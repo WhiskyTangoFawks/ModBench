@@ -1677,6 +1677,15 @@ describe('the agent server, running a gesture', () => {
       options: { target: 'B' },
     },
     {
+      name: 'mod_install carries the choices and the installer, to hand the user the installer opened on them',
+      value: CONFLICTED_WITH_DOWNLOADED_FILES,
+      tool: 'mod_install',
+      args: { argument: [outside], options: { name: 'New', installer: true, choices: [{ step: 'Main', groups: [] }] } },
+      command: 'modbench.mod.install',
+      argument: [outside],
+      options: { name: 'New', installer: true, choices: [{ step: 'Main', groups: [] }] },
+    },
+    {
       name: 'mod_install carries no Options when the call leaves out options, for the command to refuse naming them',
       value: CONFLICTED_WITH_DOWNLOADED_FILES,
       tool: 'mod_install',
@@ -1939,6 +1948,14 @@ describe('the agent server, given an input its tool does not take', () => {
     expect(description).toContain('only the views');
     expect(description).toContain('is_active');
     expect(description).toContain('view_columns');
+  });
+
+  it('tells the agent, in what Claude Code shows of mod_install, that a FOMOD\'s choices are the user\'s, and how to hand the user the installer', async () => {
+    const { tools } = await (await clientOf(new FakeInstance(VALUE))).client.listTools();
+
+    const shown = tools.find((tool) => tool.name === 'mod_install')?.description?.slice(0, 2048);
+    expect(shown).toContain('a FOMOD\'s choices are the user\'s');
+    expect(shown).toContain('installer?: true');
   });
 
   it('advertises the SQL select_rows takes as a required string', async () => {

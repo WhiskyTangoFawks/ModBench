@@ -158,20 +158,23 @@ const FOMOD_CHOICE = z.object({
 const INSTALL = gestureInput(
   'argument: the one source, { kind: \'downloadedFile\', name } as list_downloads names it, or { kind: \'archive\' | \'folder\', path } for one outside the downloads; '
     + 'options: { name: the new mod\'s name } or { target: the installed mod it upgrades, as list_mods names it }, exactly one of the two; '
-    + 'for a FOMOD, choices?: [{ step, groups: [{ group, options: [option] }] }], each by the name its installer shows, every step it shows answered, a step that needs no pick with none, '
-    + 'or manual?: true to install it as a plain copy, which a scripted FOMOD, one whose installer cannot be read and one whose module dependencies do not hold are refused without; a step left unanswered is refused, listing its groups and options, and nothing is picked for you, not even the author\'s defaults; a FOMOD that names files its package does not hold is refused, naming each, unless installAnyway?: true',
+    + 'for a FOMOD, choices?: [{ step, groups: [{ group, options: [option] }] }], each by the name its installer shows, every step it shows answered, a step that needs no pick with none; '
+    + 'a FOMOD\'s choices are the user\'s: name only those the user made or gave you to make, and put the rest to the user, or hand the user the installer with installer?: true, '
+    + 'which opens on your choices and the author\'s defaults elsewhere, and answers once the user installs or cancels; '
+    + 'or manual?: true to install it as a plain copy, which a scripted FOMOD, one whose installer cannot be read and one whose module dependencies do not hold are refused without; '
+    + 'without the installer, a step left unanswered is refused, listing its groups and options with their descriptions, and the author\'s defaults answer nothing; a FOMOD that names files its package does not hold is refused, naming each, unless installAnyway?: true',
   z.object({
     argument: z.array(INSTALL_SOURCE),
     options: z.object({
       name: z.string().optional(), target: z.string().optional(),
-      choices: z.array(FOMOD_CHOICE).optional(), manual: z.boolean().optional(), installAnyway: z.boolean().optional(),
+      choices: z.array(FOMOD_CHOICE).optional(), installer: z.boolean().optional(), manual: z.boolean().optional(), installAnyway: z.boolean().optional(),
     }).default({}),
   }),
-  (value, { argument, options: { name, target, choices, manual, installAnyway } }) => new AgentCall(
+  (value, { argument, options: { name, target, choices, installer, manual, installAnyway } }) => new AgentCall(
     argument.map((source) => (source.kind === 'downloadedFile'
       ? { kind: source.kind, name: downloadedFilesNamed(value.downloadedFiles, [source.name])[0] ?? source.name }
       : source)),
-    { name, target: target === undefined ? undefined : modsNamed(value, [{ name: target, kind: 'mod' }])[0]?.name, choices, manual, installAnyway },
+    { name, target: target === undefined ? undefined : modsNamed(value, [{ name: target, kind: 'mod' }])[0]?.name, choices, installer, manual, installAnyway },
   ),
 );
 
