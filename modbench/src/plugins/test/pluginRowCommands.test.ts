@@ -450,6 +450,17 @@ describe('modbench.plugin.decompileAndRepair', () => {
       expect(reporter.reports).toContainEqual({ severity: 'warning', message: 'Decompile and repair:', detail: 'Pack.7z could not be read whole.' });
       expect(reporter.reports.filter(({ severity }) => severity === 'warning')).toHaveLength(1);
     });
+
+    it('answers an agent the notes as partial failures, the shape version in git answers, and no notes', async () => {
+      const { handler } = reportingNotes(['Pack.7z could not be read whole.']);
+
+      const answered = await handler(new AgentCall([{ kind: 'plugin', plugin: MALFORMED }], {}));
+
+      expect(answered).toEqual({
+        applied: true, outcome: { landed: [MALFORMED], refused: [] },
+        partial: [{ message: 'Decompile and repair:', detail: 'Pack.7z could not be read whole.', severity: 'warning' }],
+      });
+    });
   });
 
   describe('where git holds a mod that is not a source mod', () => {

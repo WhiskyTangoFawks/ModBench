@@ -6,7 +6,7 @@ import type { Progress } from '../drivingLib/pausableProgress';
 import { columnHeaderOf } from '../wire/columnHeader';
 import type { PluginsTreeNode } from './pluginRows';
 import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
-import { registerAgentGesture, reportPartial, type AgentGesture } from '../drivingLib/agentGesture';
+import { registerAgentGesture, reportPartial, type AgentGesture, type GestureResult } from '../drivingLib/agentGesture';
 import type { PluginCommands, SelectionResult } from '../pluginCommands/plugins';
 import { selectionArgument } from '../drivingLib/gestureEntry';
 import { pickWhereGitHolds } from '../drivingLib/whereGitHolds';
@@ -82,7 +82,7 @@ interface DecompileAndRepairGiven extends DecompileGiven {
 export function registerDecompileAndRepairCommand(
   deps: DecompileAndRepairDeps, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
-  const gesture: AgentGesture<PluginsTreeNode, DecompileAndRepairGiven, SelectionResult<PluginAddress>, { force?: boolean }> = {
+  const gesture: AgentGesture<PluginsTreeNode, DecompileAndRepairGiven, GestureResult<PluginAddress>, { force?: boolean }> = {
     fromView: async (entry, _option, clicked) => {
       const plugins = isPluginAddress(clicked) ? [clicked] : selectionArgument(entry, 'plugin').map((node) => node.argument.plugin);
       if (plugins.length === 0) return undefined;
@@ -92,16 +92,23 @@ export function registerDecompileAndRepairCommand(
       return where === undefined ? undefined : { plugins, force: false, where, agreesToReplace: (replaced) => confirmReplace(deps.ask, 'Decompile and repair', replaced) };
     },
     fromAgent: ({ argument, options }) => ({ plugins: argument.map(pluginOf), force: options.force === true, where: 'NewRepository' }),
-    run: (given) => runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, (progress) =>
-      sendAskingOverChanges(deps.client, progress, given, (plugins, force) => deps.commands.decompileAndRepair(plugins, force, given.where))),
+    run: async (given) => partialOf(await runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, (progress) =>
+      sendAskingOverChanges(deps.client, progress, given, (plugins, force) => deps.commands.decompileAndRepair(plugins, force, given.where)))),
     report: (result, { plugins }) => {
       if (result.applied) {
         reportSelection(deps.reporter, result.outcome, plugins.length, { verb: 'decompile and repair', pastTense: 'Decompiled and repaired' });
-        reportPartial(deps.reporter, (result.notes ?? []).map((detail) => ({ message: 'Decompile and repair:', detail, severity: 'warning' as const })));
+        reportPartial(deps.reporter, result.partial);
       } else deps.reporter.report('error', result.refusal);
     },
   };
   return registerAgentGesture('modbench.plugin.decompileAndRepair', viewSelection, gesture);
+}
+
+// The notes become the partial failures an agent is answered, as version in git answers them.
+function partialOf(result: SelectionResult<PluginAddress>): GestureResult<PluginAddress> {
+  if (!result.applied) return result;
+  const { notes = [], ...applied } = result;
+  return notes.length === 0 ? applied : { ...applied, partial: notes.map((detail) => ({ message: 'Decompile and repair:', detail, severity: 'warning' as const })) };
 }
 
 async function confirmReplace(ask: AskQuestion, verb: string, plugins: readonly PluginAddress[]): Promise<boolean> {
