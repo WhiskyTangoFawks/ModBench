@@ -88,7 +88,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
 
     // The tables a plugin's rows land in (records, winners, form_references, holdings) take no key or
     // index: DuckDB serves no NOCASE lookup from one, and a re-read's commit pins their entries in memory.
-    public static void CreateTables(DuckDBConnection connection)
+    public static void CreateTables(DuckDBConnection connection, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         DuckDbSql.Execute(connection, $"CREATE SCHEMA IF NOT EXISTS {MirrorSchema}");
         DuckDbSql.Execute(connection, $"CREATE SCHEMA IF NOT EXISTS {IndexedSchema}");
@@ -108,7 +108,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         DuckDbSql.Execute(connection, $"CREATE TABLE IF NOT EXISTS {MirrorSchema}.index_version (value VARCHAR NOT NULL)");
 
         // Views after tables: the public views over every mirror table.
-        CreatePublicViews(connection);
+        CreatePublicViews(connection, ComparedHash(schemas));
     }
 
     private static void CreateStringsLanguageTable(DuckDBConnection connection)
@@ -156,15 +156,28 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
 
     internal const string PluginRecordsView = "plugin_records";
 
-    private static void CreatePublicViews(DuckDBConnection connection)
+    // editor-conflicts.md, What takes part. A document the codec could not read is a stub, with no values to compare.
+    private static string ComparedHash(IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        var inNoConflict = schemas.Values.SelectMany(schema => schema.RecordColumns)
+            .Where(column => column.Field.IgnoredInConflicts)
+            .Select(column => column.PropertyName)
+            .Distinct()
+            .ToDictionary(member => member, _ => (object?)null);
+        var removal = System.Text.Json.JsonSerializer.Serialize(inNoConflict);
+        return $"CASE WHEN t.parse_diagnosis IS NULL THEN md5(json_merge_patch(t.body, '{removal}')::VARCHAR) END AS compared_hash";
+    }
+
+    private static void CreatePublicViews(DuckDBConnection connection, string comparedHash)
     {
         foreach (var relation in PublicViews)
         {
+            var columns = relation.Table == "records" ? $"t.*, {comparedHash}" : "t.*";
             CreatePublicView(connection, ActiveSchema, relation.Table, relation, relation.HoldsRecords
                 ? ActiveJoin("t", relation.PluginColumn, relation.OriginColumn)
-                : RegisteredJoin("t", relation.PluginColumn, relation.OriginColumn));
+                : RegisteredJoin("t", relation.PluginColumn, relation.OriginColumn), columns);
             CreatePublicView(connection, IndexedSchema, relation.Table, relation,
-                RegisteredJoin("t", relation.PluginColumn, relation.OriginColumn));
+                RegisteredJoin("t", relation.PluginColumn, relation.OriginColumn), columns);
         }
 
         var records = PublicViews.Single(relation => relation.Table == "records");

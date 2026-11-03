@@ -13,7 +13,6 @@ PLACED_REFERENCE_TYPES = ('refr', 'pgre', 'pmis', 'achr', 'acre', 'parw', 'pbar'
 NAVMESH_TYPE = 'navm'
 FLAGS_FIELD = 'MajorRecordFlagsRaw'
 TELEPORT_FIELD = 'TeleportDestination'
-IDENTICAL_TO_MASTER = 'IdenticalToMaster'
 UNDERGROUND_Z = '-30000'
 OPPOSITE_OF_PARENT = ['SetEnableStateToOppositeOfParent']
 PLAYER_REFERENCE = 'PlayerRef'
@@ -108,10 +107,10 @@ def _undelete_and_disable(plugin: medit.Plugin) -> list[str]:
 
 def _identical_to_master(plugin: medit.Plugin) -> set[str]:
     rows = medit.select(
-        f"SELECT form_key FROM records WHERE {_in_plugin(plugin)} AND record_type <> 'header' AND lower(form_key_plugin) <> lower(plugin)")
-    return {
-        row['form_key'] for row in rows
-        if any(copy.plugin == plugin and copy.conflict_this == IDENTICAL_TO_MASTER for copy in medit.compare(row['form_key']))}
+        'SELECT c.form_key FROM records c JOIN records m ON m.form_key = c.form_key AND m.is_active '
+        'AND lower(m.plugin) = lower(c.form_key_plugin) AND m.compared_hash = c.compared_hash '
+        f'WHERE {_in_plugin(plugin, "c")} AND lower(c.form_key_plugin) <> lower(c.plugin)')
+    return {row['form_key'] for row in rows}
 
 
 def _removed_with_their_references(plugin: medit.Plugin, identical: set[str]) -> list[str]:

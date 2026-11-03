@@ -240,7 +240,7 @@ internal sealed class Store : IDisposable
         Release = release;
         _pluginIngest = new PluginIngest(Connection, _logger, release, contentStamp);
         _workingTreeOverlay = new WorkingTreeOverlay(Connection, _logger, _schemas, release, contentStamp);
-        TableDdlBuilder.CreateTables(Connection);
+        TableDdlBuilder.CreateTables(Connection, _schemas);
         DuckDbSql.Execute(Connection, $"DELETE FROM {IndexVersionRelation}");
         DuckDbSql.Execute(Connection, $"INSERT INTO {IndexVersionRelation} (value) VALUES ($1)", indexVersion);
     }

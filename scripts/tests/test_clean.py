@@ -140,6 +140,17 @@ class CleanAgainstTheFixtureInstance(unittest.TestCase):
         medit.edit(later, ITEM_A, 'set', 'VersionControl', 123)
         self.assertEqual(clean(later).identical_to_master, [ITEM_A])
 
+    def test_keeps_an_override_identical_to_a_plugin_of_the_masters_name_that_is_not_active(self) -> None:
+        master = self.enabled()
+        record = medit.create_record(master, 'misc')
+        inactive = self.created.create(master.name, PATCH.origin, active=False)
+        medit.create_record(inactive, 'misc')
+        medit.edit(inactive, record, 'set', 'EditorID', 'MBDevCleanRenamed')
+        override = self.enabled()
+        medit.copy(master, record, override)
+        medit.edit(override, record, 'set', 'EditorID', 'MBDevCleanRenamed')
+        self.assertEqual(clean(override).identical_to_master, [])
+
     def test_removes_a_cell_identical_to_its_master_once_its_references_are_removed(self) -> None:
         master = self.enabled()
         cell, reference = self.cell_and_reference_in(master)
