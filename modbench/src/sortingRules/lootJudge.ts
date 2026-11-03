@@ -59,7 +59,7 @@ function guarded(
 }
 
 function judgePlugin(
-  order: readonly PluginRef[], index: number, entries: readonly LootEntry[], facts: ConditionFacts,
+  order: readonly PluginRef[], index: number, entries: readonly LootEntry[], facts: ConditionFacts, loadedWithNoLine: LoadedWithNoLine,
 ): BrokenRule[] {
   const plugin = order[index];
   if (plugin === undefined) return [];
@@ -82,7 +82,7 @@ function judgePlugin(
   const loadAfters = filesOf('after').flatMap((file) => checked(file, 'a load after', (): Judged => {
     const other = order.findIndex((candidate) => fold(candidate.filename) === fold(file.name));
     const target = order[other];
-    if (target === undefined || other < index) return [];
+    if (target === undefined || other < index || (loadedWithNoLine(plugin.filename) && loadedWithNoLine(target.filename))) return [];
     return [{
       rule: 'loadAfter', level: 'warning', plugins: [plugin, target], source: file.source,
       reason: `"${plugin.filename}" loads before ${shown(file)}, and should load after it.`,
@@ -120,6 +120,8 @@ export interface LootRules {
   readonly facts: ConditionFacts;
 }
 
+type LoadedWithNoLine = (filename: string) => boolean;
+
 interface Placed {
   plugin: PluginRef;
   group: string;
@@ -148,7 +150,7 @@ function groupOf(plugin: PluginRef, entries: readonly LootEntry[]): string {
 }
 
 function judgeGroups(
-  order: readonly PluginRef[], { entries, groups }: LootRules, partitionOf: (filename: string) => LootPartition | undefined,
+  order: readonly PluginRef[], { entries, groups }: LootRules, partitionOf: (filename: string) => LootPartition | undefined, loadedWithNoLine: LoadedWithNoLine,
 ): BrokenRule[] {
   const afterOf = new Map(groups.map(({ name, after }) => [name, after]));
   const beforeOf = new Map<string, Map<string, RuleSource>>();
@@ -163,7 +165,8 @@ function judgeGroups(
   });
   return placed.flatMap((early, index): BrokenRule[] => {
     const groupsAfter = before(early.group);
-    const last = placed.slice(index + 1).findLast((other) => other.partition === early.partition && groupsAfter.has(other.group));
+    const last = placed.slice(index + 1).findLast((other) => other.partition === early.partition && groupsAfter.has(other.group)
+      && !(loadedWithNoLine(early.plugin.filename) && loadedWithNoLine(other.plugin.filename)));
     const source = last === undefined ? undefined : groupsAfter.get(last.group);
     if (last === undefined || source === undefined) return [];
     return [{
@@ -174,11 +177,13 @@ function judgeGroups(
 }
 
 /** The rules of LOOT's metadata that `order`, the active plugins in load order, breaks, and the messages that apply.
- *  A condition that cannot be evaluated is a Warning. `partitionOf` is `undefined` while a plugin's master flag is unread. */
+ *  A condition that cannot be evaluated is a Warning. `partitionOf` is `undefined` while a plugin's master flag is unread.
+ *  A group or a load after between two plugins the game loads with no line judges nothing the user owns. */
 export function judgeLoot(
   order: readonly PluginRef[], rules: LootRules, partitionOf: (filename: string) => LootPartition | undefined,
+  loadedWithNoLine: LoadedWithNoLine = () => false,
 ): BrokenRule[] {
-  return [...order.flatMap((_, index) => judgePlugin(order, index, rules.entries, rules.facts)), ...judgeGroups(order, rules, partitionOf)];
+  return [...order.flatMap((_, index) => judgePlugin(order, index, rules.entries, rules.facts, loadedWithNoLine)), ...judgeGroups(order, rules, partitionOf, loadedWithNoLine)];
 }
 
 /** The file reads `judgeLoot` needs of `order`: those of every condition on a rule of a plugin in it, and the
