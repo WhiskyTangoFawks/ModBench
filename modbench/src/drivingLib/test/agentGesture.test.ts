@@ -121,13 +121,13 @@ describe('a write refused because another is in flight', () => {
   }
 
   it('is told to a view call once, and the view call ends with nothing reported by the gesture', async () => {
-    const { told, refresh } = aWriteInFlight();
+    const { told, redraw } = aWriteInFlight();
     const { handler, reported } = registeredGesture();
 
     expect(await handler()).toBeUndefined();
 
-    expect({ reported, told: told.reports.map(({ message }) => message), refreshes: refresh.mock.calls.length }).toEqual({
-      reported: [], told: [refusedMessage], refreshes: 1,
+    expect({ reported, told: told.reports.map(({ message }) => message), redraws: redraw.mock.calls.length }).toEqual({
+      reported: [], told: [refusedMessage], redraws: 1,
     });
   });
 

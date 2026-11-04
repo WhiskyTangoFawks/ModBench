@@ -11,6 +11,7 @@ export class FakeInstance {
   readFailure: string | undefined;
   private subscribers: ((value: InstanceValue, sequence: number) => void)[] = [];
   private failureListeners: (() => void)[] = [];
+  private redrawListeners: (() => void)[] = [];
   constructor(initial: InstanceValue, sequence = 1) {
     this.value = initial;
     this.sequence = sequence;
@@ -37,6 +38,13 @@ export class FakeInstance {
   onReadFailure(listener: () => void) {
     this.failureListeners.push(listener);
     return { dispose: () => { this.failureListeners = this.failureListeners.filter((l) => l !== listener); } };
+  }
+  onRedraw(listener: () => void) {
+    this.redrawListeners.push(listener);
+    return { dispose: () => { this.redrawListeners = this.redrawListeners.filter((l) => l !== listener); } };
+  }
+  redraw(): void {
+    for (const listener of [...this.redrawListeners]) listener();
   }
   // Simulates a recompute that threw: the value and sequence stay put, and the reason is held.
   fail(reason: string): void {

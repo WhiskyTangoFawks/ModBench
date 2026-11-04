@@ -70,15 +70,15 @@ describe('onPluginCheckboxChanged', () => {
     ]);
   });
 
-  it('is refused while a write is in flight: the user is told once, the view is shown the disk, and nothing is written', async () => {
-    const { told, refresh } = aWriteInFlight();
+  it('is refused while a write is in flight: the user is told once, the view is drawn from the held value, and nothing is written', async () => {
+    const { told, redraw } = aWriteInFlight();
     const adapter = fake();
     const own = recordingReporter();
 
     await toggle(toggled(['A.esp', 1]), adapter, own);
 
-    expect({ calls: adapter.calls, own: own.reports, told: told.reports.map(({ message }) => message), refreshes: refresh.mock.calls.length }).toEqual({
-      calls: [], own: [], told: ['modbench.plugin.enable did not start: modbench.test.held is still writing.'], refreshes: 1,
+    expect({ calls: adapter.calls, own: own.reports, told: told.reports.map(({ message }) => message), redraws: redraw.mock.calls.length }).toEqual({
+      calls: [], own: [], told: ['modbench.plugin.enable did not start: modbench.test.held is still writing.'], redraws: 1,
     });
   });
 

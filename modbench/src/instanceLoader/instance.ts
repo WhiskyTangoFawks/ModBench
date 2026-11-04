@@ -161,9 +161,9 @@ export interface ListenerOutcome {
 }
 export type ListenerOutcomeListener = (outcome: ListenerOutcome) => void;
 
-/** The Instance as a tree reads it: the held value, sequence and read failure, plus the two
+/** The Instance as a tree reads it: the held value, sequence and read failure, plus the
  *  channels they move on. */
-export type InstanceView = Pick<Instance, 'value' | 'sequence' | 'readFailure' | 'subscribe' | 'onReadFailure'>;
+export type InstanceView = Pick<Instance, 'value' | 'sequence' | 'readFailure' | 'subscribe' | 'onReadFailure' | 'onRedraw'>;
 
 const cannotTellRunning = (manager: string, reason: string): string => `Cannot tell whether ${manager} is running: ${reason}.`;
 
@@ -290,6 +290,7 @@ export class Instance implements Subscription {
   private subscribers: InstanceSubscriber[] = [];
 
   private failureListeners: ReadFailureListener[] = [];
+  private redrawListeners: (() => void)[] = [];
   private outcomeListeners: ListenerOutcomeListener[] = [];
 
   private settleTimer: ReturnType<typeof setTimeout> | undefined;
@@ -372,6 +373,17 @@ export class Instance implements Subscription {
     };
   }
 
+  /** Called on each `redraw`, by the views alone: a subscriber that derives from the value or hands it on does not run again. */
+  onRedraw(listener: () => void): Subscription {
+    this.redrawListeners.push(listener);
+    return { dispose: () => { this.redrawListeners = this.redrawListeners.filter((l) => l !== listener); } };
+  }
+
+  /** Draws the held value again, with no read: a control the user toggled returns to what the value says. */
+  redraw(): void {
+    for (const listener of [...this.redrawListeners]) listener();
+  }
+
   /** Called with the outcome of each call to a subscriber or read-failure listener, so a view that
    *  missed an update can be told of. */
   onListenerOutcome(listener: ListenerOutcomeListener): Subscription {
@@ -416,6 +428,7 @@ export class Instance implements Subscription {
     this.focus.dispose();
     this.subscribers = [];
     this.failureListeners = [];
+    this.redrawListeners = [];
     this.outcomeListeners = [];
   }
 
