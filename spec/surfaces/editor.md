@@ -40,7 +40,7 @@ One line above the grid: the record type as xEdit names it, then `EditorID [Form
 As a user, I want:
 
 1. Record Header as the grid's first row, as in xEdit. Its rows are the header members Mutagen reads for the game, in Mutagen's order and under Mutagen's member names, as every row is. Each edits as any field does. Cites: xEdit; ADR-0005; xedit.md, divergences 18, 21 and 34
-2. The FormKey row to show and take the FormKey. A plugin header's FormKey is read-only, and an override's is refused, naming its master, where the record is native. Cites: xedit.md, divergences 9 and 16
+2. The FormKey row to show and take the FormKey. A plugin header's FormKey is read-only, and an override's is refused, naming its master, where the record is native. A change to it carries each reference to the record (symbols.md, The features, story 6). Cites: xedit.md, divergences 9 and 16
 
 ## Columns
 
