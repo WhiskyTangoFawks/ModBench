@@ -157,7 +157,12 @@ public sealed class DocumentEdit
             var before = DocumentHop.Spell(path.Take(i));
             if (hop.Member is { } member)
             {
-                if (cursor.Meta.Fields is not { } fields) return new EditFailure.NoMembers(sofar, before);
+                var translated = cursor.Meta.Type == TranslatedStringValues.ApiType;
+                if (translated && cursor.Node is not JsonObject) return new EditFailure.Absent(sofar, before);
+                var fields = translated && cursor.Node is JsonObject held
+                    ? TranslatedStringValues.ShapeOf(held, cursor.Meta.ReadOnlyReason).Fields
+                    : cursor.Meta.Fields;
+                if (fields is null) return new EditFailure.NoMembers(sofar, before);
                 if (cursor.Node is not JsonObject obj)
                 {
                     if (cursor.Node != null || !creating) return new EditFailure.Absent(sofar, before);
