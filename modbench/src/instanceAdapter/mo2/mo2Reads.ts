@@ -15,7 +15,7 @@ import type { ManagerGamePath } from '../gameFolder/gameFolderResolver';
 import { creationClubFileOf, dataFolderOf, listDataFolderFiles, listDataFolderPlugins, readCreationClubList } from '../gameFolder/dataFolder';
 import { pathTokensWritten } from './mo2PathTokens';
 import { pushRefusalWritten } from './mo2Submodules';
-import { get, ignoreSkippedLink, parsedBy, isRepository, listEntries, listFolders, readOrAbsent, readOrReason, identityOf, type SkippedLink, stampOf, isOwnTemp } from '../files';
+import { get, ignoreSkippedLink, parsedBy, textByStamp, isRepository, listEntries, listFolders, readOrAbsent, readOrReason, identityOf, type SkippedLink, stampOf, isOwnTemp } from '../files';
 import type { DownloadedFile, DownloadedFiles, InstanceAdapter, ManagerNames, ManagerRunning, ModFolder, ModFolders, SortingRuleFile } from '../instanceAdapter';
 import { DATA_FOLDER_GLOB, DOWNLOADS_WATCH_GLOB, FIRST_LEVEL, PROFILE_WATCH_PATTERN, profileDir, downloadedFilePath, downloadedFileMetadataPath, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile, sortingRuleFilePaths } from './layout';
 import { mo2Archives } from './mo2Archives';
@@ -49,7 +49,6 @@ async function listDownloadedFiles(downloadsDir: string, skippedLink: SkippedLin
 }
 
 const metaIniAt = parsedBy(parseMetaIni);
-const sortingRuleTextAt = parsedBy((text: string) => text);
 /** A downloaded file's metadata as it reads, parsed again only when the file's stamp has changed. */
 export const downloadedMetaAt = parsedBy(parseDownloadedFileMeta);
 const modlistAt = parsedBy(parseModlist);
@@ -81,7 +80,7 @@ export const readMetaIniIn = (folder: string): Promise<MetaIni> => readOrAbsent(
 
 async function sortingRuleFile(path: string): Promise<SortingRuleFile> {
   try {
-    return { path, kind: 'text', text: await sortingRuleTextAt(path) };
+    return { path, kind: 'text', text: await textByStamp(path) };
   } catch (err) {
     return errnoCode(err) === 'ENOENT' ? { path, kind: 'absent' } : { path, kind: 'unreadable', reason: errorMessage(err) };
   }
