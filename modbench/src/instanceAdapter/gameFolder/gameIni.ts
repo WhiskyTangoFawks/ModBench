@@ -6,8 +6,9 @@ import type { ArchiveLists } from '../../tables/gamePaths';
 
 const ARCHIVE_SECTION = 'archive';
 
-// A later line, and a later INI, replaces a key's value.
-function archiveKeysIn(text: string, values: Map<string, string>): void {
+/** The `[Archive]` keys an INI sets, by lower-cased key. */
+export function archiveKeysIn(text: string): ReadonlyMap<string, string> {
+  const values = new Map<string, string>();
   let section: string | undefined;
   for (const line of splitLines(stripBom(text)).map((raw) => raw.trim())) {
     if (line.startsWith('[') && line.endsWith(']')) section = line.slice(1, -1).trim().toLowerCase();
@@ -16,11 +17,11 @@ function archiveKeysIn(text: string, values: Map<string, string>): void {
       values.set(line.slice(0, eq).trim().toLowerCase(), line.slice(eq + 1));
     }
   }
+  return values;
 }
 
-/** The archives `keys` list in `[Archive]`, key by key, as the INIs give them read in order. */
-export function archivesListedIn(inis: readonly string[], { keys }: Pick<ArchiveLists, 'keys'>): string[] {
-  const values = new Map<string, string>();
-  for (const text of inis) archiveKeysIn(text, values);
+/** The archives `keys` list in `[Archive]`, key by key, as the INIs give them read in order: a later INI replaces a key's value. */
+export function archivesListedIn(inis: readonly ReadonlyMap<string, string>[], { keys }: Pick<ArchiveLists, 'keys'>): string[] {
+  const values = new Map(inis.flatMap((ini) => [...ini]));
   return keys.flatMap((key) => (values.get(key.toLowerCase()) ?? '').split(',').map((name) => name.trim()).filter((name) => name !== ''));
 }

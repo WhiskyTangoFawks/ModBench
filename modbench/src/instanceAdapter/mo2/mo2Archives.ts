@@ -4,9 +4,9 @@
 import { keepsOwnGameInis } from './codecs/profileSettings';
 import { archiveListsOf, pluginCompanionRule } from '../../tables/gamePaths';
 import { dataFolderOf } from '../gameFolder/dataFolder';
-import { get, ignoreSkippedLink, listEntries, readOrAbsent, readOrReason, type ResolvedEntry } from '../files';
+import { ignoreSkippedLink, listEntries, parsedBy, readOrAbsent, readOrReason, type ResolvedEntry } from '../files';
 import { listOwnEntries, type IgnoredLink } from '../gameFolder/ownEntries';
-import { archivesListedIn } from '../gameFolder/gameIni';
+import { archiveKeysIn, archivesListedIn } from '../gameFolder/gameIni';
 import { anyCase, fileInFolder, type DataFolderArchives } from '../instanceAdapter';
 import { dataFolderArchivesGlob, profileDir, profileSettingsFile } from './layout';
 import type { ArchiveReads } from '../instanceReading';
@@ -23,8 +23,11 @@ async function fileNamedIn(
   return spelled === undefined ? undefined : fileInFolder(folder, spelled);
 }
 
-const textOf = async (file: string | undefined): Promise<string[]> =>
-  (file === undefined ? [] : [await readOrAbsent(() => get(file), '')]);
+const archiveKeysAt = parsedBy(archiveKeysIn);
+const keepsOwnAt = parsedBy(keepsOwnGameInis);
+
+const archiveKeysOf = async (file: string | undefined): Promise<ReadonlyMap<string, string>[]> =>
+  (file === undefined ? [] : [await readOrAbsent(() => archiveKeysAt(file), new Map<string, string>())]);
 
 async function listGameFolderArchives(dataFolder: string, gameRelease: string | undefined, ignoredLink: IgnoredLink): Promise<DataFolderArchives> {
   const rule = pluginCompanionRule(gameRelease);
@@ -45,7 +48,7 @@ async function listGameFolderArchives(dataFolder: string, gameRelease: string | 
 async function gameInisFolder(
   { instanceRoot, resolveMyGames, watch }: Mo2Context, profile: string, release: string | undefined, userInis: readonly string[],
 ): Promise<{ folder: string | undefined; notes: string[] }> {
-  const keepsOwn = keepsOwnGameInis(await readOrAbsent(() => get(profileSettingsFile(instanceRoot, profile)), ''));
+  const keepsOwn = await readOrAbsent(() => keepsOwnAt(profileSettingsFile(instanceRoot, profile)), false);
   if (keepsOwn) {
     watch.follow('myGamesInis', undefined, '');
     return { folder: profileDir(instanceRoot, profile), notes: [] };
@@ -76,7 +79,7 @@ export function mo2Archives(context: Mo2Context): ArchiveReads {
       const { folder, notes } = await gameInisFolder(context, profile, gameRelease, lists.userInis);
       const own = folder === undefined ? [] : lists.userInis.map((name) => fileNamedIn(folder, name, listAnyEntries));
       const files = await Promise.all([fileNamedIn(gameFolder.root, lists.defaultIni, (root) => listOwnEntries(root, ignoredLink)), ...own]);
-      return { archives: archivesListedIn((await Promise.all(files.map(textOf))).flat(), lists), notes };
+      return { archives: archivesListedIn((await Promise.all(files.map(archiveKeysOf))).flat(), lists), notes };
     },
 
     gameFolderArchives(gameFolder, gameRelease, ignoredLink) {
