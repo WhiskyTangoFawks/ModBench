@@ -58,6 +58,29 @@ public sealed class SourceRepositoryStampsTests : IDisposable
         Assert.Empty(stamps.Unreadable);
     }
 
+    private string Git(params string[] args) => GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);
+
+    [Fact]
+    public void TheRepositoryStamp_MovesWithARefMovedAlone()
+    {
+        Git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-q", "-m", "second");
+        var before = _repository.RepositoryStamp();
+
+        Git("update-ref", "refs/heads/main", "HEAD~1");
+
+        Assert.NotEqual(before, _repository.RepositoryStamp());
+    }
+
+    [Fact]
+    public void TheRepositoryStamp_VouchesOnlyOnceItsFilesHaveSettled()
+    {
+        Assert.False(_repository.RepositoryStamp().Vouches);
+
+        PastTheSettleWindow();
+
+        Assert.True(_repository.RepositoryStamp().Vouches);
+    }
+
     private void PastTheSettleWindow() => _clock.SetUtcNow(TimeProvider.System.GetUtcNow().AddSeconds(3));
 
     private async Task TheFileSystemsOwnClockPassesTheSettleWindow()

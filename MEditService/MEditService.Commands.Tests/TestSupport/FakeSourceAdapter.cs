@@ -177,6 +177,8 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
         public RecordStamps StampsOf(PluginAddress plugin) => throw Unreached();
 
+        public FilesStamp RepositoryStamp() => throw Unreached();
+
         public Answer<T, SourceFailure> ReadDocuments<T>(PluginAddress plugin, Func<IPluginDocuments, T> read) => throw Unreached();
 
         public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommit(PluginAddress plugin) =>

@@ -73,6 +73,8 @@ internal sealed class TreeStamps(TimeProvider time)
     private sealed record KnownDocument(
         string? FormKey, string Content, IReadOnlyList<string> FormKeys, string? Refusal, FormIdLimit? Limit, string? BelongsAt);
 
+    internal FilesStamp StampOf(IEnumerable<string> paths) => FilesStamp.Of(paths, time);
+
     internal static string ContentStamp(string text) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 
     internal RecordStamps StampsOf(string sourceFolder, PluginAddress plugin, GameRelease release, ISourceFiles files)
@@ -83,7 +85,7 @@ internal sealed class TreeStamps(TimeProvider time)
         var unsaved = new HashSet<string>(StringComparer.Ordinal);
 
         var root = SourceRepositoryLayout.RootIn(sourceFolder, plugin.Name);
-        foreach (var gone in _known.Keys.Where(tree => !Directory.Exists(tree))) _known.TryRemove(gone, out _);
+        if (!Directory.Exists(root)) _known.TryRemove(root, out _);
         var known = _known.GetOrAdd(root, _ => new StampGatedMemo<KnownDocument>(time));
         var listed = new HashSet<string>(StringComparer.Ordinal);
         var problems = new List<FileProblem>();

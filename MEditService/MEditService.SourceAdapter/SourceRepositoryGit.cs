@@ -211,6 +211,28 @@ internal abstract class SourceRepositoryGit
         throw SourceStopException.GitFailed($"git cannot read HEAD of '{_sourceFolder}'");
     }
 
+    /// <summary>The files whose change moves what git status says of a tree but touches no document: a commit moves
+    /// the index and the ref HEAD names.</summary>
+    internal IReadOnlyList<string> StateFiles()
+    {
+        const string RefPrefix = "ref: ";
+        var head = Path.Combine(_gitDir, "HEAD");
+        var commonDir = CommonDirectory();
+        var named = File.Exists(head) && File.ReadLines(head).FirstOrDefault() is { } line && line.StartsWith(RefPrefix, StringComparison.Ordinal)
+            ? Path.Combine(commonDir, line[RefPrefix.Length..].Trim())
+            : null;
+        return [head, Path.Combine(_gitDir, "index"), Path.Combine(commonDir, "packed-refs"), .. named is null ? [] : new[] { named }];
+    }
+
+    // A linked worktree keeps its HEAD and index in its own directory, and the refs in the one commondir names.
+    private string CommonDirectory()
+    {
+        var commonDir = Path.Combine(_gitDir, "commondir");
+        return File.Exists(commonDir) && File.ReadLines(commonDir).FirstOrDefault() is { } line
+            ? Path.GetFullPath(line.Trim(), _gitDir)
+            : _gitDir;
+    }
+
     // A loose ref is a file, until git packs it into packed-refs.
     private bool RefIsStored(string gitRef) =>
         File.Exists(Path.Combine(_gitDir, gitRef)) || PackedRefs(_gitDir).Contains(gitRef);
