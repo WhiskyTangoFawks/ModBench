@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { parsePlugins } from '../../loadOrderFileCodec/pluginsText';
 import { creationClubListFile } from '../../tables/gamePaths';
 import { isPluginFile } from '../../tables/pluginFile';
-import { get, readOrAbsent, readOrReason } from '../files';
+import { parsedBy, readOrAbsent, readOrReason } from '../files';
 import { listOwnEntries, type IgnoredLink } from './ownEntries';
 import type { DataFolderFiles, DataFolderPlugins, GameFolder } from '../instanceAdapter';
 
@@ -48,9 +48,10 @@ export function creationClubFileOf(gameFolder: GameFolder, gameRelease: string |
 }
 
 // The game writes its Creation Club list in plugins.txt's own line format.
+const creationClubAt = parsedBy((text: string) => parsePlugins(text).map((entry) => entry.name));
+
 export async function readCreationClubList(gameFolder: GameFolder, gameRelease: string | undefined): Promise<string[]> {
   const file = creationClubFileOf(gameFolder, gameRelease);
   if (file === undefined) return [];
-  const text = await readOrAbsent<string | undefined>(() => get(file), undefined);
-  return text === undefined ? [] : parsePlugins(text).map((entry) => entry.name);
+  return readOrAbsent(() => creationClubAt(file), []);
 }

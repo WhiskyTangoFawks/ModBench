@@ -284,10 +284,47 @@ export function makeDir(path: string): Promise<void> {
   return mkdir(path).then(() => undefined);
 }
 
+// A file system stamps a change with a clock coarser than a read is quick, and a network share's
+// clock is not this machine's: a stamp this recent may not change for a write that follows it.
+const SETTLED_AFTER_MS = 2_000;
+
+export const sameStamp = (a: FileStamp, b: FileStamp): boolean =>
+  a.size === b.size && a.modifiedNs === b.modifiedNs && a.changedNs === b.changedNs;
+
+export const settledBefore = (stamp: FileStamp, readFromMs: number): boolean =>
+  stamp.changedNs < BigInt(readFromMs - SETTLED_AFTER_MS) * 1_000_000n;
+
+interface Kept<T> {
+  readonly stamp: FileStamp;
+  readonly value: T;
+}
+
+// The stamp is the fact every write changes that ADR-0003 validates by.
+function stampKept<T>(read: (path: string) => Promise<T>): (path: string) => Promise<T> {
+  const kept = new Map<string, Kept<T>>();
+  return async (path) => {
+    const stamp = await stampOf(path);
+    const held = kept.get(path);
+    if (held !== undefined && sameStamp(held.stamp, stamp)) return held.value;
+    const readFromMs = Date.now();
+    const value = await read(path);
+    if (settledBefore(stamp, readFromMs)) kept.set(path, { stamp, value });
+    else kept.delete(path);
+    return value;
+  };
+}
+
 /** `path`'s directory entries; the caller's own filter picks the ones it wants. */
 export function listDir(path: string): Promise<Dirent[]> {
   return readdir(path, { withFileTypes: true });
 }
+
+/** As `listDir`, for a folder of the instance or the game, which is not listed again while its stamp has not changed. */
+export const listDirByStamp = stampKept(listDir);
+
+/** A reader of the text `parse` makes of a file, which reads and parses it again only when the file's stamp has changed. */
+export const parsedBy = <T>(parse: (text: string) => T): ((path: string) => Promise<T>) =>
+  stampKept(async (path) => parse(await readText(path)));
 
 /** Hands over a link that cannot be followed, by its path, with why. */
 export type SkippedLink = (linkPath: string, reason: string) => void;
