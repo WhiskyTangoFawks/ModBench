@@ -1,6 +1,7 @@
 // Put load order (ADR-0013) and refresh. What comes back is the caller's to report and apply,
 // never pushed to a view from here.
 
+import { samePluginAddress } from '../wire/pluginAddress';
 import type { LoadOrderOutcome, LoadOrderSnapshot, MEditClient, PluginAddress } from '../client';
 
 /** What the loader read of the instance for put load order to send. */
@@ -17,7 +18,7 @@ interface ArchivesByPlugin {
 
 /** The order the game loads the snapshot's active plugins in, which the loader cannot know: it takes
  *  a blueprint plugin's place from the header facts Editing supplies (ADR-0013). */
-export type InGameOrder = (snapshot: Pick<LoadOrderSnapshot, 'active' | 'loadedWithNoLine'>) => PluginAddress[];
+export type InGameOrder = (snapshot: Pick<LoadOrderSnapshot, 'active' | 'loadedWithNoLine' | 'gameRelease'>) => PluginAddress[];
 
 /** Nothing is sent without a game folder found: there is no Data folder to key the load order on.
  *  A refusal is the loader's, to tell once: a partial snapshot would unregister what it left out. */
@@ -49,6 +50,6 @@ export type RefreshResult =
   | { applied: false; heldElsewhere: false; refusal: string };
 
 const archivesOfPlugins = ({ listedArchives, archivesByPlugin }: ArchivesByPlugin, active: readonly PluginAddress[]): LoadOrderSnapshot['archives'] => {
-  const inOrder = [...listedArchives, ...active.flatMap((plugin) => archivesByPlugin.find((own) => own.name === plugin.name && own.origin === plugin.origin)?.archives ?? [])];
+  const inOrder = [...listedArchives, ...active.flatMap((plugin) => archivesByPlugin.find((own) => samePluginAddress(own, plugin))?.archives ?? [])];
   return inOrder.filter(({ path }, index) => inOrder.findIndex((first) => first.path === path) === index);
 };

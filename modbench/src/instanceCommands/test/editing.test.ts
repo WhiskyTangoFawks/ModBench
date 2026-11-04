@@ -61,17 +61,16 @@ function wired(status: 'running' | 'stopped' = 'running') {
 }
 
 describe('the load order is put again when what Editing read of the plugins changes the order the game loads in', () => {
-  const starfield = (): LoadOrderSource => {
-    const address = (name: string) => ({ name, origin: 'Base Mod' });
-    const source = valueWith('Starfield.esm');
-    if (source === undefined || 'refusal' in source) throw new Error('fixture');
-    return { ...source, active: ['Starfield.esm', 'Blueprint.esm', 'A.esp'].map(address), loadedWithNoLine: ['Starfield.esm', 'Blueprint.esm'].map(address) };
+  const address = (name: string) => ({ name, origin: 'Base Mod' });
+  const starfield: LoadOrderSource = {
+    plugins: [], active: ['Starfield.esm', 'Blueprint.esm', 'A.esp'].map(address), loadedWithNoLine: ['Starfield.esm', 'Blueprint.esm'].map(address),
+    listedArchives: [], archivesByPlugin: [], stringsFiles: [], places: [], dataFolder: '/game/Data', gameRelease: 'Fallout4',
   };
   const activeSent = (client: InMemoryMEditClient): string[][] => client.puts().map((put) => put.active.map(({ name }) => name));
 
   it('sends the order again once, and settles when the next read finds the same blueprints', async () => {
     const { client, land, readBlueprints, toldCount } = wired();
-    land(starfield());
+    land(starfield);
     await toldCount(1);
 
     readBlueprints('Blueprint.esm');

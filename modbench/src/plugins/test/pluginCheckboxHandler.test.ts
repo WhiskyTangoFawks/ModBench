@@ -89,7 +89,7 @@ describe('onPluginCheckboxChanged', () => {
     await toggle(toggled(['A.esp', 1], ['B.esp', 0]), adapter, recordingReporter());
 
     expect({ calls: adapter.calls, told: told.reports.map(({ message }) => message) }).toEqual({
-      calls: [], told: ['modbench.plugin.enable did not start: modbench.test.held is still writing.'],
+      calls: [], told: ['modbench.plugin.enable did not start: modbench.test.held is still writing. Nothing was enabled or disabled.'],
     });
   });
 

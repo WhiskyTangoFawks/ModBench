@@ -120,12 +120,11 @@ describe('put load order, the archives follow the plugins', () => {
     return client.puts().flatMap((put) => put.archives.map(({ path }) => path));
   };
 
-  it('sends the INIs\' archives, then each plugin\'s with it, in the order the game loads the plugins', async () => {
-    expect(await archivesSent(blueprintLast)).toEqual(['/g/Interface.ba2', '/g/Starfield - Main.ba2', '/a/A - Main.ba2', '/g/Blueprint - Main.ba2']);
-  });
-
-  it('sends the order plugins.txt gives for a release that loads no blueprint plugin last', async () => {
-    expect(await archivesSent(AS_LOADED)).toEqual(['/g/Interface.ba2', '/g/Starfield - Main.ba2', '/g/Blueprint - Main.ba2', '/a/A - Main.ba2']);
+  it.each([
+    ['the order the game loads the plugins in', blueprintLast, ['/g/Interface.ba2', '/g/Starfield - Main.ba2', '/a/A - Main.ba2', '/g/Blueprint - Main.ba2']],
+    ['the plugins.txt order, for a release that loads no blueprint plugin last', AS_LOADED, ['/g/Interface.ba2', '/g/Starfield - Main.ba2', '/g/Blueprint - Main.ba2', '/a/A - Main.ba2']],
+  ])('sends the INIs\' archives, then each plugin\'s with it, in %s', async (_order, order, expected) => {
+    expect(await archivesSent(order)).toEqual(expected);
   });
 
   it('sends an archive once, at its first place', async () => {

@@ -2,6 +2,7 @@
 // what came of each put comes back through `onPut`.
 
 import type { LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, MEditClient } from '../client';
+import { exactPluginAddressKey } from '../wire/pluginAddress';
 import { errorMessage } from '../ports/errorMessage';
 import { putLoadOrder, type InGameOrder, type LoadOrderSource, type PutLoadOrderResult } from './loadOrder';
 
@@ -56,7 +57,7 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
     }));
   };
 
-  const orderOf = (source: Sent): string => deps.inGameOrder.of(source).map(({ name, origin }) => `${origin}/${name}`).join('\n');
+  const orderOf = (source: Sent): string => deps.inGameOrder.of(source).map(exactPluginAddressKey).join('\n');
 
   const put = (source: LoadOrderSource, stringsLanguage: string | undefined): void => {
     last = source === undefined || 'refusal' in source ? undefined : { source, stringsLanguage, order: orderOf(source) };

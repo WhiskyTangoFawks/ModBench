@@ -16,6 +16,7 @@
     { "path": "../pluginCommands" },
     { "path": "../ports" },
     { "path": "../sortingRules" },
+    { "path": "../tables" },
     { "path": "../textDocuments" },
     { "path": "../wire" }
   ],

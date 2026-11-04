@@ -19,6 +19,7 @@ import { PluginFactsFeed, type PluginFactsClient } from './pluginFactsFeed';
 import { isRecordRow } from './gestureEntry';
 import type { RecordGroup, RecordPlace } from './createdRecordSelection';
 import { isPluginAddress } from '../wire/messages';
+import { blueprintLoadsLastIn } from '../tables/gamePaths';
 import { activeInGameOrder, inGameOrder, pluginOrderOf, unplaced } from '../instanceLoader/pluginOrder';
 import { filePresence, filesPresent } from '../instanceLoader/filePresence';
 import { readFileFacts, type FileReads } from '../sortingRules/lootConditions';
@@ -140,8 +141,8 @@ export class PluginsTreeProvider
 
   /** The order the game loads in, which mEdit is handed: it needs what Editing read of the plugins, so it is asked again as the facts change. */
   readonly inGameOrder = {
-    of: (snapshot: Pick<LoadOrderSnapshot, 'active' | 'loadedWithNoLine'>): PluginAddress[] =>
-      activeInGameOrder(snapshot, (plugin) => this.facts.rows.isBlueprint(plugin), this.instanceValue.blueprintLoadsLast),
+    of: (snapshot: Pick<LoadOrderSnapshot, 'active' | 'loadedWithNoLine' | 'gameRelease'>): PluginAddress[] =>
+      activeInGameOrder(snapshot, (plugin) => this.facts.rows.isBlueprint(plugin), blueprintLoadsLastIn(snapshot.gameRelease)),
     onChange: (listener: () => void) => this.facts.onDidChange(listener),
   };
   private lastLockedRowUris: ReadonlySet<string> = new Set();

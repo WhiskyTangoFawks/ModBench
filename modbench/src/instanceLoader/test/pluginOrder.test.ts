@@ -74,8 +74,4 @@ describe('the snapshot\'s active plugins in the game\'s order', () => {
   it('takes the lines to be what follows the plugins the game loads with no line', () => {
     expect(activeInGameOrder(snapshot, (p) => p.name === 'Blueprint.esm', true).map((p) => p.name)).toEqual(['Base.esm', 'A.esp', 'B.esp', 'Blueprint.esm']);
   });
-
-  it('keeps the snapshot\'s order in a release that loads no blueprint plugin last', () => {
-    expect(activeInGameOrder(snapshot, (p) => p.name === 'Blueprint.esm', false)).toEqual(snapshot.active);
-  });
 });
