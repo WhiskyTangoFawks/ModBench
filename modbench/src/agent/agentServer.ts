@@ -172,6 +172,9 @@ export function serveAgent(options: AgentServerOptions): AgentServer {
   if (instance === undefined || copyReads === undefined || statuses === undefined || deployment === undefined || pluginsShown === undefined) return NOT_SERVING;
   const open = { ...options, instance, copyReads, statuses, deployment, pluginsShown };
   const http = createServer((request, response) => {
+    // A request a client sends on an idle connection while the extension host is busy past Node's keep-alive
+    // timeout is reset unread when the host frees, so no connection outlives its answer.
+    response.setHeader('Connection', 'close');
     handle(open, request, response).catch((error: unknown) => {
       log.error(`[agent] ${errorMessage(error)}`);
       if (!response.headersSent) response.writeHead(500);

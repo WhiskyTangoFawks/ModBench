@@ -58,7 +58,7 @@ const VERSION_IN_GIT = gestureInput(
   (value, { argument, options }) => new AgentCall(modArguments(value, argument), options),
 );
 
-const MOVE_PLACE = z.union([
+const MOVE_PLACE = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.enum(['ungrouped', 'modOrder']) }),
   z.strictObject({ kind: z.enum(['separator', 'mod']), name: z.string() }),
 ]);
@@ -145,7 +145,7 @@ const DOWNLOAD = gestureInput(
   (_value, { options: { mod, file } }) => new AgentCall([], { mod: String(mod), file: file === undefined ? undefined : String(file) }),
 );
 
-const INSTALL_SOURCE = z.union([
+const INSTALL_SOURCE = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('downloadedFile'), name: z.string() }),
   z.strictObject({ kind: z.enum(['archive', 'folder']), path: z.string() }),
 ]);
@@ -212,7 +212,7 @@ const SOURCE_FOLDER = z.strictObject({ kind: z.literal('folder'), path: z.string
 
 const UPDATE_MANIFEST = gestureInput(
   `${EVERY_MOD_BY_DEFAULT_TAKES}; or a source folder, { kind: 'folder', path: the sourceFolder list_mods gives its mod }`,
-  z.strictObject({ argument: z.array(z.union([ENTRY_NAME, SOURCE_FOLDER])).optional() }),
+  z.strictObject({ argument: z.array(z.discriminatedUnion('kind', [ENTRY_NAME, SOURCE_FOLDER])).optional() }),
   (value, { argument = [] }) => new AgentCall([
     ...entryArguments(value, argument.filter((one): one is z.infer<typeof ENTRY_NAME> => !('path' in one))),
     ...argument.filter((one): one is z.infer<typeof SOURCE_FOLDER> => 'path' in one),
@@ -254,7 +254,7 @@ const DECOMPILE_AND_REPAIR = gestureInput(
   (value, { argument, options }) => new AgentCall(pluginsCall(value, argument), { where: options?.where, force: options?.force }),
 );
 
-const DROP = z.union([
+const DROP = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.enum(['winningEnd', 'losingEnd']) }),
   z.strictObject({ kind: z.enum(['before', 'after']), name: z.string() }),
 ]);

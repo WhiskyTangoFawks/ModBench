@@ -1948,6 +1948,11 @@ describe('the agent server, given an input its tool does not take', () => {
     ['read_record', { name: 'X', plugin: { name: 'A.esp', orign: 'A' } }, 'orign'],
     ['resolve_instance_names', { files: [{ mod: { name: 'A' }, path: 'f', paht: 'g' }] }, 'paht'],
     ['list_plugins', { sorted: true }, 'sorted'],
+    ['mod_move', { argument: [{ name: 'A' }], options: { place: { kind: 'mod', nme: 'B' }, end: 'winning' } }, 'nme'],
+    ['plugin_move', { argument: [{ name: 'A.esp' }], options: { drop: { kind: 'before', nme: 'B.esp' } } }, 'nme'],
+    ['mod_install', { argument: [{ kind: 'archive', paht: '/a.7z' }], options: { name: 'A' } }, 'paht'],
+    ['mod_update_manifest', { argument: [{ kind: 'folder', paht: '/s' }] }, 'paht'],
+    ['mod_update_manifest', { argument: [{ name: 'A', nme: 'B' }] }, 'nme'],
   ])('%s refuses an unknown key %j, naming it, and fires nothing', async (name, args, key) => {
     fired.calls = [];
     const { client } = await clientOf(new FakeInstance(CONFLICTED));
@@ -2022,6 +2027,20 @@ describe('the agent server, given a port', () => {
     const { bound } = await serve(new FakeInstance(VALUE));
 
     expect(await post(present(bound, 'a bound port'), { ...JSON_HEADERS, origin: 'https://rebound.example' }, '{}')).toBe(403);
+  });
+
+  it('closes the connection of each answer, so a client sends its next request on a connection of its own', async () => {
+    const { bound } = await serve(new FakeInstance(VALUE));
+
+    const connection = await new Promise<string | undefined>((done) => {
+      const sent = request({ host: '127.0.0.1', port: present(bound, 'a bound port'), path: '/mcp', method: 'POST', headers: JSON_HEADERS }, (response) => {
+        response.resume();
+        done(response.headers.connection);
+      });
+      sent.end('{}');
+    });
+
+    expect(connection).toBe('close');
   });
 
   it('answers a body that is not JSON with 400', async () => {
