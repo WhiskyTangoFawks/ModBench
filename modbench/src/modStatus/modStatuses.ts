@@ -59,9 +59,8 @@ export class ModStatuses {
     void this.deriveWhileWaiting();
   }
 
-  /** The statuses derived from the value current when asked, each as read, an unreadable one too: the derivation under way, or
-   *  when a newer value waits behind it, the next, which folds all that arrived. Values arriving meanwhile do not hold it.
-   *  While git cannot say which folders it holds, every mod's status is unreadable with that reason. */
+  /** The statuses derived from the value current when asked: the derivation under way, or the next when a newer value waits
+   *  behind it. Values arriving meanwhile do not hold it. An unreadable status is read as such. */
   async current(): Promise<ReadonlyMap<string, ModStatus>> {
     const settledRun = this.waiting === undefined ? this.started : this.started + 1;
     while (this.finished < settledRun) await new Promise<void>((resolve) => { this.finishedRun.push(resolve); });

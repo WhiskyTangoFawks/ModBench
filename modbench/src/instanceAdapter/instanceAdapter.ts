@@ -11,6 +11,7 @@ import type { NexusPage } from './nexusPage';
 import { PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
 import type { FomodMove, FomodState, ReleaseImage } from '../wire/fomodPage';
 import type { FolderRefusal } from './foldersRefused';
+import type { FileStamp } from '../repositoriesLib/stampedReads';
 import type { FolderValue, PackagesAsked, PluginFlags, Read, StatusValues } from '../repositoriesLib/statusValues';
 import type { DataFileReads } from './gameFolder/dataFileReads';
 import type { ProgramVersions } from './gameFolder/programVersions';
@@ -426,13 +427,7 @@ export interface OriginFiles {
   readonly notes: readonly string[];
 }
 
-/** What the file system says of a file without a read of its bytes. A tool can keep a file's size
- *  and date modified across a write, never the time of its change. */
-export interface FileStamp {
-  readonly size: bigint;
-  readonly modifiedNs: bigint;
-  readonly changedNs: bigint;
-}
+export type { FileStamp };
 
 /** A read of one file that answers why it could not be read, rather than failing whatever asked. */
 export type FileRead<T> = Read<T>;
