@@ -127,17 +127,19 @@ internal sealed class Indexer : IDisposable
 
     private bool _reconcileAsked;
     private bool _checkAsked;
+    // The source writes made before the last change signalled: the check it asks for vouches only for those.
+    private long _writesSignalled;
     private readonly List<string> _handed = [];
     private bool _working;
     private bool _disposed;
     private CancellationTokenSource? _reconcileCancellation;
 
-    // Guards the six fields above. Not _lock, so an arrival never waits on a status read or publish; none
+    // Guards the seven fields above. Not _lock, so an arrival never waits on a status read or publish; none
     // of this class's other locks is taken inside it.
     private readonly Lock _turns = new();
 
-    // The source writes the last whole check of the disk began after, guarded by _lock and pulsed on _reconciled, which a
-    // read after a source write waits on.
+    // The source writes made before the change signalled that the last whole check of the disk answered, guarded by _lock
+    // and pulsed on _reconciled, which a read after a source write waits on.
     private long _writesChecked;
 
     // ADR-0015. Guarded by _lock.
@@ -328,6 +330,7 @@ internal sealed class Indexer : IDisposable
         lock (_turns)
         {
             _checkAsked = true;
+            _writesSignalled = _holder.SourceWrites;
             WakeWorker();
         }
     }
@@ -377,9 +380,9 @@ internal sealed class Indexer : IDisposable
             }
             if (_reconcileAsked || _checkAsked)
             {
-                var check = _checkAsked;
+                long? writes = _checkAsked ? _writesSignalled : null;
                 (_reconcileAsked, _checkAsked) = (false, false);
-                return () => ReconcileHeld(check);
+                return () => ReconcileHeld(writes);
             }
             List<string> paths = [.. _handed];
             _handed.Clear();
@@ -409,22 +412,21 @@ internal sealed class Indexer : IDisposable
 
     // Disposal is read with the exclusive right held, which Dispose takes after setting it, so no
     // reconcile opens a store after Dispose.
-    private void ReconcileHeld(bool check) => Reconcile(() =>
+    private void ReconcileHeld(long? writesSignalled) => Reconcile(() =>
     {
         lock (_turns) return _disposed ? null : _holder.Held;
-    }, check);
+    }, writesSignalled);
 
     // ADR-0013's one verb, then, for a check of the disk, every plugin validated (ADR-0015). The arrival is read once the
-    // exclusive right is held, so a refill reconciles the load order held then. Null reconciles
-    // nothing.
-    private void Reconcile(Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, bool check)
+    // exclusive right is held, so a refill reconciles the load order held then. Null reconciles nothing.
+    private void Reconcile(Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, long? writesSignalled)
     {
-        long writes = 0;
+        long writes = writesSignalled ?? 0;
         bool arrived;
         bool refused;
         try
         {
-            arrived = ReconcileOrRefuse(arrival, check, ref writes, out refused);
+            arrived = ReconcileOrRefuse(arrival, writesSignalled is not null, ref writes, out refused);
         }
         catch (OperationCanceledException ex)
         {
@@ -487,7 +489,6 @@ internal sealed class Indexer : IDisposable
             if (arrival() is not { } resolved) return false;
             var (snapshot, arrived) = resolved;
             version = arrived;
-            writes = _holder.SourceWrites;
             if (_logger.IsEnabled(LogLevel.Debug))
             {
                 _logger.LogDebug("Reconciling load order. DataFolder={DataFolder} Instance={Instance} Plugins={Count} Game={Game}",
