@@ -269,8 +269,19 @@ function stringsBeside(
 export function listedArchivesNothingHolds({ gameRelease, listed, inData, files }: ArchiveSources): string[] {
   const rule = pluginCompanionRule(gameRelease);
   if (rule === undefined || inData.kind !== 'listed') return [];
-  const held = new Set([...inData.archives, ...[...files].map(({ relativePath }) => relativePath).filter(rule.isArchive)].map(foldPath));
+  const held = new Set([...inData.archives.map(foldPath), ...archivesOfFiles(files, gameRelease, rule.isArchive)]);
   return listed.filter((name) => !held.has(foldPath(name)));
+}
+
+// The archives the files hold are scanned once per index, which a refresh that changed no listing reuses whole (ADR-0015).
+const archivesOfIndex = new WeakMap<FileWinners, { readonly gameRelease: string; readonly archives: ReadonlySet<string> }>();
+
+function archivesOfFiles(files: FileWinners, gameRelease: string, isArchive: (relativePath: string) => boolean): ReadonlySet<string> {
+  const held = archivesOfIndex.get(files);
+  if (held?.gameRelease === gameRelease) return held.archives;
+  const archives = new Set([...files].map(({ relativePath }) => relativePath).filter(isArchive).map(foldPath));
+  archivesOfIndex.set(files, { gameRelease, archives });
+  return archives;
 }
 
 /** ADR-0013's snapshot: none without a listable game folder, a refusal while a mod's plugin has no mod

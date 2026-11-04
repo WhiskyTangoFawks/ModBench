@@ -22,7 +22,7 @@ import { mo2Archives } from './mo2Archives';
 import type { ReadingSource } from '../instanceReading';
 import type { ConfigurationFile } from '../publisher';
 import { entryKey, listModFolders, modFolderNamed, modFoldersOf, type Mo2Context } from './mo2Context';
-import { originFilesIn } from './mo2Files';
+import { originFilesReader } from './mo2Files';
 import { sourceModFoldersIn } from './sourceModFolders';
 import { errorMessage } from '../../ports/errorMessage';
 import { errnoCode } from '../../ports/errno';
@@ -98,6 +98,7 @@ const watchModFolders = ({ watch }: Mo2Context, folders: readonly ModFolder[]): 
 
 export function readingSource(context: Mo2Context, publisherFile: ConfigurationFile | undefined): ReadingSource {
   const { instanceRoot, resolveGameFolder, resolveDownloadsFolder, watch, mo2Running } = context;
+  const originFilesOf = originFilesReader(context);
   return {
     names: MO2_NAMES,
     modLineKey,
@@ -153,9 +154,9 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
 
     creationClubList: readCreationClubList,
 
-    originFiles: (origin, folders) => originFilesIn(context, origin, false, folders),
+    originFiles: (origin, folders) => originFilesOf(origin, false, folders),
 
-    originRootFiles: (origin, folders) => originFilesIn(context, origin, true, folders),
+    originRootFiles: (origin, folders) => originFilesOf(origin, true, folders),
 
     sourceModFolders: () => sourceModFoldersIn(instanceRoot),
 
