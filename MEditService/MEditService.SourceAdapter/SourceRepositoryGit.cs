@@ -211,6 +211,18 @@ internal abstract class SourceRepositoryGit
         throw SourceStopException.GitFailed($"git cannot read HEAD of '{_sourceFolder}'");
     }
 
+    /// <summary>The files whose change moves what git status says of a tree but touches no document: a commit moves
+    /// the index and the ref HEAD names.</summary>
+    internal IReadOnlyList<string> StateFiles()
+    {
+        const string RefPrefix = "ref: ";
+        var head = Path.Combine(_gitDir, "HEAD");
+        var named = File.Exists(head) && File.ReadLines(head).FirstOrDefault() is { } line && line.StartsWith(RefPrefix, StringComparison.Ordinal)
+            ? Path.Combine(_gitDir, line[RefPrefix.Length..].Trim())
+            : null;
+        return [head, Path.Combine(_gitDir, "index"), Path.Combine(_gitDir, "packed-refs"), .. named is null ? [] : new[] { named }];
+    }
+
     // A loose ref is a file, until git packs it into packed-refs.
     private bool RefIsStored(string gitRef) =>
         File.Exists(Path.Combine(_gitDir, gitRef)) || PackedRefs(_gitDir).Contains(gitRef);

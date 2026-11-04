@@ -649,6 +649,8 @@ public sealed class FailedReadStateTests : IDisposable
             return inner.RecordOf(plugin, identity);
         }
 
+        public FilesStamp RepositoryStamp() => inner.RepositoryStamp();
+
         public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommit(PluginAddress plugin) =>
             inner.ChangedSinceLastCommit(plugin);
 
