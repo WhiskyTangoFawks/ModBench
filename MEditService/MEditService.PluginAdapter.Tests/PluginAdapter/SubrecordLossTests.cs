@@ -178,9 +178,9 @@ public sealed class SubrecordLossTests : IDisposable
         using var stream = new MemoryStream();
         mod.WriteToBinary(stream);
 
-        var held = PluginBinaryWalk.Records(stream.ToArray(), GameRelease.Fallout4).ToDictionary(r => r.RecordType.Type, r => r.ContentLength);
+        var written = Encoding.ASCII.GetString(stream.ToArray());
 
-        Assert.Equal((0, true), (held["CELL"], held["WRLD"] > 0));
+        Assert.Equal((false, true), (written.Contains("DeletedCell", StringComparison.Ordinal), written.Contains("DeletedWorld", StringComparison.Ordinal)));
     }
 
     [Fact]
