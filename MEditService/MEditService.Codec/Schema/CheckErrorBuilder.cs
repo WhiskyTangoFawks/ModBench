@@ -20,9 +20,9 @@ public static class CheckErrorBuilder
         // Nothing unread, for a caller whose targets all live in one store it just read.
         Func<string, string?> unread = whyUnchecked ?? (_ => null);
         FormReferences.Walk(meta, value, "",
-            (path, raw, allowsNull, validTypes) =>
+            (path, raw, validTypes) =>
             {
-                var err = CheckScalar(raw, allowsNull, validTypes, resolve, unread, release, indexed);
+                var err = CheckScalar(raw, validTypes, resolve, unread, release, indexed);
                 if (err != null) entries.Add(path.Length > 0 ? $"{path}: {err}" : err);
             });
         return entries.Count > 0 ? string.Join("; ", entries) : null;
@@ -36,11 +36,11 @@ public static class CheckErrorBuilder
         && !(translated.TryGetProperty("Values", out var values) && values.GetArrayLength() > 0);
 
     private static string? CheckScalar(
-        string? value, bool allowsNull, IReadOnlyList<string> validTypes,
+        string? value, IReadOnlyList<string> validTypes,
         Func<string, ResolvedFormKey?> resolve, Func<string, string?> whyUnchecked, GameRelease release, bool indexed)
     {
         if (string.IsNullOrEmpty(value) || value == "Null")
-            return allowsNull ? null : $"Found a NULL reference, expected: {Signatures(validTypes)}";
+            return null;
 
         // Asked only of a miss: a key the lookup answers is answered, and the hardcoded-range
         // exemption stands whether or not that master's file could be read.
