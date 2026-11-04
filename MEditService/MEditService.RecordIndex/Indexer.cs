@@ -91,7 +91,7 @@ internal sealed class Indexer : IDisposable
         }
     }
 
-    private (long Version, LoadOrderState State, string? Message) _told;
+    private (long Version, LoadOrderState State, string? Message, bool Validating) _told;
 
     // ADR-0015: every site that changes what Status reports calls this after. A status counts as told
     // only once Publish returns. _lock is reentrant, so this is safe from inside a lock a caller holds.
@@ -101,7 +101,7 @@ internal sealed class Indexer : IDisposable
         {
             var status = Status;
             _notifications?.Publish(new LoadOrderStatusNotification(status));
-            _told = (status.Version, status.State, status.Message);
+            _told = (status.Version, status.State, status.Message, status.Validating);
         }
     }
 
@@ -111,7 +111,7 @@ internal sealed class Indexer : IDisposable
         lock (_lock)
         {
             var status = Status;
-            return _told != (status.Version, status.State, status.Message);
+            return _told != (status.Version, status.State, status.Message, status.Validating);
         }
     }
 
@@ -132,10 +132,11 @@ internal sealed class Indexer : IDisposable
     private readonly List<string> _handed = [];
     private readonly HashSet<PluginAddress> _named = new(PluginAddress.Comparer);
     private bool _working;
+    private bool _validatingTurn;
     private bool _disposed;
     private CancellationTokenSource? _reconcileCancellation;
 
-    // Guards the eight fields above. Not _lock, so an arrival never waits on a status read or publish; none
+    // Guards the nine fields above. Not _lock, so an arrival never waits on a status read or publish; none
     // of this class's other locks is taken inside it.
     private readonly Lock _turns = new();
 
@@ -277,7 +278,7 @@ internal sealed class Indexer : IDisposable
                 else
                 {
                     var state = _conflictsComputed && !_validating ? LoadOrderState.Ready : LoadOrderState.Reconciling;
-                    held = new LoadOrderStatus(state, _plannedCount, _activeCount, [.. _indexed], _conflictsComputed, [.. _scope.Held.Failures, .. _collisionFailures], Version: _standing.Version);
+                    held = new LoadOrderStatus(state, _plannedCount, _activeCount, [.. _indexed], _conflictsComputed, [.. _scope.Held.Failures, .. _collisionFailures], Version: _standing.Version, Validating: ValidationAsked());
                 }
 
                 if (_standing.HeldElsewhere is { } heldElsewhere)
@@ -351,6 +352,12 @@ internal sealed class Indexer : IDisposable
         }
     }
 
+    // Lock order: _lock, then _turns. Nothing holding _turns takes _lock.
+    private bool ValidationAsked()
+    {
+        lock (_turns) return _validatingTurn || _checkAsked || _handed.Count > 0 || _named.Count > 0;
+    }
+
     // ADR-0015: a handed path is validated as a change on disk is.
     private void ValidateTreesHolding(IReadOnlyList<string> paths)
     {
@@ -372,6 +379,7 @@ internal sealed class Indexer : IDisposable
     {
         while (NextTurn() is { } turn)
         {
+            TellIfUntold();
             try { turn(); }
             catch (Exception ex) when (!CancelledBy(ex, CancellationToken.None))
             {
@@ -382,6 +390,17 @@ internal sealed class Indexer : IDisposable
                     _logger.LogError(publishFault, "Publishing the status after a failed turn failed");
                 }
             }
+            lock (_turns) _validatingTurn = false;
+            TellIfUntold();
+        }
+    }
+
+    private void TellIfUntold()
+    {
+        try { if (Untold()) PublishStatus(); }
+        catch (Exception publishFault) when (!CancelledBy(publishFault, CancellationToken.None))
+        {
+            _logger.LogError(publishFault, "Publishing the status around a turn failed");
         }
     }
 
@@ -398,6 +417,7 @@ internal sealed class Indexer : IDisposable
             {
                 long? writes = _checkAsked ? _writesSignalled : null;
                 if (_checkAsked) _named.Clear();
+                _validatingTurn = _checkAsked;
                 (_reconcileAsked, _checkAsked) = (false, false);
                 return () => ReconcileHeld(writes);
             }
@@ -405,6 +425,7 @@ internal sealed class Indexer : IDisposable
             HashSet<PluginAddress> named = new(_named, PluginAddress.Comparer);
             _handed.Clear();
             _named.Clear();
+            _validatingTurn = true;
             return () => ValidateAndPublish(paths, named);
         }
     }

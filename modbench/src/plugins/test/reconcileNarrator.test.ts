@@ -3,7 +3,7 @@ import type { LoadOrderProgress } from '../../client';
 import { createReconcileNarrator } from '../reconcileNarrator';
 
 const tick = (over: Partial<LoadOrderProgress> = {}): LoadOrderProgress => ({
-  totalPlugins: 2, activePlugins: 2, version: 3, indexedPlugins: [], conflictsComputed: false, failures: [], holdsNone: false, ...over,
+  totalPlugins: 2, activePlugins: 2, version: 3, indexedPlugins: [], conflictsComputed: false, failures: [], holdsNone: false, validating: false, ...over,
 });
 const dropped = (version = 3) => tick({ holdsNone: true, totalPlugins: 0, version });
 const ready = (version = 3) => tick({ conflictsComputed: true, indexedPlugins: [{ name: 'A.esp', origin: 'SomeMod' }, { name: 'B.esp', origin: 'SomeMod' }], version });
@@ -46,6 +46,21 @@ describe('the reconcile narrator, the view\'s progress and each row\'s indexed s
 
     expect(progress).toEqual([{ closed: true }]);
     expect(deps.settle.mock.calls).toEqual([[ready(4)]]);
+  });
+
+  it('keeps the progress open from a validation the record index announces until it settles, though the conflicts were computed all along', async () => {
+    const { progress, narrator } = narrated();
+    narrator.hear(ready(3));
+    await narrator.settled(3);
+
+    narrator.hear({ ...ready(3), validating: true });
+    expect(progress).toEqual([{ closed: false }]);
+    narrator.hear({ ...ready(3), validating: true });
+    expect(progress).toHaveLength(1);
+
+    narrator.hear(ready(3));
+    await narrator.settled(3);
+    expect(progress).toEqual([{ closed: true }]);
   });
 
   it('opens one progress for a reconcile, however many ticks it publishes', () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { errorText, toLoadOrderStatus } from '../apiClient';
+import { errorText, isTerminalLoadOrderStatusFor, toLoadOrderStatus } from '../apiClient';
 
 describe('errorText, the sentence written for the user rather than the RFC 7807 ProblemDetails envelope the backend answers every failure in', () => {
   it.each([
@@ -14,8 +14,17 @@ describe('errorText, the sentence written for the user rather than the RFC 7807 
   });
 });
 
+describe('isTerminalLoadOrderStatusFor', () => {
+  const status = { totalPlugins: 1, activePlugins: 1, version: 2, indexedPlugins: [], conflictsComputed: true, failures: [], holdsNone: false, validating: false };
+
+  it('is not terminal while the record index validates a change, though its conflicts are computed', () => {
+    expect(isTerminalLoadOrderStatusFor(status, 2)).toBe(true);
+    expect(isTerminalLoadOrderStatusFor({ ...status, validating: true }, 2)).toBe(false);
+  });
+});
+
 describe('toLoadOrderStatus', () => {
-  const wire = { totalPlugins: 0, activePlugins: 0, version: 1, indexedPlugins: [], conflictsComputed: false, failures: [] };
+  const wire = { totalPlugins: 0, activePlugins: 0, version: 1, indexedPlugins: [], conflictsComputed: false, failures: [], validating: false };
 
   it('keeps each indexed plugin as (origin, filename), so two of one filename stay two, and carries conflictsComputed false through a Ready wire state, as the whole-set conflict sweep leaves a Ready load order with stale winners', () => {
     const status = toLoadOrderStatus({
@@ -24,6 +33,7 @@ describe('toLoadOrderStatus', () => {
       indexedPlugins: [{ name: 'Shared.esp', origin: 'ModA' }, { name: 'Shared.esp', origin: 'ModB' }],
       conflictsComputed: false,
       failures: [{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }],
+      validating: false,
     });
 
     expect(status).toEqual({
@@ -32,6 +42,7 @@ describe('toLoadOrderStatus', () => {
       conflictsComputed: false,
       failures: [{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }],
       holdsNone: false,
+      validating: false,
     });
     expect(status.refusal).toBeUndefined();
   });

@@ -1362,6 +1362,7 @@ export interface components {
             message?: string | null;
             /** Format: int64 */
             version: number;
+            validating: boolean;
         };
         MadeFile: {
             path: string;

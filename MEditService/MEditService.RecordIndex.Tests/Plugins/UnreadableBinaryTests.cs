@@ -82,13 +82,20 @@ public sealed class UnreadableBinaryTests : IDisposable
     {
         NonCompiledPluginOverAnUnreadableBinary();
         var before = _notifications.Notifications.Count;
+        var standing = _index.Status;
         var other = new Fallout4Mod(ModKey.FromFileName("Other.esp"), Fallout4Release.Fallout4);
         other.Npcs.AddNew("OtherNpcChangedBesideTheUnreadableOne");
         other.WriteToBinary(OtherPluginPath);
 
         _index.NextCheck();
 
-        Assert.DoesNotContain(_notifications.Notifications.Skip(before), n => n is LoadOrderStatusNotification);
+        Assert.All(
+            _notifications.Notifications.Skip(before).OfType<LoadOrderStatusNotification>(),
+            n =>
+            {
+                Assert.Equal(standing.State, n.Status.State);
+                Assert.Equal(standing.Failures, n.Status.Failures);
+            });
     }
 
     [Fact]

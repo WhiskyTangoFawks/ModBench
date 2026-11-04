@@ -17,7 +17,7 @@ internal static class Announcements
         n => n is LoadOrderStatusNotification status && status.Status.Failures.Any(f => f.Name == plugin);
 
     /// <summary>Two checks of the disk, each answered once the change it found is announced. A check
-    /// validates every plugin before it announces, so a plugin neither announced is known quiet.</summary>
+    /// validates every plugin before it announces, so a plugin neither announced is known quiet. The status stream is read on its own.</summary>
     internal static IReadOnlyList<INotification> AnnouncedByChecks(
         this OpenedIndex index, InMemoryNotificationPublisher notifications, Func<Predicate<INotification>> change)
     {
@@ -28,7 +28,7 @@ internal static class Announcements
             var before = notifications.Notifications.Count;
             index.NextCheckUntil(() => notifications.Since(before).Any(n => announced(n)), "the change the check found");
         }
-        return notifications.Since(start);
+        return [.. notifications.Since(start).Where(n => n is not LoadOrderStatusNotification)];
     }
 
     /// <summary>A non-compiled plugin's binary rewritten: announced as the plugin.</summary>

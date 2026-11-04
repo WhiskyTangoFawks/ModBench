@@ -311,7 +311,7 @@ public sealed class ReconcileDoorTests
 
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.Equal(first, index.Status.Version);
-        Assert.All(notifications.Since(before), n => Assert.True(Announcements.PluginChanged(fx.Plugins[0])(n)));
+        Assert.All(notifications.Since(before).Where(n => n is not LoadOrderStatusNotification), n => Assert.True(Announcements.PluginChanged(fx.Plugins[0])(n)));
         Assert.Equal(2, announced.Count);
     }
 

@@ -3,7 +3,7 @@ import { loadOrderComing } from '../loadOrderComing';
 import type { LoadOrderStatus } from '../../client/apiClient';
 
 const status = (overrides: Partial<LoadOrderStatus>): LoadOrderStatus => ({
-  totalPlugins: 0, activePlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [], version: 1, holdsNone: false, ...overrides,
+  totalPlugins: 0, activePlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [], version: 1, holdsNone: false, validating: false, ...overrides,
 });
 
 const comingFor = (modbenchHasOne: boolean, loadOrderStatus?: LoadOrderStatus) =>

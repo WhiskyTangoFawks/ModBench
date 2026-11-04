@@ -6,7 +6,7 @@ import type { PutLoadOrderResult } from '../loadOrder';
 import type { LoadOrderSource } from '../loadOrder';
 
 const STATUS: LoadOrderProgress = {
-  totalPlugins: 1, activePlugins: 1, version: 7, indexedPlugins: [], conflictsComputed: true, holdsNone: false, failures: [],
+  totalPlugins: 1, activePlugins: 1, version: 7, indexedPlugins: [], conflictsComputed: true, holdsNone: false, validating: false, failures: [],
 };
 const APPLIED: LoadOrderOutcome = { outcome: 'applied', status: STATUS };
 
