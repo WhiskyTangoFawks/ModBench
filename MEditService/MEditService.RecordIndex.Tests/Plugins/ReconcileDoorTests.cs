@@ -251,39 +251,6 @@ public sealed class ReconcileDoorTests
     }
 
     [Fact]
-    public async Task AFailureCleared_ByAnAttemptSupersededBeforeItsClosingSwap_IsToldByItsSuccessor()
-    {
-        using var data = new PluginFixtureBuilder("superseded-untold-door")
-            .WithPlugin("NonCompiledPlugin.esp", mod => mod.Npcs.AddNew("FromA"))
-            .WithPlugin("Other.esp", mod => mod.Npcs.AddNew("FromOther"))
-            .Build();
-        var notifications = new InMemoryNotificationPublisher { FaultsOn = n => n is PluginChangedNotification };
-        var log = new List<LogEntry>();
-        using var loggerFactory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider(log)));
-        var holder = new LoadOrderHolder();
-        using var gate = new GatedPluginAdapter();
-        using var index = Indexes.Open(holder, gate, loggerFactory: loggerFactory, notifications: notifications);
-        index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
-        PluginBinaries.Rewrite(data.Plugins[0].Path, mod => mod.Npcs.AddNew("WrittenByAnotherTool"));
-        index.NextSnapshotUntil(() => index.Status.State == LoadOrderState.Failed, "the failed status");
-        notifications.FaultsOn = null;
-        PluginBinaries.Rewrite(data.Plugins[0].Path, mod => mod.Npcs.AddNew("WrittenAgain"));
-        gate.ParkNextOpenOf(data.Plugins[0].Name);
-        holder.Apply(holder.Current);
-        Assert.True(await Waits.CompletesWithin(gate.WaitUntilParkedAsync(), TimeSpan.FromSeconds(20)), "the validation re-reading the plugin");
-
-        holder.Apply(holder.Current);
-        Waits.Reached(() => { lock (log) return log.Exists(e => e.Message.Contains("Asked the reconcile in flight to stop", StringComparison.Ordinal)); }, "the attempt being asked to stop");
-        gate.Release();
-        Waits.Reached(() => { lock (log) return log.Exists(e => e.Message.Contains("superseded", StringComparison.Ordinal)); }, "the attempt being superseded");
-
-        Waits.Reached(() => index.Status.State == LoadOrderState.Ready, "the successor answering Ready");
-        Assert.True(
-            Waits.ReachedWithin(() => StatusesPublished(notifications).LastOrDefault()?.Status.State == LoadOrderState.Ready, TimeSpan.FromSeconds(20)),
-            "the successor publishing the Ready it answers");
-    }
-
-    [Fact]
     public void AReconcileThatStillFails_IsTriedOncePerEqualSnapshot()
     {
         using var data = new PluginFixtureBuilder("retry-once-door").WithPlugin("A.esp").Build();
@@ -324,33 +291,6 @@ public sealed class ReconcileDoorTests
         Waits.Reached(() => index.Status.State == LoadOrderState.Ready, "the refresh's ready status");
         Assert.Null(index.Status.Message);
         Assert.Equal(["FromA"], index.ListedIn(new PluginAddress("A.esp", PluginOrigin.DataDirectory)).Select(row => row.EditorId));
-    }
-
-    [Fact]
-    public async Task ASupersededReconcile_NeverEscapes_AndTheSurvivorAnswersReadyForItsOwnVersion()
-    {
-        var holder = new LoadOrderHolder();
-        using var fx = new PluginFixtureBuilder("superseded-door")
-            .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
-            .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
-            .BuildScattered();
-        var notifications = new InMemoryNotificationPublisher();
-        using var gate = new GatedPluginAdapter(gateBefore: "B.esp");
-        using var index = Indexes.Open(holder, gate, notifications: notifications);
-
-        holder.Apply(SnapshotPlugins.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins));
-        await gate.WaitUntilParkedAsync();
-        var second = holder.Apply(SnapshotPlugins.Snapshot(
-            fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, [fx.Plugins[0] with { Enabled = false }, .. fx.Plugins.Skip(1)]));
-        gate.Release();
-        index.AwaitVersion(second);
-
-        Waits.Reached(
-            () => StatusesPublished(notifications).Any(n => n.Status.State == LoadOrderState.Ready && n.Status.Version == second),
-            "the survivor's ready status");
-        Assert.Equal(LoadOrderState.Ready, index.Status.State);
-        Assert.Equal(second, index.Status.Version);
-        Assert.DoesNotContain(StatusesPublished(notifications), n => n.Status.State == LoadOrderState.HeldElsewhere);
     }
 
     [Fact]
@@ -409,27 +349,35 @@ public sealed class ReconcileDoorTests
     }
 
     [Fact]
-    public async Task ArrivalsDuringAReconcile_AreReconciledOnceAfterIt()
+    public async Task AReconcileInFlight_FinishesThroughLaterArrivals_WhichFoldIntoOneMore()
     {
-        using var data = new PluginFixtureBuilder("coalesced-door").WithPlugin("A.esp").Build();
+        using var fx = new PluginFixtureBuilder("folded-door")
+            .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
+            .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
+            .BuildScattered();
         var log = new List<LogEntry>();
         using var loggerFactory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider(log)));
         int Reconciles()
         {
             lock (log) return log.Count(e => e.Message.StartsWith("Reconciling load order", StringComparison.Ordinal));
         }
+        var notifications = new InMemoryNotificationPublisher();
         var holder = new LoadOrderHolder();
-        using var gate = new GatedPluginAdapter(gateBefore: "A.esp");
-        using var index = Indexes.Open(holder, gate, loggerFactory: loggerFactory);
-        holder.Apply(SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        using var gate = new GatedPluginAdapter(gateBefore: "B.esp");
+        using var index = Indexes.Open(holder, gate, loggerFactory: loggerFactory, notifications: notifications);
+        var first = holder.Apply(SnapshotPlugins.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins));
         await gate.WaitUntilParkedAsync();
 
-        holder.Apply(holder.Current);
+        var second = holder.Apply(SnapshotPlugins.Snapshot(
+            fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, [fx.Plugins[0] with { Enabled = false }, .. fx.Plugins.Skip(1)]));
         holder.Apply(holder.Current);
         gate.Release();
-        Waits.Reached(() => Reconciles() >= 2 && index.Status.State == LoadOrderState.Ready, "the reconcile after the arrivals");
+        index.AwaitVersion(second);
+        Waits.Reached(() => index.Status.State == LoadOrderState.Ready, "the reconcile after the arrivals");
         await Task.Delay(TimeSpan.FromMilliseconds(500));
 
+        Assert.Contains(StatusesPublished(notifications), n => n.Status.State == LoadOrderState.Ready && n.Status.Version == first);
         Assert.Equal(2, Reconciles());
+        Assert.Equal(second, index.Status.Version);
     }
 }

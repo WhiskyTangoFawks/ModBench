@@ -93,7 +93,7 @@ export function registerAgentGesture<Row, Given, Outcome, Options extends object
 }
 
 /** A command that writes and is no AgentGesture: a call from a view is a view call (`asViewCall`). */
-export function registerWritingCommand<Args extends unknown[]>(commandId: string, run: (...args: Args) => unknown): vscode.Disposable {
-  return vscode.commands.registerCommand(commandId, (...args: Args) =>
-    (isAgentCall(args[0]) ? run(...args) : asViewCall(async () => run(...args))));
+export function registerWritingCommand(commandId: string, run: (clicked?: unknown, selected?: readonly unknown[]) => unknown): vscode.Disposable {
+  return vscode.commands.registerCommand(commandId, (clicked?: unknown, selected?: readonly unknown[]) =>
+    (isAgentCall(clicked) ? run(clicked, selected) : asViewCall(() => Promise.resolve(run(clicked, selected)))));
 }

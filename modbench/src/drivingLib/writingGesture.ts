@@ -46,8 +46,8 @@ const titleOf = (command: string): string => surface?.titles.get(command) ?? com
 /** A write refused because another is in flight. */
 export class RefusedWrite extends Refusal {}
 
-/** Runs `work` as a view call: a refused write is told to the user once, in a notification and the Output, and the view
- *  is shown what is on disk (common.md, Reporting). An agent's call is not run through this: the reason goes back to it. */
+/** Runs `work` as a view call: a refused write is told once in a notification and the Output, and the view is shown
+ *  the disk (common.md, Reporting). An agent's call skips this: the reason goes back to it. */
 export async function asViewCall<T>(work: () => Promise<T>): Promise<T | undefined> {
   try {
     return await work();
