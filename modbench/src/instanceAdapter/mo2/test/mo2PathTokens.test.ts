@@ -9,6 +9,7 @@ import type { GameDetectors } from '../../gameFolder/gameFolderResolver';
 import type { ConfigurationFile } from '../../publisher';
 import { sedReplacement, sedSubstitution } from '../../pathTokens';
 import { managerOver } from '../../../test/mo2/adapterOver';
+import { fileProblemsFake } from '../../../test/fileProblemsFake';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
@@ -370,6 +371,77 @@ describe('the MO2 adapter\'s path tokens', () => {
       expect(held(root, PUBLISHER_FILE)).toBe(JSON.stringify({ Source: '{instance folder}', Output: '' }));
     });
 
+  });
+
+  describe('a file the index or HEAD holds unfiltered', () => {
+    const commit = (root: string): void => { git(root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '-m', 'commit'); };
+
+    const stagedAsTextWithNoFilter = (root: string, path: string): void => {
+      const blob = git(root, 'hash-object', '-w', '--no-filters', '--', path).trim();
+      git(root, 'update-index', '--add', '--cacheinfo', `100644,${blob},${path}`);
+    };
+
+    async function problemsOver(file: string, text: (root: string) => string) {
+      const { root } = await instanceRepository([]);
+      const problems = fileProblemsFake();
+      const adapter = managerOver(root, { fileProblems: problems }, PUBLISHER);
+      await put(root, 'profiles/Default/plugins.txt', '');
+      await writeFile(join(root, file), text(root));
+      await adapter.writePathTokens();
+      const shown = async () => {
+        await adapter.reading();
+        return problems.held.get(join(root, file));
+      };
+      return { root, shown };
+    }
+
+    const unfiltered = (holders: string, remedy: string) =>
+      [{ line: 1, message: `${holders} this file unfiltered, so a clone gets this machine's own values, such as its paths. ${remedy}` }];
+
+    it('shows the index holding it on the file, until a stage of the whole file', async () => {
+      const { root, shown } = await problemsOver(PUBLISHER_FILE, (instance) => JSON.stringify({ Source: instance }));
+      stagedAsTextWithNoFilter(root, PUBLISHER_FILE);
+
+      const staged = await shown();
+      git(root, 'add', '--', PUBLISHER_FILE);
+
+      expect([staged, await shown()]).toEqual([unfiltered('The index holds', 'Stage the whole file to filter it.'), undefined]);
+    });
+
+    it('shows HEAD holding it on the file, until a commit of it filtered', async () => {
+      const { root, shown } = await problemsOver('ModOrganizer.ini', (instance) => SETTINGS([`path=${onWineDrive(instance, '/')}/tools`]));
+      stagedAsTextWithNoFilter(root, 'ModOrganizer.ini');
+      commit(root);
+
+      const committed = await shown();
+      git(root, 'add', '--', 'ModOrganizer.ini');
+      const restaged = await shown();
+      commit(root);
+
+      expect([committed, restaged, await shown()]).toEqual([
+        unfiltered('The index and HEAD hold', 'Stage the whole file to filter it, then commit it.'),
+        unfiltered('HEAD holds', 'Commit it as staged.'),
+        undefined,
+      ]);
+    });
+
+    it('shows nothing for a file staged filtered with bytes outside UTF-8 while the working tree holds UTF-8', async () => {
+      const { root, shown } = await problemsOver('ModOrganizer.ini', () => SETTINGS([]));
+      await writeFile(join(root, 'ModOrganizer.ini'), Buffer.from(SETTINGS(['name=Caf\xe9']), 'latin1'));
+      git(root, 'add', '--', 'ModOrganizer.ini');
+      await writeFile(join(root, 'ModOrganizer.ini'), SETTINGS([]));
+
+      expect(await shown()).toBeUndefined();
+    });
+
+    it('shows nothing for a file committed with other line ends than git converts to', async () => {
+      const { root, shown } = await problemsOver('ModOrganizer.ini', (instance) => SETTINGS([`path=${onWineDrive(instance, '/')}/tools`]));
+      git(root, 'add', '--', 'ModOrganizer.ini');
+      commit(root);
+      git(root, 'config', 'core.autocrlf', 'true');
+
+      expect(await shown()).toBeUndefined();
+    });
   });
 
   describe('on a clone', () => {
