@@ -7,6 +7,8 @@ import { dirname, join, resolve } from 'node:path';
 import { errnoCode } from '../../ports/errno';
 import { exists, get, isRepository, makeTempDir, putIfChanged, readOrAbsent, remove, undoAll, write, type Undo } from '../files';
 import { git, gitFed, gitWritingInto } from '../git';
+import type { FileProblems } from '../../ports/fileProblems';
+import { unfilteredFiles } from '../unfilteredFiles';
 import type { GameFolder, InstanceAdapter } from '../instanceAdapter';
 import {
   folderTokens, holdsPathToken, sedLiteral, sedReplacement, sedSubstitution, tokenFilter, type FolderName, type TokenFilter, type PathSpelling, type TokenFolders, type TokenProgram,
@@ -278,6 +280,22 @@ async function committedOutsideInstanceIn(instanceRoot: string, covered: readonl
 async function machineOf(instanceRoot: string, covered: readonly CoveredFile[]): Promise<Machine> {
   const texts = await Promise.all(covered.flatMap(({ driver, file }) => (file === undefined ? [] : [get(join(instanceRoot, file), '').then((text): [string, string] => [driver, text])])));
   return new Map(texts);
+}
+
+/** Shows each file the path filter covers that the index or HEAD holds unfiltered as a problem on it. A failed listing
+ *  leaves what it showed, since git's failure shows on the statuses. */
+export function unfilteredShown(instanceRoot: string, publisherFile: ConfigurationFile | undefined, problems: FileProblems): () => Promise<void> {
+  const drivers = coveredFiles(publisherFile).map(({ driver }) => driver);
+  const unfiltered = unfilteredFiles();
+  let shown: ReadonlyMap<string, string> = new Map();
+  return async () => {
+    const now = await isRepository(instanceRoot) ? await unfiltered(instanceRoot, drivers).catch(() => shown) : new Map<string, string>();
+    for (const path of new Set([...shown.keys(), ...now.keys()])) {
+      const message = now.get(path);
+      if (message !== shown.get(path)) problems.set(join(instanceRoot, path), message === undefined ? [] : [{ line: 1, message }]);
+    }
+    shown = now;
+  };
 }
 
 const foundRoot = (folder: GameFolder): string | undefined => (folder.kind === 'found' ? folder.root : undefined);
