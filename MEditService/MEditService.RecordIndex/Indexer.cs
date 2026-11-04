@@ -105,7 +105,7 @@ internal sealed class Indexer : IDisposable
         }
     }
 
-    // A swap whose publish never came, such as a superseded attempt's, is told by the next attempt's close.
+    // A status whose publish faulted is told by the next attempt's close.
     private bool Untold()
     {
         lock (_lock)
@@ -122,9 +122,7 @@ internal sealed class Indexer : IDisposable
     // Deliberately not _lock: the reconciling thread takes _lock on every plugin, so a waiter
     // holding it could never be signalled.
     private readonly Lock _exclusive = new();
-    // Only disposal stops a plugin read partway, inside the one transaction its rows land in. A newer
-    // snapshot waits for the plugin in hand: snapshots come with every source write (ADR-0015), and each
-    // reconcile must make progress.
+    // Only disposal stops a plugin read partway, inside the one transaction its rows land in.
     private readonly CancellationTokenSource _disposal = new();
 
     private bool _reconcileAsked;
@@ -308,19 +306,18 @@ internal sealed class Indexer : IDisposable
     public void RecoverFromInvalidation() => AskReconcile();
 
     // ADR-0013: every arrival, changed or not, reconciles the snapshot held when its turn runs, so an
-    // overtaken arrival reconciles the newer.
+    // overtaken arrival reconciles the newer. ADR-0015: a reconcile in flight finishes, and the arrivals
+    // during it fold into one more.
     private void AskReconcile()
     {
         lock (_turns)
         {
             _reconcileAsked = true;
-            CancelInFlight();
             WakeWorker();
         }
     }
 
-    // ADR-0015: a handed path is validated as a change on disk is. A reconcile in flight is waited out,
-    // never cancelled.
+    // ADR-0015: a handed path is validated as a change on disk is.
     private void ValidateTreesHolding(IReadOnlyList<string> paths)
     {
         lock (_turns)
@@ -415,9 +412,9 @@ internal sealed class Indexer : IDisposable
         }
         catch (OperationCanceledException ex)
         {
-            // Superseded: the reconcile that cancelled this one answers for this version or
-            // higher, so nothing here is ever the last word for it. Normal, not a failure:
-            // Information, not Warning.
+            // Superseded by a rebuild or disposal: the reconcile a rebuild asks for answers for
+            // this version or higher, so nothing here is ever the last word for it. Normal, not a
+            // failure: Information, not Warning.
             _logger.LogInformation(ex, "Load order reconcile was superseded before it completed");
             return;
         }
@@ -458,8 +455,8 @@ internal sealed class Indexer : IDisposable
         get { lock (_lock) return _arrivalReconciled; }
     }
 
-    // A superseded reconcile throws, leaving its work to its successor. The closing swap and its publish
-    // share one hold of _lock, so no reader sees a version before the status answering it.
+    // A superseded reconcile throws, leaving its work to the reconcile after the rebuild. The closing swap
+    // and its publish share one hold of _lock, so no reader sees a version before the status answering it.
     private bool ReconcileOrRefuse(
         Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, ref long arrivals, out bool refused)
     {
@@ -790,8 +787,8 @@ internal sealed class Indexer : IDisposable
         // plugin wait on the slowest before any could be indexed, and bury each open failure.
         foreach (var plugin in arriving)
         {
-            // At the top of each plugin rather than mid-plugin: a newer snapshot waits for the plugin in
-            // hand (see _disposal).
+            // At the top of each plugin rather than mid-plugin: a rebuild waits for the plugin in hand
+            // (see _disposal).
             token.ThrowIfCancellationRequested();
 
             PluginMetadata? metadata = null;
