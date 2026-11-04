@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { LaunchOutcome, LoadOrderOutcome, LoadOrderProgress } from '../../client';
+import type { LaunchOutcome, LoadOrderOutcome, LoadOrderProgress, LoadOrderSnapshot } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { editingFlow } from '../editing';
 import type { PutLoadOrderResult } from '../loadOrder';
@@ -15,7 +15,7 @@ const REFUSED: LoadOrderSource = { refusal: 'a.esp has no mod folder' };
 
 function valueWith(name: string): LoadOrderSource {
   const plugin = { name, path: `/game/Data/${name}`, origin: 'Base Mod', provider: { kind: 'Game' as const }, line: null, lineNamesIt: false, archives: [], stringsFiles: [] };
-  return { plugins: [plugin], active: [{ name, origin: 'Base Mod' }], loadedWithNoLine: [], archives: [], stringsFiles: [], places: [], dataFolder: '/game/Data', gameRelease: 'Fallout4' };
+  return { plugins: [plugin], active: [{ name, origin: 'Base Mod' }], loadedWithNoLine: [], listedArchives: [], archivesByPlugin: [], stringsFiles: [], places: [], dataFolder: '/game/Data', gameRelease: 'Fallout4' };
 }
 
 type Told = PutLoadOrderResult;
@@ -40,15 +40,56 @@ function wired(status: 'running' | 'stopped' = 'running') {
     check();
   });
   const around: { entered: number; settled: boolean; told: number[] } = { entered: 0, settled: false, told: [] };
+  let blueprintNames: string[] = [];
+  const changeListeners: (() => void)[] = [];
+  const inGameOrder = {
+    of: ({ active }: Pick<LoadOrderSnapshot, 'active'>) => [...active.filter(({ name }) => !blueprintNames.includes(name)), ...active.filter(({ name }) => blueprintNames.includes(name))],
+    onChange: (listener: () => void) => { changeListeners.push(listener); return { dispose: () => undefined }; },
+  };
   const flow = editingFlow({
-    client, instanceRoot: '/instance', onPut: (put) => { tell(put); return Promise.resolve(); }, log: (line) => { logged.push(line); },
+    client, instanceRoot: '/instance', inGameOrder, onPut: (put) => { tell(put); return Promise.resolve(); }, log: (line) => { logged.push(line); },
     around: async (entry) => { around.entered++; await entry(); around.settled = true; around.told.push(told.length); },
   });
   const putPluginNames = (): string[] => client.puts().map((put) => put.plugins.map((p) => p.name).join());
   const land = (value: LoadOrderSource): void => { flow.onRecompute(value, 'English'); };
   const failNextTell = (error: Error): void => { tellFailure = error; };
-  return { client, flow, told, toldCount, putPluginNames, land, around, logged, failNextTell };
+  const readBlueprints = (...names: string[]): void => {
+    blueprintNames = names;
+    for (const listener of changeListeners) listener();
+  };
+  return { client, flow, readBlueprints, told, toldCount, putPluginNames, land, around, logged, failNextTell };
 }
+
+describe('the load order is put again when what Editing read of the plugins changes the order the game loads in', () => {
+  const address = (name: string) => ({ name, origin: 'Base Mod' });
+  const starfield: LoadOrderSource = {
+    plugins: [], active: ['Starfield.esm', 'Blueprint.esm', 'A.esp'].map(address), loadedWithNoLine: ['Starfield.esm', 'Blueprint.esm'].map(address),
+    listedArchives: [], archivesByPlugin: [], stringsFiles: [], places: [], dataFolder: '/game/Data', gameRelease: 'Fallout4',
+  };
+  const activeSent = (client: InMemoryMEditClient): string[][] => client.puts().map((put) => put.active.map(({ name }) => name));
+
+  it('sends the order again once, and settles when the next read finds the same blueprints', async () => {
+    const { client, land, readBlueprints, toldCount } = wired();
+    land(starfield);
+    await toldCount(1);
+
+    readBlueprints('Blueprint.esm');
+    await toldCount(2);
+    readBlueprints('Blueprint.esm');
+    await Promise.resolve();
+
+    expect(activeSent(client)).toEqual([['Starfield.esm', 'Blueprint.esm', 'A.esp'], ['Starfield.esm', 'A.esp', 'Blueprint.esm']]);
+  });
+
+  it('sends nothing before the loader has landed a value', async () => {
+    const { client, readBlueprints } = wired();
+
+    readBlueprints('Blueprint.esm');
+    await Promise.resolve();
+
+    expect(client.calls).toEqual([]);
+  });
+});
 
 describe('the load order is put at every recompute', () => {
   it('hands the client each snapshot and tells what came of it', async () => {
@@ -178,7 +219,7 @@ describe('telling a launch that threw', () => {
   it('reaches the Output once, naming the launch', async () => {
     const client = new ClientWhoseLaunchIsHeld();
     const logged: string[] = [];
-    editingFlow({ client, instanceRoot: '/instance', onPut: () => Promise.resolve(), log: (line) => { logged.push(line); }, around: (entry) => entry() });
+    editingFlow({ client, instanceRoot: '/instance', inGameOrder: { of: ({ active }) => [...active], onChange: () => ({ dispose: () => undefined }) }, onPut: () => Promise.resolve(), log: (line) => { logged.push(line); }, around: (entry) => entry() });
 
     client.heard(Promise.reject(new Error('no kill')));
 

@@ -38,3 +38,10 @@ export function inGameOrder<R>(
     ...lines.slice(afterLastOrdinaryLine),
   ];
 }
+
+/** The snapshot's active plugins, which hold the plugins the game loads with no line first and then the lines, in the order the game loads them. */
+export function activeInGameOrder<R>(
+  snapshot: { readonly active: readonly R[]; readonly loadedWithNoLine: readonly R[] }, isBlueprint: (plugin: R) => boolean, blueprintLoadsLast: boolean,
+): R[] {
+  return inGameOrder(snapshot.loadedWithNoLine, snapshot.active.slice(snapshot.loadedWithNoLine.length), isBlueprint, blueprintLoadsLast);
+}

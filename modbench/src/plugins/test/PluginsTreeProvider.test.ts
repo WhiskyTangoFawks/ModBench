@@ -773,6 +773,37 @@ describe('PluginsTreeProvider — the sort direction', () => {
   });
 });
 
+describe('PluginsTreeProvider.inGameOrder, the order mEdit is handed', () => {
+  const at = (name: string) => ({ name, origin: 'Data/' });
+  const snapshot = (gameRelease: string) => ({
+    gameRelease, active: ['Base.esm', 'Blueprint.esm', 'A.esp'].map(at), loadedWithNoLine: ['Base.esm', 'Blueprint.esm'].map(at),
+  });
+  const facts = [held('Base.esm', { origin: 'Data/' }), held('Blueprint.esm', { origin: 'Data/', isMaster: true, isBlueprint: true }), held('A.esp', { origin: 'Data/' })];
+  const orderFor = async (gameRelease: string, read: PluginMetadata[]) => {
+    const h = makeTree([plugin({ name: 'A.esp', line: 0 })], { loadedWithNoLine: ['Base.esm', 'Blueprint.esm'] });
+    await reconcile(h, read);
+    return h.tree.inGameOrder.of(snapshot(gameRelease)).map(({ name }) => name);
+  };
+
+  it.each([
+    ['puts a blueprint plugin Editing read last, in a release that loads them last', 'Starfield', facts, ['Base.esm', 'A.esp', 'Blueprint.esm']],
+    ['keeps the plugins.txt order in a release that does not', 'Fallout4', facts, ['Base.esm', 'Blueprint.esm', 'A.esp']],
+    ['keeps the plugins.txt order for a plugin Editing has not read', 'Starfield', [], ['Base.esm', 'Blueprint.esm', 'A.esp']],
+  ])('%s', async (_name, gameRelease, read, expected) => {
+    expect(await orderFor(gameRelease, read)).toEqual(expected);
+  });
+
+  it('tells its listener when Editing has read the plugins', async () => {
+    const h = makeTree([plugin({ name: 'A.esp', line: 0 })]);
+    const listener = vi.fn();
+    h.tree.inGameOrder.onChange(listener);
+
+    await reconcile(h, facts);
+
+    expect(listener).toHaveBeenCalled();
+  });
+});
+
 describe('PluginsTreeProvider — a plugin the game loads with no line sits where the game loads it (plugins.md, The tree, story 2)', () => {
   const BLUEPRINT = 'Blueprint.esm';
   const lines = () => [

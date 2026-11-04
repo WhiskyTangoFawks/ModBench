@@ -90,6 +90,7 @@ export interface PluginsView extends vscode.Disposable {
   standingLines: () => string[];
   sortingRuleLines: () => string[];
   pluginsShown: PluginsShown;
+  inGameOrder: PluginsTreeProvider['inGameOrder'];
 }
 
 // The one Plugins tree (ADR-0017; target-architecture.d2, Plugins).
@@ -193,6 +194,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     sortingRuleLines: () => tree.sortingRuleLines(),
     standingLines: () => [...tree.standingLines(), sync.message(), tree.facts.rows.heldElsewhereMessage()].filter((line) => line !== undefined),
     pluginsShown: tree.facts.rows,
+    inGameOrder: tree.inGameOrder,
     followed: { get selection() { return selected.rows(); }, onDidChangeSelection: view.onDidChangeSelection }, loadOrderPut,
     copyValue: { text: pluginsCopyValueText(selected.rows), reporterTag: 'pluginListTree.copyValue' },
     progress, narrator: indexStatus.narrator,
