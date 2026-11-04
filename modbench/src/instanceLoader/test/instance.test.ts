@@ -435,6 +435,88 @@ describe('Instance — built by watching', () => {
     expect(fake.rereads).toEqual([CHECK, CHECK]);
   });
 
+  it('may be late from the first event until the check of the disk has landed, and tells the views at each change', async () => {
+    const { instance, fake } = loader();
+    await instance.refresh();
+    const told: boolean[] = [];
+    instance.onMayBeLate(() => { told.push(instance.mayBeLate); });
+    const late: boolean[] = [];
+
+    fakeClockLeavingSetImmediateReal();
+    try {
+      late.push(instance.mayBeLate);
+      fake.changed('/instance/mods/A/a.esp');
+      fake.changed('/instance/mods/A/b.esp');
+      late.push(instance.mayBeLate);
+      await vi.advanceTimersByTimeAsync(SETTLE_MS);
+      late.push(instance.mayBeLate);
+      await vi.advanceTimersByTimeAsync(QUIET_MS);
+      late.push(instance.mayBeLate);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect({ late, told }).toEqual({ late: [false, true, true, false], told: [true, false] });
+  });
+
+  it('may be late still when an event arrives while the check reads', async () => {
+    let release!: () => void;
+    let readHeld: Promise<void> = Promise.resolve();
+    const { instance, fake } = loader({}, (adapter) => ({
+      ...adapter,
+      reading: async (asked) => {
+        await readHeld;
+        return adapter.reading(asked);
+      },
+    }));
+    await instance.refresh();
+
+    fakeClockLeavingSetImmediateReal();
+    try {
+      readHeld = new Promise<void>((resolve) => { release = resolve; });
+      fake.changed('/instance/mods/A/a.esp');
+      await vi.advanceTimersByTimeAsync(QUIET_MS);
+      fake.changed('/instance/mods/A/b.esp');
+      release();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(instance.mayBeLate).toBe(true);
+      await vi.advanceTimersByTimeAsync(QUIET_MS);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(instance.mayBeLate).toBe(false);
+  });
+
+  it('is not late for a check whose read failed, which the message line says', async () => {
+    const { instance, fake } = loader();
+    await instance.refresh();
+    fake.failReading('disk gone');
+
+    fakeClockLeavingSetImmediateReal();
+    try {
+      fake.changed('/instance/mods/A/a.esp');
+      await vi.advanceTimersByTimeAsync(QUIET_MS);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(instance.mayBeLate).toBe(false);
+  });
+
+  it('is not late for a check the window focus asked for', async () => {
+    const { instance, windowState } = loader();
+    await instance.refresh();
+    windowState({ focused: false });
+    const told = vi.fn();
+    instance.onMayBeLate(told);
+
+    windowState({ focused: true });
+    await pastSequence(instance, 1);
+
+    expect(told).not.toHaveBeenCalled();
+  });
+
   it('checks the disk at once when the window regains focus, and not when it loses it or keeps it', async () => {
     const { instance, fake, windowState } = loader();
     await instance.refresh();

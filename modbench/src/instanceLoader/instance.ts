@@ -291,6 +291,8 @@ export class Instance implements Subscription {
 
   private failureListeners: ReadFailureListener[] = [];
   private redrawListeners: (() => void)[] = [];
+  private lateListeners: (() => void)[] = [];
+  private late = false;
   private outcomeListeners: ListenerOutcomeListener[] = [];
 
   private settleTimer: ReturnType<typeof setTimeout> | undefined;
@@ -379,6 +381,17 @@ export class Instance implements Subscription {
     return { dispose: () => { this.redrawListeners = this.redrawListeners.filter((l) => l !== listener); } };
   }
 
+  /** Whether a change was heard that no check of the disk has confirmed since (ADR-0015). */
+  get mayBeLate(): boolean {
+    return this.late;
+  }
+
+  /** Called each time `mayBeLate` changes. */
+  onMayBeLate(listener: () => void): Subscription {
+    this.lateListeners.push(listener);
+    return { dispose: () => { this.lateListeners = this.lateListeners.filter((l) => l !== listener); } };
+  }
+
   /** Draws the held value again, with no read: a control the user toggled returns to what the value says. */
   redraw(): void {
     for (const listener of [...this.redrawListeners]) listener();
@@ -429,6 +442,7 @@ export class Instance implements Subscription {
     this.subscribers = [];
     this.failureListeners = [];
     this.redrawListeners = [];
+    this.lateListeners = [];
     this.outcomeListeners = [];
   }
 
@@ -471,6 +485,7 @@ export class Instance implements Subscription {
   private hear(path: string | undefined): void {
     if (path === undefined) this.heardNoPath = true;
     else this.heard.add(path);
+    this.setLate(true);
     clearTimeout(this.settleTimer);
     this.settleTimer = setTimeout(() => {
       const named = [...this.heard];
@@ -483,6 +498,12 @@ export class Instance implements Subscription {
     this.uncheckedSinceMs ??= now;
     clearTimeout(this.checkTimer);
     this.checkTimer = setTimeout(() => void this.enqueue({ disk: true, tellsUnheard: true }), Math.min(QUIET_MS, this.uncheckedSinceMs + CHECK_CAP_MS - now));
+  }
+
+  private setLate(late: boolean): void {
+    if (late === this.late) return;
+    this.late = late;
+    for (const listener of [...this.lateListeners]) listener();
   }
 
   private checkWaits(): boolean {
@@ -528,6 +549,7 @@ export class Instance implements Subscription {
       next = await this.read(run);
     } catch (err) {
       if (epoch !== this.quietEpoch || this.quiets > 0) return { settled: Promise.resolve() };
+      if (run.disk) this.setLate(this.uncheckedSinceMs !== undefined);
       const failure = errorMessage(err);
       this.options.log.error(`[instance] Failed to read the instance: ${failure}`);
       this.failure = failure;
@@ -536,6 +558,7 @@ export class Instance implements Subscription {
     if (epoch !== this.quietEpoch || this.quiets > 0) return { settled: Promise.resolve() };
     this.current = next;
     this.failure = undefined;
+    if (run.disk) this.setLate(this.uncheckedSinceMs !== undefined);
     this.seq++;
     const reread: Reread = { named: [...run.named], disk: run.disk };
     return { settled: this.notify(this.subscribers, 'value', (subscriber) => subscriber(next, this.seq, reread)) };
