@@ -252,8 +252,10 @@ export async function updateManifest(
   refused.push(...heldWhole.refused);
   for (const mod of heldWhole.rest) {
     if (signal?.aborted) break;
-    if (folders.isMod(mod) && sourceMods.folderOf(mod) !== undefined) passedOver.push(mod);
-    else await record(mod, () => readMod(adapter, mod, folders, game));
+    const sourceFolder = folders.isMod(mod) ? sourceMods.folderOf(mod) : undefined;
+    if (sourceFolder === undefined) await record(mod, () => readMod(adapter, mod, folders, game));
+    else if (everyMod) passedOver.push(mod);
+    else refused.push({ item: mod, reason: refusal("its mod folder is a source mod's build; run build.").refusal });
   }
   for (const mod of new Set(everyMod ? sourceMods.folders.keys() : sourceModsToRecord)) {
     if (signal?.aborted) break;

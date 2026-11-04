@@ -567,7 +567,7 @@ describe('a mod installed from an installation file, then decompiled and committ
 
     const outcome = await updateManifest({ adapter }, ['Mod'], {}, [], false, []);
 
-    expect([await manifests(), outcome.refused]).toEqual([before, []]);
+    expect([await manifests(), outcome.refused.map(({ item }) => item)]).toEqual([before, ['Mod']]);
   });
 
   it('changes nothing and trashes nothing at a first build that makes the folder it already holds (source.md, Build, story 3)', async () => {
