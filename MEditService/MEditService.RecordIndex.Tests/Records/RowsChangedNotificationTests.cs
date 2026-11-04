@@ -91,6 +91,33 @@ public sealed class RowsChangedNotificationTests
         Assert.NotNull(index.CopyIn(gained, entry.Key));
     }
 
+    [Fact]
+    public void ADocumentSavedAfterTheCheckReadTheStamps_IsNotNamedUntilACheckHoldsItsRow()
+    {
+        var source = new CountingTreeSource(TestAdapters.Source());
+        var notifications = new InMemoryNotificationPublisher();
+        FormKey template = default;
+        using var fixture = new PluginFixtureBuilder("rows-changed-saved-mid-check")
+            .WithPlugin("Fixture.esp", mod => template = mod.Npcs.AddNew("TemplateNpc").FormKey, origin: "FixtureMod")
+            .BuildScattered()
+            .CompiledPlugin();
+        var entry = fixture.Plugins.Single();
+        using var index = Indexes.Reconciled(fixture, notifications: notifications, source: source);
+        var gained = $"000F00:{entry.Name}";
+        var heldWhenNamed = new List<bool>();
+        notifications.OnPublish = n =>
+        {
+            if (Announcements.RowsChanged(gained)(n)) heldWhenNamed.Add(index.CopyIn(gained, entry.Key) is not null);
+        };
+        source.BeforeNextGitStatus = () => GainACopyOfARecordUnderAFormKeyNeitherRefHolds(entry, index, template.ToString());
+
+        var asked = source.GitStatusAsked;
+        index.NextCheckUnsettledUntil(() => source.GitStatusAsked > asked, "git asked what the tree changed");
+        index.NextCheckUntil(() => heldWhenNamed.Count > 0, "the gained record named");
+
+        Assert.All(heldWhenNamed, Assert.True);
+    }
+
     private static (ScatteredFixtureData Fixture, LoadOrderEntry Entry, InMemoryNotificationPublisher Notifications,
         OpenedIndex Index, FormKey Moved, FormKey Still) TwoNpcs(string name)
     {

@@ -7,12 +7,20 @@ using Mutagen.Bethesda;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
-/// <summary>Reads source trees as the real adapter does, and counts each time git is asked what a tree changed since its last commit.</summary>
+/// <summary>Reads source trees as the real adapter does, and counts each time git is asked what a tree changed since its last commit.
+/// <see cref="BeforeNextGitStatus"/> runs once, as git is next asked: the disk moves after the check read the documents' stamps.</summary>
 internal sealed class CountingTreeSource(ISourceAdapter inner) : DelegatingSourceAdapter(inner)
 {
     private int _asked;
 
     public int GitStatusAsked => Volatile.Read(ref _asked);
+
+    private Action? _beforeNextGitStatus;
+
+    public Action? BeforeNextGitStatus
+    {
+        set => Volatile.Write(ref _beforeNextGitStatus, value);
+    }
 
     public override ISourceRepositoryReads? TreeOf(RegisteredPlugin plugin, GameRelease release) =>
         base.TreeOf(plugin, release) is { } reads ? new Counted(reads, this) : null;
@@ -31,6 +39,7 @@ internal sealed class CountingTreeSource(ISourceAdapter inner) : DelegatingSourc
         public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommit(PluginAddress plugin)
         {
             Interlocked.Increment(ref owner._asked);
+            Interlocked.Exchange(ref owner._beforeNextGitStatus, null)?.Invoke();
             return reads.ChangedSinceLastCommit(plugin);
         }
 
