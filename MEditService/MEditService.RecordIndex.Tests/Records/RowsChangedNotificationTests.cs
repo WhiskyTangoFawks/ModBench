@@ -104,10 +104,10 @@ public sealed class RowsChangedNotificationTests
         var entry = fixture.Plugins.Single();
         using var index = Indexes.Reconciled(fixture, notifications: notifications, source: source);
         var gained = $"000F00:{entry.Name}";
-        var heldWhenNamed = new List<bool>();
+        var heldWhenNamed = new System.Collections.Concurrent.ConcurrentQueue<bool>();
         notifications.OnPublish = n =>
         {
-            if (Announcements.RowsChanged(gained)(n)) heldWhenNamed.Add(index.CopyIn(gained, entry.Key) is not null);
+            if (Announcements.RowsChanged(gained)(n)) heldWhenNamed.Enqueue(index.CopyIn(gained, entry.Key) is not null);
         };
         source.BeforeNextGitStatus = () => GainACopyOfARecordUnderAFormKeyNeitherRefHolds(entry, index, template.ToString());
 
