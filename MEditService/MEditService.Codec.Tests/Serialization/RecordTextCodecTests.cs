@@ -224,7 +224,7 @@ public class RecordTextCodecTests
     public void ATranslatedStringNestedInARecord_CollapsesToItsStringsLanguageValue_AsDoesTheRecordsOwn()
     {
         var weapon = MakeWeapon();
-        weapon.Name = new TranslatedString(Language.English,
+        weapon.Name = new TranslatedString(Language.French,
         [
             new KeyValuePair<Language, string>(Language.English, "Weapon"),
             new KeyValuePair<Language, string>(Language.French, "Arme"),
@@ -249,6 +249,7 @@ public class RecordTextCodecTests
         Assert.Contains("Arme", collapsed, StringComparison.Ordinal);
         Assert.Contains("Modele", collapsed, StringComparison.Ordinal);
         Assert.DoesNotContain("Mod English", collapsed, StringComparison.Ordinal);
+        Assert.DoesNotContain("French", collapsed, StringComparison.Ordinal);
     }
 
     [Fact]

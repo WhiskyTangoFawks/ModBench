@@ -170,6 +170,10 @@ export interface InstanceAnswers {
   outsideInstance?: ReadonlySet<string>;
   /** Mods whose name gives them no source folder. */
   unsourcedMods?: ReadonlySet<string>;
+  /** Each mod's source folder, by mod name, where it is not `/source/<mod>`. */
+  sourceFolders?: ReadonlyMap<string, string>;
+  /** Folders the instance repository cannot hold a file in. */
+  outOfReach?: ReadonlySet<string>;
   /** The reads beside `reading()` that reject, with the message each rejects with. */
   unreadReads?: Partial<Record<'profiles' | 'modOrder' | 'downloadedFiles' | 'sourceModFolders' | 'otherManifests', string>>;
   installed?: InstallOutcome;
@@ -364,7 +368,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     followModFolders: (moves) => (answers.publisherTags === undefined ? Promise.resolve() : write({ verb: 'followModFolders', moves }, () => undefined)),
     modFolderPath: (mod) => Promise.resolve(isBareName(mod) ? foldersNow().holding({ kind: 'mod', name: mod })?.path ?? folderBeside(current.modFolders, mod) : undefined),
     foldersRefused: () => Promise.resolve([]),
-    sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
+    sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : answers.sourceFolders?.get(mod) ?? `/source/${mod}`),
     installationFile: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: undefined }),
     downloadedFile: (name) => Promise.resolve(answers.downloadedFiles?.get(name) ?? putHashedAsTheirText.get(name) ?? { kind: 'read', answer: undefined }),
     downloadedFileHolding: ({ size, hash }) => Promise.resolve({
@@ -451,6 +455,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     foldersHeldWhole: (folders) => Promise.resolve(new Set(
       folders.filter((folder) => answers.heldWholeByGit?.has(folder) === true || (letInByLines.has(folder) && answers.leftOutByGit?.has(folder) !== true)),
     )),
+    foldersInReach: (folders) => Promise.resolve(folders.filter((folder) => answers.outOfReach?.has(folder) !== true)),
     filesHeldByGit: (folders) => Promise.resolve(new Map(folders.map((folder) => [folder, answers.heldByGit?.get(folder) ?? []]))),
     unheldFolderValue: (folder) => unheldFolderValueOver(adapter, answers.heldByGit?.get(folder) ?? [], folder),
     modValue: (folder, asked, heldByGit) => modValueOver(adapter, folder, asked, heldByGit),

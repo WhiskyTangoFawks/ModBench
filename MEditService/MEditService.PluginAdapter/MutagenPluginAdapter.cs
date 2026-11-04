@@ -233,12 +233,15 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
             var pairing = PluginBinaryWalk.PairByFormKey(
                 originalBytes, PluginBinaryWalk.MastersOf(new ModPath(plugin, originalPath), loadOrder),
                 recompiledBytes, PluginBinaryWalk.MastersOf(new ModPath(plugin, recompiledPath), loadOrder), loadOrder.GameRelease);
-            var deletedRecordEmptied = PluginBinaryWalk.FirstEmptiedDeletedRecord(pairing.Pairs) is { } emptied
-                ? $"{emptied.Original.RecordType} {emptied.FormKey}"
-                : null;
+            IReadOnlyList<RepairPreview> deletedRecordCauses =
+            [
+                .. Malformations.In(originalBytes, loadOrder.GameRelease)
+                    .Where(found => found.Diagnosis.DefectClass == DeletedRecordHoldingFields.DefectClass)
+                    .Select(found => found.Preview),
+            ];
             var unverified = PluginBinaryWalk.FirstUnverified(pairing);
             if (PluginBinaryWalk.FindFirstSubrecordLoss(pairing.Pairs) is not { } loss)
-                return new PluginByteComparison(Identical: false, DeletedRecordEmptied: deletedRecordEmptied, Unverified: unverified);
+                return new PluginByteComparison(Identical: false, DeletedRecordCauses: deletedRecordCauses.Count > 0 ? deletedRecordCauses : null, Unverified: unverified);
 
             IReadOnlyList<RepairPreview> causes =
             [
@@ -246,7 +249,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
                     .Where(found => found.Diagnosis.Anchor?.StartsWith($"{loss.RecordType} {loss.FormId:X8}", StringComparison.Ordinal) == true)
                     .Select(found => found.Preview),
             ];
-            return new PluginByteComparison(Identical: false, loss, causes.Count > 0 ? causes : null, deletedRecordEmptied, unverified);
+            return new PluginByteComparison(Identical: false, loss, causes.Count > 0 ? causes : null, deletedRecordCauses.Count > 0 ? deletedRecordCauses : null, unverified);
         });
 
     // Mutagen's parallel import shares the form version of the record being read across threads, so a

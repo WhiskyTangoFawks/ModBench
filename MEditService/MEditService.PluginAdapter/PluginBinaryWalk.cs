@@ -63,12 +63,6 @@ public static class PluginBinaryWalk
     internal static IReadOnlySeparatedMasterPackage MastersOf(ModPath plugin, LoadOrderSnapshot loadOrder) =>
         SeparatedMasterPackage.Factory(loadOrder.GameRelease, plugin, MasterStyles.Of(plugin, loadOrder));
 
-    /// <summary>The first record flagged Deleted that holds subrecords in the original and none in its
-    /// rewrite, as Mutagen writes most deleted records.</summary>
-    internal static RecordPair? FirstEmptiedDeletedRecord(IEnumerable<RecordPair> pairs) =>
-        pairs.Cast<RecordPair?>().FirstOrDefault(pair => pair is { } p
-            && p.Original.IsDeleted && p.Original.ContentLength > 0 && p.Rewritten.ContentLength == 0);
-
     /// <summary>Every record, the plugin header first, in document order. A GRUP's children follow its
     /// header: the format nests by adjacency, so stepping over the header alone descends.</summary>
     internal static IEnumerable<MajorRecordPinFrame> Records(byte[] pluginBytes, GameRelease release) =>
@@ -172,7 +166,8 @@ public static class PluginBinaryWalk
     {
         foreach (var (formKey, original, rewritten) in pairs)
         {
-            if (SubrecordsOfBoth(original, rewritten) is not var (originalSubrecords, rewrittenSubrecords))
+            // A deleted record the rewrite empties loses nothing: Mutagen writes it as its header alone.
+            if (original.IsDeleted && rewritten.ContentLength == 0 || SubrecordsOfBoth(original, rewritten) is not var (originalSubrecords, rewrittenSubrecords))
                 continue;
 
             var type = original.RecordType.Type;

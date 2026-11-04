@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Dirent } from 'node:fs';
 import { access, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
@@ -52,7 +53,7 @@ export async function manifestIn(folder: string): Promise<ManifestRead | undefin
 
 // The Instance adapter's listings skip the temp's name.
 async function writeWhole(folder: string, path: string, text: string): Promise<void> {
-  const temp = join(folder, `.medit_tmp_${process.pid}_manifest`);
+  const temp = join(folder, `.medit_tmp_${process.pid}_manifest_${randomUUID()}`);
   try {
     await writeFile(temp, text);
     await rename(temp, path);
@@ -64,6 +65,16 @@ async function writeWhole(folder: string, path: string, text: string): Promise<v
 function refuseUnlessReadable(text: string): void {
   const read = readManifest(text);
   if ('refused' in read) throw new Error(read.refused);
+}
+
+/** `manifest` as the file a writer outside Modbench writes in `folder`: the manifest it holds, whatever its name, else one
+ *  named for it. Rejects when the folder holds two manifests or the text is refused. */
+export async function manifestFileFor(folder: string, manifest: Manifest): Promise<{ readonly name: string; readonly text: string }> {
+  const [one, other] = await manifestsIn(folder);
+  if (other !== undefined) throw new Error(twoManifests(one ?? '', other));
+  const text = manifestText(manifest);
+  refuseUnlessReadable(text);
+  return { name: one ?? manifestNameOf(folder), text };
 }
 
 /** Writes `manifest` as the manifest named for `folder`, in the spelling it holds, and removes one named otherwise;

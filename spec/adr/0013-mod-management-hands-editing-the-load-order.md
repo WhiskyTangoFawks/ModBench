@@ -5,6 +5,7 @@ Modbench's data is two layers. The file layer is the mods and their files, resol
 ## Consequences
 
 - Mod Management interprets no plugin binary and writes no record. A plugin's masters come from Editing, so two views never disagree over them.
+- The load order never doubles as the change signal. Mod Management hands it over when it changes, and a changed file reaches Editing through Modbench's watcher ([ADR-0015](0015-edits-reach-the-read-model-through-the-watcher.md)). An unchanged load order then costs Editing nothing.
 - Metadata about a file is managed by the adapter that owns the access to that file, and every other box asks that adapter. Editing reads and writes a plugin's binary, so the plugin's own hash, which detects a change made outside Modbench ([ADR-0003](0003-modbench-never-assumes-exclusive-ownership-of-a-file-used-by-another-program.md)), is Editing's. Every other file in the instance, and its hash, is Mod Management's, because a second record of a file drifts from the first ([principles](../principles.md), Orthogonality).
 
 ## Alternatives rejected

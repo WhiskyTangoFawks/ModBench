@@ -1,18 +1,23 @@
 # Edits reach the read model through the watcher
 
-Modbench never assumes exclusive ownership of a file ([ADR-0003](0003-modbench-never-assumes-exclusive-ownership-of-a-file-used-by-another-program.md)), so a watcher and validation must exist for every file it reads. Once they exist, Modbench's own write can take the same path as another tool's: a command writes a system of record and returns, and the change comes back to the read model through the watcher. Both processes have that shape. In mEdit the read model is the record index, over the plugin files, the source tree and the editor's unsaved documents ([ADR-0001](0001-modbench-is-a-vscode-extension.md)). In Modbench it is the instance value, over the mod manager's files. One architecture on both sides of the HTTP boundary is worth more than either side's local optimum.
+Each process's read model follows its files, never the writer ([ADR-0003](0003-modbench-never-assumes-exclusive-ownership-of-a-file-used-by-another-program.md)), so Modbench's own write comes back through the watcher as another tool's does. The read model re-reads what the watcher's events name, and checks the disk once the events stop, because events are lossy. A lost event then leaves the read model late until the next check, and the check's cost grows with the folders and with the files whose content the read model reads, never with every file in a mod.
 
 ## Consequences
 
-- The write side never reads the read model. A command takes its inputs from the files, an unsaved document standing in for its file: the source text, the plugins and the schema. A document taken from the read model can be a generation behind.
-- Read-your-writes belongs to the read side. A command returns no state. The read model announces what changed and the front end re-reads, so a hand edit and another tool's write reach the screen the same way.
-- The instance value is recomputed whole, never patched. A consumer then never holds two facts from two generations.
+- A command returns no state and never reads the read model. It takes its inputs from the files, an unsaved document standing in for its file, because the read model can be a generation behind.
+- The instance value is replaced whole, however little a re-read reads, so a consumer never holds two facts from two generations.
+- The re-read after an event and the check of the disk are the same code, handed different lists, so the code that catches a lost event runs on every event.
+- A steady stream of events delays the check by a bounded time, so a long write never hides a lost event for its whole length.
+- A re-read in progress finishes, and the events that arrive during it fold into one more. A re-read that each event cancels never finishes while events keep coming.
+- A watcher can lose an event, but never window focus, so window focus checks the disk at once, unless a check already waits.
+- At start, the read model checks the disk, because no event reports what changed while it was closed.
+- From the first event until the check confirms it, the read model says it may be late ([principles](../principles.md), Never silently wrong).
 
 ## Alternatives rejected
 
-- Validate on read, or the write side pushes its result into the read model. Read-your-writes without the watcher round trip, and faster. It gives a Modbench write a different path from another tool's, so the path that matters least is the one that gets tested.
+- The write side pushes its result into the read model. Faster, but a Modbench write then takes a different path from another tool's, and the path that matters least is the one that gets tested.
 - A cache per view, invalidated per signal. Every new fact needs its own invalidation rule, and the rules disagree at exactly the moments that matter.
 - A watcher per mod folder in mEdit. A large modlist passes the system's limit on watchers, and two watchers over one tree see two sets of events.
-- Forward the changed paths to mEdit. A wrong or missing path leaves the record index wrong in silence; a late signal only delays it.
-- Trust the watcher to see every change. Focus is the one signal no watcher can lose.
-- Incremental update keyed by the changed path. Brings back per-key invalidation and the two-generations bug.
+- Trust the watcher to see every change. A lost event leaves the read model wrong in silence.
+- Check the whole disk on every event. Its cost grows with the size of the list times the number of events.
+- Learn the changes from the operating system's change journal. It needs elevated rights.

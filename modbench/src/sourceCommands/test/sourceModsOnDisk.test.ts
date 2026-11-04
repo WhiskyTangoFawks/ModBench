@@ -490,6 +490,7 @@ describe('a mod installed from an installation file, then decompiled and committ
       handed.push(mod);
       await put(`source/Mod/${BUILD_FILE}`, mod.sourceFolder.buildFile);
       await put(`source/Mod/${mod.sourceFolder.manifestFile ?? ''}`, mod.sourceFolder.manifest ?? '');
+      await put(`mods/Mod/${mod.sourceFolder.modFolderManifestFile ?? ''}`, mod.sourceFolder.modFolderManifest ?? '');
       const sourceFolder = join(root, 'source', 'Mod');
       execFileSync('git', ['init', '-q', sourceFolder]);
       execFileSync('git', ['-C', sourceFolder, 'add', BUILD_FILE, mod.sourceFolder.manifestFile ?? '']);
@@ -602,7 +603,7 @@ describe('version in git over an instance on disk', () => {
     return { client, versionInGit: () => commands.versionInGit(['Mod'], { where: 'NewRepository', commit: true }) };
   }
 
-  it('hands mEdit the repository with its build file, then records in the manifest the mod folder holds its repository and each file with its bytes', async () => {
+  it('hands mEdit the repository with its build file, and the mod folder\'s manifest naming its repository and each file with its bytes', async () => {
     const { client, versionInGit } = await aModWithItsManifest();
     const handed: ModToVersionInGit[] = [];
     client.setCommandHandler('versionInGit', (mods) => {
@@ -613,11 +614,10 @@ describe('version in git over an instance on disk', () => {
     const outcome = await versionInGit();
 
     const [sent] = handed;
-    expect(sent?.sourceFolder).toMatchObject({ path: join(root, 'source', 'Mod'), assets: ['a.nif'] });
+    expect(sent?.sourceFolder).toMatchObject({ path: join(root, 'source', 'Mod'), assets: ['a.nif'], modFolderManifestFile: 'Mod.manifest.json' });
     expect(outcome).toEqual({ landed: [{ mod: 'Mod', plugins: [{ name: 'Mod.esp', origin: 'Mod' }] }], refused: [] });
-    expect(new Set(await readdir(join(root, 'mods', 'Mod')))).toEqual(new Set(['Mod.esp', 'Mod.manifest.json', 'a.nif', 'meta.ini']));
-    const recorded = await manifestIn(join(root, 'mods', 'Mod'));
-    expect(recorded !== undefined && 'manifest' in recorded ? [recorded.manifest.packages, pathsIn(recorded.manifest)] : recorded).toEqual([[REPOSITORY], ['Mod.esp', 'a.nif']]);
+    const linked = readManifest(sent?.sourceFolder.modFolderManifest ?? '');
+    expect('manifest' in linked ? [linked.manifest.packages, pathsIn(linked.manifest)] : linked).toEqual([[REPOSITORY], ['Mod.esp', 'a.nif']]);
   });
 
   it('refuses a mod whose folder\'s manifest names the game folder when the game folder was not found, handing mEdit nothing', async () => {

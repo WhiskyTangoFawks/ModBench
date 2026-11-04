@@ -41,7 +41,7 @@ instanceadapter -> instance: bytes {class: loadorder}
 cmds -> surfaces: "applied or refusal, per item" {class: loadorder}
 surfaces -> instanceloader: refresh {class: loadorder}
 instance -> instanceadapter: watch {class: signal}
-instanceadapter -> instanceloader: "the instance changed" {class: signal}
+instanceadapter -> instanceloader: "the paths that changed, or a check is due" {class: signal}
 instanceloader -> views: value {class: loadorder}
 instanceloader -> activation: value {class: loadorder}
 activation -> cmds: "put load order: the snapshot" {class: loadorder}

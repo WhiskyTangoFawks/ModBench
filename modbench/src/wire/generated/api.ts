@@ -294,7 +294,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Whether the record index's rows for the plugin were built from the file now on disk (ADR-0003): AsOnDisk, also when no file claim backs the rows, as for a compiled plugin read from its source; NotYet when the file changed since or the record index holds no rows for it; ReadFailed, with mEdit's reason, when its last read of the plugin failed. */
+        /** @description Whether the record index's rows for the plugin were built from the file now on disk (ADR-0003): AsOnDisk, for a compiled plugin once its source tree is validated after the file last changed, and when no file claim backs the rows; NotYet when the file changed since or the record index holds no rows for it; ReadFailed, with mEdit's reason, when its last read of the plugin failed. */
         get: operations["GetPluginIndexedAsOnDisk"];
         put?: never;
         post?: never;
@@ -1685,6 +1685,9 @@ export interface components {
             manifestFile?: string | null;
             manifest?: string | null;
             ignored?: string[] | null;
+            modFolderManifestFile?: string | null;
+            modFolderManifest?: string | null;
+            modFolderManifestInInit?: boolean | null;
         };
         /** @enum {string} */
         SourceModIn: "NewRepository" | "InstanceRepository";

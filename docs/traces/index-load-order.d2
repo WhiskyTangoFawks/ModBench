@@ -17,12 +17,14 @@ loadorder: @../../spec/architecture/target-architecture.medit_kernel.loadorder
 loadorder.label: Load order state
 indexer: @../../spec/architecture/target-architecture.medit_readmodel.recordindex.indexer
 indexer.label: Indexer
-codec: @../../spec/architecture/target-architecture.medit_kernel.codec
-codec.label: Codec + schema
+instanceadapter: @../../spec/architecture/target-architecture.modbench_repositories.instanceadapter
+instanceadapter.label: Instance adapter
 sourceadapter: @../../spec/architecture/target-architecture.medit_repositories.sourceadapter
 sourceadapter.label: Source adapter
 pluginadapter: @../../spec/architecture/target-architecture.medit_repositories.pluginadapter
 pluginadapter.label: Plugin adapter
+codec: @../../spec/architecture/target-architecture.medit_kernel.codec
+codec.label: Codec + schema
 store: @../../spec/architecture/target-architecture.medit_readmodel.recordindex.store
 store.label: Store
 port: @../../spec/architecture/target-architecture.medit_kernel.ports
@@ -32,6 +34,7 @@ views: "Plugins · Editor" {class: driving}
 instanceloader -> activation: value {class: loadorder}
 activation."on each value, and on a change to the strings language setting"
 activation -> instancecommands: "put load order: the snapshot" {class: loadorder}
+instancecommands."send only a snapshot that changed"
 instancecommands -> client: "snapshot: the game release · every plugin and what provides it · the active plugins · the strings language" {class: loadorder}
 client -> http: "snapshot: the game release · every plugin and what provides it · the active plugins · the strings language" {class: loadorder}
 http -> commands: put load order {class: loadorder}
@@ -39,7 +42,20 @@ commands -> loadorder: snapshot {class: loadorder}
 commands -> http: "applied: the version" {class: loadorder}
 http -> client: the version {class: loadorder}
 loadorder -> indexer: "a snapshot arrived" {class: signal}
-indexer."validate every plugin"
+indexer."reconcile the plugins that arrived, moved or left"
+changes: "each change the watch sees" {
+  instanceadapter -> instanceloader: "the paths that changed, or a check is due" {class: signal}
+  instanceloader -> activation: "the paths that changed, or a check is due" {class: signal}
+  activation -> instancecommands: "signal change: the paths, or none" {class: signal}
+  instancecommands -> client: "the paths, or none" {class: signal}
+  client -> http: "the paths, or none" {class: signal}
+  http -> commands: signal change {class: signal}
+  commands -> sourceadapter: "the paths, or none to check the disk" {class: signal}
+  commands -> pluginadapter: "the paths, or none to check the disk" {class: signal}
+  sourceadapter -> indexer: "the plugins whose plugin source changed" {class: signal}
+  pluginadapter -> indexer: "the plugins whose bytes changed" {class: signal}
+  indexer."re-read each plugin that changed"
+}
 codec -> indexer: schema {class: query}
 sourceadapter -> indexer: documents (a compiled plugin) {class: query}
 pluginadapter -> indexer: "bytes (no source, or plugin source unreadable)" {class: query}

@@ -24,12 +24,12 @@ internal enum UnrestoredReason
     RestoreFailed,
 }
 
-/// <summary>One thing a rollback left standing (ADR-0019): a path relative to the source folder, or a
-/// description of a change outside the file tree. Detail is the operating system's reason for a refusal.</summary>
+/// <summary>One thing a rollback left standing (ADR-0019): a path from the source folder, or a change outside the file
+/// tree. Detail is the operating system's reason for a refusal.</summary>
 internal sealed record Unrestored(
     UnrestoredReason Reason, string? RelativePath = null, string? Description = null, string? Detail = null);
 
-/// <summary>Everything a Source adapter act creates, replaces, removes and mints under one source folder. One
+/// <summary>Everything a Source adapter act creates, replaces, removes and mints for one source folder. One
 /// rollback restores exactly that, leaves what another program wrote (ADR-0003) and answers what it
 /// could not restore as data (ADR-0019).</summary>
 internal sealed class WriteJournal(string sourceFolder)

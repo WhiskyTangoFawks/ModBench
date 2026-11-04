@@ -117,6 +117,11 @@ public sealed class RecordTypes
     public string? RecordTypeNamed(string? name) =>
         name is not null && _recordTypeByName.TryGetValue(WithoutOverlaySuffix(name), out var table) ? table : null;
 
+    /// <summary>Whether a record of <paramref name="recordType"/> is one the game places in a cell, and
+    /// so names a base record.</summary>
+    public bool IsReference(string recordType) =>
+        ConcreteFor(recordType)?.GetInterfaces().Any(i => i.Name == PlacedInterfaceName) == true;
+
     public string RecordTypeOf(IMajorRecordGetter record) => TableOf(record.GetType());
 
     internal string TableOf(Type recordClass) =>
@@ -205,6 +210,8 @@ public sealed class RecordTypes
 
     internal Type? LoquiTypeNamed(string name) =>
         _blockLevelByName.GetValueOrDefault(name) ?? ConcreteFor(name);
+
+    private const string PlacedInterfaceName = "IPlacedGetter";
 
     private const string CellTypeName = "Cell";
 

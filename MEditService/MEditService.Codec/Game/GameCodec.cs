@@ -65,10 +65,10 @@ internal sealed class GameCodec : IGameCodec
         return clone;
     }
 
-    public IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record, bool localized)
+    public IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record, bool localized, Func<Type, string?> baseMemberOf)
     {
         var type = record.GetType();
-        if (record is not (ICellGetter or IWorldspaceGetter or IDialogTopicGetter) && !GameSpecifics.Normalizes(record)
+        if (record is not (ICellGetter or IWorldspaceGetter or IDialogTopicGetter) && !DeletedReferences.CanReach(type) && !GameSpecifics.Normalizes(record)
             && !Targets.CanReach(type) && (localized || !StringHolders.CanReach(type)))
             return record;
         var copy = record.DeepCopy();
@@ -102,17 +102,23 @@ internal sealed class GameCodec : IGameCodec
                 ZeroTopicGroupFields(topic);
                 break;
         }
+        DeletedReferences.ForEach(copy, reference => ClearBaseOfDeleted(reference, baseMemberOf));
         GameSpecifics.Normalize(copy);
         return copy;
     }
 
-    private static readonly ConcurrentDictionary<Type, PropertyInfo[]> StringPropertiesByType = new();
+    // Mutagen reads the NAME of a deleted reference into one member and writes a deleted record as its
+    // header alone, so its reread holds no base record. Any other field of a deleted record is a divergence.
+    private static readonly RecordGraph DeletedReferences = new(typeof(IPlacedGetter).IsAssignableFrom);
 
-    private static PropertyInfo[] StringProperties(Type type) => StringPropertiesByType.GetOrAdd(type, declaring =>
-        [.. declaring.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p.CanWrite && p.PropertyType == typeof(TranslatedString))]);
+    private static void ClearBaseOfDeleted(object node, Func<Type, string?> baseMemberOf)
+    {
+        if ((((IMajorRecordGetter)node).MajorRecordFlagsRaw & DeletedFlag.Bit) == 0) return;
+        if (baseMemberOf(node.GetType()) is not { } member) return;
 
-    private static readonly RecordGraph StringHolders = new(type => StringProperties(type).Length > 0);
+        var link = node.GetType().GetProperty(member)?.GetValue(node);
+        link?.GetType().GetMethod("SetToNull", Type.EmptyTypes)?.Invoke(link, null);
+    }
 
     private static readonly RecordGraph Targets = new(type => type == typeof(LocationTargetRadius));
 
@@ -124,6 +130,14 @@ internal sealed class GameCodec : IGameCodec
         if (radius.Target is LocationFallback { Type: LocationTargetRadius.LocationType.NearReference, Data: 0 })
             radius.Target = new LocationTarget();
     }
+
+    private static readonly ConcurrentDictionary<Type, PropertyInfo[]> StringPropertiesByType = new();
+
+    private static PropertyInfo[] StringProperties(Type type) => StringPropertiesByType.GetOrAdd(type, declaring =>
+        [.. declaring.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.CanWrite && p.PropertyType == typeof(TranslatedString))]);
+
+    private static readonly RecordGraph StringHolders = new(type => StringProperties(type).Length > 0);
 
     // A plugin that is not localized writes a string's one text and never its language, so its reread
     // holds that text in the language the read gives.

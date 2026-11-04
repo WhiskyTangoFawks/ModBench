@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using MEditService.Codec.Schema;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Strings;
 
@@ -51,6 +52,7 @@ public static class TranslatedStringValues
                 continue;
             }
             translated.Remove("Values");
+            translated["TargetLanguage"] = TranslatedString.DefaultLanguage.ToString();
             translated["Value"] = value.DeepClone();
             changed = true;
         }
@@ -58,11 +60,18 @@ public static class TranslatedStringValues
     }
 
     /// <summary><paramref name="held"/> with <paramref name="text"/> as its text in <paramref name="language"/>, every
-    /// other language as it was. A plugin that is not localized holds one text, whatever its language.</summary>
+    /// other language as it was. A plugin that is not localized holds one text, which a read gives the default
+    /// language.</summary>
     internal static JsonObject WithText(JsonObject? held, string text, Language language, bool localized)
     {
-        var edited = held?.DeepClone().AsObject() ?? new JsonObject { ["TargetLanguage"] = language.ToString() };
-        if (!localized || (edited["Values"] is null && TargetLanguageOf(edited) == language))
+        var edited = held?.DeepClone().AsObject() ?? new JsonObject { ["TargetLanguage"] = (localized ? language : TranslatedString.DefaultLanguage).ToString() };
+        if (!localized)
+        {
+            edited["TargetLanguage"] = TranslatedString.DefaultLanguage.ToString();
+            edited["Value"] = text;
+            return edited;
+        }
+        if (edited["Values"] is null && TargetLanguageOf(edited) == language)
         {
             edited["Value"] = text;
             return edited;
@@ -73,6 +82,25 @@ public static class TranslatedStringValues
         else
             values.Add(new JsonObject { ["Language"] = language.ToString(), ["String"] = text });
         return edited;
+    }
+
+    /// <summary>The members a translated string's document holds: one <c>Value</c> or the <c>Values</c> of each
+    /// language. Only a localized plugin holds a language for <c>TargetLanguage</c> to name.</summary>
+    internal static FieldMetadata ShapeOf(JsonObject held, bool localized, string? readOnlyReason)
+    {
+        static FieldMetadata Leaf(string name, string type, IReadOnlyList<EnumMember>? members = null, string? readOnlyReason = null) =>
+            new(name, type, false, LeafSpec.NoFormKeyTypes, members ?? LeafSpec.NoEnumMembers, ReadOnlyReason: readOnlyReason);
+        var languages = Enum.GetNames<Language>().Select(name => new EnumMember(name)).ToList();
+        var perLanguage = new FieldMetadata(
+            "", "struct", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
+            Fields: [Leaf("Language", "enum", languages), Leaf("String", "string")]);
+        var fields = new List<FieldMetadata> { Leaf("TargetLanguage", "enum", languages, localized ? null : "the plugin is not localized, so it holds no language for a string") };
+        fields.Add(held["Values"] is null
+            ? Leaf("Value", "string")
+            : new FieldMetadata("Values", "array", true, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, ElementType: perLanguage));
+        var shape = new FieldMetadata(
+            "", ApiType, false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, Fields: fields);
+        return readOnlyReason is null ? shape : shape.WithReadOnlyReason(readOnlyReason);
     }
 
     private static Language TargetLanguageOf(JsonObject translated) =>

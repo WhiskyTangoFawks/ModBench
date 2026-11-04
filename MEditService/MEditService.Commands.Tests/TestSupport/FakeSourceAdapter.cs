@@ -68,7 +68,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
     public SourceFailure? Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<FileToCopy> assets, bool commit, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest, IReadOnlyList<string> ignored,
-        SourceModIn heldIn)
+        SourceModIn heldIn, ModFolderManifest? modFolderManifest)
     {
         if (IsSourceMod(sourceFolder) || HoldsAnotherRepository(sourceFolder))
             throw new InvalidOperationException($"'{sourceFolder}' already holds a repository.");

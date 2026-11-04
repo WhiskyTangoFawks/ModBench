@@ -33,17 +33,18 @@ internal static class Malformations
     internal static List<Found> In(byte[] pluginBytes, GameRelease gameRelease)
     {
         var shapes = GameCodecs.For(gameRelease).CreationKitShapes;
-        var readersByType = new Dictionary<string, IMalformation[]>();
+        var readersByType = new Dictionary<(string Type, bool Deleted), IMalformation[]>();
+        var recordTypes = RecordTypes.For(gameRelease);
         var found = new List<Found>();
         foreach (var record in PluginBinaryWalk.Records(pluginBytes, gameRelease))
         {
             var type = record.RecordType.Type;
-            if (!readersByType.TryGetValue(type, out var readers))
-                readersByType[type] = readers = [.. All.Where(m => m.Reads(type, shapes))];
+            if (!readersByType.TryGetValue((type, record.Frame.IsDeleted), out var readers))
+                readersByType[(type, record.Frame.IsDeleted)] = readers = [.. All.Where(m => m.Reads(type, shapes) && (record.Frame.IsDeleted || !m.ReadsOnlyDeleted))];
             if (readers.Length == 0 || PluginBinaryWalk.Subrecords(record) is not { } frames) continue;
 
             var subrecords = frames.Select(Subrecord.Of).ToList();
-            var inspected = new InspectedRecord(type, subrecords, shapes);
+            var inspected = new InspectedRecord(type, subrecords, shapes, recordTypes);
             var anchor = Anchor(type, record.FormID.Raw, subrecords);
             // One diagnosis for equal ones in one record, so a choice of it repairs each.
             foreach (var equal in readers.SelectMany(m => m.Detect(inspected)).GroupBy(m => (m.DefectClass, m.Message)))

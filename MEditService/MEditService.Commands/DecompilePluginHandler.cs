@@ -1,3 +1,4 @@
+using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -15,8 +16,9 @@ public sealed class DecompilePluginHandler
     private readonly PluginDecompiler _decompiler;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal DecompilePluginHandler(LoadOrderHolder loadOrder, IPluginAdapter adapter, ISourceAdapter source, ILogger<DecompilePluginHandler> logger) =>
-        (_loadOrder, _source, _decompiler) = (loadOrder, source, new PluginDecompiler(logger, adapter, source));
+    internal DecompilePluginHandler(
+        LoadOrderHolder loadOrder, IPluginAdapter adapter, ISourceAdapter source, SchemaReflector schemaReflector, ILogger<DecompilePluginHandler> logger) =>
+        (_loadOrder, _source, _decompiler) = (loadOrder, source, new PluginDecompiler(logger, adapter, source, schemaReflector));
 
     /// <summary>Refuses with <see cref="DecompileRefusal.NoLoadOrder"/>, writing nothing, when none is held; git
     /// missing refuses the whole selection once. A plugin whose source has working-tree changes is refused

@@ -12,11 +12,14 @@ import type { PlaceMods } from '../decompileAndRepair';
 const MALFORMED = { name: 'Malformed.esp', origin: 'Harbor' };
 const OTHER = { name: 'Other.esp', origin: 'Quay' };
 const REFUSED = { item: { name: 'Clean.esp', origin: 'Harbor' }, reason: 'Clean.esp is not malformed.' };
-const MADE = { modFolder: '/mods/Harbor', sourceFolder: { path: '/source/Harbor', in: 'NewRepository' as const, assets: ['a.dds'], buildFile: '{}' } };
+const MADE = {
+  modFolder: '/mods/Harbor',
+  sourceFolder: { path: '/source/Harbor', in: 'NewRepository' as const, assets: ['a.dds'], buildFile: '{}', modFolderManifestFile: 'Harbor.manifest.json', modFolderManifest: '{}' },
+};
 
 interface Placing {
   notMade: Record<string, string>;
-  notLinked: Record<string, string>;
+  unfinished: Record<string, string>;
   whole: string | undefined;
   notes: string[];
 }
@@ -34,7 +37,7 @@ describe('decompileAndRepair', () => {
     const landed = new Set(isRefused(outcome) ? [] : landedBy(outcome));
     return {
       outcome, notMade: new Map(Object.entries(placing.notMade)), notes: placing.notes,
-      notLinked: new Map(Object.entries(placing.notLinked).filter(([mod]) => landed.has(mod))),
+      unfinished: new Map(Object.entries(placing.unfinished).filter(([mod]) => landed.has(mod))),
     };
   };
   const commandsOver = (sourceMods: Record<string, string>) =>
@@ -50,7 +53,7 @@ describe('decompileAndRepair', () => {
   beforeEach(() => {
     client = new InMemoryMEditClient();
     client.setCommandHandler('decompileAndRepair', landingEach);
-    placing = { notMade: {}, notLinked: {}, whole: undefined, notes: [] };
+    placing = { notMade: {}, unfinished: {}, whole: undefined, notes: [] };
     requests = [];
   });
 
@@ -81,11 +84,12 @@ describe('decompileAndRepair', () => {
     expect(await repairIn({}, true)).not.toHaveProperty('notes');
   });
 
-  it('names a repaired mod whose folder could not be linked, as the repair that happened', async () => {
-    placing.notLinked = { Harbor: 'its manifest could not name its repository: EACCES' };
+  it('names a repaired mod whose source folder its manifest cannot restore, as the repair that happened, saying its manifest names its repository already', async () => {
+    placing.unfinished = { Harbor: 'its manifest names its repository, and its source folder could not be restored from it: EACCES' };
 
     expect(await repairIn({}, true)).toEqual({ applied: true, outcome: {
-      landed: [MALFORMED], refused: [REFUSED, { item: MALFORMED, reason: 'was repaired, but its manifest could not name its repository: EACCES.' }],
+      landed: [MALFORMED],
+      refused: [REFUSED, { item: MALFORMED, reason: 'was repaired, but its manifest names its repository, and its source folder could not be restored from it: EACCES.' }],
     } });
   });
 

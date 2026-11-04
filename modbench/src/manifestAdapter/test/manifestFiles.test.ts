@@ -4,7 +4,7 @@ import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'n
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BUILD_FILE, PLUGIN_SOURCE_FOLDER } from '../../wire/sourceMod';
-import { buildFileAgainst, buildFileIn, buildFileText, manifestIn, writeManifestIn, type BuildFile, type Manifest } from '../manifestAdapter';
+import { buildFileAgainst, buildFileIn, buildFileText, manifestFileFor, manifestIn, writeManifestIn, type BuildFile, type Manifest } from '../manifestAdapter';
 import { manifestText } from '../manifestText';
 import { writeBuildFile } from '../../test/buildFiles';
 
@@ -52,6 +52,15 @@ describe('writeManifestIn', () => {
     const wrote = await writeManifestIn(folder, manifest);
 
     expect([wrote, await readFile(join(folder, 'Mod.manifest.json'), 'utf8'), await readdir(folder)]).toEqual([true, manifestText(manifest), ['Mod.manifest.json']]);
+  });
+
+  it('lands two writes into one folder at once, leaving one of them and no temp', async () => {
+    const other: Manifest = { ...manifest, files: new Map([['b.nif', 'AQAAAAAAAAA=']]) };
+
+    const wrote = await Promise.all([writeManifestIn(folder, manifest), writeManifestIn(folder, other)]);
+
+    expect([wrote, await readdir(folder)]).toEqual([[true, true], ['Mod.manifest.json']]);
+    expect([manifestText(manifest), manifestText(other)]).toContain(await readFile(join(folder, 'Mod.manifest.json'), 'utf8'));
   });
 
   it('refuses, writing nothing, a manifest its schema refuses, with the reason the reader gives', async () => {
@@ -111,6 +120,30 @@ describe('writeManifestIn', () => {
     await expect(writeManifestIn(join(root, 'Gone'), manifest)).rejects.toThrow();
 
     expect(await readdir(root)).toEqual(['Mod']);
+  });
+});
+
+describe('manifestFileFor', () => {
+  it('names the file for the folder when it holds no manifest', async () => {
+    expect(await manifestFileFor(folder, manifest)).toEqual({ name: 'Mod.manifest.json', text: manifestText(manifest) });
+  });
+
+  it('names the manifest the folder holds, whatever its name, so the folder holds one manifest once it is written', async () => {
+    await writeFile(join(folder, 'Old Name.manifest.json'), '{}');
+
+    expect(await manifestFileFor(folder, manifest)).toEqual({ name: 'Old Name.manifest.json', text: manifestText(manifest) });
+  });
+
+  it('rejects when the folder holds two manifests', async () => {
+    await holdingTwoManifestsThatDifferInCase();
+
+    await expect(manifestFileFor(folder, manifest)).rejects.toThrow("its folder holds two manifests, 'MOD.manifest.json' and 'mod.manifest.json'");
+  });
+
+  it('rejects a manifest its schema refuses, with the reason the reader gives', async () => {
+    const refused: Manifest = { ...manifest, packages: [{ kind: 'installationFile', name: 'M.7z', size: 1, hash: 'AAAAAAAAAAA=', host: { nexus: { game: 'fallout4', mod: 4, file: 0 } } }] };
+
+    await expect(manifestFileFor(folder, refused)).rejects.toThrow(/cannot be read at its package 1/);
   });
 });
 
