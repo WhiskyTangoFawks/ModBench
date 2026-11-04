@@ -17,19 +17,19 @@ internal static class DeletedReferenceBases
         var types = RecordTypes.For(release);
         var schemas = schemaReflector.GetSchemas(release);
         var spans = ContainerDocumentEdits.EmbeddedChildSpansOf(owner, ownerRecordType: null, release).Values
-            .Where(span => span.Discriminator is { } type && types.IsReference(type))
-            .OrderByDescending(span => span.Start)
+            .SelectMany<EmbeddedChildSpan, (EmbeddedChildSpan Span, string Type)>(
+                span => span.Discriminator is { } type && types.IsReference(type) ? [(span, type)] : [])
+            .OrderByDescending(reference => reference.Span.Start)
             .ToList();
         if (spans.Count == 0) return owner;
 
         var text = Encoding.UTF8.GetString(owner);
-        foreach (var span in spans)
+        foreach (var (span, type) in spans)
         {
             var bytes = Encoding.UTF8.GetBytes(text);
             var child = Document.Parse(ContainerDocumentEdits.ChildTextAt(bytes, span, release));
             if ((RecordFlagsWrite.HeldBy(child) & DeletedFlag.Bit) == 0) continue;
 
-            var type = span.Discriminator ?? throw new InvalidOperationException("Expected a reference to name its type.");
             var schema = schemas[types.RecordTypeNamed(type) ?? throw new InvalidOperationException($"Expected '{type}' to be a record type.")];
             var emptied = RecordEmptying.OfDeleted(child).Apply(child, schema, release, left: null);
             if (emptied.Text == child.Text) continue;

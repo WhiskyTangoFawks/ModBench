@@ -68,10 +68,11 @@ internal sealed class GameCodec : IGameCodec
     public IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record, bool localized)
     {
         var type = record.GetType();
-        if (record is not (ICellGetter or IWorldspaceGetter or IDialogTopicGetter) && !DeletedReferences.CanReach(type) && !GameSpecifics.Normalizes(record)
-            && (localized || !StringHolders.CanReach(type)))
+        if (record is not (ICellGetter or IWorldspaceGetter or IDialogTopicGetter) && !IsReducedToHeader(record) && !GameSpecifics.Normalizes(record)
+            && !Targets.CanReach(type) && (localized || !StringHolders.CanReach(type)))
             return record;
         var copy = record.DeepCopy();
+        Targets.ForEach(copy, DefaultTargetAsRead);
         if (!localized) StringHolders.ForEach(copy, InDefaultLanguage);
         switch (copy)
         {
@@ -101,21 +102,41 @@ internal sealed class GameCodec : IGameCodec
                 ZeroTopicGroupFields(topic);
                 break;
         }
-        DeletedReferences.ForEach(copy, ClearBaseOfDeleted);
+        HeaderOnlyRecords.ForEach(copy, ReduceToHeader);
         GameSpecifics.Normalize(copy);
         return copy;
     }
 
-    // Mutagen reads a deleted reference's base record and writes a deleted record as its header alone.
-    private const string BaseMember = "Base";
+    // Mutagen writes a deleted record as its header alone, so its reread holds no field. A worldspace is
+    // the exception (WriteWorldspacesParallel skips the deleted return of WriteMajorRecord), and a
+    // container's children are written after the record, so they stay.
+    private static bool IsReducedToHeader(IMajorRecordGetter record) =>
+        (record.MajorRecordFlagsRaw & DeletedFlag.Bit) != 0 && record is not (IWorldspaceGetter or ICellGetter or IDialogTopicGetter or IQuestGetter);
 
-    private static readonly RecordGraph DeletedReferences = new(typeof(IPlacedGetter).IsAssignableFrom);
+    private static readonly RecordGraph HeaderOnlyRecords = new(typeof(IMajorRecordGetter).IsAssignableFrom);
 
-    private static void ClearBaseOfDeleted(object node)
+    private static void ReduceToHeader(object node)
     {
-        if ((((IMajorRecordGetter)node).MajorRecordFlagsRaw & DeletedFlag.Bit) == 0) return;
-        var link = node.GetType().GetProperty(BaseMember)?.GetValue(node);
-        link?.GetType().GetMethod("SetToNull", Type.EmptyTypes)?.Invoke(link, null);
+        if (node is not IMajorRecordGetter record || !IsReducedToHeader(record)) return;
+        var kept = GameAnnotations.Table.RecordHeaderMembers
+            .Select(member => node.GetType().GetProperty(member.MemberName))
+            .OfType<PropertyInfo>()
+            .Where(property => property.CanWrite)
+            .Select(property => (Property: property, Value: property.GetValue(node)))
+            .ToList();
+        ((IClearable)node).Clear();
+        foreach (var (property, value) in kept) property.SetValue(node, value);
+    }
+
+    private static readonly RecordGraph Targets = new(type => type == typeof(LocationTargetRadius));
+
+    // Mutagen's default target is a fallback of type NearReference, whose bytes it reads back as an
+    // empty reference.
+    private static void DefaultTargetAsRead(object node)
+    {
+        var radius = (LocationTargetRadius)node;
+        if (radius.Target is LocationFallback { Type: LocationTargetRadius.LocationType.NearReference, Data: 0 })
+            radius.Target = new LocationTarget();
     }
 
     private static readonly ConcurrentDictionary<Type, PropertyInfo[]> StringPropertiesByType = new();

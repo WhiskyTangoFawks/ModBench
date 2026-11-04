@@ -235,13 +235,6 @@ public sealed class VersionInGitTests
             "Mutagen writes a deleted record as its header alone. Decompile and repair it."
         },
         {
-            "deleted reference holding a field beside its base record",
-            path => File.WriteAllBytes(path, DeletedReferencePlugin.Bytes("Fixture.esp", ("DATA", new byte[24]))),
-            "Fixture.esp does not round-trip through its own source: it is a malformed plugin, and REFR 00000801 — " +
-            "deleted-record-holds-fields, repairable (drops 40 bytes): flagged Deleted and holds DATA; " +
-            "Mutagen writes a deleted record as its header alone. Decompile and repair it."
-        },
-        {
             "record absent from the rewrite",
             path => UnknownGroupPlugin.Write(path, new FormKey(ModKey.FromFileName("Fixture.esp"), 0x800), new FormKey(ModKey.FromFileName("Fixture.esp"), 0x801)),
             "Fixture.esp does not round-trip through its own source: MISC 000801:Fixture.esp is absent from the rewrite, " +

@@ -31,9 +31,7 @@ internal static class GameSpecifics
         EntryPoints: new(
             EpftByFunction: new Dictionary<byte, byte> { [1] = 1, [2] = 1, [3] = 1, [5] = 8, [9] = 4, [10] = 5, [12] = 8, [13] = 8, [14] = 8 },
             FunctionsWithoutParameters: new HashSet<byte> { 6 },
-            FunctionsCarryingEpf3: new HashSet<byte> { 9 }),
-        // Mutagen's WriteWorldspacesParallel writes a worldspace's fields without WriteMajorRecord's deleted return.
-        KeptWhenDeleted: new HashSet<string> { "WRLD" });
+            FunctionsCarryingEpf3: new HashSet<byte> { 9 }));
 
     public static IReadOnlyList<string> TransientTypes(IGameModGetter plugin) =>
     [
@@ -42,11 +40,10 @@ internal static class GameSpecifics
     ];
 
     public static bool Normalizes(IMajorRecordGetter record) =>
-        record is IQuestGetter || Targets.CanReach(record.GetType()) || FunctionConditions.CanReach(record.GetType());
+        record is IQuestGetter || FunctionConditions.CanReach(record.GetType());
 
     public static void Normalize(IMajorRecord copy)
     {
-        Targets.ForEach(copy, DefaultTargetAsRead);
         FunctionConditions.ForEach(copy, node =>
         {
             if (node is FunctionConditionData data) KeepTheWrittenParameterViews(data);
@@ -69,16 +66,5 @@ internal static class GameSpecifics
         else data.ParameterOneRecord.SetToNull();
         if (two.GetCategory() == Condition.ParameterCategory.Form) data.ParameterTwoNumber = 0;
         else data.ParameterTwoRecord.SetToNull();
-    }
-
-    private static readonly RecordGraph Targets = new(type => type == typeof(LocationTargetRadius));
-
-    // Mutagen's default target is a fallback of type NearReference, whose bytes it reads back as an
-    // empty reference.
-    private static void DefaultTargetAsRead(object node)
-    {
-        var radius = (LocationTargetRadius)node;
-        if (radius.Target is LocationFallback { Type: LocationTargetRadius.LocationType.NearReference, Data: 0 })
-            radius.Target = new LocationTarget();
     }
 }

@@ -11,9 +11,7 @@ public sealed record CreationKitShapes(
     IReadOnlyDictionary<(string RecordType, string Counter), string> CountedEntries,
     // Record types whose template combinations are written OBTF, FULL, OBTS.
     IReadOnlySet<string> TemplateCombinations,
-    PerkEntryPointShapes EntryPoints,
-    // Record types Mutagen writes whole when flagged Deleted, where it writes the others as their header alone.
-    IReadOnlySet<string> KeptWhenDeleted);
+    PerkEntryPointShapes EntryPoints);
 
 /// <summary>A perk entry point's parameter block, by its function. A function vanilla never
 /// exercises is in none of these, so it is never diagnosed.</summary>

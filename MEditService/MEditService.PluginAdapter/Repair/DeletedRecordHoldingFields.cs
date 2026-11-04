@@ -14,7 +14,8 @@ internal sealed class DeletedRecordHoldingFields : IMalformation
 
     public IEnumerable<Malformed> Detect(InspectedRecord record)
     {
-        if (record.Shapes.KeptWhenDeleted.Contains(record.Type)) yield break;
+        // Mutagen's WriteWorldspacesParallel skips WriteMajorRecord's deleted return, so a deleted worldspace keeps its fields.
+        if (record.Types.IsWorldspace(record.Type)) yield break;
 
         var isReference = record.Types.IsReference(record.Type);
         var held = record.Subrecords.Where(sub => !(isReference && sub.Signature == BaseRecord)).ToList();

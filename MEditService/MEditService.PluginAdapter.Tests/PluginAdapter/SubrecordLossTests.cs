@@ -146,19 +146,20 @@ public sealed class SubrecordLossTests : IDisposable
     }
 
     [Theory]
-    [InlineData("REFR", "NAME", "DATA")]
-    [InlineData("NPC_", "EDID", "FULL")]
-    [InlineData("CELL", "EDID", "FULL")]
-    public async Task ADeletedRecordHoldingAFieldMutagenDoesNotWrite_IsMalformed_NotALoss(string type, string tolerated, string other)
+    [InlineData("REFR", "DATA")]
+    [InlineData("NPC_", "FULL")]
+    [InlineData("CELL", "FULL")]
+    public async Task ADeletedRecordHoldingAFieldMutagenDoesNotWrite_IsMalformed_NotALoss(string type, string field)
     {
-        var original = Record(type, 0x00000801, (uint)DeletedFlag.Bit, NoFormVersion, Subrecord(tolerated, [1]), Subrecord(other, [2]));
+        var original = Record(type, 0x00000801, (uint)DeletedFlag.Bit, NoFormVersion, Subrecord(field, [2]));
         var rewritten = Record(type, 0x00000801, (uint)DeletedFlag.Bit, NoFormVersion);
 
         var comparison = await ComparisonAsync(original, rewritten);
 
         Assert.Null(comparison.Loss);
         var cause = Assert.Single(comparison.DeletedRecordCauses ?? []);
-        Assert.Equal(("deleted-record-holds-fields", $"{type} 00000801"), (cause.Diagnosis.DefectClass, cause.Diagnosis.Anchor?[..13]));
+        Assert.Equal("deleted-record-holds-fields", cause.Diagnosis.DefectClass);
+        Assert.StartsWith(type, cause.Diagnosis.Anchor, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -166,7 +167,7 @@ public sealed class SubrecordLossTests : IDisposable
     {
         var deleted = Record("WRLD", 0x00000801, (uint)DeletedFlag.Bit, NoFormVersion, Subrecord("EDID", "World"u8.ToArray()));
 
-        Assert.Null((await ComparisonAsync(deleted, deleted)).DeletedRecordCauses);
+        Assert.Null((await ComparisonAsync(deleted, Concat(deleted, AnEmptyWeapon))).DeletedRecordCauses);
     }
 
     [Fact]

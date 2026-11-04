@@ -435,10 +435,14 @@ public sealed class ModelIdentityTests
         return path;
     }
 
-    [Fact]
-    public async Task DivergenceFrom_OfADeletedReferenceHoldingItsBaseRecord_ReturnsNull_BecauseMutagenWritesADeletedRecordAsItsHeaderAlone()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DivergenceFrom_OfADeletedReferenceHoldingItsBaseRecord_ReturnsNull_BecauseMutagenWritesADeletedRecordAsItsHeaderAlone(bool trap)
     {
-        var (divergence, _, _) = await ParseRewriteAndCompare(new GeneratedPlugin("Fixture.esp", DeletedReferencePlugin.Bytes("Fixture.esp")));
+        var bytes = trap ? DeletedReferencePlugin.TrapBytes("Fixture.esp") : DeletedReferencePlugin.Bytes("Fixture.esp");
+
+        var (divergence, _, _) = await ParseRewriteAndCompare(new GeneratedPlugin("Fixture.esp", bytes));
 
         Assert.Null(divergence);
     }

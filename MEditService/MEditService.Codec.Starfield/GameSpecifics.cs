@@ -44,9 +44,7 @@ internal static class GameSpecifics
                 [17] = 5,
             },
             FunctionsWithoutParameters: new HashSet<byte>(),
-            FunctionsCarryingEpf3: new HashSet<byte> { 9 }),
-        // Mutagen's WriteWorldspacesParallel writes a worldspace's fields without WriteMajorRecord's deleted return.
-        KeptWhenDeleted: new HashSet<string> { "WRLD" });
+            FunctionsCarryingEpf3: new HashSet<byte> { 9 }));
 
     public static IReadOnlyList<string> TransientTypes(IGameModGetter plugin) =>
     [
@@ -54,25 +52,13 @@ internal static class GameSpecifics
             type => $"{type.FormType}:{string.Join(",", type.Links.Select(link => link.FormKey))}"),
     ];
 
-    public static bool Normalizes(IMajorRecordGetter record) => record is IQuestGetter || Targets.CanReach(record.GetType());
+    public static bool Normalizes(IMajorRecordGetter record) => record is IQuestGetter;
 
     public static void Normalize(IMajorRecord copy)
     {
-        Targets.ForEach(copy, DefaultTargetAsRead);
         if (copy is not Quest quest) return;
         quest.Timestamp = 0;
         quest.Unknown = 0;
         foreach (var topic in quest.DialogTopics) GameCodec.ZeroTopicGroupFields(topic);
-    }
-
-    private static readonly RecordGraph Targets = new(type => type == typeof(LocationTargetRadius));
-
-    // Mutagen's default target is a fallback of type NearReference, whose bytes it reads back as an
-    // empty reference.
-    private static void DefaultTargetAsRead(object node)
-    {
-        var radius = (LocationTargetRadius)node;
-        if (radius.Target is LocationFallback { Type: LocationTargetRadius.LocationType.NearReference, Data: 0 })
-            radius.Target = new LocationTarget();
     }
 }

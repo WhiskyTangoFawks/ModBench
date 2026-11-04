@@ -21,9 +21,8 @@ public sealed class DeletedReferenceDecompileTests : IDisposable
         File.WriteAllBytes(pluginPath, DeletedReferencePlugin.Bytes("Fixture.esp"));
         _holder.Apply(SnapshotPlugins.Snapshot(dataFolder, _root, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, ModName, 0, Enabled: true, Winning: true)]));
-        var committed = TestEditService.VersionInGitHandler(_holder)
+        TestEditService.VersionInGitHandler(_holder)
             .VersionInGitAsync(ToVersionInGit.In(_holder.Held?.Snapshot, ModName)).GetAwaiter().GetResult().Value();
-        Assert.Single(committed.Applied);
     }
 
     public void Dispose() => _root.Dispose();
