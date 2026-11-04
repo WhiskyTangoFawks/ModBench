@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -374,6 +374,9 @@ describe('the MO2 adapter\'s path tokens', () => {
   });
 
   describe('a file the index or HEAD holds unfiltered', () => {
+    beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 3_600_000 }); });
+    afterEach(() => { vi.useRealTimers(); });
+
     const commit = (root: string): void => { git(root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '-m', 'commit'); };
 
     const stagedAsTextWithNoFilter = (root: string, path: string): void => {
@@ -423,6 +426,32 @@ describe('the MO2 adapter\'s path tokens', () => {
         unfiltered('HEAD holds', 'Commit it as staged.'),
         undefined,
       ]);
+    });
+
+    it('shows HEAD holding it until HEAD moves off it, though the index stays as it is', async () => {
+      const { root, shown } = await problemsOver('ModOrganizer.ini', (instance) => SETTINGS([`path=${onWineDrive(instance, '/')}/tools`]));
+      git(root, 'add', '--', 'ModOrganizer.ini');
+      commit(root);
+      stagedAsTextWithNoFilter(root, 'ModOrganizer.ini');
+      commit(root);
+      git(root, 'add', '--', 'ModOrganizer.ini');
+
+      const committed = await shown();
+      git(root, 'reset', '--soft', 'HEAD~1');
+
+      expect([committed, await shown()]).toEqual([unfiltered('HEAD holds', 'Commit it as staged.'), undefined]);
+    });
+
+    it('says a file its filter fails on could not be checked, and checks it again on the next reading', async () => {
+      const { root, shown } = await problemsOver(PUBLISHER_FILE, (instance) => JSON.stringify({ Source: instance }));
+      git(root, 'add', '--', PUBLISHER_FILE);
+      const clean = git(root, 'config', 'filter.modbench-publisher-tokens.clean').trim();
+      git(root, 'config', 'filter.modbench-publisher-tokens.clean', 'false');
+
+      const failed = await shown();
+      git(root, 'config', 'filter.modbench-publisher-tokens.clean', clean);
+
+      expect([failed?.map(({ message }) => message.startsWith('could not be checked against its filter: ')), await shown()]).toEqual([[true], undefined]);
     });
 
     it('shows nothing for a file staged filtered with bytes outside UTF-8 while the working tree holds UTF-8', async () => {
