@@ -50,7 +50,8 @@ async function listDownloadedFiles(downloadsDir: string, skippedLink: SkippedLin
 
 const metaIniAt = parsedBy(parseMetaIni);
 const sortingRuleTextAt = parsedBy((text: string) => text);
-const downloadedMetaAt = parsedBy(parseDownloadedFileMeta);
+/** A downloaded file's metadata as it reads, parsed again only when the file's stamp has changed. */
+export const downloadedMetaAt = parsedBy(parseDownloadedFileMeta);
 const modlistAt = parsedBy(parseModlist);
 const pluginsAt = parsedBy(parsePlugins);
 
@@ -72,8 +73,11 @@ const MO2_NAMES: ManagerNames = { manager: 'MO2', modOrderFile: MODLIST_FILE_NAM
 export async function readMetaIni(context: Mo2Context, mod: string, folders: ModFolders | undefined | 'list'): Promise<MetaIni> {
   if (entryNamed(mod).kind === 'separator') return {};
   const folder = await modFolderNamed(context, mod, folders);
-  return folder === undefined ? {} : readOrAbsent(() => metaIniAt(modMetaFileIn(folder)), {});
+  return folder === undefined ? {} : readMetaIniIn(folder);
 }
+
+/** The meta.ini of the mod folder `folder`, `{}` when it is gone. */
+export const readMetaIniIn = (folder: string): Promise<MetaIni> => readOrAbsent(() => metaIniAt(modMetaFileIn(folder)), {});
 
 async function sortingRuleFile(path: string): Promise<SortingRuleFile> {
   try {

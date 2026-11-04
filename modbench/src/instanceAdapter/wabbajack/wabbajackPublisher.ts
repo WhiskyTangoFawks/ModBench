@@ -211,6 +211,10 @@ interface ListChange {
 
 const isUnder = (names: readonly string[], folder: readonly string[]): boolean => folder.every((name, depth) => names[depth] === name);
 
+// Whether `names` lie under, or at, one of the paths whose names `folders` holds joined.
+const isUnderAnyOf = (names: readonly string[], folders: ReadonlySet<string>): boolean =>
+  Array.from({ length: names.length + 1 }, (_, depth) => names.slice(0, depth).join('/')).some((prefix) => folders.has(prefix));
+
 const sameNames = (first: readonly string[], second: readonly string[]): boolean =>
   first.length === second.length && first.every((name, at) => name === second[at]);
 
@@ -422,12 +426,17 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
     keepOut: async ({ present, owns }) => {
       if (await readOrAbsent(() => get(file), undefined) === undefined) return;
       const insides = present.flatMap((path) => inInstance(instanceRoot, path) ?? []);
-      const isGone = (entry: string): boolean => owns(join(instanceRoot, ...namesOf(entry))) && !insides.some((inside) => sameNames(namesOf(inside), namesOf(entry)));
+      const insideKeys = new Set(insides.map((inside) => namesOf(inside).join('/')));
+      const isGone = (entry: string): boolean => {
+        const names = namesOf(entry);
+        return owns(join(instanceRoot, ...names)) && !insideKeys.has(names.join('/'));
+      };
       await putIfChanged(file, (before) => {
         const entries = valueOf(settingsIn(before, file), 'Ignore', file, [isNames, 'a list of paths']) ?? [];
         const changed = new Map(entries.flatMap((entry, at) => (isGone(entry) ? [[at, undefined] as const] : [])));
         const remaining = entries.filter((_, at) => !changed.has(at));
-        const missing = insides.filter((inside) => !remaining.some((entry) => isUnder(namesOf(inside), namesOf(entry))));
+        const remainingKeys = new Set(remaining.map((entry) => namesOf(entry).join('/')));
+        const missing = insides.filter((inside) => !isUnderAnyOf(namesOf(inside), remainingKeys));
         return withListChanged(before, 'Ignore', { changed, appended: missing.map(wabbajackSpelling) });
       });
     },

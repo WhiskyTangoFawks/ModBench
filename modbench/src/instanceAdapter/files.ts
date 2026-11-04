@@ -12,7 +12,8 @@ import { dirname, join, sep } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
-import type { FileRead, FileStamp } from './instanceAdapter';
+import type { FileRead } from './instanceAdapter';
+import { keptByStamp, sameStamp, stampFrom, type FileStamp, type Kept } from '../repositoriesLib/stampedReads';
 import { digestOf } from './fileContents/contentDigest';
 import type { MoveToTrash } from '../ports/trash';
 
@@ -123,8 +124,7 @@ export async function factsOf(path: string): Promise<PathFacts> {
 
 /** `path`'s stamp, following symlinks. */
 export async function stampOf(path: string): Promise<FileStamp> {
-  const info = await stat(path, { bigint: true });
-  return { size: info.size, modifiedNs: info.mtimeNs, changedNs: info.ctimeNs };
+  return stampFrom(await stat(path, { bigint: true }));
 }
 
 /** `path`'s device and inode, which name its file whatever the path's spelling; undefined where nothing is, and
@@ -285,22 +285,6 @@ export function makeDir(path: string): Promise<void> {
   return mkdir(path).then(() => undefined);
 }
 
-// A file system stamps a change with a clock coarser than a read is quick, and a network share's
-// clock is not this machine's: a stamp this recent may not change for a write that follows it.
-const SETTLED_AFTER_MS = 2_000;
-
-export const sameStamp = (a: FileStamp, b: FileStamp): boolean =>
-  a.size === b.size && a.modifiedNs === b.modifiedNs && a.changedNs === b.changedNs;
-
-export const settledBefore = (stamp: FileStamp, readFromMs: number): boolean =>
-  stamp.changedNs < BigInt(readFromMs - SETTLED_AFTER_MS) * 1_000_000n;
-
-interface Kept<T> {
-  readonly path: string;
-  readonly stamp: FileStamp;
-  readonly value: T;
-}
-
 // Windows names a file whatever the case of its path, and VS Code's watcher spells a drive in lower case.
 const pathKey = (path: string): string => (process.platform === 'win32' ? path.toLowerCase() : path);
 
@@ -310,18 +294,7 @@ const trusting = new AsyncLocalStorage<true>();
 // The stamp is the fact every write changes that ADR-0003 validates by.
 function stampKept<T>(read: (path: string) => Promise<T>, kept = new Map<string, Kept<T>>()): (path: string) => Promise<T> {
   everyKept.push(kept);
-  return async (path) => {
-    const key = pathKey(path);
-    const held = kept.get(key);
-    if (held !== undefined && trusting.getStore() === true) return held.value;
-    const stamp = await stampOf(path);
-    if (held !== undefined && sameStamp(held.stamp, stamp)) return held.value;
-    const readFromMs = Date.now();
-    const value = await read(path);
-    if (settledBefore(stamp, readFromMs)) kept.set(key, { path, stamp, value });
-    else kept.delete(key);
-    return value;
-  };
+  return keptByStamp(stampOf, read, { kept, trusts: () => trusting.getStore() === true, keyOf: pathKey });
 }
 
 /** `path`'s directory entries; the caller's own filter picks the ones it wants. */

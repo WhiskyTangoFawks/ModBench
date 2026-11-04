@@ -42,7 +42,10 @@ export class ModStatuses {
   private gitFailure: string | undefined;
   private waiting: StatusSource | undefined;
   private deriving = false;
-  private derivation: Promise<void> = Promise.resolve();
+  private started = 0;
+  private finished = 0;
+  private failure: Error | undefined;
+  private readonly finishedRun: (() => void)[] = [];
   private readonly changed = new Set<() => void>();
   private readonly messageChanged = new Set<() => void>();
 
@@ -53,13 +56,15 @@ export class ModStatuses {
     this.waiting = value;
     if (this.deriving) return;
     this.deriving = true;
-    this.derivation = this.deriveWhileWaiting();
+    void this.deriveWhileWaiting();
   }
 
-  /** The statuses derived from the latest value handed, each as read, an unreadable one too. While git cannot say which folders it
-   *  holds, every mod's status is unreadable with that reason. */
+  /** The statuses derived from the value current when asked: the derivation under way, or the next when a newer value waits
+   *  behind it. Values arriving meanwhile do not hold it. Rejects with why the last derivation failed. */
   async current(): Promise<ReadonlyMap<string, ModStatus>> {
-    await this.derivation;
+    const settledRun = this.waiting === undefined ? this.started : this.started + 1;
+    while (this.finished < settledRun) await new Promise<void>((resolve) => { this.finishedRun.push(resolve); });
+    if (this.failure !== undefined) throw this.failure;
     return this.derived;
   }
 
@@ -91,22 +96,31 @@ export class ModStatuses {
   }
 
   private async deriveWhileWaiting(): Promise<void> {
-    try {
-      for (let value = this.waiting; value !== undefined; value = this.waiting) {
-        this.waiting = undefined;
-        const mods = value.holdsRepository ? modsAt(value) : [];
-        const held = await this.heldAmong(mods);
-        if (held === undefined) {
-          this.derived = new Map(mods.map(({ name }) => [name, unreadableStatus(name, `git could not say which folders it holds: ${this.gitFailure}`)]));
-          for (const listener of this.changed) listener();
-          continue;
-        }
-        const statuses = await Promise.all(mods.map((mod) => this.statusOf(mod, held.whole.has(mod.folder), held.files.get(mod.folder) ?? [])));
-        this.hold(new Map(statuses.map((status) => [status.mod, status])));
+    for (let value = this.waiting; value !== undefined; value = this.waiting) {
+      this.waiting = undefined;
+      this.started += 1;
+      try {
+        await this.deriveFrom(value);
+        this.failure = undefined;
+      } catch (err) {
+        this.failure = err instanceof Error ? err : new Error(String(err));
       }
-    } finally {
-      this.deriving = false;
+      this.finished += 1;
+      for (const resolve of this.finishedRun.splice(0)) resolve();
     }
+    this.deriving = false;
+  }
+
+  private async deriveFrom(value: StatusSource): Promise<void> {
+    const mods = value.holdsRepository ? modsAt(value) : [];
+    const held = await this.heldAmong(mods);
+    if (held === undefined) {
+      this.derived = new Map(mods.map(({ name }) => [name, unreadableStatus(name, `git could not say which folders it holds: ${this.gitFailure}`)]));
+      for (const listener of this.changed) listener();
+      return;
+    }
+    const statuses = await Promise.all(mods.map((mod) => this.statusOf(mod, held.whole.has(mod.folder), held.files.get(mod.folder) ?? [])));
+    this.hold(new Map(statuses.map((status) => [status.mod, status])));
   }
 
   // Git failing leaves the last good statuses shown, and says why once for all of them.
@@ -137,7 +151,7 @@ export class ModStatuses {
   // The installation file is the mod manager's record, so a folder git holds whole is warned of it too.
   private async statusOf(mod: ModAndSourceFolder, heldWhole: boolean, heldByGit: readonly string[]): Promise<ModStatus> {
     const [status, installed, buildFile] = await Promise.all([
-      heldWhole ? heldWholeStatus(mod.name) : this.statusAgainstManifest(mod, heldByGit), this.reads.installationFile(mod.name),
+      heldWhole ? heldWholeStatus(mod.name) : this.statusAgainstManifest(mod, heldByGit), this.reads.installationFile(mod.name, mod.folder),
       mod.sourceFolder === undefined ? undefined : buildFileAgainst(mod.sourceFolder),
     ]);
     return { ...status, ...installed.kind === 'unreadable' ? { installationFileProblem: installed.reason } : {}, ...buildFile && { buildFile } };

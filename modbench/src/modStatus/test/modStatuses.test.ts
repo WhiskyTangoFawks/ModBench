@@ -23,6 +23,8 @@ beforeEach(async () => {
   heldWhole = new Set();
   heldByGit = new Map();
   listings = 0;
+  whileListing = () => undefined;
+  failingInstallationReads = 0;
 });
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
@@ -63,15 +65,20 @@ const valueOf = (mods: EntryRef[], modFolders: ModFolder[], over: Partial<Status
 let heldWhole: ReadonlySet<string>;
 let heldByGit: ReadonlyMap<string, readonly string[]>;
 let listings: number;
+let whileListing: () => void;
+let failingInstallationReads: number;
 let installationFiles: ReadonlyMap<string, Awaited<ReturnType<InstanceAdapter['installationFile']>>>;
 
 const instance: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole' | 'filesHeldByGit'> = {
   foldersHeldWhole: (folders) => Promise.resolve(new Set(folders.filter((folder) => heldWhole.has(folder)))),
   filesHeldByGit: (folders) => {
     listings += 1;
+    whileListing();
     return Promise.resolve(new Map(folders.map((folder) => [folder, heldByGit.get(folder) ?? []])));
   },
-  installationFile: (mod) => Promise.resolve(installationFiles.get(mod) ?? { kind: 'read', answer: undefined }),
+  installationFile: (mod) => (failingInstallationReads-- > 0
+    ? Promise.reject(new Error('the installation file could not be asked'))
+    : Promise.resolve(installationFiles.get(mod) ?? { kind: 'read', answer: undefined })),
   modValue: (folder, wanted, held) => {
     asked.push(basename(folder));
     return modValueOver(reads, folder, wanted, held);
@@ -299,6 +306,64 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     statuses.derive(valueOf([{ kind: 'mod', name: 'C' }], [folder('mod', 'C', c)]));
 
     expect([[...(await statuses.current()).keys()], asked]).toEqual([['C'], ['A', 'C']]);
+  });
+
+  it('settles once the value current when asked is derived, though values keep arriving', async () => {
+    const [a, b] = [await folderOf('A'), await folderOf('B')];
+    const statuses = statusesLogging();
+    let arrived = 0;
+    whileListing = () => {
+      if (arrived++ < 3) queueMicrotask(() => { statuses.derive(valueOf([{ kind: 'mod', name: 'B' }], [folder('mod', 'B', b)])); });
+    };
+
+    statuses.derive(valueOf([{ kind: 'mod', name: 'A' }], [folder('mod', 'A', a)]));
+    const settled = [...(await statuses.current()).keys()];
+    await vi.waitFor(async () => {
+      await statuses.current();
+      expect(listings).toBe(4);
+    });
+
+    expect(settled).toEqual(['A']);
+  });
+
+  it('settles a value handed behind a derivation with the next derivation, which folds what arrived meanwhile', async () => {
+    const [a, b, c] = [await folderOf('A'), await folderOf('B'), await folderOf('C')];
+    const statuses = statusesLogging();
+    let derivations = 0;
+    whileListing = () => {
+      if (++derivations === 2) queueMicrotask(() => { statuses.derive(valueOf([{ kind: 'mod', name: 'C' }], [folder('mod', 'C', c)])); });
+    };
+
+    statuses.derive(valueOf([{ kind: 'mod', name: 'A' }], [folder('mod', 'A', a)]));
+    statuses.derive(valueOf([{ kind: 'mod', name: 'B' }], [folder('mod', 'B', b)]));
+    const settled = [...(await statuses.current()).keys()];
+    await vi.waitFor(async () => {
+      await statuses.current();
+      expect(listings).toBe(3);
+    });
+
+    expect(settled).toEqual(['B']);
+  });
+
+  it('rejects with why the derivation it waited for failed', async () => {
+    const mod = await folderOf('A');
+    const statuses = statusesLogging();
+    failingInstallationReads = 1;
+
+    statuses.derive(valueOf([{ kind: 'mod', name: 'A' }], [folder('mod', 'A', mod)]));
+
+    await expect(statuses.current()).rejects.toThrow('the installation file could not be asked');
+  });
+
+  it('derives the value that waited behind a derivation that failed, and settles it', async () => {
+    const [a, b] = [await folderOf('A'), await folderOf('B')];
+    const statuses = statusesLogging();
+    failingInstallationReads = 1;
+
+    statuses.derive(valueOf([{ kind: 'mod', name: 'A' }], [folder('mod', 'A', a)]));
+    statuses.derive(valueOf([{ kind: 'mod', name: 'B' }], [folder('mod', 'B', b)]));
+
+    expect([...(await statuses.current()).keys()]).toEqual(['B']);
   });
 
   it('says it changed when a status changes, and not when a value derives the same statuses', async () => {

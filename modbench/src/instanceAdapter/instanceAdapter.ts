@@ -11,6 +11,7 @@ import type { NexusPage } from './nexusPage';
 import { PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
 import type { FomodMove, FomodState, ReleaseImage } from '../wire/fomodPage';
 import type { FolderRefusal } from './foldersRefused';
+import type { FileStamp } from '../repositoriesLib/stampedReads';
 import type { FolderValue, PackagesAsked, PluginFlags, Read, StatusValues } from '../repositoriesLib/statusValues';
 import type { DataFileReads } from './gameFolder/dataFileReads';
 import type { ProgramVersions } from './gameFolder/programVersions';
@@ -426,13 +427,7 @@ export interface OriginFiles {
   readonly notes: readonly string[];
 }
 
-/** What the file system says of a file without a read of its bytes. A tool can keep a file's size
- *  and date modified across a write, never the time of its change. */
-export interface FileStamp {
-  readonly size: bigint;
-  readonly modifiedNs: bigint;
-  readonly changedNs: bigint;
-}
+export type { FileStamp };
 
 /** A read of one file that answers why it could not be read, rather than failing whatever asked. */
 export type FileRead<T> = Read<T>;
@@ -702,8 +697,8 @@ export interface InstanceAdapter extends DataFileReads {
   foldersRefused(folders: ReadonlyMap<string, string>, asked: readonly string[]): Promise<readonly FolderRefusal[]>;
   /** The source folder init makes a mod's repository in (ADR-0007); undefined when its name gives it none. */
   sourceFolder(mod: string): string | undefined;
-  /** The downloaded file the mod manager records `mod` as installed from; undefined when it records none. */
-  installationFile(mod: string): Promise<FileRead<InstallationFile | undefined>>;
+  /** The downloaded file the mod manager records `mod` as installed from, its metadata read in `folder` when the caller holds it; undefined when it records none. */
+  installationFile(mod: string, folder?: string): Promise<FileRead<InstallationFile | undefined>>;
   /** The downloaded file of `name` in the downloads folder, with its hashes; undefined when the folder holds none of that name. */
   downloadedFile(name: string): Promise<FileRead<InstallationFile | undefined>>;
   /** The downloaded file with the size and hash of `pinned`, under any name; none when the folder holds none. `notes`: why a

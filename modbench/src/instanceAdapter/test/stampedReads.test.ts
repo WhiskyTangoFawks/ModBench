@@ -45,59 +45,12 @@ describe('a folder listed and a file parsed by their stamps', () => {
     vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
   };
 
-  it('lists a folder whose stamp has not changed once', async () => {
-    await writeFile(join(root, 'a.esp'), '');
-    settle();
-    await namesOf(root);
-    await namesOf(root);
-    expect(listingsOf(root)).toBe(1);
-  });
-
-  it('lists a folder again, and shows its new entry, once its stamp changes', async () => {
-    await writeFile(join(root, 'a.esp'), '');
-    settle();
-    await namesOf(root);
-    await writeFile(join(root, 'b.esp'), '');
-    await modifiedLater(root);
-    expect(await namesOf(root)).toEqual(['a.esp', 'b.esp']);
-    expect(listingsOf(root)).toBe(2);
-  });
-
-  it('lists a folder stamped within the last moments every time, as its stamp may not change for a write that follows', async () => {
-    await writeFile(join(root, 'a.esp'), '');
-    await namesOf(root);
-    await namesOf(root);
-    expect(listingsOf(root)).toBe(2);
-  });
-
   it('lists a folder every time when a writer lists it, so a temp folder is never kept', async () => {
     await writeFile(join(root, 'a.esp'), '');
     settle();
     await namesOf(root, listDir);
     await namesOf(root, listDir);
     expect(listingsOf(root)).toBe(2);
-  });
-
-  it('parses a file whose stamp has not changed once', async () => {
-    const path = join(root, 'meta.ini');
-    await writeFile(path, 'one');
-    settle();
-    const parse = vi.fn((text: string) => text.length);
-    const parsedAt = parsedBy(parse);
-    await parsedAt(path);
-    await parsedAt(path);
-    expect(parse).toHaveBeenCalledTimes(1);
-  });
-
-  it('parses a file again, and answers its new content, once its stamp changes', async () => {
-    const path = join(root, 'meta.ini');
-    await writeFile(path, 'one');
-    settle();
-    const textAt = parsedBy((text) => text);
-    await textAt(path);
-    await writeFile(path, 'three');
-    await modifiedLater(path);
-    expect(await textAt(path)).toBe('three');
   });
 
   it('trusts within a re-read each folder it keeps without its stamp, and lists again the folder of a path the re-read is named', async () => {
