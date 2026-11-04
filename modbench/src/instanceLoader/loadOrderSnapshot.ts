@@ -7,7 +7,7 @@ import {
   dataFolderFile, fileInFolder, type DataFolderArchives, type DataFolderPlugins, type FileRead, type FileStamp, type GameFolder,
   type ModFolders, type OriginFile, type PluginEntry,
 } from '../instanceAdapter/instanceAdapter';
-import { isRootLevel } from '../tables/pluginFile';
+import { isPluginAtRoot, isRootLevel } from '../tables/pluginFile';
 import { modOfOrigin } from './modOfOrigin';
 import { pluginOrderOf } from './pluginOrder';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
@@ -153,6 +153,26 @@ function winningPlugins(files: FileWinners): Map<string, PluginFile> {
   return new Map(winners.map((winner) => [foldPath(winner.name), winner]));
 }
 
+interface RootPlugins {
+  readonly winners: Map<string, PluginFile>;
+  readonly byOrigin: readonly (readonly [string, readonly OriginFile[]])[];
+}
+
+// What the index holds at the game's root is read from every file once per index, which a refresh that
+// changed no listing reuses whole (ADR-0015).
+const rootPluginsOfIndex = new WeakMap<FileConflictIndex, RootPlugins>();
+
+function rootPluginsOf(index: FileConflictIndex): RootPlugins {
+  const held = rootPluginsOfIndex.get(index);
+  if (held !== undefined) return held;
+  const read = {
+    winners: winningPlugins(index.files),
+    byOrigin: [...index.filesByMod].map(([origin, files]) => [origin, files.filter((file) => isPluginAtRoot(file.relativePath))] as const),
+  };
+  rootPluginsOfIndex.set(index, read);
+  return read;
+}
+
 /** A disabled plugins.txt line is still sent (ADR-0013), `enabled: false`. A listed
  *  name no mod or overwrite/ provides takes the Data folder's file, or is line-only when the Data
  *  folder does not hold it. */
@@ -163,7 +183,7 @@ export function buildLoadOrderRows(
   gameFolder: GameFolder,
   inData: DataFolderPlugins,
 ): (LoadOrderPlugin | LoadOrderPluginLine)[] {
-  const winners = winningPlugins(index.files);
+  const { winners, byOrigin } = rootPluginsOf(index);
   // The adapter hands each name once, and the game matches a line to a file without case, so a case
   // difference must not read as "disabled".
   const lineByName = new Map(pluginOrder.map(({ name }, line) => [pluginNameKey(name), line] as const));
@@ -186,7 +206,7 @@ export function buildLoadOrderRows(
     return winner?.name === name && winner.origin === origin;
   };
   const overwriteFiles = runtimeOutput.filter((file) => !file.excluded);
-  const outside = findPluginsOutsideLoadOrder([...index.filesByMod, [OVERWRITE_ORIGIN, overwriteFiles]], listed)
+  const outside = findPluginsOutsideLoadOrder([...byOrigin, [OVERWRITE_ORIGIN, overwriteFiles]], listed)
     .map((plugin) => ({
       ...plugin,
       line: lineByName.get(pluginNameKey(plugin.name)) ?? null,
@@ -249,8 +269,19 @@ function stringsBeside(
 export function listedArchivesNothingHolds({ gameRelease, listed, inData, files }: ArchiveSources): string[] {
   const rule = pluginCompanionRule(gameRelease);
   if (rule === undefined || inData.kind !== 'listed') return [];
-  const held = new Set([...inData.archives, ...[...files].map(({ relativePath }) => relativePath).filter(rule.isArchive)].map(foldPath));
+  const held = new Set([...inData.archives.map(foldPath), ...archivesOfFiles(files, gameRelease, rule.isArchive)]);
   return listed.filter((name) => !held.has(foldPath(name)));
+}
+
+// The archives the files hold are scanned once per index, which a refresh that changed no listing reuses whole (ADR-0015).
+const archivesOfIndex = new WeakMap<FileWinners, { readonly gameRelease: string; readonly archives: ReadonlySet<string> }>();
+
+function archivesOfFiles(files: FileWinners, gameRelease: string, isArchive: (relativePath: string) => boolean): ReadonlySet<string> {
+  const held = archivesOfIndex.get(files);
+  if (held?.gameRelease === gameRelease) return held.archives;
+  const archives = new Set([...files].map(({ relativePath }) => relativePath).filter(isArchive).map(foldPath));
+  archivesOfIndex.set(files, { gameRelease, archives });
+  return archives;
 }
 
 /** ADR-0013's snapshot: none without a listable game folder, a refusal while a mod's plugin has no mod

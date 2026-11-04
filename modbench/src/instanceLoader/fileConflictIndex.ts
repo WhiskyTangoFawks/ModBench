@@ -108,11 +108,14 @@ export interface FileConflictIndex {
 
 // A later provider loses to the earlier, winning one. A case variant of a path its origin already
 // provides is one more name for that origin's copy, never a second provider.
-function provide(files: FileConflictLookup, file: OriginFile, origin: FileOrigin): void {
+function provide(files: FileConflictLookup, seen: Set<string>, file: OriginFile, origin: FileOrigin): void {
+  const folded = foldPath(file.relativePath);
+  if (seen.has(folded)) return;
+  seen.add(folded);
   const existing = files.get(file.relativePath);
   if (!existing) {
     files.set({ relativePath: file.relativePath, winner: file.sourcePath, winnerOrigin: origin, providers: [origin] });
-  } else if (!existing.providers.some((provider) => sameOrigin(provider, origin))) {
+  } else {
     existing.providers.push(origin);
   }
 }
@@ -134,8 +137,33 @@ export function buildFileConflictIndex(
   }
 
   for (const { origin, files: provided } of filesWinningFirst(entries, overwriteFiles, (mod) => filesByMod.get(mod) ?? [])) {
-    for (const file of provided) provide(files, file, origin);
+    const seen = new Set<string>();
+    for (const file of provided) provide(files, seen, file, origin);
   }
 
   return { files, filesByMod, foldersByMod };
+}
+
+const sameEntries = (a: readonly ModlistEntry[], b: readonly ModlistEntry[]): boolean =>
+  a.length === b.length && a.every((entry, at) => entry.kind === b.at(at)?.kind && entry.name === b.at(at)?.name && entry.enabled === b.at(at)?.enabled);
+
+interface Built {
+  readonly entries: readonly ModlistEntry[];
+  readonly overwrite: readonly OriginFile[];
+  readonly listings: ReadonlyMap<string, OriginFiles | undefined>;
+  readonly index: FileConflictIndex;
+}
+
+/** `buildFileConflictIndex`, answering the index it built last while the mods, their order, Overwrite's files and every mod's
+ *  listing are the ones it built from. The cost of a refresh then grows with the listings it changed (ADR-0015). */
+export function indexReusing(): typeof buildFileConflictIndex {
+  let last: Built | undefined;
+  return (entries, overwrite, modFiles) => {
+    const listings = new Map(entries.flatMap((entry) => (entry.kind === 'mod' ? [[entry.name, modFiles.get(entry.name)] as const] : [])));
+    if (last !== undefined && last.overwrite === overwrite && sameEntries(last.entries, entries)
+      && [...listings].every(([name, listing]) => last?.listings.get(name) === listing)) return last.index;
+    const index = buildFileConflictIndex(entries, overwrite, modFiles);
+    last = { entries, overwrite, listings, index };
+    return index;
+  };
 }

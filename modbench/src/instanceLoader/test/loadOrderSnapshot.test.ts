@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { join } from 'node:path';
 import type { DataFolderPlugins, FileRead, FileStamp, GameFolder, ModFolders, OriginFile, PluginEntry } from '../../instanceAdapter/instanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
@@ -377,6 +377,18 @@ describe('the snapshot the sync PUTs, read straight from the value rather than a
       };
 
       expect(listedArchivesNothingHolds(archives)).toEqual(nothingHolds);
+    });
+
+    it('scans the files once for the same index, whatever the INIs list', () => {
+      const files = winners({ 'A - Main.ba2': 'ModA' });
+      const scan = vi.spyOn(files, Symbol.iterator);
+      const archives: ArchiveSources = { ...NO_ARCHIVES, inData: inData([]), files };
+
+      const first = listedArchivesNothingHolds({ ...archives, listed: ['Gone.ba2'] });
+      const second = listedArchivesNothingHolds({ ...archives, listed: ['A - Main.ba2', 'Gone.ba2'] });
+
+      expect([first, second]).toEqual([['Gone.ba2'], ['Gone.ba2']]);
+      expect(scan).toHaveBeenCalledTimes(1);
     });
 
     it('reads every loose strings file at the path the Mod override order resolves it to, a mod\'s over the game folder\'s', () => {

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { Mod, Separator } from '../instance';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import {
-  buildFileConflictIndex, modOrigin, goToModCandidates, inFileOrderConflict, fileOrderConflictOf, outranksACopy, winsPath, RUNTIME_OUTPUT, type ConflictEntry,
+  buildFileConflictIndex, indexReusing, modOrigin, goToModCandidates, inFileOrderConflict, fileOrderConflictOf, outranksACopy, winsPath, RUNTIME_OUTPUT, type ConflictEntry,
 } from '../fileConflictIndex';
 import type { FileOrigin, OriginFile, OriginFiles } from '../../instanceAdapter/instanceAdapter';
 import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
@@ -252,5 +252,35 @@ describe('whether a copy of a file outranks a copy', () => {
     ['outranks none for a path no one provides', undefined, high, false],
   ])('%s', (_case, entry, own, expected) => {
     expect(outranksACopy(entry, own)).toBe(expected);
+  });
+});
+
+describe('the index reused while no listing changed', () => {
+  const listing = (name: string, paths: string[]): OriginFiles =>
+    ({ origin: name, folder: `/mods/${name}`, folders: [], notes: [], files: paths.map((path) => fileIn(`/mods/${name}`, path)) });
+  const listings = (): Map<string, OriginFiles> => new Map([['ModA', listing('ModA', [SHARED])], ['ModB', listing('ModB', [SHARED])]]);
+  const entries = (): ModlistEntry[] => [mod('ModA'), mod('ModB')];
+  const NO_OVERWRITE: OriginFile[] = [];
+
+  it('answers the index it built when the mods, their order and every listing are the same', () => {
+    const build = indexReusing();
+    const modFiles = listings();
+    const first = build(entries(), NO_OVERWRITE, modFiles);
+
+    expect(build(entries(), NO_OVERWRITE, new Map(modFiles))).toBe(first);
+  });
+
+  it.each<[string, () => ModlistEntry[], (modFiles: Map<string, OriginFiles>) => void, OriginFile[]]>([
+    ['a mod is disabled', () => [mod('ModA', false), mod('ModB')], () => undefined, NO_OVERWRITE],
+    ['the mods are reordered', () => [mod('ModB'), mod('ModA')], () => undefined, NO_OVERWRITE],
+    ['a mod\'s listing is read again', entries, (modFiles) => modFiles.set('ModB', listing('ModB', [SHARED, 'b.nif'])), NO_OVERWRITE],
+    ['Overwrite\'s files are read again', entries, () => undefined, [fileIn('/overwrite', SHARED)]],
+  ])('builds the index again when %s', (_case, entriesNow, change, overwrite) => {
+    const build = indexReusing();
+    const modFiles = listings();
+    const first = build(entries(), NO_OVERWRITE, modFiles);
+    change(modFiles);
+
+    expect(build(entriesNow(), overwrite, modFiles)).not.toBe(first);
   });
 });
