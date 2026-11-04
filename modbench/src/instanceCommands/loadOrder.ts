@@ -1,13 +1,17 @@
 // Put load order (ADR-0013) and refresh. What comes back is the caller's to report and apply,
 // never pushed to a view from here.
 
-import type { LoadOrderOutcome, LoadOrderSnapshot, MEditClient } from '../client';
+import type { LoadOrderOutcome, LoadOrderSnapshot, MEditClient, PluginAddress } from '../client';
 
 /** What the loader read of the instance for put load order to send. */
 export type LoadOrderSource =
   | (Pick<LoadOrderSnapshot, 'plugins' | 'active' | 'loadedWithNoLine' | 'archives' | 'stringsFiles' | 'places' | 'gameRelease'> & { readonly dataFolder: string })
   | { readonly refusal: string }
   | undefined;
+
+/** The order the game loads the snapshot's active plugins in, which the loader cannot know: it takes
+ *  a blueprint plugin's place from the header facts Editing supplies (ADR-0013). */
+export type InGameOrder = (snapshot: Pick<LoadOrderSnapshot, 'active' | 'loadedWithNoLine'>) => PluginAddress[];
 
 /** Nothing is sent without a game folder found: there is no Data folder to key the load order on.
  *  A refusal is the loader's, to tell once: a partial snapshot would unregister what it left out. */
@@ -17,11 +21,13 @@ export type PutLoadOrderResult =
 
 export async function putLoadOrder(
   client: Pick<MEditClient, 'sendLoadOrder'>, instanceRoot: string, source: LoadOrderSource, stringsLanguage: string | undefined,
+  inGameOrder: InGameOrder,
 ): Promise<PutLoadOrderResult> {
   if (!source) return { sent: false };
   if ('refusal' in source) return { sent: false, refusal: source.refusal };
   if (stringsLanguage === undefined) throw new Error('The strings language has no value: package.json declares its default.');
-  const { plugins, active, loadedWithNoLine, archives, stringsFiles, places, gameRelease, dataFolder } = source;
+  const { plugins, loadedWithNoLine, archives, stringsFiles, places, gameRelease, dataFolder } = source;
+  const active = inGameOrder(source);
   const snapshot: LoadOrderSnapshot = {
     plugins, active, loadedWithNoLine, archives, stringsFiles, places, dataFolder, instanceRoot, gameRelease, stringsLanguage,
   };

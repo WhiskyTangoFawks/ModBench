@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { Reporter } from '../ports/reporter';
-import type { PluginDiagnosisReport, PluginAddress } from '../client';
+import type { PluginDiagnosisReport, PluginAddress, LoadOrderSnapshot } from '../client';
 import { originsOfLinesNotRestored } from '../pluginCommands/pluginsNotRestored';
 import { linesWithoutFile, modsWithManifests } from '../instanceLoader/linesNotRestored';
 import { instanceLastGoodReadFailure, managerRunningMessage, type Instance, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
@@ -19,7 +19,7 @@ import { PluginFactsFeed, type PluginFactsClient } from './pluginFactsFeed';
 import { isRecordRow } from './gestureEntry';
 import type { RecordGroup, RecordPlace } from './createdRecordSelection';
 import { isPluginAddress } from '../wire/messages';
-import { inGameOrder, pluginOrderOf, unplaced } from '../instanceLoader/pluginOrder';
+import { activeInGameOrder, inGameOrder, pluginOrderOf, unplaced } from '../instanceLoader/pluginOrder';
 import { filePresence, filesPresent } from '../instanceLoader/filePresence';
 import { readFileFacts, type FileReads } from '../sortingRules/lootConditions';
 import { rulesReader, type ReadRules } from '../sortingRules/lootMetadata';
@@ -137,6 +137,13 @@ export class PluginsTreeProvider
   private cache?: { rows: PluginListNode[] };
   private lastBuildHadNoRows = false;
   private rowsBlueprints = '';
+
+  /** The order the game loads in, which mEdit is handed: it needs what Editing read of the plugins, so it is asked again as the facts change. */
+  readonly inGameOrder = {
+    of: (snapshot: Pick<LoadOrderSnapshot, 'active' | 'loadedWithNoLine'>): PluginAddress[] =>
+      activeInGameOrder(snapshot, (plugin) => this.facts.rows.isBlueprint(plugin), this.instanceValue.blueprintLoadsLast),
+    onChange: (listener: () => void) => this.facts.onDidChange(listener),
+  };
   private lastLockedRowUris: ReadonlySet<string> = new Set();
   private highlighted: ReadonlySet<string> = new Set();
 
