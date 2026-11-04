@@ -1,7 +1,7 @@
 // The instance value (ADR-0015).
 
 import type { Log } from '../ports/log';
-import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
+import { FileConflictLookup, indexReusing, type FileWinners } from './fileConflictIndex';
 import {
   buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, stampedSnapshot, type ArchiveSources,
   type DataFolderFiles, type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine, type LoadOrderSnapshotRefusal,
@@ -320,6 +320,7 @@ export class Instance implements Subscription {
 
   // A note is one Output line until its text changes or it clears.
   private readonly told = new Map<NoteKind, ReadonlySet<string>>();
+  private readonly indexOf = indexReusing();
 
   constructor(private readonly options: InstanceOptions) {
     this.current = emptyValue(options.adapter, options.gameFolderSettingId);
@@ -588,7 +589,7 @@ export class Instance implements Subscription {
     } = reading;
     const sourceMods = await sourceModsOf(modFolders?.all, reading.sourceModFolders, (name) => adapter.entryKey({ kind: 'mod', name }));
     this.tellReading(reading, sourceMods);
-    const index = buildFileConflictIndex(entries, runtimeOutput.files, reading.modFiles);
+    const index = this.indexOf(entries, runtimeOutput.files, reading.modFiles);
     const plugins = buildLoadOrderRows(pluginOrder, index, runtimeOutput.files, gameFolder, dataFolderPlugins);
     const pluginsLoadedWithNoLine = pluginsLoadedWithNoLineOf(loadedWithNoLineOf(gameRelease, creationClub), dataFolderPlugins, plugins, gameFolder);
     // Installed reads every mod folder, not one profile's mod order: a folder no profile has synced

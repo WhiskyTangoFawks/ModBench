@@ -144,3 +144,27 @@ export function buildFileConflictIndex(
 
   return { files, filesByMod, foldersByMod };
 }
+
+const sameEntries = (a: readonly ModlistEntry[], b: readonly ModlistEntry[]): boolean =>
+  a.length === b.length && a.every((entry, at) => entry.kind === b[at]?.kind && entry.name === b[at]?.name && entry.enabled === b[at]?.enabled);
+
+interface Built {
+  readonly entries: readonly ModlistEntry[];
+  readonly overwrite: readonly OriginFile[];
+  readonly listings: ReadonlyMap<string, OriginFiles | undefined>;
+  readonly index: FileConflictIndex;
+}
+
+/** `buildFileConflictIndex`, answering the index it built last while the mods, their order, Overwrite's files and every mod's
+ *  listing are the ones it built from. The cost of a refresh then grows with the listings it changed (ADR-0015). */
+export function indexReusing(): typeof buildFileConflictIndex {
+  let last: Built | undefined;
+  return (entries, overwrite, modFiles) => {
+    const listings = new Map(entries.flatMap((entry) => (entry.kind === 'mod' ? [[entry.name, modFiles.get(entry.name)] as const] : [])));
+    if (last !== undefined && last.overwrite === overwrite && sameEntries(last.entries, entries)
+      && [...listings].every(([name, listing]) => last?.listings.get(name) === listing)) return last.index;
+    const index = buildFileConflictIndex(entries, overwrite, modFiles);
+    last = { entries, overwrite, listings, index };
+    return index;
+  };
+}
