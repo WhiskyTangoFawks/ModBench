@@ -140,7 +140,7 @@ internal sealed class Indexer : IDisposable
     // read after a source write waits on.
     private long _writesChecked;
 
-    // ADR-0015: a store just opened checks the disk, since no event reports what changed while it was closed. Guarded by _lock.
+    // ADR-0015. Guarded by _lock.
     private bool _openedUnchecked;
     private readonly object _reconciled = new();
     private static readonly TimeSpan SourceWriteReadLimit = TimeSpan.FromSeconds(60);
@@ -322,7 +322,7 @@ internal sealed class Indexer : IDisposable
         }
     }
 
-    // ADR-0015: a signal that arrives while a check waits folds into it.
+    // ADR-0015.
     private void AskCheck()
     {
         lock (_turns)

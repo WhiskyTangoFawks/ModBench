@@ -53,18 +53,18 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
   let last: { source: Sent; stringsLanguage: string | undefined; order: string } | undefined;
 
   // The snapshot mEdit holds, as far as Modbench knows: one it was handed and did not fail.
-  let handed: string | undefined;
+  let handed: { snapshot: LoadOrderSnapshot; key: string } | undefined;
   const changed = (snapshot: LoadOrderSnapshot): boolean => {
     const key = JSON.stringify(snapshot);
-    if (key === handed) return false;
-    handed = key;
+    if (key === handed?.key) return false;
+    handed = { snapshot, key };
     return true;
   };
 
   // A put the backend failed is not told: the status bar reports the stop.
   const tellPut = (put: Promise<PutLoadOrderResult>): void => {
     void tells.track(put.then((result) => {
-      if (result.sent && result.outcome.outcome !== 'applied' && handed === JSON.stringify(result.snapshot)) handed = undefined;
+      if (result.sent && result.outcome.outcome !== 'applied' && handed?.snapshot === result.snapshot) handed = undefined;
       if (result.sent && result.outcome.outcome === 'backendFailed') return;
       return onPut(result);
     }));

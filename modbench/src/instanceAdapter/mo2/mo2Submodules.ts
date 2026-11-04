@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { errnoCode } from '../../ports/errno';
 import { git } from '../git';
+import { keptByIndex } from '../keptByIndex';
 import { errorMessage } from '../../ports/errorMessage';
 import { exists, ignoreSkippedLink, isRepository, listFolders, putIfChanged, readOrAbsent, remove } from '../files';
 import type { InstanceAdapter, SourceHost, Submodule, SubmoduleNote, UnclonedSubmodule } from '../instanceAdapter';
@@ -154,6 +155,8 @@ const isOwnHook = (hook: string): Promise<boolean> => readFile(hook, 'utf8').the
 export const pushRefusalWritten = (instanceRoot: string): Promise<boolean> =>
   hooksFolder(instanceRoot).then((hooks) => isOwnHook(join(hooks, PRE_PUSH_HOOK_NAME)), () => false);
 
+const keptSubmodules = keptByIndex<Awaited<ReturnType<typeof submoduleIn>>>();
+
 export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
   return {
     async writeSubmodules(acted, sourceMods) {
@@ -217,7 +220,7 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
     sourceHost: (folder) => sourceHostOf(folder).then(
       (answer) => ({ kind: 'read' as const, answer }), (err: unknown) => ({ kind: 'unreadable' as const, reason: errorMessage(err) })),
 
-    submodule: (name) => submoduleIn(instanceRoot, name).catch((err: unknown) =>
+    submodule: (name) => keptSubmodules(instanceRoot, name, () => submoduleIn(instanceRoot, name)).catch((err: unknown) =>
       ({ lacks: `the instance repository's submodule '${name}' could not be read: ${errorMessage(err)}` })),
 
     async unclonedSubmodules() {
@@ -225,7 +228,7 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
       const uncloned: UnclonedSubmodule[] = [];
       for (const name of await sourceEntries(instanceRoot, submodulesFile(instanceRoot))) {
         if (await isRepository(join(sourceRootDir(instanceRoot), name))) continue;
-        uncloned.push({ name, ...await submoduleIn(instanceRoot, name) });
+        uncloned.push({ name, ...await keptSubmodules(instanceRoot, name, () => submoduleIn(instanceRoot, name)) });
       }
       return uncloned;
     },

@@ -29,7 +29,7 @@ public sealed class EveryCheckValidatesTests : IDisposable
     public EveryCheckValidatesTests()
     {
         FormKey npc = default;
-        _fixture = new PluginFixtureBuilder("every-reconcile-validates")
+        _fixture = new PluginFixtureBuilder("every-check-validates")
             .WithPlugin(NonCompiledPlugin, mod => mod.Npcs.AddNew("NonCompiledPluginNpc"), origin: "NonSourceMod")
             .WithPlugin(CompiledPlugin, mod => npc = mod.Npcs.AddNew("CompiledPluginNpc").FormKey, origin: "SourceMod")
             .BuildScattered();

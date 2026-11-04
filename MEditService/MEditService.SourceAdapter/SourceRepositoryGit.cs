@@ -97,7 +97,9 @@ internal abstract class SourceRepositoryGit
     internal static bool HoldsRepository(string sourceFolder)
     {
         var gitDir = GitDirOf(sourceFolder);
-        return Directory.Exists(gitDir) && (HasMainBranch(gitDir) || InitFinished(gitDir));
+        if (!Directory.Exists(gitDir)) return false;
+        var commonDir = CommonDirectoryOf(gitDir);
+        return HasMainBranch(commonDir) || InitFinished(commonDir);
     }
 
     private static bool HoldsGit(string folder)
@@ -139,7 +141,9 @@ internal abstract class SourceRepositoryGit
     internal static bool HoldsAnotherRepository(string sourceFolder)
     {
         var gitDir = GitDirOf(sourceFolder);
-        return Directory.Exists(gitDir) && !HasMainBranch(gitDir) && !IsMarkedByInit(gitDir);
+        if (!Directory.Exists(gitDir)) return false;
+        var commonDir = CommonDirectoryOf(gitDir);
+        return !HasMainBranch(commonDir) && !IsMarkedByInit(commonDir);
     }
 
     // A submodule git checks out holds a .git file naming its git directory, as gitrepository-layout(5) has it.
@@ -152,11 +156,20 @@ internal abstract class SourceRepositoryGit
         return line.StartsWith(GitFile, StringComparison.Ordinal) ? Path.GetFullPath(line[GitFile.Length..].Trim(), workTree) : dotGit;
     }
 
+    // A linked worktree keeps its HEAD and index in its own directory, and its refs and config in the one commondir names.
+    private static string CommonDirectoryOf(string gitDir)
+    {
+        var commonDir = Path.Combine(gitDir, "commondir");
+        return File.Exists(commonDir) && File.ReadLines(commonDir).FirstOrDefault() is { } line
+            ? Path.GetFullPath(line.Trim(), gitDir)
+            : gitDir;
+    }
+
     // Whether Modbench's init finished here, with a commit or without. Its mark says "pending" until then, so a crashed
     // init's half-made repository is not mistaken for a made one.
-    private static bool InitFinished(string gitDir)
+    private static bool InitFinished(string commonDir)
     {
-        var config = Path.Combine(gitDir, "config");
+        var config = Path.Combine(commonDir, "config");
         if (!File.Exists(config)) return false;
         var inMark = false;
         foreach (var line in File.ReadLines(config).Select(line => line.Trim()))
@@ -167,20 +180,22 @@ internal abstract class SourceRepositoryGit
         return false;
     }
 
-    private static bool IsMarkedByInit(string gitDir)
+    private static bool IsMarkedByInit(string commonDir)
     {
-        var config = Path.Combine(gitDir, "config");
+        var config = Path.Combine(commonDir, "config");
         return File.Exists(config) && File.ReadLines(config).Any(line => line.Trim() == $"[{InitMarkSection}]");
     }
 
-    // Read off the ref store's files, not by running git: every read of a compiled plugin asks this.
-    // A branch is a loose ref file until git packs it into packed-refs.
-    private static bool HasMainBranch(string gitDir) =>
-        File.Exists(Path.Combine(gitDir, "refs", "heads", "main")) || PackedRefs(gitDir).Contains("refs/heads/main");
+    private static bool HasMainBranch(string commonDir) => RefIsStoredIn(commonDir, "refs/heads/main");
 
-    private static HashSet<string> PackedRefs(string gitDir)
+    // Read off the ref store's files, not by running git: every read of a compiled plugin asks this.
+    // A loose ref is a file, until git packs it into packed-refs.
+    private static bool RefIsStoredIn(string commonDir, string gitRef) =>
+        File.Exists(Path.Combine(commonDir, gitRef)) || PackedRefs(commonDir).Contains(gitRef);
+
+    private static HashSet<string> PackedRefs(string commonDir)
     {
-        var packedRefs = Path.Combine(gitDir, "packed-refs");
+        var packedRefs = Path.Combine(commonDir, "packed-refs");
         return File.Exists(packedRefs)
             ? [.. File.ReadLines(packedRefs).Select(line => line.IndexOf(' ', StringComparison.Ordinal) is var at and >= 0 ? line[(at + 1)..] : null).OfType<string>()]
             : [];
@@ -207,7 +222,7 @@ internal abstract class SourceRepositoryGit
     internal string? HeadCommit()
     {
         if (TryRun(out var head, "rev-parse", "--verify", "--quiet", "HEAD")) return head.Trim();
-        if (TryRun(out var branch, "symbolic-ref", "--quiet", "HEAD") && !RefIsStored(branch.Trim())) return null;
+        if (TryRun(out var branch, "symbolic-ref", "--quiet", "HEAD") && !RefIsStoredIn(CommonDirectoryOf(_gitDir), branch.Trim())) return null;
         throw SourceStopException.GitFailed($"git cannot read HEAD of '{_sourceFolder}'");
     }
 
@@ -217,27 +232,11 @@ internal abstract class SourceRepositoryGit
     {
         const string RefPrefix = "ref: ";
         var head = Path.Combine(_gitDir, "HEAD");
-        var commonDir = CommonDirectory();
+        var commonDir = CommonDirectoryOf(_gitDir);
         var named = File.Exists(head) && File.ReadLines(head).FirstOrDefault() is { } line && line.StartsWith(RefPrefix, StringComparison.Ordinal)
             ? Path.Combine(commonDir, line[RefPrefix.Length..].Trim())
             : null;
         return [head, Path.Combine(_gitDir, "index"), Path.Combine(commonDir, "packed-refs"), .. named is null ? [] : new[] { named }];
-    }
-
-    // A linked worktree keeps its HEAD and index in its own directory, and the refs in the one commondir names.
-    private string CommonDirectory()
-    {
-        var commonDir = Path.Combine(_gitDir, "commondir");
-        return File.Exists(commonDir) && File.ReadLines(commonDir).FirstOrDefault() is { } line
-            ? Path.GetFullPath(line.Trim(), _gitDir)
-            : _gitDir;
-    }
-
-    // A loose ref is a file, until git packs it into packed-refs.
-    private bool RefIsStored(string gitRef)
-    {
-        var commonDir = CommonDirectory();
-        return File.Exists(Path.Combine(commonDir, gitRef)) || PackedRefs(commonDir).Contains(gitRef);
     }
 
     /// <summary>HEAD and the index of <see cref="FolderPaths"/> back at <paramref name="head"/>; with none, the branch is

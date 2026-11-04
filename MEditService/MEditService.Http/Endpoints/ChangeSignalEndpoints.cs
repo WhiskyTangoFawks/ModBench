@@ -10,9 +10,9 @@ internal static class ChangeSignalEndpoints
             .WithName("SignalChange")
             .WithTags("LoadOrder")
             .WithDescription(
-                "Says that the disk changed, naming no path, so mEdit checks it (ADR-0015). The compiled plugins of the load " +
-                "order held are checked for a change made outside Modbench, published as external-change. Answers at once; " +
-                "the record index validates every plugin after, and announces what it re-read.")
+                "Says that the disk changed, naming no path, so mEdit checks it (ADR-0015). Answers once the compiled plugins " +
+                "of the load order held are checked for a change made outside Modbench, published as external-change; the " +
+                "record index validates every plugin after, and announces what it re-read.")
             .Produces(204);
 
         return app;

@@ -6,7 +6,8 @@ namespace MEditService.Architecture.Tests;
 
 public sealed class WriteRouteSeamTests
 {
-    private static readonly string[] EndpointFiles = ["RecordEndpoints.cs", "PluginEndpoints.cs", "LoadOrderEndpoints.cs", "ModEndpoints.cs", "SubmoduleEndpoints.cs", "PluginFileEndpoints.cs"];
+    private static readonly string[] EndpointFiles =
+        ["RecordEndpoints.cs", "PluginEndpoints.cs", "LoadOrderEndpoints.cs", "ChangeSignalEndpoints.cs", "ModEndpoints.cs", "SubmoduleEndpoints.cs", "PluginFileEndpoints.cs"];
 
     private static readonly Regex CallSite = new(@"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", RegexOptions.Compiled);
     private static readonly Regex ProblemCall = new(@"Results\.Problem\(|EndpointMapping\.BadRequest\(", RegexOptions.Compiled);
@@ -19,6 +20,9 @@ public sealed class WriteRouteSeamTests
     private static readonly Regex WhitespaceRun = new(@"\s+", RegexOptions.Compiled);
 
     public static IEnumerable<object[]> EveryNamedMethodRoute =>
+        WriteRouteHandlerTests.Routes.Select(r => new object[] { $"{r.Method} {r.Pattern}", r.EndpointMethod });
+
+    public static IEnumerable<object[]> EveryRouteWithAnAnswerToMap =>
         WriteRouteHandlerTests.Routes
             .Where(r => HasAnAnswerToMap(r.Handler))
             .Select(r => new object[] { $"{r.Method} {r.Pattern}", r.EndpointMethod });
@@ -27,7 +31,7 @@ public sealed class WriteRouteSeamTests
         handler.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly).Any(m => m.ReturnType != typeof(void));
 
     [Theory]
-    [MemberData(nameof(EveryNamedMethodRoute))]
+    [MemberData(nameof(EveryRouteWithAnAnswerToMap))]
     public void AWriteRoute_AnswersThroughEndpointMappingAnswered(string route, string method)
     {
         Assert.True(MethodBody(method) is not null, $"{route}: no internal/private/public static method named {method} found in {string.Join(", ", EndpointFiles)}.");
@@ -184,6 +188,30 @@ public sealed class WriteRouteSeamTests
             "internal static class PlantedEndpoints\n{\n"
             + $"    internal static IResult Route(int x) => EndpointMapping.BadRequest({detail});\n}}\n",
             file => Assert.Equal(flagged, ReachInFollowingEachHelperOnce([file], "Route").SelectMany(ExtractProblemCalls).Count()));
+    }
+
+    [Theory]
+    [InlineData(typeof(PlantedHandlerAnsweringNothing), false)]
+    [InlineData(typeof(PlantedHandlerAnsweringOneVerb), true)]
+    public void TheScan_HoldsToTheAnsweredSeamEveryHandlerWithAVerbThatAnswers(Type handler, bool held)
+    {
+        Assert.Equal(held, HasAnAnswerToMap(handler));
+    }
+
+    private sealed class PlantedHandlerAnsweringNothing
+    {
+        private int _signals;
+
+        public void Signal() => _signals++;
+    }
+
+    private sealed class PlantedHandlerAnsweringOneVerb
+    {
+        private int _signals;
+
+        public void Signal() => _signals++;
+
+        public int Answer() => _signals;
     }
 
     private static void WithPlantedFile(string source, Action<string> assert)

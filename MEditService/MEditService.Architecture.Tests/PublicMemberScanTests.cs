@@ -49,6 +49,32 @@ public sealed class PublicMemberScanTests
         public static int Probe(int x) => x + Held;
     }
 
+    [Fact]
+    public void TheScan_HoldsPublicAnEventThatImplementsAnInterface_AndNamesOneThatDoesNot()
+    {
+        var scan = Scan([typeof(PublicMemberScanTests).Assembly.Location]);
+
+        var type = $"{typeof(PublicMemberScanTests).FullName}/{nameof(PlantedEvents)}";
+        Assert.DoesNotContain($"{type}.{nameof(PlantedEvents.Implemented)}", scan.Uncalled);
+        Assert.Contains($"{type}.{nameof(PlantedEvents.NotImplemented)}", scan.Uncalled);
+    }
+
+    public interface IPlantedSignal
+    {
+        event Action? Implemented;
+    }
+
+    public sealed class PlantedEvents : IPlantedSignal
+    {
+        public const int Held = 1;
+
+        private Action? _handlers;
+
+        public event Action? Implemented { add => _handlers += value; remove => _handlers -= value; }
+
+        public event Action? NotImplemented { add => _handlers += value; remove => _handlers -= value; }
+    }
+
     private sealed record ScanResult(int Assemblies, int References, int Members, List<string> Uncalled);
 
     private static ScanResult Scan(IEnumerable<string> assemblyPaths)

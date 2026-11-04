@@ -11,6 +11,7 @@ const APPLIED: LoadOrderOutcome = { outcome: 'applied', status: READY_STATUS };
 const PLUGIN = { name: 'TestMod.esp', path: '/instance/mods/TestMod/TestMod.esp', origin: 'TestMod', provider: { kind: 'Mod' as const, mod: 'TestMod', folder: '/instance/mods/TestMod' }, line: 0, lineNamesIt: true, archives: [], stringsFiles: [] };
 const MASTER = { name: 'Master.esm', path: '/game/Data/Master.esm', origin: 'Base Mod', provider: { kind: 'Game' as const }, line: null, lineNamesIt: false, archives: [], stringsFiles: [] };
 const AS_LOADED: InGameOrder = ({ active }) => [...active];
+const CHANGED = (): boolean => true;
 const SENT_PLUGINS = [MASTER, PLUGIN];
 const SENT_ACTIVE = [{ name: 'Master.esm', origin: 'Base Mod' }, { name: PLUGIN.name, origin: PLUGIN.origin }];
 const SENT_LOADED_WITH_NO_LINE = [{ name: 'Master.esm', origin: 'Base Mod' }];
@@ -35,7 +36,7 @@ describe('put load order', () => {
   it('hands the mEdit client the snapshot the loader read, keyed by the instance and its release', async () => {
     const client = attachedClient();
 
-    const result = await putLoadOrder(client, '/instance', SOURCE, 'French', AS_LOADED);
+    const result = await putLoadOrder(client, '/instance', SOURCE, 'French', AS_LOADED, CHANGED);
 
     expect(client.puts()).toEqual([{
       plugins: SENT_PLUGINS, active: SENT_ACTIVE, loadedWithNoLine: SENT_LOADED_WITH_NO_LINE, archives: SENT_ARCHIVES, stringsFiles: SENT_STRINGS_FILES,
@@ -54,7 +55,7 @@ describe('put load order', () => {
   it('sends the release the snapshot was built for', async () => {
     const client = attachedClient();
 
-    await putLoadOrder(client, '/instance', { ...SOURCE, gameRelease: 'Fallout4VR' }, 'English', AS_LOADED);
+    await putLoadOrder(client, '/instance', { ...SOURCE, gameRelease: 'Fallout4VR' }, 'English', AS_LOADED, CHANGED);
 
     expect(client.puts().map((put) => put.gameRelease)).toEqual(['Fallout4VR']);
   });
@@ -62,7 +63,7 @@ describe('put load order', () => {
   it('sends nothing while the loader read no snapshot, which is the loader\'s answer to a game folder not found or not listable', async () => {
     const client = attachedClient();
 
-    const result = await putLoadOrder(client, '/instance', undefined, 'English', AS_LOADED);
+    const result = await putLoadOrder(client, '/instance', undefined, 'English', AS_LOADED, CHANGED);
 
     expect(client.calls).toEqual([]);
     expect(result).toEqual({ sent: false });
@@ -71,7 +72,7 @@ describe('put load order', () => {
 
 describe('put load order without a strings language', () => {
   it('fails loudly rather than inventing a default the manifest owns', async () => {
-    await expect(putLoadOrder(attachedClient(), '/instance', SOURCE, undefined, AS_LOADED)).rejects.toThrow('The strings language has no value');
+    await expect(putLoadOrder(attachedClient(), '/instance', SOURCE, undefined, AS_LOADED, CHANGED)).rejects.toThrow('The strings language has no value');
   });
 });
 
@@ -80,7 +81,7 @@ describe('put load order, refused by the loader', () => {
     const client = attachedClient();
 
     const result = await putLoadOrder(
-      client, '/instance', { refusal: 'a.esp has no mod folder' }, 'English', AS_LOADED);
+      client, '/instance', { refusal: 'a.esp has no mod folder' }, 'English', AS_LOADED, CHANGED);
 
     expect(client.calls).toEqual([]);
     expect(result).toEqual({ sent: false, refusal: 'a.esp has no mod folder' });
@@ -92,7 +93,7 @@ describe('put load order in the order the game loads', () => {
     const client = attachedClient();
     const reversed: InGameOrder = ({ active }) => [...active].reverse();
 
-    await putLoadOrder(client, '/instance', SOURCE, 'English', reversed);
+    await putLoadOrder(client, '/instance', SOURCE, 'English', reversed, CHANGED);
 
     expect(client.puts().map(({ active, loadedWithNoLine }) => ({ active, loadedWithNoLine })))
       .toEqual([{ active: [...SENT_ACTIVE].reverse(), loadedWithNoLine: SENT_LOADED_WITH_NO_LINE }]);
@@ -116,7 +117,7 @@ describe('put load order, the archives follow the plugins', () => {
   const blueprintLast: InGameOrder = ({ active }) => [...active.filter(({ name }) => name !== 'Blueprint.esm'), ...active.filter(({ name }) => name === 'Blueprint.esm')];
   const archivesSent = async (order: InGameOrder): Promise<string[]> => {
     const client = attachedClient();
-    await putLoadOrder(client, '/instance', STARFIELD, 'English', order);
+    await putLoadOrder(client, '/instance', STARFIELD, 'English', order, CHANGED);
     return client.puts().flatMap((put) => put.archives.map(({ path }) => path));
   };
 
@@ -131,7 +132,7 @@ describe('put load order, the archives follow the plugins', () => {
     const client = attachedClient();
     const twice = { ...STARFIELD, listedArchives: [stamped('/a/A - Main.ba2')] };
 
-    await putLoadOrder(client, '/instance', twice, 'English', AS_LOADED);
+    await putLoadOrder(client, '/instance', twice, 'English', AS_LOADED, CHANGED);
 
     expect(client.puts().flatMap((put) => put.archives.map(({ path }) => path))).toEqual(['/a/A - Main.ba2', '/g/Starfield - Main.ba2', '/g/Blueprint - Main.ba2']);
   });

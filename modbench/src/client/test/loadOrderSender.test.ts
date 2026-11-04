@@ -9,6 +9,7 @@ const READY_STATUS: LoadOrderProgress = {
 const APPLIED: LoadOrderOutcome = { outcome: 'applied', status: READY_STATUS };
 const ABANDONED: LoadOrderOutcome = { outcome: 'abandoned' };
 const BACKEND_FAILED: LoadOrderOutcome = { outcome: 'backendFailed' };
+const SIGNAL_WAIT_CAP_MS = 10_000;
 
 function snapshot(name: string): LoadOrderSnapshot {
   return {
@@ -486,6 +487,25 @@ describe('a change signalled', () => {
     answer();
 
     await vi.waitFor(() => { expect(methods(client)).toEqual(['put', 'signalChange']); });
+  });
+
+  it('is sent within a bounded time while the snapshots handed before it go unanswered', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    try {
+      const client = running();
+      client.answerPuts(() => pending<LoadOrderOutcome>().promise);
+      void client.sendLoadOrder(snapshot('A.esp'));
+      void client.sendLoadOrder(snapshot('B.esp'));
+
+      client.signalChange();
+      await vi.advanceTimersByTimeAsync(SIGNAL_WAIT_CAP_MS - 1);
+      expect(methods(client)).toEqual(['put']);
+      await vi.advanceTimersByTimeAsync(1);
+
+      expect(methods(client)).toEqual(['put', 'signalChange']);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('folds the signals handed while one is in flight into one more', async () => {

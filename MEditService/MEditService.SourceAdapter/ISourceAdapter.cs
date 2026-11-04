@@ -42,7 +42,8 @@ public interface ISourceAdapter
 
     bool TreeHolds(RegisteredPlugin plugin, string path);
 
-    /// <summary>Says that any file the record index reads may have changed: no path names which (ADR-0015).</summary>
+    /// <summary>Relays Mod Management's word that the disk changed, naming no path, to the record index, which checks every
+    /// plugin (ADR-0015).</summary>
     void SignalChange();
 
     /// <summary>Raised by each <see cref="SignalChange"/>.</summary>

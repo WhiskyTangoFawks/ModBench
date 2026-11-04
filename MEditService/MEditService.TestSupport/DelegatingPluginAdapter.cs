@@ -34,6 +34,7 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
     public virtual string? HashOf(string pluginPath) => inner.HashOf(pluginPath);
 
     public virtual void KeepHashesOf(IReadOnlySet<string> pluginPaths) => inner.KeepHashesOf(pluginPaths);
+
     public virtual Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath, GameRelease gameRelease) => inner.ClaimOf(pluginPath, gameRelease);
 
     public virtual Answer<string, PluginFailure> SetLoadFlags(string pluginPath, IReadOnlyDictionary<string, bool> flags, GameRelease gameRelease) =>

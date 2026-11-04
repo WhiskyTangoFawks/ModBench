@@ -29,7 +29,7 @@ export type PutLoadOrderResult =
 /** A snapshot `changed` answers false for is sent no more (ADR-0013). */
 export async function putLoadOrder(
   client: Pick<MEditClient, 'sendLoadOrder'>, instanceRoot: string, source: LoadOrderSource, stringsLanguage: string | undefined,
-  inGameOrder: InGameOrder, changed: (snapshot: LoadOrderSnapshot) => boolean = () => true,
+  inGameOrder: InGameOrder, changed: (snapshot: LoadOrderSnapshot) => boolean,
 ): Promise<PutLoadOrderResult> {
   if (!source) return { sent: false };
   if ('refusal' in source) return { sent: false, refusal: source.refusal };

@@ -27,6 +27,7 @@ export interface LoadOrderSender {
 }
 
 const ABANDONED: LoadOrderOutcome = { outcome: 'abandoned' };
+const SIGNAL_WAIT_CAP_MS = 10_000;
 const BACKEND_FAILED: LoadOrderOutcome = { outcome: 'backendFailed' };
 
 interface Waiting {
@@ -50,7 +51,8 @@ function createSendSlot(wire: LoadOrderWire) {
   let inFlight: AbortController | undefined;
   let unanswered = false;
   let newest: Promise<LoadOrderOutcome> | undefined;
-  let signalOwed = false;
+  let signalOwedSince: number | undefined;
+  let signalTimer: ReturnType<typeof setTimeout> | undefined;
   let signalling = false;
 
   const drop = (outcome: LoadOrderOutcome): void => {
@@ -75,14 +77,27 @@ function createSendSlot(wire: LoadOrderWire) {
     });
   };
 
-  // A signal waits for every snapshot handed before it to be answered, so mEdit checks the load order it was handed.
   const sendSignal = (): void => {
-    signalOwed = false;
+    signalOwedSince = undefined;
+    clearTimeout(signalTimer);
+    signalTimer = undefined;
     signalling = true;
     void wire.signalChange().finally(() => {
       signalling = false;
       pump();
     });
+  };
+
+  // A signal waits for the snapshots handed before it to be answered, so mEdit checks the load order it was handed,
+  // and a stream of snapshots delays it by a bounded time (ADR-0015).
+  const pumpSignal = (): void => {
+    if (signalOwedSince === undefined || signalling) return;
+    const waited = Date.now() - signalOwedSince;
+    if ((waiting || unanswered) && waited < SIGNAL_WAIT_CAP_MS) {
+      signalTimer ??= setTimeout(() => { signalTimer = undefined; pump(); }, SIGNAL_WAIT_CAP_MS - waited);
+      return;
+    }
+    sendSignal();
   };
 
   // The backend publishes a PUT's progress the moment that PUT lands, so a snapshot waits for
@@ -94,7 +109,7 @@ function createSendSlot(wire: LoadOrderWire) {
       waiting = undefined;
       sendWaiting(next);
     }
-    if (signalOwed && !signalling && !waiting && !unanswered) sendSignal();
+    pumpSignal();
   };
 
   return {
@@ -105,9 +120,8 @@ function createSendSlot(wire: LoadOrderWire) {
       pump();
       return sent;
     },
-    // Signals owed while one is in flight fold into one more (ADR-0015).
     oweSignal(): void {
-      signalOwed = true;
+      signalOwedSince ??= Date.now();
       pump();
     },
     holdsOne: () => waiting !== undefined,
