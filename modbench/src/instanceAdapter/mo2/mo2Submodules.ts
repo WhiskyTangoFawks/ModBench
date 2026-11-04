@@ -156,7 +156,6 @@ export const pushRefusalWritten = (instanceRoot: string): Promise<boolean> =>
   hooksFolder(instanceRoot).then((hooks) => isOwnHook(join(hooks, PRE_PUSH_HOOK_NAME)), () => false);
 
 const keptSubmodules = keptByIndex<Awaited<ReturnType<typeof submoduleIn>>>();
-const keptTracked = keptByIndex<boolean>();
 
 export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
   return {
@@ -229,14 +228,14 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
       const uncloned: UnclonedSubmodule[] = [];
       for (const name of await sourceEntries(instanceRoot, submodulesFile(instanceRoot))) {
         if (await isRepository(join(sourceRootDir(instanceRoot), name))) continue;
-        uncloned.push({ name, ...await submoduleIn(instanceRoot, name) });
+        uncloned.push({ name, ...await keptSubmodules(instanceRoot, name, () => submoduleIn(instanceRoot, name)) });
       }
       return uncloned;
     },
 
     repositoryOnDisk: () => isRepository(instanceRoot),
 
-    sourceFolderTracked: (name) => keptTracked(instanceRoot, name, async () => (await sourceFoldersTracked(instanceRoot, [name])).has(name)),
+    sourceFolderTracked: async (name) => (await sourceFoldersTracked(instanceRoot, [name])).has(name),
 
     async removeRepository() {
       if (!(await isRepository(instanceRoot))) return;
