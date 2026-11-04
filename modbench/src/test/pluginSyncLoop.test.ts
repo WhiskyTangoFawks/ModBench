@@ -15,7 +15,7 @@ import { Instance, type InstanceValue } from '../instanceLoader/instance';
 import type { InstanceReading, Mod } from '../instanceAdapter/instanceAdapter';
 import { pluginSyncOn } from '../plugins/pluginSync';
 import { FakeInstance } from './mo2/fakeInstance';
-import { pastSequence, watcherFor } from './mo2/instanceLoop';
+import { pastSequence, watcherOver } from './mo2/instanceLoop';
 import { pluginSyncOver, type PluginSyncRun } from '../pluginCommands/plugins';
 import { present } from '../ports/present';
 import { instanceValueFixture } from './mo2/instanceValueFixture';
@@ -86,7 +86,7 @@ async function wiredInstance(): Promise<{
 }
 
 async function driveToQuiescence(
-  instance: Instance, syncs: ReturnType<PluginSyncRun>[], maxRounds: number,
+  root: string, instance: Instance, syncs: ReturnType<PluginSyncRun>[], maxRounds: number,
 ): Promise<{ writes: number; quiescent: boolean }> {
   let writes = 0;
   for (let round = 0; round < maxRounds; round++) {
@@ -98,7 +98,7 @@ async function driveToQuiescence(
     );
     if (!(result.applied && result.wrote)) return { writes, quiescent: true };
     writes++;
-    watcherFor('profiles/*/plugins.txt').fireChange();
+    watcherOver(join(root, 'profiles', PROFILE)).fireChange(join(root, 'profiles', PROFILE, 'plugins.txt'));
   }
   return { writes, quiescent: false };
 }
@@ -108,12 +108,12 @@ describe('plugin sync and the Instance close a loop that settles', () => {
     const { root, instance, syncs, plugins } = await wiredInstance();
 
     await writeFile(join(root, 'mods', 'Provider', 'New.esp'), 'plugin');
-    const mods = watcherFor('mods/**');
-    mods.fireChange();
-    mods.fireChange();
-    mods.fireChange();
+    const provider = watcherOver(join(root, 'mods', 'Provider'));
+    provider.fireCreate(join(root, 'mods', 'Provider', 'New.esp'));
+    provider.fireChange(join(root, 'mods', 'Provider', 'New.esp'));
+    provider.fireChange(join(root, 'mods', 'Provider', 'New.esp'));
 
-    const { writes, quiescent } = await driveToQuiescence(instance, syncs, 8);
+    const { writes, quiescent } = await driveToQuiescence(root, instance, syncs, 8);
 
     expect(writes).toBe(1);
     expect(quiescent).toBe(true);

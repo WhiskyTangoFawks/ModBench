@@ -431,6 +431,6 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
         return withListChanged(before, 'Ignore', { changed, appended: missing.map(wabbajackSpelling) });
       });
     },
-    subscribe: (listener) => watchFiles(instanceRoot, COMPILER_SETTINGS.name, () => listener()),
+    subscribe: (listener) => watchFiles(instanceRoot, COMPILER_SETTINGS.name, listener),
   };
 }

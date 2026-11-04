@@ -5,7 +5,7 @@ import { textHash } from '../instanceAdapter/fileContents/contentDigest';
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import type { NexusFileInfo } from '../ports/nexusFileInfo';
 import {
-  entryNotFound, filesWinningFirst, isBareName, type DecideModOrder, type DownloadedFile, type DownloadedFileQuery, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp,  type GameFile, type GamePlace, type HashedFile, type InstallationFile, type InstallOutcome, type InstalledPackage, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type NexusModFile, type OtherManifest, type UnsearchedFolder, type OriginFile, type FomodAnswer, type PluginOrderChange, type PublisherTag, type PublisherTagChange, type Subscription } from '../instanceAdapter/instanceAdapter';
+  CHECK_THE_DISK, entryNotFound, filesWinningFirst, type ChangeListener, type Reread, isBareName, type DecideModOrder, type DownloadedFile, type DownloadedFileQuery, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp,  type GameFile, type GamePlace, type HashedFile, type InstallationFile, type InstallOutcome, type InstalledPackage, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type NexusModFile, type OtherManifest, type UnsearchedFolder, type OriginFile, type FomodAnswer, type PluginOrderChange, type PublisherTag, type PublisherTagChange, type Subscription } from '../instanceAdapter/instanceAdapter';
 import { modOrderAfter, pluginOrderAfter } from './fakeOrderChanges';
 import { groupModOrder } from '../instanceAdapter/modGroups';
 import { parseNexusPage } from '../instanceAdapter/nexusPage';
@@ -61,6 +61,7 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
     holdsRepository: false,
     repositorySetUp: false,
     watchNotes: [],
+    unheardChanges: [],
     managerRunning: { kind: 'notRunning' },
     publisherConfiguration: NO_PUBLISHER,
     ...overrides,
@@ -210,10 +211,13 @@ export interface FakeInstanceAdapter {
   readonly hashed: string[];
   /** Every `reading()` after this answers the reading with these fields replaced. */
   read(next: Partial<InstanceReading>): void;
-  changed(): void;
+  /** Signals a change to `path`, or one with no path. */
+  changed(path?: string): void;
   /** Every `reading()` after this rejects with the message, until it is called with `undefined`. */
   failReading(message: string | undefined): void;
   readonly readings: number;
+  /** What each `reading()` was handed, in order. */
+  readonly rereads: readonly Reread[];
   readonly subscribers: number;
 }
 
@@ -297,7 +301,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
   const flaggedHashes = new Map(answers.flaggedHashes);
   const letInByLines = new Set<string>();
   const putHashedAsTheirText = new Map<string, FileRead<InstallationFile>>();
-  const listeners = new Set<() => void>();
+  const listeners = new Set<ChangeListener>();
+  const rereads: Reread[] = [];
   let readings = 0;
   let readingFailure: string | undefined;
 
@@ -341,8 +346,9 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     answers.places === undefined ? answers : answers.places.find((place) => place.root === root) ?? {};
 
   const adapter: InstanceAdapter = {
-    reading: () => {
+    reading: (reread = CHECK_THE_DISK) => {
       readings++;
+      rereads.push(reread);
       return readingFailure === undefined ? Promise.resolve(current) : Promise.reject(new Error(readingFailure));
     },
     activeProfile: () => Promise.resolve(current.profile),
@@ -649,9 +655,10 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     get calls() { return calls; },
     forgetCalls: () => { calls = []; },
     read: (next) => { current = { ...current, ...(next.mods !== undefined && next.modFiles === undefined ? { modFiles: noFilesFor(next.mods) } : {}), ...(next.mods !== undefined && next.modGroups === undefined ? { modGroups: groupModOrder(next.mods) } : {}), ...next }; },
-    changed: () => { for (const listener of [...listeners]) listener(); },
+    changed: (path) => { for (const listener of [...listeners]) listener(path); },
     failReading: (message) => { readingFailure = message; },
     get readings() { return readings; },
+    rereads,
     get subscribers() { return listeners.size; },
   };
 }

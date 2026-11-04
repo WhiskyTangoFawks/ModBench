@@ -3,10 +3,10 @@ import type { Instance, InstanceValue } from '../../instanceLoader/instance';
 import { present } from '../../ports/present';
 import { watchers, type FakeWatcher } from './fakeVscodeWatcher';
 
-export const watcherFor = (glob: string): FakeWatcher => {
-  const found = watchers.filter((w) => w.pattern === glob);
+export const watcherOver = (folder: string): FakeWatcher => {
+  const found = watchers.filter((w) => w.base === folder && !w.disposed);
   expect(found).toHaveLength(1);
-  return present(found[0], `the sole watcher registered for "${glob}"`);
+  return present(found[0], `the sole watcher over "${folder}"`);
 };
 
 export function pastSequence(instance: Instance, sequence: number): Promise<InstanceValue> {

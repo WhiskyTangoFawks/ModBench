@@ -385,6 +385,17 @@ export interface Subscription {
   dispose(): void;
 }
 
+/** Hears a path that changed, or undefined when a change has no path and the disk is to be checked. */
+export type ChangeListener = (path: string | undefined) => void;
+
+/** What a reading checks before it trusts what it read before: the paths the events named, and all of it when `disk`. */
+export interface Reread {
+  readonly named: readonly string[];
+  readonly disk: boolean;
+}
+
+export const CHECK_THE_DISK: Reread = { named: [], disk: true };
+
 /** Where a file's contents come from: a mod, or the files the game wrote at run time. */
 export type FileOrigin = { readonly kind: 'mod'; readonly name: string } | { readonly kind: 'runtimeOutput' };
 
@@ -629,6 +640,8 @@ export interface InstanceReading extends InstanceGame {
   readonly repositorySetUp: boolean;
   /** Why a folder's watch failed, once per reason: no change inside that folder is heard. */
   readonly watchNotes: readonly string[];
+  /** Each path the check of the disk found changed that no event named. */
+  readonly unheardChanges: readonly string[];
   readonly managerRunning: ManagerRunning;
   readonly publisherConfiguration: PublisherConfiguration;
 }
@@ -641,9 +654,9 @@ export interface TakenNames {
 }
 
 export interface InstanceAdapter extends DataFileReads {
-  /** The whole instance in one generation. A mod order that parses to no entries is read again
-   *  after a settle before it is believed: another tool may be half-way through writing it. */
-  reading(): Promise<InstanceReading>;
+  /** The whole instance in one generation, reading again what `reread` finds changed. A mod order that parses to no entries
+   *  is read again after a settle before it is believed: another tool may be half-way through writing it. */
+  reading(reread?: Reread): Promise<InstanceReading>;
   /** The profile the mod manager's configuration selects now. */
   activeProfile(): Promise<string>;
   /** Mutagen's release of the game the mod manager's configuration selects now. */
@@ -889,9 +902,9 @@ export interface InstanceAdapter extends DataFileReads {
   writeInstalledFrom(folder: string, packages: readonly InstalledPackage[], trash: MoveToTrash): Promise<void>;
 
   // Subscribe: the instance changed.
-  /** Hears that the instance changed: any of its files, the downloads folder and the game folder's
+  /** Hears each change to the instance: any of its files, the downloads folder and the game folder's
    *  plugins, where the last read of the settings resolved them. */
-  subscribe(listener: () => void): Subscription;
+  subscribe(listener: ChangeListener): Subscription;
 }
 
 /** A file inside `folder`, by the relative path a source tree names it with. */
