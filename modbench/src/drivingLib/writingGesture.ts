@@ -12,18 +12,12 @@ export async function runUnderProgress<T>(
 ): Promise<T> {
   const progress = pausableProgress(viewId);
   progress.working();
-  let refused = false;
   try {
     return await command(progress);
-  } catch (e) {
-    refused = e instanceof Refusal;
-    throw e;
   } finally {
+    progress.working();
     try {
-      if (!refused) {
-        progress.working();
-        await instance.refresh();
-      }
+      await instance.refresh();
     } finally {
       await progress.done();
     }
@@ -52,8 +46,8 @@ const titleOf = (command: string): string => surface?.titles.get(command) ?? com
 /** A write refused because another is in flight. */
 export class RefusedWrite extends Refusal {}
 
-/** Runs `work` as a view call: a refused write is told once in a notification and the Output, and the view is shown
- *  the disk (common.md, Reporting). An agent's call skips this: the reason goes back to it. */
+/** Runs `work` as a view call: a refused write is told once in a notification and the Output, and the views are
+ *  drawn from the held value. An agent's call skips this: the reason goes back to it. */
 export async function asViewCall<T>(work: () => Promise<T>): Promise<T | undefined> {
   try {
     return await work();
