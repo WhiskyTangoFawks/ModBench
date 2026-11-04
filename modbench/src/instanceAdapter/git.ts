@@ -7,7 +7,7 @@ const execFileAsync = promisify(execFile);
 const OPTIONS = { encoding: 'utf8', maxBuffer: 1 << 28 } as const;
 
 type Git = (folder: string, ...args: string[]) => Promise<string>;
-type GitFed = (folder: string, input: string, ...args: string[]) => Promise<string>;
+type GitFed = (folder: string, input: string | Buffer, ...args: string[]) => Promise<string>;
 
 function gitWith(env: NodeJS.ProcessEnv | undefined): { git: Git; gitFed: GitFed } {
   const options = env === undefined ? OPTIONS : { ...OPTIONS, env };
@@ -31,3 +31,7 @@ export const gitStagingInto = (index: string): { git: Git; gitFed: GitFed } => g
 
 /** git, each object it writes kept in `objects` and out of the repository. */
 export const gitWritingInto = (objects: string): { git: Git; gitFed: GitFed } => gitWith({ ...process.env, GIT_OBJECT_DIRECTORY: objects });
+
+/** What git answers in `folder`, byte for byte. */
+export const gitBytes = async (folder: string, ...args: string[]): Promise<Buffer> =>
+  (await execFileAsync('git', ['-C', folder, ...args], { ...OPTIONS, encoding: 'buffer' })).stdout;
