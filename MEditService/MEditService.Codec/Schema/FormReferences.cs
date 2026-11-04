@@ -47,7 +47,7 @@ public static class FormReferences
         });
         if (!carriesFormKeys) return;
         Walk(DocumentNodes.VariantFor(meta, root), DocumentNodes.At(root, col.PropertyName), col.Name,
-            (path, raw, _, _) => { if (IsRealRef(raw)) visitor(path, raw); });
+            (path, raw, _) => { if (IsRealRef(raw)) visitor(path, raw); });
     }
 
     // Keyed by reference: ColumnSpec is a record whose value equality would walk its whole member
@@ -69,11 +69,11 @@ public static class FormReferences
     /// document omits an unset link, which is a fact about the record.</summary>
     internal static void Walk(
         FieldMetadata meta, JsonElement? value, string path,
-        Action<string, string?, bool, IReadOnlyList<string>> onFormKeyLeaf)
+        Action<string, string?, IReadOnlyList<string>> onFormKeyLeaf)
     {
         if (meta.Type == "formKey")
         {
-            onFormKeyLeaf(path, ExtractString(value), meta.AllowsNull, meta.ValidFormKeyTypes);
+            onFormKeyLeaf(path, ExtractString(value), meta.ValidFormKeyTypes);
             return;
         }
 
@@ -83,7 +83,7 @@ public static class FormReferences
 
     private static void WalkStruct(
         IReadOnlyList<FieldMetadata> fields, JsonElement? value, string path,
-        Action<string, string?, bool, IReadOnlyList<string>> onFormKeyLeaf)
+        Action<string, string?, IReadOnlyList<string>> onFormKeyLeaf)
     {
         if (value is not { ValueKind: JsonValueKind.Object } obj) return;
         var idle = IdleMembers(fields, obj);
@@ -122,7 +122,7 @@ public static class FormReferences
 
     private static void WalkArray(
         FieldMetadata elementType, JsonElement? value, string path,
-        Action<string, string?, bool, IReadOnlyList<string>> onFormKeyLeaf)
+        Action<string, string?, IReadOnlyList<string>> onFormKeyLeaf)
     {
         if (value is not { ValueKind: JsonValueKind.Array } array) return;
         var idx = 0;
