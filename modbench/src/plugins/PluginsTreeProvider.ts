@@ -184,7 +184,7 @@ export class PluginsTreeProvider
         void this.facts.rulesChanged();
       }
       this._onDidChangeTreeData.fire(undefined);
-    }), options.instance.onReadFailure(() => this.render()));
+    }), options.instance.onReadFailure(() => this.render()), options.instance.onRedraw(() => this.render()));
     this.modStatuses = options.modStatuses;
     this.subscriptions.push(
       options.modStatuses.onDidChange(() => {

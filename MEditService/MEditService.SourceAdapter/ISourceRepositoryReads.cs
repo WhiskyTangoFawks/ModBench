@@ -11,6 +11,10 @@ public interface ISourceRepositoryReads
 
     Answer<T, SourceFailure> ReadDocuments<T>(PluginAddress plugin, Func<IPluginDocuments, T> read);
 
+    /// <summary>What a commit or a checkout moves without touching a document: with the documents' stamps unchanged,
+    /// an equal stamp that vouches means <see cref="ChangedSinceLastCommit"/> answers as it did.</summary>
+    FilesStamp RepositoryStamp();
+
     Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommit(PluginAddress plugin);
 
     /// <summary>Each file under the plugin's tree that git status names as changed or untracked, relative to the

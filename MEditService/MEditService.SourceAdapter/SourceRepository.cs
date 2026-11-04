@@ -299,6 +299,8 @@ internal sealed class SourceRepository : ISourceRepository
     /// settled is not read again, unless an unsaved text stands in for it.</summary>
     public RecordStamps StampsOf(PluginAddress plugin) => _stamps.StampsOf(_sourceFolder, Spelled(plugin), _release, Files);
 
+    public FilesStamp RepositoryStamp() => _stamps.StampOf(_git.StateFiles());
+
     /// <summary>Every record the tree holds whose text differs from the last commit's, an embedded
     /// child among them; a tree with no repository is all added. A failed read answers why, never
     /// reads as a deletion.</summary>

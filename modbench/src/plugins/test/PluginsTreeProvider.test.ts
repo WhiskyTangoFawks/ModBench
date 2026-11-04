@@ -241,6 +241,18 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     expect(tree.viewMessage()).toBeUndefined();
   });
 
+  it('draws the tree again when the instance redraws', async () => {
+    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', line: 0 })]));
+    const { tree } = makeTree([], { instance });
+    await tree.getChildren();
+    const fired: unknown[] = [];
+    tree.onDidChangeTreeData((e) => fired.push(e));
+
+    instance.redraw();
+
+    expect(fired).toHaveLength(1);
+  });
+
   it('says it shows the last good read, with the reason, when a later read fails, and not once a read lands', async () => {
     const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', line: 0 })]));
     const { tree } = makeTree([], { instance });
