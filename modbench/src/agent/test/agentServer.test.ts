@@ -8,7 +8,8 @@ vi.mock('vscode', () => ({
   commands: { executeCommand: (...args: unknown[]) => { fired.calls.push(args); return fired.failure ? Promise.reject(fired.failure) : Promise.resolve(fired.outcome); } },
   DiagnosticSeverity: { Error: 0, Warning: 1, Information: 2, Hint: 3, 0: 'Error', 1: 'Warning', 2: 'Information', 3: 'Hint' },
 }));
-import { createServer, request, type OutgoingHttpHeaders, type Server } from 'node:http';
+import { Agent, createServer, request, type OutgoingHttpHeaders, type Server } from 'node:http';
+import { Readable } from 'node:stream';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -2029,19 +2030,35 @@ describe('the agent server, given a port', () => {
     expect(await post(present(bound, 'a bound port'), { ...JSON_HEADERS, origin: 'https://rebound.example' }, '{}')).toBe(403);
   });
 
-  it('closes the connection of each answer, so a client sends its next request on a connection of its own', async () => {
-    const { bound } = await serve(new FakeInstance(VALUE));
-
-    const connection = await new Promise<string | undefined>((done) => {
-      const sent = request({ host: '127.0.0.1', port: present(bound, 'a bound port'), path: '/mcp', method: 'POST', headers: JSON_HEADERS }, (response) => {
-        response.resume();
-        done(response.headers.connection);
-      });
-      sent.end('{}');
+  const keepingAlive = new Agent({ keepAlive: true, maxSockets: 1 });
+  const busyOnceSent = { forMs: 0 };
+  afterEach(() => { keepingAlive.destroy(); busyOnceSent.forMs = 0; });
+  const holdTheLoop = (forMs: number) => { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, forMs); };
+  const keptAliveFetch = (url: string | URL, init?: RequestInit) => new Promise<Response>((done, fail) => {
+    const sent = request(url, { method: init?.method, headers: Object.fromEntries(new Headers(init?.headers)), agent: keepingAlive }, (response) => {
+      const headers = new Headers(Object.entries(response.headers).flatMap(([name, value]) => (value === undefined ? [] : [[name, String(value)]])));
+      done(new Response(Readable.toWeb(response) as ReadableStream, { status: response.statusCode, headers }));
     });
-
-    expect(connection).toBe('close');
+    sent.on('error', fail);
+    setImmediate(() => {
+      sent.end(init?.body);
+      holdTheLoop(busyOnceSent.forMs);
+    });
   });
+
+  it('answers a request a client sends on its idle connection just before the extension host is busy past Node\'s keep-alive window', async () => {
+    fired.outcome = { applied: true, outcome: { landed: ['A.esp'], refused: [] } };
+    const { bound } = await serve(new FakeInstance(VALUE));
+    const client = new Client({ name: 'test', version: '0' });
+    await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`), { fetch: keptAliveFetch }));
+    clients.push(client);
+    await call(client, 'plugin_enable', { argument: [{ name: 'A.esp' }] });
+
+    busyOnceSent.forMs = 6_300;
+    const second = call(client, 'plugin_enable', { argument: [{ name: 'A.esp' }] });
+
+    expect(await second).toEqual({ isError: false, text: JSON.stringify({ landed: ['A.esp'], refused: [] }) });
+  }, 15_000);
 
   it('answers a body that is not JSON with 400', async () => {
     const { bound } = await serve(new FakeInstance(VALUE));
