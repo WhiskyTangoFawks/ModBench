@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Dirent } from 'node:fs';
 import { access, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
@@ -52,7 +53,7 @@ export async function manifestIn(folder: string): Promise<ManifestRead | undefin
 
 // The Instance adapter's listings skip the temp's name.
 async function writeWhole(folder: string, path: string, text: string): Promise<void> {
-  const temp = join(folder, `.medit_tmp_${process.pid}_manifest`);
+  const temp = join(folder, `.medit_tmp_${process.pid}_manifest_${randomUUID()}`);
   try {
     await writeFile(temp, text);
     await rename(temp, path);

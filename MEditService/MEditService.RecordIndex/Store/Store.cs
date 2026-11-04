@@ -394,9 +394,8 @@ internal sealed class Store : IDisposable
             ? derivedFrom
             : null;
 
-    /// <summary>Restates which truth <paramref name="key"/>'s rows read as, leaving the file claim
-    /// beside it: a refresh re-derives the rows in place, and the binary they were stamped against
-    /// is still the file on disk.</summary>
+    /// <summary>Restates which truth <paramref name="key"/>'s rows read as, and nothing else: a refresh
+    /// re-derives the rows in place.</summary>
     public void RestampDerivation(PluginAddress key, DerivedFrom derivedFrom)
     {
         using var tx = BeginTransaction();
@@ -437,17 +436,38 @@ internal sealed class Store : IDisposable
             INSERT INTO {PluginDerivationRelation} (plugin, origin, derived_from) VALUES ($1, $2, $3)
             """, plugin, origin, derivedFrom.ToString());
         if (filePath == null) return;
-        if (!_plugins.ClaimOf(filePath, Release).Holds(out var claim, out var unread))
-        {
-            _logger.LogWarning(unread.Error, "Could not read {Path} to hash it, so nothing vouches for its rows: {Reason}", filePath, unread.Reason);
-            return;
-        }
+        if (ClaimOf(filePath) is { } claim) StampFileClaim(plugin, origin, filePath, claim, stringsRead);
+    }
 
+    private FileClaim? ClaimOf(string filePath)
+    {
+        if (_plugins.ClaimOf(filePath, Release).Holds(out var claim, out var unread)) return claim;
+        _logger.LogWarning(unread.Error, "Could not read {Path} to hash it, so nothing vouches for its rows: {Reason}", filePath, unread.Reason);
+        return null;
+    }
+
+    private void StampFileClaim(string plugin, string origin, string filePath, FileClaim claim, string? stringsRead)
+    {
         DuckDbSql.Execute(Connection, $"""
             INSERT INTO {FilesRelation} (plugin, origin, file_path, content_hash, strings_read)
             VALUES ($1, $2, $3, $4, $5)
             """, plugin, origin, StoredFilePath(filePath), claim.Hash, stringsRead);
         StampDiagnoses(plugin, origin, claim);
+    }
+
+    /// <summary>Claims the binary now at <paramref name="filePath"/> for rows its tree vouches for: a build rewrites
+    /// the binary and moves no row.</summary>
+    public void ReclaimTreeBinary(PluginAddress key, string filePath)
+    {
+        if (IndexedFile(key) is not { } held || FileContentHash(filePath) is not { } now || now == held.ContentHash) return;
+        if (ClaimOf(filePath) is not { } claim) return;
+
+        using var tx = BeginTransaction();
+        DuckDbSql.Execute(Connection, $"DELETE FROM {FilesRelation} WHERE plugin = $1 AND origin = $2", key.Name, key.Origin);
+        DuckDbSql.Execute(Connection, $"DELETE FROM {PluginDiagnosisRelation} WHERE plugin = $1 AND origin = $2", key.Name, key.Origin);
+        StampFileClaim(key.Name, key.Origin, filePath, claim, stringsRead: null);
+        BumpSequence();
+        tx.Commit();
     }
 
     // A scan that threw is logged and leaves no rows, never a refused ingest.
