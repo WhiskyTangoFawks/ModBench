@@ -1,3 +1,4 @@
+import { refusedAnswer } from '../ports/refused';
 import * as vscode from 'vscode';
 import type { MEditClient, SourceChanges } from '../client';
 import type { Instance } from '../instanceLoader/instance';
@@ -39,7 +40,7 @@ async function renamed({ commands, source }: RenameDeps, plugin: PluginAddress, 
   const result = await commands.renamePlugin({ apply }, plugin, newName);
   if (result.applied) return { applied: true, outcome: { landed: [{ name: newName, origin: plugin.origin }], refused: [] } };
   if ('reported' in result) return refused(`${couldNot}: its plugin source may be partly renamed. Reverting the source rename in git undoes it.`, result.reported);
-  if (!('sourceRenamed' in result)) return refused(result.refusal, result.detail);
+  if (!('sourceRenamed' in result)) return result.wroteNothing ? refusedAnswer(result.refusal, result.detail) : refused(result.refusal, result.detail);
   if (!result.sourceRenamed) return refused(`${couldNot}: its file and lines were not renamed.`, result.refusal);
   return refused(`${couldNot}: its plugin source was renamed, its file and lines were not. Reverting the source rename in git undoes it.`, result.refusal);
 }

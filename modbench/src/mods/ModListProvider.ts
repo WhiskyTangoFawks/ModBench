@@ -184,6 +184,7 @@ export class ModListProvider
   private instanceValue: InstanceValue;
   private readonly instanceSubscription: vscode.Disposable;
   private readonly readFailureSubscription: vscode.Disposable;
+  private readonly redrawSubscription: vscode.Disposable;
   private readonly statusSubscription: vscode.Disposable;
   private readonly openSubscription: vscode.Disposable;
   private readonly statuses: ModListProviderOptions['statuses'];
@@ -200,6 +201,7 @@ export class ModListProvider
       this.invalidate();
     });
     this.readFailureSubscription = options.instance.onReadFailure(() => this.render());
+    this.redrawSubscription = options.instance.onRedraw(() => this.render());
     this.statuses = options.statuses;
     this.open = options.open;
     this.reporter = options.reporter;
@@ -213,6 +215,7 @@ export class ModListProvider
   dispose(): void {
     this.instanceSubscription.dispose();
     this.readFailureSubscription.dispose();
+    this.redrawSubscription.dispose();
     this.statusSubscription.dispose();
     this.openSubscription.dispose();
     this.firstRead.dispose();

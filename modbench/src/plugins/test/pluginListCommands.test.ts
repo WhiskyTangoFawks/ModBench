@@ -294,7 +294,7 @@ describe('modbench.plugin.create, called by the agent', () => {
     client.setCommandResult('createPlugin', { refused: true, message: 'A file is already there.' });
     const { reporter, answer } = invokeAgent(place('Winning Mod'), client);
 
-    expect(await answer()).toEqual({ applied: false, refusal: 'A file is already there.' });
+    expect(await answer()).toEqual({ applied: false, wroteNothing: true, refusal: 'A file is already there.' });
     expect(reporter.reports).toEqual([]);
   });
 

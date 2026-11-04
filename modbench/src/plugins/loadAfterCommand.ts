@@ -49,7 +49,7 @@ export function registerLoadAfterCommand(
         const result = await runWritingGesture('modbench.plugin.loadAfter', PLUGINS_KEY_ARGS.view, instance, () => commands.loadAfter(plugins.map(({ name }) => name), after));
         return result.applied
           ? { applied: true, outcome: { landed: plugins, refused: [] } }
-          : { applied: false, refusal: 'Could not write the load after.', detail: result.refusal };
+          : { applied: false, refusal: 'Could not write the load after.', detail: result.refusal, ...(result.wroteNothing && { wroteNothing: true as const }) };
       } catch (e) {
         if (e instanceof RefusedWrite) throw e;
         return { applied: false, refusal: 'Failed to write the load after.', detail: errorMessage(e) };

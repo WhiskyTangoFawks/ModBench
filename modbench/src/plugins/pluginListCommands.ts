@@ -1,3 +1,4 @@
+import { refusedAnswer } from '../ports/refused';
 import * as vscode from 'vscode';
 import { isRefused, type MEditClient } from '../client';
 import type { Instance } from '../instanceLoader/instance';
@@ -156,7 +157,7 @@ export function registerCreatePluginCommand(
     run: ({ plugin, folder, sourceFolder }) => runWritingGesture('modbench.plugin.create', PLUGINS_KEY_ARGS.view, instance, async () => {
       const result = await client.createPlugin(plugin, folder, sourceFolder);
       return isRefused(result)
-        ? { applied: false, refusal: result.message }
+        ? refusedAnswer(result.message)
         : { applied: true, outcome: { landed: [{ name: result.name, origin: plugin.origin }], refused: [] } };
     }),
     report: (result, { label }) => {

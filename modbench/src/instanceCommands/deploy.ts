@@ -3,7 +3,8 @@ import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { overwritePathOf, type Deployed, type Deployment, type Purged, type FileTheGameGets, type PluginOrder } from '../deployment/deployment';
 import { gameReleaseForGame } from '../tables/gamePaths';
 import { refuse } from '../coreLib/refuse';
-import type { CommandResult } from '../coreLib/commandResult';
+import { type CommandResult } from '../coreLib/commandResult';
+import { refusedAnswer } from '../ports/refused';
 
 export interface DeploymentFolderSetting {
   readonly id: string;
@@ -44,8 +45,8 @@ async function deploy(
   setting: DeploymentFolderSetting, load: LoadOrderToDeploy | undefined,
 ): Promise<DeployResult> {
   const folder = deploymentFolderOf(setting);
-  if (folder === undefined) return { applied: false, refusal: `No deployment folder: set ${setting.id}.` };
-  if (load === undefined) return { applied: false, refusal: 'The instance has not been read.' };
+  if (folder === undefined) return refusedAnswer(`No deployment folder: set ${setting.id}.`);
+  if (load === undefined) return refusedAnswer('The instance has not been read.');
   try {
     const reportable = await reportableIn(adapter, folder);
     return { applied: true, ...reportable(await deployment.deploy(folder, load.files, pluginOrderOf(load))) };
@@ -58,7 +59,7 @@ export type PurgeResult = CommandResult<Purged>;
 
 async function purge({ deployment, adapter }: { deployment: Deployment; adapter: Adapter }, setting: DeploymentFolderSetting): Promise<PurgeResult> {
   const folder = deploymentFolderOf(setting);
-  if (folder === undefined) return { applied: false, refusal: `No deployment folder: set ${setting.id}.` };
+  if (folder === undefined) return refusedAnswer(`No deployment folder: set ${setting.id}.`);
   try {
     const reportable = await reportableIn(adapter, folder);
     return { applied: true, ...reportable(await deployment.purge(folder)) };
@@ -72,7 +73,7 @@ export type UnmanagedResult = CommandResult<{ folder: string; unmanaged: readonl
 
 async function unmanaged({ deployment, adapter }: { deployment: Deployment; adapter: Adapter }, setting: DeploymentFolderSetting): Promise<UnmanagedResult> {
   const folder = deploymentFolderOf(setting);
-  if (folder === undefined) return { applied: false, refusal: `No deployment folder: set ${setting.id}.` };
+  if (folder === undefined) return refusedAnswer(`No deployment folder: set ${setting.id}.`);
   try {
     const reportable = await reportableIn(adapter, folder);
     const { unmanaged: paths } = reportable({ unmanaged: await deployment.unmanaged(folder) });
@@ -89,11 +90,11 @@ async function moveToOverwrite(
   { adapter, deployment }: { adapter: Adapter; deployment: Deployment }, setting: DeploymentFolderSetting, named: readonly string[] | undefined,
 ): Promise<MoveToOverwriteResult> {
   const folder = deploymentFolderOf(setting);
-  if (folder === undefined) return { applied: false, refusal: `No deployment folder: set ${setting.id}.` };
+  if (folder === undefined) return refusedAnswer(`No deployment folder: set ${setting.id}.`);
   try {
     const game = await adapter.gameFolderOverlapping(folder);
     if (game !== undefined) {
-      return { applied: false, refusal: `The deployment folder ${folder} is, holds or sits inside the game folder ${game}: moving the game's own files out of it would break the game.` };
+      return refusedAnswer(`The deployment folder ${folder} is, holds or sits inside the game folder ${game}: moving the game's own files out of it would break the game.`);
     }
     const current = await deployment.unmanaged(folder);
     const paths = named === undefined ? current : named.filter((path) => current.includes(path));

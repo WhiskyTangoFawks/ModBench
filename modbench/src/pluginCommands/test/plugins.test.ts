@@ -51,7 +51,7 @@ describe('reorderPlugins hands the adapter a move decided against the order it h
 
     const result = await pluginCommandsWith(fake.adapter, NOT_INDEXED).reorderPlugins(moving('A.esp', 'B.esp'), { kind: 'before', name: target });
 
-    expect(result).toEqual({ applied: false, refusal: `The target is "${target}", which is moving.` });
+    expect(result).toEqual({ applied: false, wroteNothing: true, refusal: `The target is "${target}", which is moving.` });
     expect(fake.calls).toEqual([]);
   });
 
@@ -96,7 +96,7 @@ describe('reorderPlugins hands the adapter a move decided against the order it h
     ])('refuses %s, and hands the adapter no change', async (_, move, refusal) => {
       const { fake, result } = await run(move);
 
-      expect(result).toEqual({ applied: false, refusal });
+      expect(result).toEqual({ applied: false, wroteNothing: true, refusal });
       expect(fake.calls).toEqual([]);
     });
 

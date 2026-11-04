@@ -2,7 +2,8 @@
 
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import { dropIndexIn, type Drop } from './dropIndex';
-import type { CommandResult, SelectionResult } from '../coreLib/commandResult';
+import { type CommandResult, type SelectionResult } from '../coreLib/commandResult';
+import { refusedAnswer } from '../ports/refused';
 export type { SelectionResult };
 import { refuse } from '../coreLib/refuse';
 import { present } from '../ports/present';
@@ -29,6 +30,9 @@ interface Decision<T> {
 // The adapter takes the changes alone, so what `decide` concluded comes back here. A change
 // already true of the order is not written: for `syncPlugins` that is the difference between a
 // loop that settles and one that does not.
+/** A decision that refuses the change before the adapter writes any of it. */
+class OrderRefused extends Error {}
+
 async function changeDeciding<A extends unknown[], T extends object>(
   write: (decide: (...args: A) => readonly PluginOrderChange[]) => Promise<{ readonly wrote: boolean }>,
   decide: (...args: A) => Decision<T>,
@@ -42,7 +46,7 @@ async function changeDeciding<A extends unknown[], T extends object>(
     });
     return { applied: true, wrote, decided: present(decisions.at(-1), 'the decision the change landed on') };
   } catch (err) {
-    return refuse(err);
+    return err instanceof OrderRefused ? refusedAnswer(err.message) : refuse(err);
   }
 }
 
@@ -109,7 +113,7 @@ async function reorderPlugins(
 ): Promise<CommandResult> {
   const pluginNames = plugins.map((plugin) => plugin.name);
   if ('name' in drop && pluginNames.some((name) => pluginKey(name) === pluginKey(drop.name))) {
-    return { applied: false, refusal: `The target is "${drop.name}", which is moving.` };
+    return refusedAnswer(`The target is "${drop.name}", which is moving.`);
   }
   const factsOf = await orderFactsFrom(masters);
   // Settled against the order the change lands on, so a tree a generation behind plugins.txt
@@ -119,7 +123,7 @@ async function reorderPlugins(
     const noLine = new Set(provided.kind === 'listed' ? provided.loadedWithNoLine.map(pluginKey) : []);
     // A line for a plugin the game loads with no line does not place it.
     const refusal = moveOrderRefusal(names.filter((name) => !noLine.has(pluginKey(name))), pluginNames, drop, factsOf);
-    if (refusal !== undefined) throw new Error(refusal);
+    if (refusal !== undefined) throw new OrderRefused(refusal);
     return { changes: [{ kind: 'move', plugins: pluginNames, toIndex: dropIndexIn(names, pluginNames, drop) }], decided: {} };
   });
   return outcome.applied ? { applied: true, wrote: outcome.wrote } : outcome;

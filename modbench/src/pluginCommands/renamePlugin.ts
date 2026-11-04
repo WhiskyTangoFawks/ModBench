@@ -6,6 +6,7 @@ import type { FileOrigin, InstanceAdapter } from '../instanceAdapter/instanceAda
 import type { PluginAddress } from '../wire/pluginAddress';
 import { isRefused, type MEditClient, type SourceChanges } from '../client';
 import { errorMessage } from '../ports/errorMessage';
+import { refusedAnswer } from '../ports/refused';
 import { pluginNameRefusal } from './pluginName';
 import { answerOf } from '../wire/readFailed';
 
@@ -21,7 +22,7 @@ interface PluginRenameAccess {
 export type PluginRenameResult =
   | { applied: true }
   | { applied: false; reported: string }
-  | { applied: false; refusal: string; detail?: string }
+  | { applied: false; refusal: string; detail?: string; wroteNothing?: true }
   | { applied: false; sourceRenamed: boolean; refusal: string };
 
 const fileOriginOf = (origin: string): FileOrigin => ({ kind: 'mod', name: origin });
@@ -39,9 +40,9 @@ async function refusalBeforeWrite(access: PluginRenameAccess, plugin: PluginAddr
   try {
     refusal = await renameRefusal(access, plugin, newName, answerOf(await access.client.getCreatablePluginExtensions()));
   } catch (err) {
-    return { applied: false, refusal: `Could not check "${newName}" for "${plugin.name}" (${plugin.origin}).`, detail: errorMessage(err) };
+    return refusedAnswer(`Could not check "${newName}" for "${plugin.name}" (${plugin.origin}).`, errorMessage(err));
   }
-  return refusal === undefined ? undefined : { applied: false, refusal };
+  return refusal === undefined ? undefined : refusedAnswer(refusal);
 }
 
 async function renamePlugin(
@@ -50,7 +51,7 @@ async function renamePlugin(
   const refused = await refusalBeforeWrite(access, plugin, newName);
   if (refused !== undefined) return refused;
   const changes = await access.client.getRenameSourceChanges(plugin, newName);
-  if (isRefused(changes)) return { applied: false, refusal: changes.message };
+  if (isRefused(changes)) return refusedAnswer(changes.message);
   const unapplied = await source.apply(changes);
   if (unapplied !== undefined) return { applied: false, reported: unapplied };
 

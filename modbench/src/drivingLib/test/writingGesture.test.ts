@@ -6,7 +6,8 @@ vi.mock('vscode', async () => {
 });
 
 import { progressSteps as steps } from '../../test/recordedProgress';
-import { asViewCall, refusedAnswer, RefusedWrite, runWritingGesture, surfaceRefusedWrites } from '../writingGesture';
+import { refusedAnswer } from '../../ports/refused';
+import { asViewCall, RefusedWrite, runWritingGesture, surfaceRefusedWrites } from '../writingGesture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { Refusal } from '../refusal';
 
@@ -94,12 +95,12 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
 
     function surfaced() {
       const reporter = recordingReporter();
-      const refresh = vi.fn(() => Promise.resolve());
+      const redraw = vi.fn();
       const surface = surfaceRefusedWrites({
-        reporter, refresh, titles: new Map([['modbench.mod.build', 'Build Mod'], ['modbench.mod.rename', 'Rename Mod']]),
+        reporter, redraw, titles: new Map([['modbench.mod.build', 'Build Mod'], ['modbench.mod.rename', 'Rename Mod']]),
       });
       onTestFinished(() => { surface.dispose(); });
-      return { reporter, refresh };
+      return { reporter, redraw };
     }
 
     it('is refused, naming the write in flight, and starts nothing', async () => {
@@ -125,16 +126,16 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
       await expect(asked('modbench.mod.rename')).rejects.toThrow('Rename Mod did not start: Build Mod is still writing.');
     });
 
-    it('tells a view call once, in a notification and the Output, and shows the view the disk', async () => {
-      const { reporter, refresh } = surfaced();
+    it('tells a view call once, in a notification and the Output, and draws the view from the held value', async () => {
+      const { reporter, redraw } = surfaced();
       heldWrite('modbench.mod.build');
 
       const answered = await asViewCall(() => asked('modbench.mod.rename'));
 
-      expect({ answered, reports: reporter.reports, refreshes: refresh.mock.calls.length, shownOnSurface: reporter.shownFailures }).toEqual({
+      expect({ answered, reports: reporter.reports, redraws: redraw.mock.calls.length, shownOnSurface: reporter.shownFailures }).toEqual({
         answered: undefined,
         reports: [{ severity: 'error', message: 'Rename Mod did not start: Build Mod is still writing.', detail: undefined }],
-        refreshes: 1,
+        redraws: 1,
         shownOnSurface: [],
       });
     });

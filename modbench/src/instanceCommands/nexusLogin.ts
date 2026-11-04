@@ -1,13 +1,14 @@
 import { refuse } from '../coreLib/refuse';
-import type { CommandResult } from '../coreLib/commandResult';
+import { type CommandResult } from '../coreLib/commandResult';
+import { refusedAnswer } from '../ports/refused';
 import type { Nexus } from '../nexus/nexus';
 
 async function logIn(nexus: Nexus, typed: string, signal: AbortSignal): Promise<CommandResult> {
   const key = typed.trim();
   try {
     const checked = await nexus.check(key);
-    if (!checked.valid) return { applied: false, refusal: checked.reason };
-    if (signal.aborted) return { applied: false, refusal: 'Cancelled.' };
+    if (!checked.valid) return refusedAnswer(checked.reason);
+    if (signal.aborted) return refusedAnswer('Cancelled.');
     await nexus.keep(key);
     return { applied: true, wrote: true };
   } catch (err) {

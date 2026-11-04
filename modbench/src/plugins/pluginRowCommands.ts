@@ -1,3 +1,4 @@
+import { refusedAnswer } from '../ports/refused';
 import type * as vscode from 'vscode';
 import { isRefused, type MEditClient, type PluginAddress, type SourceModIn } from '../client';
 import type { Instance } from '../instanceLoader/instance';
@@ -157,7 +158,7 @@ async function decompiled(
   client: Pick<MEditClient, 'decompile'>, plugins: readonly PluginAddress[], force: boolean,
 ): Promise<SelectionResult<PluginAddress>> {
   const answer = await client.decompile(plugins, force);
-  return isRefused(answer) ? { applied: false, refusal: answer.message } : { applied: true, outcome: answer };
+  return isRefused(answer) ? refusedAnswer(answer.message) : { applied: true, outcome: answer };
 }
 
 interface SendBatch { readonly plugins: readonly PluginAddress[]; readonly force: boolean }

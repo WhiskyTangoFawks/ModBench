@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import { isRefused, type VersionInGitOutcome, type PluginAddress } from '../client';
 import type { Instance } from '../instanceLoader/instance';
-import { refusedAnswer, runWritingGesture } from '../drivingLib/writingGesture';
+import { refusedAnswer } from '../ports/refused';
+import { runWritingGesture } from '../drivingLib/writingGesture';
 import { registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { isClickedRow } from '../drivingLib/gestureEntry';
 import { pickWhereGitHolds } from '../drivingLib/whereGitHolds';

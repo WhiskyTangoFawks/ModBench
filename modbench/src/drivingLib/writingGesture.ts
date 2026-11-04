@@ -32,17 +32,6 @@ export async function runUnderProgress<T>(
   }
 }
 
-/** What a gesture answers when it refused and wrote nothing, so it ends without the refresh that shows a write.
- *  An `applied: false` without `wroteNothing` may follow a write, and is refreshed. */
-export interface Refused {
-  readonly applied: false;
-  readonly refusal: string;
-  readonly detail?: string;
-  readonly wroteNothing: true;
-}
-
-export const refusedAnswer = (refusal: string, detail?: string): Refused => ({ applied: false, refusal, ...(detail === undefined ? {} : { detail }), wroteNothing: true });
-
 const isRefused = (answer: unknown): boolean => typeof answer === 'object' && answer !== null && (answer as { wroteNothing?: unknown }).wroteNothing === true;
 
 let inFlight: string | undefined;
@@ -51,8 +40,8 @@ interface RefusalSurface {
   readonly reporter: Reporter;
   /** The title of each gesture's Command ID, which a refusal names the write by. */
   readonly titles: ReadonlyMap<string, string>;
-  /** Shows the view what is on disk, so a control the user toggled does not keep a state nothing wrote. */
-  readonly refresh: () => Promise<void>;
+  /** Draws the views from the held value, so a control the user toggled does not keep a state nothing wrote. */
+  readonly redraw: () => void;
 }
 
 let surface: RefusalSurface | undefined;
@@ -75,7 +64,7 @@ export async function asViewCall<T>(work: () => Promise<T>): Promise<T | undefin
   } catch (e) {
     if (!(e instanceof RefusedWrite)) throw e;
     surface?.reporter.report('error', e.message);
-    await surface?.refresh();
+    surface?.redraw();
     return undefined;
   }
 }
