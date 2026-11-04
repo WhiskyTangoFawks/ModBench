@@ -193,10 +193,11 @@ As a user, I want:
 1. A prompt for the name. It refuses an empty name, and a name whose extension the game does not load as a plugin.
 2. Then a pick of where the plugin lives: the enabled mods first, then Overwrite. Cites: catalog `create`, Argument
 3. A place that already holds a plugin of that name left out of the pick. Cites: No dead entries
-4. Esc at either step to create nothing. Cites: Esc changes nothing
+4. Esc at any step to create nothing. Cites: Esc changes nothing
 5. The new plugin to appear at the winning end of the list, disabled. Cites: catalog `plugin sync`
-6. The new plugin empty: a header with no records and no masters, flagged as its extension means.
+6. The new plugin empty: a header with no records and no masters.
 7. A plugin created in a source mod to land with its plugin source, as working-tree changes I can review. Cites: GLOSSARY.md, Source mod
+8. The header flagged with the combination I pick from those xEdit offers a new file of its extension, with no pick when it offers one. Cites: Mutagen's data, the reference's behaviour, VS Code's interaction
 
 ### Version in git
 

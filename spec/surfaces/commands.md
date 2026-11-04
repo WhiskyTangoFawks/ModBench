@@ -175,7 +175,7 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 |---|---|---|---|---|---|---|---|
 | enable / disable | writes | `modbench.plugin.enable`, `modbench.plugin.disable` | plugins | - | MO2 plugin list | Enable or disable each plugin in the active profile. | update-load-order-file |
 | move | writes | `modbench.plugin.move` | plugins | target: the row it is dropped on, or the view's end. Several plugins move as one block | MO2 plugin list | Move plugins in plugin order. | update-load-order-file |
-| create | writes | `modbench.plugin.create` | Overwrite or an enabled mod | name | xEdit navigator | Create an empty plugin. | create-plugin |
+| create | writes | `modbench.plugin.create` | Overwrite or an enabled mod | name; flags | xEdit navigator | Create an empty plugin. | create-plugin |
 | decompile | writes | `modbench.plugin.decompile` | plugins | force: [agent.md](agent.md#any-agent), story 7 | none | Read each plugin's bytes into its plugin source in the working tree. | decompile-plugin |
 | decompile and repair | writes | `modbench.plugin.decompileAndRepair` | plugins | where: a source mod in a new repository, or a source mod in the instance repository; force: [agent.md](agent.md#any-agent), story 7 | none | Decompile each malformed plugin and repair it, in two commits to its mod's plugin source. | - |
 | sort direction | reads | `modbench.plugin.sortWinningAtTop`, `modbench.plugin.sortLosingAtTop` | - | - | MO2 plugin list | List plugins with the winning end at the top or at the bottom. | none |
