@@ -184,6 +184,9 @@ A typed field that holds another record's FormKey. Two data errors exist. A dang
 
 Avoid: missing reference, broken link
 
+# Symbol
+A modding concept that a file names, as [surfaces/symbols.md](surfaces/symbols.md) lists them. A file that names it holds a reference to it.
+
 # Instance
 A mod manager's setup for one game: the mods, profiles and downloaded files it manages, wherever it keeps them.
 

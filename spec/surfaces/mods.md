@@ -92,7 +92,7 @@ Each publisher tag is an indicator of its own, with the badge its publisher decl
 A source mod's folder is its build's output ([source.md](source.md), Build). As a user, I want:
 
 1. Its row to open into the folder's files as any mod's, since they are what the game gets. The source is in the Explorer and Source Control, and `open source` shows it. Cites: catalog `open source`
-2. Rename, and exclude or include, to be choices of my modlist: they change the folder, never the source, and the next build keeps them. Cites: ADR-0022
+2. Rename, and exclude or include, to be choices of my modlist that the next build keeps. Exclude and include change the folder, never the source. Cites: ADR-0022; Rename mod, story 5
 3. No gesture that changes content the build makes: an edit lands in the source. Cites: ADR-0006; ADR-0007
 4. Uninstall to leave the source, so a build makes the mod again. Cites: source.md, Build, story 7
 
@@ -173,8 +173,9 @@ As a user, I want:
 
 1. A prompt filled with the current name. Esc, an empty name or the same name renames nothing. Cites: MO2
 2. A name another mod has, or for a separator another separator, compared without case, refused in the prompt, so Windows and Linux agree. A name with a path separator refused. Every name a gesture here gives a folder follows this rule. Cites: MO2 compares without case; Windows and Linux alike; Refuse, do not repair
-3. The mod to keep everything but its name: its place in mod order, its enabled state and its separator in every profile, and all its folder holds. A source mod's repository stays where it is. Cites: MO2; ADR-0007
+3. The mod to keep everything but its name: its place in mod order, its enabled state and its separator in every profile, and all its folder holds. Cites: MO2
 4. A rename that renamed the folder and then failed on a profile's mod order to say so, naming the profile. That profile loses the mod's place, and `mod sync` places it as a new folder when the profile is active.
+5. Each reference to its folder to follow it, and a source mod's source folder, named for it, with them. Cites: symbols.md, The features, story 6
 
 ### Delete separator
 

@@ -223,6 +223,7 @@ As a user, I want:
 2. The plugin to keep its place in plugin order and its enabled state in every profile. Its plugin source and what Modbench last wrote follow it. Cites: Never silently wrong
 3. The files in its mod that the game ties to it by name to follow it. Cites: Never silently wrong
 4. A plugin source, when the plugin has one, renamed first, as working-tree changes I can review. Then the file, the files named for it and its lines, in one write. A rename that failed on that write to say so, naming the plugin. Git shows the source rename, and reverting it is the recovery. The file reads as a plugin whose plugin source is unreadable until then.
+5. Each reference to it to follow it, so its source mod's next build makes what I renamed. Cites: symbols.md, The features, story 6
 
 ### Move
 

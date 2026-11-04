@@ -46,7 +46,7 @@ The source is files, and any tool can change them. As a user, I want:
 
 ### In the text editor
 
-A FormKey is a symbol, and the record index answers for it ([ADR-0001](../adr/0001-modbench-is-a-vscode-extension.md)). The gestures are VS Code's own, under VS Code's names and keys: Go to Definition and Go to Symbol are entry points to `open`, and Find All References to `referenced by` (commands.md, Entry points are not gestures).
+A FormKey is a record's symbol ([symbols.md](symbols.md)). Inside a FormKey, the plugin's name is the plugin's symbol. The gestures are VS Code's own, under VS Code's names and keys: Go to Definition and Go to Symbol are entry points to `open`, Find All References to `referenced by`, and Rename Symbol to `edit field` on the FormKey, or to the plugin's `rename` on its name (commands.md, Entry points are not gestures).
 
 As a user, I want:
 
@@ -56,7 +56,7 @@ As a user, I want:
 4. Go to Symbol in Workspace to find a record by EditorID or FormKey across every compiled plugin, and to open it. Cites: VS Code; catalog `open` with no Argument
 5. Completion inside a reference field to offer records by EditorID and insert the FormKey, and inside an enum field to offer its values. Cites: VS Code; ADR-0001
 6. The Problems panel to carry, on the plugin source of every compiled plugin, active or not, each refusal and warning compile would give that file, and a reference to a record that neither its plugin nor an active plugin holds. A problem appears as I type and clears the same way (ADR-0001). When mEdit cannot answer, the problems stay, and the language status says so, as common, States, story 6 says of a view. Cites: Changes outside Modbench, stories 2 and 3; ADR-0015; ADR-0012; common, States, story 6; ADR-0019; VS Code's language status
-7. Rename Symbol and the quick fixes to offer nothing on plugin source: changing a FormKey is editing the FormID field, and updating the references is a Modbench script. Cites: xedit.md, divergence 9
+7. Rename Symbol on a FormKey to change it, each reference following (symbols.md, The features, story 6). Cites: xEdit's Change FormID
 8. A language feature that fails to answer as any language server's feature does. Cites: VS Code; common.md, Reporting
 
 ## Menus and keys
@@ -75,7 +75,7 @@ As a user, I want:
 2. A pack step to take the loose files it packs out of the mod folder, so the game reads one copy.
 3. Build to record what it made in the mod's manifest, down to each file's bytes, so a build that comes out differently, here or after a clone, shows in Source Control as a change I review, and one that comes out the same changes nothing. A file a task makes or changes is recorded by its path alone, since a tool's output follows the tool, and is not checked. Cites: ADR-0022; ADR-0027; Existing tools; Never silently wrong
 4. A source mod's folder renamed outside Modbench to build where it is. Cites: ADR-0022; ADR-0003
-5. Build to save the mod's unsaved plugin source first, without asking, as Run Build Task saves before it builds, so the plugins are built from what I see. A file VS Code does not save refuses build, naming it. Cites: VS Code's save before run; ADR-0001; Never silently wrong
+5. Build to save the mod's unsaved plugin source and build file first, without asking, as Run Build Task saves before it builds, so the plugins are built from what I see. A file VS Code does not save refuses build, naming it. Cites: VS Code's save before run; ADR-0001; Never silently wrong
 6. A notification when it lands, pointing at the Problems panel when it left diagnostics. The diagnostics sit on the plugin source files.
 7. From the palette with no mod, a pick of every source mod, one with no folder yet included, so a clone builds its mods back. Cites: commands.md, The entry point supplies what it knows
 8. A plugin whose header flag limits its FormIDs, light or medium, refused when its records fall outside that range, naming the records, what limits the plugin, and what lifts that limit. The step's other plugins compile, and the refused plugin is left as it was.
