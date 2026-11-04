@@ -7,14 +7,14 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.RecordIndex.Tests.Records;
 
-public sealed class HandEditsReachTheNextSnapshotTests : IDisposable
+public sealed class HandEditsReachTheNextCheckTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderEntry _mod;
     private readonly OpenedIndex _index;
     private readonly string _npc;
 
-    public HandEditsReachTheNextSnapshotTests()
+    public HandEditsReachTheNextCheckTests()
     {
         FormKey npc = default;
         _fixture = new PluginFixtureBuilder("refresh-by-keys")
@@ -33,7 +33,7 @@ public sealed class HandEditsReachTheNextSnapshotTests : IDisposable
     }
 
     [Fact]
-    public void AHandEdit_LeavesTheServedDocumentUnchanged_UntilTheNextSnapshot()
+    public void AHandEdit_LeavesTheServedDocumentUnchanged_UntilTheNextCheck()
     {
         var before = _index.BodyOf(_npc, _mod.Key);
 
@@ -42,7 +42,7 @@ public sealed class HandEditsReachTheNextSnapshotTests : IDisposable
         Assert.Equal(before, _index.BodyOf(_npc, _mod.Key));
         Assert.Equal("FixtureNpc", _index.CopyIn(_npc, _mod.Key)?.EditorId);
 
-        _index.NextSnapshot();
+        _index.NextCheck();
 
         Assert.Equal("RenamedByHand", _index.CopyIn(_npc, _mod.Key)?.EditorId);
     }
@@ -56,7 +56,7 @@ public sealed class HandEditsReachTheNextSnapshotTests : IDisposable
             .Replace("\"FixtureNpc\"", "\"HandCreated\"", StringComparison.Ordinal);
         SourceMods.RepositoryOf(_mod).Put(_mod.Key, new SourceDocument(formKey, "npc_", "HandCreated", body)).Wrote();
 
-        _index.NextSnapshot();
+        _index.NextCheck();
 
         Assert.Equal("HandCreated", _index.CopyIn(formKey, _mod.Key)?.EditorId);
         var listing = _index.Queries.GetRecords(["npc_"], _mod.Key, search: null, limit: 50, offset: 0).Value();
@@ -69,13 +69,13 @@ public sealed class HandEditsReachTheNextSnapshotTests : IDisposable
         var npc = _index.DocumentOf(_npc, _mod.Key);
         var file = _mod.SourceFileOf(npc);
         _mod.HandEdit(npc, "\"FixtureNpc\"", "\"RenamedByHand\"");
-        _index.NextSnapshot();
+        _index.NextCheck();
         Assert.Equal("RenamedByHand", _index.DocumentOf(_npc, _mod.Key).EditorId);
 
         const string notADocumentAtAllAsAMidSaveOrHandEditedFileMayHold = "{ this is not json";
         File.WriteAllText(file, notADocumentAtAllAsAMidSaveOrHandEditedFileMayHold);
 
-        _index.NextSnapshotUntil(
+        _index.NextCheckUntil(
             () => _index.ReadFromItsPluginFileForItsUnreadableSource(_mod.Key), "the binary read in the tree's place");
 
         Assert.Equal("FixtureNpc", _index.DocumentOf(_npc, _mod.Key).EditorId);

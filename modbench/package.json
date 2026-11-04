@@ -509,6 +509,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.instance.signalChange",
+        "title": "Signal Instance Change",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.mod.sync",
         "title": "Sync Mods",
         "category": "Modbench"
@@ -1147,6 +1152,10 @@
         },
         {
           "command": "modbench.instance.putLoadOrder",
+          "when": "false"
+        },
+        {
+          "command": "modbench.instance.signalChange",
           "when": "false"
         },
         {

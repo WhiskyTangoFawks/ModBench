@@ -56,7 +56,7 @@ public sealed class CompiledPluginProjectionTests : IDisposable
         RenameByHand(formKey, from, to);
         PluginBinaries.Touch(_mod.Path);
         var before = _notifications.Notifications.Count;
-        _index.NextSnapshotUntil(
+        _index.NextCheckUntil(
             () => _notifications.Since(before).Any(n => Announcements.RowsChanged(formKey)(n)), "the rows changed announcement");
     }
 

@@ -49,7 +49,7 @@ public class FormLookupTests
         var before = index.ListedIn(key).Count;
 
         PluginBinaries.Touch(fixture.Plugins.Single().Path);
-        index.NextSnapshot();
+        index.NextCheck();
 
         Assert.Equal(before, index.ListedIn(key).Count);
         Assert.Equal(1, index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value().Total);

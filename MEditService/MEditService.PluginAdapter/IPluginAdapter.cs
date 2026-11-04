@@ -40,7 +40,6 @@ public interface IPluginAdapter
 
     /// <summary>Forgets the hash of every file but <paramref name="pluginPaths"/>.</summary>
     void KeepHashesOf(IReadOnlySet<string> pluginPaths);
-
     /// <summary>The hash and malformed-record diagnoses from one fresh read of the file.</summary>
     Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath, GameRelease gameRelease);
 

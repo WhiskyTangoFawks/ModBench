@@ -62,7 +62,7 @@ public sealed class WinnerSelectionTests : IDisposable
             [BaseKey, OverKey], headerWinners);
 
         PluginBinaries.Touch(_fixture.Plugins.Single(p => p.Name == OverKey.Name).Path);
-        _index.NextSnapshot();
+        _index.NextCheck();
         Assert.Equal(OverKey, WinnerOf(_npc));
         Assert.Single(_index.StackOf(_npc), copy => copy.IsWinner);
     }

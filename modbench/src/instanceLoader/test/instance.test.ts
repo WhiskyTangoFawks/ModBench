@@ -487,6 +487,36 @@ describe('Instance — built by watching', () => {
     expect(fake.rereads).toEqual([CHECK, reread('/instance/mods/A/a.esp'), reread('/instance/mods/A/b.esp', '/instance/mods/A/c.esp', '/instance/mods/A/d.esp')]);
   });
 
+  it('settles a refresh asked during a stream of events once the read in flight and one more have run', async () => {
+    const READ_MS = 1_200;
+    const { instance, fake } = loader({}, (adapter) => ({
+      ...adapter,
+      reading: async (asked) => {
+        await new Promise((resolve) => setTimeout(resolve, READ_MS));
+        return adapter.reading(asked);
+      },
+    }));
+    fakeClockLeavingSetImmediateReal();
+    try {
+      const first = instance.refresh();
+      await vi.advanceTimersByTimeAsync(READ_MS);
+      await first;
+      const stream = setInterval(() => { fake.changed('/instance/overwrite/again.txt'); }, SETTLE_MS * 1.5);
+      await vi.advanceTimersByTimeAsync(3 * READ_MS + SETTLE_MS / 2);
+      const readsBefore = fake.readings;
+      let settled = false;
+      void instance.refresh().then(() => { settled = true; });
+
+      await vi.advanceTimersByTimeAsync(2 * READ_MS);
+      clearInterval(stream);
+
+      expect(readsBefore).toBeGreaterThan(1);
+      expect(settled).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('is the check a burst waits on when refreshed mid-burst, reading what the burst named, and leaves no wait armed', async () => {
     const { instance, fake } = loader();
     await instance.refresh();

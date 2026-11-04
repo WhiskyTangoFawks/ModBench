@@ -20,7 +20,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(fx);
+        await Client.NextCheck(fx);
         await Client.PluginReportsCompiledPlugin(Plugin);
         return fx;
     }
@@ -33,7 +33,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         using var stream = await Client.NotificationStream();
 
         OtherTool.EditsASourceDocument(OtherTool.ModFolderOf(fx, Origin), Plugin, Npc, "RenamedByAnotherTool");
-        await Client.NextSnapshot(fx);
+        await Client.NextCheck(fx);
 
         var rows = await stream.EventsUntil(
             "rows-changed", e => e.GetProperty("keys").EnumerateArray().Any(k => k.GetString() == formKey));

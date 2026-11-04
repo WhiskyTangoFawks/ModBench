@@ -42,6 +42,12 @@ public interface ISourceAdapter
 
     bool TreeHolds(RegisteredPlugin plugin, string path);
 
+    /// <summary>Says that any file the record index reads may have changed: no path names which (ADR-0015).</summary>
+    void SignalChange();
+
+    /// <summary>Raised by each <see cref="SignalChange"/>.</summary>
+    event Action? ChangeSignalled;
+
     RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path);
 
     /// <summary>The name of the file of a record's own document where no tree has renamed it.</summary>

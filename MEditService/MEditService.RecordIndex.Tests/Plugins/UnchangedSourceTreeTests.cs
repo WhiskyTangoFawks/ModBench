@@ -50,7 +50,7 @@ public sealed class UnchangedSourceTreeTests : IDisposable
     {
         var announced = Touched(_marker);
         var before = _notifications.Notifications.Count;
-        _index.NextSnapshotUntil(() => _notifications.Since(before).Any(n => announced(n)), "the arrival validated");
+        _index.NextCheckUntil(() => _notifications.Since(before).Any(n => announced(n)), "the arrival validated");
     }
 
     private WorkingTreeState StateOfNpc() =>

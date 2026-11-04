@@ -55,7 +55,7 @@ public sealed class DuplicateFormKeyTests : IDisposable
         using var index = Indexes.Reconciled(lastGood);
 
         File.Copy(_fixture.Plugins.Single().Path, lastGood.Plugins.Single().Path, overwrite: true);
-        index.NextSnapshotUntil(() => index.Status.Failures.Any(failure => failure.Name == PluginName), "the re-read's failure");
+        index.NextCheckUntil(() => index.Status.Failures.Any(failure => failure.Name == PluginName), "the re-read's failure");
 
         Assert.Equal(["LastGoodNpc"], index.ListedIn(lastGood.Plugins.Single().Key).Select(row => row.EditorId));
     }

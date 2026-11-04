@@ -29,7 +29,7 @@ public sealed class AnotherFilesFailedReadTests : IDisposable
             Assert.True(Failed(index, LightMasterAndChild.Child));
         }
 
-        index.NextSnapshotUntil(() => !Failed(index, LightMasterAndChild.Child), "the plugin read again");
+        index.NextCheckUntil(() => !Failed(index, LightMasterAndChild.Child), "the plugin read again");
     }
 
     [Fact]
@@ -69,6 +69,6 @@ public sealed class AnotherFilesFailedReadTests : IDisposable
 
         File.Copy(repaired, archive, overwrite: true);
 
-        index.NextSnapshotUntil(() => !Failed(index, plugin), "the plugin read again");
+        index.NextCheckUntil(() => !Failed(index, plugin), "the plugin read again");
     }
 }

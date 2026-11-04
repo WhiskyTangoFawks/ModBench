@@ -79,7 +79,7 @@ public sealed class ProblemsPanelTests : IDisposable
         Build(Broken);
         var index = Indexes.Reconciled(Fixture, adapter: _brokensBinaryUnreadable);
         var (document, backup) = BackupClaimingTheFormKeyOf(Broken, "Other");
-        index.NextSnapshotUntil(() => index.Status.Failures.Count > 0, "the re-read's failure");
+        index.NextCheckUntil(() => index.Status.Failures.Count > 0, "the re-read's failure");
         return (index, document, backup);
     }
 

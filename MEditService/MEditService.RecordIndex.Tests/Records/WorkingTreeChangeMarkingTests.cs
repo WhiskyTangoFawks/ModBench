@@ -81,7 +81,7 @@ public sealed class WorkingTreeChangeMarkingTests : IDisposable
                 .Replace(_keptNpc, _keptNpc.Replace(':', '_'), StringComparison.Ordinal)
                 .Replace("KeepMe", "EditedInTree", StringComparison.Ordinal));
 
-        index.NextSnapshotUntil(() => index.RowOf(_keptNpc, _baseKey)?.EditorId == "EditedInTree", "the edit read from the tree");
+        index.NextCheckUntil(() => index.RowOf(_keptNpc, _baseKey)?.EditorId == "EditedInTree", "the edit read from the tree");
 
         Assert.Equal(WorkingTreeState.Modified, index.RowOf(_keptNpc, _baseKey)?.WorkingTreeState);
         Assert.Single(index.ListedIn(_baseKey), row => row.EditorId == "EditedInTree");

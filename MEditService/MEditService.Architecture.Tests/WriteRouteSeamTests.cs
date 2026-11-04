@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.RegularExpressions;
 using MEditService.TestSupport;
 
@@ -18,7 +19,12 @@ public sealed class WriteRouteSeamTests
     private static readonly Regex WhitespaceRun = new(@"\s+", RegexOptions.Compiled);
 
     public static IEnumerable<object[]> EveryNamedMethodRoute =>
-        WriteRouteHandlerTests.Routes.Select(r => new object[] { $"{r.Method} {r.Pattern}", r.EndpointMethod });
+        WriteRouteHandlerTests.Routes
+            .Where(r => HasAnAnswerToMap(r.Handler))
+            .Select(r => new object[] { $"{r.Method} {r.Pattern}", r.EndpointMethod });
+
+    private static bool HasAnAnswerToMap(Type handler) =>
+        handler.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly).Any(m => m.ReturnType != typeof(void));
 
     [Theory]
     [MemberData(nameof(EveryNamedMethodRoute))]

@@ -13,16 +13,16 @@ namespace MEditService.RecordIndex.Tests.Plugins;
 public sealed class ReconcileDoorTests
 {
 
-    private static async Task ParkedEqualArrivalFinding(
-        LoadOrderHolder holder, GatedPluginAdapter gate, InMemoryNotificationPublisher notifications, LoadOrderEntry plugin)
+    private static async Task ParkedCheckFinding(
+        OpenedIndex index, GatedPluginAdapter gate, InMemoryNotificationPublisher notifications, LoadOrderEntry plugin)
     {
         var before = notifications.Notifications.Count;
         gate.ParkNextOpenOf(plugin.Name);
         PluginBinaries.Touch(plugin.Path);
-        holder.Apply(holder.Current);
+        index.SignalChange();
         await gate.WaitUntilParkedAsync();
         gate.Release();
-        Waits.Reached(() => notifications.Since(before).Any(n => Announcements.PluginChanged(plugin)(n)), "the parked arrival's announcement");
+        Waits.Reached(() => notifications.Since(before).Any(n => Announcements.PluginChanged(plugin)(n)), "the parked check's announcement");
     }
 
     private static LoadOrderStatusNotification[] StatusesPublished(InMemoryNotificationPublisher notifications) =>
@@ -55,7 +55,7 @@ public sealed class ReconcileDoorTests
         Assert.Equal(filesWhileHeld, Directory.GetFiles(indexFolder).Order(StringComparer.Ordinal));
 
         otherWindow.Dispose();
-        index.NextSnapshotUntil(() => index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
+        index.NextCheckUntil(() => index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
         Assert.Equal(["FromA"], index.ListedIn(new PluginAddress("A.esp", PluginOrigin.DataDirectory)).Select(row => row.EditorId));
     }
 
@@ -121,7 +121,7 @@ public sealed class ReconcileDoorTests
         var rewrittenA = new Fallout4Mod(ModKey.FromFileName(A.Name), Fallout4Release.Fallout4);
         rewrittenA.Npcs.AddNew("FromARewritten");
         rewrittenA.WriteToBinary(data.Plugins.Single(p => p.Name == A.Name).Path);
-        index.NextSnapshotUntil(() => index.ListedIn(A).Any(row => row.EditorId == "FromARewritten"), "A's rewritten record");
+        index.NextCheckUntil(() => index.ListedIn(A).Any(row => row.EditorId == "FromARewritten"), "A's rewritten record");
 
         Assert.Equal(1, Volatile.Read(ref readsOfB));
         Assert.Contains(index.Status.Failures, f => f.Name == B.Name);
@@ -136,7 +136,7 @@ public sealed class ReconcileDoorTests
         index.Receive(holder, SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
 
         PluginBinaries.Touch(data.Plugins.Single(p => p.Name == B.Name).Path);
-        index.NextSnapshotUntil(() => index.Status.Failures.Any(f => f.Name == B.Name), "B's failure");
+        index.NextCheckUntil(() => index.Status.Failures.Any(f => f.Name == B.Name), "B's failure");
 
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.StartsWith("Could not read this plugin", index.Status.Failures.Single(f => f.Name == B.Name).Reason, StringComparison.Ordinal);
@@ -145,14 +145,14 @@ public sealed class ReconcileDoorTests
     [Theory]
     [InlineData(typeof(InvalidOperationException))]
     [InlineData(typeof(OperationCanceledException))]
-    public void APluginWhoseReadWasCutShort_IsReadByTheNextSnapshot_AndListed(Type thrownType)
+    public void APluginWhoseReadWasCutShort_IsReadByTheNextCheck_AndListed(Type thrownType)
     {
         using var data = AReadThenB();
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 1, Faults.InTurn(thrownType)));
         index.Receive(holder, SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
 
-        index.NextSnapshotUntil(() => index.Status.State == LoadOrderState.Ready, "the next snapshot's ready status");
+        index.NextCheckUntil(() => index.Status.State == LoadOrderState.Ready, "the next check's ready status");
 
         Assert.Contains(B, index.Status.IndexedPlugins);
         Assert.Equal(2, index.CountOf(B, "npc_"));
@@ -206,7 +206,7 @@ public sealed class ReconcileDoorTests
         Assert.Equal(LoadOrderState.Failed, index.Status.State);
 
         File.Delete(blocker);
-        index.NextSnapshotUntil(() => index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
+        index.NextCheckUntil(() => index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
         Assert.NotEmpty(index.ListedIn(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
     }
 
@@ -262,7 +262,7 @@ public sealed class ReconcileDoorTests
         index.Receive(holder, snapshot);
         var before = StatusesPublished(notifications).Length;
 
-        index.NextSnapshotUnsettledUntil(() => StatusesPublished(notifications).Length > before, "the retried reconcile's failed status");
+        index.NextCheckUnsettledUntil(() => StatusesPublished(notifications).Length > before, "the retried reconcile's failed status");
         index.Receive(holder, SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Oblivion, []));
 
         var retried = StatusesPublished(notifications)[before..];
@@ -294,7 +294,7 @@ public sealed class ReconcileDoorTests
     }
 
     [Fact]
-    public async Task AnIdenticalResend_AnswersTheVersionAlreadyReady_AndAnnouncesOnlyWhatChangedOnDisk()
+    public async Task AnIdenticalResend_AnswersTheVersionAlreadyReady_AndTheChecksAfterAnnounceOnlyWhatChangedOnDisk()
     {
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("no-op-door").WithPlugin("A.esp").Build();
@@ -306,8 +306,8 @@ public sealed class ReconcileDoorTests
         var before = notifications.Notifications.Count;
 
         holder.Apply(snapshot);
-        await ParkedEqualArrivalFinding(holder, gate, notifications, fx.Plugins[0]);
-        var announced = index.AnnouncedByEqualArrivals(notifications, () => Announcements.Touched(fx.Plugins[0]));
+        await ParkedCheckFinding(index, gate, notifications, fx.Plugins[0]);
+        var announced = index.AnnouncedByChecks(notifications, () => Announcements.Touched(fx.Plugins[0]));
 
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.Equal(first, index.Status.Version);

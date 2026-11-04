@@ -91,8 +91,20 @@ describe('the load order is put again when what Editing read of the plugins chan
   });
 });
 
-describe('the load order is put at every recompute', () => {
-  it('hands the client each snapshot and tells what came of it', async () => {
+describe('the load order is put at a recompute that changed it', () => {
+  it('hands the client each snapshot that changed and tells what came of it', async () => {
+    const { told, toldCount, land, putPluginNames } = wired();
+
+    land(valueWith('A.esp'));
+    await toldCount(1);
+    land(valueWith('B.esp'));
+    await toldCount(2);
+
+    expect(putPluginNames()).toEqual(['A.esp', 'B.esp']);
+    expect(told[1]).toMatchObject({ sent: true, outcome: APPLIED });
+  });
+
+  it('hands the client no snapshot equal to the one mEdit was handed', async () => {
     const { told, toldCount, land, putPluginNames } = wired();
 
     land(valueWith('A.esp'));
@@ -100,8 +112,34 @@ describe('the load order is put at every recompute', () => {
     land(valueWith('A.esp'));
     await toldCount(2);
 
+    expect(putPluginNames()).toEqual(['A.esp']);
+    expect(told[1]).toEqual({ sent: false });
+  });
+
+  it('hands the snapshot again once its put failed', async () => {
+    const { client, toldCount, land, putPluginNames } = wired();
+    client.answerPuts(() => Promise.resolve({ outcome: 'failed', message: 'no' }));
+    land(valueWith('A.esp'));
+    await toldCount(1);
+
+    client.answerPuts(() => Promise.resolve(APPLIED));
+    land(valueWith('A.esp'));
+    await toldCount(2);
+
     expect(putPluginNames()).toEqual(['A.esp', 'A.esp']);
-    expect(told[1]).toMatchObject({ sent: true, outcome: APPLIED });
+  });
+
+  it('hands the snapshot again after a load order the loader refused, so the refusal is told over', async () => {
+    const { told, toldCount, land, putPluginNames } = wired();
+    land(valueWith('A.esp'));
+    await toldCount(1);
+
+    land(REFUSED);
+    land(valueWith('A.esp'));
+    await toldCount(3);
+
+    expect(putPluginNames()).toEqual(['A.esp', 'A.esp']);
+    expect(told[2]).toMatchObject({ sent: true });
   });
 
   it('tells a value without a snapshot as nothing sent, and hands the client nothing', async () => {

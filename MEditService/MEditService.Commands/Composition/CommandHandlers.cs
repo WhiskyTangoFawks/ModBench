@@ -177,7 +177,11 @@ public static class CommandHandlers
         services.AddSingleton(sp => new PutLoadOrderHandler(
             sp.GetRequiredService<IModFolderRepository>(),
             sp.GetRequiredService<LoadOrderHolder>(),
-            sp.GetRequiredService<SchemaReflector>(),
+            sp.GetRequiredService<SchemaReflector>()));
+
+        services.AddSingleton(sp => new SignalChangeHandler(
+            sp.GetRequiredService<LoadOrderHolder>(),
+            sp.GetRequiredService<ISourceAdapter>(),
             new ExternalChangeCheck(
                 sp.GetRequiredService<INotificationPublisher>(),
                 sp.GetRequiredService<IPluginAdapter>(),

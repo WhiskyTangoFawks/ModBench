@@ -24,6 +24,9 @@ internal sealed class OpenedIndex(ServiceProvider container, LoadOrderHolder hol
 
     internal void ClearFilter() => Queries.ClearFilter();
 
+    /// <summary>A change signalled as Signal change signals it, through the source adapter.</summary>
+    internal void SignalChange() => container.GetRequiredService<ISourceAdapter>().SignalChange();
+
     /// <summary>Returns once a write in flight has finished: setting the filter again passes the write
     /// gate every write passes, and a validation announces inside its hold. With no store open, no
     /// write is in flight.</summary>

@@ -116,6 +116,7 @@ try
         .WithTags("Health");
 
     app.MapLoadOrderEndpoints();
+    app.MapChangeSignalEndpoints();
     app.MapPluginEndpoints();
     app.MapModEndpoints();
     app.MapRecordEndpoints(app.Services.GetRequiredService<ILoggerFactory>());

@@ -47,7 +47,7 @@ public sealed class LoadOrderIndexingTests
         var b = fx.Plugins.Single(p => p.Name == "B.esp");
         Reconcile(indexer, holder, fx, [.. fx.Plugins.Select(p => p.Name == "B.esp" ? p with { Winning = false } : p)]);
         PluginBinaries.Touch(b.Path);
-        indexer.NextSnapshot();
+        indexer.NextCheck();
 
         Assert.Equal("A.esm", WinnerOf(indexer, npc));
     }
@@ -122,7 +122,7 @@ public sealed class LoadOrderIndexingTests
         ReDerivations[reDerived](fx);
         var before = indexer.Sequence;
 
-        indexer.NextSnapshotUntil(() => indexer.Sequence > before, "the sequence moving");
+        indexer.NextCheckUntil(() => indexer.Sequence > before, "the sequence moving");
 
         Assert.Equal(before + 1, indexer.Sequence);
     }

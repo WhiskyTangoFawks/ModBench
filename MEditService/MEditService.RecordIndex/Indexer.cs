@@ -14,8 +14,8 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.RecordIndex;
 
-/// <summary>Brings the Store to the load order (ADR-0013), then validates every plugin against its
-/// system of record (ADR-0003). It holds the open plugins, the progress and the Store's scope.</summary>
+/// <summary>Brings the Store to the load order (ADR-0013), and at each change signalled validates every plugin against its
+/// system of record (ADR-0015). It holds the open plugins, the progress and the Store's scope.</summary>
 internal sealed class Indexer : IDisposable
 {
     private readonly LoadOrderHolder _holder;
@@ -126,18 +126,22 @@ internal sealed class Indexer : IDisposable
     private readonly CancellationTokenSource _disposal = new();
 
     private bool _reconcileAsked;
+    private bool _checkAsked;
     private readonly List<string> _handed = [];
     private bool _working;
     private bool _disposed;
     private CancellationTokenSource? _reconcileCancellation;
 
-    // Guards the five fields above. Not _lock, so an arrival never waits on a status read or publish; none
+    // Guards the six fields above. Not _lock, so an arrival never waits on a status read or publish; none
     // of this class's other locks is taken inside it.
     private readonly Lock _turns = new();
 
-    // The arrivals the last whole reconcile read the disk after, guarded by _lock and pulsed on _reconciled, which a
+    // The source writes the last whole check of the disk began after, guarded by _lock and pulsed on _reconciled, which a
     // read after a source write waits on.
-    private long _arrivalReconciled;
+    private long _writesChecked;
+
+    // ADR-0015: a store just opened checks the disk, since no event reports what changed while it was closed. Guarded by _lock.
+    private bool _openedUnchecked;
     private readonly object _reconciled = new();
     private static readonly TimeSpan SourceWriteReadLimit = TimeSpan.FromSeconds(60);
 
@@ -308,12 +312,22 @@ internal sealed class Indexer : IDisposable
     /// <summary>A read met the store's invalidation: reconciling reopens the store (ADR-0003).</summary>
     public void RecoverFromInvalidation() => AskReconcile();
 
-    // ADR-0013, ADR-0015.
+    // ADR-0013.
     private void AskReconcile()
     {
         lock (_turns)
         {
             _reconcileAsked = true;
+            WakeWorker();
+        }
+    }
+
+    // ADR-0015: a signal that arrives while a check waits folds into it.
+    private void AskCheck()
+    {
+        lock (_turns)
+        {
+            _checkAsked = true;
             WakeWorker();
         }
     }
@@ -356,15 +370,16 @@ internal sealed class Indexer : IDisposable
     {
         lock (_turns)
         {
-            if (_disposed || (!_reconcileAsked && _handed.Count == 0))
+            if (_disposed || (!_reconcileAsked && !_checkAsked && _handed.Count == 0))
             {
                 _working = false;
                 return null;
             }
-            if (_reconcileAsked)
+            if (_reconcileAsked || _checkAsked)
             {
-                _reconcileAsked = false;
-                return ReconcileHeld;
+                var check = _checkAsked;
+                (_reconcileAsked, _checkAsked) = (false, false);
+                return () => ReconcileHeld(check);
             }
             List<string> paths = [.. _handed];
             _handed.Clear();
@@ -394,22 +409,22 @@ internal sealed class Indexer : IDisposable
 
     // Disposal is read with the exclusive right held, which Dispose takes after setting it, so no
     // reconcile opens a store after Dispose.
-    private void ReconcileHeld() => Reconcile(() =>
+    private void ReconcileHeld(bool check) => Reconcile(() =>
     {
         lock (_turns) return _disposed ? null : _holder.Held;
-    });
+    }, check);
 
-    // ADR-0013's one verb, then every plugin validated (ADR-0003). The arrival is read once the
+    // ADR-0013's one verb, then, for a check of the disk, every plugin validated (ADR-0015). The arrival is read once the
     // exclusive right is held, so a refill reconciles the load order held then. Null reconciles
     // nothing.
-    private void Reconcile(Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival)
+    private void Reconcile(Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, bool check)
     {
-        long arrivals = 0;
+        long writes = 0;
         bool arrived;
         bool refused;
         try
         {
-            arrived = ReconcileOrRefuse(arrival, ref arrivals, out refused);
+            arrived = ReconcileOrRefuse(arrival, check, ref writes, out refused);
         }
         catch (OperationCanceledException ex)
         {
@@ -421,43 +436,43 @@ internal sealed class Indexer : IDisposable
         {
             if (!refused)
             {
-                lock (_lock) _arrivalReconciled = Math.Max(_arrivalReconciled, arrivals);
+                lock (_lock) _writesChecked = Math.Max(_writesChecked, writes);
             }
             lock (_reconciled) Monitor.PulseAll(_reconciled);
         }
     }
 
-    // ADR-0015, read-your-writes: a source write reaches the record index through the next snapshot, so a read after one waits
-    // for that snapshot's reconcile, and refuses rather than answer the rows from before it.
+    // ADR-0015, read-your-writes: a source write reaches the record index through the next check of the disk, so a read after
+    // one waits for that check, and refuses rather than answer the rows from before it.
     private void AwaitTheReconcileAfterTheLastSourceWrite()
     {
-        var awaited = _holder.ArrivalAwaited;
+        var awaited = _holder.SourceWrites;
         var deadline = _timeProvider.GetUtcNow() + SourceWriteReadLimit;
         lock (_reconciled)
         {
-            while (ArrivalReconciled < awaited)
+            while (WritesChecked < awaited)
             {
                 var remaining = deadline - _timeProvider.GetUtcNow();
                 if (remaining <= TimeSpan.Zero)
                 {
                     throw new IndexNotReadyException(
-                        "mEdit's record index has not read the plugin source mEdit wrote: no load order arrived after the write, " +
-                        $"or its reconcile did not finish{(Status.Message is { } reason ? $" ({reason})" : "")}.");
+                        "mEdit's record index has not read the plugin source mEdit wrote: no change was signalled after the write, " +
+                        $"or its check of the disk did not finish{(Status.Message is { } reason ? $" ({reason})" : "")}.");
                 }
                 Monitor.Wait(_reconciled, remaining < SequencePollInterval ? remaining : SequencePollInterval);
             }
         }
     }
 
-    private long ArrivalReconciled
+    private long WritesChecked
     {
-        get { lock (_lock) return _arrivalReconciled; }
+        get { lock (_lock) return _writesChecked; }
     }
 
     // A superseded reconcile throws and publishes nothing. The closing swap and its publish share one
     // hold of _lock, so no reader sees a version before the status answering it.
     private bool ReconcileOrRefuse(
-        Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, ref long arrivals, out bool refused)
+        Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, bool check, ref long writes, out bool refused)
     {
         _exclusive.Enter();
         var token = CancellationToken.None;
@@ -472,7 +487,7 @@ internal sealed class Indexer : IDisposable
             if (arrival() is not { } resolved) return false;
             var (snapshot, arrived) = resolved;
             version = arrived;
-            arrivals = _holder.Arrivals;
+            writes = _holder.SourceWrites;
             if (_logger.IsEnabled(LogLevel.Debug))
             {
                 _logger.LogDebug("Reconciling load order. DataFolder={DataFolder} Instance={Instance} Plugins={Count} Game={Game}",
@@ -490,9 +505,16 @@ internal sealed class Indexer : IDisposable
                 return true;
             }
             progressed |= ReconcileProgressively(scope, snapshot, token);
+            lock (_lock) check |= _openedUnchecked;
+            if (!check)
+            {
+                writes = 0;
+                return true;
+            }
             failure = ValidateHeld(token, out var busy);
+            if (!busy) lock (_lock) _openedUnchecked = false;
             // A validation the busy gate stopped has not read the disk whole.
-            if (busy) arrivals = 0;
+            if (busy) writes = 0;
             return true;
         }
         catch (Exception ex) when (CancelledBy(ex, token))
@@ -567,7 +589,7 @@ internal sealed class Indexer : IDisposable
         }
         if (current is null) return null;
         if (!_storeFactory.Close(current.Store))
-            return IndexWriteGate.NotDrained(NotReopened, "It is retried with the next load order.");
+            return IndexWriteGate.NotDrained(NotReopened, "It is retried at the next check of the disk.");
 
         var snapshot = current.LoadOrder;
         var held = current.Held;
@@ -578,7 +600,7 @@ internal sealed class Indexer : IDisposable
                 snapshot.GameRelease, snapshot.InstanceRoot, () => held.OpenedPlugins,
                 () => Status.State == LoadOrderState.Ready, out var heldElsewhere);
             if (fresh is null) return $"{NotReopened}: {heldElsewhere ?? "another process holds it"}";
-            lock (_lock) _scope = ScopeOn(held, fresh, snapshot);
+            lock (_lock) (_scope, _openedUnchecked) = (ScopeOn(held, fresh, snapshot), true);
         }
         PublishStatus();
         return null;
@@ -627,7 +649,7 @@ internal sealed class Indexer : IDisposable
         }
         if (!_storeFactory.Close(leaving?.Store, snapshot.InstanceRoot))
         {
-            failure = IndexWriteGate.NotDrained(NotReopened, "It is retried with the next load order.");
+            failure = IndexWriteGate.NotDrained(NotReopened, "It is retried at the next check of the disk.");
             return null;
         }
 
@@ -655,6 +677,7 @@ internal sealed class Indexer : IDisposable
                 _activeCount = 0;
                 _collisionFailures = [];
                 _scope = scope;
+                _openedUnchecked = true;
             }
             fresh = null;
         }
@@ -1146,9 +1169,8 @@ internal sealed class Indexer : IDisposable
         $"Could not validate this plugin's {(holdsTree ? "source tree" : "binary")} ({reason}). Still showing " +
         "what was last read from it.";
 
-    // ADR-0003: the status answering the version is published once the plugins are validated, and a
-    // reconcile that changed the status reads Reconciling until then. The message when validation
-    // failed outright, which becomes status data.
+    // ADR-0015: a check of the disk that changed the status reads Reconciling until the plugins are validated. The message
+    // when validation failed outright, which becomes status data.
     private string? ValidateHeld(CancellationToken token, out bool busy) => ValidationFailure(() => ValidateIndex(token), token, out busy);
 
     private string? ValidationFailure(Action validate, CancellationToken token, out bool busy)
@@ -1166,15 +1188,15 @@ internal sealed class Indexer : IDisposable
         }
         catch (IndexWriteGateTimeoutException ex)
         {
-            // Busy, not broken: validation is idempotent, and the next snapshot validates again.
-            _logger.LogWarning(ex, "Could not validate the record index while another write held it; it is re-checked at the next snapshot");
+            // Busy, not broken: validation is idempotent, and the next check of the disk validates again.
+            _logger.LogWarning(ex, "Could not validate the record index while another write held it; the next check of the disk validates it");
             busy = true;
             return null;
         }
         catch (Exception ex) when (!CancelledBy(ex, token))
         {
             // Every type, out of memory included: the failure becomes status data (plugins.md,
-            // States, story 6), and the next snapshot tries again.
+            // States, story 6), and the next check of the disk tries again.
             _logger.LogError(ex, "Validating the record index failed unexpectedly");
             return FailureAfterReopening(ex);
         }
@@ -1253,6 +1275,7 @@ internal sealed class Indexer : IDisposable
     {
         _holder.Arrived += OnArrived;
         _unsaved.Arrived += ValidateTreesHolding;
+        _source.ChangeSignalled += AskCheck;
     }
 
     private void OnArrived(LoadOrderSnapshot snapshot, long version) => AskReconcile();
@@ -1280,6 +1303,7 @@ internal sealed class Indexer : IDisposable
     {
         _holder.Arrived -= OnArrived;
         _unsaved.Arrived -= ValidateTreesHolding;
+        _source.ChangeSignalled -= AskCheck;
 
         lock (_turns) _disposed = true;
 

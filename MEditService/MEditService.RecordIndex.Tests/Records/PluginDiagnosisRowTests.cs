@@ -52,7 +52,7 @@ public sealed class PluginDiagnosisRowTests : IDisposable
         Assert.Single(index.Queries.GetLoadOrderDiagnoses().Value());
 
         RepairOnDiskAsAnotherToolWouldWithTheSameNameAndCleanBytes();
-        index.NextSnapshot();
+        index.NextCheck();
 
         Assert.Empty(index.Queries.GetLoadOrderDiagnoses().Value());
     }

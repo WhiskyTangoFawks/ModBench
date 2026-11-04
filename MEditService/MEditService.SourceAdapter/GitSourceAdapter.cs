@@ -34,6 +34,10 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved, TimeProvider time
 
     public bool TreeHolds(RegisteredPlugin plugin, string path) => SourceRepository.TreeHolds(plugin, Path.GetFullPath(path));
 
+    public void SignalChange() => ChangeSignalled?.Invoke();
+
+    public event Action? ChangeSignalled;
+
     public RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path) =>
         SourceRepository.RecordOfFile(loadOrder, path, Files(), _stamps);
 

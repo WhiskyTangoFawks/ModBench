@@ -31,13 +31,13 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         Index.Queries.GetCellChildRecords(_mod.Plugin, cellKey).Value().Temporary
             .Any(c => c.FormKey == navmeshKey && c.RecordType == "navm");
 
-    private void ChangeFormIdWithATwoSidedPutAndRemoveThenNextSnapshot(string oldFormKey, string newFormKey, string newBody)
+    private void ChangeFormIdWithATwoSidedPutAndRemoveThenNextCheck(string oldFormKey, string newFormKey, string newBody)
     {
         var repository = SourceMods.RepositoryOf(_mod.Entry);
         var current = Index.DocumentOf(oldFormKey, _mod.Plugin);
         repository.Put(_mod.Plugin, new SourceDocument(newFormKey, current.RecordType, current.EditorId, newBody)).Wrote();
         repository.Remove(_mod.Plugin, new RecordIdentity(oldFormKey, current.RecordType, current.EditorId)).Wrote();
-        _mod.Index.NextSnapshot();
+        _mod.Index.NextCheck();
     }
 
     [Fact]
@@ -50,7 +50,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         var newBody = before.Replace(oldCellKey, newCellKey, StringComparison.Ordinal);
         Assert.NotEqual(before, newBody);
 
-        ChangeFormIdWithATwoSidedPutAndRemoveThenNextSnapshot(oldCellKey, newCellKey, newBody);
+        ChangeFormIdWithATwoSidedPutAndRemoveThenNextCheck(oldCellKey, newCellKey, newBody);
 
         Assert.True(HoldsNavmesh(newCellKey, navmesh));
         Assert.Equal("temporary", Index.PlacementGroupIn(_mod.Plugin, newCellKey, _mod.TemporaryRef));
@@ -90,7 +90,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
     }
 
     [Fact]
-    public void ChangingTheFormIdOfAnEmbeddedNavigationMesh_WithoutTheNextSnapshotsValidation_LeavesTheStaleRowInPlace()
+    public void ChangingTheFormIdOfAnEmbeddedNavigationMesh_WithoutTheNextChecksValidation_LeavesTheStaleRowInPlace()
     {
         var cellKey = _mod.EmbedCell;
         var oldNavmeshKey = EmbeddedNavmeshKeyReadFromTheLiveChildRows;
@@ -115,7 +115,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
     private static void RederiveTheWholePluginBecauseParentWorldspaceIsDerivedByWalkingTheWholeBlockTree(OneExteriorCellWorldspaceFixture fixture)
     {
         PluginBinaries.Touch(fixture.Entry.Path);
-        fixture.Index.NextSnapshot();
+        fixture.Index.NextCheck();
     }
 
     [Fact]

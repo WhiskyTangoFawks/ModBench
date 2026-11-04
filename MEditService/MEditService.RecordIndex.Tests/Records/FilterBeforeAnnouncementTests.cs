@@ -129,7 +129,7 @@ public sealed class FilterBeforeAnnouncementTests : IDisposable
         _announces = n => n is PluginChangedNotification changed && changed.Plugin.Equals(resident.Key);
         _failingAt = "Swept winners";
 
-        _index.NextSnapshotUnsettledUntil(() => !_listed.IsEmpty, "the plugin's announcement");
+        _index.NextCheckUnsettledUntil(() => !_listed.IsEmpty, "the plugin's announcement");
 
         Assert.True(_failed);
         AssertEveryAnnouncementFoundTheOneMatch();

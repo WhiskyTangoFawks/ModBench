@@ -46,19 +46,40 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
         Task.Run(() => _index.Queries.GetRenderedDocument(_compiledPlugin.Key, _npc));
 
     [Fact]
-    public async Task AReadAfterASourceWrite_AnswersOnceTheNextSnapshotIsReconciled()
+    public async Task AReadAfterASourceWrite_AnswersOnceTheNextCheckOfTheDiskEnds()
     {
         var read = Read();
         var first = await Task.WhenAny(read, Task.Delay(TimeSpan.FromMilliseconds(500)));
 
-        _holder.Apply(_holder.Current);
+        _index.SignalChange();
 
         Assert.NotSame(read, first);
         Assert.Contains("\"Written\"", (await read.WaitAsync(Generous)).Value()?.Text, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task AReadAfterASourceWrite_WithNoSnapshotAfterIt_IsRefusedOnceItsWaitExpires_NamingWhy()
+    public async Task AReadAfterASourceWrite_WaitsPastALoadOrderThatArrives()
+    {
+        var read = Read();
+
+        _index.Receive(_holder, SnapshotPlugins.Snapshot(
+            _fixture.DataFolder, _fixture.InstanceRoot, GameRelease.Fallout4, [.. _fixture.Plugins, NotCompiledPlugin()]));
+        var first = await Task.WhenAny(read, Task.Delay(TimeSpan.FromMilliseconds(500)));
+
+        Assert.NotSame(read, first);
+        _index.SignalChange();
+        Assert.Contains("\"Written\"", (await read.WaitAsync(Generous)).Value()?.Text, StringComparison.Ordinal);
+    }
+
+    private LoadOrderEntry NotCompiledPlugin()
+    {
+        var path = Path.Combine(_fixture.DataFolder, "NotCompiled.esp");
+        PluginBinaries.Rewrite(path, mod => mod.Npcs.AddNew("NotCompiledNpc"));
+        return new LoadOrderEntry("NotCompiled.esp", path, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true);
+    }
+
+    [Fact]
+    public async Task AReadAfterASourceWrite_WithNoCheckAfterIt_IsRefusedOnceItsWaitExpires_NamingWhy()
     {
         var read = Read();
 
@@ -66,16 +87,17 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
 
         var refused = (await read.WaitAsync(Generous)).Refused();
         Assert.Equal(IndexRefusal.IndexNotReady, refused.Refusal);
-        Assert.Contains("no load order arrived after the write", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("no change was signalled after the write", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task ANameResolvedAfterASourceWrite_IsResolvedAgainstTheNextSnapshot()
+    public async Task ANameResolvedAfterASourceWrite_IsResolvedAgainstTheLoadOrderHeldAtTheNextCheck()
     {
         var resolved = Task.Run(() => _index.Queries.ResolveNames([new NameQuery(CompiledPlugin, null)]));
         await Task.Delay(TimeSpan.FromMilliseconds(500));
 
         _holder.Apply(SnapshotPlugins.Snapshot(_fixture.DataFolder, _fixture.InstanceRoot, GameRelease.Fallout4, []));
+        _index.SignalChange();
 
         var refused = (await resolved.WaitAsync(Generous)).Refused();
         Assert.Equal(IndexRefusal.NameRefused, refused.Refusal);

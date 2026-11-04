@@ -4,7 +4,7 @@ using MEditService.TestSupport;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
-/// <summary>What an arrival announces, as a test waits for it (ADR-0015).</summary>
+/// <summary>What a check of the disk announces, as a test waits for it (ADR-0015).</summary>
 internal static class Announcements
 {
     internal static Predicate<INotification> PluginChanged(LoadOrderEntry plugin) =>
@@ -16,17 +16,17 @@ internal static class Announcements
     internal static Predicate<INotification> FailureNamed(string plugin) =>
         n => n is LoadOrderStatusNotification status && status.Status.Failures.Any(f => f.Name == plugin);
 
-    /// <summary>Two equal arrivals, each answered once the change it found is announced. An arrival
+    /// <summary>Two checks of the disk, each answered once the change it found is announced. A check
     /// validates every plugin before it announces, so a plugin neither announced is known quiet.</summary>
-    internal static IReadOnlyList<INotification> AnnouncedByEqualArrivals(
+    internal static IReadOnlyList<INotification> AnnouncedByChecks(
         this OpenedIndex index, InMemoryNotificationPublisher notifications, Func<Predicate<INotification>> change)
     {
         var start = notifications.Notifications.Count;
-        for (var arrival = 0; arrival < 2; arrival++)
+        for (var check = 0; check < 2; check++)
         {
             var announced = change();
             var before = notifications.Notifications.Count;
-            index.NextSnapshotUntil(() => notifications.Since(before).Any(n => announced(n)), "the change the arrival found");
+            index.NextCheckUntil(() => notifications.Since(before).Any(n => announced(n)), "the change the check found");
         }
         return notifications.Since(start);
     }

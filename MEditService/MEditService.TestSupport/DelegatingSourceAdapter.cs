@@ -31,6 +31,14 @@ public abstract class DelegatingSourceAdapter(ISourceAdapter inner) : ISourceAda
 
     public virtual bool TreeHolds(RegisteredPlugin plugin, string path) => inner.TreeHolds(plugin, path);
 
+    public void SignalChange() => inner.SignalChange();
+
+    public event Action? ChangeSignalled
+    {
+        add => inner.ChangeSignalled += value;
+        remove => inner.ChangeSignalled -= value;
+    }
+
     public virtual RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path) => inner.RecordOfFile(loadOrder, path);
 
     public virtual string FileNameOf(RecordIdentity identity) => inner.FileNameOf(identity);

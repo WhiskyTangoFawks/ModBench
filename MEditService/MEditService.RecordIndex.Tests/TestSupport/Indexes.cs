@@ -91,31 +91,30 @@ internal static class Indexes
         return index;
     }
 
-    /// <summary>The held load order arriving again (ADR-0013), answered once
-    /// <paramref name="announced"/> holds, its status is out and its validation has ended: an
-    /// arrival that re-derived nothing shows that only in the write gate.</summary>
-    internal static void NextSnapshotUntil(this OpenedIndex index, Func<bool> announced, string what)
+    /// <summary>A change signalled (ADR-0015), answered once <paramref name="announced"/> holds, its status is out and its
+    /// validation has ended: a check that re-derived nothing shows that only in the write gate.</summary>
+    internal static void NextCheckUntil(this OpenedIndex index, Func<bool> announced, string what)
     {
-        index.NextSnapshotUnsettledUntil(announced, what);
+        index.NextCheckUnsettledUntil(announced, what);
         index.Settled();
     }
 
-    /// <summary>The arrival, answered once <paramref name="announced"/> holds and its status is out:
+    /// <summary>The check, answered once <paramref name="announced"/> holds and its status is out:
     /// no pass through the write gate, which would re-apply the filter a test may be asserting on.
     /// </summary>
-    internal static void NextSnapshotUnsettledUntil(this OpenedIndex index, Func<bool> announced, string what)
+    internal static void NextCheckUnsettledUntil(this OpenedIndex index, Func<bool> announced, string what)
     {
-        index.Holder.Apply(index.Holder.Current);
+        index.SignalChange();
         Waits.Reached(announced, what);
-        Waits.Reached(() => index.Status.State != LoadOrderState.Reconciling, "the arrival's status");
+        Waits.Reached(() => index.Status.State != LoadOrderState.Reconciling, "the check's status");
     }
 
-    /// <summary>The held load order arriving again, answered once the rows it changed are announced
-    /// as the sequence moving, which a projection does after it has re-applied the filter.</summary>
-    internal static void NextSnapshot(this OpenedIndex index)
+    /// <summary>A change signalled, answered once the rows it changed are announced as the sequence moving, which a
+    /// projection does after it has re-applied the filter.</summary>
+    internal static void NextCheck(this OpenedIndex index)
     {
         var before = index.Sequence;
-        index.NextSnapshotUnsettledUntil(() => index.Sequence > before, "the sequence moving");
+        index.NextCheckUnsettledUntil(() => index.Sequence > before, "the sequence moving");
     }
 
     /// <summary>The SQL door: the filter is arbitrary SQL yielding form_key, so what it

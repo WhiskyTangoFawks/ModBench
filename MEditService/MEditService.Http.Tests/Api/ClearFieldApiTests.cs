@@ -19,12 +19,12 @@ public sealed class ClearFieldApiTests : HostedTests
             .BuildScattered());
         (await Client.PutLoadOrder(fx, Origin)).EnsureSuccessStatusCode();
         (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(fx, Origin);
+        await Client.NextCheck(fx, Origin);
         await Client.PluginReportsCompiledPlugin(Plugin);
         var created = await Client.CreateRecord(Plugin, Origin, "npc_");
         created.EnsureSuccessStatusCode();
         var formKey = JsonStrings.Of((await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("formKey"));
-        await Client.NextSnapshot(fx, Origin);
+        await Client.NextCheck(fx, Origin);
         await Wire.Eventually(
             async () => (await Client.GetAsync(new Uri($"/records/{Uri.EscapeDataString(formKey)}", UriKind.Relative))).IsSuccessStatusCode,
             "the created record reached the record index");
@@ -33,12 +33,12 @@ public sealed class ClearFieldApiTests : HostedTests
         async Task<bool> HoldsHeight() => (await Client.GetStringAsync(url)).Contains("0.75", StringComparison.Ordinal);
 
         (await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(fx, Origin);
+        await Client.NextCheck(fx, Origin);
         await Wire.Eventually(HoldsHeight, "the set reached the record index");
 
         var cleared = await Client.Edit(formKey, Plugin, Origin, "HeightMax", JsonDocument.Parse("null").RootElement);
         Assert.True(cleared.IsSuccessStatusCode, await cleared.Content.ReadAsStringAsync());
-        await Client.NextSnapshot(fx, Origin);
+        await Client.NextCheck(fx, Origin);
 
         await Wire.Eventually(async () => !await HoldsHeight(), "the clear reached the record index");
     }

@@ -69,7 +69,7 @@ public sealed class IndexedAsOnDiskTests
     }
 
     [Fact]
-    public void ACompiledPluginABuildRewrote_IsAsOnDisk_OnceTheNextSnapshotValidatesItsTree()
+    public void ACompiledPluginABuildRewrote_IsAsOnDisk_OnceTheNextCheckValidatesItsTree()
     {
         using var fixture = new PluginFixtureBuilder("as-on-disk-built")
             .WithPlugin("Fixture.esp", m => m.Npcs.AddNew("FixtureNpc"), origin: "FixtureMod")
@@ -81,12 +81,12 @@ public sealed class IndexedAsOnDiskTests
         PluginBinaries.Touch(mod.Path);
         Assert.Equal(PluginIndexing.NotYet, index.Queries.GetPluginIndexedAsOnDisk(mod.Key).Value().State);
 
-        index.NextSnapshotUntil(
+        index.NextCheckUntil(
             () => index.Queries.GetPluginIndexedAsOnDisk(mod.Key).Value().State == PluginIndexing.AsOnDisk, "the rewritten binary as on disk");
     }
 
     [Fact]
-    public void ACompiledPluginABuildRewroteFromAnEditedTree_IsAsOnDisk_OnceTheNextSnapshotRefreshesTheEdit()
+    public void ACompiledPluginABuildRewroteFromAnEditedTree_IsAsOnDisk_OnceTheNextCheckRefreshesTheEdit()
     {
         FormKey npc = default;
         using var fixture = new PluginFixtureBuilder("as-on-disk-built-edited")
@@ -98,7 +98,7 @@ public sealed class IndexedAsOnDiskTests
 
         mod.HandEdit(index.DocumentOf(npc.ToString(), mod.Key), "\"FixtureNpc\"", "\"EditedBeforeTheBuild\"");
         PluginBinaries.Touch(mod.Path);
-        index.NextSnapshotUntil(() => index.CopyIn(npc.ToString(), mod.Key)?.EditorId == "EditedBeforeTheBuild", "the edit refreshed");
+        index.NextCheckUntil(() => index.CopyIn(npc.ToString(), mod.Key)?.EditorId == "EditedBeforeTheBuild", "the edit refreshed");
 
         Assert.Equal(PluginIndexing.AsOnDisk, index.Queries.GetPluginIndexedAsOnDisk(mod.Key).Value().State);
     }
@@ -116,7 +116,7 @@ public sealed class IndexedAsOnDiskTests
 
         mod.HandEdit(index.DocumentOf(npc.ToString(), mod.Key), "\"FixtureNpc\"", "\"EditedMidBuild\"");
         File.Delete(mod.Path);
-        index.NextSnapshotUntil(() => index.CopyIn(npc.ToString(), mod.Key)?.EditorId == "EditedMidBuild", "the edit refreshed");
+        index.NextCheckUntil(() => index.CopyIn(npc.ToString(), mod.Key)?.EditorId == "EditedMidBuild", "the edit refreshed");
 
         Assert.Equal(PluginIndexing.NotYet, index.Queries.GetPluginIndexedAsOnDisk(mod.Key).Value().State);
     }

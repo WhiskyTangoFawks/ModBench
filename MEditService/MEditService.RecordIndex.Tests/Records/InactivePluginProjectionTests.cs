@@ -61,7 +61,7 @@ public sealed class InactivePluginProjectionTests : IDisposable
         Reconcile(active: false);
 
         _mod.HandEdit(document, "\"FixtureNpc\"", "\"RenamedByHand\"");
-        _index.NextSnapshot();
+        _index.NextCheck();
         Reconcile(active: true);
 
         Assert.Equal("RenamedByHand", _index.CopyIn(_npc, _mod.Key)?.EditorId);
@@ -73,9 +73,9 @@ public sealed class InactivePluginProjectionTests : IDisposable
         var document = _index.DocumentOf(_npc, _mod.Key);
         Reconcile(active: false);
         _mod.HandEdit(document, "\"FixtureNpc\"", "\"RenamedByHand\"");
-        _index.NextSnapshot();
+        _index.NextCheck();
 
-        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _partner.RenamedByHand(_index));
+        var announced = _index.AnnouncedByChecks(_notifications, () => _partner.RenamedByHand(_index));
 
         Assert.DoesNotContain(announced, Announcements.RowsChanged(_npc));
     }
@@ -123,7 +123,7 @@ public sealed class InactivePluginProjectionTests : IDisposable
     {
         Reconcile(active: false);
 
-        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _partner.RenamedByHand(_index));
+        var announced = _index.AnnouncedByChecks(_notifications, () => _partner.RenamedByHand(_index));
 
         Assert.DoesNotContain(announced, Announcements.RowsChanged(_npc));
         Assert.DoesNotContain(announced, Announcements.PluginChanged(_mod));

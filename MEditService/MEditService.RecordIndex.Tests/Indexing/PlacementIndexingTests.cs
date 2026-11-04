@@ -40,7 +40,7 @@ public class PlacementIndexingTests
         var key = new PluginAddress("ReindexPlacement.esp", PluginOrigin.DataDirectory);
 
         PluginBinaries.Touch(fixture.Plugins.Single().Path);
-        index.NextSnapshot();
+        index.NextCheck();
 
         var blocks = index.Queries.GetWorldspaceBlocks(key, wrld.ToString()).Value();
         Assert.Single(blocks.Blocks.SelectMany(b => b.SubBlocks).SelectMany(s => s.Cells), c => c.FormKey == cell.ToString());

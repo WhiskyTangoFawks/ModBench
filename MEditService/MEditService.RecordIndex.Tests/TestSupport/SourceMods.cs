@@ -91,21 +91,21 @@ internal static class SourceMods
     }
 
     /// <summary>The working tree's copy of <paramref name="document"/> replaced by
-    /// <paramref name="body"/>, then the next snapshot.</summary>
+    /// <paramref name="body"/>, then the next check of the disk.</summary>
     internal static void Edit(this OpenedIndex index, LoadOrderEntry entry, RecordDetail document, string body)
     {
         RepositoryOf(entry).Put(entry.Key, new SourceDocument(document.FormKey, document.RecordType, document.EditorId, body)).Wrote();
-        index.NextSnapshot();
+        index.NextCheck();
     }
 
     /// <summary>The working tree's copy of <paramref name="document"/> put under
-    /// <paramref name="newEditorId"/>, which moves it to the name that computes, then the next snapshot.</summary>
+    /// <paramref name="newEditorId"/>, which moves it to the name that computes, then the next check of the disk.</summary>
     internal static void Rename(
         this OpenedIndex index, LoadOrderEntry entry, RecordDetail document, string newEditorId, string body)
     {
         RepositoryOf(entry).Put(
             entry.Key, new SourceDocument(document.FormKey, document.RecordType, newEditorId, body)).Wrote();
-        index.NextSnapshot();
+        index.NextCheck();
     }
 
     /// <summary>The working tree's copy of <paramref name="document"/> put under <paramref name="newEditorId"/>, written from
@@ -115,15 +115,15 @@ internal static class SourceMods
             entry, document, newEditorId,
             entry.SourceTextOf(document).Replace($"\"{document.EditorId}\"", $"\"{newEditorId}\"", StringComparison.Ordinal));
 
-    /// <summary>A document the working tree gains, then the next snapshot.</summary>
+    /// <summary>A document the working tree gains, then the next check of the disk.</summary>
     internal static void Create(this OpenedIndex index, LoadOrderEntry entry, string formKey, string recordType, string? editorId, string body)
     {
         RepositoryOf(entry).Put(entry.Key, new SourceDocument(formKey, recordType, editorId, body)).Wrote();
-        index.NextSnapshot();
+        index.NextCheck();
     }
 
-    /// <summary>Several working-tree changes made the Source repository's own way, then the next
-    /// snapshot's one validation (ADR-0003). A null body is the document taken out.</summary>
+    /// <summary>Several working-tree changes made the Source repository's own way, then the next check of the disk's one
+    /// validation (ADR-0015). A null body is the document taken out.</summary>
     internal static void Project(
         this OpenedIndex index, LoadOrderEntry entry, IReadOnlyList<(string FormKey, string? Body)> deltas)
     {
@@ -136,14 +136,13 @@ internal static class SourceMods
             else
                 repository.Put(entry.Key, new SourceDocument(formKey, current.RecordType, current.EditorId, body)).Wrote();
         }
-        index.NextSnapshot();
+        index.NextCheck();
     }
 
-    /// <summary>The working tree's copy of <paramref name="document"/> taken out, then the next
-    /// snapshot.</summary>
+    /// <summary>The working tree's copy of <paramref name="document"/> taken out, then the next check of the disk.</summary>
     internal static void Delete(this OpenedIndex index, LoadOrderEntry entry, RecordDetail document)
     {
         RepositoryOf(entry).Remove(entry.Key, new RecordIdentity(document.FormKey, document.RecordType, document.EditorId)).Wrote();
-        index.NextSnapshot();
+        index.NextCheck();
     }
 }

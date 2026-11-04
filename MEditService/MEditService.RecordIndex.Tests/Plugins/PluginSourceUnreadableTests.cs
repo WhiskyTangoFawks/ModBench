@@ -103,7 +103,7 @@ public sealed class PluginSourceUnreadableTests : IDisposable
         Assert.Equal("EditedInTheTree", index.DocumentOf(_npc, Plugin).EditorId);
 
         BackupOfTheNpcDocumentClaimingItsFormKeyAgain();
-        index.NextSnapshotUntil(
+        index.NextCheckUntil(
             () => index.ReadFromItsPluginFileForItsUnreadableSource(Plugin), "the plugin file read in its place");
 
         Assert.Equal(NpcEditorId, index.DocumentOf(_npc, Plugin).EditorId);
@@ -111,24 +111,24 @@ public sealed class PluginSourceUnreadableTests : IDisposable
     }
 
     [Fact]
-    public void APluginSourceMended_IsReadFromItsTreeAgain_AtTheNextSnapshot()
+    public void APluginSourceMended_IsReadFromItsTreeAgain_AtTheNextCheck()
     {
         using var index = Reconciled();
         var npc = index.DocumentOf(_npc, Plugin);
         index.Edit(_entry, npc, index.BodyOf(_npc, Plugin).Replace(NpcEditorId, "EditedInTheTree", StringComparison.Ordinal));
         var backup = BackupOfTheNpcDocumentClaimingItsFormKeyAgain();
-        index.NextSnapshotUntil(
+        index.NextCheckUntil(
             () => index.ReadFromItsPluginFileForItsUnreadableSource(Plugin), "the plugin file read in its place");
 
         File.Delete(backup);
-        index.NextSnapshotUntil(() => index.ReadFromItsPluginSource(Plugin), "the tree read again");
+        index.NextCheckUntil(() => index.ReadFromItsPluginSource(Plugin), "the tree read again");
 
         Assert.Equal("EditedInTheTree", index.DocumentOf(_npc, Plugin).EditorId);
         Assert.Contains("belongs at", Assert.Single(index.SourceProblems()).Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void APluginSourceWrittenWhereThereWasNone_IsReadFromItsTree_AtTheNextSnapshot()
+    public void APluginSourceWrittenWhereThereWasNone_IsReadFromItsTree_AtTheNextCheck()
     {
         var aside = Path.Combine(_fixture.InstanceRoot, "aside");
         Directory.Move(SourceRoot, aside);
@@ -137,7 +137,7 @@ public sealed class PluginSourceUnreadableTests : IDisposable
 
         Directory.Move(aside, SourceRoot);
 
-        index.NextSnapshotUntil(() => index.ReadFromItsPluginSource(Plugin), "the tree read");
+        index.NextCheckUntil(() => index.ReadFromItsPluginSource(Plugin), "the tree read");
     }
 
     [Fact]
@@ -149,7 +149,7 @@ public sealed class PluginSourceUnreadableTests : IDisposable
 
         Directory.Move(SourceRoot, PluginSourceRoot.In(_entry.ModFolderOf(), "Renamed.esp"));
 
-        index.NextSnapshotUntil(
+        index.NextCheckUntil(
             () => index.ReadFromItsPluginFileForItsUnreadableSource(Plugin), "the plugin file read in its place");
         Assert.Equal(NpcEditorId, index.DocumentOf(_npc, Plugin).EditorId);
     }

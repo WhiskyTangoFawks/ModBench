@@ -136,7 +136,8 @@ class HttpMEditClient implements MEditClient {
       onReconnected: (listener) => this.notifications.onReconnected(listener),
       start: () => this.lifecycle.start(),
       stop: () => this.lifecycle.stop(),
-      put: (snapshot, signal) => this.putLoadOrder(snapshot, signal),
+      put: (snapshot, signal, answered) => this.putLoadOrder(snapshot, signal, answered),
+      signalChange: () => this.postSignalChange(),
     });
     announceAfterReopen(this.loadOrder, this.notifications);
     this.handOver = createUnsavedHandOver({
@@ -183,6 +184,7 @@ class HttpMEditClient implements MEditClient {
 
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> { return this.loadOrder.send(snapshot); }
   latestLoadOrder(): Promise<LoadOrderOutcome | undefined> { return this.loadOrder.latest(); }
+  signalChange(): void { this.loadOrder.signalChange(); }
   onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void {
     return this.loadOrder.onResent(listener);
   }
@@ -299,9 +301,19 @@ class HttpMEditClient implements MEditClient {
     }
   }
 
+  // ADR-0015. A signal mEdit never heard is told in the log: the next one checks the disk all the same.
+  private async postSignalChange(): Promise<void> {
+    try {
+      const { error, response } = await this.apiClient.POST('/signal-change', {});
+      if (!response.ok) this.log.error(`[HttpMEditClient] signalChange failed (${response.status}): ${errorText(error)}`);
+    } catch (e) {
+      this.log.error(`[HttpMEditClient] signalChange threw: ${errorMessage(e)}`);
+    }
+  }
+
   // `instanceRoot` scopes the backend's index (ADR-0010). The signal aborts the PUT itself rather
   // than leaving it to notice a dead socket.
-  private async putLoadOrder(snapshot: LoadOrderSnapshot, signal: AbortSignal): Promise<LoadOrderOutcome> {
+  private async putLoadOrder(snapshot: LoadOrderSnapshot, signal: AbortSignal, answered: () => void): Promise<LoadOrderOutcome> {
     // The backend publishes its first tick as this PUT lands, so a PUT that outran the stream
     // loses every tick published before it connects — and with them the progressive chevrons.
     await this.notifications.whenConnected();
@@ -329,6 +341,7 @@ class HttpMEditClient implements MEditClient {
     }
 
     const { error, response, data } = result;
+    answered();
     if (!response.ok || !data) {
       unsubscribe();
       const text = errorText(error);

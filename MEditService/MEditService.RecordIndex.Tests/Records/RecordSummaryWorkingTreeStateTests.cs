@@ -35,7 +35,7 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
         index.Queries.GetRecords(["npc_"], _baseKey, search: null, limit: 50, offset: 0).Value();
 
     [Fact]
-    public void AnEditCommittedOutsideModbench_IsListedUnchanged_OnTheNextArrival()
+    public void AnEditCommittedOutsideModbench_IsListedUnchanged_OnTheNextCheck()
     {
         using var index = Indexes.Reconciled(_fixture);
         var edited = _editedFormKey.ToString();
@@ -45,7 +45,7 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
 
         _base.Git("add", "-A");
         _base.Git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "outside");
-        index.NextSnapshot();
+        index.NextCheck();
 
         Assert.Equal(WorkingTreeState.None, SummaryFor(Listing(index), edited).WorkingTreeState);
     }
@@ -59,13 +59,13 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
         index.Edit(_base, committed, index.BodyOf(edited, _baseKey).Replace("EditedOriginal", "EditedNew", StringComparison.Ordinal));
         using (new FileStream(_base.SourceFileOf(committed), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
         {
-            index.NextSnapshotUntil(
+            index.NextCheckUntil(
                 () => index.ReadFromItsPluginFileForItsUnreadableSource(_baseKey), "the binary read in the tree's place");
 
             Assert.Equal(WorkingTreeState.None, SummaryFor(Listing(index), edited).WorkingTreeState);
         }
 
-        index.NextSnapshotUntil(() => index.ReadFromItsPluginSource(_baseKey), "the tree read again");
+        index.NextCheckUntil(() => index.ReadFromItsPluginSource(_baseKey), "the tree read again");
 
         Assert.Equal(WorkingTreeState.Modified, SummaryFor(Listing(index), edited).WorkingTreeState);
     }

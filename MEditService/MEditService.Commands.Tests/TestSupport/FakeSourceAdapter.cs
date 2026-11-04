@@ -57,6 +57,10 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
     public bool TreeHolds(RegisteredPlugin plugin, string path) => throw Unreached();
 
+    public void SignalChange() => ChangeSignalled?.Invoke();
+
+    public event Action? ChangeSignalled;
+
     public RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path) => throw Unreached();
 
     public string FileNameOf(RecordIdentity identity) => throw Unreached();

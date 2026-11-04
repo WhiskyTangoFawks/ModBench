@@ -21,7 +21,7 @@ public sealed class DetectExternalChangeTraceTests : HostedTests
         var fx = Owned(OneMod());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(fx);
+        await Client.NextCheck(fx);
         await Client.PluginReportsCompiledPlugin(Plugin);
         return fx;
     }
@@ -35,7 +35,7 @@ public sealed class DetectExternalChangeTraceTests : HostedTests
         OtherTool.WritesThePlugin(
             fx.Plugins.Single(p => p.Origin == Origin).Path,
             mod => mod.Npcs.AddNew(Npc).HeightMax = 0.9f);
-        await Client.NextSnapshot(fx);
+        await Client.NextCheck(fx);
 
         var change = (await stream.EventsUntil("external-change", NamesThePlugin))[^1];
         Assert.Equal(Origin, change.GetProperty("origin").GetString());

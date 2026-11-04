@@ -93,7 +93,7 @@ public sealed class ContainerChildIndexingTests : IDisposable
         Assert.NotEmpty(Children(index, _questFk));
 
         File.Delete(_fixture.Plugins.Single().Path);
-        index.NextSnapshot();
+        index.NextCheck();
 
         Assert.Empty(Children(index, _questFk));
         Assert.Empty(Children(index, _topic0Fk));

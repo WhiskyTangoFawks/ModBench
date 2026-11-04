@@ -234,8 +234,11 @@ internal abstract class SourceRepositoryGit
     }
 
     // A loose ref is a file, until git packs it into packed-refs.
-    private bool RefIsStored(string gitRef) =>
-        File.Exists(Path.Combine(_gitDir, gitRef)) || PackedRefs(_gitDir).Contains(gitRef);
+    private bool RefIsStored(string gitRef)
+    {
+        var commonDir = CommonDirectory();
+        return File.Exists(Path.Combine(commonDir, gitRef)) || PackedRefs(commonDir).Contains(gitRef);
+    }
 
     /// <summary>HEAD and the index of <see cref="FolderPaths"/> back at <paramref name="head"/>; with none, the branch is
     /// unborn again and the index holds none of them. A change staged outside them stays staged.</summary>

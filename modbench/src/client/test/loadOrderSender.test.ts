@@ -474,6 +474,56 @@ describe('mEdit exiting', () => {
   });
 });
 
+describe('a change signalled', () => {
+  it('is sent once the snapshot handed before it has answered, so mEdit checks the load order it holds then', async () => {
+    const client = running();
+    let answer!: () => void;
+    client.answerPuts((_sent, _signal, answered) => { answer = answered; return pending<LoadOrderOutcome>().promise; });
+    void client.sendLoadOrder(snapshot('A.esp'));
+
+    client.signalChange();
+    await vi.waitFor(() => { expect(methods(client)).toEqual(['put']); });
+    answer();
+
+    await vi.waitFor(() => { expect(methods(client)).toEqual(['put', 'signalChange']); });
+  });
+
+  it('folds the signals handed while one is in flight into one more', async () => {
+    const client = running();
+    const released = pending<undefined>();
+    client.answerSignals(() => released.promise);
+
+    client.signalChange();
+    client.signalChange();
+    client.signalChange();
+    released.resolve(undefined);
+    await vi.waitFor(() => { expect(methods(client)).toEqual(['signalChange', 'signalChange']); });
+    await client.sendLoadOrder(snapshot('A.esp'));
+
+    expect(methods(client)).toEqual(['signalChange', 'signalChange', 'put']);
+  });
+
+  it('waits for mEdit to run', async () => {
+    const client = new InMemoryMEditClient();
+    client.answerPuts(() => Promise.resolve(APPLIED));
+
+    client.signalChange();
+    expect(methods(client)).toEqual([]);
+    await client.start();
+
+    await vi.waitFor(() => { expect(methods(client)).toEqual(['start', 'signalChange']); });
+  });
+
+  it('follows the snapshot a reconnect puts again, since the process behind the stream may not have checked the disk', async () => {
+    const client = running();
+    await client.sendLoadOrder(snapshot('A.esp'));
+
+    client.reconnected();
+
+    await vi.waitFor(() => { expect(methods(client)).toEqual(['put', 'put', 'signalChange']); });
+  });
+});
+
 describe('a stop', () => {
   it('is the end: a snapshot or a start after it launches nothing, and announces none', async () => {
     const client = running();

@@ -19,10 +19,16 @@ internal static class Wire
         this HttpClient client, ScatteredFixtureData fx, IEnumerable<LoadOrderEntry> plugins) =>
         client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.DataFolder, fx.InstanceRoot, plugins));
 
-    /// <summary>What Modbench sends once its watch sees a change: the snapshot again, whose arrival
-    /// validates every file (ADR-0003).</summary>
-    internal static async Task NextSnapshot(this HttpClient client, ScatteredFixtureData fx, params string[] origins) =>
+    /// <summary>What Modbench sends once its watch sees a change: the snapshot, which an equal one leaves as it was, then the
+    /// signal of a change, whose check validates every file (ADR-0015).</summary>
+    internal static async Task NextCheck(this HttpClient client, ScatteredFixtureData fx, params string[] origins)
+    {
         (await client.PutLoadOrder(fx, origins)).EnsureSuccessStatusCode();
+        await client.SignalChange();
+    }
+
+    internal static async Task SignalChange(this HttpClient client) =>
+        (await client.PostAsync("/signal-change", null)).EnsureSuccessStatusCode();
 
     /// <summary>Polls until <paramref name="holds"/>: validation runs on the service's own thread, and
     /// a validation that finds nothing publishes nothing to wait on.</summary>
@@ -274,7 +280,7 @@ internal static class Wire
     internal static async Task<JsonElement> Plugin(this HttpClient client, string name) =>
         (await client.Plugins()).Single(p => p.GetProperty("name").GetString() == name);
 
-    /// <summary>Version in git's write reaches the answers at the next snapshot (ADR-0015), whose reconcile
+    /// <summary>Version in git's write reaches the answers at the next check of the disk (ADR-0015), whose reconcile
     /// reports the plugin compiled before it validates every plugin, so its end is awaited too.</summary>
     internal static async Task PluginReportsCompiledPlugin(this HttpClient client, string name)
     {

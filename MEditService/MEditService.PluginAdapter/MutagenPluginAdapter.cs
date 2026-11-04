@@ -105,7 +105,6 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     public string? HashOf(string pluginPath) => _hashes.Of(pluginPath);
 
     public void KeepHashesOf(IReadOnlySet<string> pluginPaths) => _hashes.Keep(pluginPaths);
-
     public Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath, GameRelease gameRelease) => PluginBinaryHash.ClaimOfFile(pluginPath, gameRelease);
 
     public Answer<string, PluginFailure> SetLoadFlags(string pluginPath, IReadOnlyDictionary<string, bool> flags, GameRelease gameRelease) =>

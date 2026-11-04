@@ -21,7 +21,8 @@ internal static class LoadOrderEndpoints
                 "Every archive and strings file carries its stamp. " +
                 "Plugins new to the snapshot are opened and " +
                 "registered (indexed only if never seen), plugins absent from it are unregistered, " +
-                "plugins whose load index moved are re-registered SQL-only; then one winner sweep. " +
+                "plugins whose load index moved are re-registered SQL-only; then one winner sweep. A file changed on disk " +
+                "is read again at POST /signal-change, never here. " +
                 "Answers as soon as the snapshot is applied; the sweep runs after, reported on " +
                 "GET /load-order/status and the load-order-status notification.")
             .Produces<PutLoadOrderApplied>()
