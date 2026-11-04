@@ -1528,6 +1528,51 @@ describe('the MO2 Instance adapter', () => {
         ]);
       });
 
+      describe('read again', () => {
+        const folder = (): string => join(root, 'mods', 'Harder VATS');
+        const settled = async (): Promise<void> => {
+          await mkdir(join(folder(), 'Textures'), { recursive: true });
+          await writeFile(join(folder(), 'Textures', 'a.dds'), '');
+          vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 3_600_000 });
+        };
+        afterEach(() => vi.useRealTimers());
+
+        it.each([
+          ['a mod', mod('Harder VATS')],
+          ['Overwrite', { kind: 'runtimeOutput' as const }],
+        ])('answers the same files for %s while no folder it walked has changed', async (_, origin) => {
+          await mkdir(join(root, 'overwrite', 'Textures'), { recursive: true });
+          await writeFile(join(root, 'overwrite', 'Textures', 'a.dds'), '');
+          await settled();
+
+          const first = await source.originFiles(origin, 'list');
+          const second = await source.originFiles(origin, 'list');
+
+          expect(second).toBe(first);
+        });
+
+        it('answers new files for a mod once a folder it walked has changed', async () => {
+          await settled();
+          const first = await source.originFiles(mod('Harder VATS'), 'list');
+          await writeFile(join(folder(), 'Textures', 'b.dds'), '');
+
+          const second = await source.originFiles(mod('Harder VATS'), 'list');
+
+          expect(relativePaths(second.files)).toEqual(['Textures/a.dds', 'Textures/b.dds']);
+          expect(second).not.toBe(first);
+        });
+
+        it('answers the files of a mod that links to a file afresh each time, as a link\'s target is not stamped', async () => {
+          await settled();
+          await symlink(join(folder(), 'Textures', 'a.dds'), join(folder(), 'Linked.dds'));
+
+          const first = await source.originFiles(mod('Harder VATS'), 'list');
+          const second = await source.originFiles(mod('Harder VATS'), 'list');
+
+          expect(second).not.toBe(first);
+        });
+      });
+
       it('leaves out a manifest at its root, whatever its name, as a folder renamed outside Modbench keeps the name it had, and keeps a file below the root that bears the name', async () => {
         const folder = join(root, 'mods', 'Harder VATS');
         await mkdir(join(folder, 'docs'), { recursive: true });
