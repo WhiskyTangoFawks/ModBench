@@ -1589,7 +1589,11 @@ describe('the MO2 Instance adapter', () => {
           await writeFile(join(folder(), 'Gone', 'Lost.esp'), '');
           await settled();
           const rootStamp = await actualStat(folder(), { bigint: true });
-          vi.mocked(stat).mockImplementation(async (path, ...rest) => (String(path) === folder() ? rootStamp : actualStat(path, ...rest)) as never);
+          vi.mocked(stat).mockImplementation(async (path, ...rest) => {
+            const facts = await actualStat(path, ...rest);
+            const { size, mtimeNs, ctimeNs } = rootStamp;
+            return String(path) === folder() ? Object.assign(facts, { size, mtimeNs, ctimeNs }) : facts;
+          });
           vi.mocked(readdir).mockImplementation(async (path, options) => {
             if (String(path) === join(folder(), 'Gone')) await rm(path, { recursive: true, force: true });
             return actualReaddir(path, options);
