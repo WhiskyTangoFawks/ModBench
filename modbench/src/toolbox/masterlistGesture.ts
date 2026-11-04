@@ -52,5 +52,5 @@ export function registerMasterlistCommand({ commands, instance, pluginsView, say
     }
   };
   return vscode.commands.registerCommand(UPDATE_MASTERLIST, (called?: unknown) =>
-    runWritingGesture(pluginsView, instance, (progress) => run(called, progress)));
+    runWritingGesture(UPDATE_MASTERLIST, pluginsView, instance, (progress) => run(called, progress)));
 }

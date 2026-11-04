@@ -44,7 +44,7 @@ describe('a writing gesture that waits on a person', () => {
   it('closes its progress while it waits, and shows it again for the refresh', async () => {
     const instance = { refresh: () => { steps.push('refresh'); return Promise.resolve(undefined); } };
 
-    await runWritingGesture('modbench.thing', instance, async (progress) => {
+    await runWritingGesture('modbench.write', 'modbench.thing', instance, async (progress) => {
       steps.push('extracting');
       progress.waiting();
       await vi.waitFor(() => { expect(steps.at(-1)).toBe('progress closes'); });

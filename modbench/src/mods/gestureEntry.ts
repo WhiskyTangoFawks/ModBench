@@ -10,8 +10,8 @@ import type { Argument } from '../wire/argument';
  *  view's. */
 export const MODS_KEY_ARGS = { view: 'modbench.modList' } as const;
 
-export const runModsWriting = <T>(instance: Pick<Instance, 'refresh'>, command: () => Promise<T>): Promise<T> =>
-  runWritingGesture(MODS_KEY_ARGS.view, instance, command);
+export const runModsWriting = <T>(write: string, instance: Pick<Instance, 'refresh'>, command: () => Promise<T>): Promise<T> =>
+  runWritingGesture(write, MODS_KEY_ARGS.view, instance, command);
 
 export const modNameOf = (argument: Argument): string => argumentOfKind(argument, 'mod').name;
 

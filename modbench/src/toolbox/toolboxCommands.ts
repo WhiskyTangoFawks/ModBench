@@ -32,12 +32,12 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
   const profileReporter = reporterFor('switchProfile');
   return [
     vscode.commands.registerCommand('modbench.profile.switch', async (called?: unknown) => {
-      if (isAgentCall(called)) return answeredToAgent(await runWritingGesture(TOOLBOX_VIEW, instance, () => commands.switchProfile(profileOf(called))));
+      if (isAgentCall(called)) return answeredToAgent(await runWritingGesture('modbench.profile.switch', TOOLBOX_VIEW, instance, () => commands.switchProfile(profileOf(called))));
       const { activeProfile: active, profiles } = instance.value;
       const items = profiles.map((p) => ({ label: p, description: p === active ? 'current' : undefined }));
       const picked = await pickWithMarked(items, items.find((i) => i.label === active), 'Switch profile');
       if (!picked || picked.label === active) return undefined;
-      await runWritingGesture(TOOLBOX_VIEW, instance, async () => {
+      await runWritingGesture('modbench.profile.switch', TOOLBOX_VIEW, instance, async () => {
         const outcome = await commands.switchProfile(picked.label);
         if (!outcome.applied) profileReporter.report('error', 'Failed to switch profile.', outcome.refusal);
       });
@@ -82,5 +82,5 @@ export function registerRefreshCommand(deps: RefreshGestureDeps): vscode.Disposa
     return undefined;
   };
   return vscode.commands.registerCommand('modbench.instance.refresh', (called?: unknown) =>
-    runWritingGesture(TOOLBOX_VIEW, deps.instance, () => run(called instanceof AgentCall)));
+    runWritingGesture('modbench.instance.refresh', TOOLBOX_VIEW, deps.instance, () => run(called instanceof AgentCall)));
 }

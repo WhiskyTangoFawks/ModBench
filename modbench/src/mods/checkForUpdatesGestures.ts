@@ -29,7 +29,7 @@ export function registerCheckForUpdatesGestures(given: CheckForUpdatesDeps): vsc
 async function checkForView(
   { commands, instance, reporter }: CheckForUpdatesDeps, { mods, refused, view }: ModsToRun,
 ): Promise<void> {
-  await runWritingGesture(view, instance, async () => {
+  await runWritingGesture('modbench.mod.checkForUpdates', view, instance, async () => {
     const result = await commands.checkForUpdates(mods);
     if (!result.applied) { reporter.report('error', result.refusal); return; }
     const notAsked: ItemRefusal<string>[] = [
@@ -46,6 +46,6 @@ async function checkForView(
 async function checkForAgent(
   { commands, instance }: CheckForUpdatesDeps, { argument }: AgentCall,
 ): Promise<GestureResult<UpdateChecked>> {
-  const result = await runWritingGesture(MODS_KEY_ARGS.view, instance, () => commands.checkForUpdates(modsOfAgent(argument, instance.value)));
+  const result = await runWritingGesture('modbench.mod.checkForUpdates', MODS_KEY_ARGS.view, instance, () => commands.checkForUpdates(modsOfAgent(argument, instance.value)));
   return result.applied ? { applied: true, outcome: result.outcome } : { applied: false, refusal: result.refusal };
 }

@@ -153,7 +153,7 @@ export function registerCreatePluginCommand(
       if (typeof made === 'string') throw new Refusal(made);
       return made;
     },
-    run: ({ plugin, folder, sourceFolder }) => runWritingGesture(PLUGINS_KEY_ARGS.view, instance, async () => {
+    run: ({ plugin, folder, sourceFolder }) => runWritingGesture('modbench.plugin.create', PLUGINS_KEY_ARGS.view, instance, async () => {
       const result = await client.createPlugin(plugin, folder, sourceFolder);
       return isRefused(result)
         ? { applied: false, refusal: result.message }

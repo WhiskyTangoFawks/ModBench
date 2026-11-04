@@ -14,8 +14,8 @@ import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { reportFailure } from '../drivingLib/reportFailure';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 
-const runDownloadsWriting = <T>(instance: Pick<Instance, 'refresh'>, command: () => Promise<T>): Promise<T> =>
-  runWritingGesture(DOWNLOADS_KEY_ARGS.view, instance, command);
+const runDownloadsWriting = <T>(write: string, instance: Pick<Instance, 'refresh'>, command: () => Promise<T>): Promise<T> =>
+  runWritingGesture(write, DOWNLOADS_KEY_ARGS.view, instance, command);
 import type { Instance, InstanceValue } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { MoveToTrash } from '../ports/trash';
@@ -49,7 +49,7 @@ function deleteGesture(
       return names.length > 0 ? names : undefined;
     },
     fromAgent: ({ argument }) => argument.map(downloadedFileNameOf),
-    run: (names) => runDownloadsWriting(instance, () =>
+    run: (names) => runDownloadsWriting('modbench.downloadedFile.delete', instance, () =>
       landed(commands.deleteDownloadedFiles(names, trash), deletedPartials(instance.value.managerNames))),
     report: (result, names) => {
       if (!result.applied) return;
@@ -70,7 +70,7 @@ function markGesture(
       return names.length === 0 ? undefined : names;
     },
     fromAgent: ({ argument }) => argument.map(downloadedFileNameOf),
-    run: (names) => runDownloadsWriting(instance, () =>
+    run: (names) => runDownloadsWriting(`modbench.downloadedFile.${verb}`, instance, () =>
       landed(excluded ? commands.excludeDownloadedFiles(names) : commands.includeDownloadedFiles(names))),
     report: (result, names) => {
       if (!result.applied) return;
@@ -128,7 +128,7 @@ function queryInfoGesture(
       return names.length === 0 ? undefined : names;
     },
     fromAgent: ({ argument }) => argument.map(downloadedFileNameOf),
-    run: (names) => runDownloadsWriting(instance, async () => {
+    run: (names) => runDownloadsWriting('modbench.downloadedFile.queryInfo', instance, async () => {
       const result = await queryInfo(names);
       return result.applied ? { ...result, partial: noticesOf(result.outcome) } : result;
     }),
@@ -170,7 +170,7 @@ function downloadGesture(
       return picked === undefined ? undefined : { mod, file: picked.file };
     },
     fromAgent: ({ options }) => options,
-    run: (wanted) => runDownloadsWriting(instance, async (): Promise<GestureResult<string>> => {
+    run: (wanted) => runDownloadsWriting('modbench.downloadedFile.download', instance, async (): Promise<GestureResult<string>> => {
       const result = await download.download(wanted);
       return result.applied ? { applied: true, outcome: { landed: [result.name], refused: [] } } : result;
     }),

@@ -21,7 +21,7 @@ export function registerModlistCommands({ reporterFor, ...rest }: Omit<ModlistGe
 }
 
 const gitInitInToolbox = ({ commands, instance }: ModlistGestureDeps) =>
-  runWritingGesture(TOOLBOX_VIEW, instance, () => commands.gitInit());
+  runWritingGesture('modbench.modlist.gitInit', TOOLBOX_VIEW, instance, () => commands.gitInit());
 
 const partialOf = ({ pushRefusalNotWritten, pathTokensNotWritten }: Extract<GitInitResult, { applied: true }>): PartialFailure[] => [
   ...(pushRefusalNotWritten === undefined ? [] : [`a push of a pin its source mod's remote lacks is not refused: ${pushRefusalNotWritten}`]),

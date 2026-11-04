@@ -31,7 +31,7 @@ export async function movePlugins(
   plugins: readonly PluginAddress[], drop: PluginsDrop,
 ): Promise<GestureResult<PluginAddress>> {
   try {
-    const result = await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, () => commands.reorderPlugins(plugins, drop));
+    const result = await runWritingGesture('modbench.plugin.move', PLUGINS_KEY_ARGS.view, instance, () => commands.reorderPlugins(plugins, drop));
     return result.applied
       ? { applied: true, outcome: { landed: plugins, refused: [] } }
       : { applied: false, refusal: 'Could not move plugins.', detail: result.refusal };

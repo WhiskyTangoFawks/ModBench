@@ -60,8 +60,8 @@ export function registerDeployCommands({ commands, instance, reporterFor }: Depl
   // the instance value reads its Data folder.
   return [
     registerDeployTask(reporter),
-    vscode.commands.registerCommand('modbench.instance.deploy', (called?: unknown) => runWritingGesture(TOOLBOX_VIEW, instance, () => deploy(called instanceof AgentCall))),
-    vscode.commands.registerCommand('modbench.instance.purge', (called?: unknown) => runWritingGesture(TOOLBOX_VIEW, instance, () => purge(called))),
+    vscode.commands.registerCommand('modbench.instance.deploy', (called?: unknown) => runWritingGesture('modbench.instance.deploy', TOOLBOX_VIEW, instance, () => deploy(called instanceof AgentCall))),
+    vscode.commands.registerCommand('modbench.instance.purge', (called?: unknown) => runWritingGesture('modbench.instance.purge', TOOLBOX_VIEW, instance, () => purge(called))),
     registerMoveToOverwriteCommand({ commands, instance, reporter }, publishProblems),
     collection,
     subscription,
@@ -108,5 +108,5 @@ function registerMoveToOverwriteCommand({ commands, instance, reporter }: Omit<D
     }
     return undefined;
   };
-  return vscode.commands.registerCommand(MOVE_TO_OVERWRITE, (called?: unknown) => runWritingGesture(TOOLBOX_VIEW, instance, () => move(called)));
+  return vscode.commands.registerCommand(MOVE_TO_OVERWRITE, (called?: unknown) => runWritingGesture(MOVE_TO_OVERWRITE, TOOLBOX_VIEW, instance, () => move(called)));
 }

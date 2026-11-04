@@ -7,6 +7,7 @@ vi.mock('vscode', async () => {
 
 import { progressSteps as steps } from '../../test/recordedProgress';
 import { runWritingGesture } from '../writingGesture';
+import { Refusal } from '../refusal';
 
 function instanceThatReads() {
   return {
@@ -18,7 +19,7 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
   it('runs the command once and then one refresh, inside the view\'s progress bar', async () => {
     steps.length = 0;
 
-    await runWritingGesture('modbench.thing', instanceThatReads(), () => { steps.push('command'); return Promise.resolve(); });
+    await runWritingGesture('modbench.write', 'modbench.thing', instanceThatReads(), () => { steps.push('command'); return Promise.resolve(); });
 
     expect(steps).toEqual(['progress opens on modbench.thing', 'command', 'refresh', 'progress closes']);
   });
@@ -28,7 +29,7 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
     let lands!: () => void;
     const instance = { refresh: () => new Promise<undefined>((r) => { lands = () => r(undefined); }) };
 
-    const running = runWritingGesture('modbench.thing', instance, () => Promise.resolve());
+    const running = runWritingGesture('modbench.write', 'modbench.thing', instance, () => Promise.resolve());
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(steps).toEqual(['progress opens on modbench.thing']);
 
@@ -40,13 +41,69 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
   it('shows the disk after a command that throws, and lets the failure through', async () => {
     steps.length = 0;
 
-    await expect(runWritingGesture('modbench.thing', instanceThatReads(), () => Promise.reject(new Error('half written'))))
+    await expect(runWritingGesture('modbench.write', 'modbench.thing', instanceThatReads(), () => Promise.reject(new Error('half written'))))
       .rejects.toThrow('half written');
 
     expect(steps).toEqual(['progress opens on modbench.thing', 'refresh', 'progress closes']);
   });
 
   it('answers what the command answered', async () => {
-    expect(await runWritingGesture('modbench.thing', instanceThatReads(), () => Promise.resolve('landed'))).toBe('landed');
+    expect(await runWritingGesture('modbench.write', 'modbench.thing', instanceThatReads(), () => Promise.resolve('landed'))).toBe('landed');
+  });
+
+  describe('while another write is in flight', () => {
+    function heldWrite(name: string) {
+      let ends!: () => void;
+      const running = runWritingGesture(name, 'modbench.thing', instanceThatReads(), () => new Promise<void>((r) => { ends = r; }));
+      return { running, ends: () => ends() };
+    }
+
+    it('is refused, naming the write in flight, and starts nothing', async () => {
+      steps.length = 0;
+      const held = heldWrite('modbench.mod.build');
+
+      await expect(runWritingGesture('modbench.mod.rename', 'modbench.thing', instanceThatReads(), () => { steps.push('second command'); return Promise.resolve(); }))
+        .rejects.toThrow(/modbench\.mod\.build/);
+
+      expect(steps).not.toContain('second command');
+      held.ends();
+      await held.running;
+    });
+
+    it('is refused as a Refusal, which an agent reads as the reason', async () => {
+      const held = heldWrite('modbench.mod.build');
+
+      await expect(runWritingGesture('modbench.mod.rename', 'modbench.thing', instanceThatReads(), () => Promise.resolve()))
+        .rejects.toBeInstanceOf(Refusal);
+
+      held.ends();
+      await held.running;
+    });
+
+    it('runs once the write in flight has refreshed', async () => {
+      const held = heldWrite('modbench.mod.build');
+      held.ends();
+      await held.running;
+
+      expect(await runWritingGesture('modbench.mod.rename', 'modbench.thing', instanceThatReads(), () => Promise.resolve('landed'))).toBe('landed');
+    });
+
+    it('runs once the write in flight has failed', async () => {
+      await expect(runWritingGesture('modbench.mod.build', 'modbench.thing', instanceThatReads(), () => Promise.reject(new Error('half written')))).rejects.toThrow();
+
+      expect(await runWritingGesture('modbench.mod.rename', 'modbench.thing', instanceThatReads(), () => Promise.resolve('landed'))).toBe('landed');
+    });
+
+    it('stays held while the refresh that shows the write is running', async () => {
+      let lands!: () => void;
+      const refreshing = { refresh: () => new Promise<undefined>((r) => { lands = () => r(undefined); }) };
+      const running = runWritingGesture('modbench.mod.build', 'modbench.thing', refreshing, () => Promise.resolve());
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      await expect(runWritingGesture('modbench.mod.rename', 'modbench.thing', instanceThatReads(), () => Promise.resolve())).rejects.toThrow(/modbench\.mod\.build/);
+
+      lands();
+      await running;
+    });
   });
 });

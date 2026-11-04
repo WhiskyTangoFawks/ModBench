@@ -18,7 +18,7 @@ export async function onPluginCheckboxChanged(
     .filter((item): item is [PluginNode, vscode.TreeItemCheckboxState] => item[0].kind === 'plugin')
     .map(([node, state]) => ({ name: node.plugin.name, enabled: state === vscode.TreeItemCheckboxState.Checked }));
   if (entries.length === 0) return;
-  await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, async () => {
+  await runWritingGesture('the plugin checkbox', PLUGINS_KEY_ARGS.view, instance, async () => {
     const result = await commands.setPluginsParticipation(entries);
     reportPluginsParticipation(result, entries, reporter);
   });
