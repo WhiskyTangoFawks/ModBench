@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { isRefused } from '../client';
 import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import type { Instance } from '../instanceLoader/instance';
-import { answeringRefusal, RefusedGesture, runWritingGesture } from '../drivingLib/writingGesture';
+import { refusedAnswer, runWritingGesture } from '../drivingLib/writingGesture';
 import { registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { isClickedRow } from '../drivingLib/gestureEntry';
 import type { ReportAction, Reporter } from '../ports/reporter';
@@ -60,9 +60,9 @@ interface BuildGiven extends ModsGiven {
 async function buildMods(deps: BuildDeps, { mods, refusedRows, invokedFrom, everySource }: BuildGiven): Promise<Built> {
   const { commands, instance } = deps;
   if (mods.length === 0 && !everySource) return { applied: true, outcome: { landed: [], refused: refusedRows } };
-  return answeringRefusal(runWritingGesture('modbench.mod.build', invokedFrom, instance, async (): Promise<Built> => {
+  return runWritingGesture('modbench.mod.build', invokedFrom, instance, async (): Promise<Built> => {
     const outcome = await commands.build(mods, everySource);
-    if (isRefused(outcome)) throw new RefusedGesture(outcome.message);
+    if (isRefused(outcome)) return refusedAnswer(outcome.message);
     for (const { compiled } of outcome.landed) {
       for (const plugin of compiled) deps.problems.publish(plugin, deps.sourceFiles(plugin.origin), plugin.diagnostics);
     }
@@ -71,7 +71,7 @@ async function buildMods(deps: BuildDeps, { mods, refusedRows, invokedFrom, ever
       outcome: { landed: outcome.landed, refused: [...refusedRows, ...outcome.refused] },
       partial: [...partlyBuilt(outcome), ...buildWarnings(outcome), ...refusedInMods(outcome)],
     };
-  }));
+  });
 }
 
 function reportBuildResult(reporter: Reporter, result: Built): void {

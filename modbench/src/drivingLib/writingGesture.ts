@@ -12,15 +12,17 @@ export async function runUnderProgress<T>(
 ): Promise<T> {
   const progress = pausableProgress(viewId);
   progress.working();
-  let refused = false;
+  let wroteNothing = false;
   try {
-    return await command(progress);
+    const answer = await command(progress);
+    wroteNothing = isRefused(answer);
+    return answer;
   } catch (e) {
-    refused = e instanceof Refusal;
+    wroteNothing = e instanceof Refusal;
     throw e;
   } finally {
     try {
-      if (!refused) {
+      if (!wroteNothing) {
         progress.working();
         await instance.refresh();
       }
@@ -30,18 +32,18 @@ export async function runUnderProgress<T>(
   }
 }
 
-/** A gesture the backend or a lower layer refused: it wrote nothing, so it ends without the refresh that shows a write. */
-export class RefusedGesture extends Refusal {}
-
-/** Answers a `RefusedGesture` as the gesture's `applied: false`. A refused write and any other failure go through. */
-export async function answeringRefusal<T>(running: Promise<T>): Promise<T | { applied: false; refusal: string }> {
-  try {
-    return await running;
-  } catch (e) {
-    if (!(e instanceof RefusedGesture)) throw e;
-    return { applied: false, refusal: e.message };
-  }
+/** What a gesture answers when it refused and wrote nothing, so it ends without the refresh that shows a write.
+ *  An `applied: false` without `wroteNothing` may follow a write, and is refreshed. */
+export interface Refused {
+  readonly applied: false;
+  readonly refusal: string;
+  readonly detail?: string;
+  readonly wroteNothing: true;
 }
+
+export const refusedAnswer = (refusal: string, detail?: string): Refused => ({ applied: false, refusal, ...(detail === undefined ? {} : { detail }), wroteNothing: true });
+
+const isRefused = (answer: unknown): boolean => typeof answer === 'object' && answer !== null && (answer as { wroteNothing?: unknown }).wroteNothing === true;
 
 let inFlight: string | undefined;
 

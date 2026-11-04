@@ -6,7 +6,7 @@ vi.mock('vscode', async () => {
 });
 
 import { progressSteps as steps } from '../../test/recordedProgress';
-import { answeringRefusal, asViewCall, RefusedGesture, RefusedWrite, runWritingGesture, surfaceRefusedWrites } from '../writingGesture';
+import { asViewCall, refusedAnswer, RefusedWrite, runWritingGesture, surfaceRefusedWrites } from '../writingGesture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { Refusal } from '../refusal';
 
@@ -48,39 +48,33 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
     expect(steps).toEqual(['progress opens on modbench.thing', 'refresh', 'progress closes']);
   });
 
-  it('lets a Refusal the command throws through without a refresh to wait for', async () => {
+  it('ends at once on a refused answer, with no refresh to wait for', async () => {
     steps.length = 0;
     const neverShows = { refresh: () => new Promise<undefined>(() => undefined) };
 
-    await expect(runWritingGesture('modbench.write', 'modbench.thing', neverShows, () => Promise.reject(new RefusedGesture('no')))).rejects.toThrow('no');
+    const answer = await runWritingGesture('modbench.write', 'modbench.thing', neverShows, () => Promise.resolve(refusedAnswer('no', 'because')));
+
+    expect({ answer, steps }).toEqual({
+      answer: { applied: false, refusal: 'no', detail: 'because', wroteNothing: true },
+      steps: ['progress opens on modbench.thing', 'progress closes'],
+    });
+  });
+
+  it('ends at once on a Refusal the command throws', async () => {
+    steps.length = 0;
+    const neverShows = { refresh: () => new Promise<undefined>(() => undefined) };
+
+    await expect(runWritingGesture('modbench.write', 'modbench.thing', neverShows, () => Promise.reject(new Refusal('no')))).rejects.toThrow('no');
 
     expect(steps).toEqual(['progress opens on modbench.thing', 'progress closes']);
   });
 
-  it('refreshes after an answer that says it did not apply, which can follow a write', async () => {
+  it('refreshes after an answer that did not apply and does not say it wrote nothing, which can follow a write', async () => {
     steps.length = 0;
 
     await runWritingGesture('modbench.write', 'modbench.thing', instanceThatReads(), () => Promise.resolve({ applied: false, refusal: 'half installed' }));
 
     expect(steps).toEqual(['progress opens on modbench.thing', 'refresh', 'progress closes']);
-  });
-
-  describe('a refused gesture, answered', () => {
-    it('is the answer that the gesture did not apply, naming why', async () => {
-      expect(await answeringRefusal(Promise.reject(new RefusedGesture('mEdit refused it')))).toEqual({ applied: false, refusal: 'mEdit refused it' });
-    });
-
-    it('is what a landed gesture answered, left as it is', async () => {
-      expect(await answeringRefusal(Promise.resolve('landed'))).toBe('landed');
-    });
-
-    it('lets a refused write through, which a view call tells once', async () => {
-      await expect(answeringRefusal(Promise.reject(new RefusedWrite('busy')))).rejects.toBeInstanceOf(RefusedWrite);
-    });
-
-    it('lets a failure through', async () => {
-      await expect(answeringRefusal(Promise.reject(new Error('half written')))).rejects.toThrow('half written');
-    });
   });
 
   it('answers what the command answered', async () => {

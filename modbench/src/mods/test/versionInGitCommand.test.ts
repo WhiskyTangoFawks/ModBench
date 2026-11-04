@@ -391,7 +391,7 @@ describe('modbench.mod.versionInGit', () => {
       commands.answers({ refused: true, message: 'the executable was not found on PATH.' });
       const { handler, onCommitted } = invokeVersionInGit(commands);
 
-      expect(await handler(calling('ModA'))).toEqual({ applied: false, refusal: 'the executable was not found on PATH.' });
+      expect(await handler(calling('ModA'))).toEqual({ applied: false, refusal: 'the executable was not found on PATH.', wroteNothing: true });
       expect(onCommitted).not.toHaveBeenCalled();
     });
   });

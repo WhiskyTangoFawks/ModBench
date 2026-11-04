@@ -39,7 +39,7 @@ export interface PartialFailure {
  *  and an agent reads with the detail joined on. */
 export type GestureResult<T, Refused = T> =
   | { applied: true; outcome: { landed: SelectionOutcome<T>['landed']; refused: SelectionOutcome<Refused>['refused'] }; partial?: readonly PartialFailure[] }
-  | { applied: false; refusal: string; detail?: string };
+  | { applied: false; refusal: string; detail?: string; wroteNothing?: true };
 
 export function reportPartial(reporter: Reporter, partial: readonly PartialFailure[] = [], log: (line: string) => void = () => undefined): void {
   for (const { message, detail, severity } of partial) {
