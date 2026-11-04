@@ -9,8 +9,7 @@ export type LoadOrderSource =
   | { readonly refusal: string }
   | undefined;
 
-/** The archives the INIs list, then each plugin's with it: where the loader read them, before the order the game loads
- *  the plugins in is known. */
+// The archives the INIs list, then each plugin's with it, as the loader read them, before the order the game loads the plugins in is known.
 interface ArchivesByPlugin {
   readonly listedArchives: LoadOrderSnapshot['archives'];
   readonly archivesByPlugin: readonly (PluginAddress & { readonly archives: LoadOrderSnapshot['archives'] })[];
