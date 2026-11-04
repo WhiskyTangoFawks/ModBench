@@ -63,13 +63,9 @@ public class CheckErrorBuilderTests
 
     [Theory]
     [InlineData("a translated string holding only its target language", "Test_en.STRINGS")]
-    [InlineData("a null link that may not be null", "Found a NULL reference, expected: RACE")]
     [InlineData("a dangling link", "[000FFF:Test.esp] <Error: Could not be resolved>")]
     [InlineData("a link to a record of another type", "Found a RACE reference, expected: KYWD, LVLN, NPC_")]
     [InlineData("a list of links, one dangling", "[2]: [000FFF:Test.esp] <Error: Could not be resolved>")]
-    [InlineData("a null link in a list of structs", "[0].Faction: Found a NULL reference, expected: FACT")]
-    [InlineData("a link a stored document omits in a list of structs", "[0].Faction: Found a NULL reference, expected: FACT")]
-    [InlineData("a null link two structs down", "[0].inner.Target: Found a NULL reference, expected: KYWD")]
     [InlineData("an absent link with a declared default", "Link: Found a RACE reference, expected: NPC_")]
     public void AFieldInError_IsReportedAtItsPath(string name, string expected) =>
         Assert.Equal(expected, Built(name));
@@ -81,6 +77,10 @@ public class CheckErrorBuilderTests
     [InlineData("a translated string of a plugin missing no strings file")]
     [InlineData("a link to a record of its type")]
     [InlineData("a null link that may be null")]
+    [InlineData("a null link that may not be null")]
+    [InlineData("a null link in a list of structs")]
+    [InlineData("a link a stored document omits in a list of structs")]
+    [InlineData("a null link two structs down")]
     [InlineData("a field that is no link")]
     public void ACleanField_ReportsNothing(string name) =>
         Assert.Null(Built(name));

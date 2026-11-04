@@ -75,7 +75,7 @@ public sealed record SchemaAnnotations(
     // See FieldMetadata.ExtendedKeyMembers; every row extends a KeyedArrays row.
     Dictionary<(string TypeName, string MemberName), IReadOnlyList<string>> ExtendedKeys,
     // FormLinks Mutagen types non-nullable that the game's format leaves unset as a matter of course,
-    // so an unset one is a value, not a dangling reference. The CLR type cannot answer this.
+    // so the schema marks them nullable. The CLR type cannot answer this.
     HashSet<(string TypeName, string MemberName)> PermittedNullFormLinks,
     // The placed reference's rotation: xEdit's wbVec3PosRot, whose rotation reads in degrees where
     // Mutagen holds radians. No type marks it, and a member named Rotation is not always one.
