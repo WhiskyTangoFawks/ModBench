@@ -235,7 +235,7 @@ internal sealed class ConflictClassifier(ILogger logger)
             if (!header && values.Values.All(v => v == null)) continue;
             var shapes = recordClass.ToDictionary(
                 kv => kv.Key, kv => DocumentNodes.Variant(membersOf[kv.Key].GetValueOrDefault(member.Name, member), kv.Value));
-            diffs.Add(DiffNode(member.Name, member.Name, values, shapes, absentMeansDefault: true, memberCtx, member.IgnoredInConflicts, partialFormTakesPart: !ownField));
+            diffs.Add(DiffNode(member.Name, member.Name, values, shapes, absentMeansDefault: true, memberCtx, !ConflictRules.TakesPart(member, inPartialFormCopy: false), partialFormTakesPart: !ownField));
         }
         return diffs;
     }

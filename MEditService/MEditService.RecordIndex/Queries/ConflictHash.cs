@@ -22,8 +22,7 @@ internal static class ConflictHash
         foreach (var column in schema.RecordColumns)
         {
             var member = column.Field;
-            if (column.Synthetic is not null || member.IgnoredInConflicts || templated.Contains(member.Name)) continue;
-            if (partialForm && ConflictRules.IsOwnField(member)) continue;
+            if (column.Synthetic is not null || templated.Contains(member.Name) || !ConflictRules.TakesPart(member, partialForm)) continue;
             if (!root.TryGetProperty(column.PropertyName, out var held) || held.ValueKind == JsonValueKind.Null) continue;
             var shape = DocumentNodes.VariantFor(member, root);
             var value = ConflictClassifier.WithoutMembers(held, ConflictClassifier.MembersWithin(templated, member.Name));

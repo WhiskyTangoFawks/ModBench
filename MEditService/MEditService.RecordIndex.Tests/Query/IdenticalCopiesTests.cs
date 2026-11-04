@@ -22,7 +22,9 @@ public sealed class IdenticalCopiesTests
     private static readonly FormKey Template = new(Master, 0x902);
     private const int PartialFormBit = 0x4000;
 
-    private sealed record Copies(Func<IFallout4MajorRecord> Master, Action<IFallout4MajorRecord> Changed, Action<JsonObject>? Spelled = null);
+    private sealed record Copies(Func<IFallout4MajorRecord> Master, Action<IFallout4MajorRecord> Changed);
+
+    private sealed record Spelling(Func<IFallout4MajorRecord> Master, Action<JsonObject> Spell);
 
     private static MiscItem Item() => new(Record, Fallout4Release.Fallout4) { EditorID = "Item", Name = "Item" };
 
@@ -59,16 +61,22 @@ public sealed class IdenticalCopiesTests
         ["a copy holding a keyed array in another order"] = (new(
             () => RelatedTo(A, B),
             copy => ((Faction)copy).Relations.Reverse()), true),
-        ["a copy whose colour holding no alpha is spelled with one"] = (new(
-            () => new Weather(Record, Fallout4Release.Fallout4) { EditorID = "Weather", LightningColor = Color.FromArgb(0, 0x10, 0x20, 0x30) },
-            _ => { },
-            document => document["LightningColor"] = "#7F102030"), true),
-        ["a copy spelling a member its master omits for its default"] = (new(Item, _ => { }, document => document["Value"] = 0), true),
+        ["a copy that drops a member its master holds"] = (new(Item, copy => ((MiscItem)copy).Name = null), false),
         ["a copy that changes a field it hands to its template"] = (new(TemplatedNpc, copy => ((Npc)copy).Race.SetTo(B)), true),
         ["a Partial Form copy that changes its own field"] = (new(PartialCell, copy => ((Cell)copy).WaterHeight = 5f), true),
     };
 
+    private static readonly Dictionary<string, Spelling> SpelledCases = new()
+    {
+        ["a copy whose colour holding no alpha is spelled with one"] = new(
+            () => new Weather(Record, Fallout4Release.Fallout4) { EditorID = "Weather", LightningColor = Color.FromArgb(0, 0x10, 0x20, 0x30) },
+            document => document["LightningColor"] = "#7F102030"),
+        ["a copy spelling a member its master omits for its default"] = new(Item, document => document["Value"] = 0),
+    };
+
     public static TheoryData<string> CaseNames => [.. Cases.Keys];
+
+    public static TheoryData<string> SpelledCaseNames => [.. SpelledCases.Keys];
 
     private static ScatteredFixtureData Fixture(Copies copies, bool copyActive = true) =>
         new PluginFixtureBuilder("medit-identical-copies")
@@ -109,21 +117,32 @@ public sealed class IdenticalCopiesTests
     {
         var (copies, identical) = Cases[name];
         using var plugins = Fixture(copies);
-        if (copies.Spelled is not null) SourceMods.Init(plugins.Plugins.Single(p => p.Name == CopyPlugin.Name));
         using var index = Indexes.Reconciled(plugins);
-        if (copies.Spelled is { } spelled)
-        {
-            var document = (JsonNode.Parse(index.BodyOf(Record.ToString(), CopyPlugin)) as JsonObject).Require();
-            spelled(document);
-            index.Project(plugins.Plugins.Single(p => p.Name == CopyPlugin.Name), [(Record.ToString(), document.ToJsonString())]);
-        }
 
+        Assert.Equal((identical, identical), ClassifiedAndHashedIdentical(index));
+    }
+
+    [Theory]
+    [MemberData(nameof(SpelledCaseNames))]
+    public void ACopySpelledOtherwiseButEqual_HashesAlikeAndIsClassifiedIdentical(string name)
+    {
+        var spelling = SpelledCases[name];
+        using var plugins = Fixture(new(spelling.Master, _ => { }));
+        var copyPlugin = plugins.Plugins.Single(p => p.Name == CopyPlugin.Name);
+        SourceMods.Init(copyPlugin);
+        using var index = Indexes.Reconciled(plugins);
+        var document = (JsonNode.Parse(index.BodyOf(Record.ToString(), CopyPlugin)) as JsonObject).Require();
+        spelling.Spell(document);
+        index.Project(copyPlugin, [(Record.ToString(), document.ToJsonString())]);
+
+        Assert.Equal((true, true), ClassifiedAndHashedIdentical(index));
+    }
+
+    private static (bool Classified, bool Hashed) ClassifiedAndHashedIdentical(OpenedIndex index)
+    {
         var hashes = HashesBy(index);
         var verdict = index.StackOf(Record.ToString()).Single(copy => copy.Plugin == CopyPlugin.Name).ConflictThis;
-
-        Assert.Equal(
-            (identical, identical),
-            (verdict == ConflictThis.IdenticalToMaster, hashes[MasterPlugin] is { } master && master == hashes[CopyPlugin]));
+        return (verdict == ConflictThis.IdenticalToMaster, hashes[MasterPlugin] is { } master && master == hashes[CopyPlugin]);
     }
 
     [Fact]
