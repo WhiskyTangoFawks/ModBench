@@ -46,8 +46,10 @@ export async function sourceModsOf(
   const named = new Set<string>();
   const manifested = new Map<string, boolean>();
   const linked = new Set<string>();
-  for (const { modName: name, path: folder } of (folders ?? []).filter(({ kind }) => kind === 'mod')) {
-    const link = await linkIn(folder);
+  const mods = (folders ?? []).filter(({ kind }) => kind === 'mod');
+  const links = await Promise.all(mods.map(({ path }) => linkIn(path)));
+  for (const [index, { modName: name, path: folder }] of mods.entries()) {
+    const link = links[index] ?? { noManifest: true as const };
     if ('unreadable' in link) notes.push(`${folder} builds from no repository, as ${link.unreadable}.`);
     if (!('noManifest' in link)) manifested.set(keyOf(name), !('unreadable' in link));
     if (!('repository' in link)) continue;

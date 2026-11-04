@@ -1,7 +1,9 @@
 import { lstat } from 'node:fs/promises';
 import { isAbsolute, join, relative, sep } from 'node:path';
 import { isRepository } from './files';
+import { treeStampsOf } from './folderTreeStamps';
 import { git, gitFed } from './git';
+import { keptByRepositoryState } from './keptByRepositoryState';
 
 const PROBE = '.modbench-probe';
 const NONE_IGNORED = 1;
@@ -52,10 +54,18 @@ export async function foldersInReach(instanceRoot: string, folders: readonly str
   return reachable;
 }
 
+const keptHeldWhole = keptByRepositoryState<ReadonlySet<string>>();
+
 export async function foldersHeldWhole(instanceRoot: string, folders: readonly string[]): Promise<ReadonlySet<string>> {
   if (!await isRepository(instanceRoot)) return new Set();
   const reachable = await foldersInReach(instanceRoot, folders);
   if (reachable.length === 0) return new Set();
+  const tree = await treeStampsOf(instanceRoot, reachable);
+  if (tree === undefined) return heldWholeAmong(instanceRoot, reachable);
+  return keptHeldWhole(instanceRoot, 'heldWhole', () => heldWholeAmong(instanceRoot, reachable), [reachable.join('\0'), tree]);
+}
+
+async function heldWholeAmong(instanceRoot: string, reachable: readonly string[]): Promise<ReadonlySet<string>> {
   const probesOf = (folder: string): string[] => {
     const inFolder = gitPath(instanceRoot, folder);
     return [`${inFolder}/${PROBE}`, `${inFolder}/${PROBE}/${PROBE}`];

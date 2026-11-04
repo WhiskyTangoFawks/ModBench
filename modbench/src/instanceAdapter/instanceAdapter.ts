@@ -702,8 +702,8 @@ export interface InstanceAdapter extends DataFileReads {
   foldersRefused(folders: ReadonlyMap<string, string>, asked: readonly string[]): Promise<readonly FolderRefusal[]>;
   /** The source folder init makes a mod's repository in (ADR-0007); undefined when its name gives it none. */
   sourceFolder(mod: string): string | undefined;
-  /** The downloaded file the mod manager records `mod` as installed from; undefined when it records none. */
-  installationFile(mod: string): Promise<FileRead<InstallationFile | undefined>>;
+  /** The downloaded file the mod manager records `mod` as installed from, its metadata read in `folder` when the caller holds it; undefined when it records none. */
+  installationFile(mod: string, folder?: string): Promise<FileRead<InstallationFile | undefined>>;
   /** The downloaded file of `name` in the downloads folder, with its hashes; undefined when the folder holds none of that name. */
   downloadedFile(name: string): Promise<FileRead<InstallationFile | undefined>>;
   /** The downloaded file with the size and hash of `pinned`, under any name; none when the folder holds none. `notes`: why a

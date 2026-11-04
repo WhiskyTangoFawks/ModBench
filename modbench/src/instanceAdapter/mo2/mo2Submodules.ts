@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { errnoCode } from '../../ports/errno';
 import { git } from '../git';
+import { keptByRepositoryState } from '../keptByRepositoryState';
 import { errorMessage } from '../../ports/errorMessage';
 import { exists, ignoreSkippedLink, isRepository, listFolders, putIfChanged, readOrAbsent, remove } from '../files';
 import type { InstanceAdapter, SourceHost, Submodule, SubmoduleNote, UnclonedSubmodule } from '../instanceAdapter';
@@ -154,6 +155,9 @@ const isOwnHook = (hook: string): Promise<boolean> => readFile(hook, 'utf8').the
 export const pushRefusalWritten = (instanceRoot: string): Promise<boolean> =>
   hooksFolder(instanceRoot).then((hooks) => isOwnHook(join(hooks, PRE_PUSH_HOOK_NAME)), () => false);
 
+const keptSubmodules = keptByRepositoryState<Awaited<ReturnType<InstanceAdapter['submodule']>>>();
+const keptTracked = keptByRepositoryState<boolean>();
+
 export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
   return {
     async writeSubmodules(acted, sourceMods) {
@@ -217,8 +221,8 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
     sourceHost: (folder) => sourceHostOf(folder).then(
       (answer) => ({ kind: 'read' as const, answer }), (err: unknown) => ({ kind: 'unreadable' as const, reason: errorMessage(err) })),
 
-    submodule: (name) => submoduleIn(instanceRoot, name).catch((err: unknown) =>
-      ({ lacks: `the instance repository's submodule '${name}' could not be read: ${errorMessage(err)}` })),
+    submodule: (name) => keptSubmodules(instanceRoot, name, () => submoduleIn(instanceRoot, name).catch((err: unknown) =>
+      ({ lacks: `the instance repository's submodule '${name}' could not be read: ${errorMessage(err)}` }))),
 
     async unclonedSubmodules() {
       if (!(await isRepository(instanceRoot))) return [];
@@ -232,7 +236,7 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
 
     repositoryOnDisk: () => isRepository(instanceRoot),
 
-    sourceFolderTracked: async (name) => (await sourceFoldersTracked(instanceRoot, [name])).has(name),
+    sourceFolderTracked: (name) => keptTracked(instanceRoot, name, async () => (await sourceFoldersTracked(instanceRoot, [name])).has(name)),
 
     async removeRepository() {
       if (!(await isRepository(instanceRoot))) return;

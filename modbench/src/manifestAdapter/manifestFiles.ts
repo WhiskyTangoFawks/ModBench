@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Dirent } from 'node:fs';
-import { access, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { access, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
@@ -13,10 +13,11 @@ import type { Manifest, ManifestRead } from './manifest';
 import { manifestText, ordinal } from './manifestText';
 import { readManifest } from './manifestRead';
 import { packagesAsked } from './manifestPackages';
+import { entriesByStamp, keptByStamp } from './stampedReads';
 
 async function entriesIn(folder: string): Promise<Dirent[]> {
   try {
-    return await readdir(folder, { withFileTypes: true });
+    return await entriesByStamp(folder);
   } catch (err) {
     if (errnoCode(err) === 'ENOENT') return [];
     throw err;
@@ -40,6 +41,8 @@ const manifestFileIn = async (folder: string): Promise<string> => join(folder, (
 // An editor may write a byte order mark, which JSON does not allow.
 const textAt = async (path: string): Promise<string> => (await readFile(path, 'utf8')).replace(/^\uFEFF/, '');
 
+const manifestReadAt = keptByStamp(async (path: string): Promise<ManifestRead> => readManifest(await textAt(path)));
+
 const twoManifests = (one: string, other: string): string => `its folder holds two manifests, '${one}' and '${other}'`;
 
 const twoBuildFiles = (one: string, other: string): string => `its repository holds two build files, '${one}' and '${other}'`;
@@ -48,7 +51,7 @@ const twoBuildFiles = (one: string, other: string): string => `its repository ho
 export async function manifestIn(folder: string): Promise<ManifestRead | undefined> {
   const [one, other] = await manifestsIn(folder);
   if (other !== undefined) return { refused: twoManifests(one ?? '', other) };
-  return one === undefined ? undefined : readManifest(await textAt(join(folder, one)));
+  return one === undefined ? undefined : manifestReadAt(join(folder, one));
 }
 
 // The Instance adapter's listings skip the temp's name.
