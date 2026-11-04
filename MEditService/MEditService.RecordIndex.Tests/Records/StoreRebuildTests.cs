@@ -4,6 +4,7 @@ using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
 namespace MEditService.RecordIndex.Tests.Records;
@@ -278,6 +279,32 @@ public sealed class StoreRebuildTests : IDisposable
 
         Assert.Equal(version, index.Status.Version);
         Assert.NotNull(index.PluginResponseOf(data.Plugins[1].Key));
+    }
+
+    [Fact]
+    public async Task ARebuild_StopsTheReconcileInFlight_AndItsOwnReconcileAnswers()
+    {
+        using var data = new PluginFixtureBuilder("store-rebuild-stops-reconcile")
+            .WithPlugin("A.esp").WithPlugin("B.esp").WithPlugin("C.esp", mod => mod.Npcs.AddNew("FromC")).Build();
+        var log = new List<LogEntry>();
+        using var loggerFactory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider(log)));
+        using var gate = new GatedPluginAdapter(gateBefore: "B.esp");
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, gate, loggerFactory: loggerFactory);
+        var version = holder.Apply(SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        await gate.WaitUntilParkedAsync();
+
+        var rebuild = Task.Run(() => index.Queries.RebuildStore(GameRelease.Fallout4, data.InstanceRoot));
+        Assert.True(
+            Waits.ReachedWithin(() => { lock (log) return log.Exists(e => e.Message == "Asked the reconcile in flight to stop"); }, TimeSpan.FromSeconds(20)),
+            "the rebuild asking the parked reconcile to stop");
+        gate.Release();
+        Assert.Null(await rebuild);
+        AwaitRefill(index);
+
+        Assert.Equal(["A.esp", "B.esp", "A.esp", "B.esp", "C.esp"], gate.Opened);
+        Assert.Equal(version, index.Status.Version);
+        Assert.NotEmpty(index.ListedIn(data.Plugins[2].Key));
     }
 
     [Fact]
