@@ -80,7 +80,7 @@ function pastSequence(instance: Instance, sequence: number): Promise<InstanceVal
 }
 
 const fakeClockLeavingSetImmediateReal = (): void => {
-  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
 };
 
 const SETTLE_MS = 200;
@@ -365,14 +365,12 @@ describe('Instance — built by watching', () => {
 
     fakeClockLeavingSetImmediateReal();
     try {
-      const everyHalfQuiet = QUIET_MS / 2;
-      for (let at = 0; at < CHECK_CAP_MS - everyHalfQuiet; at += everyHalfQuiet) {
-        fake.changed(`/instance/overwrite/${at}.txt`);
-        await vi.advanceTimersByTimeAsync(everyHalfQuiet);
-      }
+      fake.changed('/instance/overwrite/first.txt');
+      const stream = setInterval(() => { fake.changed('/instance/overwrite/again.txt'); }, QUIET_MS / 2);
+      await vi.advanceTimersByTimeAsync(CHECK_CAP_MS - 1);
       expect(checks()).toBe(1);
-      fake.changed('/instance/overwrite/last.txt');
-      await vi.advanceTimersByTimeAsync(everyHalfQuiet);
+      await vi.advanceTimersByTimeAsync(QUIET_MS / 2 - 1);
+      clearInterval(stream);
     } finally {
       vi.useRealTimers();
     }
@@ -429,12 +427,11 @@ describe('Instance — built by watching', () => {
 
   it('finishes a re-read in progress, and folds the events heard during it into one more', async () => {
     let release!: () => void;
-    const held = new Promise<void>((resolve) => { release = resolve; });
-    let holding = false;
+    let readHeld: Promise<void> = Promise.resolve();
     const { instance, fake } = loader({}, (adapter) => ({
       ...adapter,
       reading: async (asked) => {
-        if (holding) await held;
+        await readHeld;
         return adapter.reading(asked);
       },
     }));
@@ -444,14 +441,15 @@ describe('Instance — built by watching', () => {
 
     fakeClockLeavingSetImmediateReal();
     try {
-      holding = true;
+      readHeld = new Promise<void>((resolve) => { release = resolve; });
       fake.changed('/instance/mods/A/a.esp');
       await vi.advanceTimersByTimeAsync(SETTLE_MS);
-      holding = false;
-      for (const name of ['b', 'c', 'd']) {
-        fake.changed(`/instance/mods/A/${name}.esp`);
-        await vi.advanceTimersByTimeAsync(SETTLE_MS);
-      }
+      fake.changed('/instance/mods/A/b.esp');
+      await vi.advanceTimersByTimeAsync(SETTLE_MS);
+      fake.changed('/instance/mods/A/c.esp');
+      await vi.advanceTimersByTimeAsync(SETTLE_MS);
+      fake.changed('/instance/mods/A/d.esp');
+      await vi.advanceTimersByTimeAsync(SETTLE_MS);
       expect(landed).toEqual([]);
       release();
       await vi.advanceTimersByTimeAsync(0);
@@ -490,6 +488,22 @@ describe('Instance — built by watching', () => {
     try {
       fake.changed('/instance/mods/A/a.esp');
       await vi.advanceTimersByTimeAsync(QUIET_MS);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(logs).toEqual(['[instance] The check of the disk found a change no event named: /instance/mods/A/textures']);
+  });
+
+  it('tells each change the check after a change with no path found, as that change named none', async () => {
+    const { instance, fake, logs } = loader();
+    await instance.refresh();
+    fake.read({ unheardChanges: ['/instance/mods/A/textures'] });
+
+    fakeClockLeavingSetImmediateReal();
+    try {
+      fake.changed();
+      await vi.advanceTimersByTimeAsync(SETTLE_MS);
     } finally {
       vi.useRealTimers();
     }

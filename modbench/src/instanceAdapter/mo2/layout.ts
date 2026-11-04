@@ -174,8 +174,8 @@ export interface WatchedFolder {
 }
 
 const EVERYTHING_BELOW = '**';
-/** What a folder holds at its first level: every name of one character or more, as `*` would be, which spells mod order's
- *  marker and so belongs to its codec alone. */
+/** A folder's first level, as VS Code reads `*`. A bare `*` is plugins.txt's mark of an enabled plugin and mod order's
+ *  mark of a skipped line, which the format scan keeps to those codecs. */
 export const FIRST_LEVEL = '?*';
 
 /** The instance's own watches, each as shallow as its changes are. A mod's or a profile's folder is followed once read. */

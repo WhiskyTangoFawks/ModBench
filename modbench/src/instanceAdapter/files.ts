@@ -334,7 +334,6 @@ const listings = new Map<string, Kept<Dirent[]>>();
 /** As `listDir`, for a folder of the instance or the game, which is not listed again while its stamp has not changed. */
 export const listDirByStamp = stampKept(listDir, listings);
 
-// A path touches what it is kept as, its folder's listing, and when it names a folder listed, everything kept below it.
 function touchedBy(named: readonly string[]): (key: string) => boolean {
   const keys = new Set(named.flatMap((path) => [pathKey(path), pathKey(dirname(path))]));
   const below = named.map(pathKey).filter((key) => listings.has(key)).map((key) => key + sep);
@@ -349,7 +348,6 @@ const stampStill = async ({ path, stamp }: Kept<unknown>): Promise<boolean> => {
   }
 };
 
-// Each kept path `checked` picks whose stamp changed, forgotten so the read after reads it again.
 async function forgetChanged(checked: (key: string) => boolean): Promise<string[]> {
   const picked = everyKept.flatMap((kept) => [...kept].filter(([key]) => checked(key)).map(([key, held]) => ({ kept, key, held })));
   const changed = await Promise.all(picked.map(async ({ kept, key, held }) => {
@@ -367,6 +365,9 @@ export async function readTrustingKept<T>(named: readonly string[], disk: boolea
   const changed = await forgetChanged(disk ? () => true : touched);
   return { answer: await trusting.run(true, read), unheard: changed.filter((path) => !touched(pathKey(path))) };
 }
+
+/** Runs `arm` outside any read that trusts what is kept, so a timer, watch or listener it arms reads as any other caller. */
+export const outsideTrustedRead = <T>(arm: () => T): T => trusting.exit(arm);
 
 /** A reader of the text `parse` makes of a file, which reads and parses it again only when the file's stamp has changed. */
 export const parsedBy = <T>(parse: (text: string) => T): ((path: string) => Promise<T>) =>

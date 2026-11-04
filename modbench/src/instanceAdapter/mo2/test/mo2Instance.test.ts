@@ -38,7 +38,7 @@ import { tmpdir } from 'node:os';
 import { Readable } from 'node:stream';
 import { dirname, join, matchesGlob, relative as relativeFrom, sep } from 'node:path';
 import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
-import { FIRST_LEVEL } from '../layout';
+import { FIRST_LEVEL, PROFILE_WATCH_PATTERN } from '../layout';
 import { fixedGameFolderSetting } from '../../../test/gameFolderSetting';
 import type { GameDetectors } from '../../gameFolder/gameFolderResolver';
 import { FOMOD_ENGINE } from '../../../test/fomodEngine';
@@ -1013,17 +1013,30 @@ describe('the MO2 Instance adapter', () => {
     };
     const recursive = (pattern: string): boolean => pattern.includes('**') || pattern.includes('/');
 
-    it('watches the whole of nothing but Overwrite, the source folders and the Data folder, a mod folder and a profile to their first level', async () => {
+    it('watches the whole of nothing in the instance but Overwrite and the source folders, each mod folder to its first level and each profile for its files', async () => {
       const watched = managerOver(root);
       watched.subscribe(() => undefined);
       await watched.reading();
 
       const wholeBelow = live().filter((w) => recursive(w.pattern)).map((w) => relativeFrom(root, w.base).split(sep).join('/'));
-      const modsWatched = live().filter((w) => dirname(w.base) === join(root, 'mods')).map((w) => w.pattern);
+      const patternsUnder = (folder: string): string[] => live().filter((w) => dirname(w.base) === join(root, folder)).map((w) => w.pattern);
 
-      expect(wholeBelow.filter((base) => !base.startsWith('..')).sort()).toEqual(['overwrite', 'source']);
-      expect(modsWatched).toHaveLength(9);
-      expect(new Set(modsWatched)).toEqual(new Set([FIRST_LEVEL]));
+      expect(wholeBelow.sort()).toEqual(['overwrite', 'source']);
+      expect(patternsUnder('mods')).toEqual(Array(9).fill(FIRST_LEVEL));
+      expect(patternsUnder('profiles')).toEqual([PROFILE_WATCH_PATTERN, PROFILE_WATCH_PATTERN]);
+    });
+
+    it('stops watching a mod folder a later read does not list', async () => {
+      const watched = managerOver(root);
+      watched.subscribe(() => undefined);
+      await watched.reading();
+      const harderVats = join(root, 'mods', 'Harder VATS');
+      const watching = live().find((w) => w.base === harderVats);
+
+      await rm(harderVats, { recursive: true });
+      await watched.reading();
+
+      expect([watching?.disposed, live().some((w) => w.base === harderVats)]).toEqual([true, false]);
     });
 
     it('hears a file created, changed or deleted alike, each by its path, so a deleted mod folder is heard', async () => {

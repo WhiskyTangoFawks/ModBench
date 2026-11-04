@@ -83,13 +83,13 @@ async function sortingRuleFile(path: string): Promise<SortingRuleFile> {
   }
 }
 
-function followedProfiles({ instanceRoot, watch }: Mo2Context, profiles: string[]): string[] {
+function watchedProfiles({ instanceRoot, watch }: Mo2Context, profiles: string[]): string[] {
   watch.follow('profileFolders', profiles.map((profile) => profileDir(instanceRoot, profile)), PROFILE_WATCH_PATTERN);
   return profiles;
 }
 
 // A change deeper in a mod is left to the check of the disk: a watch of every folder of every mod passes the system's limit.
-const followModFolders = ({ watch }: Mo2Context, folders: readonly ModFolder[]): void => {
+const watchModFolders = ({ watch }: Mo2Context, folders: readonly ModFolder[]): void => {
   watch.follow('modFolders', folders.map((folder) => folder.path), FIRST_LEVEL);
 };
 
@@ -126,7 +126,7 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
       };
     },
 
-    profiles: async (skippedLink) => followedProfiles(context, await readOrAbsent(() => listFolders(profilesDir(instanceRoot), skippedLink), [])),
+    profiles: async (skippedLink) => watchedProfiles(context, await readOrAbsent(() => listFolders(profilesDir(instanceRoot), skippedLink), [])),
 
     async modOrder(profile) {
       return modlistAt(modlistFile(instanceRoot, profile));
@@ -136,7 +136,7 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
 
     modFolders: async (skippedLink) => {
       const all = await listModFolders(context, skippedLink);
-      followModFolders(context, all ?? []);
+      watchModFolders(context, all ?? []);
       return all === undefined ? undefined : modFoldersOf(all);
     },
 

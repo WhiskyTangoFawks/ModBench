@@ -12,8 +12,10 @@ import { CHECK_THE_DISK, type InstanceReading } from '../instanceAdapter';
 vi.mock('vscode', () => fakeVscodeModule());
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
-  return { ...actual, readdir: vi.fn(actual.readdir), readFile: vi.fn(actual.readFile) };
+  return { ...actual, readdir: vi.fn(actual.readdir), readFile: vi.fn(actual.readFile), stat: vi.fn(actual.stat) };
 });
+
+const forgetWhatEarlierTestsKeptOfFoldersNowGone = (): Promise<unknown> => readTrustingKept([], true, () => Promise.resolve());
 
 const HOUR_MS = 3_600_000;
 const listingsOf = (folder: string): number => vi.mocked(readdir).mock.calls.filter(([path]) => path === folder).length;
@@ -30,6 +32,7 @@ describe('a folder listed and a file parsed by their stamps', () => {
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'medit-stamped-'));
+    await forgetWhatEarlierTestsKeptOfFoldersNowGone();
     vi.mocked(readdir).mockClear();
   });
 
@@ -160,15 +163,47 @@ describe('a folder listed and a file parsed by their stamps', () => {
     settle();
     await namesOf(heard);
     await namesOf(unheard);
-    for (const folder of [heard, unheard]) {
-      await writeFile(join(folder, 'new.esp'), '');
-      await modifiedLater(folder);
-    }
+    await writeFile(join(heard, 'new.esp'), '');
+    await modifiedLater(heard);
+    await writeFile(join(unheard, 'new.esp'), '');
+    await modifiedLater(unheard);
 
-    const { answer, unheard: changes } = await readTrustingKept([join(heard, 'new.esp')], true, async () => [await namesOf(heard), await namesOf(unheard)]);
+    const checked = await readTrustingKept([join(heard, 'new.esp')], true, async () => [await namesOf(heard), await namesOf(unheard)]);
 
-    const notAnEarlierTestsGoneFolder = (path: string): boolean => path.startsWith(root);
-    expect([answer, changes.filter(notAnEarlierTestsGoneFolder)]).toEqual([[['new.esp'], ['new.esp']], [unheard]]);
+    expect(checked).toEqual({ answer: [['new.esp'], ['new.esp']], unheard: [unheard] });
+  });
+
+  it('forgets at a check of the disk, as a change no event named, a folder it kept that is gone', async () => {
+    const gone = join(root, 'gone');
+    await mkdir(gone);
+    settle();
+    await namesOf(gone);
+    await rm(gone, { recursive: true });
+
+    const { unheard } = await readTrustingKept([], true, () => Promise.resolve());
+
+    expect(unheard).toEqual([gone]);
+    await expect(readTrustingKept([], false, () => namesOf(gone))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('keeps the listing a read outside it made while a re-read was checking that folder\'s stamp', async () => {
+    await writeFile(join(root, 'a.esp'), '');
+    settle();
+    await namesOf(root);
+    await writeFile(join(root, 'b.esp'), '');
+    await modifiedLater(root);
+    let releaseTheCheck!: () => void;
+    const checkHeld = new Promise<void>((resolve) => { releaseTheCheck = resolve; });
+    vi.mocked(stat).mockImplementationOnce(async (...args) => { await checkHeld; return stat(...args); });
+
+    const rereading = readTrustingKept([join(root, 'b.esp')], false, () => Promise.resolve());
+    const outside = await namesOf(root);
+    releaseTheCheck();
+    await rereading;
+    vi.mocked(readdir).mockClear();
+    const { answer } = await readTrustingKept([], false, () => namesOf(root));
+
+    expect([outside, answer, listingsOf(root)]).toEqual([['a.esp', 'b.esp'], ['a.esp', 'b.esp'], 0]);
   });
 
   it('rejects for a file that is gone, as a read of it does', async () => {
@@ -212,6 +247,23 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     await modifiedLater(folder);
     const after = await adapter.reading();
     expect(after.modFiles.get(name)?.files.map((file) => file.relativePath)).toContain('added/new.txt');
+  });
+
+  it('has a read that a listener starts, called as the instance read follows a new mod folder, check each stamp', async () => {
+    const adapter = managerOver(instance);
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
+    const first = await adapter.reading();
+    const folder = [...first.modFiles.values()].find((listed) => listed.files.length > 0)?.folder ?? '';
+    await writeFile(join(folder, 'added.txt'), '');
+    await modifiedLater(folder);
+    const startedByTheListener: Promise<string[]>[] = [];
+    adapter.subscribe(() => { startedByTheListener.push(namesOf(folder)); });
+    await mkdir(join(instance, 'mods', 'New Mod'));
+
+    await adapter.reading({ named: [], disk: false });
+
+    expect(await Promise.all(startedByTheListener)).toEqual([await namesOf(folder, listDir)]);
+    expect(await namesOf(folder, listDir)).toContain('added.txt');
   });
 
   it('shows a file added to a mod folder when a re-read is named it or the disk is checked, and tells the check found it unheard', async () => {

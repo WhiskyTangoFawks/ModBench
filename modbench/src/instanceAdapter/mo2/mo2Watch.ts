@@ -3,6 +3,7 @@
 
 import { heldFolderWatchFor, type HeldFolderWatch } from '../heldFolders';
 import { watchFiles } from '../watchFiles';
+import { outsideTrustedRead } from '../files';
 import type { ChangeListener, Subscription } from '../instanceAdapter';
 import { instanceWatches, sourceRootDir } from './layout';
 
@@ -82,7 +83,8 @@ export function mo2Watch(instanceRoot: string, gameFolderChanged: (listener: () 
       };
     },
 
-    follow(what, bases, glob) {
+    // A read that follows a folder trusts what it keeps; what the watch arms, and the listeners it calls, never do (ADR-0015).
+    follow: (what, bases, glob) => outsideTrustedRead(() => {
       const before: Followed = followed.get(what) ?? { glob, watches: new Map<string, Subscription | undefined>() };
       const kept = new Set(before.glob === glob ? bases : []);
       const watches = new Map<string, Subscription | undefined>();
@@ -97,7 +99,7 @@ export function mo2Watch(instanceRoot: string, gameFolderChanged: (listener: () 
       for (const base of added) watches.set(base, armed() ? watch(base, glob) : undefined);
       followed.set(what, { glob, watches });
       if (added.length > 0 && armed()) checkDue();
-    },
+    }),
 
     watchNotes: () => [...new Set([...held.values()].flatMap((folders) => folders?.failures() ?? []))]
       .map((reason) => `Modbench hears no change inside a folder whose watch failed: ${reason}`),

@@ -455,7 +455,6 @@ export class Instance implements Subscription {
     this.tellOnce('archives', missing.map((name) => `[instance] The game's INIs list the archive ${name}, which no mod, Overwrite or game folder holds.`), 'info');
   }
 
-  // What an event names is re-read once its burst settles, and the disk checked once the events go quiet, or at the cap.
   private hear(path: string | undefined): void {
     if (path === undefined) this.heardNoPath = true;
     else this.heard.add(path);
@@ -465,7 +464,7 @@ export class Instance implements Subscription {
       const disk = this.heardNoPath;
       this.heard.clear();
       this.heardNoPath = false;
-      void this.enqueue({ named, disk, tellsUnheard: false });
+      void this.enqueue({ named, disk, tellsUnheard: disk });
     }, SETTLE_MS);
     const now = Date.now();
     this.uncheckedSinceMs ??= now;
@@ -477,7 +476,6 @@ export class Instance implements Subscription {
     return this.checkTimer !== undefined || this.next?.disk === true;
   }
 
-  // A check takes in every event heard so far, and is the check they waited on.
   private enqueue({ named = [], disk, tellsUnheard }: { named?: readonly string[]; disk: boolean; tellsUnheard: boolean }): Promise<void> {
     const next = this.next ?? nextRun();
     this.next = next;
