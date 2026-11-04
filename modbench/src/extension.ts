@@ -32,6 +32,7 @@ import { offerToVsCodeChat } from './agent/vsCodeChat';
 import { agentPort } from './agent/agentPort';
 import { deploymentFolderSetting, gameFolderSetting } from './toolbox/workspaceSettings';
 import { registerPutLoadOrder } from './toolbox/putLoadOrderCommand';
+import { showProgressWhileLate } from './drivingLib/lateProgress';
 import { createPlugins, PLUGINS_KEY_ARGS, type Plugins } from './plugins';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
@@ -179,6 +180,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const { outputChannel, client, plugins: pluginsBox, reporterFor, ask, trash, extensionId } = deps;
   own(markFirstReadLanded(instance));
   own(reportSubscriberThrows(instance, reporterFor));
+  own(showProgressWhileLate(instance, [TOOLBOX_VIEW, MODS_KEY_ARGS.view, PLUGINS_KEY_ARGS.view, DOWNLOADS_KEY_ARGS.view]));
   const commands = instanceCommands({ adapter, client, instanceRoot });
   const tasks = stepTasks(hostTasks, scriptHostIn(deps.extensionUri));
   const instanceRepository = instanceRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks, loadOrderSnapshot: () => instance.value.loadOrderSnapshot });
