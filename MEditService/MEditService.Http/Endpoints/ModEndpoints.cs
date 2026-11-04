@@ -54,8 +54,12 @@ internal static class ModEndpoints
             return EndpointMapping.BadRequest(SourceFolderRequest.NotWhole);
         if (mods.Any(mod => mod.Commit is null))
             return EndpointMapping.BadRequest(ModToVersionInGitRequest.LacksCommit);
-        if (mods.Select(mod => mod.SourceFolder.WhyNotWhole).FirstOrDefault(why => why is not null) is { } notWhole)
-            return EndpointMapping.BadRequest(notWhole);
+        if (mods.Any(mod => mod.SourceFolder.WhyNotWhole == SourceFolderRequest.ManifestLacksItsFile))
+            return EndpointMapping.BadRequest(SourceFolderRequest.ManifestLacksItsFile);
+        if (mods.Any(mod => mod.SourceFolder.WhyNotWhole == SourceFolderRequest.ManifestLacksItsText))
+            return EndpointMapping.BadRequest(SourceFolderRequest.ManifestLacksItsText);
+        if (mods.Any(mod => mod.SourceFolder.WhyNotWhole == SourceFolderRequest.ManifestFileIsAPath))
+            return EndpointMapping.BadRequest(SourceFolderRequest.ManifestFileIsAPath);
         List<ModToVersionInGit> toVersion = [.. mods.Select(mod => new ModToVersionInGit(mod.Name, mod.ModFolder, mod.SourceFolder.ToSourceFolderContents(), mod.Commit == true))];
 
         return await EndpointMapping.Answered("Version in git", logger, versionInGitHandler.VersionInGitAsync(toVersion), EndpointMapping.Refusal);
@@ -184,16 +188,19 @@ internal sealed record SourceFolderRequest(
 
     internal string? WhyNotWhole =>
         !string.IsNullOrWhiteSpace(Path) && In is not null && FolderPaths.AreInTheFolder(Assets ?? []) && BuildFile is not null
-            ? WhyNotWholeFile(ManifestFile, Manifest, nameof(ManifestFile), nameof(Manifest))
-                ?? WhyNotWholeFile(ModFolderManifestFile, ModFolderManifest, nameof(ModFolderManifestFile), nameof(ModFolderManifest))
+            ? WhyManifestIsNotWhole(ManifestFile, Manifest) ?? WhyManifestIsNotWhole(ModFolderManifestFile, ModFolderManifest)
             : NotWhole;
 
-    private static string? WhyNotWholeFile(string? file, string? text, string fileMember, string textMember) => (file, text) switch
+    internal const string ManifestLacksItsFile = "A manifest needs its file name: ManifestFile or ModFolderManifestFile is missing.";
+    internal const string ManifestLacksItsText = "A manifest needs its text: Manifest or ModFolderManifest is missing.";
+    internal const string ManifestFileIsAPath = "ManifestFile or ModFolderManifestFile must be a bare file name, not a path.";
+
+    private static string? WhyManifestIsNotWhole(string? file, string? text) => (file, text) switch
     {
         (null, null) => null,
-        (null, _) => $"A manifest needs its file name: {fileMember} is missing.",
-        (_, null) => $"A manifest needs its text: {textMember} is missing.",
-        (var name, _) when !IsBareFileName(name) => $"{fileMember} must be a bare file name, not a path.",
+        (null, _) => ManifestLacksItsFile,
+        (_, null) => ManifestLacksItsText,
+        (var name, _) when !IsBareFileName(name) => ManifestFileIsAPath,
         _ => null,
     };
 

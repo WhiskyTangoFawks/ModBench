@@ -354,8 +354,12 @@ internal static class PluginEndpoints
         var requested = req.Plugins ?? [];
         if (requested.Any(p => p.SourceFolder?.WhyNotWhole == SourceFolderRequest.NotWhole))
             return Task.FromResult(EndpointMapping.BadRequest(SourceFolderRequest.NotWhole));
-        if (requested.Select(p => p.SourceFolder?.WhyNotWhole).FirstOrDefault(why => why is not null) is { } notWhole)
-            return Task.FromResult(EndpointMapping.BadRequest(notWhole));
+        if (requested.Any(p => p.SourceFolder?.WhyNotWhole == SourceFolderRequest.ManifestLacksItsFile))
+            return Task.FromResult(EndpointMapping.BadRequest(SourceFolderRequest.ManifestLacksItsFile));
+        if (requested.Any(p => p.SourceFolder?.WhyNotWhole == SourceFolderRequest.ManifestLacksItsText))
+            return Task.FromResult(EndpointMapping.BadRequest(SourceFolderRequest.ManifestLacksItsText));
+        if (requested.Any(p => p.SourceFolder?.WhyNotWhole == SourceFolderRequest.ManifestFileIsAPath))
+            return Task.FromResult(EndpointMapping.BadRequest(SourceFolderRequest.ManifestFileIsAPath));
         return OverPlugins([.. requested.Select(p => p.Plugin)], _ => EndpointMapping.Answered(
             "Decompile and repair", logger,
             repairHandler.DecompileAndRepairAsync(

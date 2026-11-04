@@ -8,7 +8,7 @@ namespace MEditService.Commands;
 public sealed record PluginToRepair(PluginAddress Plugin, SourceFolderContents? SourceFolder = null);
 
 /// <summary>The source folder made for a mod, the repository that holds it, and what the extension hands its first commit
-/// (ADR-0016): the assets by their paths in the mod folder, the build file, and its and the mod folder's manifests.</summary>
+/// (ADR-0016): the assets by path in the mod folder, the build file, and both manifests.</summary>
 public sealed record SourceFolderContents(
     string Path, SourceModIn In, IReadOnlyList<string> Assets, byte[] BuildFile, RootFile? Manifest = null, IReadOnlyList<string>? Ignored = null,
     RootFile? ModFolderManifest = null);
