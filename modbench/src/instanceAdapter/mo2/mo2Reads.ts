@@ -15,7 +15,7 @@ import type { ManagerGamePath } from '../gameFolder/gameFolderResolver';
 import { creationClubFileOf, dataFolderOf, listDataFolderFiles, listDataFolderPlugins, readCreationClubList } from '../gameFolder/dataFolder';
 import { pathTokensWritten } from './mo2PathTokens';
 import { pushRefusalWritten } from './mo2Submodules';
-import { factsOf, get, ignoreSkippedLink, isRepository, listEntries, listFolders, readOrAbsent, readOrReason, identityOf, type SkippedLink, stampOf, isOwnTemp } from '../files';
+import { get, ignoreSkippedLink, parsedBy, isRepository, listEntries, listFolders, readOrAbsent, readOrReason, identityOf, type SkippedLink, stampOf, isOwnTemp } from '../files';
 import type { DownloadedFile, DownloadedFiles, InstanceAdapter, ManagerNames, ManagerRunning, ModFolder, ModFolders, SortingRuleFile } from '../instanceAdapter';
 import { DATA_FOLDER_GLOB, DOWNLOADS_WATCH_GLOB, downloadedFilePath, downloadedFileMetadataPath, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile, sortingRuleFilePaths } from './layout';
 import { mo2Archives } from './mo2Archives';
@@ -40,14 +40,19 @@ async function listDownloadedFiles(downloadsDir: string, skippedLink: SkippedLin
   return Promise.all(names.map(async (name) => {
     const path = downloadedFilePath(downloadsDir, name);
     const metadataPath = downloadedFileMetadataPath(downloadsDir, name);
-    const [facts, metaText] = await Promise.all([
-      factsOf(path),
-      readOrAbsent<string | undefined>(() => get(metadataPath), undefined),
+    const [stamp, parsed] = await Promise.all([
+      stampOf(path),
+      readOrAbsent<ReturnType<typeof parseDownloadedFileMeta> | undefined>(() => downloadedMetaAt(metadataPath), undefined),
     ]);
-    const parsed = metaText === undefined ? undefined : parseDownloadedFileMeta(metaText);
-    return { name, path, metadataPath, size: facts.size, mtimeMs: facts.mtimeMs, excluded: parsed?.hidden ?? false, meta: parsed?.meta, modID: effectiveModId(parsed?.meta.modID, name) };
+    return { name, path, metadataPath, size: Number(stamp.size), mtimeMs: Number(stamp.modifiedNs) / 1e6, excluded: parsed?.hidden ?? false, meta: parsed?.meta, modID: effectiveModId(parsed?.meta.modID, name) };
   }));
 }
+
+const metaIniAt = parsedBy(parseMetaIni);
+const sortingRuleTextAt = parsedBy((text: string) => text);
+const downloadedMetaAt = parsedBy(parseDownloadedFileMeta);
+const modlistAt = parsedBy(parseModlist);
+const pluginsAt = parsedBy(parsePlugins);
 
 const GAME_PATH_PLACE = `${SETTINGS_FILE_NAME}'s gamePath`;
 
@@ -67,12 +72,12 @@ const MO2_NAMES: ManagerNames = { manager: 'MO2', modOrderFile: MODLIST_FILE_NAM
 export async function readMetaIni(context: Mo2Context, mod: string, folders: ModFolders | undefined | 'list'): Promise<MetaIni> {
   if (entryNamed(mod).kind === 'separator') return {};
   const folder = await modFolderNamed(context, mod, folders);
-  return folder === undefined ? {} : readOrAbsent(async () => parseMetaIni(await get(modMetaFileIn(folder))), {});
+  return folder === undefined ? {} : readOrAbsent(() => metaIniAt(modMetaFileIn(folder)), {});
 }
 
 async function sortingRuleFile(path: string): Promise<SortingRuleFile> {
   try {
-    return { path, kind: 'text', text: await get(path) };
+    return { path, kind: 'text', text: await sortingRuleTextAt(path) };
   } catch (err) {
     return errnoCode(err) === 'ENOENT' ? { path, kind: 'absent' } : { path, kind: 'unreadable', reason: errorMessage(err) };
   }
@@ -115,7 +120,7 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
     },
 
     async modOrder(profile) {
-      return parseModlist(await get(modlistFile(instanceRoot, profile)));
+      return modlistAt(modlistFile(instanceRoot, profile));
     },
 
     modMeta: async (mod, folders) => modMetaOf(await readMetaIni(context, mod, folders)),
@@ -126,7 +131,7 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
     },
 
     async pluginOrder(profile) {
-      return parsePlugins(await get(pluginsFile(instanceRoot, profile)));
+      return pluginsAt(pluginsFile(instanceRoot, profile));
     },
 
     gameFolderPlugins: listDataFolderPlugins,
