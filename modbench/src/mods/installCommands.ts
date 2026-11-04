@@ -196,6 +196,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
       ...packageOf(argument), target: await targetOf(options, (name) => commands.newModNameRefusal(name)), fomod: fomodAnswerOf(options),
     }),
     run: (install) => runWritingGesture(
+      'modbench.mod.install',
       install.via === 'downloadedFile' ? downloadedFileInstallReporting.progressViewId : MODS_KEY_ARGS.view, instance, (progress) => installedMod(install, progress)),
     report: (result, install) => {
       if (!result.applied) {

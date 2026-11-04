@@ -40,7 +40,7 @@ export function registerModEnableCommands(
         return modNames.length === 0 ? undefined : modNames;
       },
       fromAgent: ({ argument }) => argument.map(modNameOf),
-      run: (modNames) => runModsWriting(instance, () => commands.setModsEnabled(modNames, enabled)),
+      run: (modNames) => runModsWriting(enabled ? 'modbench.mod.enable' : 'modbench.mod.disable', instance, () => commands.setModsEnabled(modNames, enabled)),
       report: (result, modNames) => {
         if (!result.applied) {
           reporter.report('error', `Failed to ${verb} mods.`, result.refusal);
@@ -73,7 +73,7 @@ export function registerFileExclusionCommands(
       },
       fromAgent: ({ argument }) => argument.map(fileRefOf),
       run: async (refs) => {
-        const result = await runModsWriting(instance, () => commands.markFiles(refs, mark));
+        const result = await runModsWriting(mark === 'Excluded' ? 'modbench.mod.excludeFile' : 'modbench.mod.includeFile', instance, () => commands.markFiles(refs, mark));
         return result.applied ? result : { applied: false, refusal: `Could not ${verb} ${refs.length} files.`, detail: result.refusal };
       },
       report: (result, refs) => {
@@ -105,7 +105,7 @@ export function registerFileIgnoreCommands(
         return refs.length === 0 ? undefined : refs;
       },
       fromAgent: ({ argument }) => argument.map(fileRefOf),
-      run: async (refs) => ({ applied: true, outcome: await runModsWriting(instance, () => commands.ignoreFiles(refs, ignore)) }),
+      run: async (refs) => ({ applied: true, outcome: await runModsWriting(ignore ? 'modbench.mod.ignoreFile' : 'modbench.mod.unignoreFile', instance, () => commands.ignoreFiles(refs, ignore)) }),
       report: (result, refs) => {
         if (!result.applied) {
           reporter.report('error', result.refusal, result.detail);
@@ -167,7 +167,7 @@ export function registerModMoveCommand(
       return { kind, names: entries.map((entry) => entry.name), target: options };
     },
     run: ({ kind, names, target: { place, end } }) =>
-      runModsWriting(instance, async () => asMoveResult(
+      runModsWriting('modbench.mod.move', instance, async () => asMoveResult(
         kind, await (kind === 'mod' ? commands.moveMods(names, place, end) : commands.moveSeparators(names, place, end)))),
     report: (result, { kind, names }) => {
       if (!result.applied) {
@@ -244,7 +244,7 @@ export function registerModContextCommands(
       const oldName = modNameOf(only);
       return { oldName, newName: name };
     },
-    run: ({ oldName, newName }) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
+    run: ({ oldName, newName }) => runModsWriting('modbench.mod.rename', instance, async (): Promise<GestureResult<string>> => {
       const result = await instance.quiet(() => commands.renameMod(oldName, newName));
       if (!result.applied) return { applied: false, refusal: 'Failed to rename mod.', detail: result.refusal };
       if (result.unchanged) return { applied: true, outcome: { landed: [], refused: [] } };
@@ -266,7 +266,7 @@ export function registerModContextCommands(
     },
   };
 
-  const uninstallForced = (mods: readonly string[]) => runModsWriting(instance, async (): Promise<GestureResult<Uninstalled>> => {
+  const uninstallForced = (mods: readonly string[]) => runModsWriting('modbench.mod.uninstall', instance, async (): Promise<GestureResult<Uninstalled>> => {
     const result = await commands.uninstallMods(mods, trash);
     if (!result.applied) return { applied: false, refusal: 'Failed to uninstall mods.', detail: result.refusal };
     return { applied: true, outcome: result.outcome, partial: result.outcome.landed.flatMap((item) => partialsOfUninstall(item, commands.names.modOrderFile)) };
@@ -373,7 +373,7 @@ function renameGesture(
       const oldName = separatorNameOf(only);
       return { oldName, newName: name };
     },
-    run: ({ oldName, newName }) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
+    run: ({ oldName, newName }) => runModsWriting('modbench.separator.rename', instance, async (): Promise<GestureResult<string>> => {
       const result = await commands.renameSeparator(oldName, newName);
       if (!result.applied) return { applied: false, refusal: 'Failed to rename separator.', detail: result.refusal };
       return { applied: true, outcome: { landed: result.wrote ? [result.name] : [], refused: [] } };
@@ -403,7 +403,7 @@ function renameGesture(
       if (only === undefined || more.length > 0) throw new Refusal('An agent call to add a separator carries one mod or separator, the anchor.');
       return { name, anchor: entryRefOf(only) };
     },
-    run: ({ name, anchor }) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
+    run: ({ name, anchor }) => runModsWriting('modbench.separator.add', instance, async (): Promise<GestureResult<string>> => {
       const result = await commands.insertSeparator(name, anchor);
       return result.applied
         ? { applied: true, outcome: { landed: [result.name], refused: [] } }
@@ -420,7 +420,7 @@ function renameGesture(
   ): AgentGesture<ModlistNode, SeparatorDeletion, GestureResult<DeletedSeparator>, { force?: boolean }> {
     const refusals = (names: readonly string[]) => refusedWithoutForce(
       names, 'delete', (name) => `its mods would ${destinationOf(instance.value.modGroups.groups, name, names)}`);
-    const deleteForced = (names: readonly string[]) => runModsWriting(instance, async (): Promise<GestureResult<DeletedSeparator>> => {
+    const deleteForced = (names: readonly string[]) => runModsWriting('modbench.separator.delete', instance, async (): Promise<GestureResult<DeletedSeparator>> => {
       const result = await commands.deleteSeparators(names, trash);
       if (!result.applied) return { applied: false, refusal: 'Failed to delete separators.', detail: result.refusal };
       return {
@@ -479,7 +479,7 @@ function renameGesture(
         await refuseAgentName(commands.newModNameRefusal(name));
         return name;
       },
-      run: (name) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
+      run: (name) => runModsWriting('modbench.mod.createEmpty', instance, async (): Promise<GestureResult<string>> => {
         const failed = `Failed to create "${name}".`;
         try {
           const outcome = await commands.createEmptyMod(name);

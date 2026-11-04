@@ -60,7 +60,7 @@ interface BuildGiven extends ModsGiven {
 async function buildMods(deps: BuildDeps, { mods, refusedRows, invokedFrom, everySource }: BuildGiven): Promise<Built> {
   const { commands, instance } = deps;
   if (mods.length === 0 && !everySource) return { applied: true, outcome: { landed: [], refused: refusedRows } };
-  return runWritingGesture(invokedFrom, instance, async (): Promise<Built> => {
+  return runWritingGesture('modbench.mod.build', invokedFrom, instance, async (): Promise<Built> => {
     const outcome = await commands.build(mods, everySource);
     if (isRefused(outcome)) return { applied: false, refusal: outcome.message };
     for (const { compiled } of outcome.landed) {

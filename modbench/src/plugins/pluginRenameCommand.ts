@@ -11,6 +11,7 @@ import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 import type { PluginAddress } from '../wire/pluginAddress';
 import { Refusal } from '../drivingLib/refusal';
+import { holdingTheWrite } from '../drivingLib/writingGesture';
 import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
 import { creatablePluginExtensionsOf } from './creatablePluginExtensions';
 import type { PluginsTreeNode } from './pluginRows';
@@ -74,8 +75,8 @@ export function registerRenamePluginCommand(
       const plugin = pluginOf(only);
       return { plugin, newName: name };
     },
-    run: async ({ plugin, newName }) => vscode.window.withProgress({ location: { viewId: PLUGINS_KEY_ARGS.view } }, () =>
-      instance.quiet(() => source.oneAtATime(() => renamed({ commands, source }, plugin, newName)))),
+    run: ({ plugin, newName }) => holdingTheWrite('modbench.plugin.rename', async () => vscode.window.withProgress({ location: { viewId: PLUGINS_KEY_ARGS.view } }, () =>
+      instance.quiet(() => source.oneAtATime(() => renamed({ commands, source }, plugin, newName))))),
     report: (result) => {
       if (!result.applied) reporter.report('error', result.refusal, result.detail);
     },

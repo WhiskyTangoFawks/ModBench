@@ -41,6 +41,8 @@ import { present } from '../../ports/present';
 import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, readingFixture, refusing } from '../../test/fakeInstanceAdapter';
 import { progressSteps } from '../../test/recordedProgress';
+import { aWriteInFlight } from '../../test/writeInFlight';
+import { RefusedWrite } from '../../drivingLib/writingGesture';
 
 const LOAD_AFTER = 'modbench.plugin.loadAfter';
 const row = (name: string) => new PluginNode({ name, enabled: true }, 'ModA');
@@ -100,6 +102,28 @@ describe('modbench.plugin.loadAfter', () => {
     await invoke(row('A.esp'));
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not write the load after.', detail: 'userlist.yaml is not a map' }]);
+  });
+});
+
+describe('modbench.plugin.loadAfter, asked while a write is in flight', () => {
+  it('tells the user once, as a refusal and no failure', async () => {
+    const { told } = aWriteInFlight();
+    const { reporter, fake } = registered();
+    picks.chosen = ['C.esp'];
+
+    await invoke(row('A.esp'));
+
+    expect({ calls: fake.calls, own: reporter.reports, told: told.reports.map(({ message }) => message) }).toEqual({
+      calls: [], own: [], told: ['modbench.plugin.loadAfter did not start: modbench.test.held is still writing.'],
+    });
+  });
+
+  it('goes back to the agent as the refusal', async () => {
+    aWriteInFlight();
+    registered();
+    const call = new AgentCall([{ kind: 'plugin', plugin: { name: 'A.esp', origin: 'ModA' } }], { after: [{ name: 'C.esp' }] });
+
+    await expect(invoke(call)).rejects.toBeInstanceOf(RefusedWrite);
   });
 });
 

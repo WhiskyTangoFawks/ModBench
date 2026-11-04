@@ -4,6 +4,8 @@
 import * as vscode from 'vscode';
 import { attachPortOf, createMEditClient, stopMEditClient, type MEditClient } from './client';
 import { makeReporter } from './drivingLib/reporter';
+import { commandTitles } from './drivingLib/commandTitles';
+import { surfaceRefusedWrites } from './drivingLib/writingGesture';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
 import { highlightFollowingFocus } from './drivingLib/highlightFollowsFocus';
@@ -304,6 +306,7 @@ function start(context: vscode.ExtensionContext): void {
     refreshSourceControlFor: sourceModRepositories.refreshSourceControlFor,
   };
   const reporterFor = (tag: string) => makeReporter(outputChannel, tag);
+  context.subscriptions.push(surfaceRefusedWrites({ reporter: reporterFor('write'), titles: commandTitles(context.extension.packageJSON), refresh: () => opened.facts.refresh() }));
   const plugins = createPlugins({
     client: meditClient, facts: opened.facts, channel: outputChannel, reporterFor,
     registerRepositories: sourceModRepositories.registerRepositories, ask: askQuestion, sourceEditing,
