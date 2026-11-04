@@ -2032,7 +2032,7 @@ describe('the agent server, given a port', () => {
   it('keeps a connection its answer leaves open with no time after which it closes it, so a request a client sends on it while the extension host is busy is read', async () => {
     const { bound } = await serve(new FakeInstance(VALUE));
 
-    const keptAlive = await new Promise<string | undefined>((done) => {
+    const keptAlive = await new Promise<string | string[] | undefined>((done) => {
       const sent = request({ host: '127.0.0.1', port: present(bound, 'a bound port'), path: '/mcp', method: 'POST', headers: JSON_HEADERS }, (response) => {
         response.resume();
         done(response.headers['keep-alive']);
