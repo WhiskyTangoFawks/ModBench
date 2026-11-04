@@ -254,3 +254,16 @@ describe('whether a copy of a file outranks a copy', () => {
     expect(outranksACopy(entry, own)).toBe(expected);
   });
 });
+
+describe('the cost of the index', () => {
+  it('grows with the files, not with the providers of each path', () => {
+    const names = Array.from({ length: 6000 }, (_, i) => `Mod${i}`);
+    const shared = Array.from({ length: 20 }, (_, i) => `shared/${i}.nif`);
+    const started = performance.now();
+
+    const index = indexOver(names.map((name) => mod(name)), Object.fromEntries(names.map((name) => [name, shared])));
+
+    expect(index.files.get(shared[0])?.providers).toHaveLength(names.length);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+});
