@@ -256,6 +256,8 @@ internal sealed class Projector(
             });
 
         // A tree that stopped the refresh is read whole, which reads the binary in its place and says why.
-        return stopped is null ? ValidationReport.Clean : new ValidationReport([], NeedsRebuild: true, [stopped.Reason]);
+        if (stopped is not null) return new ValidationReport([], NeedsRebuild: true, [stopped.Reason]);
+        index.ReclaimTreeBinary(key, plugin.Path);
+        return ValidationReport.Clean;
     }
 }
