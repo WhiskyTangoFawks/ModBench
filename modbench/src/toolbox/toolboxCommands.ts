@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { RefreshResult } from '../instanceCommands/loadOrder';
 import type { Instance } from '../instanceLoader/instance';
 import type { InstanceCommands } from '../instanceCommands/instanceCommands';
-import { AgentCall, answeredToAgent, isAgentCall, profilesOf, type GestureResult } from '../drivingLib/agentGesture';
+import { AgentCall, answeredToAgent, isAgentCall, registerWritingCommand, profilesOf, type GestureResult } from '../drivingLib/agentGesture';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { Refusal } from '../drivingLib/refusal';
@@ -31,7 +31,7 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
   const { commands, instance, extensionId, reporterFor } = deps;
   const profileReporter = reporterFor('switchProfile');
   return [
-    vscode.commands.registerCommand('modbench.profile.switch', async (called?: unknown) => {
+    registerWritingCommand('modbench.profile.switch', async (called?: unknown) => {
       if (isAgentCall(called)) return answeredToAgent(await runWritingGesture('modbench.profile.switch', TOOLBOX_VIEW, instance, () => commands.switchProfile(profileOf(called))));
       const { activeProfile: active, profiles } = instance.value;
       const items = profiles.map((p) => ({ label: p, description: p === active ? 'current' : undefined }));
@@ -81,6 +81,6 @@ export function registerRefreshCommand(deps: RefreshGestureDeps): vscode.Disposa
     reporter.report('error', message, detail);
     return undefined;
   };
-  return vscode.commands.registerCommand('modbench.instance.refresh', (called?: unknown) =>
+  return registerWritingCommand('modbench.instance.refresh', (called?: unknown) =>
     runWritingGesture('modbench.instance.refresh', TOOLBOX_VIEW, deps.instance, () => run(called instanceof AgentCall)));
 }

@@ -9,8 +9,10 @@ const { registerCommand } = vi.hoisted(() => ({
 
 vi.mock('vscode', () => ({ commands: { registerCommand }, TreeItem }));
 
-import { AgentCall, argumentOfKind, registerAgentGesture, reportPartial, type AgentGesture, type PartialFailure } from '../agentGesture';
+import { AgentCall, argumentOfKind, registerAgentGesture, registerWritingCommand, reportPartial, type AgentGesture, type PartialFailure } from '../agentGesture';
 import { Refusal } from '../refusal';
+import { holdingTheWrite, RefusedWrite } from '../writingGesture';
+import { aWriteInFlight } from '../../test/writeInFlight';
 import type { GestureEntry } from '../gestureEntry';
 
 class Row extends TreeItem {
@@ -101,6 +103,53 @@ describe('a gesture run as an agent call and as a view call', () => {
     const { handler, entries } = register({}, (value): value is Row => value === context);
     await handler(context);
     expect(entries).toEqual([{ clicked: context, selection: [context] }]);
+  });
+});
+
+describe('a write refused because another is in flight', () => {
+  const refusedMessage = 'modbench.test.asked did not start: modbench.test.held is still writing.';
+  const asking = () => holdingTheWrite('modbench.test.asked', () => Promise.resolve('ran'));
+
+  function registeredGesture() {
+    const reported: string[] = [];
+    registerAgentGesture('modbench.test.gesture', () => [], {
+      fromView: () => 'given', fromAgent: () => 'given', run: asking, report: (outcome) => { reported.push(outcome); },
+    });
+    const handler = registerCommand.mock.calls.at(-1)?.[1];
+    if (!handler) throw new Error('the gesture registered no command');
+    return { handler: (...args: unknown[]): Promise<unknown> => Promise.resolve(handler(...args)), reported };
+  }
+
+  it('is told to a view call once, and the view call ends with nothing reported by the gesture', async () => {
+    const { told, refresh } = aWriteInFlight();
+    const { handler, reported } = registeredGesture();
+
+    expect(await handler()).toBeUndefined();
+
+    expect({ reported, told: told.reports.map(({ message }) => message), refreshes: refresh.mock.calls.length }).toEqual({
+      reported: [], told: [refusedMessage], refreshes: 1,
+    });
+  });
+
+  it('goes back to an agent call as the error, and tells the user nothing', async () => {
+    const { told } = aWriteInFlight();
+    const { handler } = registeredGesture();
+
+    await expect(handler(new AgentCall([], {}))).rejects.toBeInstanceOf(RefusedWrite);
+
+    expect(told.reports).toEqual([]);
+  });
+
+  it('is told once for a command that is no gesture, as for one that is', async () => {
+    const { told } = aWriteInFlight();
+    registerWritingCommand('modbench.test.command', asking);
+    const handler = registerCommand.mock.calls.at(-1)?.[1];
+    if (!handler) throw new Error('the command registered nothing');
+
+    await Promise.resolve(handler());
+    await expect(Promise.resolve(handler(new AgentCall([], {})))).rejects.toBeInstanceOf(RefusedWrite);
+
+    expect(told.reports.map(({ message }) => message)).toEqual([refusedMessage]);
   });
 });
 

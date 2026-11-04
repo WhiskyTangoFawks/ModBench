@@ -30,11 +30,12 @@ interface RefusalSurface {
   readonly reporter: Reporter;
   /** The title of each gesture's Command ID, which a refusal names the write by. */
   readonly titles: ReadonlyMap<string, string>;
+  /** Shows the view what is on disk, so a control the user toggled does not keep a state nothing wrote. */
+  readonly refresh: () => Promise<void>;
 }
 
 let surface: RefusalSurface | undefined;
 
-/** Where a refused write is logged. VS Code shows the refusal as the notification a rejected command gets (common.md, Reporting). */
 export function surfaceRefusedWrites(on: RefusalSurface): { dispose: () => void } {
   surface = on;
   return { dispose: () => { surface = undefined; } };
@@ -42,14 +43,26 @@ export function surfaceRefusedWrites(on: RefusalSurface): { dispose: () => void 
 
 const titleOf = (command: string): string => surface?.titles.get(command) ?? command;
 
+/** A write refused because another is in flight. */
+export class RefusedWrite extends Refusal {}
+
+/** Runs `work` as a view call: a refused write is told to the user once, in a notification and the Output, and the view
+ *  is shown what is on disk (common.md, Reporting). An agent's call is not run through this: the reason goes back to it. */
+export async function asViewCall<T>(work: () => Promise<T>): Promise<T | undefined> {
+  try {
+    return await work();
+  } catch (e) {
+    if (!(e instanceof RefusedWrite)) throw e;
+    surface?.reporter.report('error', e.message);
+    await surface?.refresh();
+    return undefined;
+  }
+}
+
 /** Runs the `write` gesture's `work`. One write runs at a time (commands.md, Refuse, do not repair): a write asked
  *  while another is in flight is refused, naming it. */
 export async function holdingTheWrite<T>(write: string, work: () => Promise<T>): Promise<T> {
-  if (inFlight !== undefined) {
-    const message = `${titleOf(write)} did not start: ${titleOf(inFlight)} is still writing.`;
-    surface?.reporter.shownOnSurface('error', message);
-    throw new Refusal(message);
-  }
+  if (inFlight !== undefined) throw new RefusedWrite(`${titleOf(write)} did not start: ${titleOf(inFlight)} is still writing.`);
   inFlight = write;
   try {
     return await work();

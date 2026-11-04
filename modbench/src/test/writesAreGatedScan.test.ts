@@ -8,11 +8,11 @@ const GATES = new Set(['holdingTheWrite', 'runWritingGesture', 'runModsWriting',
 
 const sourceOf = (path: string): ts.SourceFile => ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true);
 
-function stringConstants(files: readonly ts.SourceFile[]): Map<string, string> {
-  const constants = new Map<string, string>();
+function stringConstants(files: readonly ts.SourceFile[]): Map<string, Set<string>> {
+  const constants = new Map<string, Set<string>>();
   const visit = (node: ts.Node): void => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer !== undefined && ts.isStringLiteral(node.initializer)) {
-      constants.set(node.name.text, node.initializer.text);
+      constants.set(node.name.text, (constants.get(node.name.text) ?? new Set()).add(node.initializer.text));
     }
     ts.forEachChild(node, visit);
   };
@@ -25,7 +25,11 @@ function gatedCommands(files: readonly ts.SourceFile[]): Set<string> {
   const gated = new Set<string>();
   const named = (node: ts.Node): void => {
     if (ts.isStringLiteralLike(node)) gated.add(node.text);
-    else if (ts.isIdentifier(node) && constants.has(node.text)) gated.add(constants.get(node.text) ?? '');
+    else if (ts.isIdentifier(node) && constants.has(node.text)) {
+      const values = [...constants.get(node.text) ?? []];
+      if (values.length > 1) throw new Error(`The constant ${node.text} names ${values.join(' and ')} in different files, so the scan cannot tell which a gate takes.`);
+      values.forEach((value) => gated.add(value));
+    }
     else ts.forEachChild(node, named);
   };
   const visit = (node: ts.Node): void => {

@@ -3,7 +3,7 @@ import type { PluginAddress } from '../client';
 import type { Instance } from '../instanceLoader/instance';
 import { registerAgentGesture, type AgentGesture, type GestureResult } from '../drivingLib/agentGesture';
 import { pluralArgument } from '../drivingLib/gestureEntry';
-import { runWritingGesture } from '../drivingLib/writingGesture';
+import { RefusedWrite, runWritingGesture } from '../drivingLib/writingGesture';
 import type { PluginCommands, PluginsDrop } from '../pluginCommands/plugins';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
@@ -36,6 +36,7 @@ export async function movePlugins(
       ? { applied: true, outcome: { landed: plugins, refused: [] } }
       : { applied: false, refusal: 'Could not move plugins.', detail: result.refusal };
   } catch (e) {
+    if (e instanceof RefusedWrite) throw e;
     return { applied: false, refusal: 'Failed to move plugins.', detail: errorMessage(e) };
   }
 }

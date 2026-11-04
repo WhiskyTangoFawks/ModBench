@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { AgentCall, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
+import { AgentCall, registerWritingCommand, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { MODS_KEY_ARGS } from './gestureEntry';
 import type { Instance } from '../instanceLoader/instance';
@@ -24,12 +24,12 @@ const isAgentCall = (value: unknown): value is ModlistCall => value instanceof A
 // view (commands.md, Entry points are not gestures).
 export function registerManifestGestures(deps: ManifestGestureDeps): vscode.Disposable[] {
   return [
-    vscode.commands.registerCommand('modbench.mod.updateManifest', (clicked?: unknown, selected?: readonly unknown[]) =>
+    registerWritingCommand('modbench.mod.updateManifest', (clicked?: unknown, selected?: readonly unknown[]) =>
       (isAgentCall(clicked) ? updateManifestForAgent(deps, clicked) : updateManifest(deps, modsAndSourceModsToRun(deps, clicked, selected)))),
-    vscode.commands.registerCommand('modbench.mod.restoreFromManifest', (clicked?: unknown, selected?: readonly unknown[]) =>
+    registerWritingCommand('modbench.mod.restoreFromManifest', (clicked?: unknown, selected?: readonly unknown[]) =>
       (isAgentCall(clicked) ? restoreFromManifestForAgent(deps, clicked) : restoreFromManifest(deps, modsToRun(deps, clicked, selected)))),
-    vscode.commands.registerCommand('modbench.modList.updateManifestHere', () => updateManifest(deps, everyModHere(deps))),
-    vscode.commands.registerCommand('modbench.modList.restoreFromManifestHere', () => restoreFromManifest(deps, everyModHere(deps))),
+    registerWritingCommand('modbench.modList.updateManifestHere', () => updateManifest(deps, everyModHere(deps))),
+    registerWritingCommand('modbench.modList.restoreFromManifestHere', () => restoreFromManifest(deps, everyModHere(deps))),
   ];
 }
 

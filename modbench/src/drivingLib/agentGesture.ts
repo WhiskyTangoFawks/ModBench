@@ -4,6 +4,7 @@ import type { SelectionOutcome } from '../ports/selectionOutcome';
 import { Refusal } from './refusal';
 import type { Reporter } from '../ports/reporter';
 import { gestureEntry, type GestureEntry, type KindedRow } from './gestureEntry';
+import { asViewCall } from './writingGesture';
 
 /** The Argument and the Options an agent call gives a gesture (commands.md, The entry point supplies what it knows). */
 export class AgentCall<Options extends object = object> {
@@ -83,8 +84,16 @@ export function registerAgentGesture<Row, Given, Outcome, Options extends object
   const isCall = (value: unknown): value is AgentCall<Options> => value instanceof AgentCall;
   return vscode.commands.registerCommand(commandId, async (clicked?: unknown, selected?: readonly Row[], option?: unknown) => {
     if (isCall(clicked)) return gesture.run(await gesture.fromAgent(clicked));
-    const given = await gesture.fromView(gestureEntry(clicked, selected, viewSelection, isRow), option, clicked);
-    if (given !== undefined) gesture.report(await gesture.run(given), given);
-    return undefined;
+    return asViewCall(async () => {
+      const given = await gesture.fromView(gestureEntry(clicked, selected, viewSelection, isRow), option, clicked);
+      if (given !== undefined) gesture.report(await gesture.run(given), given);
+      return undefined;
+    });
   });
+}
+
+/** A command that writes and is no AgentGesture: a call from a view is a view call (`asViewCall`). */
+export function registerWritingCommand<Args extends unknown[]>(commandId: string, run: (...args: Args) => unknown): vscode.Disposable {
+  return vscode.commands.registerCommand(commandId, (...args: Args) =>
+    (isAgentCall(args[0]) ? run(...args) : asViewCall(async () => run(...args))));
 }

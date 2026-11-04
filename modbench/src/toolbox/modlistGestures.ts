@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { AgentCall, reportPartial, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
+import { AgentCall, registerWritingCommand, reportPartial, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
@@ -16,7 +16,7 @@ interface ModlistGestureDeps {
 export function registerModlistCommands({ reporterFor, ...rest }: Omit<ModlistGestureDeps, 'reporter'> & { reporterFor: (tag: string) => Reporter }): vscode.Disposable[] {
   const deps = { ...rest, reporter: reporterFor('modlist') };
   return [
-    vscode.commands.registerCommand('modbench.modlist.gitInit', (clicked?: unknown) => (clicked instanceof AgentCall ? gitInitForAgent(deps) : gitInit(deps))),
+    registerWritingCommand('modbench.modlist.gitInit', (clicked?: unknown) => (clicked instanceof AgentCall ? gitInitForAgent(deps) : gitInit(deps))),
   ];
 }
 

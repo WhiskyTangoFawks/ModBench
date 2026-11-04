@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { AgentCall, type GestureResult } from '../drivingLib/agentGesture';
+import { AgentCall, registerWritingCommand, type GestureResult } from '../drivingLib/agentGesture';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Instance } from '../instanceLoader/instance';
 import type { CheckForUpdates, UpdateChecked } from '../modCommands/checkForUpdates';
@@ -20,9 +20,9 @@ const isAgentCall = (value: unknown): value is AgentCall => value instanceof Age
 export function registerCheckForUpdatesGestures(given: CheckForUpdatesDeps): vscode.Disposable[] {
   const deps = { ...given, toolboxView: MODS_KEY_ARGS.view };
   return [
-    vscode.commands.registerCommand('modbench.mod.checkForUpdates', (clicked?: unknown, selected?: readonly unknown[]) =>
+    registerWritingCommand('modbench.mod.checkForUpdates', (clicked?: unknown, selected?: readonly unknown[]) =>
       (isAgentCall(clicked) ? checkForAgent(deps, clicked) : checkForView(deps, modsToRun(deps, clicked, selected)))),
-    vscode.commands.registerCommand('modbench.modList.checkForUpdatesHere', () => checkForView(deps, everyModHere(deps))),
+    registerWritingCommand('modbench.modList.checkForUpdatesHere', () => checkForView(deps, everyModHere(deps))),
   ];
 }
 
