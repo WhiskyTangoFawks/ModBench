@@ -6,7 +6,7 @@ import { readGameName } from './codecs/modOrganizerIni';
 import { errorMessage } from '../../ports/errorMessage';
 import { entryNamed, modNameKey, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
 import type { DownloadsDirectoryResolver } from './downloadsDirectory';
-import { exists, get, ignoreSkippedLink, listFolders, readOrAbsent, rename, type SkippedLink, type Undo } from '../files';
+import { exists, get, textByStamp, ignoreSkippedLink, listFolders, readOrAbsent, rename, type SkippedLink, type Undo } from '../files';
 import type { GameFolderResolver, SteamInstallResolver } from '../gameFolder/gameFolderResolver';
 import type { EntryRef, ModFolder, ModFolders, ModlistEntry } from '../instanceAdapter';
 import type { FileOrigin } from '../instanceAdapter';
@@ -69,7 +69,7 @@ export function modFoldersOf(all: readonly ModFolder[]): ModFolders {
 
 /** The downloads folder as the settings name it now; rejects with why when it cannot be resolved. */
 export async function currentDownloadsDir({ instanceRoot, resolveDownloadsFolder }: Mo2Context): Promise<string> {
-  const resolution = await resolveDownloadsFolder(instanceRoot, await get(settingsFile(instanceRoot)));
+  const resolution = await resolveDownloadsFolder(instanceRoot, await textByStamp(settingsFile(instanceRoot)));
   if (resolution.kind === 'unresolved') throw new Error(resolution.reason);
   return resolution.downloadsDir;
 }

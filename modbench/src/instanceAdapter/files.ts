@@ -346,6 +346,9 @@ export const outsideTrustedRead = <T>(arm: () => T): T => trusting.exit(arm);
 export const parsedBy = <T>(parse: (text: string) => T): ((path: string) => Promise<T>) =>
   stampKept(async (path) => parse(await readText(path)));
 
+/** As `parsedBy`, for the text itself. */
+export const textByStamp = parsedBy((text: string) => text);
+
 /** Hands over a link that cannot be followed, by its path, with why. */
 export type SkippedLink = (linkPath: string, reason: string) => void;
 
