@@ -82,6 +82,17 @@ describe('onPluginCheckboxChanged', () => {
     });
   });
 
+  it('is told once when a mixed batch is refused while a write is in flight', async () => {
+    const { told } = aWriteInFlight();
+    const adapter = fake();
+
+    await toggle(toggled(['A.esp', 1], ['B.esp', 0]), adapter, recordingReporter());
+
+    expect({ calls: adapter.calls, told: told.reports.map(({ message }) => message) }).toEqual({
+      calls: [], told: ['modbench.plugin.enable did not start: modbench.test.held is still writing.'],
+    });
+  });
+
   it('ignores a non-plugin row (a record-tree row sharing the merged view), writing nothing and opening no progress', async () => {
     const adapter = fake();
     const recordNode = await recordRow(recordSummaryFixture(), 'Data/');

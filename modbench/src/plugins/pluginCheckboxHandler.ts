@@ -18,12 +18,14 @@ export async function onPluginCheckboxChanged(
     .filter((item): item is [PluginNode, vscode.TreeItemCheckboxState] => item[0].kind === 'plugin')
     .map(([node, state]) => ({ name: node.plugin.name, enabled: state === vscode.TreeItemCheckboxState.Checked }));
   if (entries.length === 0) return;
-  for (const enabled of [true, false]) {
-    const batch = entries.filter((entry) => entry.enabled === enabled);
-    if (batch.length === 0) continue;
-    await asViewCall(() => runWritingGesture(enabled ? 'modbench.plugin.enable' : 'modbench.plugin.disable', PLUGINS_KEY_ARGS.view, instance, async () => {
-      const result = await commands.setPluginsParticipation(batch);
-      reportPluginsParticipation(result, batch, reporter);
-    }));
-  }
+  await asViewCall(async () => {
+    for (const enabled of [true, false]) {
+      const batch = entries.filter((entry) => entry.enabled === enabled);
+      if (batch.length === 0) continue;
+      await runWritingGesture(enabled ? 'modbench.plugin.enable' : 'modbench.plugin.disable', PLUGINS_KEY_ARGS.view, instance, async () => {
+        const result = await commands.setPluginsParticipation(batch);
+        reportPluginsParticipation(result, batch, reporter);
+      });
+    }
+  });
 }
