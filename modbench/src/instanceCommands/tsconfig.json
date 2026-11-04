@@ -12,7 +12,8 @@
     { "path": "../nexus" },
     { "path": "../lootMetadata" },
     { "path": "../deployment" },
-    { "path": "../tables" }
+    { "path": "../tables" },
+    { "path": "../wire" }
   ],
   "include": ["**/*.ts"],
   "exclude": ["test", "**/*.test.ts"]

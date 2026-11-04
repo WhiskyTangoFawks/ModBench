@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { inGameOrder, pluginOrderOf } from '../pluginOrder';
+import { activeInGameOrder, inGameOrder, pluginOrderOf } from '../pluginOrder';
 
 interface Row { name: string; origin: string; line: number | null; enabled: boolean; winning: boolean }
 const row = (name: string, origin: string, line: number | null, enabled = true, winning = true): Row => ({ name, origin, line, enabled, winning });
@@ -64,5 +64,14 @@ describe('the game\'s order, where the release loads a blueprint plugin after ev
   it('places the plugins with no line before every line in a release that does not', () => {
     expect(orderOfNames(['Base.esm', 'Blueprint.esm'], ['A.esp', 'B.esp', 'Ship.esm'], blueprints('Blueprint.esm', 'Ship.esm'), false))
       .toEqual(['Base.esm', 'Blueprint.esm', 'A.esp', 'B.esp', 'Ship.esm']);
+  });
+});
+
+describe('the snapshot\'s active plugins in the game\'s order', () => {
+  const at = (name: string) => ({ name, origin: 'Mod' });
+  const snapshot = { loadedWithNoLine: ['Base.esm', 'Blueprint.esm'].map(at), active: ['Base.esm', 'Blueprint.esm', 'A.esp', 'B.esp'].map(at) };
+
+  it('takes the lines to be what follows the plugins the game loads with no line', () => {
+    expect(activeInGameOrder(snapshot, (p) => p.name === 'Blueprint.esm', true).map((p) => p.name)).toEqual(['Base.esm', 'A.esp', 'B.esp', 'Blueprint.esm']);
   });
 });

@@ -763,7 +763,7 @@ describe('Instance — game folder and the archives the game loads', () => {
     await instance.refresh();
     await instance.refresh();
 
-    expect(instance.value.loadOrderSnapshot).toMatchObject({ archives: [{ path: SUPPLIED }] });
+    expect(instance.value.loadOrderSnapshot).toMatchObject({ listedArchives: [{ path: SUPPLIED }] });
     expect(warnings).toEqual([`[instance] ${note}`]);
     expect(logs).toEqual([]);
   });
