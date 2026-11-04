@@ -1007,16 +1007,16 @@ describe('the MO2 Instance adapter', () => {
       return watcher !== undefined;
     };
 
-    it('hears a file created, changed or deleted alike, so a deleted mod folder is heard', () => {
-      let signals = 0;
-      managerOver(root).subscribe(() => { signals++; });
+    it('hears a file created, changed or deleted alike, each by its path, so a deleted mod folder is heard', () => {
+      const heard: (string | undefined)[] = [];
+      managerOver(root).subscribe((path) => { heard.push(path); });
       const mods = live().find((w) => w.base === root && matchesGlob('mods/A/x.esp', w.pattern));
 
       mods?.fireCreate(join(root, 'mods', 'A', 'x.esp'));
       mods?.fireChange(join(root, 'mods', 'A', 'x.esp'));
       mods?.fireDelete(join(root, 'mods', 'A'));
 
-      expect(signals).toBe(3);
+      expect(heard).toEqual([join(root, 'mods', 'A', 'x.esp'), join(root, 'mods', 'A', 'x.esp'), join(root, 'mods', 'A')]);
     });
 
     it('hears a repository appear at, or vanish from, the instance root', () => {
@@ -1064,18 +1064,18 @@ describe('the MO2 Instance adapter', () => {
       expect(live()).toEqual([]);
     });
 
-    it('signals a change to the game-folder setting as it signals a file change, while anyone listens', () => {
+    it('signals a change to the game-folder setting as a change with no path, while anyone listens', () => {
       let setting: (() => void) | undefined;
       const adapter = managerOver(root, { gameFolderSettingChanged: (listener) => {
         setting = listener;
         return { dispose: () => { setting = undefined; } };
       } });
       expect(setting).toBeUndefined();
-      let signals = 0;
-      const subscription = adapter.subscribe(() => { signals++; });
+      const heard: (string | undefined)[] = [];
+      const subscription = adapter.subscribe((path) => { heard.push(path); });
 
       setting?.();
-      expect(signals).toBe(1);
+      expect(heard).toEqual([undefined]);
 
       subscription.dispose();
       expect(setting).toBeUndefined();
@@ -1302,19 +1302,19 @@ describe('the MO2 Instance adapter', () => {
       });
     });
 
-    it('follows the downloads folder the last read of the settings resolved, signalling once when it moves, not the one where the instance began, so a downloaded file landing in the folder the settings name now is heard', async () => {
-      let signals = 0;
+    it('follows the downloads folder the last read of the settings resolved, signalling once with no path when it moves, not the one where the instance began, so a downloaded file landing in the folder the settings name now is heard', async () => {
+      let heard: (string | undefined)[] = [];
       const watched = watchedOver(contextOver(root));
-      watched.subscribe(() => { signals++; });
+      watched.subscribe((path) => { heard.push(path); });
       await (await watched.settings()).downloadedFiles(ignoreSkippedLink);
       expect(fire(join(root, 'downloads'), 'new.7z')).toBe(true);
-      signals = 0;
+      heard = [];
 
       await writeFile(join(root, INI), `${await text(root, INI)}download_directory=@ByteArray(Elsewhere)\r\n`);
       await (await watched.settings()).downloadedFiles(ignoreSkippedLink);
-      expect(signals).toBe(1);
+      expect(heard).toEqual([undefined]);
       await (await watched.settings()).downloadedFiles(ignoreSkippedLink);
-      expect(signals).toBe(1);
+      expect(heard).toEqual([undefined]);
 
       expect(fire(join(root, 'downloads'), 'old.7z')).toBe(false);
       expect(fire(join(root, 'Elsewhere'), 'new.7z')).toBe(true);

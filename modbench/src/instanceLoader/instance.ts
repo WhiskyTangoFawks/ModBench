@@ -28,8 +28,26 @@ export type { LocatedDownloadedFileRow, DownloadedFileRow, UpgradeCandidate, Upg
 export type { Covering, DownloadedFileStatus, PublisherTag, PublisherTagChange, TagPathProblem } from '../instanceAdapter/instanceAdapter';
 export type { GameFolder, ProgramVersion } from '../instanceAdapter/instanceAdapter';
 
-// How long another tool's write takes to settle: the wait a burst coalesces into one recompute on.
+// How long another tool's write takes to settle: the wait a burst coalesces into one re-read on.
 const SETTLE_MS = 200;
+// How long the events stay quiet before the disk is checked, and how long a stream of them can put the check off.
+const QUIET_MS = 1_000;
+const CHECK_CAP_MS = 10_000;
+
+interface Run {
+  readonly named: Set<string>;
+  disk: boolean;
+  /** The check was the watch's, so a change it finds is one no event named; a refresh's finds its caller's own write. */
+  tellsUnheard: boolean;
+  readonly settled: Promise<void>;
+  land(settled: Promise<void>): void;
+}
+
+function nextRun(): Run {
+  let land!: (settled: Promise<void>) => void;
+  const settled = new Promise<void>((resolve) => { land = resolve; });
+  return { named: new Set(), disk: false, tellsUnheard: false, settled, land };
+}
 
 type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'dataFolderFiles' | 'gameArchives' | 'archives' | 'watchNotes' | 'listingNotes' | 'managerRunning' | 'publisherConfiguration' | 'programVersions';
 
@@ -274,10 +292,20 @@ export class Instance implements Subscription {
   private failureListeners: ReadFailureListener[] = [];
   private outcomeListeners: ListenerOutcomeListener[] = [];
 
-  private timer: ReturnType<typeof setTimeout> | undefined;
+  private settleTimer: ReturnType<typeof setTimeout> | undefined;
 
-  // Recomputes never overlap, so a slow walk cannot publish over a newer one.
-  private queue: Promise<unknown> = Promise.resolve();
+  private readonly heard = new Set<string>();
+
+  private heardNoPath = false;
+
+  private checkTimer: ReturnType<typeof setTimeout> | undefined;
+
+  private uncheckedSinceMs: number | undefined;
+
+  // Recomputes never overlap, so a slow walk cannot publish over a newer one; what is asked during one folds into the next.
+  private reading = false;
+
+  private next: Run | undefined;
 
   private quiets = 0;
 
@@ -292,10 +320,10 @@ export class Instance implements Subscription {
 
   constructor(private readonly options: InstanceOptions) {
     this.current = emptyValue(options.adapter, options.gameFolderSettingId);
-    this.changes = options.adapter.subscribe(() => this.schedule());
+    this.changes = options.adapter.subscribe((path) => { this.hear(path); });
     let focused = options.window.state.focused;
     this.focus = options.window.onDidChangeWindowState((state) => {
-      if (state.focused && !focused) this.schedule();
+      if (state.focused && !focused && !this.checkWaits()) void this.enqueue({ disk: true, tellsUnheard: true });
       focused = state.focused;
     });
   }
@@ -355,12 +383,10 @@ export class Instance implements Subscription {
     };
   }
 
-  /** The recompute activation runs, and the one that corrects the value after a change the
-   *  adapter never signalled. Identical to the one a signal runs. Settles when its read has run;
-   *  a read that overlapped `quiet` is dropped, not landed. */
+  /** A check of the disk: the recompute activation runs, and the one that corrects the value after a change the adapter
+   *  never signalled. Settles when its read has run; a read that overlapped `quiet` is dropped, not landed. */
   refresh(): Promise<void> {
-    clearTimeout(this.timer); // a refresh mid-burst is the burst's recompute, not a second one
-    return this.run();
+    return this.enqueue({ disk: true, tellsUnheard: false });
   }
 
   /** Runs `work`, a write to several files the value reads, then refreshes. A read that overlapped
@@ -384,7 +410,8 @@ export class Instance implements Subscription {
   }
 
   dispose(): void {
-    clearTimeout(this.timer);
+    clearTimeout(this.settleTimer);
+    clearTimeout(this.checkTimer);
     this.changes.dispose();
     this.focus.dispose();
     this.subscribers = [];
@@ -428,25 +455,66 @@ export class Instance implements Subscription {
     this.tellOnce('archives', missing.map((name) => `[instance] The game's INIs list the archive ${name}, which no mod, Overwrite or game folder holds.`), 'info');
   }
 
-  private schedule(): void {
-    clearTimeout(this.timer);
-    this.timer = setTimeout(() => void this.run(), SETTLE_MS);
+  // What an event names is re-read once its burst settles, and the disk checked once the events go quiet, or at the cap.
+  private hear(path: string | undefined): void {
+    if (path === undefined) this.heardNoPath = true;
+    else this.heard.add(path);
+    clearTimeout(this.settleTimer);
+    this.settleTimer = setTimeout(() => {
+      const named = [...this.heard];
+      const disk = this.heardNoPath;
+      this.heard.clear();
+      this.heardNoPath = false;
+      void this.enqueue({ named, disk, tellsUnheard: false });
+    }, SETTLE_MS);
+    const now = Date.now();
+    this.uncheckedSinceMs ??= now;
+    clearTimeout(this.checkTimer);
+    this.checkTimer = setTimeout(() => void this.enqueue({ disk: true, tellsUnheard: true }), Math.min(QUIET_MS, this.uncheckedSinceMs + CHECK_CAP_MS - now));
   }
 
-  // A refresh settles with its value's subscribers; the queue does not wait for them.
-  private run(): Promise<void> {
-    const task = this.queue.then(() => this.recompute());
-    this.queue = task;
-    return task.then(({ settled }) => settled);
+  private checkWaits(): boolean {
+    return this.checkTimer !== undefined || this.next?.disk === true;
+  }
+
+  // A check takes in every event heard so far, and is the check they waited on.
+  private enqueue({ named = [], disk, tellsUnheard }: { named?: readonly string[]; disk: boolean; tellsUnheard: boolean }): Promise<void> {
+    const next = this.next ?? nextRun();
+    this.next = next;
+    for (const path of named) next.named.add(path);
+    if (disk) {
+      for (const path of this.heard) next.named.add(path);
+      this.heard.clear();
+      this.heardNoPath = false;
+      clearTimeout(this.settleTimer);
+      clearTimeout(this.checkTimer);
+      this.checkTimer = undefined;
+      this.uncheckedSinceMs = undefined;
+    }
+    next.disk ||= disk;
+    next.tellsUnheard ||= tellsUnheard;
+    void this.drain();
+    return next.settled;
+  }
+
+  // A run settles with its value's subscribers; the next run does not wait for them.
+  private async drain(): Promise<void> {
+    if (this.reading) return;
+    this.reading = true;
+    for (let run = this.next; run !== undefined; run = this.next) {
+      this.next = undefined;
+      run.land((await this.recompute(run)).settled);
+    }
+    this.reading = false;
   }
 
   // A read that throws logs and leaves the last value and the last sequence in place, so a file
   // another tool is half-way through writing never empties the trees.
-  private async recompute(): Promise<{ settled: Promise<void> }> {
+  private async recompute(run: Run): Promise<{ settled: Promise<void> }> {
     let next: InstanceValue;
     const epoch = this.quietEpoch;
     try {
-      next = await this.read();
+      next = await this.read(run);
     } catch (err) {
       if (epoch !== this.quietEpoch || this.quiets > 0) return { settled: Promise.resolve() };
       const failure = errorMessage(err);
@@ -475,9 +543,10 @@ export class Instance implements Subscription {
     }));
   }
 
-  private async read(): Promise<InstanceValue> {
-    const { adapter } = this.options;
-    const reading = await adapter.reading();
+  private async read({ named, disk, tellsUnheard }: Run): Promise<InstanceValue> {
+    const { adapter, log } = this.options;
+    const reading = await adapter.reading({ named: [...named], disk });
+    if (tellsUnheard) for (const path of reading.unheardChanges) log.info(`[instance] The check of the disk found a change no event named: ${path}`);
     const {
       profile, gameName, gameRelease, mods: entries, pluginOrder, downloadedFiles: downloadedFilesOutcome, gameFolder, programVersions, dataFolderPlugins,
       creationClubList: creationClub, dataFolderArchives, dataFolderFiles, runtimeOutput, modFolders, profiles,

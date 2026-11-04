@@ -79,7 +79,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
   const gameFolder = async (): Promise<GameFolder> => (await source.settings()).gameFolder();
   const adapter: ManagerAdapter = {
     names: source.names,
-    reading: () => readInstance(source),
+    reading: (reread) => readInstance(source, reread),
     activeProfile: async () => (await source.settings()).profile,
     gameRelease: async () => (await source.settings()).gameRelease,
     gameFolder,

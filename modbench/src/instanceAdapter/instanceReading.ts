@@ -3,9 +3,9 @@
 
 import { firstLines } from '../loadOrderFileCodec/firstLines';
 import { pluginKey, PLUGINS_FILE_NAME } from '../loadOrderFileCodec/pluginsText';
-import { ignoreSkippedLink, type SkippedLink } from './files';
+import { ignoreSkippedLink, readTrustingKept, type SkippedLink } from './files';
 import {
-  filesWinningFirst, type DataFolderArchives, type DataFolderFiles, type DataFolderPlugins, type DownloadedFiles, type EntryRef, type FileOrigin, type GameFolder,
+  CHECK_THE_DISK, filesWinningFirst, type Reread, type DataFolderArchives, type DataFolderFiles, type DataFolderPlugins, type DownloadedFiles, type EntryRef, type FileOrigin, type GameFolder,
   type ManagerNames, type ManagerRunning, type ModFolders, type ModMeta, type ModlistEntry, type OriginFiles, type PluginEntry, type PluginsProvided,
   type SortingRuleFiles,
 } from './instanceAdapter';
@@ -105,7 +105,12 @@ async function folderMetaOf(
 
 /** The instance whole, every fact against the one read of the settings, so a profile switch
  *  mid-read cannot mix one profile's mod order with another's plugin order. */
-export async function readInstance(source: ReadingSource): Promise<ManagerReading> {
+export async function readInstance(source: ReadingSource, { named, disk }: Reread = CHECK_THE_DISK): Promise<ManagerReading> {
+  const { answer, unheard } = await readTrustingKept(named, disk, () => readWhole(source));
+  return { ...answer, unheardChanges: unheard };
+}
+
+async function readWhole(source: ReadingSource): Promise<Omit<ManagerReading, 'unheardChanges'>> {
   const settings = await source.settings();
   const { profile, gameName, gameRelease } = settings;
   const skippedLinks = new Map<string, string>();
