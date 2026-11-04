@@ -1,6 +1,6 @@
 namespace MEditService.RepositoriesLib;
 
-/// <summary>The <see cref="FileStamp"/>s of a set of files, taken together. Two equal stamps vouch for an
+/// <summary>The file stamps of a set of files, taken together. Two equal stamps vouch for an
 /// unchanged set only when <see cref="Vouches"/>, as one stamp alone does (ADR-0003).</summary>
 public sealed class FilesStamp : IEquatable<FilesStamp>
 {
@@ -14,8 +14,8 @@ public sealed class FilesStamp : IEquatable<FilesStamp>
     public static FilesStamp Of(IEnumerable<string> paths, TimeProvider timeProvider)
     {
         var taken = timeProvider.GetUtcNow();
-        var stamps = paths.Select(path => (path, FileStamp.Of(path))).ToArray();
-        var vouches = stamps.All(file => file.Item2 is { } stamp ? stamp.SettledAt(taken) : !File.Exists(file.path));
+        var stamps = paths.Select(path => (Path: path, Stamp: FileStamp.Of(path))).ToArray();
+        var vouches = stamps.All(file => file.Stamp is { } stamp ? stamp.SettledAt(taken) : !File.Exists(file.Path));
         return new FilesStamp(stamps, vouches);
     }
 

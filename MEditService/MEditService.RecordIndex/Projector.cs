@@ -216,15 +216,15 @@ internal sealed class Projector(
             : new ValidationReport([], NeedsRebuild: true, []);
     }
 
-    // What a tree's documents and repository stood as when its rows last matched them; cleared when
-    // rows are written from the tree. A commit moves the repository and no document (ADR-0015).
+    // A commit moves what git status says and touches no document, so the repository stamp counts beside the documents'.
     private readonly ConcurrentDictionary<PluginAddress, (RecordStamps Documents, FilesStamp Repository)> _matched = new(PluginAddress.Comparer);
 
     // A plugin's rows against the source documents they came from, by content stamp (ADR-0003).
     private ValidationReport ValidateAgainstTree(RegisteredPlugin plugin, RecordStamps stamps)
     {
         var repository = Over(plugin).RepositoryStamp();
-        if (repository.Vouches && _matched.TryGetValue(plugin.Key, out var last) && last.Documents.Equals(stamps) && last.Repository.Equals(repository))
+        if (repository.Vouches && index.DerivationOf(plugin.Key) == DerivedFrom.SourceTree
+            && _matched.TryGetValue(plugin.Key, out var last) && last.Documents.Equals(stamps) && last.Repository.Equals(repository))
         {
             index.ReclaimTreeBinary(plugin.Key, plugin.Path);
             return ValidationReport.Clean;
@@ -274,7 +274,7 @@ internal sealed class Projector(
         // A tree that stopped the refresh is read whole, which reads the binary in its place and says why.
         if (stopped is not null) return new ValidationReport([], NeedsRebuild: true, [stopped.Reason]);
         index.ReclaimTreeBinary(key, plugin.Path);
-        if (stale.Count == 0) _matched[key] = (stamps, repository);
+        if (stale.Count == 0 && repository.Vouches) _matched[key] = (stamps, repository);
         return ValidationReport.Clean;
     }
 }

@@ -217,10 +217,20 @@ internal abstract class SourceRepositoryGit
     {
         const string RefPrefix = "ref: ";
         var head = Path.Combine(_gitDir, "HEAD");
+        var commonDir = CommonDirectory();
         var named = File.Exists(head) && File.ReadLines(head).FirstOrDefault() is { } line && line.StartsWith(RefPrefix, StringComparison.Ordinal)
-            ? Path.Combine(_gitDir, line[RefPrefix.Length..].Trim())
+            ? Path.Combine(commonDir, line[RefPrefix.Length..].Trim())
             : null;
-        return [head, Path.Combine(_gitDir, "index"), Path.Combine(_gitDir, "packed-refs"), .. named is null ? [] : new[] { named }];
+        return [head, Path.Combine(_gitDir, "index"), Path.Combine(commonDir, "packed-refs"), .. named is null ? [] : new[] { named }];
+    }
+
+    // A linked worktree keeps its HEAD and index in its own directory, and the refs in the one commondir names.
+    private string CommonDirectory()
+    {
+        var commonDir = Path.Combine(_gitDir, "commondir");
+        return File.Exists(commonDir) && File.ReadLines(commonDir).FirstOrDefault() is { } line
+            ? Path.GetFullPath(line.Trim(), _gitDir)
+            : _gitDir;
     }
 
     // A loose ref is a file, until git packs it into packed-refs.
