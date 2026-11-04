@@ -83,7 +83,7 @@ interface Tool<Shape extends z.ZodRawShape> {
 function register<Shape extends z.ZodRawShape>(
   server: McpServer, log: Log, standing: () => string[], { name, description, input }: Tool<Shape>, run: (args: z.output<z.ZodObject<Shape>>) => unknown,
 ): void {
-  const schema = z.object(input);
+  const schema = z.strictObject(input);
   const anyObject = z.looseObject({}).meta(z.toJSONSchema(schema, { io: 'input', target: 'draft-7' }));
   server.registerTool(name, { description, inputSchema: anyObject }, (args) => answer(log, standing, name, () => {
     return run(parseOrRefuse(schema, args));

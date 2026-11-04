@@ -17,7 +17,7 @@ import { formKeysNamed } from './recordNames';
 
 const RECORD = {
   name: z.string(),
-  plugin: z.object({ name: z.string(), origin: z.string().optional() }).optional(),
+  plugin: z.strictObject({ name: z.string(), origin: z.string().optional() }).optional(),
 };
 
 type RecordReads = Pick<MEditClient, 'resolveNames' | 'getComparison' | 'getPlugins' | 'getCopyDocument' | 'getRenderedDocument'>;
