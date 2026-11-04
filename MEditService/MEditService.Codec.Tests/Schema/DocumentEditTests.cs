@@ -701,7 +701,8 @@ public sealed class DocumentEditTests
 
     [Theory]
     [InlineData(false, """{"TargetLanguage":"English","Value":"Old"}""", """{"TargetLanguage":"English","Value":"Nommé"}""")]
-    [InlineData(false, null, """{"TargetLanguage":"French","Value":"Nommé"}""")]
+    [InlineData(false, null, """{"TargetLanguage":"English","Value":"Nommé"}""")]
+    [InlineData(false, """{"TargetLanguage":"French","Value":"Vieux"}""", """{"TargetLanguage":"English","Value":"Nommé"}""")]
     [InlineData(true, """{"TargetLanguage":"French","Value":"Vieux"}""", """{"TargetLanguage":"French","Value":"Nommé"}""")]
     [InlineData(
         true, """{"TargetLanguage":"English","Value":"Old"}""",
@@ -712,7 +713,7 @@ public sealed class DocumentEditTests
     [InlineData(
         true, """{"TargetLanguage":"English","Values":[{"Language":"English","String":"Old"},{"Language":"German","String":"Alt"}]}""",
         """{"TargetLanguage":"English","Values":[{"Language":"English","String":"Old"},{"Language":"German","String":"Alt"},{"Language":"French","String":"Nommé"}]}""")]
-    public void TranslatedString_SetToText_IsItsTextInTheStringsLanguageWhereThePluginIsLocalized(bool localized, string? held, string expected)
+    public void TranslatedString_SetToText_IsItsTextInTheStringsLanguageWhereLocalizedAndEnglishWhereNot(bool localized, string? held, string expected)
     {
         var before = JsonNode.Parse(NpcText()).Require().AsObject();
         before["Name"] = held is null ? null : JsonNode.Parse(held);
@@ -720,6 +721,60 @@ public sealed class DocumentEditTests
         var after = Edited(Language.French, localized, before.ToJsonString(), "npc_", EditOp.Set, "\"Nommé\"", Member("Name"));
 
         Assert.Equal(expected, JsonStrings.AsWritten(Node(after, "Name")));
+    }
+
+    private string NpcNamed(string translated)
+    {
+        var before = JsonNode.Parse(NpcText()).Require().AsObject();
+        before["Name"] = JsonNode.Parse(translated);
+        return before.ToJsonString();
+    }
+
+    [Fact]
+    public void TranslatedString_ValueOfAPluginThatIsNotLocalized_IsAPathTheDocumentShows()
+    {
+        var before = NpcNamed("""{"TargetLanguage":"English","Value":"Old"}""");
+
+        var after = Edited(Language.French, localized: false, before, "npc_", EditOp.Set, "\"New\"", Member("Name"), Member("Value"));
+
+        Assert.Equal("""{"TargetLanguage":"English","Value":"New"}""", JsonStrings.AsWritten(Node(after, "Name")));
+    }
+
+    [Fact]
+    public void TranslatedString_StringOfALanguageOfALocalizedPlugin_IsAPathTheDocumentShows()
+    {
+        var before = NpcNamed("""{"TargetLanguage":"English","Values":[{"Language":"English","String":"Old"},{"Language":"French","String":"Vieux"}]}""");
+
+        var after = Edited(Language.French, localized: true, before, "npc_", EditOp.Set, "\"Nommé\"", Member("Name"), Member("Values"), At(1), Member("String"));
+
+        Assert.Equal(
+            """{"TargetLanguage":"English","Values":[{"Language":"English","String":"Old"},{"Language":"French","String":"Nommé"}]}""",
+            JsonStrings.AsWritten(Node(after, "Name")));
+    }
+
+    [Theory]
+    [InlineData("""{"TargetLanguage":"English","Values":[{"Language":"English","String":"Old"}]}""", "Value")]
+    [InlineData("""{"TargetLanguage":"English","Value":"Old"}""", "Values")]
+    [InlineData("""{"TargetLanguage":"English","Value":"Old"}""", "Text")]
+    public void TranslatedString_AMemberTheDocumentDoesNotHold_IsRefused(string held, string member)
+    {
+        var failure = Failure(NpcNamed(held), "npc_", EditOp.Set, "\"New\"", Member("Name"), Member(member));
+
+        Assert.Equal($"Name.{member}", Assert.IsType<EditFailure.NoMember>(failure).Path);
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void TranslatedString_TargetLanguage_IsReadOnlyWhereThePluginIsNotLocalized(bool localized, bool readOnly)
+    {
+        var held = NpcNamed("""{"TargetLanguage":"English","Value":"Old"}""");
+
+        Assert.Null(DocumentEdit.Locate(
+            Document.Parse(held), SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["npc_"], EditOp.Set,
+            [Member("Name"), Member("TargetLanguage")], localized, out var edit));
+
+        Assert.Equal(readOnly, edit.Require().ReadOnlyTarget is not null);
     }
 
     [Fact]

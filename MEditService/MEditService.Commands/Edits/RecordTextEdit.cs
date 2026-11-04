@@ -34,7 +34,7 @@ internal static class RecordTextEdit
         if (ValidateEnvelope(envelope, spelled, out var op) is { } malformed) return malformed;
 
         var record = request.Record;
-        if (DocumentEdit.Locate(record, request.Schema, op, [.. envelope.Path.Select(hop => hop.Hop)], out var located) is { } unaddressed)
+        if (DocumentEdit.Locate(record, request.Schema, op, [.. envelope.Path.Select(hop => hop.Hop)], request.Localized, out var located) is { } unaddressed)
             return Refusal(unaddressed);
         var edit = located ?? throw new InvalidOperationException("Expected Locate to answer an edit when it does not refuse.");
         if (edit.ReadOnlyTarget is { } readOnly) return ReadOnlyRefusal(readOnly.Path, readOnly.Member, readOnly.Reason);

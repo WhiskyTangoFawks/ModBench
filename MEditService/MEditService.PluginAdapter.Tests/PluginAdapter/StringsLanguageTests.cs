@@ -76,4 +76,24 @@ public sealed class StringsLanguageTests : IDisposable
 
         Assert.Empty(drops);
     }
+
+    [Fact]
+    public async Task APluginThatIsNotLocalized_ReadForEditAndForDecompile_HoldTheDefaultLanguage_WhateverTheStringsLanguage()
+    {
+        var plainPath = Path.Combine(_root, "Plain.esp");
+        LocalizedDoorPlugin.WriteNameInPlugin(plainPath, "Plain Door");
+        var plain = new RegisteredPlugin(
+            "Plain.esp", PluginOrigin.DataDirectory, plainPath, PluginProvider.Game, Line: null, HandedStrings.Of(plainPath));
+        var loadOrder = new LoadOrderSnapshot(_root, null, GameRelease.SkyrimSE, [plain], [], [plain.Key], [], [], [], Language.German);
+
+        using var documents = Adapter.OpenDocuments(
+            new ModPath(ModKey.FromFileName("Plain.esp"), plainPath), loadOrder,
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE), HandedStrings.Of(plainPath)).Answered();
+        var source = await Adapter.ReadSourceOfAsync(plain, loadOrder);
+
+        var edited = documents.Records.Single().Text;
+        var decompiled = string.Concat(source.Answered().Files.Select(file => System.Text.Encoding.UTF8.GetString(file.Content)));
+        Assert.Matches("\"TargetLanguage\":\\s*\"English\"", edited);
+        Assert.Matches("\"TargetLanguage\":\\s*\"English\"", decompiled);
+    }
 }
