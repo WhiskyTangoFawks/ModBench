@@ -181,7 +181,6 @@ const programDirectory = async (instanceRoot: string): Promise<string> =>
 type FilterFolders = Omit<TokenFolders, 'instance'>;
 const NO_FOLDERS: FilterFolders = { game: undefined, downloads: undefined, committedOutsideInstance: [] };
 
-/** Each covered file's text on this machine, by its driver. */
 type Machine = ReadonlyMap<string, string>;
 const NOTHING_OF_MACHINE: Machine = new Map();
 
