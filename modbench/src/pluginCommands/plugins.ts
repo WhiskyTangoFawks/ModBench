@@ -27,12 +27,11 @@ interface Decision<T> {
   readonly decided: T;
 }
 
+class OrderRefused extends Error {}
+
 // The adapter takes the changes alone, so what `decide` concluded comes back here. A change
 // already true of the order is not written: for `syncPlugins` that is the difference between a
 // loop that settles and one that does not.
-/** A decision that refuses the change before the adapter writes any of it. */
-class OrderRefused extends Error {}
-
 async function changeDeciding<A extends unknown[], T extends object>(
   write: (decide: (...args: A) => readonly PluginOrderChange[]) => Promise<{ readonly wrote: boolean }>,
   decide: (...args: A) => Decision<T>,
