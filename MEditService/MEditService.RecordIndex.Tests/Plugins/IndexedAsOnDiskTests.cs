@@ -103,6 +103,24 @@ public sealed class IndexedAsOnDiskTests
         Assert.Equal(PluginIndexing.AsOnDisk, index.Queries.GetPluginIndexedAsOnDisk(mod.Key).Value().State);
     }
 
+    [Fact]
+    public void ACompiledPluginWhoseBinaryCannotBeRead_IsNotYet_AfterItsTreeValidates()
+    {
+        FormKey npc = default;
+        using var fixture = new PluginFixtureBuilder("as-on-disk-unreadable")
+            .WithPlugin("Fixture.esp", m => npc = m.Npcs.AddNew("FixtureNpc").FormKey, origin: "FixtureMod")
+            .BuildScattered()
+            .CompiledPlugin();
+        var mod = fixture.Plugins.Single();
+        using var index = Indexes.Reconciled(fixture);
+
+        mod.HandEdit(index.DocumentOf(npc.ToString(), mod.Key), "\"FixtureNpc\"", "\"EditedMidBuild\"");
+        File.Delete(mod.Path);
+        index.NextSnapshotUntil(() => index.CopyIn(npc.ToString(), mod.Key)?.EditorId == "EditedMidBuild", "the edit refreshed");
+
+        Assert.Equal(PluginIndexing.NotYet, index.Queries.GetPluginIndexedAsOnDisk(mod.Key).Value().State);
+    }
+
     private sealed class FailsToRead() : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public override Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
