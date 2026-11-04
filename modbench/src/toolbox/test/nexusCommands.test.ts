@@ -61,6 +61,7 @@ import { acceptingGoodKey, GOOD_KEY, json, nexusAnswering } from '../../nexus/te
 import { tagRecordingReporterFor } from '../../test/surfacingDoubles';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { present } from '../../ports/present';
+import { aWriteInFlight } from '../../test/writeInFlight';
 
 function registered(secretsFail?: 'get' | 'delete', account?: Response) {
   const over = nexusAnswering(account === undefined ? acceptingGoodKey : () => account);
@@ -159,6 +160,25 @@ describe('Log in', () => {
     await vi.waitFor(() => expect(contextKeys.get(LOGGED_IN_KEY)).toBe(true));
     await vi.waitFor(() => expect(contextKeys.has(PREMIUM_KEY)).toBe(true));
     expect(sent).toHaveLength(2);
+  });
+});
+
+describe('Log in while a write is in flight', () => {
+  it('tells the user once that the write was refused, keeps the prompt open, and never says Nexus refused the key', async () => {
+    const { told } = aWriteInFlight();
+    const { sent, reporter } = registered();
+    const { box } = openPrompt();
+    box.value = GOOD_KEY;
+
+    await box.accept();
+
+    expect({
+      sent, hidden: box.hidden, validationMessage: box.validationMessage, shownOnSurface: reporter.shownFailures,
+      told: told.reports.map(({ message }) => message),
+    }).toEqual({
+      sent: [], hidden: false, validationMessage: undefined, shownOnSurface: [],
+      told: ['modbench.instance.logIn did not start: modbench.test.held is still writing.'],
+    });
   });
 });
 

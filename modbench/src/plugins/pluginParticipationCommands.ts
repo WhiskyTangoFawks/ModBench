@@ -23,7 +23,7 @@ export function registerPluginEnableCommands(
     },
     fromAgent: ({ argument }) => argument.map(pluginOf),
     run: async (plugins) => {
-      const result = await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, () =>
+      const result = await runWritingGesture(enabled ? 'modbench.plugin.enable' : 'modbench.plugin.disable', PLUGINS_KEY_ARGS.view, instance, () =>
         commands.setPluginsEnabled(plugins.map(({ name }) => name), enabled));
       if (!result.applied) return result;
       const addressOf = (name: string): PluginAddress => present(plugins.find((plugin) => plugin.name === name), `the plugin given as ${name}`);

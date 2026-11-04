@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
 import type { MasterlistCommands } from '../instanceCommands/masterlist';
-import { answeredToAgent, isAgentCall, type AgentCall, type GestureResult } from '../drivingLib/agentGesture';
+import { answeredToAgent, isAgentCall, registerWritingCommand, type AgentCall, type GestureResult } from '../drivingLib/agentGesture';
 import type { Progress } from '../drivingLib/pausableProgress';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { AskQuestion } from '../ports/dialog';
@@ -51,6 +51,6 @@ export function registerMasterlistCommand({ commands, instance, pluginsView, say
       say(undefined);
     }
   };
-  return vscode.commands.registerCommand(UPDATE_MASTERLIST, (called?: unknown) =>
-    runWritingGesture(pluginsView, instance, (progress) => run(called, progress)));
+  return registerWritingCommand(UPDATE_MASTERLIST, (called?: unknown) =>
+    runWritingGesture(UPDATE_MASTERLIST, pluginsView, instance, (progress) => run(called, progress)));
 }

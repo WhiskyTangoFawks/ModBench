@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { AgentCall, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
+import { AgentCall, registerWritingCommand, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { MODS_KEY_ARGS } from './gestureEntry';
 import type { Instance } from '../instanceLoader/instance';
@@ -24,12 +24,12 @@ const isAgentCall = (value: unknown): value is ModlistCall => value instanceof A
 // view (commands.md, Entry points are not gestures).
 export function registerManifestGestures(deps: ManifestGestureDeps): vscode.Disposable[] {
   return [
-    vscode.commands.registerCommand('modbench.mod.updateManifest', (clicked?: unknown, selected?: readonly unknown[]) =>
+    registerWritingCommand('modbench.mod.updateManifest', (clicked?: unknown, selected?: readonly unknown[]) =>
       (isAgentCall(clicked) ? updateManifestForAgent(deps, clicked) : updateManifest(deps, modsAndSourceModsToRun(deps, clicked, selected)))),
-    vscode.commands.registerCommand('modbench.mod.restoreFromManifest', (clicked?: unknown, selected?: readonly unknown[]) =>
+    registerWritingCommand('modbench.mod.restoreFromManifest', (clicked?: unknown, selected?: readonly unknown[]) =>
       (isAgentCall(clicked) ? restoreFromManifestForAgent(deps, clicked) : restoreFromManifest(deps, modsToRun(deps, clicked, selected)))),
-    vscode.commands.registerCommand('modbench.modList.updateManifestHere', () => updateManifest(deps, everyModHere(deps))),
-    vscode.commands.registerCommand('modbench.modList.restoreFromManifestHere', () => restoreFromManifest(deps, everyModHere(deps))),
+    registerWritingCommand('modbench.modList.updateManifestHere', () => updateManifest(deps, everyModHere(deps))),
+    registerWritingCommand('modbench.modList.restoreFromManifestHere', () => restoreFromManifest(deps, everyModHere(deps))),
   ];
 }
 
@@ -59,7 +59,7 @@ function withProgressAndCancel<T>(
 
 async function updateManifest(deps: ManifestGestureDeps, { mods, sourceMods, refused, view, everyMod }: ModsToRun): Promise<void> {
   const { commands, instance, reporter } = deps;
-  await runWritingGesture(view, instance, async () => {
+  await runWritingGesture('modbench.mod.updateManifest', view, instance, async () => {
     const found = await othersOf(deps, everyMod);
     const outcome = await withProgressAndCancel(deps, (show, signal) =>
       commands.updateManifest(mods, { onProgress: (status) => { show(updateMessage(status)); }, signal }, found.others, everyMod, sourceMods));
@@ -73,7 +73,7 @@ async function updateManifestForAgent(
   const { commands, instance } = deps;
   const { mods, sourceMods, refused } = modsAndSourceModsOfAgent(argument, instance.value);
   const found = await othersOf(deps, argument.length === 0);
-  const result = await runWritingGesture(MODS_KEY_ARGS.view, instance, () => commands.updateManifest(mods, {}, found.others, argument.length === 0, sourceMods));
+  const result = await runWritingGesture('modbench.mod.updateManifest', MODS_KEY_ARGS.view, instance, () => commands.updateManifest(mods, {}, found.others, argument.length === 0, sourceMods));
   const { notHeld, otherBytes } = gapsOf(result.landed, (mod, path) => `${mod}: its package does not hold ${path}`, (mod, path) => `${mod}: its package holds ${path} with other bytes`);
   return {
     applied: true,
@@ -143,7 +143,7 @@ async function restoreFromManifest(deps: ManifestGestureDeps, toRun: ModsToRun):
     reportRestored(reporter, total, { landed: [], refused });
     return;
   }
-  await runWritingGesture(view, instance, async () => {
+  await runWritingGesture('modbench.mod.restoreFromManifest', view, instance, async () => {
     const outcome = await withProgressAndCancel(deps, (show, signal) =>
       commands.restoreFromManifest(mods, { onProgress: (status) => { show(restoreMessage(status)); }, signal }, toRun.everyMod, found.others));
     reportRestored(reporter, total, { ...outcome, refused: [...outcome.refused, ...refused] });
@@ -155,7 +155,7 @@ async function restoreFromManifestForAgent(deps: ManifestGestureDeps, { argument
   const mods = modsOfAgent(argument, instance.value);
   const found = await othersOf(deps, argument.length === 0);
   if (mods.length + found.others.length === 0) return { applied: true, outcome: { landed: [], refused: found.refused } };
-  const outcome = await runWritingGesture(MODS_KEY_ARGS.view, instance, () => commands.restoreFromManifest(mods, {}, argument.length === 0, found.others));
+  const outcome = await runWritingGesture('modbench.mod.restoreFromManifest', MODS_KEY_ARGS.view, instance, () => commands.restoreFromManifest(mods, {}, argument.length === 0, found.others));
   return {
     applied: true,
     outcome: { landed: outcome.landed, refused: [...outcome.refused, ...found.refused] },
