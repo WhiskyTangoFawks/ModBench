@@ -17,7 +17,7 @@ interface MadeSourceFolder {
 interface PlacedMods<R> {
   readonly outcome: R | WriteRefused;
   readonly notMade: ReadonlyMap<string, string>;
-  readonly notLinked: ReadonlyMap<string, string>;
+  readonly unfinished: ReadonlyMap<string, string>;
   readonly notes: readonly string[];
 }
 
@@ -49,8 +49,8 @@ export async function outsideSourceMods(access: Pick<DecompileAndRepairAccess, '
 }
 
 // source.md, Decompile and repair, story 4: one item for a mod, the first plugin of it that landed.
-function firstLandedOf(landed: readonly PluginAddress[], notLinked: ReadonlyMap<string, string>): ItemRefusal<PluginAddress>[] {
-  return [...notLinked].flatMap(([mod, why]) => {
+function firstLandedOf(landed: readonly PluginAddress[], unfinished: ReadonlyMap<string, string>): ItemRefusal<PluginAddress>[] {
+  return [...unfinished].flatMap(([mod, why]) => {
     const item = landed.find(({ origin }) => origin === mod);
     return item === undefined ? [] : [{ item, reason: `was repaired, but ${why}.` }];
   });
@@ -72,11 +72,11 @@ export async function decompileAndRepair(
   };
   const placed = await placeMods({ mods: notSourceMods, where }, repaired, (outcome) => outcome.landed.map(({ origin }) => origin));
   if (isRefused(placed)) return { applied: false, refusal: placed.message };
-  const { outcome, notMade, notLinked, notes } = placed;
+  const { outcome, notMade, unfinished, notes } = placed;
   if (isRefused(outcome)) return { applied: false, refusal: outcome.message };
   const notMadePlugins = plugins.filter(({ origin }) => notMade.has(origin)).map((item) => ({
     item, reason: `${item.origin} is not a source mod, and a source folder cannot be made for it: ${notMade.get(item.origin) ?? ''}`,
   }));
-  const refused = [...notMadePlugins, ...outcome.refused, ...firstLandedOf(outcome.landed, notLinked)];
+  const refused = [...notMadePlugins, ...outcome.refused, ...firstLandedOf(outcome.landed, unfinished)];
   return { applied: true, outcome: { landed: outcome.landed, refused }, ...notes.length === 0 ? {} : { notes } };
 }

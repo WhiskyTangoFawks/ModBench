@@ -22,15 +22,17 @@ internal abstract class SourceRepositoryGit
     /// <summary>The repository of the source folder's own <c>.git</c>, made yet or not.</summary>
     internal static SourceRepositoryGit Own(string sourceFolder) => new OwnRepository(sourceFolder);
 
-    /// <summary>The instance repository, the nearest one above the source folder, as git finds it.</summary>
-    internal static SourceRepositoryGit Above(string sourceFolder) => new RepositoryAbove(sourceFolder, WorkTreeAbove(sourceFolder) ?? sourceFolder);
+    /// <summary>The instance repository, the nearest one above the source folder, as git finds it. An init there commits
+    /// the file <paramref name="besideFolder"/> too.</summary>
+    internal static SourceRepositoryGit Above(string sourceFolder, string? besideFolder = null) =>
+        new RepositoryAbove(sourceFolder, WorkTreeAbove(sourceFolder) ?? sourceFolder, besideFolder);
 
     /// <summary>The repository that holds the source folder: its own, else the one above it.</summary>
     internal static SourceRepositoryGit Holding(string sourceFolder) => HoldsGit(sourceFolder) ? Own(sourceFolder) : Above(sourceFolder);
 
     private protected abstract string SourceFolderInWorkTree { get; }
 
-    /// <summary>The pathspec that limits an add or a commit to the source folder.</summary>
+    /// <summary>The pathspec that limits an add or a commit to the source folder, and what an init commits beside it.</summary>
     internal abstract string[] FolderPaths { get; }
 
     /// <summary>Makes the repository ready to take the source folder's files, undone by <paramref name="journal"/>.</summary>
@@ -60,13 +62,14 @@ internal abstract class SourceRepositoryGit
         private protected override string SourceCommit() => "HEAD";
     }
 
-    private sealed class RepositoryAbove(string sourceFolder, string workTree) : SourceRepositoryGit(sourceFolder, workTree)
+    private sealed class RepositoryAbove(string sourceFolder, string workTree, string? besideFolder) : SourceRepositoryGit(sourceFolder, workTree)
     {
         private string? _sourceFolderInWorkTree;
 
         private protected override string SourceFolderInWorkTree => _sourceFolderInWorkTree ??= Run("rev-parse", "--show-prefix").Trim();
 
-        internal override string[] FolderPaths => ["--", "."];
+        internal override string[] FolderPaths =>
+            besideFolder is null ? ["--", "."] : ["--", ".", LiteralPathspec(Path.GetRelativePath(_sourceFolder, besideFolder))];
 
         internal override void BeginInit(WriteJournal journal)
         {
@@ -212,18 +215,18 @@ internal abstract class SourceRepositoryGit
     private bool RefIsStored(string gitRef) =>
         File.Exists(Path.Combine(_gitDir, gitRef)) || PackedRefs(_gitDir).Contains(gitRef);
 
-    /// <summary>HEAD and the index of the source folder's paths back at <paramref name="head"/>; with none, the branch is
-    /// unborn again and the index holds none of them. What else is staged stays staged.</summary>
+    /// <summary>HEAD and the index of <see cref="FolderPaths"/> back at <paramref name="head"/>; with none, the branch is
+    /// unborn again and the index holds none of them. A change staged outside them stays staged.</summary>
     internal void PutBack(string? head)
     {
         if (head is null)
         {
             DropBranchAtHead();
-            Run("rm", "-r", "-q", "--cached", "--ignore-unmatch", "--", ".");
+            Run(["rm", "-r", "-q", "--cached", "--ignore-unmatch", .. FolderPaths]);
             return;
         }
         Run("reset", "-q", "--soft", head);
-        Run("reset", "-q", head, "--", ".");
+        Run(["reset", "-q", head, .. FolderPaths]);
     }
 
     /// <summary>Before the first commit there is no commit to go back to: the branch HEAD names is dropped.</summary>

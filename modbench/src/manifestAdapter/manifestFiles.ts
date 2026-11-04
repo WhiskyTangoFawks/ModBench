@@ -66,6 +66,16 @@ function refuseUnlessReadable(text: string): void {
   if ('refused' in read) throw new Error(read.refused);
 }
 
+/** `manifest` as the file a writer outside Modbench writes in `folder`: the manifest it holds, whatever its name, else one
+ *  named for it. Rejects when the folder holds two manifests or the text is refused. */
+export async function manifestFileFor(folder: string, manifest: Manifest): Promise<{ readonly name: string; readonly text: string }> {
+  const [one, other] = await manifestsIn(folder);
+  if (other !== undefined) throw new Error(twoManifests(one ?? '', other));
+  const text = manifestText(manifest);
+  refuseUnlessReadable(text);
+  return { name: one ?? manifestNameOf(folder), text };
+}
+
 /** Writes `manifest` as the manifest named for `folder`, in the spelling it holds, and removes one named otherwise;
  *  true when a file changed. Rejects, writing nothing, when the folder holds two manifests, is not there or the text is refused. */
 export async function writeManifestIn(folder: string, manifest: Manifest): Promise<boolean> {
