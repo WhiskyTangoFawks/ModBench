@@ -133,12 +133,14 @@ internal sealed class ConflictClassifier(ILogger logger)
 
         // The templated members inside the node at this dotted path, relative to it: a struct is
         // compared with them left out.
-        public List<string[]> TemplatedWithin(string path) =>
-            [.. Templated.Values.SelectMany(t => t.Keys)
-                .Where(member => member.StartsWith(path + ".", StringComparison.Ordinal))
-                .Distinct()
-                .Select(member => member[(path.Length + 1)..].Split('.'))];
+        public List<string[]> TemplatedWithin(string path) => MembersWithin(Templated.Values.SelectMany(t => t.Keys), path);
     }
+
+    internal static List<string[]> MembersWithin(IEnumerable<string> templated, string path) =>
+        [.. templated
+            .Where(member => member.StartsWith(path + ".", StringComparison.Ordinal))
+            .Distinct()
+            .Select(member => member[(path.Length + 1)..].Split('.'))];
 
     // How a node's cells take their conflict state: ComputeCellStates. A comparison of several
     // records has none, and its cells take theirs by focus.
@@ -192,7 +194,7 @@ internal sealed class ConflictClassifier(ILogger logger)
             NoWinner: noWinner);
     }
 
-    private static object? WithoutMembers(object? value, IEnumerable<string[]> members)
+    internal static object? WithoutMembers(object? value, IEnumerable<string[]> members)
     {
         if (value is not JsonElement { ValueKind: JsonValueKind.Object or JsonValueKind.Array } element) return value;
         var node = System.Text.Json.Nodes.JsonNode.Parse(element.GetRawText());
@@ -224,17 +226,16 @@ internal sealed class ConflictClassifier(ILogger logger)
         var diffs = new List<FieldDiff>();
         foreach (var member in records.SelectMany(r => r.Fields).Select(f => f.Metadata).DistinctBy(m => m.Name))
         {
-            // A Partial Form override's own fields take no part (ADR-0018), so they fall through to
-            // the previous override that takes part; its header and EditorID take part.
+            // A Partial Form override's own fields fall through to the previous override that takes part.
             var header = member.IsRecordHeaderMember;
-            var ownField = !header && !member.IsEditorId;
+            var ownField = ConflictRules.IsOwnField(member);
             var values = records.Select((r, i) => (Column: columns[i], Value: MemberValue(r, member.Name)))
                 .ToDictionary(t => t.Column, t => t.Value);
             var memberCtx = ownField ? ctx : ctx with { ShadowedColumns = new HashSet<string>() };
             if (!header && values.Values.All(v => v == null)) continue;
             var shapes = recordClass.ToDictionary(
                 kv => kv.Key, kv => DocumentNodes.Variant(membersOf[kv.Key].GetValueOrDefault(member.Name, member), kv.Value));
-            diffs.Add(DiffNode(member.Name, member.Name, values, shapes, absentMeansDefault: true, memberCtx, member.IgnoredInConflicts, partialFormTakesPart: !ownField));
+            diffs.Add(DiffNode(member.Name, member.Name, values, shapes, absentMeansDefault: true, memberCtx, !ConflictRules.TakesPart(member, inPartialFormCopy: false), partialFormTakesPart: !ownField));
         }
         return diffs;
     }

@@ -241,9 +241,25 @@ internal sealed class Store : IDisposable
         _pluginIngest = new PluginIngest(Connection, _logger, release, contentStamp);
         _workingTreeOverlay = new WorkingTreeOverlay(Connection, _logger, _schemas, release, contentStamp);
         TableDdlBuilder.CreateTables(Connection);
+        RegisterConflictHash(_schemas, release);
         DuckDbSql.Execute(Connection, $"DELETE FROM {IndexVersionRelation}");
         DuckDbSql.Execute(Connection, $"INSERT INTO {IndexVersionRelation} (value) VALUES ($1)", indexVersion);
     }
+
+    // conflict_hash(record_type, body, parse_diagnosis): null for a document the codec refused, which is a stub with
+    // no values to compare.
+    private void RegisterConflictHash(IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release) =>
+        Connection.RegisterScalarFunction<string, string, string, string>("conflict_hash", (columns, hashes, rows) =>
+        {
+            for (ulong row = 0; row < rows; row++)
+            {
+                if (columns[0].IsValid(row) && columns[1].IsValid(row) && !columns[2].IsValid(row)
+                    && schemas.TryGetValue(columns[0].GetValue<string>(row), out var schema) && !schema.IsHeader)
+                    hashes.WriteValue(ConflictHash.Of(columns[1].GetValue<string>(row), schema, release), row);
+                else
+                    hashes.WriteNull(row);
+            }
+        }, new ScalarFunctionOptions { IsPureFunction = true, HandlesNulls = true });
 
     public void CreateRecordTypeViews()
     {
