@@ -104,10 +104,10 @@ public sealed class IndexedAsOnDiskTests
     }
 
     [Fact]
-    public void ACompiledPluginWhoseBinaryCannotBeRead_IsNotYet_AfterItsTreeValidates()
+    public void ACompiledPluginWithNoBinaryOnDisk_IsNotYet_AfterItsTreeValidates()
     {
         FormKey npc = default;
-        using var fixture = new PluginFixtureBuilder("as-on-disk-unreadable")
+        using var fixture = new PluginFixtureBuilder("as-on-disk-no-binary")
             .WithPlugin("Fixture.esp", m => npc = m.Npcs.AddNew("FixtureNpc").FormKey, origin: "FixtureMod")
             .BuildScattered()
             .CompiledPlugin();

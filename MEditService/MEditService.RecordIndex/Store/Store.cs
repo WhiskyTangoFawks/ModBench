@@ -394,9 +394,8 @@ internal sealed class Store : IDisposable
             ? derivedFrom
             : null;
 
-    /// <summary>Restates which truth <paramref name="key"/>'s rows read as, leaving the file claim
-    /// beside it: a refresh re-derives the rows in place, and the binary they were stamped against
-    /// is still the file on disk.</summary>
+    /// <summary>Restates which truth <paramref name="key"/>'s rows read as, and nothing else: a refresh
+    /// re-derives the rows in place.</summary>
     public void RestampDerivation(PluginAddress key, DerivedFrom derivedFrom)
     {
         using var tx = BeginTransaction();
@@ -457,10 +456,10 @@ internal sealed class Store : IDisposable
     }
 
     /// <summary>Claims the binary now at <paramref name="filePath"/> for rows its tree vouches for: a build rewrites
-    /// the binary and moves no row. With no claim, or no binary to read, nothing moves.</summary>
+    /// the binary and moves no row.</summary>
     public void ReclaimTreeBinary(PluginAddress key, string filePath)
     {
-        if (IndexedFile(key) is not { } held || _plugins.HashOf(filePath) is not { } now || now == held.ContentHash) return;
+        if (IndexedFile(key) is not { } held || FileContentHash(filePath) is not { } now || now == held.ContentHash) return;
         if (ClaimOf(filePath) is not { } claim) return;
 
         using var tx = BeginTransaction();
