@@ -50,15 +50,15 @@ async function gameInisFolder(
 ): Promise<{ folder: string | undefined; notes: string[] }> {
   const keepsOwn = await readOrAbsent(() => keepsOwnAt(profileSettingsFile(instanceRoot, profile)), false);
   if (keepsOwn) {
-    watch.follow('myGamesInis', undefined, '');
+    watch.follow('myGamesInis', [], '');
     return { folder: profileDir(instanceRoot, profile), notes: [] };
   }
   const myGames = await resolveMyGames(release);
   if (myGames.kind === 'found') {
-    watch.follow('myGamesInis', myGames.folder, `{${userInis.map(anyCase).join(',')}}`);
+    watch.follow('myGamesInis', [myGames.folder], `{${userInis.map(anyCase).join(',')}}`);
     return { folder: myGames.folder, notes: [] };
   }
-  watch.follow('myGamesInis', undefined, '');
+  watch.follow('myGamesInis', [], '');
   return {
     folder: undefined,
     notes: [`The profile ${profile} keeps no game INIs of its own, and the game's were not found: the archives listed are its default INI's. Looked at ${myGames.looked.join('; ')}.`],
@@ -71,11 +71,11 @@ export function mo2Archives(context: Mo2Context): ArchiveReads {
     async archiveList(profile, gameFolder, gameRelease, ignoredLink) {
       const lists = archiveListsOf(gameRelease);
       if (gameFolder.kind !== 'found' || lists === undefined) {
-        watch.follow('defaultIni', undefined, '');
-        watch.follow('myGamesInis', undefined, '');
+        watch.follow('defaultIni', [], '');
+        watch.follow('myGamesInis', [], '');
         return { archives: [], notes: [] };
       }
-      watch.follow('defaultIni', gameFolder.root, anyCase(lists.defaultIni));
+      watch.follow('defaultIni', [gameFolder.root], anyCase(lists.defaultIni));
       const { folder, notes } = await gameInisFolder(context, profile, gameRelease, lists.userInis);
       const own = folder === undefined ? [] : lists.userInis.map((name) => fileNamedIn(folder, name, listAnyEntries));
       const files = await Promise.all([fileNamedIn(gameFolder.root, lists.defaultIni, (root) => listOwnEntries(root, ignoredLink)), ...own]);
@@ -85,7 +85,7 @@ export function mo2Archives(context: Mo2Context): ArchiveReads {
     gameFolderArchives(gameFolder, gameRelease, ignoredLink) {
       const rule = pluginCompanionRule(gameRelease);
       const dataFolder = dataFolderOf(gameFolder);
-      watch.follow('gameFolderArchives', rule && dataFolder, rule ? dataFolderArchivesGlob(rule.archiveExtension, rule.stringsFolder) : '');
+      watch.follow('gameFolderArchives', rule && dataFolder !== undefined ? [dataFolder] : [], rule ? dataFolderArchivesGlob(rule.archiveExtension, rule.stringsFolder) : '');
       return dataFolder === undefined ? Promise.resolve({ kind: 'unresolved' }) : listGameFolderArchives(dataFolder, gameRelease, ignoredLink);
     },
   };

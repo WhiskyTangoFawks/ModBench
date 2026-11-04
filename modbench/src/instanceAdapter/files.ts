@@ -7,7 +7,8 @@ import { constants, createWriteStream, type Dirent } from 'node:fs';
 import {
   access, appendFile, chmod, cp, mkdir, mkdtemp, readFile, readdir, realpath, rename as fsRename, rm, rmdir, stat, writeFile,
 } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { dirname, join, sep } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
@@ -295,21 +296,30 @@ export const settledBefore = (stamp: FileStamp, readFromMs: number): boolean =>
   stamp.changedNs < BigInt(readFromMs - SETTLED_AFTER_MS) * 1_000_000n;
 
 interface Kept<T> {
+  readonly path: string;
   readonly stamp: FileStamp;
   readonly value: T;
 }
 
+// Windows names a file whatever the case of its path, and VS Code's watcher spells a drive in lower case.
+const pathKey = (path: string): string => (process.platform === 'win32' ? path.toLowerCase() : path);
+
+const everyKept: Map<string, Kept<unknown>>[] = [];
+const trusting = new AsyncLocalStorage<true>();
+
 // The stamp is the fact every write changes that ADR-0003 validates by.
-function stampKept<T>(read: (path: string) => Promise<T>): (path: string) => Promise<T> {
-  const kept = new Map<string, Kept<T>>();
+function stampKept<T>(read: (path: string) => Promise<T>, kept = new Map<string, Kept<T>>()): (path: string) => Promise<T> {
+  everyKept.push(kept);
   return async (path) => {
+    const key = pathKey(path);
+    const held = kept.get(key);
+    if (held !== undefined && trusting.getStore() === true) return held.value;
     const stamp = await stampOf(path);
-    const held = kept.get(path);
     if (held !== undefined && sameStamp(held.stamp, stamp)) return held.value;
     const readFromMs = Date.now();
     const value = await read(path);
-    if (settledBefore(stamp, readFromMs)) kept.set(path, { stamp, value });
-    else kept.delete(path);
+    if (settledBefore(stamp, readFromMs)) kept.set(key, { path, stamp, value });
+    else kept.delete(key);
     return value;
   };
 }
@@ -319,8 +329,45 @@ export function listDir(path: string): Promise<Dirent[]> {
   return readdir(path, { withFileTypes: true });
 }
 
+const listings = new Map<string, Kept<Dirent[]>>();
+
 /** As `listDir`, for a folder of the instance or the game, which is not listed again while its stamp has not changed. */
-export const listDirByStamp = stampKept(listDir);
+export const listDirByStamp = stampKept(listDir, listings);
+
+function touchedBy(named: readonly string[]): (key: string) => boolean {
+  const keys = new Set(named.flatMap((path) => [pathKey(path), pathKey(dirname(path))]));
+  const below = named.map(pathKey).filter((key) => listings.has(key)).map((key) => key + sep);
+  return (key) => keys.has(key) || below.some((folder) => key.startsWith(folder));
+}
+
+const stampStill = async ({ path, stamp }: Kept<unknown>): Promise<boolean> => {
+  try {
+    return sameStamp(await stampOf(path), stamp);
+  } catch {
+    return false;
+  }
+};
+
+async function forgetChanged(checked: (key: string) => boolean): Promise<string[]> {
+  const picked = everyKept.flatMap((kept) => [...kept].filter(([key]) => checked(key)).map(([key, held]) => ({ kept, key, held })));
+  const changed = await Promise.all(picked.map(async ({ kept, key, held }) => {
+    if (await stampStill(held)) return [];
+    if (kept.get(key) === held) kept.delete(key);
+    return [held.path];
+  }));
+  return [...new Set(changed.flat())];
+}
+
+/** Runs `read` trusting what is kept, once each kept path `named` touches, or every one when `disk`, is forgotten where its
+ *  stamp changed. Answers each changed path `named` does not touch. Any other read checks each stamp. */
+export async function readTrustingKept<T>(named: readonly string[], disk: boolean, read: () => Promise<T>): Promise<{ answer: T; unheard: string[] }> {
+  const touched = touchedBy(named);
+  const changed = await forgetChanged(disk ? () => true : touched);
+  return { answer: await trusting.run(true, read), unheard: changed.filter((path) => !touched(pathKey(path))) };
+}
+
+/** Runs `arm` outside any read that trusts what is kept, so a timer, watch or listener it arms reads as any other caller. */
+export const outsideTrustedRead = <T>(arm: () => T): T => trusting.exit(arm);
 
 /** A reader of the text `parse` makes of a file, which reads and parses it again only when the file's stamp has changed. */
 export const parsedBy = <T>(parse: (text: string) => T): ((path: string) => Promise<T>) =>
