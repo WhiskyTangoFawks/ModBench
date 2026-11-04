@@ -49,6 +49,7 @@ As a user, I want:
 8. A warning, when the mod manager that made the instance is running, that it overwrites my changes when it launches a program or exits. Cites: Never break the instance for its owner; Never silently wrong
 9. One instance in each window: the first open folder that is an instance, chosen when Modbench starts. No view shows the other open folders, which stay VS Code's, and each other instance among them gets one line in the Output naming it. Cites: Existing tools
 10. A folder I have not trusted, when it is an instance, to say in Modbench's views that Modbench is off until I trust it, with a link to trust it, and Modbench to start once I do, with no reload. Cites: VS Code's interaction; Never silently wrong
+11. From the first change Modbench sees until the disk has been checked, every view's progress bar, so a view that may be late says so. Cites: ADR-0015; Never silently wrong
 
 ## A gesture that writes
 
