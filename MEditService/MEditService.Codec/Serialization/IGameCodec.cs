@@ -46,10 +46,8 @@ public interface IGameCodec
     /// <summary>The header's transient types as comparable values, empty for a game whose header has none.</summary>
     IReadOnlyList<string> TransientTypes(IModGetter plugin);
 
-    /// <summary>A copy of <paramref name="record"/> without the encoding a rewrite may change: group-header
-    /// fields, block order, Mutagen's default location target, and a string's language where not
-    /// <paramref name="localized"/>, and the base record of a deleted reference, which
-    /// <paramref name="baseMemberOf"/> names by the member its NAME is read into (ADR-0006).</summary>
+    /// <summary>A copy of <paramref name="record"/> without the encoding a rewrite may change (ADR-0006). A deleted
+    /// reference's base record is the member <paramref name="baseMemberOf"/> names for its type.</summary>
     IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record, bool localized, Func<Type, string?> baseMemberOf);
 
     /// <summary>A mod holding <paramref name="plugin"/>'s header and no record, which the whole-mod
