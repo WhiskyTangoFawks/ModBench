@@ -96,11 +96,11 @@ public sealed class IdenticalCopiesTests
 
     private static Dictionary<PluginAddress, string?> HashesBy(OpenedIndex index) =>
         index.Queries.SelectRows(
-                $"SELECT plugin, origin, compared_hash(record_type, body, parse_diagnosis) AS compared_hash FROM records WHERE form_key = '{Record}'")
+                $"SELECT plugin, origin, conflict_hash(record_type, body, parse_diagnosis) AS conflict_hash FROM records WHERE form_key = '{Record}'")
             .Value().Rows
             .ToDictionary(
                 row => new PluginAddress(row.GetProperty("plugin").GetString() ?? "", row.GetProperty("origin").GetString() ?? ""),
-                row => row.GetProperty("compared_hash").GetString(),
+                row => row.GetProperty("conflict_hash").GetString(),
                 PluginAddress.Comparer);
 
     [Theory]

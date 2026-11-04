@@ -9,7 +9,7 @@ namespace MEditService.RecordIndex.Queries;
 
 /// <summary>A copy's members as the conflict classifier compares them, hashed. A member another copy in the
 /// stack templates is left out of a compare, and no hash of one copy can know it.</summary>
-internal static class ComparedHash
+internal static class ConflictHash
 {
     public static string Of(string body, RecordTableSchema schema, GameRelease release)
     {
