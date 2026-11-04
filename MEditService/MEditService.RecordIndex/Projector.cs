@@ -71,7 +71,9 @@ internal sealed class Projector(
             change => change.Key,
             change => change.Value == RecordChange.Added ? WorkingTreeState.Added : WorkingTreeState.Modified,
             StringComparer.Ordinal);
+        // A key git names with no row is a document saved since the stamps were read: a later check holds its row and names it.
         var moved = KeysDiffering(index.HeldWorkingTreeStates(key), learned)
+            .Where(formKey => index.StoredRow(key, formKey) is not null)
             .Select(formKey => (FormKey: formKey, State: learned.GetValueOrDefault(formKey)))
             .ToList();
         if (moved.Count == 0) return SourceAnswer.Of<IReadOnlyList<string>>([]);
