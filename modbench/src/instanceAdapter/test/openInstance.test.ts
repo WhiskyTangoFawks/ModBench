@@ -1,7 +1,7 @@
 import { describe, it, expect, afterAll, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, matchesGlob } from 'node:path';
 import { watchers, fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { adapterOver } from '../../test/mo2/adapterOver';
 import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
@@ -122,7 +122,7 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
     let signals = 0;
     const subscription = adapterOver(root).subscribe(() => { signals++; });
     const live = () => watchers.filter((watcher) => !watcher.disposed);
-    const firedOn = (pattern: string): void => { live().find((watcher) => watcher.pattern === pattern)?.fireChange(); };
+    const firedOn = (name: string): void => { live().find((watcher) => watcher.base === root && matchesGlob(name, watcher.pattern))?.fireChange(); };
 
     firedOn(SETTINGS_FILE);
     firedOn('ModOrganizer.ini');

@@ -166,33 +166,40 @@ export const submodulesFile = (instanceRoot: string): string => join(instanceRoo
 /** A source mod's path in the instance repository, which is its submodule's path. */
 export const sourceModPath = (folderName: string): string => `${SOURCE_MODS_FOLDER}/${folderName}`;
 
-/** A repository appearing at, or vanishing from, the instance root. */
-export const REPOSITORY_WATCH_GLOB = GIT_DIR;
+/** A watch's folder, and the pattern of what in it the watch hears. VS Code watches a folder whole only for a pattern with
+ *  `**` or a path segment, and otherwise its first level alone. */
+export interface WatchedFolder {
+  readonly base: string;
+  readonly pattern: string;
+}
 
-/** The repository's config and pre-push hook, where git init's path filter and push check are written. */
-export const REPOSITORY_SET_UP_WATCH_GLOB = `${GIT_DIR}/{config,hooks/pre-push}`;
+const EVERYTHING_BELOW = '**';
+/** What a folder holds at its first level: every name of one character or more, as `*` would be, which spells mod order's
+ *  marker and so belongs to its codec alone. */
+export const FIRST_LEVEL = '?*';
 
-/** What decides the folders git holds whole: its ignore lists and its index of tracked files. */
-export const HELD_BY_GIT_WATCH_GLOB = `{.gitignore,${GIT_DIR}/index,${GIT_DIR}/info/exclude}`;
+/** The instance's own watches, each as shallow as its changes are. A mod's or a profile's folder is followed once read. */
+export const instanceWatches = (instanceRoot: string): readonly WatchedFolder[] => [
+  // A profile switch rewrites the settings and nothing else; a repository appears at, or vanishes from, the root.
+  { base: instanceRoot, pattern: `{${SETTINGS_FILE_NAME},${IGNORE_LIST_FILE},${GIT_DIR},${Object.values(SORTING_RULE_FILES).join(',')}}` },
+  { base: modsDir(instanceRoot), pattern: FIRST_LEVEL },
+  { base: profilesDir(instanceRoot), pattern: FIRST_LEVEL },
+  { base: overwriteDir(instanceRoot), pattern: EVERYTHING_BELOW },
+  { base: sourceRootDir(instanceRoot), pattern: EVERYTHING_BELOW },
+  // Git init's path filter and push check, and what decides the folders git holds whole.
+  { base: join(instanceRoot, GIT_DIR), pattern: '{config,index}' },
+  { base: join(instanceRoot, GIT_DIR, 'hooks'), pattern: 'pre-push' },
+  { base: join(instanceRoot, GIT_DIR, 'info'), pattern: 'exclude' },
+];
 
-// Watch patterns, POSIX-separated and relative to the instance root: a `RelativePattern` takes a
-// glob, never a platform path, so these are built as text rather than with `join`.
-export const MODS_GLOB = `${MODS}/**`;
-export const SOURCE_GLOB = `${SOURCE_MODS_FOLDER}/**`;
-export const OVERWRITE_GLOB = `${OVERWRITE_DIR_NAME}/**`;
-export const MODLIST_GLOB = `${PROFILES}/*/${MODLIST_FILE_NAME}`;
-export const PLUGINS_GLOB = `${PROFILES}/*/${PLUGINS_FILE_NAME}`;
-export const SORTING_RULE_FILES_GLOB = `{${Object.values(SORTING_RULE_FILES).join(',')}}`;
-/** A profile switch rewrites the settings and nothing else. */
-export const SETTINGS_WATCH_GLOB = SETTINGS_FILE_NAME;
-/** Downloads' own base is the resolved folder itself, so this glob is everything under it. */
-export const DOWNLOADS_WATCH_GLOB = '**';
+/** What a profile's folder holds that the instance reads: its mod order, its plugin order, and its settings and game INIs. */
+export const PROFILE_WATCH_PATTERN = `{${MODLIST_FILE_NAME},${PLUGINS_FILE_NAME},*.${anyCase('ini')}}`;
+
+/** A downloaded file and its metadata sit at the first level of the downloads folder. */
+export const DOWNLOADS_WATCH_GLOB = FIRST_LEVEL;
 
 /** Everything under the game folder's Data folder, the Data folder its base. */
-export const DATA_FOLDER_GLOB = '**';
-
-/** A profile's own INIs: its settings, and the game INIs it keeps. */
-export const PROFILE_INIS_GLOB = `${PROFILES}/*/*.${anyCase('ini')}`;
+export const DATA_FOLDER_GLOB = EVERYTHING_BELOW;
 
 // A repository does not look inside an ignored folder, so each folder is let in, its content ignored, and the files let back.
 const heldInEachFolderOf = (folder: string, files: readonly string[]): string[] => [

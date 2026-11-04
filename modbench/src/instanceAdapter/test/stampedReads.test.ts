@@ -17,8 +17,10 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 const HOUR_MS = 3_600_000;
 const listingsOf = (folder: string): number => vi.mocked(readdir).mock.calls.filter(([path]) => path === folder).length;
+let laterEachTimeMs = 0;
 const modifiedLater = async (path: string): Promise<void> => {
-  const later = new Date((await stat(path)).mtimeMs + 10_000);
+  laterEachTimeMs += 10_000;
+  const later = new Date((await stat(path)).mtimeMs + laterEachTimeMs);
   await utimes(path, later, later);
 };
 const namesOf = async (folder: string, list = listDirByStamp): Promise<string[]> => (await list(folder)).map((entry) => entry.name).sort();
@@ -109,6 +111,19 @@ describe('a folder listed and a file parsed by their stamps', () => {
     expect(unnamed).toEqual({ answer: ['a.esp'], unheard: [] });
     expect(named).toEqual({ answer: ['a.esp', 'b.esp'], unheard: [] });
     expect(listingsOf(root)).toBe(1);
+  });
+
+  it.runIf(process.platform === 'win32')('lists again within a re-read the folder of a path named in another case, as VS Code\'s watcher spells a drive', async () => {
+    await writeFile(join(root, 'a.esp'), '');
+    settle();
+    await namesOf(root);
+    await writeFile(join(root, 'b.esp'), '');
+    await modifiedLater(root);
+    const spelledByTheWatcher = join(root, 'b.esp').toLowerCase();
+
+    const { answer } = await readTrustingKept([spelledByTheWatcher], false, () => namesOf(root));
+
+    expect(answer).toEqual(['a.esp', 'b.esp']);
   });
 
   it('parses again within a re-read a file the re-read is named', async () => {

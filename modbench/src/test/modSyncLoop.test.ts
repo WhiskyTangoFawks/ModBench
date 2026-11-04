@@ -9,7 +9,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 import { Instance } from '../instanceLoader/instance';
 import { instanceValueFixture } from './mo2/instanceValueFixture';
 import { FakeInstance } from './mo2/fakeInstance';
-import { pastSequence, watcherFor } from './mo2/instanceLoop';
+import { pastSequence, watcherOver } from './mo2/instanceLoop';
 import { modSyncOn } from '../mods/modSync';
 import { modSyncOver, type ModSyncRun } from '../modCommands/modCommands';
 import type { InstanceReading, Mod } from '../instanceAdapter/instanceAdapter';
@@ -73,7 +73,7 @@ describe('mod sync and the Instance, over a real mods/ folder', () => {
     await writeFile(join(root, 'mods', MOD, 'Installed.esp'), 'plugin bytes');
     expect(await modlistText(root)).not.toContain(MOD);
 
-    watcherFor('mods/**').fireCreate(join(root, 'mods', MOD, 'Installed.esp'));
+    watcherOver(join(root, 'mods')).fireCreate(join(root, 'mods', MOD));
     await pastSequence(instance, before);
     await syncs[syncs.length - 1];
 

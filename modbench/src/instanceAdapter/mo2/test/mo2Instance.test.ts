@@ -36,8 +36,9 @@ const actualReaddir = present(real.readdir, 'the real readdir');
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { Readable } from 'node:stream';
-import { dirname, join, matchesGlob, sep } from 'node:path';
+import { dirname, join, matchesGlob, relative as relativeFrom, sep } from 'node:path';
 import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
+import { FIRST_LEVEL } from '../layout';
 import { fixedGameFolderSetting } from '../../../test/gameFolderSetting';
 import type { GameDetectors } from '../../gameFolder/gameFolderResolver';
 import { FOMOD_ENGINE } from '../../../test/fomodEngine';
@@ -1001,28 +1002,49 @@ describe('the MO2 Instance adapter', () => {
 
     const live = (): FakeWatcher[] => watchers.filter((w) => !w.disposed);
 
-    const fire = (base: string, relative: string, heardAsByVsCodesMatcher = relative): boolean => {
-      const watcher = live().find((w) => w.base === base && matchesGlob(heardAsByVsCodesMatcher, w.pattern));
-      watcher?.fireChange(join(base, relative));
+    const watcherOf = (path: string): FakeWatcher | undefined => live().find((w) => {
+      const below = relativeFrom(w.base, path);
+      return below !== '' && !below.startsWith('..') && matchesGlob(below.split(sep).join('/'), w.pattern);
+    });
+    const fire = (base: string, relativePath: string, heardAsByVsCodesMatcher = relativePath): boolean => {
+      const watcher = watcherOf(join(base, heardAsByVsCodesMatcher));
+      watcher?.fireChange(join(base, relativePath));
       return watcher !== undefined;
     };
+    const recursive = (pattern: string): boolean => pattern.includes('**') || pattern.includes('/');
 
-    it('hears a file created, changed or deleted alike, each by its path, so a deleted mod folder is heard', () => {
+    it('watches the whole of nothing but Overwrite, the source folders and the Data folder, a mod folder and a profile to their first level', async () => {
+      const watched = managerOver(root);
+      watched.subscribe(() => undefined);
+      await watched.reading();
+
+      const wholeBelow = live().filter((w) => recursive(w.pattern)).map((w) => relativeFrom(root, w.base).split(sep).join('/'));
+      const modsWatched = live().filter((w) => dirname(w.base) === join(root, 'mods')).map((w) => w.pattern);
+
+      expect(wholeBelow.filter((base) => !base.startsWith('..')).sort()).toEqual(['overwrite', 'source']);
+      expect(modsWatched).toHaveLength(9);
+      expect(new Set(modsWatched)).toEqual(new Set([FIRST_LEVEL]));
+    });
+
+    it('hears a file created, changed or deleted alike, each by its path, so a deleted mod folder is heard', async () => {
       const heard: (string | undefined)[] = [];
-      managerOver(root).subscribe((path) => { heard.push(path); });
-      const mods = live().find((w) => w.base === root && matchesGlob('mods/A/x.esp', w.pattern));
+      const watched = managerOver(root);
+      watched.subscribe((path) => { heard.push(path); });
+      await watched.reading();
+      heard.length = 0;
+      const harderVats = join(root, 'mods', 'Harder VATS');
 
-      mods?.fireCreate(join(root, 'mods', 'A', 'x.esp'));
-      mods?.fireChange(join(root, 'mods', 'A', 'x.esp'));
-      mods?.fireDelete(join(root, 'mods', 'A'));
+      watcherOf(join(harderVats, 'x.esp'))?.fireCreate(join(harderVats, 'x.esp'));
+      watcherOf(join(harderVats, 'x.esp'))?.fireChange(join(harderVats, 'x.esp'));
+      watcherOf(harderVats)?.fireDelete(harderVats);
 
-      expect(heard).toEqual([join(root, 'mods', 'A', 'x.esp'), join(root, 'mods', 'A', 'x.esp'), join(root, 'mods', 'A')]);
+      expect(heard).toEqual([join(harderVats, 'x.esp'), join(harderVats, 'x.esp'), harderVats]);
     });
 
     it('hears a repository appear at, or vanish from, the instance root', () => {
       let signals = 0;
       managerOver(root).subscribe(() => { signals++; });
-      const entry = live().find((w) => w.base === root && matchesGlob('.git', w.pattern));
+      const entry = watcherOf(join(root, '.git'));
 
       entry?.fireCreate(join(root, '.git'));
       entry?.fireDelete(join(root, '.git'));
@@ -1033,20 +1055,16 @@ describe('the MO2 Instance adapter', () => {
     it.each(['.git/config', '.git/hooks/pre-push'])('hears a change to %s, where git init writes the path filter and the push check', (inside) => {
       let signals = 0;
       managerOver(root).subscribe(() => { signals++; });
-      const entry = live().find((w) => w.base === root && matchesGlob(inside, w.pattern));
 
-      entry?.fireChange(join(root, inside));
-
+      expect(fire(root, inside)).toBe(true);
       expect(signals).toBe(1);
     });
 
     it.each(['.gitignore', '.git/index', '.git/info/exclude'])('hears a change to %s, which decides the folders git holds whole', (inside) => {
       let signals = 0;
       managerOver(root).subscribe(() => { signals++; });
-      const entry = live().find((w) => w.base === root && matchesGlob(inside, w.pattern));
 
-      entry?.fireChange(join(root, inside));
-
+      expect(fire(root, inside)).toBe(true);
       expect(signals).toBe(1);
     });
 
@@ -1085,17 +1103,24 @@ describe('the MO2 Instance adapter', () => {
       ['a profile\'s mod order', 'profiles/Default/modlist.txt', 1],
       ['another profile\'s plugin order', 'profiles/Secondary/plugins.txt', 1],
       ['the settings', 'ModOrganizer.ini', 1],
-      ['a mod\'s file', 'mods/Harder VATS/Textures/a.dds', 1],
+      ['a mod\'s file at its folder\'s first level', 'mods/Harder VATS/Harder VATS.esp', 1],
+      ['a folder made in a mod', 'mods/Harder VATS/Textures', 1],
+      ['a mod folder made', 'mods/New Mod', 1],
+      ['a profile made', 'profiles/Third', 1],
       ['a mod\'s source', 'source/Harder VATS/plugin-source/Harder VATS.esp/a.json', 1],
       ['a file in overwrite', 'overwrite/F4SE/Plugins/x.ini', 1],
       ['a profile\'s settings', 'profiles/Default/settings.ini', 1],
       ['a profile\'s INI, in any case', 'profiles/Default/fallout4.INI', 1],
       ['no other file of a profile', 'profiles/Default/other.txt', 0],
-    ])('signals a change to %s', (_what, relative, signalled) => {
+      ['no file deeper in a mod, which the check of the disk finds', 'mods/Harder VATS/Textures/a.dds', 0],
+    ])('signals a change to %s', async (_what, relativePath, signalled) => {
+      const watched = managerOver(root);
       let signals = 0;
-      managerOver(root).subscribe(() => { signals++; });
+      watched.subscribe(() => { signals++; });
+      await watched.reading();
+      signals = 0;
 
-      fire(root, relative);
+      fire(root, relativePath);
 
       expect(signals).toBe(signalled);
     });
@@ -1112,7 +1137,7 @@ describe('the MO2 Instance adapter', () => {
     it('tells a ref from git\'s bookkeeping in a Windows path', () => {
       let signals = 0;
       managerOver(root).subscribe(() => { signals++; });
-      const source = live().find((w) => w.base === root && matchesGlob('source/A/x.json', w.pattern));
+      const source = watcherOf(join(root, 'source', 'A', 'x.json'));
 
       source?.fireChange('C:\\MO2\\source\\Harder VATS\\.git\\index');
       source?.fireChange('C:\\MO2\\source\\Harder VATS\\.git\\refs\\heads\\main');
@@ -1129,20 +1154,21 @@ describe('the MO2 Instance adapter', () => {
         expect(signals).toBe(0);
       });
 
-    it('hears git\'s bookkeeping in a .git a mod\'s folder holds, which is the mod\'s content', () => {
+    it('hears a .git a mod\'s folder holds at its first level, which is the mod\'s content', async () => {
+      const watched = managerOver(root);
       let signals = 0;
-      managerOver(root).subscribe(() => { signals++; });
+      watched.subscribe(() => { signals++; });
+      await watched.reading();
+      signals = 0;
 
-      expect(fire(root, 'mods/Harder VATS/.git/index', 'mods/Harder VATS/git/index')).toBe(true);
+      expect(fire(root, 'mods/Harder VATS/.git', 'mods/Harder VATS/git')).toBe(true);
       expect(signals).toBe(1);
     });
 
     describe.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher misses them only on Linux) the folders a folder heard created already held', () => {
       const mod = (): string => join(root, 'source', 'Harder VATS');
-      const watchOf = (top: string): FakeWatcher | undefined => live().find((w) => w.base === root && matchesGlob(`${top}/A/x.json`, w.pattern));
       const fireCreated = (path: string): void => {
-        const [top = ''] = path.slice(root.length + 1).split(sep);
-        watchOf(top)?.fireCreate(path);
+        watcherOf(path)?.fireCreate(path);
       };
 
       it('signals a change inside one', async () => {
@@ -1150,7 +1176,7 @@ describe('the MO2 Instance adapter', () => {
         const subscription = managerOver(root).subscribe(() => { signals++; });
         const file = join(mod(), 'plugin-source', 'Harder VATS.esp', 'Weapons', 'Gun.json');
         await mkdir(dirname(file), { recursive: true });
-        fireCreated(join(root, 'source'));
+        fireCreated(mod());
         signals = 0;
 
         const signalled = await eventually(() => signals > 0, () => writeFile(file, `${Date.now()}`));
@@ -1164,7 +1190,7 @@ describe('the MO2 Instance adapter', () => {
         const subscription = managerOver(root).subscribe(() => { signals++; });
         const file = join(mod(), 'plugin-source', 'Harder VATS.esp', 'Gun.json');
         await mkdir(dirname(file), { recursive: true });
-        watchOf('source')?.fireChange(join(root, 'source'));
+        watcherOf(mod())?.fireChange(mod());
         signals = 0;
 
         const signalled = await eventually(() => signals > 0, () => writeFile(file, `${Date.now()}`));
@@ -1179,7 +1205,7 @@ describe('the MO2 Instance adapter', () => {
         await mkdir(dirname(file), { recursive: true });
         let signals = 0;
         const first = watched.subscribe(() => { signals++; });
-        fireCreated(join(root, 'source'));
+        fireCreated(mod());
         signals = 0;
         const heardBeforeTheDisarm = await eventually(() => signals > 0, () => writeFile(file, `${Date.now()}`));
         first.dispose();
@@ -1208,7 +1234,7 @@ describe('the MO2 Instance adapter', () => {
         signals = 0;
         const goneHeard = await eventually(() => signals > 0, () => writeFile(join(inGone, 'Gun.json'), `${Date.now()}`));
         await rm(gone, { recursive: true });
-        watchOf('source')?.fireDelete(gone);
+        watcherOf(gone)?.fireDelete(gone);
         first.dispose();
         await mkdir(inGone, { recursive: true });
 
@@ -1224,8 +1250,8 @@ describe('the MO2 Instance adapter', () => {
         expect(signals).toBe(0);
       });
 
-      it.each(['source', 'mods'])('signals a change to the refs of a repository in %s/, and none to git\'s object store', async (top) => {
-        const repository = join(root, top, 'Repository Mod');
+      it('signals a change to the refs of a repository in source/, and none to git\'s object store', async () => {
+        const repository = join(root, 'source', 'Repository Mod');
         const refs = join(repository, '.git', 'refs', 'heads');
         const objects = join(repository, '.git', 'objects', 'ab');
         await mkdir(refs, { recursive: true });
@@ -1290,7 +1316,7 @@ describe('the MO2 Instance adapter', () => {
         let signals = 0;
         const subscription = watched.subscribe(() => { signals++; });
 
-        fireCreated(join(root, 'source'));
+        fireCreated(mod());
         signals = 0;
         const signalled = await eventually(() => signals > 0);
         const { watchNotes } = await watched.reading();
