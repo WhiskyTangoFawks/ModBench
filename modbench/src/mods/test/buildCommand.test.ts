@@ -212,6 +212,7 @@ describe('modbench.mod.build', () => {
       { severity: 'error', message: 'Could not build 1 mod — No load order has been received.', detail: undefined },
     ]);
     expect(reporter.landings).toEqual([]);
+    expect(progressSteps).toEqual(['progress opens on modbench.modList', 'build', 'progress closes']);
   });
 
   it('from the palette with a selection, builds the selection without the pick', async () => {

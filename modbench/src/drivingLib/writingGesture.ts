@@ -12,14 +12,15 @@ export async function runUnderProgress<T>(
 ): Promise<T> {
   const progress = pausableProgress(viewId);
   progress.working();
-  let wrote = true;
+  let refused = false;
   try {
-    const answer = await command(progress);
-    wrote = !isRefusal(answer);
-    return answer;
+    return await command(progress);
+  } catch (e) {
+    refused = e instanceof Refusal;
+    throw e;
   } finally {
     try {
-      if (wrote) {
+      if (!refused) {
         progress.working();
         await instance.refresh();
       }
@@ -29,11 +30,17 @@ export async function runUnderProgress<T>(
   }
 }
 
-// A refused gesture wrote nothing, so it answers at once: the refresh waits on a read that mEdit work in flight can hold for minutes.
-function isRefusal(answer: unknown): boolean {
-  if (typeof answer !== 'object' || answer === null) return false;
-  const { applied, refused } = answer as { applied?: unknown; refused?: unknown };
-  return applied === false || refused === true;
+/** A gesture the backend or a lower layer refused: it wrote nothing, so it ends without the refresh that shows a write. */
+export class RefusedGesture extends Refusal {}
+
+/** Answers a `RefusedGesture` as the gesture's `applied: false`. A refused write and any other failure go through. */
+export async function answeringRefusal<T>(running: Promise<T>): Promise<T | { applied: false; refusal: string }> {
+  try {
+    return await running;
+  } catch (e) {
+    if (!(e instanceof RefusedGesture)) throw e;
+    return { applied: false, refusal: e.message };
+  }
 }
 
 let inFlight: string | undefined;

@@ -328,6 +328,7 @@ describe('modbench.mod.versionInGit', () => {
     ]);
     expect(reporter.landings).toEqual([]);
     expect(onCommitted).not.toHaveBeenCalled();
+    expect(progressSteps).not.toContain('Instance loader: read every file again');
   });
 
   it('says the mod and the phase on the message line of the view the gesture was fired from', async () => {

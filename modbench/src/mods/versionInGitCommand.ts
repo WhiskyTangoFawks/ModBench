@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { isRefused, type VersionInGitOutcome, type PluginAddress } from '../client';
 import type { Instance } from '../instanceLoader/instance';
-import { runWritingGesture } from '../drivingLib/writingGesture';
+import { answeringRefusal, RefusedGesture, runWritingGesture } from '../drivingLib/writingGesture';
 import { registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { isClickedRow } from '../drivingLib/gestureEntry';
 import { pickWhereGitHolds } from '../drivingLib/whereGitHolds';
@@ -69,21 +69,21 @@ async function versionModsInGit(
   if (firstMod === undefined) return { applied: true, outcome: { landed: [], refused: [] } };
   const progress = progressIn(invokedFrom);
   const makesSourceMods = options.where !== 'WholeFolder';
-  const result = await runWritingGesture('modbench.mod.versionInGit', invokedFrom, instance, async (): Promise<VersionedInGit> => {
+  const result = await answeringRefusal(runWritingGesture('modbench.mod.versionInGit', invokedFrom, instance, async (): Promise<VersionedInGit> => {
     try {
       progress.say(versionInGitProgressMessage(firstMod, undefined));
       const result = await commands.versionInGit(mods, {
         ...options,
         onProgress: (status) => { progress.say(versionInGitProgressMessage(status.mod ?? firstMod, status.phase)); },
       });
-      if (isRefused(result)) return { applied: false, refusal: result.message };
+      if (isRefused(result)) throw new RefusedGesture(result.message);
       if (makesSourceMods && result.landed.length > 0) await onCommitted();
       const { notes = [], ...outcome } = result;
       return { applied: true, outcome, ...notes.length === 0 ? {} : { partial: notes.map((detail) => ({ message: 'Version in git:', detail, severity: 'warning' as const })) } };
     } finally {
       progress.say(undefined);
     }
-  });
+  }));
   const lastLanded = result.applied && makesSourceMods ? result.outcome.landed.at(-1) : undefined;
   if (!result.applied || lastLanded === undefined) return result;
   const unshown = await showInExplorer(instance.value.paths.sourceDirs.get(lastLanded.mod), lastLanded.mod);
