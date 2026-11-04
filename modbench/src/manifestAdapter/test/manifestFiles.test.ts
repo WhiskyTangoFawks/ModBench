@@ -54,6 +54,15 @@ describe('writeManifestIn', () => {
     expect([wrote, await readFile(join(folder, 'Mod.manifest.json'), 'utf8'), await readdir(folder)]).toEqual([true, manifestText(manifest), ['Mod.manifest.json']]);
   });
 
+  it('lands two writes into one folder at once, leaving one of them and no temp', async () => {
+    const other: Manifest = { ...manifest, files: new Map([['b.nif', 'AQAAAAAAAAA=']]) };
+
+    const wrote = await Promise.all([writeManifestIn(folder, manifest), writeManifestIn(folder, other)]);
+
+    expect([wrote, await readdir(folder)]).toEqual([[true, true], ['Mod.manifest.json']]);
+    expect([manifestText(manifest), manifestText(other)]).toContain(await readFile(join(folder, 'Mod.manifest.json'), 'utf8'));
+  });
+
   it('refuses, writing nothing, a manifest its schema refuses, with the reason the reader gives', async () => {
     const refused: Manifest = { ...manifest, packages: [{ kind: 'installationFile', name: 'M.7z', size: 1, hash: 'AAAAAAAAAAA=', host: { nexus: { game: 'fallout4', mod: 4, file: 0 } } }] };
 
