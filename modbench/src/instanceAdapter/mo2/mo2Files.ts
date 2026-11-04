@@ -6,7 +6,7 @@ import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
-import { factsOf, listDir, isOwnTemp } from '../files';
+import { factsOf, listDirByStamp, isOwnTemp, realPathIfThere } from '../files';
 import type { FileOrigin, ModFolders, OriginFile, OriginFiles, OriginFolder } from '../instanceAdapter';
 import { isManifestPath } from '../../repositoriesLib/manifestPath';
 import { includedPathOf, isExcludedName, overwriteDir } from './layout';
@@ -61,22 +61,22 @@ async function inSubfolder(walk: Walk, dir: string, visit: () => Promise<void>):
   }
 }
 
-// One real path per directory, so a single guard catches a link cycle.
-async function descend(walk: Walk, dir: string, ancestors: ReadonlySet<string>): Promise<void> {
+// A directory reached through a link (`linkedTo`, its real path) is entered only when that is none of its ancestors'. Resolving
+// them only then keeps a walk with no link to one stat per folder.
+async function descend(walk: Walk, dir: string, ancestors: readonly string[], linkedTo?: string): Promise<void> {
   await inSubfolder(walk, dir, async () => {
-    const { realPath } = await factsOf(dir);
-    if (ancestors.has(realPath)) {
+    if (linkedTo !== undefined && (await Promise.all(ancestors.map(realPathIfThere))).includes(linkedTo)) {
       walk.notes.push(`link cycle at "${dir}", skipped`);
       return;
     }
     keepFolder(walk, dir);
-    await walkDir(walk, dir, new Set(ancestors).add(realPath));
+    await walkDir(walk, dir, [...ancestors, dir]);
   });
 }
 
 // A link is followed as MO2 follows it; a broken one is skipped and noted, and any other failure
 // rejects rather than reading as nothing there.
-async function walkLink(walk: Walk, path: string, ancestors: ReadonlySet<string>): Promise<void> {
+async function walkLink(walk: Walk, path: string, ancestors: readonly string[]): Promise<void> {
   let facts;
   try {
     facts = await factsOf(path);
@@ -86,14 +86,14 @@ async function walkLink(walk: Walk, path: string, ancestors: ReadonlySet<string>
     return;
   }
   if (facts.kind === 'directory') {
-    if (!walk.rootOnly) await descend(walk, path, ancestors);
+    if (!walk.rootOnly) await descend(walk, path, ancestors, facts.realPath);
   }
   else if (facts.kind === 'file') keep(walk, path, facts.realPath);
   else walk.notes.push(`link "${path}" names no file or folder, skipped`);
 }
 
-async function walkDir(walk: Walk, dir: string, ancestors: ReadonlySet<string>): Promise<void> {
-  for (const dirent of await listDir(dir)) {
+async function walkDir(walk: Walk, dir: string, ancestors: readonly string[]): Promise<void> {
+  for (const dirent of await listDirByStamp(dir)) {
     if (isOwnTemp(dirent.name)) continue;
     const path = childOf(dir, dirent.name);
     if (dirent.isDirectory()) {
@@ -111,7 +111,7 @@ async function walkDir(walk: Walk, dir: string, ancestors: ReadonlySet<string>):
 async function walkMod(folder: string, rootOnly: boolean): Promise<Walk> {
   const walk: Walk = { root: folder, notContent: NOT_CONTENT, manifestAtRoot: true, rootOnly, files: [], folders: [], notes: [] };
   try {
-    await walkDir(walk, folder, new Set([(await factsOf(folder)).realPath]));
+    await walkDir(walk, folder, [folder]);
   } catch (err) {
     if (errnoCode(err) !== 'ENOENT') throw err;
     return { ...walk, files: [], folders: [], notes: [] };
@@ -120,7 +120,7 @@ async function walkMod(folder: string, rootOnly: boolean): Promise<Walk> {
 }
 
 async function listWhole(walk: Walk, dir: string): Promise<void> {
-  for (const dirent of await listDir(dir)) {
+  for (const dirent of await listDirByStamp(dir)) {
     if (isOwnTemp(dirent.name)) continue;
     const path = childOf(dir, dirent.name);
     if (dirent.isDirectory()) {

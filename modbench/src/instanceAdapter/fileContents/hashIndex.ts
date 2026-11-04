@@ -7,16 +7,12 @@ import { errorMessage } from '../../ports/errorMessage';
 import type { FileProblems } from '../../ports/fileProblems';
 import type { InstallationFileReader } from './installationFileReader';
 import { digestOf } from './contentDigest';
-import { append, ensureDir, get, listDir, makeTempDir, readOrReason, remove, stampOf, withLock } from '../files';
+import { append, ensureDir, get, listDir, makeTempDir, readOrReason, remove, sameStamp, settledBefore, stampOf, withLock } from '../files';
 import type { FileRead, FileStamp, HashedDownloadedFile, HashedFile, InstanceAdapter } from '../instanceAdapter';
 
 const INDEX_FILE = 'hashes.jsonl';
 /** The prefix of an extraction of a downloaded file, which a crash can leave behind. */
 export const EXTRACTION_PREFIX = 'entries-';
-
-// A file system stamps a change with a clock coarser than a hash is quick, and a network share's
-// clock is not this machine's: a stamp this recent may not change for a write that follows it.
-const SETTLED_AFTER_MS = 2_000;
 
 type Kind = 'origin' | 'game' | 'downloadedFile';
 type LineKind = Kind | 'flagged';
@@ -25,12 +21,6 @@ interface Kept {
   readonly stamp: FileStamp;
   readonly hashed: Promise<FileRead<HashedDownloadedFile>>;
 }
-
-const sameStamp = (a: FileStamp, b: FileStamp): boolean =>
-  a.size === b.size && a.modifiedNs === b.modifiedNs && a.changedNs === b.changedNs;
-
-const settledBefore = (stamp: FileStamp, readFromMs: number): boolean =>
-  stamp.changedNs < BigInt(readFromMs - SETTLED_AFTER_MS) * 1_000_000n;
 
 const lineOf = (kind: Kind, path: string, stamp: FileStamp, hashed: HashedDownloadedFile): string =>
   `${JSON.stringify([kind, path, String(stamp.size), String(stamp.modifiedNs), String(stamp.changedNs), hashed.hash, ...hashed.entries.flatMap((entry) => [entry.path, entry.hash])])}\n`;
