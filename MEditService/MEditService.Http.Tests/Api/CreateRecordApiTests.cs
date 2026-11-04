@@ -27,7 +27,7 @@ public sealed class CreateRecordApiTests : HostedTests
             .BuildScattered());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(fx);
+        await Client.NextCheck(fx);
         await Client.PluginReportsCompiledPlugin(Plugin);
         return fx;
     }
@@ -45,7 +45,7 @@ public sealed class CreateRecordApiTests : HostedTests
         response.EnsureSuccessStatusCode();
         var formKey = (await response.Body()).GetProperty("formKey").GetString().Require();
         Assert.EndsWith(":" + Plugin, formKey, StringComparison.Ordinal);
-        await Client.NextSnapshot(fx);
+        await Client.NextCheck(fx);
         await Wire.Eventually(
             async () => (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&origin={Origin}&type=npc_"))
                 .GetProperty("items").EnumerateArray().Any(r => r.GetProperty("formKey").GetString() == formKey),
@@ -85,7 +85,7 @@ public sealed class CreateRecordApiTests : HostedTests
 
         response.EnsureSuccessStatusCode();
         var formKey = (await response.Body()).GetProperty("formKey").GetString().Require();
-        await Client.NextSnapshot(fx);
+        await Client.NextCheck(fx);
         await Wire.Eventually(async () => await CellOfTheWorldspace(formKey) is not null, "the created cell to be read");
         var cell = Assert.NotNull(await CellOfTheWorldspace(formKey));
         Assert.Equal((1, -2), (cell.GetProperty("cellX").GetInt32(), cell.GetProperty("cellY").GetInt32()));

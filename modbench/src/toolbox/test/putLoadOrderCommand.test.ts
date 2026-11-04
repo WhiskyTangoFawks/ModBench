@@ -22,10 +22,41 @@ import { FakeInstance } from '../../test/mo2/fakeInstance';
 
 const wired = () => {
   const puts: (string | undefined)[] = [];
+  const sent: string[] = [];
   const instance = new FakeInstance(instanceValueFixture());
-  registerPutLoadOrder({ onRecompute: (_source, stringsLanguage) => { puts.push(stringsLanguage); } }, instance);
-  return { puts, instance };
+  registerPutLoadOrder({
+    onRecompute: (_source, stringsLanguage) => { puts.push(stringsLanguage); sent.push('put'); },
+    signalChange: () => { sent.push('signal'); },
+  }, instance);
+  return { puts, sent, instance };
 };
+
+describe('signal change', () => {
+  it('follows the put at every recompute', () => {
+    const { sent, instance } = wired();
+
+    instance.publish(instanceValueFixture());
+    instance.publish(instanceValueFixture());
+
+    expect(sent).toEqual(['put', 'signal', 'put', 'signal']);
+  });
+
+  it('is not sent for a change of the strings language, which changes no file', () => {
+    const { sent } = wired();
+
+    configListener?.({ affectsConfiguration: (section) => section === 'modbench.stringsLanguage' });
+
+    expect(sent).toEqual(['put']);
+  });
+
+  it('is the command modbench.instance.signalChange', () => {
+    const { sent } = wired();
+
+    commands.get('modbench.instance.signalChange')?.(undefined);
+
+    expect(sent).toEqual(['signal']);
+  });
+});
 
 describe('put load order', () => {
   it('puts with the strings language the setting holds when the put is made', () => {

@@ -26,9 +26,10 @@ export type PutLoadOrderResult =
   | { sent: false; refusal?: string }
   | { sent: true; snapshot: LoadOrderSnapshot; outcome: LoadOrderOutcome };
 
+/** A snapshot `changed` answers false for is sent no more (ADR-0013). */
 export async function putLoadOrder(
   client: Pick<MEditClient, 'sendLoadOrder'>, instanceRoot: string, source: LoadOrderSource, stringsLanguage: string | undefined,
-  inGameOrder: InGameOrder,
+  inGameOrder: InGameOrder, changed: (snapshot: LoadOrderSnapshot) => boolean,
 ): Promise<PutLoadOrderResult> {
   if (!source) return { sent: false };
   if ('refusal' in source) return { sent: false, refusal: source.refusal };
@@ -39,6 +40,7 @@ export async function putLoadOrder(
   const snapshot: LoadOrderSnapshot = {
     plugins, active, loadedWithNoLine, archives, stringsFiles, places, dataFolder, instanceRoot, gameRelease, stringsLanguage,
   };
+  if (!changed(snapshot)) return { sent: false };
   return { sent: true, snapshot, outcome: await client.sendLoadOrder(snapshot) };
 }
 

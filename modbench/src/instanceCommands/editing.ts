@@ -1,5 +1,5 @@
-// Put load order (ADR-0013) at every recompute. The client owns the process the snapshot goes to;
-// what came of each put comes back through `onPut`.
+// Put load order (ADR-0013) when the snapshot changed, and signal change (ADR-0015). The client owns the process both go
+// to; what came of each put comes back through `onPut`.
 
 import type { LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, MEditClient } from '../client';
 import { exactPluginAddressKey } from '../wire/pluginAddress';
@@ -7,7 +7,7 @@ import { errorMessage } from '../ports/errorMessage';
 import { putLoadOrder, type InGameOrder, type LoadOrderSource, type PutLoadOrderResult } from './loadOrder';
 
 export interface EditingDeps {
-  client: Pick<MEditClient, 'sendLoadOrder' | 'onLoadOrderResent' | 'onLaunch' | 'latestLoadOrder'>;
+  client: Pick<MEditClient, 'sendLoadOrder' | 'onLoadOrderResent' | 'onLaunch' | 'latestLoadOrder' | 'signalChange'>;
   instanceRoot: string;
   /** The order the game loads in; `onChange` is the moment it may have changed, as Editing read the plugins. */
   inGameOrder: { of: InGameOrder; onChange(listener: () => void): { dispose(): void } };
@@ -23,7 +23,10 @@ export interface EditingFlow {
   /** The launch with the extension, shown until the first read settles and the value it landed,
    *  if any, is told. */
   enter(firstRead: Promise<unknown>): Promise<void>;
+  /** Puts the snapshot when it differs from the one mEdit holds (ADR-0013). */
   onRecompute(source: LoadOrderSource, stringsLanguage: string | undefined): void;
+  /** Tells mEdit to check the disk (ADR-0015). */
+  signalChange(): void;
   dispose(): void;
 }
 
@@ -49,9 +52,19 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
   let entering = false;
   let last: { source: Sent; stringsLanguage: string | undefined; order: string } | undefined;
 
+  // The snapshot mEdit holds, as far as Modbench knows: one it was handed and did not fail.
+  let handed: { snapshot: LoadOrderSnapshot; key: string } | undefined;
+  const changed = (snapshot: LoadOrderSnapshot): boolean => {
+    const key = JSON.stringify(snapshot);
+    if (key === handed?.key) return false;
+    handed = { snapshot, key };
+    return true;
+  };
+
   // A put the backend failed is not told: the status bar reports the stop.
   const tellPut = (put: Promise<PutLoadOrderResult>): void => {
     void tells.track(put.then((result) => {
+      if (result.sent && result.outcome.outcome !== 'applied' && handed?.snapshot === result.snapshot) handed = undefined;
       if (result.sent && result.outcome.outcome === 'backendFailed') return;
       return onPut(result);
     }));
@@ -61,7 +74,8 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
 
   const put = (source: LoadOrderSource, stringsLanguage: string | undefined): void => {
     last = source === undefined || 'refusal' in source ? undefined : { source, stringsLanguage, order: orderOf(source) };
-    tellPut(putLoadOrder(client, instanceRoot, source, stringsLanguage, deps.inGameOrder.of));
+    if (last === undefined) handed = undefined;
+    tellPut(putLoadOrder(client, instanceRoot, source, stringsLanguage, deps.inGameOrder.of, changed));
   };
 
   const changeOfOrder = deps.inGameOrder.onChange(() => {
@@ -100,6 +114,7 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
       }
     },
     onRecompute: put,
+    signalChange: () => { client.signalChange(); },
     dispose: () => { for (const unsubscribe of unsubscribes) unsubscribe(); },
   };
 }

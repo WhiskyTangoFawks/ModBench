@@ -49,6 +49,32 @@ public sealed class PublicMemberScanTests
         public static int Probe(int x) => x + Held;
     }
 
+    [Fact]
+    public void TheScan_HoldsPublicAnEventThatImplementsAnInterface_AndNamesOneThatDoesNot()
+    {
+        var scan = Scan([typeof(PublicMemberScanTests).Assembly.Location]);
+
+        var type = $"{typeof(PublicMemberScanTests).FullName}/{nameof(PlantedEvents)}";
+        Assert.DoesNotContain($"{type}.{nameof(PlantedEvents.Implemented)}", scan.Uncalled);
+        Assert.Contains($"{type}.{nameof(PlantedEvents.NotImplemented)}", scan.Uncalled);
+    }
+
+    public interface IPlantedSignal
+    {
+        event Action? Implemented;
+    }
+
+    public sealed class PlantedEvents : IPlantedSignal
+    {
+        public const int Held = 1;
+
+        private Action? _handlers;
+
+        public event Action? Implemented { add => _handlers += value; remove => _handlers -= value; }
+
+        public event Action? NotImplemented { add => _handlers += value; remove => _handlers -= value; }
+    }
+
     private sealed record ScanResult(int Assemblies, int References, int Members, List<string> Uncalled);
 
     private static ScanResult Scan(IEnumerable<string> assemblyPaths)
@@ -258,10 +284,11 @@ public sealed class PublicMemberScanTests
                 if (visibleAccessors.Count == 0)
                     continue;
                 var keys = visibleAccessors.Select(h => MethodKey(owner, h)).ToList();
+                var held = visibleAccessors.Any(h => IsDispatchedTo(reader.GetMethodDefinition(h).Attributes));
                 yield return new VisibleMember(
                     $"{owner.Type}.{reader.GetString(@event.Name)}", owner, false,
                     [.. keys.Select(k => k.Key)], [.. keys.SelectMany(k => k.Exposes)],
-                    world => isInterface && ImplementedElsewhere(world));
+                    world => held || (isInterface && ImplementedElsewhere(world)));
             }
 
             foreach (var field in type.GetFields().Select(reader.GetFieldDefinition))

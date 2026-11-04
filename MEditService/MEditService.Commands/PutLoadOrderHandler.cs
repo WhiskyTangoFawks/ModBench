@@ -7,19 +7,17 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Commands;
 
-/// <summary>Validates the folders and the game release, applies the snapshot to Load order state as Mod Management
-/// sent it (ADR-0013), and checks it for external changes (ADR-0003). The Index reconciles itself.</summary>
+/// <summary>Validates the folders and the game release, and applies the snapshot to Load order state as Mod Management
+/// sent it (ADR-0013). The Index reconciles itself.</summary>
 public sealed class PutLoadOrderHandler
 {
     private readonly IModFolderRepository _modFolders;
     private readonly LoadOrderHolder _holder;
     private readonly SchemaReflector _schemaReflector;
-    private readonly ExternalChangeCheck _externalChanges;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal PutLoadOrderHandler(
-        IModFolderRepository modFolders, LoadOrderHolder holder, SchemaReflector schemaReflector, ExternalChangeCheck externalChanges) =>
-        (_modFolders, _holder, _schemaReflector, _externalChanges) = (modFolders, holder, schemaReflector, externalChanges);
+    internal PutLoadOrderHandler(IModFolderRepository modFolders, LoadOrderHolder holder, SchemaReflector schemaReflector) =>
+        (_modFolders, _holder, _schemaReflector) = (modFolders, holder, schemaReflector);
 
     public Answer<PutLoadOrderApplied, PutLoadOrderRefused> Put(
         string dataFolder, string? instanceRoot, GameRelease gameRelease,
@@ -45,8 +43,6 @@ public sealed class PutLoadOrderHandler
             return new PutLoadOrderRefused(PutLoadOrderRefusal.InvalidSnapshot, invalid);
 
         var snapshot = new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, plugins, active, loadedWithNoLine, archives, stringsFiles, places, stringsLanguage);
-        var version = _holder.Apply(snapshot);
-        _externalChanges.Check(snapshot);
-        return new PutLoadOrderApplied(version);
+        return new PutLoadOrderApplied(_holder.Apply(snapshot));
     }
 }

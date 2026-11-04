@@ -47,7 +47,7 @@ public sealed class ValidationFaultTests : IDisposable
         using var index = Subscribed(notifications: new InMemoryNotificationPublisher { FaultsOn = n => n is PluginChangedNotification });
         RewriteThePlugin();
 
-        index.NextSnapshotUntil(() => index.Status.State == LoadOrderState.Failed, "the failed status");
+        index.NextCheckUntil(() => index.Status.State == LoadOrderState.Failed, "the failed status");
 
         lock (_log)
             Assert.Contains(_log, e => e.Level == LogLevel.Error && e.Exception?.Message == InMemoryNotificationPublisher.FaultReason);

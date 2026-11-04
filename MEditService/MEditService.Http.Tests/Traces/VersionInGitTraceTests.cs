@@ -140,13 +140,13 @@ public sealed class VersionInGitTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task AfterInit_TheNextSnapshotReportsThePluginCompiledPlugin()
+    public async Task AfterInit_TheNextCheckReportsThePluginCompiledPlugin()
     {
         await Loaded();
         Assert.False((await Client.Plugin(Plugin)).GetProperty("isCompiledPlugin").GetBoolean());
 
         (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(_instance);
+        await Client.NextCheck(_instance);
 
         await Client.PluginReportsCompiledPlugin(Plugin);
     }

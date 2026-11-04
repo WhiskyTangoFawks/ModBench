@@ -28,8 +28,12 @@ public sealed class FailedStatusPublicationTests : IDisposable
 
         var readEarly = await Waits.EverSeenWhile(
             () => index.Status is { State: LoadOrderState.Failed } status && status.Version <= versionAnswered,
-            () => index.Receive(holder, SnapshotPlugins.Snapshot(
-                _fixture.DataFolder, _fixture.InstanceRoot, GameRelease.Fallout4, [_fixture.Plugins[0]])));
+            () =>
+            {
+                holder.Apply(SnapshotPlugins.Snapshot(_fixture.DataFolder, _fixture.InstanceRoot, GameRelease.Fallout4, [_fixture.Plugins[0]]));
+                index.SignalChange();
+                Waits.Reached(() => index.Status.State == LoadOrderState.Failed, "the check's failure");
+            });
 
         Assert.Equal(LoadOrderState.Failed, index.Status.State);
         Assert.False(readEarly);

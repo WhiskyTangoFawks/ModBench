@@ -180,6 +180,11 @@ function createMockBackend(): http.Server {
       res.end();
       return;
     }
+    if (method === 'POST' && url === '/signal-change') {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
     if (method === 'POST' && url === '/index/rebuild') {
       req.on('data', () => {});
       req.on('end', () => {
@@ -1871,6 +1876,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
   let gameFolder = '';
   let swapped = false;
   const putCount = () => requestLog.filter((l) => l === 'PUT /load-order').length;
+  const signalCount = () => requestLog.filter((l) => l === 'POST /signal-change').length;
 
   async function swapPluginOrder(): Promise<void> {
     swapped = !swapped;
@@ -1905,13 +1911,14 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
     assert.ok(putCount() >= before + 1, 'a plugins.txt change must send a fresh snapshot, not merely re-render the tree');
   });
 
-  it('a plugins.txt write that leaves the load order equal puts it again', async () => {
+  it('a plugins.txt write that leaves the load order equal signals a change and puts nothing', async () => {
     const sent = putLoadOrders.length;
-    const order = swapped ? ['Second.esp', 'TestMod.esp'] : ['TestMod.esp', 'Second.esp'];
+    const signalled = signalCount();
 
-    await writePluginsTxt(`${readFileSync(pluginsTxtPath, 'utf8')}\n`);
+    writeFileSync(pluginsTxtPath, `${readFileSync(pluginsTxtPath, 'utf8')}\n`);
+    await waitFor('a POST /signal-change after plugins.txt changed', () => signalCount() > signalled ? true : undefined);
 
-    assert.deepStrictEqual(putLoadOrders.slice(sent), [order]);
+    assert.deepStrictEqual(putLoadOrders.slice(sent), []);
   });
 
   describe('a file of a source mod\'s plugin source, written after its folders arrive', () => {
@@ -1974,12 +1981,12 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
           rmSync(path.join(root, 'source'), { recursive: true, force: true });
         });
 
-        it('puts the load order again on a write to it', async () => {
-          const before = putCount();
+        it('signals a change on a write to it', async () => {
+          const before = signalCount();
 
           writeThroughTemp(file, '{ }');
 
-          await waitFor('a PUT /load-order after the write', () => putCount() > before);
+          await waitFor('a POST /signal-change after the write', () => signalCount() > before);
         });
       });
     }
@@ -1989,15 +1996,15 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
 describe('Refresh rebuilds the record index, then re-reads the instance', () => {
   afterEach(() => { rebuildIndexShouldFail = false; });
 
-  it('POSTs /index/rebuild, then PUTs the load order the re-read built', async () => {
+  it('POSTs /index/rebuild, then signals the change the re-read found', async () => {
     const since = requestLog.length;
 
     await vscode.commands.executeCommand('modbench.instance.refresh');
 
     const rebuilt = requestLog.indexOf('POST /index/rebuild', since);
     assert.ok(rebuilt !== -1, 'modbench.instance.refresh must rebuild the record index');
-    await waitFor('a PUT /load-order after the rebuild',
-      () => requestLog.slice(rebuilt).includes('PUT /load-order') ? true : undefined);
+    await waitFor('a POST /signal-change after the rebuild',
+      () => requestLog.slice(rebuilt).includes('POST /signal-change') ? true : undefined);
   });
 
   it('reports that another window holds the record index, naming this instance', async () => {

@@ -625,6 +625,7 @@ describe('package.json command titles and categories', () => {
 
   const INTERNAL_COMMANDS = [
     'modbench.instance.putLoadOrder',
+    'modbench.instance.signalChange',
     'modbench.mod.sync',
     'modbench.plugin.sync',
   ] as const;

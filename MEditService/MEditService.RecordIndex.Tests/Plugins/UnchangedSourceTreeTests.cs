@@ -46,11 +46,11 @@ public sealed class UnchangedSourceTreeTests : IDisposable
 
     private void TimePasses() => _clock.Advance(TimeSpan.FromHours(1));
 
-    private void Arrive()
+    private void CheckTheDisk()
     {
         var announced = Touched(_marker);
         var before = _notifications.Notifications.Count;
-        _index.NextSnapshotUntil(() => _notifications.Since(before).Any(n => announced(n)), "the arrival validated");
+        _index.NextCheckUntil(() => _notifications.Since(before).Any(n => announced(n)), "the check validated");
     }
 
     private WorkingTreeState StateOfNpc() =>
@@ -63,11 +63,11 @@ public sealed class UnchangedSourceTreeTests : IDisposable
     public void ATreeWhoseDocumentsAndRepositoryStandAsTheyWere_IsNotAskedWhatChangedSinceItsLastCommit()
     {
         TimePasses();
-        Arrive();
+        CheckTheDisk();
         var asked = _source.GitStatusAsked;
 
-        Arrive();
-        Arrive();
+        CheckTheDisk();
+        CheckTheDisk();
 
         Assert.Equal(asked, _source.GitStatusAsked);
     }
@@ -77,13 +77,13 @@ public sealed class UnchangedSourceTreeTests : IDisposable
     {
         TimePasses();
         EditNpc();
-        Arrive();
-        Arrive();
+        CheckTheDisk();
+        CheckTheDisk();
         Assert.Equal(WorkingTreeState.Modified, StateOfNpc());
 
         _plugin.Git("add", "-A");
         _plugin.Git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "outside");
-        Arrive();
+        CheckTheDisk();
 
         Assert.Equal(WorkingTreeState.None, StateOfNpc());
     }
@@ -92,12 +92,12 @@ public sealed class UnchangedSourceTreeTests : IDisposable
     public void ATreeCheckedWhileItsRepositoryWasTooRecentToVouch_IsAskedAgainOnceItHas()
     {
         EditNpc();
-        Arrive();
-        Arrive();
+        CheckTheDisk();
+        CheckTheDisk();
         var asked = _source.GitStatusAsked;
 
         TimePasses();
-        Arrive();
+        CheckTheDisk();
 
         Assert.True(_source.GitStatusAsked > asked);
     }
@@ -108,9 +108,9 @@ public sealed class UnchangedSourceTreeTests : IDisposable
         TimePasses();
         var build = Path.Combine(_plugin.ModFolderOf(), "build.json");
         var buildText = File.ReadAllText(build);
-        Arrive();
+        CheckTheDisk();
         File.Delete(build);
-        Arrive();
+        CheckTheDisk();
         Assert.False(_index.ReadFromItsPluginSource(_plugin.Key));
 
         File.WriteAllText(build, buildText);
@@ -124,12 +124,12 @@ public sealed class UnchangedSourceTreeTests : IDisposable
     public void ATreeWhoseDocumentIsEditedOutsideModbench_IsAskedAgain()
     {
         TimePasses();
-        Arrive();
-        Arrive();
+        CheckTheDisk();
+        CheckTheDisk();
         var asked = _source.GitStatusAsked;
 
         EditNpc();
-        Arrive();
+        CheckTheDisk();
 
         Assert.True(_source.GitStatusAsked > asked);
     }

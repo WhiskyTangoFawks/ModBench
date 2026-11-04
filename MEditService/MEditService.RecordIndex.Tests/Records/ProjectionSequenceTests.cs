@@ -96,7 +96,7 @@ public sealed class ProjectionSequenceTests : IDisposable
     {
         Reconcile(_fixture.Plugins);
 
-        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _partner.RenamedByHand(_index));
+        var announced = _index.AnnouncedByChecks(_notifications, () => _partner.RenamedByHand(_index));
 
         Assert.All(announced, n => Assert.IsType<RowsChangedNotification>(n));
         Assert.DoesNotContain(announced, Announcements.RowsChanged(_npc1.ToString()));

@@ -110,7 +110,7 @@ public sealed class LinkResolutionTests
                 mod.Npcs.AddNew("Asker");
                 HoldsTheLateRaceAs(mod, editorId);
             });
-            _index.NextSnapshot();
+            _index.NextCheck();
         }
 
         public void Dispose()

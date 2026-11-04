@@ -180,7 +180,7 @@ public sealed class SpatialParseFailurePrefixTests
         {
             _adapter.Unreadable = formKey;
             PluginBinaries.Touch(_path);
-            Index.NextSnapshot();
+            Index.NextCheck();
         }
 
         public void Dispose()

@@ -132,7 +132,7 @@ public sealed class SourceIngestContainerTests : IDisposable
         var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
         File.WriteAllText(file, WithTemporaryRefMisspelt(File.ReadAllText(file)));
 
-        index.NextSnapshotUntil(
+        index.NextCheckUntil(
             () => index.ReadFromItsPluginFileForItsUnreadableSource(_fixture.Plugin),
             "the plugin file read in place of its source");
 

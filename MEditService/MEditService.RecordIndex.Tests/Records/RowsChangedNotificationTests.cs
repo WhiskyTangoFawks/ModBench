@@ -23,7 +23,7 @@ public sealed class RowsChangedNotificationTests
         var formKey = npc.ToString();
         entry.HandEdit(index.DocumentOf(formKey, entry.Key), "\"FixtureNpc\"", "\"EditedName\"");
 
-        index.NextSnapshot();
+        index.NextCheck();
 
         var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
         Assert.Equal(entry.Key, notification.Plugin);
@@ -46,7 +46,7 @@ public sealed class RowsChangedNotificationTests
         var documentDeletedByHandWhereGitCannotNameTheKey = entry.SourceFileOf(index.DocumentOf(formKey, entry.Key));
         File.Delete(documentDeletedByHandWhereGitCannotNameTheKey);
 
-        index.NextSnapshot();
+        index.NextCheck();
 
         var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
         Assert.Equal(entry.Key, notification.Plugin);
@@ -64,7 +64,7 @@ public sealed class RowsChangedNotificationTests
         var gained = GainACopyOfARecordUnderAFormKeyNeitherRefHolds(entry, index, moved.ToString());
         entry.RenameByHand(index.DocumentOf(moved.ToString(), entry.Key), "EditedNpc");
 
-        index.NextSnapshot();
+        index.NextCheck();
 
         var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
         Assert.Equal(entry.Key, notification.Plugin);
@@ -83,7 +83,7 @@ public sealed class RowsChangedNotificationTests
         using var ___ = index;
         var gained = GainACopyOfARecordUnderAFormKeyNeitherRefHolds(entry, index, moved.ToString());
 
-        index.NextSnapshot();
+        index.NextCheck();
 
         var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
         Assert.Equal([gained], notification.Keys);
@@ -131,7 +131,7 @@ public sealed class RowsChangedNotificationTests
             File.ReadAllText(ownersDocumentHoldingTheChildWithNoFileOfItsOwn).Replace(
                 $"\"{ContainerModPlugin.TemporaryRefEditorId}\"", "\"RenamedByHand\"", StringComparison.Ordinal));
 
-        fixture.Index.NextSnapshot();
+        fixture.Index.NextCheck();
 
         var rowsChanged = notifications.Notifications.OfType<RowsChangedNotification>().Last();
         Assert.Contains(fixture.EmbedCell, rowsChanged.Keys);

@@ -167,7 +167,7 @@ public class HeaderIndexingTests
         var key = new PluginAddress("ReindexHeader.esp", PluginOrigin.DataDirectory);
 
         PluginBinaries.Touch(fixture.Plugins.Single().Path);
-        index.NextSnapshot();
+        index.NextCheck();
 
         Assert.Single(index.StackOf("000000:ReindexHeader.esp"));
         Assert.Single(HeaderRows(index, key));

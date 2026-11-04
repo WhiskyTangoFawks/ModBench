@@ -4,16 +4,19 @@ import {
   isMEditGone, type BackendStatus, type LaunchOutcome, type LoadOrderOutcome, type LoadOrderSnapshot,
 } from './MEditClient';
 
-/** What an adapter gives the sender: its process, its stream's reopen, and one PUT of a snapshot. */
+/** What an adapter gives the sender: its process, its stream's reopen, one PUT of a snapshot, which calls `answered` once
+ *  mEdit has answered it, and one signal of a change, which never rejects. */
 export interface LoadOrderWire extends LauncherWire {
   onStatusChanged(listener: (status: BackendStatus) => void): () => void;
   onReconnected(listener: () => void): () => void;
-  put(snapshot: LoadOrderSnapshot, signal: AbortSignal): Promise<LoadOrderOutcome>;
+  put(snapshot: LoadOrderSnapshot, signal: AbortSignal, answered: () => void): Promise<LoadOrderOutcome>;
+  signalChange(): Promise<void>;
 }
 
-/** The one sender of ADR-0013's snapshot, and the owner of the process it is sent to. */
+/** The one sender of ADR-0013's snapshot and ADR-0015's change signal, and the owner of the process they are sent to. */
 export interface LoadOrderSender {
   send(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome>;
+  signalChange(): void;
   latest(): Promise<LoadOrderOutcome | undefined>;
   onResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void;
   onAppliedAfterReopen(listener: (snapshot: LoadOrderSnapshot) => void): () => void;
@@ -24,6 +27,7 @@ export interface LoadOrderSender {
 }
 
 const ABANDONED: LoadOrderOutcome = { outcome: 'abandoned' };
+const SIGNAL_WAIT_CAP_MS = 10_000;
 const BACKEND_FAILED: LoadOrderOutcome = { outcome: 'backendFailed' };
 
 interface Waiting {
@@ -33,8 +37,8 @@ interface Waiting {
 
 // Swallowing the throw here is what keeps one bad send from wedging every send after it; the
 // caller still hears the failure as this snapshot's own outcome (ADR-0019).
-function putSnapshot(wire: LoadOrderWire, snapshot: LoadOrderSnapshot, signal: AbortSignal): Promise<LoadOrderOutcome> {
-  return wire.put(snapshot, signal).catch((e: unknown): LoadOrderOutcome => ({
+function putSnapshot(wire: LoadOrderWire, snapshot: LoadOrderSnapshot, signal: AbortSignal, answered: () => void): Promise<LoadOrderOutcome> {
+  return wire.put(snapshot, signal, answered).catch((e: unknown): LoadOrderOutcome => ({
     outcome: 'failed',
     message: `Failed to send the load order — ${errorMessage(e)}`,
   }));
@@ -45,7 +49,11 @@ function putSnapshot(wire: LoadOrderWire, snapshot: LoadOrderSnapshot, signal: A
 function createSendSlot(wire: LoadOrderWire) {
   let waiting: Waiting | undefined;
   let inFlight: AbortController | undefined;
+  let unanswered = false;
   let newest: Promise<LoadOrderOutcome> | undefined;
+  let signalOwedSince: number | undefined;
+  let signalTimer: ReturnType<typeof setTimeout> | undefined;
+  let signalling = false;
 
   const drop = (outcome: LoadOrderOutcome): void => {
     const dropped = waiting;
@@ -53,18 +61,55 @@ function createSendSlot(wire: LoadOrderWire) {
     dropped?.settle(outcome);
   };
 
-  // The backend publishes a PUT's progress the moment that PUT lands, so a snapshot waits for
-  // mEdit to run rather than being sent into a backend that is not there yet.
-  const pump = (): void => {
-    if (inFlight || !waiting || wire.status() !== 'running') return;
-    const next = waiting;
-    waiting = undefined;
+  const sendWaiting = (next: Waiting): void => {
     const controller = new AbortController();
     inFlight = controller;
-    void putSnapshot(wire, next.snapshot, controller.signal).then(next.settle).finally(() => {
+    unanswered = true;
+    const answered = (): void => {
+      if (inFlight !== controller || !unanswered) return;
+      unanswered = false;
+      pump();
+    };
+    void putSnapshot(wire, next.snapshot, controller.signal, answered).then(next.settle).finally(() => {
+      unanswered = false;
       inFlight = undefined;
       pump();
     });
+  };
+
+  const sendSignal = (): void => {
+    signalOwedSince = undefined;
+    clearTimeout(signalTimer);
+    signalTimer = undefined;
+    signalling = true;
+    void wire.signalChange().finally(() => {
+      signalling = false;
+      pump();
+    });
+  };
+
+  // A signal waits for the snapshots handed before it to be answered, so mEdit checks the load order it was handed,
+  // and a stream of snapshots delays it by a bounded time (ADR-0015).
+  const pumpSignal = (): void => {
+    if (signalOwedSince === undefined || signalling) return;
+    const waited = Date.now() - signalOwedSince;
+    if ((waiting || unanswered) && waited < SIGNAL_WAIT_CAP_MS) {
+      signalTimer ??= setTimeout(() => { signalTimer = undefined; pump(); }, SIGNAL_WAIT_CAP_MS - waited);
+      return;
+    }
+    sendSignal();
+  };
+
+  // The backend publishes a PUT's progress the moment that PUT lands, so a snapshot waits for
+  // mEdit to run rather than being sent into a backend that is not there yet.
+  const pump = (): void => {
+    if (wire.status() !== 'running') return;
+    if (!inFlight && waiting) {
+      const next = waiting;
+      waiting = undefined;
+      sendWaiting(next);
+    }
+    pumpSignal();
   };
 
   return {
@@ -74,6 +119,10 @@ function createSendSlot(wire: LoadOrderWire) {
       newest = sent;
       pump();
       return sent;
+    },
+    oweSignal(): void {
+      signalOwedSince ??= Date.now();
+      pump();
     },
     holdsOne: () => waiting !== undefined,
     drop,
@@ -144,8 +193,8 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     const snapshot = newestHanded;
     if (!snapshot) return;
     reopenUnannounced = true;
-    if (slot.holdsOne()) return;
-    void hand(snapshot).then((outcome) => { resent.fire(snapshot, outcome); });
+    if (!slot.holdsOne()) void hand(snapshot).then((outcome) => { resent.fire(snapshot, outcome); });
+    slot.oweSignal();
   };
 
   // A send in flight when mEdit goes answers abandoned, never a killed backend as a network failure.
@@ -162,6 +211,7 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
 
   return {
     send: hand,
+    signalChange: () => { if (!launcher.stopped()) slot.oweSignal(); },
     latest: () => slot.latest(),
     onResent: resent.add,
     onAppliedAfterReopen: appliedAfterReopen.add,

@@ -64,7 +64,7 @@ public class PluginParticipationTests
         var afterTheFlip = WinnersByPlugin(index, npcKey);
 
         PluginBinaries.Touch(fixture.Plugins[0].Path);
-        index.NextSnapshot();
+        index.NextCheck();
         var afterTheSnapshotArrivedAgain = WinnersByPlugin(index, npcKey);
 
         Assert.Equal(afterTheFlip, afterTheSnapshotArrivedAgain);

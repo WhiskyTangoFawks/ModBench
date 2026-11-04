@@ -73,7 +73,7 @@ public sealed class RenderedDocumentApiTests : HostedTests
         var fx = await NonCompiledPlugin();
         var npc = await Client.FormKeyNamed(Plugin, Origin, "npc_", "RenderedNpc");
         (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(fx);
+        await Client.NextCheck(fx);
         await Client.PluginReportsCompiledPlugin(Plugin);
         var written = Directory.EnumerateFiles(ModFolderOf(fx), "RenderedNpc - *.json", SearchOption.AllDirectories).Single();
 

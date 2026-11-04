@@ -66,7 +66,7 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.False(Directory.Exists(gone));
 
         Directory.CreateDirectory(gone);
-        _index.NextSnapshotUntil(() => _index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
+        _index.NextCheckUntil(() => _index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
 
         Assert.NotEmpty(_index.ListedIn(Key));
     }
@@ -84,7 +84,7 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.False(Directory.Exists(gone));
 
         Directory.CreateDirectory(gone);
-        _index.NextSnapshotUntil(() => _index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
+        _index.NextCheckUntil(() => _index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
     }
 
     [Fact]
@@ -211,7 +211,7 @@ public sealed class StoreRebuildTests : IDisposable
         var filterTakes = filtering.Elapsed;
         PluginBinaries.Touch(data.Plugins.Single(plugin => plugin.Name == "B.esp").Path);
 
-        holder.Apply(holder.Current);
+        index.SignalChange();
         var longestRead = Waits.LongestReadUntil(() => index.Status.State, state => state == LoadOrderState.Failed);
 
         Assert.True(longestRead < filterTakes / 2, $"The longest status read took {longestRead}; the filter takes {filterTakes}.");
@@ -239,7 +239,7 @@ public sealed class StoreRebuildTests : IDisposable
             Assert.NotNull(index.Queries.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot));
             index.ClearFilter();
             otherWindow.ForEach(window => window.Dispose());
-            index.NextSnapshot();
+            index.NextCheck();
 
             Assert.Null(index.Queries.GetFilter().Value());
             Assert.Equal(["NpcBeforeRebuild"], ListedNpcs(index));

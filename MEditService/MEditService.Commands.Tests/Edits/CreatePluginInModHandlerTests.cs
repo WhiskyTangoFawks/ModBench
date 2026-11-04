@@ -42,13 +42,13 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
     [Fact]
     public async Task CreatePluginIn_AModTheLoadOrderHoldsAPluginOf_WritesItInThatModsFolderAndMarksTheWrite()
     {
-        var awaited = _holder.ArrivalAwaited;
+        var written = _holder.SourceWrites;
 
         var result = await Handler.CreatePluginIn(Mod.ToUpperInvariant(), "Second.esp");
 
         Assert.Equal(new PluginAddress("Second.esp", Mod), result.Created());
         Assert.True(File.Exists(Path.Combine(_folder, "Second.esp")));
-        Assert.True(_holder.ArrivalAwaited > awaited);
+        Assert.True(_holder.SourceWrites > written);
     }
 
     [Fact]
@@ -78,12 +78,12 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
     [Fact]
     public async Task CreatePluginIn_ThatRefuses_MarksNothing()
     {
-        var awaited = _holder.ArrivalAwaited;
+        var written = _holder.SourceWrites;
 
         var result = (await Handler.CreatePluginIn(Mod, "First.esp")).Refused();
 
         Assert.Equal(PluginCreateRefusal.FileExists, result.Refusal);
-        Assert.Equal(awaited, _holder.ArrivalAwaited);
+        Assert.Equal(written, _holder.SourceWrites);
     }
 
     [Theory]
@@ -91,13 +91,13 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
     [InlineData(PluginOrigin.DataDirectory)]
     public async Task CreatePluginIn_AnOriginThatIsNoPlaceOfTheLoadOrder_RefusesNamingItAndWritesNothing(string origin)
     {
-        var awaited = _holder.ArrivalAwaited;
+        var written = _holder.SourceWrites;
 
         var result = (await Handler.CreatePluginIn(origin, "Second.esp")).Refused();
 
         Assert.Equal(PluginCreateRefusal.OriginNotAMod, result.Refusal);
         Assert.Contains(origin, result.Message, StringComparison.Ordinal);
         Assert.False(File.Exists(Path.Combine(_data.DataFolder, "Second.esp")));
-        Assert.Equal(awaited, _holder.ArrivalAwaited);
+        Assert.Equal(written, _holder.SourceWrites);
     }
 }

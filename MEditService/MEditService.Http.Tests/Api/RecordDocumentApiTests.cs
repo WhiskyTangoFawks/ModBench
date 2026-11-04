@@ -23,7 +23,7 @@ public sealed class RecordDocumentApiTests : HostedTests
     {
         var fx = await NonCompiledPlugin();
         (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(fx);
+        await Client.NextCheck(fx);
         await Client.PluginReportsCompiledPlugin(Plugin);
         return fx;
     }

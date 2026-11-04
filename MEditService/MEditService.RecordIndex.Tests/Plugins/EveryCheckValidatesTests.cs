@@ -11,7 +11,7 @@ using static MEditService.RecordIndex.Tests.TestSupport.Announcements;
 
 namespace MEditService.RecordIndex.Tests.Plugins;
 
-public sealed class EveryReconcileValidatesTests : IDisposable
+public sealed class EveryCheckValidatesTests : IDisposable
 {
 
     private const string NonCompiledPlugin = "NonCompiledPlugin.esp";
@@ -26,10 +26,10 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     private readonly DiskSaysAdapter _disk;
     private readonly OpenedIndex _index;
 
-    public EveryReconcileValidatesTests()
+    public EveryCheckValidatesTests()
     {
         FormKey npc = default;
-        _fixture = new PluginFixtureBuilder("every-reconcile-validates")
+        _fixture = new PluginFixtureBuilder("every-check-validates")
             .WithPlugin(NonCompiledPlugin, mod => mod.Npcs.AddNew("NonCompiledPluginNpc"), origin: "NonSourceMod")
             .WithPlugin(CompiledPlugin, mod => npc = mod.Npcs.AddNew("CompiledPluginNpc").FormKey, origin: "SourceMod")
             .BuildScattered();
@@ -52,10 +52,10 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     private void Reconcile() =>
         _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
 
-    private void ArrivalAnnouncing(Predicate<INotification> announced)
+    private void CheckAnnouncing(Predicate<INotification> announced)
     {
         var before = _notifications.Notifications.Count;
-        _index.NextSnapshotUntil(() => _notifications.Since(before).Any(n => announced(n)), "the arrival's announcement");
+        _index.NextCheckUntil(() => _notifications.Since(before).Any(n => announced(n)), "the check's announcement");
     }
 
     private void HandEditCompiledPlugin(string editorId = "EditedByHand")
@@ -72,21 +72,21 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     }
 
     [Fact]
-    public void AnEqualSnapshot_ReindexesANonCompiledPluginBinaryRewrittenOutsideModbench_AndNamesThePlugin()
+    public void ACheck_ReindexesANonCompiledPluginBinaryRewrittenOutsideModbench_AndNamesThePlugin()
     {
         RewriteNonCompiledPlugin("WrittenByAnotherTool");
 
-        ArrivalAnnouncing(PluginChanged(_nonCompiledPlugin));
+        CheckAnnouncing(PluginChanged(_nonCompiledPlugin));
 
         Assert.Contains(_index.ListedIn(_nonCompiledPlugin.Key), row => row.EditorId == "WrittenByAnotherTool");
     }
 
     [Fact]
-    public void AnEqualSnapshot_RefreshesACompiledPluginDocumentEditedOutsideModbench_AndNamesTheRecord()
+    public void ACheck_RefreshesACompiledPluginDocumentEditedOutsideModbench_AndNamesTheRecord()
     {
         HandEditCompiledPlugin();
 
-        ArrivalAnnouncing(RowsChanged(_compiledPluginNpc));
+        CheckAnnouncing(RowsChanged(_compiledPluginNpc));
 
         Assert.Equal("EditedByHand", _index.DocumentOf(_compiledPluginNpc, _compiledPlugin.Key).EditorId);
     }
@@ -104,77 +104,102 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     }
 
     [Fact]
-    public void AnEqualSnapshot_TakesTheRowsOfANonCompiledPluginBinaryTheAdapterSaysIsGone()
+    public void ALoadOrderThatArrives_LeavesAPluginItKeepsAsLastRead_UntilACheck()
+    {
+        RewriteNonCompiledPlugin("WrittenByAnotherTool");
+
+        _index.Reconcile(_holder, _fixture.DataFolder, [_nonCompiledPlugin], GameRelease.Fallout4, _fixture.InstanceRoot);
+        Assert.Contains(_index.ListedIn(_nonCompiledPlugin.Key), row => row.EditorId == "NonCompiledPluginNpc");
+
+        CheckAnnouncing(PluginChanged(_nonCompiledPlugin));
+        Assert.Contains(_index.ListedIn(_nonCompiledPlugin.Key), row => row.EditorId == "WrittenByAnotherTool");
+    }
+
+    [Fact]
+    public void ATreeEditedWhileMEditWasClosed_IsReadByTheFirstLoadOrder()
+    {
+        HandEditCompiledPlugin();
+        _index.Dispose();
+
+        var holder = new LoadOrderHolder();
+        using var reopened = Indexes.Open(holder);
+        reopened.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+
+        Assert.Equal("EditedByHand", reopened.DocumentOf(_compiledPluginNpc, _compiledPlugin.Key).EditorId);
+    }
+
+    [Fact]
+    public void ACheck_TakesTheRowsOfANonCompiledPluginBinaryTheAdapterSaysIsGone()
     {
         _disk.Gone(_nonCompiledPlugin.Path);
 
-        ArrivalAnnouncing(PluginChanged(_nonCompiledPlugin));
+        CheckAnnouncing(PluginChanged(_nonCompiledPlugin));
 
         Assert.Empty(_index.ListedIn(_nonCompiledPlugin.Key));
     }
 
     [Fact]
-    public void AnEqualSnapshot_ReindexesANonCompiledPluginBinaryTheAdapterSaysChanged()
+    public void ACheck_ReindexesANonCompiledPluginBinaryTheAdapterSaysChanged()
     {
         _disk.Changed(_nonCompiledPlugin.Path);
 
-        ArrivalAnnouncing(PluginChanged(_nonCompiledPlugin));
+        CheckAnnouncing(PluginChanged(_nonCompiledPlugin));
 
         Assert.Contains(_index.ListedIn(_nonCompiledPlugin.Key), row => row.EditorId == "NonCompiledPluginNpc");
     }
 
     [Fact]
-    public void AnEqualSnapshot_TakesEveryRowOfAPluginWhoseRepositoryAndBinaryWent()
+    public void ACheck_TakesEveryRowOfAPluginWhoseRepositoryAndBinaryWent()
     {
         HandEditCompiledPlugin();
-        ArrivalAnnouncing(RowsChanged(_compiledPluginNpc));
+        CheckAnnouncing(RowsChanged(_compiledPluginNpc));
 
         AnotherTool.Delete(Path.Combine(_compiledPlugin.ModFolderOf(), ".git"));
         File.Delete(_compiledPlugin.Path);
-        ArrivalAnnouncing(PluginChanged(_compiledPlugin));
+        CheckAnnouncing(PluginChanged(_compiledPlugin));
 
         Assert.Empty(_index.ListedIn(_compiledPlugin.Key));
     }
 
     [Fact]
-    public void AnEqualSnapshot_ReindexesANonCompiledPluginBinaryThatCameBack()
+    public void ACheck_ReindexesANonCompiledPluginBinaryThatCameBack()
     {
         var bytes = File.ReadAllBytes(_nonCompiledPlugin.Path);
         File.Delete(_nonCompiledPlugin.Path);
-        ArrivalAnnouncing(PluginChanged(_nonCompiledPlugin));
+        CheckAnnouncing(PluginChanged(_nonCompiledPlugin));
         Assert.Empty(_index.ListedIn(_nonCompiledPlugin.Key));
 
         File.WriteAllBytes(_nonCompiledPlugin.Path, bytes);
-        ArrivalAnnouncing(PluginChanged(_nonCompiledPlugin));
+        CheckAnnouncing(PluginChanged(_nonCompiledPlugin));
 
         Assert.Contains(_index.ListedIn(_nonCompiledPlugin.Key), row => row.EditorId == "NonCompiledPluginNpc");
     }
 
     [Fact]
-    public void AnEqualSnapshot_OfABinaryWhoseStampHolds_ReadsNothing()
+    public void ACheck_OfABinaryWhoseStampHolds_ReadsNothing()
     {
         using var held = new FileStream(_nonCompiledPlugin.Path, FileMode.Open, FileAccess.Read, FileShare.None);
         Assert.IsType<PluginFailure.Inaccessible>(_disk.ClaimOf(_nonCompiledPlugin.Path, GameRelease.Fallout4).Failure());
 
-        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _compiledPlugin.RenamedByHand(_index));
+        var announced = _index.AnnouncedByChecks(_notifications, () => _compiledPlugin.RenamedByHand(_index));
 
         Assert.All(announced, n => Assert.IsType<RowsChangedNotification>(n));
         Assert.Empty(_index.Status.Failures);
     }
 
     [Fact]
-    public void AnEqualSnapshot_OfAPluginHeldWithAFailure_PublishesNothingWhileItsBytesStayTheSame()
+    public void ACheck_OfAPluginHeldWithAFailure_PublishesNothingWhileItsBytesStayTheSame()
     {
         File.WriteAllText(_nonCompiledPlugin.Path, "not a plugin");
-        ArrivalAnnouncing(FailureNamed(NonCompiledPlugin));
+        CheckAnnouncing(FailureNamed(NonCompiledPlugin));
 
-        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _compiledPlugin.RenamedByHand(_index));
+        var announced = _index.AnnouncedByChecks(_notifications, () => _compiledPlugin.RenamedByHand(_index));
 
         Assert.All(announced, n => Assert.IsType<RowsChangedNotification>(n));
     }
 
     [Fact]
-    public void AnEqualSnapshot_OfAPluginWithNoTreeInASourceMod_PublishesNothing()
+    public void ACheck_OfAPluginWithNoTreeInASourceMod_PublishesNothing()
     {
         var loosePath = Path.Combine(_compiledPlugin.ModFolderOf(), "Loose.esp");
         var loose = new Fallout4Mod(ModKey.FromFileName("Loose.esp"), Fallout4Release.Fallout4);
@@ -185,20 +210,20 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         Assert.Contains(
             _index.ListedIn(new PluginAddress("Loose.esp", _compiledPlugin.Origin)), row => row.EditorId == "LooseNpc");
 
-        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _compiledPlugin.RenamedByHand(_index));
+        var announced = _index.AnnouncedByChecks(_notifications, () => _compiledPlugin.RenamedByHand(_index));
 
         Assert.All(announced, n => Assert.IsType<RowsChangedNotification>(n));
     }
 
     [Fact]
-    public void AnEqualSnapshot_OfATreeThatFailedToRead_AndStandsUnchanged_ReadsNothingOfIt()
+    public void ACheck_OfATreeThatFailedToRead_AndStandsUnchanged_ReadsNothingOfIt()
     {
         var document = _compiledPlugin.SourceFileOf(_index.DocumentOf(_compiledPluginNpc, _compiledPlugin.Key));
         File.Copy(document, Path.Combine(Path.GetDirectoryName(document).Require(), "Backup.json"));
-        ArrivalAnnouncing(PluginChanged(_compiledPlugin));
+        CheckAnnouncing(PluginChanged(_compiledPlugin));
         Assert.True(_index.ReadFromItsPluginFileForItsUnreadableSource(_compiledPlugin.Key));
 
-        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => Touched(_nonCompiledPlugin));
+        var announced = _index.AnnouncedByChecks(_notifications, () => Touched(_nonCompiledPlugin));
 
         Assert.All(announced, n => Assert.IsType<PluginChangedNotification>(n));
         Assert.DoesNotContain(announced, PluginChanged(_compiledPlugin));
@@ -206,25 +231,25 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     }
 
     [Fact]
-    public void AnEqualSnapshot_ReadsABinaryThatFailedAgain_OnceItsBytesChange()
+    public void ACheck_ReadsABinaryThatFailedAgain_OnceItsBytesChange()
     {
         File.WriteAllText(_nonCompiledPlugin.Path, "not a plugin");
-        ArrivalAnnouncing(FailureNamed(NonCompiledPlugin));
+        CheckAnnouncing(FailureNamed(NonCompiledPlugin));
 
         RewriteNonCompiledPlugin("FixedByAnotherTool");
-        ArrivalAnnouncing(PluginChanged(_nonCompiledPlugin));
+        CheckAnnouncing(PluginChanged(_nonCompiledPlugin));
 
         Assert.Contains(_index.ListedIn(_nonCompiledPlugin.Key), row => row.EditorId == "FixedByAnotherTool");
         Assert.DoesNotContain(_index.Status.Failures, f => f.Name == NonCompiledPlugin);
     }
 
     [Fact]
-    public void AnEqualSnapshot_ReadsAPluginWhoseModGainedARepository_FromItsTree()
+    public void ACheck_ReadsAPluginWhoseModGainedARepository_FromItsTree()
     {
         SourceMods.Init(_nonCompiledPlugin);
 
-        _index.NextSnapshotUntil(
-            () => _index.ReadFromItsPluginSource(_nonCompiledPlugin.Key), "the arrival's re-derivation of the plugin from its tree");
+        _index.NextCheckUntil(
+            () => _index.ReadFromItsPluginSource(_nonCompiledPlugin.Key), "the check's re-derivation of the plugin from its tree");
     }
 
     [Fact]

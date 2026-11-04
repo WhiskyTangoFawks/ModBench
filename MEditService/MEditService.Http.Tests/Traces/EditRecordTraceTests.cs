@@ -28,7 +28,7 @@ public sealed class EditRecordTraceTests : HostedTests
         var fx = TwoMods();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.VersionInGit(compiledOrigin)).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(fx);
+        await Client.NextCheck(fx);
         foreach (var plugin in fx.Plugins.Where(p => p.Origin == compiledOrigin)) await Client.PluginReportsCompiledPlugin(plugin.Name);
         return fx;
     }
@@ -47,7 +47,7 @@ public sealed class EditRecordTraceTests : HostedTests
 
         applied.EnsureSuccessStatusCode();
         Assert.NotEmpty((await applied.Body()).GetProperty("documents").EnumerateArray());
-        await Client.NextSnapshot(fx);
+        await Client.NextCheck(fx);
 
         var rows = Assert.Single(await stream.EventsUntil(
             "rows-changed", e => e.GetProperty("keys").EnumerateArray().Any(k => k.GetString() == formKey)));
@@ -66,7 +66,7 @@ public sealed class EditRecordTraceTests : HostedTests
         using var fx = await Loaded(Origin);
         var formKey = await Client.FirstFormKey(Plugin, Origin);
         (await Edit(formKey, "HeightMax", 0.75)).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(fx);
+        await Client.NextCheck(fx);
 
         await Wire.Eventually(async () =>
             (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&origin={Origin}&type=npc_"))
@@ -85,7 +85,7 @@ public sealed class EditRecordTraceTests : HostedTests
 
         response.EnsureSuccessStatusCode();
         Assert.Single((await response.Body()).GetProperty("applied").EnumerateArray());
-        await Client.NextSnapshot(fx);
+        await Client.NextCheck(fx);
         var rows = Assert.Single(await stream.EventsUntil(
             "rows-changed", e => e.GetProperty("keys").EnumerateArray().Any(k => k.GetString() == formKey)));
         Assert.Equal(Plugin, rows.GetProperty("plugin").GetString());
@@ -111,7 +111,7 @@ public sealed class EditRecordTraceTests : HostedTests
 
         created.EnsureSuccessStatusCode();
         var formKey = (await created.Body()).GetProperty("formKey").GetString().Require();
-        await Client.NextSnapshot(fx);
+        await Client.NextCheck(fx);
         var rows = (await stream.EventsUntil("rows-changed", e => KeysOf(e).Contains(formKey)))[^1];
         Assert.Equal(Plugin, rows.GetProperty("plugin").GetString());
         Assert.Equal(Origin, rows.GetProperty("origin").GetString());
@@ -149,7 +149,7 @@ public sealed class EditRecordTraceTests : HostedTests
         Assert.Equal(
             [(records[0], NonCompiledPlugin, "PluginNotCompiledPlugin"), (records[1], NonCompiledPlugin, "PluginNotCompiledPlugin")],
             answer.GetProperty("refused").EnumerateArray().Select(RefusedFrom).ToArray());
-        await Client.NextSnapshot(fx);
+        await Client.NextCheck(fx);
         await Wire.Eventually(
             async () => (await NpcFormKeys(OtherPlugin, OtherOrigin)).Intersect(records).Count() == records.Length,
             "the compiled plugin destination to answer both copied records");
@@ -189,17 +189,17 @@ public sealed class EditRecordTraceTests : HostedTests
         var formKey = await Client.FirstFormKey(Plugin, Origin);
         var copiedHeight = await HeightMax(formKey);
         (await Client.Copy(formKey, (Plugin, Origin), "Override", (OtherPlugin, OtherOrigin))).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(fx);
+        await Client.NextCheck(fx);
         await Wire.Eventually(async () => (await NpcFormKeys(OtherPlugin, OtherOrigin)).Contains(formKey), "the copy to be answered");
         (await Client.Edit(formKey, OtherPlugin, OtherOrigin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(fx);
+        await Client.NextCheck(fx);
         await Wire.Eventually(async () => await HeightMax(formKey) == 0.75, "the edit of the copy to be answered");
 
         var response = await Client.Copy(formKey, (Plugin, Origin), "Override", (OtherPlugin, OtherOrigin), replace: true);
 
         response.EnsureSuccessStatusCode();
         Assert.Single((await response.Body()).GetProperty("applied").EnumerateArray());
-        await Client.NextSnapshot(fx);
+        await Client.NextCheck(fx);
         await Wire.Eventually(async () => await HeightMax(formKey) == copiedHeight, "the replacement to be answered");
     }
 

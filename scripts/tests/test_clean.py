@@ -46,6 +46,7 @@ class Created:
 def resend_with(fixture: Fixture, created: Created) -> None:
     with created.lock:
         send_load_order(fixture, created)
+        call('POST', fixture.url + '/signal-change')
 
 
 def send_load_order(fixture: Fixture, created: Created) -> None:

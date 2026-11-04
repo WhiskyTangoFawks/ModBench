@@ -16,15 +16,15 @@ public sealed class ValidateContainerByStampsTests : IDisposable
         ?? throw new InvalidOperationException("Expected the placed reference to carry an EditorID.");
 
     private void ValidateUntilPlacedRefIsNamed(string editorId) =>
-        _fixture.Index.NextSnapshotUntil(() => _fixture.Index.CopyIn(_fixture.TemporaryRef, _fixture.Plugin)?.EditorId == editorId, $"the placed reference named {editorId}");
+        _fixture.Index.NextCheckUntil(() => _fixture.Index.CopyIn(_fixture.TemporaryRef, _fixture.Plugin)?.EditorId == editorId, $"the placed reference named {editorId}");
 
     private string CellDirectory => Path.GetDirectoryName(_fixture.Mod.SourceFileContaining(ContainerModPlugin.TemporaryRefEditorId)).Require();
 
     private void ValidateUntilSourceUnreadable() =>
-        _fixture.Index.NextSnapshotUntil(() => _fixture.Index.ReadFromItsPluginFileForItsUnreadableSource(_fixture.Plugin), "the plugin read from its binary in place of its source");
+        _fixture.Index.NextCheckUntil(() => _fixture.Index.ReadFromItsPluginFileForItsUnreadableSource(_fixture.Plugin), "the plugin read from its binary in place of its source");
 
     private void ValidateUntilSourceRead() =>
-        _fixture.Index.NextSnapshotUntil(() => !_fixture.Index.ReadFromItsPluginFileForItsUnreadableSource(_fixture.Plugin), "the plugin read from its source again");
+        _fixture.Index.NextCheckUntil(() => !_fixture.Index.ReadFromItsPluginFileForItsUnreadableSource(_fixture.Plugin), "the plugin read from its source again");
 
     [Fact]
     public void AGitRevertOfAPlacedRefsOwningCellDocument_ReachesTheNextRead()
@@ -91,12 +91,12 @@ public sealed class ValidateContainerByStampsTests : IDisposable
         var directory = Path.GetDirectoryName(document).Require();
         var text = File.ReadAllText(document);
         Directory.Delete(directory, recursive: true);
-        _fixture.Index.NextSnapshotUntil(() => _fixture.Index.CopyIn(formKey, _fixture.Plugin) is null, "the container gone");
+        _fixture.Index.NextCheckUntil(() => _fixture.Index.CopyIn(formKey, _fixture.Plugin) is null, "the container gone");
 
         var written = Path.Combine(AnotherTool.Beside(directory, "RenamedByHand"), Path.GetFileName(document));
         Directory.CreateDirectory(Path.GetDirectoryName(written).Require());
         File.WriteAllText(written, text);
-        _fixture.Index.NextSnapshotUntil(() => _fixture.Index.CopyIn(formKey, _fixture.Plugin) is not null, "the container back");
+        _fixture.Index.NextCheckUntil(() => _fixture.Index.CopyIn(formKey, _fixture.Plugin) is not null, "the container back");
 
         Assert.Equal(editorId, _fixture.Index.DocumentOf(formKey, _fixture.Plugin).EditorId);
     }

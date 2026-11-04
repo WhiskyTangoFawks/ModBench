@@ -19,11 +19,11 @@ public sealed class SpatialWorkingTreeStateApiTests : HostedTests
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(fx);
+        await Client.NextCheck(fx);
         await Client.PluginReportsCompiledPlugin(Plugin);
 
         (await Client.Edit(placedRef.ToString(), Plugin, Origin, "EditorID", "Renamed")).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(fx);
+        await Client.NextCheck(fx);
 
         await Wire.Eventually(
             async () => JsonDocument.Parse(await Client.GetStringAsync($"/plugins/{Plugin}/working-tree-states-beneath?origin={Origin}"))

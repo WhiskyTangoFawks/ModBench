@@ -44,7 +44,7 @@ public sealed class UnreopenableIndexFileTests : IDisposable
         rewritten.Npcs.AddNew("RewrittenNpc");
         rewritten.WriteToBinary(_fixture.Plugins.Single().Path);
 
-        _index.NextSnapshotUnsettledUntil(() => _index.Status.State == LoadOrderState.Failed, "the reopen failing");
+        _index.NextCheckUnsettledUntil(() => _index.Status.State == LoadOrderState.Failed, "the reopen failing");
 
         Assert.Equal(LoadOrderState.Failed, _index.Status.State);
         Assert.Single(Regex.Matches(_index.Status.Message ?? "", "mEdit's record index was not reopened: "));

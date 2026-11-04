@@ -28,6 +28,7 @@ public sealed class WriteRouteHandlerTests
         ("POST", "/plugins/move-last-written", typeof(MoveLastWrittenHandler), "MoveLastWritten"),
         ("POST", "/plugins/{plugin}/create-record-changes", typeof(CreateRecordChangesHandler), "CreateRecordChanges"),
         ("PUT", "/load-order", typeof(PutLoadOrderHandler), "PutLoadOrder"),
+        ("POST", "/signal-change", typeof(SignalChangeHandler), "SignalChange"),
         ("POST", "/build", typeof(BuildModHandler), "Build"),
         ("POST", "/version-in-git", typeof(VersionInGitHandler), "VersionInGit"),
         ("POST", "/clone-submodules", typeof(CloneSubmodulesHandler), "CloneSubmodules"),

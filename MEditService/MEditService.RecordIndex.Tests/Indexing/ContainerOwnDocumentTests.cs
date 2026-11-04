@@ -118,7 +118,7 @@ public sealed class ContainerOwnDocumentTests
         fixture.Entry.HandEdit(
             fixture.Index.DocumentOf(cell, Plugin), $"\"{ContainerModPlugin.EmbedCellEditorId}\"", "\"EditedCell\"");
 
-        fixture.Index.NextSnapshot();
+        fixture.Index.NextCheck();
 
         var stored = fixture.Stored(cell);
         Assert.Equal(["FormKey", "EditorID", "WaterHeight"], MembersOf(stored));
