@@ -1,3 +1,4 @@
+using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.PluginAdapter.Repair;
@@ -15,7 +16,7 @@ internal sealed record Decompiled(PluginSource? Source, DecompileRefusal Refusal
 
 /// <summary>Init and decompile both read a plugin into its plugin source through this one gate.
 /// </summary>
-internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, ISourceAdapter sourceAdapter)
+internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, ISourceAdapter sourceAdapter, SchemaReflector schemaReflector)
 {
     internal async Task<Decompiled> DecompileAsync(
         LoadOrderSnapshot loadOrder, RegisteredPlugin plugin, string modFolder, Action onParsed, CancellationToken cancel, bool namesRepair = true)
@@ -39,6 +40,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         }
 
         onParsed();
+        source = source with { Files = DeletedReferenceBases.Dropped(source.Files, loadOrder.GameRelease, schemaReflector) };
         if (await VerifyRoundTrip(plugin.Name, plugin.Path, source, loadOrder, plugin.Strings, namesRepair, cancel) is { } refusal)
             return Decompiled.Refused(DecompileRefusal.RoundTripFailed, refusal);
 
@@ -101,10 +103,10 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         if (comparison.Identical)
             return null;
 
-        if (comparison.DeletedRecordEmptied is { } deleted)
+        if (comparison.DeletedRecordCauses is { } deleted)
         {
-            return $"{pluginName} does not round-trip through its own source: {deleted} is flagged Deleted and still " +
-                   "holds fields, which Mutagen does not write for a deleted record.";
+            return $"{pluginName} does not round-trip through its own source: it is a malformed plugin, and " +
+                   $"{string.Join("; ", deleted.Select(cause => cause.Diagnosis.Describe()))}.{RepairClause(deleted, namesRepair)}";
         }
 
         if (comparison.Loss is { } loss)

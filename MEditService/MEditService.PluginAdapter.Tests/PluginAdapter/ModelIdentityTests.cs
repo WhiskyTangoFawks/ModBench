@@ -435,6 +435,18 @@ public sealed class ModelIdentityTests
         return path;
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DivergenceFrom_OfADeletedReferenceHoldingItsBaseRecord_ReturnsNull_BecauseMutagenWritesADeletedRecordAsItsHeaderAlone(bool trap)
+    {
+        var bytes = trap ? DeletedReferencePlugin.TrapBytes("Fixture.esp") : DeletedReferencePlugin.Bytes("Fixture.esp");
+
+        var (divergence, _, _) = await ParseRewriteAndCompare(new GeneratedPlugin("Fixture.esp", bytes));
+
+        Assert.Null(divergence);
+    }
+
     private static async Task<string?> DivergenceAsync(Fallout4Mod original, Fallout4Mod recompiled)
     {
         using var scratch = new ScratchDirectory("medit-modelidentity-");

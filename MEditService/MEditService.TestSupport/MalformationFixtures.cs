@@ -1,4 +1,5 @@
 using System.Reflection;
+using MEditService.Codec.Schema;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -197,6 +198,20 @@ public static class MalformationFixtures
                 subrecords => subrecords.Where(s => s.Signature != "EPF3"),
                 "entry-point-parameter-shape, repairable (lossless): entry point 0 (function 9, Add Activate Choice) is missing EPF3; vanilla always writes it",
                 "inserts 1 zeroed EPF3 of 2 bytes before PRKF");
+        }
+    }
+
+    private static MalformationFixture DeletedRecordHoldingFields
+    {
+        get
+        {
+            var mod = NewMod();
+            var npc = new Npc(mod.GetNextFormKey(), Fallout4Release.Fallout4) { EditorID = "Guy", MajorRecordFlagsRaw = (int)DeletedFlag.Bit };
+            mod.Npcs.Add(npc);
+            return Malformed(nameof(DeletedRecordHoldingFields), mod, "NPC_", npc,
+                subrecords => [.. subrecords, ("EDID", "Guy\0"u8.ToArray()), ("FULL", new byte[4])],
+                "deleted-record-holds-fields, repairable (drops 20 bytes): flagged Deleted and holds EDID, FULL; Mutagen writes a deleted record as its header alone",
+                "drops EDID, FULL (20 bytes)");
         }
     }
 
