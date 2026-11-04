@@ -40,6 +40,20 @@ public sealed class DetectExternalChangeTraceTests : HostedTests
         Assert.Equal(Origin, change.GetProperty("origin").GetString());
     }
 
+    [Fact]
+    public async Task AChangeNamingOnlyAnAsset_PublishesNothing_WhereTheNextChangeNamingNoPathPublishes()
+    {
+        var fx = await CompiledPlugin();
+        using var stream = await Client.NotificationStream();
+        var path = fx.Plugins.Single(p => p.Origin == Origin).Path;
+
+        await Client.SignalChange(Path.Combine(Path.GetDirectoryName(path).Require(), "textures", "watched.dds"));
+        OtherTool.WritesThePlugin(path, mod => mod.Npcs.AddNew(Npc).HeightMax = 0.9f);
+        await Client.SignalChange();
+
+        Assert.True(NamesThePlugin(Assert.Single(await stream.EventsUntil("external-change", NamesThePlugin))));
+    }
+
     private static bool NamesThePlugin(JsonElement change) =>
         change.GetProperty("changedPlugins").EnumerateArray().Any(p => p.GetProperty("name").GetString() == Plugin);
 }
