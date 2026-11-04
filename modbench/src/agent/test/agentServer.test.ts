@@ -387,16 +387,16 @@ describe('the agent server, given an instance value', () => {
     });
 
     it.each([
-      ['plugin_enable', 'modbench.plugin.enable', {}],
+      ['plugin_enable', 'modbench.plugin.enable', undefined],
       ['plugin_move', 'modbench.plugin.move', { drop: { kind: 'winningEnd' } }],
     ])('fires %s on the line named by the origin list_plugins shows, as the load order holds it', async (tool, command, options) => {
       statusRead.answer = [status('Acc Mod C', { gone: ['AccC.esp'] })];
       fired.outcome = { applied: true, outcome: { landed: ['AccC.esp'], refused: [] } };
       const { client } = await clientOf(cloned('AccC.esp'));
 
-      await call(client, tool, { argument: [{ name: 'AccC.esp', origin: 'Acc Mod C' }], options });
+      await call(client, tool, { argument: [{ name: 'AccC.esp', origin: 'Acc Mod C' }], ...options && { options } });
 
-      expect(fired.calls).toEqual([[command, new AgentCall([{ kind: 'plugin', plugin: { name: 'AccC.esp', origin: DATA_DIRECTORY_ORIGIN } }], options)]]);
+      expect(fired.calls).toEqual([[command, new AgentCall([{ kind: 'plugin', plugin: { name: 'AccC.esp', origin: DATA_DIRECTORY_ORIGIN } }], options ?? {})]]);
     });
   });
 
@@ -1939,6 +1939,30 @@ describe('the agent server, given an input its tool does not take', () => {
     expect(refusal.text).toContain(input);
     expect(lines).toEqual([`[agent] ${name}: ${refusal.text}`]);
     expect(reporter.reports).toEqual([]);
+  });
+
+  it.each([
+    ['mod_build', { mod: 'A' }, 'mod'],
+    ['mod_enable', { argument: [{ name: 'A', nme: 'B' }] }, 'nme'],
+    ['mod_move', { argument: [{ name: 'A' }], options: { place: { kind: 'ungrouped' }, end: 'winning', extra: 1 } }, 'extra'],
+    ['read_record', { name: 'X', plugin: { name: 'A.esp', orign: 'A' } }, 'orign'],
+    ['resolve_instance_names', { files: [{ mod: { name: 'A' }, path: 'f', paht: 'g' }] }, 'paht'],
+    ['list_plugins', { sorted: true }, 'sorted'],
+  ])('%s refuses an unknown key %j, naming it, and fires nothing', async (name, args, key) => {
+    fired.calls = [];
+    const { client } = await clientOf(new FakeInstance(CONFLICTED));
+
+    const refusal = await call(client, name, args);
+
+    expect(refusal.isError).toBe(true);
+    expect(refusal.text).toContain(key);
+    expect(fired.calls).toEqual([]);
+  });
+
+  it('advertises that a tool takes no other key', async () => {
+    const { tools } = await (await clientOf(new FakeInstance(VALUE))).client.listTools();
+
+    expect(tools.find((tool) => tool.name === 'mod_build')?.inputSchema).toMatchObject({ additionalProperties: false });
   });
 
   it('tells the agent select_rows reads only the views, and where their columns are listed', async () => {
