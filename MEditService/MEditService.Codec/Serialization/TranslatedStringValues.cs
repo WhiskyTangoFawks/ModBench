@@ -84,17 +84,17 @@ public static class TranslatedStringValues
         return edited;
     }
 
-    /// <summary>The members a translated string's document holds: its text as one <c>Value</c> or as the
-    /// <c>Values</c> of each language, whichever the plugin's localization gives it.</summary>
-    internal static FieldMetadata ShapeOf(JsonObject held, string? readOnlyReason)
+    /// <summary>The members a translated string's document holds: one <c>Value</c> or the <c>Values</c> of each
+    /// language. Only a localized plugin holds a language for <c>TargetLanguage</c> to name.</summary>
+    internal static FieldMetadata ShapeOf(JsonObject held, bool localized, string? readOnlyReason)
     {
-        static FieldMetadata Leaf(string name, string type, IReadOnlyList<EnumMember>? members = null) =>
-            new(name, type, false, LeafSpec.NoFormKeyTypes, members ?? LeafSpec.NoEnumMembers);
+        static FieldMetadata Leaf(string name, string type, IReadOnlyList<EnumMember>? members = null, string? readOnlyReason = null) =>
+            new(name, type, false, LeafSpec.NoFormKeyTypes, members ?? LeafSpec.NoEnumMembers, ReadOnlyReason: readOnlyReason);
         var languages = Enum.GetNames<Language>().Select(name => new EnumMember(name)).ToList();
         var perLanguage = new FieldMetadata(
             "", "struct", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
             Fields: [Leaf("Language", "enum", languages), Leaf("String", "string")]);
-        var fields = new List<FieldMetadata> { Leaf("TargetLanguage", "enum", languages) };
+        var fields = new List<FieldMetadata> { Leaf("TargetLanguage", "enum", languages, localized ? null : "the plugin is not localized, so it holds no language for a string") };
         fields.Add(held["Values"] is null
             ? Leaf("Value", "string")
             : new FieldMetadata("Values", "array", true, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, ElementType: perLanguage));

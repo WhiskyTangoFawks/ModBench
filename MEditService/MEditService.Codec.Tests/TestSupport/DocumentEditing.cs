@@ -34,7 +34,7 @@ internal static class DocumentEditing
     {
         var schema = SharedSchemaReflector.Instance.GetSchemas(release)[table];
         var record = Document.Parse(text);
-        if (DocumentEdit.Locate(record, schema, op, path, out var located) is { } unaddressed) return new(unaddressed, null, null, null);
+        if (DocumentEdit.Locate(record, schema, op, path, localized, out var located) is { } unaddressed) return new(unaddressed, null, null, null);
         var edit = located.Require();
         if (edit.Apply(value, stringsLanguage, localized, out var applied) is { } failure) return new(failure, null, null, null);
         var patch = applied.Require();

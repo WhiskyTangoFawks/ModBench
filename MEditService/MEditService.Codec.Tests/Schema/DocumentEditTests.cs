@@ -763,6 +763,20 @@ public sealed class DocumentEditTests
         Assert.Equal($"Name.{member}", Assert.IsType<EditFailure.NoMember>(failure).Path);
     }
 
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void TranslatedString_TargetLanguage_IsReadOnlyWhereThePluginIsNotLocalized(bool localized, bool readOnly)
+    {
+        var held = NpcNamed("""{"TargetLanguage":"English","Value":"Old"}""");
+
+        Assert.Null(DocumentEdit.Locate(
+            Document.Parse(held), SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["npc_"], EditOp.Set,
+            [Member("Name"), Member("TargetLanguage")], localized, out var edit));
+
+        Assert.Equal(readOnly, edit.Require().ReadOnlyTarget is not null);
+    }
+
     [Fact]
     public void Header_IsSmallMaster_WritesTheFlagsMemberAndNothingElse()
     {

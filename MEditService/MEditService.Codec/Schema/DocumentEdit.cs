@@ -34,11 +34,11 @@ public sealed class DocumentEdit
     /// <summary>Where <paramref name="path"/> lands in <paramref name="record"/>. A set or an add makes
     /// the objects on the way that the document omits.</summary>
     public static EditFailure? Locate(
-        Document record, RecordTableSchema schema, EditOp op, IReadOnlyList<DocumentHop> path, out DocumentEdit? edit)
+        Document record, RecordTableSchema schema, EditOp op, IReadOnlyList<DocumentHop> path, bool localized, out DocumentEdit? edit)
     {
         edit = null;
         var tree = record.Tree();
-        if (Resolve(tree, schema, path, op is EditOp.Set or EditOp.Add, out var resolved) is { } unresolved) return unresolved;
+        if (Resolve(tree, schema, path, op is EditOp.Set or EditOp.Add, localized, out var resolved) is { } unresolved) return unresolved;
         var cursor = resolved ?? throw new InvalidOperationException("Expected Resolve to set a cursor when it does not refuse.");
         var spelled = DocumentHop.Spell(path);
         var readOnly = cursor.Field?.ReadOnlyReason is { } why ? new ReadOnlyMember(spelled, cursor.MemberName ?? cursor.Column.Name, why) : null;
@@ -120,7 +120,7 @@ public sealed class DocumentEdit
     }
 
     private static EditFailure? Resolve(
-        JsonObject record, RecordTableSchema schema, IReadOnlyList<DocumentHop> path, bool creating, out Cursor? cursor)
+        JsonObject record, RecordTableSchema schema, IReadOnlyList<DocumentHop> path, bool creating, bool localized, out Cursor? cursor)
     {
         cursor = null;
         var spelled = DocumentHop.Spell(path);
@@ -160,7 +160,7 @@ public sealed class DocumentEdit
                 var translated = cursor.Meta.Type == TranslatedStringValues.ApiType;
                 if (translated && cursor.Node is not JsonObject) return new EditFailure.Absent(sofar, before);
                 var fields = translated && cursor.Node is JsonObject held
-                    ? TranslatedStringValues.ShapeOf(held, cursor.Meta.ReadOnlyReason).Fields
+                    ? TranslatedStringValues.ShapeOf(held, localized, cursor.Meta.ReadOnlyReason).Fields
                     : cursor.Meta.Fields;
                 if (fields is null) return new EditFailure.NoMembers(sofar, before);
                 if (cursor.Node is not JsonObject obj)
