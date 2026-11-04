@@ -13,8 +13,7 @@ import type { Manifest, ManifestRead } from './manifest';
 import { manifestText, ordinal } from './manifestText';
 import { readManifest } from './manifestRead';
 import { packagesAsked } from './manifestPackages';
-import { keptByStamp } from '../repositoriesLib/stampedReads';
-import { entriesByStamp } from './stampedReads';
+import { entriesByStamp, keptByStamp } from './stampedReads';
 
 async function entriesIn(folder: string): Promise<Dirent[]> {
   try {

@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { errnoCode } from '../ports/errno';
-import { sameStamp, settledBefore, stampOf, type FileStamp } from '../repositoriesLib/stampedReads';
-import { GIT_DIR } from './files';
+import { sameStamp, settledBefore, type FileStamp } from '../repositoriesLib/stampedReads';
+import { GIT_DIR, stampOf } from './files';
 
 type MaybeStamped = FileStamp | undefined;
 

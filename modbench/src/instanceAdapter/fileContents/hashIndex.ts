@@ -7,8 +7,8 @@ import { errorMessage } from '../../ports/errorMessage';
 import type { FileProblems } from '../../ports/fileProblems';
 import type { InstallationFileReader } from './installationFileReader';
 import { digestOf } from './contentDigest';
-import { append, ensureDir, get, listDir, makeTempDir, readOrReason, remove, withLock } from '../files';
-import { sameStamp, settledBefore, stampOf } from '../../repositoriesLib/stampedReads';
+import { append, ensureDir, get, listDir, makeTempDir, readOrReason, remove, stampOf, withLock } from '../files';
+import { sameStamp, settledBefore } from '../../repositoriesLib/stampedReads';
 import type { FileRead, FileStamp, HashedDownloadedFile, HashedFile, InstanceAdapter } from '../instanceAdapter';
 
 const INDEX_FILE = 'hashes.jsonl';

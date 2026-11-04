@@ -2,7 +2,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { link, mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { keptByStamp } from '../stampedReads';
+import { keptByStamp as keptByStampOf, stampFrom } from '../stampedReads';
+
+const keptByStamp = <T>(read: (path: string) => Promise<T>, options: Parameters<typeof keptByStampOf<T>>[2] = {}): ((path: string) => Promise<T>) =>
+  keptByStampOf(async (path) => stampFrom(await stat(path, { bigint: true })), read, options);
 
 const HOUR_MS = 3_600_000;
 
@@ -55,10 +58,11 @@ describe('a read kept by the stamp of its file', () => {
   it('reads again a file another tool rewrote keeping its size and date modified, which changes its time of change', async () => {
     settle();
     const kept = keptByStamp(read);
-    const { atime, mtime } = await stat(path);
+    const fixed = new Date(1_700_000_000_000);
+    await utimes(path, fixed, fixed);
     await kept(path);
     await writeFile(path, 'two');
-    await utimes(path, atime, mtime);
+    await utimes(path, fixed, fixed);
 
     expect(await kept(path)).toBe(2);
   });

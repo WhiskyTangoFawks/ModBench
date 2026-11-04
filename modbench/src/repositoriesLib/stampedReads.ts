@@ -1,5 +1,3 @@
-import { stat } from 'node:fs/promises';
-
 /** What the file system says of a file without a read of its bytes. A tool can keep a file's size
  *  and date modified across a write, never the time of its change. */
 export interface FileStamp {
@@ -8,11 +6,9 @@ export interface FileStamp {
   readonly changedNs: bigint;
 }
 
-/** `path`'s stamp, following symlinks. */
-export async function stampOf(path: string): Promise<FileStamp> {
-  const info = await stat(path, { bigint: true });
-  return { size: info.size, modifiedNs: info.mtimeNs, changedNs: info.ctimeNs };
-}
+/** The stamp of a file from its `stat` with `bigint: true`. */
+export const stampFrom = ({ size, mtimeNs, ctimeNs }: { size: bigint; mtimeNs: bigint; ctimeNs: bigint }): FileStamp =>
+  ({ size, modifiedNs: mtimeNs, changedNs: ctimeNs });
 
 export const sameStamp = (a: FileStamp, b: FileStamp): boolean =>
   a.size === b.size && a.modifiedNs === b.modifiedNs && a.changedNs === b.changedNs;
@@ -38,7 +34,7 @@ interface KeptOptions<T> {
 
 /** A reader of `path` that reads it again only when its stamp has changed, and keeps nothing whose stamp is too fresh to trust. */
 export function keptByStamp<T>(
-  read: (path: string) => Promise<T>, { kept = new Map(), trusts = () => false, keyOf = (path) => path }: KeptOptions<T> = {},
+  stampOf: (path: string) => Promise<FileStamp>, read: (path: string) => Promise<T>, { kept = new Map(), trusts = () => false, keyOf = (path) => path }: KeptOptions<T> = {},
 ): (path: string) => Promise<T> {
   return async (path) => {
     const key = keyOf(path);
