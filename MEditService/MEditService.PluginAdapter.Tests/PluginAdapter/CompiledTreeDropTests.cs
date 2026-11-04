@@ -1,3 +1,4 @@
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -152,6 +153,58 @@ public sealed class CompiledTreeDropTests
         mod.Doors.AddNew("Door").Name = new TranslatedString(Language.French, "La Porte");
 
         Assert.Equal("Name", Assert.Single(await DropsOf(mod)).Field);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DropsIn_OfADeletedReferenceHoldingOnlyItsBaseRecord_NamesNothing_ForMutagenWritesADeletedRecordAsItsHeaderAlone(bool trap)
+    {
+        var mod = NewMod();
+        var cell = new Cell(mod) { EditorID = "Cell" };
+        cell.Persistent.Add(DeletedReference(mod, trap, editorId: null));
+        mod.AddInteriorCells(cell);
+
+        Assert.Empty(await DropsOf(mod));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DropsIn_OfADeletedReferenceHoldingAFieldBesideItsBaseRecord_NamesTheField(bool trap)
+    {
+        var mod = NewMod();
+        var cell = new Cell(mod) { EditorID = "Cell" };
+        var reference = DeletedReference(mod, trap, editorId: "Ref");
+        cell.Persistent.Add(reference);
+        mod.AddInteriorCells(cell);
+
+        var drops = await DropsOf(mod);
+
+        Assert.Contains((reference.FormKey.ToString(), "EditorID"), drops.Select(drop => (drop.Record.FormKey, drop.Field)));
+    }
+
+    [Fact]
+    public async Task DropsIn_OfADeletedNpcHoldingAField_NamesTheField()
+    {
+        var mod = NewMod();
+        var npc = new Npc(mod) { EditorID = "Guy", MajorRecordFlagsRaw = (int)DeletedFlag.Bit };
+        mod.Npcs.Add(npc);
+
+        var drop = Assert.Single(await DropsOf(mod));
+
+        Assert.Equal((npc.FormKey.ToString(), "EditorID"), (drop.Record.FormKey, drop.Field));
+    }
+
+    private static IPlaced DeletedReference(Fallout4Mod mod, bool trap, string? editorId)
+    {
+        var baseRecord = FormKey.Factory($"000801:{Plugin.FileName}");
+        IPlaced reference = trap
+            ? new PlacedMissile(mod) { Projectile = new FormLink<IProjectileGetter>(baseRecord) }
+            : new PlacedObject(mod) { Base = new FormLinkNullable<IPlaceableObjectGetter>(baseRecord) };
+        reference.EditorID = editorId;
+        reference.MajorRecordFlagsRaw = (int)DeletedFlag.Bit;
+        return reference;
     }
 
     private static Fallout4Mod NewMod() => new(Plugin, Fallout4Release.Fallout4);

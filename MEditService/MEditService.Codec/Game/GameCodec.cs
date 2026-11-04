@@ -1,9 +1,13 @@
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.IO.Abstractions;
 using System.Reflection;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
+using Mutagen.Bethesda.Plugins.Utility;
 using Mutagen.Bethesda.Serialization.Newtonsoft;
 using Mutagen.Bethesda.Strings;
 using Noggog;
@@ -65,10 +69,10 @@ internal sealed class GameCodec : IGameCodec
         return clone;
     }
 
-    public IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record, bool localized)
+    public IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record, bool localized, GameRelease release)
     {
         var type = record.GetType();
-        if (record is not (ICellGetter or IWorldspaceGetter or IDialogTopicGetter) && !IsReducedToHeader(record) && !GameSpecifics.Normalizes(record)
+        if (record is not (ICellGetter or IWorldspaceGetter or IDialogTopicGetter) && !DeletedReferences.CanReach(type) && !GameSpecifics.Normalizes(record)
             && !Targets.CanReach(type) && (localized || !StringHolders.CanReach(type)))
             return record;
         var copy = record.DeepCopy();
@@ -102,30 +106,65 @@ internal sealed class GameCodec : IGameCodec
                 ZeroTopicGroupFields(topic);
                 break;
         }
-        HeaderOnlyRecords.ForEach(copy, ReduceToHeader);
+        DeletedReferences.ForEach(copy, reference => ClearBaseOfDeleted(reference, release));
         GameSpecifics.Normalize(copy);
         return copy;
     }
 
-    // Mutagen writes a deleted record as its header alone, so its reread holds no field. A worldspace is
-    // the exception (WriteWorldspacesParallel skips the deleted return of WriteMajorRecord), and a
-    // container's children are written after the record, so they stay.
-    private static bool IsReducedToHeader(IMajorRecordGetter record) =>
-        (record.MajorRecordFlagsRaw & DeletedFlag.Bit) != 0 && record is not (IWorldspaceGetter or ICellGetter or IDialogTopicGetter or IQuestGetter);
+    // Mutagen reads the NAME of a deleted reference into one member and writes a deleted record as its
+    // header alone, so its reread holds no base record. Any other field of a deleted record is a divergence.
+    private static readonly RecordGraph DeletedReferences = new(typeof(IPlacedGetter).IsAssignableFrom);
 
-    private static readonly RecordGraph HeaderOnlyRecords = new(typeof(IMajorRecordGetter).IsAssignableFrom);
-
-    private static void ReduceToHeader(object node)
+    private static void ClearBaseOfDeleted(object node, GameRelease release)
     {
-        if (node is not IMajorRecordGetter record || !IsReducedToHeader(record)) return;
-        var kept = GameAnnotations.Table.RecordHeaderMembers
-            .Select(member => node.GetType().GetProperty(member.MemberName))
-            .OfType<PropertyInfo>()
-            .Where(property => property.CanWrite)
-            .Select(property => (Property: property, Value: property.GetValue(node)))
+        if ((((IMajorRecordGetter)node).MajorRecordFlagsRaw & DeletedFlag.Bit) == 0) return;
+        if (NameMemberOf(node.GetType(), release) is not { } member) return;
+
+        var link = node.GetType().GetProperty(member)?.GetValue(node);
+        link?.GetType().GetMethod("SetToNull", Type.EmptyTypes)?.Invoke(link, null);
+    }
+
+    private static readonly ConcurrentDictionary<Type, string?> NameMembers = new();
+
+    // The member Mutagen writes as NAME, found by writing the record once with each of its links set to
+    // an ID of its own: Mutagen's writer is the only place that says which member a subrecord holds.
+    private static string? NameMemberOf(Type recordType, GameRelease release) => NameMembers.GetOrAdd(recordType, type =>
+    {
+        var modKey = ModKey.FromFileName("Probe.esp");
+        var links = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(property => property.GetIndexParameters().Length == 0 && typeof(IFormLinkGetter).IsAssignableFrom(property.PropertyType))
             .ToList();
-        ((IClearable)node).Clear();
-        foreach (var (property, value) in kept) property.SetValue(node, value);
+        var mod = ModFactory<GameMod>.Activator(modKey, release);
+        var cell = (Cell)MajorRecordInstantiator.Activator(mod.GetNextFormKey(), release, typeof(Cell));
+        var record = (IPlaced)MajorRecordInstantiator.Activator(mod.GetNextFormKey(), release, type);
+        for (var i = 0; i < links.Count; i++)
+        {
+            var link = links[i].GetValue(record);
+            link?.GetType().GetMethod("SetTo", [typeof(FormKey?)])?.Invoke(link, [new FormKey(modKey, FirstProbeId + (uint)i)]);
+        }
+        cell.Persistent.Add(record);
+        var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
+        subBlock.Cells.Add(cell);
+        var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
+        block.SubBlocks.Add(subBlock);
+        mod.Cells.Records.Add(block);
+
+        using var stream = new MemoryStream();
+        mod.WriteToBinary(stream);
+        var written = stream.ToArray();
+        var named = links.Where((_, i) => ContainsName(written, FirstProbeId + (uint)i)).ToList();
+        return named.Count == 1 ? named[0].Name : null;
+    });
+
+    private const uint FirstProbeId = 0x1000;
+
+    private static bool ContainsName(byte[] written, uint id)
+    {
+        Span<byte> subrecord = stackalloc byte[10];
+        "NAME"u8.CopyTo(subrecord);
+        BinaryPrimitives.WriteUInt16LittleEndian(subrecord[4..], sizeof(uint));
+        BinaryPrimitives.WriteUInt32LittleEndian(subrecord[6..], id);
+        return written.AsSpan().IndexOf(subrecord) >= 0;
     }
 
     private static readonly RecordGraph Targets = new(type => type == typeof(LocationTargetRadius));

@@ -1,6 +1,7 @@
 using System.IO.Abstractions;
 using System.Reflection;
 using MEditService.Codec.Schema;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog.IO;
 using Noggog.WorkEngine;
@@ -49,7 +50,7 @@ public interface IGameCodec
     /// <summary>A copy of <paramref name="record"/> without the encoding a rewrite may change: group-header
     /// fields, block order, Mutagen's default location target, and a string's language where not
     /// <paramref name="localized"/> (ADR-0006).</summary>
-    IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record, bool localized);
+    IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record, bool localized, GameRelease release);
 
     /// <summary>A mod holding <paramref name="plugin"/>'s header and no record, which the whole-mod
     /// door writes as the header document alone.</summary>
