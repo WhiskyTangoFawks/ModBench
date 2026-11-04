@@ -58,8 +58,10 @@ export interface LoadOrderSnapshotValue<F = StampedFile> {
   readonly plugins: SnapshotPlugin<F>[];
   readonly active: PluginAddress[];
   readonly loadedWithNoLine: PluginAddress[];
-  /** In the order the game loads them, each at the path that wins. */
-  readonly archives: F[];
+  /** The archives the INIs list, in their order, each at the path that wins. */
+  readonly listedArchives: F[];
+  /** The archives each active plugin loads with it, each at the path that wins. The game loads them after `listedArchives`, in the order it loads the plugins in. */
+  readonly archivesByPlugin: (PluginAddress & { readonly archives: F[] })[];
   /** The loose strings files the game reads, each at the path that wins. */
   readonly stringsFiles: F[];
   /** Each enabled mod that has a mod folder, then Overwrite: where the plugin create gesture offers to put a plugin. */
@@ -211,15 +213,20 @@ function winningFiles(
 // replaces an earlier one's, and loose files replace every archive's.
 function archivesAndStringsOf(
   { gameRelease, listed, inData, files }: ArchiveSources, dataFolder: string, active: readonly PluginAddress[],
-): Pick<LoadOrderSnapshotValue<string>, 'archives' | 'stringsFiles'> {
+): Pick<LoadOrderSnapshotValue<string>, 'listedArchives' | 'archivesByPlugin' | 'stringsFiles'> {
   const rule = pluginCompanionRule(gameRelease);
-  if (rule === undefined || inData.kind !== 'listed') return { archives: [], stringsFiles: [] };
+  if (rule === undefined || inData.kind !== 'listed') return { listedArchives: [], archivesByPlugin: [], stringsFiles: [] };
   const archives = winningFiles(dataFolder, inData.archives, files, rule.isArchive);
-  const pluginArchives = active.flatMap(({ name }) =>
-    [...archives.values()].filter((archive) => rule.isArchiveOf(name, archive.relativePath)).sort(byFoldedPath));
-  const loaded = [...listed.flatMap((name) => archives.get(foldPath(name)) ?? []), ...pluginArchives].map(({ path }) => path);
+  const listedArchives = listed.flatMap((name) => archives.get(foldPath(name)) ?? []).map(({ path }) => path);
+  const archivesByPlugin = active.map(({ name, origin }) => ({
+    name, origin,
+    archives: [...archives.values()].filter((archive) => rule.isArchiveOf(name, archive.relativePath)).sort(byFoldedPath).map(({ path }) => path),
+  }));
   const strings = winningFiles(dataFolder, inData.stringsFiles, files, rule.isStringsFile);
-  return { archives: [...new Set(loaded)], stringsFiles: [...strings.values()].map(({ path }) => path) };
+  return {
+    listedArchives, archivesByPlugin,
+    stringsFiles: [...strings.values()].map(({ path }) => path),
+  };
 }
 
 function stringsBeside(
@@ -324,12 +331,13 @@ export async function stampedSnapshot(
     reads.set(path, read);
     return read;
   }));
-  const [plugins, archives, stringsFiles] = await Promise.all([
+  const [plugins, listedArchives, archivesByPlugin, stringsFiles] = await Promise.all([
     Promise.all(value.plugins.map(async (plugin) => ({ ...plugin, archives: await stamped(plugin.archives), stringsFiles: await stamped(plugin.stringsFiles) }))),
-    stamped(value.archives),
+    stamped(value.listedArchives),
+    Promise.all(value.archivesByPlugin.map(async (plugin) => ({ ...plugin, archives: await stamped(plugin.archives) }))),
     stamped(value.stringsFiles),
   ]);
-  return { ...value, plugins, archives, stringsFiles };
+  return { ...value, plugins, listedArchives, archivesByPlugin, stringsFiles };
 }
 
 const listed = (names: readonly string[]): string =>
