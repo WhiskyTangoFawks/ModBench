@@ -431,7 +431,8 @@ describe('the snapshot the sync PUTs, read straight from the value rather than a
         archives: ['/a/A - Main.ba2'], stringsFiles: ['/a/A_en.STRINGS'],
       }],
       active: [], loadedWithNoLine: [],
-      archives: ['/g/Interface.ba2', '/a/A - Main.ba2'], stringsFiles: ['/t/A_en.STRINGS'],
+      archives: ['/g/Interface.ba2', '/a/A - Main.ba2'], listedArchives: ['/g/Interface.ba2'],
+      archivesByPlugin: [{ name: 'A.esp', origin: 'ModA', archives: ['/a/A - Main.ba2'] }], stringsFiles: ['/t/A_en.STRINGS'],
     };
 
     const stamped = await stampedSnapshot(value, stampOf);
@@ -444,6 +445,8 @@ describe('the snapshot the sync PUTs, read straight from the value rather than a
         stringsFiles: [{ path: '/a/A_en.STRINGS', stamp: 'EACCES /a/A_en.STRINGS' }],
       }],
       archives: [{ path: '/g/Interface.ba2', stamp: '16/1/2' }, { path: '/a/A - Main.ba2', stamp: '15/1/2' }],
+      listedArchives: [{ path: '/g/Interface.ba2', stamp: '16/1/2' }],
+      archivesByPlugin: [{ name: 'A.esp', origin: 'ModA', archives: [{ path: '/a/A - Main.ba2', stamp: '15/1/2' }] }],
       stringsFiles: [{ path: '/t/A_en.STRINGS', stamp: 'EACCES /t/A_en.STRINGS' }],
     });
     expect(asked.sort()).toEqual(['/a/A - Main.ba2', '/a/A_en.STRINGS', '/g/Interface.ba2', '/t/A_en.STRINGS']);

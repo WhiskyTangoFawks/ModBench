@@ -5,9 +5,16 @@ import type { LoadOrderOutcome, LoadOrderSnapshot, MEditClient, PluginAddress } 
 
 /** What the loader read of the instance for put load order to send. */
 export type LoadOrderSource =
-  | (Pick<LoadOrderSnapshot, 'plugins' | 'active' | 'loadedWithNoLine' | 'archives' | 'stringsFiles' | 'places' | 'gameRelease'> & { readonly dataFolder: string })
+  | (Pick<LoadOrderSnapshot, 'plugins' | 'active' | 'loadedWithNoLine' | 'stringsFiles' | 'places' | 'gameRelease'> & ArchivesByPlugin & { readonly dataFolder: string })
   | { readonly refusal: string }
   | undefined;
+
+/** The archives the INIs list, then each plugin's with it: where the loader read them, before the order the game loads
+ *  the plugins in is known. */
+interface ArchivesByPlugin {
+  readonly listedArchives: LoadOrderSnapshot['archives'];
+  readonly archivesByPlugin: readonly (PluginAddress & { readonly archives: LoadOrderSnapshot['archives'] })[];
+}
 
 /** The order the game loads the snapshot's active plugins in, which the loader cannot know: it takes
  *  a blueprint plugin's place from the header facts Editing supplies (ADR-0013). */
@@ -26,8 +33,9 @@ export async function putLoadOrder(
   if (!source) return { sent: false };
   if ('refusal' in source) return { sent: false, refusal: source.refusal };
   if (stringsLanguage === undefined) throw new Error('The strings language has no value: package.json declares its default.');
-  const { plugins, loadedWithNoLine, archives, stringsFiles, places, gameRelease, dataFolder } = source;
+  const { plugins, loadedWithNoLine, stringsFiles, places, gameRelease, dataFolder } = source;
   const active = inGameOrder(source);
+  const archives = archivesOfPlugins(source, active);
   const snapshot: LoadOrderSnapshot = {
     plugins, active, loadedWithNoLine, archives, stringsFiles, places, dataFolder, instanceRoot, gameRelease, stringsLanguage,
   };
@@ -40,3 +48,8 @@ export type RefreshResult =
   | { applied: true }
   | { applied: false; heldElsewhere: true }
   | { applied: false; heldElsewhere: false; refusal: string };
+
+const archivesOfPlugins = ({ listedArchives, archivesByPlugin }: ArchivesByPlugin, active: readonly PluginAddress[]): LoadOrderSnapshot['archives'] => {
+  const inOrder = [...listedArchives, ...active.flatMap((plugin) => archivesByPlugin.find((own) => own.name === plugin.name && own.origin === plugin.origin)?.archives ?? [])];
+  return inOrder.filter(({ path }, index) => inOrder.findIndex((first) => first.path === path) === index);
+};

@@ -19,7 +19,8 @@ const SENT_STRINGS_FILES = [{ path: '/instance/mods/TestMod/Strings/TestMod_en.S
 const SENT_PLACES = [{ name: 'TestMod', folder: '/instance/mods/TestMod' }];
 
 const SOURCE: LoadOrderSource = {
-  plugins: SENT_PLUGINS, active: SENT_ACTIVE, loadedWithNoLine: SENT_LOADED_WITH_NO_LINE, archives: SENT_ARCHIVES, stringsFiles: SENT_STRINGS_FILES,
+  plugins: SENT_PLUGINS, active: SENT_ACTIVE, loadedWithNoLine: SENT_LOADED_WITH_NO_LINE, stringsFiles: SENT_STRINGS_FILES,
+  listedArchives: [], archivesByPlugin: [{ name: 'Master.esm', origin: 'Base Mod', archives: SENT_ARCHIVES }],
   places: SENT_PLACES, dataFolder: '/game/Data', gameRelease: 'Fallout4',
 };
 
@@ -95,5 +96,44 @@ describe('put load order in the order the game loads', () => {
 
     expect(client.puts().map(({ active, loadedWithNoLine }) => ({ active, loadedWithNoLine })))
       .toEqual([{ active: [...SENT_ACTIVE].reverse(), loadedWithNoLine: SENT_LOADED_WITH_NO_LINE }]);
+  });
+});
+
+describe('put load order, the archives follow the plugins', () => {
+  const stamped = (path: string) => ({ path, stamp: '1/2/3' });
+  const address = (name: string) => ({ name, origin: 'Base Mod' });
+  const STARFIELD: LoadOrderSource = {
+    ...SOURCE,
+    active: ['Starfield.esm', 'Blueprint.esm', 'A.esp'].map(address),
+    loadedWithNoLine: ['Starfield.esm', 'Blueprint.esm'].map(address),
+    listedArchives: [stamped('/g/Interface.ba2')],
+    archivesByPlugin: [
+      { ...address('Starfield.esm'), archives: [stamped('/g/Starfield - Main.ba2')] },
+      { ...address('Blueprint.esm'), archives: [stamped('/g/Blueprint - Main.ba2')] },
+      { ...address('A.esp'), archives: [stamped('/a/A - Main.ba2')] },
+    ],
+  };
+  const blueprintLast: InGameOrder = ({ active }) => [...active.filter(({ name }) => name !== 'Blueprint.esm'), ...active.filter(({ name }) => name === 'Blueprint.esm')];
+  const archivesSent = async (order: InGameOrder): Promise<string[]> => {
+    const client = attachedClient();
+    await putLoadOrder(client, '/instance', STARFIELD, 'English', order);
+    return client.puts().flatMap((put) => put.archives.map(({ path }) => path));
+  };
+
+  it('sends the INIs\' archives, then each plugin\'s with it, in the order the game loads the plugins', async () => {
+    expect(await archivesSent(blueprintLast)).toEqual(['/g/Interface.ba2', '/g/Starfield - Main.ba2', '/a/A - Main.ba2', '/g/Blueprint - Main.ba2']);
+  });
+
+  it('sends the order plugins.txt gives for a release that loads no blueprint plugin last', async () => {
+    expect(await archivesSent(AS_LOADED)).toEqual(['/g/Interface.ba2', '/g/Starfield - Main.ba2', '/g/Blueprint - Main.ba2', '/a/A - Main.ba2']);
+  });
+
+  it('sends an archive once, at its first place', async () => {
+    const client = attachedClient();
+    const twice = { ...STARFIELD, listedArchives: [stamped('/a/A - Main.ba2')] };
+
+    await putLoadOrder(client, '/instance', twice, 'English', AS_LOADED);
+
+    expect(client.puts().flatMap((put) => put.archives.map(({ path }) => path))).toEqual(['/a/A - Main.ba2', '/g/Starfield - Main.ba2', '/g/Blueprint - Main.ba2']);
   });
 });
