@@ -14,6 +14,13 @@ internal sealed class CountingTreeSource(ISourceAdapter inner) : DelegatingSourc
 
     public int GitStatusAsked => Volatile.Read(ref _asked);
 
+    private Action? _beforeNextGitStatus;
+
+    public Action? BeforeNextGitStatus
+    {
+        set => Volatile.Write(ref _beforeNextGitStatus, value);
+    }
+
     public override ISourceRepositoryReads? TreeOf(RegisteredPlugin plugin, GameRelease release) =>
         base.TreeOf(plugin, release) is { } reads ? new Counted(reads, this) : null;
 
@@ -31,6 +38,7 @@ internal sealed class CountingTreeSource(ISourceAdapter inner) : DelegatingSourc
         public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommit(PluginAddress plugin)
         {
             Interlocked.Increment(ref owner._asked);
+            Interlocked.Exchange(ref owner._beforeNextGitStatus, null)?.Invoke();
             return reads.ChangedSinceLastCommit(plugin);
         }
 

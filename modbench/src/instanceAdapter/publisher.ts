@@ -16,8 +16,8 @@ export type ManagerAdapter = Omit<InstanceAdapter, 'reading' | 'publisherTags' |
 export interface ConfigurationFile {
   readonly name: string;
   readonly spelling: PathSpelling;
-  /** What the file holds of this machine alone, blanked when git holds the file. */
-  readonly blanked?: TokenProgram;
+  /** What the file holds of this machine alone, blanked when git holds the file, and put back from the text this machine holds. */
+  readonly blanked?: (thisMachine: string) => TokenProgram;
 }
 
 interface KeptFiles {

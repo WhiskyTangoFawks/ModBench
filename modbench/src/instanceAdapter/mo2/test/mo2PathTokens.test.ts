@@ -7,7 +7,7 @@ import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 import { NO_DETECTORS } from '../../../test/noDetectors';
 import type { GameDetectors } from '../../gameFolder/gameFolderResolver';
 import type { ConfigurationFile } from '../../publisher';
-import { sedSubstitution } from '../../pathTokens';
+import { sedReplacement, sedSubstitution } from '../../pathTokens';
 import { managerOver } from '../../../test/mo2/adapterOver';
 
 vi.mock('vscode', () => fakeVscodeModule());
@@ -34,7 +34,13 @@ async function gameFolder(): Promise<string> {
 const PUBLISHER: ConfigurationFile = {
   name: 'publisher.json',
   spelling: { separators: [{ first: '\\\\', rest: '\\\\' }], ends: '"', nativeStarts: ['"'] },
-  blanked: { clean: [sedSubstitution('"Output":"[^"]*"', '"Output":""')], smudge: [] },
+  blanked: (thisMachine) => {
+    const output = /"Output":("[^"]*")/.exec(thisMachine)?.[1];
+    return {
+      clean: [sedSubstitution('"Output":"[^"]*"', '"Output":""')],
+      smudge: output === undefined ? [] : [sedSubstitution('"Output":""', `"Output":${sedReplacement(output)}`)],
+    };
+  },
 };
 const PUBLISHER_FILE = PUBLISHER.name;
 
@@ -145,6 +151,53 @@ describe('the MO2 adapter\'s path tokens', () => {
     git(root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '-m', 'paths');
 
     expect([git(root, 'show', '--textconv', 'HEAD:ModOrganizer.ini'), git(root, 'status', '--porcelain', '--', 'ModOrganizer.ini')]).toEqual([written, '']);
+  });
+
+  describe('a value the filter blanks or drops', () => {
+    const commit = (root: string, file: string): void => {
+      git(root, 'add', '--', file);
+      git(root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '-m', 'machine');
+    };
+    const RECENT = ['[recentDirectories]', '1\\name=Mod', '1\\directory=D:/Elsewhere'];
+
+    it.each([
+      ['a blanked value', PUBLISHER_FILE, (edit: string) => `{\n"Source":"${edit}",\n"Output":"C:\\\\out\\\\list.out"\n}`],
+      ['a dropped section before another', 'ModOrganizer.ini', (edit: string) => SETTINGS([...RECENT, '[Settings]', `style=${edit}`])],
+      ['a dropped section at the end', 'ModOrganizer.ini', (edit: string) => SETTINGS(['[Settings]', `style=${edit}`, ...RECENT])],
+    ])('shows git diff only a change beside %s', async (_what, file, text) => {
+      const { root, adapter } = await instanceRepository([]);
+      await put(root, file, text('before'));
+      await adapter.writePathTokens();
+      commit(root, file);
+      await put(root, file, text('after'));
+
+      const changed = git(root, 'diff', '-U0').split('\n').filter((line) => /^[-+][^-+]/.test(line));
+      expect(changed.map((line) => line.slice(0, 1) + (line.includes('before') ? 'before' : line.includes('after') ? 'after' : line))).toEqual(['-before', '+after']);
+    });
+
+    it.each([
+      ['a blanked value', PUBLISHER_FILE, () => JSON.stringify({ Source: '{x}', Output: 'C:\\out\\list.out' })],
+      ['a dropped section', 'ModOrganizer.ini', () => SETTINGS([...RECENT, '[Settings]', 'style=dark'])],
+    ])('puts %s back on checkout as this machine\'s own', async (_what, file, text) => {
+      const { root, adapter } = await instanceRepository([]);
+      await put(root, file, text());
+      await adapter.writePathTokens();
+      commit(root, file);
+      await rm(join(root, file));
+
+      git(root, 'checkout', '--', file);
+
+      expect(await readFile(join(root, file), 'utf8')).toBe(text());
+    });
+
+    it('puts a dropped section back once into a file that holds it and a token', async () => {
+      const { root, adapter } = await instanceRepository([]);
+      await put(root, 'ModOrganizer.ini', SETTINGS([...RECENT, '[Settings]', 'path={instance folder:/}/x']));
+
+      await adapter.writePathTokens();
+
+      expect(await readFile(join(root, 'ModOrganizer.ini'), 'utf8')).toBe(SETTINGS([...RECENT, '[Settings]', `path=${onWineDrive(root, '/')}/x`]));
+    });
   });
 
   it('takes a file committed before the game folder was found as changed once the game folder is found', async () => {

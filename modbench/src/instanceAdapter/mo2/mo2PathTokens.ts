@@ -11,7 +11,7 @@ import type { GameFolder, InstanceAdapter } from '../instanceAdapter';
 import {
   folderTokens, holdsPathToken, sedLiteral, sedReplacement, sedSubstitution, tokenFilter, type FolderName, type TokenFilter, type PathSpelling, type TokenFolders, type TokenProgram,
 } from '../pathTokens';
-import { readDownloadDirectory } from './codecs/modOrganizerIni';
+import { SETTINGS_FILE_NAME, readDownloadDirectory } from './codecs/modOrganizerIni';
 import { defaultDownloadsDir, MOD_META_FILES_PATTERN, PROFILE_INIS_PATTERN, SETTINGS_FILE_PATTERN, settingsFile } from './layout';
 import type { ConfigurationFile } from '../publisher';
 import type { Mo2Context } from './mo2Context';
@@ -38,20 +38,42 @@ interface CoveredFile {
   readonly driver: string;
   readonly spelling: PathSpelling;
   readonly holdsAccounts: boolean;
-  readonly blanked?: TokenProgram;
+  /** From the instance root, the file this machine's values are read from. */
+  readonly file?: string;
+  readonly blanked?: ConfigurationFile['blanked'];
 }
 
 // The mod manager's configuration holds the accounts, so its filter is a driver of its own.
 const coveredFiles = (publisherFile: ConfigurationFile | undefined): CoveredFile[] => [
-  { patterns: [SETTINGS_FILE_PATTERN], driver: 'modbench-settings-tokens', spelling: SPELLING, holdsAccounts: true, blanked: RECENT_DIRECTORIES_DROPPED },
+  { patterns: [SETTINGS_FILE_PATTERN], driver: 'modbench-settings-tokens', spelling: SPELLING, holdsAccounts: true, file: SETTINGS_FILE_NAME, blanked: recentDirectoriesDropped },
   { patterns: [PROFILE_INIS_PATTERN, MOD_META_FILES_PATTERN], driver: 'modbench-tokens', spelling: SPELLING, holdsAccounts: false },
   ...(publisherFile === undefined ? [] : [
-    { patterns: [`/${publisherFile.name}`], driver: 'modbench-publisher-tokens', spelling: publisherFile.spelling, holdsAccounts: false, blanked: publisherFile.blanked },
+    { patterns: [`/${publisherFile.name}`], driver: 'modbench-publisher-tokens', spelling: publisherFile.spelling, holdsAccounts: false, file: publisherFile.name, blanked: publisherFile.blanked },
   ]),
 ];
 
+const RECENT_DIRECTORIES = '[recentDirectories]';
+
+// A sed `i` or `a` text: each line but the last ends in a backslash.
+const sedText = (lines: readonly string[]): string => lines.map((line) => line.replaceAll('\\', '\\\\')).join('\\\n');
+
+// The insertion runs once, unless the file already holds the section, which its first line is noted in the hold space.
+const insertedOnce = (address: string, command: 'i' | 'a', section: readonly string[]): string =>
+  `${address}{\nx\n/./!{\nx\n${command}\\\n${sedText(section)}\nx\n}\nx\n}`;
+
 // MO2 fills this section with whatever folder a file dialog last browsed. The range runs to the next section's header.
-const RECENT_DIRECTORIES_DROPPED: TokenProgram = { clean: [String.raw`/^\[recentDirectories\]/,/^\[/{/^\[recentDirectories\]/d;/^\[/!d}`], smudge: [] };
+// A checkout puts this machine's own back, before the section that follows it here.
+function recentDirectoriesDropped(thisMachine: string): TokenProgram {
+  const clean = [String.raw`/^\[recentDirectories\]/,/^\[/{/^\[recentDirectories\]/d;/^\[/!d}`];
+  const lines = thisMachine.split('\n');
+  const start = lines.findIndex((line) => line.startsWith(RECENT_DIRECTORIES));
+  if (start === -1) return { clean, smudge: [] };
+  const length = lines.slice(start + 1).findIndex((line) => line.startsWith('['));
+  const section = lines.slice(start, length === -1 ? undefined : start + 1 + length);
+  const next = length === -1 ? undefined : lines[start + 1 + length]?.replace(/\r$/, '');
+  const noted = String.raw`/^\[recentDirectories\]/h`;
+  return { clean, smudge: [noted, next === undefined ? insertedOnce('$', 'a', section) : insertedOnce(`/^${sedLiteral(next)}/`, 'i', section)] };
+}
 
 // A clone holds no account, so its value is empty.
 function accountTokens(settings: string): TokenProgram {
@@ -159,18 +181,21 @@ const programDirectory = async (instanceRoot: string): Promise<string> =>
 type FilterFolders = Omit<TokenFolders, 'instance'>;
 const NO_FOLDERS: FilterFolders = { game: undefined, downloads: undefined, committedOutsideInstance: [] };
 
-function filterOf(instanceRoot: string, covered: readonly CoveredFile[], directory: string, { game, downloads, committedOutsideInstance }: FilterFolders, accounts: TokenProgram): TokenFilter {
+type Machine = ReadonlyMap<string, string>;
+const NOTHING_OF_MACHINE: Machine = new Map();
+
+function filterOf(instanceRoot: string, covered: readonly CoveredFile[], directory: string, { game, downloads, committedOutsideInstance }: FilterFolders, accounts: TokenProgram, machine: Machine): TokenFilter {
   const filters = covered.map(({ driver, spelling, holdsAccounts, blanked }) => {
     const folders = folderTokens({ instance: instanceRoot, game, downloads, committedOutsideInstance }, process.platform, spelling);
-    return tokenFilter(driver, directory, folders, ...(holdsAccounts ? [accounts] : []), ...(blanked === undefined ? [] : [blanked]));
+    return tokenFilter(driver, directory, folders, ...(holdsAccounts ? [accounts] : []), ...(blanked === undefined ? [] : [blanked(machine.get(driver) ?? '')]));
   });
   const merged = (of: (filter: TokenFilter) => Readonly<Record<string, string>>): Record<string, string> =>
     Object.fromEntries(filters.flatMap((filter) => Object.entries(of(filter))));
   return { config: merged(({ config }) => config), programFiles: merged(({ programFiles }) => programFiles) };
 }
 
-async function programsPut(instanceRoot: string, covered: readonly CoveredFile[], directory: string, folders: FilterFolders, accounts: TokenProgram): Promise<void> {
-  const { programFiles } = filterOf(instanceRoot, covered, directory, folders, accounts);
+async function programsPut(instanceRoot: string, covered: readonly CoveredFile[], directory: string, folders: FilterFolders, accounts: TokenProgram, machine: Machine): Promise<void> {
+  const { programFiles } = filterOf(instanceRoot, covered, directory, folders, accounts, machine);
   await mkdir(directory, { recursive: true });
   for (const [file, text] of Object.entries(programFiles)) await write(file, text);
 }
@@ -178,7 +203,7 @@ async function programsPut(instanceRoot: string, covered: readonly CoveredFile[]
 // A filter's config names its program files and no folder, so one write serves every pass. Each key written costs a
 // git process, so a key the repository already holds is left as it is.
 async function configPut(instanceRoot: string, covered: readonly CoveredFile[], directory: string, held: ReadonlyMap<string, string>): Promise<void> {
-  const { config } = filterOf(instanceRoot, covered, directory, NO_FOLDERS, accountTokens(''));
+  const { config } = filterOf(instanceRoot, covered, directory, NO_FOLDERS, accountTokens(''), NOTHING_OF_MACHINE);
   for (const [key, value] of Object.entries(config)) if (held.get(key) !== value) await git(instanceRoot, 'config', key, value);
 }
 
@@ -199,7 +224,7 @@ interface FilterHeld {
 }
 
 async function filterHeld(instanceRoot: string, covered: readonly CoveredFile[], directory: string): Promise<FilterHeld> {
-  const { config, programFiles } = filterOf(instanceRoot, covered, directory, NO_FOLDERS, accountTokens(''));
+  const { config, programFiles } = filterOf(instanceRoot, covered, directory, NO_FOLDERS, accountTokens(''), NOTHING_OF_MACHINE);
   const held = await localFilterConfig(instanceRoot);
   const files = await Promise.all(Object.keys(programFiles).map(async (file) => ({ file, text: await readOrAbsent<string | undefined>(() => get(file), undefined) })));
   const folderHeld = await exists(directory);
@@ -222,7 +247,7 @@ async function filterHeld(instanceRoot: string, covered: readonly CoveredFile[],
 export async function pathTokensWritten(instanceRoot: string, publisherFile: ConfigurationFile | undefined): Promise<boolean> {
   const covered = coveredFiles(publisherFile);
   if ((await filesNotWritten(instanceRoot, covered)).length > 0) return false;
-  const { programFiles } = filterOf(instanceRoot, covered, await programDirectory(instanceRoot), NO_FOLDERS, accountTokens(''));
+  const { programFiles } = filterOf(instanceRoot, covered, await programDirectory(instanceRoot), NO_FOLDERS, accountTokens(''), NOTHING_OF_MACHINE);
   return (await Promise.all(Object.keys(programFiles).map(exists))).every(Boolean);
 }
 
@@ -249,6 +274,12 @@ async function committedOutsideInstanceIn(instanceRoot: string, covered: readonl
   return (['game folder', 'downloads folder'] as const).filter((name) => held.includes(`{${name}`));
 }
 
+// What each file holds before the filter's passes rewrite it.
+async function machineOf(instanceRoot: string, covered: readonly CoveredFile[]): Promise<Machine> {
+  const texts = await Promise.all(covered.flatMap(({ driver, file }) => (file === undefined ? [] : [get(join(instanceRoot, file), '').then((text): [string, string] => [driver, text])])));
+  return new Map(texts);
+}
+
 const foundRoot = (folder: GameFolder): string | undefined => (folder.kind === 'found' ? folder.root : undefined);
 
 export function mo2PathTokens(context: Mo2Context, gameFolder: () => Promise<GameFolder>, publisherFile: ConfigurationFile | undefined): Mo2PathTokens {
@@ -257,15 +288,16 @@ export function mo2PathTokens(context: Mo2Context, gameFolder: () => Promise<Gam
   const written = async (takeBack: Undo[]): Promise<string | undefined> => {
     takeBack.push(await attributesWritten(instanceRoot, covered));
     const files = (await filesGitHolds(instanceRoot, covered)).flatMap(({ file, covered: isCovered }) => (isCovered ? [file] : []));
+    const machine = await machineOf(instanceRoot, covered);
     const accounts = accountTokens(await get(settingsFile(instanceRoot), ''));
     const directory = await programDirectory(instanceRoot);
     const held = await filterHeld(instanceRoot, covered, directory);
     takeBack.push(held.restore);
-    await programsPut(instanceRoot, covered, directory, NO_FOLDERS, accounts);
+    await programsPut(instanceRoot, covered, directory, NO_FOLDERS, accounts, machine);
     await configPut(instanceRoot, covered, directory, held.config);
     await withScratch((scratch) => smudged(scratch, instanceRoot, files));
     const game = await gameFolder();
-    await programsPut(instanceRoot, covered, directory, { game: foundRoot(game), downloads: await downloadsFolder(context), committedOutsideInstance: await committedOutsideInstanceIn(instanceRoot, covered) }, accounts);
+    await programsPut(instanceRoot, covered, directory, { game: foundRoot(game), downloads: await downloadsFolder(context), committedOutsideInstance: await committedOutsideInstanceIn(instanceRoot, covered) }, accounts, machine);
     const holding = await withScratch((scratch) => smudged(scratch, instanceRoot, files));
     await statsForgotten(instanceRoot, files);
     if (holding.length === 0) return undefined;
