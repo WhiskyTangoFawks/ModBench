@@ -16,7 +16,7 @@ export interface ModName {
 
 /** A mod, a separator or Overwrite, as list_mods names it. */
 export const CONTAINER_NAME = z
-  .object({ name: z.string().optional(), kind: z.enum(['mod', 'separator', 'runtimeOutput']).optional() })
+  .strictObject({ name: z.string().optional(), kind: z.enum(['mod', 'separator', 'runtimeOutput']).optional() })
   .refine(({ name, kind }) => name !== undefined || kind === 'runtimeOutput', { message: 'A mod or separator needs a name.', path: ['name'] })
   .transform(({ name, kind }): ContainerName => ({ name: name ?? OVERWRITE_LABEL, ...(kind === undefined ? {} : { kind }) }));
 
