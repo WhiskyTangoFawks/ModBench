@@ -178,6 +178,9 @@ export function serveAgent(options: AgentServerOptions): AgentServer {
       response.end();
     });
   });
+  // The extension host's loop can be held past the keep-alive window, and the expired timer then
+  // resets a connection with a request already sent on it.
+  http.keepAliveTimeout = 0;
   const listening = new Promise<AddressInfo | undefined>((done) => {
     http.once('error', (error) => {
       reporter.report('error', `Modbench cannot take port ${port} for your agent. Set ${AGENT_PORT_SETTING} to a free port.`, errorMessage(error));
