@@ -25,7 +25,6 @@ internal static class HeaderIndexer
         row.AppendNullValue();    // parse_diagnosis: the header is written from what already parsed
         row.AppendValue(new List<string>());
         row.AppendValue(RecordMasters.PluginNamedBy(header.FormKey));
-        row.AppendNullValue();    // compared_hash: no other plugin holds a copy of a plugin's header
         row.EndRow();
     }
 }

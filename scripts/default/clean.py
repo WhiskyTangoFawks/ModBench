@@ -107,9 +107,12 @@ def _undelete_and_disable(plugin: medit.Plugin) -> list[str]:
 
 def _identical_to_master(plugin: medit.Plugin) -> set[str]:
     rows = medit.select(
-        'SELECT c.form_key FROM records c JOIN records m ON m.form_key = c.form_key AND m.is_active '
-        'AND lower(m.plugin) = lower(c.form_key_plugin) AND m.compared_hash = c.compared_hash '
-        f'WHERE {_in_plugin(plugin, "c")} AND lower(c.form_key_plugin) <> lower(c.plugin)')
+        'WITH copies AS MATERIALIZED (SELECT form_key, form_key_plugin, record_type, body, parse_diagnosis FROM records '
+        f'WHERE {_in_plugin(plugin)} AND lower(form_key_plugin) <> lower(plugin)), '
+        'masters AS MATERIALIZED (SELECT m.form_key, m.record_type, m.body, m.parse_diagnosis FROM records m JOIN copies c '
+        'ON m.form_key = c.form_key AND lower(m.plugin) = lower(c.form_key_plugin) WHERE m.is_active) '
+        'SELECT c.form_key FROM copies c JOIN masters m ON m.form_key = c.form_key '
+        'WHERE compared_hash(c.record_type, c.body, c.parse_diagnosis) = compared_hash(m.record_type, m.body, m.parse_diagnosis)')
     return {row['form_key'] for row in rows}
 
 
