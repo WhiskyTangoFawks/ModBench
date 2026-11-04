@@ -77,6 +77,10 @@ public class CheckErrorBuilderTests
     [InlineData("a translated string of a plugin missing no strings file")]
     [InlineData("a link to a record of its type")]
     [InlineData("a null link that may be null")]
+    [InlineData("a null link that may not be null")]
+    [InlineData("a null link in a list of structs")]
+    [InlineData("a link a stored document omits in a list of structs")]
+    [InlineData("a null link two structs down")]
     [InlineData("a field that is no link")]
     public void ACleanField_ReportsNothing(string name) =>
         Assert.Null(Built(name));

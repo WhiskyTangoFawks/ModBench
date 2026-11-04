@@ -1,6 +1,7 @@
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
+using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -39,14 +40,16 @@ public sealed class CompilePluginTests : IDisposable
     [Fact]
     public async Task Compile_NamesADiagnosticsOwnDocument_RelativeToTheModFolder()
     {
+        _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.Race.FormKey = FormKey.Factory("000FFF:Compile.esp"));
+
         var answer = (await _mod.CompileHandler.CompileAsync([_mod.Plugin])).Value();
 
         Assert.Empty(answer.Refused);
         var diagnostics = Assert.Single(answer.Applied).Diagnostics;
-        var diagnostic = diagnostics.First(d => d.FormKey == _mod.Race.ToString());
-        var race = _mod.Document(_mod.Race.ToString()).Require();
+        var diagnostic = Assert.Single(diagnostics, d => d.FormKey == _mod.Npc.ToString());
+        var npc = _mod.Document(_mod.Npc.ToString()).Require();
         Assert.Equal(
-            TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, new RecordIdentity(race.FormKey, race.RecordType, race.EditorId)),
+            TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, new RecordIdentity(npc.FormKey, npc.RecordType, npc.EditorId)),
             Path.Combine(_mod.ModFolder, diagnostic.SourceRelativePath));
     }
 
