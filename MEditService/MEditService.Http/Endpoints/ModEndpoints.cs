@@ -181,7 +181,7 @@ internal sealed record ModToVersionInGitRequest(string Name, string ModFolder, S
 /// <summary><see cref="SourceFolderContents"/> on the wire: each file's text, and each manifest by name.</summary>
 internal sealed record SourceFolderRequest(
     string Path, SourceModIn? In, IReadOnlyList<string>? Assets, string BuildFile, string? ManifestFile = null, string? Manifest = null,
-    IReadOnlyList<string>? Ignored = null, string? ModFolderManifestFile = null, string? ModFolderManifest = null)
+    IReadOnlyList<string>? Ignored = null, string? ModFolderManifestFile = null, string? ModFolderManifest = null, bool? ModFolderManifestInInit = null)
 {
     internal const string NotWhole =
         "A source folder to make needs its path, in: NewRepository or InstanceRepository, forward-slash paths in the mod folder for its assets, and its build file.";
@@ -209,7 +209,7 @@ internal sealed record SourceFolderRequest(
 
     internal SourceFolderContents ToSourceFolderContents() =>
         new(Path, In ?? throw new InvalidOperationException(NotWhole), Assets ?? [], Utf8(BuildFile), RootFileOf(ManifestFile, Manifest), Ignored,
-            RootFileOf(ModFolderManifestFile, ModFolderManifest));
+            RootFileOf(ModFolderManifestFile, ModFolderManifest), ModFolderManifestInInit == true);
 
     private static RootFile? RootFileOf(string? name, string? text) => name is not null && text is not null ? new RootFile(name, Utf8(text)) : null;
 

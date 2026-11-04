@@ -90,7 +90,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         var sourceFolder = Path.Combine(_root, "source", NewModName);
         var linked = new RootFile($"{NewModName}.manifest.json", "the link"u8.ToArray());
 
-        var result = await Repair(new PluginToRepair(plugin, MadeIn(sourceFolder, SourceModIn.InstanceRepository) with { ModFolderManifest = linked }));
+        var result = await Repair(new PluginToRepair(plugin, MadeIn(sourceFolder, SourceModIn.InstanceRepository) with { ModFolderManifest = linked, ModFolderManifestInInit = true }));
 
         Assert.Equal([plugin], result.Applied);
         Assert.Equal([$"Repair {Malformed}", $"Init {NewModName}"], Subjects(_root, 3));

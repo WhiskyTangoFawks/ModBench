@@ -1687,6 +1687,7 @@ export interface components {
             ignored?: string[] | null;
             modFolderManifestFile?: string | null;
             modFolderManifest?: string | null;
+            modFolderManifestInInit?: boolean | null;
         };
         /** @enum {string} */
         SourceModIn: "NewRepository" | "InstanceRepository";

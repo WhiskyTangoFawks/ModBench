@@ -47,7 +47,7 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
         CommitTheModFoldersManifest();
         StageAnotherChange();
 
-        Assert.Null(InitInInstanceRepository(_sourceFolder, commit: true, (ModFolder, LinkManifest)));
+        Assert.Null(InitInInstanceRepository(_sourceFolder, commit: true, new ModFolderManifest(ModFolder, LinkManifest, InInit: true)));
 
         Assert.Contains(ModFolderManifestPath, Lines(Git("show", "--name-only", "--format=", "HEAD")));
         Assert.Equal(LinkText, Git("cat-file", "-p", $"HEAD:{ModFolderManifestPath}"));
@@ -61,11 +61,24 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
         StageAnotherChange();
         GitHooks.Write(_instance, "commit-msg", "exit 1");
 
-        Assert.NotNull(InitInInstanceRepository(_sourceFolder, commit: true, (ModFolder, LinkManifest)));
+        Assert.NotNull(InitInInstanceRepository(_sourceFolder, commit: true, new ModFolderManifest(ModFolder, LinkManifest, InInit: true)));
 
         Assert.Equal("{}", File.ReadAllText(Path.Combine(ModFolder, LinkManifest.Name)));
         Assert.Equal(["modlist.txt"], Lines(Git("diff", "--cached", "--name-only")));
         Assert.Empty(Git("status", "--porcelain", "--", ModFolderManifestPath));
+    }
+
+    [Fact]
+    public void AnInit_WritesTheManifestOfAModFolderItIsNotToHold_AndCommitsTheSourceFolderAlone()
+    {
+        using var outside = new ScratchDirectory("medit-mod-folder-out-of-reach-");
+        var before = Head();
+
+        Assert.Null(InitInInstanceRepository(_sourceFolder, commit: true, new ModFolderManifest(outside, LinkManifest, InInit: false)));
+
+        Assert.Equal(before, Head("HEAD~1"));
+        Assert.All(Lines(Git("show", "--name-only", "--format=", "HEAD")), path => Assert.StartsWith($"source/{TestMod.Name}/", path, StringComparison.Ordinal));
+        Assert.Equal(LinkText, File.ReadAllText(Path.Combine(outside, LinkManifest.Name)));
     }
 
     [Fact]
@@ -75,7 +88,7 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
         var before = Head();
 
         Assert.Null(TestAdapters.Source().Init(
-            _sourceFolder, SourceInits.BuildFile, [OneRecordOf("A.esp")], [], commit: true, modFolderManifest: (ModFolder, LinkManifest)));
+            _sourceFolder, SourceInits.BuildFile, [OneRecordOf("A.esp")], [], commit: true, modFolderManifest: new ModFolderManifest(ModFolder, LinkManifest, InInit: false)));
 
         Assert.Equal(before, Head());
         Assert.Equal($" M {ModFolderManifestPath}", Git("status", "--porcelain", "--", ModFolderManifestPath).TrimEnd());
@@ -285,7 +298,7 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
         Assert.False(TestAdapters.Source().IsSourceMod(outside));
     }
 
-    private static SourceFailure? InitInInstanceRepository(string sourceFolder, bool commit, (string Folder, RootFile Manifest)? modFolderManifest = null) =>
+    private static SourceFailure? InitInInstanceRepository(string sourceFolder, bool commit, ModFolderManifest? modFolderManifest = null) =>
         TestAdapters.Source().Init(
             sourceFolder, SourceInits.BuildFile, [OneRecordOf("A.esp")], [], commit, heldIn: SourceModIn.InstanceRepository, modFolderManifest: modFolderManifest);
 
@@ -297,7 +310,7 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
         Git("add", "modlist.txt");
     }
 
-    private string Head() => Git("rev-parse", "HEAD").Trim();
+    private string Head(string revision = "HEAD") => Git("rev-parse", revision).Trim();
 
     private static string[] Lines(string text) => text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
 

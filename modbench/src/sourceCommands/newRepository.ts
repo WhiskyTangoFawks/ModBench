@@ -19,7 +19,7 @@ import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, descri
 
 type Adapter = Pick<InstanceAdapter,
   'sourceFolder' | 'installationFile' | 'downloadedFile' | 'downloadedFilesHashed' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash' | 'nexusFileAt'
-  | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceModFolders' | 'entryKey' | 'folderValue' | 'repositoryOnDisk' | 'writeSourceModLines'>
+  | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceModFolders' | 'entryKey' | 'folderValue' | 'foldersInReach' | 'repositoryOnDisk' | 'writeSourceModLines'>
   & FolderRestoreAdapter;
 
 /** The source folder version in git makes for a mod, the repository that holds it, and the manifest that links the mod
@@ -109,6 +109,7 @@ async function sourceFolderOf(
   if (taken !== undefined) return { refusal: taken };
   const link = await linkOf(adapter, folder, sourceFolder, ignore);
   if ('refusal' in link) return link;
+  const linkInInit = heldIn === 'InstanceRepository' && (await adapter.foldersInReach([folder])).length > 0;
   const plugins = [...compiled].filter(isPluginAtRoot).sort();
   const steps: BuildStep[] = [
     ...copied.length === 0 ? [] : [{ kind: 'copy' as const, paths: copied }],
@@ -121,7 +122,7 @@ async function sourceFolderOf(
     sourceFolder: {
       path: sourceFolder, in: heldIn, assets: all.filter(({ path }) => !notAssets.has(path)).map(({ path }) => path), buildFile: buildFileText({ steps }),
       manifestFile: manifestNameOf(sourceFolder), manifest: manifestText(sourceManifest), ignored: [...sourceManifest.files.keys()],
-      modFolderManifestFile: link.name, modFolderManifest: link.text,
+      modFolderManifestFile: link.name, modFolderManifest: link.text, modFolderManifestInInit: linkInInit,
     },
   };
 }
@@ -133,8 +134,8 @@ async function linkOf(
 ): Promise<{ readonly manifest: Manifest; readonly name: string; readonly text: string } | { readonly refusal: string }> {
   try {
     const value = await adapter.folderValue(folder);
-    const leftOut = new Set(adapter.metadataFilesInModFolder.map((path) => path.toLowerCase()));
-    const files = ownFilesOf({ files: new Map([...value.files].filter(([pathInFolder]) => !leftOut.has(pathInFolder.toLowerCase()))) }, ignore);
+    const kept = new Set(notMetadata(adapter, [...value.files.keys()]));
+    const files = ownFilesOf({ files: new Map([...value.files].filter(([pathInFolder]) => kept.has(pathInFolder))) }, ignore);
     if ('why' in files) return { refusal: files.why };
     const manifest: Manifest = {
       packages: [{ kind: 'repository', name: basename(sourceFolder) }], exclude: exclusionsOfFiles(value.exclude, files.keys()), ignore, flags: new Map(), files,
@@ -161,20 +162,27 @@ const notMetadata = (adapter: Pick<Adapter, 'metadataFilesInModFolder'>, paths: 
 const replacesNothing: MoveToTrash = (path) => Promise.reject(new Error(`'${path}' is in the source folder already`));
 const downloadsNothing: RestoreDeps['nexus'] = { download: () => Promise.resolve({ found: false, reason: 'version in git downloads nothing' }) };
 
-// mEdit's Init wrote the manifest that names each landed mod's repository, so one that cannot restore its source folder is
-// reported, never undone (commands.md, Principles).
-async function foldersNotRestored(
+const NOT_IN_INIT = 'the instance repository cannot hold its manifest, which names its repository, as its folder is beyond the repository\'s reach';
+
+// mEdit's Init wrote the manifest that names each landed mod's repository, so what that manifest cannot do is reported,
+// never undone (commands.md, Principles).
+async function foldersUnfinished(
   adapter: FolderRestoreAdapter, made: ReadonlyMap<string, MadeSourceFolder>, landed: readonly string[],
 ): Promise<Map<string, string>> {
-  const notRestored = new Map<string, string>();
+  const unfinished = new Map<string, string>();
   for (const mod of landed) {
     const folder = made.get(mod);
-    const why = folder === undefined ? undefined : await sourceFolderRestoredFrom(
+    if (folder === undefined) continue;
+    const notRestored = await sourceFolderRestoredFrom(
       { adapter, nexus: downloadsNothing, trash: replacesNothing }, mod, folder.sourceFolder.path, { folder: folder.modFolder, manifest: folder.link },
     ).catch(errorMessage);
-    if (why !== undefined) notRestored.set(mod, `its manifest names its repository, and its source folder could not be restored from it: ${why}`);
+    const whys = [
+      ...folder.sourceFolder.in === 'InstanceRepository' && folder.sourceFolder.modFolderManifestInInit !== true ? [NOT_IN_INIT] : [],
+      ...notRestored === undefined ? [] : [`its manifest names its repository, and its source folder could not be restored from it: ${notRestored}`],
+    ];
+    if (whys.length > 0) unfinished.set(mod, whys.join('; '));
   }
-  return notRestored;
+  return unfinished;
 }
 
 export const NO_INSTANCE_REPOSITORY = 'The instance holds no repository to put a mod in: git init makes one.';
@@ -227,7 +235,7 @@ export async function modsPlaced<R>(
   }
   const outcome = await run(made);
   const landed = [...new Set(isRefused(outcome) ? [] : landedBy(outcome))];
-  const unfinished = await foldersNotRestored(adapter, made, landed);
+  const unfinished = await foldersUnfinished(adapter, made, landed);
   const notLeftOut = where === 'NewRepository' && landed.length > 0 ? await leftOutOrWhy(adapter) : undefined;
   if (notLeftOut !== undefined) {
     for (const mod of landed) {

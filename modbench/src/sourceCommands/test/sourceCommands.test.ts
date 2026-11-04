@@ -647,8 +647,43 @@ describe('sourceCommands versionInGit', () => {
     await sourceCommands({ client, adapter, saveUnsaved: savedAll, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], { where: 'InstanceRepository', commit: true });
 
     const linked: Manifest = { packages: [{ kind: 'repository', name: 'ModA' }], exclude: [], ignore: [], flags: new Map(), files: new Map() };
-    expect(handed[0]?.sourceFolder).toMatchObject({ modFolderManifestFile: 'ModA.manifest.json', modFolderManifest: manifestText(linked) });
+    expect(handed[0]?.sourceFolder).toMatchObject({ modFolderManifestFile: 'ModA.manifest.json', modFolderManifest: manifestText(linked), modFolderManifestInInit: true });
     expect(await manifestIn(folder)).toBeUndefined();
+  });
+
+  it.each([[true, 'committed'], [false, 'put under git']])('given commit %s, asks mEdit to write but not hold the manifest of a folder beyond the instance repository\'s reach, and names the mod as %s, saying so', async (commit, done) => {
+    const client = new InMemoryMEditClient();
+    const handed: ModToVersionInGit[] = [];
+    client.setCommandHandler('versionInGit', (mods) => { handed.push(...mods); return Promise.resolve({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] }); });
+    const adapter = modsAt({ outOfReach: new Set([FOLDER]), repositoryOnDisk: true });
+
+    const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], { where: 'InstanceRepository', commit });
+
+    expect(handed[0]?.sourceFolder).toMatchObject({ modFolderManifestFile: 'ModA.manifest.json', modFolderManifestInInit: false });
+    expect(outcome).toEqual({ landed: [{ mod: 'ModA', plugins: [] }], refused: [{
+      item: 'ModA', reason: `was ${done}, but the instance repository cannot hold its manifest, which names its repository, as its folder is beyond the repository's reach.`,
+    }] });
+  });
+
+  it('asks mEdit for no Init in the instance repository to hold the mod folder\'s manifest of a mod in a new repository', async () => {
+    const { client, handed } = committing();
+
+    await sourceCommands({ client, adapter: modsAt(), saveUnsaved: savedAll, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], { where: 'NewRepository', commit: true });
+
+    expect(handed[0]?.sourceFolder.modFolderManifestInInit).toBe(false);
+  });
+
+  it.each<[string, InstanceAnswers, string]>([
+    ['whose folder holds two files a manifest names as one', { folderFiles: new Map([[FOLDER, ['a.dds', `a.dds${EXCLUSION_MARK}`]]]), hashes: new Map([[join(FOLDER, 'a.dds'), { size: 1, hash: 'AAAAAAAAAAA=' }], [join(FOLDER, `a.dds${EXCLUSION_MARK}`), { size: 1, hash: 'AAAAAAAAAAA=' }]]) },
+      `its folder holds 'a.dds' and 'a.dds${EXCLUSION_MARK}', which a manifest names as one file`],
+    ['whose manifest the reader would refuse', { folderFiles: new Map([[FOLDER, ['a.dds']]]), hashes: new Map([[join(FOLDER, 'a.dds'), { size: 1, hash: 'not a hash' }]]) },
+      "its manifest could not name its repository: its manifest cannot be read at its file 'a.dds'"],
+  ])('refuses a mod %s, handing mEdit nothing', async (_case, answers, reason) => {
+    const { client, handed } = committing();
+
+    const outcome = await sourceCommands({ client, adapter: modsAt(answers), saveUnsaved: savedAll, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], { where: 'NewRepository', commit: true });
+
+    expect([handed, outcome]).toEqual([[], { landed: [], refused: [{ item: 'ModA', reason }] }]);
   });
 
   it('hands mEdit the mod folder\'s manifest under the name the folder holds it by, so the folder holds one manifest', async () => {

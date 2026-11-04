@@ -63,7 +63,7 @@ public interface ISourceAdapter
     SourceFailure? Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<FileToCopy> assets, bool commit, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest, IReadOnlyList<string> ignored,
-        SourceModIn heldIn, (string Folder, RootFile Manifest)? modFolderManifest);
+        SourceModIn heldIn, ModFolderManifest? modFolderManifest);
 
     /// <summary>Where <paramref name="sourceFolder"/> holds the file at its forward-slash <paramref name="path"/>.</summary>
     string FileIn(string sourceFolder, string path);

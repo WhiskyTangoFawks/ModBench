@@ -102,7 +102,7 @@ public sealed class VersionInGitHandlerTests : IDisposable
         var linked = new RootFile($"{Origin}.manifest.json", "the link"u8.ToArray());
 
         var result = await InitWith(new ModToVersionInGit(
-            Origin, _mod.Folder, new SourceFolderContents(SourceFolder, SourceModIn.InstanceRepository, [], SourceInits.BuildFile, ModFolderManifest: linked), Commit: true));
+            Origin, _mod.Folder, new SourceFolderContents(SourceFolder, SourceModIn.InstanceRepository, [], SourceInits.BuildFile, ModFolderManifest: linked, ModFolderManifestInInit: true), Commit: true));
 
         Assert.Equal([new PluginAddress(PluginName, Origin)], Assert.Single(result.Applied).Plugins);
         Assert.False(Path.Exists(Path.Combine(SourceFolder, ".git")));

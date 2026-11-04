@@ -23,9 +23,9 @@ internal abstract class SourceRepositoryGit
     internal static SourceRepositoryGit Own(string sourceFolder) => new OwnRepository(sourceFolder);
 
     /// <summary>The instance repository, the nearest one above the source folder, as git finds it. An init there commits
-    /// <paramref name="besideFolder"/> too.</summary>
-    internal static SourceRepositoryGit Above(string sourceFolder, IReadOnlyList<string>? besideFolder = null) =>
-        new RepositoryAbove(sourceFolder, WorkTreeAbove(sourceFolder) ?? sourceFolder, besideFolder ?? []);
+    /// the file <paramref name="besideFolder"/> too.</summary>
+    internal static SourceRepositoryGit Above(string sourceFolder, string? besideFolder = null) =>
+        new RepositoryAbove(sourceFolder, WorkTreeAbove(sourceFolder) ?? sourceFolder, besideFolder);
 
     /// <summary>The repository that holds the source folder: its own, else the one above it.</summary>
     internal static SourceRepositoryGit Holding(string sourceFolder) => HoldsGit(sourceFolder) ? Own(sourceFolder) : Above(sourceFolder);
@@ -62,13 +62,14 @@ internal abstract class SourceRepositoryGit
         private protected override string SourceCommit() => "HEAD";
     }
 
-    private sealed class RepositoryAbove(string sourceFolder, string workTree, IReadOnlyList<string> besideFolder) : SourceRepositoryGit(sourceFolder, workTree)
+    private sealed class RepositoryAbove(string sourceFolder, string workTree, string? besideFolder) : SourceRepositoryGit(sourceFolder, workTree)
     {
         private string? _sourceFolderInWorkTree;
 
         private protected override string SourceFolderInWorkTree => _sourceFolderInWorkTree ??= Run("rev-parse", "--show-prefix").Trim();
 
-        internal override string[] FolderPaths => ["--", ".", .. besideFolder.Select(file => LiteralPathspec(Path.GetRelativePath(_sourceFolder, file)))];
+        internal override string[] FolderPaths =>
+            besideFolder is null ? ["--", "."] : ["--", ".", LiteralPathspec(Path.GetRelativePath(_sourceFolder, besideFolder))];
 
         internal override void BeginInit(WriteJournal journal)
         {
@@ -215,7 +216,7 @@ internal abstract class SourceRepositoryGit
         File.Exists(Path.Combine(_gitDir, gitRef)) || PackedRefs(_gitDir).Contains(gitRef);
 
     /// <summary>HEAD and the index of <see cref="FolderPaths"/> back at <paramref name="head"/>; with none, the branch is
-    /// unborn again and the index holds none of them. What else is staged stays staged.</summary>
+    /// unborn again and the index holds none of them. A change staged outside them stays staged.</summary>
     internal void PutBack(string? head)
     {
         if (head is null)

@@ -16,7 +16,7 @@ public static class SourceInits
     public static SourceFailure? Init(
         this ISourceAdapter source, string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<FileToCopy> assets, bool commit, (PluginAddress Plugin, TreeCommit Commit)? repair = null, RootFile? manifest = null,
-        IReadOnlyList<string>? ignored = null, SourceModIn heldIn = SourceModIn.NewRepository, (string Folder, RootFile Manifest)? modFolderManifest = null) =>
+        IReadOnlyList<string>? ignored = null, SourceModIn heldIn = SourceModIn.NewRepository, ModFolderManifest? modFolderManifest = null) =>
         source.Init(sourceFolder, buildFile, plugins, assets, commit, repair, manifest, ignored ?? [], heldIn, modFolderManifest);
 
     /// <summary>A build file, whose text the Source adapter commits as it is given.</summary>

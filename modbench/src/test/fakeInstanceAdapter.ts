@@ -172,6 +172,8 @@ export interface InstanceAnswers {
   unsourcedMods?: ReadonlySet<string>;
   /** Each mod's source folder, by mod name, where it is not `/source/<mod>`. */
   sourceFolders?: ReadonlyMap<string, string>;
+  /** Folders the instance repository cannot hold a file in. */
+  outOfReach?: ReadonlySet<string>;
   /** The reads beside `reading()` that reject, with the message each rejects with. */
   unreadReads?: Partial<Record<'profiles' | 'modOrder' | 'downloadedFiles' | 'sourceModFolders' | 'otherManifests', string>>;
   installed?: InstallOutcome;
@@ -453,6 +455,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     foldersHeldWhole: (folders) => Promise.resolve(new Set(
       folders.filter((folder) => answers.heldWholeByGit?.has(folder) === true || (letInByLines.has(folder) && answers.leftOutByGit?.has(folder) !== true)),
     )),
+    foldersInReach: (folders) => Promise.resolve(folders.filter((folder) => answers.outOfReach?.has(folder) !== true)),
     filesHeldByGit: (folders) => Promise.resolve(new Map(folders.map((folder) => [folder, answers.heldByGit?.get(folder) ?? []]))),
     unheldFolderValue: (folder) => unheldFolderValueOver(adapter, answers.heldByGit?.get(folder) ?? [], folder),
     modValue: (folder, asked, heldByGit) => modValueOver(adapter, folder, asked, heldByGit),
