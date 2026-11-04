@@ -1562,6 +1562,62 @@ describe('the MO2 Instance adapter', () => {
           expect(second).not.toBe(first);
         });
 
+        it('answers new files once a folder below the mod\'s root has changed', async () => {
+          await mkdir(join(folder(), 'Textures', 'Source'), { recursive: true });
+          await settled();
+          const first = await source.originFiles(mod('Harder VATS'), 'list');
+          await writeFile(join(folder(), 'Textures', 'Source', 'deep.psc'), '');
+
+          const second = await source.originFiles(mod('Harder VATS'), 'list');
+
+          expect(relativePaths(second.files)).toContain('Textures/Source/deep.psc');
+          expect(second).not.toBe(first);
+        });
+
+        it('walks again a folder changed within the settle window, as its stamp may not change for a write that follows', async () => {
+          await mkdir(join(folder(), 'Textures'), { recursive: true });
+          await writeFile(join(folder(), 'Textures', 'a.dds'), '');
+
+          const first = await source.originFiles(mod('Harder VATS'), 'list');
+          const second = await source.originFiles(mod('Harder VATS'), 'list');
+
+          expect(second).not.toBe(first);
+        });
+
+        it('does not keep a walk that met a folder removed mid-read, though the stamp of the folder above it did not change', async () => {
+          await mkdir(join(folder(), 'Gone'), { recursive: true });
+          await writeFile(join(folder(), 'Gone', 'Lost.esp'), '');
+          await settled();
+          const rootStamp = await actualStat(folder(), { bigint: true });
+          vi.mocked(stat).mockImplementation(async (path, ...rest) => {
+            const facts = await actualStat(path, ...rest);
+            const { size, mtimeNs, ctimeNs } = rootStamp;
+            return String(path) === folder() ? Object.assign(facts, { size, mtimeNs, ctimeNs }) : facts;
+          });
+          vi.mocked(readdir).mockImplementation(async (path, options) => {
+            if (String(path) === join(folder(), 'Gone')) await rm(path, { recursive: true, force: true });
+            return actualReaddir(path, options);
+          });
+
+          const first = await source.originFiles(mod('Harder VATS'), 'list');
+          const second = await source.originFiles(mod('Harder VATS'), 'list');
+
+          expect(first.notes).toEqual([expect.stringMatching(/Gone/)]);
+          expect(second).not.toBe(first);
+          expect(second.notes).toEqual([expect.stringMatching(/Gone/)]);
+        });
+
+        it('keeps only the walks of the mod folders the latest reading names', async () => {
+          await settled();
+          const folders = present((await adapter.reading()).modFolders, 'mod folders');
+          const first = await source.originFiles(mod('Harder VATS'), folders);
+
+          await source.originFiles(mod('Other'), { ...folders, all: [] });
+          const again = await source.originFiles(mod('Harder VATS'), folders);
+
+          expect(again).not.toBe(first);
+        });
+
         it('answers the files of a mod that links to a file afresh each time, as a link\'s target is not stamped', async () => {
           await settled();
           await symlink(join(folder(), 'Textures', 'a.dds'), join(folder(), 'Linked.dds'));

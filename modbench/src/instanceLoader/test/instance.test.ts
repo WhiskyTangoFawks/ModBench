@@ -777,6 +777,22 @@ describe('Instance — a value that survives a bad read', () => {
     expect(instance.sequence).toBe(before + 1);
   });
 
+  it('keeps the file conflict index across a refresh that changed no listing, and builds it again when a listing changed', async () => {
+    const modFiles = new Map([['A', filesOfMod('A', 'a.dds')]]);
+    const { instance, fake } = loader({ mods: [mod('A')], modFiles });
+    await instance.refresh();
+    const first = instance.value.files;
+
+    fake.read({ modFiles: new Map(modFiles) });
+    await instance.refresh();
+    const unchanged = instance.value.files;
+    fake.read({ modFiles: new Map([['A', filesOfMod('A', 'a.dds')]]) });
+    await instance.refresh();
+
+    expect(unchanged).toBe(first);
+    expect(instance.value.files).not.toBe(first);
+  });
+
   it('keeps recomputing after a subscriber throws', async () => {
     const { instance } = loader();
     const seen: number[] = [];

@@ -171,8 +171,6 @@ interface Walked {
   readonly files: OriginFiles;
 }
 
-const walked = new Map<string, Walked>();
-
 const listingsStill = async ({ listings }: Walked): Promise<boolean> => {
   try {
     return (await Promise.all(listings.map(async ([dir, listing]) => (await listDirByStamp(dir)) === listing))).every(Boolean);
@@ -181,25 +179,43 @@ const listingsStill = async ({ listings }: Walked): Promise<boolean> => {
   }
 };
 
-// The same files `walk` answered last time while every folder it listed still answers the listing it did.
-async function walkedOnce(key: string, walk: () => Promise<Walk>, filesOf: (walk: Walk) => OriginFiles): Promise<OriginFiles> {
-  const before = walked.get(key);
-  if (before !== undefined && await listingsStill(before)) return before.files;
-  const done = await walk();
-  const files = filesOf(done);
-  if (done.stampsCover) walked.set(key, { listings: done.listings, files });
-  else walked.delete(key);
-  return files;
-}
+const modKey = (rootOnly: boolean, folder: string): string => `mod|${rootOnly}|${folder}`;
 
-export async function originFilesIn(context: Mo2Context, origin: FileOrigin, rootOnly: boolean, modFolders: ModFolders | undefined | 'list'): Promise<OriginFiles> {
-  if (origin.kind === 'runtimeOutput') {
-    const dir = overwriteDir(context.instanceRoot);
-    return walkedOnce(`overwrite|${rootOnly}|${dir}`, () => listOverwrite(dir, rootOnly),
-      ({ root, files, folders, notes }) => ({ origin: OVERWRITE_ORIGIN, folder: root, files, folders, notes }));
+/** An instance's origin files, each answered again while every folder its walk listed still answers the listing it did.
+ *  It keeps the walks of the mod folders the latest reading names, so it ends with the instance it describes. */
+export function originFilesReader(
+  context: Mo2Context,
+): (origin: FileOrigin, rootOnly: boolean, modFolders: ModFolders | undefined | 'list') => Promise<OriginFiles> {
+  const walked = new Map<string, Walked>();
+  let named: ModFolders | undefined;
+
+  const forgetUnnamed = (modFolders: ModFolders): void => {
+    if (named === modFolders) return;
+    named = modFolders;
+    const live = new Set(modFolders.all.flatMap(({ path }) => [modKey(false, path), modKey(true, path)]));
+    for (const key of walked.keys()) if (key.startsWith('mod|') && !live.has(key)) walked.delete(key);
+  };
+
+  async function walkedOnce(key: string, walk: () => Promise<Walk>, filesOf: (walk: Walk) => OriginFiles): Promise<OriginFiles> {
+    const before = walked.get(key);
+    if (before !== undefined && await listingsStill(before)) return before.files;
+    const done = await walk();
+    const files = filesOf(done);
+    if (done.stampsCover) walked.set(key, { listings: done.listings, files });
+    else walked.delete(key);
+    return files;
   }
-  const folder = await originFolder(context, origin, modFolders);
-  if (folder === undefined) return { origin: origin.name, folder: undefined, files: [], folders: [], notes: [] };
-  return walkedOnce(`mod|${rootOnly}|${folder}`, () => walkMod(folder, rootOnly),
-    ({ files, folders, notes }) => ({ origin: origin.name, folder, files, folders, notes }));
+
+  return async (origin, rootOnly, modFolders) => {
+    if (origin.kind === 'runtimeOutput') {
+      const dir = overwriteDir(context.instanceRoot);
+      return walkedOnce(`overwrite|${rootOnly}`, () => listOverwrite(dir, rootOnly),
+        ({ root, files, folders, notes }) => ({ origin: OVERWRITE_ORIGIN, folder: root, files, folders, notes }));
+    }
+    if (typeof modFolders === 'object') forgetUnnamed(modFolders);
+    const folder = await originFolder(context, origin, modFolders);
+    if (folder === undefined) return { origin: origin.name, folder: undefined, files: [], folders: [], notes: [] };
+    return walkedOnce(modKey(rootOnly, folder), () => walkMod(folder, rootOnly),
+      ({ files, folders, notes }) => ({ origin: origin.name, folder, files, folders, notes }));
+  };
 }
