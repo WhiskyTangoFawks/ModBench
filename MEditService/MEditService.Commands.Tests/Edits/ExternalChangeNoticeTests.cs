@@ -30,7 +30,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     private void PutThenSignal(LoadOrderSnapshot snapshot, IServiceProvider? service = null)
     {
         Put(snapshot, service);
-        (service ?? _service.Value).GetRequiredService<SignalChangeHandler>().Signal();
+        (service ?? _service.Value).GetRequiredService<SignalChangeHandler>().Signal([]);
     }
 
     private string ModFolder => Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
@@ -99,7 +99,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     [Fact]
     public void AChangeSignal_BeforeAnyLoadOrder_TellsNothing()
     {
-        _service.Value.GetRequiredService<SignalChangeHandler>().Signal();
+        _service.Value.GetRequiredService<SignalChangeHandler>().Signal([]);
 
         Assert.Empty(_notifications.Notifications);
     }

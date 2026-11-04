@@ -26,19 +26,19 @@ const wired = () => {
   const instance = new FakeInstance(instanceValueFixture());
   registerPutLoadOrder({
     onRecompute: (_source, stringsLanguage) => { puts.push(stringsLanguage); sent.push('put'); },
-    signalChange: () => { sent.push('signal'); },
+    signalChange: (paths) => { sent.push(`signal ${paths.join()}`); },
   }, instance);
   return { puts, sent, instance };
 };
 
 describe('signal change', () => {
-  it('follows the put at every recompute', () => {
+  it('follows the put at every recompute, naming the paths it read again, and none for a check of the disk', () => {
     const { sent, instance } = wired();
 
-    instance.publish(instanceValueFixture());
-    instance.publish(instanceValueFixture());
+    instance.publish(instanceValueFixture(), { named: ['/mods/A/A.esp', '/mods/B/B.esp'], disk: false });
+    instance.publish(instanceValueFixture(), { named: ['/mods/A/A.esp'], disk: true });
 
-    expect(sent).toEqual(['put', 'signal', 'put', 'signal']);
+    expect(sent).toEqual(['put', 'signal /mods/A/A.esp,/mods/B/B.esp', 'put', 'signal ']);
   });
 
   it('is not sent for a change of the strings language, which changes no file', () => {
@@ -54,7 +54,7 @@ describe('signal change', () => {
 
     commands.get('modbench.instance.signalChange')?.(undefined);
 
-    expect(sent).toEqual(['signal']);
+    expect(sent).toEqual(['signal ']);
   });
 });
 

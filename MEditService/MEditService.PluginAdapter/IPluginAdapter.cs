@@ -30,6 +30,10 @@ public interface IPluginAdapter
 
     bool Exists(string pluginPath);
 
+    /// <summary>The plugins whose file, or strings named for them, is at <paramref name="path"/>, or plugins it cannot name
+    /// for another archive or strings file the game loads.</summary>
+    PathAnswer Touching(LoadOrderSnapshot loadOrder, string path);
+
     /// <summary>Those of <paramref name="paths"/>, forward-slash and relative to the plugin's folder, that compile writes
     /// for <paramref name="plugin"/>: the plugin itself and, when it is localized, its strings.</summary>
     IReadOnlyList<string> WrittenByCompile(RegisteredPlugin plugin, IReadOnlyList<string> paths, GameRelease gameRelease);

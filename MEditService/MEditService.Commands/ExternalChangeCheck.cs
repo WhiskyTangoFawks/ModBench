@@ -10,30 +10,30 @@ internal sealed class ExternalChangeCheck(INotificationPublisher notifications, 
 {
     private readonly Lock _checking = new();
     // A mod whose repository went since is told it names no changed plugin.
-    private HashSet<string> _compiledPluginAtLastCheck = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _compiledPluginAtLastCheck = new(StringComparer.Ordinal);
 
-    public void Check(LoadOrderSnapshot snapshot)
+    /// <summary>Checks each mod that provides one of <paramref name="plugins"/>, whole: its answer names every changed plugin.</summary>
+    public void Check(LoadOrderSnapshot snapshot, IEnumerable<RegisteredPlugin> plugins)
     {
+        var checkedMods = plugins.Select(plugin => plugin.Provider).OfType<PluginProvider.FromMod>().ToHashSet();
         var mods = snapshot.Plugins
-            .Where(plugin => plugin.Provider is PluginProvider.FromMod)
+            .Where(plugin => plugin.Provider is PluginProvider.FromMod mod && checkedMods.Contains(mod))
             .GroupBy(plugin => (PluginProvider.FromMod)plugin.Provider);
 
         lock (_checking)
         {
-            var compiledPlugin = new HashSet<string>(StringComparer.Ordinal);
             foreach (var mod in mods)
             {
                 if (source.Open(mod.Key, snapshot.GameRelease) is { } repository)
                 {
-                    compiledPlugin.Add(mod.Key.Folder);
+                    _compiledPluginAtLastCheck.Add(mod.Key.Folder);
                     Tell(mod.Key.Name, repository, [.. mod]);
                 }
-                else if (_compiledPluginAtLastCheck.Contains(mod.Key.Folder))
+                else if (_compiledPluginAtLastCheck.Remove(mod.Key.Folder))
                 {
                     notifications.Publish(new ExternalChangeNotification(mod.Key.Name, []));
                 }
             }
-            _compiledPluginAtLastCheck = compiledPlugin;
         }
     }
 

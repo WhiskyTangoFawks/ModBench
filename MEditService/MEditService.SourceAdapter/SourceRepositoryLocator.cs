@@ -2,6 +2,7 @@ using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -330,12 +331,11 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
     private string? RememberedFoundByText(PluginAddress plugin, string formKey) =>
         _foundByText.TryGetValue((plugin, formKey), out var found) && _files.FileExists(found) ? found : null;
 
-    // Windows names a file without regard to case, and VS Code spells a drive letter in lower case.
-    internal static StringComparison PathComparison =>
-        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-
     internal static bool IsUnder(string directory, string path) =>
-        path.StartsWith(directory + Path.DirectorySeparatorChar, PathComparison);
+        path.StartsWith(directory + Path.DirectorySeparatorChar, FilePaths.Comparison);
+
+    internal static bool IsOrIsUnder(string directory, string path) =>
+        string.Equals(directory, path, FilePaths.Comparison) || IsUnder(directory, path);
 
     /// <summary>Where the tree puts the cell <paramref name="identity"/> names, or null when nothing
     /// holds it. Only the repository reads block directories back (ADR-0014). A

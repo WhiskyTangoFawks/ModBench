@@ -146,6 +146,16 @@ internal abstract class SourceRepositoryGit
         return !HasMainBranch(commonDir) && !IsMarkedByInit(commonDir);
     }
 
+    /// <summary>Whether <paramref name="fullPath"/> is <paramref name="sourceFolder"/>'s <c>.git</c>, or in the git directory
+    /// or common directory it resolves to.</summary>
+    internal static bool RepositoryHolds(string sourceFolder, string fullPath)
+    {
+        var folder = Path.GetFullPath(sourceFolder);
+        var gitDir = GitDirOf(folder);
+        return new[] { Path.Combine(folder, ".git"), gitDir, CommonDirectoryOf(gitDir) }
+            .Any(directory => SourceRepositoryLocator.IsOrIsUnder(directory, fullPath));
+    }
+
     // A submodule git checks out holds a .git file naming its git directory, as gitrepository-layout(5) has it.
     private static string GitDirOf(string workTree)
     {

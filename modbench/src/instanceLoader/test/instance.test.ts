@@ -384,6 +384,22 @@ describe('Instance — built by watching', () => {
     expect(fake.rereads).toEqual([CHECK, reread('/instance/mods/A/a.esp'), CHECK]);
   });
 
+  it('hands each subscriber what the value was read again for: the paths the events named, or the check of the disk', async () => {
+    const { instance, fake } = loader();
+    const landedFor: Reread[] = [];
+    instance.subscribe((_value, _sequence, landed) => { landedFor.push(landed); });
+
+    fakeClockLeavingSetImmediateReal();
+    try {
+      fake.changed('/instance/mods/A/a.esp');
+      await vi.advanceTimersByTimeAsync(QUIET_MS);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(landedFor).toEqual([reread('/instance/mods/A/a.esp'), CHECK]);
+  });
+
   it('checks the disk within a bounded time of the first event while events keep coming', async () => {
     const { instance, fake } = loader();
     await instance.refresh();

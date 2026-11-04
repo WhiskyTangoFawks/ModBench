@@ -30,6 +30,10 @@ internal static class Wire
     internal static async Task SignalChange(this HttpClient client) =>
         (await client.PostAsync("/signal-change", null)).EnsureSuccessStatusCode();
 
+    /// <summary>The signal of a change at <paramref name="paths"/>, as Modbench sends one once its watch names them.</summary>
+    internal static async Task SignalChange(this HttpClient client, params string[] paths) =>
+        (await client.PostAsJsonAsync("/signal-change", new { paths })).EnsureSuccessStatusCode();
+
     /// <summary>Polls until <paramref name="holds"/>: validation runs on the service's own thread, and
     /// a validation that finds nothing publishes nothing to wait on.</summary>
     internal static async Task Eventually(Func<Task<bool>> holds, string what)

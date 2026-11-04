@@ -27,18 +27,31 @@ public sealed class DetectExternalChangeTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task APluginAnotherToolRewrote_IsNamedOnTheStream_WithItsMod()
+    public async Task APluginAnotherToolRewrote_IsNamedOnTheStream_WithItsMod_WhenTheChangeNamesItsFile()
     {
         var fx = await CompiledPlugin();
         using var stream = await Client.NotificationStream();
+        var path = fx.Plugins.Single(p => p.Origin == Origin).Path;
 
-        OtherTool.WritesThePlugin(
-            fx.Plugins.Single(p => p.Origin == Origin).Path,
-            mod => mod.Npcs.AddNew(Npc).HeightMax = 0.9f);
-        await Client.NextCheck(fx);
+        OtherTool.WritesThePlugin(path, mod => mod.Npcs.AddNew(Npc).HeightMax = 0.9f);
+        await Client.SignalChange(path);
 
         var change = (await stream.EventsUntil("external-change", NamesThePlugin))[^1];
         Assert.Equal(Origin, change.GetProperty("origin").GetString());
+    }
+
+    [Fact]
+    public async Task AChangeNamingOnlyAnAsset_PublishesNothing_WhereTheNextChangeNamingNoPathPublishes()
+    {
+        var fx = await CompiledPlugin();
+        using var stream = await Client.NotificationStream();
+        var path = fx.Plugins.Single(p => p.Origin == Origin).Path;
+
+        await Client.SignalChange(Path.Combine(Path.GetDirectoryName(path).Require(), "textures", "watched.dds"));
+        OtherTool.WritesThePlugin(path, mod => mod.Npcs.AddNew(Npc).HeightMax = 0.9f);
+        await Client.SignalChange();
+
+        Assert.True(NamesThePlugin(Assert.Single(await stream.EventsUntil("external-change", NamesThePlugin))));
     }
 
     private static bool NamesThePlugin(JsonElement change) =>

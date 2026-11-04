@@ -342,9 +342,9 @@ export interface MEditClient {
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome>;
   /** The newest snapshot's outcome, following a superseding one. Undefined when none was sent. */
   latestLoadOrder(): Promise<LoadOrderOutcome | undefined>;
-  /** Tells mEdit the disk may have changed, so it checks it (ADR-0015), once every snapshot handed before has answered.
-   *  Signals handed while one is in flight fold into one more. */
-  signalChange(): void;
+  /** Tells mEdit the files at `paths` changed, or, with none, to check the disk (ADR-0015), once every snapshot handed
+   *  before has answered. Signals handed while one is in flight fold into one more. */
+  signalChange(paths: readonly string[]): void;
   /** Each put of the newest snapshot that no send asked for: after a reconnect, since the process
    *  behind the stream may hold nothing sent before. */
   onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void;

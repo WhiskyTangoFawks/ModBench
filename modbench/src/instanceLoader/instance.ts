@@ -14,7 +14,7 @@ import { blueprintLoadsLastIn, loadedWithNoLineOf, nexusDomainForMetaGame } from
 import {
   ABSENT_SORTING_RULE_FILES, type DownloadedFiles, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
   type ProgramVersion, type ProgramVersions, type EntryRef, type ManagerNames, type ManagerRunning, type ModGroups, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type PublisherConfiguration,
-  type PublisherTag, type SortingRuleFiles, type Subscription,
+  type PublisherTag, type Reread, type SortingRuleFiles, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { sourceModsOf, type SourceMods } from '../manifestAdapter/manifestAdapter';
 import { pluginPlacesOf } from './pluginPlacesOf';
@@ -26,7 +26,7 @@ export { sameEntry } from '../instanceAdapter/instanceAdapter';
 export type { EntryRef, FileOrigin, Mod, ModGroup, ModGroups, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
 export type { LocatedDownloadedFileRow, DownloadedFileRow, UpgradeCandidate, UpgradeTier } from './downloadedFileRows';
 export type { Covering, DownloadedFileStatus, PublisherTag, PublisherTagChange, TagPathProblem } from '../instanceAdapter/instanceAdapter';
-export type { GameFolder, ProgramVersion } from '../instanceAdapter/instanceAdapter';
+export type { GameFolder, ProgramVersion, Reread } from '../instanceAdapter/instanceAdapter';
 
 // How long another tool's write takes to settle: the wait a burst coalesces into one re-read on.
 const SETTLE_MS = 200;
@@ -146,8 +146,8 @@ export interface InstanceValue {
   readonly sortingRuleFiles: SortingRuleFiles;
 }
 
-/** A subscriber that returns a promise holds `refresh` until it settles. */
-export type InstanceSubscriber = (value: InstanceValue, sequence: number) => void | Promise<void>;
+/** A subscriber that returns a promise holds `refresh` until it settles. `reread` is what the value was read again for. */
+export type InstanceSubscriber = (value: InstanceValue, sequence: number, reread: Reread) => void | Promise<void>;
 
 /** Hears each recompute that failed; `readFailure` holds the reason. The value and sequence are
  *  where they were: before the first landed value that is the empty sentinel at 0. */
@@ -537,7 +537,8 @@ export class Instance implements Subscription {
     this.current = next;
     this.failure = undefined;
     this.seq++;
-    return { settled: this.notify(this.subscribers, 'value', (subscriber) => subscriber(next, this.seq)) };
+    const reread: Reread = { named: [...run.named], disk: run.disk };
+    return { settled: this.notify(this.subscribers, 'value', (subscriber) => subscriber(next, this.seq, reread)) };
   }
 
   // A throwing subscriber would otherwise reject the queue for good, and no later recompute

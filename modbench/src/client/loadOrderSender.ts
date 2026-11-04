@@ -10,13 +10,13 @@ export interface LoadOrderWire extends LauncherWire {
   onStatusChanged(listener: (status: BackendStatus) => void): () => void;
   onReconnected(listener: () => void): () => void;
   put(snapshot: LoadOrderSnapshot, signal: AbortSignal, answered: () => void): Promise<LoadOrderOutcome>;
-  signalChange(): Promise<void>;
+  signalChange(paths: readonly string[]): Promise<void>;
 }
 
 /** The one sender of ADR-0013's snapshot and ADR-0015's change signal, and the owner of the process they are sent to. */
 export interface LoadOrderSender {
   send(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome>;
-  signalChange(): void;
+  signalChange(paths: readonly string[]): void;
   latest(): Promise<LoadOrderOutcome | undefined>;
   onResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void;
   onAppliedAfterReopen(listener: (snapshot: LoadOrderSnapshot) => void): () => void;
@@ -29,6 +29,12 @@ export interface LoadOrderSender {
 const ABANDONED: LoadOrderOutcome = { outcome: 'abandoned' };
 const SIGNAL_WAIT_CAP_MS = 10_000;
 const BACKEND_FAILED: LoadOrderOutcome = { outcome: 'backendFailed' };
+
+interface OwedSignal {
+  readonly since: number;
+  readonly paths: Set<string>;
+  disk: boolean;
+}
 
 interface Waiting {
   snapshot: LoadOrderSnapshot;
@@ -51,7 +57,7 @@ function createSendSlot(wire: LoadOrderWire) {
   let inFlight: AbortController | undefined;
   let unanswered = false;
   let newest: Promise<LoadOrderOutcome> | undefined;
-  let signalOwedSince: number | undefined;
+  let owed: OwedSignal | undefined;
   let signalTimer: ReturnType<typeof setTimeout> | undefined;
   let signalling = false;
 
@@ -77,12 +83,12 @@ function createSendSlot(wire: LoadOrderWire) {
     });
   };
 
-  const sendSignal = (): void => {
-    signalOwedSince = undefined;
+  const sendSignal = (signal: OwedSignal): void => {
+    owed = undefined;
     clearTimeout(signalTimer);
     signalTimer = undefined;
     signalling = true;
-    void wire.signalChange().finally(() => {
+    void wire.signalChange(signal.disk ? [] : [...signal.paths]).finally(() => {
       signalling = false;
       pump();
     });
@@ -91,13 +97,13 @@ function createSendSlot(wire: LoadOrderWire) {
   // A signal waits for the snapshots handed before it to be answered, so mEdit checks the load order it was handed,
   // and a stream of snapshots delays it by a bounded time (ADR-0015).
   const pumpSignal = (): void => {
-    if (signalOwedSince === undefined || signalling) return;
-    const waited = Date.now() - signalOwedSince;
+    if (owed === undefined || signalling) return;
+    const waited = Date.now() - owed.since;
     if ((waiting || unanswered) && waited < SIGNAL_WAIT_CAP_MS) {
       signalTimer ??= setTimeout(() => { signalTimer = undefined; pump(); }, SIGNAL_WAIT_CAP_MS - waited);
       return;
     }
-    sendSignal();
+    sendSignal(owed);
   };
 
   // The backend publishes a PUT's progress the moment that PUT lands, so a snapshot waits for
@@ -120,8 +126,10 @@ function createSendSlot(wire: LoadOrderWire) {
       pump();
       return sent;
     },
-    oweSignal(): void {
-      signalOwedSince ??= Date.now();
+    oweSignal(paths: readonly string[]): void {
+      owed ??= { since: Date.now(), paths: new Set(), disk: false };
+      owed.disk ||= paths.length === 0;
+      for (const path of paths) owed.paths.add(path);
       pump();
     },
     holdsOne: () => waiting !== undefined,
@@ -194,7 +202,7 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     if (!snapshot) return;
     reopenUnannounced = true;
     if (!slot.holdsOne()) void hand(snapshot).then((outcome) => { resent.fire(snapshot, outcome); });
-    slot.oweSignal();
+    slot.oweSignal([]);
   };
 
   // A send in flight when mEdit goes answers abandoned, never a killed backend as a network failure.
@@ -211,7 +219,7 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
 
   return {
     send: hand,
-    signalChange: () => { if (!launcher.stopped()) slot.oweSignal(); },
+    signalChange: (paths) => { if (!launcher.stopped()) slot.oweSignal(paths); },
     latest: () => slot.latest(),
     onResent: resent.add,
     onAppliedAfterReopen: appliedAfterReopen.add,

@@ -46,7 +46,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Says that the disk changed, naming no path, so mEdit checks it (ADR-0015). Answers once the compiled plugins of the load order held are checked for a change made outside Modbench, published as external-change; the record index validates every plugin after, and announces what it re-read. */
+        /** @description Says that the disk changed at the paths named, or, naming none, that mEdit is to check it (ADR-0015). A path that the record index reads for plugins mEdit cannot name, such as a build file or an archive, checks the disk; one it reads nothing of is dropped. Answers once the mods of the plugins whose files are touched, or every mod at a check, are checked for a change made outside Modbench, published as external-change; the record index validates the plugins touched, or every plugin, after, and announces what it re-read. */
         post: operations["SignalChange"];
         delete?: never;
         options?: never;
@@ -1694,6 +1694,9 @@ export interface components {
             applied: components["schemas"]["PluginFileFlagsSet"][];
             refused: components["schemas"]["PluginFileFlagRefused"][];
         };
+        SignalChangeRequest: {
+            paths?: string[] | null;
+        };
         SourceFolderRequest: {
             path: string;
             in?: components["schemas"]["SourceModIn"] | null;
@@ -1885,7 +1888,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SignalChangeRequest"];
+            };
+        };
         responses: {
             /** @description No Content */
             204: {

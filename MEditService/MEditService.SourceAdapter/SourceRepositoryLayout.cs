@@ -116,6 +116,14 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
         }
     }
 
+    /// <summary>Whether <paramref name="fullPath"/> is the build file of <paramref name="sourceFolder"/>, or in its plugin
+    /// source: what decides which plugins it builds, and from what.</summary>
+    internal static bool ReadForThePluginsOf(string sourceFolder, string fullPath)
+    {
+        var folder = Path.GetFullPath(sourceFolder);
+        return new[] { BuildFileName, RootFolderName }.Any(name => SourceRepositoryLocator.IsOrIsUnder(Path.Combine(folder, name), fullPath));
+    }
+
     /// <summary>The folder of the mod's plugin source that <paramref name="fullPath"/> sits in, as the path spells
     /// it; null for a path outside the plugin source.</summary>
     internal static string? TreeFolderHolding(string sourceFolder, string fullPath)

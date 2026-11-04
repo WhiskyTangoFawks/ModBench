@@ -104,6 +104,17 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     public string? HashOf(string pluginPath) => _hashes.Of(pluginPath);
 
+    public PathAnswer Touching(LoadOrderSnapshot loadOrder, string path)
+    {
+        var full = Path.GetFullPath(path);
+        bool At(string file) => string.Equals(file, full, FilePaths.Comparison);
+        bool AtOneOf(IEnumerable<StampedFile> files) => files.Any(file => At(file.Path));
+        // Every plugin that reads the game's strings reads each of these.
+        if (AtOneOf(loadOrder.Archives) || AtOneOf(loadOrder.StringsFiles)) return new PathAnswer.Unnamed();
+        return PathAnswer.Of([.. loadOrder.Plugins
+            .Where(plugin => At(plugin.Path) || AtOneOf(plugin.Strings.Archives) || AtOneOf(plugin.Strings.StringsFiles))]);
+    }
+
     public void KeepHashesOf(IReadOnlySet<string> pluginPaths) => _hashes.Keep(pluginPaths);
 
     public Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath, GameRelease gameRelease) => PluginBinaryHash.ClaimOfFile(pluginPath, gameRelease);

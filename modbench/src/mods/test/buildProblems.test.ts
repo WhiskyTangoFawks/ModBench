@@ -6,6 +6,7 @@ vi.mock('vscode', () => ({ Diagnostic, DiagnosticSeverity, Range, Uri }));
 
 import { BuildProblems } from '../buildProblems';
 import type { InstanceSubscriber } from '../../instanceLoader/instance';
+import { CHECK_THE_DISK } from '../../instanceAdapter/instanceAdapter';
 import { sourceFiles } from '../../instanceLoader/loadOrderSnapshot';
 import { valueWithSourceDirs } from './sourceDirsFixture';
 
@@ -50,7 +51,7 @@ describe('a build\'s diagnostics in the Problems panel', () => {
     problems.publish({ name: 'A.esp', origin: 'ModA' }, sourceFiles(both, 'ModA'), diagnosticAt('A.esp/Old.json'));
     problems.publish({ name: 'B.esp', origin: 'ModB' }, sourceFiles(both, 'ModB'), diagnosticAt('B.esp/Other.json'));
 
-    void heard?.(valueWithSourceDirs(new Map([['ModB', normalize('/instance/source/ModB')]])), 2);
+    void heard?.(valueWithSourceDirs(new Map([['ModB', normalize('/instance/source/ModB')]])), 2, CHECK_THE_DISK);
 
     expect(publishedPaths(diagnostics)).toEqual([normalize('/instance/source/ModB/B.esp/Other.json')]);
   });
