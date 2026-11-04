@@ -1,13 +1,9 @@
-using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.IO.Abstractions;
 using System.Reflection;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
-using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
-using Mutagen.Bethesda.Plugins.Utility;
 using Mutagen.Bethesda.Serialization.Newtonsoft;
 using Mutagen.Bethesda.Strings;
 using Noggog;
@@ -69,7 +65,7 @@ internal sealed class GameCodec : IGameCodec
         return clone;
     }
 
-    public IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record, bool localized, GameRelease release)
+    public IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record, bool localized, Func<Type, string?> baseMemberOf)
     {
         var type = record.GetType();
         if (record is not (ICellGetter or IWorldspaceGetter or IDialogTopicGetter) && !DeletedReferences.CanReach(type) && !GameSpecifics.Normalizes(record)
@@ -106,7 +102,7 @@ internal sealed class GameCodec : IGameCodec
                 ZeroTopicGroupFields(topic);
                 break;
         }
-        DeletedReferences.ForEach(copy, reference => ClearBaseOfDeleted(reference, release));
+        DeletedReferences.ForEach(copy, reference => ClearBaseOfDeleted(reference, baseMemberOf));
         GameSpecifics.Normalize(copy);
         return copy;
     }
@@ -115,56 +111,13 @@ internal sealed class GameCodec : IGameCodec
     // header alone, so its reread holds no base record. Any other field of a deleted record is a divergence.
     private static readonly RecordGraph DeletedReferences = new(typeof(IPlacedGetter).IsAssignableFrom);
 
-    private static void ClearBaseOfDeleted(object node, GameRelease release)
+    private static void ClearBaseOfDeleted(object node, Func<Type, string?> baseMemberOf)
     {
         if ((((IMajorRecordGetter)node).MajorRecordFlagsRaw & DeletedFlag.Bit) == 0) return;
-        if (NameMemberOf(node.GetType(), release) is not { } member) return;
+        if (baseMemberOf(node.GetType()) is not { } member) return;
 
         var link = node.GetType().GetProperty(member)?.GetValue(node);
         link?.GetType().GetMethod("SetToNull", Type.EmptyTypes)?.Invoke(link, null);
-    }
-
-    private static readonly ConcurrentDictionary<Type, string?> NameMembers = new();
-
-    // The member Mutagen writes as NAME, found by writing the record once with each of its links set to
-    // an ID of its own: Mutagen's writer is the only place that says which member a subrecord holds.
-    private static string? NameMemberOf(Type recordType, GameRelease release) => NameMembers.GetOrAdd(recordType, type =>
-    {
-        var modKey = ModKey.FromFileName("Probe.esp");
-        var links = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(property => property.GetIndexParameters().Length == 0 && typeof(IFormLinkGetter).IsAssignableFrom(property.PropertyType))
-            .ToList();
-        var mod = ModFactory<GameMod>.Activator(modKey, release);
-        var cell = (Cell)MajorRecordInstantiator.Activator(mod.GetNextFormKey(), release, typeof(Cell));
-        var record = (IPlaced)MajorRecordInstantiator.Activator(mod.GetNextFormKey(), release, type);
-        for (var i = 0; i < links.Count; i++)
-        {
-            var link = links[i].GetValue(record);
-            link?.GetType().GetMethod("SetTo", [typeof(FormKey?)])?.Invoke(link, [new FormKey(modKey, FirstProbeId + (uint)i)]);
-        }
-        cell.Persistent.Add(record);
-        var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
-        subBlock.Cells.Add(cell);
-        var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
-        block.SubBlocks.Add(subBlock);
-        mod.Cells.Records.Add(block);
-
-        using var stream = new MemoryStream();
-        mod.WriteToBinary(stream);
-        var written = stream.ToArray();
-        var named = links.Where((_, i) => ContainsName(written, FirstProbeId + (uint)i)).ToList();
-        return named.Count == 1 ? named[0].Name : null;
-    });
-
-    private const uint FirstProbeId = 0x1000;
-
-    private static bool ContainsName(byte[] written, uint id)
-    {
-        Span<byte> subrecord = stackalloc byte[10];
-        "NAME"u8.CopyTo(subrecord);
-        BinaryPrimitives.WriteUInt16LittleEndian(subrecord[4..], sizeof(uint));
-        BinaryPrimitives.WriteUInt32LittleEndian(subrecord[6..], id);
-        return written.AsSpan().IndexOf(subrecord) >= 0;
     }
 
     private static readonly RecordGraph Targets = new(type => type == typeof(LocationTargetRadius));
