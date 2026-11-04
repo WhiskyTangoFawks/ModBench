@@ -181,7 +181,7 @@ const listingsStill = async ({ listings }: Walked): Promise<boolean> => {
   }
 };
 
-/** The same files `walk` answered last time while every folder it listed still answers the listing it did. */
+// The same files `walk` answered last time while every folder it listed still answers the listing it did.
 async function walkedOnce(key: string, walk: () => Promise<Walk>, filesOf: (walk: Walk) => OriginFiles): Promise<OriginFiles> {
   const before = walked.get(key);
   if (before !== undefined && await listingsStill(before)) return before.files;

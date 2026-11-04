@@ -108,7 +108,6 @@ export interface FileConflictIndex {
 
 // A later provider loses to the earlier, winning one. A case variant of a path its origin already
 // provides is one more name for that origin's copy, never a second provider.
-// `seen` holds the folded paths this origin already provides, so the check costs nothing per provider.
 function provide(files: FileConflictLookup, seen: Set<string>, file: OriginFile, origin: FileOrigin): void {
   const folded = foldPath(file.relativePath);
   if (seen.has(folded)) return;
@@ -146,7 +145,7 @@ export function buildFileConflictIndex(
 }
 
 const sameEntries = (a: readonly ModlistEntry[], b: readonly ModlistEntry[]): boolean =>
-  a.length === b.length && a.every((entry, at) => entry.kind === b[at]?.kind && entry.name === b[at]?.name && entry.enabled === b[at]?.enabled);
+  a.length === b.length && a.every((entry, at) => entry.kind === b.at(at)?.kind && entry.name === b.at(at)?.name && entry.enabled === b.at(at)?.enabled);
 
 interface Built {
   readonly entries: readonly ModlistEntry[];
