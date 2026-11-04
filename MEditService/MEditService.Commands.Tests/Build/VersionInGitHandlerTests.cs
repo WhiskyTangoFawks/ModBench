@@ -93,21 +93,23 @@ public sealed class VersionInGitHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Init_InTheInstanceRepository_CommitsThePluginsSourceThere_AndMakesNoRepositoryOfItsOwn()
+    public async Task Init_InTheInstanceRepository_CommitsThePluginsSourceAndTheModFoldersManifestThere_AndMakesNoRepositoryOfItsOwn()
     {
         var instanceRepository = Path.Combine(_instanceRoot, ".git");
         GitProbe.Run(instanceRepository, _instanceRoot, "init", "-q", "-b", "main");
         GitProbe.Run(instanceRepository, _instanceRoot, "config", "user.name", "Test");
         GitProbe.Run(instanceRepository, _instanceRoot, "config", "user.email", "test@localhost");
+        var linked = new RootFile($"{Origin}.manifest.json", "the link"u8.ToArray());
 
         var result = await InitWith(new ModToVersionInGit(
-            Origin, _mod.Folder, new SourceFolderContents(SourceFolder, SourceModIn.InstanceRepository, [], SourceInits.BuildFile), Commit: true));
+            Origin, _mod.Folder, new SourceFolderContents(SourceFolder, SourceModIn.InstanceRepository, [], SourceInits.BuildFile, ModFolderManifest: linked), Commit: true));
 
         Assert.Equal([new PluginAddress(PluginName, Origin)], Assert.Single(result.Applied).Plugins);
         Assert.False(Path.Exists(Path.Combine(SourceFolder, ".git")));
         Assert.Contains(
             $"source/{Origin}/plugin-source/{PluginName}/",
             GitProbe.Run(instanceRepository, _instanceRoot, "ls-tree", "-r", "--name-only", "main"), StringComparison.Ordinal);
+        Assert.Equal("the link", GitProbe.Run(instanceRepository, _instanceRoot, "show", $"main:mods/{Origin}/{linked.Name}"));
     }
 
     [Fact]

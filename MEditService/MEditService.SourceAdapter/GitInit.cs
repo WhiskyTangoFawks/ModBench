@@ -12,7 +12,7 @@ public sealed record DecompiledPlugin(PluginAddress Address, string? BinarySha25
 /// <summary>A file to copy, by its forward-slash path in the folder it is copied into.</summary>
 public sealed record FileToCopy(string Path, Func<Stream> Open);
 
-/// <summary>A file at the root of a new repository, by its name there.</summary>
+/// <summary>A file at the root of a folder, by its name there.</summary>
 public sealed record RootFile(string Name, byte[] Content);
 
 /// <summary>Which repository holds the source folder version in git makes (plugins.md, Version in git, story 1).</summary>
@@ -26,20 +26,22 @@ public enum SourceModIn
     InstanceRepository,
 }
 
-/// <summary>Puts a mod's source folder under git, with one commit, <c>Init &lt;mod&gt;</c>, of its paths alone when
-/// asked. A failed init writes nothing and deletes no repository it did not make (ADR-0003).</summary>
+/// <summary>Puts a source folder under git, with one commit, <c>Init &lt;mod&gt;</c>, of what it wrote there if asked.
+/// A failed init writes nothing and deletes no repository it did not make (ADR-0003).</summary>
 internal static class GitInit
 {
     internal static void Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<FileToCopy> assets, bool commit, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest,
-        IReadOnlyList<string> ignored, SourceModIn heldIn)
+        IReadOnlyList<string> ignored, SourceModIn heldIn, (string Folder, RootFile Manifest)? modFolderManifest)
     {
         if (SourceRepositoryGit.HoldsRepository(sourceFolder) || SourceRepositoryGit.HoldsAnotherRepository(sourceFolder) || SourceRepositoryGit.HoldsSourceMod(sourceFolder))
             throw new InvalidOperationException($"'{sourceFolder}' is already a source mod's source folder, or holds a repository.");
         if (!commit && repair is not null)
             throw new ArgumentException("A repair is a commit, so an init that commits nothing cannot hold one.", nameof(repair));
-        var git = heldIn == SourceModIn.NewRepository ? SourceRepositoryGit.Own(sourceFolder) : SourceRepositoryGit.Above(sourceFolder);
+        (string Path, byte[] Content)? modFolderFile = modFolderManifest is var (modFolder, file) ? (Path.Combine(modFolder, file.Name), file.Content) : null;
+        string[] besideFolder = modFolderFile is var (inInit, _) ? [inInit] : [];
+        var git = heldIn == SourceModIn.NewRepository ? SourceRepositoryGit.Own(sourceFolder) : SourceRepositoryGit.Above(sourceFolder, besideFolder);
 
         WriteJournal journal = new(sourceFolder);
         try
@@ -54,6 +56,7 @@ internal static class GitInit
             journal.Write(Path.Combine(sourceFolder, ".gitattributes"), "* -text\n"u8.ToArray());
             journal.Write(Path.Combine(sourceFolder, SourceRepositoryLayout.BuildFileName), buildFile);
             if (manifest is not null) journal.Write(Path.Combine(sourceFolder, manifest.Name), manifest.Content);
+            if (modFolderFile is var (path, content)) journal.Write(path, content);
             Track(git, journal, sourceFolder, commit, plugins, repair);
             git.FinishInit();
         }

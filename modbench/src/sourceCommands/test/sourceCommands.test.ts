@@ -8,7 +8,7 @@ import { fakeInstanceAdapter, modFoldersIn, readingFixture, repositoriesOf, type
 import { sourceCommands } from '../sourceCommands';
 import { isPluginSourcePath } from '../../instanceAdapter/instanceAdapter';
 import { recordingTasks } from '../../test/recordingTasks';
-import { manifestIn, writeManifestIn, type BuildStep, type Manifest, type TaskStep } from '../../manifestAdapter/manifestAdapter';
+import { manifestIn, manifestText, writeManifestIn, type BuildStep, type Manifest, type TaskStep } from '../../manifestAdapter/manifestAdapter';
 import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
 import { BUILD_FILE } from '../../wire/sourceMod';
 import type { ModToVersionInGit } from '../../client';
@@ -382,9 +382,10 @@ describe('sourceCommands build over a folder it cannot read', () => {
 describe('sourceCommands versionInGit', () => {
   const modsAt = (answers: InstanceAnswers = {}) => fakeInstanceAdapter(readingFixture({ sourceModFolders: repositoriesOf(SOURCES) }), answers).adapter;
   const FOLDER = '/instance/mods/ModA';
+  const hashOf = (tag: string): string => Buffer.from(tag.padEnd(8, '_').slice(0, 8)).toString('base64');
   const hashed = (files: Record<string, string>, folder = FOLDER): InstanceAnswers => ({
     folderFiles: new Map([[folder, Object.keys(files)]]),
-    hashes: new Map(Object.entries(files).map(([path, hash]) => [join(folder, path), { size: 1, hash }])),
+    hashes: new Map(Object.entries(files).map(([path, tag]) => [join(folder, path), { size: 1, hash: hashOf(tag) }])),
   });
   const committing = () => {
     const client = new InMemoryMEditClient();
@@ -394,7 +395,7 @@ describe('sourceCommands versionInGit', () => {
   };
   it('hands mEdit each mod\'s repository: as its assets each file its installation file does not yield with its bytes but those compile writes, and a build file that copies every other file by the file or folder at the root holding it, then compiles each plugin (plugins.md, Version in git, story 2)', async () => {
     const { client, handed } = committing();
-    const pack = { path: '/downloads/Pack.7z', page: undefined, size: 7, hash: 'H', entries: [{ path: 'textures/a.dds', hash: 'A' }] };
+    const pack = { path: '/downloads/Pack.7z', page: undefined, size: 7, hash: hashOf('H'), entries: [{ path: 'textures/a.dds', hash: hashOf('A') }] };
     const adapter = modsAt({
       ...hashed({ 'ModA.esp': 'P', 'Strings/ModA_en.strings': 'S', 'meta.ini': 'M', 'textures/a.dds': 'A', 'scripts/b.pex': 'B', 'ModA.manifest.json': 'X' }),
       installations: new Map([['ModA', { kind: 'read', answer: pack }]]), metadata: new Map([['ModA', { version: '1.2.3' }]]),
@@ -635,30 +636,49 @@ describe('sourceCommands versionInGit', () => {
     });
   });
 
-  it('names the repository in each committed mod\'s manifest, and none of the mod\'s metadata, so the mod is a source mod (commands.md, version in git)', async () => {
+  it('hands mEdit, for the Init commit, the mod folder\'s manifest naming its repository and none of the mod\'s metadata, and writes no manifest itself (plugins.md, Version in git, story 3)', async () => {
     const folder = folderOf('ModA');
     const client = new InMemoryMEditClient();
-    client.setCommandHandler('versionInGit', () => Promise.resolve({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] }));
-    const adapter = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA') }), { metadata: new Map([['ModA', { version: '1.2.3' }]]) }).adapter;
+    const handed: ModToVersionInGit[] = [];
+    client.setCommandHandler('versionInGit', (mods) => { handed.push(...mods); return Promise.resolve({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] }); });
+    const adapter = fakeInstanceAdapter(
+      readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA') }), { metadata: new Map([['ModA', { version: '1.2.3' }]]), repositoryOnDisk: true }).adapter;
 
-    const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], { where: 'NewRepository', commit: true });
+    await sourceCommands({ client, adapter, saveUnsaved: savedAll, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], { where: 'InstanceRepository', commit: true });
 
-    expect(outcome).toEqual({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] });
-    expect(await manifestIn(folder)).toEqual({ manifest: { packages: [{ kind: 'repository', name: 'ModA' }], exclude: [], ignore: [], flags: new Map(), files: new Map() } });
+    const linked: Manifest = { packages: [{ kind: 'repository', name: 'ModA' }], exclude: [], ignore: [], flags: new Map(), files: new Map() };
+    expect(handed[0]?.sourceFolder).toMatchObject({ modFolderManifestFile: 'ModA.manifest.json', modFolderManifest: manifestText(linked) });
+    expect(await manifestIn(folder)).toBeUndefined();
   });
 
-  it.each([[true, 'committed'], [false, 'put under git']])('given commit %s, names a mod whose manifest could not name its repository as %s, never as what did not happen', async (commit, done) => {
+  it('hands mEdit the mod folder\'s manifest under the name the folder holds it by, so the folder holds one manifest', async () => {
+    await writeFile(join(folderOf('ModA'), 'Old ModA.manifest.json'), manifestText({ packages: [], exclude: [], ignore: [], flags: new Map(), files: new Map() }));
+    const { client, handed } = committing();
+    const adapter = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA') })).adapter;
+
+    await sourceCommands({ client, adapter, saveUnsaved: savedAll, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], { where: 'NewRepository', commit: true });
+
+    expect(handed[0]?.sourceFolder.modFolderManifestFile).toBe('Old ModA.manifest.json');
+  });
+
+  it.each([[true, 'committed'], [false, 'put under git']])('given commit %s, names a mod whose source folder its manifest cannot restore as %s, saying its manifest names its repository already', async (commit, done) => {
     const client = new InMemoryMEditClient();
-    client.setCommandHandler('versionInGit', () => Promise.resolve({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] }));
+    client.setCommandHandler('versionInGit', async () => {
+      await writeFile(join(SOURCES.ModA, 'ModA.manifest.json'), '{');
+      return { landed: [{ mod: 'ModA', plugins: [] }], refused: [] };
+    });
+    const adapter = modsAt({ sourceFolders: new Map([['ModA', SOURCES.ModA]]) });
 
-    const outcome = await sourceCommands({ client, adapter: modsAt(), saveUnsaved: savedAll, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], { where: 'NewRepository', commit });
+    const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], { where: 'NewRepository', commit });
 
-    expect(outcome).toMatchObject({ landed: [{ mod: 'ModA' }], refused: [{ item: 'ModA', reason: expect.stringMatching(new RegExp(`^was ${done}, but its manifest could not name its repository: `)) as unknown }] });
+    expect(outcome).toMatchObject({ landed: [{ mod: 'ModA' }], refused: [{
+      item: 'ModA', reason: expect.stringMatching(new RegExp(`^was ${done}, but its manifest names its repository, and its source folder could not be restored from it: .*not valid JSON`)) as unknown,
+    }] });
   });
 
   it('commits as an asset a file its installation file holds with other bytes', async () => {
     const { client, handed } = committing();
-    const pack = { path: '/downloads/Pack.7z', page: undefined, size: 7, hash: 'H', entries: [{ path: 'textures/a.dds', hash: 'A' }] };
+    const pack = { path: '/downloads/Pack.7z', page: undefined, size: 7, hash: hashOf('H'), entries: [{ path: 'textures/a.dds', hash: hashOf('A') }] };
     const adapter = modsAt({ ...hashed({ 'textures/a.dds': 'edited' }), installations: new Map([['ModA', { kind: 'read', answer: pack }]]) });
 
     await sourceCommands({ client, adapter, saveUnsaved: savedAll, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], { where: 'NewRepository', commit: true });
@@ -668,7 +688,7 @@ describe('sourceCommands versionInGit', () => {
 
   it('commits no asset for a file the game folder holds with its bytes', async () => {
     const { client, handed } = committing();
-    const file = { path: 'Data/textures/a.dds', hash: 'G', pathInFolder: 'textures/a.dds' };
+    const file = { path: 'Data/textures/a.dds', hash: hashOf('G'), pathInFolder: 'textures/a.dds' };
     const adapter = modsAt({
       ...hashed({ 'textures/a.dds': 'G', 'scripts/b.pex': 'B' }, '/instance/mods/ModC'),
       places: [{ root: '/game', holdsDataFiles: true, depots: [], depotProblems: [], gameFilesTaken: new Map([['ModC', { kind: 'read', answer: { gameFiles: [file], notes: [] } }]]) }],

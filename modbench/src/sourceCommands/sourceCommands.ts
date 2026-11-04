@@ -164,12 +164,12 @@ async function modsVersionedInGit(
     adapter, { mods, where, onProgress: (mod, modsDone, modsTotal) => onProgress?.({ mod, modsDone, modsTotal, phase: 'ReadingFiles' }) },
     sentOver, (outcome) => outcome.landed.map(({ mod }) => mod));
   if (isRefused(placed)) return placed;
-  const { outcome, notMade, notLinked, notes } = placed;
+  const { outcome, notMade, unfinished, notes } = placed;
   if (isRefused(outcome)) return outcome;
   const refused = [
     ...outcome.refused,
     ...[...notMade].map(([item, reason]) => ({ item, reason })),
-    ...[...notLinked].map(([item, why]) => ({ item, reason: `was ${commit ? 'committed' : 'put under git'}, but ${why}.` })),
+    ...[...unfinished].map(([item, why]) => ({ item, reason: `was ${commit ? 'committed' : 'put under git'}, but ${why}.` })),
   ];
   return { landed: outcome.landed, refused, ...notes.length === 0 ? {} : { notes } };
 }

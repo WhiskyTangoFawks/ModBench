@@ -58,12 +58,12 @@ public interface ISourceAdapter
     /// file that is not valid UTF-8 stamps alike on disk and in the record index.</summary>
     string ContentStamp(string text);
 
-    /// <summary>A source folder for a mod that has none, in the repository <paramref name="heldIn"/> names: one commit,
-    /// <c>Init &lt;mod&gt;</c>, of its files, then any repair. Without <paramref name="commit"/>, neither.</summary>
+    /// <summary>A source folder in the repository <paramref name="heldIn"/> names, and the mod folder's manifest: one commit,
+    /// <c>Init &lt;mod&gt;</c>, of the source folder, and in the instance repository that manifest, then any repair.</summary>
     SourceFailure? Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<FileToCopy> assets, bool commit, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest, IReadOnlyList<string> ignored,
-        SourceModIn heldIn);
+        SourceModIn heldIn, (string Folder, RootFile Manifest)? modFolderManifest);
 
     /// <summary>Where <paramref name="sourceFolder"/> holds the file at its forward-slash <paramref name="path"/>.</summary>
     string FileIn(string sourceFolder, string path);

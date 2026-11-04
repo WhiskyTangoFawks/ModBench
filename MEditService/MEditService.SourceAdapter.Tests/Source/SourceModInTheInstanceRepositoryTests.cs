@@ -42,6 +42,61 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void AnInit_CommitsTheModFoldersManifestItIsHanded_AndWhatElseIsStagedStaysStaged()
+    {
+        CommitTheModFoldersManifest();
+        StageAnotherChange();
+
+        Assert.Null(InitInInstanceRepository(_sourceFolder, commit: true, (ModFolder, LinkManifest)));
+
+        Assert.Contains(ModFolderManifestPath, Lines(Git("show", "--name-only", "--format=", "HEAD")));
+        Assert.Equal(LinkText, Git("cat-file", "-p", $"HEAD:{ModFolderManifestPath}"));
+        Assert.Equal(["modlist.txt"], Lines(Git("diff", "--cached", "--name-only")));
+    }
+
+    [Fact]
+    public void AFailedInit_LeavesTheModFoldersManifestAndTheIndexAsTheyWere()
+    {
+        CommitTheModFoldersManifest();
+        StageAnotherChange();
+        GitHooks.Write(_instance, "commit-msg", "exit 1");
+
+        Assert.NotNull(InitInInstanceRepository(_sourceFolder, commit: true, (ModFolder, LinkManifest)));
+
+        Assert.Equal("{}", File.ReadAllText(Path.Combine(ModFolder, LinkManifest.Name)));
+        Assert.Equal(["modlist.txt"], Lines(Git("diff", "--cached", "--name-only")));
+        Assert.Empty(Git("status", "--porcelain", "--", ModFolderManifestPath));
+    }
+
+    [Fact]
+    public void AnInitInARepositoryOfItsOwn_WritesTheModFoldersManifest_AndCommitsNothingInTheInstanceRepository()
+    {
+        CommitTheModFoldersManifest();
+        var before = Head();
+
+        Assert.Null(TestAdapters.Source().Init(
+            _sourceFolder, SourceInits.BuildFile, [OneRecordOf("A.esp")], [], commit: true, modFolderManifest: (ModFolder, LinkManifest)));
+
+        Assert.Equal(before, Head());
+        Assert.Equal($" M {ModFolderManifestPath}", Git("status", "--porcelain", "--", ModFolderManifestPath).TrimEnd());
+        Assert.Equal(LinkText, File.ReadAllText(Path.Combine(ModFolder, LinkManifest.Name)));
+    }
+
+    private const string LinkText = """{"version":1,"packages":[{"kind":"repository","name":"TestMod"}]}""";
+    private static readonly RootFile LinkManifest = new($"{TestMod.Name}.manifest.json", System.Text.Encoding.UTF8.GetBytes(LinkText));
+    private static readonly string ModFolderManifestPath = $"mods/{TestMod.Name}/{TestMod.Name}.manifest.json";
+
+    private string ModFolder => Path.Combine(_instance, "mods", TestMod.Name);
+
+    private void CommitTheModFoldersManifest()
+    {
+        Directory.CreateDirectory(ModFolder);
+        File.WriteAllText(Path.Combine(ModFolder, LinkManifest.Name), "{}");
+        Git("add", ModFolderManifestPath);
+        Git("commit", "-q", "-m", "The mod folder's manifest");
+    }
+
+    [Fact]
     public void UnderAnIgnoreListThatLetsInEverySourceFolder_AnInit_CommitsTheSourceFolderAlone_AndNoChangeOfTheIgnoreList()
     {
         CommitAnIgnoreListLettingInEverySourceFolder_ThenChangeIt();
@@ -230,8 +285,9 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
         Assert.False(TestAdapters.Source().IsSourceMod(outside));
     }
 
-    private static SourceFailure? InitInInstanceRepository(string sourceFolder, bool commit) =>
-        TestAdapters.Source().Init(sourceFolder, SourceInits.BuildFile, [OneRecordOf("A.esp")], [], commit, heldIn: SourceModIn.InstanceRepository);
+    private static SourceFailure? InitInInstanceRepository(string sourceFolder, bool commit, (string Folder, RootFile Manifest)? modFolderManifest = null) =>
+        TestAdapters.Source().Init(
+            sourceFolder, SourceInits.BuildFile, [OneRecordOf("A.esp")], [], commit, heldIn: SourceModIn.InstanceRepository, modFolderManifest: modFolderManifest);
 
     private string SourceFolderOf(string mod) => Path.Combine(_instance, "source", mod);
 

@@ -170,6 +170,8 @@ export interface InstanceAnswers {
   outsideInstance?: ReadonlySet<string>;
   /** Mods whose name gives them no source folder. */
   unsourcedMods?: ReadonlySet<string>;
+  /** Each mod's source folder, by mod name, where it is not `/source/<mod>`. */
+  sourceFolders?: ReadonlyMap<string, string>;
   /** The reads beside `reading()` that reject, with the message each rejects with. */
   unreadReads?: Partial<Record<'profiles' | 'modOrder' | 'downloadedFiles' | 'sourceModFolders' | 'otherManifests', string>>;
   installed?: InstallOutcome;
@@ -364,7 +366,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     followModFolders: (moves) => (answers.publisherTags === undefined ? Promise.resolve() : write({ verb: 'followModFolders', moves }, () => undefined)),
     modFolderPath: (mod) => Promise.resolve(isBareName(mod) ? foldersNow().holding({ kind: 'mod', name: mod })?.path ?? folderBeside(current.modFolders, mod) : undefined),
     foldersRefused: () => Promise.resolve([]),
-    sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
+    sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : answers.sourceFolders?.get(mod) ?? `/source/${mod}`),
     installationFile: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: undefined }),
     downloadedFile: (name) => Promise.resolve(answers.downloadedFiles?.get(name) ?? putHashedAsTheirText.get(name) ?? { kind: 'read', answer: undefined }),
     downloadedFileHolding: ({ size, hash }) => Promise.resolve({
