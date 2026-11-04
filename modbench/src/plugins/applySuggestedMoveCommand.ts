@@ -60,7 +60,7 @@ export function registerApplySuggestedMoveCommand(
       if (others.length > 0) throw new Refusal(`"${plugin.name}" has several suggested moves: name the broken rule.`);
       return chosenMoveOf(chosen);
     },
-    run: ({ plugin, drop }) => movePlugins(commands, instance, [plugin], drop),
+    run: ({ plugin, drop }) => movePlugins('modbench.plugin.applySuggestedMove', commands, instance, [plugin], drop),
     report: (result) => {
       if (!result.applied) reporter.report('error', result.refusal, result.detail);
     },

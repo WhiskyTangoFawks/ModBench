@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { AgentCall, reportPartial, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
+import { AgentCall, registerWritingCommand, reportPartial, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
@@ -16,12 +16,12 @@ interface ModlistGestureDeps {
 export function registerModlistCommands({ reporterFor, ...rest }: Omit<ModlistGestureDeps, 'reporter'> & { reporterFor: (tag: string) => Reporter }): vscode.Disposable[] {
   const deps = { ...rest, reporter: reporterFor('modlist') };
   return [
-    vscode.commands.registerCommand('modbench.modlist.gitInit', (clicked?: unknown) => (clicked instanceof AgentCall ? gitInitForAgent(deps) : gitInit(deps))),
+    registerWritingCommand('modbench.modlist.gitInit', (clicked?: unknown) => (clicked instanceof AgentCall ? gitInitForAgent(deps) : gitInit(deps))),
   ];
 }
 
 const gitInitInToolbox = ({ commands, instance }: ModlistGestureDeps) =>
-  runWritingGesture(TOOLBOX_VIEW, instance, () => commands.gitInit());
+  runWritingGesture('modbench.modlist.gitInit', TOOLBOX_VIEW, instance, () => commands.gitInit());
 
 const partialOf = ({ pushRefusalNotWritten, pathTokensNotWritten }: Extract<GitInitResult, { applied: true }>): PartialFailure[] => [
   ...(pushRefusalNotWritten === undefined ? [] : [`a push of a pin its source mod's remote lacks is not refused: ${pushRefusalNotWritten}`]),

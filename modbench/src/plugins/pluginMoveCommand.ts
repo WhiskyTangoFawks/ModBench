@@ -3,7 +3,7 @@ import type { PluginAddress } from '../client';
 import type { Instance } from '../instanceLoader/instance';
 import { registerAgentGesture, type AgentGesture, type GestureResult } from '../drivingLib/agentGesture';
 import { pluralArgument } from '../drivingLib/gestureEntry';
-import { runWritingGesture } from '../drivingLib/writingGesture';
+import { RefusedWrite, runWritingGesture } from '../drivingLib/writingGesture';
 import type { PluginCommands, PluginsDrop } from '../pluginCommands/plugins';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
@@ -27,15 +27,16 @@ interface Move {
 }
 
 export async function movePlugins(
-  commands: Pick<PluginCommands, 'reorderPlugins'>, instance: Pick<Instance, 'value' | 'refresh'>,
+  write: string, commands: Pick<PluginCommands, 'reorderPlugins'>, instance: Pick<Instance, 'value' | 'refresh'>,
   plugins: readonly PluginAddress[], drop: PluginsDrop,
 ): Promise<GestureResult<PluginAddress>> {
   try {
-    const result = await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, () => commands.reorderPlugins(plugins, drop));
+    const result = await runWritingGesture(write, PLUGINS_KEY_ARGS.view, instance, () => commands.reorderPlugins(plugins, drop));
     return result.applied
       ? { applied: true, outcome: { landed: plugins, refused: [] } }
       : { applied: false, refusal: 'Could not move plugins.', detail: result.refusal };
   } catch (e) {
+    if (e instanceof RefusedWrite) throw e;
     return { applied: false, refusal: 'Failed to move plugins.', detail: errorMessage(e) };
   }
 }
@@ -56,7 +57,7 @@ export function registerPluginMoveCommand(
       return drop && { plugins, drop };
     },
     fromAgent: ({ argument, options }) => ({ plugins: argument.map(pluginOf), drop: options.drop }),
-    run: ({ plugins, drop }) => movePlugins(commands, instance, plugins, drop),
+    run: ({ plugins, drop }) => movePlugins('modbench.plugin.move', commands, instance, plugins, drop),
     report: (result) => {
       if (!result.applied) reporter.report('error', result.refusal, result.detail);
     },

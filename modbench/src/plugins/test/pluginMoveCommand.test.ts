@@ -39,6 +39,8 @@ import { present } from '../../ports/present';
 import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
 import { progressSteps } from '../../test/recordedProgress';
+import { aWriteInFlight } from '../../test/writeInFlight';
+import { RefusedWrite } from '../../drivingLib/writingGesture';
 
 const MOVE = 'modbench.plugin.move';
 const A = { name: 'A.esp', origin: 'ModA' };
@@ -79,6 +81,27 @@ function registered(
   registerPluginMoveCommand(pluginCommandsWith(fake.adapter, masters), instance, { selection: () => selection, movePlaces: () => PLACES }, reporter);
   return { reporter, fake };
 }
+
+describe('modbench.plugin.move, asked while a write is in flight', () => {
+  it('tells the user once, as a refusal and no failure', async () => {
+    const { told } = aWriteInFlight();
+    const { reporter, fake } = registered();
+
+    await invoke(...rowsOf(A), { kind: 'winningEnd' });
+
+    expect({ calls: fake.calls, own: reporter.reports, told: told.reports.map(({ message }) => message) }).toEqual({
+      calls: [], own: [], told: ['modbench.plugin.move did not start: modbench.test.held is still writing.'],
+    });
+  });
+
+  it('goes back to the agent as the refusal', async () => {
+    aWriteInFlight();
+    registered();
+    const call = new AgentCall([{ kind: 'plugin', plugin: A }], { drop: { kind: 'winningEnd' } });
+
+    await expect(invoke(call)).rejects.toBeInstanceOf(RefusedWrite);
+  });
+});
 
 describe('modbench.plugin.move', () => {
   it('hands the adapter the move to the target and ends on the read after it, under the Plugins view\'s progress', async () => {

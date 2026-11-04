@@ -4,7 +4,7 @@ import type { PluginCommands } from '../pluginCommands/plugins';
 import { registerAgentGesture, type AgentGesture, type GestureResult } from '../drivingLib/agentGesture';
 import { pluralArgument } from '../drivingLib/gestureEntry';
 import { Refusal } from '../drivingLib/refusal';
-import { runWritingGesture } from '../drivingLib/writingGesture';
+import { RefusedWrite, runWritingGesture } from '../drivingLib/writingGesture';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { pluginNameKey, type PluginAddress } from '../wire/pluginAddress';
@@ -46,11 +46,12 @@ export function registerLoadAfterCommand(
     },
     run: async ({ plugins, after }) => {
       try {
-        const result = await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, () => commands.loadAfter(plugins.map(({ name }) => name), after));
+        const result = await runWritingGesture('modbench.plugin.loadAfter', PLUGINS_KEY_ARGS.view, instance, () => commands.loadAfter(plugins.map(({ name }) => name), after));
         return result.applied
           ? { applied: true, outcome: { landed: plugins, refused: [] } }
           : { applied: false, refusal: 'Could not write the load after.', detail: result.refusal };
       } catch (e) {
+        if (e instanceof RefusedWrite) throw e;
         return { applied: false, refusal: 'Failed to write the load after.', detail: errorMessage(e) };
       }
     },

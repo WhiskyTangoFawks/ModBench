@@ -77,7 +77,7 @@ export function registerPublisherTagCommands(
         return given.kind === 'mod' ? { origin: { kind: 'mod', name: given.name } } : { origin: given.origin, relativePath: given.relativePath };
       }),
     }),
-    run: ({ tag, rows }) => runModsWriting(instance, () => commands.changePublisherTag(change, tag, rows)),
+    run: ({ tag, rows }) => runModsWriting(change === 'add' ? 'modbench.mod.addPublisherTag' : 'modbench.mod.removePublisherTag', instance, () => commands.changePublisherTag(change, tag, rows)),
     report: (result, { tag, rows }) => {
       if (!result.applied) {
         reporter.report('error', `Failed to ${change} ${tag}.`, result.refusal);
