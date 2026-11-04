@@ -48,6 +48,17 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
     expect(steps).toEqual(['progress opens on modbench.thing', 'refresh', 'progress closes']);
   });
 
+  it.each([
+    ['a refusal', { applied: false, refusal: 'no' }],
+    ['a write mEdit refused', { refused: true, message: 'no' }],
+  ])('answers %s without waiting for a refresh', async (_, refusal) => {
+    steps.length = 0;
+    const neverShows = { refresh: () => new Promise<undefined>(() => undefined) };
+
+    expect(await runWritingGesture('modbench.write', 'modbench.thing', neverShows, () => Promise.resolve(refusal))).toBe(refusal);
+    expect(steps).toEqual(['progress opens on modbench.thing', 'progress closes']);
+  });
+
   it('answers what the command answered', async () => {
     expect(await runWritingGesture('modbench.write', 'modbench.thing', instanceThatReads(), () => Promise.resolve('landed'))).toBe('landed');
   });
