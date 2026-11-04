@@ -179,7 +179,21 @@ internal sealed class SourceRepository : ISourceRepository
         return new RecordOfFileAnswer.Refused($"{fullPath} is under no compiled plugin's source.");
     }
 
-    internal static bool TreeHolds(RegisteredPlugin plugin, string fullPath) => TreeFolderHolding(plugin, fullPath) is not null;
+    internal static PathAnswer Touching(LoadOrderSnapshot loadOrder, string fullPath)
+    {
+        var holding = loadOrder.Plugins.Where(plugin => TreeFolderHolding(plugin, fullPath) is not null).ToList();
+        if (holding.Count > 0) return new PathAnswer.Touches(holding);
+        return loadOrder.Plugins
+            .Select(plugin => plugin.Provider)
+            .OfType<PluginProvider.FromMod>()
+            .Select(mod => mod.SourceFolder)
+            .OfType<string>()
+            .Distinct(StringComparer.Ordinal)
+            .Any(sourceFolder => SourceRepositoryLayout.ReadForThePluginsOf(sourceFolder, fullPath)
+                || SourceRepositoryGit.RepositoryHolds(sourceFolder, fullPath))
+            ? new PathAnswer.Unnamed()
+            : new PathAnswer.Untouched();
+    }
 
     private static string? TreeFolderHolding(RegisteredPlugin plugin, string fullPath) =>
         plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder }
@@ -187,7 +201,7 @@ internal sealed class SourceRepository : ISourceRepository
         && tree.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)
         && IsSourceMod(sourceFolder)
         && SourceRepositoryLayout.TreeNameIn(sourceFolder, plugin.Name).Holds(out var named, out _)
-        && string.Equals(named, tree, SourceRepositoryLocator.PathComparison)
+        && string.Equals(named, tree, FilePaths.Comparison)
             ? tree
             : null;
 
@@ -363,7 +377,7 @@ internal sealed class SourceRepository : ISourceRepository
             var name = Spelled(plugin).Name;
             var sources = Path.Combine(_sourceFolder, SourceRepositoryLayout.RootFolderName);
             return Files.EntriesUnder(sources).Any(entry => string.Equals(Path.GetFileName(entry), newName, StringComparison.OrdinalIgnoreCase)
-                    && string.Equals(PathShape.DirectoryOf(entry), sources, SourceRepositoryLocator.PathComparison))
+                    && string.Equals(PathShape.DirectoryOf(entry), sources, FilePaths.Comparison))
                 ? null
                 : Writes.ChangesToRenameSource(name, newName);
         });

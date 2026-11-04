@@ -29,11 +29,11 @@ public abstract class DelegatingSourceAdapter(ISourceAdapter inner) : ISourceAda
     public virtual IWriteSession WriteSessionOver(PluginProvider.FromMod provider, GameRelease release, IReadOnlyList<DocumentChange> held) =>
         inner.WriteSessionOver(provider, release, held);
 
-    public virtual bool TreeHolds(RegisteredPlugin plugin, string path) => inner.TreeHolds(plugin, path);
+    public virtual PathAnswer Touching(LoadOrderSnapshot loadOrder, string path) => inner.Touching(loadOrder, path);
 
-    public void SignalChange() => inner.SignalChange();
+    public void SignalChange(IReadOnlyList<PluginAddress>? plugins) => inner.SignalChange(plugins);
 
-    public event Action? ChangeSignalled
+    public event Action<IReadOnlyList<PluginAddress>?>? ChangeSignalled
     {
         add => inner.ChangeSignalled += value;
         remove => inner.ChangeSignalled -= value;

@@ -182,6 +182,7 @@ public static class CommandHandlers
         services.AddSingleton(sp => new SignalChangeHandler(
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<ISourceAdapter>(),
+            sp.GetRequiredService<IPluginAdapter>(),
             new ExternalChangeCheck(
                 sp.GetRequiredService<INotificationPublisher>(),
                 sp.GetRequiredService<IPluginAdapter>(),

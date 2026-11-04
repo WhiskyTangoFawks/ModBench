@@ -35,9 +35,9 @@ activation -> instancecommands: "signal change: the paths, or none" {class: sign
 instancecommands -> client: "the paths, or none" {class: signal}
 client -> http: "the paths, or none" {class: signal}
 http -> commands: signal change {class: signal}
-pluginadapter -> commands: "each changed compiled plugin's hash" {class: query}
-sourceadapter -> commands: "what Modbench last wrote · which plugins hold plugin source" {class: query}
-commands."each changed compiled plugin's hash against what Modbench last wrote"
+pluginadapter -> commands: "for each path: the plugins whose file or strings it is, plugins it cannot name, or nothing · each changed compiled plugin's hash" {class: query}
+sourceadapter -> commands: "for each path: plugins it cannot name, or not · what Modbench last wrote · which plugins hold plugin source" {class: query}
+commands."in each mod whose plugin files a path touches, or every mod when no path, or one read for plugins no adapter names: each changed compiled plugin's hash against what Modbench last wrote"
 commands -> port: "external change: the mod, its changed plugins · plugins whose plugin source is unreadable" {class: push}
 port -> http: publish {class: push}
 http -> client: stream {class: push}

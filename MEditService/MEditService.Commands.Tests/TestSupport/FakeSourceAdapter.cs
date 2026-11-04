@@ -55,11 +55,11 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
     public ISourceRepository OverFolder(PluginProvider.FromMod provider, GameRelease release) => throw Unreached();
 
-    public bool TreeHolds(RegisteredPlugin plugin, string path) => throw Unreached();
+    public PathAnswer Touching(LoadOrderSnapshot loadOrder, string path) => throw Unreached();
 
-    public void SignalChange() => ChangeSignalled?.Invoke();
+    public void SignalChange(IReadOnlyList<PluginAddress>? plugins) => ChangeSignalled?.Invoke(plugins);
 
-    public event Action? ChangeSignalled;
+    public event Action<IReadOnlyList<PluginAddress>?>? ChangeSignalled;
 
     public RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path) => throw Unreached();
 

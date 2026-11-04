@@ -32,11 +32,11 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved, TimeProvider time
     public IWriteSession WriteSessionOver(PluginProvider.FromMod provider, GameRelease release, IReadOnlyList<DocumentChange> held) =>
         WriteSession.Over(provider, release, held, _stamps);
 
-    public bool TreeHolds(RegisteredPlugin plugin, string path) => SourceRepository.TreeHolds(plugin, Path.GetFullPath(path));
+    public PathAnswer Touching(LoadOrderSnapshot loadOrder, string path) => SourceRepository.Touching(loadOrder, Path.GetFullPath(path));
 
-    public void SignalChange() => ChangeSignalled?.Invoke();
+    public void SignalChange(IReadOnlyList<PluginAddress>? plugins) => ChangeSignalled?.Invoke(plugins);
 
-    public event Action? ChangeSignalled;
+    public event Action<IReadOnlyList<PluginAddress>?>? ChangeSignalled;
 
     public RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path) =>
         SourceRepository.RecordOfFile(loadOrder, path, Files(), _stamps);

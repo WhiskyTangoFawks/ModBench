@@ -50,11 +50,12 @@ changes: "each change the watch sees" {
   instancecommands -> client: "the paths, or none" {class: signal}
   client -> http: "the paths, or none" {class: signal}
   http -> commands: signal change {class: signal}
-  commands -> sourceadapter: "the paths, or none to check the disk" {class: signal}
-  commands -> pluginadapter: "the paths, or none to check the disk" {class: signal}
-  sourceadapter -> indexer: "the plugins whose plugin source changed" {class: signal}
-  pluginadapter -> indexer: "the plugins whose bytes changed" {class: signal}
-  indexer."re-read each plugin that changed"
+  sourceadapter -> commands: "for each path: the plugins whose plugin source holds it, plugins it cannot name, or nothing" {class: query}
+  pluginadapter -> commands: "for each path: the plugins whose file or strings it is, plugins it cannot name, or nothing" {class: query}
+  commands."no path, or one read for plugins no adapter names: check the disk"
+  commands -> sourceadapter: "the plugins named, or none to check the disk" {class: signal}
+  sourceadapter -> indexer: "the plugins named, or none to check the disk" {class: signal}
+  indexer."re-read each plugin named, or every plugin"
 }
 codec -> indexer: schema {class: query}
 sourceadapter -> indexer: documents (a compiled plugin) {class: query}

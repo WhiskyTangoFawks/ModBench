@@ -14,7 +14,7 @@ internal static class ExternalChanges
         var notifications = new InMemoryNotificationPublisher();
         var service = TestEditService.Over(new LoadOrderHolder(), notifications: notifications);
         Put(loadOrder, service.GetRequiredService<PutLoadOrderHandler>());
-        service.GetRequiredService<SignalChangeHandler>().Signal();
+        service.GetRequiredService<SignalChangeHandler>().Signal([]);
         return notifications.Notifications.OfType<ExternalChangeNotification>().SelectMany(notice => notice.Plugins).ToList();
     }
 

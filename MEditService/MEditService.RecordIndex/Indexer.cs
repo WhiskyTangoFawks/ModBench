@@ -14,8 +14,8 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.RecordIndex;
 
-/// <summary>Brings the Store to the load order (ADR-0013), and at each change signalled validates every plugin against its
-/// system of record (ADR-0015). It holds the open plugins, the progress and the Store's scope.</summary>
+/// <summary>Brings the Store to the load order (ADR-0013), and validates each plugin a change names, or every plugin at a
+/// check of the disk (ADR-0015). It holds the open plugins, the progress and the scope.</summary>
 internal sealed class Indexer : IDisposable
 {
     private readonly LoadOrderHolder _holder;
@@ -72,9 +72,9 @@ internal sealed class Indexer : IDisposable
     private int _plannedCount;
     private int _activeCount;
     private IReadOnlyList<PluginLoadFailure> _collisionFailures = [];
-    private sealed record Standing(long Version, string? HeldElsewhere, string? Failure, string? HandOverFailure)
+    private sealed record Standing(long Version, string? HeldElsewhere, string? Failure, string? ReReadFailure)
     {
-        public Standing WithoutRefusals() => this with { HeldElsewhere = null, Failure = null, HandOverFailure = null };
+        public Standing WithoutRefusals() => this with { HeldElsewhere = null, Failure = null, ReReadFailure = null };
     }
 
     // Replaced whole under _lock, never edited in place, so a reader sees a version with its own refusals.
@@ -130,11 +130,12 @@ internal sealed class Indexer : IDisposable
     // The source writes made before the last change signalled: the check it asks for vouches only for those.
     private long _writesSignalled;
     private readonly List<string> _handed = [];
+    private readonly HashSet<PluginAddress> _named = new(PluginAddress.Comparer);
     private bool _working;
     private bool _disposed;
     private CancellationTokenSource? _reconcileCancellation;
 
-    // Guards the seven fields above. Not _lock, so an arrival never waits on a status read or publish; none
+    // Guards the eight fields above. Not _lock, so an arrival never waits on a status read or publish; none
     // of this class's other locks is taken inside it.
     private readonly Lock _turns = new();
 
@@ -281,7 +282,7 @@ internal sealed class Indexer : IDisposable
 
                 if (_standing.HeldElsewhere is { } heldElsewhere)
                     return held with { State = LoadOrderState.HeldElsewhere, Message = heldElsewhere };
-                if ((_standing.Failure ?? _standing.HandOverFailure) is { } failure)
+                if ((_standing.Failure ?? _standing.ReReadFailure) is { } failure)
                     return held with { State = LoadOrderState.Failed, Message = failure };
                 return held;
             }
@@ -324,7 +325,22 @@ internal sealed class Indexer : IDisposable
         }
     }
 
-    // ADR-0015.
+    // ADR-0015: the plugins a change names are re-read, and a change that names none checks every plugin.
+    private void OnChangeSignalled(IReadOnlyList<PluginAddress>? plugins)
+    {
+        if (plugins is null) AskCheck();
+        else AskReRead(plugins);
+    }
+
+    private void AskReRead(IReadOnlyList<PluginAddress> plugins)
+    {
+        lock (_turns)
+        {
+            _named.UnionWith(plugins);
+            WakeWorker();
+        }
+    }
+
     private void AskCheck()
     {
         lock (_turns)
@@ -373,7 +389,7 @@ internal sealed class Indexer : IDisposable
     {
         lock (_turns)
         {
-            if (_disposed || (!_reconcileAsked && !_checkAsked && _handed.Count == 0))
+            if (_disposed || (!_reconcileAsked && !_checkAsked && _handed.Count == 0 && _named.Count == 0))
             {
                 _working = false;
                 return null;
@@ -381,32 +397,40 @@ internal sealed class Indexer : IDisposable
             if (_reconcileAsked || _checkAsked)
             {
                 long? writes = _checkAsked ? _writesSignalled : null;
+                if (_checkAsked) _named.Clear();
                 (_reconcileAsked, _checkAsked) = (false, false);
                 return () => ReconcileHeld(writes);
             }
             List<string> paths = [.. _handed];
+            HashSet<PluginAddress> named = new(_named, PluginAddress.Comparer);
             _handed.Clear();
-            return () => ValidateAndPublish(paths);
+            _named.Clear();
+            return () => ValidateAndPublish(paths, named);
         }
     }
 
-    private void ValidateAndPublish(List<string> paths)
+    private void ValidateAndPublish(List<string> paths, HashSet<PluginAddress> named)
     {
         bool moved;
         _exclusive.Enter();
         try
         {
-            var failure = ValidationFailure(() => ValidateTreesOf(paths), CancellationToken.None, out _);
-            moved = Swap(standing => standing with { HandOverFailure = failure });
+            var failure = ValidationFailure(() => ValidateNamed(paths, named), CancellationToken.None, out _);
+            moved = Swap(standing => standing with { ReReadFailure = failure });
         }
         finally { _exclusive.Exit(); }
         if (moved) PublishStatus();
     }
 
-    private void ValidateTreesOf(List<string> paths)
+    private void ValidateNamed(List<string> paths, HashSet<PluginAddress> named)
     {
         var scope = RequireScope();
-        var holding = scope.Held.Plugins.Where(plugin => paths.Exists(path => _source.TreeHolds(plugin.Registered, path))).ToList();
+        named.UnionWith(paths
+            .Select(path => _source.Touching(scope.LoadOrder, path))
+            .OfType<PathAnswer.Touches>()
+            .SelectMany(touches => touches.Plugins)
+            .Select(plugin => plugin.Key));
+        var holding = scope.Held.Plugins.Where(plugin => named.Contains(plugin.Key)).ToList();
         if (holding.Count > 0) Validate(scope, holding, CancellationToken.None);
     }
 
@@ -1276,7 +1300,7 @@ internal sealed class Indexer : IDisposable
     {
         _holder.Arrived += OnArrived;
         _unsaved.Arrived += ValidateTreesHolding;
-        _source.ChangeSignalled += AskCheck;
+        _source.ChangeSignalled += OnChangeSignalled;
     }
 
     private void OnArrived(LoadOrderSnapshot snapshot, long version) => AskReconcile();
@@ -1304,7 +1328,7 @@ internal sealed class Indexer : IDisposable
     {
         _holder.Arrived -= OnArrived;
         _unsaved.Arrived -= ValidateTreesHolding;
-        _source.ChangeSignalled -= AskCheck;
+        _source.ChangeSignalled -= OnChangeSignalled;
 
         lock (_turns) _disposed = true;
 

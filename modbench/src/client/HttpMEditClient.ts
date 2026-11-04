@@ -137,7 +137,7 @@ class HttpMEditClient implements MEditClient {
       start: () => this.lifecycle.start(),
       stop: () => this.lifecycle.stop(),
       put: (snapshot, signal, answered) => this.putLoadOrder(snapshot, signal, answered),
-      signalChange: () => this.postSignalChange(),
+      signalChange: (paths) => this.postSignalChange(paths),
     });
     announceAfterReopen(this.loadOrder, this.notifications);
     this.handOver = createUnsavedHandOver({
@@ -184,7 +184,7 @@ class HttpMEditClient implements MEditClient {
 
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> { return this.loadOrder.send(snapshot); }
   latestLoadOrder(): Promise<LoadOrderOutcome | undefined> { return this.loadOrder.latest(); }
-  signalChange(): void { this.loadOrder.signalChange(); }
+  signalChange(paths: readonly string[]): void { this.loadOrder.signalChange(paths); }
   onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void {
     return this.loadOrder.onResent(listener);
   }
@@ -302,9 +302,9 @@ class HttpMEditClient implements MEditClient {
   }
 
   // ADR-0015. A signal mEdit never heard is told in the log: the next one checks the disk all the same.
-  private async postSignalChange(): Promise<void> {
+  private async postSignalChange(paths: readonly string[]): Promise<void> {
     try {
-      const { error, response } = await this.apiClient.POST('/signal-change', {});
+      const { error, response } = await this.apiClient.POST('/signal-change', { body: { paths: [...paths] } });
       if (!response.ok) this.log.error(`[HttpMEditClient] signalChange failed (${response.status}): ${errorText(error)}`);
     } catch (e) {
       this.log.error(`[HttpMEditClient] signalChange threw: ${errorMessage(e)}`);

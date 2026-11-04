@@ -40,14 +40,16 @@ public interface ISourceAdapter
     /// place of the file at its absolute path.</summary>
     IWriteSession WriteSessionOver(PluginProvider.FromMod provider, GameRelease release, IReadOnlyList<DocumentChange> held);
 
-    bool TreeHolds(RegisteredPlugin plugin, string path);
+    /// <summary>The plugins whose plugin source holds <paramref name="path"/>, or plugins it cannot name for a source mod's
+    /// build file, repository, or plugin source no plugin's tree holds.</summary>
+    PathAnswer Touching(LoadOrderSnapshot loadOrder, string path);
 
-    /// <summary>Relays Mod Management's word that the disk changed, naming no path, to the record index, which checks every
-    /// plugin (ADR-0015).</summary>
-    void SignalChange();
+    /// <summary>Relays Mod Management's word that the disk changed to the record index (ADR-0015): the plugins its paths name,
+    /// which it re-reads, or null, and it checks every plugin.</summary>
+    void SignalChange(IReadOnlyList<PluginAddress>? plugins);
 
-    /// <summary>Raised by each <see cref="SignalChange"/>.</summary>
-    event Action? ChangeSignalled;
+    /// <summary>Raised by each <see cref="SignalChange"/>, with its plugins.</summary>
+    event Action<IReadOnlyList<PluginAddress>?>? ChangeSignalled;
 
     RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path);
 

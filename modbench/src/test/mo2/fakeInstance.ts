@@ -1,4 +1,5 @@
-import type { InstanceValue } from '../../instanceLoader/instance';
+import type { InstanceSubscriber, InstanceValue } from '../../instanceLoader/instance';
+import { CHECK_THE_DISK } from '../../instanceAdapter/instanceAdapter';
 
 /** The double every provider's row contract needs: `.value` plus `.subscribe`, structurally
  *  compatible with `Instance` without ever constructing one. Shared so a fake `publish`ed
@@ -9,24 +10,24 @@ export class FakeInstance {
   // of the sequence === 0 ("not read yet") guard passes 0 explicitly.
   sequence: number;
   readFailure: string | undefined;
-  private subscribers: ((value: InstanceValue, sequence: number) => void)[] = [];
+  private subscribers: InstanceSubscriber[] = [];
   private failureListeners: (() => void)[] = [];
   private redrawListeners: (() => void)[] = [];
   constructor(initial: InstanceValue, sequence = 1) {
     this.value = initial;
     this.sequence = sequence;
   }
-  subscribe(subscriber: (value: InstanceValue, sequence: number) => void) {
+  subscribe(subscriber: InstanceSubscriber) {
     this.subscribers.push(subscriber);
     return { dispose: () => { this.subscribers = this.subscribers.filter((s) => s !== subscriber); } };
   }
   // Simulates a landed recompute: publishes to every live subscriber, the way Instance's own
   // watcher-driven recompute does.
-  publish(value: InstanceValue): void {
+  publish(value: InstanceValue, reread = CHECK_THE_DISK): void {
     this.value = value;
     this.readFailure = undefined;
     this.sequence++;
-    for (const subscriber of [...this.subscribers]) subscriber(value, this.sequence);
+    for (const subscriber of [...this.subscribers]) void subscriber(value, this.sequence, reread);
   }
   refresh(): Promise<void> {
     this.publish(this.value);

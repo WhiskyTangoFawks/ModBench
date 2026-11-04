@@ -102,6 +102,7 @@ const requestLog: string[] = [];
 const putLoadOrders: string[][] = [];
 const putPlaces: string[][] = [];
 const handedUnsaved: unknown[][] = [];
+const signalledPaths: string[][] = [];
 const comparedTexts: unknown[] = [];
 const comparedSideBySide: unknown[] = [];
 
@@ -136,6 +137,13 @@ function pluginNamesOf(body: string): string[] {
   if (!Array.isArray(plugins)) throw new Error(`expected a PUT /load-order body with a plugins array, got: ${body}`);
   return plugins.map((p: unknown) => (typeof p === 'object' && p !== null && 'name' in p ? String(p.name) : '?'));
 }
+function pathsSignalled(body: string): string[] {
+  const parsed: unknown = JSON.parse(body);
+  const paths = isRecord(parsed) ? parsed.paths : undefined;
+  if (!Array.isArray(paths)) throw new Error(`expected a POST /signal-change body with a paths array, got: ${body}`);
+  return paths.map(String);
+}
+
 function namesIn(body: string, list: 'places'): string[] {
   const parsed: unknown = JSON.parse(body);
   const entries = isRecord(parsed) ? parsed[list] : undefined;
@@ -181,8 +189,13 @@ function createMockBackend(): http.Server {
       return;
     }
     if (method === 'POST' && url === '/signal-change') {
-      res.writeHead(204);
-      res.end();
+      let body = '';
+      req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+      req.on('end', () => {
+        signalledPaths.push(pathsSignalled(body));
+        res.writeHead(204);
+        res.end();
+      });
       return;
     }
     if (method === 'POST' && url === '/index/rebuild') {
@@ -1981,12 +1994,12 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
           rmSync(path.join(root, 'source'), { recursive: true, force: true });
         });
 
-        it('signals a change on a write to it', async () => {
-          const before = signalCount();
+        it('signals a change naming it on a write to it', async () => {
+          const before = signalledPaths.length;
 
           writeThroughTemp(file, '{ }');
 
-          await waitFor('a POST /signal-change after the write', () => signalCount() > before);
+          await waitFor('a POST /signal-change naming the file after the write', () => signalledPaths.slice(before).some((paths) => paths.includes(file)));
         });
       });
     }

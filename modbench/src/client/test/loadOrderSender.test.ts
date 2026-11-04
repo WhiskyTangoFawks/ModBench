@@ -28,6 +28,7 @@ function snapshot(name: string): LoadOrderSnapshot {
 
 const sentNames = (client: InMemoryMEditClient) => client.puts().map((put) => put.plugins.map((p) => p.name).join());
 const methods = (client: InMemoryMEditClient) => client.calls.map((c) => c.method);
+const signalled = (client: InMemoryMEditClient) => client.calls.filter((c) => c.method === 'signalChange').map((c) => c.args[0]);
 
 function running(): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
@@ -482,7 +483,7 @@ describe('a change signalled', () => {
     client.answerPuts((_sent, _signal, answered) => { answer = answered; return pending<LoadOrderOutcome>().promise; });
     void client.sendLoadOrder(snapshot('A.esp'));
 
-    client.signalChange();
+    client.signalChange([]);
     await vi.waitFor(() => { expect(methods(client)).toEqual(['put']); });
     answer();
 
@@ -497,7 +498,7 @@ describe('a change signalled', () => {
       void client.sendLoadOrder(snapshot('A.esp'));
       void client.sendLoadOrder(snapshot('B.esp'));
 
-      client.signalChange();
+      client.signalChange([]);
       await vi.advanceTimersByTimeAsync(SIGNAL_WAIT_CAP_MS - 1);
       expect(methods(client)).toEqual(['put']);
       await vi.advanceTimersByTimeAsync(1);
@@ -513,9 +514,9 @@ describe('a change signalled', () => {
     const released = pending<undefined>();
     client.answerSignals(() => released.promise);
 
-    client.signalChange();
-    client.signalChange();
-    client.signalChange();
+    client.signalChange([]);
+    client.signalChange([]);
+    client.signalChange([]);
     released.resolve(undefined);
     await vi.waitFor(() => { expect(methods(client)).toEqual(['signalChange', 'signalChange']); });
     await client.sendLoadOrder(snapshot('A.esp'));
@@ -523,11 +524,26 @@ describe('a change signalled', () => {
     expect(methods(client)).toEqual(['signalChange', 'signalChange', 'put']);
   });
 
+  it.each([
+    { handed: [['/a.esp'], ['/b.esp', '/a.esp']], folded: ['/a.esp', '/b.esp'] },
+    { handed: [['/a.esp'], [], ['/b.esp']], folded: [] },
+  ])('folds the paths of the signals handed while one is in flight, and a signal that names none checks the disk: $handed', async ({ handed, folded }) => {
+    const client = running();
+    const released = pending<undefined>();
+    client.answerSignals(() => released.promise);
+    client.signalChange(['/first.esp']);
+
+    for (const paths of handed) client.signalChange(paths);
+    released.resolve(undefined);
+
+    await vi.waitFor(() => { expect(signalled(client)).toEqual([['/first.esp'], folded]); });
+  });
+
   it('waits for mEdit to run', async () => {
     const client = new InMemoryMEditClient();
     client.answerPuts(() => Promise.resolve(APPLIED));
 
-    client.signalChange();
+    client.signalChange([]);
     expect(methods(client)).toEqual([]);
     await client.start();
 
