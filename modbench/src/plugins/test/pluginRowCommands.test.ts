@@ -314,7 +314,7 @@ describe('modbench.plugin.decompile, called by the agent', () => {
     client.setCommandResult('decompile', { refused: true, message: 'git was not found on PATH.' });
     const { handler, reporter } = registered(client);
 
-    expect(await handler(calling(SECOND))).toEqual({ applied: false, wroteNothing: true, refusal: 'git was not found on PATH.' });
+    expect(await handler(calling(SECOND))).toEqual({ applied: false, refusal: 'git was not found on PATH.' });
     expect(reporter.reports).toEqual([]);
   });
 

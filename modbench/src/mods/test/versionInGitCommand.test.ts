@@ -328,7 +328,6 @@ describe('modbench.mod.versionInGit', () => {
     ]);
     expect(reporter.landings).toEqual([]);
     expect(onCommitted).not.toHaveBeenCalled();
-    expect(progressSteps).not.toContain('Instance loader: read every file again');
   });
 
   it('says the mod and the phase on the message line of the view the gesture was fired from', async () => {
@@ -391,7 +390,7 @@ describe('modbench.mod.versionInGit', () => {
       commands.answers({ refused: true, message: 'the executable was not found on PATH.' });
       const { handler, onCommitted } = invokeVersionInGit(commands);
 
-      expect(await handler(calling('ModA'))).toEqual({ applied: false, refusal: 'the executable was not found on PATH.', wroteNothing: true });
+      expect(await handler(calling('ModA'))).toEqual({ applied: false, refusal: 'the executable was not found on PATH.' });
       expect(onCommitted).not.toHaveBeenCalled();
     });
   });

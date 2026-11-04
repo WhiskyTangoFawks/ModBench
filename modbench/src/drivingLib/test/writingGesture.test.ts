@@ -6,7 +6,6 @@ vi.mock('vscode', async () => {
 });
 
 import { progressSteps as steps } from '../../test/recordedProgress';
-import { refusedAnswer } from '../../ports/refused';
 import { asViewCall, RefusedWrite, runWritingGesture, surfaceRefusedWrites } from '../writingGesture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { Refusal } from '../refusal';
@@ -49,18 +48,6 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
     expect(steps).toEqual(['progress opens on modbench.thing', 'refresh', 'progress closes']);
   });
 
-  it('ends at once on a refused answer, with no refresh to wait for', async () => {
-    steps.length = 0;
-    const neverShows = { refresh: () => new Promise<undefined>(() => undefined) };
-
-    const answer = await runWritingGesture('modbench.write', 'modbench.thing', neverShows, () => Promise.resolve(refusedAnswer('no', 'because')));
-
-    expect({ answer, steps }).toEqual({
-      answer: { applied: false, refusal: 'no', detail: 'because', wroteNothing: true },
-      steps: ['progress opens on modbench.thing', 'progress closes'],
-    });
-  });
-
   it('ends at once on a Refusal the command throws', async () => {
     steps.length = 0;
     const neverShows = { refresh: () => new Promise<undefined>(() => undefined) };
@@ -70,7 +57,7 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
     expect(steps).toEqual(['progress opens on modbench.thing', 'progress closes']);
   });
 
-  it('refreshes after an answer that did not apply and does not say it wrote nothing, which can follow a write', async () => {
+  it('refreshes after an answer that did not apply, which can follow a write', async () => {
     steps.length = 0;
 
     await runWritingGesture('modbench.write', 'modbench.thing', instanceThatReads(), () => Promise.resolve({ applied: false, refusal: 'half installed' }));

@@ -1,13 +1,12 @@
 import { refuse } from '../coreLib/refuse';
-import { type CommandResult } from '../coreLib/commandResult';
-import { refusedAnswer } from '../ports/refused';
+import type { CommandResult } from '../coreLib/commandResult';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { LootMetadata } from '../lootMetadata/lootMetadata';
 
 async function update(adapter: InstanceAdapter, lootMetadata: LootMetadata): Promise<CommandResult> {
   try {
     const fetched = await lootMetadata.fetch(await adapter.gameRelease());
-    if (!fetched.found) return refusedAnswer(fetched.reason);
+    if (!fetched.found) return { applied: false, refusal: fetched.reason };
     const { wrote } = await adapter.changeMasterlist({ masterlist: fetched.masterlist, prelude: fetched.prelude });
     return { applied: true, wrote };
   } catch (err) {

@@ -27,7 +27,7 @@ describe('update', () => {
   it('refuses with the reason LOOT gave, writing nothing', async () => {
     const { fake, commands } = over(() => Promise.resolve({ found: false, reason: 'LOOT did not serve the masterlist: 404' }));
 
-    expect(await commands.update()).toEqual({ applied: false, wroteNothing: true, refusal: 'LOOT did not serve the masterlist: 404' });
+    expect(await commands.update()).toEqual({ applied: false, refusal: 'LOOT did not serve the masterlist: 404' });
     expect(fake.calls).toEqual([]);
   });
 

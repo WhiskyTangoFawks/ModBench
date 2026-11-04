@@ -65,7 +65,7 @@ describe('deploy', () => {
 
     const result = await deployCommands({ adapter: NO_MOVES, deployment, deploymentFolder: settingHolding(held) }).deploy(LOAD);
 
-    expect([result, deployedTo]).toEqual([{ applied: false, wroteNothing: true, refusal: `No deployment folder: set ${SETTING_ID}.` }, []]);
+    expect([result, deployedTo]).toEqual([{ applied: false, refusal: `No deployment folder: set ${SETTING_ID}.` }, []]);
   });
 
   it('is refused while the instance has not been read, so an empty load order removes nothing deploy wrote', async () => {
@@ -73,7 +73,7 @@ describe('deploy', () => {
 
     const result = await deployCommands({ adapter: NO_MOVES, deployment, deploymentFolder: settingHolding({ workspaceValue: '/deployed' }) }).deploy(undefined);
 
-    expect([result, deployedTo]).toEqual([{ applied: false, wroteNothing: true, refusal: 'The instance has not been read.' }, []]);
+    expect([result, deployedTo]).toEqual([{ applied: false, refusal: 'The instance has not been read.' }, []]);
   });
 
   it('is refused with the reason the deployment cannot deploy', async () => {
@@ -177,7 +177,7 @@ describe('move to Overwrite', () => {
 
     const result = await commands.moveToOverwrite(['Data/a.esp']);
 
-    expect([result, adapter.calls]).toEqual([{ applied: false, wroteNothing: true, refusal: `The deployment folder ${folder} is, holds or sits inside the game folder /games/Fallout4: moving the game's own files out of it would break the game.` }, []]);
+    expect([result, adapter.calls]).toEqual([{ applied: false, refusal: `The deployment folder ${folder} is, holds or sits inside the game folder /games/Fallout4: moving the game's own files out of it would break the game.` }, []]);
   });
 
   it('moves from a deployment folder whose name is only the start of the game folder\'s', async () => {
@@ -191,7 +191,7 @@ describe('move to Overwrite', () => {
   it('is refused, naming the setting, while the setting holds no value', async () => {
     const commands = deployCommands({ adapter: NO_MOVES, deployment: deploymentAnswering(landed).deployment, deploymentFolder: settingHolding(undefined) });
 
-    expect(await commands.moveToOverwrite(['Data/a.esp'])).toEqual({ applied: false, wroteNothing: true, refusal: `No deployment folder: set ${SETTING_ID}.` });
+    expect(await commands.moveToOverwrite(['Data/a.esp'])).toEqual({ applied: false, refusal: `No deployment folder: set ${SETTING_ID}.` });
   });
 });
 
@@ -217,7 +217,7 @@ describe('the files the deployment folder holds that deploy does not manage', ()
 
     const result = await deployCommands({ adapter: NO_MOVES, deployment, deploymentFolder: settingHolding(undefined) }).unmanaged();
 
-    expect(result).toEqual({ applied: false, wroteNothing: true, refusal: `No deployment folder: set ${SETTING_ID}.` });
+    expect(result).toEqual({ applied: false, refusal: `No deployment folder: set ${SETTING_ID}.` });
   });
 });
 
@@ -244,7 +244,7 @@ describe('purge', () => {
 
     const result = await deployCommands({ adapter: NO_MOVES, deployment, deploymentFolder: settingHolding(undefined) }).purge();
 
-    expect([result, purgedFrom]).toEqual([{ applied: false, wroteNothing: true, refusal: `No deployment folder: set ${SETTING_ID}.` }, []]);
+    expect([result, purgedFrom]).toEqual([{ applied: false, refusal: `No deployment folder: set ${SETTING_ID}.` }, []]);
   });
 
   it('is refused with the reason the deployment cannot purge', async () => {

@@ -28,7 +28,7 @@ describe('logIn', () => {
   it('refuses a key Nexus refuses, keeping nothing', async () => {
     const { commands, nexus } = loginOver();
 
-    expect(await commands.logIn('wrong', live)).toEqual({ applied: false, wroteNothing: true, refusal: 'Nexus refused this key.' });
+    expect(await commands.logIn('wrong', live)).toEqual({ applied: false, refusal: 'Nexus refused this key.' });
     expect(await nexus.loggedIn()).toBe(false);
   });
 

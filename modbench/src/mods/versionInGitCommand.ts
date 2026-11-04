@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { isRefused, type VersionInGitOutcome, type PluginAddress } from '../client';
 import type { Instance } from '../instanceLoader/instance';
-import { refusedAnswer } from '../ports/refused';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { isClickedRow } from '../drivingLib/gestureEntry';
@@ -77,7 +76,7 @@ async function versionModsInGit(
         ...options,
         onProgress: (status) => { progress.say(versionInGitProgressMessage(status.mod ?? firstMod, status.phase)); },
       });
-      if (isRefused(result)) return refusedAnswer(result.message);
+      if (isRefused(result)) return { applied: false, refusal: result.message };
       if (makesSourceMods && result.landed.length > 0) await onCommitted();
       const { notes = [], ...outcome } = result;
       return { applied: true, outcome, ...notes.length === 0 ? {} : { partial: notes.map((detail) => ({ message: 'Version in git:', detail, severity: 'warning' as const })) } };

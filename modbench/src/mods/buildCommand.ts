@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import { isRefused } from '../client';
 import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import type { Instance } from '../instanceLoader/instance';
-import { refusedAnswer } from '../ports/refused';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { isClickedRow } from '../drivingLib/gestureEntry';
@@ -63,7 +62,7 @@ async function buildMods(deps: BuildDeps, { mods, refusedRows, invokedFrom, ever
   if (mods.length === 0 && !everySource) return { applied: true, outcome: { landed: [], refused: refusedRows } };
   return runWritingGesture('modbench.mod.build', invokedFrom, instance, async (): Promise<Built> => {
     const outcome = await commands.build(mods, everySource);
-    if (isRefused(outcome)) return refusedAnswer(outcome.message);
+    if (isRefused(outcome)) return { applied: false, refusal: outcome.message };
     for (const { compiled } of outcome.landed) {
       for (const plugin of compiled) deps.problems.publish(plugin, deps.sourceFiles(plugin.origin), plugin.diagnostics);
     }

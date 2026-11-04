@@ -2,8 +2,7 @@
 
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import { dropIndexIn, type Drop } from './dropIndex';
-import { type CommandResult, type SelectionResult } from '../coreLib/commandResult';
-import { refusedAnswer } from '../ports/refused';
+import type { CommandResult, SelectionResult } from '../coreLib/commandResult';
 export type { SelectionResult };
 import { refuse } from '../coreLib/refuse';
 import { present } from '../ports/present';
@@ -27,8 +26,6 @@ interface Decision<T> {
   readonly decided: T;
 }
 
-class OrderRefused extends Error {}
-
 // The adapter takes the changes alone, so what `decide` concluded comes back here. A change
 // already true of the order is not written: for `syncPlugins` that is the difference between a
 // loop that settles and one that does not.
@@ -45,7 +42,7 @@ async function changeDeciding<A extends unknown[], T extends object>(
     });
     return { applied: true, wrote, decided: present(decisions.at(-1), 'the decision the change landed on') };
   } catch (err) {
-    return err instanceof OrderRefused ? refusedAnswer(err.message) : refuse(err);
+    return refuse(err);
   }
 }
 
@@ -112,7 +109,7 @@ async function reorderPlugins(
 ): Promise<CommandResult> {
   const pluginNames = plugins.map((plugin) => plugin.name);
   if ('name' in drop && pluginNames.some((name) => pluginKey(name) === pluginKey(drop.name))) {
-    return refusedAnswer(`The target is "${drop.name}", which is moving.`);
+    return { applied: false, refusal: `The target is "${drop.name}", which is moving.` };
   }
   const factsOf = await orderFactsFrom(masters);
   // Settled against the order the change lands on, so a tree a generation behind plugins.txt
@@ -122,7 +119,7 @@ async function reorderPlugins(
     const noLine = new Set(provided.kind === 'listed' ? provided.loadedWithNoLine.map(pluginKey) : []);
     // A line for a plugin the game loads with no line does not place it.
     const refusal = moveOrderRefusal(names.filter((name) => !noLine.has(pluginKey(name))), pluginNames, drop, factsOf);
-    if (refusal !== undefined) throw new OrderRefused(refusal);
+    if (refusal !== undefined) throw new Error(refusal);
     return { changes: [{ kind: 'move', plugins: pluginNames, toIndex: dropIndexIn(names, pluginNames, drop) }], decided: {} };
   });
   return outcome.applied ? { applied: true, wrote: outcome.wrote } : outcome;

@@ -12,17 +12,15 @@ export async function runUnderProgress<T>(
 ): Promise<T> {
   const progress = pausableProgress(viewId);
   progress.working();
-  let wroteNothing = false;
+  let refused = false;
   try {
-    const answer = await command(progress);
-    wroteNothing = isRefused(answer);
-    return answer;
+    return await command(progress);
   } catch (e) {
-    wroteNothing = e instanceof Refusal;
+    refused = e instanceof Refusal;
     throw e;
   } finally {
     try {
-      if (!wroteNothing) {
+      if (!refused) {
         progress.working();
         await instance.refresh();
       }
@@ -31,8 +29,6 @@ export async function runUnderProgress<T>(
     }
   }
 }
-
-const isRefused = (answer: unknown): boolean => typeof answer === 'object' && answer !== null && (answer as { wroteNothing?: unknown }).wroteNothing === true;
 
 let inFlight: string | undefined;
 

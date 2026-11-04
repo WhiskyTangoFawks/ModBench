@@ -58,7 +58,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
   it('refuses a name the origin already holds before any write', async () => {
     const { fake, result } = rename('Renamed Patch.esp', PLUGIN, {}, ['Renamed Patch.esp']);
 
-    expect(await result).toEqual({ applied: false, wroteNothing: true, refusal: '"Patch Mod" already holds "Renamed Patch.esp".' });
+    expect(await result).toEqual({ applied: false, refusal: '"Patch Mod" already holds "Renamed Patch.esp".' });
     expect(client.calls.map((call) => call.method)).toEqual(['getCreatablePluginExtensions']);
     expect(apply).not.toHaveBeenCalled();
     expect(fake.calls).toEqual([]);
@@ -67,7 +67,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
   it('refuses a name that is not a folder name before the source moves', async () => {
     const { fake, result } = rename('a/b.esp');
 
-    expect(await result).toEqual({ applied: false, wroteNothing: true, refusal: 'A name cannot be . or .. or contain / or \\' });
+    expect(await result).toEqual({ applied: false, refusal: 'A name cannot be . or .. or contain / or \\' });
     expect(client.calls.map((call) => call.method)).toEqual(['getCreatablePluginExtensions']);
     expect(apply).not.toHaveBeenCalled();
     expect(fake.calls).toEqual([]);
@@ -78,7 +78,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     const { fake, result } = rename('Renamed Patch.esp');
 
     expect(await result).toEqual({
-      applied: false, wroteNothing: true, refusal: 'Could not check "Renamed Patch.esp" for "Patch Mod.esp" (Patch Mod).', detail: 'mEdit is not ready.',
+      applied: false, refusal: 'Could not check "Renamed Patch.esp" for "Patch Mod.esp" (Patch Mod).', detail: 'mEdit is not ready.',
     });
     expect(apply).not.toHaveBeenCalled();
     expect(fake.calls).toEqual([]);
@@ -89,7 +89,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     const { fake, result } = rename('Renamed Patch.esp');
 
     expect(await result).toEqual({
-      applied: false, wroteNothing: true, refusal: 'Could not rename "Patch Mod.esp" — NotCompiledPlugin',
+      applied: false, refusal: 'Could not rename "Patch Mod.esp" — NotCompiledPlugin',
     });
     expect(apply).not.toHaveBeenCalled();
     expect(fake.calls).toEqual([]);

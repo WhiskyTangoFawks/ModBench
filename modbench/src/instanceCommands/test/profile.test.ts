@@ -26,7 +26,7 @@ describe('switchProfile', () => {
     const profile = 'No Such Profile';
     const { fake, switchProfile } = over();
 
-    expect(await switchProfile(profile)).toEqual({ applied: false, wroteNothing: true, refusal: `No such profile: ${profile}` });
+    expect(await switchProfile(profile)).toEqual({ applied: false, refusal: `No such profile: ${profile}` });
     expect(fake.calls).toEqual([]);
   });
 

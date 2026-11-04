@@ -2,8 +2,7 @@
 
 import type { MEditClient } from '../client';
 import { refuse } from '../coreLib/refuse';
-import { type CommandResult } from '../coreLib/commandResult';
-import { refusedAnswer } from '../ports/refused';
+import type { CommandResult } from '../coreLib/commandResult';
 import type { TailOf } from '../coreLib/boundCommand';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { RefreshResult } from './loadOrder';
@@ -14,7 +13,7 @@ import type { RefreshResult } from './loadOrder';
 async function switchProfile(adapter: InstanceAdapter, profile: string): Promise<CommandResult> {
   try {
     if (!(await adapter.profiles()).includes(profile)) {
-      return refusedAnswer(`No such profile: ${profile}`);
+      return { applied: false, refusal: `No such profile: ${profile}` };
     }
     const { wrote } = await adapter.selectProfile(profile);
     return { applied: true, wrote };

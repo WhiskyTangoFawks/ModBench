@@ -34,7 +34,7 @@ export async function movePlugins(
     const result = await runWritingGesture(write, PLUGINS_KEY_ARGS.view, instance, () => commands.reorderPlugins(plugins, drop));
     return result.applied
       ? { applied: true, outcome: { landed: plugins, refused: [] } }
-      : { applied: false, refusal: 'Could not move plugins.', detail: result.refusal, ...(result.wroteNothing && { wroteNothing: true as const }) };
+      : { applied: false, refusal: 'Could not move plugins.', detail: result.refusal };
   } catch (e) {
     if (e instanceof RefusedWrite) throw e;
     return { applied: false, refusal: 'Failed to move plugins.', detail: errorMessage(e) };

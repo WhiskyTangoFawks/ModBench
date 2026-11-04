@@ -161,7 +161,7 @@ export interface ListenerOutcome {
 }
 export type ListenerOutcomeListener = (outcome: ListenerOutcome) => void;
 
-/** The Instance as a tree reads it: the held value, sequence and read failure, plus the two
+/** The Instance as a tree reads it: the held value, sequence and read failure, plus the
  *  channels they move on. */
 export type InstanceView = Pick<Instance, 'value' | 'sequence' | 'readFailure' | 'subscribe' | 'onReadFailure' | 'onRedraw'>;
 
