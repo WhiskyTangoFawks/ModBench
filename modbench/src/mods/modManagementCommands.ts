@@ -40,7 +40,7 @@ export function registerModEnableCommands(
         return modNames.length === 0 ? undefined : modNames;
       },
       fromAgent: ({ argument }) => argument.map(modNameOf),
-      run: (modNames) => runModsWriting(`modbench.mod.${verb}`, instance, () => commands.setModsEnabled(modNames, enabled)),
+      run: (modNames) => runModsWriting(enabled ? 'modbench.mod.enable' : 'modbench.mod.disable', instance, () => commands.setModsEnabled(modNames, enabled)),
       report: (result, modNames) => {
         if (!result.applied) {
           reporter.report('error', `Failed to ${verb} mods.`, result.refusal);
@@ -73,7 +73,7 @@ export function registerFileExclusionCommands(
       },
       fromAgent: ({ argument }) => argument.map(fileRefOf),
       run: async (refs) => {
-        const result = await runModsWriting(`modbench.mod.${verb}File`, instance, () => commands.markFiles(refs, mark));
+        const result = await runModsWriting(mark === 'Excluded' ? 'modbench.mod.excludeFile' : 'modbench.mod.includeFile', instance, () => commands.markFiles(refs, mark));
         return result.applied ? result : { applied: false, refusal: `Could not ${verb} ${refs.length} files.`, detail: result.refusal };
       },
       report: (result, refs) => {
@@ -105,7 +105,7 @@ export function registerFileIgnoreCommands(
         return refs.length === 0 ? undefined : refs;
       },
       fromAgent: ({ argument }) => argument.map(fileRefOf),
-      run: async (refs) => ({ applied: true, outcome: await runModsWriting(`modbench.mod.${verb}File`, instance, () => commands.ignoreFiles(refs, ignore)) }),
+      run: async (refs) => ({ applied: true, outcome: await runModsWriting(ignore ? 'modbench.mod.ignoreFile' : 'modbench.mod.unignoreFile', instance, () => commands.ignoreFiles(refs, ignore)) }),
       report: (result, refs) => {
         if (!result.applied) {
           reporter.report('error', result.refusal, result.detail);

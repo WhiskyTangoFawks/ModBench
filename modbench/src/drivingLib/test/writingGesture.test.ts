@@ -6,7 +6,7 @@ vi.mock('vscode', async () => {
 });
 
 import { progressSteps as steps } from '../../test/recordedProgress';
-import { runWritingGesture } from '../writingGesture';
+import { runWritingGesture, surfaceRefusedWrites } from '../writingGesture';
 import { Refusal } from '../refusal';
 
 function instanceThatReads() {
@@ -76,6 +76,22 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
       await expect(runWritingGesture('modbench.mod.rename', 'modbench.thing', instanceThatReads(), () => Promise.resolve()))
         .rejects.toBeInstanceOf(Refusal);
 
+      held.ends();
+      await held.running;
+    });
+
+    it('is logged on the Output under the titles the user saw, and still refused', async () => {
+      const shownOnSurface = vi.fn();
+      const surface = surfaceRefusedWrites({
+        reporter: { report: vi.fn(), landed: vi.fn(), shownOnSurface, selectionOutcome: vi.fn() },
+        titles: new Map([['modbench.mod.build', 'Build Mod'], ['modbench.mod.rename', 'Rename Mod']]),
+      });
+      const held = heldWrite('modbench.mod.build');
+
+      await expect(runWritingGesture('modbench.mod.rename', 'modbench.thing', instanceThatReads(), () => Promise.resolve())).rejects.toThrow('Rename Mod did not start: Build Mod is still writing.');
+
+      expect(shownOnSurface).toHaveBeenCalledWith('error', 'Rename Mod did not start: Build Mod is still writing.');
+      surface.dispose();
       held.ends();
       await held.running;
     });

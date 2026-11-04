@@ -27,11 +27,11 @@ interface Move {
 }
 
 export async function movePlugins(
-  commands: Pick<PluginCommands, 'reorderPlugins'>, instance: Pick<Instance, 'value' | 'refresh'>,
+  write: string, commands: Pick<PluginCommands, 'reorderPlugins'>, instance: Pick<Instance, 'value' | 'refresh'>,
   plugins: readonly PluginAddress[], drop: PluginsDrop,
 ): Promise<GestureResult<PluginAddress>> {
   try {
-    const result = await runWritingGesture('modbench.plugin.move', PLUGINS_KEY_ARGS.view, instance, () => commands.reorderPlugins(plugins, drop));
+    const result = await runWritingGesture(write, PLUGINS_KEY_ARGS.view, instance, () => commands.reorderPlugins(plugins, drop));
     return result.applied
       ? { applied: true, outcome: { landed: plugins, refused: [] } }
       : { applied: false, refusal: 'Could not move plugins.', detail: result.refusal };
@@ -56,7 +56,7 @@ export function registerPluginMoveCommand(
       return drop && { plugins, drop };
     },
     fromAgent: ({ argument, options }) => ({ plugins: argument.map(pluginOf), drop: options.drop }),
-    run: ({ plugins, drop }) => movePlugins(commands, instance, plugins, drop),
+    run: ({ plugins, drop }) => movePlugins('modbench.plugin.move', commands, instance, plugins, drop),
     report: (result) => {
       if (!result.applied) reporter.report('error', result.refusal, result.detail);
     },

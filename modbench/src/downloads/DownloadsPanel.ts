@@ -70,7 +70,7 @@ function markGesture(
       return names.length === 0 ? undefined : names;
     },
     fromAgent: ({ argument }) => argument.map(downloadedFileNameOf),
-    run: (names) => runDownloadsWriting(`modbench.downloadedFile.${verb}`, instance, () =>
+    run: (names) => runDownloadsWriting(excluded ? 'modbench.downloadedFile.exclude' : 'modbench.downloadedFile.include', instance, () =>
       landed(excluded ? commands.excludeDownloadedFiles(names) : commands.includeDownloadedFiles(names))),
     report: (result, names) => {
       if (!result.applied) return;
