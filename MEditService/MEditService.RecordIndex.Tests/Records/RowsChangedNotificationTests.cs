@@ -113,7 +113,7 @@ public sealed class RowsChangedNotificationTests
 
         var asked = source.GitStatusAsked;
         index.NextCheckUnsettledUntil(() => source.GitStatusAsked > asked, "git asked what the tree changed");
-        index.NextCheckUntil(() => heldWhenNamed.Count > 0, "the gained record named");
+        index.NextCheckUntil(() => !heldWhenNamed.IsEmpty, "the gained record named");
 
         Assert.All(heldWhenNamed, Assert.True);
     }
