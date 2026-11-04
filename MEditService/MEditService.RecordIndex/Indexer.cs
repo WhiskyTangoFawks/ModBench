@@ -148,7 +148,7 @@ internal sealed class Indexer : IDisposable
     // Always paired with ExitExclusive in a finally.
     private void EnterExclusive()
     {
-        lock (_turns) CancelInFlight();
+        CancelInFlight();
         _exclusive.Enter();
     }
 
@@ -156,8 +156,11 @@ internal sealed class Indexer : IDisposable
     // been disposed.
     private void CancelInFlight()
     {
-        if (_reconcileCancellation is not { } inFlight) return;
-        inFlight.Cancel();
+        lock (_turns)
+        {
+            if (_reconcileCancellation is not { } inFlight) return;
+            inFlight.Cancel();
+        }
         _logger.LogDebug("Asked the reconcile in flight to stop");
     }
 
@@ -169,7 +172,7 @@ internal sealed class Indexer : IDisposable
 
     private bool EnterExclusiveWithin(TimeSpan limit)
     {
-        lock (_turns) CancelInFlight();
+        CancelInFlight();
         var deadline = _timeProvider.GetUtcNow() + limit;
         while (!_exclusive.TryEnter(SequencePollInterval))
         {
@@ -305,9 +308,7 @@ internal sealed class Indexer : IDisposable
     /// <summary>A read met the store's invalidation: reconciling reopens the store (ADR-0003).</summary>
     public void RecoverFromInvalidation() => AskReconcile();
 
-    // ADR-0013: every arrival, changed or not, reconciles the snapshot held when its turn runs, so an
-    // overtaken arrival reconciles the newer. ADR-0015: a reconcile in flight finishes, and the arrivals
-    // during it fold into one more.
+    // ADR-0013, ADR-0015.
     private void AskReconcile()
     {
         lock (_turns)
@@ -412,9 +413,7 @@ internal sealed class Indexer : IDisposable
         }
         catch (OperationCanceledException ex)
         {
-            // Superseded by a rebuild or disposal: the reconcile a rebuild asks for answers for
-            // this version or higher, so nothing here is ever the last word for it. Normal, not a
-            // failure: Information, not Warning.
+            // Superseded by a rebuild, which publishes the status itself, or by disposal.
             _logger.LogInformation(ex, "Load order reconcile was superseded before it completed");
             return;
         }
@@ -455,8 +454,8 @@ internal sealed class Indexer : IDisposable
         get { lock (_lock) return _arrivalReconciled; }
     }
 
-    // A superseded reconcile throws, leaving its work to the reconcile after the rebuild. The closing swap
-    // and its publish share one hold of _lock, so no reader sees a version before the status answering it.
+    // A superseded reconcile throws and publishes nothing. The closing swap and its publish share one
+    // hold of _lock, so no reader sees a version before the status answering it.
     private bool ReconcileOrRefuse(
         Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, ref long arrivals, out bool refused)
     {
@@ -787,8 +786,6 @@ internal sealed class Indexer : IDisposable
         // plugin wait on the slowest before any could be indexed, and bury each open failure.
         foreach (var plugin in arriving)
         {
-            // At the top of each plugin rather than mid-plugin: a rebuild waits for the plugin in hand
-            // (see _disposal).
             token.ThrowIfCancellationRequested();
 
             PluginMetadata? metadata = null;

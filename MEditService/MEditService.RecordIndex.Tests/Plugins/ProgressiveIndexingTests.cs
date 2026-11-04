@@ -142,10 +142,10 @@ public sealed class ProgressiveIndexingTests
     }
 
     [Fact]
-    public async Task ASecondLoadMidLoad_DrainsTheFirst_ReconcilesInPlace_AndTheSurvivorIsWhollyTheSecond()
+    public async Task ASecondLoadMidLoad_AnswersOnceTheFirstIsReleased_ReadsEachPluginOnce_AndTheResultIsWhollyTheSecond()
     {
         var holder = new LoadOrderHolder();
-        using var fx = FourPlugins("sm-progressive-supersede");
+        using var fx = FourPlugins("sm-progressive-second-load");
         var (index, gate) = OpenGatedIndex(holder, gateBefore: "B.esp");
         using var _ = index;
         using var __ = gate;
