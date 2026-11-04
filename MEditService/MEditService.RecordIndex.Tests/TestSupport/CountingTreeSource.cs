@@ -7,8 +7,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
-/// <summary>Reads source trees as the real adapter does, and counts each time git is asked what a tree changed since its last commit.
-/// <see cref="BeforeNextGitStatus"/> runs once, as git is next asked: the disk moves after the check read the documents' stamps.</summary>
+/// <summary>Reads source trees as the real adapter does, and counts each time git is asked what a tree changed since its last commit.</summary>
 internal sealed class CountingTreeSource(ISourceAdapter inner) : DelegatingSourceAdapter(inner)
 {
     private int _asked;
