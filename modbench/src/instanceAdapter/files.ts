@@ -13,7 +13,7 @@ import { pipeline } from 'node:stream/promises';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import type { FileRead } from './instanceAdapter';
-import { keptByStamp, sameStamp, stampFrom, type FileStamp, type Kept } from '../repositoriesLib/stampedReads';
+import { keptByStamp, sameStamp, stampOf, type Kept } from '../repositoriesLib/stampedReads';
 import { digestOf } from './fileContents/contentDigest';
 import type { MoveToTrash } from '../ports/trash';
 
@@ -120,11 +120,6 @@ export async function factsOf(path: string): Promise<PathFacts> {
   const kind: PathFacts['kind'] = info.isDirectory() ? 'directory' : info.isFile() ? 'file' : 'other';
   const realPath = await realpath(path);
   return { size: info.size, mtimeMs: info.mtimeMs, kind, realPath };
-}
-
-/** `path`'s stamp, following symlinks. */
-export async function stampOf(path: string): Promise<FileStamp> {
-  return stampFrom(await stat(path, { bigint: true }));
 }
 
 /** `path`'s device and inode, which name its file whatever the path's spelling; undefined where nothing is, and
@@ -285,8 +280,6 @@ export function makeDir(path: string): Promise<void> {
   return mkdir(path).then(() => undefined);
 }
 
-export { sameStamp, settledBefore } from '../repositoriesLib/stampedReads';
-
 // Windows names a file whatever the case of its path, and VS Code's watcher spells a drive in lower case.
 const pathKey = (path: string): string => (process.platform === 'win32' ? path.toLowerCase() : path);
 
@@ -296,7 +289,7 @@ const trusting = new AsyncLocalStorage<true>();
 // The stamp is the fact every write changes that ADR-0003 validates by.
 function stampKept<T>(read: (path: string) => Promise<T>, kept = new Map<string, Kept<T>>()): (path: string) => Promise<T> {
   everyKept.push(kept);
-  return keptByStamp(stampOf, read, { kept, trusts: () => trusting.getStore() === true, keyOf: pathKey });
+  return keptByStamp(read, { kept, trusts: () => trusting.getStore() === true, keyOf: pathKey });
 }
 
 /** `path`'s directory entries; the caller's own filter picks the ones it wants. */

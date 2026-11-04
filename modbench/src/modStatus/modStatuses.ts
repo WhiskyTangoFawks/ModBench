@@ -60,7 +60,7 @@ export class ModStatuses {
   }
 
   /** The statuses derived from the value current when asked: the derivation under way, or the next when a newer value waits
-   *  behind it. Values arriving meanwhile do not hold it. An unreadable status is read as such. */
+   *  behind it. Values arriving meanwhile do not hold it. Rejects with why the last derivation failed. */
   async current(): Promise<ReadonlyMap<string, ModStatus>> {
     const settledRun = this.waiting === undefined ? this.started : this.started + 1;
     while (this.finished < settledRun) await new Promise<void>((resolve) => { this.finishedRun.push(resolve); });
@@ -96,23 +96,19 @@ export class ModStatuses {
   }
 
   private async deriveWhileWaiting(): Promise<void> {
-    this.failure = undefined;
-    try {
-      for (let value = this.waiting; value !== undefined; value = this.waiting) {
-        this.waiting = undefined;
-        this.started += 1;
-        try {
-          await this.deriveFrom(value);
-        } finally {
-          this.finished += 1;
-          for (const resolve of this.finishedRun.splice(0)) resolve();
-        }
+    for (let value = this.waiting; value !== undefined; value = this.waiting) {
+      this.waiting = undefined;
+      this.started += 1;
+      try {
+        await this.deriveFrom(value);
+        this.failure = undefined;
+      } catch (err) {
+        this.failure = err instanceof Error ? err : new Error(String(err));
       }
-    } catch (err) {
-      this.failure = err instanceof Error ? err : new Error(String(err));
-    } finally {
-      this.deriving = false;
+      this.finished += 1;
+      for (const resolve of this.finishedRun.splice(0)) resolve();
     }
+    this.deriving = false;
   }
 
   private async deriveFrom(value: StatusSource): Promise<void> {

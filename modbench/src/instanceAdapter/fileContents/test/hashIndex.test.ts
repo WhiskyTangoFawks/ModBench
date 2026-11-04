@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
 import type { InstallationFileReader } from '../installationFileReader';
 import { digestOf } from '../contentDigest';
-import { stampOf } from '../../files';
+import { stampOf } from '../../../repositoriesLib/stampedReads';
 import { hashIndex as hashIndexWith } from '../hashIndex';
 import { fileProblemsFake } from '../../../test/fileProblemsFake';
 
@@ -13,8 +13,8 @@ vi.mock('../contentDigest', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../contentDigest')>();
   return { digestOf: vi.fn(actual.digestOf) };
 });
-vi.mock('../../files', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../files')>();
+vi.mock('../../../repositoriesLib/stampedReads', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../repositoriesLib/stampedReads')>();
   return { ...actual, stampOf: vi.fn(actual.stampOf) };
 });
 

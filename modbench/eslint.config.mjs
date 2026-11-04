@@ -239,7 +239,7 @@ export default defineConfig(
                 path: PATHLESS_BOXES.includes(box),
                 client: box === 'toolbox',
                 inAdapter: box === 'instanceAdapter',
-                files: box === 'instanceAdapter' || box === 'manifestAdapter' || box === 'deployment',
+                files: box === 'instanceAdapter' || box === 'manifestAdapter' || box === 'deployment' || box === 'repositoriesLib',
                 clientSeam: box !== 'client',
             }),
         },

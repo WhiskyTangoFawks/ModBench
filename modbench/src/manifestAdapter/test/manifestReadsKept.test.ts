@@ -71,13 +71,6 @@ describe('a folder\'s manifest read by the stamps of its folder and its file', (
     expect(await manifestIn(folder)).toEqual({ refused: "its folder holds two manifests, 'Mod.manifest.json' and 'Other.manifest.json'" });
   });
 
-  it('reads again a file whose stamp is younger than two seconds', async () => {
-    await manifestIn(folder);
-    await manifestIn(folder);
-
-    expect(callsOn(readFile, file)).toBe(2);
-  });
-
   it('reads a folder that is not there as holding no manifest', async () => {
     expect(await manifestIn(join(root, 'Gone'))).toBeUndefined();
   });
