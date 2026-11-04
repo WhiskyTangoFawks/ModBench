@@ -15,10 +15,11 @@ As a user, I want:
 As a user, I want:
 
 1. Each file Modbench keeps in the instance, such as its record index, the repository's own files and every manifest, in the publisher's ignore list, so the published modlist ships none of them, and every other entry as I wrote it. Cites: ADR-0024; Never break the instance for its owner; Never silently wrong
+2. Each mod with a file the published modlist has no way to ship, as its publisher judges it, in the Problems panel on the publisher's configuration, naming the mod and why. Cites: ADR-0024; Never silently wrong; common.md, Reporting
 
 ## Publisher tags
 
-Each publisher declares its publisher tags: each one's name, its badge, and whether it marks paths or only mods. Modbench shows and changes them, and never interprets them. As a user, I want:
+Each publisher declares its publisher tags: each one's name, its badge, and whether it marks paths or only mods. Modbench shows and changes them, and their meaning is their publisher's (GLOSSARY.md, Publisher tag). As a user, I want:
 
 1. Each row a publisher tag covers, as its publisher applies it, to carry the publisher tag's indicator: a mod, or a folder or file in one ([mods.md](mods.md), Indicators). Cites: ADR-0024; Never silently wrong
 2. Add publisher tag and remove publisher tag on the selected mods, folders and files. Remove offers only the publisher tags the selection holds. Cites: catalog `add / remove publisher tag`

@@ -70,7 +70,7 @@ As a user, I want:
 
 ## Reporting
 
-The Output is the log: a line for each thing that happened. The Problems panel is the dashboard: a problem for each state that is wrong, on the file it concerns, while the state holds.
+The Output is the log: a line for each thing that happened. The Problems panel is the dashboard: a problem for each state that is wrong, on the file it concerns, while the state holds. A problem that a gesture clears offers that gesture as its quick fix (principles.md, Existing tools).
 
 A notification is for what I started, or for a view left showing something untrue (ADR-0019). For anything else my Modbench script or my agent asked, the reason goes back to it, and the Output logs it.
 
