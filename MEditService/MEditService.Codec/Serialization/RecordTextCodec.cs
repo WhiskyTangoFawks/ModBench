@@ -160,7 +160,7 @@ public static class RecordTextCodec
         // No \r anywhere: the kernel's indentation uses the platform newline. No trailing newline:
         // Finalize writes the closing brace and nothing after, as does the source tree, so adding
         // one would diverge from the whole-mod door's document shape.
-        return TranslatedStringValues.InLanguageOrder(WithoutCarriageReturns(buffer.GetBuffer().AsSpan(0, (int)buffer.Length)));
+        return UnheldMembers.Without(TranslatedStringValues.InLanguageOrder(WithoutCarriageReturns(buffer.GetBuffer().AsSpan(0, (int)buffer.Length))), record);
     }
 
     private static byte[] WithoutCarriageReturns(ReadOnlySpan<byte> written)

@@ -86,7 +86,7 @@ public sealed class DocumentEdit
             };
         if (failure is not null) return failure;
         var chain = IndexChain(edited ?? throw new InvalidOperationException("Expected the edit to set which node changed."));
-        patch = new Patch(Document.Of(_record).WithoutAliasesOf(_cursor.Column), chain, editedMeta, _spelled);
+        patch = new Patch(Document.Of(_record).WithoutAliasesOf(_cursor.Column), chain, _cursor.Column.Field, editedMeta, _spelled);
         return null;
     }
 
@@ -500,19 +500,53 @@ public sealed class DocumentEdit
     public sealed class Patch
     {
         private readonly List<object> _chain;
+        private readonly FieldMetadata _column;
         private readonly FieldMetadata _meta;
         private readonly string _spelled;
 
-        internal Patch(Document document, List<object> chain, FieldMetadata meta, string spelled) =>
-            (Document, _chain, _meta, _spelled) = (document, chain, meta, spelled);
+        internal Patch(Document document, List<object> chain, FieldMetadata column, FieldMetadata meta, string spelled) =>
+            (Document, _chain, _column, _meta, _spelled) = (document, chain, column, meta, spelled);
 
         public Document Document { get; }
+
+        /// <summary>A member and the set break of its owner's, as <c>Versioning.Break0</c>, that leaves it unheld.</summary>
+        public sealed record Unheld(string Member, string Break);
 
         /// <summary>The first member the patch spelled that <paramref name="written"/>, the codec's text of
         /// <paramref name="patched"/>, did not keep, unless a default the codec omits; null when it kept
         /// them all.</summary>
         public string? FirstDropped(Document patched, Document written) =>
             SilentSkipGuard.Keeps(At(written.Tree(), _chain), At(patched.Tree(), _chain), _meta, _spelled, out var dropped) ? null : dropped;
+
+        /// <summary>The outermost member on the way to the one the patch spelled that its owner's set break
+        /// leaves unheld in <paramref name="patched"/>; null when none is.</summary>
+        public Unheld? OutermostUnheld(Document patched)
+        {
+            JsonNode? owner = patched.Tree();
+            FieldMetadata? ownerMeta = null;
+            var spelled = "";
+            FieldMetadata? MemberOf(string name)
+            {
+                if (spelled.Length == 0) return _column;
+                return ownerMeta?.Fields?.FirstOrDefault(field => field.Name == name) is { } field ? DocumentNodes.VariantFor(field, owner) : null;
+            }
+            foreach (var step in _chain)
+            {
+                if (step is int index)
+                {
+                    (owner, ownerMeta, spelled) = ((owner as JsonArray)?[index], ownerMeta?.ElementType, $"{spelled}[{index}]");
+                    continue;
+                }
+                var name = (string)step;
+                var member = MemberOf(name);
+                spelled = spelled.Length == 0 ? name : $"{spelled}.{name}";
+                if (owner is JsonObject held && member?.UnheldWhen?.FirstOrDefault(entry => entry.Split('.') is [var flags, var flag]
+                    && held[flags] is JsonArray set && set.Any(each => each?.GetValue<string>() == flag)) is { } unheldBy)
+                    return new Unheld(spelled, unheldBy);
+                (owner, ownerMeta) = ((owner as JsonObject)?[name], member);
+            }
+            return null;
+        }
 
         private static JsonNode? At(JsonNode root, List<object> chain)
         {

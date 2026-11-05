@@ -41,6 +41,15 @@ public sealed class DocumentShapeParityTests
     }
 
     [Fact]
+    public async Task PerRecordCodecBytes_ForAQuestWhoseAdapterEndsAtItsBreak_EqualTheWholeModPathsFileForIt()
+    {
+        var mod = NewMod();
+        var quest = VersioningBreakDocumentTests.QuestWithAdapter(mod, QuestAdapter.VersioningBreaks.Break0);
+
+        await AssertTheCodecAndTheWholeModDoorWriteOneText(mod, quest, "BreakQuest");
+    }
+
+    [Fact]
     public void AQuestsText_CarriesItsTopicAndItsResponseInline()
     {
         using var doc = JsonDocument.Parse(RecordTextCodec.SerializeToText(MakePopulatedQuest(NewMod()), GameRelease.Fallout4));

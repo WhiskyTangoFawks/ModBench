@@ -90,6 +90,10 @@ public record FieldMetadata(
     // alias or package-data parameter), when DocumentNodes.VariantFor shapes it an integer.
     IReadOnlyList<string>? IndexWhen = null,
 
+    // The owner's versioning breaks, as `Versioning.Break0`, any one of which leaves this member unheld:
+    // it reads as nothing, not as its default (editor-fields.md, Every field, story 2).
+    IReadOnlyList<string>? UnheldWhen = null,
+
     // xEdit's extended key: the members ordering the elements that share a key, so the nth of them
     // pairs with the nth in every other column. The compare reads it; the webview never does.
     [property: JsonIgnore] IReadOnlyList<string>? ExtendedKeyMembers = null)
