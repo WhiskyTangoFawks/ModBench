@@ -373,7 +373,7 @@ export interface SubmoduleNote { readonly mod: string; readonly note: string }
  *  out and its pin, or what the instance repository lacks of it. */
 export type UnclonedSubmodule = { readonly name: string } & (Submodule | SubmoduleLacks);
 
-/** `written`: each source mod whose `.gitmodules` entry or ignore lines the call wrote. */
+// `written`: each source mod whose `.gitmodules` entry or ignore lines the call wrote.
 interface SubmoduleReport { readonly notes: readonly SubmoduleNote[]; readonly other: readonly string[]; readonly written: readonly string[] }
 
 /** A folder outside every mod folder that holds the manifest named for it, which builds it (ADR-0022). `name` is its path in the instance, ending in `/`, so no mod has it. */
