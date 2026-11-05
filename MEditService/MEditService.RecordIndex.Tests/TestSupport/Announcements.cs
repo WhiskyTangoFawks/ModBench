@@ -21,15 +21,23 @@ internal static class Announcements
     internal static IReadOnlyList<INotification> AnnouncedByChecks(
         this OpenedIndex index, InMemoryNotificationPublisher notifications, Func<Predicate<INotification>> change)
     {
+        AwaitValidationClosed(index, notifications);
         var start = notifications.Notifications.Count;
         for (var check = 0; check < 2; check++)
         {
             var announced = change();
             var before = notifications.Notifications.Count;
             index.NextCheckUntil(() => notifications.Since(before).Any(n => announced(n)), "the change the check found");
+            AwaitValidationClosed(index, notifications);
         }
         return notifications.Since(start).WithoutValidations();
     }
+
+    private static void AwaitValidationClosed(OpenedIndex index, InMemoryNotificationPublisher notifications) =>
+        Waits.Reached(
+            () => !index.Status.Validating
+                && notifications.Notifications.OfType<LoadOrderStatusNotification>().LastOrDefault()?.Status.Validating != true,
+            "the validation closing");
 
     /// <summary>A non-compiled plugin's binary rewritten: announced as the plugin.</summary>
     internal static Predicate<INotification> Touched(LoadOrderEntry plugin)
