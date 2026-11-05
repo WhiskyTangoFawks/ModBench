@@ -41,10 +41,10 @@ internal sealed class WorkingTreeOverlay
     {
         // The deltas' own keys are named whether or not their bytes moved: the caller asked about
         // them, and a subscriber re-reading one it was told about costs one query.
-        var touched = new List<string>(deltas.Select(d => d.FormKey));
+        var movedKeys = new List<string>(deltas.Select(d => d.FormKey));
         foreach (var (formKey, body) in deltas)
-            ApplyOneWorkingTreeChange(key, formKey, body, touched);
-        return touched;
+            ApplyOneWorkingTreeChange(key, formKey, body, movedKeys);
+        return movedKeys;
     }
 
     private void ApplyOneWorkingTreeChange(PluginAddress key, string formKey, string? body, ICollection<string> movedKeys)

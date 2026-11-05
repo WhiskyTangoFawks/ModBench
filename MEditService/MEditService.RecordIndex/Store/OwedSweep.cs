@@ -1,15 +1,17 @@
 namespace MEditService.RecordIndex.Store;
 
-/// <summary>The FormKeys whose winner is owed a sweep, or every one. Null keys is every one.</summary>
-internal sealed record OwedSweep(IReadOnlySet<string>? FormKeys)
+internal sealed class OwedSweep(IReadOnlySet<string>? formKeys)
 {
     internal static OwedSweep None { get; } = new(new HashSet<string>());
 
-    internal static OwedSweep Every { get; } = new((IReadOnlySet<string>?)null);
+    internal static OwedSweep Every { get; } = new(null);
+
+    /// <summary>Null is every FormKey.</summary>
+    internal IReadOnlySet<string>? FormKeys { get; } = formKeys;
 
     internal bool IsOwed => FormKeys is null || FormKeys.Count > 0;
 
-    internal OwedSweep And(OwedSweep other) =>
+    internal OwedSweep Union(OwedSweep other) =>
         FormKeys is null || other.FormKeys is null
             ? Every
             : new OwedSweep(new HashSet<string>(FormKeys.Concat(other.FormKeys), StringComparer.OrdinalIgnoreCase));

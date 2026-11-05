@@ -1,3 +1,4 @@
+using MEditService.Codec.Serialization;
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.Ports;
@@ -79,36 +80,55 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         Assert.Equal(WorkingTreeState.None, index.RowOf(_raceA, _baseKey)?.WorkingTreeState);
     }
 
-    [Fact]
-    public void AWinnerSweepThatFails_IsFailedStatus_AndIsOwedUntilALaterCheckLandsIt()
+    private const string ActivePlugins = "active_plugins";
+
+    private bool PromotesBase(OpenedIndex index) =>
+        Waits.ReachedWithin(() => StackOf(index, _npc).SequenceEqual([("Base.esm", true)]), TimeSpan.FromSeconds(20));
+
+    private OpenedIndex IndexWhoseSweepFailedAfterDeletingTheWinner()
     {
-        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
-        IndexFiles.Execute(_fixture.InstanceRoot, "ALTER TABLE active_plugins RENAME TO active_aside");
-
+        var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
+        IndexFiles.Execute(_fixture.InstanceRoot, $"ALTER TABLE {ActivePlugins} RENAME TO active_aside");
         index.Delete(_winner, index.DocumentOf(_npc, _winnerKey));
-
         Assert.True(Waits.ReachedWithin(() => index.Status.State == LoadOrderState.Failed, TimeSpan.FromSeconds(20)));
-        IndexFiles.Execute(_fixture.InstanceRoot, "ALTER TABLE active_aside RENAME TO active_plugins");
+        IndexFiles.Execute(_fixture.InstanceRoot, $"ALTER TABLE active_aside RENAME TO {ActivePlugins}");
+        return index;
+    }
+
+    [Fact]
+    public void AWinnerSweepThatFails_FailsTheStatus_AndStaysOwedUntilALaterCheckLandsIt()
+    {
+        using var index = IndexWhoseSweepFailedAfterDeletingTheWinner();
+
         index.SignalChange();
-        Assert.True(
-            Waits.ReachedWithin(() => StackOf(index, _npc).SequenceEqual([("Base.esm", true)]), TimeSpan.FromSeconds(20)),
-            $"The stack stands at {string.Join(",", StackOf(index, _npc))}.");
+
+        Assert.True(PromotesBase(index), $"The stack stands at {string.Join(",", StackOf(index, _npc))}.");
     }
 
     [Fact]
     public void AWinnerSweepOwed_IsPaidByACheckThatNamesNoHeldPlugin()
     {
-        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
-        IndexFiles.Execute(_fixture.InstanceRoot, "ALTER TABLE active_plugins RENAME TO active_aside");
-        index.Delete(_winner, index.DocumentOf(_npc, _winnerKey));
-        Assert.True(Waits.ReachedWithin(() => index.Status.State == LoadOrderState.Failed, TimeSpan.FromSeconds(20)));
-        IndexFiles.Execute(_fixture.InstanceRoot, "ALTER TABLE active_aside RENAME TO active_plugins");
+        using var index = IndexWhoseSweepFailedAfterDeletingTheWinner();
 
         index.SignalChange([new PluginAddress("Absent.esp", "AbsentMod")]);
 
-        Assert.True(
-            Waits.ReachedWithin(() => StackOf(index, _npc).SequenceEqual([("Base.esm", true)]), TimeSpan.FromSeconds(20)),
-            $"The stack stands at {string.Join(",", StackOf(index, _npc))}.");
+        Assert.True(PromotesBase(index), $"The stack stands at {string.Join(",", StackOf(index, _npc))}.");
+    }
+
+    [Fact]
+    public void AWinnerSweepOwedWhenTheIndexFileIsReopened_IsPaidByTheReopenedIndex()
+    {
+        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
+        var document = index.DocumentOf(_npc, _winnerKey);
+        IndexFiles.AbortNextCheckpoint(_fixture.InstanceRoot);
+        SourceMods.RepositoryOf(_winner).Remove(_winnerKey, new RecordIdentity(document.FormKey, document.RecordType, document.EditorId)).Wrote();
+        index.SignalChange();
+        Assert.True(Waits.ReachedWithin(() => index.Status.State == LoadOrderState.Failed, TimeSpan.FromSeconds(20)));
+
+        index.SignalChange();
+
+        Assert.True(PromotesBase(index), $"The stack stands at {string.Join(",", StackOf(index, _npc))}.");
+        Assert.Equal(LoadOrderState.Ready, index.Status.State);
     }
 
     [Fact]

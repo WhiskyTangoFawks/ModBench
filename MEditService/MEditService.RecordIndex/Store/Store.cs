@@ -549,9 +549,14 @@ internal sealed class Store : IDisposable
         return scope;
     }
 
-    private ProjectionScope OpenProjection =>
-        _openProjection.Value
-        ?? throw new InvalidOperationException("A row change outside Store.Commit skips the filter and the announcement.");
+    private const string OutsideCommit = "A row change outside Store.Commit skips the filter and the announcement.";
+
+    private ProjectionScope OpenProjection => _openProjection.Value ?? throw new InvalidOperationException(OutsideCommit);
+
+    private void RequireOpenProjection()
+    {
+        if (_openProjection.Value is null) throw new InvalidOperationException(OutsideCommit);
+    }
 
     public void BumpSequence()
     {
@@ -559,8 +564,7 @@ internal sealed class Store : IDisposable
         lock (_projectionLock) scope.BumpOwed = true;
     }
 
-    // Held by the store rather than the projection: a sweep that fails leaves its debt standing for
-    // the next commit that lands, since the rows it was owed for are already committed.
+    // Outlives the projection that owed it: a failed sweep stands owed for the next commit to land.
     private OwedSweep _owedSweep = OwedSweep.None;
 
     internal bool SweepOwed
@@ -576,8 +580,8 @@ internal sealed class Store : IDisposable
 
     private void Owe(OwedSweep owed)
     {
-        _ = OpenProjection;
-        lock (_projectionLock) _owedSweep = _owedSweep.And(owed);
+        RequireOpenProjection();
+        lock (_projectionLock) _owedSweep = _owedSweep.Union(owed);
     }
 
     /// <summary>Runs <paramref name="publish"/> after the outermost projection's advance: a
@@ -913,10 +917,10 @@ internal sealed class Store : IDisposable
         UpdateWinnersCore(null);
         BumpSequence();
         tx.Commit();
+        lock (_projectionLock) _owedSweep = OwedSweep.None;
     }
 
-    // The same sweep for a projection that moved rows without moving the load order: which plugins
-    // are active cannot change here, so the set the last sweep was handed still holds.
+    // Pays what rows moved since the last sweep: the active plugins are the set that sweep was handed.
     private void SweepWinners()
     {
         OwedSweep owed;
@@ -936,7 +940,7 @@ internal sealed class Store : IDisposable
         }
         catch
         {
-            lock (_projectionLock) _owedSweep = _owedSweep.And(owed);
+            lock (_projectionLock) _owedSweep = _owedSweep.Union(owed);
             throw;
         }
         if (_logger.IsEnabled(LogLevel.Debug))
@@ -986,11 +990,11 @@ internal sealed class Store : IDisposable
         if (deltas.Count == 0) return [];
 
         using var tx = BeginTransaction();
-        var touched = StoreFaults.Translating(() => Overlay.ProjectDocuments(key, deltas));
+        var movedKeys = StoreFaults.Translating(() => Overlay.ProjectDocuments(key, deltas));
         BumpSequence();
         tx.Commit();
-        OweWinnerSweep(touched);
-        return touched;
+        OweWinnerSweep(movedKeys);
+        return movedKeys;
     }
 
     /// <summary>Sets each listed row to the state it is now in (ADR-0007), in one advance.</summary>
