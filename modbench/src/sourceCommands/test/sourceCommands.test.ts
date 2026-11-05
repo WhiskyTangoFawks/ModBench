@@ -450,15 +450,25 @@ describe('sourceCommands versionInGit', () => {
   describe('in the instance repository', () => {
     const inInstanceRepository = { where: 'InstanceRepository', commit: true } as const;
 
-    it('writes nothing in the instance\'s ignore list, so the commit mEdit makes holds only what version in git put under git (plugins.md, Version in git, story 3)', async () => {
+    it('lets the source folder in before mEdit adds it, and reconciles the ignore list to the disk after (plugins.md, Version in git, story 2)', async () => {
+      const log: string[] = [];
       const fake = fakeInstanceAdapter(readingFixture({ sourceModFolders: repositoriesOf(SOURCES) }), { ...hashed({ 'ModA.esp': 'P' }), repositoryOnDisk: true });
       const client = new InMemoryMEditClient();
-      const handed: ModToVersionInGit[] = [];
-      client.setCommandHandler('versionInGit', (mods) => { handed.push(...mods); return Promise.resolve({ landed: [{ mod: 'ModA', plugins: [] }], refused: [] }); });
+      landingA(client, log);
+      const logging = { ...fake.adapter, writeSourceModLines: (letIn?: readonly string[]) => { log.push(`writeSourceModLines ${JSON.stringify(letIn ?? [])}`); return fake.adapter.writeSourceModLines(letIn); } };
+
+      await sourceCommands({ client, adapter: logging, saveUnsaved: savedAll, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], inInstanceRepository);
+
+      expect(log).toEqual(['writeSourceModLines ["ModA"]', 'versionInGit', 'writeSourceModLines []']);
+    });
+
+    it('reconciles the ignore list after a run that landed nothing, so the line of a folder never made goes', async () => {
+      const fake = fakeInstanceAdapter(readingFixture({ sourceModFolders: repositoriesOf(SOURCES) }), { ...hashed({ 'ModA.esp': 'P' }), repositoryOnDisk: true });
+      const { client } = committing();
 
       await sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], inInstanceRepository);
 
-      expect([handed.map(({ sourceFolder }) => sourceFolder.in), ignoreListWrites(fake.calls)]).toEqual([['InstanceRepository'], []]);
+      expect(ignoreListWrites(fake.calls)).toEqual([{ verb: 'writeSourceModLines', letIn: ['ModA'] }, { verb: 'writeSourceModLines', letIn: [] }]);
     });
 
     it('refuses the whole selection, writing nothing, while the instance holds no repository', async () => {

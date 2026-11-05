@@ -103,10 +103,11 @@ export async function sourceFoldersOf(instanceRoot: string, submodules?: Readonl
   return { submodules: [...entries], plain };
 }
 
-async function sourceModLinesWritten(instanceRoot: string, submodules?: ReadonlySet<string>): Promise<void> {
+async function sourceModLinesWritten(instanceRoot: string, submodules?: ReadonlySet<string>, letIn: readonly string[] = []): Promise<void> {
   const file = ignoreListFile(instanceRoot);
   if (!(await exists(file))) return;
-  const folders = await sourceFoldersOf(instanceRoot, submodules);
+  const onDisk = await sourceFoldersOf(instanceRoot, submodules);
+  const folders = { ...onDisk, plain: [...new Set([...onDisk.plain, ...letIn.filter((name) => !onDisk.submodules.includes(name))])] };
   await putIfChanged(file, (before) => {
     const after = withSourceModLines(before, folders);
     if (after === undefined) throw new Error(`${file} has a source folders marker with no match, so its source folder lines are left as they are`);
@@ -275,8 +276,8 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
       return { notes, other, written };
     },
 
-    async writeSourceModLines() {
-      if (await isRepository(instanceRoot)) await sourceModLinesWritten(instanceRoot);
+    async writeSourceModLines(letIn) {
+      if (await isRepository(instanceRoot)) await sourceModLinesWritten(instanceRoot, undefined, letIn);
     },
 
     sourceHost: (folder) => sourceHostOf(folder).then(
