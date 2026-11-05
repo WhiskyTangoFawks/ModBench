@@ -110,7 +110,7 @@ const gapsOf = (
 // instance-repository.md, Reporting, story 1
 function reportUpdated(reporter: Reporter, outcome: UpdateManifestResult): void {
   const { notHeld, otherBytes } = gapsOf(outcome.landed, (mod, path) => `${mod}: ${path}`, (mod, path) => `${mod}: ${path} (other bytes)`);
-  const updated = outcome.landed.filter(({ manifestWritten }) => manifestWritten).length;
+  const updated = outcome.landed.filter(({ manifestWritten, repositoryWritten }) => manifestWritten || repositoryWritten).length;
   const unchanged = outcome.landed.length - updated;
   const line = `Update manifest${outcome.cancelled ? ' cancelled' : ''}: ${unchanged} mod${unchanged === 1 ? '' : 's'} unchanged, ${updated} updated, `
     + `${outcome.refused.length} refused; their packages do not hold ${counted(notHeld.length, 'file', 'files')} and hold ${counted(otherBytes.length, 'file', 'files')} with other bytes.`;

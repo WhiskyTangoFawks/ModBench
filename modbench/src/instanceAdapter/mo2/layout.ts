@@ -304,6 +304,12 @@ export const withSourceModLines = (ignoreList: string, { submodules, plain }: So
     ...[...plain].sort().map((name) => `!/${SOURCE_MODS_FOLDER}/${escapedForIgnoreList(name)}/`),
   ]);
 
+/** The lines of `ignoreList` that let in the source folder `name`. */
+export function sourceModLinesOf(ignoreList: string, name: string): string[] {
+  const line = `!/${SOURCE_MODS_FOLDER}/${escapedForIgnoreList(name)}`;
+  return ignoreList.split(/\r?\n/).filter((each) => each === line || each === `${line}/`);
+}
+
 /** An ignore list that lets in the files of each mod folder of `folderNames`, or with `held` false leaves them out, every
  *  other line kept. Undefined when the markers do not pair. */
 export const withHeldWholeLines = (ignoreList: string, folderNames: readonly string[], held: boolean): string | undefined =>

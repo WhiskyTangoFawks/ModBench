@@ -7,8 +7,8 @@ import { git } from '../git';
 import { keptByIndex } from '../keptByIndex';
 import { errorMessage } from '../../ports/errorMessage';
 import { exists, get, ignoreSkippedLink, isRepository, listFolders, putIfChanged, readOrAbsent, remove } from '../files';
-import type { InstanceAdapter, SourceHost, Submodule, SubmoduleNote, UnclonedSubmodule } from '../instanceAdapter';
-import { ignoreListFile, sourceModPath, sourceRootDir, submodulesFile, leavesOutSourceFolders, withSourceModLines, type SourceFolders } from './layout';
+import type { InstanceAdapter, SourceHost, Submodule, SubmoduleLacks, SubmoduleNote, UnclonedSubmodule } from '../instanceAdapter';
+import { ignoreListFile, sourceModLinesOf, sourceModPath, sourceRootDir, submodulesFile, leavesOutSourceFolders, withSourceModLines, type SourceFolders } from './layout';
 import type { FileProblems } from '../../ports/fileProblems';
 import type { Mo2Context } from './mo2Context';
 import { PRE_PUSH_HOOK, PRE_PUSH_HOOK_NAME } from '../prePushHook';
@@ -162,13 +162,31 @@ const configured = (instanceRoot: string, file: string, key: string): Promise<st
     throw err;
   });
 
+interface Written { readonly entries: ReadonlyMap<string, string>; readonly ignoreList: string }
+
+// Each submodule's lines in `.gitmodules` by its name, and the ignore list: what a call to writeSubmodules can write.
+async function writtenState(instanceRoot: string): Promise<Written> {
+  const file = submodulesFile(instanceRoot);
+  const entries = new Map<string, string>();
+  if (await exists(file)) {
+    const listed = await git(instanceRoot, 'config', '-f', file, '--null', '--list');
+    for (const entry of listed.split('\0').filter((each) => each !== '')) {
+      const key = entry.split('\n')[0] ?? '';
+      if (!key.startsWith('submodule.')) continue;
+      const name = key.slice('submodule.'.length, key.lastIndexOf('.'));
+      entries.set(name, `${entries.get(name) ?? ''}${entry}\n`);
+    }
+  }
+  return { entries, ignoreList: await get(ignoreListFile(instanceRoot), '') };
+}
+
 // The index holds a submodule's pin as a gitlink, mode 160000.
-async function submoduleIn(instanceRoot: string, name: string): Promise<Submodule | { readonly lacks: string }> {
+async function submoduleIn(instanceRoot: string, name: string): Promise<Submodule | SubmoduleLacks> {
   const file = submodulesFile(instanceRoot);
   const path = await configured(instanceRoot, file, `submodule.${name}.path`);
   if (path === '') return { lacks: `${file} names no submodule '${name}'` };
   const [mode, pin] = (await git(instanceRoot, 'ls-files', '--stage', '--', path)).split(/\s/);
-  if (mode !== '160000' || pin === undefined) return { lacks: `the instance repository pins no commit at ${path}` };
+  if (mode !== '160000' || pin === undefined) return { lacks: `the instance repository pins no commit at ${path}`, unpinned: true };
   const branch = await configured(instanceRoot, file, `submodule.${name}.branch`);
   return { folder: resolve(instanceRoot, path), pin, ...(branch === '' ? {} : { branch }) };
 }
@@ -184,11 +202,17 @@ const keptSubmodules = keptByIndex<Awaited<ReturnType<typeof submoduleIn>>>();
 export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
   return {
     async writeSubmodules(acted, sourceMods) {
-      if (!(await isRepository(instanceRoot))) return { notes: [], other: [] };
+      if (!(await isRepository(instanceRoot))) return { notes: [], other: [], written: [] };
       const file = submodulesFile(instanceRoot);
       const built = new Set([...sourceMods.values()].map((folder) => basename(folder)));
       const notes: SubmoduleNote[] = [];
       const other: string[] = [];
+      let before: Written | undefined;
+      try {
+        before = await writtenState(instanceRoot);
+      } catch (err) {
+        other.push(`which source mods it wrote could not be read, so none is named: ${errorMessage(err)}`);
+      }
       const kept = new Set<string>();
       let existing: string[] = [];
       try {
@@ -234,7 +258,21 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
       } catch (err) {
         other.push(errorMessage(err));
       }
-      return { notes, other };
+      const written: string[] = [];
+      if (before !== undefined) {
+        try {
+          const after = await writtenState(instanceRoot);
+          for (const [mod, folder] of sourceMods) {
+            const name = basename(folder);
+            const entryChanged = before.entries.get(name) !== after.entries.get(name);
+            const linesChanged = sourceModLinesOf(before.ignoreList, name).join() !== sourceModLinesOf(after.ignoreList, name).join();
+            if (entryChanged || linesChanged) written.push(mod);
+          }
+        } catch (err) {
+          other.push(`which source mods it wrote could not be read, so none is named: ${errorMessage(err)}`);
+        }
+      }
+      return { notes, other, written };
     },
 
     async writeSourceModLines() {

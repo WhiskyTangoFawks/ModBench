@@ -182,7 +182,7 @@ describe('Every mod (update manifest and restore from manifest)', () => {
   it('update manifest, cancelled, says it was cancelled and the counts of what landed before, and does not report a landing', async () => {
     updateManifest.mockResolvedValueOnce({
       cancelled: true, notes: [], repositoryNotes: [], refused: [],
-      landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: [], otherBytes: [] }],
+      landed: [{ mod: 'ModA', manifestWritten: true, repositoryWritten: false, notInPackage: [], otherBytes: [] }],
     });
     const { reporter, run } = register();
 
@@ -303,7 +303,7 @@ describe('Update manifest', () => {
   it('says in one line how many mods were unchanged, updated and refused, and that no file is outside its package', async () => {
     updateManifest.mockResolvedValueOnce({
       notes: [], repositoryNotes: [], refused: [],
-      landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: [], otherBytes: [] }, { mod: 'ModB', manifestWritten: false, notInPackage: [], otherBytes: [] }, { mod: 'C', manifestWritten: false, notInPackage: [], otherBytes: [] }],
+      landed: [{ mod: 'ModA', manifestWritten: true, repositoryWritten: false, notInPackage: [], otherBytes: [] }, { mod: 'ModB', manifestWritten: false, repositoryWritten: false, notInPackage: [], otherBytes: [] }, { mod: 'C', manifestWritten: false, repositoryWritten: false, notInPackage: [], otherBytes: [] }],
     });
     const { reporter, run } = register();
 
@@ -312,14 +312,26 @@ describe('Update manifest', () => {
     expect([reporter.landings, reporter.reports]).toEqual([['Update manifest: 2 mods unchanged, 1 updated, 0 refused; their packages do not hold 0 files and hold 0 files with other bytes.'], []]);
   });
 
+  it('counts a mod whose submodule entry or ignore lines were written as updated, though its manifest was unchanged', async () => {
+    updateManifest.mockResolvedValueOnce({
+      notes: [], repositoryNotes: [], refused: [],
+      landed: [{ mod: 'ModA', manifestWritten: false, repositoryWritten: true, notInPackage: [], otherBytes: [] }],
+    });
+    const { reporter, run } = register();
+
+    await run(UPDATE);
+
+    expect(reporter.landings).toEqual(['Update manifest: 0 mods unchanged, 1 updated, 0 refused; their packages do not hold 0 files and hold 0 files with other bytes.']);
+  });
+
   it.each([
-    ['a package does not hold a file, naming each by mod', { landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: ['a.nif', 'b/c.dds'], otherBytes: [] }] },
+    ['a package does not hold a file, naming each by mod', { landed: [{ mod: 'ModA', manifestWritten: true, repositoryWritten: false, notInPackage: ['a.nif', 'b/c.dds'], otherBytes: [] }] },
       'Update manifest: 0 mods unchanged, 1 updated, 0 refused; their packages do not hold 2 files and hold 0 files with other bytes.', 'ModA: a.nif\nModA: b/c.dds'],
-    ['a package holds a file with other bytes, naming each by mod', { landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: ['z.nif'], otherBytes: ['a.esp'] }] },
+    ['a package holds a file with other bytes, naming each by mod', { landed: [{ mod: 'ModA', manifestWritten: true, repositoryWritten: false, notInPackage: ['z.nif'], otherBytes: ['a.esp'] }] },
       'Update manifest: 0 mods unchanged, 1 updated, 0 refused; their packages do not hold 1 file and hold 1 file with other bytes.',
       'ModA: z.nif\nModA: a.esp (other bytes)'],
     ['a mod folder\'s listing skipped an entry, naming each', {
-      notes: [{ mod: 'ModA', note: 'broken link "a.nif", skipped' }], repositoryNotes: ['source/Odd is not a source mod'], landed: [{ mod: 'ModA', manifestWritten: false, notInPackage: [], otherBytes: [] }],
+      notes: [{ mod: 'ModA', note: 'broken link "a.nif", skipped' }], repositoryNotes: ['source/Odd is not a source mod'], landed: [{ mod: 'ModA', manifestWritten: false, repositoryWritten: false, notInPackage: [], otherBytes: [] }],
     }, 'Update manifest: 1 mod unchanged, 0 updated, 0 refused; their packages do not hold 0 files and hold 0 files with other bytes.', 'ModA: broken link "a.nif", skipped\nsource/Odd is not a source mod'],
   ])('warns in that line when %s in the Output', async (_case, answer, message, detail) => {
     updateManifest.mockResolvedValueOnce({ notes: [], repositoryNotes: [], refused: [], ...answer });
@@ -333,7 +345,7 @@ describe('Update manifest', () => {
   it('errs in that line when a mod is refused, naming each refused mod with why, then each file its package does not hold', async () => {
     updateManifest.mockResolvedValueOnce({
       notes: [], repositoryNotes: [],
-      landed: [{ mod: 'ModA', manifestWritten: false, notInPackage: ['a.nif'], otherBytes: [] }],
+      landed: [{ mod: 'ModA', manifestWritten: false, repositoryWritten: false, notInPackage: ['a.nif'], otherBytes: [] }],
       refused: [{ item: 'ModB', reason: "was not updated: its folder does not exist." }],
     });
     const { reporter, run } = register();
@@ -512,7 +524,7 @@ describe('An agent call', () => {
   it('update manifest answers what landed and what was refused, each file its package does not hold and each note as a part that failed, and reports nothing', async () => {
     updateManifest.mockResolvedValueOnce({
       notes: [{ mod: 'ModA', note: 'a game file was unreadable' }], repositoryNotes: ['source/Odd is not a source mod'],
-      landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: ['a.nif'], otherBytes: ['b.esp'] }],
+      landed: [{ mod: 'ModA', manifestWritten: true, repositoryWritten: false, notInPackage: ['a.nif'], otherBytes: ['b.esp'] }],
       refused: [{ item: 'ModB', reason: "was not updated." }],
     });
     const { reporter, run } = register();
@@ -521,7 +533,7 @@ describe('An agent call', () => {
 
     expect(answer).toEqual({
       applied: true,
-      outcome: { landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: ['a.nif'], otherBytes: ['b.esp'] }], refused: [{ item: 'ModB', reason: "was not updated." }] },
+      outcome: { landed: [{ mod: 'ModA', manifestWritten: true, repositoryWritten: false, notInPackage: ['a.nif'], otherBytes: ['b.esp'] }], refused: [{ item: 'ModB', reason: "was not updated." }] },
       partial: [
         { message: 'Update manifest:', detail: 'ModA: its package does not hold a.nif', severity: 'warning' },
         { message: 'Update manifest:', detail: 'ModA: its package holds b.esp with other bytes', severity: 'warning' },

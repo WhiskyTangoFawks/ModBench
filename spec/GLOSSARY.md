@@ -1,7 +1,7 @@
 Architecture words live in `spec/architecture/`. Verbs live in `spec/surfaces/commands.md`. A word is here only where its usual meaning, in software development or in modding, would mislead; a word that is not here means what it usually means.
 
 # Order
-A stack of items that resolve conflicts by override. Mod order and plugin order are its two kinds. Load order combines them.
+A stack of items that resolve conflicts by override. Mod order and plugin order are its two kinds. Load order combines them. Resolution Precedence.
 
 Avoid: priority
 
@@ -19,9 +19,9 @@ Avoid: plugin load order
 The mod order and plugin order together. The two files resolve the full stack into a playable game state. Never use it for one half alone.
 
 # Winning / losing
-The two ends of an order. A wins over B, B loses to A. The extremes are winning-most and losing-most. Vanilla is losing-most in both orders.
+The two ends of an order. A wins over B, B loses to A. Later and earlier compare two items: the later one wins. The extremes are winning-most and losing-most. Vanilla is losing-most in both orders.
 
-Avoid: high or low priority, top or bottom (view words)
+Avoid: high or low priority, top or bottom, above or below (view words)
 
 # Sort direction
 Whether a view lists winning at the top or at the bottom. It never changes who wins.
@@ -29,7 +29,7 @@ Whether a view lists winning at the top or at the bottom. It never changes who w
 Avoid: view order, sort order
 
 # Sorting rule
-A statement about a plugin's place in plugin order, or about the plugins it needs or cannot load with. The game states some, and LOOT's masterlist and the instance's userlist state the rest.
+A statement about a plugin's place in plugin order, or about the plugins it needs or cannot load with. The game states some, and LOOT's masterlist and the instance's userlist state the rest. An ordering constraint.
 
 Avoid: plugin rule, load-order rule
 
@@ -91,6 +91,9 @@ A git workflow where `main` holds another author's plugin as each release ships 
 
 Avoid: modified mod (a vendored workflow describes where `main` points), upstream (git's word for a branch's remote counterpart)
 
+# Overwrite
+The instance's folder of files that belong to no mod, such as a file a tool wrote. It wins over every mod.
+
 # Source
 Source code: what a build compiles a mod from, in a source mod's repository.
 
@@ -127,12 +130,12 @@ A plugin the game loads: the file mod order resolves its name to, with an enable
 Avoid: participating, loaded, registered
 
 ## Master Plugin
-A plugin that another plugin lists as a dependency. A master loads earlier.
+A plugin that another plugin's header lists, for the records it overrides or references. A master loads earlier. Effectively a dependency, due to another plugin inheriting a record from it.
 
 Avoid: parent plugin (an override's plugin is not its child)
 
 ## Compiled plugin
-A plugin in a source mod that a build compiles from its plugin source, which is its truth.
+A plugin in a source mod that a build compiles from its plugin source, which is its truth Treat is as a build artifact.
 
 Avoid: source plugin (that reads as plugin source), tracked plugin (git's tracked is a file in the index)
 
@@ -233,7 +236,7 @@ Where a package is fetched from: a site such as Nexus, a store such as Steam, or
 Avoid: repository (MO2's word for a host), source
 
 # Manifest
-The one file recording what a folder holds: the packages it is made from, each package's host when it has one, and each of its files.
+The one file recording what a folder holds: the packages it is made from, each package's host when it has one, and each of its files. Like a lockfile.
 
 Avoid: record (a plugin's unit of data), recipe, directives, build file (that builds a source mod's folder)
 

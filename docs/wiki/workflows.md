@@ -58,7 +58,7 @@ The mod folder's name and the files you exclude belong to the modlist, not the s
 
 ### Publish a source mod
 
-Give the source mod's repository a remote, and push it. The next Update Manifests makes it a submodule of the instance repository, pinned at its commit, and Source Control shows the change to commit. A source mod in the instance repository is published when you push the modlist.
+Give the source mod's repository a remote, and push it. The next Update Manifests writes its entry in `.gitmodules` and lets it into the instance repository's ignore list, and stages nothing. Stage `source/<name>` yourself to pin its commit; git warns "adding embedded git repository" on that `git add`, which is expected. Until you do, the Problems panel says on its manifest that the repository is not pinned. A source mod in the instance repository is published when you push the modlist.
 
 Push the source mod before the modlist. An instance repository made by Git Init Modlist refuses a push that pins a commit the source mod's remote lacks, so the modlist never pins a commit a clone cannot fetch.
 
