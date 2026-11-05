@@ -546,6 +546,22 @@ describe('the MO2 adapter\'s repository', () => {
       expect(shown()).toEqual([`source/Mod A/${BUILD_FILE}`, 'source/Mod A/.gitignore'].sort());
     });
 
+    it('lets in a folder named before it exists, so git add takes it, and drops the line once the folder is not on disk', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+
+      await adapter.writeSourceModLines(['Mod A']);
+      await sourceFolder('Mod A');
+      runGit('add', '-A', '--', 'source/Mod A');
+      const lines = async (): Promise<string[]> => (await readFile(join(root, '.gitignore'), 'utf8')).split('\n');
+      const letIn = (await lines()).includes('!/source/Mod A/');
+      await rm(join(root, 'source', 'Mod A'), { recursive: true });
+      await adapter.writeSourceModLines();
+
+      expect([letIn, shown(), (await lines()).includes('!/source/Mod A/')]).toEqual([true, [`source/Mod A/${BUILD_FILE}`, 'source/Mod A/.gitignore'].sort(), false]);
+    });
+
     it('is left out once it holds a repository of its own, keeping every line of the ignore list it did not write', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');

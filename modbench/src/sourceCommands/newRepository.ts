@@ -197,9 +197,12 @@ export interface PlacedMods<R> {
 }
 
 // A repository of its own would show in the instance repository as a nested one.
-async function leftOutOrWhy(adapter: Pick<Adapter, 'writeSourceModLines'>): Promise<string | undefined> {
-  return adapter.writeSourceModLines().then(
-    () => undefined, (err: unknown) => `the instance repository's ignore list could not leave its repository out: ${errorMessage(err)}`);
+const leftOutOrWhy = (adapter: Pick<Adapter, 'writeSourceModLines'>): Promise<string | undefined> =>
+  ignoreListWrittenOrWhy(adapter, [], 'could not leave its repository out');
+
+function ignoreListWrittenOrWhy(adapter: Pick<Adapter, 'writeSourceModLines'>, letIn: readonly string[], couldNot: string): Promise<string | undefined> {
+  return adapter.writeSourceModLines(letIn).then(
+    () => undefined, (err: unknown) => `the instance repository's ignore list ${couldNot}: ${errorMessage(err)}`);
 }
 
 interface PlaceRequest {
@@ -233,10 +236,21 @@ export async function modsPlaced<R>(
       }
     }
   }
-  const outcome = await run(made);
+  const letIn = where === 'InstanceRepository' ? [...made.values()].map(({ sourceFolder }) => basename(sourceFolder.path)) : [];
+  if (letIn.length > 0) {
+    const notLetIn = await ignoreListWrittenOrWhy(adapter, letIn, 'could not let the source folders in');
+    if (notLetIn !== undefined) return { refused: true, message: notLetIn };
+  }
+  let outcome: R | WriteRefused;
+  let notReconciled: string | undefined;
+  try {
+    outcome = await run(made);
+  } finally {
+    if (letIn.length > 0) notReconciled = await ignoreListWrittenOrWhy(adapter, [], 'could not be brought to the source folders on disk');
+  }
   const landed = [...new Set(isRefused(outcome) ? [] : landedBy(outcome))];
   const unfinished = await foldersUnfinished(adapter, made, landed);
-  const notLeftOut = where === 'NewRepository' && landed.length > 0 ? await leftOutOrWhy(adapter) : undefined;
+  const notLeftOut = where === 'NewRepository' && landed.length > 0 ? await leftOutOrWhy(adapter) : notReconciled;
   if (notLeftOut !== undefined) {
     for (const mod of landed) {
       const why = unfinished.get(mod);

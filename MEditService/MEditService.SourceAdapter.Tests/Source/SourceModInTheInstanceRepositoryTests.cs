@@ -110,9 +110,9 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void UnderAnIgnoreListThatLetsInEverySourceFolder_AnInit_CommitsTheSourceFolderAlone_AndNoChangeOfTheIgnoreList()
+    public void UnderAnIgnoreListThatLetsInTheSourceFolderByItsOwnLine_AnInit_CommitsTheSourceFolderAlone_AndNoChangeOfTheIgnoreList()
     {
-        CommitAnIgnoreListLettingInEverySourceFolder_ThenChangeIt();
+        CommitAnIgnoreListLettingInTheSourceFolderByItsOwnLine_ThenChangeIt();
 
         Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [OneRecordOf("A.esp")], [], commit: true, heldIn: SourceModIn.InstanceRepository));
 
@@ -120,9 +120,9 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void UnderAnIgnoreListThatLetsInEverySourceFolder_AnInitThenARepair_CommitsTheSourceFolderAloneAsTheInit_AndNoChangeOfTheIgnoreList()
+    public void UnderAnIgnoreListThatLetsInTheSourceFolderByItsOwnLine_AnInitThenARepair_CommitsTheSourceFolderAloneAsTheInit_AndNoChangeOfTheIgnoreList()
     {
-        CommitAnIgnoreListLettingInEverySourceFolder_ThenChangeIt();
+        CommitAnIgnoreListLettingInTheSourceFolderByItsOwnLine_ThenChangeIt();
         var repair = new TreeCommit([new TreeFile("npc_/A.esp/000001.json", "{\"EditorID\": \"Repaired\"}"u8.ToArray())], "Repair A.esp");
 
         Assert.Null(TestAdapters.Source().Init(_sourceFolder, SourceInits.BuildFile, [OneRecordOf("A.esp")], [], commit: true, repair: (A, repair), heldIn: SourceModIn.InstanceRepository));
@@ -130,9 +130,9 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
         AssertTheInitAtHoldsTheSourceFolderAlone("HEAD~1");
     }
 
-    private void CommitAnIgnoreListLettingInEverySourceFolder_ThenChangeIt()
+    private void CommitAnIgnoreListLettingInTheSourceFolderByItsOwnLine_ThenChangeIt()
     {
-        File.WriteAllText(Path.Combine(_instance, ".gitignore"), "/*\n!/.gitignore\n!/source/\n/source/*\n!/source/*/\n");
+        File.WriteAllText(Path.Combine(_instance, ".gitignore"), "/*\n!/.gitignore\n!/source/\n/source/*\n!/source/TestMod/\n");
         Git("add", ".gitignore");
         Git("commit", "-q", "-m", "Base");
         File.AppendAllText(Path.Combine(_instance, ".gitignore"), "mine/\n");
@@ -145,6 +145,7 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
         Assert.NotEmpty(init[1..]);
         Assert.All(init[1..], path => Assert.StartsWith($"source/{TestMod.Name}/", path, StringComparison.Ordinal));
         Assert.Equal(" M .gitignore", Git("status", "--porcelain", "--", ".gitignore").TrimEnd());
+        Assert.Equal("/*\n!/.gitignore\n!/source/\n/source/*\n!/source/TestMod/\nmine/\n", File.ReadAllText(Path.Combine(_instance, ".gitignore")));
     }
 
     [Fact]
