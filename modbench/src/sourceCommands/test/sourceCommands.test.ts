@@ -135,14 +135,25 @@ describe('sourceCommands build', () => {
     expect(outcome).toEqual({ landed: [landedOf(sent)], refused: [{ item, reason }] });
   });
 
-  it('refuses a mod whose folder holds a build file the instance repository lacks, saying to stage it', async () => {
-    await writeBuildFile(folderOf('ModA'), buildFileOf({ steps: [COMPILE] }));
+  it('refuses a mod whose source folder holds a build file the instance repository lacks, saying to stage it', async () => {
     const client = new InMemoryMEditClient();
-    const adapter = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceModFolders: repositoriesOf({}) })).adapter;
+    const sourceFolders = new Map([['ModA', SOURCES.ModA]]);
+    const adapter = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceModFolders: repositoriesOf({}) }), { sourceFolders }).adapter;
 
     const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
 
     expect([client.calls, outcome]).toEqual([[], { landed: [], refused: [{ item: 'ModA', reason: `its ${BUILD_FILE} is not staged in the instance repository: stage it.` }] }]);
+  });
+
+  it('refuses a mod whose unstaged build file is refused, naming why and not saying to stage it', async () => {
+    await writeFile(join(SOURCES.ModA, BUILD_FILE), '{"files": []}');
+    const client = new InMemoryMEditClient();
+    const sourceFolders = new Map([['ModA', SOURCES.ModA]]);
+    const adapter = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersIn(join(root, 'mods'), 'ModA'), sourceModFolders: repositoriesOf({}) }), { sourceFolders }).adapter;
+
+    const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
+
+    expect(outcome).toEqual({ landed: [], refused: [{ item: 'ModA', reason: 'was not built: its build file is in a format before version 1, and Modbench reads only version 1.' }] });
   });
 
   it.each<[string, () => Promise<void>, string, Record<string, true>]>([

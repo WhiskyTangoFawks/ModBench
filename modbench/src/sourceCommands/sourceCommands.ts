@@ -51,12 +51,16 @@ async function heldBuildFile(sourceFolder: string): Promise<BuildFile | { readon
   }
 }
 
-// A manifest that cannot be read names no repository, and says why; a build file the instance repository lacks says to stage it.
-async function noRepository(folder: string | undefined): Promise<string> {
-  const held = folder === undefined ? undefined : await manifestIn(folder).catch(() => undefined);
-  if (held !== undefined && 'refused' in held) return `was not built: ${held.refused}.`;
-  const buildFile = folder === undefined ? undefined : await buildFileIn(folder).catch(() => undefined);
-  return buildFile === undefined ? 'no repository in the source folder builds it' : `its ${BUILD_FILE} is not staged in the instance repository: stage it.`;
+const readOrUndefined = <T>(folder: string | undefined, read: (folder: string) => Promise<T>): Promise<T | undefined> =>
+  folder === undefined ? Promise.resolve(undefined) : read(folder).catch(() => undefined);
+
+async function whyNoRepositoryBuilds(adapter: Adapter, mod: string, modFolder: string | undefined): Promise<string> {
+  const [manifest, buildFile] = await Promise.all([
+    readOrUndefined(modFolder, manifestIn), readOrUndefined(adapter.sourceFolder(mod), buildFileIn),
+  ]);
+  if (manifest !== undefined && 'refused' in manifest) return `was not built: ${manifest.refused}.`;
+  if (buildFile === undefined) return 'no repository in the source folder builds it';
+  return 'refused' in buildFile ? `was not built: ${buildFile.refused}.` : `its ${BUILD_FILE} is not staged in the instance repository: stage it.`;
 }
 
 // mods.md, A source mod, story 2: the build keeps the exclusions the folder holds, and those its manifest records, and the
@@ -84,7 +88,7 @@ async function sourceModOf(
 async function sourceModRead(adapter: Adapter, mod: string, sourceMods: SourceMods): Promise<SourceModToBuild | ItemRefusal<string>> {
   const sourceFolder = sourceMods.folderOf(mod);
   const folder = await adapter.modFolderPath(mod);
-  if (sourceFolder === undefined) return { item: mod, reason: await noRepository(folder) };
+  if (sourceFolder === undefined) return { item: mod, reason: await whyNoRepositoryBuilds(adapter, mod, folder) };
   if (folder === undefined) return { item: mod, reason: 'its name gives it no folder' };
   const buildFile = await heldBuildFile(sourceFolder);
   if ('reason' in buildFile) return { item: mod, reason: buildFile.reason };
