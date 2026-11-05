@@ -1294,6 +1294,7 @@ export interface components {
             holdsAlpha: boolean;
             isPlacedRotation: boolean;
             indexWhen?: string[] | null;
+            unheldWhen?: string[] | null;
         };
         FieldValue: {
             metadata: components["schemas"]["FieldMetadata"];

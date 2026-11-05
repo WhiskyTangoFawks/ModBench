@@ -147,6 +147,8 @@ internal sealed class ConflictClassifier(ILogger logger)
     private delegate IReadOnlyDictionary<string, ConflictThis> CellStatesOf(
         Dictionary<string, object?> values, IReadOnlySet<string> templatedColumns, Func<object?, object?, bool> same);
 
+    private static readonly object Unheld = new();
+
     // One node of the diff tree, at whatever depth the walk reached it. absentMeansDefault is false
     // for an array element, which the codec never omits for equalling its default.
     private static FieldDiff DiffNode(
@@ -157,10 +159,17 @@ internal sealed class ConflictClassifier(ILogger logger)
         bool absentMeansDefault,
         DiffContext ctx,
         bool ignoredInConflicts = false,
-        bool partialFormTakesPart = false)
+        bool partialFormTakesPart = false,
+        HashSet<string>? unheldColumns = null)
     {
-        // A shadowed column shows its value and takes no part in the comparison.
-        var taking = values.ToDictionary(v => v.Key, v => ctx.ShadowedColumns.Contains(v.Key) ? null : v.Value);
+        // A shadowed column shows its value and takes no part in the comparison. An unheld one compares
+        // unlike any value, the default included.
+        object? Taken(string column, object? value)
+        {
+            if (ctx.ShadowedColumns.Contains(column)) return null;
+            return unheldColumns?.Contains(column) == true ? Unheld : value;
+        }
+        var taking = values.ToDictionary(v => v.Key, v => Taken(v.Key, v.Value));
         var winnerColumn = ConflictRules.WinnerOf(taking, ctx.ComparedOrder, ctx.PartialFormColumns) ?? ctx.RecordWinnerColumn;
         var shape = shapes[winnerColumn];
         var templatedColumns = ctx.TemplatedAt(path);
@@ -247,10 +256,11 @@ internal sealed class ConflictClassifier(ILogger logger)
         foreach (var member in members)
         {
             var values = owners.ToDictionary(kv => kv.Key, kv => (object?)MemberValue(kv.Value, member.Name));
-            if (values.Values.All(v => v == null)) continue;
+            var unheld = owners.Where(kv => !DocumentNodes.Holds(member, kv.Value as JsonElement?)).Select(kv => kv.Key).ToHashSet(StringComparer.Ordinal);
+            if (values.Values.All(v => v == null) && (unheld.Count == 0 || unheld.Count == owners.Count)) continue;
             var shapes = owners.ToDictionary(
                 kv => kv.Key, kv => DocumentNodes.VariantFor(member, kv.Value as JsonElement?));
-            children.Add(DiffNode(member.Name, $"{path}.{member.Name}", values, shapes, absentMeansDefault: true, ctx));
+            children.Add(DiffNode(member.Name, $"{path}.{member.Name}", values, shapes, absentMeansDefault: true, ctx, unheldColumns: unheld));
         }
         return children.Count > 0 ? children : null;
     }
