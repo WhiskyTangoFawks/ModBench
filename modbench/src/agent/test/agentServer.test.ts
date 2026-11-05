@@ -1232,8 +1232,7 @@ describe('the agent server, running a gesture', () => {
     beforeEach(() => { vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] }); });
     afterEach(() => { vi.useRealTimers(); });
 
-    // vi.waitFor advances the fake clock as it polls, which would stretch each window.
-    const until = (holds: () => boolean) => new Promise<void>((done) => {
+    const untilWithTheClockStill = (holds: () => boolean) => new Promise<void>((done) => {
       const check = () => { if (holds()) done(); else setImmediate(check); };
       check();
     });
@@ -1245,7 +1244,7 @@ describe('the agent server, running a gesture', () => {
       const errors: Error[] = [];
       client.onerror = (error) => errors.push(error);
       const answered = client.callTool({ name: 'mod_enable', arguments: { argument: [{ name: 'A' }] } }, undefined, onprogress && { onprogress });
-      await until(() => fired.calls.length === 1);
+      await untilWithTheClockStill(() => fired.calls.length === 1);
       const answer = async () => {
         land({ applied: true, outcome: { landed: ['A'], refused: [] } });
         return CallToolResultSchema.parse(await answered);
@@ -1258,9 +1257,9 @@ describe('the agent server, running a gesture', () => {
       const { answer } = await running(({ progress }) => heard.push(progress));
 
       await vi.advanceTimersByTimeAsync(AGENT_IDLE_MS - 1);
-      await until(() => heard.length >= 1);
+      await untilWithTheClockStill(() => heard.length >= 1);
       await vi.advanceTimersByTimeAsync(AGENT_IDLE_MS);
-      await until(() => heard.length >= 2);
+      await untilWithTheClockStill(() => heard.length >= 2);
 
       expect((await answer()).isError).not.toBe(true);
       expect(heard.filter((progress, at) => at > 0 && progress <= present(heard[at - 1], 'the progress before'))).toEqual([]);
