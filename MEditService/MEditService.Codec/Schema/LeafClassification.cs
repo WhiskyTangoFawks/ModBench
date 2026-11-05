@@ -43,12 +43,12 @@ internal static class LeafClassification
         [typeof(string)] = "string",
     };
 
-    // A CLR enum's members: a flags enum keeps only the atomic members, each with its bit, and any
-    // other keeps every member with no bit.
-    internal static EnumMember[] GetEnumMembers(Type enumType)
+    // A CLR enum's members: a flags enum, or a plain one whose members are bits, keeps only the atomic
+    // members, each with its bit, and any other keeps every member with no bit.
+    internal static EnumMember[] GetEnumMembers(Type enumType, bool bitSet = false)
     {
         var allNames = Enum.GetNames(enumType);
-        if (enumType.GetCustomAttribute<FlagsAttribute>() == null)
+        if (!bitSet && enumType.GetCustomAttribute<FlagsAttribute>() == null)
             return [.. allNames.Select(n => new EnumMember(n))];
 
         var allValues = Enum.GetValues(enumType);
@@ -93,7 +93,7 @@ internal static class LeafClassification
             return new("string", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers);
 
         if (core.IsEnum)
-            return ClassifyEnumLeaf(core, declared, prop == null ? null : game.Annotations.EnumLabelsFor(prop));
+            return ClassifyEnumLeaf(core, declared, prop == null ? null : game.Annotations.EnumLabelsFor(prop), core == game.TemplateFlagsEnum);
 
         if (ReflectedTypes.IsFormLink(core))
         {
@@ -119,9 +119,9 @@ internal static class LeafClassification
     // names ("flags"), a plain enum as its name. `declared` is null where the leaf has no owner (a
     // list element, the mod header).
     internal static LeafSpec ClassifyEnumLeaf(
-        Type core, object? declared = null, IReadOnlyDictionary<string, string>? labels = null)
+        Type core, object? declared = null, IReadOnlyDictionary<string, string>? labels = null, bool bitSet = false)
     {
-        var members = Labelled(GetEnumMembers(core), labels);
+        var members = Labelled(GetEnumMembers(core, bitSet), labels);
 
         // Whether the serializer writes this enum as a name array is a question about the Flags
         // attribute alone, since a flags enum with no power-of-two members still serializes as an array.

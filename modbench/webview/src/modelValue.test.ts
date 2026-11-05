@@ -100,6 +100,23 @@ describe('an integer whose bits the schema names reads, copies and pastes as fla
   });
 });
 
+describe('a plain enum whose members carry bits reads, copies and pastes as flags, spelled as a number string', () => {
+  const templateFlagsMeta: FieldMetadata = fieldMeta({
+    type: 'enum',
+    enumMembers: [{ value: 'Traits', bitValue: '1' }, { value: 'Stats', bitValue: '2' }, { value: 'Factions', bitValue: '4' }],
+  });
+
+  it('reads the names of the bits set in the number string, or the one name Mutagen spells for a lone bit', () => {
+    expect(modelValue('5', templateFlagsMeta)).toBe('Traits, Factions');
+    expect(modelValue('Stats', templateFlagsMeta)).toBe('Stats');
+  });
+
+  it('pastes the names as the number string Mutagen reads back', () => {
+    expect(pastedValue('Traits, Stats', templateFlagsMeta)).toBe('3');
+    expect(pastedValue('', templateFlagsMeta)).toBe('0');
+  });
+});
+
 describe('a value as its cell reads it and Ctrl+C copies it', () => {
   it.each([
     ['an enum value the enum does not name reads <Unknown: n>', 5, enumMeta, '<Unknown: 5>', '5'],
