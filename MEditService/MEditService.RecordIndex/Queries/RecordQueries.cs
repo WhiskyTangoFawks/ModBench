@@ -325,7 +325,7 @@ internal sealed class RecordQueries(
         _answer.Of(() => Referrers(RequireReads().GetReferencedByInActiveOrCompiledPlugins(targetFormKey)));
 
     // A plugin the record index has not reached would read as naming nothing.
-    public Answer<IReadOnlyList<RecordCopy>, IndexRefused> GetPluginNameReferences(string name) =>
+    public Answer<IReadOnlyList<CopyNaming>, IndexRefused> GetPluginNameReferences(string name) =>
         _answer.Of(() => _index.RequireWholeSetReads().GetCopiesNaming(name));
 
     private IReadOnlyList<ReferenceResult> Referrers(IReadOnlyList<ReferenceRow> rows)

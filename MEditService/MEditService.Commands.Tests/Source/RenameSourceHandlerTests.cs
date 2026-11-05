@@ -16,6 +16,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
     private const string NonSourceModName = "NonSourceMod";
     private const string MasterName = "Master.esm";
     private static readonly PluginAddress Old = new("Old.esp", SourceModName);
+    private static readonly PluginAddress Patch = new("Patch.esp", SourceModName);
     private readonly ScratchDirectory _root = new("medit-rename-source-");
     private readonly string _dataFolder;
     private readonly string _sourceMod;
@@ -41,6 +42,11 @@ public sealed class RenameSourceHandlerTests : IDisposable
             Path.Combine(_sourceMod, Old.Name),
             new BinaryWriteParameters { MastersListContent = MastersListContentOption.Iterate });
         WritePlugin(_nonSourceMod, "Other.esp");
+        var patch = new Fallout4Mod(ModKey.FromFileName(Patch.Name), Fallout4Release.Fallout4);
+        patch.Npcs.AddNew("PatchNpc").Race.SetTo(race);
+        patch.WriteToBinary(
+            Path.Combine(_sourceMod, Patch.Name),
+            new BinaryWriteParameters { MastersListContent = MastersListContentOption.Iterate });
 
         Apply(Old.Name);
         TestEditService.VersionInGitHandler(_holder).VersionInGitAsync(ToVersionInGit.In(_holder.Held?.Snapshot, SourceModName)).GetAwaiter().GetResult().Value();
@@ -77,6 +83,31 @@ public sealed class RenameSourceHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task RenameSource_AnotherPluginSourceThatNamesIt_FollowsIt_SoItCompilesAgainstTheNewName()
+    {
+        var result = RenameSource(Old, "New.esp");
+
+        Assert.Empty(result.Changes.Require().LeftBehind);
+        TheInstanceAdapterRenamesTheFile("New.esp");
+        await CompiledBytes(Patch);
+        using var compiled = Fallout4Mod.CreateFromBinaryOverlay(Path.Combine(_sourceMod, Patch.Name), Fallout4Release.Fallout4);
+        Assert.Equal(["New.esp"], compiled.ModHeader.MasterReferences.Select(master => master.Master.FileName.String));
+    }
+
+    [Fact]
+    public void RenameSource_AnotherPluginSourceThatDoesNotRead_IsLeftBehind_NamingWhy_AndTheRenameLands()
+    {
+        var npc = SourceModTree.DocumentCarrying(_sourceMod, Patch, "PatchNpc");
+        SourceModTree.Overwrite(_sourceMod, Patch, npc.Identity, "{ \"FormKey\": ");
+
+        var result = new Read(Changes.RenameSource(Old, "New.esp"));
+
+        var left = Assert.Single(result.Changes.Require().LeftBehind);
+        Assert.Equal(Patch, left.Plugin);
+        Assert.Contains("PatchNpc", left.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void RenameSource_ToANameThatIsNoPluginFile_RefusesIt_AndWritesNothing()
     {
         var before = SourceModTree.Records(_sourceMod, Old);
@@ -104,7 +135,9 @@ public sealed class RenameSourceHandlerTests : IDisposable
     {
         var result = RenameSource(new PluginAddress(plugin, origin), "New.esp");
 
-        Assert.Equal((null, [], [], []), (result.Refusal, result.Changes.Require().Moves, result.Changes.Require().Deletions, result.Changes.Require().Documents));
+        var changes = result.Changes.Require();
+        Assert.Null(result.Refusal);
+        Assert.Equal(0, changes.Moves.Count + changes.Deletions.Count + changes.Documents.Count + changes.LeftBehind.Count);
         Assert.False(Directory.Exists(PluginSourceRoot.In(_sourceMod, "New.esp")));
         Assert.False(Directory.Exists(PluginSourceRoot.In(_nonSourceMod, "New.esp")));
     }
@@ -258,9 +291,10 @@ public sealed class RenameSourceHandlerTests : IDisposable
             new(MasterName, Path.Combine(_dataFolder, MasterName), PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
             new(compiledPlugin, Path.Combine(_sourceMod, compiledPlugin), SourceModName, 1, Enabled: true, Winning: true),
             new("Other.esp", Path.Combine(_nonSourceMod, "Other.esp"), NonSourceModName, 2, Enabled: true, Winning: true),
+            new(Patch.Name, Path.Combine(_sourceMod, Patch.Name), SourceModName, 3, Enabled: true, Winning: true),
         ];
         if (File.Exists(Path.Combine(_sourceMod, "Loose.esp")))
-            entries.Add(new("Loose.esp", Path.Combine(_sourceMod, "Loose.esp"), SourceModName, 3, Enabled: true, Winning: true));
+            entries.Add(new("Loose.esp", Path.Combine(_sourceMod, "Loose.esp"), SourceModName, 4, Enabled: true, Winning: true));
         _holder.Apply(SnapshotPlugins.Snapshot(_dataFolder, _root, GameRelease.Fallout4, entries));
     }
 

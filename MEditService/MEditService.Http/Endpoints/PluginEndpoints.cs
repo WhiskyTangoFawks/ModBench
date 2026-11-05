@@ -60,8 +60,8 @@ internal static class PluginEndpoints
             .WithDescription(
                 "Each copy, in an active plugin or one with plugin source, whose text names the plugin file name, and " +
                 "the Plugin Header record of each plugin with no plugin source that lists it as a master. Answers only " +
-                "once the record index is ready.")
-            .Produces<IReadOnlyList<RecordCopy>>()
+                "once the record index is ready. Each says whether its plugin has plugin source, which a rename changes.")
+            .Produces<IReadOnlyList<CopyNaming>>()
             .ProducesProblem(503);
 
         app.MapGet("/plugins/{plugin}/indexed-as-on-disk", (string plugin, string? origin, IQueries svc) =>
@@ -217,12 +217,13 @@ internal static class PluginEndpoints
 
         app.MapPost("/plugins/rename-source-changes", RenameSourceChanges)
             .WithName("RenameSourceChanges")
-            .WithSummary("The changes renaming a compiled plugin's source makes, writing nothing.")
+            .WithSummary("The changes renaming a plugin makes to plugin source, writing nothing.")
             .WithDescription(
                 "Over the unsaved documents mEdit holds, the files and folders renaming the plugin's source " +
-                "moves and the text each document it changes holds afterwards: every FormKey of the plugin follows. " +
-                "Moves come first, then deletions, then documents, and every path is absolute. The plugin file, its " +
-                "plugins.txt lines and what Modbench last wrote stay as they are.")
+                "moves and the text each document it changes holds afterwards: every FormKey of the plugin follows, in its " +
+                "own source and in every other plugin source. Moves come first, then deletions, then documents, and every " +
+                "path is absolute. Each other plugin source that cannot follow is left behind, saying why. The plugin " +
+                "file, its plugins.txt lines and what Modbench last wrote stay as they are.")
             .Produces<RenameSourceChanges>()
             .ProducesProblem(400)
             .ProducesProblem(404)

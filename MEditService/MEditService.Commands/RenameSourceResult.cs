@@ -1,18 +1,20 @@
+using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 
 namespace MEditService.Commands;
 
-/// <summary>The changes that move the plugin's source and the name its tree was filed under, or why nothing changed.</summary>
+/// <summary>The changes renaming a plugin makes to plugin source and the name its tree was filed under, or why nothing
+/// changed.</summary>
 public abstract record RenameSourceResult
 {
     private RenameSourceResult()
     {
     }
 
-    internal static RenameSourceResult Landed(SourceChanges changes, string treeName)
+    internal static RenameSourceResult Landed(SourceChanges changes, string treeName, IReadOnlyList<SourceLeftBehind> leftBehind)
     {
         var (moves, deletions, documents) = changes;
-        return new LandedResult(new RenameSourceChanges(treeName, moves, deletions, documents));
+        return new LandedResult(new RenameSourceChanges(treeName, moves, deletions, documents, leftBehind));
     }
 
     internal static RenameSourceResult Refused(RenameSourceRefusal refusal, string message) => new RefusedResult(refusal, message);
@@ -34,7 +36,11 @@ public abstract record RenameSourceResult
 }
 
 public sealed record RenameSourceChanges(
-    string TreeName, IReadOnlyList<SourceMove> Moves, IReadOnlyList<string> Deletions, IReadOnlyList<DocumentChange> Documents);
+    string TreeName, IReadOnlyList<SourceMove> Moves, IReadOnlyList<string> Deletions, IReadOnlyList<DocumentChange> Documents,
+    IReadOnlyList<SourceLeftBehind> LeftBehind);
+
+/// <summary>Another plugin's source that may name the renamed plugin and cannot follow it, and why.</summary>
+public sealed record SourceLeftBehind(PluginAddress Plugin, string Reason);
 
 /// <summary>Whether what Modbench last wrote moved, or why it did not.</summary>
 public sealed record MoveLastWrittenResult(RenameSourceRefusal? Refusal = null, string? Message = null);

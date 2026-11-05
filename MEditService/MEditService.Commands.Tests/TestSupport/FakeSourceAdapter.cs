@@ -240,6 +240,8 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
         public Answer<SourceChanges?, SourceFailure> ChangesToRenameSource(PluginAddress plugin, string newName) => throw Unreached();
 
+        public Answer<SourceChanges, SourceFailure> ChangesToFollowRename(PluginAddress plugin, string renamed, string newName) => throw Unreached();
+
         public SourceFailure? ReplaceSourceFrom(PluginAddress plugin, IReadOnlyList<TreeFile> tree, string binarySha256) =>
             throw Unreached();
 

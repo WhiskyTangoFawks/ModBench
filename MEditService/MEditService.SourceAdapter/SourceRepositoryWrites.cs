@@ -311,6 +311,20 @@ internal sealed class SourceRepositoryWrites(
         return new SourceChanges(MovesTopDown(held.Select(file => file.Relative), renamed.Select(file => file.RelativePath)), [], [.. documents]);
     }
 
+    /// <summary>What renaming the plugin <paramref name="from"/> changes in the source of the plugin whose tree is
+    /// <paramref name="treeName"/>: each document holding a FormKey of it, at the same path.</summary>
+    internal SourceChanges ChangesToFollowRename(string treeName, string from, string to)
+    {
+        var documents = files.FilesIn(SourceRepositoryLayout.RootIn(_sourceFolder, treeName), "*", SearchOption.AllDirectories)
+            .Where(path => path.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.OrdinalIgnoreCase))
+            .Order(StringComparer.Ordinal)
+            .Select(path => (Relative: Path.GetRelativePath(_sourceFolder, path), Bytes: files.ReadAllBytes(path)))
+            .Select(file => (file.Relative, file.Bytes, Renamed: PluginSourceRename.Following(file.Relative, file.Bytes, from, to)))
+            .Where(file => !file.Renamed.AsSpan().SequenceEqual(file.Bytes))
+            .Select(file => new DocumentChange(file.Relative, Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(file.Renamed))));
+        return new SourceChanges([], [], [.. documents]);
+    }
+
     // A directory moves before what is in it, so each move names a path as the moves before it left it.
     private static List<SourceMove> MovesTopDown(IEnumerable<string> from, IEnumerable<string> to)
     {

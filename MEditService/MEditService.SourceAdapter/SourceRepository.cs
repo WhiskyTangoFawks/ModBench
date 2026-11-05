@@ -382,6 +382,9 @@ internal sealed class SourceRepository : ISourceRepository
                 : Writes.ChangesToRenameSource(name, newName);
         });
 
+    public Answer<SourceChanges, SourceFailure> ChangesToFollowRename(PluginAddress plugin, string renamed, string newName) =>
+        SourceFailure.Answer(() => Writes.ChangesToFollowRename(Spelled(plugin).Name, renamed, newName));
+
     public string TreeNameOf(PluginAddress plugin) => Spelled(plugin).Name;
 
     public SourceFailure? MoveLastWrittenTo(string treeName, string newName)

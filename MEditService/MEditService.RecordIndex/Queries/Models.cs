@@ -137,6 +137,9 @@ public record CompareResult(
 /// or the one <paramref name="DocumentText"/> spells in its place (ADR-0012).</summary>
 public record RecordCopy(string FormKey, PluginAddress Plugin, string? DocumentText = null);
 
+/// <summary>A copy whose text names a plugin, and whether its plugin has plugin source, which a rename can change.</summary>
+public sealed record CopyNaming(string FormKey, PluginAddress Plugin, bool InPluginSource);
+
 /// <summary>The document carrying the record, its own or its container's, that a comparison reads
 /// <paramref name="Plugin"/>'s copy from in place of the record index's copy. <paramref name="Alone"/>
 /// compares that copy with no other.</summary>

@@ -89,6 +89,10 @@ public interface ISourceRepository : ISourceRepositoryReads
     /// case.</summary>
     Answer<SourceChanges?, SourceFailure> ChangesToRenameSource(PluginAddress plugin, string newName);
 
+    /// <summary>What renaming the plugin <paramref name="renamed"/> to <paramref name="newName"/> changes in
+    /// <paramref name="plugin"/>'s source: each FormKey of the renamed plugin follows it.</summary>
+    Answer<SourceChanges, SourceFailure> ChangesToFollowRename(PluginAddress plugin, string renamed, string newName);
+
     /// <summary>The name the plugin's tree folder is spelled with, which is what Modbench's last write of the
     /// plugin is filed under.</summary>
     string TreeNameOf(PluginAddress plugin);
