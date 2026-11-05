@@ -31,7 +31,7 @@ const COVERED: Record<string, readonly PublisherTag[]> = {
   '/instance/Winner/own.esp': [AE],
   '/instance/Loser/a.dds': [NM],
 };
-const publisherConfiguration: PublisherConfiguration = { kind: 'read', covering: (path) => COVERED[path] ?? [], listed: () => [], pathProblems: [] };
+const publisherConfiguration: PublisherConfiguration = { kind: 'read', covering: (path) => COVERED[path] ?? [], listed: () => [], pathProblems: [], unshippable: { file: '', reason: () => undefined } };
 
 const switchesOn = Object.fromEntries([...MOD_INDICATORS.map(({ id }) => id), 'publisherTag' as const]
   .flatMap((id) => [[indicatorSetting(id, 'badge'), true], [indicatorSetting(id, 'colour'), true]]));

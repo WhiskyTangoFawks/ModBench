@@ -164,6 +164,93 @@ describe('a folder Wabbajack\'s compiler never ships, as the mod manager names i
   });
 });
 
+describe('a file the compiler has no way to ship, once no package holds its bytes (publishing.md, What ships, story 2)', () => {
+  const COMPILE_PROFILES = { Profile: 'Main' };
+  const REASON = 'no package holds its bytes, and no Include or No Match Include publisher tag covers it';
+
+  async function unshippable(mod: string, pathInMod: string, folder: readonly string[] = ['mods', mod]): Promise<string | undefined> {
+    const { unshippable: judged } = expectKind(await publisherOver().configuration(), 'read');
+    return judged.reason(join(root, ...folder), pathInMod, mod);
+  }
+
+  describe('hands back the same judgement while what it judges by is unchanged', () => {
+    const judgeOf = async (publisher: ReturnType<typeof publisherOver>) => expectKind(await publisher.configuration(), 'read').unshippable.reason;
+
+    it('across readings of unchanged settings and unchanged enabled mods', async () => {
+      await writeSettings({ ...COMPILE_PROFILES, Include: ['mods\\\\A'] });
+      const publisher = publisherOver();
+
+      expect(await judgeOf(publisher)).toBe(await judgeOf(publisher));
+    });
+
+    it('is replaced by a new one when the settings change', async () => {
+      await writeSettings({ ...COMPILE_PROFILES, Include: ['mods\\\\A'] });
+      const publisher = publisherOver();
+      const before = await judgeOf(publisher);
+
+      await writeSettings({ ...COMPILE_PROFILES, Include: ['mods\\\\B'] });
+
+      expect(await judgeOf(publisher)).not.toBe(before);
+    });
+
+    it('is replaced by a new one when the mods a compile profile enables change', async () => {
+      await writeSettings(COMPILE_PROFILES);
+      const publisher = publisherOver();
+      const before = await judgeOf(publisher);
+      const main = ENABLED_BY_PROFILE.Main ?? [];
+
+      ENABLED_BY_PROFILE.Main = ['Enabled', 'Newly Enabled'];
+      const after = await judgeOf(publisher);
+      ENABLED_BY_PROFILE.Main = main;
+
+      expect(after).not.toBe(before);
+    });
+  });
+
+  it('names the compiler settings as the file it is shown on', async () => {
+    await writeSettings({});
+
+    expect(expectKind(await publisherOver().configuration(), 'read').unshippable.file).toBe(join(root, SETTINGS_FILE));
+  });
+
+  it('judges a file in an enabled mod that no Include nor No Match Include covers to be one, and says why', async () => {
+    await writeSettings(COMPILE_PROFILES);
+
+    expect(await unshippable('Enabled', 'x.esp')).toBe(REASON);
+  });
+
+  it.each([['Include'], ['NoMatchInclude']])('judges it shippable once %s covers its folder or the file', async (listedUnder) => {
+    await writeSettings({ ...COMPILE_PROFILES, [listedUnder]: ['mods\\Enabled\\textures', 'mods\\Enabled\\x.esp'] });
+
+    expect([await unshippable('Enabled', join('textures', 'a.dds')), await unshippable('Enabled', 'x.esp'), await unshippable('Enabled', 'y.esp')])
+      .toEqual([undefined, undefined, REASON]);
+  });
+
+  it('judges a file Ignore covers shippable, since the compiler never asks for it', async () => {
+    await writeSettings({ Ignore: ['mods\\Enabled'] });
+
+    expect(await unshippable('Enabled', 'x.esp')).toBeUndefined();
+  });
+
+  it('judges a file in a mod no compile profile enables, or in a folder the compiler never ships, shippable', async () => {
+    await writeSettings(COMPILE_PROFILES);
+
+    expect([await unshippable('Disabled', 'x.esp'), await unshippable('Enabled', 'x.ini', [NEVER_SHIPPED])]).toEqual([undefined, undefined]);
+  });
+
+  it('judges a file in a disabled Always Enabled mod one, as the compiler ships that mod', async () => {
+    await writeSettings({ ...COMPILE_PROFILES, AlwaysEnabled: ['mods\\Disabled'] });
+
+    expect(await unshippable('Disabled', 'x.esp')).toBe(REASON);
+  });
+
+  it('judges a file outside the instance shippable', async () => {
+    await writeSettings({});
+
+    expect(await unshippable('Enabled', 'x.esp', ['..'])).toBeUndefined();
+  });
+});
+
 describe('compiler settings Modbench cannot read (Never silently wrong)', () => {
   const reason = async (): Promise<string> => expectKind(await publisherOver().configuration(), 'unreadable').reason;
 

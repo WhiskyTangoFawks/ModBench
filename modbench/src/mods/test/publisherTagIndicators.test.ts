@@ -40,6 +40,7 @@ const READ: PublisherConfiguration = {
   covering: (path, mod) => COVERED_AS_THE_PUBLISHER_APPLIES_THEM_BY_MOD_AND_PATH[`${mod ?? 'outside every mod'} ${path}`] ?? [],
   listed: () => [],
   pathProblems: [],
+  unshippable: { file: '', reason: () => undefined },
 };
 
 const separator = (name: string): ModlistEntry => ({ kind: 'separator', name, enabled: true });

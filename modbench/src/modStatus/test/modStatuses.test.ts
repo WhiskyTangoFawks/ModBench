@@ -60,7 +60,7 @@ const file = (name: string) => ({ kind: 'installationFile' as const, name, size:
 const folder = (kind: EntryRef['kind'], name: string, path: string, modName = name): ModFolder => ({ kind, name, path, modName });
 
 const valueOf = (mods: EntryRef[], modFolders: ModFolder[], over: Partial<StatusSource> = {}): StatusSource =>
-  ({ holdsRepository: true, mods, modFolders, entryKey: ({ name }) => name.toLowerCase(), paths: { sourceDirs: new Map() }, ...over });
+  ({ holdsRepository: true, mods, modFolders, entryKey: ({ name }) => name.toLowerCase(), paths: { sourceDirs: new Map() }, filesByMod: new Map(), ...over });
 
 let heldWhole: ReadonlySet<string>;
 let heldByGit: ReadonlyMap<string, readonly string[]>;
@@ -178,6 +178,31 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     await statuses.current();
 
     expect(hashed).toEqual([]);
+  });
+
+  describe('the files no package holds (publishing.md, What ships, story 2)', () => {
+    it('lists every file the reading holds of a mod whose folder holds no manifest, but git\'s own', async () => {
+      const mod = await folderOf('ModA');
+      const held = ['mine.txt', 'other.txt', '.git/HEAD'].map((relativePath) => ({ relativePath }));
+      const statuses = statusesLogging();
+
+      statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], { filesByMod: new Map([['ModA', held]]) }));
+
+      expect((await statuses.current()).get('ModA')?.unpackaged).toEqual(['mine.txt', 'other.txt']);
+    });
+
+    it('lists the files git holds of a folder it holds whole, and of one with a manifest, which no package holds', async () => {
+      const [whole, manifested] = [await folderOf('ModA', { 'a.esp': '' }), await folderOf('ModB', { 'b.ini': '' })];
+      await writeManifestIn(manifested, EMPTY);
+      heldWhole = new Set([whole]);
+      heldByGit = new Map([[whole, ['a.esp']], [manifested, ['b.ini']]]);
+      const statuses = statusesLogging();
+
+      statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }, { kind: 'mod', name: 'ModB' }], [folder('mod', 'ModA', whole), folder('mod', 'ModB', manifested)]));
+      const derived = await statuses.current();
+
+      expect([derived.get('ModA')?.unpackaged, derived.get('ModB')?.unpackaged]).toEqual([['a.esp'], ['b.ini']]);
+    });
   });
 
   it('reads a folder git holds whole as git\'s, with no manifest to judge it by and no file of it hashed (Status, story 1)', async () => {

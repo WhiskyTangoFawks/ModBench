@@ -35,6 +35,9 @@ export interface ModStatus {
   /** The files no package holds the bytes of, nor a file of their name; `otherBytes`, those a package holds one of their name of. */
   readonly notInPackage: readonly string[];
   readonly otherBytes: readonly string[];
+  /** The folder's files no package holds the bytes of, by the paths it holds them at: those that differ, that no line
+   *  names, a step makes, or the lists above name, and every file of a source mod. */
+  readonly unpackaged: readonly string[];
   /** Each package with no host, as a noun phrase. */
   readonly noHost: readonly string[];
   /** Why this machine does not hold each package the manifest names, as a clause. */
@@ -49,10 +52,10 @@ export interface ModStatus {
 }
 
 const nothing = (mod: string, over: Partial<ModStatus> = {}): ModStatus =>
-  ({ mod, packages: [], noManifest: false, differing: [], namedByNoLine: [], ignored: [], ignoreEntries: [], gone: [], notInPackage: [], otherBytes: [], noHost: [], packagesLacking: [], ...over });
+  ({ mod, packages: [], noManifest: false, differing: [], namedByNoLine: [], ignored: [], ignoreEntries: [], gone: [], notInPackage: [], otherBytes: [], unpackaged: [], noHost: [], packagesLacking: [], ...over });
 
 /** A mod whose whole folder git holds: git's, so it lists nothing. */
-export const heldWholeStatus = (mod: string): ModStatus => nothing(mod, { heldWhole: true });
+export const heldWholeStatus = (mod: string, files: readonly string[]): ModStatus => nothing(mod, { heldWhole: true, unpackaged: ordered(files) });
 
 /** A mod whose status could not be read, for `why`. */
 export const unreadableStatus = (mod: string, why: string): ModStatus => nothing(mod, { unreadable: why });
@@ -153,6 +156,12 @@ export function statusFrom(mod: ModAt, { read, file }: ManifestAt, values: Statu
   const { manifest } = read;
   const { files, namedByNoLine, ignored } = folderAgainst(manifest, values.folder, values.flaggedHashes);
   const held = packagesHeld(manifest, values);
+  const unheld = held.lacking.length === 0 ? filesNoPackageHolds(manifest, held.files) : undefined;
+  const unheldPaths = new Set([...unheld?.notInPackage ?? [], ...unheld?.otherBytes ?? []].map(folded));
+  const isUnheld = (path: string): boolean => unheldPaths.has(folded(path));
+  const isSourceMod = repositoryOf(manifest) !== undefined;
+  const unpackaged = files.flatMap(({ path, hash, pathInFolder, holdsItsBytes }) =>
+    (pathInFolder !== undefined && (isSourceMod || hash === null || holdsItsBytes === false || isUnheld(path)) ? [pathInFolder] : []));
   return {
     ...nothing(mod.name, { manifestFile: file, packages: manifest.packages }),
     differing: ordered(files.flatMap(({ pathInFolder, holdsItsBytes }) => (holdsItsBytes === false && pathInFolder !== undefined ? [pathInFolder] : []))),
@@ -160,7 +169,8 @@ export function statusFrom(mod: ModAt, { read, file }: ManifestAt, values: Statu
     ignored,
     ignoreEntries: manifest.ignore,
     gone: ordered(files.flatMap(({ path, pathInFolder }) => (pathInFolder === undefined ? [path] : []))),
-    ...held.lacking.length === 0 ? filesNoPackageHolds(manifest, held.files) : {},
+    ...unheld,
+    unpackaged: ordered([...unpackaged, ...namedByNoLine]),
     noHost: manifest.packages.flatMap((pkg) => packageWithoutHost(pkg, values.repositoryHosted)),
     packagesLacking: held.lacking,
   };

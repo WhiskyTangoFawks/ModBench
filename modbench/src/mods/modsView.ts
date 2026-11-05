@@ -33,6 +33,7 @@ import { registerBuildTask } from './buildTask';
 import { BuildProblems } from './buildProblems';
 import { ModProblems } from './modProblems';
 import { PublisherProblems } from './publisherProblems';
+import { UnshippableProblems } from './unshippableProblems';
 import { registerVersionInGitCommand } from './versionInGitCommand';
 import type { InstanceRepositoryCommands } from '../sourceCommands/instanceRepositoryCommands';
 import { registerManifestGestures, type ManifestGestureDeps } from './manifestGestures';
@@ -164,6 +165,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     ...registerModDecorations(instance, open, vscode.workspace),
     new PublisherProblems(vscode.languages.createDiagnosticCollection('modbench-publisher'), instance),
     new ModProblems(vscode.languages.createDiagnosticCollection('modbench-mod-status'), instance, statuses),
+    new UnshippableProblems(vscode.languages.createDiagnosticCollection('modbench-unshippable'), instance, statuses),
     ...registerModContextCommands({
       commands, instance, viewSelection: () => view.selection, reporter: reporterFor('mod.uninstall'), ask, trash,
       log,

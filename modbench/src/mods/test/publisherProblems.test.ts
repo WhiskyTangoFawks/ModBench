@@ -13,7 +13,7 @@ const FILE = '/instance/compiler_settings.json';
 
 const naming = (...lines: number[]): PublisherConfiguration => ({
   kind: 'read', covering: () => [], listed: () => [],
-  pathProblems: lines.map((line) => ({ kind: 'namesNoPath', file: FILE, line, tag: IGNORE, entry: `gone${line}` })),
+  pathProblems: lines.map((line) => ({ kind: 'namesNoPath', file: FILE, line, tag: IGNORE, entry: `gone${line}` })), unshippable: { file: '', reason: () => undefined },
 });
 
 const instanceHolding = (publisherConfiguration: PublisherConfiguration) =>
@@ -40,7 +40,7 @@ describe('a publisher tag that names no path (publishing.md, Publisher tags, sto
     const collection = new FakeDiagnosticCollection();
     const unchecked: PublisherConfiguration = {
       kind: 'read', covering: () => [], listed: () => [],
-      pathProblems: [{ kind: 'notChecked', file: FILE, line: 1, tag: IGNORE, entry: 'mods\\loop', reason: 'ELOOP' }],
+      pathProblems: [{ kind: 'notChecked', file: FILE, line: 1, tag: IGNORE, entry: 'mods\\loop', reason: 'ELOOP' }], unshippable: { file: '', reason: () => undefined },
     };
 
     new PublisherProblems(collection, instanceHolding(unchecked));
