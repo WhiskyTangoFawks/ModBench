@@ -24,6 +24,7 @@ export interface Kept<T> {
   readonly path: string;
   readonly stamp: FileStamp;
   readonly value: T;
+  readonly settled: boolean;
 }
 
 interface KeptOptions<T> {
@@ -32,20 +33,19 @@ interface KeptOptions<T> {
   readonly keyOf?: (path: string) => string;
 }
 
-/** A reader of `path` that reads it again only when its stamp has changed, and keeps nothing whose stamp is too fresh to trust. */
+/** A reader of `path` that reads it again only when its stamp has changed, or while its stamp is too fresh to trust. */
 export function keptByStamp<T>(
   stampOf: (path: string) => Promise<FileStamp>, read: (path: string) => Promise<T>, { kept = new Map(), trusts = () => false, keyOf = (path) => path }: KeptOptions<T> = {},
 ): (path: string) => Promise<T> {
   return async (path) => {
     const key = keyOf(path);
     const held = kept.get(key);
-    if (held !== undefined && trusts()) return held.value;
+    if (held?.settled === true && trusts()) return held.value;
     const stamp = await stampOf(path);
-    if (held !== undefined && sameStamp(held.stamp, stamp)) return held.value;
+    if (held?.settled === true && sameStamp(held.stamp, stamp)) return held.value;
     const readFromMs = Date.now();
     const value = await read(path);
-    if (settledBefore(stamp, readFromMs)) kept.set(key, { path, stamp, value });
-    else kept.delete(key);
+    kept.set(key, { path, stamp, value, settled: settledBefore(stamp, readFromMs) });
     return value;
   };
 }
