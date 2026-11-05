@@ -73,11 +73,10 @@ medit_readmodel: "MEDIT · Read model — the record index, a view over the repo
     store: "Store\nowns: every plugin's rows\nhides: DuckDB" {class: derived}
   }
 }
-modbench_readmodel: "MODBENCH · Read model — the instance value, derived from the Instance adapter by watching, the mod statuses derived from it, and the symbols derived from the repositories, and nothing else" {
+modbench_readmodel: "MODBENCH · Read model — the instance value, derived from the Instance adapter by watching, and the mod statuses derived from it, and nothing else" {
   class: band; grid-rows: 1
   instanceloader: "Instance loader\nowns: the instance value, recomputed whole on every change" {class: readmodel}
   modstatus: "Mod status\nowns: each mod's status against its manifest,\nderived whole from each instance value" {class: readmodel}
-  symbols: "Symbols\nowns: every symbol the instance's files name,\nand each place a file names it" {class: readmodel}
 }
 
 medit_repositories: "MEDIT · Repositories — the only boxes that read or write a system of record" {

@@ -46,7 +46,7 @@ The source is files, and any tool can change them. As a user, I want:
 
 ### In the text editor
 
-A FormKey is a record's symbol ([symbols.md](symbols.md)). Inside a FormKey, the plugin's name is the plugin's symbol. The gestures are VS Code's own, under VS Code's names and keys: Go to Definition and Go to Symbol are entry points to `open`, Find All References to `referenced by`, and Rename Symbol to `edit field` on the FormKey, or to the plugin's `rename` on its name (commands.md, Entry points are not gestures).
+A FormKey is a record's symbol ([symbols.md](symbols.md)). Inside a FormKey, the plugin's name is the plugin's symbol. The gestures are VS Code's own, under VS Code's names and keys: Go to Definition and Go to Symbol are entry points to `open`, Find All References to `referenced by`, and Rename Symbol to `edit field` on the FormKey or the EditorID. On the plugin's name they are entry points to the plugin's `go to`, `referenced by` and `rename` (commands.md, Entry points are not gestures).
 
 As a user, I want:
 

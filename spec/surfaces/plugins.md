@@ -159,8 +159,8 @@ The menus follow VS Code's groups: open, change, create, source control, copy, t
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. 3: filter records, or clear the record filter while active. 4: create plugin. Collapse All last. |
-| Plugin menu | reveal · enable or disable · apply suggested move (a broken sorting rule a move keeps) · rename… (a plugin in a mod) · load after… · create record… · version in git… (a mod that is not a source mod) · decompile (in a source mod) · decompile and repair (a malformed plugin) · copy value |
-| Plugin the game loads with no line | reveal · copy value |
+| Plugin menu | reveal · referenced by · enable or disable · apply suggested move (a broken sorting rule a move keeps) · rename… (a plugin in a mod) · load after… · create record… · version in git… (a mod that is not a source mod) · decompile (in a source mod) · decompile and repair (a malformed plugin) · copy value |
+| Plugin the game loads with no line | reveal · referenced by · copy value |
 | Record-type group menu | create record…, except on a group of a type the game cannot create |
 | Record menu, on every record row, worldspaces, cells and placed references included | open · referenced by · create record… (on a container record, Menus and keys, story 4) · copy… · copy value · delete (Menus and keys, story 4) |
 | Check box | enable or disable |

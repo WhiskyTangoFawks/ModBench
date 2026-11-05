@@ -159,6 +159,8 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | exclude / include file | writes | `modbench.mod.excludeFile`, `modbench.mod.includeFile` | files in mods or Overwrite | - | MO2 Information dialog, Conflicts tab, Hide; MO2 mod list, Restore hidden files | Keep each file from the game with the mod manager's exclusion mark, or clear the mark. | update-load-order-file |
 | ignore / unignore file | writes | `modbench.mod.ignoreFile`, `modbench.mod.unignoreFile` | files in mods | - | none | Keep each file out of its mod's manifest, or put it back. | update-manifest |
 | rename | writes | `modbench.mod.rename` | mod | name | MO2 mod list | Rename a mod's folder, and each reference to it. | update-load-order-file |
+| referenced by | reads | `modbench.mod.referencedBy` | mod | - | none | List each place a file names a mod, in VS Code's References view. | - |
+| go to | reads | `modbench.mod.goTo` | mod | - | none | Select a mod's row in Mods, or show its folder in the Explorer when Mods shows no row for it. | none |
 | add / remove publisher tag | writes | `modbench.mod.addPublisherTag`, `modbench.mod.removePublisherTag` | mods, or files and folders in mods | publisher tag: a pick | none | Add a publisher tag to each mod, folder or file, or remove it ([publishing.md](publishing.md), Publisher tags). | change-publisher-tag |
 
 ## Separator
@@ -181,6 +183,8 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | sort direction | reads | `modbench.plugin.sortWinningAtTop`, `modbench.plugin.sortLosingAtTop` | - | - | MO2 plugin list | List plugins with the winning end at the top or at the bottom. | none |
 | reveal | reads | `modbench.plugin.reveal` | plugin | - | MO2 plugin list | Show a plugin file in the system's file manager. | none |
 | rename | writes | `modbench.plugin.rename` | plugin | name | none | Rename a plugin, the files named for it, and each reference to it. | rename-plugin |
+| referenced by | reads | `modbench.plugin.referencedBy` | plugin | - | none | List each place a file names a plugin, in VS Code's References view. | - |
+| go to | reads | `modbench.plugin.goTo` | plugin | - | none | Select a plugin's row in Plugins, or show its file in the Explorer when Plugins shows no row for it. | none |
 | apply suggested move | writes | `modbench.plugin.applySuggestedMove` | plugin | broken sorting rule: a pick, when more than one offers a move | none | Move a plugin to the nearest place that keeps a broken sorting rule. | update-load-order-file |
 | load after | writes | `modbench.plugin.loadAfter` | plugins | plugins to load after: a pick | LOOT, Edit Metadata, Load After | Add a sorting rule to the userlist that each plugin loads after the picked plugins. | update-load-order-file |
 
