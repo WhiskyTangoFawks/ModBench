@@ -59,12 +59,12 @@ const RECENT_DIRECTORIES = '[recentDirectories]';
 // A sed `i` or `a` text: each line but the last ends in a backslash.
 const sedText = (lines: readonly string[]): string => lines.map((line) => line.replaceAll('\\', '\\\\')).join('\\\n');
 
-// The insertion runs once, and not at all if the file already holds the section: the hold space is empty until the section's first line, or the insertion, fills it.
+// The insertion runs once, unless the file holds the section: the hold space stays empty until the header or an insertion fills it.
 const insertedOnce = (address: string, command: 'i' | 'a', section: readonly string[]): string =>
   `${address}{\nx\n/./!{\nx\n${command}\\\n${sedText(section)}\nh\nx\n}\nx\n}`;
 
 // MO2 fills this section with whatever folder a file dialog last browsed. The range runs to the next section's header.
-// A checkout puts this machine's own back, before the section that followed it here, or at the end where the file lacks that section.
+// A checkout puts this machine's own back before the section that followed it here, else at the end.
 function recentDirectoriesDropped(thisMachine: string): TokenProgram {
   const clean = [String.raw`/^\[recentDirectories\]/,/^\[/{/^\[recentDirectories\]/d;/^\[/!d}`];
   const lines = thisMachine.split('\n');
