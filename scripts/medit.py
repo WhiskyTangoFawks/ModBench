@@ -99,10 +99,10 @@ def copy(plugin: Name, form_key: str, destination: Name, mode: CopyMode = 'overr
         'mode': mode, 'destination': {'name': into_name, 'origin': into_origin}, 'replace': replace})['formKey']
 
 
-def create_plugin(name: str, origin: str) -> Plugin:
+def create_plugin(name: str, origin: str, flags: list[str] | None = None) -> Plugin:
     """Writes an empty plugin into an enabled mod or Overwrite. It has plugin source only in a mod that is already a
-    source mod; elsewhere a write is refused until its mod is decompiled and committed."""
-    _call('POST', '/plugins/create-in-mod', {'origin': origin, 'name': name})
+    source mod; elsewhere a write is refused until its mod is decompiled and committed. flags: header flags."""
+    _call('POST', '/plugins/create-in-mod', {'origin': origin, 'name': name, 'flags': flags})
     return Plugin(name, origin)
 
 

@@ -26,7 +26,7 @@ public sealed class CreatePluginApiTests : HostedTests
     }
 
     private Task<HttpResponseMessage> Create(string name, string folder, string origin = Origin) =>
-        Client.PostAsJsonAsync("/plugins/create", new { origin, name, folder });
+        Client.PostAsJsonAsync("/plugins/create", new { origin, name, folder, flags = Array.Empty<string>() });
 
     private async Task<JsonElement> Created(string name, string folder, string origin = Origin)
     {
@@ -55,7 +55,7 @@ public sealed class CreatePluginApiTests : HostedTests
         Client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.DataFolder, fx.InstanceRoot, plugins, places: places));
 
     private Task<HttpResponseMessage> CreateInMod(string origin, string name) =>
-        Client.PostAsJsonAsync("/plugins/create-in-mod", new { origin, name });
+        Client.PostAsJsonAsync("/plugins/create-in-mod", new { origin, name, flags = Array.Empty<string>() });
 
     [Fact]
     public async Task CreatingAPluginInAPlaceTheSnapshotNamesWithNoPlugin_WritesItInThatPlacesFolder()

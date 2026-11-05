@@ -437,6 +437,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins/creatable-flags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The header flag combinations a new plugin of the given file name's extension may take. */
+        get: operations["GetCreatablePluginFlags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/create": {
         parameters: {
             query?: never;
@@ -446,7 +463,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes an empty plugin (a header whose flags its extension sets, no records and no masters) into the given folder, in the release of the held load order. Changes nothing else: no init, no load order change and no plugins.txt line. */
+        /** @description Writes an empty plugin (a header flagged as given, no records and no masters) into the given folder, in the release of the held load order. Changes nothing else: no init, no load order change and no plugins.txt line. */
         post: operations["CreatePlugin"];
         delete?: never;
         options?: never;
@@ -1169,12 +1186,14 @@ export interface components {
         CreatePluginInModRequest: {
             origin: string;
             name: string;
+            flags?: string[] | null;
         };
         CreatePluginRequest: {
             origin: string;
             name: string;
             folder: string;
             sourceFolder?: string | null;
+            flags?: string[] | null;
         };
         CreateRecordChanges: {
             formKey: string;
@@ -2878,6 +2897,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": string[];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetCreatablePluginFlags: {
+        parameters: {
+            query: {
+                name: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Service Unavailable */

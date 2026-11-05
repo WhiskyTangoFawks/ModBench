@@ -99,47 +99,47 @@ class WriteAgainstTheFixtureInstance(unittest.TestCase):
         self.assertEqual(changed(self.source), [])
 
     def test_creates_a_plugin_in_a_mod_with_its_source(self) -> None:
-        medit.create_plugin(NEW_PLUGIN, CONDITIONS.origin)
+        medit.create_plugin(NEW_PLUGIN, CONDITIONS.origin, flags=[])
         self.assertTrue((self.fixture.instance / 'mods' / CONDITIONS.origin / NEW_PLUGIN).exists())
         self.assertTrue(any('MBDevNew' in line for line in changed(self.source)))
 
     def test_a_write_into_the_created_plugin_lands_once_the_watchers_snapshot_holds_it(self) -> None:
-        created = medit.create_plugin(NEW_PLUGIN, CONDITIONS.origin)
+        created = medit.create_plugin(NEW_PLUGIN, CONDITIONS.origin, flags=[])
         watcher_sees_a_change(self.fixture, created)
         self.assertTrue(medit.create_record(created, 'npc_').endswith(f':{NEW_PLUGIN}'))
 
     def test_a_write_into_the_created_plugin_waits_for_the_watchers_snapshot_that_holds_it(self) -> None:
-        created = medit.create_plugin(NEW_PLUGIN, CONDITIONS.origin)
+        created = medit.create_plugin(NEW_PLUGIN, CONDITIONS.origin, flags=[])
         watcher = threading.Timer(1, watcher_sees_a_change, [self.fixture, created])
         watcher.start()
         self.addCleanup(watcher.join)
         self.assertTrue(medit.create_record(created, 'npc_').endswith(f':{NEW_PLUGIN}'))
 
     def test_creates_a_plugin_in_a_mod_that_holds_no_plugin(self) -> None:
-        medit.create_plugin(NEW_PLUGIN, EMPTY_MOD)
+        medit.create_plugin(NEW_PLUGIN, EMPTY_MOD, flags=[])
         self.assertTrue((self.fixture.instance / 'mods' / EMPTY_MOD / NEW_PLUGIN).exists())
 
     def test_a_copy_into_a_plugin_created_in_a_mod_with_no_source_is_refused_until_the_mod_is_decompiled(self) -> None:
-        created = medit.create_plugin(NEW_PLUGIN, EMPTY_MOD)
+        created = medit.create_plugin(NEW_PLUGIN, EMPTY_MOD, flags=[])
         watcher_sees_a_change(self.fixture, created)
         with self.assertRaises(medit.MEditError) as raised:
             medit.copy(CONDITIONS.name, RECIPE, created, mode='new')
         self.assertIn(f'{NEW_PLUGIN} is not a compiled plugin', str(raised.exception))
 
     def test_creates_a_plugin_in_overwrite_with_no_source(self) -> None:
-        medit.create_plugin(NEW_PLUGIN, OVERWRITE)
+        medit.create_plugin(NEW_PLUGIN, OVERWRITE, flags=[])
         self.assertTrue((self.fixture.instance / 'overwrite' / NEW_PLUGIN).exists())
         self.assertEqual(changed(self.source), [])
 
     def test_raises_for_a_create_of_a_plugin_in_a_place_the_load_order_does_not_offer_and_writes_nothing(self) -> None:
         with self.assertRaises(medit.MEditError) as raised:
-            medit.create_plugin(NEW_PLUGIN, 'No Such Mod')
+            medit.create_plugin(NEW_PLUGIN, 'No Such Mod', flags=[])
         self.assertIn('No Such Mod', str(raised.exception))
         self.assertEqual(changed(self.source), [])
 
     def test_raises_for_a_create_of_a_plugin_the_mod_already_holds(self) -> None:
         with self.assertRaises(medit.MEditError):
-            medit.create_plugin(CONDITIONS.name, CONDITIONS.origin)
+            medit.create_plugin(CONDITIONS.name, CONDITIONS.origin, flags=[])
 
     def test_raises_for_a_create_of_a_record_type_that_does_not_exist_and_writes_nothing(self) -> None:
         with self.assertRaises(medit.MEditError):

@@ -278,8 +278,8 @@ const LOAD_AFTER = gestureInput(
 );
 
 const CREATE_PLUGIN = gestureInput(
-  'argument: the one mod it lands in, or Overwrite, { name, kind? } as list_mods names it; options: { name: the new plugin\'s file name }',
-  z.strictObject({ argument: z.array(CONTAINER_NAME), options: z.strictObject({ name: z.string() }) }),
+  'argument: the one mod it lands in, or Overwrite, { name, kind? } as list_mods names it; options: { name: the new plugin\'s file name, flags?: the header flags it takes, such as ["Small"], left out only where its extension offers one combination, and the refusal for a request that leaves it out lists them }',
+  z.strictObject({ argument: z.array(CONTAINER_NAME), options: z.strictObject({ name: z.string(), flags: z.array(z.string()).optional() }) }),
   (value, { argument, options }) => new AgentCall(
     argument.flatMap((container): Argument[] => (container.kind === 'runtimeOutput'
       ? [{ kind: 'runtimeOutput' }]

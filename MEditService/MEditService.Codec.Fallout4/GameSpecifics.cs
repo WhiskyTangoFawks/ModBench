@@ -1,4 +1,7 @@
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Game;
@@ -6,6 +9,10 @@ namespace MEditService.Codec.Game;
 /// <summary>What the shared codec source asks each game's project to answer.</summary>
 internal static class GameSpecifics
 {
+    // xEdit offers the light templates in a VR or LE release only with the VRESL dll, which nothing here detects.
+    public static IReadOnlyList<IReadOnlyList<HeaderFlag>> NewPluginFlags(GameRelease release, ModType type) =>
+        CreatablePluginFlags.Offered(type, release == GameRelease.Fallout4 ? [HeaderFlag.Small] : [], flaggedEsp: true);
+
     public const int BlueprintFlag = 0;
 
     public static IReadOnlyDictionary<string, int> LoadFlags { get; } = Enum.GetValues<Fallout4ModHeader.HeaderFlag>()

@@ -106,7 +106,7 @@ public sealed class RefusalLoggingApiTests : HostedTests
         await LoadedAndCompiledPlugin();
         OtherTool.WritesTheFile(Path.Combine(scratch, "Taken.esp"), "another tool's file");
 
-        await Client.PostAsJsonAsync("/plugins/create", new { origin = "TakenMod", name = "Taken.esp", folder = scratch.Path });
+        await Client.PostAsJsonAsync("/plugins/create", new { origin = "TakenMod", name = "Taken.esp", folder = scratch.Path, flags = Array.Empty<string>() });
 
         AssertLoggedOnce("Refused Create plugin of PluginAddress { Name = Taken.esp, Origin = TakenMod }:", "FileExists");
     }

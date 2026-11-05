@@ -3,6 +3,8 @@ using System.IO.Abstractions;
 using System.Reflection;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Serialization.Newtonsoft;
 using Mutagen.Bethesda.Serialization.Utility;
@@ -35,6 +37,8 @@ internal sealed class GameCodec : IGameCodec
     public int BlueprintFlag => GameSpecifics.BlueprintFlag;
 
     public IReadOnlyDictionary<string, int> LoadFlags => GameSpecifics.LoadFlags;
+
+    public IReadOnlyList<IReadOnlyList<HeaderFlag>> NewPluginFlags(GameRelease release, ModType type) => GameSpecifics.NewPluginFlags(release, type);
 
     public CreationKitShapes CreationKitShapes => GameSpecifics.CreationKitShapes;
 
