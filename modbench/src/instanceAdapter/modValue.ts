@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
-import type { FolderFile, FolderValue, HashedPath, PackagesAsked, StatusValues } from '../repositoriesLib/statusValues';
+import type { FolderFile, FolderValue, HashedPath, PackagesAsked, RepositoryPin, StatusValues } from '../repositoriesLib/statusValues';
 import { ownPathOf } from './excludedPaths';
 import type { FileRead, InstallationFile, InstanceAdapter } from './instanceAdapter';
 
@@ -48,8 +48,12 @@ async function gameFilesOver(reads: ModReads, folder: string, paths: readonly st
   return { kind: 'read', answer: files };
 }
 
-const cloneGets = async (reads: ModReads, repository: string): Promise<boolean> =>
-  !('lacks' in await reads.submodule(repository)) || reads.sourceFolderTracked(repository);
+async function pinOf(reads: ModReads, repository: string): Promise<RepositoryPin> {
+  const submodule = await reads.submodule(repository);
+  if (!('lacks' in submodule)) return 'pinned';
+  if (await reads.sourceFolderTracked(repository)) return 'pinned';
+  return submodule.unpinned === true ? 'unpinned' : 'none';
+}
 
 /** What a mod's status reads of the instance besides its manifest and the files git holds in it; a read that rejects
  *  leaves the rest unreadable. Nothing of the folder is read when no manifest is `asked` for. */
@@ -66,8 +70,8 @@ export async function modValueOver(reads: ModReads, folder: string, asked: Packa
       const flaggedHash = await reads.flaggedHash(hash, flags);
       if (flaggedHash !== undefined) flaggedHashes.set(path, flaggedHash);
     }
-    const repositoryHosted = asked.repository !== undefined && await cloneGets(reads, asked.repository);
-    return { kind: 'read', folder: folderValue, downloadedFiles, gameFiles: gameFiles.answer, flaggedHashes, repositoryHosted };
+    const repositoryPin = asked.repository === undefined ? 'none' : await pinOf(reads, asked.repository);
+    return { kind: 'read', folder: folderValue, downloadedFiles, gameFiles: gameFiles.answer, flaggedHashes, repositoryPin };
   } catch (err) {
     return { kind: 'unreadable', reason: errorMessage(err) };
   }

@@ -363,14 +363,18 @@ export interface Submodule { readonly folder: string; readonly pin: string; read
  *  (ADR-0022). */
 export type SourceHost = { readonly kind: 'host'; readonly url: string } | { readonly kind: 'noRemote' } | { readonly kind: 'noHost'; readonly why: string };
 
+/** What the instance repository lacks of a submodule; `unpinned`: `.gitmodules` names it, and the index holds no commit at its path. */
+export interface SubmoduleLacks { readonly lacks: string; readonly unpinned?: true }
+
 /** Why one source mod is not as a submodule would be. */
 export interface SubmoduleNote { readonly mod: string; readonly note: string }
 
 /** A submodule `.gitmodules` names in the source folder that holds no repository yet, by its name, with where git checks it
  *  out and its pin, or what the instance repository lacks of it. */
-export type UnclonedSubmodule = { readonly name: string } & (Submodule | { readonly lacks: string });
+export type UnclonedSubmodule = { readonly name: string } & (Submodule | SubmoduleLacks);
 
-interface SubmoduleReport { readonly notes: readonly SubmoduleNote[]; readonly other: readonly string[] }
+// `written`: each source mod whose `.gitmodules` entry or ignore lines the call wrote.
+interface SubmoduleReport { readonly notes: readonly SubmoduleNote[]; readonly other: readonly string[]; readonly written: readonly string[] }
 
 /** A folder outside every mod folder that holds the manifest named for it, which builds it (ADR-0022). `name` is its path in the instance, ending in `/`, so no mod has it. */
 export interface OtherManifest { readonly name: string; readonly folder: string }
@@ -769,7 +773,7 @@ export interface InstanceAdapter extends DataFileReads {
   /** The host of the repository in `sourceFolder`, through `origin`, else its first remote by name. */
   sourceHost(sourceFolder: string): Promise<FileRead<SourceHost>>;
   /** The submodule of the instance repository named `name`, as its index pins it, or what the repository lacks of it. */
-  submodule(name: string): Promise<Submodule | { readonly lacks: string }>;
+  submodule(name: string): Promise<Submodule | SubmoduleLacks>;
   /** Each submodule `.gitmodules` names in the source folder whose folder holds no repository. */
   unclonedSubmodules(): Promise<readonly UnclonedSubmodule[]>;
   /** Whether the instance repository tracks the source folder named `name`, by its build file, so a clone checks it out. */

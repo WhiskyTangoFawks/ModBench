@@ -57,7 +57,7 @@ describe('a mod as a value', () => {
     gamePlaces: () => Promise.resolve([]),
     flaggedHash: () => Promise.resolve(undefined),
     gameFilesTakenBy: () => Promise.resolve({ kind: 'read' as const, answer: { gameFiles: [], notes: [] } }),
-    submodule: (name: string) => Promise.resolve(name === 'Hosted' ? { folder: '/source/Hosted', pin: 'abc' } : { lacks: 'no submodule' }),
+    submodule: (name: string) => Promise.resolve(name === 'Hosted' ? { folder: '/source/Hosted', pin: 'abc' } : name === 'Unpinned' ? { lacks: 'no pin', unpinned: true as const } : { lacks: 'no submodule' }),
     sourceFolderTracked: (name: string) => Promise.resolve(name === 'Tracked'),
   };
 
@@ -83,10 +83,10 @@ describe('a mod as a value', () => {
     expect(value).toMatchObject({ kind: 'read', flaggedHashes: new Map([['a.esp', 'KKKKKKKKKKA=']]) });
   });
 
-  it.each([['Hosted', true], ['Tracked', true], ['Local', false]])('says whether a clone gets the repository %s: a submodule, or a source folder the instance repository tracks', async (repository, hosted) => {
+  it.each([['Hosted', 'pinned'], ['Tracked', 'pinned'], ['Unpinned', 'unpinned'], ['Local', 'none']])('says what a clone gets of the repository %s: a submodule at a pinned commit, an unpinned one, or a source folder the instance repository tracks', async (repository, repositoryPin) => {
     const value = await modValueOver(modReads, '/mods/Mod', { installationFiles: [], repository }, []);
 
-    expect(value).toMatchObject({ kind: 'read', repositoryHosted: hosted });
+    expect(value).toMatchObject({ kind: 'read', repositoryPin });
   });
 
   it('reads and hashes no file of a folder when no manifest is asked for', async () => {

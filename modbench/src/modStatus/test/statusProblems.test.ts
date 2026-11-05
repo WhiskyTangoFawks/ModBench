@@ -41,6 +41,7 @@ describe('a mod\'s unfinished states, each on the file it concerns (instance-rep
     ['a file no package holds', { notInPackage: ['b.esp'] }, "No package it names holds the bytes of 'b.esp'."],
     ['a file a package holds one of its name of with other bytes', { otherBytes: ['b.esp'] }, "No package it names holds the bytes of 'b.esp'; one holds a file of its name."],
     ['a package with no host', { noHost: ['the game folder'] }, 'The game folder has no host.'],
+    ['a repository with no pin', { unpinned: ["repository 'Mod'"] }, "Repository 'Mod' is not pinned: the instance repository pins no commit for it until its gitlink is staged."],
     ['a package this machine lacks', { packagesLacking: ['the game folder was not found'] }, 'This machine does not hold a package it names: the game folder was not found.'],
   ])('puts %s on the manifest, as the folder spells it', (_state, over, message) => {
     expect(statusProblems(held(over), folder)).toEqual([{ file: manifestFile, message }]);

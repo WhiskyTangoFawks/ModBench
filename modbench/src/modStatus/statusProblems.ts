@@ -11,7 +11,9 @@ export interface StatusProblem {
 const lackMessage = ({ step, path }: BuildFileLack): string =>
   `Its ${step} step names '${path}', ${step === 'compile' ? 'whose plugin source' : 'which'} the source folder lacks.`;
 
-const sentence = (clause: string): string => `${clause.charAt(0).toUpperCase()}${clause.slice(1)}.`;
+const capitalised = (clause: string): string => `${clause.charAt(0).toUpperCase()}${clause.slice(1)}`;
+
+const sentence = (clause: string): string => `${capitalised(clause)}.`;
 
 const buildFileProblems = ({ buildFile }: ModStatus): StatusProblem[] =>
   (buildFile === undefined ? [] : [...buildFile.lacks.map(lackMessage), ...buildFile.unreadable.map(sentence)].map((message) => ({ file: buildFile.file, message })));
@@ -35,7 +37,8 @@ export function statusProblems(status: ModStatus, folder: string): StatusProblem
     ...onManifest(status.gone.map((path) => `Names '${path}', which the mod's folder lacks.`)),
     ...onManifest(status.notInPackage.map((path) => `No package it names holds the bytes of '${path}'.`)),
     ...onManifest(status.otherBytes.map((path) => `No package it names holds the bytes of '${path}'; one holds a file of its name.`)),
-    ...onManifest(status.noHost.map((pkg) => `${pkg.charAt(0).toUpperCase()}${pkg.slice(1)} has no host.`)),
+    ...onManifest(status.noHost.map((pkg) => `${capitalised(pkg)} has no host.`)),
+    ...onManifest(status.unpinned.map((repository) => `${capitalised(repository)} is not pinned: the instance repository pins no commit for it until its gitlink is staged.`)),
     ...onManifest(status.packagesLacking.map((lacking) => `This machine does not hold a package it names: ${lacking}.`)),
   ];
 }

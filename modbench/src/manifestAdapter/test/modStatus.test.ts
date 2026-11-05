@@ -17,7 +17,7 @@ let entries: HashedPath[];
 let notDownloaded: Set<string>;
 let downloadedHash: Map<string, string>;
 let gameFiles: HashedPath[] | undefined;
-let repositoryHosted: boolean;
+let repositoryPin: ReadValues['repositoryPin'];
 let exclude: string[];
 let flaggedHashes: Map<string, string>;
 
@@ -29,7 +29,7 @@ beforeEach(async () => {
   notDownloaded = new Set();
   downloadedHash = new Map();
   gameFiles = [];
-  repositoryHosted = true;
+  repositoryPin = 'pinned';
   exclude = [];
   flaggedHashes = new Map();
 });
@@ -54,7 +54,7 @@ async function valuesHashingEachFileAsItsText(manifest: ManifestAt, ignoresCase:
     downloadedFiles: new Map(asked.installationFiles.map((name) => [name, {
       kind: 'read' as const, answer: notDownloaded.has(name) ? undefined : { hash: downloadedHash.get(name) ?? PACK, entries },
     }])),
-    gameFiles, flaggedHashes, repositoryHosted,
+    gameFiles, flaggedHashes, repositoryPin,
   };
 }
 
@@ -78,7 +78,7 @@ async function statusWith(values: (read: ReadValues) => StatusValues = (read) =>
 const status = (fileSystemIgnoresCase = false): Promise<ModStatus> => statusWith((read) => read, fileSystemIgnoresCase);
 
 const nothing = (over: Partial<ModStatus> = {}): ModStatus =>
-  ({ mod: 'mod', packages: [], noManifest: false, differing: [], namedByNoLine: [], ignored: [], ignoreEntries: [], gone: [], notInPackage: [], otherBytes: [], unpackaged: [], noHost: [], packagesLacking: [], ...over });
+  ({ mod: 'mod', packages: [], noManifest: false, differing: [], namedByNoLine: [], ignored: [], ignoreEntries: [], gone: [], notInPackage: [], otherBytes: [], unpackaged: [], noHost: [], unpinned: [], packagesLacking: [], ...over });
 
 const heldAs = (over: Partial<ModStatus> = {}): ModStatus => nothing({ manifestFile: join(folder, 'mod.manifest.json'), packages: [MOD_ZIP], ...over });
 
@@ -282,17 +282,25 @@ describe('a mod\'s status against its manifest', () => {
     });
   });
 
-  it.each<[string, ManifestPackage, boolean, string[]]>([
-    ['an installation file with no host', { kind: 'installationFile', name: 'Mod.zip', size: 7, hash: PACK }, true, ["installation file 'Mod.zip'"]],
-    ['a game folder with no host', { kind: 'gameFolder' }, true, ['the game folder']],
-    ['a repository that is no submodule', REPOSITORY, false, ["repository 'Mod'"]],
-    ['a repository that is a submodule', REPOSITORY, true, []],
-    ['an installation file on Nexus', MOD_ZIP, true, []],
-  ])('names each package with no host (The manifest, story 5): %s', async (_case, pkg, hosted, noHost) => {
-    repositoryHosted = hosted;
+  it.each<[string, ManifestPackage, ReadValues['repositoryPin'], string[]]>([
+    ['an installation file with no host', { kind: 'installationFile', name: 'Mod.zip', size: 7, hash: PACK }, 'pinned', ["installation file 'Mod.zip'"]],
+    ['a game folder with no host', { kind: 'gameFolder' }, 'pinned', ['the game folder']],
+    ['a repository that is no submodule', REPOSITORY, 'none', ["repository 'Mod'"]],
+    ['a repository that is a submodule', REPOSITORY, 'pinned', []],
+    ['a repository that is a submodule with no pin', REPOSITORY, 'unpinned', []],
+    ['an installation file on Nexus', MOD_ZIP, 'pinned', []],
+  ])('names each package with no host (The manifest, story 5): %s', async (_case, pkg, host, noHost) => {
+    repositoryPin = host;
     await manifested(manifest({}, { packages: [pkg] }));
 
     expect((await status()).noHost).toEqual(noHost);
+  });
+
+  it('names a repository whose submodule the instance repository pins no commit of', async () => {
+    repositoryPin = 'unpinned';
+    await manifested(manifest({}, { packages: [REPOSITORY] }));
+
+    expect((await status()).unpinned).toEqual(["repository 'Mod'"]);
   });
 
   it.each([
