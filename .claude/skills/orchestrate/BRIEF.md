@@ -2,7 +2,7 @@
 
 Your goal is the ticket: make its spec lines true, reading each one where it lives in the spec. Every command runs in the worktree. Each Bash call is one plain command run from the worktree root, with literal paths, and every file change goes through Edit or Write.
 
-Read the ticket and its epic, each with its comments, oldest first: `gh issue view <n> --json number,title,body,labels,comments`. The epic is the issue the ticket's Parent names. The spec lines are your work, and the comments are context.
+Read the ticket and its epic, each with its comments, oldest first: `gh issue view <n> --json number,title,body,labels,comments`. The epic is the issue the ticket's Parent names. A bug has no Parent: it is its own epic. The spec lines are your work, and the comments are context.
 
 Before the first frontend command, symlink `modbench/node_modules` from the main checkout, the first path `git worktree list` prints.
 
