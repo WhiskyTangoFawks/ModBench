@@ -82,7 +82,11 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
   const followPathTokens = pathTokensFollowed(context, gameFolder, publisherFile);
   const adapter: ManagerAdapter = {
     names: source.names,
-    reading: async (reread) => (await Promise.all([readInstance(source, reread), showUnfiltered(), followPathTokens(), followSourceModLines()]))[0],
+    // The reading's git runs the path token programs, and Windows refuses to replace a program its sed holds open.
+    reading: async (reread) => {
+      await followPathTokens();
+      return (await Promise.all([readInstance(source, reread), showUnfiltered(), followSourceModLines()]))[0];
+    },
     activeProfile: async () => (await source.settings()).profile,
     gameRelease: async () => (await source.settings()).gameRelease,
     gameFolder,
