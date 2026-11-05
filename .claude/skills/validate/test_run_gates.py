@@ -99,6 +99,13 @@ class OnMain(unittest.TestCase):
         git(self.repo, "commit", "-q", "-m", "base")
 
     def test_main_itself_runs_every_gate(self):
+        self.assert_every_gate_runs()
+
+    def test_main_with_an_uncommitted_edit_runs_every_gate(self):
+        pathlib.Path(self.repo, "spec/a.d2").write_text("edited")
+        self.assert_every_gate_runs()
+
+    def assert_every_gate_runs(self):
         clean = {k: v for k, v in os.environ.items() if k != "BUILD_SLOT_HELD"}
         run = subprocess.run(["bash", str(self.validate / "run-gates.sh")],
                              capture_output=True, text=True, timeout=60, env=clean)
