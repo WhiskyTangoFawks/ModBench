@@ -79,7 +79,7 @@ export interface RuleFileProblem {
 const MESSAGE_LEVELS: Record<string, RuleLevel> = { say: 'info', warn: 'warning', error: 'error' };
 
 // LOOT reads a name holding any of these as a regular expression over the whole file name.
-const REGEX_NAME = /[:\\*?|]/;
+export const REGEX_NAME = /[:\\*?|]/;
 
 /** The branch of LOOT's repositories whose metadata format this parser reads. */
 export const METADATA_BRANCH = 'v0.29';

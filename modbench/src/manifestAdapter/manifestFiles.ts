@@ -95,11 +95,21 @@ export async function writeManifestIn(folder: string, manifest: Manifest): Promi
   return true;
 }
 
-async function buildFileAt(sourceFolder: string): Promise<{ readonly file: string; readonly read: BuildFileRead } | undefined> {
+/** The build file at the root of the source mod's repository in `sourceFolder`, as text, its unsaved text when `held`
+ *  holds it; undefined when the folder holds none. */
+export async function buildFileTextIn(
+  sourceFolder: string, held: ReadonlyMap<string, string> = new Map(),
+): Promise<{ readonly file: string } & ({ readonly text: string } | { readonly refused: string }) | undefined> {
   const [one, other] = await spellingsIn(sourceFolder, BUILD_FILE);
   if (one === undefined) return undefined;
   const file = join(sourceFolder, one);
-  return { file, read: other === undefined ? readBuildFile(await textAt(file)) : { refused: twoBuildFiles(one, other) } };
+  if (other !== undefined) return { file, refused: twoBuildFiles(one, other) };
+  return { file, text: held.get(file) ?? await textAt(file) };
+}
+
+async function buildFileAt(sourceFolder: string): Promise<{ readonly file: string; readonly read: BuildFileRead } | undefined> {
+  const at = await buildFileTextIn(sourceFolder);
+  return at && { file: at.file, read: 'refused' in at ? { refused: at.refused } : readBuildFile(at.text) };
 }
 
 /** The build file at the root of the source mod's repository in `sourceFolder`; undefined when it holds none. */

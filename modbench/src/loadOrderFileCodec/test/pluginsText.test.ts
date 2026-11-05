@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  parsePlugins, pluginsTextOf, setPluginEnabledInText, movePluginsInText, appendPluginInText, removePluginFromText, renamePluginInText,
+  parsePlugins, pluginNamesIn, pluginsTextOf, setPluginEnabledInText, movePluginsInText, appendPluginInText, removePluginFromText, renamePluginInText,
 } from '../pluginsText';
 import type { PluginEntry } from '../pluginsText';
 
@@ -235,5 +235,17 @@ describe('pluginsTextOf', () => {
     const text = pluginsTextOf(entries);
 
     expect([text, parsePlugins(text)]).toEqual(['*Foo.esp\r\nBar.esp\r\n', entries]);
+  });
+});
+
+describe('pluginNamesIn', () => {
+  it('places each entry line\'s name past its padding and marker, skipping comments and blanks', () => {
+    const text = '﻿# *A.esp\r\n\r\n  *A.esp \nB.esp\r*a.ESP';
+
+    expect(pluginNamesIn(text)).toEqual([
+      { name: 'A.esp', line: 2, start: 3, end: 8 },
+      { name: 'B.esp', line: 3, start: 0, end: 5 },
+      { name: 'a.ESP', line: 4, start: 1, end: 6 },
+    ]);
   });
 });

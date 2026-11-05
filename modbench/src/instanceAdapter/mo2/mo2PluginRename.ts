@@ -5,9 +5,9 @@ import { basename, parse } from 'node:path';
 import { parsePlugins, pluginKey, renamePluginInText } from '../../loadOrderFileCodec/pluginsText';
 import { present } from '../../ports/present';
 import { pluginCompanionRule, type PluginCompanionRule } from '../../tables/gamePaths';
-import { get, ignoreSkippedLink, listEntries, listFolders, readOrAbsent, rename, undoAll, type Undo, withLock, write } from '../files';
+import { get, ignoreSkippedLink, listEntries, readOrAbsent, rename, undoAll, type Undo, withLock, write } from '../files';
 import { fileInFolder, isBareName, type FileOrigin, InstanceAdapter } from '../instanceAdapter';
-import { pluginOrderFiles, profilesDir } from './layout';
+import { everyPluginOrderFile } from './mo2PluginReferences';
 import type { ReadingSource } from '../instanceReading';
 import { originFolder, type Mo2Context } from './mo2Context';
 
@@ -91,11 +91,6 @@ export function mo2PluginRename(context: Mo2Context, source: ReadingSource): Mo2
     ];
   }
 
-  async function orderFiles(): Promise<string[]> {
-    const profiles = await readOrAbsent(() => listFolders(profilesDir(instanceRoot), ignoreSkippedLink), []);
-    return profiles.sort().flatMap((name) => pluginOrderFiles(instanceRoot, name));
-  }
-
   // Everything the rename refuses, read before any write.
   async function plan(orders: readonly string[], origin: FileOrigin, from: string, to: string) {
     const { gameRelease } = await source.settings();
@@ -113,7 +108,7 @@ export function mo2PluginRename(context: Mo2Context, source: ReadingSource): Mo2
     },
 
     async renamePlugin(origin, from, to) {
-      const orders = await orderFiles();
+      const orders = await everyPluginOrderFile(instanceRoot);
       await withLocks(orders, async () => {
         const { lines, files } = await plan(orders, origin, from, to);
         const undos: Undo[] = [];
