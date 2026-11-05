@@ -714,7 +714,7 @@ describe('the agent server, reading file order conflicts', () => {
       filesByMod: new Map([['E', [fileIn('/e', 'only.txt'), fileIn('/e', 'skip.txt.mohidden')]]]),
       files: asLookup(providing('only.txt', modOrigin('E'))),
       publisherConfiguration: {
-        kind: 'read', listed: () => [], pathProblems: [],
+        kind: 'read', listed: () => [], pathProblems: [], unshippable: { file: '', reason: () => undefined },
         covering: (path: string) => (path === '/e/only.txt' ? [{ name: 'Patched', badge: 'P', marksPaths: true }, { name: 'Mod only', badge: 'M', marksPaths: false }] : []),
       },
     });

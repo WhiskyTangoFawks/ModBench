@@ -49,7 +49,7 @@ export class ModStatuses {
   private readonly changed = new Set<() => void>();
   private readonly messageChanged = new Set<() => void>();
 
-  constructor(private readonly reads: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole' | 'filesHeldByGit'>, private readonly log: (line: string) => void) {}
+  constructor(private readonly reads: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole' | 'filesHeldByGit' | 'filesIn'>, private readonly log: (line: string) => void) {}
 
   /** Derives every status again from `value`; of the values handed while one derives, the latest alone derives next. */
   derive(value: StatusSource): void {
@@ -145,13 +145,16 @@ export class ModStatuses {
 
   private async statusAgainstManifest(mod: ModAt, heldByGit: readonly string[]): Promise<ModStatus> {
     const manifest = await manifestAt(mod.folder);
-    return statusFrom(mod, manifest, await this.reads.modValue(mod.folder, packagesAskedAt(manifest), heldByGit));
+    const status = statusFrom(mod, manifest, await this.reads.modValue(mod.folder, packagesAskedAt(manifest), heldByGit));
+    if (status.unreadable !== undefined) return status;
+    const unpackaged = status.noManifest ? await this.reads.filesIn(mod.folder) : status.unpackaged;
+    return { ...status, unpackaged: [...new Set([...unpackaged, ...heldByGit])].sort() };
   }
 
   // The installation file is the mod manager's record, so a folder git holds whole is warned of it too.
   private async statusOf(mod: ModAndSourceFolder, heldWhole: boolean, heldByGit: readonly string[]): Promise<ModStatus> {
     const [status, installed, buildFile] = await Promise.all([
-      heldWhole ? heldWholeStatus(mod.name) : this.statusAgainstManifest(mod, heldByGit), this.reads.installationFile(mod.name, mod.folder),
+      heldWhole ? heldWholeStatus(mod.name, heldByGit) : this.statusAgainstManifest(mod, heldByGit), this.reads.installationFile(mod.name, mod.folder),
       mod.sourceFolder === undefined ? undefined : buildFileAgainst(mod.sourceFolder),
     ]);
     return { ...status, ...installed.kind === 'unreadable' ? { installationFileProblem: installed.reason } : {}, ...buildFile && { buildFile } };

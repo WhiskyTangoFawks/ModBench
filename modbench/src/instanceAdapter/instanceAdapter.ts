@@ -561,6 +561,10 @@ interface TagEntryAt {
   readonly entry: string;
 }
 
+/** Why the published modlist has no way to ship the file `pathInFolder` of the folder of `mod`, as its publisher judges it,
+ *  once no package holds the file's bytes; none when it has a way or the publisher never asks for the file. */
+export type UnshippableReason = (folder: string, pathInFolder: string, mod: string) => string | undefined;
+
 /** What is wrong with the path a publisher tag's entry names. */
 export type TagPathProblem =
   | (TagEntryAt & { readonly kind: 'namesNoPath' })
@@ -569,7 +573,11 @@ export type TagPathProblem =
 /** The publisher's configuration: none while the instance holds no publisher's, or why it could not be read. */
 export type PublisherConfiguration =
   | { readonly kind: 'none' }
-  | { readonly kind: 'read'; readonly covering: Covering; readonly listed: Listed; readonly pathProblems: readonly TagPathProblem[] }
+  | {
+    readonly kind: 'read'; readonly covering: Covering; readonly listed: Listed; readonly pathProblems: readonly TagPathProblem[];
+    /** Where a mod's unshippable files are shown, and how the publisher judges them. */
+    readonly unshippable: { readonly file: string; readonly reason: UnshippableReason };
+  }
   | { readonly kind: 'unreadable'; readonly reason: string };
 
 /** One sorting rule file as the instance holds it: where it is, and its text, or that it is absent or why it could not be read. */

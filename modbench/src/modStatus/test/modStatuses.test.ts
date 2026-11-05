@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, join, relative } from 'node:path';
 import type { EntryRef, InstanceAdapter, ModFolder } from '../../instanceAdapter/instanceAdapter';
 import { modValueOver } from '../../instanceAdapter/modValue';
 import type { Manifest } from '../../manifestAdapter/manifestAdapter';
@@ -69,8 +69,9 @@ let whileListing: () => void;
 let failingInstallationReads: number;
 let installationFiles: ReadonlyMap<string, Awaited<ReturnType<InstanceAdapter['installationFile']>>>;
 
-const instance: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole' | 'filesHeldByGit'> = {
+const instance: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole' | 'filesHeldByGit' | 'filesIn'> = {
   foldersHeldWhole: (folders) => Promise.resolve(new Set(folders.filter((folder) => heldWhole.has(folder)))),
+  filesIn: async (at) => (await readdir(at, { recursive: true, withFileTypes: true })).filter((entry) => entry.isFile()).map((entry) => relative(at, join(entry.parentPath, entry.name))),
   filesHeldByGit: (folders) => {
     listings += 1;
     whileListing();
@@ -178,6 +179,30 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     await statuses.current();
 
     expect(hashed).toEqual([]);
+  });
+
+  describe('the files no package holds (publishing.md, What ships, story 2)', () => {
+    it('lists every file of a mod whose folder holds no manifest', async () => {
+      const mod = await folderOf('ModA', { 'mine.txt': '', 'other.txt': '' });
+      const statuses = statusesLogging();
+
+      statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)]));
+
+      expect((await statuses.current()).get('ModA')?.unpackaged).toEqual(['mine.txt', 'other.txt']);
+    });
+
+    it('lists the files git holds of a folder it holds whole, and of one with a manifest, which no package holds', async () => {
+      const [whole, manifested] = [await folderOf('ModA', { 'a.esp': '' }), await folderOf('ModB', { 'b.ini': '' })];
+      await writeManifestIn(manifested, EMPTY);
+      heldWhole = new Set([whole]);
+      heldByGit = new Map([[whole, ['a.esp']], [manifested, ['b.ini']]]);
+      const statuses = statusesLogging();
+
+      statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }, { kind: 'mod', name: 'ModB' }], [folder('mod', 'ModA', whole), folder('mod', 'ModB', manifested)]));
+      const derived = await statuses.current();
+
+      expect([derived.get('ModA')?.unpackaged, derived.get('ModB')?.unpackaged]).toEqual([['a.esp'], ['b.ini']]);
+    });
   });
 
   it('reads a folder git holds whole as git\'s, with no manifest to judge it by and no file of it hashed (Status, story 1)', async () => {

@@ -84,8 +84,9 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingTasks } from '../../test/recordingTasks';
 
 
-const foldersHoldingNothing = (listing: () => Promise<readonly string[]> = () => Promise.resolve([])): Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole' | 'filesHeldByGit'> => ({
+const foldersHoldingNothing = (listing: () => Promise<readonly string[]> = () => Promise.resolve([])): Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole' | 'filesHeldByGit' | 'filesIn'> => ({
   foldersHeldWhole: () => Promise.resolve(new Set()),
+  filesIn: () => Promise.resolve([]),
   filesHeldByGit: () => Promise.resolve(new Map()),
   installationFile: () => Promise.resolve({ kind: 'read', answer: undefined }),
   modValue: (folder, asked, heldByGit) => modValueOver({
@@ -155,7 +156,7 @@ beforeEach(() => {
 describe('the Mods view\'s problems (publishing.md, Publisher tags, story 4)', () => {
   it('publishes a publisher tag that names no path to the Problems panel', () => {
     const file = '/instance/compiler_settings.json';
-    const publisherConfiguration = { kind: 'read', covering: () => [], listed: () => [], pathProblems: [{ kind: 'namesNoPath', file, line: 2, tag: { name: 'Ignore', badge: 'IG', marksPaths: true }, entry: 'gone' }] } as const;
+    const publisherConfiguration = { kind: 'read', covering: () => [], listed: () => [], pathProblems: [{ kind: 'namesNoPath', file, line: 2, tag: { name: 'Ignore', badge: 'IG', marksPaths: true }, entry: 'gone' }], unshippable: { file: '', reason: () => undefined } } as const;
     const instance = new FakeInstance(instanceValueFixture({ publisherConfiguration }));
 
     createModsView({ ...otherDeps(), instance, ...noSync() });
