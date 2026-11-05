@@ -72,7 +72,7 @@ Overwrite is always a row, even when it holds nothing. It is not a mod: it has n
 | Colour | greyed when the game does not get the file (The tree, story 8) | |
 | Description | ignored, or differs ([instance-repository.md](instance-repository.md), The manifest, story 11; Status) | |
 | Indicators | a badge at the right edge for each publisher tag that covers it ([Indicators](#indicators)) | [publishing.md](publishing.md), Publisher tags |
-| Tooltip | the path in its mod | |
+| Tooltip | the path in its mod, and the file in the game folder that wins over it, if any | |
 
 ## Indicators
 
@@ -80,8 +80,12 @@ A mod row carries an indicator for each status that holds, and a folder or file 
 
 | Indicator | Holds when | Badge | Colour |
 |---|---|---|---|
-| Overwrites loose files | a file of the mod wins over another copy | off | off |
-| Overwritten loose files | a file of the mod loses to another copy, and the mod is not Redundant | on | off |
+| Overwrites loose files | a loose file of the mod wins over another loose copy | off | off |
+| Overwritten loose files | a loose file of the mod loses to another loose copy, and the mod is not Redundant | on | off |
+| Overwrites an archive with loose files | a loose file of the mod wins over another mod's archived copy | off | off |
+| Archive is overwritten by loose files | an archived file of the mod loses to a loose copy in another mod or Overwrite, and the mod is not Redundant | on | off |
+| Overwrites another archive file | an archived file of the mod wins over another mod's archived copy | off | off |
+| Overwritten by another archive file | an archived file of the mod loses to another mod's archived copy, and the mod is not Redundant | on | off |
 | Redundant | the mod has a file the game could get, and every such file loses to another copy | on | off |
 | Contains excluded files | the mod has an excluded file | off | off |
 | Update available | the mod's version is older than the newest version check for updates found | on | off |
