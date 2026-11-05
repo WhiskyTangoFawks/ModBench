@@ -6,12 +6,12 @@ A stack of items that resolve conflicts by override. Mod order and plugin order 
 Avoid: priority
 
 ## Mod order
-The order of mods. It resolves files.
+The order of mods. It resolves loose files.
 
 Avoid: mod priority, mod load order
 
 ## Plugin order
-The order of plugins, held in `plugins.txt`. It resolves records.
+The order of plugins, held in `plugins.txt`. It resolves records, and the files in archives.
 
 Avoid: plugin load order
 
@@ -44,7 +44,7 @@ Several items in an order provide the same thing. The order decides which one wi
 Avoid: override (a placement, not a clash)
 
 ## File order conflict
-An order conflict in mod order: enabled mods provide the same relative file.
+An order conflict over a relative file that enabled mods provide, loose or archived. The game stacks the loose and archived copies into one order.
 
 Avoid: file conflict, override (a placement, not a clash), higher-priority
 
