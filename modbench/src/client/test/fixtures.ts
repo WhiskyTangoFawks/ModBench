@@ -98,7 +98,7 @@ export function loadOrderStatusEventFixture(
   return notificationEventFixture({
     kind: 'load-order-status',
     loadOrderStatus: {
-      state: 'Ready', totalPlugins: 0, activePlugins: 0, indexedPlugins: [], conflictsComputed: true, failures: [], version: 1, ...overrides,
+      state: 'Ready', totalPlugins: 0, activePlugins: 0, indexedPlugins: [], conflictsComputed: true, failures: [], version: 1, validating: false, ...overrides,
     },
   });
 }
