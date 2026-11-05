@@ -102,6 +102,7 @@ describe('an integer whose bits the schema names reads, copies and pastes as fla
 
 describe('a plain enum whose members carry bits reads, copies and pastes as flags, spelled as a number string', () => {
   const templateFlagsMeta: FieldMetadata = fieldMeta({
+    name: 'TemplateFlags',
     type: 'enum',
     enumMembers: [{ value: 'Traits', bitValue: '1' }, { value: 'Stats', bitValue: '2' }, { value: 'Factions', bitValue: '4' }],
   });
