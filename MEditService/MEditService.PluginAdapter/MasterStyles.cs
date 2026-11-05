@@ -36,6 +36,13 @@ internal static class MasterStyles
         return PluginAnswer.Of<IReadOnlyCache<IModMasterStyledGetter, ModKey>?>(Cached(styles));
     }
 
+    /// <summary>What the FormKeys of <paramref name="plugin"/>'s FormIDs depend on besides its own bytes: each master's
+    /// style under <paramref name="loadOrder"/>. Empty for a game whose masters share one style.</summary>
+    internal static string Fingerprint(ModPath plugin, LoadOrderSnapshot loadOrder) =>
+        Of(plugin, loadOrder) is { } styles
+            ? string.Join(';', styles.Items.Select(master => $"{master.ModKey}:{master.MasterStyle}").Order(StringComparer.Ordinal))
+            : "";
+
     private static bool AreStyled(LoadOrderSnapshot loadOrder) => GameConstants.Get(loadOrder.GameRelease).SeparateMasterLoadOrders;
 
     private static IEnumerable<ModPath> HeldPaths(IEnumerable<ModKey> masters, LoadOrderSnapshot loadOrder)

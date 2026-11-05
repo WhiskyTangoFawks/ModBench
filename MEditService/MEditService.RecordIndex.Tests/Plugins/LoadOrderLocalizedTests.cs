@@ -247,10 +247,10 @@ public sealed class LoadOrderLocalizedTests
         public ConcurrentQueue<(bool SequenceMoved, LoadOrderState State)> Seen { get; } = new();
         public long Settled { get; set; }
 
-        public override void KeepHashesOf(IReadOnlySet<string> pluginPaths)
+        public override void KeepStateOf(IReadOnlySet<string> pluginPaths)
         {
             Watch();
-            base.KeepHashesOf(pluginPaths);
+            base.KeepStateOf(pluginPaths);
         }
 
         public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(

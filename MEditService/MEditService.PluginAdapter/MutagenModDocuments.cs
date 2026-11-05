@@ -235,7 +235,7 @@ internal sealed class MutagenModDocuments(
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             PluginFailure.ThrowIfNotTheFilesAnswer(ex, file);
-            var stub = ParseFailedDocument.For(record, EditorIdOrNull(record), mod.GameRelease);
+            var stub = ParseFailedDocument.For(record, EditorIdOrNull(record, file), mod.GameRelease);
             return WithGrupFacts(
                 new PluginDocument(
                     tableName, formKey, Encoding.UTF8.GetString(stub),
@@ -255,7 +255,7 @@ internal sealed class MutagenModDocuments(
 
     // The EditorID of an unreadable record is read through the same lazy Mutagen field access that
     // just threw, so it answers null rather than taking the plugin down with it.
-    private string? EditorIdOrNull(IMajorRecordGetter record)
+    internal static string? EditorIdOrNull(IMajorRecordGetter record, PluginRecordBytes file)
     {
         try { return record.EditorID; }
         catch (Exception ex) when (ex is not OperationCanceledException)
