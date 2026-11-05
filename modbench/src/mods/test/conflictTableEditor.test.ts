@@ -196,7 +196,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
     })));
 
   it('reads each copy at the path its mod holds it at, and shows what the adapter stamps', async () => {
-    const stamp = (size: bigint) => ({ size, modifiedNs: 0n, changedNs: 0n });
+    const stamp = (size: bigint) => ({ size, modifiedNs: 0n });
     const { adapter } = fakeInstanceAdapter(readingFixture(), {
       stamps: new Map([['/instance/High/a.dds', stamp(2048n)], ['/instance/Low/a.dds', stamp(512n)]]),
     });

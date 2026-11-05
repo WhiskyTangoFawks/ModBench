@@ -206,6 +206,12 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | filter | reads | `modbench.record.filter`, `modbench.record.clearFilter` | - | query: a `.sql` file, or a new document | xEdit navigator | Narrow the record tree to the FormKeys a SQL query returns. | query-record-index |
 | collapse no conflict | reads | `modbench.record.collapseNoConflict`, `modbench.record.showNoConflict` | - | - | xEdit View grid, Hide no conflict and empty rows | Collapse the rows and columns that add nothing to the conflict, in every record panel, or show them again. | none |
 
+## Archive
+
+| Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
+|---|---|---|---|---|---|---|---|
+| open | reads | `modbench.archive.open` | archive | - | none | Show an archive's files as a read-only folder in VS Code's Explorer. | - |
+
 ## Downloaded file
 
 | Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |

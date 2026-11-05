@@ -1,103 +1,35 @@
-using System.Runtime.InteropServices;
-using System.Text;
-using Microsoft.Win32.SafeHandles;
-
 namespace MEditService.RepositoriesLib;
 
-/// <summary>What the file system says of a file without a read of its bytes. Times are nanoseconds
-/// since the Unix epoch. .NET exposes no change time, so each platform's is read natively.</summary>
-internal readonly record struct FileStamp(long Size, long Modified, long Changed)
+/// <summary>What the file system says of a file without a read of its bytes: its size and date
+/// modified, which a link leaves as it was (ADR-0003). The date is ticks since the Unix epoch.</summary>
+internal readonly record struct FileStamp(long Size, long Modified)
 {
     /// <summary>Null when the file system cannot answer, and then nothing vouches for a remembered
     /// hash.</summary>
-    internal static FileStamp? Of(string path) =>
-        OperatingSystem.IsWindows() ? WindowsFileStamp.Of(path) : LinuxFileStamp.Of(path);
+    internal static FileStamp? Of(string path)
+    {
+        try
+        {
+            var file = new FileInfo(path);
+            return file.Exists
+                ? new FileStamp(file.Length, (file.LastWriteTimeUtc - DateTime.UnixEpoch).Ticks)
+                : null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
 
     // A file system stamps a change with a clock coarser than a read is quick, and a network share's
     // clock is not this machine's: a stamp this recent may not change for a write that follows it.
     private const int SettledAfterSeconds = 2;
 
-    /// <summary>True once the file's last change is old enough that a later write would move the stamp.</summary>
+    /// <summary>True once the file's date modified is old enough that a later write would move the stamp.</summary>
     internal bool SettledAt(DateTimeOffset moment) =>
-        Changed < (moment.AddSeconds(-SettledAfterSeconds) - DateTimeOffset.UnixEpoch).Ticks * (1_000_000_000 / TimeSpan.TicksPerSecond);
-}
-
-internal static class LinuxFileStamp
-{
-    private const int CurrentDirectory = -100;
-    private const uint ModifiedMask = 0x40;
-    private const uint ChangedMask = 0x80;
-    private const uint SizeMask = 0x200;
-    private const uint Wanted = SizeMask | ModifiedMask | ChangedMask;
-
-    // struct statx from the kernel's uapi <linux/stat.h>: fixed-width fields, the same layout on
-    // every architecture.
-    [StructLayout(LayoutKind.Explicit, Size = 256)]
-    private struct Statx
-    {
-        [FieldOffset(0)] public uint Mask;
-        [FieldOffset(40)] public ulong Size;
-        [FieldOffset(96)] public long ChangedSeconds;
-        [FieldOffset(104)] public uint ChangedNanoseconds;
-        [FieldOffset(112)] public long ModifiedSeconds;
-        [FieldOffset(120)] public uint ModifiedNanoseconds;
-    }
-
-    // The path as the kernel takes it: UTF-8 with a terminating null.
-    [DllImport("libc", EntryPoint = "statx")]
-    private static extern int StatxOf(int directory, byte[] path, int flags, uint mask, out Statx result);
-
-    public static FileStamp? Of(string path)
-    {
-        var answered = StatxOf(CurrentDirectory, Encoding.UTF8.GetBytes(path + '\0'), 0, Wanted, out var stat) == 0;
-        if (!answered || (stat.Mask & Wanted) != Wanted) return null;
-        return new FileStamp(
-            (long)stat.Size,
-            Nanoseconds(stat.ModifiedSeconds, stat.ModifiedNanoseconds),
-            Nanoseconds(stat.ChangedSeconds, stat.ChangedNanoseconds));
-    }
-
-    private static long Nanoseconds(long seconds, uint nanoseconds) => (seconds * 1_000_000_000) + nanoseconds;
-}
-
-internal static class WindowsFileStamp
-{
-    // Attributes alone: an open for them passes a tool's handle that denies sharing.
-    private const uint ReadAttributes = 0x80;
-    private const uint ShareReadWriteDelete = 0x7;
-    private const uint OpenExisting = 3;
-    private const int FileBasicInfoClass = 0;
-    private const long UnixEpochAsFileTime = 116_444_736_000_000_000;
-
-    // FILE_BASIC_INFO from <winbase.h>.
-    [StructLayout(LayoutKind.Explicit, Size = 40)]
-    private struct FileBasicInfo
-    {
-        [FieldOffset(16)] public long Modified;
-        [FieldOffset(24)] public long Changed;
-    }
-
-    [DllImport("kernel32.dll", EntryPoint = "CreateFileW")]
-    private static extern SafeFileHandle CreateFile(
-        [MarshalAs(UnmanagedType.LPWStr)] string path, uint access, uint share, nint security, uint disposition,
-        uint flags, nint template);
-
-    [DllImport("kernel32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetFileInformationByHandleEx(
-        SafeFileHandle file, int infoClass, out FileBasicInfo info, uint size);
-
-    public static FileStamp? Of(string path)
-    {
-        using var file = CreateFile(path, ReadAttributes, ShareReadWriteDelete, 0, OpenExisting, 0, 0);
-        if (file.IsInvalid
-            || !GetFileInformationByHandleEx(file, FileBasicInfoClass, out var info, (uint)Marshal.SizeOf<FileBasicInfo>()))
-        {
-            return null;
-        }
-        return new FileStamp(
-            RandomAccess.GetLength(file), Nanoseconds(info.Modified), Nanoseconds(info.Changed));
-    }
-
-    private static long Nanoseconds(long fileTime) => (fileTime - UnixEpochAsFileTime) * 100;
+        Modified < (moment.AddSeconds(-SettledAfterSeconds) - DateTimeOffset.UnixEpoch).Ticks;
 }

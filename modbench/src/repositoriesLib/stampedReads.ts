@@ -1,24 +1,23 @@
 /** What the file system says of a file without a read of its bytes. A tool can keep a file's size
- *  and date modified across a write, never the time of its change. */
+ *  and date modified across a write, and ADR-0003 accepts that. */
 export interface FileStamp {
   readonly size: bigint;
   readonly modifiedNs: bigint;
-  readonly changedNs: bigint;
 }
 
 /** The stamp of a file from its `stat` with `bigint: true`. */
-export const stampFrom = ({ size, mtimeNs, ctimeNs }: { size: bigint; mtimeNs: bigint; ctimeNs: bigint }): FileStamp =>
-  ({ size, modifiedNs: mtimeNs, changedNs: ctimeNs });
+export const stampFrom = ({ size, mtimeNs }: { size: bigint; mtimeNs: bigint }): FileStamp =>
+  ({ size, modifiedNs: mtimeNs });
 
 export const sameStamp = (a: FileStamp, b: FileStamp): boolean =>
-  a.size === b.size && a.modifiedNs === b.modifiedNs && a.changedNs === b.changedNs;
+  a.size === b.size && a.modifiedNs === b.modifiedNs;
 
 // A file system stamps a change with a clock coarser than a read is quick, and a network share's
 // clock is not this machine's: a stamp this recent may not change for a write that follows it.
 const SETTLED_AFTER_MS = 2_000;
 
 export const settledBefore = (stamp: FileStamp, readFromMs: number): boolean =>
-  stamp.changedNs < BigInt(readFromMs - SETTLED_AFTER_MS) * 1_000_000n;
+  stamp.modifiedNs < BigInt(readFromMs - SETTLED_AFTER_MS) * 1_000_000n;
 
 export interface Kept<T> {
   readonly path: string;

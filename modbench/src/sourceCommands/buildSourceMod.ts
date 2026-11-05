@@ -161,7 +161,7 @@ async function stampsIn(adapter: Adapter, folder: string): Promise<ReadonlyMap<s
   const stamps = new Map<string, string>();
   for (const path of await adapter.filesIn(folder)) {
     const stamp = await adapter.fileStamp(join(folder, path));
-    stamps.set(path, stamp.kind === 'read' ? `${stamp.answer.size}:${stamp.answer.modifiedNs}:${stamp.answer.changedNs}` : `unreadable:${stamp.reason}`);
+    stamps.set(path, stamp.kind === 'read' ? `${stamp.answer.size}:${stamp.answer.modifiedNs}` : `unreadable:${stamp.reason}`);
   }
   return stamps;
 }

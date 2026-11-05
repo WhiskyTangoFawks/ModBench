@@ -31,4 +31,24 @@ public sealed class StampGatedMemoTests : IDisposable
 
         Assert.Equal(2, reads);
     }
+
+    [Fact]
+    public void AFileWhoseChangeTimeMoved_ButNotItsSizeOrDateModified_IsNotReadAgain()
+    {
+        var reads = 0;
+        var memo = new StampGatedMemo<object>(new FakeTimeProvider(TimeProvider.System.GetUtcNow() + TimeSpan.FromHours(1)));
+        object Read()
+        {
+            reads++;
+            return new object();
+        }
+        File.WriteAllBytes(FilePath, [1]);
+
+        memo.Of(FilePath, Read);
+        File.SetAttributes(FilePath, FileAttributes.ReadOnly);
+        File.SetAttributes(FilePath, FileAttributes.Normal);
+        memo.Of(FilePath, Read);
+
+        Assert.Equal(1, reads);
+    }
 }

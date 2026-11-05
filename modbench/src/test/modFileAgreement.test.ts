@@ -83,7 +83,7 @@ describe('what the Mods view shows of a mod\'s files, and what the agent reads (
 });
 
 const NS = 1_577_836_800_000_000_000n;
-const stamp = (size: number, days: number) => ({ size: BigInt(size), modifiedNs: NS + BigInt(days) * 86_400_000_000_000n, changedNs: NS });
+const stamp = (size: number, days: number) => ({ size: BigInt(size), modifiedNs: NS + BigInt(days) * 86_400_000_000_000n });
 const at = (mod: string, path: string) => `/instance/${mod}/${path}`;
 const NAMES = ['High', 'Middle', 'Low'];
 

@@ -11,7 +11,7 @@ const mod = (name: string) => ({ kind: 'mod', name } as const);
 const NONO = mod('Ñoño\'s Retexture');
 const PATCH = mod('Unofficial Fallout 4 Patch');
 const pathOf = (origin: FileOrigin): string => `/${origin.kind === 'mod' ? origin.name : 'overwrite'}/${SHARED}`;
-const stampOf = (size: number) => ({ size: BigInt(size), modifiedNs: NS, changedNs: NS });
+const stampOf = (size: number) => ({ size: BigInt(size), modifiedNs: NS });
 
 function over(copies: readonly (readonly [FileOrigin, { size: number; hash?: string }])[]) {
   const entries = copies.map(([origin, copy]) => [pathOf(origin), copy] as const);
