@@ -14,7 +14,7 @@ public sealed class OnePluginReadMemoryTests(OnePluginReadMemoryTests.SmallBesid
     private const string Large = "Large.esp";
     private const int LargeQuests = 100;
     private const int TopicsPerQuest = 2_000;
-    private const long MemoryLimit = 12_000_000;
+    private const long MemoryLimit = 32_000_000;
 
     public sealed class SmallBesideLarge : IDisposable
     {

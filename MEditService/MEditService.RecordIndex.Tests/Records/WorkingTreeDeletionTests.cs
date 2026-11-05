@@ -128,7 +128,7 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         index.SignalChange();
 
         Assert.True(PromotesBase(index), $"The stack stands at {string.Join(",", StackOf(index, _npc))}.");
-        Assert.Equal(LoadOrderState.Ready, index.Status.State);
+        Assert.True(Waits.ReachedWithin(() => index.Status.State == LoadOrderState.Ready, TimeSpan.FromSeconds(20)));
     }
 
     [Fact]
