@@ -1,42 +1,74 @@
+using System.Runtime.CompilerServices;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Time.Testing;
+using Mutagen.Bethesda;
+using static MEditService.TestSupport.RawPlugin;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
 public sealed class RecentPluginMemoTests : IDisposable
 {
-    private readonly ScratchDirectory _folder = new("recent-plugin-memo");
-    private readonly Dictionary<string, int> _reads = [];
+    private readonly PluginFixtureData _data = new PluginFixtureBuilder("adapter-recent-plugin-memo").Build();
+    private readonly MutagenPluginAdapter _adapter = new(new FakeTimeProvider(TimeProvider.System.GetUtcNow() + TimeSpan.FromHours(1)));
 
-    public void Dispose() => _folder.Dispose();
+    public void Dispose() => _data.Dispose();
 
-    private string Plugin(string name)
+    private RegisteredPlugin Plugin(string name)
     {
-        var path = Path.Combine(_folder.Path, name);
-        File.WriteAllBytes(path, [1]);
-        return path;
+        var path = Path.Combine(_data.DataFolder, name);
+        File.WriteAllBytes(path, RawPlugin.Plugin(Tes4(), Group("MISC", Misc(0x800, name))));
+        return new RegisteredPlugin(name, PluginOrigin.DataDirectory, path, PluginProvider.Game, Line: null, PluginStrings.None);
     }
 
-    private void Ask(RecentPluginMemo<object> memo, string path) =>
-        memo.Of(path, "", () =>
-        {
-            _reads[path] = _reads.GetValueOrDefault(path) + 1;
-            return new object();
-        });
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private WeakReference Ask(RegisteredPlugin plugin)
+    {
+        var loadOrder = EmptyLoadOrder.Of(GameRelease.Fallout4);
+        using var records = _adapter.OpenRecordLookup(
+            plugin, loadOrder, SharedSchemaReflector.Instance.GetSchemas(loadOrder.GameRelease)).Answered();
+        return new WeakReference(records.IdentityOf($"000800:{plugin.Name}").Answered()?.EditorId);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static bool IsHeld(WeakReference weak)
+    {
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        return weak.IsAlive;
+    }
 
     [Fact]
-    public void ThePluginsLeastRecentlyAskedAbout_AreReadAgainOnceMoreThanTheTwoMostRecentAreAskedAbout()
+    public void APluginAskedAboutBeforeTwoOthers_IsLetGoOf()
     {
-        var memo = new RecentPluginMemo<object>(new FakeTimeProvider(TimeProvider.System.GetUtcNow() + TimeSpan.FromHours(1)), capacity: 2);
-        var (first, second, third) = (Plugin("First.bin"), Plugin("Second.bin"), Plugin("Third.bin"));
+        var (first, second, third) = (Plugin("First.esp"), Plugin("Second.esp"), Plugin("Third.esp"));
+        var editorId = Ask(first);
+        Ask(second);
+        Ask(third);
 
-        Ask(memo, first);
-        Ask(memo, second);
-        Ask(memo, third);
-        Ask(memo, second);
-        Ask(memo, first);
-        Ask(memo, second);
+        Assert.False(IsHeld(editorId));
+    }
 
-        Assert.Equal([2, 1, 1], new[] { _reads[first], _reads[second], _reads[third] });
+    [Fact]
+    public void APluginAskedAboutBeforeOneOther_IsHeld()
+    {
+        var (first, second) = (Plugin("First.esp"), Plugin("Second.esp"));
+        var held = Ask(first);
+        Ask(second);
+
+        Assert.True(IsHeld(held));
+    }
+
+    [Fact]
+    public void APluginAskedAboutAgain_OutlastsOneAskedAboutBeforeIt()
+    {
+        var (first, second, third) = (Plugin("First.esp"), Plugin("Second.esp"), Plugin("Third.esp"));
+        Ask(first);
+        Ask(second);
+        var held = Ask(first);
+        Ask(third);
+
+        Assert.True(IsHeld(held));
     }
 }
