@@ -110,6 +110,7 @@ public sealed class RowsChangedNotificationTests
             if (Announcements.RowsChanged(gained)(n)) heldWhenNamed.Enqueue(index.CopyIn(gained, entry.Key) is not null);
         };
         source.BeforeNextGitStatus = () => GainACopyOfARecordUnderAFormKeyNeitherRefHolds(entry, index, template.ToString());
+        entry.Git("commit", "--allow-empty", "--quiet", "-m", "Moves HEAD, so the next check asks git again");
 
         var asked = source.GitStatusAsked;
         index.NextCheckUnsettledUntil(() => source.GitStatusAsked > asked, "git asked what the tree changed");
