@@ -33,7 +33,7 @@ GLOSSARY.md holds words already in the maintainer's head. Through it, an agent s
 
 - Two heading levels. `#` is a term. `##` is a kind of the `#` term above it, and its definition starts with that term: a [parent] that [difference]. A term with two parents stays a `#`, and its definition names both.
 - The heading is the canonical spelling, so `grep -E '^#+ Term$'` finds it. Where the language allows, a kind's heading contains its parent's name: Mod order, Patch plugin.
-- The body is the definition on one line, in one or two sentences, then an optional `Like:` line and an optional `Avoid:` line, each after a blank line. Define what it is, not what it does.
+- The body is the definition on one line, in one or two sentences, then a blank line and an optional `Avoid:` line. Define what it is, not what it does.
 - Related terms sit next to each other, and a term is defined before it is used.
 - A kind gets its own heading when it has its own `Avoid:` words or facts beyond one clause. A kind that is only a state of its parent stays a sentence in the parent.
 - `Avoid:` lists words someone still says. A word with a legitimate use elsewhere is scoped in brackets: `Avoid: patch (a kind of plugin)`.

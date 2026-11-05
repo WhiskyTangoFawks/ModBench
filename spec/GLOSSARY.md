@@ -1,7 +1,7 @@
 Architecture words live in `spec/architecture/`. Verbs live in `spec/surfaces/commands.md`. A word is here only where its usual meaning, in software development or in modding, would mislead; a word that is not here means what it usually means.
 
 # Order
-A stack of items that resolve conflicts by override. Mod order and plugin order are its two kinds. Load order combines them. Resolution Precedence.
+A stack of items that resolve conflicts by override. Mod order and plugin order are its two kinds. Load order combines them. Like resolution precedence.
 
 Avoid: priority
 
@@ -135,7 +135,7 @@ A plugin that another plugin's header lists, for the records it overrides or ref
 Avoid: parent plugin (an override's plugin is not its child)
 
 ## Compiled plugin
-A plugin in a source mod that a build compiles from its plugin source, which is its truth Treat is as a build artifact.
+A plugin in a source mod that a build compiles from its plugin source, which is its truth. Treat it as a build artifact.
 
 Avoid: source plugin (that reads as plugin source), tracked plugin (git's tracked is a file in the index)
 
