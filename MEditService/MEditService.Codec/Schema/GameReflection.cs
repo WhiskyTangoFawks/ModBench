@@ -16,6 +16,13 @@ internal sealed record GameReflection(
 
     internal int TableCount { get; } = GetterTypeToTable.Values.Distinct(StringComparer.OrdinalIgnoreCase).Count();
 
+    // A plain enum in Mutagen, though its members are bits: the document spells it as its number.
+    internal Type? TemplateFlagsEnum { get; } = GetterTypeToTable.Keys
+        .FirstOrDefault(type => type.IsInterface && type.Name == Annotations.ActorTemplates.TypeName) is { } actor
+        && ReflectedTypes.PropertyAt(actor, Annotations.ActorTemplates.FlagsMember) is { } flags
+            ? ReflectedTypes.CoreOf(flags).Core
+            : null;
+
     internal ConcurrentDictionary<Type, bool> ReachesATruncation { get; } = new();
 
     internal ConcurrentDictionary<Type, List<FieldMetadata>> PathFreeSubSchemas { get; } = new();
