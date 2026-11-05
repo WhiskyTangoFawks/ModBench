@@ -1,5 +1,5 @@
-"""Observes run-gates.sh's refusal: a run gates the tree that will land, so a branch behind main
-is refused before any gate runs. Also observes which gate runs take the build slot."""
+"""Observes run-gates.sh: a branch behind main is refused, a gate run takes the build slot, and the
+change since main selects the gates."""
 import os
 import pathlib
 import shutil
@@ -50,27 +50,40 @@ class BehindMain(unittest.TestCase):
         self.assertIn("Gate 1", run.stdout)
 
 
-class InTheSlot(unittest.TestCase):
+class GateRepo(unittest.TestCase):
     def setUp(self):
         self.repo = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.repo)
         self.validate = pathlib.Path(self.repo, ".claude/skills/validate")
         self.validate.mkdir(parents=True)
         shutil.copy(SCRIPT, self.validate)
+        shutil.copy(SCRIPT.parent / "select_gates.py", self.validate)
         (self.validate / "slot-run.sh").write_text('echo "slot-run: $*"\n')
+        for path in ("MEditService/Core/a.cs", "modbench/src/a.ts", "spec/a.d2"):
+            self.write(path, "x")
         git(self.repo, "init", "-q", "-b", "main")
-        git(self.repo, "commit", "-q", "--allow-empty", "-m", "base")
+        git(self.repo, "add", ".")
+        git(self.repo, "commit", "-q", "-m", "base")
 
-    def gates(self, flag, **env):
+    def write(self, path, text):
+        file = pathlib.Path(self.repo, path)
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(text)
+
+    def gates(self, *flags, **env):
         clean = {k: v for k, v in os.environ.items() if k != "BUILD_SLOT_HELD"}
-        return subprocess.run(["bash", str(self.validate / "run-gates.sh"), flag],
+        return subprocess.run(["bash", str(self.validate / "run-gates.sh"), *flags],
                               capture_output=True, text=True, timeout=60, env=clean | env)
 
+    def slot_line(self, flags):
+        return f"slot-run: bash {self.validate / 'run-gates.sh'} {flags}"
+
+
+class InTheSlot(GateRepo):
     def test_a_gate_run_that_builds_or_tests_runs_in_the_build_slot(self):
         for flag in ("--backend", "--frontend", "--api-drift", "--docs", "--scripts"):
             with self.subTest(flag=flag):
-                run = self.gates(flag)
-                self.assertEqual(run.stdout, f"slot-run: bash {self.validate / 'run-gates.sh'} {flag}\n")
+                self.assertEqual(self.gates(flag).stdout, self.slot_line(flag) + "\n")
 
     def test_the_comment_gate_alone_takes_no_slot(self):
         self.assertNotIn("slot-run:", self.gates("--comments").stdout)
@@ -81,38 +94,31 @@ class InTheSlot(unittest.TestCase):
         self.assertIn("=== Gate 1", run.stdout)
 
 
-class OnMain(unittest.TestCase):
-    def setUp(self):
-        self.repo = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, self.repo)
-        self.validate = pathlib.Path(self.repo, ".claude/skills/validate")
-        self.validate.mkdir(parents=True)
-        shutil.copy(SCRIPT, self.validate)
-        shutil.copy(SCRIPT.parent / "select_gates.py", self.validate)
-        (self.validate / "slot-run.sh").write_text('echo "slot-run: $*"\n')
-        for path in ("MEditService/Core/a.cs", "modbench/src/a.ts", "scripts/a.py", "spec/a.d2"):
-            file = pathlib.Path(self.repo, path)
-            file.parent.mkdir(parents=True, exist_ok=True)
-            file.write_text("x")
-        git(self.repo, "init", "-q", "-b", "main")
-        git(self.repo, "add", ".")
-        git(self.repo, "commit", "-q", "-m", "base")
+class SelectedByChange(GateRepo):
+    EVERY_GATE = "--backend --api-drift --scripts --frontend --docs"
+
+    def selected(self):
+        return self.gates().stdout.splitlines()[-1]
 
     def test_main_itself_runs_every_gate(self):
-        self.assert_every_gate_runs()
+        self.assertEqual(self.selected(), self.slot_line(self.EVERY_GATE))
 
     def test_main_with_an_uncommitted_edit_runs_every_gate(self):
-        pathlib.Path(self.repo, "spec/a.d2").write_text("edited")
-        self.assert_every_gate_runs()
+        self.write("spec/a.d2", "edited")
+        self.assertEqual(self.selected(), self.slot_line(self.EVERY_GATE))
 
-    def assert_every_gate_runs(self):
-        clean = {k: v for k, v in os.environ.items() if k != "BUILD_SLOT_HELD"}
-        run = subprocess.run(["bash", str(self.validate / "run-gates.sh")],
-                             capture_output=True, text=True, timeout=60, env=clean)
-        slot_line = next((line for line in run.stdout.splitlines() if line.startswith("slot-run:")), "")
-        for flag in ("--backend", "--frontend", "--api-drift", "--docs", "--scripts"):
-            with self.subTest(flag=flag):
-                self.assertIn(flag, slot_line)
+    def test_a_branch_ahead_of_main_runs_the_gates_its_diff_can_break(self):
+        git(self.repo, "checkout", "-q", "-b", "feature")
+        self.write("spec/a.d2", "edited")
+        git(self.repo, "commit", "-q", "-am", "edit")
+        self.assertEqual(self.selected(), self.slot_line("--docs"))
+
+    def test_a_branch_changing_only_a_non_ascii_path_runs_the_gates_it_can_break(self):
+        git(self.repo, "checkout", "-q", "-b", "feature")
+        self.write("modbench/src/test/Ñoño's Retexture/a.ts", "x")
+        git(self.repo, "add", ".")
+        git(self.repo, "commit", "-q", "-m", "fixture")
+        self.assertEqual(self.selected(), self.slot_line("--frontend"))
 
 
 if __name__ == '__main__':
