@@ -16,6 +16,7 @@ public sealed class JsonOffPublicSurfaceScanTests
     [
         "MEditService.Codec.Schema.CheckErrorBuilder.Build",
         "MEditService.Codec.Schema.DocumentNodes.ComparedText",
+        "MEditService.Codec.Schema.DocumentNodes.Holds",
         "MEditService.Codec.Schema.DocumentNodes.VariantFor",
         "MEditService.Codec.Schema.ElementKey.Of",
         "MEditService.Codec.Schema.ElementKey.SortKeyOf",

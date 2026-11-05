@@ -1,16 +1,16 @@
 using System.Collections.Concurrent;
 using System.Reflection;
-using System.Text.Json;
+using MEditService.Codec.Schema;
 
-namespace MEditService.Codec.Schema;
+namespace MEditService.Codec.Serialization;
 
 /// <summary>Mutagen's versioning breaks: bytes that end at a break hold no member past it. Mutagen's
 /// own copy stops at a set break, so the members it reads under one are the ones held.</summary>
-public static class VersioningBreaks
+internal static class VersioningBreaks
 {
     public const string Member = "Versioning";
 
-    public const string EnumName = "VersioningBreaks";
+    private const string EnumName = "VersioningBreaks";
 
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> None = new Dictionary<string, IReadOnlyList<string>>();
 
@@ -20,14 +20,6 @@ public static class VersioningBreaks
     /// does, spelled <c>Versioning.Break0</c>.</summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<string>> UnheldWhen(Type loquiClass) =>
         UnheldByClass.GetOrAdd(loquiClass, Derive);
-
-    /// <summary>Whether <paramref name="owner"/>'s breaks leave the member <paramref name="member"/>
-    /// describes unheld.</summary>
-    public static bool Unheld(FieldMetadata member, JsonElement? owner) =>
-        member.UnheldWhen is { } breaks
-            && owner is { ValueKind: JsonValueKind.Object } held
-            && held.TryGetProperty(Member, out var flags) && flags.ValueKind == JsonValueKind.Array
-            && flags.EnumerateArray().Any(flag => breaks.Contains($"{Member}.{flag.GetString()}"));
 
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> Derive(Type loquiClass)
     {

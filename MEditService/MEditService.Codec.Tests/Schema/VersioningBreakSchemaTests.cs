@@ -1,4 +1,3 @@
-using MEditService.Codec.Schema;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -30,24 +29,19 @@ public sealed class VersioningBreakSchemaTests
     [InlineData(GameRelease.Fallout4)]
     [InlineData(GameRelease.SkyrimSE)]
     [InlineData(GameRelease.Starfield)]
-    public void EveryBreakOfEveryClassMutagenVersions_LeavesAMemberUnheld(GameRelease release)
+    public void EveryBreakOfEveryStructMutagenVersions_LeavesAMemberUnheld(GameRelease release)
     {
-        var game = release switch
-        {
-            GameRelease.Fallout4 => typeof(Mutagen.Bethesda.Fallout4.Quest).Assembly,
-            GameRelease.SkyrimSE => typeof(Mutagen.Bethesda.Skyrim.Quest).Assembly,
-            _ => typeof(Mutagen.Bethesda.Starfield.Quest).Assembly,
-        };
-        var versioned = game.GetTypes()
-            .Where(type => type is { IsClass: true, IsAbstract: false, IsPublic: true } && type.GetNestedType(VersioningBreaks.EnumName) is not null)
+        var versioned = SchemaFields.All(release)
+            .Where(found => found.Field.Fields?.Any(member => member is { Name: "Versioning", Type: "flags" }) == true)
             .ToList();
 
         Assert.NotEmpty(versioned);
-        foreach (var type in versioned)
+        foreach (var (path, field) in versioned)
         {
-            var unheld = VersioningBreaks.UnheldWhen(type).Values.SelectMany(flags => flags).ToHashSet(StringComparer.Ordinal);
-            var breaks = Enum.GetNames(type.GetNestedType(VersioningBreaks.EnumName) ?? throw new InvalidOperationException()).Select(flag => $"{VersioningBreaks.Member}.{flag}");
-            Assert.True(breaks.All(unheld.Contains), $"{type.Name} leaves no member unheld under one of {string.Join(", ", breaks)}");
+            var members = field.Fields ?? [];
+            var breaks = members.Single(member => member.Name == "Versioning").EnumMembers.Select(flag => $"Versioning.{flag.Value}").ToList();
+            var unheld = members.SelectMany(member => member.UnheldWhen ?? []).ToHashSet(StringComparer.Ordinal);
+            Assert.True(breaks.TrueForAll(unheld.Contains), $"{path} leaves no member unheld under one of {string.Join(", ", breaks)}");
         }
     }
 }

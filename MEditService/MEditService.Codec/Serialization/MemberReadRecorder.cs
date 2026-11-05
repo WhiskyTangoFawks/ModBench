@@ -1,9 +1,9 @@
 using System.Reflection;
 
-namespace MEditService.Codec.Schema;
+namespace MEditService.Codec.Serialization;
 
-/// <summary>A getter that answers as a fresh instance does, under the breaks it is given, and records each
-/// member a copy reads. DispatchProxy derives the proxy from it, so it cannot be sealed.</summary>
+/// <summary>A getter answering as a fresh instance does, under the breaks it is given, that records each
+/// member a copy reads. DispatchProxy derives from it, so it is unsealed, and CA1852 refuses that internal.</summary>
 public class MemberReadRecorder : DispatchProxy
 {
     internal object? Target { get; set; }

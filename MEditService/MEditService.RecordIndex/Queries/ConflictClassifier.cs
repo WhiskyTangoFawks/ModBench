@@ -256,7 +256,7 @@ internal sealed class ConflictClassifier(ILogger logger)
         foreach (var member in members)
         {
             var values = owners.ToDictionary(kv => kv.Key, kv => (object?)MemberValue(kv.Value, member.Name));
-            var unheld = owners.Where(kv => VersioningBreaks.Unheld(member, kv.Value as JsonElement?)).Select(kv => kv.Key).ToHashSet(StringComparer.Ordinal);
+            var unheld = owners.Where(kv => !DocumentNodes.Holds(member, kv.Value as JsonElement?)).Select(kv => kv.Key).ToHashSet(StringComparer.Ordinal);
             if (values.Values.All(v => v == null) && (unheld.Count == 0 || unheld.Count == owners.Count)) continue;
             var shapes = owners.ToDictionary(
                 kv => kv.Key, kv => DocumentNodes.VariantFor(member, kv.Value as JsonElement?));

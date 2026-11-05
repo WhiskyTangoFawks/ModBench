@@ -120,6 +120,15 @@ public static class DocumentNodes
             ? shape with { Type = "int", ValidFormKeyTypes = LeafSpec.NoFormKeyTypes, AllowsNull = false, IndexWhen = null }
             : shape;
 
+    /// <summary>Whether <paramref name="owner"/> holds the member at all: none of the flags its
+    /// <see cref="FieldMetadata.UnheldWhen"/> names, the owner's versioning breaks, is set.</summary>
+    public static bool Holds(FieldMetadata member, JsonElement? owner) =>
+        member.UnheldWhen is not { } breaks
+            || owner is not { ValueKind: JsonValueKind.Object } held
+            || !breaks.Any(entry => entry.Split('.') is [var flags, var flag]
+                && held.TryGetProperty(flags, out var set) && set.ValueKind == JsonValueKind.Array
+                && set.EnumerateArray().Any(name => name.ValueKind == JsonValueKind.String && name.GetString() == flag));
+
     /// <summary>The shape a member has under a named union leaf; its own where no variant
     /// answers to that name.</summary>
     public static FieldMetadata Variant(FieldMetadata member, string? leaf) =>

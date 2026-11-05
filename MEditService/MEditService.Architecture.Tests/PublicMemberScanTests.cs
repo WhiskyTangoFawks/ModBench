@@ -50,6 +50,21 @@ public sealed class PublicMemberScanTests
     }
 
     [Fact]
+    public void TheScan_HoldsPublicATypeDispatchProxyDerivesFrom_AndTheConstructorItCalls()
+    {
+        var scan = Scan([typeof(PublicMemberScanTests).Assembly.Location]);
+
+        var type = $"{typeof(PublicMemberScanTests).FullName}/{nameof(PlantedProxy)}";
+        Assert.DoesNotContain(type, scan.Uncalled);
+        Assert.DoesNotContain($"{type}..ctor(0:Void())", scan.Uncalled);
+    }
+
+    public class PlantedProxy : DispatchProxy
+    {
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) => null;
+    }
+
+    [Fact]
     public void TheScan_HoldsPublicAnEventThatImplementsAnInterface_AndNamesOneThatDoesNot()
     {
         var scan = Scan([typeof(PublicMemberScanTests).Assembly.Location]);
@@ -150,6 +165,7 @@ public sealed class PublicMemberScanTests
         private const string MutagenNamespace = "Mutagen.";
         private const string MixInsTheSerializationGeneratorEmitsPublic = "MixIns";
         private const string DependencyInjection = "Microsoft.Extensions.DependencyInjection";
+        private const string DerivedByDispatchProxySoUnsealedWhichCa1852RefusesInternal = "System.Reflection.DispatchProxy";
         private readonly SignatureNames names = new(reader, name);
 
         public static Metadata Read(string path)
@@ -210,7 +226,7 @@ public sealed class PublicMemberScanTests
                 var owner = Key.OfType(name, names.Of(handle));
                 if (!IsVisible(type) || IsSerializationGeneratorMixIns(type))
                     continue;
-                var heldPublic = owner.Type == ComposedByWebApplicationFactory || HoldsConstantsItsReadersCopy(type);
+                var heldPublic = owner.Type == ComposedByWebApplicationFactory || HoldsConstantsItsReadersCopy(type) || Extends(type, DerivedByDispatchProxySoUnsealedWhichCa1852RefusesInternal);
                 yield return new VisibleMember(owner.Type, owner, true, [owner], TypeExposes(type), _ => heldPublic);
                 foreach (var member in Members(type, owner))
                     yield return member;
@@ -252,7 +268,8 @@ public sealed class PublicMemberScanTests
                 var held = IsCompilerGenerated(method.GetCustomAttributes())
                     || IsDispatchedTo(method.Attributes)
                     || isPrimaryConstructor
-                    || IsOperatorTheLanguageDeclaresPublic(method, methodName);
+                    || IsOperatorTheLanguageDeclaresPublic(method, methodName)
+                    || (isConstructor && Extends(type, DerivedByDispatchProxySoUnsealedWhichCa1852RefusesInternal));
                 var isAbstract = (method.Attributes & MethodAttributes.Abstract) != 0;
                 yield return new VisibleMember(
                     $"{owner.Type}.{methodName}({key.Signature})", owner, false, [key], exposes,
@@ -314,9 +331,11 @@ public sealed class PublicMemberScanTests
                 IsCopiedIntoItsCallersSoNoReferenceReachesTheirMetadata(field)
                 && IsVisible((MethodAttributes)(int)(field.Attributes & FieldAttributes.FieldAccessMask)));
 
-        private bool IsEnum(TypeDefinition type) =>
+        private bool IsEnum(TypeDefinition type) => Extends(type, "System.Enum");
+
+        private bool Extends(TypeDefinition type, string baseType) =>
             type.BaseType.Kind == HandleKind.TypeReference
-            && names.Of((TypeReferenceHandle)type.BaseType) == "System.Enum";
+            && names.Of((TypeReferenceHandle)type.BaseType) == baseType;
 
         private static IEnumerable<MethodDefinitionHandle> Accessors(PropertyAccessors accessors) =>
             new[] { accessors.Getter, accessors.Setter }.Where(h => !h.IsNil);

@@ -8,6 +8,8 @@ using System.Text.Json.Nodes;
 using Loqui;
 using MEditService.Codec.Schema;
 using Mutagen.Bethesda.Plugins.Records;
+using Noggog;
+using Noggog.IO;
 
 namespace MEditService.Codec.Serialization;
 
@@ -19,7 +21,7 @@ public static class UnheldMembers
 
     /// <summary><paramref name="json"/>, the document of <paramref name="graph"/>, without the members its
     /// breaks leave unheld, every other byte as it was.</summary>
-    public static byte[] Without(byte[] json, object graph)
+    internal static byte[] Without(byte[] json, object graph)
     {
         if (json.AsSpan().IndexOf(Marker) < 0) return json;
         var unheld = new List<object[]>();
@@ -28,22 +30,43 @@ public static class UnheldMembers
         return json;
     }
 
-    /// <summary>The same, over each document the whole-mod door wrote into <paramref name="folder"/>: a
-    /// record's by its FormKey, and the root's by the plugin.</summary>
-    public static void LeaveOutOfTree(IModGetter plugin, string folder, IFileSystem fileSystem)
+    /// <summary>The whole-mod door's streams over <paramref name="streamCreator"/>'s, each document written
+    /// without them as it closes: a record's by its FormKey, the root's by the plugin.</summary>
+    public static ICreateStream LeavingOut(IModGetter plugin, ICreateStream streamCreator) => new LeftOut(plugin, streamCreator);
+
+    private sealed class LeftOut(IModGetter plugin, ICreateStream inner) : ICreateStream
     {
-        if (!fileSystem.Directory.Exists(folder)) return;
-        Dictionary<string, IMajorRecordGetter>? records = null;
-        foreach (var file in fileSystem.Directory.EnumerateFiles(folder, "*.json", SearchOption.AllDirectories))
+        private readonly Lazy<Dictionary<string, IMajorRecordGetter>> _records =
+            new(() => plugin.EnumerateMajorRecords().ToDictionary(record => record.FormKey.ToString(), StringComparer.Ordinal));
+
+        public Stream GetStreamFor(IFileSystem fileSystem, FilePath path, bool write) => write
+            ? new WrittenOnClose(json =>
+            {
+                using var target = inner.GetStreamFor(fileSystem, path, write);
+                target.Write(Without(json, GraphOf(json)));
+            })
+            : inner.GetStreamFor(fileSystem, path, write);
+
+        private object GraphOf(byte[] json) =>
+            json.AsSpan().IndexOf(Marker) >= 0
+                && JsonNode.Parse(json)?[RecordMembers.FormKey]?.GetValue<string>() is { } formKey
+                && _records.Value.TryGetValue(formKey, out var record)
+                    ? record
+                    : plugin;
+    }
+
+    private sealed class WrittenOnClose(Action<byte[]> written) : MemoryStream
+    {
+        private bool _closed;
+
+        protected override void Dispose(bool disposing)
         {
-            var json = fileSystem.File.ReadAllBytes(file);
-            if (json.AsSpan().IndexOf(Marker) < 0) continue;
-            records ??= plugin.EnumerateMajorRecords().ToDictionary(record => record.FormKey.ToString(), StringComparer.Ordinal);
-            object graph = JsonNode.Parse(json)?[RecordMembers.FormKey]?.GetValue<string>() is { } formKey && records.TryGetValue(formKey, out var record)
-                ? record
-                : plugin;
-            var without = Without(json, graph);
-            if (without != json) fileSystem.File.WriteAllBytes(file, without);
+            if (disposing && !_closed)
+            {
+                _closed = true;
+                written(ToArray());
+            }
+            base.Dispose(disposing);
         }
     }
 
