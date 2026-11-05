@@ -390,33 +390,33 @@ describe('update manifest', () => {
     const SOURCE_FILES = { 'tool.dll': HA, 'plugin.json': HX, '.git': HB, '.git/HEAD': HB };
     const GIT_HOLDS = () => ({ heldByGit: new Map([[SOURCE(), ['plugin.json']]]) });
 
-    it('has its source folder recorded, and not its mod folder, when named as a mod', async () => {
-      const { update, manifestOf } = await among({ 'extra.nif': HX }, GIT_HOLDS(), SOURCE_FILES);
+    it('is refused when named as a mod, naming build and its source folder, and nothing of it is written', async () => {
+      const { update, manifestOf, fake } = await among({ 'extra.nif': HX }, GIT_HOLDS(), SOURCE_FILES);
 
       const result = await update(['ModA', 'ModB']);
 
-      expect([result.landed.map(({ mod }) => mod), result.refused, await manifestOf('ModB'), await heldIn(SOURCE())]).toEqual([
-        ['ModA', 'ModB'], [], undefined, { ...EMPTY, files: holding({ 'tool.dll': HA }) },
+      expect([result.landed.map(({ mod }) => mod), result.refused, await manifestOf('ModB'), fake.calls[0]]).toEqual([
+        ['ModA'], [{ item: 'ModB', reason: `its build records its folder: run build on it, or name its source folder ${SOURCE()}` }], undefined,
+        { verb: 'writeSubmodules', acted: ['ModA'] },
       ]);
     });
 
     it('counts each mod whose submodule entry or ignore lines were written, a mod with a manifest unchanged too', async () => {
       const { update } = await among({}, { submodules: { notes: [], other: [], written: ['ModB'] } }, SOURCE_FILES);
 
-      const first = await update(['ModB']);
-      const second = await update(['ModB']);
+      const first = await update([], {}, [], false, ['ModB']);
+      const second = await update([], {}, [], false, ['ModB']);
 
       expect([first, second].map(({ landed }) => landed.map(({ manifestWritten, repositoryWritten }) => [manifestWritten, repositoryWritten]))).toEqual([[[true, true]], [[false, true]]]);
     });
 
-    it('is passed over, not refused, though its mod folder is one git holds whole, whether named as a mod or on every mod', async () => {
+    it('is passed over, not refused, on every mod, though its mod folder is one git holds whole', async () => {
       const held = { ...GIT_HOLDS(), heldWholeByGit: new Set([join(modsDir, 'ModB')]) };
       const { update } = await among({ 'extra.nif': HX }, held, SOURCE_FILES);
 
-      const named = await update(['ModB']);
       const every = await update(['ModB'], {}, [], true);
 
-      expect([named.refused, every.refused]).toEqual([[], []]);
+      expect(every.refused).toEqual([]);
     });
 
     it('has its source folder recorded in a manifest of its own, naming no file git holds, when named as a source folder', async () => {
@@ -455,20 +455,12 @@ describe('update manifest', () => {
       expect([result.landed, result.refused.map(({ item }) => item)]).toEqual([[], ['ModB']]);
     });
 
-    it('still has its submodule entry written when it is all the selection holds', async () => {
+    it('has no submodule entry written when it is all the selection holds', async () => {
       const { update, fake } = await among();
 
       const result = await update(['ModB']);
 
-      expect([fake.calls[0], result.landed.map(({ mod }) => mod), result.refused]).toEqual([{ verb: 'writeSubmodules', acted: ['ModB'] }, ['ModB'], []]);
-    });
-
-    it('still has its submodule entry written, as a mod acted on', async () => {
-      const { update, fake } = await among();
-
-      await update(['ModA', 'ModB']);
-
-      expect(fake.calls[0]).toEqual({ verb: 'writeSubmodules', acted: ['ModB', 'ModA'] });
+      expect([fake.calls, result.landed, result.refused.map(({ item }) => item)]).toEqual([[], [], ['ModB']]);
     });
   });
 

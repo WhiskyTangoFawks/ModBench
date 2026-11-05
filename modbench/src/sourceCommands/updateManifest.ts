@@ -240,7 +240,6 @@ export async function updateManifest(
   const refused: ItemRefusal<string>[] = [];
   const notes: ModNote[] = [];
   const read: ModToUpdate[] = [];
-  const named: string[] = [];
   const record = async (mod: string, readOf: () => ReturnType<typeof readMod>): Promise<void> => {
     onProgress?.({ phase: 'ReadingFiles', mod });
     const answer = await readOf();
@@ -254,23 +253,17 @@ export async function updateManifest(
   refused.push(...heldWhole.refused);
   for (const mod of heldWhole.rest) {
     if (signal?.aborted) break;
-    if (folders.isMod(mod) && sourceMods.folderOf(mod) !== undefined) named.push(mod);
-    else await record(mod, () => readMod(adapter, mod, folders, game));
+    const sourceFolder = folders.isMod(mod) ? sourceMods.folderOf(mod) : undefined;
+    if (sourceFolder === undefined) await record(mod, () => readMod(adapter, mod, folders, game));
+    else if (!everyMod) refused.push({ item: mod, reason: `its build records its folder: run build on it, or name its source folder ${sourceFolder}` });
   }
-  for (const mod of new Set(everyMod ? sourceMods.folders.keys() : [...named, ...sourceModsToRecord])) {
+  for (const mod of new Set(everyMod ? sourceMods.folders.keys() : sourceModsToRecord)) {
     if (signal?.aborted) break;
     const folder = sourceMods.folderOf(mod);
     if (folder === undefined) refused.push({ item: mod, reason: 'no source folder builds it' });
     else await record(mod, () => readSourceFolder(adapter, mod, folder, game));
   }
-  const nothingUpdated = async (): Promise<UpdateManifestResult> => {
-    const cancelled = cancelledIf(signal);
-    const submodules = named.length === 0 || cancelled.cancelled ? { notes: [], repositoryNotes: [] } : await submodulesWritten(adapter, named, sourceMods.folders);
-    return {
-      ...cancelled, landed: [], refused, notes: [...notes, ...submodules.notes],
-      repositoryNotes: submodules.repositoryNotes,
-    };
-  };
+  const nothingUpdated = (): UpdateManifestResult => ({ ...cancelledIf(signal), landed: [], refused, notes, repositoryNotes: [] });
   if (signal?.aborted || read.length === 0) return nothingUpdated();
 
   const downloaded = await adapter.downloadedFilesHashed({ onHashing: (left) => onProgress?.({ phase: 'Hashing', left }), signal });
@@ -278,7 +271,7 @@ export async function updateManifest(
 
   const downloadedFiles = downloadedFilesOf(downloaded.files, nexusFileOf(adapter));
   const landed: ModUpdated[] = [];
-  const acted = [...named];
+  const acted: string[] = [];
   for (const [at, mod] of read.entries()) {
     if (signal?.aborted) break;
     onProgress?.({ phase: 'Updating', mod: mod.name, modsDone: at, modsTotal: read.length });
