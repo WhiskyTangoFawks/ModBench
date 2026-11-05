@@ -753,7 +753,7 @@ internal sealed class Indexer : IDisposable
         var resolved = snapshot.Plugins;
         // A hash is kept only for a file the load order names, or the kept hashes grow by every path
         // a session ever read.
-        _adapter.KeepHashesOf(resolved.Select(r => r.Path).ToHashSet(StringComparer.Ordinal));
+        _adapter.KeepStateOf(resolved.Select(r => r.Path).ToHashSet(StringComparer.Ordinal));
         var wanted = resolved.ToDictionary(r => r.Key, PluginAddress.Comparer);
         var open = held.Plugins.ToDictionary(p => p.Key, PluginAddress.Comparer);
 

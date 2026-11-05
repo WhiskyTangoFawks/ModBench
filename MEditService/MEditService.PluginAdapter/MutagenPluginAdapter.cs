@@ -26,7 +26,7 @@ internal interface ILoadedMod : IDisposable
 public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAdapter
 {
     private readonly PluginFileHashes _hashes = new(timeProvider);
-    private readonly StampGatedMemo<PluginRecordFacts> _facts = new(timeProvider);
+    private readonly PluginRecordFactsMemo _facts = new(timeProvider);
 
     // The getter looks its strings up as they are read, so the folder it reads them from lives as long as it does.
     internal static ILoadedMod OpenForRead(
@@ -69,8 +69,12 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         return Opened<IPluginRecords>(modPath, plugin.Strings, loadOrder, loaded =>
             new ModRecordLookup(
                 loaded.Getter, new PluginRecordBytes(modPath, loadOrder), schemas,
-                () => _facts.Of(plugin.Path, () => PluginRecordFacts.Of(loaded.Getter))
-                    ?? throw new InvalidOperationException("Expected the walk of a mod to answer its facts."), loaded));
+                () => _facts.Of(plugin.Path, MasterStyles.Fingerprint(modPath, loadOrder), () =>
+                {
+                    using var own = OpenForRead(modPath, loadOrder.GameRelease, plugin.Strings, loadOrder, loadOrder.StringsLanguage);
+                    return PluginRecordFacts.Of(own.Getter, new PluginRecordBytes(modPath, loadOrder));
+                }),
+                loaded));
     }
 
     // The open passes to what its result holds; until it has, a failure disposes it here.
@@ -119,7 +123,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
             .Where(plugin => At(plugin.Path) || AtOneOf(plugin.Strings.Archives) || AtOneOf(plugin.Strings.StringsFiles))]);
     }
 
-    public void KeepHashesOf(IReadOnlySet<string> pluginPaths)
+    public void KeepStateOf(IReadOnlySet<string> pluginPaths)
     {
         _hashes.Keep(pluginPaths);
         _facts.Retain(pluginPaths);

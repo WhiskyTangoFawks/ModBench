@@ -42,8 +42,8 @@ public interface IPluginAdapter
     /// file cannot be read: no evidence either way, so each caller decides.</summary>
     string? HashOf(string pluginPath);
 
-    /// <summary>Forgets the hash of every file but <paramref name="pluginPaths"/>.</summary>
-    void KeepHashesOf(IReadOnlySet<string> pluginPaths);
+    /// <summary>Forgets what is kept of every plugin file but <paramref name="pluginPaths"/>: its hash, and its record facts.</summary>
+    void KeepStateOf(IReadOnlySet<string> pluginPaths);
 
     /// <summary>The hash and malformed-record diagnoses from one fresh read of the file.</summary>
     Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath, GameRelease gameRelease);

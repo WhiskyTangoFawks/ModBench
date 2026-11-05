@@ -4,8 +4,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.PluginAdapter;
 
-/// <summary>What a lookup asks of a plugin about one key, answered for every key by one walk of the
-/// mod, so the walk is kept by the file's stamp (ADR-0003) and not repeated for each lookup.</summary>
+/// <summary>What a lookup asks of a plugin about one key, answered for every key by one walk of the mod.</summary>
 internal sealed class PluginRecordFacts
 {
     internal readonly record struct Fact(string RecordType, string? EditorId, long Flags, Type GetterType);
@@ -22,7 +21,7 @@ internal sealed class PluginRecordFacts
     // document instead. A block is not a record, so a worldspace's cells are not here.
     internal Dictionary<FormKey, DocumentContainment> Containments { get; }
 
-    internal static PluginRecordFacts Of(IModGetter mod)
+    internal static PluginRecordFacts Of(IModGetter mod, PluginRecordBytes file)
     {
         var types = RecordTypes.For(mod.GameRelease);
         var records = new Dictionary<FormKey, Fact>();
@@ -30,9 +29,13 @@ internal sealed class PluginRecordFacts
         foreach (var record in mod.EnumerateMajorRecords())
         {
             var recordType = types.RecordTypeOf(record);
-            records.TryAdd(record.FormKey, new Fact(recordType, record.EditorID, record.MajorRecordFlagsRaw, record.Registration.GetterType));
-            foreach (var (slotName, _, child) in ContainerChildFields.EnumerateChildren(record))
-                containments.TryAdd(child.FormKey, new DocumentContainment(record.FormKey.ToString(), recordType, slotName));
+            records[record.FormKey] = new Fact(
+                recordType, MutagenModDocuments.EditorIdOrNull(record, file), record.MajorRecordFlagsRaw, record.Registration.GetterType);
+            var children = ContainerChildFields.EnumerateChildren(record).ToList();
+            if (children.Count == 0) continue;
+            var parentKey = record.FormKey.ToString();
+            foreach (var (slotName, _, child) in children)
+                containments.TryAdd(child.FormKey, new DocumentContainment(parentKey, recordType, slotName));
         }
         return new PluginRecordFacts(records, containments);
     }
