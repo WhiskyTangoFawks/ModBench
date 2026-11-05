@@ -30,10 +30,16 @@ GATE_NAME="gates.$(basename "$ROOT")"
 $WAIT && exec bash "$DETACHED_SH" wait "$GATE_NAME"
 $DETACH && exec bash "$DETACHED_SH" start "$GATE_NAME" bash "$0" "${GATE_ARGS[@]}"
 
+# On main itself the diff is empty, so the change is the whole tree. core.quotePath=false keeps
+# non-ASCII paths unquoted, so they match the selectors' prefixes.
 changed_since_main() {
-  local base
+  local base git=(git -C "$ROOT" -c core.quotePath=false)
   base=$(git -C "$ROOT" merge-base main HEAD) || return
-  git -C "$ROOT" diff --name-only --no-renames "$base" && git -C "$ROOT" ls-files --others --exclude-standard
+  if [[ $base == "$(git -C "$ROOT" rev-parse HEAD)" ]]; then
+    "${git[@]}" ls-files
+  else
+    "${git[@]}" diff --name-only --no-renames "$base"
+  fi && "${git[@]}" ls-files --others --exclude-standard
 }
 
 if [[ ${GATE_ARGS[*]} != --comments ]] && ! git -C "$ROOT" merge-base --is-ancestor main HEAD; then
