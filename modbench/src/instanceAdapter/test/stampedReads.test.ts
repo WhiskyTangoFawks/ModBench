@@ -126,6 +126,17 @@ describe('a folder listed and a file parsed by their stamps', () => {
     expect(checked).toEqual({ answer: [['new.esp'], ['new.esp']], unheard: [unheard] });
   });
 
+  it('answers as unheard a change to a file it last read too soon after a write to trust', async () => {
+    const path = join(root, 'modlist.txt');
+    await writeFile(path, '+A');
+    const textAt = parsedBy((text) => text);
+    await textAt(path);
+    await writeFile(path, '+B');
+    await modifiedLater(path);
+
+    expect(await readTrustingKept([], true, () => textAt(path))).toEqual({ answer: '+B', unheard: [path] });
+  });
+
   it('forgets at a check of the disk, as a change no event named, a folder it kept that is gone', async () => {
     const gone = join(root, 'gone');
     await mkdir(gone);
