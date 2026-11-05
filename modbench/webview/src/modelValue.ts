@@ -16,6 +16,7 @@ export function modelValue(value: unknown, meta: FieldMetadata, resolution?: For
       case 'flags':
         return flagNames(value, meta).join(', ');
       case 'int':
+      case 'enum':
         return readsAsFlags(meta) ? flagNames(value, meta).join(', ') : toStr(value);
       case 'translatedString':
         return toStr(translatedText(value));
@@ -28,7 +29,6 @@ export function modelValue(value: unknown, meta: FieldMetadata, resolution?: For
         return colorReading(toStr(value), meta.holdsAlpha);
       case 'string':
       case 'float':
-      case 'enum':
       case 'hex':
       case 'vector':
         return toStr(value);
@@ -76,9 +76,9 @@ export function copiedText(value: unknown, meta: FieldMetadata, resolution?: For
   return unnamed ? modelValue(value, meta) : displayValue(value, meta, resolution);
 }
 
-/** A flags member, or an integer whose bits the schema names, as the record header's flags are. */
+/** A flags member, or an integer or plain enum whose bits the schema names, as the record header's flags are. */
 export function readsAsFlags(meta: FieldMetadata): boolean {
-  return meta.type === 'flags' || (meta.type === 'int' && meta.enumMembers.length > 0);
+  return meta.type === 'flags' || ((meta.type === 'int' || meta.type === 'enum') && meta.enumMembers.some(m => m.bitValue != null));
 }
 
 const bitOf = (name: string, meta: FieldMetadata): number | undefined => {
@@ -93,8 +93,10 @@ const hexOf = (bit: number) => `0x${(bit >>> 0).toString(16).toUpperCase()}`;
 // by the names the schema gives them, and an unnamed bit as the codec spells one. Absent means none.
 export function flagNames(value: unknown, meta: FieldMetadata): string[] {
   if (Array.isArray(value)) return value.map(String);
-  if (typeof value !== 'number') return [];
-  let unnamed = value | 0;
+  if (meta.type === 'enum' && isString(value) && !WHOLE_NUMBER.test(value)) return [value];
+  const bits = meta.type === 'enum' && isString(value) ? Number(value) : value;
+  if (typeof bits !== 'number') return [];
+  let unnamed = bits | 0;
   const names = meta.enumMembers.filter(m => {
     const bit = Number(m.bitValue) | 0;
     if (bit === 0 || (unnamed & bit) === 0) return false;
@@ -118,7 +120,7 @@ export function flagsValue(names: readonly string[], meta: FieldMetadata): unkno
     if (bit === undefined) return undefined;
     bits |= bit;
   }
-  return bits;
+  return meta.type === 'enum' ? String(bits) : bits;
 }
 
 // The codec spells a translated string as an object whose `Value` is the text; an edit spells it
@@ -174,7 +176,7 @@ export function pastedValue(text: string, meta: FieldMetadata): unknown {
       const number = DECIMAL_NUMBER.test(trimmed) ? Number(trimmed) : NaN;
       return Number.isFinite(number) ? number : text;
     }
-    case 'enum': return enumValueNamed(trimmed, meta);
+    case 'enum': return readsAsFlags(meta) ? flagsValue(names, meta) ?? text : enumValueNamed(trimmed, meta);
     case 'flags': return names;
     case 'formKey': return trimmed === '' ? null : BRACKETED_FORM_KEY.exec(trimmed)?.[1] ?? trimmed;
     case 'struct':

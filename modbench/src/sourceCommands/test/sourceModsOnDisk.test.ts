@@ -569,7 +569,7 @@ describe('a mod installed from an installation file, then decompiled and committ
     ];
     const before = await manifests();
 
-    const outcome = await updateManifest({ adapter }, ['Mod'], {}, [], false, []);
+    const outcome = await updateManifest({ adapter }, [], {}, [], false, ['Mod']);
 
     expect([await manifests(), outcome.refused]).toEqual([before, []]);
   });
