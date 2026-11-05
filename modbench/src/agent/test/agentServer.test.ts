@@ -1227,6 +1227,56 @@ describe('the agent server, running a gesture', () => {
     expect(errored).toEqual(['[agent] mod_enable: disk gone']);
   });
 
+  describe('a gesture that runs past the 300 s an agent waits in silence (agent.md, Reporting, story 5)', () => {
+    const AGENT_IDLE_MS = 300_000;
+    beforeEach(() => { vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] }); });
+    afterEach(() => { vi.useRealTimers(); });
+
+    // vi.waitFor advances the fake clock as it polls, which would stretch each window.
+    const until = (holds: () => boolean) => new Promise<void>((done) => {
+      const check = () => { if (holds()) done(); else setImmediate(check); };
+      check();
+    });
+
+    const running = async (onprogress?: (progress: { progress: number }) => void) => {
+      let land: (outcome: unknown) => void = () => undefined;
+      fired.outcome = new Promise((done) => { land = done; });
+      const { client } = await served();
+      const errors: Error[] = [];
+      client.onerror = (error) => errors.push(error);
+      const answered = client.callTool({ name: 'mod_enable', arguments: { argument: [{ name: 'A' }] } }, undefined, onprogress && { onprogress });
+      await until(() => fired.calls.length === 1);
+      const answer = async () => {
+        land({ applied: true, outcome: { landed: ['A'], refused: [] } });
+        return CallToolResultSchema.parse(await answered);
+      };
+      return { errors, answer };
+    };
+
+    it('tells an agent that asks for progress it is still working within each window, until it answers', async () => {
+      const heard: number[] = [];
+      const { answer } = await running(({ progress }) => heard.push(progress));
+
+      await vi.advanceTimersByTimeAsync(AGENT_IDLE_MS - 1);
+      await until(() => heard.length >= 1);
+      await vi.advanceTimersByTimeAsync(AGENT_IDLE_MS);
+      await until(() => heard.length >= 2);
+
+      expect((await answer()).isError).not.toBe(true);
+      expect(heard.filter((progress, at) => at > 0 && progress <= present(heard[at - 1], 'the progress before'))).toEqual([]);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('sends no progress to an agent that asks for none', async () => {
+      const { errors, answer } = await running();
+
+      await vi.advanceTimersByTimeAsync(AGENT_IDLE_MS);
+      await answer();
+
+      expect(errors).toEqual([]);
+    });
+  });
+
   it('refuses in whole, answering the command\'s refusal', async () => {
     fired.outcome = { applied: false, refusal: 'ENOENT: modlist.txt' };
     const { client, lines } = await served();

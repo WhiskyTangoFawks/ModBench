@@ -3,6 +3,8 @@ import type { AddressInfo } from 'node:net';
 import { text } from 'node:stream/consumers';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
+import type { ServerNotification, ServerRequest } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import type { CopyReads } from '../drivingLib/sameCopies';
 import type { PluginsShown } from '../drivingLib/pluginsShown';
@@ -72,6 +74,24 @@ async function answer(log: Log, standing: () => string[], name: string, work: ()
   }
 }
 
+// Claude Code gives up on a call it hears neither progress nor an outcome of for 300 s.
+const STILL_WORKING_MS = 15_000;
+
+async function stillWorking({ _meta, sendNotification }: RequestHandlerExtra<ServerRequest, ServerNotification>, work: () => unknown): Promise<unknown> {
+  const progressToken = _meta?.progressToken;
+  if (progressToken === undefined) return work();
+  let progress = 0;
+  const beat = setInterval(() => {
+    progress += 1;
+    sendNotification({ method: 'notifications/progress', params: { progressToken, progress } }).catch(() => { clearInterval(beat); });
+  }, STILL_WORKING_MS);
+  try {
+    return await work();
+  } finally {
+    clearInterval(beat);
+  }
+}
+
 interface Tool<Shape extends z.ZodRawShape> {
   readonly name: string;
   readonly description: string;
@@ -85,9 +105,8 @@ function register<Shape extends z.ZodRawShape>(
 ): void {
   const schema = z.strictObject(input);
   const anyObject = z.looseObject({}).meta(z.toJSONSchema(schema, { io: 'input', target: 'draft-7' }));
-  server.registerTool(name, { description, inputSchema: anyObject }, (args) => answer(log, standing, name, () => {
-    return run(parseOrRefuse(schema, args));
-  }));
+  server.registerTool(name, { description, inputSchema: anyObject }, (args, extra) => answer(log, standing, name, () =>
+    stillWorking(extra, () => run(parseOrRefuse(schema, args)))));
 }
 
 const NO_INPUT = {};
