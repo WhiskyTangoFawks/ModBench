@@ -36,8 +36,8 @@ interface Kept<T> {
   readonly value: T;
 }
 
-/** What git answers from the index and .gitmodules, read once under its `key` and handed again while both keep their stamps
- *  and its `version` stays. Only the latest version of a key is kept; a failed read, or one `keeps` refuses, is not. */
+/** What git answers from the index and .gitmodules, kept under its `key` while both keep their stamps and its `version`
+ *  stays. A key keeps its latest version only. A failed read, or one `keeps` refuses, is not kept. */
 export function keptByIndex<T>(keeps: (value: T) => boolean = () => true): (repository: string, key: string, read: () => Promise<T>, version?: string) => Promise<T> {
   const kept = new Map<string, Kept<T>>();
   return async (repository, key, read, version = '') => {
