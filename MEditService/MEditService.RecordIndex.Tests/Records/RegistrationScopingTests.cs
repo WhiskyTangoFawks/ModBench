@@ -219,6 +219,58 @@ public class RegistrationScopingTests
         Assert.Empty(fx.Index.Queries.GetReferencesInActiveOrCompiledPlugins(fx.BetaRaceFk).Value());
     }
 
+    private static IReadOnlyList<RecordCopy> NamingAlpha(FixtureWithEveryKindOfExtractedRowAndBetaOverridingAlphasNpc fx, string name = "Alpha.esp") =>
+        fx.Index.Queries.GetPluginNameReferences(name).Value();
+
+    [Fact]
+    public void ACopyInAnotherPluginWhoseTextNamesAPlugin_IsAReferenceToItsFileNameInAnyCase()
+    {
+        using var fx = Build("plugin-name-references-override");
+
+        var copies = NamingAlpha(fx, "alpha.ESP");
+
+        Assert.Contains(copies, c => c.FormKey == fx.SharedNpcFk && PluginAddress.Comparer.Equals(c.Plugin, BetaKey));
+    }
+
+    [Fact]
+    public void ThePluginsOwnRecords_AreNoReferenceToIt()
+    {
+        using var fx = Build("plugin-name-references-own");
+
+        Assert.DoesNotContain(NamingAlpha(fx), c => PluginAddress.Comparer.Equals(c.Plugin, AlphaKey));
+    }
+
+    [Fact]
+    public void APluginWithNoPluginSourceThatListsAMaster_NamesItAtItsPluginHeader()
+    {
+        using var fx = Build("plugin-name-references-master");
+
+        Assert.Contains(NamingAlpha(fx), c => c.FormKey == "000000:Beta.esp" && PluginAddress.Comparer.Equals(c.Plugin, BetaKey));
+    }
+
+    [Fact]
+    public void APluginWithPluginSourceThatIsNotActive_StillNamesAPlugin()
+    {
+        using var fx = Build("plugin-name-references-inactive-compiled");
+        SourceMods.Init(fx.Plugins.Plugins.Single(p => p.Name == BetaKey.Name));
+
+        fx.Reconcile(fx.WithBetaDisabled);
+
+        Assert.Contains(NamingAlpha(fx), c => c.FormKey == fx.SharedNpcFk);
+    }
+
+    [Theory]
+    [InlineData(BetaDisabled)]
+    [InlineData(BetaAbsent)]
+    public void APluginNotCompiledTheSnapshotLeavesInactive_NamesNoPlugin(string snapshot)
+    {
+        using var fx = Build("plugin-name-references-inactive");
+
+        fx.Reconcile(fx.Snapshot(snapshot));
+
+        Assert.Empty(NamingAlpha(fx));
+    }
+
     [Theory]
     [InlineData("records", "plugin")]
     [InlineData("form_lookup", "plugin")]
