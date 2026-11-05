@@ -206,6 +206,22 @@ public sealed class RecordDocumentEditTests : IDisposable
     }
 
     [Fact]
+    public void AValueForAMemberPastItsOwnersSetBreak_IsRefusedNamingThatBreak()
+    {
+        _quest.VirtualMachineAdapter = new QuestAdapter { Versioning = QuestAdapter.VersioningBreaks.Break0 };
+        var formKey = _fixture.Seed(_quest, "qust");
+
+        var (result, after) = _fixture.Apply(formKey, SetAt(Json("5"), Member("VirtualMachineAdapter"), Member("ExtraBindDataVersion")));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.CodecDroppedValue, result.Refusal);
+        Assert.Equal(
+            "'VirtualMachineAdapter.ExtraBindDataVersion' lies past its owner's Versioning.Break0, which is set, so the record does not hold it and nothing was written.",
+            result.Message);
+        Assert.Null(after);
+    }
+
+    [Fact]
     public void RecordFlags_ClearedToNone_LeavesNoSpellingOfThemBehind()
     {
         var cell = new Cell(_mod) { EditorID = "C", WaterHeight = 5f, MajorRecordFlagsRaw = 0x0420 };

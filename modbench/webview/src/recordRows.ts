@@ -159,12 +159,14 @@ function fieldRow(
   const name = meta.displayLabel ?? diff.fieldName;
   const last = at.path.at(-1);
   const elementOf = isArrayElementHop(last) ? at.parent : null;
-  // A row no column carries a value for holds nothing but its children, so every column present holds it.
-  const structural = Object.values(diff.values).every(v => v == null);
+  // A row no column carries a value for holds nothing but its children, so once a column holds it every
+  // column does (editor-fields.md, Placeholders, story 3).
+  const structural = (diff.children?.length ?? 0) > 0 && Object.values(diff.values).every(v => v == null)
+    && columns.some(({ key }) => present(key));
   const cells = new Map(columns.map(({ key, override: o }): [ColumnKey, ValueCell] => {
     const cellMeta = cellMetas?.[key] ?? meta;
     const value = diff.values[key];
-    const holds = present(key) && (structural || (columnHasNode(cellMeta, value) && (value != null || !ignored.has(key))));
+    const holds = structural || (present(key) && columnHasNode(cellMeta, value) && (value != null || !ignored.has(key)));
     const held = holds ? value ?? defaultOf(cellMeta) : undefined;
     const shown = holds ? shownValue(held, cellMeta, stringsLanguage) : undefined;
     const resolution = diff.resolutions?.[key];

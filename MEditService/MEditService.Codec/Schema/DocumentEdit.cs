@@ -514,6 +514,14 @@ public sealed class DocumentEdit
         public string? FirstDropped(Document patched, Document written) =>
             SilentSkipGuard.Keeps(At(written.Tree(), _chain), At(patched.Tree(), _chain), _meta, _spelled, out var dropped) ? null : dropped;
 
+        /// <summary>The owner's set break, as <c>Versioning.Break0</c>, that leaves the member the patch
+        /// spelled unheld in <paramref name="patched"/>; null when none does.</summary>
+        public string? BreakLeavingUnheld(Document patched) =>
+            At(patched.Tree(), [.. _chain.SkipLast(1)]) is JsonObject owner
+                ? _meta.UnheldWhen?.FirstOrDefault(entry => entry.Split('.') is [var flags, var flag]
+                    && owner[flags] is JsonArray set && set.Any(name => name?.GetValue<string>() == flag))
+                : null;
+
         private static JsonNode? At(JsonNode root, List<object> chain)
         {
             JsonNode? node = root;

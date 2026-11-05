@@ -21,11 +21,14 @@ public static class UnheldMembers
 
     /// <summary><paramref name="json"/>, the document of <paramref name="graph"/>, without the members its
     /// breaks leave unheld, every other byte as it was.</summary>
-    internal static byte[] Without(byte[] json, object graph)
+    internal static byte[] Without(byte[] json, object graph) => Without(json, _ => graph);
+
+    private static byte[] Without(byte[] json, Func<JsonNode?, object> graphOf)
     {
         if (json.AsSpan().IndexOf(Marker) < 0) return json;
+        var root = JsonNode.Parse(json);
         var unheld = new List<object[]>();
-        Collect(graph, JsonNode.Parse(json), [], unheld);
+        Collect(graphOf(root), root, [], unheld);
         foreach (var path in unheld) json = WithoutMember(json, path);
         return json;
     }
@@ -43,16 +46,14 @@ public static class UnheldMembers
             ? new WrittenOnClose(json =>
             {
                 using var target = inner.GetStreamFor(fileSystem, path, write);
-                target.Write(Without(json, GraphOf(json)));
+                target.Write(Without(json, GraphOf));
             })
             : inner.GetStreamFor(fileSystem, path, write);
 
-        private object GraphOf(byte[] json) =>
-            json.AsSpan().IndexOf(Marker) >= 0
-                && JsonNode.Parse(json)?[RecordMembers.FormKey]?.GetValue<string>() is { } formKey
-                && _records.Value.TryGetValue(formKey, out var record)
-                    ? record
-                    : plugin;
+        private object GraphOf(JsonNode? root) =>
+            root?[RecordMembers.FormKey]?.GetValue<string>() is { } formKey && _records.Value.TryGetValue(formKey, out var record)
+                ? record
+                : plugin;
     }
 
     private sealed class WrittenOnClose(Action<byte[]> written) : MemoryStream
@@ -70,7 +71,6 @@ public static class UnheldMembers
         }
     }
 
-    // The document's members against the object it spells, by member name and element index.
     private static void Collect(object? node, JsonNode? json, object[] path, List<object[]> unheld)
     {
         switch (json)
@@ -113,8 +113,7 @@ public static class UnheldMembers
         return [.. json.AsSpan(0, start), .. json.AsSpan(end)];
     }
 
-    // The bytes the member at path takes with the comma ahead of it: Mutagen writes a class's Versioning
-    // ahead of every member past its breaks. The reader stands on the container that holds path[hop].
+    // Mutagen writes a class's Versioning ahead of every member past its breaks, so a comma precedes each.
     private static (int Start, int End)? Span(ref Utf8JsonReader reader, object[] path, int hop)
     {
         if (reader.TokenType == JsonTokenType.StartObject && path[hop] is string member)

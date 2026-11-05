@@ -6,42 +6,53 @@ namespace MEditService.Codec.Tests.Schema;
 public sealed class VersioningBreakSchemaTests
 {
     [Theory]
-    [InlineData(GameRelease.Fallout4, "Script")]
-    [InlineData(GameRelease.SkyrimSE, "FileName")]
-    [InlineData(GameRelease.Starfield, "Script")]
-    public void AQuestAdaptersFragmentBlock_IsUnheldUnderItsBreak_AndItsScriptsNever(GameRelease release, string fragmentScript)
+    [InlineData(GameRelease.Fallout4, "qust", "VirtualMachineAdapter.ExtraBindDataVersion", "Versioning.Break0")]
+    [InlineData(GameRelease.Fallout4, "qust", "VirtualMachineAdapter.Script", "Versioning.Break0")]
+    [InlineData(GameRelease.Fallout4, "qust", "VirtualMachineAdapter.Fragments", "Versioning.Break0")]
+    [InlineData(GameRelease.Fallout4, "qust", "VirtualMachineAdapter.Aliases", "Versioning.Break0")]
+    [InlineData(GameRelease.Fallout4, "qust", "VirtualMachineAdapter.Scripts", "")]
+    [InlineData(GameRelease.Fallout4, "qust", "VirtualMachineAdapter.Versioning", "")]
+    [InlineData(GameRelease.SkyrimSE, "qust", "VirtualMachineAdapter.ExtraBindDataVersion", "Versioning.Break0")]
+    [InlineData(GameRelease.SkyrimSE, "qust", "VirtualMachineAdapter.FileName", "Versioning.Break0")]
+    [InlineData(GameRelease.SkyrimSE, "qust", "VirtualMachineAdapter.Fragments", "Versioning.Break0")]
+    [InlineData(GameRelease.SkyrimSE, "qust", "VirtualMachineAdapter.Aliases", "Versioning.Break0")]
+    [InlineData(GameRelease.SkyrimSE, "qust", "VirtualMachineAdapter.Scripts", "")]
+    [InlineData(GameRelease.Starfield, "qust", "VirtualMachineAdapter.ExtraBindDataVersion", "Versioning.Break0")]
+    [InlineData(GameRelease.Starfield, "qust", "VirtualMachineAdapter.Script", "Versioning.Break0")]
+    [InlineData(GameRelease.Starfield, "qust", "VirtualMachineAdapter.Fragments", "Versioning.Break0")]
+    [InlineData(GameRelease.Starfield, "qust", "VirtualMachineAdapter.Aliases", "Versioning.Break0")]
+    [InlineData(GameRelease.Starfield, "qust", "VirtualMachineAdapter.Scripts", "")]
+    [InlineData(GameRelease.Fallout4, "cell", "Lighting.FarHeightMid", "Versioning.Break0, Versioning.Break1, Versioning.Break2")]
+    [InlineData(GameRelease.Fallout4, "cell", "Lighting.FogNearScale", "Versioning.Break0, Versioning.Break1")]
+    [InlineData(GameRelease.Fallout4, "cell", "Lighting.NearHeightMid", "Versioning.Break0")]
+    [InlineData(GameRelease.Fallout4, "cell", "Lighting.FogNear", "")]
+    public void AMember_IsUnheldUnderEachBreakItLiesPast(GameRelease release, string table, string path, string breaks)
     {
-        foreach (var member in new[] { "ExtraBindDataVersion", fragmentScript, "Fragments", "Aliases" })
-            Assert.Equal(["Versioning.Break0"], SchemaFields.At(release, "qust", $"VirtualMachineAdapter.{member}").UnheldWhen);
-        Assert.Null(SchemaFields.At(release, "qust", "VirtualMachineAdapter.Scripts").UnheldWhen);
-        Assert.Null(SchemaFields.At(release, "qust", "VirtualMachineAdapter.Versioning").UnheldWhen);
+        Assert.Equal(breaks, string.Join(", ", SchemaFields.At(release, table, path).UnheldWhen ?? []));
     }
 
-    [Fact]
-    public void AMemberPastSeveralBreaks_IsUnheldUnderEachOfThem()
+    public static TheoryData<GameRelease, string> VersionedStructs()
     {
-        Assert.Equal(["Versioning.Break0", "Versioning.Break1", "Versioning.Break2"], SchemaFields.At(GameRelease.Fallout4, "cell", "Lighting.FarHeightMid").UnheldWhen);
-        Assert.Equal(["Versioning.Break0"], SchemaFields.At(GameRelease.Fallout4, "cell", "Lighting.NearHeightMid").UnheldWhen);
-        Assert.Null(SchemaFields.At(GameRelease.Fallout4, "cell", "Lighting.FogNear").UnheldWhen);
+        var rows = new TheoryData<GameRelease, string>();
+        foreach (var release in new[] { GameRelease.Fallout4, GameRelease.SkyrimSE, GameRelease.Starfield })
+        {
+            foreach (var path in SchemaFields.All(release)
+                .Where(found => found.Field.Fields?.Any(member => member is { Name: "Versioning", Type: "flags" }) == true)
+                .Select(found => found.Path)
+                .Distinct(StringComparer.Ordinal))
+                rows.Add(release, path);
+        }
+        return rows;
     }
 
     [Theory]
-    [InlineData(GameRelease.Fallout4)]
-    [InlineData(GameRelease.SkyrimSE)]
-    [InlineData(GameRelease.Starfield)]
-    public void EveryBreakOfEveryStructMutagenVersions_LeavesAMemberUnheld(GameRelease release)
+    [MemberData(nameof(VersionedStructs))]
+    public void EveryBreakOfAStructMutagenVersions_LeavesAMemberUnheld(GameRelease release, string path)
     {
-        var versioned = SchemaFields.All(release)
-            .Where(found => found.Field.Fields?.Any(member => member is { Name: "Versioning", Type: "flags" }) == true)
-            .ToList();
+        var members = SchemaFields.All(release).First(found => found.Path == path).Field.Fields ?? [];
 
-        Assert.NotEmpty(versioned);
-        foreach (var (path, field) in versioned)
-        {
-            var members = field.Fields ?? [];
-            var breaks = members.Single(member => member.Name == "Versioning").EnumMembers.Select(flag => $"Versioning.{flag.Value}").ToList();
-            var unheld = members.SelectMany(member => member.UnheldWhen ?? []).ToHashSet(StringComparer.Ordinal);
-            Assert.True(breaks.TrueForAll(unheld.Contains), $"{path} leaves no member unheld under one of {string.Join(", ", breaks)}");
-        }
+        Assert.Subset(
+            members.SelectMany(member => member.UnheldWhen ?? []).ToHashSet(StringComparer.Ordinal),
+            members.Single(member => member.Name == "Versioning").EnumMembers.Select(flag => $"Versioning.{flag.Value}").ToHashSet(StringComparer.Ordinal));
     }
 }

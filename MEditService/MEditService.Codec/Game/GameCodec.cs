@@ -42,8 +42,6 @@ internal sealed class GameCodec : IGameCodec
 
     public uint NextObjectIdDefault => ModStats.NextFormIDDefault;
 
-    // The door's own stream creator, which deletes what the write did not reach, is taken here so the
-    // documents pass through UnheldMembers on their way to it.
     public async Task SerializeWholeMod(
         IModGetter plugin, string folder, IWorkDropoff workDropoff, CancellationToken cancel,
         IFileSystem? fileSystem = null, ICreateStream? streamCreator = null)

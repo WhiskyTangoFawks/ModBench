@@ -518,6 +518,17 @@ describe('a member the document omits', () => {
     expect(cell?.shown).toBeUndefined();
   });
 
+  it('a row only its children hold keeps its placeholder in every column once one holds it', () => {
+    const owner = struct('Owner', [struct('Inner', [fieldMeta({ name: 'X', type: 'int' })])], true);
+    const ownerDiff = diffNode({
+      fieldName: 'Owner', values: { [MASTER]: {}, [MOD]: null },
+      children: [diffNode({ fieldName: 'Inner', values: { [MASTER]: null, [MOD]: null }, children: [memberDiff('X', null)] })],
+    });
+    const rows = fieldRowsOf(rowsFor(answer([owner], [ownerDiff])));
+
+    expect([MASTER, MOD].map(c => rows.find(r => r.key === 'Owner.Inner')?.cells.get(c)?.holds)).toEqual([true, true]);
+  });
+
   it('a member a break leaves unheld reads as its default in a column that holds it', () => {
     const rows = fieldRowsOf(rowsFor(answer([adapter], [adapterDiff({})])));
 

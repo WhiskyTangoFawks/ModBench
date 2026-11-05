@@ -81,7 +81,9 @@ internal static class RecordTextEdit
         {
             return RecordEditResult.RefusedAt(
                 RecordEditRefusal.CodecDroppedValue, dropped,
-                $"'{dropped}' was not kept by the codec: the record's own class has no member the document can carry it in, so nothing was written.");
+                patch.BreakLeavingUnheld(patched) is { } unheldBy
+                    ? $"'{spelled}' lies past its owner's {unheldBy}, which is set, so the record does not hold it and nothing was written."
+                    : $"'{dropped}' was not kept by the codec: the record's own class has no member the document can carry it in, so nothing was written.");
         }
 
         foreach (var other in request.Schema.RecordColumns)
