@@ -1,6 +1,6 @@
 # Mod Management lives in the extension
 
-Record editing is split across the extension and the C# service. Mod Management is not. It lives in the extension, in TypeScript. That work is file, HTTP and JSON work, which Node does natively. The trees and the status bar are already in the extension. A C# home would be a chatty HTTP API around UI-adjacent bookkeeping. The editing backend stays a pure Mutagen and DuckDB record service.
+Record editing is split across the extension and the C# service. Mod Management is not. It lives in the extension, in TypeScript. That work is file, HTTP and JSON work, which Node does natively. The trees and the status bar are already in the extension. A C# home would be a chatty HTTP API around UI-adjacent bookkeeping. The editing backend stays a Mutagen and DuckDB service. It reads records, and what any archive holds, since its tooling already reads both, so the extension keeps no second archive reader.
 
 ## Consequences
 

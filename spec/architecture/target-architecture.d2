@@ -73,7 +73,7 @@ medit_readmodel: "MEDIT · Read model — the record index, a view over the repo
     store: "Store\nowns: every plugin's rows\nhides: DuckDB" {class: derived}
   }
 }
-modbench_readmodel: "MODBENCH · Read model — the instance value, derived from the Instance adapter by watching, and the mod statuses derived from it, and nothing else" {
+modbench_readmodel: "MODBENCH · Read model — the instance value, derived from the Instance adapter by watching and from what mEdit says each archive holds, and the mod statuses derived from it, and nothing else" {
   class: band; grid-rows: 1
   instanceloader: "Instance loader\nowns: the instance value, recomputed whole on every change" {class: readmodel}
   modstatus: "Mod status\nowns: each mod's status against its manifest,\nderived whole from each instance value" {class: readmodel}
@@ -83,7 +83,7 @@ medit_repositories: "MEDIT · Repositories — the only boxes that read or write
   class: band; grid-rows: 1
   sourceadapter: "Source adapter\nowns: a source mod's folder: plugin source, assets\nand repository\nhides: the layout inside plugin source, and git" {class: repositories}
   pluginadapter: "Plugin adapter\nowns: the plugin files\nhides: the binary format" {class: repositories}
-  modfolderadapter: "Mod folder adapter\nowns: the assets and archives of a source mod's output folder,\nand what each archive its build unpacks holds\nhides: the archive formats" {class: repositories}
+  modfolderadapter: "Mod folder adapter\nowns: the assets and archives of a source mod's output folder,\nand what any archive holds\nhides: the archive formats" {class: repositories}
 }
 modbench_repositories: "MODBENCH · Repositories — the Instance adapter is the one reader and writer of the mod manager's and the publisher's files" {
   class: band; grid-rows: 1

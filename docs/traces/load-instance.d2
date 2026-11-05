@@ -25,6 +25,8 @@ instanceloader -> instanceadapter: "get: the instance's files · the paths to re
 instanceadapter -> instanceloader: "parsed: the game, the profile, the mods and their meta, the load order, the downloaded files, the game folder's plugins and Creation Club list, the game's own files in its Data folder, the sorting rule files, the source folder's repositories" {class: loadorder}
 instanceloader -> manifestadapter: "get: the repository each mod folder's manifest names" {class: loadorder}
 manifestadapter -> instanceloader: "the source mods: each repository by the mod it builds" {class: loadorder}
+instanceloader -> client: "get: what each archive changed since the last read holds" {class: loadorder}
+client -> instanceloader: "each archive's files, or why it cannot be read" {class: loadorder}
 instanceloader."the value, replaced whole"
 instanceloader -> views: "value · the last read's failure, if any" {class: loadorder}
 instanceloader -> activation: value {class: loadorder}
