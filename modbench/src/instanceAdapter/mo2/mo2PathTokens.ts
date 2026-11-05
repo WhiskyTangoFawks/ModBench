@@ -5,7 +5,7 @@ import { mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { errnoCode } from '../../ports/errno';
-import { exists, get, isRepository, makeTempDir, putIfChanged, readOrAbsent, remove, undoAll, write, type Undo } from '../files';
+import { exists, get, isRepository, makeTempDir, putIfChanged, readOrAbsent, remove, undoAll, withLock, write, type Undo } from '../files';
 import { git, gitFed, gitWritingInto } from '../git';
 import type { FileProblems } from '../../ports/fileProblems';
 import { unfilteredFiles } from '../unfilteredFiles';
@@ -184,6 +184,9 @@ const programDirectory = async (instanceRoot: string): Promise<string> =>
 type FilterFolders = Omit<TokenFolders, 'instance'>;
 const NO_FOLDERS: FilterFolders = { game: undefined, downloads: undefined, committedOutsideInstance: [] };
 
+// A write of the programs is several steps, and a follow-up between them would put its own in the gesture's way.
+const programsLock = (instanceRoot: string): string => `${instanceRoot}\0path token programs`;
+
 type Machine = ReadonlyMap<string, string>;
 const NOTHING_OF_MACHINE: Machine = new Map();
 
@@ -314,7 +317,7 @@ async function machineProgramsPut(context: Mo2Context, gameFolder: () => Promise
 export function pathTokensFollowed(context: Mo2Context, gameFolder: () => Promise<GameFolder>, publisherFile: ConfigurationFile | undefined): () => Promise<void> {
   const covered = coveredFiles(publisherFile);
   let followed: string | undefined;
-  return async () => {
+  return () => withLock(programsLock(context.instanceRoot), async () => {
     const { instanceRoot } = context;
     const machine = await machineOf(instanceRoot, covered);
     const values = JSON.stringify([...machine]);
@@ -323,7 +326,7 @@ export function pathTokensFollowed(context: Mo2Context, gameFolder: () => Promis
       await machineProgramsPut(context, gameFolder, covered, await programDirectory(instanceRoot), accountTokens(await get(settingsFile(instanceRoot), '')), machine);
     }
     followed = values;
-  };
+  });
 }
 
 export function mo2PathTokens(context: Mo2Context, gameFolder: () => Promise<GameFolder>, publisherFile: ConfigurationFile | undefined): Mo2PathTokens {
@@ -354,7 +357,7 @@ export function mo2PathTokens(context: Mo2Context, gameFolder: () => Promise<Gam
       if (!(await isRepository(instanceRoot))) return undefined;
       const takeBack: Undo[] = [];
       try {
-        return await written(takeBack);
+        return await withLock(programsLock(instanceRoot), () => written(takeBack));
       } catch (err) {
         throw await undoAll(takeBack.reverse(), err);
       }

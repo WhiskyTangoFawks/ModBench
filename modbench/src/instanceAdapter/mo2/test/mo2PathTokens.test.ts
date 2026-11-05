@@ -232,6 +232,33 @@ describe('the MO2 adapter\'s path tokens', () => {
     });
   });
 
+  it('leaves its filter programs as its own write has them while a reading of the instance waits', async () => {
+    const { root } = await instanceRepository([]);
+    const game = await folder('game');
+    await mkdir(join(game, 'Data'));
+    await put(root, 'profiles/Default/plugins.txt', '');
+    await put(root, 'ModOrganizer.ini', SETTINGS([`path=${onWineDrive(game, '/')}/x.exe`]));
+    const found = { kind: 'found' as const, root: game, dataFolder: join(game, 'Data') };
+    let reading: Promise<unknown> | undefined;
+    let untouched: boolean | undefined;
+    const adapter = managerOver(root, {
+      gameFolder: async () => {
+        if (reading === undefined) {
+          const before = await programsIn(root);
+          reading = adapter.reading();
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          untouched = JSON.stringify(before) === JSON.stringify(await programsIn(root));
+        }
+        return found;
+      },
+    }, PUBLISHER);
+
+    await adapter.writePathTokens();
+    await reading;
+
+    expect(untouched).toBe(true);
+  });
+
   it('takes a file committed before the game folder was found as changed once the game folder is found', async () => {
     const game = await gameFolder();
     const { root } = await instanceRepository([`1\\binary=${onWineDrive(game, '/')}/Fallout4.exe`]);
