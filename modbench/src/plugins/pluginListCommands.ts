@@ -9,7 +9,7 @@ import {
 import type { RowOf } from '../drivingLib/gestureEntry';
 import { viewCopyValueText } from '../drivingLib/copyValue';
 import { placeFolder, pluginPlaces } from './pluginPlaces';
-import { OVERWRITE_ORIGIN, type PluginAddress } from '../wire/pluginAddress';
+import { OVERWRITE_ORIGIN, type PluginAddress, type PluginPlace } from '../wire/pluginAddress';
 import { OVERWRITE_LABEL } from '../instanceLoader/fileConflictIndex';
 import { argumentOfKind, registerAgentGesture, type AgentCall, type AgentGesture } from '../drivingLib/agentGesture';
 import { runWritingGesture } from '../drivingLib/writingGesture';
@@ -92,11 +92,13 @@ interface NewPlugin {
   readonly sourceFolder?: string;
 }
 
-function placed(value: Pick<InstanceValue, 'mods' | 'paths' | 'entryKey'>, name: string, { origin, label }: { origin: string; label: string }): NewPlugin | string {
-  const where = placeFolder(value, origin);
-  if ('lost' in where) return `${lostPlace(origin, where.lost)}, so "${name}" was not created.`;
-  const { folder, sourceFolder } = where;
+function newPlugin(name: string, { origin, label }: { origin: string; label: string }, { folder, sourceFolder }: PluginPlace): NewPlugin {
   return { plugin: { name, origin }, label, folder, ...(sourceFolder == null ? {} : { sourceFolder }) };
+}
+
+function placed(value: Pick<InstanceValue, 'mods' | 'paths' | 'entryKey'>, name: string, at: { origin: string; label: string }): NewPlugin | string {
+  const where = placeFolder(value, at.origin);
+  return 'lost' in where ? `${lostPlace(at.origin, where.lost)}, so "${name}" was not created.` : newPlugin(name, at, where);
 }
 
 interface CreateOptions {
@@ -142,16 +144,16 @@ export function registerCreatePluginCommand(
     fromAgent: (call) => {
       const { name } = call.options;
       const { origin, label } = placeOf(call);
-      if (pluginPlaces(instance.value, name).every((place) => place.name !== origin)) {
-        if (origin === OVERWRITE_ORIGIN) {
-          const unread = placed(instance.value, name, { origin, label });
-          if (typeof unread === 'string') throw new Refusal(unread);
-        }
-        throw new Refusal(`"${label}" is not an enabled mod or Overwrite that lacks "${name}".`);
+      const where = placeFolder(instance.value, origin);
+      if ('lost' in where) {
+        throw new Refusal(where.lost === 'disabled'
+          ? `"${label}" is not enabled, so "${name}" was not created.`
+          : `${lostPlace(origin, where.lost)}, so "${name}" was not created.`);
       }
-      const made = placed(instance.value, name, { origin, label });
-      if (typeof made === 'string') throw new Refusal(made);
-      return made;
+      if (pluginPlaces(instance.value, name).every((place) => place.name !== where.name)) {
+        throw new Refusal(`"${label}" already holds "${name}".`);
+      }
+      return newPlugin(name, { origin, label }, where);
     },
     run: ({ plugin, folder, sourceFolder }) => runWritingGesture('modbench.plugin.create', PLUGINS_KEY_ARGS.view, instance, async () => {
       const result = await client.createPlugin(plugin, folder, sourceFolder);
