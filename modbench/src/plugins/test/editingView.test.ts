@@ -9,7 +9,7 @@ type Sent = Extract<PutLoadOrderResult, { sent: true }>;
 type Outcome = Sent['outcome'];
 
 const STATUS = {
-  totalPlugins: 1, activePlugins: 1, version: 7, indexedPlugins: [], conflictsComputed: true, holdsNone: false, failures: [],
+  totalPlugins: 1, activePlugins: 1, version: 7, indexedPlugins: [], conflictsComputed: true, holdsNone: false, validating: false, failures: [],
 };
 const SNAPSHOT: Sent['snapshot'] = {
   plugins: [], active: [], loadedWithNoLine: [], archives: [], stringsFiles: [], places: [],

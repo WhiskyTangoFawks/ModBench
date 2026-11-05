@@ -288,7 +288,7 @@ describe('the Plugins view\'s selection and the highlight (plugins.md, The highl
 });
 
 const APPLIED_STATUS: LoadOrderProgress = {
-  totalPlugins: 3, activePlugins: 3, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, failures: [],
+  totalPlugins: 3, activePlugins: 3, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, validating: false, failures: [],
 };
 
 function snapshotOf(...names: string[]): LoadOrderSnapshot {

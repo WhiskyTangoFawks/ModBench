@@ -74,5 +74,6 @@ public sealed class InvalidatedIndexFileTests : IDisposable
 
     private LoadOrderState? Answered(int before) =>
         _notifications.Since(before).OfType<LoadOrderStatusNotification>()
+            .Where(n => !n.Status.Validating)
             .Select(n => (LoadOrderState?)n.Status.State).LastOrDefault(state => state is LoadOrderState.Ready or LoadOrderState.Failed);
 }
