@@ -49,6 +49,12 @@ public sealed class IdenticalCopiesTests
         MajorRecordFlagsRaw = PartialFormBit,
     };
 
+    private static Quest ScriptedQuest() => new(Record, Fallout4Release.Fallout4)
+    {
+        EditorID = "Scripted",
+        VirtualMachineAdapter = new QuestAdapter { Version = 6, ObjectFormat = 2 },
+    };
+
     private static readonly Dictionary<string, (Copies Copies, bool Identical)> Cases = new()
     {
         ["a copy that differs only in its version stamps"] = (new(Item, copy =>
@@ -64,6 +70,8 @@ public sealed class IdenticalCopiesTests
         ["a copy that drops a member its master holds"] = (new(Item, copy => ((MiscItem)copy).Name = null), false),
         ["a copy that changes a field it hands to its template"] = (new(TemplatedNpc, copy => ((Npc)copy).Race.SetTo(B)), true),
         ["a Partial Form copy that changes its own field"] = (new(PartialCell, copy => ((Cell)copy).WaterHeight = 5f), true),
+        ["a copy whose break leaves unheld a member its master holds at its default"] = (new(ScriptedQuest, copy =>
+            ((Quest)copy).VirtualMachineAdapter.Require().Versioning = QuestAdapter.VersioningBreaks.Break0), false),
     };
 
     private static readonly Dictionary<string, Spelling> SpelledCases = new()
@@ -98,6 +106,7 @@ public sealed class IdenticalCopiesTests
             case Weather weather: ((IMod)mod).GetTopLevelGroup<Weather>().Set(weather); break;
             case Npc npc: mod.Npcs.Add(npc); break;
             case Faction faction: mod.Factions.Add(faction); break;
+            case Quest quest: mod.Quests.Add(quest); break;
             default: throw new ArgumentException($"No group here holds a {record.GetType().Name}.", nameof(record));
         }
     }
