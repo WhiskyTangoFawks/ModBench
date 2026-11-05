@@ -179,6 +179,7 @@ describe('the MO2 adapter\'s path tokens', () => {
     it.each([
       ['a blanked value', PUBLISHER_FILE, () => JSON.stringify({ Source: '{x}', Output: 'C:\\out\\list.out' })],
       ['a dropped section', 'ModOrganizer.ini', () => SETTINGS([...RECENT, '[Settings]', 'style=dark'])],
+      ['a dropped section at the end', 'ModOrganizer.ini', () => SETTINGS(['[Settings]', 'style=dark', ...RECENT])],
     ])('puts %s back on checkout as this machine\'s own', async (_what, file, text) => {
       const { root, adapter } = await instanceRepository([]);
       await put(root, file, text());

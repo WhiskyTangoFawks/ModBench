@@ -72,7 +72,8 @@ function recentDirectoriesDropped(thisMachine: string): TokenProgram {
   const start = lines.findIndex((line) => line.startsWith(RECENT_DIRECTORIES));
   if (start === -1) return { clean, smudge: [] };
   const length = lines.slice(start + 1).findIndex((line) => line.startsWith('['));
-  const section = lines.slice(start, length === -1 ? undefined : start + 1 + length);
+  const toFileEnd = lines.at(-1) === '' ? -1 : undefined;
+  const section = lines.slice(start, length === -1 ? toFileEnd : start + 1 + length);
   const next = length === -1 ? undefined : lines[start + 1 + length]?.replace(/\r$/, '');
   const noted = String.raw`/^\[recentDirectories\]/h`;
   const atEnd = insertedOnce('$', 'a', section);
