@@ -28,9 +28,8 @@ interface ModUpdated {
   readonly otherBytes: readonly string[];
 }
 
-/** What update manifest answers. `cancelled`: the signal aborted, so the landed mods are those before it. `manifestWritten`
- *  is false when a manifest already was so, and `repositoryWritten` when the mod's `.gitmodules` entry and ignore lines were;
- *  `notInPackage` and `otherBytes` name the files no package holds. */
+/** What update manifest answers. `cancelled`: the signal aborted, so the landed mods are those before it.
+ *  `manifestWritten` and `repositoryWritten` are false when the manifest, and the mod's `.gitmodules` entry and ignore lines, already were so. */
 export interface UpdateManifestResult {
   readonly cancelled?: true;
   readonly landed: readonly ModUpdated[];

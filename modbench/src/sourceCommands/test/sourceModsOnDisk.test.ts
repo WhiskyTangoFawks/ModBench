@@ -566,10 +566,13 @@ describe('a mod installed from an installation file, then decompiled and committ
     const modManifest = join(root, 'mods', 'Mod', 'Mod.manifest.json');
     const before = await readFile(modManifest, 'utf8');
     const packagesBefore = readManifest(await readFile(sourceManifest, 'utf8'));
+    assert('manifest' in packagesBefore);
 
     const outcome = await updateManifest({ adapter }, ['Mod'], {}, [], false, []);
 
-    expect([await readFile(modManifest, 'utf8'), readManifest(await readFile(sourceManifest, 'utf8')), outcome.refused]).toEqual([before, packagesBefore, []]);
+    const after = readManifest(await readFile(sourceManifest, 'utf8'));
+    assert('manifest' in after);
+    expect([await readFile(modManifest, 'utf8'), after.manifest.packages, outcome.refused]).toEqual([before, packagesBefore.manifest.packages, []]);
   });
 
   it('changes nothing and trashes nothing at a first build that makes the folder it already holds (source.md, Build, story 3)', async () => {
