@@ -20,6 +20,9 @@ As a user, I want:
 10. Each reply to my agent to be concise, so it is token efficient. Cites: Minimal by default; Never silently wrong
 11. My agent to read Nexus itself where Nexus needs no key, and to learn from Modbench how. Cites: story 6
 12. My agent to learn from Modbench that a FOMOD's choices are mine, so it names only choices I made or gave it to make, and otherwise puts them to me. Cites: story 6
+13. My agent to understand that Modbench is modding with software development practice, so that it works as Modbench intends even before I know how Modbench applies that practice. Cites: story 6; Existing tools
+14. My agent to understand what Modbench does to the instance automatically, and what follows a change I make by hand, so that a change it did not make does not surprise it. Cites: story 6; ADR-0003; ADR-0015
+15. My agent to treat modding folklore with appropriate skepticism, and make decisions based on evidence and official documentation, so that folklore and knowledge from other games doesn't cause a wrong decision. Cites: story 6; Never silently wrong
 
 ## Names
 
