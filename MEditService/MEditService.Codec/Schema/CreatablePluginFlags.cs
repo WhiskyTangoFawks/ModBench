@@ -11,11 +11,11 @@ public readonly record struct HeaderFlag
     public static readonly HeaderFlag Small = new("Small");
     public static readonly HeaderFlag Medium = new("Medium");
 
-    public static IReadOnlyList<HeaderFlag> All { get; } = [Master, Small, Medium];
+    internal static IReadOnlyList<HeaderFlag> All { get; } = [Master, Small, Medium];
 
     private HeaderFlag(string name) => Name = name;
 
-    public string Name { get; }
+    internal string Name { get; }
 
     public override string ToString() => Name;
 }
