@@ -252,12 +252,14 @@ class HttpMEditClient implements MEditClient {
     return isRefused(answer) ? answer : spec.outcome(answer);
   }
 
-  async createPlugin(plugin: PluginAddress, folder: string, sourceFolder: string | undefined): Promise<PluginAddress | WriteRefused> {
+  async createPlugin(
+    plugin: PluginAddress, folder: string, sourceFolder: string | undefined, flags: readonly string[] | undefined,
+  ): Promise<PluginAddress | WriteRefused> {
     const failMsg = `Could not create "${plugin.name}"`;
     const answer = await this.mutate({
       op: `createPlugin(${plugin.name}, ${plugin.origin})`,
       failMsg,
-      post: () => this.apiClient.POST('/plugins/create', { body: { origin: plugin.origin, name: plugin.name, folder, sourceFolder } }),
+      post: () => this.apiClient.POST('/plugins/create', { body: { origin: plugin.origin, name: plugin.name, folder, sourceFolder, flags: flags === undefined ? undefined : [...flags] } }),
     });
     return answer;
   }
@@ -660,6 +662,10 @@ class HttpMEditClient implements MEditClient {
 
   getCreatablePluginExtensions(): Promise<string[] | ReadFailed> {
     return this.read('getCreatablePluginExtensions', (api, signal) => api.GET('/plugins/creatable-extensions', { signal }), (data) => data ?? [], { timed: true });
+  }
+
+  getCreatablePluginFlags(name: string): Promise<string[][] | ReadFailed> {
+    return this.read('getCreatablePluginFlags', (api, signal) => api.GET('/plugins/creatable-flags', { params: { query: { name } }, signal }), (data) => data ?? [], { timed: true });
   }
 
   getRecords({ name: plugin, origin }: PluginAddress, type: string, offset: number, limit: number): Promise<RecordPage | ReadFailed> {

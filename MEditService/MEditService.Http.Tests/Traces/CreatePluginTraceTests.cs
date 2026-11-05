@@ -21,7 +21,7 @@ public sealed class CreatePluginTraceTests : HostedTests
     }
 
     private static Task<HttpResponseMessage> Create(HttpClient client, string name, string folder) =>
-        client.PostAsJsonAsync("/plugins/create", new { origin = Origin, name, folder });
+        client.PostAsJsonAsync("/plugins/create", new { origin = Origin, name, folder, flags = Array.Empty<string>() });
 
     [Fact]
     public async Task CreatingAPluginInASourceMod_LandsItsSourceInTheSourceFolderTheRequestNames()
@@ -33,7 +33,7 @@ public sealed class CreatePluginTraceTests : HostedTests
         foreach (var entry in new[] { ".git", ".gitignore", "build.json", "plugin-source" })
             Directory.Move(Path.Combine(folder, entry), Path.Combine(sourceFolder, entry));
 
-        var created = await Client.PostAsJsonAsync("/plugins/create", new { origin = Origin, name = "New.esp", folder, sourceFolder });
+        var created = await Client.PostAsJsonAsync("/plugins/create", new { origin = Origin, name = "New.esp", folder, sourceFolder, flags = Array.Empty<string>() });
 
         created.EnsureSuccessStatusCode();
         Assert.True(Directory.Exists(PluginSourceRoot.In(sourceFolder, "New.esp")));

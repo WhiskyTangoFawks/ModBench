@@ -73,4 +73,13 @@ public sealed class SuccessStatusApiTests(LoadedApiFixture<TestPluginFixture> lo
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal([".esm", ".esl", ".esp"], (await response.Body()).EnumerateArray().Select(e => e.GetString()));
     }
+
+    [Fact]
+    public async Task GetCreatablePluginFlags_Is200_NamingTheCombinationsOfTheExtension()
+    {
+        var response = await Client.GetAsync(new Uri("/plugins/creatable-flags?name=Any.esl", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(["Master", "Small"], Assert.Single((await response.Body()).EnumerateArray()).EnumerateArray().Select(e => e.GetString()));
+    }
 }

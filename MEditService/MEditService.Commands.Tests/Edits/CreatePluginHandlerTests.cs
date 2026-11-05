@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using MEditService.Codec.Schema;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -6,6 +7,7 @@ using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -27,7 +29,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
     private string ModFolder(string name) => Directory.CreateDirectory(Path.Combine(_data.DataFolder, name)).FullName;
 
     private Task<Answer<PluginAddress, PluginCreateRefused>> Create(string name, string folder, string origin) =>
-        Handler.CreatePlugin(new PluginAddress(name, origin), folder, origin == LoadOrderEntry.OverwriteOrigin ? null : folder);
+        Handler.CreatePlugin(new PluginAddress(name, origin), folder, origin == LoadOrderEntry.OverwriteOrigin ? null : folder, []);
 
     [Fact]
     public async Task CreatePlugin_WritesTheFileInTheFolder_AndAnswersNoRefusal()
@@ -112,7 +114,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
         var folder = await SourceModWith("FailingMod", "First.esp");
         var adapter = new SourceUnreadableAdapter();
 
-        var result = (await TestEditService.PluginCreateHandler(_holder, adapter).CreatePlugin(new PluginAddress("Second.esp", "FailingMod"), folder, folder)).Refused();
+        var result = (await TestEditService.PluginCreateHandler(_holder, adapter).CreatePlugin(new PluginAddress("Second.esp", "FailingMod"), folder, folder, [])).Refused();
 
         Assert.Equal(PluginCreateRefusal.WriteFailed, result.Refusal);
         Assert.Contains("Second.esp", result.Message, StringComparison.Ordinal);
@@ -156,7 +158,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
         var created = Path.Combine(folder, "Second.esp");
         var adapter = new SourceUnreadableAdapter { Before = () => File.WriteAllText(created, "another tool's file") };
 
-        var result = (await TestEditService.PluginCreateHandler(_holder, adapter).CreatePlugin(new PluginAddress("Second.esp", "ChangedMod"), folder, folder)).Refused();
+        var result = (await TestEditService.PluginCreateHandler(_holder, adapter).CreatePlugin(new PluginAddress("Second.esp", "ChangedMod"), folder, folder, [])).Refused();
 
         Assert.Equal(PluginCreateRefusal.WriteFailed, result.Refusal);
         Assert.Contains("left in", result.Message, StringComparison.Ordinal);
@@ -171,7 +173,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
         var takeBackFailure = PluginFailures.Inaccessible();
         var adapter = new SourceUnreadableAdapter { TakeBackFailure = takeBackFailure };
 
-        var result = (await TestEditService.PluginCreateHandler(_holder, adapter).CreatePlugin(new PluginAddress("Second.esp", "LockedMod"), folder, folder)).Refused();
+        var result = (await TestEditService.PluginCreateHandler(_holder, adapter).CreatePlugin(new PluginAddress("Second.esp", "LockedMod"), folder, folder, [])).Refused();
 
         Assert.Equal(PluginCreateRefusal.WriteFailed, result.Refusal);
         Assert.Contains(adapter.Unread.Reason, result.Message, StringComparison.Ordinal);
@@ -274,32 +276,70 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Assert.EndsWith(expected, result.Message, StringComparison.Ordinal);
     }
 
-    [Theory]
-    [InlineData("Plain.esp")]
-    [InlineData("Master.esm")]
-    public async Task CreatePlugin_AFullPluginInAReleaseWithoutLightPlugins_IsWritten(string name)
-    {
-        var folder = ModFolder("FullMod");
-        var adapter = new WritesAsFallout4Adapter();
-
-        var result = await HandlerIn(GameRelease.Oblivion, adapter).CreatePlugin(new PluginAddress(name, "FullMod"), folder, folder);
-
-        result.Created();
-        Assert.Equal([GameRelease.Oblivion], adapter.Asked);
-        Assert.True(File.Exists(Path.Combine(folder, name)));
-    }
-
     [Fact]
     public async Task CreatePlugin_WhenTheFileSystemRefusesTheWrite_RefusesWithItsWords()
     {
         var failure = PluginFailures.Inaccessible();
         var adapter = new FailingWriteAdapter(failure);
 
-        var result = (await HandlerIn(GameRelease.Fallout4, adapter).CreatePlugin(new PluginAddress("Full.esp", "FullMod"), ModFolder("FullMod"), ModFolder("FullMod"))).Refused();
+        var result = (await HandlerIn(GameRelease.Fallout4, adapter).CreatePlugin(new PluginAddress("Full.esp", "FullMod"), ModFolder("FullMod"), ModFolder("FullMod"), [])).Refused();
 
         Assert.Equal(PluginCreateRefusal.WriteFailed, result.Refusal);
         Assert.Contains("Full.esp", result.Message, StringComparison.Ordinal);
         Assert.Contains(failure.Reason, result.Message, StringComparison.Ordinal);
+    }
+
+    private static IModFlagsGetter Header(string folder, string name) =>
+        ModFactory.ImportGetter(new ModPath(ModKey.FromFileName(name), Path.Combine(folder, name)), GameRelease.Fallout4);
+
+    [Fact]
+    public async Task CreatePlugin_AnEspWithFlagsPicked_WritesThemInTheHeader()
+    {
+        var folder = ModFolder("FlagsMod");
+
+        (await Handler.CreatePlugin(new PluginAddress("Small.esp", "FlagsMod"), folder, folder, ["Small"])).Created();
+
+        var header = Header(folder, "Small.esp");
+        Assert.Equal((false, true), (header.IsMaster, header.IsSmallMaster));
+    }
+
+    [Fact]
+    public async Task CreatePlugin_AnEslWithNoFlags_TakesTheOneCombinationItsExtensionImplies()
+    {
+        var folder = ModFolder("EslMod");
+
+        (await Handler.CreatePlugin(new PluginAddress("Light.esl", "EslMod"), folder, folder)).Created();
+
+        var header = Header(folder, "Light.esl");
+        Assert.Equal((true, true), (header.IsMaster, header.IsSmallMaster));
+    }
+
+    [Fact]
+    public async Task CreatePlugin_AnEspWithNoFlags_IsRefusedNamingFlags_AndWritesNothing()
+    {
+        var folder = ModFolder("NeedMod");
+
+        var result = (await Handler.CreatePlugin(new PluginAddress("Plain.esp", "NeedMod"), folder, folder)).Refused();
+
+        Assert.Equal(PluginCreateRefusal.FlagsNeeded, result.Refusal);
+        Assert.Contains("flags", result.Message, StringComparison.Ordinal);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(folder));
+    }
+
+    [Theory]
+    [InlineData("Plain.esl", new string[0])]
+    [InlineData("Plain.esp", new[] { "Medium" })]
+    [InlineData("Plain.esp", new[] { "Bogus" })]
+    [InlineData("Plain.esp", new[] { "1" })]
+    [InlineData("Plain.esp", new[] { "small" })]
+    public async Task CreatePlugin_FlagsTheExtensionDoesNotOffer_AreRefused_AndWriteNothing(string name, string[] flags)
+    {
+        var folder = ModFolder("NotOfferedMod");
+
+        var result = (await Handler.CreatePlugin(new PluginAddress(name, "NotOfferedMod"), folder, folder, flags)).Refused();
+
+        Assert.Equal(PluginCreateRefusal.FlagsNotOffered, result.Refusal);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(folder));
     }
 
     private CreatePluginHandler HandlerIn(GameRelease release, IPluginAdapter? adapter = null)
@@ -311,18 +351,8 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
     private sealed class FailingWriteAdapter(PluginFailure failure) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
-        public override Task<Answer<EmptyPluginCreated, PluginFailure>> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease) =>
+        public override Task<Answer<EmptyPluginCreated, PluginFailure>> CreateAndWriteAsync(
+            ModKey modKey, string folder, GameRelease gameRelease, IReadOnlyCollection<HeaderFlag> flags) =>
             Task.FromResult<Answer<EmptyPluginCreated, PluginFailure>>(failure);
-    }
-
-    private sealed class WritesAsFallout4Adapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())
-    {
-        public List<GameRelease> Asked { get; } = [];
-
-        public override Task<Answer<EmptyPluginCreated, PluginFailure>> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease)
-        {
-            Asked.Add(gameRelease);
-            return base.CreateAndWriteAsync(modKey, folder, GameRelease.Fallout4);
-        }
     }
 }

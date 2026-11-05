@@ -114,10 +114,11 @@ public interface IPluginAdapter
     Task<Answer<PluginByteComparison, PluginFailure>> CompareBytesAsync(
         string originalPath, string recompiledPath, LoadOrderSnapshot loadOrder, CancellationToken cancel = default);
 
-    /// <summary>A new plugin in <paramref name="folder"/>: a header whose flags the extension alone
-    /// sets, no records and no masters. Written whole or not at all, into no folder it made and over
+    /// <summary>A new plugin in <paramref name="folder"/>: a header flagged as <paramref name="flags"/> say,
+    /// no records and no masters. Written whole or not at all, into no folder it made and over
     /// no file.</summary>
-    Task<Answer<EmptyPluginCreated, PluginFailure>> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease);
+    Task<Answer<EmptyPluginCreated, PluginFailure>> CreateAndWriteAsync(
+        ModKey modKey, string folder, GameRelease gameRelease, IReadOnlyCollection<HeaderFlag> flags);
 
     /// <summary>Where <see cref="CreateAndWriteAsync"/> puts the plugin.</summary>
     string PathOfEmpty(ModKey modKey, string folder);
