@@ -142,15 +142,11 @@ export function registerCreatePluginCommand(
     fromAgent: (call) => {
       const { name } = call.options;
       const { origin, label } = placeOf(call);
-      if (pluginPlaces(instance.value, name).every((place) => place.name !== origin)) {
-        if (origin === OVERWRITE_ORIGIN) {
-          const unread = placed(instance.value, name, { origin, label });
-          if (typeof unread === 'string') throw new Refusal(unread);
-        }
-        throw new Refusal(`"${label}" is not an enabled mod or Overwrite that lacks "${name}".`);
-      }
       const made = placed(instance.value, name, { origin, label });
       if (typeof made === 'string') throw new Refusal(made);
+      if (pluginPlaces(instance.value, name).every((place) => place.name !== origin)) {
+        throw new Refusal(`"${label}" already holds "${name}".`);
+      }
       return made;
     },
     run: ({ plugin, folder, sourceFolder }) => runWritingGesture('modbench.plugin.create', PLUGINS_KEY_ARGS.view, instance, async () => {

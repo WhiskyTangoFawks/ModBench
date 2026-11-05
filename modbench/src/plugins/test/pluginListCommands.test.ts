@@ -323,8 +323,8 @@ describe('modbench.plugin.create, called by the agent', () => {
   });
 
   it.each([
-    ['a place that is not an enabled mod', place('Disabled Mod'), {}, '"Disabled Mod" is not an enabled mod or Overwrite that lacks "MyPatch.esp".'],
-    ['a place that already holds the name', place('Holding Mod'), {}, '"Holding Mod" is not an enabled mod or Overwrite that lacks "MyPatch.esp".'],
+    ['a place that is not an enabled mod', place('Disabled Mod'), {}, 'The mod "Disabled Mod" was disabled, so "MyPatch.esp" was not created.'],
+    ['a place that already holds the name', place('Holding Mod'), {}, '"Holding Mod" already holds "MyPatch.esp".'],
     ['an Overwrite whose folder is unread', place('overwrite/'), { overwriteDir: undefined }, 'Overwrite has no folder yet, so "MyPatch.esp" was not created.'],
   ])('refuses %s, creating nothing', async (_what, call, paths, reason) => {
     const { client, answer } = invokeAgent(call, undefined, paths);

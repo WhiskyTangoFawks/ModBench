@@ -5,6 +5,7 @@ import { isPluginSourcePath, type InstanceAdapter } from '../instanceAdapter/ins
 import {
   buildFileIn, exclusionsOf, manifestIn, sourceModsOf, type BuildFile, type SourceMods,
 } from '../manifestAdapter/manifestAdapter';
+import { BUILD_FILE } from '../wire/sourceMod';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
@@ -50,10 +51,12 @@ async function heldBuildFile(sourceFolder: string): Promise<BuildFile | { readon
   }
 }
 
-// A manifest that cannot be read names no repository, and says why.
+// A manifest that cannot be read names no repository, and says why; a build file the instance repository lacks says to stage it.
 async function noRepository(folder: string | undefined): Promise<string> {
   const held = folder === undefined ? undefined : await manifestIn(folder).catch(() => undefined);
-  return held !== undefined && 'refused' in held ? `was not built: ${held.refused}.` : 'no repository in the source folder builds it';
+  if (held !== undefined && 'refused' in held) return `was not built: ${held.refused}.`;
+  const buildFile = folder === undefined ? undefined : await buildFileIn(folder).catch(() => undefined);
+  return buildFile === undefined ? 'no repository in the source folder builds it' : `its ${BUILD_FILE} is not staged in the instance repository: stage it.`;
 }
 
 // mods.md, A source mod, story 2: the build keeps the exclusions the folder holds, and those its manifest records, and the
