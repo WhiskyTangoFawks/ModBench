@@ -25,6 +25,7 @@ As a user, I want:
 5. No INI and no save of the profile's own. Cites: ADR-0025
 6. No gesture to run the game. Cites: ADR-0025; Existing tools
 7. Deploy as a task, which fails on each warning that the game gets something the load order does not hold: a file left out because its path holds a file deploy did not write, a file left out because another file the game gets folds to its path, and no `plugins.txt` written. My chain then stops before the game starts. A file deploy renamed to remove, and could not then delete, gives the game nothing to read, so it is named in the Output and does not fail the task. Cites: commands.md, A task is an entry point for a chain; Never silently wrong
+8. Every other gesture to be as quick after a deploy or a purge as it was before. Cites: Usable first
 
 ## plugins.txt
 

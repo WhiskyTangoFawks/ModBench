@@ -1,6 +1,8 @@
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
+using Mutagen.Bethesda;
 
 namespace MEditService.RecordIndex.Tests.Query;
 
@@ -12,6 +14,8 @@ public sealed class SelectReadMemoryTests : IDisposable
     private const int CopiedRecords = 5;
     private const int NameLength = 2_000;
     private const string MemoryLimit = "64MB";
+    private const long SpillingLimit = 250_000_000;
+    private const int SpillingRecords = 200_000;
 
     private readonly PluginFixtureData _fixture = new PluginFixtureBuilder("select-read-memory")
         .WithPlugin(Master).WithPlugin(Copies).Build();
@@ -38,5 +42,17 @@ public sealed class SelectReadMemoryTests : IDisposable
             """).Value().Rows;
 
         Assert.Equal(CopiedRecords, rows.Length);
+    }
+
+    [Fact]
+    public void ASelectThatMustSpillToAnswer_AnswersUnderTheRecordIndexsMemoryLimit()
+    {
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, new MadeUpAdapter((Master, () => Items(SpillingRecords))), memoryLimit: SpillingLimit);
+        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+
+        var rows = index.Queries.SelectRows("SELECT count(*) AS n FROM records a JOIN records b ON b.form_key = a.form_key AND b.body = a.body WHERE a.record_type = 'misc'").Value().Rows;
+
+        Assert.Equal(SpillingRecords, rows.Single().GetProperty("n").GetInt32());
     }
 }

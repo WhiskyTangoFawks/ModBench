@@ -112,7 +112,7 @@ public sealed class StoreRebuildTests : IDisposable
 
     private const string MatchesNpcA = "SELECT form_key FROM npc_ WHERE editor_id = 'NpcA'";
 
-    private const string SlowlyMatchesNpcA = MatchesNpcA + " UNION ALL SELECT NULL FROM range(1) WHERE (SELECT sum(range % 7) FROM range(200000000)) < 0";
+    private const string SlowlyMatchesNpcA = MatchesNpcA + " UNION ALL SELECT NULL FROM range(1) WHERE (SELECT sum(range % 7) FROM range(70000000)) < 0";
 
     private static PluginFixtureData NpcAAndNpcOtherInAespAndNpcBInBespFixture(string name) => new PluginFixtureBuilder(name)
         .WithPlugin("A.esp", mod => { mod.Npcs.AddNew("NpcA"); mod.Npcs.AddNew("NpcOther"); })
