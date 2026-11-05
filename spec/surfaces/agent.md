@@ -74,3 +74,4 @@ As a user, I want:
 2. A request from my agent never to open a picker, a prompt or a confirmation, except the installer it asks for (Gestures, story 8). A request that leaves out an Option the gesture needs is refused, and the refusal names the Option. Cites: commands.md, The entry point supplies what it knows
 3. My agent to get each gesture's outcome, so its next step builds on what landed.
 4. A refusal that a gesture clears to name that gesture, such as version in git for a plugin with no plugin source. Cites: Any agent, story 6
+5. My agent's request for a gesture that runs long to tell my agent it is still working, so my agent waits for the outcome rather than giving up. Cites: story 3; Usable first
