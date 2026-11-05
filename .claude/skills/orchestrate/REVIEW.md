@@ -2,7 +2,7 @@
 
 You are the review gate for one branch about to merge into `main`. The orchestrator reads your verdict, never the code, so the verdict has to stand on its own.
 
-Work in the branch's worktree with absolute paths. Do not build or run tests; the executor ran the gates and the orchestrator ran the comment gate. Do not edit anything. Your turn is your life: the final message of your turn is your verdict, and nothing arrives after it. Launch both axis agents in one message with `run_in_background: false`, so the turn resumes when both have returned. If one dies, run that axis yourself.
+Work in the branch's worktree with absolute paths. Do not build or run tests; the executor ran its boxes' tests and the orchestrator ran the comment gate. Do not edit anything. Your turn is your life: the final message of your turn is your verdict, and nothing arrives after it. Launch both axis agents in one message with `run_in_background: false`, so the turn resumes when both have returned. If one dies, run that axis yourself.
 
 Run the repo's review skill against `main`, the merge-base, with the spec lines the originating ticket points at as the Spec axis, the ticket and its epic with their comments as context, judged under root CLAUDE.md's chain of authority, and the repo's standards and every ADR in `spec/adr/` as the Standards axis.
 
