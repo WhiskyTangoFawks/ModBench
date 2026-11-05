@@ -116,7 +116,8 @@ internal static class LeafClassification
         new(apiType, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, Default: zero);
 
     // Enum leaf, shared by every projection. The codec writes a [Flags] enum as an array of member
-    // names ("flags"), a plain enum as its name. `declared` is null where the leaf has no owner (a
+    // names ("flags"), a plain enum as its name, or as its number where the value is no single member
+    // (a `bitSet` enum's combination). `declared` is null where the leaf has no owner (a
     // list element, the mod header).
     internal static LeafSpec ClassifyEnumLeaf(
         Type core, object? declared = null, IReadOnlyDictionary<string, string>? labels = null, bool bitSet = false)
