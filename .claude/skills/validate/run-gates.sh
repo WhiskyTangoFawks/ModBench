@@ -33,6 +33,10 @@ $DETACH && exec bash "$DETACHED_SH" start "$GATE_NAME" bash "$0" "${GATE_ARGS[@]
 changed_since_main() {
   local base
   base=$(git -C "$ROOT" merge-base main HEAD) || return
+  if [[ $base == "$(git -C "$ROOT" rev-parse HEAD)" ]] && git -C "$ROOT" diff --quiet "$base"; then
+    git -C "$ROOT" ls-files && git -C "$ROOT" ls-files --others --exclude-standard
+    return
+  fi
   git -C "$ROOT" diff --name-only --no-renames "$base" && git -C "$ROOT" ls-files --others --exclude-standard
 }
 

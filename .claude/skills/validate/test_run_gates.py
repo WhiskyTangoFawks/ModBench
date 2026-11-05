@@ -81,5 +81,32 @@ class InTheSlot(unittest.TestCase):
         self.assertIn("=== Gate 1", run.stdout)
 
 
+class OnMain(unittest.TestCase):
+    def setUp(self):
+        self.repo = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.repo)
+        self.validate = pathlib.Path(self.repo, ".claude/skills/validate")
+        self.validate.mkdir(parents=True)
+        shutil.copy(SCRIPT, self.validate)
+        shutil.copy(SCRIPT.parent / "select_gates.py", self.validate)
+        (self.validate / "slot-run.sh").write_text('echo "slot-run: $*"\n')
+        for path in ("MEditService/Core/a.cs", "modbench/src/a.ts", "scripts/a.py", "spec/a.d2"):
+            file = pathlib.Path(self.repo, path)
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_text("x")
+        git(self.repo, "init", "-q", "-b", "main")
+        git(self.repo, "add", ".")
+        git(self.repo, "commit", "-q", "-m", "base")
+
+    def test_main_itself_runs_every_gate(self):
+        clean = {k: v for k, v in os.environ.items() if k != "BUILD_SLOT_HELD"}
+        run = subprocess.run(["bash", str(self.validate / "run-gates.sh")],
+                             capture_output=True, text=True, timeout=60, env=clean)
+        slot_line = next((line for line in run.stdout.splitlines() if line.startswith("slot-run:")), "")
+        for flag in ("--backend", "--frontend", "--api-drift", "--docs", "--scripts"):
+            with self.subTest(flag=flag):
+                self.assertIn(flag, slot_line)
+
+
 if __name__ == '__main__':
     unittest.main()
