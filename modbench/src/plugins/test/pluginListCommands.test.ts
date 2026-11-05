@@ -404,8 +404,9 @@ describe('registerReferencedByCommand (plugins.md, Menus and keys)', () => {
   const locked = new ImplicitMasterNode('Fallout4.esm', 'Data/');
   const plugin = new PluginNode({ name: 'MyMod.esp', enabled: true }, 'SomeMod');
 
-  it.each<[string, PluginsTreeNode | undefined, readonly PluginsTreeNode[], { name: string; origin: string } | undefined]>([
+  it.each<[string, object | undefined, readonly PluginsTreeNode[], { name: string; origin: string } | undefined]>([
     ['a plugin row', plugin, [], { name: 'MyMod.esp', origin: 'SomeMod' }],
+    ['the plugin an Argument carries', { argument: { kind: 'plugin', plugin: { name: 'Other.esp', origin: 'Other' } } }, [], { name: 'Other.esp', origin: 'Other' }],
     ['the plugin the game loads with no line', locked, [], { name: 'Fallout4.esm', origin: 'Data/' }],
     ['the one selected plugin from the palette', undefined, [plugin], { name: 'MyMod.esp', origin: 'SomeMod' }],
     ['no plugin from the palette over several', undefined, [plugin, locked], undefined],

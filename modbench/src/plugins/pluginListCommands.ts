@@ -7,6 +7,7 @@ import {
   PLUGIN_ROW_KINDS, RECORD_ROW_KINDS, PLUGINS_KEY_ARGS, onlySelected,
 } from './gestureEntry';
 import type { RowOf } from '../drivingLib/gestureEntry';
+import { pluginArgumentOf } from '../drivingLib/argument';
 import { viewCopyValueText } from '../drivingLib/copyValue';
 import { placeFolder, pluginPlaces } from './pluginPlaces';
 import { OVERWRITE_ORIGIN, type PluginAddress, type PluginPlace } from '../wire/pluginAddress';
@@ -52,9 +53,9 @@ export function registerRevealInExplorerCommand(
 export function registerReferencedByCommand(
   referencedBy: (plugin: PluginAddress) => Promise<void>, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.plugin.referencedBy', async (clicked: PluginListNode | undefined) => {
-    const node = clicked ?? onlySelected(viewSelection(), ...PLUGIN_ROW_KINDS);
-    if (node?.kind === 'plugin' || node?.kind === 'implicitMaster') await referencedBy(node.argument.plugin);
+  return vscode.commands.registerCommand('modbench.plugin.referencedBy', async (clicked?: unknown) => {
+    const plugin = pluginArgumentOf(clicked ?? onlySelected(viewSelection(), ...PLUGIN_ROW_KINDS))?.plugin;
+    if (plugin) await referencedBy(plugin);
   });
 }
 

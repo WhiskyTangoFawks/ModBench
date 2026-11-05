@@ -1855,6 +1855,37 @@ describe('The Plugins view\'s keys, as VS Code runs them', () => {
   });
 });
 
+describe('Referenced By on a plugin, as VS Code\'s References view takes it', () => {
+  let gameFolder = '';
+  let original = '';
+
+  before(async () => {
+    original = readFileSync(pluginsTxtPath, 'utf8');
+    gameFolder = gameFolderHolding('medit-plugin-references-', ['TestMod.esp']);
+    await setGameFolder(gameFolder);
+  });
+
+  after(async () => {
+    await setGameFolder(FIXTURE_GAME_FOLDER);
+    writeFileSync(pluginsTxtPath, original);
+    rmSync(gameFolder, { recursive: true, force: true, maxRetries: RETRIES_WHILE_THE_MOVED_AWAY_GAME_FOLDER_WATCHER_HOLDS_IT });
+  });
+
+  it('lists the plugins.txt line that names the plugin, anchored at it', async () => {
+    await holdPluginsTxt('*TestMod.esp\r\n');
+    const referencesView = await present(
+      vscode.extensions.getExtension<{ getInput(): ReferencesViewInput | undefined }>('vscode.references-view'), 'VS Code\'s References view',
+    ).activate();
+
+    await vscode.commands.executeCommand('modbench.plugin.referencedBy', { argument: { kind: 'plugin', plugin: { name: 'TestMod.esp', origin: 'Data/' } } });
+
+    const input = await waitFor('the References view showing TestMod.esp', () =>
+      referencesView.getInput()?.title === 'Referenced By: TestMod.esp (Data/)' && referencesView.getInput());
+    const files = await input.resolve().then(({ provider }) => provider.getChildren());
+    assert.ok(Array.isArray(files) && files.some((row) => row instanceof vscode.TreeItem && row.resourceUri?.fsPath === pluginsTxtPath));
+  });
+});
+
 describe('The game folder setting reaches the Instance as a recompute', () => {
   let providing = '';
   let empty = '';
