@@ -23,12 +23,14 @@ export interface ModNote { readonly mod: string; readonly note: string }
 interface ModUpdated {
   readonly mod: string;
   readonly manifestWritten: boolean;
+  readonly repositoryWritten: boolean;
   readonly notInPackage: readonly string[];
   readonly otherBytes: readonly string[];
 }
 
 /** What update manifest answers. `cancelled`: the signal aborted, so the landed mods are those before it. `manifestWritten`
- *  is false when a manifest already was so; `notInPackage` and `otherBytes` name the files no package holds. */
+ *  is false when a manifest already was so, and `repositoryWritten` when the mod's `.gitmodules` entry and ignore lines were;
+ *  `notInPackage` and `otherBytes` name the files no package holds. */
 export interface UpdateManifestResult {
   readonly cancelled?: true;
   readonly landed: readonly ModUpdated[];
@@ -85,9 +87,14 @@ async function readMod(
 async function readSourceFolder(
   adapter: Adapter, mod: string, folder: string, game: GameToHand,
 ): Promise<{ read: ModToUpdate; notes: readonly string[] } | { refusal: string }> {
-  const taken = await gameFilesOf(adapter, { mod, folder }, { ...game, takes: () => true }, false);
+  const installed = await adapter.installationFile(mod);
+  const installationFile = installed.kind === 'read' ? installed.answer : undefined;
+  const taken = await gameFilesOf(adapter, { mod, folder }, { ...game, takes: () => true }, installationFile !== undefined);
   if ('refusal' in taken) return taken;
-  return { read: { name: mod, folder, isSourceFolder: true, ...withGame(game, taken.gameFiles) }, notes: taken.notes };
+  return {
+    read: { name: mod, folder, isSourceFolder: true, ...withGame(game, taken.gameFiles), ...installationFile === undefined ? {} : { installationFile } },
+    notes: taken.notes,
+  };
 }
 
 const withGame = (game: GameToHand, held: Parameters<typeof gameHeld>[1]): { game?: GameHeld } => {
@@ -196,7 +203,7 @@ async function updateMod(
   } catch (err) {
     return refusal(`its manifest could not be written: ${errorMessage(err)}`);
   }
-  return { landed: { mod: mod.name, manifestWritten: written, notInPackage: recorded.notInPackage, otherBytes: recorded.otherBytes }, notes: recorded.notes };
+  return { landed: { mod: mod.name, manifestWritten: written, repositoryWritten: false, notInPackage: recorded.notInPackage, otherBytes: recorded.otherBytes }, notes: recorded.notes };
 }
 
 // instance-repository.md, The repository, story 2: git cannot let in a file inside a folder its ignore list leaves out.
@@ -211,14 +218,17 @@ async function otherManifestLinesWritten(adapter: Adapter): Promise<readonly str
 
 async function submodulesWritten(
   adapter: Adapter, acted: readonly string[] | 'every', sourceMods: ReadonlyMap<string, string>,
-): Promise<{ notes: readonly ModNote[]; repositoryNotes: readonly string[] }> {
+): Promise<{ notes: readonly ModNote[]; repositoryNotes: readonly string[]; written: readonly string[] }> {
   try {
-    const { notes, other } = await adapter.writeSubmodules(acted, sourceMods);
-    return { notes, repositoryNotes: other };
+    const { notes, other, written } = await adapter.writeSubmodules(acted, sourceMods);
+    return { notes, repositoryNotes: other, written };
   } catch (err) {
-    return { notes: [], repositoryNotes: [errorMessage(err)] };
+    return { notes: [], repositoryNotes: [errorMessage(err)], written: [] };
   }
 }
+
+const withRepositoryWritten = (landed: readonly ModUpdated[], written: readonly string[]): ModUpdated[] =>
+  landed.map((one) => (written.includes(one.mod) ? { ...one, repositoryWritten: true } : one));
 
 const cancelledIf = (signal: AbortSignal | undefined): { cancelled?: true } => (signal?.aborted ? { cancelled: true } : {});
 
@@ -236,7 +246,7 @@ export async function updateManifest(
   const refused: ItemRefusal<string>[] = [];
   const notes: ModNote[] = [];
   const read: ModToUpdate[] = [];
-  const passedOver: string[] = [];
+  const named: string[] = [];
   const record = async (mod: string, readOf: () => ReturnType<typeof readMod>): Promise<void> => {
     onProgress?.({ phase: 'ReadingFiles', mod });
     const answer = await readOf();
@@ -250,10 +260,10 @@ export async function updateManifest(
   refused.push(...heldWhole.refused);
   for (const mod of heldWhole.rest) {
     if (signal?.aborted) break;
-    if (folders.isMod(mod) && sourceMods.folderOf(mod) !== undefined) passedOver.push(mod);
+    if (folders.isMod(mod) && sourceMods.folderOf(mod) !== undefined) named.push(mod);
     else await record(mod, () => readMod(adapter, mod, folders, game));
   }
-  for (const mod of new Set(everyMod ? sourceMods.folders.keys() : sourceModsToRecord)) {
+  for (const mod of new Set(everyMod ? sourceMods.folders.keys() : [...named, ...sourceModsToRecord])) {
     if (signal?.aborted) break;
     const folder = sourceMods.folderOf(mod);
     if (folder === undefined) refused.push({ item: mod, reason: 'no source folder builds it' });
@@ -261,7 +271,7 @@ export async function updateManifest(
   }
   const nothingUpdated = async (): Promise<UpdateManifestResult> => {
     const cancelled = cancelledIf(signal);
-    const submodules = passedOver.length === 0 || cancelled.cancelled ? { notes: [], repositoryNotes: [] } : await submodulesWritten(adapter, passedOver, sourceMods.folders);
+    const submodules = named.length === 0 || cancelled.cancelled ? { notes: [], repositoryNotes: [] } : await submodulesWritten(adapter, named, sourceMods.folders);
     return {
       ...cancelled, landed: [], refused, notes: [...notes, ...submodules.notes],
       repositoryNotes: submodules.repositoryNotes,
@@ -274,7 +284,7 @@ export async function updateManifest(
 
   const downloadedFiles = downloadedFilesOf(downloaded.files, nexusFileOf(adapter));
   const landed: ModUpdated[] = [];
-  const acted = [...passedOver];
+  const acted = [...named];
   for (const [at, mod] of read.entries()) {
     if (signal?.aborted) break;
     onProgress?.({ phase: 'Updating', mod: mod.name, modsDone: at, modsTotal: read.length });
@@ -286,7 +296,7 @@ export async function updateManifest(
   }
   const submodules = await submodulesWritten(adapter, everyMod ? 'every' : acted, sourceMods.folders);
   return {
-    ...cancelledIf(signal), landed, refused, notes: [...notes, ...submodules.notes],
+    ...cancelledIf(signal), landed: withRepositoryWritten(landed, submodules.written), refused, notes: [...notes, ...submodules.notes],
     repositoryNotes: [
       ...downloaded.notes, ...depotProblemsOf(game, read), ...submodules.repositoryNotes,
       ...await otherManifestLinesWritten(adapter),

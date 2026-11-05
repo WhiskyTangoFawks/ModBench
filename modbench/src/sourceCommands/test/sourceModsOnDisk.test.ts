@@ -560,16 +560,16 @@ describe('a mod installed from an installation file, then decompiled and committ
     expect(await textsBelow(join(root, 'source', 'Mod'))).toMatchObject({ 'b.nif': 'bytes of b.nif', 'textures/c.dds': 'bytes of textures/c.dds' });
   });
 
-  it('is rewritten by no update manifest at its first run, neither the source folder\'s manifest nor the mod folder\'s (instance-repository.md, Update manifest, story 2)', async () => {
+  it('is rewritten by no update manifest at its first run in the mod folder, and keeps the source folder\'s package (instance-repository.md, Update manifest, story 2)', async () => {
     const { adapter } = await anInstalledModDecompiled();
-    const manifests = async (): Promise<string[]> => [
-      await readFile(join(root, 'source', 'Mod', 'Mod.manifest.json'), 'utf8'), await readFile(join(root, 'mods', 'Mod', 'Mod.manifest.json'), 'utf8'),
-    ];
-    const before = await manifests();
+    const sourceManifest = join(root, 'source', 'Mod', 'Mod.manifest.json');
+    const modManifest = join(root, 'mods', 'Mod', 'Mod.manifest.json');
+    const before = await readFile(modManifest, 'utf8');
+    const packagesBefore = readManifest(await readFile(sourceManifest, 'utf8'));
 
     const outcome = await updateManifest({ adapter }, ['Mod'], {}, [], false, []);
 
-    expect([await manifests(), outcome.refused]).toEqual([before, []]);
+    expect([await readFile(modManifest, 'utf8'), readManifest(await readFile(sourceManifest, 'utf8')), outcome.refused]).toEqual([before, packagesBefore, []]);
   });
 
   it('changes nothing and trashes nothing at a first build that makes the folder it already holds (source.md, Build, story 3)', async () => {

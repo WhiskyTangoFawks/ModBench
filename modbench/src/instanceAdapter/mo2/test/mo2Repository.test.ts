@@ -626,7 +626,7 @@ describe('the MO2 adapter\'s repository', () => {
       await adapter.writeIgnoreList();
       await sourceFolder('Mod A');
 
-      expect(await everySourceModNamedForItsRepository(adapter)).toEqual({ notes: [], other: [] });
+      expect(await everySourceModNamedForItsRepository(adapter)).toEqual({ notes: [], other: [], written: [] });
       expect(existsSync(join(root, '.gitmodules'))).toBe(false);
     });
 
@@ -750,7 +750,7 @@ describe('the MO2 adapter\'s repository', () => {
       const report = await everySourceModNamedForItsRepository(adapter);
 
       runGit('add', '-A', '--', '.');
-      expect(report).toEqual({ notes: [], other: [] });
+      expect(report).toEqual({ notes: [], other: [], written: ['Mod A'] });
       expect(submodulesNamed()).toEqual(['submodule.Mod A.url https://example.test/a.git']);
       expect(runGit('config', '-f', '.gitmodules', 'submodule.Mod A.branch').trim()).toBe('main');
       expect(runGit('config', '-f', '.gitmodules', 'submodule.Mod A.path').trim()).toBe('source/Mod A');
@@ -799,6 +799,20 @@ describe('the MO2 adapter\'s repository', () => {
       await everySourceModNamedForItsRepository(adapter);
 
       expect([await readFile(join(root, '.gitmodules'), 'utf8'), await readFile(join(root, '.gitignore'), 'utf8')]).toEqual(before);
+    });
+
+    it('names each source mod whose entry or lines it wrote, and none when they were as it left them', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      await sourceMod('Mod A', 'https://example.test/a.git');
+      await sourceMod('Local');
+      const first = await everySourceModNamedForItsRepository(adapter);
+      const second = await everySourceModNamedForItsRepository(adapter);
+      runGit('config', '-f', '.gitmodules', 'submodule.Mod A.url', 'https://example.test/other.git');
+      const third = await everySourceModNamedForItsRepository(adapter);
+
+      expect([first.written, second.written, third.written]).toEqual([['Mod A'], [], ['Mod A']]);
     });
 
     it('takes the entry and the line of a source mod that is gone or lost its remote, lets in no line for the one that lost its remote, and keeps the lines it did not write', async () => {
@@ -949,7 +963,7 @@ describe('the MO2 adapter\'s repository', () => {
 
       const report = await everySourceModNamedForItsRepository(adapter);
 
-      expect([report, submodulesNamed()]).toEqual([{ notes: [], other: [] }, ['submodule.Kept.url https://example.test/k.git']]);
+      expect([report, submodulesNamed()]).toEqual([{ notes: [], other: [], written: [] }, ['submodule.Kept.url https://example.test/k.git']]);
       expect(await readFile(join(root, '.gitignore'), 'utf8')).not.toContain('NoDelete');
     });
 
@@ -1344,7 +1358,7 @@ describe('the MO2 adapter\'s submodules', () => {
   it.each(['nothing', 'file'] as const)('says the instance repository pins no commit for a submodule where its index holds %s', async (staged) => {
     const adapter = await holding([], staged);
 
-    expect(await adapter.submodule('Mod Source')).toEqual({ lacks: 'the instance repository pins no commit at source/Mod Source' });
+    expect(await adapter.submodule('Mod Source')).toEqual({ lacks: 'the instance repository pins no commit at source/Mod Source', unpinned: true });
   });
 
   it('says .gitmodules names no submodule of a name it lacks', async () => {
@@ -1358,7 +1372,7 @@ describe('the MO2 adapter\'s submodules', () => {
     expect(await pinned.unclonedSubmodules()).toEqual([{ name: 'Mod Source', folder: join(root, 'source', 'Mod Source'), pin: PIN, branch: 'main' }]);
 
     runGit('rm', '--cached', '--quiet', 'source/Mod Source');
-    expect(await pinned.unclonedSubmodules()).toEqual([{ name: 'Mod Source', lacks: 'the instance repository pins no commit at source/Mod Source' }]);
+    expect(await pinned.unclonedSubmodules()).toEqual([{ name: 'Mod Source', lacks: 'the instance repository pins no commit at source/Mod Source', unpinned: true }]);
 
     await mkdir(join(root, 'source', 'Mod Source', '.git'), { recursive: true });
     expect(await pinned.unclonedSubmodules()).toEqual([]);

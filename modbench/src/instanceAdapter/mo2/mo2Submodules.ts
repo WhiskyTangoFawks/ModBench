@@ -7,8 +7,8 @@ import { git } from '../git';
 import { keptByIndex } from '../keptByIndex';
 import { errorMessage } from '../../ports/errorMessage';
 import { exists, get, ignoreSkippedLink, isRepository, listFolders, putIfChanged, readOrAbsent, remove } from '../files';
-import type { InstanceAdapter, SourceHost, Submodule, SubmoduleNote, UnclonedSubmodule } from '../instanceAdapter';
-import { ignoreListFile, sourceModPath, sourceRootDir, submodulesFile, leavesOutSourceFolders, withSourceModLines, type SourceFolders } from './layout';
+import type { InstanceAdapter, SourceHost, Submodule, SubmoduleLacks, SubmoduleNote, UnclonedSubmodule } from '../instanceAdapter';
+import { ignoreListFile, sourceModLinesOf, sourceModPath, sourceRootDir, submodulesFile, leavesOutSourceFolders, withSourceModLines, type SourceFolders } from './layout';
 import type { FileProblems } from '../../ports/fileProblems';
 import type { Mo2Context } from './mo2Context';
 import { PRE_PUSH_HOOK, PRE_PUSH_HOOK_NAME } from '../prePushHook';
@@ -162,13 +162,16 @@ const configured = (instanceRoot: string, file: string, key: string): Promise<st
     throw err;
   });
 
+const entryValues = async (instanceRoot: string, file: string, name: string): Promise<string> =>
+  (await Promise.all(['path', 'url', 'branch'].map((key) => configured(instanceRoot, file, `submodule.${name}.${key}`)))).join('\n');
+
 // The index holds a submodule's pin as a gitlink, mode 160000.
-async function submoduleIn(instanceRoot: string, name: string): Promise<Submodule | { readonly lacks: string }> {
+async function submoduleIn(instanceRoot: string, name: string): Promise<Submodule | SubmoduleLacks> {
   const file = submodulesFile(instanceRoot);
   const path = await configured(instanceRoot, file, `submodule.${name}.path`);
   if (path === '') return { lacks: `${file} names no submodule '${name}'` };
   const [mode, pin] = (await git(instanceRoot, 'ls-files', '--stage', '--', path)).split(/\s/);
-  if (mode !== '160000' || pin === undefined) return { lacks: `the instance repository pins no commit at ${path}` };
+  if (mode !== '160000' || pin === undefined) return { lacks: `the instance repository pins no commit at ${path}`, unpinned: true };
   const branch = await configured(instanceRoot, file, `submodule.${name}.branch`);
   return { folder: resolve(instanceRoot, path), pin, ...(branch === '' ? {} : { branch }) };
 }
@@ -184,11 +187,15 @@ const keptSubmodules = keptByIndex<Awaited<ReturnType<typeof submoduleIn>>>();
 export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
   return {
     async writeSubmodules(acted, sourceMods) {
-      if (!(await isRepository(instanceRoot))) return { notes: [], other: [] };
+      if (!(await isRepository(instanceRoot))) return { notes: [], other: [], written: [] };
       const file = submodulesFile(instanceRoot);
       const built = new Set([...sourceMods.values()].map((folder) => basename(folder)));
       const notes: SubmoduleNote[] = [];
       const other: string[] = [];
+      const ignoreFile = ignoreListFile(instanceRoot);
+      const linesBefore = await get(ignoreFile, '');
+      const entriesBefore = new Map<string, string>();
+      for (const [mod, folder] of sourceMods) entriesBefore.set(mod, await entryValues(instanceRoot, file, basename(folder)).catch(() => ''));
       const kept = new Set<string>();
       let existing: string[] = [];
       try {
@@ -234,7 +241,15 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
       } catch (err) {
         other.push(errorMessage(err));
       }
-      return { notes, other };
+      const linesAfter = await get(ignoreFile, '');
+      const written: string[] = [];
+      for (const [mod, folder] of sourceMods) {
+        const name = basename(folder);
+        const entryChanged = entriesBefore.get(mod) !== await entryValues(instanceRoot, file, name).catch(() => '');
+        const linesChanged = sourceModLinesOf(linesBefore, name).join() !== sourceModLinesOf(linesAfter, name).join();
+        if (entryChanged || linesChanged) written.push(mod);
+      }
+      return { notes, other, written };
     },
 
     async writeSourceModLines() {

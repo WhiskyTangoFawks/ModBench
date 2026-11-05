@@ -40,6 +40,8 @@ export interface ModStatus {
   readonly unpackaged: readonly string[];
   /** Each package with no host, as a noun phrase. */
   readonly noHost: readonly string[];
+  /** Each repository a submodule names whose commit the instance repository does not yet pin, as a noun phrase. */
+  readonly unpinned: readonly string[];
   /** Why this machine does not hold each package the manifest names, as a clause. */
   readonly packagesLacking: readonly string[];
   /** The manifest's path as the folder spells it; none when the folder holds none or it cannot be read. */
@@ -52,7 +54,7 @@ export interface ModStatus {
 }
 
 const nothing = (mod: string, over: Partial<ModStatus> = {}): ModStatus =>
-  ({ mod, packages: [], noManifest: false, differing: [], namedByNoLine: [], ignored: [], ignoreEntries: [], gone: [], notInPackage: [], otherBytes: [], unpackaged: [], noHost: [], packagesLacking: [], ...over });
+  ({ mod, packages: [], noManifest: false, differing: [], namedByNoLine: [], ignored: [], ignoreEntries: [], gone: [], notInPackage: [], otherBytes: [], unpackaged: [], noHost: [], unpinned: [], packagesLacking: [], ...over });
 
 /** A mod whose whole folder git holds: git's, so it lists nothing. */
 export const heldWholeStatus = (mod: string, files: readonly string[]): ModStatus => nothing(mod, { heldWhole: true, unpackaged: ordered(files) });
@@ -171,7 +173,8 @@ export function statusFrom(mod: ModAt, { read, file }: ManifestAt, values: Statu
     gone: ordered(files.flatMap(({ path, pathInFolder }) => (pathInFolder === undefined ? [path] : []))),
     ...unheld,
     unpackaged: ordered([...unpackaged, ...namedByNoLine]),
-    noHost: manifest.packages.flatMap((pkg) => packageWithoutHost(pkg, values.repositoryHosted)),
+    noHost: manifest.packages.flatMap((pkg) => packageWithoutHost(pkg, values.repositoryHost)),
+    unpinned: manifest.packages.flatMap((pkg) => (pkg.kind === 'repository' && values.repositoryHost === 'unpinned' ? [`repository '${pkg.name}'`] : [])),
     packagesLacking: held.lacking,
   };
 }

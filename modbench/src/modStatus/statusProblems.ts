@@ -36,6 +36,7 @@ export function statusProblems(status: ModStatus, folder: string): StatusProblem
     ...onManifest(status.notInPackage.map((path) => `No package it names holds the bytes of '${path}'.`)),
     ...onManifest(status.otherBytes.map((path) => `No package it names holds the bytes of '${path}'; one holds a file of its name.`)),
     ...onManifest(status.noHost.map((pkg) => `${pkg.charAt(0).toUpperCase()}${pkg.slice(1)} has no host.`)),
+    ...onManifest(status.unpinned.map((repository) => `${repository.charAt(0).toUpperCase()}${repository.slice(1)} is not pinned: the instance repository pins no commit for it until its gitlink is staged.`)),
     ...onManifest(status.packagesLacking.map((lacking) => `This machine does not hold a package it names: ${lacking}.`)),
   ];
 }
