@@ -4,7 +4,8 @@ import { ModStatuses } from '../../modStatus/modStatuses';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { LIST_MOD_STATUSES } from '../modStatuses';
 
-const gitGone: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole' | 'filesHeldByGit'> = {
+const gitGone: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole' | 'filesHeldByGit' | 'filesIn'> = {
+  filesIn: () => Promise.reject(new Error('never asked')),
   foldersHeldWhole: () => Promise.reject(new Error('git is gone')),
   filesHeldByGit: () => Promise.reject(new Error('git is gone')),
   modValue: () => Promise.reject(new Error('never asked')),

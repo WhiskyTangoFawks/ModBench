@@ -35,8 +35,8 @@ export interface ModStatus {
   /** The files no package holds the bytes of, nor a file of their name; `otherBytes`, those a package holds one of their name of. */
   readonly notInPackage: readonly string[];
   readonly otherBytes: readonly string[];
-  /** The files of the folder no package holds the bytes of, by the paths the folder holds them at: the differing, the named
-   *  by no line, those of `notInPackage` and `otherBytes`, a build step's, and every file of a source mod. */
+  /** The folder's files no package holds the bytes of, by the paths it holds them at: those that differ, that no line
+   *  names, a step makes, or the lists above name, and every file of a source mod. */
   readonly unpackaged: readonly string[];
   /** Each package with no host, as a noun phrase. */
   readonly noHost: readonly string[];

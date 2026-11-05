@@ -561,8 +561,8 @@ interface TagEntryAt {
   readonly entry: string;
 }
 
-/** Why the published modlist has no way to ship the file `pathInFolder` of the folder of `mod`, as its publisher judges it,
- *  once no package holds the file's bytes; none when it has a way or the publisher never asks for the file. */
+/** Why the published modlist cannot ship the file `pathInFolder` of `mod`'s `folder` once no package holds it, as its
+ *  publisher judges; none when it can, or the publisher never asks for the file. */
 export type UnshippableReason = (folder: string, pathInFolder: string, mod: string) => string | undefined;
 
 /** What is wrong with the path a publisher tag's entry names. */

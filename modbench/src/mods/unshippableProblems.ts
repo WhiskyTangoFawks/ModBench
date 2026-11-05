@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { modbenchDiagnostic } from '../drivingLib/modbenchDiagnostic';
-import type { UnshippableReason } from '../instanceAdapter/instanceAdapter';
 import type { InstanceView } from '../instanceLoader/instance';
 import type { ModStatus } from '../manifestAdapter/manifestAdapter';
 import type { ModStatuses } from '../modStatus/modStatuses';
@@ -15,7 +14,7 @@ const wording = (mod: string, [first, ...rest]: readonly [Unshippable, ...Unship
     ? `1 file of "${mod}" has no way to ship: '${first.path}': ${first.reason}.`
     : `${rest.length + 1} files of "${mod}" have no way to ship, such as '${first.path}': ${first.reason}.`;
 
-function unshippableIn(status: ModStatus, folder: string, reasonFor: UnshippableReason): Unshippable[] {
+function unshippableIn(status: ModStatus, folder: string, reasonFor: (folder: string, pathInFolder: string, mod: string) => string | undefined): Unshippable[] {
   return status.unpackaged.flatMap((path) => {
     const reason = reasonFor(folder, path, status.mod);
     return reason === undefined ? [] : [{ path, reason }];
