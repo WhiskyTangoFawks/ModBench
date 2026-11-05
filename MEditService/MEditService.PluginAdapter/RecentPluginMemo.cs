@@ -3,8 +3,8 @@ using MEditService.RepositoriesLib;
 namespace MEditService.PluginAdapter;
 
 /// <summary>A value read of a plugin's file, kept by the file's stamp (ADR-0003) and by what else it reads,
-/// for the plugins most recently asked about. Public so a test can count the reads.</summary>
-public sealed class RecentPluginMemo<TValue>(TimeProvider timeProvider, int capacity) where TValue : class
+/// for the plugins most recently asked about.</summary>
+internal sealed class RecentPluginMemo<TValue>(TimeProvider timeProvider, int capacity) where TValue : class
 {
     private readonly object _gate = new();
     private readonly List<(string Path, string Dependencies, StampGatedMemo<TValue> Memo)> _recent = [];
