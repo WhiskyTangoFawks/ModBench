@@ -11,7 +11,9 @@
     { "path": "../drivingLib" },
     { "path": "../instanceAdapter" },
     { "path": "../instanceLoader" },
+    { "path": "../manifestAdapter" },
     { "path": "../ports" },
+    { "path": "../symbolNames" },
     { "path": "../textDocuments" },
     { "path": "../wire" }
   ],

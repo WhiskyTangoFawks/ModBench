@@ -19,10 +19,15 @@ const sameText = (a: string, b: string): boolean => a.toLowerCase() === b.toLowe
 
 const samePlugin = (a: PluginSymbol, b: PluginSymbol): boolean => sameText(a.name, b.name) && sameText(a.origin, b.origin);
 
-/** Whether `named` names `symbol`: with its mod, that copy; by its file name alone, the copy mod order resolves it to. */
+/** The plugin `named` names: with its mod, that copy; by its file name alone, the copy mod order resolves it to, if any. */
+export function pluginNamed({ name, origin }: PluginName, plugins: readonly ResolvedPlugin[]): PluginSymbol | undefined {
+  if (origin !== undefined) return { name, origin };
+  const resolved = plugins.find((plugin) => plugin.winning && sameText(plugin.name, name));
+  return resolved && { name: resolved.name, origin: resolved.origin };
+}
+
 export function namesPlugin(named: PluginName, symbol: PluginSymbol, plugins: readonly ResolvedPlugin[]): boolean {
-  const { name, origin } = named;
-  const resolved = origin === undefined ? plugins.find((plugin) => plugin.winning && sameText(plugin.name, name)) : { name, origin };
+  const resolved = pluginNamed(named, plugins);
   return resolved !== undefined && samePlugin(resolved, symbol);
 }
 

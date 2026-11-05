@@ -1,8 +1,9 @@
 // Where MO2's files name a plugin: every profile's plugin order, and LOOT's sorting rule files.
 
+import { stripBom } from '../../loadOrderFileCodec/lineScan';
 import { pluginNamesIn } from '../../loadOrderFileCodec/pluginsText';
 import { errorMessage } from '../../ports/errorMessage';
-import { ruleFilePluginNames } from '../../sortingRules/ruleFileNames';
+import { ruleFilePluginNames } from '../../sortingRules/lootMetadata';
 import { placeIn, type SymbolReading, type SymbolReference } from '../../symbolNames/symbolNames';
 import { get, ignoreSkippedLink, listFolders, readOrAbsent } from '../files';
 import type { InstanceAdapter } from '../instanceAdapter';
@@ -16,8 +17,6 @@ export async function everyPluginOrderFile(instanceRoot: string): Promise<string
 }
 
 const sameName = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
-
-const stripBom = (text: string): string => text.replace(/^﻿/, '');
 
 type NamesIn = (file: string, text: string) => SymbolReference[] | { readonly refused: string };
 

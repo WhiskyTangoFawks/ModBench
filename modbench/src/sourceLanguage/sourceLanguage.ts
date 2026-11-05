@@ -18,11 +18,15 @@ import { registerBuildEntryPoint } from './buildEntryPoint';
 import { registerUpdateManifestEntryPoint } from './updateManifestEntryPoint';
 import type { Instance } from '../instanceLoader/instance';
 import { feedSourceProblems, type ProblemOnFile, type ProblemsByFile, type SourceProblemsDeps } from './sourceProblems';
+import type { PluginSymbol, SymbolOwner } from '../symbolNames/symbolNames';
+import { pluginLanguage } from './pluginLanguage';
 
 interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'sourceFiles'> {
   instance: Pick<Instance, 'value' | 'subscribe'> | undefined;
-  reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
+  reporter: Pick<Reporter, 'shownOnSurface' | 'report' | 'landed'>;
   client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlugins' | 'handUnsavedDocuments'> & RecordDocumentClient & SourceProblemsDeps['client'];
+  /** Each box that owns files, saying where they name a symbol (ADR-0028). */
+  owners: readonly SymbolOwner[];
 }
 
 const kinds = { reference: vscode.CompletionItemKind.Reference, enumMember: vscode.CompletionItemKind.EnumMember };
@@ -41,9 +45,11 @@ class RecordSymbolInformation extends vscode.SymbolInformation {
 
 interface SourceLanguage extends vscode.Disposable {
   messages(): string[];
+  /** Lists each place a file names `plugin`, in VS Code's References view. */
+  referencedBy(plugin: PluginSymbol): Promise<void>;
 }
 
-function sourceProblems(deps: SourceLanguageDeps): SourceLanguage {
+function sourceProblems(deps: SourceLanguageDeps): Pick<SourceLanguage, 'dispose' | 'messages'> {
   const collection = vscode.languages.createDiagnosticCollection('modbench-source');
   const publish = (problems: ProblemsByFile) => {
     collection.clear();
@@ -105,10 +111,14 @@ export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
     },
   });
   const referencesAt = referencesOf({ client, reporter: deps.reporter, open: openPluginSourceDocument });
+  const plugin = pluginLanguage(deps);
   const references = vscode.languages.registerReferenceProvider(pluginSource, {
     async provideReferences(document, position) {
+      const offset = document.offsetAt(position);
+      const toPlugin = await plugin.referencesAt(document, offset);
+      if (toPlugin !== undefined) return toPlugin;
       if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
-      return (await referencesAt(heldText(document), document.offsetAt(position))).map(locationOf);
+      return (await referencesAt(heldText(document), offset)).map(locationOf);
     },
   });
   const workspace = workspaceSymbolsOf({ client, reporter: deps.reporter, open: openPluginSourceDocument });
@@ -128,5 +138,6 @@ export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
   return {
     dispose: () => { disposable.dispose(); },
     messages: () => problems.messages(),
+    referencedBy: plugin.referencedBy,
   };
 }

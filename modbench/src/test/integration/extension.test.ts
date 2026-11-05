@@ -10,7 +10,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import type { CompareResult, PluginMetadata, PluginProblems } from '../../client';
 import { present } from '../../ports/present';
-import type { ReferencesViewInput } from '../../editor/referencesView';
+import type { ReferencesViewInput } from '../../drivingLib/referencesView';
 import { PLUGIN_SOURCE_GLOB } from '../../instanceAdapter/instanceAdapter';
 import { BUILD_FILE } from '../../wire/sourceMod';
 import { comparisonOf, fieldOf } from '../comparison';

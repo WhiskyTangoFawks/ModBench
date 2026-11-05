@@ -5,7 +5,7 @@ import { basename, parse } from 'node:path';
 import { parsePlugins, pluginKey, renamePluginInText } from '../../loadOrderFileCodec/pluginsText';
 import { present } from '../../ports/present';
 import { pluginCompanionRule, type PluginCompanionRule } from '../../tables/gamePaths';
-import { get, ignoreSkippedLink, listEntries, readOrAbsent, rename, undoAll, type Undo, withLock, write } from '../files';
+import { get, listEntries, readOrAbsent, rename, undoAll, type Undo, withLock, write } from '../files';
 import { fileInFolder, isBareName, type FileOrigin, InstanceAdapter } from '../instanceAdapter';
 import { everyPluginOrderFile } from './mo2PluginReferences';
 import type { ReadingSource } from '../instanceReading';

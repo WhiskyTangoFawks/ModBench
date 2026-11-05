@@ -240,7 +240,7 @@ describe('pluginsTextOf', () => {
 
 describe('pluginNamesIn', () => {
   it('places each entry line\'s name past its padding and marker, skipping comments and blanks', () => {
-    const text = '﻿# *A.esp\r\n\r\n  *A.esp \nB.esp\r*a.ESP';
+    const text = `${String.fromCharCode(0xFEFF)}# *A.esp\r\n\r\n  *A.esp \nB.esp\r*a.ESP`;
 
     expect(pluginNamesIn(text)).toEqual([
       { name: 'A.esp', line: 2, start: 3, end: 8 },

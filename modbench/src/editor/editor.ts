@@ -4,7 +4,7 @@ import { GRID_VIEW, publishFocusedCell, gridCopyValueText } from './focusedCells
 import { registerNoConflictLens } from './noConflictLens';
 import { registerEditorCommands, type EditorCommandDeps } from './editorCommands';
 import { referencedByCopyValueText } from './referencedByList';
-import { publishReferencesView } from './referencesView';
+import { publishReferencesView } from '../drivingLib/referencesView';
 import { registerReferencedBy, type LocateRecord, type ReferencedByDeps } from './referencedBy';
 import { selectionInFocusedView } from '../drivingLib/inFocusedView';
 import type { CopyValueAdapter } from '../drivingLib/copyValue';

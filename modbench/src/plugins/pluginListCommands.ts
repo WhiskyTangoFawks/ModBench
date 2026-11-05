@@ -48,6 +48,16 @@ export function registerRevealInExplorerCommand(
   });
 }
 
+/** `referenced by` on a plugin row: `referencedBy` lists where files name it (plugins.md, Menus and keys). */
+export function registerReferencedByCommand(
+  referencedBy: (plugin: PluginAddress) => Promise<void>, viewSelection: () => readonly PluginsTreeNode[],
+): vscode.Disposable {
+  return vscode.commands.registerCommand('modbench.plugin.referencedBy', async (clicked: PluginListNode | undefined) => {
+    const node = clicked ?? onlySelected(viewSelection(), ...PLUGIN_ROW_KINDS);
+    if (node?.kind === 'plugin' || node?.kind === 'implicitMaster') await referencedBy(node.argument.plugin);
+  });
+}
+
 const COPIED_KINDS = [...PLUGIN_ROW_KINDS, ...RECORD_ROW_KINDS] as const;
 
 type CopiedRow = RowOf<PluginsTreeNode, typeof COPIED_KINDS[number]>;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { namesPlugin, placeIn } from '../symbolNames';
+import { namesPlugin, placeIn, pluginNamed } from '../symbolNames';
 
 const winning = { name: 'Shared.esp', origin: 'Late', winning: true };
 const losing = { name: 'Shared.esp', origin: 'Early', winning: false };
@@ -13,6 +13,11 @@ describe('a name in a file resolves to its plugin (symbols.md, The symbols, Plug
 
   it('a file name alone that mod order resolves to no copy names no plugin', () => {
     expect(namesPlugin({ name: 'Shared.esp' }, losing, [losing])).toBe(false);
+    expect(pluginNamed({ name: 'Shared.esp' }, [losing])).toBeUndefined();
+  });
+
+  it('a file name alone names its copy as the instance spells it', () => {
+    expect(pluginNamed({ name: 'shared.ESP' }, plugins)).toEqual({ name: 'Shared.esp', origin: 'Late' });
   });
 
   it('a file name with the mod that holds it names that copy, won or not', () => {

@@ -23,7 +23,7 @@ import { RecordDecorationProvider } from './RecordDecorationProvider';
 import { ImplicitMasterDecorationProvider } from './ImplicitMasterDecorationProvider';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
 import {
-  pluginsCopyValueText, registerCreatePluginCommand, registerRevealInExplorerCommand,
+  pluginsCopyValueText, registerCreatePluginCommand, registerReferencedByCommand, registerRevealInExplorerCommand,
 } from './pluginListCommands';
 import { registerRenamePluginCommand, type RenamePluginDeps } from './pluginRenameCommand';
 import { registerRecordCreateCommand } from './createRecordCommand';
@@ -70,6 +70,8 @@ export interface PluginsViewDeps {
   /** The Instance adapter's reads of the files LOOT's conditions name. */
   fileReads: FileReads;
   channel: SyncChannel;
+  /** Lists each place a file names a plugin, in VS Code's References view. */
+  referencedBy: (plugin: PluginAddress) => Promise<void>;
   log: (level: 'info' | 'warn' | 'error', msg: string) => void;
   reporterFor: (tag: string) => Reporter;
 }
@@ -171,6 +173,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     }),
     ...registerSortDirectionToggle('plugin', tree),
     registerRevealInExplorerCommand(tree, reporterFor('pluginListTree.revealInExplorer'), selected.rows),
+    registerReferencedByCommand(deps.referencedBy, selected.rows),
     view.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(
       e, commands, reporterFor('pluginListTree.checkbox'), instance)),
     // Grays an implicit master's row the way the reference tool grays COL_NAME for a forceLoaded

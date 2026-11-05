@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ruleFilePluginNames } from '../ruleFileNames';
+import { ruleFilePluginNames } from '../lootMetadata';
 
 const TEXT = `groups:
   - name: 'A.esp group'

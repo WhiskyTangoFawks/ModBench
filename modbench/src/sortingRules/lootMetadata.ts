@@ -79,7 +79,7 @@ export interface RuleFileProblem {
 const MESSAGE_LEVELS: Record<string, RuleLevel> = { say: 'info', warn: 'warning', error: 'error' };
 
 // LOOT reads a name holding any of these as a regular expression over the whole file name.
-export const REGEX_NAME = /[:\\*?|]/;
+const REGEX_NAME = /[:\\*?|]/;
 
 /** The branch of LOOT's repositories whose metadata format this parser reads. */
 export const METADATA_BRANCH = 'v0.29';
@@ -583,4 +583,34 @@ export function addLoadAfter(source: string, additions: readonly LoadAfter[]): s
     else if (found.kind === 'absent') userlist.appendPlugins(found.end, fresh);
   }
   return userlist.edited ? userlist.result() : source;
+}
+
+interface NameInText {
+  readonly name: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+const QUOTED = new Set(['QUOTE_DOUBLE', 'QUOTE_SINGLE']);
+
+function nameIn(node: unknown): NameInText[] {
+  if (!isScalar(node) || typeof node.value !== 'string' || REGEX_NAME.test(node.value) || !node.range) return [];
+  const quote = QUOTED.has(String(node.type)) ? 1 : 0;
+  return [{ name: node.value, start: node.range[0] + quote, end: node.range[1] - quote }];
+}
+
+const fileNamesIn = (list: unknown): NameInText[] =>
+  isSeq(list) ? list.items.flatMap((item: unknown) => nameIn(isMap(item) ? item.get('name', true) : item)) : [];
+
+/** Each plugin a LOOT metadata file names, with the span of its name: each entry's own name and each its `after`,
+ *  `req` and `inc` name, a regular expression left out; or why the file does not read. */
+export function ruleFilePluginNames(text: string): readonly NameInText[] | { readonly refused: string } {
+  const document = parseDocument(text);
+  const [error] = document.errors;
+  if (error !== undefined) return { refused: error.message.split('\n')[0] ?? error.message };
+  const plugins = document.get('plugins', true);
+  if (!isSeq(plugins)) return [];
+  return plugins.items.flatMap((entry: unknown) => isMap(entry)
+    ? [...nameIn(entry.get('name', true)), ...['after', 'req', 'inc'].flatMap((key) => fileNamesIn(entry.get(key, true)))]
+    : []);
 }

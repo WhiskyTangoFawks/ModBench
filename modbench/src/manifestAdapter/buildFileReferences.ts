@@ -1,4 +1,3 @@
-import { findNodeAtOffset, getNodePath, parseTree, type Node } from 'jsonc-parser';
 import { errorMessage } from '../ports/errorMessage';
 import { placeIn, type SymbolOwner, type SymbolReading } from '../symbolNames/symbolNames';
 import { readBuildFile } from './buildFileRead';
@@ -10,27 +9,66 @@ interface NameInText {
   readonly end: number;
 }
 
-// The steps whose paths name a plugin when they name a file at the root.
-const NAMING_PLUGINS: readonly unknown[] = ['decompile', 'compile', 'copy'];
+type Segment = string | number;
 
-function isPluginAtTheRoot(node: Node): boolean {
-  if (node.type !== 'string' || typeof node.value !== 'string' || node.value.includes('/')) return false;
-  const [steps, , kind, at] = getNodePath(node);
-  return steps === 'steps' && NAMING_PLUGINS.includes(kind) && typeof at === 'number';
+interface StringAt extends NameInText {
+  readonly path: readonly Segment[];
 }
 
-const nameOf = (node: Node): NameInText => ({ name: String(node.value), start: node.offset + 1, end: node.offset + node.length - 1 });
+const WHITESPACE = /\s/;
+const SCALAR_END = /[\s,\]}]/;
 
-function pluginNodes(node: Node | undefined): Node[] {
-  if (node === undefined) return [];
-  return isPluginAtTheRoot(node) ? [node] : (node.children ?? []).flatMap(pluginNodes);
+// Each string value of `text`, a JSON text the build file's read accepted, with its path and the span of its value.
+function stringsOf(text: string): StringAt[] {
+  const found: StringAt[] = [];
+  let at = 0;
+  const skipWhitespace = (): void => { while (WHITESPACE.test(text.charAt(at))) at += 1; };
+  const string = (): NameInText => {
+    const start = at;
+    at += 1;
+    while (text.charAt(at) !== '"') at += text.charAt(at) === '\\' ? 2 : 1;
+    at += 1;
+    const name: unknown = JSON.parse(text.slice(start, at));
+    return { name: String(name), start: start + 1, end: at - 1 };
+  };
+  const items = (close: string, item: (index: number) => void): void => {
+    at += 1;
+    skipWhitespace();
+    for (let index = 0; text.charAt(at) !== close; index += 1) {
+      item(index);
+      skipWhitespace();
+      if (text.charAt(at) === ',') at += 1;
+      skipWhitespace();
+    }
+    at += 1;
+  };
+  const value = (path: readonly Segment[]): void => {
+    skipWhitespace();
+    const opening = text.charAt(at);
+    if (opening === '"') found.push({ ...string(), path });
+    else if (opening === '{') items('}', () => { const key = string().name; skipWhitespace(); at += 1; value([...path, key]); });
+    else if (opening === '[') items(']', (index) => { value([...path, index]); });
+    else while (at < text.length && !SCALAR_END.test(text.charAt(at))) at += 1;
+  };
+  value([]);
+  return found;
+}
+
+// The steps whose paths name a plugin when they name a file at the root.
+const NAMING_PLUGINS: readonly Segment[] = ['decompile', 'compile', 'copy'];
+
+const isPluginAtTheRoot = ({ name, path: [steps, , kind, index] }: StringAt): boolean =>
+  steps === 'steps' && kind !== undefined && NAMING_PLUGINS.includes(kind) && typeof index === 'number' && !name.includes('/');
+
+function pluginsIn(text: string): readonly NameInText[] | { readonly refused: string } {
+  const read = readBuildFile(text);
+  return 'refused' in read ? read : stringsOf(text).filter(isPluginAtTheRoot).map(({ name, start, end }) => ({ name, start, end }));
 }
 
 /** The plugin a build file's step names at `offset` of its text, with the span of its name. */
 export function buildFilePluginAt(text: string, offset: number): NameInText | undefined {
-  const root = parseTree(text);
-  const node = root && findNodeAtOffset(root, offset);
-  return node && isPluginAtTheRoot(node) ? nameOf(node) : undefined;
+  const plugins = pluginsIn(text);
+  return 'refused' in plugins ? undefined : plugins.find(({ start, end }) => offset >= start && offset <= end);
 }
 
 const sameName = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
@@ -50,9 +88,9 @@ export function buildFileReferences(sourceFolders: () => ReadonlyMap<string, str
         const at = await buildFileTextIn(folder, held);
         if (at === undefined) return NONE;
         if ('refused' in at) return leftOut(at.file, at.refused);
-        const read = readBuildFile(at.text);
-        if ('refused' in read) return leftOut(at.file, read.refused);
-        const named = pluginNodes(parseTree(at.text)).map(nameOf).filter((found) => sameName(found.name, name));
+        const plugins = pluginsIn(at.text);
+        if ('refused' in plugins) return leftOut(at.file, plugins.refused);
+        const named = plugins.filter((found) => sameName(found.name, name));
         return { references: named.map(({ name: spelled, start, end }) => ({ place: placeIn(at.file, at.text, start, end), names: { name: spelled, origin: mod } })), leftOut: [] };
       } catch (err) {
         return leftOut(folder, errorMessage(err));
