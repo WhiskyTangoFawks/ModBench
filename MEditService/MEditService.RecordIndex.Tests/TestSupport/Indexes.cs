@@ -23,7 +23,8 @@ internal static class Indexes
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
         TimeProvider? timeProvider = null,
-        ISourceAdapter? source = null)
+        ISourceAdapter? source = null,
+        long? memoryLimit = null)
     {
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
         var services = new ServiceCollection();
@@ -38,7 +39,8 @@ internal static class Indexes
         services.AddSingleton(timeProvider ?? TimeProvider.System);
         services.AddLogging();
         if (notifications is not null) services.AddSingleton(notifications);
-        services.AddRecordIndex();
+        if (memoryLimit is { } limit) services.AddRecordIndex(limit);
+        else services.AddRecordIndex();
         return services.BuildServiceProvider();
     }
 
@@ -48,8 +50,9 @@ internal static class Indexes
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
         TimeProvider? timeProvider = null,
-        ISourceAdapter? source = null) =>
-        new(Container(holder, adapter, loggerFactory, notifications, timeProvider, source), holder);
+        ISourceAdapter? source = null,
+        long? memoryLimit = null) =>
+        new(Container(holder, adapter, loggerFactory, notifications, timeProvider, source, memoryLimit), holder);
 
     internal static OpenedIndex Reconciled(
         PluginFixtureData fixture,

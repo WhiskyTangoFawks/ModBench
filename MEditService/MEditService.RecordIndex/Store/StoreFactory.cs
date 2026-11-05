@@ -20,6 +20,7 @@ internal sealed class StoreFactory(
     IndexWriteGate gate,
     FilterInForce filter,
     INotificationPublisher? notifications,
+    long memoryLimit,
     ILogger<StoreFactory>? logger = null,
     TimeProvider? timeProvider = null) : IDisposable
 {
@@ -92,7 +93,7 @@ internal sealed class StoreFactory(
     {
         var store = new Store(
             _logger, instanceRoot is null ? null : IndexFile.For(instanceRoot), instanceRoot, schemaReflector, ddlBuilder, plugins,
-            timeProvider, openedPlugins, indexed, gate, filter, notifications);
+            timeProvider, openedPlugins, indexed, gate, filter, notifications, memoryLimit);
         try { refusal = store.Open(); }
         catch
         {

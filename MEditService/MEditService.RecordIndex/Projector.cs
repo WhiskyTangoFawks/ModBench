@@ -167,8 +167,8 @@ internal sealed class Projector(
         var before = index.EffectiveContentHashes(key);
         var statesBefore = index.HeldWorkingTreeStates(key);
         if (Ingest(plugin) is { } stopped) return stopped;
-        projection.OweWinnerSweep();
         var after = index.EffectiveContentHashes(key);
+        projection.OweWinnerSweep(before.Keys.Union(after.Keys));
         var statesAfter = index.HeldWorkingTreeStates(key);
 
         // ADR-0015: the keys asked about, and every row the tree read again moved, gone

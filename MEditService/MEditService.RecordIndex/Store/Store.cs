@@ -34,6 +34,7 @@ internal sealed class Store : IDisposable
     private readonly IndexWriteGate _gate;
     private readonly FilterInForce _filterInForce;
     private readonly INotificationPublisher? _notifications;
+    private readonly long _memoryLimit;
     private readonly Projection _projection;
     private IReadOnlyDictionary<string, RecordTableSchema>? _schemas;
     private PluginIngest? _pluginIngest;
@@ -72,8 +73,9 @@ internal sealed class Store : IDisposable
     public Store(
         ILogger logger, string? databasePath, string? instanceRoot, SchemaReflector schemaReflector, TableDdlBuilder ddlBuilder, IPluginAdapter plugins,
         TimeProvider? timeProvider, Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, Func<bool> indexed,
-        IndexWriteGate gate, FilterInForce filterInForce, INotificationPublisher? notifications)
+        IndexWriteGate gate, FilterInForce filterInForce, INotificationPublisher? notifications, long memoryLimit)
     {
+        _memoryLimit = memoryLimit;
         _logger = logger;
         _gate = gate;
         _filterInForce = filterInForce;
@@ -219,14 +221,15 @@ internal sealed class Store : IDisposable
         _connection?.Dispose();
     }
 
-    // DuckDB sizes its buffer pool from the machine's memory, and cannot see the share a desktop
-    // with other programs leaves it.
-    private const string MemoryLimit = "1GB";
+    // DuckDB needs 125 MB a thread to spill, and a join that hashes bodies twice that: on less, a read that
+    // outgrows memory fails rather than slows.
+    private const long MemoryPerThread = 250_000_000;
 
-    private static DuckDBConnection OpenFile(string databasePath)
+    private DuckDBConnection OpenFile(string databasePath)
     {
         var connection = Opened($"DataSource={databasePath}");
-        DuckDbSql.Execute(connection, $"SET GLOBAL memory_limit = '{MemoryLimit}'");
+        var threads = Math.Clamp(_memoryLimit / MemoryPerThread, 1, Environment.ProcessorCount);
+        DuckDbSql.Execute(connection, $"SET GLOBAL memory_limit = '{_memoryLimit}B'; SET GLOBAL threads = {threads}");
         return connection;
     }
 
@@ -562,6 +565,13 @@ internal sealed class Store : IDisposable
         lock (_projectionLock) scope.SweepOwed = true;
     }
 
+    /// <summary>Owed by rows that moved which copy wins only these FormKeys.</summary>
+    internal void OweWinnerSweep(IEnumerable<string> formKeys)
+    {
+        var scope = OpenProjection;
+        lock (_projectionLock) scope.SweepOwedFor.UnionWith(formKeys);
+    }
+
     /// <summary>Runs <paramref name="publish"/> after the outermost projection's advance: a
     /// subscriber is never told about rows at a sequence the store has not reached.</summary>
     internal void Announce(Action publish)
@@ -592,6 +602,7 @@ internal sealed class Store : IDisposable
             {
                 parent.BumpOwed |= scope.BumpOwed;
                 parent.SweepOwed |= scope.SweepOwed;
+                parent.SweepOwedFor.UnionWith(scope.SweepOwedFor);
                 parent.Announcements.AddRange(scope.Announcements);
                 scope.Announcements.Clear();
                 return;
@@ -615,6 +626,7 @@ internal sealed class Store : IDisposable
         internal ProjectionScope? Parent { get; } = parent;
         internal bool BumpOwed { get; set; }
         internal bool SweepOwed { get; set; }
+        internal HashSet<string> SweepOwedFor { get; } = new(StringComparer.OrdinalIgnoreCase);
         internal List<Action> Announcements { get; } = [];
         private Action<ProjectionScope>? _endProjection = endProjection;
 
@@ -678,7 +690,7 @@ internal sealed class Store : IDisposable
     // would hide the first.
     private void Land(ProjectionScope scope, ExceptionDispatchInfo? first)
     {
-        Action[] steps = [() => { if (scope.SweepOwed) SweepWinners(); }, Checkpoint, () => _filterInForce.Reapply(this)];
+        Action[] steps = [() => SweepWinners(scope), Checkpoint, () => _filterInForce.Reapply(this)];
         foreach (var step in steps)
         {
             try
@@ -714,6 +726,8 @@ internal sealed class Store : IDisposable
         /// <summary>Owed by rows that moved which record wins a FormKey; the outermost commit sweeps
         /// once for all of them.</summary>
         public void OweWinnerSweep() => store.OweWinnerSweep();
+
+        public void OweWinnerSweep(IEnumerable<string> formKeys) => store.OweWinnerSweep(formKeys);
 
         public void Announce(Func<long, INotification> announcement) =>
             store.Announce(() => store._notifications?.Publish(announcement(store.Sequence)));
@@ -902,12 +916,13 @@ internal sealed class Store : IDisposable
 
     // The same sweep for a projection that moved rows without moving the load order: which plugins
     // are active cannot change here, so the set the last sweep was handed still holds.
-    private void SweepWinners()
+    private void SweepWinners(ProjectionScope scope)
     {
+        if (!scope.SweepOwed && scope.SweepOwedFor.Count == 0) return;
         var timer = Stopwatch.StartNew();
         using (var tx = BeginTransaction())
         {
-            UpdateWinnersCore();
+            UpdateWinnersCore(scope.SweepOwed ? null : scope.SweepOwedFor);
             BumpSequence();
             tx.Commit();
         }
@@ -929,9 +944,11 @@ internal sealed class Store : IDisposable
 
     // The sweep itself, unwrapped: a caller already inside a transaction (the projection verbs
     // below) calls this directly, since DuckDB refuses a second BeginTransaction on one connection.
-    private void UpdateWinnersCore()
+    private void UpdateWinnersCore(IReadOnlyCollection<string>? formKeys = null)
     {
-        DuckDbSql.Execute(Connection, $"DELETE FROM {TableDdlBuilder.WinnersRelation}");
+        object[] keys = formKeys is null ? [] : [formKeys.ToList()];
+        string Among(string formKey) => formKeys is null ? "TRUE" : $"{formKey} IN (SELECT unnest($1::VARCHAR[]))";
+        DuckDbSql.Execute(Connection, $"DELETE FROM {TableDdlBuilder.WinnersRelation} WHERE {Among("form_key")}", keys);
 
         // QUALIFY and the (plugin, origin) tiebreak make a load_order_idx tie deterministic.
         DuckDbSql.Execute(Connection, $"""
@@ -940,10 +957,11 @@ internal sealed class Store : IDisposable
             FROM mirror.records r
             JOIN {TableDdlBuilder.ActiveRelation} p
               ON p.plugin = r.plugin AND p.origin = r.origin
+            WHERE {Among("r.form_key")}
             QUALIFY ROW_NUMBER() OVER (
                 PARTITION BY r.form_key
                 ORDER BY p.load_order_idx DESC, r.plugin, r.origin) = 1
-            """);
+            """, keys);
     }
 
     // --- Working-tree changes ---
@@ -957,14 +975,11 @@ internal sealed class Store : IDisposable
         if (deltas.Count == 0) return [];
 
         using var tx = BeginTransaction();
-        var projected = StoreFaults.Translating(() => Overlay.ProjectDocuments(key, deltas));
+        var touched = StoreFaults.Translating(() => Overlay.ProjectDocuments(key, deltas));
         BumpSequence();
         tx.Commit();
-        // Only a delta that added or removed a row can move winner status. Re-swept for the whole
-        // load order rather than per FormKey because UpdateWinners is the one definition of winning
-        // (measured at 18 ms over 48k records).
-        if (projected.Structural) OweWinnerSweep();
-        return projected.Touched;
+        OweWinnerSweep(touched);
+        return touched;
     }
 
     /// <summary>Sets each listed row to the state it is now in (ADR-0007), in one advance.</summary>
