@@ -52,7 +52,7 @@ import type {
   EntryRef, GameFolder, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange, PluginsProvided,
 } from '../../instanceAdapter';
 import { setIniValue } from '../codecs/qSettingsIni';
-import { ownTempPrefix } from '../../files';
+import { ownTempPrefix } from '../../../repositoriesLib/wholeWrites';
 import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
 import { runningProgram } from '../../../test/runningProgram';
 import { fileSystemClockMovedOn } from '../../../test/fileSystemClock';
