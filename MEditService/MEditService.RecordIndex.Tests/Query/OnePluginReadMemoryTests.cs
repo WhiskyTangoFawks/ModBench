@@ -1,3 +1,4 @@
+using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
@@ -41,7 +42,7 @@ public sealed class OnePluginReadMemoryTests(OnePluginReadMemoryTests.SmallBesid
                 .Build();
             Keys = keys;
             Quest = quest;
-            Index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new HoldingAdapter(Large, LargeQuests, TopicsPerQuest));
+            Index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Large, QuestsHoldingTopics)));
             IndexFiles.LimitMemory(_fixture.InstanceRoot, MemoryLimit);
         }
 
@@ -51,6 +52,19 @@ public sealed class OnePluginReadMemoryTests(OnePluginReadMemoryTests.SmallBesid
             _fixture.Dispose();
         }
     }
+
+    private static IEnumerable<PluginDocument> QuestsHoldingTopics() => Enumerable.Range(0, LargeQuests).SelectMany(quest =>
+    {
+        var questKey = FormKeyAt(quest * (TopicsPerQuest + 1));
+        var topics = Enumerable.Range(quest * (TopicsPerQuest + 1) + 1, TopicsPerQuest)
+            .Select(FormKeyAt)
+            .Select(topicKey => new PluginDocument("dial", topicKey, $$"""{"FormKey": "{{topicKey}}"}"""))
+            .ToList();
+        var held = string.Join(", ", topics.Select(topic => topic.Text));
+        return topics.Prepend(new PluginDocument("qust", questKey, $$"""{"FormKey": "{{questKey}}", "DialogTopics": [{{held}}]}"""));
+    });
+
+    private static string FormKeyAt(int i) => $"{0x800 + i:X6}:{Large}";
 
     private static readonly Dictionary<string, Action<IQueries, SmallBesideLarge>> ReadsAboutOnePlugin = new()
     {
