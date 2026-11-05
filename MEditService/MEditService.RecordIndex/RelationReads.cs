@@ -355,8 +355,11 @@ internal sealed class RelationReads(
         return GetReferences(context, ActiveOrCompiledPluginReferrers, $"AND (p.load_order_idx IS NOT NULL OR d.derived_from <> '{DerivedFrom.Binary}')", targetFormKey);
     }
 
-    /// <summary>Each copy naming the plugin file <paramref name="name"/> in an active or compiled plugin, and the
-    /// Plugin Header of each such plugin read from its binary that lists it as a master.</summary>
+    // SQL's 1-based position of a FormKey's plugin name, after its six-digit object ID and its colon.
+    private const int FormKeyPluginStart = 8;
+
+    /// <summary>Each copy naming the plugin file <paramref name="name"/> in an active or compiled plugin, by its own
+    /// FormKey or a link, and the Plugin Header of each such plugin read from its binary that lists it.</summary>
     public IReadOnlyList<RecordCopy> GetCopiesNaming(string name)
     {
         using var context = store.OpenRead();
@@ -366,7 +369,12 @@ internal sealed class RelationReads(
             {TableDdlBuilder.RegisteredJoin("r", "plugin", "origin")}
             JOIN {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} d
               ON d.plugin = r.plugin AND d.origin = r.origin
-            WHERE list_contains(list_transform(r.masters, m -> lower(m)), lower($1))
+            WHERE (lower(r.form_key_plugin) = lower($1)
+                   OR list_contains(list_transform(r.masters, m -> lower(m)), lower($1))
+                   OR (lower(r.plugin) = lower($1) AND EXISTS (
+                       SELECT 1 FROM {TableDdlBuilder.MirrorSchema}.form_references fr
+                       WHERE fr.source_form_key = r.form_key AND fr.source_plugin = r.plugin AND fr.source_origin = r.origin
+                         AND lower(substr(fr.target_form_key, {FormKeyPluginStart})) = lower($1))))
               AND (p.load_order_idx IS NOT NULL OR d.derived_from <> '{DerivedFrom.Binary}')
             ORDER BY r.plugin, r.origin, r.form_key
             """, reader => new RecordCopy(reader.GetString(0), new PluginAddress(reader.GetString(1), reader.GetString(2))), name);

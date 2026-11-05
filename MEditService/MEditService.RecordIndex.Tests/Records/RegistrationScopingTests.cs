@@ -233,11 +233,34 @@ public class RegistrationScopingTests
     }
 
     [Fact]
-    public void ThePluginsOwnRecords_AreNoReferenceToIt()
+    public void ThePluginsOwnRecords_AreReferencesToIt_TheirFormKeysNamingIt()
     {
         using var fx = Build("plugin-name-references-own");
 
-        Assert.DoesNotContain(NamingAlpha(fx), c => PluginAddress.Comparer.Equals(c.Plugin, AlphaKey));
+        Assert.Contains(NamingAlpha(fx), c => c.FormKey == fx.SharedNpcFk && PluginAddress.Comparer.Equals(c.Plugin, AlphaKey));
+    }
+
+    [Fact]
+    public void ThePluginsOverrideThatLinksToItsOwnRecord_IsAReferenceToIt()
+    {
+        string overriddenNpc = "";
+        using var plugins = new PluginFixtureBuilder("plugin-name-references-own-link")
+            .WithPlugin(AlphaKey.Name, mod => overriddenNpc = mod.Npcs.AddNew("Base").FormKey.ToString(), origin: AlphaKey.Origin)
+            .WithPlugin(BetaKey.Name, (mod, built) =>
+            {
+                mod.ModHeader.MasterReferences.Add(new MasterReference { Master = built[0].ModKey });
+                var npc = built[0].Npcs.Single().DeepCopy();
+                npc.Race.SetTo(mod.Races.AddNew("BetaRace").FormKey);
+                mod.Npcs.Set(npc);
+            }, origin: BetaKey.Origin)
+            .BuildScattered();
+        var holder = new LoadOrderHolder();
+        using var opens = new GatedPluginAdapter();
+        using var index = Indexes.Open(holder, opens);
+        index.Reconcile(holder, plugins.DataFolder, plugins.Plugins, GameRelease.Fallout4);
+
+        Assert.Contains(index.Queries.GetPluginNameReferences(BetaKey.Name).Value(),
+            c => c.FormKey == overriddenNpc && PluginAddress.Comparer.Equals(c.Plugin, BetaKey));
     }
 
     [Fact]
@@ -268,7 +291,7 @@ public class RegistrationScopingTests
 
         fx.Reconcile(fx.Snapshot(snapshot));
 
-        Assert.Empty(NamingAlpha(fx));
+        Assert.DoesNotContain(NamingAlpha(fx), c => PluginAddress.Comparer.Equals(c.Plugin, BetaKey));
     }
 
     [Theory]
