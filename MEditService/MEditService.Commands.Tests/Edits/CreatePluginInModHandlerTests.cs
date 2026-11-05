@@ -20,7 +20,7 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
     {
         _folder = Directory.CreateDirectory(Path.Combine(_data.DataFolder, Mod)).FullName;
         _holder.Apply(SnapshotPlugins.Snapshot(_data.DataFolder, _data.InstanceRoot, GameRelease.Fallout4, _data.Plugins));
-        TestEditService.PluginCreateHandler(_holder).CreatePlugin(new PluginAddress("First.esp", Mod), _folder, _folder).GetAwaiter().GetResult();
+        TestEditService.PluginCreateHandler(_holder).CreatePlugin(new PluginAddress("First.esp", Mod), _folder, _folder, []).GetAwaiter().GetResult();
         _holder.Apply(SnapshotPlugins.Snapshot(_data.DataFolder, _data.InstanceRoot, GameRelease.Fallout4,
         [
             .. _data.Plugins,
@@ -44,7 +44,7 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
     {
         var written = _holder.SourceWrites;
 
-        var result = await Handler.CreatePluginIn(Mod.ToUpperInvariant(), "Second.esp");
+        var result = await Handler.CreatePluginIn(Mod.ToUpperInvariant(), "Second.esp", []);
 
         Assert.Equal(new PluginAddress("Second.esp", Mod), result.Created());
         Assert.True(File.Exists(Path.Combine(_folder, "Second.esp")));
@@ -57,7 +57,7 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
         var emptyFolder = Directory.CreateDirectory(Path.Combine(_data.DataFolder, "EmptyMod")).FullName;
         Place(new PluginPlace("EmptyMod", emptyFolder, null));
 
-        var result = await Handler.CreatePluginIn("EmptyMod", "Patch.esp");
+        var result = await Handler.CreatePluginIn("EmptyMod", "Patch.esp", []);
 
         result.Created();
         Assert.True(File.Exists(Path.Combine(emptyFolder, "Patch.esp")));
@@ -69,7 +69,7 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
         var overwrite = Directory.CreateDirectory(Path.Combine(_data.DataFolder, "overwrite")).FullName;
         Place(new PluginPlace(LoadOrderEntry.OverwriteOrigin, overwrite, null));
 
-        var result = await Handler.CreatePluginIn(LoadOrderEntry.OverwriteOrigin, "Patch.esp");
+        var result = await Handler.CreatePluginIn(LoadOrderEntry.OverwriteOrigin, "Patch.esp", []);
 
         Assert.Equal(new PluginAddress("Patch.esp", LoadOrderEntry.OverwriteOrigin), result.Created());
         Assert.True(File.Exists(Path.Combine(overwrite, "Patch.esp")));
@@ -80,7 +80,7 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
     {
         var written = _holder.SourceWrites;
 
-        var result = (await Handler.CreatePluginIn(Mod, "First.esp")).Refused();
+        var result = (await Handler.CreatePluginIn(Mod, "First.esp", [])).Refused();
 
         Assert.Equal(PluginCreateRefusal.FileExists, result.Refusal);
         Assert.Equal(written, _holder.SourceWrites);
@@ -93,7 +93,7 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
     {
         var written = _holder.SourceWrites;
 
-        var result = (await Handler.CreatePluginIn(origin, "Second.esp")).Refused();
+        var result = (await Handler.CreatePluginIn(origin, "Second.esp", [])).Refused();
 
         Assert.Equal(PluginCreateRefusal.OriginNotAMod, result.Refusal);
         Assert.Contains(origin, result.Message, StringComparison.Ordinal);

@@ -26,7 +26,7 @@ public sealed class CreatePluginApiTests : HostedTests
     }
 
     private Task<HttpResponseMessage> Create(string name, string folder, string origin = Origin) =>
-        Client.PostAsJsonAsync("/plugins/create", new { origin, name, folder });
+        Client.PostAsJsonAsync("/plugins/create", new { origin, name, folder, flags = Array.Empty<string>() });
 
     private async Task<JsonElement> Created(string name, string folder, string origin = Origin)
     {
@@ -55,7 +55,7 @@ public sealed class CreatePluginApiTests : HostedTests
         Client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.DataFolder, fx.InstanceRoot, plugins, places: places));
 
     private Task<HttpResponseMessage> CreateInMod(string origin, string name) =>
-        Client.PostAsJsonAsync("/plugins/create-in-mod", new { origin, name });
+        Client.PostAsJsonAsync("/plugins/create-in-mod", new { origin, name, flags = Array.Empty<string>() });
 
     [Fact]
     public async Task CreatingAPluginInAPlaceTheSnapshotNamesWithNoPlugin_WritesItInThatPlacesFolder()
@@ -102,6 +102,28 @@ public sealed class CreatePluginApiTests : HostedTests
             fx.Plugins.Count, Enabled: false, Winning: true));
         (await Client.PutLoadOrder(fx, named)).EnsureSuccessStatusCode();
         Assert.Contains(await Client.Plugins(), p => p.GetProperty("name").GetString() == "Listed.esp");
+    }
+
+    [Fact]
+    public async Task CreatingAnEspWithNoFlags_Is422_AndWritesNothing()
+    {
+        var fx = Owned(await Loaded());
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+
+        var created = await Client.PostAsJsonAsync("/plugins/create", new { origin = Origin, name = "Flagless.esp", folder = modFolder });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, created.StatusCode);
+        Assert.False(File.Exists(Path.Combine(modFolder, "Flagless.esp")));
+    }
+
+    [Fact]
+    public async Task TheCreatableFlagsOfAnExtension_AreItsCombinations()
+    {
+        Owned(await Loaded());
+
+        var choices = await Client.GetFromJsonAsync<string[][]>("/plugins/creatable-flags?name=Any.esp");
+
+        Assert.Equal(["", "Master", "Small", "Master+Small"], choices.Require().Select(combination => string.Join('+', combination)));
     }
 
     [Fact]

@@ -87,14 +87,18 @@ function makeMo2() {
 const WROTE = { name: 'MyPatch.esp', origin: 'Winning Mod' };
 
 describe('registerCreatePluginCommand', () => {
-  function invoke(client: InMemoryMEditClient, mo2: ReturnType<typeof makeMo2>, creatableExtensions = ['.esm', '.esl', '.esp']) {
+  function invoke(
+    client: InMemoryMEditClient, mo2: ReturnType<typeof makeMo2>, creatableExtensions = ['.esm', '.esl', '.esp'], flagChoices = [['Master']],
+  ) {
     client.setQueryAnswer('getCreatablePluginExtensions', creatableExtensions);
+    client.setQueryAnswer('getCreatablePluginFlags', flagChoices);
     const reporter = recordingReporter();
     registerCreatePluginCommand(client, mo2.instance, reporter);
     return { run: present(handlers.get('modbench.plugin.create'), "the create plugin command's registered handler"), reporter };
   }
 
   const extensionsQuery = { method: 'getCreatablePluginExtensions', args: [] };
+  const flagsQuery = { method: 'getCreatablePluginFlags', args: ['MyPatch.esp'] };
 
   type Place = { label: string; origin: string };
   const offering = (): { offered: Place[] } => {
@@ -119,9 +123,41 @@ describe('registerCreatePluginCommand', () => {
 
     expect(client.calls).toEqual([
       extensionsQuery,
-      { method: 'createPlugin', args: [{ name: 'MyPatch.esp', origin: 'Winning Mod' }, '/instance/mods/Winning Mod', '/instance/source/Winning Mod'] },
+      flagsQuery,
+      { method: 'createPlugin', args: [{ name: 'MyPatch.esp', origin: 'Winning Mod' }, '/instance/mods/Winning Mod', '/instance/source/Winning Mod', ['Master']] },
     ]);
     expect(reporter.landings).toEqual(['Created "MyPatch.esp" in Winning Mod.']);
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('picks the header flags from the combinations offered, and creates the header flagged as picked', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('createPlugin', WROTE);
+    showInputBox.mockResolvedValue('MyPatch.esp');
+    const offered: string[] = [];
+    showQuickPick.mockImplementation((items: { label: string; origin?: string; flags?: string[] }[]) => {
+      if (items[0]?.origin !== undefined) return Promise.resolve(items.find((item) => item.origin === 'Winning Mod'));
+      offered.push(...items.map((item) => item.label));
+      return Promise.resolve(items.find((item) => item.label === 'ESL'));
+    });
+
+    const { run } = invoke(client, makeMo2(), undefined, [[], ['Master'], ['Small']]);
+    await run();
+
+    expect(offered).toEqual(['No flags', 'ESM', 'ESL']);
+    expect(client.calls.at(-1)).toMatchObject({ method: 'createPlugin', args: [expect.anything(), expect.anything(), expect.anything(), ['Small']] });
+  });
+
+  it('creates nothing when Esc answers the flags pick', async () => {
+    const client = new InMemoryMEditClient();
+    showInputBox.mockResolvedValue('MyPatch.esp');
+    showQuickPick.mockImplementation((items: { origin?: string }[]) =>
+      Promise.resolve(items[0]?.origin === undefined ? undefined : items.find((item) => item.origin === 'Winning Mod')));
+
+    const { run, reporter } = invoke(client, makeMo2(), undefined, [[], ['Master']]);
+    await run();
+
+    expect(client.calls.some((call) => call.method === 'createPlugin')).toBe(false);
     expect(reporter.reports).toEqual([]);
   });
 
@@ -260,11 +296,11 @@ describe('registerCreatePluginCommand', () => {
 });
 
 describe('modbench.plugin.create, called by the agent', () => {
-  const place = (origin: string, name = 'MyPatch.esp') =>
-    new AgentCall([origin === 'overwrite/' ? { kind: 'runtimeOutput' } : { kind: 'mod', name: origin }], { name });
+  const place = (origin: string, name = 'MyPatch.esp', flags?: string[]) =>
+    new AgentCall([origin === 'overwrite/' ? { kind: 'runtimeOutput' } : { kind: 'mod', name: origin }], { name, flags });
   const placeless = new AgentCall([], { name: 'MyPatch.esp' });
 
-  function invokeAgent(call: AgentCall<{ name: string }>, client = new InMemoryMEditClient(), paths: Partial<InstanceValue['paths']> = {}) {
+  function invokeAgent(call: AgentCall<{ name: string; flags?: string[] }>, client = new InMemoryMEditClient(), paths: Partial<InstanceValue['paths']> = {}) {
     const mo2 = makeMo2();
     mo2.instance.value = { ...mo2.instance.value, paths: { ...mo2.instance.value.paths, ...paths } };
     const reporter = recordingReporter();
@@ -276,12 +312,12 @@ describe('modbench.plugin.create, called by the agent', () => {
   it('creates the plugin named in the place given, opening and reporting nothing, and answers the outcome', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('createPlugin', WROTE);
-    const { reporter, answer } = invokeAgent(place('Winning Mod'), client);
+    const { reporter, answer } = invokeAgent(place('Winning Mod', 'MyPatch.esp', ['Small']), client);
 
     const answered = await answer();
 
     expect(client.calls.at(-1)).toEqual(
-      { method: 'createPlugin', args: [WROTE, '/instance/mods/Winning Mod', '/instance/source/Winning Mod'] });
+      { method: 'createPlugin', args: [WROTE, '/instance/mods/Winning Mod', '/instance/source/Winning Mod', ['Small']] });
     expect(answered).toEqual({ applied: true, outcome: { landed: [WROTE], refused: [] } });
     expect(showInputBox).not.toHaveBeenCalled();
     expect(showQuickPick).not.toHaveBeenCalled();
@@ -289,14 +325,15 @@ describe('modbench.plugin.create, called by the agent', () => {
     expect(reporter.landings).toEqual([]);
   });
 
-  it('creates the plugin in a mod named with other case, which holds no plugin of that name', async () => {
+  it('creates the plugin in a mod named with other case, addressing it by the origin the place resolved to', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('createPlugin', WROTE);
     const { answer } = invokeAgent(place('winning mod'), client);
 
     await answer();
 
-    expect(client.calls.at(-1)).toMatchObject({ method: 'createPlugin', args: [expect.anything(), '/instance/mods/Winning Mod', '/instance/source/Winning Mod'] });
+    expect(client.calls.at(-1)).toEqual(
+      { method: 'createPlugin', args: [WROTE, '/instance/mods/Winning Mod', '/instance/source/Winning Mod', undefined] });
   });
 
   it('answers the refusal mEdit gave, with its reason and reporting nothing', async () => {

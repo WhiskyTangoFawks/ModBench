@@ -1,8 +1,10 @@
+using MEditService.Codec.Schema;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.RepositoriesLib;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Http.Endpoints;
 
@@ -147,11 +149,19 @@ internal static class PluginEndpoints
             .Produces<IReadOnlyList<string>>()
             .ProducesProblem(503);
 
+        app.MapGet("/plugins/creatable-flags", CreatableFlags)
+            .WithName("GetCreatablePluginFlags")
+            .WithTags(Tag)
+            .WithDescription("The header flag combinations a new plugin of the given file name's extension may take.")
+            .Produces<IReadOnlyList<IReadOnlyList<string>>>()
+            .ProducesProblem(400)
+            .ProducesProblem(503);
+
         app.MapPost("/plugins/create", CreatePlugin)
             .WithName("CreatePlugin")
             .WithTags(Tag)
             .WithDescription(
-                "Writes an empty plugin (a header whose flags its extension sets, no records and no " +
+                "Writes an empty plugin (a header flagged as given, no records and no " +
                 "masters) into the given folder, in the release of the held load order. Changes " +
                 "nothing else: no init, no load order change and no plugins.txt line.")
             .Produces<PluginAddress>()
@@ -285,6 +295,15 @@ internal static class PluginEndpoints
     private static IResult? RecordTypeProblem(RecordCreateChangesRequest req) =>
         string.IsNullOrWhiteSpace(req.RecordType) ? EndpointMapping.BadRequest("A record type is required.") : null;
 
+    internal static IResult CreatableFlags(string name, LoadOrderHolder holder)
+    {
+        if (holder.Held is not { Snapshot: var loadOrder }) return EndpointMapping.Refusal(PluginCreateRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
+
+        return ModKey.TryFromFileName(name, out var modKey)
+            ? Results.Ok(CreatablePluginFlags.Names(CreatablePluginFlags.Of(loadOrder.GameRelease, modKey.Type)))
+            : EndpointMapping.BadRequest($"{name} is not a plugin file name.");
+    }
+
     internal static async Task<IResult> CreatePlugin(
         CreatePluginRequest req, CreatePluginHandler create, ILoggerFactory loggerFactory)
     {
@@ -292,7 +311,7 @@ internal static class PluginEndpoints
         if (Malformed(req) is { } malformed) return malformed;
 
         var plugin = new PluginAddress(req.Name, req.Origin);
-        return EndpointMapping.Answered("Create plugin", logger, plugin, await create.CreatePlugin(plugin, req.Folder, req.SourceFolder));
+        return EndpointMapping.Answered("Create plugin", logger, plugin, await create.CreatePlugin(plugin, req.Folder, req.SourceFolder, req.Flags));
     }
 
     internal static async Task<IResult> CreatePluginInMod(
@@ -301,7 +320,7 @@ internal static class PluginEndpoints
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (RenamedPlugin(req.Name, req.Origin) is not { } plugin) return EndpointMapping.BadRequest("Plugin name and origin are required.");
 
-        return EndpointMapping.Answered("Create plugin in mod", logger, plugin, await create.CreatePluginIn(plugin.Origin, plugin.Name));
+        return EndpointMapping.Answered("Create plugin in mod", logger, plugin, await create.CreatePluginIn(plugin.Origin, plugin.Name, req.Flags));
     }
 
     // The refusals a malformed request earns, taken before the door so a name that could never be
@@ -416,10 +435,10 @@ internal static class PluginEndpoints
 
 /// <summary>The origin and the file name are the plugin (ADR-0012); the folder is where
 /// the instance holds that origin's files, and the source folder the mod's repository's, none for Overwrite.</summary>
-internal sealed record CreatePluginRequest(string Origin, string Name, string Folder, string? SourceFolder = null);
+internal sealed record CreatePluginRequest(string Origin, string Name, string Folder, string? SourceFolder = null, IReadOnlyList<string>? Flags = null);
 
 /// <summary>The mod that provides the plugin (ADR-0012) and its file name.</summary>
-internal sealed record CreatePluginInModRequest(string Origin, string Name);
+internal sealed record CreatePluginInModRequest(string Origin, string Name, IReadOnlyList<string>? Flags = null);
 
 /// <summary>The plugin by its origin and file name (ADR-0012), and the file name its source takes.</summary>
 internal sealed record RenameSourceChangesRequest(string Origin, string Name, string NewName);

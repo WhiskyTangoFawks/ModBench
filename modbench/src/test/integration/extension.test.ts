@@ -274,6 +274,11 @@ function createMockBackend(): http.Server {
       res.end(JSON.stringify(['.esp', '.esm', '.esl']));
       return;
     }
+    if (url.startsWith('/plugins/creatable-flags')) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify([[], ['Small']]));
+      return;
+    }
     if (method === 'POST' && url === '/plugins/rename-source-changes') {
       let body = '';
       req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
@@ -1808,7 +1813,7 @@ describe('modbench.plugin.create', () => {
     this.timeout(30_000);
     Object.assign(vscode.window, {
       showInputBox: () => Promise.resolve('Created.esp'),
-      showQuickPick: (places: readonly { label: string }[]) => Promise.resolve(places.find((place) => place.label === modName)),
+      showQuickPick: (places: readonly { label: string }[]) => Promise.resolve(places.find((place) => place.label === modName || place.label === 'No flags')),
     });
 
     await waitFor('the create to write the file into the chosen mod, the Instance having read the mod enabled', async () => {

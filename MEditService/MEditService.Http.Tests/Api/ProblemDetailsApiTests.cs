@@ -33,7 +33,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         new(
             "POST /plugins/create",
             (client, dataFolder) => client.PostAsJsonAsync(
-                "/plugins/create", new { origin = Origin, name = "New.esp", folder = Path.Combine(dataFolder, Origin) })),
+                "/plugins/create", new { origin = Origin, name = "New.esp", folder = Path.Combine(dataFolder, Origin), flags = Array.Empty<string>() })),
         new(
             "POST /plugins/rename-source-changes",
             (client, _) => client.PostAsJsonAsync("/plugins/rename-source-changes", new { origin = Origin, name = "New.esp", newName = "Renamed.esp" })),
@@ -64,7 +64,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         using var scratch = new ScratchDirectory("problem-details-create-");
         Directory.CreateDirectory(Path.Combine(scratch, "New.esp"));
 
-        var response = await client.PostAsJsonAsync("/plugins/create", new { origin = Origin, name = "New.esp", folder = scratch.ToString() });
+        var response = await client.PostAsJsonAsync("/plugins/create", new { origin = Origin, name = "New.esp", folder = scratch.ToString(), flags = Array.Empty<string>() });
 
         var problem = await response.AssertIsProblem(HttpStatusCode.UnprocessableEntity);
         Assert.Equal("WriteFailed", problem.GetProperty("refusal").GetString());
