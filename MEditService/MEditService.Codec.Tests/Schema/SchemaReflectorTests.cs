@@ -207,6 +207,16 @@ public class SchemaReflectorTests
         });
     }
 
+    [Theory]
+    [InlineData(GameRelease.Fallout4)]
+    [InlineData(GameRelease.Starfield)]
+    public void ATemplateFlags_ArePlainEnumsInMutagen_SoTheirMembersCarryTheBitsTheDocumentsNumberIsMadeOf(GameRelease release)
+    {
+        var field = SchemaFields.At(release, "npc_", "UseTemplateActors");
+        Assert.Equal("enum", field.Type);
+        Assert.Equal(["1", "2", "4"], field.EnumMembers.Take(3).Select(m => m.BitValue));
+    }
+
     [Fact]
     public void ARacesFlags_UlongBackedBitsBeyondJsMaxSafeInteger_SerializedAsStringsSoTheFrontendParsesThemAsBigInt()
     {
