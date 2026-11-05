@@ -347,7 +347,7 @@ describe('update manifest', () => {
 
     it('whose folder is gone', async () => {
       const { result } = await refusedBy({
-        adapterOver: { fileStamp: (path) => Promise.resolve(path.endsWith('ModA') ? { kind: 'unreadable', reason: `ENOENT: no such file or directory, stat '${path}'` } : read({ size: 0n, modifiedNs: 0n, changedNs: 0n })) },
+        adapterOver: { fileStamp: (path) => Promise.resolve(path.endsWith('ModA') ? { kind: 'unreadable', reason: `ENOENT: no such file or directory, stat '${path}'` } : read({ size: 0n, modifiedNs: 0n })) },
       });
 
       expect(result.refused).toEqual([{ item: 'ModA', reason: 'was not updated: its folder does not exist.' }]);

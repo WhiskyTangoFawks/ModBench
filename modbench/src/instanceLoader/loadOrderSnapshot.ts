@@ -349,7 +349,7 @@ export function loadOrderSnapshotOf(value: {
 
 // Equal while the file's content is (ADR-0003); a file whose stamp could not be read, by why.
 const stampText = (read: FileRead<FileStamp>): string =>
-  (read.kind === 'unreadable' ? read.reason : `${read.answer.size}/${read.answer.modifiedNs}/${read.answer.changedNs}`);
+  (read.kind === 'unreadable' ? read.reason : `${read.answer.size}/${read.answer.modifiedNs}`);
 
 /** The snapshot with each archive and strings file it hands stamped at its own path, each path read once, so no file it
  *  hands goes without its stamp. */

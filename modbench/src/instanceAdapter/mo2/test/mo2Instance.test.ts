@@ -1593,8 +1593,8 @@ describe('the MO2 Instance adapter', () => {
           const rootStamp = await actualStat(folder(), { bigint: true });
           vi.mocked(stat).mockImplementation(async (path, ...rest) => {
             const facts = await actualStat(path, ...rest);
-            const { size, mtimeNs, ctimeNs } = rootStamp;
-            return String(path) === folder() ? Object.assign(facts, { size, mtimeNs, ctimeNs }) : facts;
+            const { size, mtimeNs } = rootStamp;
+            return String(path) === folder() ? Object.assign(facts, { size, mtimeNs }) : facts;
           });
           vi.mocked(readdir).mockImplementation(async (path, options) => {
             if (String(path) === join(folder(), 'Gone')) await rm(path, { recursive: true, force: true });

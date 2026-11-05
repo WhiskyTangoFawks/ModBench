@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { folderValueOver, modValueOver, unheldFolderValueOver } from '../modValue';
 
-const stamp = { size: 0n, modifiedNs: 0n, changedNs: 0n };
+const stamp = { size: 0n, modifiedNs: 0n };
 
 const reads = (held: readonly string[], findsOtherCase = false) => ({
   filesIn: () => Promise.resolve(held),

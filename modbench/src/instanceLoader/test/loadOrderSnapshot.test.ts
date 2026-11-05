@@ -438,7 +438,7 @@ describe('the snapshot the sync PUTs, read straight from the value rather than a
       asked.push(path);
       return Promise.resolve(path.endsWith('.STRINGS')
         ? { kind: 'unreadable', reason: `EACCES ${path}` }
-        : { kind: 'read', answer: { size: BigInt(path.length), modifiedNs: 1n, changedNs: 2n } });
+        : { kind: 'read', answer: { size: BigInt(path.length), modifiedNs: 1n } });
     };
     const value: Parameters<typeof stampedSnapshot>[0] = {
       dataFolder: '/game/Data', gameRelease: 'Fallout4',
@@ -458,11 +458,11 @@ describe('the snapshot the sync PUTs, read straight from the value rather than a
       ...value,
       plugins: [{
         ...value.plugins.at(0),
-        archives: [{ path: '/a/A - Main.ba2', stamp: '15/1/2' }],
+        archives: [{ path: '/a/A - Main.ba2', stamp: '15/1' }],
         stringsFiles: [{ path: '/a/A_en.STRINGS', stamp: 'EACCES /a/A_en.STRINGS' }],
       }],
-      listedArchives: [{ path: '/g/Interface.ba2', stamp: '16/1/2' }],
-      archivesByPlugin: [{ name: 'A.esp', origin: 'ModA', archives: [{ path: '/a/A - Main.ba2', stamp: '15/1/2' }] }],
+      listedArchives: [{ path: '/g/Interface.ba2', stamp: '16/1' }],
+      archivesByPlugin: [{ name: 'A.esp', origin: 'ModA', archives: [{ path: '/a/A - Main.ba2', stamp: '15/1' }] }],
       stringsFiles: [{ path: '/t/A_en.STRINGS', stamp: 'EACCES /t/A_en.STRINGS' }],
     });
     expect(asked.sort()).toEqual(['/a/A - Main.ba2', '/a/A_en.STRINGS', '/g/Interface.ba2', '/t/A_en.STRINGS']);

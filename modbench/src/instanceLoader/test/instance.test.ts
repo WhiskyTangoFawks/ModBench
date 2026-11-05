@@ -972,22 +972,22 @@ describe('Instance — game folder and the archives the game loads', () => {
 
   it('hands a mod\'s plugin the new stamp of a strings file rewritten beside it, at the next read', async () => {
     const stringsFile = '/instance/mods/Patch Mod/Strings/Patch Mod_en.STRINGS';
-    let changedNs = 1n;
+    let modifiedNs = 1n;
     const { instance } = loader({
       ...GAME_FOUND,
       mods: [mod('Patch Mod')],
       pluginOrder: [{ name: 'Patch Mod.esp', enabled: true }],
       modFolders: modFoldersOf('Patch Mod'),
       modFiles: new Map([['Patch Mod', filesOfMod('Patch Mod', 'Patch Mod.esp', 'Strings/Patch Mod_en.STRINGS')]]),
-    }, (adapter) => ({ ...adapter, fileStamp: (path) => Promise.resolve({ kind: 'read', answer: { size: 5n, modifiedNs: 1n, changedNs: path === stringsFile ? changedNs : 0n } }) }));
+    }, (adapter) => ({ ...adapter, fileStamp: (path) => Promise.resolve({ kind: 'read', answer: { size: 5n, modifiedNs: path === stringsFile ? modifiedNs : 0n } }) }));
     await instance.refresh();
     const before = handedStringsFiles(instance.value.loadOrderSnapshot);
 
-    changedNs = 2n;
+    modifiedNs = 2n;
     await instance.refresh();
 
     const after = handedStringsFiles(instance.value.loadOrderSnapshot);
-    expect([before, after]).toEqual([[{ path: stringsFile, stamp: '5/1/1' }], [{ path: stringsFile, stamp: '5/1/2' }]]);
+    expect([before, after]).toEqual([[{ path: stringsFile, stamp: '5/1' }], [{ path: stringsFile, stamp: '5/2' }]]);
   });
 
   it('lands a value carrying the game folder not found, rather than a failure, and back again when it is found', async () => {
