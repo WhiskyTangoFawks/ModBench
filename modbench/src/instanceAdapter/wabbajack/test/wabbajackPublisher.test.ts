@@ -197,7 +197,7 @@ describe('a file the compiler has no way to ship, once no package holds its byte
       await writeSettings(COMPILE_PROFILES);
       const publisher = publisherOver();
       const before = await judgeOf(publisher);
-      const main = ENABLED_BY_PROFILE.Main;
+      const main = ENABLED_BY_PROFILE.Main ?? [];
 
       ENABLED_BY_PROFILE.Main = ['Enabled', 'Newly Enabled'];
       const after = await judgeOf(publisher);
