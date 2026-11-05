@@ -8,8 +8,7 @@ import { dirname, join } from 'node:path';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import type { MoveToTrash } from '../ports/trash';
-import { remove, rename } from './files';
-import { ownTempPrefix } from '../repositoriesLib/wholeWrites';
+import { ownTempPrefix, remove, rename } from './files';
 
 async function whyNotTrashed(folder: string, path: string, trash: MoveToTrash): Promise<string | undefined> {
   const file = join(folder, path);

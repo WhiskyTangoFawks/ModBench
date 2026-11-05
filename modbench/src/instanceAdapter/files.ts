@@ -14,7 +14,7 @@ import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import type { FileRead } from './instanceAdapter';
 import { keptByStamp, sameStamp, stampFrom, type FileStamp, type Kept } from '../repositoriesLib/stampedReads';
-import { isOwnTemp, ownTempPrefix, renameOver, tempOwner } from '../repositoriesLib/wholeWrites';
+import { renameOver } from '../repositoriesLib/wholeWrites';
 import { digestOf } from './fileContents/contentDigest';
 import type { MoveToTrash } from '../ports/trash';
 
@@ -25,6 +25,19 @@ export function isRepository(sourceFolder: string): Promise<boolean> {
 
 /** The git directory, whose presence makes a folder a repository. */
 export const GIT_DIR = '.git';
+
+const TEMP_PREFIX = '.medit_tmp_';
+
+/** Whether `name` is a temp that Modbench or mEdit left in an instance folder: never a mod's file. */
+export const isOwnTemp = (name: string): boolean => name.startsWith(TEMP_PREFIX);
+
+// The prefix of a temp this process names, `.medit_tmp_<pid>_`: the process id lets any writer tell a leftover from a live temp.
+export const ownTempPrefix = (folder: string, kind: string): string => join(folder, `${TEMP_PREFIX}${process.pid}_${kind}`);
+
+function tempOwner(tempName: string): number | undefined {
+  const id = Number(tempName.slice(TEMP_PREFIX.length).split('_')[0] || Number.NaN);
+  return Number.isInteger(id) && id > 0 ? id : undefined;
+}
 
 function tempWritePath(path: string): string {
   return `${ownTempPrefix(dirname(path), '')}${randomBytes(6).toString('hex')}.tmp`;
