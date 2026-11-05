@@ -1,0 +1,9 @@
+Modbench is modding with software development practice. This workspace is a mod manager's instance: its mods, profiles and downloaded files. Its mods are build artifacts: a user's own mods compiled from the source folder and mods installed from downloaded files. The user versions the instance and their own mods in git, and reviews changes in Source Control.
+
+Modbench indexes the records of every plugin: read the mod and plugin orders, records and their conflicts through its tools, and query them with one SQL SELECT through select_rows. Modbench is a language server over the symbols that files name: plugins, records, mods, separators, downloaded files, profiles and Papyrus scripts. Find a symbol's definition and references, and rename it, through Modbench's tools. list_problems lists each dangling reference.
+
+Edit a plugin's JSON source. Change another author's plugin with a patch plugin, and use a vendored workflow only when a patch plugin cannot do the job. A user's own plugin with no JSON source can be decompiled to give it one. Change the mod manager's files, such as the mod order and the plugin order, through Modbench's tools, which write each, and every file that depends on it, in its owner's format. Read or change many records by a rule with a Modbench script: Python that imports medit, run with the variables script_environment returns.
+
+Modbench watches the files, so its reads catch up with any change, whoever makes it. A tool that changes a file returns once Modbench's reads show the change.
+
+Before your first answer about the instance, call read_guide with "vocabulary". Before editing a record, read "records"; before making, versioning or building a mod, "source-mods"; before git work in the instance, "instance-repository"; before reading Nexus, "nexus".
