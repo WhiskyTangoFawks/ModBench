@@ -308,15 +308,16 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         });
 
     public async Task<Answer<EmptyPluginCreated, PluginFailure>> CreateAndWriteAsync(
-        ModKey modKey, string folder, GameRelease gameRelease)
+        ModKey modKey, string folder, GameRelease gameRelease, IReadOnlyCollection<HeaderFlag> flags)
     {
         var destinationPath = PathOfEmpty(modKey, folder);
         if (!Directory.Exists(folder)) return PluginAnswer.Of<EmptyPluginCreated>(EmptyPluginWrite.FolderGone);
         if (File.Exists(destinationPath)) return PluginAnswer.Of<EmptyPluginCreated>(EmptyPluginWrite.FileExists);
 
         var plugin = CreateEmpty(modKey, gameRelease);
-        plugin.IsMaster = modKey.Type == ModType.Master;
-        plugin.IsSmallMaster = modKey.Type == ModType.Light;
+        plugin.IsMaster = flags.Contains(HeaderFlag.Master);
+        plugin.IsSmallMaster = flags.Contains(HeaderFlag.Small);
+        if (flags.Contains(HeaderFlag.Medium)) plugin.IsMediumMaster = true;
 
         // NoModKeySync lifts Mutagen's file-name-matches-ModKey check, so the temp file needs no
         // folder of its own — nothing here can create or resurrect one. The fixed .tmp suffix

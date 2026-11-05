@@ -38,7 +38,7 @@ class Created:
 
     def create(self, name: str, origin: str, active: bool) -> medit.Plugin:
         with self.lock:
-            plugin = medit.create_plugin(name, origin)
+            plugin = medit.create_plugin(name, origin, flags=[])
             (self.enabled if active else self.disabled).append(plugin)
             return plugin
 

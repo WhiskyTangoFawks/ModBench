@@ -228,7 +228,9 @@ export type RecordFilter = components['schemas']['RecordFilter'];
 export interface MEditClient {
   // Commands — the HTTP adapter's verbs by today's names, each answering applied-or-refusal;
   // `rebuildIndex` answers with its own outcome shape (RebuildIndexOutcome).
-  createPlugin(plugin: PluginAddress, folder: string, sourceFolder: string | undefined): Promise<PluginAddress | WriteRefused>;
+  createPlugin(
+    plugin: PluginAddress, folder: string, sourceFolder: string | undefined, flags: readonly string[] | undefined,
+  ): Promise<PluginAddress | WriteRefused>;
   // The changes renaming the plugin source makes over the unsaved documents mEdit holds, and the name its tree is
   // filed under. A WriteRefused is the call failing or mEdit refusing. Nothing is written.
   getRenameSourceChanges(plugin: PluginAddress, newName: string): Promise<RenameSourceChangesOutcome | WriteRefused>;
@@ -280,6 +282,8 @@ export interface MEditClient {
   /** The types the plugin's copy of a container record can hold, in name order. */
   getChildRecordTypes(plugin: PluginAddress, formKey: string): Promise<RecordTypeChoice[] | ReadFailed>;
   getCreatablePluginExtensions(): Promise<string[] | ReadFailed>;
+  /** The header flag combinations a new plugin of the file name's extension may take. */
+  getCreatablePluginFlags(name: string): Promise<string[][] | ReadFailed>;
   getRecords(plugin: PluginAddress, type: string, offset: number, limit: number): Promise<RecordPage | ReadFailed>;
   /** Every active plugin's copies, or one plugin's. */
   searchRecords(query: string, validTypes: string[], plugin?: PluginAddress): Promise<RecordPage | ReadFailed>;
