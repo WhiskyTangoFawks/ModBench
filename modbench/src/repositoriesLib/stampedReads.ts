@@ -24,7 +24,6 @@ export interface Kept<T> {
   readonly path: string;
   readonly stamp: FileStamp;
   readonly value: T;
-  /** Whether `stamp` is old enough to trust `value` by. */
   readonly settled: boolean;
 }
 

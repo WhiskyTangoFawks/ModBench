@@ -109,6 +109,21 @@ describe('a folder listed and a file parsed by their stamps', () => {
     expect(answer).toEqual(['a.dds']);
   });
 
+  it('lists again within a re-read each folder kept below a folder the re-read is named that it listed too recently to trust', async () => {
+    const below = join(root, 'Mod', 'textures');
+    await mkdir(below, { recursive: true });
+    settle();
+    await namesOf(below);
+    await writeFile(join(below, 'a.dds'), '');
+    await modifiedLater(below);
+    vi.useRealTimers();
+    await namesOf(join(root, 'Mod'));
+
+    const { answer } = await readTrustingKept([join(root, 'Mod')], false, () => namesOf(below));
+
+    expect(answer).toEqual(['a.dds']);
+  });
+
   it('checks the disk by every stamp it keeps, answering each change as unheard but those of the paths it is named', async () => {
     const [heard, unheard] = [join(root, 'heard'), join(root, 'unheard')];
     await mkdir(heard);

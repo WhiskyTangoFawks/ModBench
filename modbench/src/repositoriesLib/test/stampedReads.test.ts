@@ -76,6 +76,13 @@ describe('a read kept by the stamp of its file', () => {
     expect(await kept(path)).toBe(2);
   });
 
+  it('reads every time while the stamp is younger than two seconds, though it trusts', async () => {
+    const kept = keptByStamp(read, { trusts: () => true });
+    await kept(path);
+
+    expect(await kept(path)).toBe(2);
+  });
+
   it('hands what it keeps without looking at the stamp while it trusts', async () => {
     settle();
     let trusting = false;

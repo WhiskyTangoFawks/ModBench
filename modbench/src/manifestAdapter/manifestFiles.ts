@@ -6,6 +6,7 @@ import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import { isManifestPath, MANIFEST_SUFFIX } from '../repositoriesLib/manifestPath';
 import type { PackagesAsked } from '../repositoriesLib/statusValues';
+import { ownTempPrefix, renameOver } from '../repositoriesLib/wholeWrites';
 import { BUILD_FILE, PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
 import type { BuildFileAgainst, BuildFileLack, BuildFileRead, BuildStep } from './buildFile';
 import { readBuildFile } from './buildFileRead';
@@ -54,12 +55,11 @@ export async function manifestIn(folder: string): Promise<ManifestRead | undefin
   return one === undefined ? undefined : manifestReadAt(join(folder, one));
 }
 
-// The Instance adapter's listings skip the temp's name.
 async function writeWhole(folder: string, path: string, text: string): Promise<void> {
-  const temp = join(folder, `.medit_tmp_${process.pid}_manifest_${randomUUID()}`);
+  const temp = `${ownTempPrefix(folder, 'manifest_')}${randomUUID()}`;
   try {
     await writeFile(temp, text);
-    await rename(temp, path);
+    await renameOver(rename, temp, path);
   } finally {
     await rm(temp, { force: true });
   }
