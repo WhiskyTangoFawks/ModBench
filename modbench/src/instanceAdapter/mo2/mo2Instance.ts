@@ -21,7 +21,7 @@ import type { Mo2Context } from './mo2Context';
 import { mo2Landing } from './mo2Landing';
 import { mo2GameFiles, mo2Repository } from './mo2Repository';
 import { mo2Submodules } from './mo2Submodules';
-import { mo2PathTokens, unfilteredShown } from './mo2PathTokens';
+import { mo2PathTokens, pathTokensFollowed, unfilteredShown } from './mo2PathTokens';
 import { mo2PluginRename } from './mo2PluginRename';
 import { mo2Installation } from './mo2Installation';
 import { readInstance } from '../instanceReading';
@@ -78,9 +78,10 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
   const source = readingSource(context, publisherFile);
   const gameFolder = async (): Promise<GameFolder> => (await source.settings()).gameFolder();
   const showUnfiltered = unfilteredShown(instanceRoot, publisherFile, fileProblems);
+  const followPathTokens = pathTokensFollowed(context, gameFolder, publisherFile);
   const adapter: ManagerAdapter = {
     names: source.names,
-    reading: async (reread) => (await Promise.all([readInstance(source, reread), showUnfiltered()]))[0],
+    reading: async (reread) => (await Promise.all([readInstance(source, reread), showUnfiltered(), followPathTokens()]))[0],
     activeProfile: async () => (await source.settings()).profile,
     gameRelease: async () => (await source.settings()).gameRelease,
     gameFolder,

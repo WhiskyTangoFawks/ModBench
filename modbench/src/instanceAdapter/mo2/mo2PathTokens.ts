@@ -59,12 +59,12 @@ const RECENT_DIRECTORIES = '[recentDirectories]';
 // A sed `i` or `a` text: each line but the last ends in a backslash.
 const sedText = (lines: readonly string[]): string => lines.map((line) => line.replaceAll('\\', '\\\\')).join('\\\n');
 
-// The insertion runs once, unless the file already holds the section, which its first line is noted in the hold space.
+// The insertion runs once, and not at all if the file already holds the section: the hold space is empty until the section's first line, or the insertion, fills it.
 const insertedOnce = (address: string, command: 'i' | 'a', section: readonly string[]): string =>
-  `${address}{\nx\n/./!{\nx\n${command}\\\n${sedText(section)}\nx\n}\nx\n}`;
+  `${address}{\nx\n/./!{\nx\n${command}\\\n${sedText(section)}\nh\nx\n}\nx\n}`;
 
 // MO2 fills this section with whatever folder a file dialog last browsed. The range runs to the next section's header.
-// A checkout puts this machine's own back, before the section that follows it here.
+// A checkout puts this machine's own back, before the section that followed it here, or at the end where the file lacks that section.
 function recentDirectoriesDropped(thisMachine: string): TokenProgram {
   const clean = [String.raw`/^\[recentDirectories\]/,/^\[/{/^\[recentDirectories\]/d;/^\[/!d}`];
   const lines = thisMachine.split('\n');
@@ -74,7 +74,8 @@ function recentDirectoriesDropped(thisMachine: string): TokenProgram {
   const section = lines.slice(start, length === -1 ? undefined : start + 1 + length);
   const next = length === -1 ? undefined : lines[start + 1 + length]?.replace(/\r$/, '');
   const noted = String.raw`/^\[recentDirectories\]/h`;
-  return { clean, smudge: [noted, next === undefined ? insertedOnce('$', 'a', section) : insertedOnce(`/^${sedLiteral(next)}/`, 'i', section)] };
+  const atEnd = insertedOnce('$', 'a', section);
+  return { clean, smudge: [noted, ...(next === undefined ? [] : [insertedOnce(`/^${sedLiteral(next)}/`, 'i', section)]), atEnd] };
 }
 
 // A clone holds no account, so its value is empty.
@@ -300,6 +301,31 @@ export function unfilteredShown(instanceRoot: string, publisherFile: Configurati
 
 const foundRoot = (folder: GameFolder): string | undefined => (folder.kind === 'found' ? folder.root : undefined);
 
+// The programs with this machine's own folders and values in place of the tokens. Answers the game folder it used.
+async function machineProgramsPut(context: Mo2Context, gameFolder: () => Promise<GameFolder>, covered: readonly CoveredFile[], directory: string, accounts: TokenProgram, machine: Machine): Promise<GameFolder> {
+  const game = await gameFolder();
+  const folders = { game: foundRoot(game), downloads: await downloadsFolder(context), committedOutsideInstance: await committedOutsideInstanceIn(context.instanceRoot, covered) };
+  await programsPut(context.instanceRoot, covered, directory, folders, accounts, machine);
+  return game;
+}
+
+/** Rewrites the programs of a repository that holds its path filters whenever this machine's values in a covered file change, so
+ *  git diff shows a change against the latest of them. Run on each reading of the instance. */
+export function pathTokensFollowed(context: Mo2Context, gameFolder: () => Promise<GameFolder>, publisherFile: ConfigurationFile | undefined): () => Promise<void> {
+  const covered = coveredFiles(publisherFile);
+  let followed: string | undefined;
+  return async () => {
+    const { instanceRoot } = context;
+    const machine = await machineOf(instanceRoot, covered);
+    const values = JSON.stringify([...machine]);
+    if (values === followed) return;
+    if (await isRepository(instanceRoot) && await pathTokensWritten(instanceRoot, publisherFile)) {
+      await machineProgramsPut(context, gameFolder, covered, await programDirectory(instanceRoot), accountTokens(await get(settingsFile(instanceRoot), '')), machine);
+    }
+    followed = values;
+  };
+}
+
 export function mo2PathTokens(context: Mo2Context, gameFolder: () => Promise<GameFolder>, publisherFile: ConfigurationFile | undefined): Mo2PathTokens {
   const { instanceRoot } = context;
   const covered = coveredFiles(publisherFile);
@@ -314,8 +340,7 @@ export function mo2PathTokens(context: Mo2Context, gameFolder: () => Promise<Gam
     await programsPut(instanceRoot, covered, directory, NO_FOLDERS, accounts, machine);
     await configPut(instanceRoot, covered, directory, held.config);
     await withScratch((scratch) => smudged(scratch, instanceRoot, files));
-    const game = await gameFolder();
-    await programsPut(instanceRoot, covered, directory, { game: foundRoot(game), downloads: await downloadsFolder(context), committedOutsideInstance: await committedOutsideInstanceIn(instanceRoot, covered) }, accounts, machine);
+    const game = await machineProgramsPut(context, gameFolder, covered, directory, accounts, machine);
     const holding = await withScratch((scratch) => smudged(scratch, instanceRoot, files));
     await statsForgotten(instanceRoot, files);
     if (holding.length === 0) return undefined;

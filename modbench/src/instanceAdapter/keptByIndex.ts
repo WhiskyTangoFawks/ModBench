@@ -31,22 +31,23 @@ const sameStamps = (a: readonly MaybeStamped[], b: readonly MaybeStamped[]): boo
   });
 
 interface Kept<T> {
+  readonly version: string;
   readonly stamps: readonly MaybeStamped[];
   readonly value: T;
 }
 
 /** A keeper of what git answers from a repository's index and .gitmodules alone: an answer is read once under its `key`,
- *  and handed again while both keep their stamps. A failed read, or one `keeps` refuses, is not kept. */
-export function keptByIndex<T>(keeps: (value: T) => boolean = () => true): (repository: string, key: string, read: () => Promise<T>) => Promise<T> {
+ *  and handed again while both keep their stamps and its `version` stays. A key keeps only its latest version. A failed read, or one `keeps` refuses, is not kept. */
+export function keptByIndex<T>(keeps: (value: T) => boolean = () => true): (repository: string, key: string, read: () => Promise<T>, version?: string) => Promise<T> {
   const kept = new Map<string, Kept<T>>();
-  return async (repository, key, read) => {
+  return async (repository, key, read, version = '') => {
     const where = `${repository}\0${key}`;
     const stamps = await Promise.all([join(await gitDirOf(repository), 'index'), join(repository, '.gitmodules')].map(stampedIfThere));
     const held = kept.get(where);
-    if (held !== undefined && sameStamps(held.stamps, stamps)) return held.value;
+    if (held !== undefined && held.version === version && sameStamps(held.stamps, stamps)) return held.value;
     const readFromMs = Date.now();
     const value = await read();
-    if (keeps(value) && stamps.every((stamp) => stamp === undefined || settledBefore(stamp, readFromMs))) kept.set(where, { stamps, value });
+    if (keeps(value) && stamps.every((stamp) => stamp === undefined || settledBefore(stamp, readFromMs))) kept.set(where, { version, stamps, value });
     else kept.delete(where);
     return value;
   };
