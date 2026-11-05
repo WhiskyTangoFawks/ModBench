@@ -18,7 +18,7 @@ public sealed class CrossSideNameTests
     [
         new(Path.Combine("MEditService.RepositoriesLib", "TempName.cs"),
             @"private const string Prefix = ""([^""]+)"";",
-            Path.Combine("instanceAdapter", "files.ts"),
+            Path.Combine("repositoriesLib", "wholeWrites.ts"),
             @"(?:export )?const TEMP_PREFIX = '([^']+)';",
             "private const string Prefix = \".medit_tmp_\";",
             "const TEMP_PREFIX = '.medit_temp_';"),
