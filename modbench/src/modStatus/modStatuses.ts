@@ -11,9 +11,13 @@ export interface StatusSource {
   readonly entryKey: (entry: EntryRef) => string;
   /** Each source mod's source folder, by its entry's name. */
   readonly paths: { readonly sourceDirs: ReadonlyMap<string, string> };
+  /** Each listed mod's own files, by its entry's name: what the reading already holds. */
+  readonly filesByMod: ReadonlyMap<string, readonly { readonly relativePath: string }[]>;
 }
 
-type ModAndSourceFolder = ModAt & { readonly sourceFolder?: string };
+const isGitsOwn = (path: string): boolean => path === '.git' || path.startsWith('.git/');
+
+type ModAndSourceFolder = ModAt & { readonly sourceFolder?: string; readonly files: readonly string[] };
 
 interface Listening {
   dispose(): void;
@@ -24,7 +28,7 @@ function modsAt(value: StatusSource): ModAndSourceFolder[] {
   const folders = new Map((value.modFolders ?? []).map((folder) => [keyOf(folder), folder]));
   return value.mods.filter(({ kind }) => kind === 'mod').flatMap((entry) => {
     const folder = folders.get(keyOf(entry));
-    return folder === undefined ? [] : [{ name: folder.modName, folder: folder.path, sourceFolder: value.paths.sourceDirs.get(entry.name) }];
+    return folder === undefined ? [] : [{ name: folder.modName, folder: folder.path, sourceFolder: value.paths.sourceDirs.get(entry.name), files: (value.filesByMod.get(entry.name) ?? []).map(({ relativePath }) => relativePath) }];
   });
 }
 
@@ -49,7 +53,7 @@ export class ModStatuses {
   private readonly changed = new Set<() => void>();
   private readonly messageChanged = new Set<() => void>();
 
-  constructor(private readonly reads: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole' | 'filesHeldByGit' | 'filesIn'>, private readonly log: (line: string) => void) {}
+  constructor(private readonly reads: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole' | 'filesHeldByGit'>, private readonly log: (line: string) => void) {}
 
   /** Derives every status again from `value`; of the values handed while one derives, the latest alone derives next. */
   derive(value: StatusSource): void {
@@ -143,11 +147,11 @@ export class ModStatuses {
     }
   }
 
-  private async statusAgainstManifest(mod: ModAt, heldByGit: readonly string[]): Promise<ModStatus> {
+  private async statusAgainstManifest(mod: ModAndSourceFolder, heldByGit: readonly string[]): Promise<ModStatus> {
     const manifest = await manifestAt(mod.folder);
     const status = statusFrom(mod, manifest, await this.reads.modValue(mod.folder, packagesAskedAt(manifest), heldByGit));
     if (status.unreadable !== undefined) return status;
-    const unpackaged = status.noManifest ? await this.reads.filesIn(mod.folder) : status.unpackaged;
+    const unpackaged = status.noManifest ? mod.files.filter((path) => !isGitsOwn(path)) : status.unpackaged;
     return { ...status, unpackaged: [...new Set([...unpackaged, ...heldByGit])].sort() };
   }
 

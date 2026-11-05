@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, join, relative } from 'node:path';
+import { basename, join } from 'node:path';
 import type { EntryRef, InstanceAdapter, ModFolder } from '../../instanceAdapter/instanceAdapter';
 import { modValueOver } from '../../instanceAdapter/modValue';
 import type { Manifest } from '../../manifestAdapter/manifestAdapter';
@@ -60,7 +60,7 @@ const file = (name: string) => ({ kind: 'installationFile' as const, name, size:
 const folder = (kind: EntryRef['kind'], name: string, path: string, modName = name): ModFolder => ({ kind, name, path, modName });
 
 const valueOf = (mods: EntryRef[], modFolders: ModFolder[], over: Partial<StatusSource> = {}): StatusSource =>
-  ({ holdsRepository: true, mods, modFolders, entryKey: ({ name }) => name.toLowerCase(), paths: { sourceDirs: new Map() }, ...over });
+  ({ holdsRepository: true, mods, modFolders, entryKey: ({ name }) => name.toLowerCase(), paths: { sourceDirs: new Map() }, filesByMod: new Map(), ...over });
 
 let heldWhole: ReadonlySet<string>;
 let heldByGit: ReadonlyMap<string, readonly string[]>;
@@ -69,9 +69,8 @@ let whileListing: () => void;
 let failingInstallationReads: number;
 let installationFiles: ReadonlyMap<string, Awaited<ReturnType<InstanceAdapter['installationFile']>>>;
 
-const instance: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole' | 'filesHeldByGit' | 'filesIn'> = {
+const instance: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole' | 'filesHeldByGit'> = {
   foldersHeldWhole: (folders) => Promise.resolve(new Set(folders.filter((folder) => heldWhole.has(folder)))),
-  filesIn: async (at) => (await readdir(at, { recursive: true, withFileTypes: true })).filter((entry) => entry.isFile()).map((entry) => relative(at, join(entry.parentPath, entry.name))),
   filesHeldByGit: (folders) => {
     listings += 1;
     whileListing();
@@ -182,11 +181,12 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
   });
 
   describe('the files no package holds (publishing.md, What ships, story 2)', () => {
-    it('lists every file of a mod whose folder holds no manifest', async () => {
-      const mod = await folderOf('ModA', { 'mine.txt': '', 'other.txt': '' });
+    it('lists every file the reading holds of a mod whose folder holds no manifest, but git\'s own', async () => {
+      const mod = await folderOf('ModA');
+      const held = ['mine.txt', 'other.txt', '.git/HEAD'].map((relativePath) => ({ relativePath }));
       const statuses = statusesLogging();
 
-      statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)]));
+      statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], { filesByMod: new Map([['ModA', held]]) }));
 
       expect((await statuses.current()).get('ModA')?.unpackaged).toEqual(['mine.txt', 'other.txt']);
     });

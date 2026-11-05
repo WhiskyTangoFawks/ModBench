@@ -157,7 +157,8 @@ export function statusFrom(mod: ModAt, { read, file }: ManifestAt, values: Statu
   const { files, namedByNoLine, ignored } = folderAgainst(manifest, values.folder, values.flaggedHashes);
   const held = packagesHeld(manifest, values);
   const unheld = held.lacking.length === 0 ? filesNoPackageHolds(manifest, held.files) : undefined;
-  const isUnheld = (path: string): boolean => unheld !== undefined && [...unheld.notInPackage, ...unheld.otherBytes].some((one) => folded(one) === folded(path));
+  const unheldPaths = new Set([...unheld?.notInPackage ?? [], ...unheld?.otherBytes ?? []].map(folded));
+  const isUnheld = (path: string): boolean => unheldPaths.has(folded(path));
   const isSourceMod = repositoryOf(manifest) !== undefined;
   const unpackaged = files.flatMap(({ path, hash, pathInFolder, holdsItsBytes }) =>
     (pathInFolder !== undefined && (isSourceMod || hash === null || holdsItsBytes === false || isUnheld(path)) ? [pathInFolder] : []));

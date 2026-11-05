@@ -64,6 +64,21 @@ describe('a mod the published modlist has no way to ship (publishing.md, What sh
     await vi.waitFor(() => { expect(problemsOn(collection).map(([, message]) => message)).toEqual([`1 file of "ModB" has no way to ship: 'a.esp': ModB ${REASON}.`]); });
   });
 
+  it('judges again only the mods whose status changed', async () => {
+    const judgedMods: string[] = [];
+    const counting: PublisherConfiguration = {
+      ...configuration(), unshippable: { file: SETTINGS, reason: (_folder, _path, mod) => { judgedMods.push(mod); return REASON; } },
+    };
+    const { collection, becomes } = over([status('ModA', { unpackaged: ['a.esp'] }), status('ModB', { unpackaged: ['b.esp'] })], counting);
+    await vi.waitFor(() => { expect(problemsOn(collection)).toHaveLength(2); });
+    judgedMods.length = 0;
+
+    becomes([status('ModA', { unpackaged: ['a.esp'] }), status('ModB', { unpackaged: ['b.esp', 'c.esp'] })]);
+    await vi.waitFor(() => { expect(problemsOn(collection).map(([, message]) => message)).toContain(`2 files of "ModB" have no way to ship, such as 'b.esp': ${REASON}.`); });
+
+    expect(judgedMods).toEqual(['ModB', 'ModB']);
+  });
+
   it('follows the statuses, and clears when the instance holds no publisher', async () => {
     const { collection, instance, becomes } = over([status('ModA', { unpackaged: ['a.esp'] })], configuration());
     await vi.waitFor(() => { expect(problemsOn(collection)).toHaveLength(1); });
