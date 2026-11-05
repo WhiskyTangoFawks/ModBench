@@ -27,4 +27,7 @@ internal sealed class IndexFaultException : InvalidOperationException
     }
 
     public IndexFault Fault { get; init; }
+
+    internal static bool RanOutOfMemory(Exception ex) =>
+        ex is OutOfMemoryException or IndexFaultException { Fault: IndexFault.OutOfMemory };
 }
