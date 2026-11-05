@@ -47,6 +47,7 @@ Gestures Modbench does differently.
 | 23 | Delete a downloaded file | Asks nothing: the trash gives the file back | Confirms each delete | Principle: Minimal by default (commands.md, Confirm what destroys). |
 | 24 | Hide and Hidden files | Exclude or include, and show excluded | Hide / Un-Hide, and the Hidden files check box | Ruling: in Modbench, hide acts on the view alone (commands.md, Exclude and hide). |
 | 25 | Where a new mod lands | At the winning end of the mod order ([mods.md](../surfaces/mods.md), What install does, story 2) | At the priority of the row the gesture started from, or inside the separator it started from; Create empty mod and Install mod inside are on the separator menu | Ruling: deferred. |
+| 26 | Archive parsing | Always on, with no setting | An experimental setting, off by default | Principle: Usable first. |
 
 ## Omissions by object
 
