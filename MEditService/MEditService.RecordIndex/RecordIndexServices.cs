@@ -17,7 +17,7 @@ public static class RecordIndexServices
     // with other programs leaves it.
     private const long Gigabyte = 1_000_000_000;
 
-    public static IServiceCollection AddRecordIndex(this IServiceCollection services, long memoryLimit = Gigabyte)
+    public static IServiceCollection AddRecordIndex(this IServiceCollection services, long? memoryLimit = null)
     {
         services.AddSingleton<IQueries>(sp =>
         {
@@ -29,7 +29,7 @@ public static class RecordIndexServices
                 sp.GetRequiredService<ISourceAdapter>(),
                 sp.GetRequiredService<SchemaReflector>(),
                 filter,
-                memoryLimit,
+                memoryLimit ?? Gigabyte,
                 sp.GetRequiredService<ILoggerFactory>(),
                 sp.GetService<INotificationPublisher>(),
                 sp.GetRequiredService<TimeProvider>());

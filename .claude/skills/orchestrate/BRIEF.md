@@ -12,11 +12,11 @@ Verified means observed, and that includes my claims. A run you watched outranks
 
 Work test-first, using `/tdd` at the seams the ticket names. Typecheck and run the single test files you are touching as you go, rather than saving every failure for the end.
 
-Run `/validate` when the work stands. Review is the orchestrator's, dispatched against your branch once you report. Conflicts from merging `main` are yours to resolve on the branch. Use local `main` only. Nothing in this run pushes.
+When the work stands, typecheck and run the test projects of the boxes you touched. The full gates run once, on `main`, when the run drains. Review is the orchestrator's, dispatched against your branch once you report. Conflicts from merging `main` are yours to resolve on the branch. Use local `main` only. Nothing in this run pushes.
 
 A guard test is vacuous until you have watched it fail. For every slice that arrives green and every test that forbids a state, name the **rival**: the plausible wrong implementation, or the precondition removed. Apply the rival with Edit, run the test, report the failure you observed, and undo the rival with Edit. A rival that passes is a finding, so report what actually enforces the property.
 
-Your turn is your life. The final message of your turn is your report, and nothing you were waiting for arrives after it. Every wait is a foreground call: Bash with `run_in_background: false` and `timeout: 600000`, or Agent with `run_in_background: false`. Work that outlasts one call is detached and polled with further foreground calls, which is how `/validate` runs the gates.
+Your turn is your life. The final message of your turn is your report, and nothing you were waiting for arrives after it. Every wait is a foreground call: Bash with `run_in_background: false` and `timeout: 600000`, or Agent with `run_in_background: false`. Work that outlasts one call is detached and polled with further foreground calls.
 
 Findings are handled in two ways. A bug or debt that your ticket needs, or that sits in code you touched, gets fixed here. Anything you did not fix goes in the report as a finding, with what you observed. A red gate in a box another lane holds is such a finding. A ruled-out area is neither fixed nor reported. Stop at its edge and say so. The report is your only outlet, because the tracker belongs to the orchestrator.
 
@@ -33,7 +33,7 @@ Park only for one of these:
 
 To park, commit WIP and end your turn with the question as the report.
 
-Done means committed. Gates are green, the SHA is reported, and `git status` is clean. Say committed, never landed.
+Done means committed. Your boxes' tests are green, the SHA is reported, and `git status` is clean. Say committed, never landed.
 
 Report test counts as passed before, passed after, and delta, with skipped stated separately. Name each test you deleted, with the member it tested or the test that now holds its case.
 

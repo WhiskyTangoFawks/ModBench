@@ -1,5 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
+using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -76,6 +77,41 @@ public sealed class WorkingTreeDeletionTests : IDisposable
 
         index.Create(_base, _raceA, "race", "RaceA", committedBody);
         Assert.Equal(WorkingTreeState.None, index.RowOf(_raceA, _baseKey)?.WorkingTreeState);
+    }
+
+    private const string ActivePlugins = "active_plugins";
+
+    private bool PromotesBase(OpenedIndex index) =>
+        Waits.ReachedWithin(() => StackOf(index, _npc).SequenceEqual([("Base.esm", true)]), TimeSpan.FromSeconds(20));
+
+    private OpenedIndex IndexWhoseSweepFailedAfterDeletingTheWinner()
+    {
+        var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
+        IndexFiles.Execute(_fixture.InstanceRoot, $"ALTER TABLE {ActivePlugins} RENAME TO active_aside");
+        index.Delete(_winner, index.DocumentOf(_npc, _winnerKey));
+        Assert.True(Waits.ReachedWithin(() => index.Status.State == LoadOrderState.Failed, TimeSpan.FromSeconds(20)));
+        IndexFiles.Execute(_fixture.InstanceRoot, $"ALTER TABLE active_aside RENAME TO {ActivePlugins}");
+        return index;
+    }
+
+    [Fact]
+    public void AWinnerSweepThatFails_FailsTheStatus_AndStaysOwedUntilALaterCheckLandsIt()
+    {
+        using var index = IndexWhoseSweepFailedAfterDeletingTheWinner();
+
+        index.SignalChange();
+
+        Assert.True(PromotesBase(index), $"The stack stands at {string.Join(",", StackOf(index, _npc))}.");
+    }
+
+    [Fact]
+    public void AWinnerSweepOwed_IsPaidByACheckThatNamesNoHeldPlugin()
+    {
+        using var index = IndexWhoseSweepFailedAfterDeletingTheWinner();
+
+        index.SignalChange([new PluginAddress("Absent.esp", "AbsentMod")]);
+
+        Assert.True(PromotesBase(index), $"The stack stands at {string.Join(",", StackOf(index, _npc))}.");
     }
 
     [Fact]

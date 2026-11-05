@@ -13,7 +13,7 @@ public sealed class SelectReadMemoryTests : IDisposable
     private const int MasterRecords = 64_000;
     private const int CopiedRecords = 5;
     private const int NameLength = 2_000;
-    private const string MemoryLimit = "64MB";
+    private const long MemoryLimit = 64_000_000;
     private const long SpillingLimit = 250_000_000;
     private const int SpillingRecords = 200_000;
 
@@ -33,8 +33,7 @@ public sealed class SelectReadMemoryTests : IDisposable
     {
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter(
             (Master, () => Items(MasterRecords)),
-            (Copies, () => Items(CopiedRecords))));
-        IndexFiles.LimitMemory(_fixture.InstanceRoot, MemoryLimit);
+            (Copies, () => Items(CopiedRecords))), memoryLimit: MemoryLimit);
 
         var rows = index.Queries.SelectRows($"""
             SELECT c.form_key FROM records c JOIN records m ON m.form_key = c.form_key AND m.plugin = c.form_key_plugin
