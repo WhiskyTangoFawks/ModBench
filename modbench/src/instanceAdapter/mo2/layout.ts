@@ -213,8 +213,8 @@ export const whitelistIgnoreList = (publisherFileName: string | undefined): stri
   '/*', `!/${IGNORE_LIST_FILE}`, `!/${SUBMODULES_FILE}`, `!/${SETTINGS_FILE_NAME}`,
   ...Object.values(SORTING_RULE_FILES).map((file) => `!/${file}`),
   ...publisherFileName === undefined ? [] : [`!/${escapedForIgnoreList(publisherFileName)}`],
-  // Each source folder's own ignore list says what git holds of it; a link holds its absolute target, which a clone lacks.
-  `!/${SOURCE_MODS_FOLDER}/`, `/${SOURCE_MODS_FOLDER}/*`, `!/${SOURCE_MODS_FOLDER}/*/`,
+  // A source folder is let in by a line of its own, and its own ignore list says what git holds of it.
+  `!/${SOURCE_MODS_FOLDER}/`, `/${SOURCE_MODS_FOLDER}/*`,
   ...heldInEachFolderOf(PROFILES, [MODLIST_FILE_NAME, PLUGINS_FILE_NAME, PLUGIN_ORDER_FILE, `*.${anyCase('ini')}`]),
   ...heldInEachFolderOf(MODS, [`*.${MANIFEST_SUFFIX.slice(1)}`]),
   // A separator is its folder, so a clone holds the folder by its metadata, and mod sync keeps its line.
@@ -227,10 +227,7 @@ type Markers = readonly [first: string, last: string];
 interface OwnLines { readonly leftOut?: Markers; readonly letIn: Markers }
 type Role = 'leftOut' | 'letIn';
 
-const SOURCE_MODS: OwnLines = {
-  leftOut: ['# Source folders with a repository of their own, left out', '# End of source folders with a repository of their own, left out'],
-  letIn: ['# Source mods with a remote', '# End of source mods with a remote'],
-};
+const SOURCE_MODS: OwnLines = { letIn: ['# Source folders in this repository', '# End of source folders in this repository'] };
 const OTHER_MANIFESTS: OwnLines = {
   leftOut: ['# Manifests outside the mod folders, the rest left out', '# End of manifests outside the mod folders, the rest left out'],
   letIn: ['# Manifests outside the mod folders', '# End of manifests outside the mod folders'],
@@ -291,15 +288,20 @@ function withOwnLines(ignoreList: string, kind: OwnLines, own: readonly string[]
   return (kind.leftOut === undefined || placed(lines, 'leftOut', kind.leftOut, leftOut)) && placed(lines, 'letIn', kind.letIn, letIn) ? `${lines.join(lineEnding)}${lineEnding}` : undefined;
 }
 
-/** The source folders that hold a repository of their own, by name: each a submodule, or with no submodule entry. */
-export interface SourceRepositories { readonly submodules: readonly string[]; readonly withoutEntry: readonly string[] }
+/** The source folders a clone gets, by name: each a submodule, or a plain folder, which holds no repository of its own. */
+export interface SourceFolders { readonly submodules: readonly string[]; readonly plain: readonly string[] }
 
-/** An ignore list that lets in each submodule past a user's line leaving out folders in source/, and leaves out each
- *  repository with no entry, which git shows as a nested one. Undefined when the markers do not pair. */
-export const withSourceModLines = (ignoreList: string, { submodules, withoutEntry }: SourceRepositories): string | undefined =>
+/** Whether the ignore list holds the whitelist's line that leaves out the source folders, which the lines of
+ *  `withSourceModLines` let back in. */
+export const leavesOutSourceFolders = (ignoreList: string): boolean => ignoreList.split(/\r?\n/).includes(`/${SOURCE_MODS_FOLDER}/*`);
+
+/** An ignore list that lets in each submodule and each plain source folder, past the whitelist's line leaving out the
+ *  folders in source/. A repository with no entry is named in no line, so git leaves it out. Undefined when the markers
+ *  do not pair. */
+export const withSourceModLines = (ignoreList: string, { submodules, plain }: SourceFolders): string | undefined =>
   withOwnLines(ignoreList, SOURCE_MODS, [
     ...[...submodules].sort().map((name) => `!/${SOURCE_MODS_FOLDER}/${escapedForIgnoreList(name)}`),
-    ...[...withoutEntry].sort().map((name) => `/${SOURCE_MODS_FOLDER}/${escapedForIgnoreList(name)}/`),
+    ...[...plain].sort().map((name) => `!/${SOURCE_MODS_FOLDER}/${escapedForIgnoreList(name)}/`),
   ]);
 
 /** An ignore list that lets in the files of each mod folder of `folderNames`, or with `held` false leaves them out, every

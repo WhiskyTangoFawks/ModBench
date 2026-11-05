@@ -55,7 +55,7 @@ describe('the MO2 adapter\'s repository', () => {
 
   describe('the ignore list', () => {
     const crlf = (text: string): string => text.replaceAll('\n', '\r\n');
-    const withSourceMod = withSourceModLines(whitelistIgnoreList(undefined), { submodules: ['Mod A'], withoutEntry: ['Mod B'] }) ?? '';
+    const withSourceMod = withSourceModLines(whitelistIgnoreList(undefined), { submodules: ['Mod A'], plain: ['Mod B'] }) ?? '';
     const ignoreList = (): Promise<string> => readFile(join(root, '.gitignore'), 'utf8');
 
     const whitelistLines = whitelistIgnoreList(undefined).trimEnd().split('\n');
@@ -496,18 +496,18 @@ describe('the MO2 adapter\'s repository', () => {
     const shown = (): string[] =>
       runGit('status', '--porcelain', '-z', '--untracked-files=all', '--', 'source').split('\0').filter(Boolean).map((line) => line.slice(3)).sort();
 
-    it('shows git what its own ignore list lets in, with no line of the instance\'s for it, and is a source mod\'s once git tracks its build file', async () => {
+    it('shows git what its own ignore list lets in, by a line of the instance\'s for it, and is a source mod\'s once git tracks its build file', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');
       await adapter.writeIgnoreList();
-      const before = await readFile(join(root, '.gitignore'), 'utf8');
       await sourceFolder('Mod A');
+      await adapter.writeSourceModLines();
 
       const untracked = [...(await adapter.sourceModFolders()).keys()];
       runGit('add', '-A', '--', 'source');
 
       expect(shown()).toEqual([`source/Mod A/${BUILD_FILE}`, 'source/Mod A/.gitignore'].sort());
-      expect([untracked, [...(await adapter.sourceModFolders()).keys()], await readFile(join(root, '.gitignore'), 'utf8')]).toEqual([[], ['Mod A'], before]);
+      expect([untracked, [...(await adapter.sourceModFolders()).keys()], (await readFile(join(root, '.gitignore'), 'utf8')).split('\n')]).toEqual([[], ['Mod A'], expect.arrayContaining(['!/source/Mod A/']) as unknown]);
     });
 
     it.skipIf(process.platform === 'win32')('(a link needs no privilege on POSIX) lets in no link and no loose file beside it, which a clone on another machine could not use', async () => {
@@ -518,6 +518,7 @@ describe('the MO2 adapter\'s repository', () => {
       await put('source/notes.md');
       await put('elsewhere/Linked/build.json');
       await symlink(join(root, 'elsewhere', 'Linked'), join(root, 'source', 'Linked'));
+      await adapter.writeSourceModLines();
 
       expect(shown()).toEqual([`source/Mod A/${BUILD_FILE}`, 'source/Mod A/.gitignore'].sort());
     });
@@ -527,6 +528,7 @@ describe('the MO2 adapter\'s repository', () => {
       runGit('init', '--quiet');
       await adapter.writeIgnoreList();
       const folder = await sourceFolder('Mod A');
+      await adapter.writeSourceModLines();
 
       expect([(await adapter.filesHeldByGit([folder])).get(folder), [...await adapter.foldersHeldWhole([folder])]])
         .toEqual([[BUILD_FILE, '.gitignore'].sort(), []]);
@@ -550,12 +552,50 @@ describe('the MO2 adapter\'s repository', () => {
       await adapter.writeIgnoreList();
       await put('.gitignore', `${await readFile(join(root, '.gitignore'), 'utf8')}mine\n`);
       await sourceFolder('Own [1]');
-      execFileSync('git', ['init', '--quiet'], { cwd: join(root, 'source', 'Own [1]') });
+      await adapter.writeSourceModLines();
       const before = shown();
+      execFileSync('git', ['init', '--quiet'], { cwd: join(root, 'source', 'Own [1]') });
 
       await adapter.writeSourceModLines();
 
-      expect([before, shown(), (await readFile(join(root, '.gitignore'), 'utf8')).split('\n')]).toEqual([['source/Own [1]/'], [], expect.arrayContaining(['mine']) as unknown]);
+      expect([before, shown(), (await readFile(join(root, '.gitignore'), 'utf8')).split('\n')])
+        .toEqual([[`source/Own [1]/${BUILD_FILE}`, 'source/Own [1]/.gitignore'].sort(), [], expect.arrayContaining(['mine']) as unknown]);
+    });
+
+    const instanceFiles = async (): Promise<void> => {
+      await put('ModOrganizer.ini', '[General]\r\ngameName=Fallout 4\r\nselected_profile=Default\r\n');
+      await put('profiles/Default/modlist.txt', '');
+      await put('profiles/Default/plugins.txt', '');
+      await mkdir(join(root, 'mods'), { recursive: true });
+    };
+
+    it('lets a new source folder in and takes a removed one out as the instance is read again, with no command run', async () => {
+      const adapter = await instance();
+      await instanceFiles();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      await sourceFolder('Mod A');
+      await adapter.reading();
+      const added = shown();
+      const lineIn = async (): Promise<boolean> => (await readFile(join(root, '.gitignore'), 'utf8')).split('\n').includes('!/source/Mod A/');
+      const letIn = await lineIn();
+      await rm(join(root, 'source', 'Mod A'), { recursive: true });
+
+      await adapter.reading();
+
+      expect([added, letIn, await lineIn()]).toEqual([[`source/Mod A/${BUILD_FILE}`, 'source/Mod A/.gitignore'].sort(), true, false]);
+    });
+
+    it('writes no line into an ignore list that holds no whitelist as the instance is read', async () => {
+      const adapter = await instance();
+      await instanceFiles();
+      runGit('init', '--quiet');
+      await put('.gitignore', 'mine/\n');
+      await sourceFolder('Mod A');
+
+      await adapter.reading();
+
+      expect(await readFile(join(root, '.gitignore'), 'utf8')).toBe('mine/\n');
     });
 
     it('is no source mod\'s with a repository of its own but no build file', async () => {
@@ -571,6 +611,7 @@ describe('the MO2 adapter\'s repository', () => {
       runGit('init', '--quiet');
       await adapter.writeIgnoreList();
       await sourceFolder('Mod A');
+      await adapter.writeSourceModLines();
       const before = await adapter.sourceFolderTracked('Mod A');
 
       runGit('add', '-A', '--', 'source');
@@ -760,7 +801,7 @@ describe('the MO2 adapter\'s repository', () => {
       expect([await readFile(join(root, '.gitmodules'), 'utf8'), await readFile(join(root, '.gitignore'), 'utf8')]).toEqual(before);
     });
 
-    it('takes the entry and the line of a source mod that is gone or lost its remote, leaves out the one that lost its remote, and keeps the lines it did not write', async () => {
+    it('takes the entry and the line of a source mod that is gone or lost its remote, lets in no line for the one that lost its remote, and keeps the lines it did not write', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');
       await adapter.writeIgnoreList();
@@ -776,8 +817,8 @@ describe('the MO2 adapter\'s repository', () => {
 
       expect(submodulesNamed()).toEqual(['submodule.Kept.url https://example.test/k.git']);
       const ignoreList = await readFile(join(root, '.gitignore'), 'utf8');
-      expect([ignoreList.includes('Gone'), ignoreList.includes('Unlinked'), ignoreList.includes('Kept'), ignoreList.includes('mine/')]).toEqual([false, true, true, true]);
-      expect(ignoreList.split('\n')).toEqual(expect.arrayContaining(['/source/Unlinked/', '!/source/Kept']) as unknown);
+      expect([ignoreList.includes('Gone'), ignoreList.includes('Unlinked'), ignoreList.includes('Kept'), ignoreList.includes('mine/')]).toEqual([false, false, true, true]);
+      expect(ignoreList.split('\n')).toEqual(expect.arrayContaining(['!/source/Kept']) as unknown);
     });
 
     it('writes the entry of a source mod by its repository\'s folder, whatever the mod is called', async () => {
@@ -814,15 +855,15 @@ describe('the MO2 adapter\'s repository', () => {
     it.each([
       ['https://user:p@ss@example.test/a.git', 'its remote holds a credential that cannot safely be left out of its URL, so it is no submodule'],
       ['../a', 'its remote is on this machine alone, so it is no submodule'],
-    ])('takes the entry and the line of a source mod whose remote %s is no host, leaves it out, and names it', async (remote, note) => {
+    ])('takes the entry and the line of a source mod whose remote %s is no host, lets in no line for it, and names it', async (remote, note) => {
       const { adapter, folder } = await submoduleOfOne();
       git(folder, 'remote', 'set-url', 'origin', remote);
 
       const report = await everySourceModNamedForItsRepository(adapter);
 
       const lines = (await readFile(join(root, '.gitignore'), 'utf8')).split('\n');
-      expect([report.notes, runGit('config', '-f', '.gitmodules', '--list').trim(), lines.includes('!/source/Mod A'), lines.includes('/source/Mod A/')])
-        .toEqual([[{ mod: 'Mod A', note }], '', false, true]);
+      expect([report.notes, runGit('config', '-f', '.gitmodules', '--list').trim(), lines.includes('!/source/Mod A'), lines.includes('!/source/Mod A/')])
+        .toEqual([[{ mod: 'Mod A', note }], '', false, false]);
     });
 
     describe('a source mod\'s host', () => {
@@ -929,31 +970,32 @@ describe('the MO2 adapter\'s repository', () => {
       const lines = (await readFile(join(root, '.gitignore'), 'utf8')).split('\n');
 
       expect([unchanged, lines.indexOf('after/') < lines.indexOf('!/source/Mod A'), lines.at(-3), lines.at(-2)])
-        .toEqual([before, true, '!/source/Mod B', '# End of source mods with a remote']);
+        .toEqual([before, true, '!/source/Mod B', '# End of source folders in this repository']);
     });
 
-    it('writes the lines that leave out a repository with no remote before every line written after the whitelist, and changes nothing when nothing changed', async () => {
+    it('writes the lines that let in a source folder with no repository after every line written after the whitelist, and changes nothing when nothing changed', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');
       await adapter.writeIgnoreList();
-      await sourceMod('Local A');
+      await put('source/Plain A/build.json');
       await everySourceModNamedForItsRepository(adapter);
       await put('.gitignore', `${await readFile(join(root, '.gitignore'), 'utf8')}after/\n`);
+      await everySourceModNamedForItsRepository(adapter);
       const before = await readFile(join(root, '.gitignore'), 'utf8');
       await everySourceModNamedForItsRepository(adapter);
       const unchanged = await readFile(join(root, '.gitignore'), 'utf8');
-      await sourceMod('Local B');
+      await put('source/Plain B/build.json');
 
       await everySourceModNamedForItsRepository(adapter);
       const lines = (await readFile(join(root, '.gitignore'), 'utf8')).split('\n');
 
-      expect([unchanged, lines.indexOf('/source/Local B/') === lines.indexOf('/source/Local A/') + 1, lines.indexOf('/source/Local B/') < lines.indexOf('after/')])
+      expect([unchanged, lines.indexOf('!/source/Plain B/') === lines.indexOf('!/source/Plain A/') + 1, lines.indexOf('!/source/Plain B/') > lines.indexOf('after/')])
         .toEqual([before, true, true]);
     });
 
     it.each([
-      ['begin', '# Source folders with a repository of their own, left out\n/source/Mine/\n'],
-      ['end', '/source/Mine/\n# End of source folders with a repository of their own, left out\n'],
+      ['begin', '# Source folders in this repository\n!/source/Mine/\n'],
+      ['end', '!/source/Mine/\n# End of source folders in this repository\n'],
     ])('leaves the ignore list as it is when its block has only an %s marker, and names it', async (_marker, block) => {
       const adapter = await instance();
       runGit('init', '--quiet');
@@ -973,13 +1015,13 @@ describe('the MO2 adapter\'s repository', () => {
       await adapter.writeIgnoreList();
       const mine = `${await readFile(join(root, '.gitignore'), 'utf8')}\n!/source/\n/source/*\n!/source/Mine\n\nnotes/\n`;
       await put('.gitignore', mine);
-      await sourceMod('Local');
+      await put('source/Local/build.json');
 
       await everySourceModNamedForItsRepository(adapter);
       await everySourceModNamedForItsRepository(adapter);
       const lines = (await readFile(join(root, '.gitignore'), 'utf8')).split('\n').slice(0, -1);
 
-      expect([lines.filter((line) => line === '!/source/Mine').length, lines.includes('notes/'), lines.includes('/source/Local/'), lines.filter((line) => line === '').length]).toEqual([1, true, true, 2]);
+      expect([lines.filter((line) => line === '!/source/Mine').length, lines.includes('notes/'), lines.includes('!/source/Local/'), lines.filter((line) => line === '').length]).toEqual([1, true, true, 2]);
     });
 
     it('says, naming it, that a pre-push hook is already in the repository', async () => {
