@@ -55,6 +55,7 @@ import { setIniValue } from '../codecs/qSettingsIni';
 import { ownTempPrefix } from '../../files';
 import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
 import { runningProgram } from '../../../test/runningProgram';
+import { fileSystemClockMovedOn } from '../../../test/fileSystemClock';
 import { adapterOver, contextOver, managerOver, sourceOver } from '../../../test/mo2/adapterOver';
 import { INSTALLED_DEPOT, writeAppManifestOfDepot } from '../../../test/steamAppManifestFixture';
 import {
@@ -1533,6 +1534,7 @@ describe('the MO2 Instance adapter', () => {
         const settled = async (): Promise<void> => {
           await mkdir(join(folder(), 'Textures'), { recursive: true });
           await writeFile(join(folder(), 'Textures', 'a.dds'), '');
+          await fileSystemClockMovedOn();
           vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 3_600_000 });
         };
         afterEach(() => vi.useRealTimers());

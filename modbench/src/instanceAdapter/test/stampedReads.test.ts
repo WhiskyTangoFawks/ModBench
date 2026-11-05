@@ -109,6 +109,21 @@ describe('a folder listed and a file parsed by their stamps', () => {
     expect(answer).toEqual(['a.dds']);
   });
 
+  it('lists again within a re-read each folder kept below a folder the re-read is named that it listed too recently to trust', async () => {
+    const below = join(root, 'Mod', 'textures');
+    await mkdir(below, { recursive: true });
+    settle();
+    await namesOf(below);
+    await writeFile(join(below, 'a.dds'), '');
+    await modifiedLater(below);
+    vi.useRealTimers();
+    await namesOf(join(root, 'Mod'));
+
+    const { answer } = await readTrustingKept([join(root, 'Mod')], false, () => namesOf(below));
+
+    expect(answer).toEqual(['a.dds']);
+  });
+
   it('checks the disk by every stamp it keeps, answering each change as unheard but those of the paths it is named', async () => {
     const [heard, unheard] = [join(root, 'heard'), join(root, 'unheard')];
     await mkdir(heard);
@@ -124,6 +139,17 @@ describe('a folder listed and a file parsed by their stamps', () => {
     const checked = await readTrustingKept([join(heard, 'new.esp')], true, async () => [await namesOf(heard), await namesOf(unheard)]);
 
     expect(checked).toEqual({ answer: [['new.esp'], ['new.esp']], unheard: [unheard] });
+  });
+
+  it('answers as unheard a change to a file it last read too soon after a write to trust', async () => {
+    const path = join(root, 'modlist.txt');
+    await writeFile(path, '+A');
+    const textAt = parsedBy((text) => text);
+    await textAt(path);
+    await writeFile(path, '+B');
+    await modifiedLater(path);
+
+    expect(await readTrustingKept([], true, () => textAt(path))).toEqual({ answer: '+B', unheard: [path] });
   });
 
   it('forgets at a check of the disk, as a change no event named, a folder it kept that is gone', async () => {

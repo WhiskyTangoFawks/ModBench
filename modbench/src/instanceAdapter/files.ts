@@ -14,6 +14,7 @@ import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import type { FileRead } from './instanceAdapter';
 import { keptByStamp, sameStamp, stampFrom, type FileStamp, type Kept } from '../repositoriesLib/stampedReads';
+import { renameOver } from '../repositoriesLib/wholeWrites';
 import { digestOf } from './fileContents/contentDigest';
 import type { MoveToTrash } from '../ports/trash';
 
@@ -220,7 +221,7 @@ async function writeAtomic(path: string, text: string): Promise<void> {
   try {
     await writeFile(tmp, text);
     if (mode !== undefined) await chmod(tmp, mode);
-    await fsRename(tmp, target);
+    await renameOver(fsRename, tmp, target);
   } catch (err) {
     await rm(tmp, { force: true });
     throw reportedAsTarget(err, tmp, target);
@@ -235,7 +236,7 @@ export async function putStreamedIf(path: string, bytes: AsyncIterable<Uint8Arra
   try {
     await pipeline(bytes, createWriteStream(tmp, { flags: 'wx' }));
     if (!(await keep(tmp))) return false;
-    await fsRename(tmp, path);
+    await renameOver(fsRename, tmp, path);
     return true;
   } finally {
     await rm(tmp, { force: true });
@@ -254,7 +255,7 @@ export async function writeTrashing(path: string, text: string, trash: MoveToTra
   try {
     await writeFile(tmp, text);
     if (await exists(path)) await trash(path);
-    await fsRename(tmp, path);
+    await renameOver(fsRename, tmp, path);
   } finally {
     await rm(tmp, { force: true });
   }
