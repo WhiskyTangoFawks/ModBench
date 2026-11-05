@@ -14,7 +14,7 @@ public sealed class OnePluginReadMemoryTests(OnePluginReadMemoryTests.SmallBesid
     private const string Large = "Large.esp";
     private const int LargeQuests = 100;
     private const int TopicsPerQuest = 2_000;
-    private const string MemoryLimit = "32MB";
+    private const long MemoryLimit = 32_000_000;
 
     public sealed class SmallBesideLarge : IDisposable
     {
@@ -42,8 +42,7 @@ public sealed class OnePluginReadMemoryTests(OnePluginReadMemoryTests.SmallBesid
                 .Build();
             Keys = keys;
             Quest = quest;
-            Index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Large, QuestsHoldingTopics)));
-            IndexFiles.LimitMemory(_fixture.InstanceRoot, MemoryLimit);
+            Index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Large, QuestsHoldingTopics)), memoryLimit: MemoryLimit);
         }
 
         public void Dispose()

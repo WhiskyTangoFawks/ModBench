@@ -10,7 +10,7 @@ public sealed class ProblemsReadMemoryTests : IDisposable
     private const string Plugin = "Referring.esp";
     private const int RecordCount = 20_000;
     private const int LinksPerRecord = 50;
-    private const string MemoryLimit = "32MB";
+    private const long MemoryLimit = 32_000_000;
 
     private readonly PluginFixtureData _fixture = new PluginFixtureBuilder("problems-read-memory").WithPlugin(Plugin).Build();
     private readonly LoadOrderHolder _holder = new();
@@ -20,9 +20,8 @@ public sealed class ProblemsReadMemoryTests : IDisposable
     [Fact]
     public void ABinaryPluginsLinksToMissingRecords_OutgrowingDuckDbsMemoryLimit_LeaveTheProblemsReadAnswering()
     {
-        using var index = Indexes.Open(_holder, new LinkingAdapter(Plugin, LinksToMissingRecords));
+        using var index = Indexes.Open(_holder, new LinkingAdapter(Plugin, LinksToMissingRecords), memoryLimit: MemoryLimit);
         index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
-        IndexFiles.LimitMemory(_fixture.InstanceRoot, MemoryLimit);
 
         Assert.Empty(index.Queries.GetProblems().Value());
     }

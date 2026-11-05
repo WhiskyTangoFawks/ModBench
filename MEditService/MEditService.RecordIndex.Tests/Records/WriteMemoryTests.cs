@@ -12,7 +12,7 @@ public sealed class WriteMemoryTests : IDisposable
 {
     private const string Large = "Large.esm";
     private const int LargeRecords = 400_000;
-    private const string MemoryLimit = "24MB";
+    private const long MemoryLimit = 24_000_000;
 
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderEntry _winner;
@@ -46,8 +46,7 @@ public sealed class WriteMemoryTests : IDisposable
     [Fact]
     public void DeletingTheWinningOverride_PromotesTheNextPluginDown_InMemoryTheWholeIndexesWinnersOutgrow()
     {
-        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Large, Items)));
-        IndexFiles.LimitMemory(_fixture.InstanceRoot, MemoryLimit);
+        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Large, Items)), memoryLimit: MemoryLimit);
 
         index.Delete(_winner, index.DocumentOf(_npc, _winner.Key));
 
@@ -57,10 +56,9 @@ public sealed class WriteMemoryTests : IDisposable
     [Fact]
     public void CreatingAnOverride_MakesItTheWinner_InMemoryTheWholeIndexesWinnersOutgrow()
     {
-        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Large, Items)));
+        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Large, Items)), memoryLimit: MemoryLimit);
         var body = index.BodyOf(_npc, _winner.Key);
         index.Delete(_winner, index.DocumentOf(_npc, _winner.Key));
-        IndexFiles.LimitMemory(_fixture.InstanceRoot, MemoryLimit);
 
         index.Create(_winner, _npc, "npc_", "TestNpc", body);
 

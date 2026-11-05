@@ -21,11 +21,6 @@ internal static class IndexFiles
         cmd.ExecuteNonQuery();
     }
 
-    /// <summary>Holds the open Index's DuckDB to <paramref name="memoryLimit"/>, on the threads the
-    /// Index opened it with.</summary>
-    internal static void LimitMemory(string instanceRoot, string memoryLimit) =>
-        Execute(instanceRoot, $"SET GLOBAL memory_limit = '{memoryLimit}'");
-
     /// <summary>Leaves DuckDB to abort its next checkpoint: a fatal error that invalidates the index file.</summary>
     internal static void AbortNextCheckpoint(string instanceRoot) =>
         Execute(instanceRoot, "SET GLOBAL checkpoint_threshold = '1KB'; SET GLOBAL debug_checkpoint_abort = 'before_header'");

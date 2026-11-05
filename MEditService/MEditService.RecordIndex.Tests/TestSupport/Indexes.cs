@@ -59,8 +59,9 @@ internal static class Indexes
         IPluginAdapter? adapter = null,
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
-        ISourceAdapter? source = null) =>
-        Reconciled(fixture.DataFolder, fixture.Plugins, instanceRoot, adapter, loggerFactory, notifications, source);
+        ISourceAdapter? source = null,
+        long? memoryLimit = null) =>
+        Reconciled(fixture.DataFolder, fixture.Plugins, instanceRoot, adapter, loggerFactory, notifications, source, memoryLimit);
 
     internal static OpenedIndex Reconciled(
         ScatteredFixtureData fixture,
@@ -68,8 +69,9 @@ internal static class Indexes
         IPluginAdapter? adapter = null,
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
-        ISourceAdapter? source = null) =>
-        Reconciled(fixture.DataFolder, fixture.Plugins, instanceRoot, adapter, loggerFactory, notifications, source);
+        ISourceAdapter? source = null,
+        long? memoryLimit = null) =>
+        Reconciled(fixture.DataFolder, fixture.Plugins, instanceRoot, adapter, loggerFactory, notifications, source, memoryLimit);
 
     internal static OpenedIndex Reconciled(
         string dataFolder,
@@ -78,10 +80,11 @@ internal static class Indexes
         IPluginAdapter? adapter = null,
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
-        ISourceAdapter? source = null)
+        ISourceAdapter? source = null,
+        long? memoryLimit = null)
     {
         var holder = new LoadOrderHolder();
-        var index = Open(holder, adapter, loggerFactory, notifications, source: source);
+        var index = Open(holder, adapter, loggerFactory, notifications, source: source, memoryLimit: memoryLimit);
         index.Reconcile(holder, dataFolder, plugins, GameRelease.Fallout4, instanceRoot);
         // The door turns a refusal into status; a fixture built over one is not the fixture asked for.
         if (index.Status.State is LoadOrderState.HeldElsewhere or LoadOrderState.Failed)

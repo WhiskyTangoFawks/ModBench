@@ -563,6 +563,11 @@ internal sealed class Store : IDisposable
     // the next commit that lands, since the rows it was owed for are already committed.
     private OwedSweep _owedSweep = OwedSweep.None;
 
+    internal bool SweepOwed
+    {
+        get { lock (_projectionLock) return _owedSweep.IsOwed; }
+    }
+
     internal void OweWinnerSweep() => Owe(OwedSweep.Every);
 
     /// <summary>Owed by rows that moved which copy wins only these FormKeys.</summary>
