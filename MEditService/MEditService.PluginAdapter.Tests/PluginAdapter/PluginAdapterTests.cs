@@ -91,21 +91,24 @@ public sealed class PluginAdapterTests
         Assert.False(File.Exists(Path.Combine(scratch, PluginName)));
     }
 
+    private static HashSet<HeaderFlag> Flags(string names) =>
+        [.. CreatablePluginFlags.Parse(names.Split(',', StringSplitOptions.RemoveEmptyEntries)) ?? throw new InvalidOperationException(names)];
+
     [Theory]
-    [InlineData(GameRelease.Fallout4, "Plain.esp", false, false, new HeaderBit[0])]
-    [InlineData(GameRelease.Fallout4, "Master.esm", true, false, new[] { HeaderBit.Master })]
-    [InlineData(GameRelease.Fallout4, "Light.esl", true, true, new[] { HeaderBit.Master, HeaderBit.Small })]
-    [InlineData(GameRelease.Fallout4, "Small.esp", false, true, new[] { HeaderBit.Small })]
-    [InlineData(GameRelease.SkyrimSE, "Both.esp", true, true, new[] { HeaderBit.Master, HeaderBit.Small })]
-    [InlineData(GameRelease.SkyrimSE, "Plain.esp", false, false, new HeaderBit[0])]
-    [InlineData(GameRelease.Starfield, "Plain.esp", false, false, new HeaderBit[0])]
-    [InlineData(GameRelease.Starfield, "Master.esm", true, false, new[] { HeaderBit.Master })]
-    public async Task CreateAndWriteAsync_WritesTheGamesHeader_FlaggedAsGiven(GameRelease release, string name, bool master, bool light, HeaderBit[] flags)
+    [InlineData(GameRelease.Fallout4, "Plain.esp", false, false, "")]
+    [InlineData(GameRelease.Fallout4, "Master.esm", true, false, "Master")]
+    [InlineData(GameRelease.Fallout4, "Light.esl", true, true, "Master,Small")]
+    [InlineData(GameRelease.Fallout4, "Small.esp", false, true, "Small")]
+    [InlineData(GameRelease.SkyrimSE, "Both.esp", true, true, "Master,Small")]
+    [InlineData(GameRelease.SkyrimSE, "Plain.esp", false, false, "")]
+    [InlineData(GameRelease.Starfield, "Plain.esp", false, false, "")]
+    [InlineData(GameRelease.Starfield, "Master.esm", true, false, "Master")]
+    public async Task CreateAndWriteAsync_WritesTheGamesHeader_FlaggedAsGiven(GameRelease release, string name, bool master, bool light, string flags)
     {
         using var scratch = new ScratchDirectory("medit-adapter-create-flags-");
         var path = Path.Combine(scratch, name);
 
-        (await Adapter.CreateAndWriteAsync(ModKey.FromFileName(name), scratch, release, flags)).Answered();
+        (await Adapter.CreateAndWriteAsync(ModKey.FromFileName(name), scratch, release, Flags(flags))).Answered();
 
         using var reread = ModFactory.ImportGetter(new ModPath(ModKey.FromFileName(name), path), release);
         Assert.Equal((master, light), (((IModFlagsGetter)reread).IsMaster, ((IModFlagsGetter)reread).IsSmallMaster));
@@ -118,7 +121,7 @@ public sealed class PluginAdapterTests
     {
         using var scratch = new ScratchDirectory("medit-adapter-create-medium-");
 
-        (await Adapter.CreateAndWriteAsync(ModKey.FromFileName("Medium.esm"), scratch, GameRelease.Starfield, [HeaderBit.Master, HeaderBit.Medium])).Answered();
+        (await Adapter.CreateAndWriteAsync(ModKey.FromFileName("Medium.esm"), scratch, GameRelease.Starfield, [HeaderFlag.Master, HeaderFlag.Medium])).Answered();
 
         using var reread = ModFactory.ImportGetter(new ModPath(ModKey.FromFileName("Medium.esm"), Path.Combine(scratch, "Medium.esm")), GameRelease.Starfield);
         Assert.True(((IModFlagsGetter)reread).IsMediumMaster);

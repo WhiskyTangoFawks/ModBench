@@ -105,28 +105,6 @@ public sealed class CreatePluginApiTests : HostedTests
     }
 
     [Fact]
-    public async Task CreatingAnEspWithNoFlags_Is422_AndWritesNothing()
-    {
-        var fx = Owned(await Loaded());
-        var modFolder = OtherTool.ModFolderOf(fx, Origin);
-
-        var created = await Client.PostAsJsonAsync("/plugins/create", new { origin = Origin, name = "Flagless.esp", folder = modFolder });
-
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, created.StatusCode);
-        Assert.False(File.Exists(Path.Combine(modFolder, "Flagless.esp")));
-    }
-
-    [Fact]
-    public async Task TheCreatableFlagsOfAnExtension_AreItsCombinations()
-    {
-        Owned(await Loaded());
-
-        var choices = await Client.GetFromJsonAsync<string[][]>("/plugins/creatable-flags?name=Any.esp");
-
-        Assert.Equal(["", "Master", "Small", "Master+Small"], choices.Require().Select(combination => string.Join('+', combination)));
-    }
-
-    [Fact]
     public async Task CreatingAPluginWithAnInvalidExtension_Is400_AndWritesNothing()
     {
         var fx = Owned(await Loaded());

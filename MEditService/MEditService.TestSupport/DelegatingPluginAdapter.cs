@@ -84,7 +84,7 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
         inner.CompareBytesAsync(originalPath, recompiledPath, loadOrder, cancel);
 
     public virtual Task<Answer<EmptyPluginCreated, PluginFailure>> CreateAndWriteAsync(
-        ModKey modKey, string folder, GameRelease gameRelease, IReadOnlyCollection<HeaderBit> flags) =>
+        ModKey modKey, string folder, GameRelease gameRelease, IReadOnlyCollection<HeaderFlag> flags) =>
         inner.CreateAndWriteAsync(modKey, folder, gameRelease, flags);
 
     public virtual string PathOfEmpty(ModKey modKey, string folder) => inner.PathOfEmpty(modKey, folder);

@@ -1,10 +1,8 @@
-using MEditService.Codec.Schema;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.RepositoriesLib;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Http.Endpoints;
 
@@ -149,7 +147,8 @@ internal static class PluginEndpoints
             .Produces<IReadOnlyList<string>>()
             .ProducesProblem(503);
 
-        app.MapGet("/plugins/creatable-flags", CreatableFlags)
+        app.MapGet("/plugins/creatable-flags", (string name, IQueries svc) =>
+            EndpointMapping.Ok(svc.GetCreatablePluginFlags(name)))
             .WithName("GetCreatablePluginFlags")
             .WithTags(Tag)
             .WithDescription("The header flag combinations a new plugin of the given file name's extension may take.")
@@ -294,15 +293,6 @@ internal static class PluginEndpoints
 
     private static IResult? RecordTypeProblem(RecordCreateChangesRequest req) =>
         string.IsNullOrWhiteSpace(req.RecordType) ? EndpointMapping.BadRequest("A record type is required.") : null;
-
-    internal static IResult CreatableFlags(string name, LoadOrderHolder holder)
-    {
-        if (holder.Held is not { Snapshot: var loadOrder }) return EndpointMapping.Refusal(PluginCreateRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
-
-        return ModKey.TryFromFileName(name, out var modKey)
-            ? Results.Ok(CreatablePluginFlags.Names(CreatablePluginFlags.Of(loadOrder.GameRelease, modKey.Type)))
-            : EndpointMapping.BadRequest($"{name} is not a plugin file name.");
-    }
 
     internal static async Task<IResult> CreatePlugin(
         CreatePluginRequest req, CreatePluginHandler create, ILoggerFactory loggerFactory)

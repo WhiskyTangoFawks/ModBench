@@ -1,4 +1,7 @@
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Game;
@@ -7,6 +10,9 @@ namespace MEditService.Codec.Game;
 internal static class GameSpecifics
 {
     // wbDefinitionsSF1.pas names 0x800 'Blueprint' in Starfield's TES4 header; Mutagen's header flag enum has no such bit.
+    public static IReadOnlyList<IReadOnlyList<HeaderFlag>> NewPluginFlags(GameRelease _, ModType type) =>
+        CreatablePluginFlags.Offered(type, [HeaderFlag.Small, HeaderFlag.Medium], flaggedEsp: false);
+
     public const int BlueprintFlag = 0x800;
 
     public static IReadOnlyDictionary<string, int> LoadFlags { get; } = Enum.GetValues<StarfieldModHeader.HeaderFlag>()

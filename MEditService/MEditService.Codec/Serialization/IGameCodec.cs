@@ -1,6 +1,8 @@
 using System.IO.Abstractions;
 using System.Reflection;
 using MEditService.Codec.Schema;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog.IO;
 using Noggog.WorkEngine;
@@ -34,6 +36,9 @@ public interface IGameCodec
     /// <summary>Each plugin header flag that changes how the game loads the plugin, by Mutagen's name for the game, with its bit.
     /// The localized flag is not one: it changes how the plugin's strings are stored.</summary>
     IReadOnlyDictionary<string, int> LoadFlags { get; }
+
+    /// <summary>The header flag combinations xEdit offers a new file of the extension, in <paramref name="release"/>.</summary>
+    IReadOnlyList<IReadOnlyList<HeaderFlag>> NewPluginFlags(GameRelease release, ModType type);
 
     /// <summary>The Next Object ID the game's serializer omits from a header document.</summary>
     uint NextObjectIdDefault { get; }

@@ -59,10 +59,10 @@ public sealed class CreatePluginHandler
 
     private static string Spelled(IEnumerable<string> flags) => $"[{string.Join(", ", flags.Select(flag => $"\"{flag}\""))}]";
 
-    private static string SpelledAll(IEnumerable<IReadOnlyList<HeaderBit>> combinations) =>
+    private static string SpelledAll(IEnumerable<IReadOnlyList<HeaderFlag>> combinations) =>
         string.Join(", ", CreatablePluginFlags.Names(combinations).Select(Spelled));
 
-    private static Answer<IReadOnlyCollection<HeaderBit>, PluginCreateRefused> ChosenFlags(
+    private static Answer<IReadOnlyCollection<HeaderFlag>, PluginCreateRefused> ChosenFlags(
         string name, ModKey modKey, GameRelease release, IReadOnlyList<string>? flags)
     {
         var offered = CreatablePluginFlags.Of(release, modKey.Type);
@@ -74,12 +74,8 @@ public sealed class CreatePluginHandler
                     $"{name} can take more than one combination of header flags, so flags must be one of: {SpelledAll(offered)}.");
         }
 
-        var named = flags
-            .Select(flag => Enum.TryParse<HeaderBit>(flag, ignoreCase: true, out var bit) ? [bit] : Array.Empty<HeaderBit>())
-            .SelectMany(bit => bit).ToHashSet();
-        var match = named.Count == flags.Count
-            ? offered.FirstOrDefault(combination => named.SetEquals(combination))
-            : null;
+        var named = CreatablePluginFlags.Parse(flags);
+        var match = named is null ? null : offered.FirstOrDefault(combination => named.SetEquals(combination));
         return match is null
             ? new PluginCreateRefused(PluginCreateRefusal.FlagsNotOffered,
                 $"{Spelled(flags)} is not a combination of header flags offered {name}: {SpelledAll(offered)}.")

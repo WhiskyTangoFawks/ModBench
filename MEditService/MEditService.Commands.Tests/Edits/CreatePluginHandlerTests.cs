@@ -276,21 +276,6 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Assert.EndsWith(expected, result.Message, StringComparison.Ordinal);
     }
 
-    [Theory]
-    [InlineData("Plain.esp")]
-    [InlineData("Master.esm")]
-    public async Task CreatePlugin_AFullPluginInAReleaseWithoutLightPlugins_IsWritten(string name)
-    {
-        var folder = ModFolder("FullMod");
-        var adapter = new WritesAsFallout4Adapter();
-
-        var result = await HandlerIn(GameRelease.Oblivion, adapter).CreatePlugin(new PluginAddress(name, "FullMod"), folder, folder, name == "Master.esm" ? ["Master"] : []);
-
-        result.Created();
-        Assert.Equal([GameRelease.Oblivion], adapter.Asked);
-        Assert.True(File.Exists(Path.Combine(folder, name)));
-    }
-
     [Fact]
     public async Task CreatePlugin_WhenTheFileSystemRefusesTheWrite_RefusesWithItsWords()
     {
@@ -345,6 +330,8 @@ public sealed class CreatePluginHandlerTests : IDisposable
     [InlineData("Plain.esl", new string[0])]
     [InlineData("Plain.esp", new[] { "Medium" })]
     [InlineData("Plain.esp", new[] { "Bogus" })]
+    [InlineData("Plain.esp", new[] { "1" })]
+    [InlineData("Plain.esp", new[] { "small" })]
     public async Task CreatePlugin_FlagsTheExtensionDoesNotOffer_AreRefused_AndWriteNothing(string name, string[] flags)
     {
         var folder = ModFolder("NotOfferedMod");
@@ -365,19 +352,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
     private sealed class FailingWriteAdapter(PluginFailure failure) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public override Task<Answer<EmptyPluginCreated, PluginFailure>> CreateAndWriteAsync(
-            ModKey modKey, string folder, GameRelease gameRelease, IReadOnlyCollection<HeaderBit> flags) =>
+            ModKey modKey, string folder, GameRelease gameRelease, IReadOnlyCollection<HeaderFlag> flags) =>
             Task.FromResult<Answer<EmptyPluginCreated, PluginFailure>>(failure);
-    }
-
-    private sealed class WritesAsFallout4Adapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())
-    {
-        public List<GameRelease> Asked { get; } = [];
-
-        public override Task<Answer<EmptyPluginCreated, PluginFailure>> CreateAndWriteAsync(
-            ModKey modKey, string folder, GameRelease gameRelease, IReadOnlyCollection<HeaderBit> flags)
-        {
-            Asked.Add(gameRelease);
-            return base.CreateAndWriteAsync(modKey, folder, GameRelease.Fallout4, flags);
-        }
     }
 }

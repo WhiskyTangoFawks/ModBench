@@ -118,7 +118,7 @@ public interface IPluginAdapter
     /// no records and no masters. Written whole or not at all, into no folder it made and over
     /// no file.</summary>
     Task<Answer<EmptyPluginCreated, PluginFailure>> CreateAndWriteAsync(
-        ModKey modKey, string folder, GameRelease gameRelease, IReadOnlyCollection<HeaderBit> flags);
+        ModKey modKey, string folder, GameRelease gameRelease, IReadOnlyCollection<HeaderFlag> flags);
 
     /// <summary>Where <see cref="CreateAndWriteAsync"/> puts the plugin.</summary>
     string PathOfEmpty(ModKey modKey, string folder);

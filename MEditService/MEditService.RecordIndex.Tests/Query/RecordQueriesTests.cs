@@ -637,6 +637,21 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         Assert.Equal([".esm", ".esl", ".esp"], _svc.GetCreatablePluginExtensions().Value());
     }
 
+    [Theory]
+    [InlineData("Any.esp", "|Master|Small|Master+Small")]
+    [InlineData("Any.esm", "Master|Master+Small")]
+    [InlineData("Any.esl", "Master+Small")]
+    public void TheCreatablePluginFlags_AreTheHeldReleasesCombinationsForTheExtension(string name, string expected)
+    {
+        Assert.Equal(expected, string.Join('|', _svc.GetCreatablePluginFlags(name).Value().Select(combination => string.Join('+', combination))));
+    }
+
+    [Fact]
+    public void TheCreatablePluginFlags_OfANameThatIsNoPluginFile_AreRefused()
+    {
+        Assert.Equal(IndexRefusal.NameRefused, _svc.GetCreatablePluginFlags("Mod.txt").Refused().Refusal);
+    }
+
     [Fact]
     public void ACreatableFlatType_IsNamedAsXEditNamesIt()
     {

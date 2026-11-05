@@ -103,12 +103,11 @@ function placed(value: Pick<InstanceValue, 'mods' | 'paths' | 'entryKey'>, name:
   return 'lost' in where ? `${lostPlace(at.origin, where.lost)}, so "${name}" was not created.` : newPlugin(name, at, where);
 }
 
-const FLAG_LABELS: Readonly<Record<string, string>> = { Master: 'ESM', Small: 'ESL' };
+const FLAG_LABELS: Readonly<Record<string, string>> = { Master: 'ESM', Small: 'Light', Medium: 'Medium' };
 
 const flagsLabel = (combination: readonly string[]): string =>
   combination.length === 0 ? 'No flags' : combination.map((flag) => FLAG_LABELS[flag] ?? flag).join(', ');
 
-// The only combination offered, else the one picked; undefined when mEdit cannot say or the pick is cancelled.
 async function pickFlags(
   client: Pick<MEditClient, 'getCreatablePluginFlags'>, reporter: Reporter, name: string,
 ): Promise<readonly string[] | undefined> {

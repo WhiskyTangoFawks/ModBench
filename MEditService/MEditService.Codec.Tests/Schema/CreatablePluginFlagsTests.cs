@@ -6,36 +6,34 @@ namespace MEditService.Codec.Tests.Schema;
 
 public sealed class CreatablePluginFlagsTests
 {
-    private static string[] Offered(GameRelease release, ModType type) =>
-        [.. CreatablePluginFlags.Of(release, type).Select(combination => string.Join('+', combination))];
-
-    [Fact]
-    public void AnEsp_OnAGameWithLightPlugins_OffersEveryCombinationOfMasterAndSmall()
+    [Theory]
+    [InlineData(GameRelease.Fallout4, ModType.Plugin, "|Master|Small|Master+Small")]
+    [InlineData(GameRelease.Fallout4, ModType.Master, "Master|Master+Small")]
+    [InlineData(GameRelease.Fallout4, ModType.Light, "Master+Small")]
+    [InlineData(GameRelease.Fallout4VR, ModType.Plugin, "|Master")]
+    [InlineData(GameRelease.Fallout4VR, ModType.Master, "Master")]
+    [InlineData(GameRelease.SkyrimSE, ModType.Plugin, "|Master|Small|Master+Small")]
+    [InlineData(GameRelease.EnderalSE, ModType.Master, "Master|Master+Small")]
+    [InlineData(GameRelease.SkyrimLE, ModType.Plugin, "|Master")]
+    [InlineData(GameRelease.EnderalLE, ModType.Master, "Master")]
+    [InlineData(GameRelease.SkyrimVR, ModType.Plugin, "|Master")]
+    [InlineData(GameRelease.Starfield, ModType.Plugin, "")]
+    [InlineData(GameRelease.Starfield, ModType.Master, "Master|Master+Small|Master+Medium")]
+    [InlineData(GameRelease.Starfield, ModType.Light, "Master+Small")]
+    public void ANewFile_IsOfferedTheCombinationsXEditOffersItsExtensionInTheRelease(GameRelease release, ModType type, string expected)
     {
-        Assert.Equal(["", "Master", "Small", "Master+Small"], Offered(GameRelease.Fallout4, ModType.Plugin));
+        var offered = CreatablePluginFlags.Of(release, type).Select(combination => string.Join('+', combination));
+
+        Assert.Equal(expected, string.Join('|', offered));
     }
 
-    [Fact]
-    public void AnEsm_KeepsMaster_AndOffersEachSmallerStyleBesideIt()
+    [Theory]
+    [InlineData("Small", true)]
+    [InlineData("small", false)]
+    [InlineData("1", false)]
+    [InlineData("Bogus", false)]
+    public void AFlag_IsKnownByItsNameOnly(string name, bool known)
     {
-        Assert.Equal(["Master", "Master+Small", "Master+Medium"], Offered(GameRelease.Starfield, ModType.Master));
-    }
-
-    [Fact]
-    public void AnEsl_OffersOneCombination_SoThereIsNoPick()
-    {
-        Assert.Equal(["Master+Small"], Offered(GameRelease.Fallout4, ModType.Light));
-    }
-
-    [Fact]
-    public void AnEsm_OnAGameWithNoLightPlugins_OffersOneCombination()
-    {
-        Assert.Equal(["Master"], Offered(GameRelease.Oblivion, ModType.Master));
-    }
-
-    [Fact]
-    public void AnEsp_OnAGameWithNoLightPlugins_OffersNoFlagsOrMaster()
-    {
-        Assert.Equal(["", "Master"], Offered(GameRelease.Oblivion, ModType.Plugin));
+        Assert.Equal(known, CreatablePluginFlags.Parse([name]) is not null);
     }
 }

@@ -1,36 +1,58 @@
+using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Meta;
 
 namespace MEditService.Codec.Schema;
 
-/// <summary>A header flag a new plugin may be created with, spelled as Mutagen's <c>IModFlags</c> does.</summary>
-public enum HeaderBit
+/// <summary>A header flag a new plugin may be created with, named as Mutagen's <c>IModFlags</c> does.</summary>
+public readonly record struct HeaderFlag
 {
-    Master,
-    Small,
-    Medium,
+    public static readonly HeaderFlag Master = new("Master");
+    public static readonly HeaderFlag Small = new("Small");
+    public static readonly HeaderFlag Medium = new("Medium");
+
+    public static IReadOnlyList<HeaderFlag> All { get; } = [Master, Small, Medium];
+
+    private HeaderFlag(string name) => Name = name;
+
+    public string Name { get; }
+
+    public override string ToString() => Name;
 }
 
 /// <summary>The header flag combinations xEdit offers a new file of an extension (wbLoadOrder.pas), each
-/// keeping the flags its extension implies, for the styles Mutagen's GameConstants gives the release.</summary>
+/// keeping the flags its extension implies. The game's project says which styles its release has.</summary>
 public static class CreatablePluginFlags
 {
-    public static IEnumerable<IReadOnlyList<string>> Names(IEnumerable<IReadOnlyList<HeaderBit>> combinations) =>
-        combinations.Select(combination => (IReadOnlyList<string>)[.. combination.Select(bit => bit.ToString())]);
+    public static IReadOnlyList<IReadOnlyList<HeaderFlag>> Of(GameRelease release, ModType type) =>
+        GameCodecs.For(release).NewPluginFlags(release, type);
 
-    public static IReadOnlyList<IReadOnlyList<HeaderBit>> Of(GameRelease release, ModType type)
-    {
-        var constants = GameConstants.Get(release);
-        List<HeaderBit> styles = [];
-        if (constants.SmallMasterFlag is not null) styles.Add(HeaderBit.Small);
-        if (constants.MediumMasterFlag is not null) styles.Add(HeaderBit.Medium);
-        return type switch
+    /// <summary>The combinations for an extension, for a release whose smaller styles are <paramref name="styles"/>.
+    /// <paramref name="flaggedEsp"/> is whether xEdit offers the .esp any flag at all.</summary>
+    public static IReadOnlyList<IReadOnlyList<HeaderFlag>> Offered(ModType type, IReadOnlyList<HeaderFlag> styles, bool flaggedEsp) =>
+        type switch
         {
-            ModType.Plugin => [[], [HeaderBit.Master], .. styles.SelectMany(style => new[] { new[] { style }, [HeaderBit.Master, style] })],
-            ModType.Master => [[HeaderBit.Master], .. styles.Select(style => new[] { HeaderBit.Master, style })],
-            ModType.Light => [[HeaderBit.Master, HeaderBit.Small]],
+            ModType.Plugin when flaggedEsp => [[], [HeaderFlag.Master], .. styles.SelectMany(style => new[] { new[] { style }, [HeaderFlag.Master, style] })],
+            ModType.Plugin => [[]],
+            ModType.Master => [[HeaderFlag.Master], .. styles.Select(style => new[] { HeaderFlag.Master, style })],
+            ModType.Light => [[HeaderFlag.Master, HeaderFlag.Small]],
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, null),
         };
+
+    public static IEnumerable<IReadOnlyList<string>> Names(IEnumerable<IReadOnlyList<HeaderFlag>> combinations) =>
+        combinations.Select(combination => (IReadOnlyList<string>)[.. combination.Select(flag => flag.ToString())]);
+
+    /// <summary>The flags the names spell, exactly, or null when any name is no flag.</summary>
+    public static IReadOnlySet<HeaderFlag>? Parse(IEnumerable<string> names)
+    {
+        var flags = new HashSet<HeaderFlag>();
+        foreach (var name in names)
+        {
+            var flag = HeaderFlag.All.FirstOrDefault(known => known.Name == name);
+            if (flag.Name is null) return null;
+            flags.Add(flag);
+        }
+
+        return flags;
     }
 }

@@ -130,35 +130,53 @@ describe('registerCreatePluginCommand', () => {
     expect(reporter.reports).toEqual([]);
   });
 
+  type Labelled = { label: string };
+  const pickLabelled = (label: string) => (items: Labelled[]) => Promise.resolve(items.find((item) => item.label === label));
+
   it('picks the header flags from the combinations offered, and creates the header flagged as picked', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('createPlugin', WROTE);
     showInputBox.mockResolvedValue('MyPatch.esp');
     const offered: string[] = [];
-    showQuickPick.mockImplementation((items: { label: string; origin?: string; flags?: string[] }[]) => {
-      if (items[0]?.origin !== undefined) return Promise.resolve(items.find((item) => item.origin === 'Winning Mod'));
+    showQuickPick.mockImplementationOnce(pickLabelled('Winning Mod'));
+    showQuickPick.mockImplementationOnce((items: Labelled[]) => {
       offered.push(...items.map((item) => item.label));
-      return Promise.resolve(items.find((item) => item.label === 'ESL'));
+      return pickLabelled('Light')(items);
     });
 
-    const { run } = invoke(client, makeMo2(), undefined, [[], ['Master'], ['Small']]);
+    const { run } = invoke(client, makeMo2(), undefined, [[], ['Master'], ['Small'], ['Master', 'Medium']]);
     await run();
 
-    expect(offered).toEqual(['No flags', 'ESM', 'ESL']);
+    expect(offered).toEqual(['No flags', 'ESM', 'Light', 'ESM, Medium']);
     expect(client.calls.at(-1)).toMatchObject({ method: 'createPlugin', args: [expect.anything(), expect.anything(), expect.anything(), ['Small']] });
   });
 
   it('creates nothing when Esc answers the flags pick', async () => {
     const client = new InMemoryMEditClient();
     showInputBox.mockResolvedValue('MyPatch.esp');
-    showQuickPick.mockImplementation((items: { origin?: string }[]) =>
-      Promise.resolve(items[0]?.origin === undefined ? undefined : items.find((item) => item.origin === 'Winning Mod')));
+    showQuickPick.mockImplementationOnce(pickLabelled('Winning Mod'));
+    showQuickPick.mockResolvedValueOnce(undefined);
 
     const { run, reporter } = invoke(client, makeMo2(), undefined, [[], ['Master']]);
     await run();
 
     expect(client.calls.some((call) => call.method === 'createPlugin')).toBe(false);
     expect(reporter.reports).toEqual([]);
+  });
+
+  it('reports why, and creates nothing, when mEdit cannot say which header flags the plugin may take', async () => {
+    const client = new InMemoryMEditClient();
+    showInputBox.mockResolvedValue('MyPatch.esp');
+    showQuickPick.mockImplementationOnce(pickLabelled('Winning Mod'));
+
+    const { run, reporter } = invoke(client, makeMo2());
+    client.setQueryFailure('getCreatablePluginFlags', { failed: 'refused', refusal: 'MyPatch.esp is not a plugin file name.' });
+    await run();
+
+    expect(client.calls.some((call) => call.method === 'createPlugin')).toBe(false);
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Could not look up which header flags "MyPatch.esp" may take.', detail: 'MyPatch.esp is not a plugin file name.' },
+    ]);
   });
 
   it('refuses an extension mEdit leaves out inline, naming the ones it allows', async () => {

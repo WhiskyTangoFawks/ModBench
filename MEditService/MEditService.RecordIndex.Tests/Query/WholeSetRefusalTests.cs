@@ -31,6 +31,7 @@ public sealed class WholeSetRefusalTests
         [nameof(IQueries.GetInteriorCells)] = q => q.GetInteriorCells(FirstPlugin).Refused(),
         [nameof(IQueries.GetContainerChildren)] = q => q.GetContainerChildren(FirstPlugin, "000800:First.esp").Refused(),
         [nameof(IQueries.GetCreatablePluginExtensions)] = q => q.GetCreatablePluginExtensions().Refused(),
+        [nameof(IQueries.GetCreatablePluginFlags)] = q => q.GetCreatablePluginFlags("Any.esp").Refused(),
     };
 
     private static readonly Dictionary<string, Func<IQueries, IndexRefused>> BehindAGuard =
