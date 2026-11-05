@@ -762,8 +762,7 @@ export interface InstanceAdapter extends DataFileReads {
    *  nothing without an ignore list; rejects, writing nothing, when a folder could not be searched. */
   writeOtherManifestLines(): Promise<void>;
   /** Lets each submodule and each source folder with no repository of its own into the instance repository, and each of
-   *  `letIn` by name, though it is not on disk yet. A later call without it takes its line back. Writes nothing without a
-   *  repository or an ignore list; rejects, writing nothing, for an unpaired marker. */
+   *  `letIn` by name before it exists. Writes nothing without a repository or an ignore list; rejects for an unpaired marker. */
   writeSourceModLines(letIn?: readonly string[]): Promise<void>;
   /** Lets the instance repository hold the files of each mod folder of `modFolders`, or with `held` false leaves them out.
    *  Writes nothing without an ignore list; rejects, writing nothing, for a folder outside the mods folder or an unpaired marker. */
