@@ -56,8 +56,9 @@ const coveredFiles = (publisherFile: ConfigurationFile | undefined): CoveredFile
 
 const RECENT_DIRECTORIES = '[recentDirectories]';
 
-// A sed `i` or `a` text: each line but the last ends in a backslash.
-const sedText = (lines: readonly string[]): string => lines.map((line) => line.replaceAll('\\', '\\\\')).join('\\\n');
+// A sed `i` or `a` text: each line but the last ends in a backslash. Git's sed on Windows reads its program as text,
+// dropping a carriage return at a line's end, so the text spells it `\r`.
+const sedText = (lines: readonly string[]): string => lines.map((line) => line.replaceAll('\\', '\\\\').replaceAll('\r', '\\r')).join('\\\n');
 
 // The insertion runs once, unless the file holds the section: the hold space stays empty until the header or an insertion fills it.
 const insertedOnce = (address: string, command: 'i' | 'a', section: readonly string[]): string =>

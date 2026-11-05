@@ -15,7 +15,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     rename: async (from: string, to: string) => {
       if (crashBeforeTheNextRenameLands) {
         crashBeforeTheNextRenameLands = false;
-        throw Object.assign(new Error(`EPERM: simulated crash, rename '${from}' -> '${to}'`), { code: 'EPERM' });
+        throw Object.assign(new Error(`EIO: simulated crash, rename '${from}' -> '${to}'`), { code: 'EIO' });
       }
       return actual.rename(from, to);
     },
