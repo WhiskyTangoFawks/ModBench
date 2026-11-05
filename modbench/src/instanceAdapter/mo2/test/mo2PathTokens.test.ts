@@ -191,6 +191,37 @@ describe('the MO2 adapter\'s path tokens', () => {
       expect(await readFile(join(root, file), 'utf8')).toBe(text());
     });
 
+    it('puts a dropped section back at the end of a file that lacks the header of the section that followed it', async () => {
+      const { root, adapter } = await instanceRepository([]);
+      await put(root, 'ModOrganizer.ini', SETTINGS([...RECENT, '[Settings]', 'style=dark']));
+      await adapter.writePathTokens();
+      await put(root, 'ModOrganizer.ini', SETTINGS([]));
+      commit(root, 'ModOrganizer.ini');
+      await rm(join(root, 'ModOrganizer.ini'));
+
+      git(root, 'checkout', '--', 'ModOrganizer.ini');
+
+      expect(await readFile(join(root, 'ModOrganizer.ini'), 'utf8')).toBe(SETTINGS(RECENT));
+    });
+
+    it.each([
+      ['a blanked value', PUBLISHER_FILE, (output: string) => JSON.stringify({ Source: '{x}', Output: output })],
+      ['a dropped section', 'ModOrganizer.ini', (directory: string) => SETTINGS(['[recentDirectories]', `1\\directory=${directory}`, '[Settings]', 'style=dark'])],
+    ])('puts %s back as this machine\'s latest after the watch hears it change', async (_what, file, text) => {
+      const { root, adapter } = await instanceRepository([]);
+      await put(root, 'profiles/Default/plugins.txt', '');
+      await put(root, file, text('C:\\old'));
+      await adapter.writePathTokens();
+      await put(root, file, text('C:\\new'));
+      await adapter.reading();
+      commit(root, file);
+      await rm(join(root, file));
+
+      git(root, 'checkout', '--', file);
+
+      expect(await readFile(join(root, file), 'utf8')).toBe(text('C:\\new'));
+    });
+
     it('puts a dropped section back once into a file that holds it and a token', async () => {
       const { root, adapter } = await instanceRepository([]);
       await put(root, 'ModOrganizer.ini', SETTINGS([...RECENT, '[Settings]', 'path={instance folder:/}/x']));
@@ -199,6 +230,33 @@ describe('the MO2 adapter\'s path tokens', () => {
 
       expect(await readFile(join(root, 'ModOrganizer.ini'), 'utf8')).toBe(SETTINGS([...RECENT, '[Settings]', `path=${onWineDrive(root, '/')}/x`]));
     });
+  });
+
+  it('leaves its filter programs as its own write has them while a reading of the instance waits', async () => {
+    const { root } = await instanceRepository([]);
+    const game = await folder('game');
+    await mkdir(join(game, 'Data'));
+    await put(root, 'profiles/Default/plugins.txt', '');
+    await put(root, 'ModOrganizer.ini', SETTINGS([`path=${onWineDrive(game, '/')}/x.exe`]));
+    const found = { kind: 'found' as const, root: game, dataFolder: join(game, 'Data') };
+    let reading: Promise<unknown> | undefined;
+    let untouched: boolean | undefined;
+    const adapter = managerOver(root, {
+      gameFolder: async () => {
+        if (reading === undefined) {
+          const before = await programsIn(root);
+          reading = adapter.reading();
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          untouched = JSON.stringify(before) === JSON.stringify(await programsIn(root));
+        }
+        return found;
+      },
+    }, PUBLISHER);
+
+    await adapter.writePathTokens();
+    await reading;
+
+    expect(untouched).toBe(true);
   });
 
   it('takes a file committed before the game folder was found as changed once the game folder is found', async () => {

@@ -18,7 +18,7 @@ import {
 import type { ConfigurationFile, ManagerAdapter } from '../publisher';
 import { currentDownloadsDir, type Mo2Context } from './mo2Context';
 import { filesBelow } from './mo2Files';
-import { sourceRepositoriesOf } from './mo2Submodules';
+import { sourceFoldersOf } from './mo2Submodules';
 
 type Mo2Repository = Pick<InstanceAdapter, 'writeIgnoreList' | 'otherManifests' | 'writeOtherManifestLines' | 'writeHeldWholeLines' | 'commitFolder'> & Pick<ManagerAdapter, 'filesKept'>;
 
@@ -160,7 +160,7 @@ function caseBlindFinder({ root, holdsDataFiles }: GamePlace) {
 function whitelistAfter(ignoreList: string, whitelist: string): string {
   const whitelistLines = whitelist.trimEnd().split('\n');
   const text = ignoreList.replaceAll('\r\n', '\n');
-  const gitLines = (withSourceModLines(text, { submodules: [], withoutEntry: [] }) ?? text).trimEnd().split('\n').map((line) => line.replace(/(?<!\\) +$/, ''));
+  const gitLines = (withSourceModLines(text, { submodules: [], plain: [] }) ?? text).trimEnd().split('\n').map((line) => line.replace(/(?<!\\) +$/, ''));
   const holdsWhitelist = gitLines.some((_, at) => whitelistLines.every((line, i) => gitLines[at + i] === line));
   if (holdsWhitelist) return '';
   const lineEnding = ignoreList.includes('\r\n') ? '\r\n' : '\n';
@@ -183,7 +183,7 @@ export function mo2Repository(context: Mo2Context, publisherFile: ConfigurationF
       let appended = '';
       await putIfChanged(file, async (before) => {
         const whitelisted = whitelistAfter(before, whitelist);
-        const after = whitelisted === '' ? before : withSourceModLines(before + whitelisted, await sourceRepositoriesOf(instanceRoot)) ?? before + whitelisted;
+        const after = whitelisted === '' ? before : withSourceModLines(before + whitelisted, await sourceFoldersOf(instanceRoot)) ?? before + whitelisted;
         appended = after.startsWith(before) ? after.slice(before.length) : whitelisted;
         return before + appended;
       }, { ifMissing: '' });
