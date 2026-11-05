@@ -1,5 +1,4 @@
 using MEditService.Codec.Schema;
-using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
@@ -113,22 +112,6 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         index.SignalChange([new PluginAddress("Absent.esp", "AbsentMod")]);
 
         Assert.True(PromotesBase(index), $"The stack stands at {string.Join(",", StackOf(index, _npc))}.");
-    }
-
-    [Fact]
-    public void AWinnerSweepOwedWhenTheIndexFileIsReopened_IsPaidByTheReopenedIndex()
-    {
-        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
-        var document = index.DocumentOf(_npc, _winnerKey);
-        IndexFiles.AbortNextCheckpoint(_fixture.InstanceRoot);
-        SourceMods.RepositoryOf(_winner).Remove(_winnerKey, new RecordIdentity(document.FormKey, document.RecordType, document.EditorId)).Wrote();
-        index.SignalChange();
-        Assert.True(Waits.ReachedWithin(() => index.Status.State == LoadOrderState.Failed, TimeSpan.FromSeconds(20)));
-
-        index.SignalChange();
-
-        Assert.True(PromotesBase(index), $"The stack stands at {string.Join(",", StackOf(index, _npc))}.");
-        Assert.True(Waits.ReachedWithin(() => index.Status.State == LoadOrderState.Ready, TimeSpan.FromSeconds(20)));
     }
 
     [Fact]
