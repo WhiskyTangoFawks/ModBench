@@ -453,7 +453,7 @@ internal sealed class Indexer : IDisposable
             .SelectMany(touches => touches.Plugins)
             .Select(plugin => plugin.Key));
         var holding = scope.Held.Plugins.Where(plugin => named.Contains(plugin.Key)).ToList();
-        if (holding.Count > 0) Validate(scope, holding, CancellationToken.None);
+        if (holding.Count > 0 || scope.Store.SweepOwed) Validate(scope, holding, CancellationToken.None);
     }
 
     // Disposal is read with the exclusive right held, which Dispose takes after setting it, so no
@@ -647,7 +647,7 @@ internal sealed class Indexer : IDisposable
                 snapshot.GameRelease, snapshot.InstanceRoot, () => held.OpenedPlugins,
                 () => Status.State == LoadOrderState.Ready, out var heldElsewhere);
             if (fresh is null) return $"{NotReopened}: {heldElsewhere ?? "another process holds it"}";
-            lock (_lock) (_scope, _openedUnchecked) = (ScopeOn(held, fresh, snapshot), true);
+            lock (_lock) (_scope, _openedUnchecked, _conflictsComputed) = (ScopeOn(held, fresh, snapshot), true, false);
         }
         PublishStatus();
         return null;
@@ -658,7 +658,7 @@ internal sealed class Indexer : IDisposable
 
     // A whole read after a validation that ran out of memory would run out again.
     private bool RetriedByAWholeRead(Exception ex, CancellationToken token) =>
-        ex is not OutOfMemoryException && FailsOnePlugin(ex, token);
+        !IndexFaultException.RanOutOfMemory(ex) && FailsOnePlugin(ex, token);
 
     // Called with the exclusive right held, so no other reconcile can be in flight.
     private CancellationToken BeginReconcile()

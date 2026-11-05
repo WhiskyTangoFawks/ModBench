@@ -13,7 +13,7 @@ public sealed class ReReadMemoryTests : IDisposable
     private const string Plugin = "Referring.esp";
     private const int RecordCount = 40_000;
     private const int ReferencesPerRecord = 50;
-    private const string MemoryLimit = "64MB";
+    private const long MemoryLimit = 64_000_000;
 
     private readonly PluginFixtureData _fixture = new PluginFixtureBuilder("re-read-memory").WithPlugin(Plugin).Build();
     private readonly LoadOrderHolder _holder = new();
@@ -24,7 +24,7 @@ public sealed class ReReadMemoryTests : IDisposable
     public void APluginWhoseReferencesOutgrowDuckDbsMemoryLimit_IsReadAndReadAgainWhole()
     {
         var notifications = new InMemoryNotificationPublisher();
-        using var index = Indexes.Open(_holder, new LinkingAdapter(Plugin, Records), notifications: notifications);
+        using var index = Indexes.Open(_holder, new LinkingAdapter(Plugin, Records), notifications: notifications, memoryLimit: MemoryLimit);
         index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         Assert.Equal((LoadOrderState.Ready, null, ""), Answer(index));
 
@@ -45,7 +45,6 @@ public sealed class ReReadMemoryTests : IDisposable
 
     private IEnumerable<(string, IEnumerable<string>)> Records()
     {
-        IndexFiles.LimitMemory(_fixture.InstanceRoot, MemoryLimit);
         for (var i = 0; i < RecordCount; i++)
             yield return ($"{0x800 + RecordCount + i:X6}:{Plugin}", Enumerable.Range(0, ReferencesPerRecord).Select(j => Target((i + j * 7919) % RecordCount)));
     }
