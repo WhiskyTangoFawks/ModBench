@@ -114,6 +114,9 @@ internal static class SubFieldReflection
             null when ReflectedTypes.IsLoquiInterface(core) => StructLeaves.BuildStruct(prop, core, game, path, logger),
             _ => SchemaRefusals.ReportUnclassified<FieldMetadata>(game, logger, prop, core, "member"),
         };
+        if (spec != null && ReflectedTypes.GetSetterType(ReflectedTypes.DeclaringTypeOf(prop)) is { } owner
+            && VersioningBreaks.UnheldWhen(owner).TryGetValue(prop.Name, out var unheldWhen))
+            spec = spec with { UnheldWhen = unheldWhen };
 
         if (game.Annotations.ReadOnlyReasonFor(prop) is not { } reason) return spec;
         // A member a known defect governs is still named, opaque where the defect is what stopped the

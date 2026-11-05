@@ -5,7 +5,7 @@ import { elementsIn } from './presentation';
 import { idleMembers } from './siblingsInUse';
 import {
   arrayElementContext, arrayParentContext, cellContext, columnHasNode, declaresMember, defaultOf, editableCellContext,
-  getAtPath, isArrayElementHop, offersArrayAdd, referenceContext, rootFieldOf, stringValueContext, variantFor, wirePath,
+  getAtPath, heldUnder, isArrayElementHop, offersArrayAdd, referenceContext, rootFieldOf, stringValueContext, variantFor, wirePath,
   type CellContext, type Column,
 } from './recordUtils';
 import type { FocusedCell, NavRow } from './gridNavigation';
@@ -84,7 +84,8 @@ interface RowsInput {
 }
 
 type RowPlacement = Pick<FieldRow, 'path' | 'rootField' | 'key' | 'parent' | 'depth' | 'isLastElement' | 'keyMembers'> & {
-  // Whether a column holds the object this row is a member of.
+  // Whether a column holds this row's member: it holds the object the member is of, and that object
+  // holds the member.
   present: (column: ColumnKey) => boolean;
   editable: ReadonlySet<ColumnKey>;
   // The columns whose copy the game ignores in this row.
@@ -158,12 +159,12 @@ function fieldRow(
   const name = meta.displayLabel ?? diff.fieldName;
   const last = at.path.at(-1);
   const elementOf = isArrayElementHop(last) ? at.parent : null;
-  // A row no column carries a value for holds nothing but its children, so every column holds it.
+  // A row no column carries a value for holds nothing but its children, so every column present holds it.
   const structural = Object.values(diff.values).every(v => v == null);
   const cells = new Map(columns.map(({ key, override: o }): [ColumnKey, ValueCell] => {
     const cellMeta = cellMetas?.[key] ?? meta;
     const value = diff.values[key];
-    const holds = structural || (present(key) && columnHasNode(cellMeta, value) && (value != null || !ignored.has(key)));
+    const holds = present(key) && (structural || (columnHasNode(cellMeta, value) && (value != null || !ignored.has(key))));
     const held = holds ? value ?? defaultOf(cellMeta) : undefined;
     const shown = holds ? shownValue(held, cellMeta, stringsLanguage) : undefined;
     const resolution = diff.resolutions?.[key];
@@ -254,7 +255,7 @@ export function recordRows({ result, columns, editableColumns, partialFormColumn
           path: [...path, { kind: 'member', name: child.fieldName }],
           key: childKey, parent: key,
           present: column => present(column) && columnHasNode(meta, diff.values[column])
-            && (!member || declaresMember(member, diff.values[column], meta)),
+            && (!member || (declaresMember(member, diff.values[column], meta) && heldUnder(member, diff.values[column]))),
           depth: depth + 1, isLastElement: undefined, keyMembers: undefined, cellMetas,
         }));
       }

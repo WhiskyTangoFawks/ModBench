@@ -15,11 +15,13 @@ public sealed class VmadCompareTests : IDisposable
     private readonly OpenedIndex _index;
     private readonly string _scriptedNpc;
     private readonly string _scriptedQuest;
+    private readonly string _breakQuest;
 
     public VmadCompareTests()
     {
         string? scriptedNpc = null;
         string? scriptedQuest = null;
+        string? breakQuest = null;
         _fixture = new PluginFixtureBuilder("medit-vmad-compare")
             .WithPlugin("Base.esm", mod =>
             {
@@ -33,6 +35,10 @@ public sealed class VmadCompareTests : IDisposable
                 var quest = mod.Quests.AddNew("ScriptedQuest");
                 quest.VirtualMachineAdapter = QuestAdapterWith(aliasLevel: 1);
                 scriptedQuest = quest.FormKey.ToString();
+
+                var fragmentQuest = mod.Quests.AddNew("FragmentQuest");
+                fragmentQuest.VirtualMachineAdapter = new QuestAdapter { Version = 6, ObjectFormat = 2 };
+                breakQuest = fragmentQuest.FormKey.ToString();
             })
             .WithPlugin("Top.esp", (mod, built) =>
             {
@@ -42,13 +48,17 @@ public sealed class VmadCompareTests : IDisposable
                 npcKeepingOnlyGuardMastersAmbushAbsentNotRenamed.VirtualMachineAdapter = adapter;
                 mod.Npcs.Set(npcKeepingOnlyGuardMastersAmbushAbsentNotRenamed);
 
-                var questDisagreeingOnlyInAnAliasScriptsOwnProperty = built[0].Quests.First().DeepCopy();
+                var questDisagreeingOnlyInAnAliasScriptsOwnProperty = built[0].Quests.Single(q => q.EditorID == "ScriptedQuest").DeepCopy();
                 questDisagreeingOnlyInAnAliasScriptsOwnProperty.VirtualMachineAdapter = QuestAdapterWith(aliasLevel: 2);
                 mod.Quests.Set(questDisagreeingOnlyInAnAliasScriptsOwnProperty);
+
+                var questWhoseAdapterEndsAtItsBreak = built[0].Quests.Single(q => q.EditorID == "FragmentQuest").DeepCopy();
+                questWhoseAdapterEndsAtItsBreak.VirtualMachineAdapter = new QuestAdapter { Version = 6, ObjectFormat = 2, Versioning = QuestAdapter.VersioningBreaks.Break0 };
+                mod.Quests.Set(questWhoseAdapterEndsAtItsBreak);
             })
             .Build();
         _index = Indexes.Reconciled(_fixture);
-        (_scriptedNpc, _scriptedQuest) = (scriptedNpc.Require(), scriptedQuest.Require());
+        (_scriptedNpc, _scriptedQuest, _breakQuest) = (scriptedNpc.Require(), scriptedQuest.Require(), breakQuest.Require());
     }
 
     public void Dispose()
@@ -122,5 +132,15 @@ public sealed class VmadCompareTests : IDisposable
 
         Assert.Equal(ConflictThis.IdenticalToMaster, Child(adapter, "Script").CellStates["Top.esp"]);
         Assert.DoesNotContain(Children(adapter), c => c.FieldName is "Scripts" or "Fragments");
+    }
+
+    [Fact]
+    public void AMemberAnOverridesBreakLeavesUnheld_DiffersFromTheMastersDefault_AndReadsAsNothingThere()
+    {
+        var extraBindDataVersion = Child(Adapter(_breakQuest), "ExtraBindDataVersion");
+
+        Assert.Null(extraBindDataVersion.Values["Base.esm"]);
+        Assert.Null(extraBindDataVersion.Values["Top.esp"]);
+        Assert.Equal(ConflictThis.Override, extraBindDataVersion.CellStates["Top.esp"]);
     }
 }

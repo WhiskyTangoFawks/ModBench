@@ -494,6 +494,36 @@ describe('a member the document omits', () => {
     expect(cell?.shown).toBeUndefined();
   });
 
+  const adapter = struct('Adapter', [
+    fieldMeta({ name: 'Versioning', type: 'flags' }),
+    fieldMeta({ name: 'BindVersion', type: 'int', default: 3, unheldWhen: ['Versioning.Break0'] }),
+    fieldMeta({ name: 'Script', type: 'struct', fields: [fieldMeta({ name: 'Name', type: 'string' })], unheldWhen: ['Versioning.Break0'] }),
+  ]);
+  const adapterDiff = (master: unknown) => diffNode({
+    fieldName: 'Adapter', values: { [MASTER]: master, [MOD]: { Versioning: ['Break0'] } },
+    children: [
+      memberDiff('BindVersion', null),
+      diffNode({ fieldName: 'Script', values: { [MASTER]: null, [MOD]: null }, children: [memberDiff('Name', null)] }),
+    ],
+  });
+
+  it.each([
+    ['a scalar its column\'s break leaves unheld, where the other holds it at its default', 'Adapter.BindVersion', {}],
+    ['a struct every column\'s break leaves unheld', 'Adapter.Script', { Versioning: ['Break0'] }],
+    ['a member of that struct', 'Adapter.Script.Name', { Versioning: ['Break0'] }],
+  ])('is nothing, not its default: %s', (_kind, key, master) => {
+    const cell = memberOf([adapter], [adapterDiff(master)], key);
+
+    expect(cell?.holds).toBe(false);
+    expect(cell?.shown).toBeUndefined();
+  });
+
+  it('a member a break leaves unheld reads as its default in a column that holds it', () => {
+    const rows = fieldRowsOf(rowsFor(answer([adapter], [adapterDiff({})])));
+
+    expect(rows.find(r => r.key === 'Adapter.BindVersion')?.cells.get(MASTER)?.value).toBe(3);
+  });
+
   it.each([
     ['a field', fieldMeta({ name: 'Name', type: 'string' }), 'Name', diffNode({ fieldName: 'Name', values: { [MASTER]: 'Original', [MOD]: null } })],
     ['a non-nullable struct, whose absence would read as its default', size, 'Size', sizeDiff],
