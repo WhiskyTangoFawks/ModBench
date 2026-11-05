@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { referencesView, type ReferencesViewInput } from '../drivingLib/referencesView';
-import type { Instance } from '../instanceLoader/instance';
+import type { InstanceValue } from '../instanceLoader/instance';
 import { isPluginSourcePath } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
@@ -16,11 +16,13 @@ import { locateRecord, locationOf } from './recordLocation';
 import { formKeyPluginAt, formKeyValue } from './sourceText';
 
 interface PluginLanguageDeps {
-  instance: Pick<Instance, 'value'> | undefined;
+  instance: { readonly value: Pick<InstanceValue, 'plugins'> } | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
   client: RecordDocumentClient;
   owners: readonly SymbolOwner[];
 }
+
+type AskedIn = Pick<vscode.TextDocument, 'getText'> & { readonly uri: Pick<vscode.Uri, 'fsPath'> };
 
 interface ListedLocations {
   readonly locations: vscode.Location[];
@@ -60,7 +62,7 @@ export function pluginLanguage({ instance, reporter, client, owners }: PluginLan
   };
   const [listedForGesture, listedForFeature] = [listed(referencesTo.forGesture), listed(referencesTo.forFeature)];
 
-  const nameAt = async (document: vscode.TextDocument, offset: number): Promise<PluginName | undefined> => {
+  const nameAt = async (document: AskedIn, offset: number): Promise<PluginName | undefined> => {
     const text = heldText(document);
     if (isPluginSourcePath(document.uri.fsPath)) return formKeyPluginAt(text, offset);
     for (const owner of owners) {
@@ -80,7 +82,7 @@ export function pluginLanguage({ instance, reporter, client, owners }: PluginLan
 
   return {
     /** Find All References on the plugin whose name is at `offset`; undefined where no plugin's name is. */
-    referencesAt: async (document: vscode.TextDocument, offset: number): Promise<vscode.Location[] | undefined> => {
+    referencesAt: async (document: AskedIn, offset: number): Promise<vscode.Location[] | undefined> => {
       const named = await nameAt(document, offset);
       if (named === undefined) return undefined;
       const plugin = pluginNamed(named, instance?.value.plugins ?? []);
