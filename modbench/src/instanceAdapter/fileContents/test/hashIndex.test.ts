@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import { appendFile, mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
+import { appendFile, link, mkdir, mkdtemp, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
@@ -165,27 +165,18 @@ describe('the sizes and hashes of the record index', () => {
     expect(installationFileReader.extracted).toEqual([downloadedFile]);
   });
 
-  async function afterTheFileSystemClockThatStampsAChangePasses(file: string): Promise<void> {
-    const { ctimeNs } = await stat(file, { bigint: true });
-    const clock = await mkdtemp(join(tmpdir(), 'modbench-clock-'));
-    const probe = join(clock, 'probe');
-    do await writeFile(probe, ''); while ((await stat(probe, { bigint: true })).ctimeNs <= ctimeNs);
-    await rm(clock, { recursive: true });
-  }
-
-  it('reads again a file another tool rewrote keeping its size and date modified', async () => {
+  it('reads no file again that a deploy or a purge linked or unlinked', async () => {
     clockAnHourPastEveryWrite();
     const file = await fileHolding('Game.esm', 'aaaa');
-    const kept = new Date('2020-01-01T00:00:00Z');
-    await utimes(file, kept, kept);
     const index = hashIndex(folder, fakeInstallationFileReader([]));
     await index.gameFileHash(file);
-    await afterTheFileSystemClockThatStampsAChangePasses(file);
+    const reads = vi.mocked(digestOf).mock.calls.length;
 
-    await writeFile(file, 'bbbb');
-    await utimes(file, kept, kept);
+    await link(file, join(root, 'Linked.esm'));
+    await unlink(join(root, 'Linked.esm'));
 
-    expect(await index.gameFileHash(file)).toEqual({ kind: 'read', answer: { size: 4, hash: HASH_OF_BBBB } });
+    expect(await index.gameFileHash(file)).toEqual({ kind: 'read', answer: { size: 4, hash: HASH_OF_AAAA } });
+    expect(vi.mocked(digestOf).mock.calls).toHaveLength(reads);
   });
 
   it('reads again, and keeps no record of, a file whose stamp is within a clock tick of its read, as a write in that tick may keep the stamp', async () => {

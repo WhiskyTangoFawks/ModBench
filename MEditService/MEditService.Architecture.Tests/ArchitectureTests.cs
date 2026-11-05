@@ -84,14 +84,6 @@ public sealed class ArchitectureTests
     }
 
     [Fact]
-    public void DiskDerivedState_NeverReadsLastWriteTime_BecauseDotNetHasNoChangeTimeSoItIsModificationTimeAlone()
-    {
-        var offenders = Offenders(ServiceProjects.SolutionDirectory(), Projects, "LastWriteTime", allowedFiles: []);
-        Assert.True(offenders.Count == 0,
-            "Modification time read without change time in:\n" + string.Join("\n", offenders));
-    }
-
-    [Fact]
     public void LoadOrder_IsWrittenOnlyByPutLoadOrder()
     {
         var root = ServiceProjects.SolutionDirectory();

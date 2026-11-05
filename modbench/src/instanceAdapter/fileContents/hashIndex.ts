@@ -24,20 +24,20 @@ interface Kept {
 }
 
 const lineOf = (kind: Kind, path: string, stamp: FileStamp, hashed: HashedDownloadedFile): string =>
-  `${JSON.stringify([kind, path, String(stamp.size), String(stamp.modifiedNs), String(stamp.changedNs), hashed.hash, ...hashed.entries.flatMap((entry) => [entry.path, entry.hash])])}\n`;
+  `${JSON.stringify([kind, path, String(stamp.size), String(stamp.modifiedNs), hashed.hash, ...hashed.entries.flatMap((entry) => [entry.path, entry.hash])])}\n`;
 
 type Line = [LineKind, string, string, string, string, string, ...string[]];
 
 const isLine = (fields: unknown): fields is Line =>
-  Array.isArray(fields) && fields.length >= 6 && fields.length % 2 === 0 && fields.every((field) => typeof field === 'string')
+  Array.isArray(fields) && fields.length >= 5 && fields.length % 2 === 1 && fields.every((field) => typeof field === 'string')
   && (fields[0] === 'origin' || fields[0] === 'game' || fields[0] === 'downloadedFile' || fields[0] === 'flagged');
 
 function keptAt(line: string): { kind: LineKind; path: string; stamp: FileStamp; read: FileRead<HashedDownloadedFile> } | undefined {
   try {
     const fields: unknown = JSON.parse(line);
     if (!isLine(fields)) return undefined;
-    const [tag, path, size, modifiedNs, changedNs, hash, ...entries] = fields;
-    const stamp = { size: BigInt(size), modifiedNs: BigInt(modifiedNs), changedNs: BigInt(changedNs) };
+    const [tag, path, size, modifiedNs, hash, ...entries] = fields;
+    const stamp = { size: BigInt(size), modifiedNs: BigInt(modifiedNs) };
     const pairs = entries.flatMap((entryPath, i) => (i % 2 === 0 ? [{ path: entryPath, hash: entries[i + 1] ?? '' }] : []));
     return { kind: tag, path, stamp, read: { kind: 'read', answer: { size: Number(stamp.size), hash, entries: pairs } } };
   } catch {
@@ -216,7 +216,7 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
       await load();
       const key = flaggedKey(hash, flags);
       flagged.set(key, flaggedHash);
-      await ensureDir(folder).then(() => append(indexFile, `${JSON.stringify(['flagged', key, '0', '0', '0', flaggedHash])}\n`)).catch((err: unknown) => { unwritten = errorMessage(err); });
+      await ensureDir(folder).then(() => append(indexFile, `${JSON.stringify(['flagged', key, '0', '0', flaggedHash])}\n`)).catch((err: unknown) => { unwritten = errorMessage(err); });
     },
     originFileHash: (path) => hashAlone('origin', path),
     gameFileHash: (path) => hashAlone('game', path),
