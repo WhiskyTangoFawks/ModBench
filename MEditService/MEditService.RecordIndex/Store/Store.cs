@@ -34,6 +34,7 @@ internal sealed class Store : IDisposable
     private readonly IndexWriteGate _gate;
     private readonly FilterInForce _filterInForce;
     private readonly INotificationPublisher? _notifications;
+    private readonly long _memoryLimit;
     private readonly Projection _projection;
     private IReadOnlyDictionary<string, RecordTableSchema>? _schemas;
     private PluginIngest? _pluginIngest;
@@ -72,8 +73,9 @@ internal sealed class Store : IDisposable
     public Store(
         ILogger logger, string? databasePath, string? instanceRoot, SchemaReflector schemaReflector, TableDdlBuilder ddlBuilder, IPluginAdapter plugins,
         TimeProvider? timeProvider, Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, Func<bool> indexed,
-        IndexWriteGate gate, FilterInForce filterInForce, INotificationPublisher? notifications)
+        IndexWriteGate gate, FilterInForce filterInForce, INotificationPublisher? notifications, long memoryLimit)
     {
+        _memoryLimit = memoryLimit;
         _logger = logger;
         _gate = gate;
         _filterInForce = filterInForce;
@@ -219,14 +221,15 @@ internal sealed class Store : IDisposable
         _connection?.Dispose();
     }
 
-    // DuckDB sizes its buffer pool from the machine's memory, and cannot see the share a desktop
-    // with other programs leaves it.
-    private const string MemoryLimit = "1GB";
+    // DuckDB needs 125 MB a thread to spill, and a join that hashes bodies twice that: on less, a read that
+    // outgrows memory fails rather than slows.
+    private const long MemoryPerThread = 250_000_000;
 
-    private static DuckDBConnection OpenFile(string databasePath)
+    private DuckDBConnection OpenFile(string databasePath)
     {
         var connection = Opened($"DataSource={databasePath}");
-        DuckDbSql.Execute(connection, $"SET GLOBAL memory_limit = '{MemoryLimit}'");
+        var threads = Math.Clamp(_memoryLimit / MemoryPerThread, 1, Environment.ProcessorCount);
+        DuckDbSql.Execute(connection, $"SET GLOBAL memory_limit = '{_memoryLimit}B'; SET GLOBAL threads = {threads}");
         return connection;
     }
 

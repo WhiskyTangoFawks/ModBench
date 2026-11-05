@@ -40,6 +40,7 @@ internal sealed class Indexer : IDisposable
         ISourceAdapter source,
         SchemaReflector schemaReflector,
         FilterInForce filter,
+        long memoryLimit,
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
         TimeProvider? timeProvider = null)
@@ -54,7 +55,7 @@ internal sealed class Indexer : IDisposable
         _logger = loggerFactory?.CreateLogger<Indexer>() ?? NullLogger<Indexer>.Instance;
         _storeFactory = new StoreFactory(
             schemaReflector, new TableDdlBuilder(schemaReflector), adapter, source, _gate, _filter, notifications,
-            loggerFactory?.CreateLogger<StoreFactory>(), timeProvider);
+            memoryLimit, loggerFactory?.CreateLogger<StoreFactory>(), timeProvider);
     }
 
     // Lock order: _lock, then the Store's projection lock, which a projection's announcements run
