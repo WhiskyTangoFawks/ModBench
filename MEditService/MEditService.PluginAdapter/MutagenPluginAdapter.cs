@@ -26,7 +26,7 @@ internal interface ILoadedMod : IDisposable
 public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAdapter
 {
     private readonly PluginFileHashes _hashes = new(timeProvider);
-    private readonly PluginRecordFactsMemo _facts = new(timeProvider);
+    private readonly RecentPluginMemo<PluginRecordFacts> _facts = new(timeProvider, capacity: 2);
 
     // The getter looks its strings up as they are read, so the folder it reads them from lives as long as it does.
     internal static ILoadedMod OpenForRead(
