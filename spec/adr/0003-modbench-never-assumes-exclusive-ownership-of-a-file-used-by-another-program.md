@@ -1,9 +1,10 @@
 # Modbench never assumes exclusive ownership of a file used by another program
 
-Any program or the user can change any file Modbench shares with them, at any moment ([principles](../principles.md), Never break the instance for its owner). So every state Modbench derives from such a file validates by the file's content, or by a fact every write to the file changes, never by trust in its own last write or in the watcher. A compiled plugin's binary is the one file git cannot show, so when its bytes differ from what Modbench last wrote, Modbench tells the user and does nothing else.
+Any program or the user can change any file Modbench shares with them, at any moment ([principles](../principles.md), Never break the instance for its owner). So every state Modbench derives from such a file validates by the file's content, or by a fact every ordinary write changes, never by trust in its own last write or in the watcher. A compiled plugin's binary is the one file git cannot show, so when its bytes differ from what Modbench last wrote, Modbench tells the user and does nothing else.
 
 ## Consequences
 
+- A write that keeps the file's size and puts its old date modified back goes unseen. A fact that linking the file changes would cost every deploy and purge a read of each file it links ([principles](../principles.md), Usable first).
 - A rollback never reverts a third party's write. It restores only what the action still owns ([ADR-0007](0007-plugin-edits-are-git-working-tree-changes.md)).
 
 ## Alternatives rejected
