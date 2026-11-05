@@ -83,10 +83,10 @@ describe('a mod as a value', () => {
     expect(value).toMatchObject({ kind: 'read', flaggedHashes: new Map([['a.esp', 'KKKKKKKKKKA=']]) });
   });
 
-  it.each([['Hosted', 'hosted'], ['Tracked', 'hosted'], ['Unpinned', 'unpinned'], ['Local', 'none']])('says whether a clone gets the repository %s: a submodule, or a source folder the instance repository tracks', async (repository, repositoryHost) => {
+  it.each([['Hosted', 'pinned'], ['Tracked', 'pinned'], ['Unpinned', 'unpinned'], ['Local', 'none']])('says what a clone gets of the repository %s: a submodule at a pinned commit, an unpinned one, or a source folder the instance repository tracks', async (repository, repositoryPin) => {
     const value = await modValueOver(modReads, '/mods/Mod', { installationFiles: [], repository }, []);
 
-    expect(value).toMatchObject({ kind: 'read', repositoryHost });
+    expect(value).toMatchObject({ kind: 'read', repositoryPin });
   });
 
   it('reads and hashes no file of a folder when no manifest is asked for', async () => {

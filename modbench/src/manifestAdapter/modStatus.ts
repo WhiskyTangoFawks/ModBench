@@ -8,7 +8,7 @@ import type { Manifest, ManifestPackage } from './manifest';
 import type { ManifestAt } from './manifestFiles';
 import { isUnderAny } from './folderPaths';
 import { installationFileLack } from './packageLack';
-import { packageWithoutHost, repositoryOf } from './manifestPackages';
+import { packageWithoutHost, repositoryNoun, repositoryOf } from './manifestPackages';
 
 /** A mod by its name and the folder that holds it and its manifest. */
 export interface ModAt {
@@ -173,8 +173,8 @@ export function statusFrom(mod: ModAt, { read, file }: ManifestAt, values: Statu
     gone: ordered(files.flatMap(({ path, pathInFolder }) => (pathInFolder === undefined ? [path] : []))),
     ...unheld,
     unpackaged: ordered([...unpackaged, ...namedByNoLine]),
-    noHost: manifest.packages.flatMap((pkg) => packageWithoutHost(pkg, values.repositoryHost)),
-    unpinned: manifest.packages.flatMap((pkg) => (pkg.kind === 'repository' && values.repositoryHost === 'unpinned' ? [`repository '${pkg.name}'`] : [])),
+    noHost: manifest.packages.flatMap((pkg) => packageWithoutHost(pkg, values.repositoryPin)),
+    unpinned: manifest.packages.flatMap((pkg) => (pkg.kind === 'repository' && values.repositoryPin === 'unpinned' ? [repositoryNoun(pkg.name)] : [])),
     packagesLacking: held.lacking,
   };
 }

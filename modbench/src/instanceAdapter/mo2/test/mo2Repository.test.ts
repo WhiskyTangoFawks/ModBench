@@ -815,6 +815,20 @@ describe('the MO2 adapter\'s repository', () => {
       expect([first.written, second.written, third.written]).toEqual([['Mod A'], [], ['Mod A']]);
     });
 
+    it('names a source mod whose ignore lines alone it wrote', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await adapter.writeIgnoreList();
+      await sourceMod('Mod A', 'https://example.test/a.git');
+      await everySourceModNamedForItsRepository(adapter);
+      const lines = (await readFile(join(root, '.gitignore'), 'utf8')).split('\n');
+      await put('.gitignore', lines.filter((line) => !line.includes('source/Mod A')).join('\n'));
+
+      const report = await everySourceModNamedForItsRepository(adapter);
+
+      expect(report.written).toEqual(['Mod A']);
+    });
+
     it('takes the entry and the line of a source mod that is gone or lost its remote, lets in no line for the one that lost its remote, and keeps the lines it did not write', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');

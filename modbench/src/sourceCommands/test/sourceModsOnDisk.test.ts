@@ -493,7 +493,9 @@ describe('a mod installed from an installation file, then decompiled and committ
       await put(`mods/Mod/${mod.sourceFolder.modFolderManifestFile ?? ''}`, mod.sourceFolder.modFolderManifest ?? '');
       const sourceFolder = join(root, 'source', 'Mod');
       execFileSync('git', ['init', '-q', sourceFolder]);
-      execFileSync('git', ['-C', sourceFolder, 'add', BUILD_FILE, mod.sourceFolder.manifestFile ?? '']);
+      const kept = [BUILD_FILE, mod.sourceFolder.manifestFile ?? '', ...mod.sourceFolder.assets ?? []];
+      await put('source/Mod/.gitignore', `*\n!/.gitignore\n${kept.map((path) => `!/${path}\n`).join('')}`);
+      execFileSync('git', ['-C', sourceFolder, 'add', '.gitignore', BUILD_FILE, mod.sourceFolder.manifestFile ?? '']);
       execFileSync('git', ['-C', sourceFolder, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'Init Mod']);
       return { landed: [{ mod: 'Mod', plugins: [{ name: 'Mod.esp', origin: 'Mod' }] }], refused: [] };
     });
@@ -537,7 +539,7 @@ describe('a mod installed from an installation file, then decompiled and committ
     expect([sent?.sourceFolder.manifestFile, sent?.sourceFolder.assets, sent?.sourceFolder.buildFile, pathsIn(manifest.manifest), manifest.manifest.packages.map(({ kind }) => kind), sent?.sourceFolder.ignored])
       .toEqual(['Mod.manifest.json', [], '{"version":1,"steps":[\n{"copy":["b.nif","textures"]},\n{"compile":["Mod.esp"]}\n]}\n', ASSETS, ['installationFile'], ASSETS]);
     expect(Object.keys(await textsBelow(join(root, 'source', 'Mod'))).filter((path) => !path.startsWith('.git/')).sort())
-      .toEqual(['Mod.manifest.json', 'b.nif', 'build.json', 'textures/c.dds']);
+      .toEqual(['.gitignore', 'Mod.manifest.json', 'b.nif', 'build.json', 'textures/c.dds']);
   });
 
   it('leaves a file its manifest ignores out of its repository, and keeps the ignore in the manifest its folder holds (The manifest, story 11)', async () => {
@@ -560,19 +562,16 @@ describe('a mod installed from an installation file, then decompiled and committ
     expect(await textsBelow(join(root, 'source', 'Mod'))).toMatchObject({ 'b.nif': 'bytes of b.nif', 'textures/c.dds': 'bytes of textures/c.dds' });
   });
 
-  it('is rewritten by no update manifest at its first run in the mod folder, and keeps the source folder\'s package (instance-repository.md, Update manifest, story 2)', async () => {
+  it('is rewritten by no update manifest at its first run, neither the source folder\'s manifest nor the mod folder\'s (instance-repository.md, Update manifest, story 2)', async () => {
     const { adapter } = await anInstalledModDecompiled();
-    const sourceManifest = join(root, 'source', 'Mod', 'Mod.manifest.json');
-    const modManifest = join(root, 'mods', 'Mod', 'Mod.manifest.json');
-    const before = await readFile(modManifest, 'utf8');
-    const packagesBefore = readManifest(await readFile(sourceManifest, 'utf8'));
-    assert('manifest' in packagesBefore);
+    const manifests = async (): Promise<string[]> => [
+      await readFile(join(root, 'source', 'Mod', 'Mod.manifest.json'), 'utf8'), await readFile(join(root, 'mods', 'Mod', 'Mod.manifest.json'), 'utf8'),
+    ];
+    const before = await manifests();
 
     const outcome = await updateManifest({ adapter }, ['Mod'], {}, [], false, []);
 
-    const after = readManifest(await readFile(sourceManifest, 'utf8'));
-    assert('manifest' in after);
-    expect([await readFile(modManifest, 'utf8'), after.manifest.packages, outcome.refused]).toEqual([before, packagesBefore.manifest.packages, []]);
+    expect([await manifests(), outcome.refused]).toEqual([before, []]);
   });
 
   it('changes nothing and trashes nothing at a first build that makes the folder it already holds (source.md, Build, story 3)', async () => {

@@ -162,8 +162,23 @@ const configured = (instanceRoot: string, file: string, key: string): Promise<st
     throw err;
   });
 
-const entryValues = async (instanceRoot: string, file: string, name: string): Promise<string> =>
-  (await Promise.all(['path', 'url', 'branch'].map((key) => configured(instanceRoot, file, `submodule.${name}.${key}`)))).join('\n');
+interface Written { readonly entries: ReadonlyMap<string, string>; readonly ignoreList: string }
+
+// Each submodule's lines in `.gitmodules` by its name, and the ignore list: what a call to writeSubmodules can write.
+async function writtenState(instanceRoot: string): Promise<Written> {
+  const file = submodulesFile(instanceRoot);
+  const entries = new Map<string, string>();
+  if (await exists(file)) {
+    const listed = await git(instanceRoot, 'config', '-f', file, '--null', '--list');
+    for (const entry of listed.split('\0').filter((each) => each !== '')) {
+      const key = entry.split('\n')[0] ?? '';
+      if (!key.startsWith('submodule.')) continue;
+      const name = key.slice('submodule.'.length, key.lastIndexOf('.'));
+      entries.set(name, `${entries.get(name) ?? ''}${entry}\n`);
+    }
+  }
+  return { entries, ignoreList: await get(ignoreListFile(instanceRoot), '') };
+}
 
 // The index holds a submodule's pin as a gitlink, mode 160000.
 async function submoduleIn(instanceRoot: string, name: string): Promise<Submodule | SubmoduleLacks> {
@@ -192,10 +207,12 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
       const built = new Set([...sourceMods.values()].map((folder) => basename(folder)));
       const notes: SubmoduleNote[] = [];
       const other: string[] = [];
-      const ignoreFile = ignoreListFile(instanceRoot);
-      const linesBefore = await get(ignoreFile, '');
-      const entriesBefore = new Map<string, string>();
-      for (const [mod, folder] of sourceMods) entriesBefore.set(mod, await entryValues(instanceRoot, file, basename(folder)).catch(() => ''));
+      let before: Written | undefined;
+      try {
+        before = await writtenState(instanceRoot);
+      } catch (err) {
+        other.push(`which source mods it wrote could not be read, so none is named: ${errorMessage(err)}`);
+      }
       const kept = new Set<string>();
       let existing: string[] = [];
       try {
@@ -241,13 +258,19 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
       } catch (err) {
         other.push(errorMessage(err));
       }
-      const linesAfter = await get(ignoreFile, '');
       const written: string[] = [];
-      for (const [mod, folder] of sourceMods) {
-        const name = basename(folder);
-        const entryChanged = entriesBefore.get(mod) !== await entryValues(instanceRoot, file, name).catch(() => '');
-        const linesChanged = sourceModLinesOf(linesBefore, name).join() !== sourceModLinesOf(linesAfter, name).join();
-        if (entryChanged || linesChanged) written.push(mod);
+      if (before !== undefined) {
+        try {
+          const after = await writtenState(instanceRoot);
+          for (const [mod, folder] of sourceMods) {
+            const name = basename(folder);
+            const entryChanged = before.entries.get(name) !== after.entries.get(name);
+            const linesChanged = sourceModLinesOf(before.ignoreList, name).join() !== sourceModLinesOf(after.ignoreList, name).join();
+            if (entryChanged || linesChanged) written.push(mod);
+          }
+        } catch (err) {
+          other.push(`which source mods it wrote could not be read, so none is named: ${errorMessage(err)}`);
+        }
       }
       return { notes, other, written };
     },

@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
-import type { FolderFile, FolderValue, HashedPath, PackagesAsked, RepositoryHost, StatusValues } from '../repositoriesLib/statusValues';
+import type { FolderFile, FolderValue, HashedPath, PackagesAsked, RepositoryPin, StatusValues } from '../repositoriesLib/statusValues';
 import { ownPathOf } from './excludedPaths';
 import type { FileRead, InstallationFile, InstanceAdapter } from './instanceAdapter';
 
@@ -48,10 +48,10 @@ async function gameFilesOver(reads: ModReads, folder: string, paths: readonly st
   return { kind: 'read', answer: files };
 }
 
-async function hostOf(reads: ModReads, repository: string): Promise<RepositoryHost> {
+async function hostOf(reads: ModReads, repository: string): Promise<RepositoryPin> {
   const submodule = await reads.submodule(repository);
-  if (!('lacks' in submodule)) return 'hosted';
-  if (await reads.sourceFolderTracked(repository)) return 'hosted';
+  if (!('lacks' in submodule)) return 'pinned';
+  if (await reads.sourceFolderTracked(repository)) return 'pinned';
   return submodule.unpinned === true ? 'unpinned' : 'none';
 }
 
@@ -70,8 +70,8 @@ export async function modValueOver(reads: ModReads, folder: string, asked: Packa
       const flaggedHash = await reads.flaggedHash(hash, flags);
       if (flaggedHash !== undefined) flaggedHashes.set(path, flaggedHash);
     }
-    const repositoryHost = asked.repository === undefined ? 'none' : await hostOf(reads, asked.repository);
-    return { kind: 'read', folder: folderValue, downloadedFiles, gameFiles: gameFiles.answer, flaggedHashes, repositoryHost };
+    const repositoryPin = asked.repository === undefined ? 'none' : await hostOf(reads, asked.repository);
+    return { kind: 'read', folder: folderValue, downloadedFiles, gameFiles: gameFiles.answer, flaggedHashes, repositoryPin };
   } catch (err) {
     return { kind: 'unreadable', reason: errorMessage(err) };
   }

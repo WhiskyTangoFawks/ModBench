@@ -86,14 +86,9 @@ async function readMod(
 async function readSourceFolder(
   adapter: Adapter, mod: string, folder: string, game: GameToHand,
 ): Promise<{ read: ModToUpdate; notes: readonly string[] } | { refusal: string }> {
-  const installed = await adapter.installationFile(mod);
-  const installationFile = installed.kind === 'read' ? installed.answer : undefined;
-  const taken = await gameFilesOf(adapter, { mod, folder }, { ...game, takes: () => true }, installationFile !== undefined);
+  const taken = await gameFilesOf(adapter, { mod, folder }, { ...game, takes: () => true }, false);
   if ('refusal' in taken) return taken;
-  return {
-    read: { name: mod, folder, isSourceFolder: true, ...withGame(game, taken.gameFiles), ...installationFile === undefined ? {} : { installationFile } },
-    notes: taken.notes,
-  };
+  return { read: { name: mod, folder, isSourceFolder: true, ...withGame(game, taken.gameFiles) }, notes: taken.notes };
 }
 
 const withGame = (game: GameToHand, held: Parameters<typeof gameHeld>[1]): { game?: GameHeld } => {
