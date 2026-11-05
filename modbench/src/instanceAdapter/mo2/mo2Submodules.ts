@@ -6,9 +6,10 @@ import { errnoCode } from '../../ports/errno';
 import { git } from '../git';
 import { keptByIndex } from '../keptByIndex';
 import { errorMessage } from '../../ports/errorMessage';
-import { exists, ignoreSkippedLink, isRepository, listFolders, putIfChanged, readOrAbsent, remove } from '../files';
+import { exists, get, ignoreSkippedLink, isRepository, listFolders, putIfChanged, readOrAbsent, remove } from '../files';
 import type { InstanceAdapter, SourceHost, Submodule, SubmoduleNote, UnclonedSubmodule } from '../instanceAdapter';
-import { ignoreListFile, sourceModPath, sourceRootDir, submodulesFile, withSourceModLines, type SourceRepositories } from './layout';
+import { ignoreListFile, sourceModPath, sourceRootDir, submodulesFile, leavesOutSourceFolders, withSourceModLines, type SourceFolders } from './layout';
+import type { FileProblems } from '../../ports/fileProblems';
 import type { Mo2Context } from './mo2Context';
 import { PRE_PUSH_HOOK, PRE_PUSH_HOOK_NAME } from '../prePushHook';
 import { sourceFoldersTracked } from './sourceModFolders';
@@ -93,24 +94,47 @@ async function entryWritten(instanceRoot: string, file: string, { name, url, bra
   await git(instanceRoot, 'config', '-f', file, `submodule.${name}.branch`, branch);
 }
 
-/** The source folders that hold a repository of their own: those `.gitmodules` names, or `submodules`, and the rest. */
-export async function sourceRepositoriesOf(instanceRoot: string, submodules?: ReadonlySet<string>): Promise<SourceRepositories> {
+/** The source folders a clone gets: those `.gitmodules` names, or `submodules`, and each other that holds no repository of its own. */
+export async function sourceFoldersOf(instanceRoot: string, submodules?: ReadonlySet<string>): Promise<SourceFolders> {
   const entries = submodules ?? new Set(await sourceEntries(instanceRoot, submodulesFile(instanceRoot)));
   const folders = await readOrAbsent(() => listFolders(sourceRootDir(instanceRoot), ignoreSkippedLink), []);
-  const withoutEntry: string[] = [];
-  for (const name of folders) if (!entries.has(name) && await isRepository(join(sourceRootDir(instanceRoot), name))) withoutEntry.push(name);
-  return { submodules: [...entries], withoutEntry };
+  const plain: string[] = [];
+  for (const name of folders) if (!entries.has(name) && !(await isRepository(join(sourceRootDir(instanceRoot), name)))) plain.push(name);
+  return { submodules: [...entries], plain };
 }
 
 async function sourceModLinesWritten(instanceRoot: string, submodules?: ReadonlySet<string>): Promise<void> {
   const file = ignoreListFile(instanceRoot);
   if (!(await exists(file))) return;
-  const repositories = await sourceRepositoriesOf(instanceRoot, submodules);
+  const folders = await sourceFoldersOf(instanceRoot, submodules);
   await putIfChanged(file, (before) => {
-    const after = withSourceModLines(before, repositories);
-    if (after === undefined) throw new Error(`${file} has a source mods marker with no match, so its source mod lines are left as they are`);
+    const after = withSourceModLines(before, folders);
+    if (after === undefined) throw new Error(`${file} has a source folders marker with no match, so its source folder lines are left as they are`);
     return after;
   });
+}
+
+/** Rewrites the source folder lines when the source folders change, in an ignore list that holds the whitelist. A marker
+ *  with no match shows as a problem on it. Run on each reading of the instance. */
+export function sourceModLinesFollowed(instanceRoot: string, problems: FileProblems): () => Promise<void> {
+  const file = ignoreListFile(instanceRoot);
+  let followed: string | undefined;
+  let shown = false;
+  return async () => {
+    if (!(await isRepository(instanceRoot)) || !leavesOutSourceFolders(await get(file, ''))) return;
+    const folders = await sourceFoldersOf(instanceRoot);
+    const now = JSON.stringify(folders);
+    if (now === followed) return;
+    try {
+      await sourceModLinesWritten(instanceRoot, new Set(folders.submodules));
+      followed = now;
+      if (shown) problems.set(file, []);
+      shown = false;
+    } catch (err) {
+      problems.set(file, [{ line: 1, message: errorMessage(err) }]);
+      shown = true;
+    }
+  };
 }
 
 // A hook outside the repository's own git directory would run in every repository that reads it.

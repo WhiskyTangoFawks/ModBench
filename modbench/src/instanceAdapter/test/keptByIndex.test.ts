@@ -51,6 +51,14 @@ describe('what git answers from the index and .gitmodules, kept while both keep 
     expect(await kept(root, 'two', read)).toBe(2);
   });
 
+  it('keeps only the latest version of a key, so an earlier one is read again', async () => {
+    const kept = keptByIndex<number>();
+    await kept(root, 'answer', read, 'first');
+    await kept(root, 'answer', read, 'second');
+
+    expect(await kept(root, 'answer', read, 'first')).toBe(3);
+  });
+
   it('reads again once the index has changed', async () => {
     const kept = keptByIndex<number>();
     await kept(root, 'answer', read);

@@ -56,7 +56,7 @@ export function unfilteredFiles(): (repository: string, drivers: readonly string
   const kept = keptByIndex<ReadonlyMap<string, Problem>>((problems) => [...problems.values()].every(({ checked }) => checked));
   return async (repository, drivers) => {
     const head = await headOf(repository);
-    const problems = await kept(repository, [head ?? '', ...drivers].join('\0'), () => unfilteredIn(repository, drivers, head));
+    const problems = await kept(repository, drivers.join('\0'), () => unfilteredIn(repository, drivers, head), head ?? '');
     return new Map([...problems].map(([path, { message }]) => [path, message]));
   };
 }
