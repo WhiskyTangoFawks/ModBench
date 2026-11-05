@@ -56,6 +56,60 @@ describe('a build file names a plugin of its own mod in its steps (ADR-0028)', (
   });
 });
 
+describe('a build file carries a rename of a plugin of its own mod (formats/build-file.md, Canonical text)', () => {
+  const RENAMED = '{"version":1,"steps":[\n{"decompile":["New.esp","B.esp"]},\n{"copy":["a/A.esp","New.esp"]},\n{"unpack":{"In.7z":["A.esp"]}},\n{"pack":{"A - Main.ba2":["A.esp"]}}\n]}\n';
+
+  const planned = async (held = NONE) => {
+    const plan = await owner().plan({ name: 'a.ESP', origin: 'Mod A' }, 'New.esp', held);
+    if ('refused' in plan) throw new Error(plan.refused);
+    return plan;
+  };
+
+  it('changes only each name a decompile, compile or copy step gives the plugin, and moves the file those steps read', async () => {
+    await writeFile(file, TEXT);
+    await writeFile(join(folder, 'A.esp'), 'plugin');
+
+    const plan = await planned();
+
+    expect(plan.changes).toEqual({ moves: [{ from: join(folder, 'A.esp'), to: join(folder, 'New.esp') }], deletions: [], documents: [{ path: file, text: RENAMED }] });
+  });
+
+  it('cannot carry the name an unpack step takes a file out of its archive by', async () => {
+    await writeFile(file, TEXT);
+
+    expect((await planned()).cannotFollow).toEqual([`${file}: its unpack step takes A.esp out of In.7z by that name.`]);
+  });
+
+  it('changes the build file\'s unsaved text in place of the file', async () => {
+    await writeFile(file, TEXT);
+
+    const plan = await planned(heldTexts([[file, '{"version":1,"steps":[{"compile":["A.esp"]}]}']]));
+
+    expect(plan.changes.documents).toEqual([{ path: file, text: '{"version":1,"steps":[{"compile":["New.esp"]}]}' }]);
+  });
+
+  it('changes nothing for a plugin of a mod that is no source mod, or whose folder holds no build file', async () => {
+    const elsewhere = await owner().plan({ name: 'A.esp', origin: 'Mod B' }, 'New.esp', NONE);
+    const noBuildFile = await owner().plan({ name: 'A.esp', origin: 'Mod A' }, 'New.esp', NONE);
+
+    for (const plan of [elsewhere, noBuildFile]) expect(plan).toMatchObject({ changes: { moves: [], deletions: [], documents: [] }, cannotFollow: [] });
+  });
+
+  it('refuses a new name a file of the source folder already has', async () => {
+    await writeFile(file, TEXT);
+    await writeFile(join(folder, 'A.esp'), 'plugin');
+    await writeFile(join(folder, 'NEW.esp'), 'other');
+
+    expect(await owner().plan({ name: 'A.esp', origin: 'Mod A' }, 'New.esp', NONE)).toEqual({ refused: `${join(folder, 'NEW.esp')} is in the way of ${join(folder, 'A.esp')}.` });
+  });
+
+  it('cannot carry a build file it cannot read, saying why', async () => {
+    await writeFile(file, '{"version":2}');
+
+    expect((await planned()).cannotFollow).toEqual([`${file}: its build file is version 2, and Modbench reads only version 1`]);
+  });
+});
+
 describe('the plugin a build file names at a place in its text', () => {
   it('is the name under the place in a step that names plugins at the root, with its mod', async () => {
     expect(await owner().nameAt(file, TEXT, TEXT.indexOf('B.esp') + 2)).toEqual({ name: 'B.esp', origin: 'Mod A' });

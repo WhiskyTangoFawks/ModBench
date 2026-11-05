@@ -8,7 +8,8 @@
     { "path": "../coreLib" },
     { "path": "../instanceAdapter" },
     { "path": "../nexus" },
-    { "path": "../ports" }
+    { "path": "../ports" },
+    { "path": "../symbolNames" }
   ],
   "include": ["**/*.ts"],
   "exclude": ["test", "**/*.test.ts"]

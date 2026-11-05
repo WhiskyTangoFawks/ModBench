@@ -14,7 +14,7 @@ import { highlightFollowingFocus } from './drivingLib/highlightFollowsFocus';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, loadOrderComing, sourceModRepositoriesOver, type Editor } from './editor';
 import { createSourceLanguage, formKeyLocation } from './sourceLanguage';
-import { saveUnsavedPluginSource } from './textDocuments/saveUnsavedPluginSource';
+import { saveUnsavedUnder } from './textDocuments/saveUnsavedUnder';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
 import { registerCopyValueCommand, type CopyValueAdapter } from './drivingLib/copyValue';
 import type { SourceEditing } from './textDocuments/sourceEditing';
@@ -94,7 +94,7 @@ type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
   'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'signalChange' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
-  | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'getPluginIndexing'>;
+  | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'getPluginNameReferences' | 'moveLastWritten' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'getPluginIndexing'>;
 
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -211,7 +211,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     extensionUri: deps.extensionUri,
     downloadsView: DOWNLOADS_KEY_ARGS.view, focusedView: deps.focusedView,
     sourceGestures: {
-      commands: sourceCommands({ client, adapter, saveUnsaved: saveUnsavedPluginSource, loadOrderSnapshot: () => instance.value.loadOrderSnapshot, tasks, trash }), pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say,
+      commands: sourceCommands({ client, adapter, saveUnsaved: saveUnsavedUnder, loadOrderSnapshot: () => instance.value.loadOrderSnapshot, tasks, trash }), pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say,
       registerRepositories: deps.registerRepositories,
     },
     checkForUpdates: checkForUpdatesOver(adapter, deps.nexus),

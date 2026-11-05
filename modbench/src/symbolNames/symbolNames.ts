@@ -84,9 +84,29 @@ export const heldTextAt = ({ byPath }: HeldTexts, path: string): string | undefi
 /** Whether two paths, as VS Code and the instance spell them, are one file. */
 export const samePath = (a: string, b: string): boolean => heldKey(a) === heldKey(b);
 
+/** Changes to files by absolute path, which Text documents applies: each move, then each deletion, then each
+ *  document's text. */
+export interface FileChanges {
+  readonly moves: readonly { readonly from: string; readonly to: string }[];
+  readonly deletions: readonly string[];
+  readonly documents: readonly { readonly path: string; readonly text: string }[];
+}
+
+export const NO_FILE_CHANGES: FileChanges = { moves: [], deletions: [], documents: [] };
+
+/** An owner's part of a rename, with nothing written: the changes Text documents applies, each reference that cannot
+ *  follow, and the owner's own write once every owner's changes are applied. */
+export interface RenamePlan {
+  readonly changes: FileChanges;
+  readonly cannotFollow: readonly string[];
+  commit(): Promise<void>;
+}
+
 /** A box that owns files, saying where they name a symbol (ADR-0028). */
 export interface SymbolOwner {
   read(symbol: PluginSymbol, held: HeldTexts): Promise<SymbolReading>;
+  /** Its part of renaming `symbol` to `newName`, or why it refuses the rename. */
+  plan(symbol: PluginSymbol, newName: string, held: HeldTexts): Promise<RenamePlan | { readonly refused: string }>;
   /** The plugin one of its files names at `offset` of the file's `text`; undefined where it names none. */
   nameAt(file: string, text: string, offset: number): Promise<PluginName | undefined>;
 }

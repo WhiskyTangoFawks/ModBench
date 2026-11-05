@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { fakeInstanceAdapter, modFoldersIn, readingFixture, repositoriesOf, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { sourceCommands } from '../sourceCommands';
-import { isPluginSourcePath } from '../../instanceAdapter/instanceAdapter';
 import { recordingTasks } from '../../test/recordingTasks';
 import { manifestIn, manifestText, writeManifestIn, type BuildStep, type Manifest, type TaskStep } from '../../manifestAdapter/manifestAdapter';
 import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
@@ -109,9 +108,11 @@ describe('sourceCommands build', () => {
     const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA', 'ModB']);
 
     expect(saved).toEqual([SOURCES.ModA, SOURCES.ModB]);
-    expect(predicates).toEqual([isPluginSourcePath, isPluginSourcePath]);
+    expect(predicates.map((saves) => [
+      saves('/instance/source/ModA/plugin-source/A.esp/Cell.json'), saves(join(SOURCES.ModA, BUILD_FILE)), saves(join(SOURCES.ModA, 'scripts', BUILD_FILE)), saves(`${SOURCES.ModA}/notes.json`),
+    ])).toEqual([[true, true, false, false], [true, false, false, false]]);
     expect(client.calls.map((call) => call.args[0])).toMatchObject([[{ name: 'ModA' }]]);
-    expect(outcome).toMatchObject({ refused: [{ item: 'ModB', reason: `VS Code did not save its plugin source: ${SOURCES.ModB}/plugin-source/B.esp/Cell.json` }] });
+    expect(outcome).toMatchObject({ refused: [{ item: 'ModB', reason: `VS Code did not save its source: ${SOURCES.ModB}/plugin-source/B.esp/Cell.json` }] });
   });
 
   it('hands mEdit no archive variant for a release the table names none for', async () => {

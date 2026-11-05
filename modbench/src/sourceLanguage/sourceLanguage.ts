@@ -29,6 +29,11 @@ interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'sourceFiles'> {
   owners: readonly SymbolOwner[];
 }
 
+// Rename Symbol is an entry point to the plugin's `rename`, supplying the plugin and the new name (commands.md).
+const renamePluginNamed = async (plugin: PluginSymbol, name: string): Promise<void> => {
+  await vscode.commands.executeCommand('modbench.plugin.rename', undefined, undefined, { plugin, name });
+};
+
 const kinds = { reference: vscode.CompletionItemKind.Reference, enumMember: vscode.CompletionItemKind.EnumMember };
 const pluginSource: vscode.DocumentSelector = { language: 'json' };
 // symbols.md, The features, story 2: any file an owner of files reports may name a plugin.
@@ -113,7 +118,19 @@ export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
     },
   });
   const referencesAt = referencesOf({ client, reporter: deps.reporter, open: openPluginSourceDocument });
-  const plugin = pluginLanguage(deps);
+  const plugin = pluginLanguage({ ...deps, renamePlugin: renamePluginNamed });
+  const rename = vscode.languages.registerRenameProvider(ownedFiles, {
+    async prepareRename(document, position) {
+      const found = await plugin.renameRangeAt(document, document.offsetAt(position));
+      if (found === undefined) throw new Error('Rename Symbol renames a plugin, and no plugin\'s name is here.');
+      return { range: new vscode.Range(document.positionAt(found.start), document.positionAt(found.end)), placeholder: found.name };
+    },
+    // The gesture applies its own changes, and writes after them what no workspace edit can hold.
+    async provideRenameEdits(document, position, newName) {
+      await plugin.renameAt(document, document.offsetAt(position), newName);
+      return new vscode.WorkspaceEdit();
+    },
+  });
   const references = vscode.languages.registerReferenceProvider(ownedFiles, {
     async provideReferences(document, position) {
       const offset = document.offsetAt(position);
@@ -136,7 +153,7 @@ export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
   };
   const symbols = vscode.languages.registerWorkspaceSymbolProvider(symbolProvider);
   const problems = sourceProblems(deps);
-  const disposable = vscode.Disposable.from(handUnsavedPluginSource(client, isPluginSourcePath), hover, completion, definition, references, symbols, problems, ...(deps.instance ? [registerBuildEntryPoint({ instance: deps.instance, reporter: deps.reporter }), registerUpdateManifestEntryPoint({ instance: deps.instance, reporter: deps.reporter })] : []));
+  const disposable = vscode.Disposable.from(handUnsavedPluginSource(client, isPluginSourcePath), hover, completion, definition, rename, references, symbols, problems, ...(deps.instance ? [registerBuildEntryPoint({ instance: deps.instance, reporter: deps.reporter }), registerUpdateManifestEntryPoint({ instance: deps.instance, reporter: deps.reporter })] : []));
   return {
     dispose: () => { disposable.dispose(); },
     messages: () => problems.messages(),

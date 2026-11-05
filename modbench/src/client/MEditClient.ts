@@ -306,7 +306,7 @@ export interface MEditClient {
   /** The referrers of the active plugins and of the inactive compiled ones. */
   getReferencesInActiveOrCompiledPlugins(formKey: string): Promise<ReferenceResult[] | ReadFailed>;
   /** Each copy whose text names the plugin file `name`, and the Plugin Header of each plugin with no plugin source that lists it as a master. */
-  getPluginNameReferences(name: string): Promise<components['schemas']['RecordCopy'][] | ReadFailed>;
+  getPluginNameReferences(name: string): Promise<components['schemas']['CopyNaming'][] | ReadFailed>;
   /** Null: the plugin holds no such record. */
   getRenderedDocument(plugin: PluginAddress, formKey: string): Promise<RenderedDocument | null | ReadFailed>;
   /** Null: the plugin holds no such record. `location` is the path of the copy's own file, of the file of the

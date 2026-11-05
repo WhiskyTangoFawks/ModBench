@@ -31,6 +31,7 @@ export function fakeVscodeModule() {
     RelativePattern: class { constructor(public base: { fsPath: string }, public pattern: string) {} },
     Uri: { file: (p: string) => ({ fsPath: p }) },
     workspace: {
+      textDocuments: [],
       createFileSystemWatcher: (pattern: { pattern: string; base: { fsPath: string } }) => {
         const w = new FakeWatcher(pattern.pattern, pattern.base.fsPath);
         watchers.push(w);

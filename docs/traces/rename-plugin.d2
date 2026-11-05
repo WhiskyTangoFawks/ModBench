@@ -1,28 +1,34 @@
 # Rename a plugin, cyan and blue.
 ...@../../spec/architecture/styles
 shape: sequence_diagram
-plugins: @../../spec/architecture/target-architecture.modbench_driving.plugins
-plugins.label: Plugins
+plugins: "Plugins · Source's Rename Symbol" {class: driving}
 plugincommands: @../../spec/architecture/target-architecture.modbench_core.plugincommands
 plugincommands.label: plugin commands
 client: @../../spec/architecture/target-architecture.modbench_repositories.client
 client.label: mEdit client
+manifestadapter: @../../spec/architecture/target-architecture.modbench_repositories.manifestadapter
+manifestadapter.label: Manifest adapter
 instanceadapter: @../../spec/architecture/target-architecture.modbench_repositories.instanceadapter
 instanceadapter.label: Instance adapter
+textdocuments: @../../spec/architecture/target-architecture.modbench_repositories.textdocuments
+textdocuments.label: Text documents
 instanceloader: @../../spec/architecture/target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 
 plugins."the name"
-plugins -> plugincommands: "the gesture: the plugin, the new name" {class: loadorder}
-plugincommands -> client: "rename source: the plugin, the new name; the rest is edit-record" {class: edit}
-client -> plugincommands: applied or refusal {class: edit}
-plugincommands -> instanceadapter: "the change: the file names · the lines, every profile; the rest is update-load-order-file" {class: loadorder}
-plugincommands -> plugins: applied or refusal {class: loadorder}
+plugins -> plugincommands: "the gesture: the plugin, the new name, the unsaved texts" {class: loadorder}
+plugincommands -> client: "plan: the plugin source's changes, each copy in a plugin with none" {class: edit}
+plugincommands -> manifestadapter: "plan: the build file's changes" {class: edit}
+plugincommands -> instanceadapter: "plan: what refuses · the masterlist and prelude names" {class: loadorder}
+plugincommands -> textdocuments: "every owner's changes, one workspace edit" {class: edit}
+plugincommands -> client: "commit: move what Modbench last wrote" {class: edit}
+plugincommands -> instanceadapter: "commit, last: the file names · the lines, every profile · the userlist; the rest is update-load-order-file" {class: loadorder}
+plugincommands -> plugins: "applied, and each reference that could not follow; or refusal" {class: loadorder}
 plugins -> instanceloader: refresh {class: loadorder}
 
 refused: "refused, before any write" {
   plugincommands -> plugins: "the refusal" {class: loadorder}
 }
-failed: "the files failed after the source" {
+failed: "a commit failed after the edit" {
   plugincommands -> plugins: "the failure: the plugin" {class: loadorder}
 }

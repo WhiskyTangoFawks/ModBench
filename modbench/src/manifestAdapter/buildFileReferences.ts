@@ -1,6 +1,9 @@
-import { basename, dirname } from 'node:path';
+import { readdir } from 'node:fs/promises';
+import { basename, dirname, join } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
-import { placeIn, sameName, samePath, type SymbolOwner, type SymbolReading } from '../symbolNames/symbolNames';
+import {
+  NO_FILE_CHANGES, placeIn, sameName, samePath, type FileChanges, type HeldTexts, type RenamePlan, type SymbolOwner, type SymbolReading,
+} from '../symbolNames/symbolNames';
 import { readBuildFile } from './buildFileRead';
 import { buildFileTextIn, isBuildFileName } from './manifestFiles';
 
@@ -61,14 +64,58 @@ const isNamingAFile = ([steps, , kind, ...rest]: readonly Segment[]): boolean =>
 
 const isPluginAtTheRoot = ({ name, path }: StringAt): boolean => isNamingAFile(path) && typeof path.at(-1) === 'number' && !name.includes('/');
 
-function pluginsIn(text: string): readonly NameInText[] | { readonly refused: string } {
-  const read = readBuildFile(text);
-  return 'refused' in read ? read : stringsOf(text).filter(isPluginAtTheRoot).map(({ name, start, end }) => ({ name, start, end }));
+interface PluginInStep extends NameInText {
+  readonly path: readonly Segment[];
 }
+
+function pluginsIn(text: string): readonly PluginInStep[] | { readonly refused: string } {
+  const read = readBuildFile(text);
+  return 'refused' in read ? read : stringsOf(text).filter(isPluginAtTheRoot);
+}
+
+const stepOf = ({ path }: PluginInStep): string => String(path[2]);
 
 const NONE: SymbolReading = { references: [], leftOut: [] };
 
 const leftOut = (file: string, why: string): SymbolReading => ({ references: [], leftOut: [`${file}: ${why}`] });
+
+const NO_RENAME: RenamePlan = { changes: NO_FILE_CHANGES, cannotFollow: [], commit: () => Promise.resolve() };
+
+const cannotFollow = (file: string, why: string): RenamePlan => ({ ...NO_RENAME, cannotFollow: [`${file}: ${why}`] });
+
+function renamedIn(text: string, names: readonly PluginInStep[], newName: string): string {
+  const spelled = JSON.stringify(newName).slice(1, -1);
+  return [...names].reverse().reduce((renamed, { start, end }) => renamed.slice(0, start) + spelled + renamed.slice(end), text);
+}
+
+// A decompile or copy step reads the plugin's file from the source folder, so the file takes the new name too.
+async function fileMoveIn(folder: string, name: string, newName: string): Promise<FileChanges['moves'] | { readonly refused: string }> {
+  const names = await readdir(folder);
+  const held = names.find((entry) => sameName(entry, name));
+  if (held === undefined) return [];
+  const taken = names.find((entry) => sameName(entry, newName) && entry !== held);
+  if (taken !== undefined) return { refused: `${join(folder, taken)} is in the way of ${join(folder, held)}.` };
+  return [{ from: join(folder, held), to: join(folder, newName) }];
+}
+
+async function renamePlan(folder: string, name: string, newName: string, held: HeldTexts): Promise<RenamePlan | { readonly refused: string }> {
+  const at = await buildFileTextIn(folder, held);
+  if (at === undefined) return NO_RENAME;
+  if ('refused' in at) return cannotFollow(at.file, at.refused);
+  const plugins = pluginsIn(at.text);
+  if ('refused' in plugins) return cannotFollow(at.file, plugins.refused);
+  const named = plugins.filter((found) => sameName(found.name, name));
+  const unpacked = named.filter((found) => stepOf(found) === 'unpack');
+  const carried = named.filter((found) => stepOf(found) !== 'unpack');
+  const moves = carried.some((found) => stepOf(found) !== 'compile') ? await fileMoveIn(folder, name, newName) : [];
+  if ('refused' in moves) return moves;
+  const text = renamedIn(at.text, carried, newName);
+  return {
+    changes: { moves, deletions: [], documents: text === at.text ? [] : [{ path: at.file, text }] },
+    cannotFollow: unpacked.map(({ name: spelled, path }) => `${at.file}: its unpack step takes ${spelled} out of ${String(path[3])} by that name.`),
+    commit: () => Promise.resolve(),
+  };
+}
 
 /** The build files as an owner of files that name a plugin: each source mod's names the plugins of that mod.
  *  `sourceFolders`: each source mod's source folder, by mod. */
@@ -93,6 +140,15 @@ export function buildFileReferences(sourceFolders: () => ReadonlyMap<string, str
         return { references: named.map(({ name: spelled, start, end }) => ({ place: placeIn(at.file, at.text, start, end), names: { name: spelled, origin: mod } })), leftOut: [] };
       } catch (err) {
         return leftOut(folder, errorMessage(err));
+      }
+    },
+    async plan({ name, origin }, newName, held) {
+      const [, folder] = [...sourceFolders()].find(([named]) => sameName(named, origin)) ?? [];
+      if (folder === undefined) return NO_RENAME;
+      try {
+        return await renamePlan(folder, name, newName, held);
+      } catch (err) {
+        return cannotFollow(folder, errorMessage(err));
       }
     },
   };
