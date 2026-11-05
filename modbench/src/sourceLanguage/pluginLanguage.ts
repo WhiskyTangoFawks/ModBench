@@ -54,10 +54,11 @@ export function pluginLanguage({ instance, reporter, client, owners }: PluginLan
     plugins: () => instance?.value.plugins ?? [],
     held: () => heldTexts(unsavedTexts()),
   });
-  const listed = async (plugin: PluginSymbol): Promise<ListedLocations> => {
-    const { found, unread } = await referencesTo(plugin);
+  const listed = (read: typeof referencesTo.forGesture) => async (plugin: PluginSymbol): Promise<ListedLocations> => {
+    const { found, unread } = await read(plugin);
     return { locations: found.map(locationOfReference), unread: unread.length };
   };
+  const [listedForGesture, listedForFeature] = [listed(referencesTo.forGesture), listed(referencesTo.forFeature)];
 
   const nameAt = async (document: vscode.TextDocument, offset: number): Promise<PluginName | undefined> => {
     const text = heldText(document);
@@ -83,7 +84,7 @@ export function pluginLanguage({ instance, reporter, client, owners }: PluginLan
       const named = await nameAt(document, offset);
       if (named === undefined) return undefined;
       const plugin = pluginNamed(named, instance?.value.plugins ?? []);
-      if (plugin) return (await listed(plugin)).locations;
+      if (plugin) return (await listedForFeature(plugin)).locations;
       reporter.shownOnSurface('warning', `Find All References cannot list what names ${named.name}.`, `Mod order resolves ${named.name} to no plugin.`);
       return [];
     },
@@ -91,13 +92,13 @@ export function pluginLanguage({ instance, reporter, client, owners }: PluginLan
     referencedBy: async (plugin: PluginSymbol): Promise<void> => {
       const view = await referencesView();
       if (!view) return;
-      const first = await listed(plugin);
+      const first = await listedForGesture(plugin);
       const anchor = await anchorOf(plugin, first);
       if ('refused' in anchor) {
         reporter.report('error', `Could not list where files name ${pluginRowName(plugin)}.`, anchor.refused);
         return;
       }
-      view.setInput(referencedByInput(`Referenced By: ${pluginRowName(plugin)}`, anchor, () => listed(plugin), first));
+      view.setInput(referencedByInput(`Referenced By: ${pluginRowName(plugin)}`, anchor, () => listedForGesture(plugin), first));
     },
   };
 }

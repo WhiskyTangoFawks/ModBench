@@ -11,7 +11,7 @@ interface PluginReferencesDeps<Document> extends RecordLocationDeps<Document> {
   /** The instance's plugin rows, which a file name alone resolves through. */
   plugins: () => readonly ResolvedPlugin[];
   held: () => HeldTexts;
-  reporter: Pick<Reporter, 'report'>;
+  reporter: Pick<Reporter, 'report' | 'shownOnSurface'>;
 }
 
 export type PluginReference<Document> = PlaceInFile | RecordLocation<Document>;
@@ -31,11 +31,36 @@ export function listMessage(found: number, unread: number): string | undefined {
   return unread > 0 ? 'No references found in the files that could be read.' : 'No references found.';
 }
 
-/** Each place a file names the plugin, as each owner of files says (ADR-0028); a notification names each file or copy
- *  that could not be read, as the list without them is not the whole answer (common.md, Reporting). */
+type Read<Document> = (symbol: PluginSymbol) => Promise<PluginReferences<Document>>;
+
+/** Each place a file names the plugin, as each owner of files says (ADR-0028). What went unread is a notification for
+ *  the gesture, and a line in the Output each for Find All References (common.md, Reporting). */
 export function pluginReferencesOf<Document extends { getText(): string }>(
-  { owners, plugins, held, reporter, client, open }: PluginReferencesDeps<Document>,
-): (symbol: PluginSymbol) => Promise<PluginReferences<Document>> {
+  deps: PluginReferencesDeps<Document>,
+): { forGesture: Read<Document>; forFeature: Read<Document> } {
+  const read = readReferences(deps);
+  const { reporter } = deps;
+  return {
+    forGesture: async (symbol) => {
+      const references = await read(symbol);
+      if (references.unread.length > 0) {
+        reporter.report('warning', `Referenced by on ${pluginRowName(symbol)} could not read every file that may name it.`, references.unread.join('\n'));
+      }
+      return references;
+    },
+    forFeature: async (symbol) => {
+      const references = await read(symbol);
+      for (const why of references.unread) {
+        reporter.shownOnSurface('warning', `Find All References on ${pluginRowName(symbol)} could not read a file that may name it.`, why);
+      }
+      return references;
+    },
+  };
+}
+
+function readReferences<Document extends { getText(): string }>(
+  { owners, plugins, held, client, open }: PluginReferencesDeps<Document>,
+): Read<Document> {
   return async (symbol) => {
     const readings = await Promise.all(owners.map((owner) => readBy(owner, symbol, held())));
     const rows = plugins();
@@ -46,10 +71,6 @@ export function pluginReferencesOf<Document extends { getText(): string }>(
       const document = await open(uri);
       return pluginNameSpans(heldText(document), copy.formKey, symbol.name).map((span) => ({ uri, document, ...span }));
     });
-    const unread = [...readings.flatMap((reading) => reading.leftOut), ...leftOut];
-    if (unread.length > 0) {
-      reporter.report('warning', `Find All References on ${pluginRowName(symbol)} could not read every file that may name it.`, unread.join('\n'));
-    }
-    return { found: [...places, ...found.flat()], unread };
+    return { found: [...places, ...found.flat()], unread: [...readings.flatMap((reading) => reading.leftOut), ...leftOut] };
   };
 }
