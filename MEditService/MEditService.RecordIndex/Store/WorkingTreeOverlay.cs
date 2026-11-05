@@ -47,8 +47,7 @@ internal sealed class WorkingTreeOverlay
         return touched;
     }
 
-    // touched collects every key whose rows this call moved.
-    private void ApplyOneWorkingTreeChange(PluginAddress key, string formKey, string? body, ICollection<string> touched)
+    private void ApplyOneWorkingTreeChange(PluginAddress key, string formKey, string? body, ICollection<string> movedKeys)
     {
         if (RecordTypeAtEffective(key, formKey) is not { } recordType)
         {
@@ -71,8 +70,8 @@ internal sealed class WorkingTreeOverlay
             {
                 if (RowExistsAtEffective(key, child) && !HeldByAnotherContainer(key, child, formKey))
                 {
-                    touched.Add(child);
-                    ApplyOneWorkingTreeChange(key, child, null, touched);
+                    movedKeys.Add(child);
+                    ApplyOneWorkingTreeChange(key, child, null, movedKeys);
                 }
             }
 
@@ -85,7 +84,7 @@ internal sealed class WorkingTreeOverlay
         }
 
         UpsertEffectiveBody(key, formKey, recordType, body);
-        RederiveIndexRowsForRecord(key, formKey, recordType, body, touched);
+        RederiveIndexRowsForRecord(key, formKey, recordType, body, movedKeys);
     }
 
     private bool RowExistsAtEffective(PluginAddress key, string formKey) => RecordTypeAtEffective(key, formKey) != null;
@@ -98,10 +97,10 @@ internal sealed class WorkingTreeOverlay
     // A record the record index does not hold, materialized: the shape an embedded child re-derived out of a
     // container's document arrives in.
     private void MaterializeRecord(
-        PluginAddress key, string formKey, string recordType, string body, ICollection<string> touched)
+        PluginAddress key, string formKey, string recordType, string body, ICollection<string> movedKeys)
     {
         InsertNewWorkingTreeRow(key, formKey, recordType, body);
-        RederiveIndexRowsForRecord(key, formKey, recordType, body, touched);
+        RederiveIndexRowsForRecord(key, formKey, recordType, body, movedKeys);
     }
 
     private void InsertNewWorkingTreeRow(PluginAddress key, string formKey, string recordType, string body)
@@ -139,7 +138,7 @@ internal sealed class WorkingTreeOverlay
     // Rebuilt for one record through the same collectors ingest uses, so an edit cannot
     // leave derived answers describing bytes that are gone.
     private void RederiveIndexRowsForRecord(
-        PluginAddress key, string formKey, string recordType, string body, ICollection<string> touched)
+        PluginAddress key, string formKey, string recordType, string body, ICollection<string> movedKeys)
     {
         if (!_schemas.TryGetValue(recordType, out var schema)) return;
 
@@ -168,7 +167,7 @@ internal sealed class WorkingTreeOverlay
         // holdings and cell_location track Effective the same way form_references does, rebuilt
         // from the child documents this body carries.
         var recordedBefore = ChildrenRecorded(key, formKey, embeddedIn: recordType);
-        DeriveEmbeddedChildRows(key, recordType, children, touched);
+        DeriveEmbeddedChildRows(key, recordType, children, movedKeys);
         RederiveContainmentForRecord(key, prepared);
 
         // A child absent from the document is gone at Effective, unless another container's document
@@ -181,8 +180,8 @@ internal sealed class WorkingTreeOverlay
         {
             if (RowExistsAtEffective(key, gone) && !HeldByAnotherContainer(key, gone, formKey))
             {
-                touched.Add(gone);
-                ApplyOneWorkingTreeChange(key, gone, null, touched);
+                movedKeys.Add(gone);
+                ApplyOneWorkingTreeChange(key, gone, null, movedKeys);
             }
         }
     }
@@ -209,7 +208,7 @@ internal sealed class WorkingTreeOverlay
     // serialized out of the container's graph through the codec ingest uses.
     private void DeriveEmbeddedChildRows(
         PluginAddress key, string recordType, IReadOnlyList<ContainerDocuments.ChildDocument> children,
-        ICollection<string> touched)
+        ICollection<string> movedKeys)
     {
         foreach (var child in children)
         {
@@ -220,11 +219,11 @@ internal sealed class WorkingTreeOverlay
             var childBody = _containers.TextOf(child);
             if (string.Equals(_contentStamp(childBody), EffectiveStamp(key, child.FormKey), StringComparison.Ordinal)) continue;
 
-            touched.Add(child.FormKey);
+            movedKeys.Add(child.FormKey);
             if (RowExistsAtEffective(key, child.FormKey))
-                ApplyOneWorkingTreeChange(key, child.FormKey, childBody, touched);
+                ApplyOneWorkingTreeChange(key, child.FormKey, childBody, movedKeys);
             else
-                MaterializeRecord(key, child.FormKey, childType, childBody, touched);
+                MaterializeRecord(key, child.FormKey, childType, childBody, movedKeys);
         }
     }
 

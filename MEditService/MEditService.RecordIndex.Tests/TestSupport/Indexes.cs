@@ -39,8 +39,7 @@ internal static class Indexes
         services.AddSingleton(timeProvider ?? TimeProvider.System);
         services.AddLogging();
         if (notifications is not null) services.AddSingleton(notifications);
-        if (memoryLimit is { } limit) services.AddRecordIndex(limit);
-        else services.AddRecordIndex();
+        services.AddRecordIndex(memoryLimit);
         return services.BuildServiceProvider();
     }
 
