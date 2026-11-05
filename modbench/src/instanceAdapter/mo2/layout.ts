@@ -295,9 +295,8 @@ export interface SourceFolders { readonly submodules: readonly string[]; readonl
  *  `withSourceModLines` let back in. */
 export const leavesOutSourceFolders = (ignoreList: string): boolean => ignoreList.split(/\r?\n/).includes(`/${SOURCE_MODS_FOLDER}/*`);
 
-/** An ignore list that lets in each submodule and each plain source folder, past the whitelist's line leaving out the
- *  folders in source/. A repository with no entry is named in no line, so git leaves it out. Undefined when the markers
- *  do not pair. */
+/** An ignore list that lets in each submodule and plain source folder, past the whitelist's line leaving out the folders in
+ *  source/. A repository with no entry gets no line. Undefined when the markers do not pair. */
 export const withSourceModLines = (ignoreList: string, { submodules, plain }: SourceFolders): string | undefined =>
   withOwnLines(ignoreList, SOURCE_MODS, [
     ...[...submodules].sort().map((name) => `!/${SOURCE_MODS_FOLDER}/${escapedForIgnoreList(name)}`),

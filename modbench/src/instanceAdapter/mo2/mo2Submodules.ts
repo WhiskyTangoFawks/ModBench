@@ -114,8 +114,8 @@ async function sourceModLinesWritten(instanceRoot: string, submodules?: Readonly
   });
 }
 
-/** Rewrites the source folder lines whenever the source folders change, in an ignore list that holds the whitelist. A marker
- *  with no match shows as a problem on the ignore list until it pairs. Run on each reading of the instance. */
+/** Rewrites the source folder lines when the source folders change, in an ignore list that holds the whitelist. A marker
+ *  with no match shows as a problem on it. Run on each reading of the instance. */
 export function sourceModLinesFollowed(instanceRoot: string, problems: FileProblems): () => Promise<void> {
   const file = ignoreListFile(instanceRoot);
   let followed: string | undefined;
