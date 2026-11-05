@@ -1,4 +1,5 @@
 import { findNodeAtLocation, findNodeAtOffset, getNodePath, getNodeValue, parseTree, type Node } from 'jsonc-parser';
+import { sameName } from '../symbolNames/symbolNames';
 
 export interface TextSpan { start: number; end: number }
 
@@ -112,6 +113,39 @@ export function referenceSpan(text: string, referrer: string, formKey: string): 
   const record = root && recordOf(root, referrer);
   const found = record && (firstReference(record, formKey) ?? ownFormKey(record));
   return found ? spanOf(found) : { start: 0, end: 0 };
+}
+
+// A FormKey's six-digit object ID and its delimiter come before its plugin's name.
+const PLUGIN_NAME_OFFSET = 7;
+
+const pluginPartOf = (node: Node): TextSpan & { name: string } =>
+  ({ name: String(node.value).slice(PLUGIN_NAME_OFFSET), start: node.offset + 1 + PLUGIN_NAME_OFFSET, end: node.offset + node.length - 1 });
+
+const isFormKeyString = (node: Node): boolean => isStringValue(node) && typeof node.value === 'string' && FORM_KEY.test(node.value);
+
+/** The plugin's name in the FormKey string under `offset`, and its span. */
+export function formKeyPluginAt(text: string, offset: number): (TextSpan & { name: string }) | undefined {
+  const node = stringNodeAt(parseTree(text), offset);
+  const part = node && isFormKeyString(node) ? pluginPartOf(node) : undefined;
+  return part && offset >= part.start && offset <= part.end ? part : undefined;
+}
+
+function formKeysOf(record: Node): Node[] {
+  return valuesOf(record).flatMap((child) => {
+    if (child.type !== 'object' && child.type !== 'array' && child.type !== 'property') return isFormKeyString(child) ? [child] : [];
+    return child.type === 'object' && ownFormKey(child) !== undefined ? [] : formKeysOf(child);
+  });
+}
+
+/** Where the record `formKey` names the plugin `name`: the name in each of its FormKeys that names it, else its own
+ *  FormKey; the start of the text when the record is absent. */
+export function pluginNameSpans(text: string, formKey: string, name: string): TextSpan[] {
+  const root = parseTree(text);
+  const record = root && recordOf(root, formKey);
+  if (!record) return [{ start: 0, end: 0 }];
+  const naming = formKeysOf(record).map(pluginPartOf).filter((part) => sameName(part.name, name));
+  const own = ownFormKey(record);
+  return naming.length > 0 ? naming.map(({ start, end }) => ({ start, end })) : own ? [spanOf(own)] : [{ start: 0, end: 0 }];
 }
 
 // mEdit's field path is the document's own member names, an element's index in brackets.

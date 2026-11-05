@@ -1,18 +1,23 @@
 import * as vscode from 'vscode';
-import type { ReferencedByList } from './referencedByList';
 
 const REFERENCES_VIEW_EXTENSION = 'vscode.references-view';
 
-// The slice of the built-in extension's exports Referenced By drives; @types/vscode does not declare it.
-export interface ReferencesViewInput {
+/** What the References view shows of a list: its rows, and the line above them. */
+export interface ReferencesViewList {
+  readonly provider: vscode.TreeDataProvider<unknown>;
+  readonly message: string | undefined;
+}
+
+// The slice of the built-in extension's exports a list drives; @types/vscode does not declare it.
+export interface ReferencesViewInput<List extends ReferencesViewList = ReferencesViewList> {
   readonly title: string;
   // The view opens this as a text document and clears itself unless a non-blank run sits at its start.
   readonly location: vscode.Location;
   // The view sets `reference-list.source` to it.
   readonly contextValue: string;
-  resolve(): Promise<ReferencedByList>;
+  resolve(): Promise<List>;
   // Its refresh calls this when the document moved the anchor since the list was asked for.
-  with(location: vscode.Location): ReferencesViewInput;
+  with(location: vscode.Location): ReferencesViewInput<List>;
 }
 
 interface ReferencesView {

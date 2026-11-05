@@ -1,6 +1,6 @@
 import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { ReferencesViewInput } from '../referencesView';
+import type { ReferencedByInput as ReferencesViewInput } from '../referencedBy';
 import {
   commandHandlers, contextKeys, disk, documentChanges, editorProviderDisposals, editorProviderOptions, editorProviders, editorVscode,
   executeCommand, executed, fakePanel, fileSystems, openedDocuments, pickers, referencesView, type FakePanel,

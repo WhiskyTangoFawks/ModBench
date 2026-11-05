@@ -7,7 +7,7 @@ import { isReadFailed } from '../wire/readFailed';
 import { pickRecord } from './recordPicker';
 import { recordTitle } from './recordTitle';
 import { readReferencedBy, type ReferencedByClient, type ReferencedByList } from './referencedByList';
-import { referencesView, type ReferencesViewInput } from './referencesView';
+import { referencesView, type ReferencesViewInput } from '../drivingLib/referencesView';
 
 const REFERENCED_BY_SOURCE = 'modbench.referencedBy';
 
@@ -27,7 +27,9 @@ async function titleOf(client: ReferencedByDeps['client'], formKey: string): Pro
   return `Referenced By: ${recordTitle(formKey, overrides)}`;
 }
 
-function referencedByInput(title: string, location: vscode.Location, resolve: () => Promise<ReferencedByList>): ReferencesViewInput {
+export type ReferencedByInput = ReferencesViewInput<ReferencedByList>;
+
+function referencedByInput(title: string, location: vscode.Location, resolve: () => Promise<ReferencedByList>): ReferencedByInput {
   return {
     title, location, contextValue: REFERENCED_BY_SOURCE, resolve,
     with: (moved) => referencedByInput(title, moved, resolve),

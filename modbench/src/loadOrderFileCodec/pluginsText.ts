@@ -3,7 +3,7 @@
 // comment and blank lines survive untouched.
 
 import { firstLines } from './firstLines';
-import { editLines, entryLineIndices, stripBom } from './lineScan';
+import { editLines, entryLineIndices, splitLines, stripBom } from './lineScan';
 
 /** The plugin order, one line per plugin file. */
 export const PLUGINS_FILE_NAME = 'plugins.txt';
@@ -43,6 +43,16 @@ export function parsePlugins(text: string): PluginEntry[] {
     entries.push({ name: pluginNameOf(raw), enabled: isEnabledEntry(raw) });
   }
   return entries;
+}
+
+/** Each entry line's name, where it sits: its zero-based line, and the characters it spans there. */
+export function pluginNamesIn(text: string): { name: string; line: number; start: number; end: number }[] {
+  return splitLines(stripBom(text)).flatMap((raw, line) => {
+    if (!isEntryLine(raw)) return [];
+    const name = pluginNameOf(raw);
+    const start = raw.indexOf(name, paddingOf(raw));
+    return [{ name, line, start, end: start + name.length }];
+  });
 }
 
 /** The text of a plugins.txt holding exactly these entries. */

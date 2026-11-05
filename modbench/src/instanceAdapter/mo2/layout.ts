@@ -8,7 +8,7 @@ import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
 import { SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
 import { PROFILE_SETTINGS_FILE_NAME } from './codecs/profileSettings';
-import { GIT_DIR } from '../files';
+import { GIT_DIR, ignoreSkippedLink, listFolders, readOrAbsent } from '../files';
 import { ownTempPrefix } from '../../repositoriesLib/wholeWrites';
 import { PLUGINS_FILE_NAME } from '../../loadOrderFileCodec/pluginsText';
 import { anyCase, isBareName, SOURCE_MODS_FOLDER, type EntryRef } from '../instanceAdapter';
@@ -113,6 +113,12 @@ const loadOrderFile = (instanceRoot: string, profile: string): string =>
 /** A profile's plugin order files in the one order every writer takes their locks. */
 export const pluginOrderFiles = (instanceRoot: string, profile: string): [loadOrder: string, plugins: string] =>
   [loadOrderFile(instanceRoot, profile), pluginsFile(instanceRoot, profile)];
+
+/** Every profile's plugin order files, by profile name. */
+export async function everyPluginOrderFile(instanceRoot: string): Promise<string[]> {
+  const profiles = await readOrAbsent(() => listFolders(profilesDir(instanceRoot), ignoreSkippedLink), []);
+  return profiles.sort().flatMap((name) => pluginOrderFiles(instanceRoot, name));
+}
 
 /** LOOT's metadata files, at the instance root. */
 export const sortingRuleFilePaths = (instanceRoot: string): Record<keyof typeof SORTING_RULE_FILES, string> => ({

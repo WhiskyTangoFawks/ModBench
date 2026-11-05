@@ -31,7 +31,7 @@ vi.mock('vscode', async () => {
 });
 
 import {
-  pluginsCopyValueText, registerCreatePluginCommand, registerRevealInExplorerCommand,
+  pluginsCopyValueText, registerCreatePluginCommand, registerReferencedByCommand, registerRevealInExplorerCommand,
 } from '../pluginListCommands';
 import { PLUGINS_KEY_ARGS } from '../gestureEntry';
 import type { RecordBrowserNode } from '../RecordBrowser';
@@ -397,6 +397,26 @@ describe('modbench.plugin.create, called by the agent', () => {
     await expect(answer()).rejects.toThrow(reason);
 
     expect(client.calls).toEqual([]);
+  });
+});
+
+describe('registerReferencedByCommand (plugins.md, Menus and keys)', () => {
+  const locked = new ImplicitMasterNode('Fallout4.esm', 'Data/');
+  const plugin = new PluginNode({ name: 'MyMod.esp', enabled: true }, 'SomeMod');
+
+  it.each<[string, object | undefined, readonly PluginsTreeNode[], { name: string; origin: string } | undefined]>([
+    ['a plugin row', plugin, [], { name: 'MyMod.esp', origin: 'SomeMod' }],
+    ['the plugin an Argument carries', { argument: { kind: 'plugin', plugin: { name: 'Other.esp', origin: 'Other' } } }, [], { name: 'Other.esp', origin: 'Other' }],
+    ['the plugin the game loads with no line', locked, [], { name: 'Fallout4.esm', origin: 'Data/' }],
+    ['the one selected plugin from the palette', undefined, [plugin], { name: 'MyMod.esp', origin: 'SomeMod' }],
+    ['no plugin from the palette over several', undefined, [plugin, locked], undefined],
+  ])('lists where files name %s', async (_what, clicked, selection, listed) => {
+    const asked: { name: string; origin: string }[] = [];
+    registerReferencedByCommand((named) => { asked.push(named); return Promise.resolve(); }, () => selection);
+
+    await present(handlers.get('modbench.plugin.referencedBy'), 'the referenced by handler')(clicked);
+
+    expect(asked).toEqual(listed ? [listed] : []);
   });
 });
 

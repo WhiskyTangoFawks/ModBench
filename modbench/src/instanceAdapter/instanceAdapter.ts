@@ -18,6 +18,7 @@ import type { ProgramVersions } from './gameFolder/programVersions';
 import type { NonSteamPrefix } from './gameFolder/steamPrefix';
 import type { Depot } from './gameFolder/steamAppManifest';
 import type { ScriptEnvironmentFile } from './scriptEnvironmentFile';
+import type { SymbolOwner } from '../symbolNames/symbolNames';
 
 export type { ProgramVersion, ProgramVersions } from './gameFolder/programVersions';
 
@@ -885,6 +886,8 @@ export interface InstanceAdapter extends DataFileReads {
    *  write; a failed write puts every file back. Refuses, changing nothing, a taken name or a
    *  plugin not there. */
   renamePlugin(origin: FileOrigin, from: string, to: string): Promise<void>;
+  /** Where the instance's files name a plugin: each profile's plugin order, and the sorting rule files. */
+  readonly pluginReferences: SymbolOwner;
   /** Moves the folder that holds `entry` out of mods/ into the trash; false when none does. */
   trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;
   /** Moves a downloaded file to the trash, then what the manager keeps about it. Rejects when the

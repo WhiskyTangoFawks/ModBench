@@ -9,3 +9,4 @@ export { exclusionsOf, exclusionsOfFiles, isUnderAny, ownFilesOf } from './folde
 export { installationFileLack } from './packageLack';
 export { isAddress, repositoryOf } from './manifestPackages';
 export { sourceModsOf, type SourceMods } from './sourceMods';
+export { buildFileReferences } from './buildFileReferences';

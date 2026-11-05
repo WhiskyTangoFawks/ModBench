@@ -2,7 +2,9 @@
 // with VS Code, and decides nothing: eslint.config.mjs holds that.
 
 import * as vscode from 'vscode';
-import { attachPortOf, createMEditClient, stopMEditClient, type MEditClient } from './client';
+import { attachPortOf, createMEditClient, recordIndexReferences, stopMEditClient, type MEditClient } from './client';
+import { buildFileReferences } from './manifestAdapter/manifestAdapter';
+import type { SymbolOwner } from './symbolNames/symbolNames';
 import { makeReporter } from './drivingLib/reporter';
 import { commandTitles } from './drivingLib/commandTitles';
 import { surfaceRefusedWrites } from './drivingLib/writingGesture';
@@ -150,6 +152,8 @@ interface Opened {
   facts: InstanceFacts;
   instance?: Instance;
   scriptEnvironmentFile?: InstanceAdapter['scriptEnvironmentFile'];
+  /** Each box over the instance's files that says where they name a symbol. */
+  owners: readonly SymbolOwner[];
   side: (own: Own, deps: ViewsDeps) => InstanceSide;
 }
 
@@ -170,9 +174,10 @@ function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, 
       const instance = own(new Instance({
         adapter, gameFolderSettingId: gameFolderSetting.id, window: vscode.window, log: outputChannel,
       }));
-      return { facts: factsOf(instance), instance, scriptEnvironmentFile: adapter.scriptEnvironmentFile, side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
+      const owners = [adapter.pluginReferences, buildFileReferences(() => instance.value.paths.sourceDirs)];
+      return { facts: factsOf(instance), instance, scriptEnvironmentFile: adapter.scriptEnvironmentFile, owners, side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
     },
-    notAnInstance: () => ({ facts: NO_INSTANCE_FACTS, side: buildBareSide }),
+    notAnInstance: () => ({ facts: NO_INSTANCE_FACTS, owners: [], side: buildBareSide }),
   });
 }
 
@@ -312,6 +317,7 @@ function start(context: vscode.ExtensionContext): void {
   const plugins = createPlugins({
     client: meditClient, facts: opened.facts, channel: outputChannel, reporterFor,
     registerRepositories: sourceModRepositories.registerRepositories, ask: askQuestion, sourceEditing,
+    referencedBy: (plugin) => sourceLanguage.referencedBy(plugin),
   });
   const editor = createEditor({
     context, meditClient, outputChannel,
@@ -345,6 +351,7 @@ function start(context: vscode.ExtensionContext): void {
   const scriptsPath = vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath;
   const sourceLanguage = createSourceLanguage({
     client: meditClient, instance: views.instance, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
+    owners: [recordIndexReferences(meditClient), ...opened.owners],
   });
   const agentServer = serveAgent({ port: agentPort(), instance: views.instance, copyReads: views.copyReads, statuses: views.statuses, deployment: views.deployment, pluginsShown: views.pluginsShown, standing: { mEdit: () => plugins.standing.mEdit(), plugins: () => plugins.standing.plugins(), sortingRules: () => plugins.standing.sortingRules(), modList: () => views.modsLines(), sourceLanguage: () => sourceLanguage.messages() }, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
   context.subscriptions.push(

@@ -53,6 +53,17 @@ internal static class PluginEndpoints
             .ProducesProblem(400)
             .ProducesProblem(503);
 
+        app.MapGet("/plugin-names/{name}/references", (string name, IQueries svc) =>
+            EndpointMapping.Ok(svc.GetPluginNameReferences(name)))
+            .WithName("GetPluginNameReferences")
+            .WithTags(Tag)
+            .WithDescription(
+                "Each copy, in an active plugin or one with plugin source, whose text names the plugin file name, and " +
+                "the Plugin Header record of each plugin with no plugin source that lists it as a master. Answers only " +
+                "once the record index is ready.")
+            .Produces<IReadOnlyList<RecordCopy>>()
+            .ProducesProblem(503);
+
         app.MapGet("/plugins/{plugin}/indexed-as-on-disk", (string plugin, string? origin, IQueries svc) =>
         {
             if (!EndpointMapping.PluginAt(plugin, origin, out var address, out var refused)) return refused;

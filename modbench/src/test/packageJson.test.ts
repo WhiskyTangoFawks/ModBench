@@ -685,6 +685,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
   });
 
   const REVEAL_ENTRY: [string, string] = ['modbench.plugin.reveal', '1_open'];
+  const PLUGIN_REFERENCES_ENTRY: [string, string] = ['modbench.plugin.referencedBy', '1_open'];
   const COPY_VALUE_ENTRY: [string, string] = ['modbench.copyValue', '5_copy'];
   const OPEN_ENTRY: [string, string] = [OPEN_PINNED, '1_open'];
   const REFERENCES_ENTRY: [string, string] = [REFERENCED_BY, '1_open'];
@@ -701,15 +702,15 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
   const containerKinds = ['record', 'worldspace', 'cell'];
 
   const menus: [contextValue: string, entries: [string, string][]][] = [
-    ['plugin disabled inNonSourceMod nonCompiledPlugin', [REVEAL_ENTRY, ENABLE_ENTRY, RENAME_ENTRY, LOAD_AFTER_ENTRY, VERSION_IN_GIT_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin enabled inSourceMod compiledPlugin editable', [REVEAL_ENTRY, DISABLE_ENTRY, RENAME_ENTRY, LOAD_AFTER_ENTRY, CREATE_RECORD_ENTRY, DECOMPILE_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin disabled inSourceMod compiledPlugin', [REVEAL_ENTRY, ENABLE_ENTRY, RENAME_ENTRY, LOAD_AFTER_ENTRY, DECOMPILE_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin enabled inSourceMod compiledPlugin', [REVEAL_ENTRY, DISABLE_ENTRY, RENAME_ENTRY, LOAD_AFTER_ENTRY, DECOMPILE_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin enabled inSourceMod nonCompiledPlugin', [REVEAL_ENTRY, DISABLE_ENTRY, RENAME_ENTRY, LOAD_AFTER_ENTRY, DECOMPILE_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin enabled inNonSourceMod', [REVEAL_ENTRY, DISABLE_ENTRY, RENAME_ENTRY, LOAD_AFTER_ENTRY, VERSION_IN_GIT_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin enabled inOverwrite nonCompiledPlugin', [REVEAL_ENTRY, DISABLE_ENTRY, LOAD_AFTER_ENTRY, COPY_VALUE_ENTRY]],
-    ['plugin enabled nonCompiledPlugin', [REVEAL_ENTRY, DISABLE_ENTRY, LOAD_AFTER_ENTRY, COPY_VALUE_ENTRY]],
-    ['pluginImplicit', [REVEAL_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin disabled inNonSourceMod nonCompiledPlugin', [REVEAL_ENTRY, PLUGIN_REFERENCES_ENTRY, ENABLE_ENTRY, RENAME_ENTRY, LOAD_AFTER_ENTRY, VERSION_IN_GIT_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin enabled inSourceMod compiledPlugin editable', [REVEAL_ENTRY, PLUGIN_REFERENCES_ENTRY, DISABLE_ENTRY, RENAME_ENTRY, LOAD_AFTER_ENTRY, CREATE_RECORD_ENTRY, DECOMPILE_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin disabled inSourceMod compiledPlugin', [REVEAL_ENTRY, PLUGIN_REFERENCES_ENTRY, ENABLE_ENTRY, RENAME_ENTRY, LOAD_AFTER_ENTRY, DECOMPILE_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin enabled inSourceMod compiledPlugin', [REVEAL_ENTRY, PLUGIN_REFERENCES_ENTRY, DISABLE_ENTRY, RENAME_ENTRY, LOAD_AFTER_ENTRY, DECOMPILE_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin enabled inSourceMod nonCompiledPlugin', [REVEAL_ENTRY, PLUGIN_REFERENCES_ENTRY, DISABLE_ENTRY, RENAME_ENTRY, LOAD_AFTER_ENTRY, DECOMPILE_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin enabled inNonSourceMod', [REVEAL_ENTRY, PLUGIN_REFERENCES_ENTRY, DISABLE_ENTRY, RENAME_ENTRY, LOAD_AFTER_ENTRY, VERSION_IN_GIT_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin enabled inOverwrite nonCompiledPlugin', [REVEAL_ENTRY, PLUGIN_REFERENCES_ENTRY, DISABLE_ENTRY, LOAD_AFTER_ENTRY, COPY_VALUE_ENTRY]],
+    ['plugin enabled nonCompiledPlugin', [REVEAL_ENTRY, PLUGIN_REFERENCES_ENTRY, DISABLE_ENTRY, LOAD_AFTER_ENTRY, COPY_VALUE_ENTRY]],
+    ['pluginImplicit', [REVEAL_ENTRY, PLUGIN_REFERENCES_ENTRY, COPY_VALUE_ENTRY]],
     ['recordType editable creatable', [CREATE_RECORD_ENTRY]],
     ['recordType creatable', []],
     ['recordType editable', []],

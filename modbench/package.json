@@ -798,6 +798,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.plugin.referencedBy",
+        "title": "Referenced By Plugin",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.plugin.move",
         "title": "Move Plugin…",
         "category": "Modbench"
@@ -1069,6 +1074,10 @@
         {
           "command": "modbench.plugin.reveal",
           "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singlePlugin"
+        },
+        {
+          "command": "modbench.plugin.referencedBy",
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singlePlugin && modbench.referencesView"
         },
         {
           "command": "modbench.plugin.rename",
@@ -1812,6 +1821,11 @@
           "group": "1_open@1"
         },
         {
+          "command": "modbench.plugin.referencedBy",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && modbench.referencesView",
+          "group": "1_open@2"
+        },
+        {
           "command": "modbench.plugin.enable",
           "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\bdisabled\\b/",
           "group": "2_change@1"
@@ -1865,6 +1879,11 @@
           "command": "modbench.plugin.reveal",
           "when": "view == modbench.pluginListTree && viewItem == pluginImplicit",
           "group": "1_open@1"
+        },
+        {
+          "command": "modbench.plugin.referencedBy",
+          "when": "view == modbench.pluginListTree && viewItem == pluginImplicit && modbench.referencesView",
+          "group": "1_open@2"
         },
         {
           "command": "modbench.copyValue",

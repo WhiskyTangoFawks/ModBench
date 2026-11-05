@@ -26,6 +26,7 @@ export interface PluginsDeps {
   registerRepositories: () => Promise<void>;
   ask: AskQuestion;
   sourceEditing: PluginsViewDeps['sourceEditing'];
+  referencedBy: PluginsViewDeps['referencedBy'];
 }
 
 type PluginsInstanceDeps = Pick<PluginsViewDeps, 'instance' | 'commands' | 'modStatuses' | 'fileReads'> & {
@@ -66,7 +67,7 @@ export function createPlugins(deps: PluginsDeps): Plugins {
       const syncCommand = registerPluginSyncCommand(syncing.pluginSync);
       const view = createPluginsView({
         ...instanceDeps, pluginSync: syncing.pluginSync, recordBrowser, client, statusBar, channel, registerRepositories: deps.registerRepositories, reporterFor,
-        ask: deps.ask, recordWrite, sourceEditing: deps.sourceEditing,
+        ask: deps.ask, recordWrite, sourceEditing: deps.sourceEditing, referencedBy: deps.referencedBy,
         log: (level, msg) => channel[level](msg),
       });
       pluginLines = view.standingLines;

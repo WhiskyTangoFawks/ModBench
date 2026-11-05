@@ -304,6 +304,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugin-names/{name}/references": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Each copy, in an active plugin or one with plugin source, whose text names the plugin file name, and the Plugin Header record of each plugin with no plugin source that lists it as a master. Answers only once the record index is ready. */
+        get: operations["GetPluginNameReferences"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/{plugin}/indexed-as-on-disk": {
         parameters: {
             query?: never;
@@ -2539,6 +2556,37 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetPluginNameReferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordCopy"][];
                 };
             };
             /** @description Service Unavailable */

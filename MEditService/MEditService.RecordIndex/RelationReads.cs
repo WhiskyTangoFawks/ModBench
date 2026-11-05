@@ -9,6 +9,7 @@ using MEditService.RecordIndex.Store;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.RecordIndex;
 
@@ -352,6 +353,42 @@ internal sealed class RelationReads(
     {
         using var context = store.OpenRead();
         return GetReferences(context, ActiveOrCompiledPluginReferrers, $"AND (p.load_order_idx IS NOT NULL OR d.derived_from <> '{DerivedFrom.Binary}')", targetFormKey);
+    }
+
+    // SQL's 1-based position of a FormKey's plugin name, after its six-digit object ID and its colon.
+    private const int FormKeyPluginStart = 8;
+
+    /// <summary>Each copy naming the plugin file <paramref name="name"/> in an active or compiled plugin, by its own
+    /// FormKey or a link, and the Plugin Header of each such plugin read from its binary that lists it.</summary>
+    public IReadOnlyList<RecordCopy> GetCopiesNaming(string name)
+    {
+        using var context = store.OpenRead();
+        var copies = context.Rows($"""
+            SELECT r.form_key, r.plugin, r.origin
+            FROM {TableDdlBuilder.MirrorSchema}.records r
+            {TableDdlBuilder.RegisteredJoin("r", "plugin", "origin")}
+            JOIN {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} d
+              ON d.plugin = r.plugin AND d.origin = r.origin
+            WHERE (lower(r.form_key_plugin) = lower($1)
+                   OR list_contains(list_transform(r.masters, m -> lower(m)), lower($1))
+                   OR (lower(r.plugin) = lower($1) AND EXISTS (
+                       SELECT 1 FROM {TableDdlBuilder.MirrorSchema}.form_references fr
+                       WHERE fr.source_form_key = r.form_key AND fr.source_plugin = r.plugin AND fr.source_origin = r.origin
+                         AND lower(substr(fr.target_form_key, {FormKeyPluginStart})) = lower($1))))
+              AND (p.load_order_idx IS NOT NULL OR d.derived_from <> '{DerivedFrom.Binary}')
+            ORDER BY r.plugin, r.origin, r.form_key
+            """, reader => new RecordCopy(reader.GetString(0), new PluginAddress(reader.GetString(1), reader.GetString(2))), name);
+        var headers = context.Rows($"""
+            SELECT d.plugin, d.origin
+            FROM {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} d
+            {TableDdlBuilder.RegisteredJoin("d", "plugin", "origin")}
+            WHERE d.derived_from <> '{DerivedFrom.SourceTree}'
+              AND (p.load_order_idx IS NOT NULL OR d.derived_from <> '{DerivedFrom.Binary}')
+            ORDER BY d.plugin, d.origin
+            """, reader => reader.GetPluginAddress())
+            .Where(plugin => OpenedPlugins.GetValueOrDefault(plugin)?.Masters.Contains(name, StringComparer.OrdinalIgnoreCase) == true)
+            .Select(plugin => new RecordCopy(PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)), plugin));
+        return [.. headers.Concat(copies).DistinctBy(copy => (copy.FormKey, copy.Plugin.Name, copy.Plugin.Origin))];
     }
 
     /// <summary>Every plugin at least one filtered record matches, restricted to

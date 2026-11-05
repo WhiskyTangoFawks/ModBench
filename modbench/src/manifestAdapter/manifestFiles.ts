@@ -8,6 +8,7 @@ import { isManifestPath, MANIFEST_SUFFIX } from '../repositoriesLib/manifestPath
 import type { PackagesAsked } from '../repositoriesLib/statusValues';
 import { ownTempPrefix, renameOver } from '../repositoriesLib/wholeWrites';
 import { BUILD_FILE, PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
+import { heldTextAt, heldTexts, type HeldTexts } from '../symbolNames/symbolNames';
 import type { BuildFileAgainst, BuildFileLack, BuildFileRead, BuildStep } from './buildFile';
 import { readBuildFile } from './buildFileRead';
 import type { Manifest, ManifestRead } from './manifest';
@@ -28,9 +29,8 @@ async function entriesIn(folder: string): Promise<Dirent[]> {
 const fileNamesIn = async (folder: string): Promise<string[]> =>
   (await entriesIn(folder)).filter((entry) => entry.isFile()).map(({ name }) => name).sort(ordinal);
 
-// A name in any case, so a folder reads alike on Windows and Linux.
-const spellingsIn = async (folder: string, name: string): Promise<string[]> =>
-  (await fileNamesIn(folder)).filter((held) => held.toLowerCase() === name.toLowerCase());
+/** Whether a file's name is the build file's, in any case, so a folder reads alike on Windows and Linux. */
+export const isBuildFileName = (name: string): boolean => name.toLowerCase() === BUILD_FILE.toLowerCase();
 
 export const manifestNameOf = (folder: string): string => `${basename(folder)}${MANIFEST_SUFFIX}`;
 
@@ -95,11 +95,21 @@ export async function writeManifestIn(folder: string, manifest: Manifest): Promi
   return true;
 }
 
-async function buildFileAt(sourceFolder: string): Promise<{ readonly file: string; readonly read: BuildFileRead } | undefined> {
-  const [one, other] = await spellingsIn(sourceFolder, BUILD_FILE);
+/** The build file at the root of the source mod's repository in `sourceFolder`, as text, its unsaved text when `held`
+ *  holds it; undefined when the folder holds none. */
+export async function buildFileTextIn(
+  sourceFolder: string, held: HeldTexts = heldTexts([]),
+): Promise<{ readonly file: string } & ({ readonly text: string } | { readonly refused: string }) | undefined> {
+  const [one, other] = (await fileNamesIn(sourceFolder)).filter(isBuildFileName);
   if (one === undefined) return undefined;
   const file = join(sourceFolder, one);
-  return { file, read: other === undefined ? readBuildFile(await textAt(file)) : { refused: twoBuildFiles(one, other) } };
+  if (other !== undefined) return { file, refused: twoBuildFiles(one, other) };
+  return { file, text: heldTextAt(held, file) ?? await textAt(file) };
+}
+
+async function buildFileAt(sourceFolder: string): Promise<{ readonly file: string; readonly read: BuildFileRead } | undefined> {
+  const at = await buildFileTextIn(sourceFolder);
+  return at && { file: at.file, read: 'refused' in at ? { refused: at.refused } : readBuildFile(at.text) };
 }
 
 /** The build file at the root of the source mod's repository in `sourceFolder`; undefined when it holds none. */

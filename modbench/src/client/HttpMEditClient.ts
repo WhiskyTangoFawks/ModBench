@@ -727,6 +727,12 @@ class HttpMEditClient implements MEditClient {
       (data) => data ?? []);
   }
 
+  getPluginNameReferences(name: string): Promise<components['schemas']['RecordCopy'][] | ReadFailed> {
+    return this.read(`getPluginNameReferences(${name})`,
+      (api, signal) => api.GET('/plugin-names/{name}/references', { params: { path: { name } }, signal }),
+      (data) => data ?? []);
+  }
+
   getRenderedDocument({ name: plugin, origin }: PluginAddress, formKey: string): Promise<RenderedDocument | null | ReadFailed> {
     return this.read(`getRenderedDocument(${plugin}, ${formKey})`, (api, signal) => api.GET('/plugins/{plugin}/records/{formKey}/rendered-document', {
       params: { path: { plugin, formKey }, query: { origin } }, signal,

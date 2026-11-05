@@ -162,6 +162,7 @@ function pluginsView(
     statusBar: { ready: vi.fn(), showMEditState: vi.fn(), standing: () => "", dispose: vi.fn() }, registerRepositories: () => Promise.resolve(),
     ask: scriptedDialog(), recordWrite: (command) => command(),
     sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
+    referencedBy: () => Promise.resolve(),
   });
   const provider = () => treeViews.view().treeDataProvider;
   const rows = async () => (await provider().getChildren()) ?? [];
