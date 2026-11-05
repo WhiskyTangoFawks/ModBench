@@ -1,5 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
+using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -76,6 +77,22 @@ public sealed class WorkingTreeDeletionTests : IDisposable
 
         index.Create(_base, _raceA, "race", "RaceA", committedBody);
         Assert.Equal(WorkingTreeState.None, index.RowOf(_raceA, _baseKey)?.WorkingTreeState);
+    }
+
+    [Fact]
+    public void AWinnerSweepThatFails_IsFailedStatus_AndIsOwedUntilALaterCheckLandsIt()
+    {
+        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
+        IndexFiles.Execute(_fixture.InstanceRoot, "ALTER TABLE active_plugins RENAME TO active_aside");
+
+        index.Delete(_winner, index.DocumentOf(_npc, _winnerKey));
+
+        Assert.True(Waits.ReachedWithin(() => index.Status.State == LoadOrderState.Failed, TimeSpan.FromSeconds(20)));
+        IndexFiles.Execute(_fixture.InstanceRoot, "ALTER TABLE active_aside RENAME TO active_plugins");
+        index.SignalChange();
+        Assert.True(
+            Waits.ReachedWithin(() => StackOf(index, _npc).SequenceEqual([("Base.esm", true)]), TimeSpan.FromSeconds(20)),
+            $"The stack stands at {string.Join(",", StackOf(index, _npc))}.");
     }
 
     [Fact]

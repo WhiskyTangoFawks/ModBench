@@ -559,17 +559,20 @@ internal sealed class Store : IDisposable
         lock (_projectionLock) scope.BumpOwed = true;
     }
 
-    internal void OweWinnerSweep()
-    {
-        var scope = OpenProjection;
-        lock (_projectionLock) scope.SweepOwed = true;
-    }
+    // Held by the store rather than the projection: a sweep that fails leaves its debt standing for
+    // the next commit that lands, since the rows it was owed for are already committed.
+    private OwedSweep _owedSweep = OwedSweep.None;
+
+    internal void OweWinnerSweep() => Owe(OwedSweep.Every);
 
     /// <summary>Owed by rows that moved which copy wins only these FormKeys.</summary>
-    internal void OweWinnerSweep(IEnumerable<string> formKeys)
+    internal void OweWinnerSweep(IEnumerable<string> formKeys) =>
+        Owe(new OwedSweep(new HashSet<string>(formKeys, StringComparer.OrdinalIgnoreCase)));
+
+    private void Owe(OwedSweep owed)
     {
-        var scope = OpenProjection;
-        lock (_projectionLock) scope.SweepOwedFor.UnionWith(formKeys);
+        _ = OpenProjection;
+        lock (_projectionLock) _owedSweep = _owedSweep.And(owed);
     }
 
     /// <summary>Runs <paramref name="publish"/> after the outermost projection's advance: a
@@ -601,8 +604,6 @@ internal sealed class Store : IDisposable
             if (scope.Parent is { } parent)
             {
                 parent.BumpOwed |= scope.BumpOwed;
-                parent.SweepOwed |= scope.SweepOwed;
-                parent.SweepOwedFor.UnionWith(scope.SweepOwedFor);
                 parent.Announcements.AddRange(scope.Announcements);
                 scope.Announcements.Clear();
                 return;
@@ -625,8 +626,6 @@ internal sealed class Store : IDisposable
     {
         internal ProjectionScope? Parent { get; } = parent;
         internal bool BumpOwed { get; set; }
-        internal bool SweepOwed { get; set; }
-        internal HashSet<string> SweepOwedFor { get; } = new(StringComparer.OrdinalIgnoreCase);
         internal List<Action> Announcements { get; } = [];
         private Action<ProjectionScope>? _endProjection = endProjection;
 
@@ -679,18 +678,18 @@ internal sealed class Store : IDisposable
         }
         catch (Exception ex)
         {
-            Land(scope, ExceptionDispatchInfo.Capture(ex));
+            Land(ExceptionDispatchInfo.Capture(ex));
             throw;
         }
-        Land(scope, first: null);
+        Land(first: null);
         return written;
     }
 
     // Each step runs whatever threw before it. A later throw is logged rather than rethrown, which
     // would hide the first.
-    private void Land(ProjectionScope scope, ExceptionDispatchInfo? first)
+    private void Land(ExceptionDispatchInfo? first)
     {
-        Action[] steps = [() => SweepWinners(scope), Checkpoint, () => _filterInForce.Reapply(this)];
+        Action[] steps = [SweepWinners, Checkpoint, () => _filterInForce.Reapply(this)];
         foreach (var step in steps)
         {
             try
@@ -732,8 +731,8 @@ internal sealed class Store : IDisposable
         public void Announce(Func<long, INotification> announcement) =>
             store.Announce(() => store._notifications?.Publish(announcement(store.Sequence)));
 
-        /// <summary>ADR-0015: a whole plugin re-derived or removed has too many rows to name, and can
-        /// move the winner of every FormKey it holds.</summary>
+        /// <summary>ADR-0015: a whole plugin re-derived or removed can move the winner of every
+        /// FormKey it holds.</summary>
         public void PluginChanged(PluginAddress key)
         {
             OweWinnerSweep();
@@ -902,29 +901,38 @@ internal sealed class Store : IDisposable
             Connection, $"DELETE FROM {TableDdlBuilder.RegistrationsRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
     }
 
-    /// <summary>Wholesale rather than incremental because there is no smaller correct unit:
-    /// registering a plugin can move the winner of every FormKey it holds. Measured at ~75 ms
-    /// on a 48,000-record, 60-plugin fixture.</summary>
     public void UpdateWinners(IReadOnlyList<RegisteredPlugin> active)
     {
         using var tx = BeginTransaction();
         ReplaceActive(active);
-        UpdateWinnersCore();
+        UpdateWinnersCore(null);
         BumpSequence();
         tx.Commit();
     }
 
     // The same sweep for a projection that moved rows without moving the load order: which plugins
     // are active cannot change here, so the set the last sweep was handed still holds.
-    private void SweepWinners(ProjectionScope scope)
+    private void SweepWinners()
     {
-        if (!scope.SweepOwed && scope.SweepOwedFor.Count == 0) return;
-        var timer = Stopwatch.StartNew();
-        using (var tx = BeginTransaction())
+        OwedSweep owed;
+        lock (_projectionLock)
         {
-            UpdateWinnersCore(scope.SweepOwed ? null : scope.SweepOwedFor);
+            owed = _owedSweep;
+            _owedSweep = OwedSweep.None;
+        }
+        if (!owed.IsOwed) return;
+        var timer = Stopwatch.StartNew();
+        try
+        {
+            using var tx = BeginTransaction();
+            UpdateWinnersCore(owed.FormKeys);
             BumpSequence();
             tx.Commit();
+        }
+        catch
+        {
+            lock (_projectionLock) _owedSweep = _owedSweep.And(owed);
+            throw;
         }
         if (_logger.IsEnabled(LogLevel.Debug))
             _logger.LogDebug("Swept winners in {ElapsedMs} ms", timer.ElapsedMilliseconds);
@@ -942,9 +950,7 @@ internal sealed class Store : IDisposable
         }
     }
 
-    // The sweep itself, unwrapped: a caller already inside a transaction (the projection verbs
-    // below) calls this directly, since DuckDB refuses a second BeginTransaction on one connection.
-    private void UpdateWinnersCore(IReadOnlyCollection<string>? formKeys = null)
+    private void UpdateWinnersCore(IReadOnlyCollection<string>? formKeys)
     {
         object[] keys = formKeys is null ? [] : [formKeys.ToList()];
         string Among(string formKey) => formKeys is null ? "TRUE" : $"{formKey} IN (SELECT unnest($1::VARCHAR[]))";
