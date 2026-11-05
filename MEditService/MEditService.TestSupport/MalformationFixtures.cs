@@ -215,6 +215,21 @@ public static class MalformationFixtures
         }
     }
 
+    private static MalformationFixture GlobFnamNotATypeLetter
+    {
+        get
+        {
+            var mod = NewMod();
+            var global = mod.Globals.AddNewFloat("HarborHasSkins");
+            global.Data = 1f;
+            global.OutputChar = false;
+            return Malformed(nameof(GlobFnamNotATypeLetter), mod, "GLOB", global,
+                subrecords => subrecords.SelectMany<(string Signature, byte[] Payload), (string, byte[])>(s => s.Signature == "FLTV" ? [("FNAM", [0]), s] : [s]),
+                "glob-fnam-not-a-type-letter, repairable (drops 7 bytes): FNAM is 0x00; vanilla writes s, l, f or no FNAM",
+                "drops FNAM (7 bytes)");
+        }
+    }
+
     private static MalformationFixture EntryPointParameterOfAnotherType => new(
         nameof(EntryPointParameterOfAnotherType), MisshapedPerkPlugin.Plugin,
         $"{MisshapedPerkPlugin.Anchor} — entry-point-parameter-shape: entry point 1 (function 14, Multiply 1 + Actor Value Mult) has EPFT 2; vanilla writes EPFT 8",
