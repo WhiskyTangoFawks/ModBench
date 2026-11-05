@@ -36,23 +36,19 @@ internal sealed class WorkingTreeOverlay
     }
 
     /// <summary>Folds re-derived documents into the read model: null Body deletes, byte-equal body
-    /// converges. <c>Structural</c> is an Effective row added or removed, which winners resweep on;
-    /// <c>Touched</c> is every key whose rows moved.</summary>
-    public (bool Structural, List<string> Touched) ProjectDocuments(
-        PluginAddress key, IReadOnlyList<(string FormKey, string? Body)> deltas)
+    /// converges. Returns every key whose rows moved.</summary>
+    public List<string> ProjectDocuments(PluginAddress key, IReadOnlyList<(string FormKey, string? Body)> deltas)
     {
-        var structural = false;
         // The deltas' own keys are named whether or not their bytes moved: the caller asked about
         // them, and a subscriber re-reading one it was told about costs one query.
         var touched = new List<string>(deltas.Select(d => d.FormKey));
         foreach (var (formKey, body) in deltas)
-            structural |= ApplyOneWorkingTreeChange(key, formKey, body, touched);
-        return (structural, touched);
+            ApplyOneWorkingTreeChange(key, formKey, body, touched);
+        return touched;
     }
 
-    // Returns true when it added or removed an Effective row — a structural change, the only kind
-    // that can move winner status. touched collects every key whose rows this call moved.
-    private bool ApplyOneWorkingTreeChange(PluginAddress key, string formKey, string? body, ICollection<string> touched)
+    // touched collects every key whose rows this call moved.
+    private void ApplyOneWorkingTreeChange(PluginAddress key, string formKey, string? body, ICollection<string> touched)
     {
         if (RecordTypeAtEffective(key, formKey) is not { } recordType)
         {
@@ -64,7 +60,7 @@ internal sealed class WorkingTreeOverlay
                     "Ignoring a working-tree change for {FormKey}, which {Plugin} ({Origin}) does not hold",
                     formKey, key.Name, key.Origin);
             }
-            return false;
+            return;
         }
 
         if (body == null)
@@ -85,12 +81,11 @@ internal sealed class WorkingTreeOverlay
             DuckDbSql.Execute(_connection, "DELETE FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
                 formKey, key.Name, key.Origin);
             DeleteDerivationsForRecord(key, formKey);
-            return true;
+            return;
         }
 
         UpsertEffectiveBody(key, formKey, recordType, body);
         RederiveIndexRowsForRecord(key, formKey, recordType, body, touched);
-        return false;
     }
 
     private bool RowExistsAtEffective(PluginAddress key, string formKey) => RecordTypeAtEffective(key, formKey) != null;

@@ -46,6 +46,22 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
     }
 
     [Fact]
+    public void ApplyingAContainersDocument_WithAChildHeldAtNeitherRef_MakesTheChildsOneCopyItsWinner()
+    {
+        var newRef = $"000F10:{ContainerMod.PluginName}";
+        var body = CellBodyAfterCodecRoundTripThrough(temporary =>
+        {
+            var appended = (temporary[0]?.DeepClone().AsObject()) ?? throw new InvalidOperationException("Expected a temporary ref to copy.");
+            appended["FormKey"] = newRef;
+            temporary.Add(appended);
+        });
+
+        Project(_fixture.EmbedCell, body);
+
+        Assert.True(_fixture.Index.StackOf(newRef).Single().IsWinner);
+    }
+
+    [Fact]
     public void ApplyingAContainersDocument_ThatNoLongerCarriesAChild_RemovesTheChildAtEffective()
     {
         var removed = _fixture.TemporaryRef;
