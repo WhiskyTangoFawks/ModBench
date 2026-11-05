@@ -20,11 +20,14 @@ internal static class Wire
         client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.DataFolder, fx.InstanceRoot, plugins));
 
     /// <summary>What Modbench sends once its watch sees a change: the snapshot, which an equal one leaves as it was, then the
-    /// signal of a change, whose check validates every file (ADR-0015).</summary>
+    /// signal of a change. Returns once its check has validated every file (ADR-0015).</summary>
     internal static async Task NextCheck(this HttpClient client, ScatteredFixtureData fx, params string[] origins)
     {
         (await client.PutLoadOrder(fx, origins)).EnsureSuccessStatusCode();
         await client.SignalChange();
+        await Eventually(
+            async () => !(await client.GetFromJsonAsync<JsonElement>("/load-order/status")).GetProperty("validating").GetBoolean(),
+            "the check validated");
     }
 
     internal static async Task SignalChange(this HttpClient client) =>

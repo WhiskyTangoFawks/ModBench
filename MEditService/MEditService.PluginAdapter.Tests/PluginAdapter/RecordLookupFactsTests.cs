@@ -37,10 +37,10 @@ public sealed class RecordLookupFactsTests : IDisposable
         Write(Misc(0x800, "First"));
         using (var earlier = Open()) Assert.Equal("First", earlier.IdentityOf(FirstRecord).Answered()?.EditorId);
 
-        Write(Misc(0x800, "Other"));
+        Write(Misc(0x800, "Second"));
         using var later = Open();
 
-        Assert.Equal("Other", later.IdentityOf(FirstRecord).Answered()?.EditorId);
+        Assert.Equal("Second", later.IdentityOf(FirstRecord).Answered()?.EditorId);
     }
 
     [Fact]
