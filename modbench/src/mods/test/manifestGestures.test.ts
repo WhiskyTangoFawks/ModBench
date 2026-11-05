@@ -312,6 +312,18 @@ describe('Update manifest', () => {
     expect([reporter.landings, reporter.reports]).toEqual([['Update manifest: 2 mods unchanged, 1 updated, 0 refused; their packages do not hold 0 files and hold 0 files with other bytes.'], []]);
   });
 
+  it('counts a mod whose submodule entry or ignore lines were written as updated, though its manifest was unchanged', async () => {
+    updateManifest.mockResolvedValueOnce({
+      notes: [], repositoryNotes: [], refused: [],
+      landed: [{ mod: 'ModA', manifestWritten: false, repositoryWritten: true, notInPackage: [], otherBytes: [] }],
+    });
+    const { reporter, run } = register();
+
+    await run(UPDATE);
+
+    expect(reporter.landings).toEqual(['Update manifest: 0 mods unchanged, 1 updated, 0 refused; their packages do not hold 0 files and hold 0 files with other bytes.']);
+  });
+
   it.each([
     ['a package does not hold a file, naming each by mod', { landed: [{ mod: 'ModA', manifestWritten: true, repositoryWritten: false, notInPackage: ['a.nif', 'b/c.dds'], otherBytes: [] }] },
       'Update manifest: 0 mods unchanged, 1 updated, 0 refused; their packages do not hold 2 files and hold 0 files with other bytes.', 'ModA: a.nif\nModA: b/c.dds'],
