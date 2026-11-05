@@ -67,7 +67,8 @@ describe('a mod the published modlist has no way to ship (publishing.md, What sh
   it('judges again only the mods whose status changed', async () => {
     const judgedMods: string[] = [];
     const counting: PublisherConfiguration = {
-      ...configuration(), unshippable: { file: SETTINGS, reason: (_folder, _path, mod) => { judgedMods.push(mod); return REASON; } },
+      kind: 'read', covering: () => [], listed: () => [], pathProblems: [],
+      unshippable: { file: SETTINGS, reason: (_folder, _path, mod) => { judgedMods.push(mod); return REASON; } },
     };
     const { collection, becomes } = over([status('ModA', { unpackaged: ['a.esp'] }), status('ModB', { unpackaged: ['b.esp'] })], counting);
     await vi.waitFor(() => { expect(problemsOn(collection)).toHaveLength(2); });
