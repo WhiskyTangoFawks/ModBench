@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { namesPlugin, placeIn, pluginNamed } from '../symbolNames';
+import { heldTextAt, heldTexts, namesPlugin, placeIn, pluginNamed, samePath } from '../symbolNames';
 
 const winning = { name: 'Shared.esp', origin: 'Late', winning: true };
 const losing = { name: 'Shared.esp', origin: 'Early', winning: false };
@@ -23,6 +23,16 @@ describe('a name in a file resolves to its plugin (symbols.md, The symbols, Plug
   it('a file name with the mod that holds it names that copy, won or not', () => {
     expect(namesPlugin({ name: 'Shared.esp', origin: 'early' }, { name: 'Shared.esp', origin: 'Early' }, plugins)).toBe(true);
     expect(namesPlugin({ name: 'Shared.esp', origin: 'Early' }, { name: 'Shared.esp', origin: 'Late' }, plugins)).toBe(false);
+  });
+});
+
+describe('unsaved text, by its file', () => {
+  it('is found for a path that spells the drive letter in the other case', () => {
+    const held = heldTexts([['c:\\Mods\\A\\build.json', '{}']]);
+
+    expect(heldTextAt(held, 'C:\\Mods\\A\\build.json')).toBe('{}');
+    expect(heldTextAt(held, 'C:\\Mods\\B\\build.json')).toBeUndefined();
+    expect(samePath('c:\\Mods\\A', 'C:\\Mods\\A')).toBe(true);
   });
 });
 

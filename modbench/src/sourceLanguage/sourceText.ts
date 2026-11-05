@@ -1,4 +1,5 @@
 import { findNodeAtLocation, findNodeAtOffset, getNodePath, getNodeValue, parseTree, type Node } from 'jsonc-parser';
+import { sameName } from '../symbolNames/symbolNames';
 
 export interface TextSpan { start: number; end: number }
 
@@ -115,10 +116,10 @@ export function referenceSpan(text: string, referrer: string, formKey: string): 
 }
 
 // A FormKey's six-digit object ID and its delimiter come before its plugin's name.
-const PLUGIN_PART = 7;
+const PLUGIN_NAME_OFFSET = 7;
 
 const pluginPartOf = (node: Node): TextSpan & { name: string } =>
-  ({ name: String(node.value).slice(PLUGIN_PART), start: node.offset + 1 + PLUGIN_PART, end: node.offset + node.length - 1 });
+  ({ name: String(node.value).slice(PLUGIN_NAME_OFFSET), start: node.offset + 1 + PLUGIN_NAME_OFFSET, end: node.offset + node.length - 1 });
 
 const isFormKeyString = (node: Node): boolean => isStringValue(node) && typeof node.value === 'string' && FORM_KEY.test(node.value);
 
@@ -142,7 +143,7 @@ export function pluginNameSpans(text: string, formKey: string, name: string): Te
   const root = parseTree(text);
   const record = root && recordOf(root, formKey);
   if (!record) return [{ start: 0, end: 0 }];
-  const naming = formKeysOf(record).map(pluginPartOf).filter((part) => part.name.toLowerCase() === name.toLowerCase());
+  const naming = formKeysOf(record).map(pluginPartOf).filter((part) => sameName(part.name, name));
   const own = ownFormKey(record);
   return naming.length > 0 ? naming.map(({ start, end }) => ({ start, end })) : own ? [spanOf(own)] : [{ start: 0, end: 0 }];
 }

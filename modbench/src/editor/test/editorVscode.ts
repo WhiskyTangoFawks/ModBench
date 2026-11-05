@@ -2,10 +2,7 @@ import { vi } from 'vitest';
 import {
   Range, EventEmitter, TreeItem, TreeItemCollapsibleState, ThemeIcon,
 } from '../../test/vscodeMock';
-import type { ReferencesViewInput as AnyReferencesViewInput } from '../../drivingLib/referencesView';
-import type { ReferencedByList } from '../referencedByList';
-
-type ReferencesViewInput = AnyReferencesViewInput<ReferencedByList>;
+import type { ReferencedByInput as ReferencesViewInput } from '../referencedBy';
 
 /** The VS Code the Editor runs against, for a test's `vi.mock('vscode', () => editorVscode)`, and the state it keeps.
  *  This module loads nothing that imports `vscode`, so the hoisted mock can read it. */

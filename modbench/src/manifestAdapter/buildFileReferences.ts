@@ -1,7 +1,8 @@
+import { basename, dirname } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
-import { placeIn, type SymbolOwner, type SymbolReading } from '../symbolNames/symbolNames';
+import { placeIn, sameName, samePath, type SymbolOwner, type SymbolReading } from '../symbolNames/symbolNames';
 import { readBuildFile } from './buildFileRead';
-import { buildFileTextIn } from './manifestFiles';
+import { buildFileTextIn, isBuildFileName } from './manifestFiles';
 
 interface NameInText {
   readonly name: string;
@@ -54,24 +55,16 @@ function stringsOf(text: string): StringAt[] {
   return found;
 }
 
-// The steps whose paths name a plugin when they name a file at the root.
-const NAMING_PLUGINS: readonly Segment[] = ['decompile', 'compile', 'copy'];
+// The paths of the steps that name a file of the source folder, or one an archive holds: a plugin, at the root.
+const isNamingAFile = ([steps, , kind, ...rest]: readonly Segment[]): boolean =>
+  steps === 'steps' && (kind === 'unpack' ? rest.length === 2 : ['decompile', 'compile', 'copy'].includes(String(kind)) && rest.length === 1);
 
-const isPluginAtTheRoot = ({ name, path: [steps, , kind, index] }: StringAt): boolean =>
-  steps === 'steps' && kind !== undefined && NAMING_PLUGINS.includes(kind) && typeof index === 'number' && !name.includes('/');
+const isPluginAtTheRoot = ({ name, path }: StringAt): boolean => isNamingAFile(path) && typeof path.at(-1) === 'number' && !name.includes('/');
 
 function pluginsIn(text: string): readonly NameInText[] | { readonly refused: string } {
   const read = readBuildFile(text);
   return 'refused' in read ? read : stringsOf(text).filter(isPluginAtTheRoot).map(({ name, start, end }) => ({ name, start, end }));
 }
-
-/** The plugin a build file's step names at `offset` of its text, with the span of its name. */
-export function buildFilePluginAt(text: string, offset: number): NameInText | undefined {
-  const plugins = pluginsIn(text);
-  return 'refused' in plugins ? undefined : plugins.find(({ start, end }) => offset >= start && offset <= end);
-}
-
-const sameName = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
 const NONE: SymbolReading = { references: [], leftOut: [] };
 
@@ -81,6 +74,12 @@ const leftOut = (file: string, why: string): SymbolReading => ({ references: [],
  *  `sourceFolders`: each source mod's source folder, by mod. */
 export function buildFileReferences(sourceFolders: () => ReadonlyMap<string, string>): SymbolOwner {
   return {
+    nameAt(file, text, offset) {
+      const [mod] = [...sourceFolders()].find(([, folder]) => samePath(dirname(file), folder) && isBuildFileName(basename(file))) ?? [];
+      const plugins = mod === undefined ? [] : pluginsIn(text);
+      const named = 'refused' in plugins ? undefined : plugins.find(({ start, end }) => offset >= start && offset <= end);
+      return Promise.resolve(named && mod !== undefined ? { name: named.name, origin: mod } : undefined);
+    },
     async read({ name, origin }, held) {
       const [mod, folder] = [...sourceFolders()].find(([named]) => sameName(named, origin)) ?? [];
       if (mod === undefined || folder === undefined) return NONE;

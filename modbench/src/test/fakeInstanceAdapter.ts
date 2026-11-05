@@ -610,7 +610,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     pathInFolder: (path, exclude) => pathInFolderOf(path, exclude, EXCLUSION_MARK),
     ownPath: (pathInFolder) => ownPathOf(pathInFolder, EXCLUSION_MARK).path,
     originHoldsPlugin: (origin, name) => Promise.resolve(rootFileOf(origin, name) !== undefined),
-    pluginReferences: { read: () => Promise.resolve({ references: [], leftOut: [] }) },
+    pluginReferences: { read: () => Promise.resolve({ references: [], leftOut: [] }), nameAt: () => Promise.resolve(undefined) },
     renamePlugin: (origin, from, to) =>
       write({ verb: 'renamePlugin', origin, from, to }, () => {
         const sameAsFrom = (name: string): boolean => pluginKey(name) === pluginKey(from);

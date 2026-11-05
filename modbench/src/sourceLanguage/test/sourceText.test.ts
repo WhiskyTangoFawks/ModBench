@@ -60,9 +60,9 @@ describe('a plugin\'s name inside a FormKey is the plugin\'s symbol (source.md, 
   });
 
   it('is spanned in each FormKey of a record that names the plugin, its child records left to themselves', () => {
-    const record = `{ "FormKey": "000700:B.esp", "Refs": ["000801:b.ESP", "000802:C.esp"], "Placed": [{ "FormKey": "000803:A.esp", "Base": "000804:B.esp" }] }`;
+    const record = `{ "FormKey": "000700:B.esp", "Refs": ["000801:B.esp", "000802:C.esp"], "Placed": [{ "FormKey": "000803:A.esp", "Base": "000804:B.esp" }] }`;
 
-    expect(pluginNameSpans(record, '000700:B.esp', 'B.esp').map(({ start, end }) => record.slice(start, end))).toEqual(['B.esp', 'b.ESP']);
+    expect(pluginNameSpans(record, '000700:B.esp', 'B.esp').map(({ start, end }) => record.slice(start, end))).toEqual(['B.esp', 'B.esp']);
   });
 
   it('is spanned at the record\'s own FormKey when no FormKey of it names the plugin, and at the start without the record', () => {

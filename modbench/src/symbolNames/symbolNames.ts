@@ -15,14 +15,15 @@ export interface ResolvedPlugin extends PluginSymbol {
   readonly winning: boolean;
 }
 
-const sameText = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
+/** Whether two plugin file names, or two mod names, name one thing: the game compares them in any case. */
+export const sameName = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
-const samePlugin = (a: PluginSymbol, b: PluginSymbol): boolean => sameText(a.name, b.name) && sameText(a.origin, b.origin);
+const samePlugin = (a: PluginSymbol, b: PluginSymbol): boolean => sameName(a.name, b.name) && sameName(a.origin, b.origin);
 
 /** The plugin `named` names: with its mod, that copy; by its file name alone, the copy mod order resolves it to, if any. */
 export function pluginNamed({ name, origin }: PluginName, plugins: readonly ResolvedPlugin[]): PluginSymbol | undefined {
   if (origin !== undefined) return { name, origin };
-  const resolved = plugins.find((plugin) => plugin.winning && sameText(plugin.name, name));
+  const resolved = plugins.find((plugin) => plugin.winning && sameName(plugin.name, name));
   return resolved && { name: resolved.name, origin: resolved.origin };
 }
 
@@ -68,9 +69,24 @@ export interface SymbolReading {
 }
 
 /** Unsaved text by its file's path, read in place of the file. */
-export type HeldTexts = ReadonlyMap<string, string>;
+export interface HeldTexts {
+  readonly byPath: ReadonlyMap<string, string>;
+}
+
+// A Windows path's drive letter is spelled in either case, VS Code's in lower case.
+const heldKey = (path: string): string => path.replace(/^[A-Z]:/, (drive) => drive.toLowerCase());
+
+export const heldTexts = (entries: Iterable<readonly [path: string, text: string]>): HeldTexts =>
+  ({ byPath: new Map([...entries].map(([path, text]) => [heldKey(path), text])) });
+
+export const heldTextAt = ({ byPath }: HeldTexts, path: string): string | undefined => byPath.get(heldKey(path));
+
+/** Whether two paths, as VS Code and the instance spell them, are one file. */
+export const samePath = (a: string, b: string): boolean => heldKey(a) === heldKey(b);
 
 /** A box that owns files, saying where they name a symbol (ADR-0028). */
 export interface SymbolOwner {
   read(symbol: PluginSymbol, held: HeldTexts): Promise<SymbolReading>;
+  /** The plugin one of its files names at `offset` of the file's `text`; undefined where it names none. */
+  nameAt(file: string, text: string, offset: number): Promise<PluginName | undefined>;
 }

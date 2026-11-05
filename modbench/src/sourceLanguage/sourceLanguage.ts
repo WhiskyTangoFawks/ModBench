@@ -23,7 +23,7 @@ import { pluginLanguage } from './pluginLanguage';
 
 interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'sourceFiles'> {
   instance: Pick<Instance, 'value' | 'subscribe'> | undefined;
-  reporter: Pick<Reporter, 'shownOnSurface' | 'report' | 'landed'>;
+  reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
   client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlugins' | 'handUnsavedDocuments'> & RecordDocumentClient & SourceProblemsDeps['client'];
   /** Each box that owns files, saying where they name a symbol (ADR-0028). */
   owners: readonly SymbolOwner[];
@@ -31,6 +31,8 @@ interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'sourceFiles'> {
 
 const kinds = { reference: vscode.CompletionItemKind.Reference, enumMember: vscode.CompletionItemKind.EnumMember };
 const pluginSource: vscode.DocumentSelector = { language: 'json' };
+// symbols.md, The features, story 2: any file an owner of files reports may name a plugin.
+const ownedFiles: vscode.DocumentSelector = [pluginSource, { scheme: 'file' }];
 const pluginSourceStatusSelector: vscode.DocumentSelector = { language: 'json', pattern: PLUGIN_SOURCE_GLOB };
 
 const diagnosticOf = ({ message, start, end }: ProblemOnFile): vscode.Diagnostic =>
@@ -112,7 +114,7 @@ export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
   });
   const referencesAt = referencesOf({ client, reporter: deps.reporter, open: openPluginSourceDocument });
   const plugin = pluginLanguage(deps);
-  const references = vscode.languages.registerReferenceProvider(pluginSource, {
+  const references = vscode.languages.registerReferenceProvider(ownedFiles, {
     async provideReferences(document, position) {
       const offset = document.offsetAt(position);
       const toPlugin = await plugin.referencesAt(document, offset);

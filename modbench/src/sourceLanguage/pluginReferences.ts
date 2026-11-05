@@ -11,19 +11,31 @@ interface PluginReferencesDeps<Document> extends RecordLocationDeps<Document> {
   /** The instance's plugin rows, which a file name alone resolves through. */
   plugins: () => readonly ResolvedPlugin[];
   held: () => HeldTexts;
-  reporter: Pick<Reporter, 'shownOnSurface'>;
+  reporter: Pick<Reporter, 'report'>;
 }
 
 export type PluginReference<Document> = PlaceInFile | RecordLocation<Document>;
 
+/** The places found, and why each file or copy that may name the plugin went unread. */
+export interface PluginReferences<Document> {
+  readonly found: readonly PluginReference<Document>[];
+  readonly unread: readonly string[];
+}
+
 const readBy = (owner: SymbolOwner, symbol: PluginSymbol, held: HeldTexts): Promise<SymbolReading> =>
   owner.read(symbol, held).catch((error: unknown) => ({ references: [], leftOut: [errorMessage(error)] }));
 
-/** Each place a file names the plugin, as each owner of files says (ADR-0028); a place an owner could not read is
- *  shown as a warning that says why. */
+/** The line above a plugin's list: an empty list says so, and that it is no proof while a file went unread. */
+export function listMessage(found: number, unread: number): string | undefined {
+  if (found > 0) return undefined;
+  return unread > 0 ? 'No references found in the files that could be read.' : 'No references found.';
+}
+
+/** Each place a file names the plugin, as each owner of files says (ADR-0028); a notification names each file or copy
+ *  that could not be read, as the list without them is not the whole answer (common.md, Reporting). */
 export function pluginReferencesOf<Document extends { getText(): string }>(
   { owners, plugins, held, reporter, client, open }: PluginReferencesDeps<Document>,
-): (symbol: PluginSymbol) => Promise<PluginReference<Document>[]> {
+): (symbol: PluginSymbol) => Promise<PluginReferences<Document>> {
   return async (symbol) => {
     const readings = await Promise.all(owners.map((owner) => readBy(owner, symbol, held())));
     const rows = plugins();
@@ -36,8 +48,8 @@ export function pluginReferencesOf<Document extends { getText(): string }>(
     });
     const unread = [...readings.flatMap((reading) => reading.leftOut), ...leftOut];
     if (unread.length > 0) {
-      reporter.shownOnSurface('warning', `Find All References on ${pluginRowName(symbol)} left out what it could not read.`, unread.join('\n'));
+      reporter.report('warning', `Find All References on ${pluginRowName(symbol)} could not read every file that may name it.`, unread.join('\n'));
     }
-    return [...places, ...found.flat()];
+    return { found: [...places, ...found.flat()], unread };
   };
 }

@@ -7,7 +7,7 @@ import { present } from '../../ports/present';
 import { pluginCompanionRule, type PluginCompanionRule } from '../../tables/gamePaths';
 import { get, listEntries, readOrAbsent, rename, undoAll, type Undo, withLock, write } from '../files';
 import { fileInFolder, isBareName, type FileOrigin, InstanceAdapter } from '../instanceAdapter';
-import { everyPluginOrderFile } from './mo2PluginReferences';
+import { everyPluginOrderFile } from './layout';
 import type { ReadingSource } from '../instanceReading';
 import { originFolder, type Mo2Context } from './mo2Context';
 

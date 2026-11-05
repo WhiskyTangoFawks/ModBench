@@ -1,7 +1,6 @@
 import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { ReferencesViewInput as AnyReferencesViewInput } from '../../drivingLib/referencesView';
-import type { ReferencedByList } from '../referencedByList';
+import type { ReferencedByInput as ReferencesViewInput } from '../referencedBy';
 import {
   commandHandlers, contextKeys, disk, documentChanges, editorProviderDisposals, editorProviderOptions, editorProviders, editorVscode,
   executeCommand, executed, fakePanel, fileSystems, openedDocuments, pickers, referencesView, type FakePanel,
@@ -18,8 +17,6 @@ import { present } from '../../ports/present';
 import { comparisonOf } from '../../test/comparison';
 import { loadOrderStatusEventFixture, notificationEventFixture, pluginMetadataFixture } from '../../client/test/fixtures';
 import { DATA_DIRECTORY_ORIGIN, samePluginAddress } from '../../wire/pluginAddress';
-
-type ReferencesViewInput = AnyReferencesViewInput<ReferencedByList>;
 import { columnKey } from '../../wire/columnKey';
 
 const COPY_PLUGIN = { name: 'A.esp', origin: 'ModA' };

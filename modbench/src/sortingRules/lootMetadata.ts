@@ -1,4 +1,4 @@
-import { isMap, isNode, isScalar, isSeq, LineCounter, parseDocument, stringify, type Document, type Pair, type YAMLMap, type YAMLSeq } from 'yaml';
+import { isMap, isNode, isScalar, isSeq, LineCounter, parseDocument, stringify, visit, type Document, type Pair, type YAMLMap, type YAMLSeq } from 'yaml';
 
 type SortingRuleFile = { readonly path: string } & (
   | { readonly kind: 'text'; readonly text: string }
@@ -602,15 +602,35 @@ function nameIn(node: unknown): NameInText[] {
 const fileNamesIn = (list: unknown): NameInText[] =>
   isSeq(list) ? list.items.flatMap((item: unknown) => nameIn(isMap(item) ? item.get('name', true) : item)) : [];
 
-/** Each plugin a LOOT metadata file names, with the span of its name: each entry's own name and each its `after`,
- *  `req` and `inc` name, a regular expression left out; or why the file does not read. */
+// A condition function's quoted argument, its quotes escaped where the condition is a double-quoted scalar.
+const CONDITION_ARGUMENT = /[(,]\s*\\?"([^"\\]+)\\?"/g;
+const PLUGIN_FILE = /^[^/]+\.es[lmp]$/i;
+
+function conditionNamesIn(text: string, node: unknown): NameInText[] {
+  if (!isScalar(node) || !node.range) return [];
+  const [from, to] = node.range;
+  return [...text.slice(from, to).matchAll(CONDITION_ARGUMENT)].flatMap(({ 0: whole, 1: name, index }) => {
+    if (name === undefined || !PLUGIN_FILE.test(name) || REGEX_NAME.test(name)) return [];
+    const start = from + index + whole.indexOf(name);
+    return [{ name, start, end: start + name.length }];
+  });
+}
+
+/** Each plugin a LOOT metadata file names, in order, with its span: an entry's name, an after, req or inc name, and
+ *  a condition's, never a regular expression; or why the file does not read. */
 export function ruleFilePluginNames(text: string): readonly NameInText[] | { readonly refused: string } {
   const document = parseDocument(text);
   const [error] = document.errors;
   if (error !== undefined) return { refused: error.message.split('\n')[0] ?? error.message };
+  const named: NameInText[] = [];
   const plugins = document.get('plugins', true);
-  if (!isSeq(plugins)) return [];
-  return plugins.items.flatMap((entry: unknown) => isMap(entry)
-    ? [...nameIn(entry.get('name', true)), ...['after', 'req', 'inc'].flatMap((key) => fileNamesIn(entry.get(key, true)))]
-    : []);
+  for (const entry of isSeq(plugins) ? plugins.items : []) {
+    if (isMap(entry)) named.push(...nameIn(entry.get('name', true)), ...['after', 'req', 'inc'].flatMap((key) => fileNamesIn(entry.get(key, true))));
+  }
+  visit(document, {
+    Pair: (_key, pair) => {
+      if (isScalar(pair.key) && ['condition', 'constraint'].includes(String(pair.key.value))) named.push(...conditionNamesIn(text, pair.value));
+    },
+  });
+  return named.sort((a, b) => a.start - b.start);
 }

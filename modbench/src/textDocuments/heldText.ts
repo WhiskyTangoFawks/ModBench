@@ -4,11 +4,11 @@ export const heldText = (document: Pick<vscode.TextDocument, 'getText'>): string
 
 export const isUnsaved = (document: Pick<vscode.TextDocument, 'isDirty'>): boolean => document.isDirty;
 
-/** The unsaved text of each file `isHeld` takes, by its path. */
-export const unsavedTexts = (isHeld: (path: string) => boolean): ReadonlyMap<string, string> =>
-  new Map(vscode.workspace.textDocuments
-    .filter((document) => document.uri.scheme === 'file' && isUnsaved(document) && isHeld(document.uri.fsPath))
-    .map((document) => [document.uri.fsPath, heldText(document)]));
+/** Each file's unsaved text, by its path. */
+export const unsavedTexts = (): (readonly [path: string, text: string])[] =>
+  vscode.workspace.textDocuments
+    .filter((document) => document.uri.scheme === 'file' && isUnsaved(document))
+    .map((document) => [document.uri.fsPath, heldText(document)] as const);
 
 export const onHeldTextChanged = (document: object, changed: () => void): vscode.Disposable =>
   vscode.workspace.onDidChangeTextDocument((change) => {

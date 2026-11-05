@@ -19,8 +19,8 @@ class FileRow extends vscode.TreeItem {
   }
 }
 
-/** `locations` as the References view lists them: by file, each place under its line's text. */
-export async function locationsList(locations: readonly vscode.Location[]): Promise<ReferencesViewList> {
+/** `locations` as the References view lists them: by file, each place under its line's text, below `message`. */
+export async function locationsList(locations: readonly vscode.Location[], message: string | undefined): Promise<ReferencesViewList> {
   const byFile = new Map<string, vscode.Location[]>();
   for (const location of locations) byFile.set(location.uri.toString(), [...byFile.get(location.uri.toString()) ?? [], location]);
   const files = await Promise.all([...byFile.values()].map(async (inFile) => {
@@ -34,5 +34,5 @@ export async function locationsList(locations: readonly vscode.Location[]): Prom
     getTreeItem: (row) => row,
     getChildren: (row) => (row === undefined ? rows : row instanceof FileRow ? [...row.places] : []),
   };
-  return { provider, message: undefined };
+  return { provider, message };
 }

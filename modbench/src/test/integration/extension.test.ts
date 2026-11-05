@@ -1884,6 +1884,16 @@ describe('Referenced By on a plugin, as VS Code\'s References view takes it', ()
     const files = await input.resolve().then(({ provider }) => provider.getChildren());
     assert.ok(Array.isArray(files) && files.some((row) => row instanceof vscode.TreeItem && row.resourceUri?.fsPath === pluginsTxtPath));
   });
+
+  it('answers Find All References on the plugin\'s name in plugins.txt, a file an owner reports', async () => {
+    await holdPluginsTxt('*TestMod.esp\r\n');
+    const document = await vscode.workspace.openTextDocument(pluginsTxtPath);
+
+    const found = await vscode.commands.executeCommand<vscode.Location[] | undefined>(
+      'vscode.executeReferenceProvider', document.uri, new vscode.Position(0, 3));
+
+    assert.ok(found?.some(({ uri, range }) => uri.fsPath === pluginsTxtPath && range.start.isEqual(new vscode.Position(0, 1))));
+  });
 });
 
 describe('The game folder setting reaches the Instance as a recompute', () => {

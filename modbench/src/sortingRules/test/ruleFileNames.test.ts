@@ -26,6 +26,21 @@ describe('the plugins a sorting rule file names (ADR-0026)', () => {
     ]);
   });
 
+  it('are each plugin a condition names, wherever a condition is, in the order the file names them', () => {
+    const text = `plugins:
+  - name: Other.esp
+    msg:
+      - type: say
+        content: 'x'
+        condition: 'active("A.esp") and not file("Data/B.esp")'
+    after:
+      - name: C.esp
+        condition: "is_master(\\"D.esm\\") or many(\\"E.*\\\\.esp\\")"
+`;
+
+    expect(named(text)).toEqual([['Other.esp', 'Other.esp'], ['A.esp', 'A.esp'], ['C.esp', 'C.esp'], ['D.esm', 'D.esm']]);
+  });
+
   it('are refused, saying why, for a file that does not read', () => {
     expect(ruleFilePluginNames('plugins: [')).toEqual({ refused: expect.stringContaining('line 1') as unknown });
   });
