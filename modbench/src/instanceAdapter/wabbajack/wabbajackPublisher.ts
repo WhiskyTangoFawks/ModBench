@@ -392,10 +392,17 @@ function withListChanged(text: string, key: string, change: ListChange): string 
 export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers): Publisher {
   const file = join(instanceRoot, COMPILER_SETTINGS.name);
   const neverShipped = manager.neverShipped.map((folder) => namesOf(relative(instanceRoot, folder)));
+  let judging: { readonly key: string; readonly tags: PathNode; readonly covering: Covering; readonly reason: UnshippableReason } | undefined;
   const understood = async (text: string) => {
     const settings = settingsIn(text, file);
-    const tags = tagsByPath(settings, file);
-    return { settings, tags, compiled: compiledIn(instanceRoot, tags, neverShipped, await shippedModsIn(settings, file, manager)) };
+    const shipped = await shippedModsIn(settings, file, manager);
+    const key = JSON.stringify([text, shipped === 'every' ? shipped : [...shipped].sort()]);
+    if (judging?.key !== key) {
+      const tags = tagsByPath(settings, file);
+      const compiled = compiledIn(instanceRoot, tags, neverShipped, shipped);
+      judging = { key, tags, covering: coveringIn(compiled), reason: unshippableIn(compiled) };
+    }
+    return { settings, ...judging };
   };
   const settingsText = () => readOrAbsent(() => get(file), undefined);
   return {
@@ -405,10 +412,10 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
       try {
         const text = await settingsText();
         if (text === undefined) return { kind: 'none' };
-        const { settings, tags, compiled } = await understood(text);
+        const { settings, tags, covering, reason } = await understood(text);
         return {
-          kind: 'read', covering: coveringIn(compiled), listed: listedIn(instanceRoot, tags), pathProblems: await tagsWithPathProblems(instanceRoot, settings, text, file),
-          unshippable: { file, reason: unshippableIn(compiled) },
+          kind: 'read', covering, listed: listedIn(instanceRoot, tags), pathProblems: await tagsWithPathProblems(instanceRoot, settings, text, file),
+          unshippable: { file, reason },
         };
       } catch (err) {
         return { kind: 'unreadable', reason: errorMessage(err) };

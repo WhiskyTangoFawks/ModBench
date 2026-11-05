@@ -173,6 +173,40 @@ describe('a file the compiler has no way to ship, once no package holds its byte
     return judged.reason(join(root, ...folder), pathInMod, mod);
   }
 
+  describe('hands back the same judgement while what it judges by is unchanged', () => {
+    const judgeOf = async (publisher: ReturnType<typeof publisherOver>) => expectKind(await publisher.configuration(), 'read').unshippable.reason;
+
+    it('across readings of unchanged settings and unchanged enabled mods', async () => {
+      await writeSettings({ ...COMPILE_PROFILES, Include: ['mods\\\\A'] });
+      const publisher = publisherOver();
+
+      expect(await judgeOf(publisher)).toBe(await judgeOf(publisher));
+    });
+
+    it('is replaced by a new one when the settings change', async () => {
+      await writeSettings({ ...COMPILE_PROFILES, Include: ['mods\\\\A'] });
+      const publisher = publisherOver();
+      const before = await judgeOf(publisher);
+
+      await writeSettings({ ...COMPILE_PROFILES, Include: ['mods\\\\B'] });
+
+      expect(await judgeOf(publisher)).not.toBe(before);
+    });
+
+    it('is replaced by a new one when the mods a compile profile enables change', async () => {
+      await writeSettings(COMPILE_PROFILES);
+      const publisher = publisherOver();
+      const before = await judgeOf(publisher);
+      const main = ENABLED_BY_PROFILE.Main;
+
+      ENABLED_BY_PROFILE.Main = ['Enabled', 'Newly Enabled'];
+      const after = await judgeOf(publisher);
+      ENABLED_BY_PROFILE.Main = main;
+
+      expect(after).not.toBe(before);
+    });
+  });
+
   it('names the compiler settings as the file it is shown on', async () => {
     await writeSettings({});
 
