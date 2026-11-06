@@ -115,9 +115,7 @@ internal static class ConflictRules
 
     private const int Absent = -1;
 
-    // Present values equal as their codec text does, which groups them. Whether an absent cell equals a value
-    // depends on the value alone (the codec omits some spellings of a default and not others), so it is asked
-    // once of each group and never groups an absent cell with them.
+    // SameNode is not transitive: an absent cell equals only the spellings the codec omits, so it is never grouped.
     private sealed class StatesWithFocusOn(string focused, Dictionary<string, int> classes, List<bool> equalsAbsent)
         : IReadOnlyDictionary<string, ConflictThis>
     {
