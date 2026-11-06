@@ -19,7 +19,7 @@ import type { ProgramVersions } from './gameFolder/programVersions';
 import type { NonSteamPrefix } from './gameFolder/steamPrefix';
 import type { Depot } from './gameFolder/steamAppManifest';
 import type { ScriptEnvironmentFile } from './scriptEnvironmentFile';
-import type { SymbolOwner } from '../symbolNames/symbolNames';
+import { originsWinningFirst, type SymbolOwner } from '../symbolNames/symbolNames';
 
 export type { ProgramVersion, ProgramVersions } from './gameFolder/programVersions';
 
@@ -948,13 +948,9 @@ export interface OriginProvides {
 const provides = (origin: FileOrigin, files: readonly OriginFile[]): OriginProvides =>
   ({ origin, files: files.filter((file) => !file.excluded) });
 
-/** The origins the game gets a file from, winning-first: Overwrite, then each enabled mod in mod
- *  order, each with the files nothing excludes. */
+/** The origins the game gets a file from, winning-first, as Symbol names ranks them, each with the files nothing excludes. */
 export function filesWinningFirst(
   mods: readonly ModlistEntry[], runtimeOutput: readonly OriginFile[], filesOf: (mod: string) => readonly OriginFile[],
 ): OriginProvides[] {
-  return [
-    provides({ kind: 'runtimeOutput' }, runtimeOutput),
-    ...mods.flatMap((entry) => (entry.kind === 'mod' && entry.enabled ? [provides({ kind: 'mod', name: entry.name }, filesOf(entry.name))] : [])),
-  ];
+  return originsWinningFirst(mods).map((origin) => provides(origin, origin.kind === 'mod' ? filesOf(origin.name) : runtimeOutput));
 }

@@ -15,6 +15,16 @@ export interface ResolvedPlugin extends PluginSymbol {
   readonly winning: boolean;
 }
 
+/** Where the game takes a file from: a mod, or the files it wrote at run time. */
+export type RankedOrigin = { readonly kind: 'mod'; readonly name: string } | { readonly kind: 'runtimeOutput' };
+
+/** The origins a file name resolves through, winning first: the run-time output, then each enabled mod of `modOrder`,
+ *  which lists them winning first. A name no origin holds resolves to the game's Data folder. */
+export const originsWinningFirst = (modOrder: readonly { readonly kind: string; readonly name: string; readonly enabled: boolean }[]): RankedOrigin[] => [
+  { kind: 'runtimeOutput' },
+  ...modOrder.flatMap((entry): RankedOrigin[] => (entry.kind === 'mod' && entry.enabled ? [{ kind: 'mod', name: entry.name }] : [])),
+];
+
 /** Whether two plugin file names, or two mod names, name one thing: the game compares them in any case. */
 export const sameName = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 

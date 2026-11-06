@@ -3,9 +3,9 @@
 
 import type { TailOf } from '../coreLib/boundCommand';
 import { change, type ChangeResult, type Changing, type SymbolOwners } from '../coreLib/change';
-import { fileOriginOfPlugin, type FileOrigin, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import { fileOriginOfPlugin, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { manifestFileReferences, sourceModsOf } from '../manifestAdapter/manifestAdapter';
-import type { ResolvedPlugin } from '../symbolNames/symbolNames';
+import { originsWinningFirst, type RankedOrigin, type ResolvedPlugin } from '../symbolNames/symbolNames';
 import { pluginCompanionRule } from '../tables/gamePaths';
 import { OVERWRITE_ORIGIN, type PluginAddress } from '../wire/pluginAddress';
 import { recordIndexReferences, type MEditClient } from '../client';
@@ -44,14 +44,11 @@ async function ownersOf({ adapter, client }: PluginRenameAccess): Promise<Symbol
   return { definition: adapter.pluginReferences, references: [recordIndexReferences(client, manifestFiles.sourceFilesOf), manifestFiles] };
 }
 
-const originName = (origin: FileOrigin): string => (origin.kind === 'mod' ? origin.name : OVERWRITE_ORIGIN);
+const originName = (origin: RankedOrigin): string => (origin.kind === 'mod' ? origin.name : OVERWRITE_ORIGIN);
 
-// The copy mod order resolves the plugin's file name to: Overwrite's, then each enabled mod's, winning first. None of
-// them holding it leaves the Data folder's, which no rename names.
+// The copy mod order resolves the plugin's file name to; the Data folder's, which no rename names, when no origin holds it.
 async function rowsOf(adapter: InstanceAdapter, { name }: PluginAddress): Promise<ResolvedPlugin[]> {
-  const { mods } = await adapter.modOrder();
-  const origins: FileOrigin[] = [{ kind: 'runtimeOutput' }, ...mods.flatMap((entry) => (entry.kind === 'mod' && entry.enabled ? [{ kind: 'mod' as const, name: entry.name }] : []))];
-  for (const origin of origins) {
+  for (const origin of originsWinningFirst((await adapter.modOrder()).mods)) {
     if (await adapter.originHoldsPlugin(origin, name)) return [{ name, origin: originName(origin), winning: true }];
   }
   return [];
