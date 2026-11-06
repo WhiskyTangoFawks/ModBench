@@ -160,7 +160,7 @@ describe('following a rename VS Code makes of a file or folder that is a symbol 
     expect({ events, reports: reporter.reports }).toEqual({ events: [], reports: [] });
   });
 
-  it('says why it could not tell what a rename renames, and holds the rename no longer', async () => {
+  it('says why it could not tell what a rename renames, and lets the rename go on', async () => {
     const { follow, reporter } = follower(new Error('mods/ cannot be listed'));
 
     const following = follow([RENAME], new Promise<boolean>(() => undefined));

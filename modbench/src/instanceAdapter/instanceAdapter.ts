@@ -122,8 +122,8 @@ export interface ModGroups {
 /** A mod or a separator, by its kind and name. */
 export type EntryRef = Pick<ModlistEntry, 'kind' | 'name'>;
 
-/** What a rename of a file or folder in place renames: a plugin at the root of a mod or Overwrite, and the file name it
- *  takes; or the folder of a mod or a separator, and the entry its new name holds. */
+/** A plugin at the root of a mod or Overwrite and its new file name, or a mod's or a separator's folder and the entry its
+ *  new name holds. */
 export type RenamedSymbol =
   | { readonly kind: 'plugin'; readonly plugin: PluginAddress; readonly to: string }
   | { readonly kind: 'entry'; readonly entry: EntryRef; readonly to: EntryRef };
