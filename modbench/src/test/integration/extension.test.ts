@@ -2532,9 +2532,11 @@ describe('The Problems panel on plugin source', () => {
     });
     const fixes = await vscode.commands.executeCommand<vscode.CodeAction[]>('vscode.executeCodeActionProvider', vscode.Uri.file(file), problem?.range, vscode.CodeActionKind.QuickFix.value);
     const fix = fixes.find(({ title }) => title === 'Clear reference');
+    assert.strictEqual(typeof problem?.code === 'object' ? problem.code.value : problem?.code, 'clear reference');
+    const args: unknown[] = fix?.command?.arguments ?? [];
     const asked = editsAsked.length;
 
-    await vscode.commands.executeCommand(fix?.command?.command ?? 'no quick fix', ...fix?.command?.arguments ?? []);
+    await vscode.commands.executeCommand(fix?.command?.command ?? 'no quick fix', ...args);
 
     assert.deepStrictEqual(editsAsked.slice(asked).map(({ value }) => value), [null]);
   });

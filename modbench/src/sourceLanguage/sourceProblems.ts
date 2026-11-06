@@ -5,13 +5,12 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import type { PathHop, RecordEditEnvelope } from '../wire/messages';
 import { pluginAddressKey } from '../wire/pluginAddress';
-import { problemSpan } from './sourceText';
+import { locationOf, problemSpan, type Segment } from './sourceText';
 import { answerOf, failureReason, type ReadFailed } from '../wire/readFailed';
 
 type SourceProblem = PluginProblems['problems'][number];
 
 interface Position { line: number; character: number }
-// The `edit field` that clears a reference: on the copy of `record` the plugin holds.
 interface ClearingEdit { record: { formKey: string; plugin: string; origin: string }; envelope: RecordEditEnvelope }
 export interface ProblemOnFile { message: string; start: Position; end: Position; clearing?: ClearingEdit }
 /** Every problem mEdit answered, by the absolute path of the file it sits on. */
@@ -35,18 +34,12 @@ function positionAt(text: string, offset: number): Position {
   return { line: lines.length - 1, character: lines.at(-1)?.length ?? 0 };
 }
 
-// mEdit's field path is the document's own member names, an element's index in brackets.
-const hopsOf = (fieldPath: string): PathHop[] =>
-  fieldPath.split('.').flatMap((member) => [
-    { kind: 'member' as const, name: member.split('[')[0] ?? member },
-    ...[...member.matchAll(/\[(\d+)\]/g)].map((index) => ({ kind: 'index' as const, index: Number(index[1]) })),
-  ]);
+const hopOf = (segment: Segment): PathHop => typeof segment === 'number' ? { kind: 'index', index: segment } : { kind: 'member', name: segment };
 
 function clearingEdit({ plugin, problem }: { plugin: PluginAddress; problem: SourceProblem }): ClearingEdit | undefined {
   if (!problem.formKey || !problem.fieldPath) return undefined;
-  const path = hopsOf(problem.fieldPath);
   const record = { formKey: problem.formKey, plugin: plugin.name, origin: plugin.origin };
-  return { record, envelope: path.at(-1)?.kind === 'index' ? { op: 'remove', path } : { op: 'set', path, value: null } };
+  return { record, envelope: { op: 'set', path: locationOf(problem.fieldPath).map(hopOf), value: null } };
 }
 
 function onText(text: string, plugin: PluginAddress, problem: SourceProblem): ProblemOnFile {

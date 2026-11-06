@@ -152,7 +152,7 @@ export function pluginNameSpans(text: string, formKey: string, name: string): Te
 }
 
 // mEdit's field path is the document's own member names, an element's index in brackets.
-const locationOf = (fieldPath: string): Segment[] =>
+export const locationOf = (fieldPath: string): Segment[] =>
   fieldPath.split('.').flatMap((member) => [member.split('[')[0] ?? member, ...[...member.matchAll(/\[(\d+)\]/g)].map((index) => Number(index[1]))]);
 
 function stringInScope(scope: Node, spanned: string, fieldPath: string | null | undefined): Node | undefined {

@@ -96,8 +96,9 @@ class ParsedUri {
   readonly query: string;
   constructor(readonly href: string) {
     const [head = '', ...query] = href.split('?');
-    this.scheme = head.slice(0, head.indexOf(':'));
-    this.path = head.slice(head.indexOf(':') + 1);
+    const colon = head.indexOf(':');
+    this.scheme = colon < 0 ? '' : head.slice(0, colon);
+    this.path = head.slice(colon + 1);
     this.query = decodeURIComponent(query.join('?'));
   }
   toString(): string { return this.href; }

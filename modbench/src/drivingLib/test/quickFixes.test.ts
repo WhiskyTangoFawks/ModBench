@@ -14,7 +14,7 @@ import { Diagnostic, Range, DiagnosticSeverity } from '../../test/vscodeMock';
 import { commandLink, quickFixes } from '../quickFixes';
 
 const problemWith = (code: unknown, source = 'Modbench') => Object.assign(new Diagnostic(new Range(0, 0, 0, 0), 'wrong', DiagnosticSeverity.Warning), { code, source });
-const offered = (...diagnostics: Diagnostic[]) => quickFixes().provideCodeActions({ uri: {} }, undefined, { diagnostics });
+const offered = (...diagnostics: Diagnostic[]) => quickFixes.provideCodeActions({ uri: {} }, undefined, { diagnostics });
 
 describe('quickFixes: a problem whose code is a link to a gesture offers that gesture', () => {
   it('is a quick fix titled by the link, firing the link\'s command with its arguments, on the problem', () => {
@@ -28,14 +28,11 @@ describe('quickFixes: a problem whose code is a link to a gesture offers that ge
   });
 
   it.each([
-    ['a code that is no link', 'other'],
-    ['a problem with no code', undefined],
-    ['a link to a web page', { value: 'docs', target: { scheme: 'https', path: '/x', query: '' } }],
-  ])('offers nothing on %s', (_label, code) => {
-    expect(offered(problemWith(code))).toEqual([]);
-  });
-
-  it('offers nothing on another source\'s problem', () => {
-    expect(offered(problemWith(commandLink('clear', 'x.y', []), 'Other'))).toEqual([]);
+    ['a code that is no link', 'other', 'Modbench'],
+    ['a problem with no code', undefined, 'Modbench'],
+    ['a link to a web page', { value: 'docs', target: { scheme: 'https', path: '/x', query: '' } }, 'Modbench'],
+    ['another source\'s problem', commandLink('clear', 'x.y', []), 'Other'],
+  ])('offers nothing on %s', (_label, code, source) => {
+    expect(offered(problemWith(code, source))).toEqual([]);
   });
 });

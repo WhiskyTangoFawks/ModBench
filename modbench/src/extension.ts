@@ -396,7 +396,7 @@ function start(context: vscode.ExtensionContext): void {
     plugins,
     editor,
     agentServer,
-    vscode.languages.registerCodeActionsProvider({ scheme: 'file' }, quickFixes(), { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }),
+    vscode.languages.registerCodeActionsProvider({ scheme: 'file' }, quickFixes, { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }),
     offerToVsCodeChat(agentServer),
     reachMEditFromTerminals(context.environmentVariableCollection, meditClient, scriptsPath),
     reachMEditFromEnvFile({

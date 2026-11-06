@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { PROBLEM_SOURCE } from './modbenchDiagnostic';
 
-/** A problem's code that links to the gesture that clears it: the link in the Problems panel, and the quick fix. */
 export const commandLink = (value: string, command: string, args: readonly unknown[]): { value: string; target: vscode.Uri } => ({
   value,
   target: vscode.Uri.parse(`command:${command}?${encodeURIComponent(JSON.stringify(args))}`),
@@ -22,10 +21,8 @@ function fixOf(diagnostic: unknown): vscode.CodeAction | undefined {
 }
 
 /** common.md, Reporting: a problem that a gesture clears offers that gesture as its quick fix. */
-export function quickFixes() {
-  return {
-    provideCodeActions(_document: unknown, _range: unknown, { diagnostics }: { readonly diagnostics: readonly unknown[] }): vscode.CodeAction[] {
-      return diagnostics.flatMap((diagnostic) => fixOf(diagnostic) ?? []);
-    },
-  } satisfies vscode.CodeActionProvider;
-}
+export const quickFixes = {
+  provideCodeActions(_document: unknown, _range: unknown, { diagnostics }: { readonly diagnostics: readonly unknown[] }): vscode.CodeAction[] {
+    return diagnostics.flatMap((diagnostic) => fixOf(diagnostic) ?? []);
+  },
+} satisfies vscode.CodeActionProvider;
