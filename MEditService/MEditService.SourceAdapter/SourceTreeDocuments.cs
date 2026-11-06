@@ -185,11 +185,18 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     }
 
     /// <summary>Throws, naming <paramref name="file"/>, when <paramref name="text"/> holds what the whole
-    /// read refuses: an EditorID that is no string, or an embedded child that is untyped or holds one.</summary>
+    /// read refuses: an EditorID that is no string, an embedded child that is untyped or holds one, or a
+    /// FormKey held twice.</summary>
     internal void RefuseUnreadable(string recordType, string formKey, string text, string file)
     {
         _ = RequireReadable(_sourceFolder, DocumentTokens.EditorIdIn(text), file, formKey);
-        foreach (var embedded in EmbeddedTexts(recordType, formKey, text)) _ = RequireReadable(_sourceFolder, embedded.Child, file);
+        var holders = new OneDocumentPerFormKey(_sourceFolder);
+        holders.Claim(formKey, file);
+        foreach (var child in EmbeddedTexts(recordType, formKey, text).Select(embedded => embedded.Child))
+        {
+            _ = RequireReadable(_sourceFolder, child, file);
+            holders.Claim(child.FormKey, file);
+        }
     }
 
     /// <summary>The EditorID of the record at a document's root, refusing as that document one that is no string.</summary>
