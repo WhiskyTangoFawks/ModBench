@@ -97,6 +97,8 @@ describe('what a plugin\'s references could not read, as each surface says it (c
 });
 
 describe('the line above a plugin\'s list, read again (common.md, States, story 3)', () => {
+  beforeEach(() => { setInput.mockClear(); });
+
   it.each([
     { found: [], unread: [], message: 'No references found.' },
     { found: [], unread: [UNREAD], message: 'No references found in the files that could be read.' },

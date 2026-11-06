@@ -12,7 +12,9 @@ vi.mock('vscode', () => ({
     textDocuments: [],
     onDidRenameFiles: (listener: RenameListener) => { renameListeners.add(listener); return { dispose: () => { renameListeners.delete(listener); } }; },
     onWillRenameFiles: (listener: WillRenameListener) => { willRenameListeners.add(listener); return { dispose: () => { willRenameListeners.delete(listener); } }; },
-    getConfiguration: () => ({ get: () => PARTICIPANTS_TIMEOUT_MS }),
+    getConfiguration: (section: string) => ({
+      get: (key: string, fallback: number) => (section === 'files' && key === 'participants.timeout' ? PARTICIPANTS_TIMEOUT_MS : fallback),
+    }),
   },
   commands: { registerCommand: () => ({ dispose: () => undefined }) },
   Disposable: { from: (...disposables: { dispose(): void }[]) => ({ dispose: () => { for (const disposable of disposables) disposable.dispose(); } }) },
@@ -239,7 +241,7 @@ describe('whether VS Code renamed what a rename planned for', () => {
     void landed.then((did) => { answer = did; });
 
     heard(OTHER_RENAME);
-    await vi.advanceTimersByTimeAsync(PARTICIPANTS_TIMEOUT_MS + 9_999);
+    await vi.advanceTimersByTimeAsync(PARTICIPANTS_TIMEOUT_MS + 10_000 - 1);
     const before = answer;
     await vi.advanceTimersByTimeAsync(1);
 
