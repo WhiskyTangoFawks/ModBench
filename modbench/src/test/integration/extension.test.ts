@@ -604,6 +604,65 @@ describe('Mod sync', () => {
   });
 });
 
+describe('a rename VS Code makes of a mod\'s folder', () => {
+  const modDir = path.join(root, 'mods', 'Explorer Mod');
+  const renamedDir = path.join(root, 'mods', 'Renamed Mod');
+  let original = '';
+
+  before(() => {
+    original = readFileSync(modlistPath, 'utf8');
+    mkdirSync(modDir);
+    writeFileSync(modlistPath, '+Explorer Mod\r\n');
+  });
+  after(() => {
+    writeFileSync(modlistPath, original);
+    for (const folder of [modDir, renamedDir]) rmSync(folder, { recursive: true, force: true });
+  });
+
+  it('carries the mod\'s line to the folder\'s new name, enabled as it was', async () => {
+    const edit = new vscode.WorkspaceEdit();
+    edit.renameFile(vscode.Uri.file(modDir), vscode.Uri.file(renamedDir));
+
+    assert.ok(await vscode.workspace.applyEdit(edit));
+
+    await waitFor('the line to follow the folder', () => readFileSync(modlistPath, 'utf8') === '+Renamed Mod\r\n');
+  });
+});
+
+describe('a rename VS Code makes of a plugin to a name its rename gesture refuses', () => {
+  const modDir = path.join(root, 'mods', 'Explorer Plugin Mod');
+  let original = '';
+  const warnings: string[] = [];
+  const realShowWarning = vscode.window.showWarningMessage;
+
+  before(() => {
+    original = readFileSync(modlistPath, 'utf8');
+    mkdirSync(modDir);
+    writeFileSync(path.join(modDir, 'Plain.esp'), '');
+    writeFileSync(modlistPath, '+Explorer Plugin Mod\r\n');
+    Object.defineProperty(vscode.window, 'showWarningMessage', {
+      configurable: true,
+      value: (message: string) => { warnings.push(message); return Promise.resolve(undefined); },
+    });
+  });
+  after(() => {
+    Object.defineProperty(vscode.window, 'showWarningMessage', { configurable: true, value: realShowWarning });
+    writeFileSync(modlistPath, original);
+    rmSync(modDir, { recursive: true, force: true });
+  });
+
+  it('lands, with a warning that says why no reference followed', async () => {
+    const edit = new vscode.WorkspaceEdit();
+    edit.renameFile(vscode.Uri.file(path.join(modDir, 'Plain.esp')), vscode.Uri.file(path.join(modDir, 'Plain.esp.bak')));
+
+    assert.ok(await vscode.workspace.applyEdit(edit));
+
+    const warning = await waitFor('the warning', () => warnings.find((message) => message.includes('"Plain.esp" (Explorer Plugin Mod)')));
+    assert.strictEqual(warning, '"Plain.esp" (Explorer Plugin Mod) was renamed to "Plain.esp.bak", and no reference to it followed: Extension must be .esp, .esm, or .esl');
+    assert.deepStrictEqual(readdirSync(modDir), ['Plain.esp.bak']);
+  });
+});
+
 describe('Deploy', () => {
   const modDir = path.join(root, 'mods', 'Deployed Mod');
   const deploymentFolder = path.join(root, '..', 'deployment');

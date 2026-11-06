@@ -218,6 +218,17 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     expect((await snapshotTree(root)).has(`${MOD}/Renamed Patch.esp`)).toBe(true);
   });
 
+  it('commits a plugin another program renamed after the plan as renamed, and renames its files and its lines', async () => {
+    const plan = await renamePlanOf(adapter, PATCH, 'Renamed Patch.esp');
+    await actualRename(at(`${MOD}/Patch Mod.esp`), at(`${MOD}/Renamed Patch.esp`));
+
+    expect(await plan.commit()).toEqual({ cannotFollow: [] });
+
+    const after = await snapshotTree(root);
+    expect(NAMED_FOR_IT.filter(([before, renamed]) => after.has(before) || !after.has(renamed))).toEqual([]);
+    expect(await text(SECONDARY_PLUGINS)).toBe('*Unofficial Fallout 4 Patch.esp\r\nRenamed Patch.esp\r\n*Last.esp\r\n');
+  });
+
   it('renames each name the userlist gives the plugin, in the quoting it is written in, and nothing else of it', async () => {
     await put(USERLIST, '﻿plugins:\n  - name: Patch Mod.esp\n    after: [ \'patch mod.esp\', "Other.esp" ]\n    condition: \'file("Patch Mod.esp")\'\n  - name: Other.esp\n    req: [ "Patch Mod.esp" ]\n');
 

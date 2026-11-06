@@ -13,7 +13,7 @@ import { moveToTrash } from './trash';
 import { highlightFollowingFocus } from './drivingLib/highlightFollowsFocus';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, loadOrderComing, sourceModRepositoriesOver, type Editor } from './editor';
-import { createSourceLanguage, formKeyLocation } from './sourceLanguage';
+import { createSourceLanguage, followRenames, formKeyLocation, registerFollowRename } from './sourceLanguage';
 import { saveUnsavedUnder } from './textDocuments/saveUnsavedUnder';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
 import { registerCopyValueCommand, type CopyValueAdapter } from './drivingLib/copyValue';
@@ -208,8 +208,13 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   }));
   const { modSync } = own(modSyncOn({ instance, syncMods: modSyncOver(adapter), channel: outputChannel }));
   own(registerModSyncCommand(modSync));
+  const commandsOfPlugins = pluginCommands({ adapter, client, placeMods: placeModsOver(adapter) });
+  const entryRenames = entryRenameCommands({ adapter, client });
+  own(registerFollowRename(followRenames({
+    adapter, plugins: commandsOfPlugins, entries: entryRenames, source: deps.sourceEditing, instance, reporter: reporterFor('symbol.followRename'),
+  })));
   const plugins = own(pluginsBox.onInstance({
-    instance, commands: pluginCommands({ adapter, client, placeMods: placeModsOver(adapter) }), syncPlugins: pluginSyncOver(adapter), modStatuses,
+    instance, commands: commandsOfPlugins, syncPlugins: pluginSyncOver(adapter), modStatuses,
     fileReads: fileReadsOver(adapter, () => instance.value.files),
   }));
   const downloads = own(createDownloadsView({
@@ -219,7 +224,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const placeForGame: PluginsTxtPlaceOf = (gameName, folder) => placeOfPluginsTxt(gameReleaseForGame(gameName), folder);
   const toolbox = own(createToolboxView({ instance, channel: outputChannel, deploymentFolder: deploymentFolderSetting, pluginsTxtPlace: placeForGame }));
   const mods = own(createModsView({
-    instance, commands: modCommands(adapter), renames: entryRenameCommands({ adapter, client }), source: deps.sourceEditing, copyReads: adapter, channel: outputChannel, modSync, reporterFor, ask, trash,
+    instance, commands: modCommands(adapter), renames: entryRenames, source: deps.sourceEditing, copyReads: adapter, channel: outputChannel, modSync, reporterFor, ask, trash,
     extensionUri: deps.extensionUri,
     downloadsView: DOWNLOADS_KEY_ARGS.view, focusedView: deps.focusedView,
     sourceGestures: {

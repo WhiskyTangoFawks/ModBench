@@ -152,7 +152,8 @@ export function mo2PluginRename(context: Mo2Context, source: ReadingSource): Pic
     const stringsFolder = root.find((e) => e.isFolder && sameName(e.name, rule.stringsFolder));
     const stringsPath = stringsFolder === undefined ? undefined : fileInFolder(folder, stringsFolder.name);
     const stringsEntries = stringsPath === undefined ? [] : await entriesIn(stringsPath);
-    if (!root.some((e) => !e.isFolder && sameName(e.name, from))) throw notAFileOf(origin, from);
+    // A plugin already at its new name, as VS Code's rename leaves it, has moved.
+    if (!root.some((e) => !e.isFolder && (sameName(e.name, from) || sameName(e.name, to)))) throw notAFileOf(origin, from);
     return [
       ...movesIn(folder, root, (name) => rule.renamedWith(from, name, to)),
       ...(stringsPath === undefined ? [] : movesIn(stringsPath, stringsEntries, (name) => rule.renamedWith(from, `${rule.stringsFolder}/${name}`, to)?.split('/')[1])),
