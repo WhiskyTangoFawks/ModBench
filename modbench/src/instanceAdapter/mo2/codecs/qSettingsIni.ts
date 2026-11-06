@@ -53,6 +53,26 @@ export function readIniSection(text: string, section: string): Map<string, strin
 export const readIniValue = (text: string, section: string, key: string): string | undefined =>
   readIniSection(text, section).get(key);
 
+/** The name `nameOf` reads from one key's value, and the span of its line that spells it as Qt writes it, plain or as
+ *  a byte array; undefined for no such key, an empty name or another spelling. */
+export function iniNameAt(
+  text: string, section: string, key: string, nameOf: (value: string) => string = (value) => value,
+): { name: string; line: number; start: number; end: number } | undefined {
+  const lines = splitLines(text);
+  const span = findSection(lines, section);
+  const line = span === undefined ? -1 : findKeyLine(lines, span, key);
+  const written = lines[line];
+  if (written === undefined) return undefined;
+  const afterEquals = written.indexOf('=') + 1;
+  const raw = written.slice(afterEquals).trim();
+  const start = written.indexOf(raw, afterEquals);
+  const name = nameOf(decodeIniValue(raw));
+  if (name === '') return undefined;
+  const spellings = [name, escapeUnits(name, false), escapeUnits(Buffer.from(name, 'utf8').toString('latin1'), true)];
+  const found = spellings.map((spelling) => ({ spelling, at: raw.lastIndexOf(spelling) })).find(({ at }) => at !== -1);
+  return found && { name, line, start: start + found.at, end: start + found.at + found.spelling.length };
+}
+
 // Qt's INI reader and writer (qsettings.cpp: iniUnescapedStringList, iniEscapedString,
 // variantToString): an escape yields one UTF-16 unit, `\x` takes any number of hex digits, an
 // unknown escape is dropped, and a QByteArray is `@ByteArray(` its bytes as latin-1 `)`.

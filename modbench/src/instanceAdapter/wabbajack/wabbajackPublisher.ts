@@ -11,7 +11,7 @@ import type { Covering, Listed, PathRefusal, PublisherConfiguration, PublisherTa
 import type { ConfigurationFile, Publisher } from '../publisher';
 import { sedReplacement, sedSubstitution } from '../pathTokens';
 import { watchFiles } from '../watchFiles';
-import { heldTextAt, placeIn, samePath } from '../../symbolNames/symbolNames';
+import { heldTextAt, placeIn, sameName, samePath, spliced, type EntryNames, type HeldTexts } from '../../symbolNames/symbolNames';
 
 // Wabbajack's configuration, at the instance root. Wabbajack writes this machine's own paths, or on Wine a Windows
 // program's, a Windows one in JSON's escaped backslashes (AbsolutePathConverter).
@@ -319,6 +319,13 @@ function entrySegmentsIn(text: string): Segment[][] {
   });
 }
 
+// The compile profile and each additional profile, where the text spells them.
+function profilesIn(text: string): Segment[] {
+  const additional = listOf(text, 'AdditionalProfiles')?.children ?? [];
+  return [listOf(text, 'Profile'), ...additional].flatMap((node) =>
+    (node?.type === 'string' ? [{ name: String(node.value), start: node.offset + 1, end: node.offset + node.length - 1 }] : []));
+}
+
 function layoutOf(text: string): { eol: string; unit: string } {
   return { eol: text.includes('\r\n') ? '\r\n' : '\n', unit: /\n([ \t]+)"/.exec(text)?.[1] ?? '  ' };
 }
@@ -438,7 +445,37 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
     return { settings, ...judging };
   };
   const settingsText = () => readOrAbsent(() => get(file), undefined);
+  const readProfiles = async (held: HeldTexts): Promise<{ text: string; profiles: Segment[] } | undefined> => {
+    const text = heldTextAt(held, file) ?? await settingsText();
+    if (text === undefined) return undefined;
+    settingsIn(text, file);
+    return { text, profiles: profilesIn(text) };
+  };
+  const profileNames: EntryNames = {
+    listed: () => Promise.resolve([]),
+    read: async ({ kind, name }, held) => {
+      try {
+        const read = kind === 'profile' ? await readProfiles(held) : undefined;
+        const named = read?.profiles.filter((profile) => sameName(profile.name, name)) ?? [];
+        return { references: named.map(({ start, end }) => placeIn(file, read?.text ?? '', start, end)), leftOut: [] };
+      } catch (err) {
+        return { references: [], leftOut: [`${file}: ${errorMessage(err)}`] };
+      }
+    },
+    nameAt: (named, text, offset) => {
+      const at = samePath(named, file) ? profilesIn(text).find(({ start, end }) => start <= offset && offset <= end) : undefined;
+      return Promise.resolve(at && { entry: { kind: 'profile', name: at.name }, start: at.start, end: at.end });
+    },
+  };
   return {
+    profileNames,
+    followProfile: async (from, to) => {
+      if (await settingsText() === undefined) return;
+      await putIfChanged(file, (before) => {
+        settingsIn(before, file);
+        return spliced(before, profilesIn(before).filter(({ name }) => sameName(name, from)), () => JSON.stringify(to).slice(1, -1));
+      });
+    },
     tags: TAGS.map(({ tag }) => tag),
     configurationFile: COMPILER_SETTINGS,
     configuration: async (): Promise<PublisherConfiguration> => {

@@ -8,8 +8,10 @@
   },
   "references": [
     { "path": "../client" },
+    { "path": "../downloadedFileCommands" },
     { "path": "../drivingLib" },
     { "path": "../instanceAdapter" },
+    { "path": "../instanceCommands" },
     { "path": "../instanceLoader" },
     { "path": "../modCommands" },
     { "path": "../pluginCommands" },

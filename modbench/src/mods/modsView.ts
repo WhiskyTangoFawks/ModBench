@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { Instance, InstanceView } from '../instanceLoader/instance';
+import type { EntryRef, Instance, InstanceView } from '../instanceLoader/instance';
 import type { ModCommands } from '../modCommands/modCommands';
 import type { EntryRenameCommands } from '../modCommands/renameEntry';
 import type { SourceEditing } from '../textDocuments/sourceEditing';
@@ -32,7 +32,6 @@ import { fomodDialog } from './fomodDialog';
 import { registerCompareFileCommand } from './compareFile';
 import { registerGoToModCommand } from './goToMod';
 import { registerGoToModRowCommand, registerModReferencedByCommand } from './modSymbolCommands';
-import type { EntrySymbol } from '../symbolNames/symbolNames';
 import { registerBuildCommand } from './buildCommand';
 import { registerBuildTask } from './buildTask';
 import { BuildProblems } from './buildProblems';
@@ -103,7 +102,7 @@ interface ModsView extends vscode.Disposable {
   /** The lines that bear on a read of the mods, for the agent, without the instance's own. */
   standingLines(): string[];
   /** The tooltip of the row the view shows for the entry; undefined where it shows none. */
-  tooltipOf: (entry: EntrySymbol) => string | undefined;
+  tooltipOf: (entry: EntryRef) => string | undefined;
 }
 
 /** Tree, filter and count readout together, because the view's description and message line

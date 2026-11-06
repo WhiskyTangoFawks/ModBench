@@ -4,7 +4,7 @@
 import * as vscode from 'vscode';
 import { attachPortOf, createMEditClient, recordIndexReferences, stopMEditClient, type MEditClient } from './client';
 import { manifestFileReferences, manifestEntryNames } from './manifestAdapter/manifestAdapter';
-import type { EntryNames, EntrySymbol, SymbolOwner } from './symbolNames/symbolNames';
+import type { EntryNames, SymbolOwner } from './symbolNames/symbolNames';
 import { makeReporter } from './drivingLib/reporter';
 import { commandTitles } from './drivingLib/commandTitles';
 import { surfaceRefusedWrites } from './drivingLib/writingGesture';
@@ -23,7 +23,7 @@ import { oneAtATime } from './textDocuments/oneAtATime';
 import { Instance } from './instanceLoader/instance';
 import { factsOf, NO_INSTANCE_FACTS, type InstanceFacts } from './instanceLoader/instanceFacts';
 import { sourceFiles, NO_SOURCE_FILES, type SourceFilesOf } from './instanceLoader/loadOrderSnapshot';
-import { downloadedFileReader, type InstanceAdapter } from './instanceAdapter/instanceAdapter';
+import { downloadedFileReader, type InstanceAdapter, type EntryRef } from './instanceAdapter/instanceAdapter';
 import type { CopyReads } from './drivingLib/sameCopies';
 import { adapterForInstance, isInstance } from './instanceAdapter/openInstance';
 import { serveAgent } from './agent/agentServer';
@@ -126,7 +126,9 @@ interface InstanceSide {
   pluginsShown?: PluginsShown;
   toolbox: ToolboxView;
   modsLines: () => string[];
-  entryTooltip: (entry: EntrySymbol) => string | undefined;
+  entryTooltip: (entry: EntryRef) => string | undefined;
+  downloadedFileTooltip: (name: string) => string | undefined;
+  modOrderFileOf: (profile: string) => string | undefined;
   sourceFiles: SourceFilesOf;
   copyValue: CopyValueAdapter[];
 }
@@ -142,6 +144,8 @@ function buildBareSide(own: Own): InstanceSide {
     toolbox: own(createToolboxView({ instance: undefined })),
     modsLines: () => [],
     entryTooltip: () => undefined,
+    downloadedFileTooltip: () => undefined,
+    modOrderFileOf: () => undefined,
     sourceFiles: NO_SOURCE_FILES,
     copyValue: [],
   };
@@ -159,7 +163,7 @@ interface Opened {
   scriptEnvironmentFile?: InstanceAdapter['scriptEnvironmentFile'];
   /** Each box over the instance's files that says where they name a symbol. */
   owners: readonly SymbolOwner[];
-  /** Each box over the instance's files that says where they name a mod. */
+  /** Each box over the instance's files that says where they name a symbol its name alone names. */
   entryOwners: readonly EntryNames[];
   side: (own: Own, deps: ViewsDeps) => InstanceSide;
 }
@@ -211,7 +215,8 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const commandsOfPlugins = pluginCommands({ adapter, client, placeMods: placeModsOver(adapter) });
   const entryRenames = entryRenameCommands({ adapter, client });
   own(registerFollowRename(followRenames({
-    adapter, plugins: commandsOfPlugins, entries: entryRenames, source: deps.sourceEditing, instance, reporter: reporterFor('symbol.followRename'),
+    adapter, plugins: commandsOfPlugins, entries: entryRenames, downloads: downloadedFileCommands(adapter), profiles: commands, source: deps.sourceEditing, instance,
+    reporter: reporterFor('symbol.followRename'),
   })));
   const plugins = own(pluginsBox.onInstance({
     instance, commands: commandsOfPlugins, syncPlugins: pluginSyncOver(adapter), modStatuses,
@@ -276,6 +281,8 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     instance, toolbox, statuses: modStatuses, pluginsShown: plugins.pluginsShown, copyReads: adapter,
     modsLines: () => mods.standingLines(),
     entryTooltip: (entry) => mods.tooltipOf(entry),
+    downloadedFileTooltip: (name) => downloads.tooltipOf(name),
+    modOrderFileOf: (profile) => adapter.modOrderFileOf(profile),
     deployment: { folder: () => deploymentFolderOf(deploymentFolderSetting), pluginsTxtPlace: placeForGame },
     sourceFiles: (origin) => sourceFiles(instance.value, origin),
     copyValue: [mods.copyValue, plugins.copyValue, downloads.copyValue],
@@ -374,6 +381,8 @@ function start(context: vscode.ExtensionContext): void {
     client: meditClient, instance: views.instance, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
     pluginsShown: views.pluginsShown,
     entryTooltip: views.entryTooltip,
+    downloadedFileTooltip: views.downloadedFileTooltip,
+    modOrderFileOf: views.modOrderFileOf,
     owners: [recordIndexReferences(meditClient, () => Promise.resolve([])), ...opened.owners],
     entryOwners: opened.entryOwners,
   });

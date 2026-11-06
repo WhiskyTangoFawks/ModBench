@@ -186,10 +186,11 @@ const indexed = (listing: readonly ModFolder[]): ModFolders => {
 
 export function mo2Reads(
   context: Mo2Context, source: ReadingSource,
-): Pick<InstanceAdapter, 'modFolderPath' | 'foldersRefused' | 'sourceFolder' | 'fileStamp' | 'entryKey' | 'profiles' | 'modOrder' | 'downloadedFiles' | 'downloadedFileAt' | 'sourceModFolders'> {
+): Pick<InstanceAdapter, 'modFolderPath' | 'modOrderFileOf' | 'foldersRefused' | 'sourceFolder' | 'fileStamp' | 'entryKey' | 'profiles' | 'modOrder' | 'downloadedFiles' | 'downloadedFileAt' | 'sourceModFolders'> {
   const { instanceRoot } = context;
   const reads: ReturnType<typeof mo2Reads> = {
     profiles: () => source.profiles(ignoreSkippedLink),
+    modOrderFileOf: (profile) => modlistFile(instanceRoot, profile),
     downloadedFiles: async () => (await source.settings()).downloadedFiles(ignoreSkippedLink),
     downloadedFileAt: (path) => readOrReason(async () => {
       const listed = await reads.downloadedFiles();

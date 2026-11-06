@@ -3,9 +3,11 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { rm } from 'node:fs/promises';
+import { readFile, rename, rm } from 'node:fs/promises';
+import { join } from 'node:path';
 import { downloadedFileCommands } from '../downloads';
-import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
+import { heldTexts } from '../../symbolNames/symbolNames';
+import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
 import { adapterOver, readDownloadedFile } from '../../test/mo2/adapterOver';
 
 const NAME = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
@@ -34,5 +36,16 @@ describe('downloaded file commands over the committed corpus fixture: one path e
     const outcome = await downloadedFileCommands(adapterOver(dir)).deleteDownloadedFiles([NAME], (path) => rm(path));
 
     expect({ outcome, row: await readDownloadedFile(dir, NAME) }).toEqual({ outcome: { landed: [{ name: NAME }], refused: [] }, row: undefined });
+  });
+
+  it('rename, once another program has renamed the file, moves its metadata and follows in the meta.ini of the mod installed from it, and nothing else', async () => {
+    const meta = 'mods/Unofficial Fallout 4 Patch/meta.ini';
+    await rename(join(dir, 'downloads', NAME), join(dir, 'downloads', 'UFO4P.7z'));
+    const before = await snapshotTree(dir);
+
+    const outcome = await downloadedFileCommands(adapterOver(dir)).renameDownloadedFile({ held: heldTexts([]), apply: () => Promise.resolve(undefined) }, NAME, 'UFO4P.7z');
+
+    assertOnlyChanged(before, await snapshotTree(dir), new Set([`downloads/${NAME}.meta`, 'downloads/UFO4P.7z.meta', meta]));
+    expect({ outcome, followed: (await readFile(join(dir, meta), 'utf8')).includes('installationFile=UFO4P.7z') }).toEqual({ outcome: { applied: true, cannotFollow: [] }, followed: true });
   });
 });

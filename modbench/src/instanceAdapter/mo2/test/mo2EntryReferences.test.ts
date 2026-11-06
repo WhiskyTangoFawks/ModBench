@@ -16,6 +16,10 @@ const GITMODULES = '[submodule "Patch Mod"]\n\tpath = source/Patch Mod\n\turl = 
 const KEYWORDS = '[submodule "sub"]\n\tpath = mods/sub\n[submodule "libs"]\n\tpath = libs/x\n';
 const mod = (name: string): EntrySymbol => ({ kind: 'mod', name });
 const separator = (name: string): EntrySymbol => ({ kind: 'separator', name });
+const downloadedFile = (name: string): EntrySymbol => ({ kind: 'downloadedFile', name });
+const profile = (name: string): EntrySymbol => ({ kind: 'profile', name });
+const PATCH_META = '[General]\r\nversion=1\r\ninstallationFile=D:/Downloads/Patch-1.7z\r\n';
+const HARDER_META = '[General]\ninstallationFile=patch-1.7z\n';
 
 describe('the MO2 Instance adapter saying where its files name a mod or a separator (ADR-0028)', () => {
   let root: string;
@@ -57,6 +61,39 @@ describe('the MO2 Instance adapter saying where its files name a mod or a separa
     ]);
     const unsaved = heldTexts([[join(root, 'profiles/Default/modlist.txt'), '+Held Mod\r\n']]);
     expect((await adapter.entryReferences.listed(unsaved)).map(({ entry }) => entry)).toEqual([mod('Held Mod')]);
+  });
+
+  describe('a downloaded file and a profile', () => {
+    beforeEach(async () => {
+      await put('mods/Patch Mod/meta.ini', PATCH_META);
+      await put('mods/Harder VATS/meta.ini', HARDER_META);
+    });
+
+    it('names a downloaded file, whatever its case, at the file name each mod\'s meta.ini installed it from, below any folder the value holds', async () => {
+      const { references, leftOut } = await adapter.entryReferences.read(downloadedFile('Patch-1.7z'), heldTexts([]));
+
+      expect(leftOut).toEqual([]);
+      expect(references).toEqual(expect.arrayContaining([at('mods/Patch Mod/meta.ini', 2, 30, 40), at('mods/Harder VATS/meta.ini', 1, 17, 27)]));
+      expect(references).toHaveLength(2);
+    });
+
+    it('names a profile at the profile ModOrganizer.ini selects, inside the byte array MO2 writes it as', async () => {
+      expect((await adapter.entryReferences.read(profile('default'), heldTexts([]))).references).toEqual([at('ModOrganizer.ini', 2, 28, 35)]);
+      expect((await adapter.entryReferences.read(profile('Secondary'), heldTexts([]))).references).toEqual([]);
+    });
+
+    it.each([
+      ['a downloaded file at the file name of installationFile', 'mods/Patch Mod/meta.ini', PATCH_META, PATCH_META.indexOf('Patch-1') + 2,
+        { entry: downloadedFile('Patch-1.7z'), start: PATCH_META.indexOf('Patch-1'), end: PATCH_META.indexOf('Patch-1') + 10 }],
+      ['no downloaded file at the folder installationFile holds it in', 'mods/Patch Mod/meta.ini', PATCH_META, PATCH_META.indexOf('Downloads'), undefined],
+      ['no downloaded file at another key of meta.ini', 'mods/Patch Mod/meta.ini', PATCH_META, PATCH_META.indexOf('version') + 1, undefined],
+      ['the profile ModOrganizer.ini selects', 'ModOrganizer.ini', '[General]\nselected_profile=@ByteArray(Default)\n', 39,
+        { entry: profile('Default'), start: 38, end: 45 }],
+      ['a profile whose name MO2 writes escaped, over its escaped bytes alone and never the byte array around them', 'ModOrganizer.ini',
+        '[General]\nselected_profile=@ByteArray(\\xc3\\x91o\\xc3\\xb1o)\n', 40, { entry: profile('Ñoño'), start: 38, end: 56 }],
+    ])('says what a file names at a place: %s', async (_case, file, text, offset, expected) => {
+      expect(await adapter.entryReferences.nameAt(join(root, file), text, offset)).toEqual(expected);
+    });
   });
 
   it('names a mod in the repository\'s ignore list at the line that holds its folder whole or lets its source folder in, and in .gitmodules at its entry and path', async () => {

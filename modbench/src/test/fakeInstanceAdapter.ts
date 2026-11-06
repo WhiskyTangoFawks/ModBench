@@ -87,7 +87,7 @@ export type AdapterCall =
   | { readonly verb: 'changeUserlist'; readonly additions: readonly LoadAfter[] }
   | { readonly verb: 'changeMasterlist'; readonly masterlist: string; readonly prelude: string }
   | { readonly verb: 'createModFolder'; readonly mod: string }
-  | { readonly verb: 'renameModFolder'; readonly from: string; readonly to: string }
+  | { readonly verb: 'renameModFolder' | 'renameDownloadedFile' | 'renameProfile'; readonly from: string; readonly to: string }
   | { readonly verb: 'markOriginFile'; readonly origin: FileOrigin; readonly relativePath: string; readonly mark: OriginFileMark }
   | { readonly verb: 'moveIntoOverwrite'; readonly moves: Parameters<InstanceAdapter['moveIntoOverwrite']>[0] }
   | { readonly verb: 'renamePlugin'; readonly origin: FileOrigin; readonly from: string; readonly to: string }
@@ -376,6 +376,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       write({ verb: 'changePublisherTag', change, tag, paths }, () => paths.flatMap((path) => (answers.outsideInstance?.has(path) ? [{ path, reason: 'It is outside the instance.' }] : []))),
     publisherConfigurationRefusal: () => Promise.resolve(answers.unreadablePublisher),
     followModFolders: (moves) => (answers.publisherTags === undefined ? Promise.resolve() : write({ verb: 'followModFolders', moves }, () => undefined)),
+    modOrderFileOf: (profile) => `/instance/profiles/${profile}/modlist.txt`,
     modFolderPath: (mod) => Promise.resolve(isBareName(mod) ? foldersNow().holding({ kind: 'mod', name: mod })?.path ?? folderBeside(current.modFolders, mod) : undefined),
     foldersRefused: () => Promise.resolve([]),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : answers.sourceFolders?.get(mod) ?? `/source/${mod}`),
@@ -579,6 +580,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         if (taken !== undefined && taken !== held) throw inTheWay(taken.path);
         current = { ...current, modFolders: foldersHolding(foldersNow().all.map((folder) => (folder === held ? { ...folder, name: to, path: folderBeside(current.modFolders, to), modName: to } : folder))) };
       }),
+    renameDownloadedFile: (from, to) => record({ verb: 'renameDownloadedFile', from, to }, []),
+    renameProfile: (from, to) => record({ verb: 'renameProfile', from, to }, []),
     originFile: (origin, relativePath) => {
       if (reachesOut(relativePath)) return Promise.reject(notAFileOf(origin, relativePath));
       const unread = answers.unreadOriginFile?.({ origin, relativePath });

@@ -3,7 +3,9 @@ import { fakeVscodeModule } from './fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { rm } from 'node:fs/promises';
+import { rename, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { heldTexts } from '../../symbolNames/symbolNames';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { instanceCommands } from '../../instanceCommands/instanceCommands';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from './corpusFixture';
@@ -30,5 +32,16 @@ describe('profile corpus', () => {
       'Unofficial Fallout 4 Patch',
       'Harder VATS',
     ]);
+  });
+
+  it('a profile whose folder another program renamed is followed in ModOrganizer.ini alone', async () => {
+    await rename(join(dir, 'profiles', 'Default'), join(dir, 'profiles', 'Main'));
+    const before = await snapshotTree(dir);
+
+    const outcome = await instanceCommands({ adapter: adapterOver(dir), client: new InMemoryMEditClient(), instanceRoot: dir })
+      .renameProfile({ held: heldTexts([]), apply: () => Promise.resolve(undefined) }, 'Default', 'Main');
+
+    assertOnlyChanged(before, await snapshotTree(dir), new Set([INI]));
+    expect([outcome, await readActiveProfile(dir)]).toEqual([{ applied: true, cannotFollow: [] }, 'Main']);
   });
 });

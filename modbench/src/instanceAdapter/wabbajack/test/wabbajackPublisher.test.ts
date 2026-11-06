@@ -722,3 +722,56 @@ describe('where the publisher tags name a mod folder (ADR-0028)', () => {
     expect(await publisherOver().folderAt(join(root, name), text, offset, folderOf)).toEqual(expected);
   });
 });
+
+describe('where the compiler settings name a profile (ADR-0028)', () => {
+  const SETTINGS = '{\n  "Profile": "Main",\n  "AdditionalProfiles": [ "Extra", "main" ]\n}';
+  const place = (line: number, start: number, end: number) => ({ file: join(root, SETTINGS_FILE), start: { line, character: start }, end: { line, character: end } });
+  const profile = (name: string) => ({ kind: 'profile', name }) as const;
+  const settingsText = () => readFile(join(root, SETTINGS_FILE), 'utf8');
+
+  it('names a profile, whatever its case, at the compile profile and at each additional profile', async () => {
+    await writeSettings(SETTINGS);
+
+    const { references, leftOut } = await publisherOver().profileNames.read(profile('MAIN'), heldTexts([]));
+
+    expect(leftOut).toEqual([]);
+    expect(references).toEqual([place(1, 14, 18), place(2, 36, 40)]);
+  });
+
+  it('names no mod', async () => {
+    await writeSettings(SETTINGS);
+
+    expect((await publisherOver().profileNames.read({ kind: 'mod', name: 'Main' }, heldTexts([]))).references).toEqual([]);
+  });
+
+  it('says why settings it cannot read are left out, naming the file first as every owner does', async () => {
+    await writeSettings('{ not json');
+
+    const [why] = (await publisherOver().profileNames.read(profile('Main'), heldTexts([]))).leftOut;
+
+    expect(why?.startsWith(`${join(root, SETTINGS_FILE)}: `)).toBe(true);
+  });
+
+  it.each([
+    ['the compile profile', SETTINGS_FILE, SETTINGS.indexOf('Main') + 1, { entry: profile('Main'), start: SETTINGS.indexOf('Main'), end: SETTINGS.indexOf('Main') + 4 }],
+    ['an additional profile', SETTINGS_FILE, SETTINGS.indexOf('Extra'), { entry: profile('Extra'), start: SETTINGS.indexOf('Extra'), end: SETTINGS.indexOf('Extra') + 5 }],
+    ['no profile at a key', SETTINGS_FILE, SETTINGS.indexOf('Profile'), undefined],
+    ['no profile in a file that is no configuration', 'notes.json', SETTINGS.indexOf('Main'), undefined],
+  ])('says which profile is under a place: %s', async (_case, name, offset, expected) => {
+    expect(await publisherOver().profileNames.nameAt(join(root, name), SETTINGS, offset)).toEqual(expected);
+  });
+
+  it('follows a profile\'s rename at the compile profile and each additional profile, and leaves every other line as written', async () => {
+    await writeSettings(SETTINGS);
+
+    await publisherOver().followProfile('Main', 'Renamed');
+
+    expect(await settingsText()).toBe('{\n  "Profile": "Renamed",\n  "AdditionalProfiles": [ "Extra", "Renamed" ]\n}');
+  });
+
+  it('writes no settings the instance lacks', async () => {
+    await publisherOver().followProfile('Main', 'Renamed');
+
+    await expect(settingsText()).rejects.toThrow();
+  });
+});

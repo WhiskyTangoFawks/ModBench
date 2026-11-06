@@ -51,6 +51,23 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
     expect(await adapter.entryReferences.nameAt(join(root, SETTINGS_FILE), settings, settings.indexOf('x.esp'))).toBeUndefined();
   });
 
+  it('names a profile in the compiler settings beside ModOrganizer.ini, and follows its rename in both', async () => {
+    const settings = '{ "Profile": "Default" }';
+    await writeFile(join(root, SETTINGS_FILE), settings);
+    const adapter = adapterOver(root);
+    const profile = { kind: 'profile', name: 'Default' } as const;
+
+    const { references } = await adapter.entryReferences.read(profile, heldTexts([]));
+    const nameAt = await adapter.entryReferences.nameAt(join(root, SETTINGS_FILE), settings, settings.indexOf('Default'));
+    const cannotFollow = await adapter.renameProfile('Default', 'Main');
+    const followed = [await readFile(join(root, SETTINGS_FILE), 'utf8'), (await readFile(join(root, 'ModOrganizer.ini'), 'utf8')).includes('@ByteArray(Main)')];
+    await adapter.renameProfile('Main', 'Default');
+
+    expect(references.map(({ file }) => file)).toEqual([join(root, 'ModOrganizer.ini'), join(root, SETTINGS_FILE)]);
+    expect(nameAt).toEqual({ entry: profile, start: settings.indexOf('Default'), end: settings.indexOf('Default') + 7 });
+    expect([cannotFollow, ...followed]).toEqual([[], '{ "Profile": "Main" }', true]);
+  });
+
   it('gives the publisher the mods its compile profiles enable, not the instance\'s selected profile', async () => {
     await mkdir(join(root, 'profiles', 'Compile'));
     await writeFile(join(root, 'profiles', 'Compile', 'modlist.txt'), '+Harder VATS\r\n');

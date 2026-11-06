@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { modbenchDiagnostic } from '../drivingLib/modbenchDiagnostic';
 import type { MEditClient } from '../client';
 import type { Reporter } from '../ports/reporter';
-import { isPluginSourcePath, PLUGIN_SOURCE_GLOB } from '../instanceAdapter/instanceAdapter';
+import { isPluginSourcePath, PLUGIN_SOURCE_GLOB, type EntryRef } from '../instanceAdapter/instanceAdapter';
 import type { RecordDocumentClient } from '../textDocuments/recordDocument';
 import { heldText } from '../textDocuments/heldText';
 import { openPluginSourceDocument, readHeldText } from '../textDocuments/pluginSource';
@@ -29,10 +29,14 @@ interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'sourceFiles'> {
   client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlugins' | 'handUnsavedDocuments'> & RecordDocumentClient & SourceProblemsDeps['client'];
   /** Each box that owns files, saying where they name a symbol (ADR-0028). */
   owners: readonly SymbolOwner[];
-  /** Each box that owns files, saying where they name a mod or a separator. */
+  /** Each box that owns files, saying where they name a symbol its name alone names. */
   entryOwners: readonly EntryNames[];
   /** The tooltip of the row Mods shows for a mod or a separator; undefined where it shows none. */
-  entryTooltip: (entry: EntrySymbol) => string | undefined;
+  entryTooltip: (entry: EntryRef) => string | undefined;
+  /** The tooltip of the row Downloads shows for a downloaded file; undefined where it shows none. */
+  downloadedFileTooltip: (name: string) => string | undefined;
+  /** The file that holds a profile's mod order; undefined with no instance. */
+  modOrderFileOf: (profile: string) => string | undefined;
   /** What Plugins shows of a plugin's row; absent with no instance. */
   pluginsShown: Pick<PluginsShown, 'tooltipLines'> | undefined;
 }
@@ -67,9 +71,16 @@ class PluginSymbolInformation extends vscode.SymbolInformation {
   }
 }
 
+const entryShown: Record<EntrySymbol['kind'], { readonly kind: vscode.SymbolKind; readonly completion: vscode.CompletionItemKind; readonly word: string }> = {
+  mod: { kind: vscode.SymbolKind.Package, completion: vscode.CompletionItemKind.Folder, word: 'mod' },
+  separator: { kind: vscode.SymbolKind.Namespace, completion: vscode.CompletionItemKind.Folder, word: 'separator' },
+  downloadedFile: { kind: vscode.SymbolKind.File, completion: vscode.CompletionItemKind.File, word: 'downloaded file' },
+  profile: { kind: vscode.SymbolKind.Module, completion: vscode.CompletionItemKind.Folder, word: 'profile' },
+};
+
 class EntrySymbolInformation extends vscode.SymbolInformation {
   constructor(readonly entry: EntrySymbol, location: vscode.Location) {
-    super(entry.name, entry.kind === 'mod' ? vscode.SymbolKind.Package : vscode.SymbolKind.Namespace, entry.kind, location);
+    super(entry.name, entryShown[entry.kind].kind, entryShown[entry.kind].word, location);
   }
 }
 
@@ -145,7 +156,7 @@ function registerCompletion(deps: SourceLanguageDeps, plugin: PluginLanguage, en
       const ofEntry = await entry.completionsAt(document, document.offsetAt(position));
       if (ofEntry !== undefined) {
         return ofEntry.items.map((name) => {
-          const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Folder);
+          const item = new vscode.CompletionItem(name, entryShown[ofEntry.kind].completion);
           item.range = rangeIn(document, ofEntry);
           return item;
         });
@@ -249,7 +260,8 @@ function registerSymbols(deps: SourceLanguageDeps, plugin: PluginLanguage, entry
 
 export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
   const plugin = pluginLanguage({ ...deps, renamePlugin: renamePluginNamed, goTo: goToPlugin, tooltip: (shown) => deps.pluginsShown?.tooltipLines(shown) ?? [] });
-  const entry = entryLanguage({ instance: deps.instance, reporter: deps.reporter, owners: deps.entryOwners, goTo: goToMod, tooltip: deps.entryTooltip });
+  const { instance, reporter, entryOwners: owners, entryTooltip, downloadedFileTooltip, modOrderFileOf } = deps;
+  const entry = entryLanguage({ instance, reporter, owners, goTo: goToMod, entryTooltip, downloadedFileTooltip, modOrderFileOf });
   const problems = sourceProblems(deps);
   const entryPoints = deps.instance ? [registerBuildEntryPoint({ instance: deps.instance, reporter: deps.reporter }), registerUpdateManifestEntryPoint({ instance: deps.instance, reporter: deps.reporter })] : [];
   const disposable = vscode.Disposable.from(
