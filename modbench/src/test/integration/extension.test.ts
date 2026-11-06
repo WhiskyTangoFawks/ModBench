@@ -629,6 +629,32 @@ describe('a rename VS Code makes of a mod\'s folder', () => {
   });
 });
 
+describe('a rename VS Code makes of a downloaded file', () => {
+  const downloadsDir = path.join(root, 'downloads');
+  const modDir = path.join(root, 'mods', 'Installed Mod');
+  const metaIni = path.join(modDir, 'meta.ini');
+
+  before(() => {
+    mkdirSync(downloadsDir, { recursive: true });
+    mkdirSync(modDir);
+    writeFileSync(path.join(downloadsDir, 'Explorer-1.7z'), '');
+    writeFileSync(metaIni, '[General]\r\ninstallationFile=Explorer-1.7z\r\n');
+  });
+  after(() => {
+    rmSync(modDir, { recursive: true, force: true });
+    for (const name of ['Explorer-1.7z', 'Explorer-2.7z']) rmSync(path.join(downloadsDir, name), { force: true });
+  });
+
+  it('carries the name the mod installed from it to the file\'s new name', async () => {
+    const edit = new vscode.WorkspaceEdit();
+    edit.renameFile(vscode.Uri.file(path.join(downloadsDir, 'Explorer-1.7z')), vscode.Uri.file(path.join(downloadsDir, 'Explorer-2.7z')));
+
+    assert.ok(await vscode.workspace.applyEdit(edit));
+
+    await waitFor('the meta.ini to follow the file', () => readFileSync(metaIni, 'utf8') === '[General]\r\ninstallationFile=Explorer-2.7z\r\n');
+  });
+});
+
 describe('a rename VS Code makes of a plugin to a name its rename gesture refuses', () => {
   const modDir = path.join(root, 'mods', 'Explorer Plugin Mod');
   let original = '';

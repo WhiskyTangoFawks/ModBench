@@ -125,13 +125,13 @@ export interface RenamePlan {
 
 export type Planned = RenamePlan | { readonly refused: string };
 
-/** A mod or a mod separator as a symbol: its name (symbols.md, The symbols). */
+/** A symbol its name alone names: a mod, a mod separator, a downloaded file or a profile (symbols.md, The symbols). */
 export interface EntrySymbol {
-  readonly kind: 'mod' | 'separator';
+  readonly kind: 'mod' | 'separator' | 'downloadedFile' | 'profile';
   readonly name: string;
 }
 
-/** The places a box's files name a mod or a separator, and why it left out each file it could not read. */
+/** The places a box's files name a symbol its name alone names, and why it left out each file it could not read. */
 export interface EntryReading {
   readonly references: readonly PlaceInFile[];
   readonly leftOut: readonly string[];
@@ -150,20 +150,20 @@ export interface EntryPlace {
   readonly place: PlaceInFile;
 }
 
-/** A box that owns files, saying where they name a mod or a separator (ADR-0028). */
+/** A box that owns files, saying where they name a symbol its name alone names (ADR-0028). */
 export interface EntryNames {
-  /** Where its own list names each entry the list holds, from one read of the list: the active profile's mod list, for the
-   *  Instance adapter. A box with no such list holds none. */
-  listed(held: HeldTexts): Promise<readonly EntryPlace[]>;
+  /** Where its files name each symbol of `kind`, from one read of each file. For mods and separators, the Instance
+   *  adapter's is the active profile's mod list alone. */
+  listed(kind: EntrySymbol['kind'], held: HeldTexts): Promise<readonly EntryPlace[]>;
   read(entry: EntrySymbol, held: HeldTexts): Promise<EntryReading>;
-  /** The mod or separator one of its files names at `offset` of the file's `text`, and the span of the text that names
-   *  it; undefined where it names none. */
+  /** The symbol one of its files names at `offset` of the file's `text`, and the span of the text that names it;
+   *  undefined where it names none. */
   nameAt(file: string, text: string, offset: number): Promise<EntryNamed | undefined>;
 }
 
-/** A box that owns files naming a mod or a separator, in its part of a rename. */
-export interface EntryOwner {
-  plan(symbol: EntrySymbol, newName: string, held: HeldTexts): Promise<Planned>;
+/** A box that owns files naming a symbol its name alone names, in its part of a rename. */
+export interface EntryOwner<Symbol extends EntrySymbol = EntrySymbol> {
+  plan(symbol: Symbol, newName: string, held: HeldTexts): Promise<Planned>;
 }
 
 /** `text` with each span replaced by what `spelled` makes of the text at its start. */

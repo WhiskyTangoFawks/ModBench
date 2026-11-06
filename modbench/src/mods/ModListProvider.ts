@@ -474,7 +474,7 @@ export class ModListProvider
   }
 
   /** The row the tree shows for a mod or a separator, or undefined when it shows none. */
-  entryRow({ kind, name }: EntrySymbol): ModNode | SeparatorNode | undefined {
+  entryRow({ kind, name }: EntrySymbol & { readonly kind: 'mod' | 'separator' }): ModNode | SeparatorNode | undefined {
     if (kind === 'separator') return this.separatorRowNamed(name);
     const row = this.rowFor(modOrigin(name));
     return row?.kind === 'mod' ? row : undefined;

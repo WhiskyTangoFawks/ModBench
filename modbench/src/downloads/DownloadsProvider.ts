@@ -32,7 +32,7 @@ function downloadedFileDescription(row: DownloadedFileRow): string {
 }
 
 // A manually-dropped downloaded file with no metadata file still gets a valid, minimal tooltip.
-function downloadedFileTooltip(row: DownloadedFileRow): vscode.MarkdownString {
+export function downloadedFileTooltip(row: DownloadedFileRow): vscode.MarkdownString {
   const lines = [
     `**${row.name}**`,
     row.modName && `Mod: ${row.modName}`,

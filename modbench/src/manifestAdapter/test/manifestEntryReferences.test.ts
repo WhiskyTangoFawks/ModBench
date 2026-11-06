@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { heldTexts, NO_FILE_CHANGES, type RenamePlan } from '../../symbolNames/symbolNames';
-import { manifestEntryReferences, manifestEntryNames } from '../manifestEntryReferences';
+import { manifestDownloadedFileReferences, manifestEntryReferences, manifestEntryNames } from '../manifestEntryReferences';
 
 let root: string;
 let modFolder: string;
@@ -136,6 +136,60 @@ describe('where a mod\'s manifest names the mod (ADR-0028)', () => {
     await writeFile(file(), LINKED);
 
     expect(await names(listedIn()).nameAt(file(), LINKED, offset)).toBeUndefined();
+  });
+});
+
+describe('where a mod\'s manifest names a downloaded file: each installation file package (ADR-0028)', () => {
+  const INSTALLED = '{\n"version":1,\n"packages":[\n{"kind":"installationFile","name":"Old-1.7z","size":1,"hash":"AAAAAAAAAAA="}\n],\n"files":{\n"Old.esp":"Qm9yZGVyczE="\n}\n}\n';
+  const DOWNLOADED = { kind: 'downloadedFile', name: 'old-1.7z' } as const;
+  const otherFolder = () => join(root, 'mods', 'Other');
+  const names = () => manifestEntryNames({ modFolderOf: () => Promise.resolve(undefined), modFolders: () => new Map([['Old', modFolder], ['Other', otherFolder()]]) });
+  const file = () => join(modFolder, 'Old.manifest.json');
+  const place = { start: { line: 3, character: 35 }, end: { line: 3, character: 43 } };
+
+  beforeEach(async () => {
+    await writeFile(file(), INSTALLED);
+    await mkdir(otherFolder());
+    await writeFile(join(otherFolder(), 'Other.manifest.json'), INSTALLED.replace('Old-1.7z', 'Other-1.7z'));
+  });
+
+  it('names a downloaded file, whatever the case, at each manifest\'s installation file package of its name', async () => {
+    expect(await names().read(DOWNLOADED, NONE)).toEqual({ references: [{ file: file(), ...place }], leftOut: [] });
+  });
+
+  it('places every downloaded file a manifest names', async () => {
+    expect((await names().listed('downloadedFile', NONE)).map(({ entry }) => entry.name)).toEqual(['Old-1.7z', 'Other-1.7z']);
+    expect(await names().listed('mod', NONE)).toEqual([]);
+  });
+
+  it('says why a manifest it cannot read is left out', async () => {
+    await writeFile(file(), '{ not json');
+
+    expect((await names().read(DOWNLOADED, NONE)).leftOut).toEqual([expect.stringContaining(file()) as unknown]);
+  });
+
+  it('says which downloaded file a package names at a place', async () => {
+    const start = INSTALLED.indexOf('Old-1.7z');
+
+    expect(await names().nameAt(file(), INSTALLED, start + 1)).toEqual({ entry: { kind: 'downloadedFile', name: 'Old-1.7z' }, start, end: start + 8 });
+  });
+
+  it('renames each package of the downloaded file\'s name, in the text the editor holds unsaved', async () => {
+    const unsaved = INSTALLED.replace('"Old.esp"', '"Held.esp"');
+
+    const plan = await manifestDownloadedFileReferences([modFolder, otherFolder()]).plan(DOWNLOADED, 'New "1".7z', heldTexts([[file(), unsaved]]));
+
+    expect(plan).toMatchObject({
+      changes: { moves: [], deletions: [], documents: [{ path: file(), text: unsaved.replace('Old-1.7z', 'New \\"1\\".7z') }] }, cannotFollow: [],
+    });
+  });
+
+  it('cannot follow a manifest it cannot read, saying why', async () => {
+    await writeFile(file(), '{ not json');
+
+    const plan = await manifestDownloadedFileReferences([modFolder]).plan(DOWNLOADED, 'New.7z', NONE);
+
+    expect(plan).toMatchObject({ changes: NO_FILE_CHANGES, cannotFollow: [expect.stringContaining(file()) as unknown] });
   });
 });
 

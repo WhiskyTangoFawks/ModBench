@@ -20,6 +20,11 @@ const document = { uri: Uri.file(MODLIST), getText: () => '# list\nbase mod\n' }
 const AT_NAME = 10;
 const mod = (name: string): EntrySymbol => ({ kind: 'mod', name });
 const separator = (name: string): EntrySymbol => ({ kind: 'separator', name });
+const downloadedFile = (name: string): EntrySymbol => ({ kind: 'downloadedFile', name });
+const profile = (name: string): EntrySymbol => ({ kind: 'profile', name });
+const row = (name: string) => ({
+  name, displayName: name, status: 'Downloaded' as const, size: 0, mtimeMs: 0, hasMeta: false, excluded: false, upgrades: [], path: `/downloads/${name}`, metadataPath: '',
+});
 const spelled = (entry: EntrySymbol): EntryNamed => ({ entry, start: 7, end: 15 });
 const SPAN = { start: 7, end: 15 };
 const locationAt = (line: number) => ({ uri: Uri.file(MODLIST), range: new Range(line, 1, line, 9) });
@@ -29,6 +34,7 @@ interface Options {
   places?: PlaceInFile[];
   leftOut?: string[];
   tooltip?: string;
+  downloadedFileTooltip?: string;
   listed?: EntryPlace[];
   listedFails?: boolean;
 }
@@ -37,8 +43,12 @@ function language(named: EntryNamed | undefined, options: Options = {}) {
   const reporter = recordingReporter();
   const goTo = vi.fn((_mod: string) => Promise.resolve());
   const reads = vi.fn();
+  const listings = vi.fn();
   const owner: EntryNames = {
-    listed: () => (options.listedFails ? Promise.reject(new Error('the list is gone')) : Promise.resolve(options.listed ?? [])),
+    listed: (kind) => {
+      listings(kind);
+      return options.listedFails ? Promise.reject(new Error('the list is gone')) : Promise.resolve((options.listed ?? []).filter(({ entry }) => entry.kind === kind));
+    },
     read: (entry) => { reads(entry); return Promise.resolve({ references: options.places ?? [place(MODLIST, 1)], leftOut: options.leftOut ?? [] }); },
     nameAt: () => Promise.resolve(named),
   };
@@ -46,14 +56,19 @@ function language(named: EntryNamed | undefined, options: Options = {}) {
     { kind: 'mod' as const, name: 'Base Mod', enabled: true }, { kind: 'mod' as const, name: 'Other Mod', enabled: true },
     { kind: 'separator' as const, name: 'Gear', enabled: true },
   ];
-  return { goTo, reporter, reads, ...entryLanguage({ instance: { value: { mods } }, reporter, owners: [owner], goTo, tooltip: () => options.tooltip }) };
+  const value = { mods, downloadedFiles: { kind: 'listed' as const, rows: [row('Patch-1.7z'), row('Armor-2.zip')] }, profiles: ['Default', 'Armor Test'] };
+  return { goTo, reporter, reads, listings, ...entryLanguage({
+    instance: { value }, reporter, owners: [owner], goTo, entryTooltip: () => options.tooltip, downloadedFileTooltip: () => options.downloadedFileTooltip,
+  }) };
 }
 
-describe('Go to Definition on a name of a mod or a separator (symbols.md, The symbols)', () => {
+describe('Go to Definition on a name of a mod, a separator, a downloaded file or a profile (symbols.md, The symbols)', () => {
   it.each([
     ['goes to the mod, as the instance names it, and answers the name\'s own span', mod('base mod'), { ...SPAN, resolved: true }, ['Base Mod'], []],
     ['says in the Output, and goes nowhere, when no mod has the name', mod('Gone Mod'), { ...SPAN, resolved: false }, [], ['warning']],
     ['has no definition for a separator, which goes nowhere and says nothing', separator('Gear'), undefined, [], []],
+    ['has no definition for a downloaded file', downloadedFile('Patch-1.7z'), undefined, [], []],
+    ['has no definition for a profile', profile('Default'), undefined, [], []],
   ])('%s', async (_case, entry, expected, goneTo, severities) => {
     const { definitionAt, goTo, reporter } = language(spelled(entry));
 
@@ -62,7 +77,7 @@ describe('Go to Definition on a name of a mod or a separator (symbols.md, The sy
   });
 });
 
-describe('Find All References on a mod or a separator (symbols.md, The features, story 2)', () => {
+describe('Find All References on a symbol its name alone names (symbols.md, The features, story 2)', () => {
   it('lists each place the owners report, and a line in the Output, not a notification, for a file they could not read', async () => {
     const { referencesAt, reporter } = language(spelled(mod('Base Mod')), { leftOut: [UNREAD] });
 
@@ -70,19 +85,25 @@ describe('Find All References on a mod or a separator (symbols.md, The features,
     expect([reporter.reports, reporter.shownFailures.map(({ severity, detail }) => [severity, detail])]).toEqual([[], [['warning', UNREAD]]]);
   });
 
-  it('lists a separator\'s places too', async () => {
-    expect(located(await language(spelled(separator('Gear'))).referencesAt(document, AT_NAME))).toEqual([locationAt(1)]);
+  it.each([
+    ['a separator', separator('Gear')], ['a downloaded file, whatever its case', downloadedFile('patch-1.7z')], ['a profile', profile('Default')],
+  ])('lists the places of %s too', async (_case, entry) => {
+    expect(located(await language(spelled(entry)).referencesAt(document, AT_NAME))).toEqual([locationAt(1)]);
   });
 
-  it('says in the Output that no entry has the name, and lists nothing', async () => {
-    const { referencesAt, reporter } = language(spelled(separator('Gone')));
+  it.each([
+    [separator('Gone'), 'Mods lists no separator named Gone.'],
+    [downloadedFile('Gone.7z'), 'Downloads lists no downloaded file named Gone.7z.'],
+    [profile('Gone'), 'The instance holds no profile named Gone.'],
+  ])('says in the Output that nothing has the name, and lists nothing: %o', async (entry, detail) => {
+    const { referencesAt, reporter } = language(spelled(entry));
 
     expect(await referencesAt(document, AT_NAME)).toEqual([]);
-    expect(reporter.shownFailures.map(({ severity }) => severity)).toEqual(['warning']);
+    expect(reporter.shownFailures.map((failure) => [failure.severity, failure.detail])).toEqual([['warning', detail]]);
   });
 });
 
-describe('hover and completion on a mod or a separator (symbols.md, The features, stories 3 and 5)', () => {
+describe('hover and completion on a symbol its name alone names (symbols.md, The features, stories 3 and 5)', () => {
   it.each([
     ['the row\'s tooltip, a line to each of its lines', mod('base mod'), 'Base Mod · 1.0\nbuilt from source/Base Mod', ['Base Mod · 1.0', 'built from source/Base Mod']],
     ['the name alone when its row shows no tooltip, as a separator\'s does not', separator('Gear'), undefined, ['Gear']],
@@ -92,18 +113,30 @@ describe('hover and completion on a mod or a separator (symbols.md, The features
   });
 
   it.each([
+    ['a downloaded file\'s row\'s tooltip, never a mod\'s', downloadedFile('patch-1.7z'), ['Patch-1.7z', 'size 1 KB']],
+    ['a profile\'s name, which no row shows, never a mod\'s tooltip', profile('Default'), ['Default']],
+  ])('hover says %s', async (_case, entry, lines) => {
+    const hovered = language(spelled(entry), { tooltip: 'a mod\'s tooltip', downloadedFileTooltip: 'Patch-1.7z\nsize 1 KB' });
+
+    expect(await hovered.hoverAt(document, AT_NAME)).toEqual({ ...SPAN, lines });
+  });
+
+  it.each([
     ['a mod, every mod', mod('Base'), ['Base Mod', 'Other Mod']],
     ['a separator, every separator', separator('Gea'), ['Gear']],
+    ['a downloaded file, every downloaded file', downloadedFile('P'), ['Patch-1.7z', 'Armor-2.zip']],
+    ['a profile, every profile', profile('D'), ['Default', 'Armor Test']],
   ])('completes where a file names %s, over the name so far', async (_case, entry, items) => {
-    expect(await language(spelled(entry)).completionsAt(document, AT_NAME)).toEqual({ ...SPAN, items });
+    expect(await language(spelled(entry)).completionsAt(document, AT_NAME)).toEqual({ ...SPAN, kind: entry.kind, items });
   });
 });
 
-describe('Go to Symbol in Workspace on a mod or a separator (symbols.md, The features, story 4)', () => {
+describe('Go to Symbol in Workspace on a symbol its name alone names (symbols.md, The features, story 4)', () => {
   it('lists each mod and separator whose name holds the query, whatever the case, at the first place a file names it', async () => {
     const { symbolsFor } = language(undefined);
 
     expect((await symbolsFor('  ge ')).map(({ entry }) => entry)).toEqual([separator('Gear')]);
+    expect((await symbolsFor('ARMOR')).map(({ entry }) => entry)).toEqual([downloadedFile('Armor-2.zip'), profile('Armor Test')]);
     expect((await symbolsFor('MOD')).map(({ entry }) => entry)).toEqual([mod('Base Mod'), mod('Other Mod')]);
     expect(await symbolsFor(' ')).toEqual([]);
   });
@@ -118,10 +151,19 @@ describe('Go to Symbol in Workspace on a mod or a separator (symbols.md, The fea
     expect(reads.mock.calls).toEqual([[mod('Other Mod')]]);
   });
 
-  it('reads nothing for entries a broad query matches when the list names every one', async () => {
-    const { symbolsFor, reads } = language(undefined, { listed: [mod('Base Mod'), mod('Other Mod'), separator('Gear')].map((entry, line) => ({ entry, place: place(MODLIST, line) })) });
+  it('asks the owners for the places of no kind that no name of the query holds', async () => {
+    const { symbolsFor, listings } = language(undefined);
 
-    expect(await symbolsFor('e')).toHaveLength(3);
+    await symbolsFor('patch');
+
+    expect(listings.mock.calls).toEqual([['downloadedFile']]);
+  });
+
+  it('reads nothing for entries a broad query matches when the list names every one', async () => {
+    const listed = [mod('Base Mod'), mod('Other Mod'), separator('Gear'), downloadedFile('Patch-1.7z'), downloadedFile('Armor-2.zip'), profile('Default'), profile('Armor Test')];
+    const { symbolsFor, reads } = language(undefined, { listed: listed.map((entry, line) => ({ entry, place: place(MODLIST, line) })) });
+
+    expect(await symbolsFor('e')).toHaveLength(5);
     expect(reads).not.toHaveBeenCalled();
   });
 

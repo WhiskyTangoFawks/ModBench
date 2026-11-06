@@ -8,22 +8,43 @@ import { heldText, unsavedTexts } from '../textDocuments/heldText';
 import { placeLocation, readBy, referencedByInput, reportedForFeature, reportedForGesture, type AskedIn, type ListedLocations } from './symbolPlaces';
 
 interface EntryLanguageDeps {
-  instance: { readonly value: Pick<InstanceValue, 'mods'> } | undefined;
+  instance: { readonly value: Pick<InstanceValue, 'mods' | 'downloadedFiles' | 'profiles'> } | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
   owners: readonly EntryNames[];
   /** The mod's `go to`. */
   goTo: (mod: string) => Promise<void>;
-  /** The tooltip of the entry's row; undefined where Mods shows none. */
-  tooltip: (entry: EntrySymbol) => string | undefined;
+  /** The tooltip of the row Mods shows for a mod or a separator; undefined where it shows none. */
+  entryTooltip: (entry: EntrySymbol & { readonly kind: 'mod' | 'separator' }) => string | undefined;
+  /** The tooltip of the row Downloads shows for a downloaded file; undefined where it shows none. */
+  downloadedFileTooltip: (name: string) => string | undefined;
 }
 
 const entryKey = ({ kind, name }: EntrySymbol): string => `${kind}:${name.toLowerCase()}`;
 
-/** A mod and a separator as symbols in the text editor: wherever an owner's file names them, and the places files name
- *  them (symbols.md). */
-export function entryLanguage({ instance, reporter, owners, goTo, tooltip }: EntryLanguageDeps) {
-  const listed = (kind: EntrySymbol['kind']): string[] =>
-    (instance?.value.mods ?? []).flatMap((entry) => (entry.kind === kind ? [entry.name] : []));
+const KINDS = ['mod', 'separator', 'downloadedFile', 'profile'] as const;
+
+const unlisted = ({ kind, name }: EntrySymbol): string => ({
+  mod: `Mods lists no mod named ${name}.`,
+  separator: `Mods lists no separator named ${name}.`,
+  downloadedFile: `Downloads lists no downloaded file named ${name}.`,
+  profile: `The instance holds no profile named ${name}.`,
+})[kind];
+
+/** A mod, a separator, a downloaded file and a profile as symbols in the text editor: wherever an owner's file names
+ *  them, and the places files name them (symbols.md). */
+export function entryLanguage({ instance, reporter, owners, goTo, entryTooltip, downloadedFileTooltip }: EntryLanguageDeps) {
+  // A profile has no row.
+  const tooltip = ({ kind, name }: EntrySymbol): string | undefined => {
+    if (kind === 'downloadedFile') return downloadedFileTooltip(name);
+    return kind === 'profile' ? undefined : entryTooltip({ kind, name });
+  };
+  const listed = (kind: EntrySymbol['kind']): readonly string[] => {
+    const value = instance?.value;
+    if (value === undefined) return [];
+    if (kind === 'profile') return value.profiles;
+    if (kind === 'downloadedFile') return value.downloadedFiles.kind === 'listed' ? value.downloadedFiles.rows.map(({ name }) => name) : [];
+    return value.mods.flatMap((entry) => (entry.kind === kind ? [entry.name] : []));
+  };
   const entryListed = ({ kind, name }: EntrySymbol): EntrySymbol | undefined => {
     const found = listed(kind).find((each) => sameName(each, name));
     return found === undefined ? undefined : { kind, name: found };
@@ -47,8 +68,6 @@ export function entryLanguage({ instance, reporter, owners, goTo, tooltip }: Ent
     return undefined;
   };
 
-  const unlisted = (named: EntrySymbol): string => `Mods lists no ${named.kind} named ${named.name}.`;
-
   return {
     /** Go to Definition on the mod whose name is at `offset`: the mod's `go to`. A separator has none. Undefined where
      *  no mod's name is. */
@@ -68,22 +87,23 @@ export function entryLanguage({ instance, reporter, owners, goTo, tooltip }: Ent
       const lines = (shown && tooltip(shown))?.split('\n').filter((line) => line !== '') ?? [];
       return { start: found.start, end: found.end, lines: lines.length > 0 ? lines : [found.named.name] };
     },
-    /** Completion where a file names a mod or a separator: each of its kind, over the name so far. */
-    completionsAt: async (document: AskedIn, offset: number): Promise<{ start: number; end: number; items: string[] } | undefined> => {
+    /** Completion where a file names a symbol: each of its kind, over the name so far. */
+    completionsAt: async (document: AskedIn, offset: number): Promise<{ start: number; end: number; kind: EntrySymbol['kind']; items: readonly string[] } | undefined> => {
       const found = await nameWithSpan(document, offset);
-      return found && { start: found.start, end: found.end, items: listed(found.named.kind) };
+      return found && { start: found.start, end: found.end, kind: found.named.kind, items: listed(found.named.kind) };
     },
-    /** Go to Symbol in Workspace: each entry whose name holds `query`, at its line in the owners' list, else at the first
-     *  place a file names it. An entry no file names is left out. */
+    /** Go to Symbol in Workspace: each symbol whose name holds `query`, at the first place the owners list it, else at the
+     *  first place a file names it. A symbol no file names is left out. */
     symbolsFor: async (query: string): Promise<{ entry: EntrySymbol; location: vscode.Location }[]> => {
       const wanted = query.trim().toLowerCase();
       if (wanted === '') return [];
-      const matching = (['mod', 'separator'] as const).flatMap((kind) =>
+      const matching = KINDS.flatMap((kind) =>
         listed(kind).filter((name) => name.toLowerCase().includes(wanted)).map((name): EntrySymbol => ({ kind, name })));
-      const lists = await Promise.all(owners.map((owner) => owner.listed(heldTexts(unsavedTexts())).catch((error: unknown) => {
-        reporter.shownOnSurface('warning', 'Go to Symbol in Workspace could not read an owner\'s list of mods and separators.', errorMessage(error));
+      const kinds = KINDS.filter((kind) => matching.some((entry) => entry.kind === kind));
+      const lists = await Promise.all(kinds.flatMap((kind) => owners.map((owner) => owner.listed(kind, heldTexts(unsavedTexts())).catch((error: unknown) => {
+        reporter.shownOnSurface('warning', 'Go to Symbol in Workspace could not read where an owner\'s files name its symbols.', errorMessage(error));
         return [];
-      })));
+      }))));
       const lines = new Map<string, PlaceInFile>();
       for (const { entry, place } of lists.flat()) {
         const key = entryKey(entry);
@@ -96,7 +116,7 @@ export function entryLanguage({ instance, reporter, owners, goTo, tooltip }: Ent
       }));
       return placed.filter((symbol) => symbol !== undefined);
     },
-    /** Find All References on the mod or separator whose name is at `offset`; undefined where no entry's name is. */
+    /** Find All References on the symbol whose name is at `offset`; undefined where no such symbol's name is. */
     referencesAt: async (document: AskedIn, offset: number): Promise<vscode.Location[] | undefined> => {
       const found = await nameWithSpan(document, offset);
       if (found === undefined) return undefined;

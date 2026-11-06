@@ -103,7 +103,7 @@ interface ModsView extends vscode.Disposable {
   /** The lines that bear on a read of the mods, for the agent, without the instance's own. */
   standingLines(): string[];
   /** The tooltip of the row the view shows for the entry; undefined where it shows none. */
-  tooltipOf: (entry: EntrySymbol) => string | undefined;
+  tooltipOf: (entry: EntrySymbol & { readonly kind: 'mod' | 'separator' }) => string | undefined;
 }
 
 /** Tree, filter and count readout together, because the view's description and message line

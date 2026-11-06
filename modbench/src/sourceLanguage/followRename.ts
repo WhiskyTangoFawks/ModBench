@@ -3,6 +3,8 @@ import { reportPartial } from '../drivingLib/agentGesture';
 import { renameOutcome } from '../drivingLib/renameOutcome';
 import type { InstanceAdapter, RenamedSymbol } from '../instanceAdapter/instanceAdapter';
 import type { Instance } from '../instanceLoader/instance';
+import type { DownloadedFileCommands } from '../downloadedFileCommands/downloads';
+import type { InstanceCommands } from '../instanceCommands/instanceCommands';
 import type { EntryRenameCommands, RenameEditing } from '../modCommands/renameEntry';
 import type { PluginCommands } from '../pluginCommands/plugins';
 import type { ChangeResult } from '../ports/changeResult';
@@ -30,6 +32,8 @@ interface FollowRenameDeps {
   readonly adapter: Pick<InstanceAdapter, 'renamedSymbol'>;
   readonly plugins: Pick<PluginCommands, 'renamePlugin'>;
   readonly entries: Pick<EntryRenameCommands, 'renameMod' | 'renameSeparator'>;
+  readonly downloads: Pick<DownloadedFileCommands, 'renameDownloadedFile'>;
+  readonly profiles: Pick<InstanceCommands, 'renameProfile'>;
   readonly source: SourceEditing;
   readonly instance: Pick<Instance, 'quiet'>;
   readonly reporter: Reporter;
@@ -56,7 +60,10 @@ interface Followed {
   readonly report: () => void;
 }
 
-async function followed({ plugins, entries, reporter }: FollowRenameDeps, symbol: RenamedSymbol, editing: Editing): Promise<Followed> {
+// What each kind's definition writes last, as a failed rename names it.
+const DEFINITIONS = { mod: 'its lines', separator: 'its lines', downloadedFile: 'its file and its metadata', profile: 'its folder' } as const;
+
+async function followed({ plugins, entries, downloads, profiles, reporter }: FollowRenameDeps, symbol: RenamedSymbol, editing: Editing): Promise<Followed> {
   if (symbol.kind === 'plugin') {
     const { plugin, to } = symbol;
     const named = `"${plugin.name}" (${plugin.origin})`;
@@ -71,8 +78,10 @@ async function followed({ plugins, entries, reporter }: FollowRenameDeps, symbol
       report: () => { reporter.report('warning', `${named} was renamed to "${to.name}", which names a ${to.kind} and not a ${entry.kind}, so no reference to it followed.`); },
     };
   }
-  const result = await (entry.kind === 'mod' ? entries.renameMod : entries.renameSeparator)(editing([]), entry.name, to.name);
-  return { named, report: () => { reportFollowed(reporter, named, result.applied ? result.name : to.name, result, 'its lines'); } };
+  const renames = { mod: entries.renameMod, separator: entries.renameSeparator, downloadedFile: downloads.renameDownloadedFile, profile: profiles.renameProfile };
+  const result = await renames[entry.kind](editing([]), entry.name, to.name);
+  const landedAs = result.applied && 'name' in result && typeof result.name === 'string' ? result.name : to.name;
+  return { named, report: () => { reportFollowed(reporter, named, landedAs, result, DEFINITIONS[entry.kind]); } };
 }
 
 /** commands.md, System commands, `modbench.symbol.followRename`: carries each reference to what VS Code renames. The

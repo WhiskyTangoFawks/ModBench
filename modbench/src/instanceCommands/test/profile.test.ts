@@ -3,6 +3,7 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { instanceCommands } from '../instanceCommands';
 import { fakeInstanceAdapter, refusing, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
+import { heldTexts } from '../../symbolNames/symbolNames';
 
 const PROFILES = ['Default', 'Secondary'];
 
@@ -41,5 +42,26 @@ describe('switchProfile', () => {
 
     expect(await switchProfile('Secondary')).toEqual({ applied: false, refusal: expect.stringMatching(/unreadable/) as unknown });
     expect(fake.calls).toEqual([]);
+  });
+});
+
+describe('renaming a profile another program renames (symbols.md, The features, story 6)', () => {
+  const renamer = (answers: InstanceAnswers = {}) => {
+    const fake = fakeInstanceAdapter(readingFixture({ profiles: [...PROFILES] }), answers);
+    const editing = { held: heldTexts([]), apply: () => Promise.resolve(undefined) };
+    return { fake, rename: () => instanceCommands({ adapter: fake.adapter, client: new InMemoryMEditClient(), instanceRoot: '/instance' }).renameProfile(editing, 'Secondary', 'Third') };
+  };
+
+  it('renames it, and each reference to it, through the adapter', async () => {
+    const { fake, rename } = renamer();
+
+    expect(await rename()).toEqual({ applied: true, cannotFollow: [] });
+    expect(fake.calls).toEqual([{ verb: 'renameProfile', from: 'Secondary', to: 'Third' }]);
+  });
+
+  it('fails when the adapter cannot move its folder', async () => {
+    const { rename } = renamer({ refusals: refusing('renameProfile', 'No profile "Secondary"') });
+
+    expect(await rename()).toEqual({ applied: false, failed: 'No profile "Secondary"', edited: false, moved: [] });
   });
 });

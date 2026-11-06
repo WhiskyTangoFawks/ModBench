@@ -53,6 +53,25 @@ export function readIniSection(text: string, section: string): Map<string, strin
 export const readIniValue = (text: string, section: string, key: string): string | undefined =>
   readIniSection(text, section).get(key);
 
+/** The name `nameOf` reads from one key's value, and the span of its line that spells it, the whole value where it is
+ *  escaped or bytes; undefined for no such key or an empty name. */
+export function iniNameAt(
+  text: string, section: string, key: string, nameOf: (value: string) => string = (value) => value,
+): { name: string; line: number; start: number; end: number } | undefined {
+  const lines = splitLines(text);
+  const span = findSection(lines, section);
+  const line = span === undefined ? -1 : findKeyLine(lines, span, key);
+  const written = lines[line];
+  if (written === undefined) return undefined;
+  const afterEquals = written.indexOf('=') + 1;
+  const raw = written.slice(afterEquals).trim();
+  const start = written.indexOf(raw, afterEquals);
+  const name = nameOf(decodeIniValue(raw));
+  if (name === '') return undefined;
+  const spelled = raw.lastIndexOf(name);
+  return spelled === -1 ? { name, line, start, end: start + raw.length } : { name, line, start: start + spelled, end: start + spelled + name.length };
+}
+
 // Qt's INI reader and writer (qsettings.cpp: iniUnescapedStringList, iniEscapedString,
 // variantToString): an escape yields one UTF-16 unit, `\x` takes any number of hex digits, an
 // unknown escape is dropped, and a QByteArray is `@ByteArray(` its bytes as latin-1 `)`.

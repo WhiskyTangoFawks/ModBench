@@ -4,7 +4,7 @@
 import type { ChangeListener, InstanceAdapter, InstanceReading, PublisherConfiguration, PublisherTag, Reread, Subscription } from './instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { PathSpelling, TokenProgram } from './pathTokens';
-import type { EntryReading, HeldTexts } from '../symbolNames/symbolNames';
+import type { EntryNames, EntryReading, HeldTexts } from '../symbolNames/symbolNames';
 
 export type ManagerReading = Omit<InstanceReading, 'publisherConfiguration'>;
 
@@ -45,6 +45,10 @@ export interface Publisher {
   /** The segment of an entry at `offset` of the configuration's `text`, when `folderOf` says the folder it names is at
    *  that path; undefined where `file` is no configuration or no such segment is there. */
   folderAt(file: string, text: string, offset: number, folderOf: (name: string) => Promise<string | undefined>): Promise<NamedSpan | undefined>;
+  /** Where the configuration names a profile. */
+  readonly profileNames: EntryNames;
+  /** Renames each place the configuration names profile `from` to `to`; does nothing when the instance holds none. */
+  followProfile(from: string, to: string): Promise<void>;
   changeTag: InstanceAdapter['changePublisherTag'];
   followFolders: InstanceAdapter['followModFolders'];
   /** Lists each kept file in the ignore list, leaving every other entry as written. Rejects, writing nothing, for a
@@ -66,18 +70,29 @@ export function withPublisher(manager: ManagerAdapter, publisher: Publisher, scr
   return {
     ...manager,
     entryReferences: {
-      listed: (held) => manager.entryReferences.listed(held),
+      listed: async (kind, held) => [...await manager.entryReferences.listed(kind, held), ...await publisher.profileNames.listed(kind, held)],
       read: async (entry, held) => {
-        const [files, folder] = await Promise.all([manager.entryReferences.read(entry, held), entry.kind === 'mod' ? manager.modFolderPath(entry.name) : undefined]);
-        const tags = folder === undefined ? { references: [], leftOut: [] } : await publisher.namesFolder(folder, held);
-        return { references: [...files.references, ...tags.references], leftOut: [...files.leftOut, ...tags.leftOut] };
+        const folder = entry.kind === 'mod' ? await manager.modFolderPath(entry.name) : undefined;
+        const readings = await Promise.all([
+          manager.entryReferences.read(entry, held), folder === undefined ? { references: [], leftOut: [] } : publisher.namesFolder(folder, held), publisher.profileNames.read(entry, held),
+        ]);
+        return { references: readings.flatMap(({ references }) => references), leftOut: readings.flatMap(({ leftOut }) => leftOut) };
       },
       nameAt: async (file, text, offset) => {
         const named = await manager.entryReferences.nameAt(file, text, offset);
         if (named !== undefined) return named;
         const folder = await publisher.folderAt(file, text, offset, (name) => manager.modFolderPath(name));
-        return folder && { entry: { kind: 'mod', name: folder.name }, start: folder.start, end: folder.end };
+        return folder ? { entry: { kind: 'mod', name: folder.name }, start: folder.start, end: folder.end } : publisher.profileNames.nameAt(file, text, offset);
       },
+    },
+    renameProfile: async (from, to) => {
+      const cannotFollow = await manager.renameProfile(from, to);
+      try {
+        await publisher.followProfile(from, to);
+        return cannotFollow;
+      } catch (err) {
+        return [...cannotFollow, `${publisher.configurationFile.name}: ${errorMessage(err)}`];
+      }
     },
     publisherTags: publisher.tags,
     changePublisherTag: (...change) => afterKeepingOut(publisher.changeTag(...change)),

@@ -4,7 +4,7 @@
 import type { ModMeta } from '../../instanceAdapter';
 import { qtToInt } from './qtInt';
 import { isUpdateAvailable } from './versionInfo';
-import { GENERAL_SECTION, readIniSection, replaceIniSection, setIniValue } from './qSettingsIni';
+import { GENERAL_SECTION, iniNameAt, readIniSection, replaceIniSection, setIniValue } from './qSettingsIni';
 
 /** A mod folder's metadata file. */
 export const MOD_META_FILE_NAME = 'meta.ini';
@@ -84,6 +84,13 @@ export function parseMetaIni(text: string): MetaIni {
     installedFiles: parseInstalledFiles(text),
   };
 }
+
+// A path's last name, at either separator.
+const fileNameOf = (path: string): string => path.split(/[\\/]/).at(-1) ?? '';
+
+/** The file name of the downloaded file meta.ini says the mod was installed from, below any folder it names, where its
+ *  line spells it. */
+export const installationFileAt = (text: string) => iniNameAt(text, GENERAL_SECTION, 'installationFile', fileNameOf);
 
 /** The key a downloaded file carries for an installed file: its pair. */
 export const installedFileKey = ({ nexusId, fileId }: InstalledFileId): string => `${nexusId}:${fileId}`;

@@ -3,10 +3,14 @@
 import { refuse } from '../coreLib/refuse';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
-import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import { isInstallationFileName, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { goneFromDisk } from '../coreLib/commandRefusals';
 import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult } from '../coreLib/commandResult';
+import { change, committedBy, type RenameEditing } from '../coreLib/change';
+import { manifestDownloadedFileReferences } from '../manifestAdapter/manifestAdapter';
+import type { ChangeResult } from '../ports/changeResult';
+import type { EntryOwner } from '../symbolNames/symbolNames';
 
 type DownloadedFileCommandResult = CommandResult<{ wrote: boolean; metadataLeftBehind?: string }>;
 
@@ -65,12 +69,27 @@ async function deleteDownloadedFile(adapter: InstanceAdapter, name: string, tras
   }
 }
 
+// commands.md, `modbench.symbol.followRename`: the file and its metadata, each manifest's installation file package and
+// each mod's metadata. Install owns which names are downloaded files.
+async function renameDownloadedFile(adapter: InstanceAdapter, { held, apply }: RenameEditing, from: string, to: string): Promise<ChangeResult> {
+  if (!isInstallationFileName(to)) return { applied: false, refusal: `Not a file install can take: "${to}"` };
+  let modFolders: string[];
+  try {
+    modFolders = ((await adapter.modOrder()).modFolders ?? []).flatMap(({ kind, path }) => (kind === 'mod' ? [path] : []));
+  } catch (err) {
+    return refuse(err);
+  }
+  const definition: EntryOwner = { plan: () => Promise.resolve(committedBy(() => adapter.renameDownloadedFile(from, to))) };
+  return change({ definition, references: [manifestDownloadedFileReferences(modFolders)] }, (owner) => owner.plan({ kind: 'downloadedFile', name: from }, to, held), apply);
+}
+
 /** The downloads' commands, bound to one instance: each takes the gesture's arguments only. */
 export function downloadedFileCommands(adapter: InstanceAdapter) {
   return {
     excludeDownloadedFiles: (...args: TailOf<typeof excludeDownloadedFiles>) => excludeDownloadedFiles(adapter, ...args),
     includeDownloadedFiles: (...args: TailOf<typeof includeDownloadedFiles>) => includeDownloadedFiles(adapter, ...args),
     deleteDownloadedFiles: (...args: TailOf<typeof deleteDownloadedFiles>) => deleteDownloadedFiles(adapter, ...args),
+    renameDownloadedFile: (...args: TailOf<typeof renameDownloadedFile>) => renameDownloadedFile(adapter, ...args),
   };
 }
 

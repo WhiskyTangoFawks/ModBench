@@ -10,7 +10,7 @@ import {
   registerDownloadsDownloadCommand, registerDownloadsExcludedToggleCommands, registerDownloadsMultiRowCommands, registerDownloadsQueryInfoCommand,
   registerDownloadsSingleRowCommands, registerDownloadsSortCommand,
 } from './DownloadsPanel';
-import { DownloadsProvider, type DownloadsTreeNode } from './DownloadsProvider';
+import { downloadedFileTooltip, DownloadsProvider, type DownloadsTreeNode } from './DownloadsProvider';
 import { ExcludedDownloadedFileDecorationProvider } from './ExcludedDownloadedFileDecorationProvider';
 import { downloadsFolderUnresolvedLine } from './downloadsFolderUnresolvedLog';
 import { logOncePerFailure } from '../drivingLib/logOncePerFailure';
@@ -32,6 +32,8 @@ interface DownloadsView extends vscode.Disposable {
   view: vscode.TreeView<DownloadsTreeNode>;
   nameFilter: NameFilter;
   copyValue: CopyValueAdapter;
+  /** The tooltip of the downloaded file's row; undefined while no row shows it. */
+  tooltipOf: (name: string) => string | undefined;
 }
 
 /** Rows come from the Instance value alone (ADR-0015). */
@@ -90,6 +92,11 @@ export function createDownloadsView(
   return {
     provider, view, nameFilter,
     copyValue: { text: downloadsCopyValueText(() => view.selection), reporterTag: 'downloadedFile.copyValue' },
+    tooltipOf: (name) => {
+      const files = instance.value.downloadedFiles;
+      const row = files.kind === 'listed' ? files.rows.find((each) => each.name === name) : undefined;
+      return row && downloadedFileTooltip(row).value;
+    },
     dispose: () => { disposable.dispose(); },
   };
 }

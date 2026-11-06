@@ -19,7 +19,7 @@ import type { ProgramVersions } from './gameFolder/programVersions';
 import type { NonSteamPrefix } from './gameFolder/steamPrefix';
 import type { Depot } from './gameFolder/steamAppManifest';
 import type { ScriptEnvironmentFile } from './scriptEnvironmentFile';
-import { originsWinningFirst, type EntryNames, type SymbolOwner } from '../symbolNames/symbolNames';
+import { originsWinningFirst, type EntryNames, type EntrySymbol, type SymbolOwner } from '../symbolNames/symbolNames';
 
 export type { ProgramVersion, ProgramVersions } from './gameFolder/programVersions';
 
@@ -28,7 +28,7 @@ export { dataFolderFile } from './gameFolder/dataFolder';
 export type { Depot } from './gameFolder/steamAppManifest';
 
 export type { InstallationFileReader } from './fileContents/installationFileReader';
-export { INSTALLATION_FILE_EXTENSIONS } from './fileContents/installationFileNames';
+export { INSTALLATION_FILE_EXTENSIONS, isInstallationFileName } from './fileContents/installationFileNames';
 export { downloadedFileReader } from './fileContents/downloadedFileReader';
 
 /** The setting that names the game folder outright: its id
@@ -122,11 +122,11 @@ export interface ModGroups {
 /** A mod or a separator, by its kind and name. */
 export type EntryRef = Pick<ModlistEntry, 'kind' | 'name'>;
 
-/** A plugin at the root of a mod or Overwrite and its new file name, or a mod's or a separator's folder and the entry its
- *  new name holds. */
+/** A plugin at the root of a mod or Overwrite and its new file name; or a mod's or a separator's folder, a downloaded
+ *  file or a profile's folder, and the symbol its new name holds. */
 export type RenamedSymbol =
   | { readonly kind: 'plugin'; readonly plugin: PluginAddress; readonly to: string }
-  | { readonly kind: 'entry'; readonly entry: EntryRef; readonly to: EntryRef };
+  | { readonly kind: 'entry'; readonly entry: EntrySymbol; readonly to: EntrySymbol };
 
 /** Whether two entries are one to the mod manager: the same kind, and the same key. */
 export const sameEntry = (manager: Pick<InstanceAdapter, 'entryKey'>, a: EntryRef, b: EntryRef): boolean =>
@@ -879,6 +879,12 @@ export interface InstanceAdapter extends DataFileReads {
   /** Renames the folder that holds `from` to `to`, in place. Refuses when none holds `from`, and a
    *  folder already there under another name, matched as the manager matches names. */
   renameModFolder(from: string, to: string): Promise<void>;
+  /** Renames downloaded file `from` and its metadata to `to`, each already at `to` counted as moved, then follows in each
+   *  mod's metadata. Rejects when either cannot move; answers each mod's metadata that could not follow. */
+  renameDownloadedFile(from: string, to: string): Promise<readonly string[]>;
+  /** Renames profile `from`'s folder to `to`, one already at `to` counted as moved, then follows in the mod manager's
+   *  selected profile and the publisher's configuration. Rejects when the folder cannot move; answers each that could not follow. */
+  renameProfile(from: string, to: string): Promise<readonly string[]>;
   /** The file at `relativePath` as the origin's listing holds it, or `undefined` when none is there.
    *  Rejects a path outside the origin. */
   originFile(origin: FileOrigin, relativePath: string): Promise<OriginFile | undefined>;

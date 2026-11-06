@@ -67,7 +67,7 @@ async function profilesActiveFirst(adapter: InstanceAdapter): Promise<string[]> 
 
 // A mod's folder moves before its lines, so a failed line costs that profile the mod's place (mods.md, Rename mod,
 // story 4).
-function entryDefinition(adapter: InstanceAdapter, sourceFolder: FolderMove | undefined): EntryOwner {
+function entryDefinition(adapter: InstanceAdapter, sourceFolder: FolderMove | undefined): EntryOwner<EntryRef> {
   return {
     async plan(entry, to) {
       // A name the manager folds to nothing gives no folder and no line.
@@ -112,7 +112,7 @@ async function sourceFolderNamedFor(adapter: InstanceAdapter, mod: string): Prom
   return folder !== undefined && sameName(basename(folder), mod) ? folder : undefined;
 }
 
-async function modOwners({ adapter, client }: EntryRenameAccess, from: string, to: string): Promise<SymbolOwners<EntryOwner>> {
+async function modOwners({ adapter, client }: EntryRenameAccess, from: string, to: string): Promise<SymbolOwners<EntryOwner<EntryRef>>> {
   const sourceFolder = await sourceFolderNamedFor(adapter, from);
   const movedTo = sourceFolder === undefined ? undefined : adapter.sourceFolder(to);
   const move = sourceFolder === undefined || movedTo === undefined ? undefined : { from: sourceFolder, to: movedTo };
@@ -128,9 +128,9 @@ export type EntryRenameResult = Exclude<ChangeResult, { readonly applied: true }
 
 async function renameEntry(
   access: EntryRenameAccess, { held, apply }: RenameEditing, entry: EntryRef, to: string, refusalOf: Refusal,
-  ownersOf: () => Promise<SymbolOwners<EntryOwner>>,
+  ownersOf: () => Promise<SymbolOwners<EntryOwner<EntryRef>>>,
 ): Promise<EntryRenameResult> {
-  let owners: SymbolOwners<EntryOwner>;
+  let owners: SymbolOwners<EntryOwner<EntryRef>>;
   try {
     const refusal = await refusalOf(access.adapter, to, entry.name);
     if (refusal !== undefined) return { applied: false, refusal };

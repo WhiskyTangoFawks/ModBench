@@ -1,4 +1,4 @@
-import { GENERAL_SECTION, readIniValue, setIniByteArray } from './qSettingsIni';
+import { GENERAL_SECTION, iniNameAt, readIniValue, setIniByteArray } from './qSettingsIni';
 
 /** MO2's settings file, at the instance root. */
 export const SETTINGS_FILE_NAME = 'ModOrganizer.ini';
@@ -14,6 +14,9 @@ function readRequired(text: string, key: string): string {
 }
 
 export const readSelectedProfile = (text: string): string => readRequired(text, SELECTED_PROFILE_KEY);
+
+/** The profile MO2 selects, where its line spells it. */
+export const selectedProfileAt = (text: string) => iniNameAt(text, GENERAL_SECTION, SELECTED_PROFILE_KEY);
 
 export const readGameName = (text: string): string => readRequired(text, 'gameName');
 

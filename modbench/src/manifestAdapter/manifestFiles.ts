@@ -47,7 +47,7 @@ export const textAt = async (path: string): Promise<string> => (await readFile(p
 
 const manifestReadAt = keptByStamp(async (path: string): Promise<ManifestRead> => readManifest(await textAt(path)));
 
-const twoManifests = (one: string, other: string): string => `its folder holds two manifests, '${one}' and '${other}'`;
+export const twoManifests = (one: string, other: string): string => `its folder holds two manifests, '${one}' and '${other}'`;
 
 const twoBuildFiles = (one: string, other: string): string => `its repository holds two build files, '${one}' and '${other}'`;
 
