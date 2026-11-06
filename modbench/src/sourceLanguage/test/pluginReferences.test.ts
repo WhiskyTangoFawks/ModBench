@@ -5,7 +5,6 @@ vi.mock('vscode', () => ({ Uri, TreeItem, TreeItemCollapsibleState }));
 
 import type * as vscode from 'vscode';
 import { pluginReferencesOf } from '../pluginReferences';
-import { listMessage } from '../symbolPlaces';
 import { heldTexts, type HeldTexts, type PlaceInFile, type PluginSymbol, type SymbolOwner, type SymbolReading } from '../../symbolNames/symbolNames';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { copyDocumentsOf, copyKey as key, type CopyOnDisk } from './copyDocuments';
@@ -112,13 +111,5 @@ describe('Find All References on a plugin (symbols.md, The features, story 2)', 
         severity: 'warning', message: 'Find All References on Base.esm (Base Mod) could not read a file that may name it.', detail,
       }))]);
     });
-  });
-});
-
-describe('the line above a plugin\'s list (common.md, States, story 3)', () => {
-  it('says the list is empty only where every file was read', () => {
-    expect([listMessage(0, 0), listMessage(0, 1), listMessage(2, 1)]).toEqual([
-      'No references found.', 'No references found in the files that could be read.', undefined,
-    ]);
   });
 });

@@ -10,7 +10,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { entryLanguage } from '../entryLanguage';
-import type { EntryNames, EntryNamed, EntryPlace, EntrySymbol, PlaceInFile } from '../../symbolNames/symbolNames';
+import type { EntryNames, EntrySymbol, PlaceInFile } from '../../symbolNames/symbolNames';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { downloadedFileRowFixture } from '../../test/mo2/downloadedFileRowFixture';
 
@@ -19,6 +19,9 @@ const UNREAD = '/profiles/Other/modlist.txt: it does not read';
 const place = (file: string, line: number): PlaceInFile => ({ file, start: { line, character: 1 }, end: { line, character: 9 } });
 const document = { uri: Uri.file(MODLIST), getText: () => '# list\nbase mod\n' };
 const AT_NAME = 10;
+type EntryNamed = NonNullable<Awaited<ReturnType<EntryNames['nameAt']>>>;
+type EntryPlace = Awaited<ReturnType<EntryNames['listed']>>[number];
+
 const mod = (name: string): EntrySymbol => ({ kind: 'mod', name });
 const separator = (name: string): EntrySymbol => ({ kind: 'separator', name });
 const downloadedFile = (name: string): EntrySymbol => ({ kind: 'downloadedFile', name });

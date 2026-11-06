@@ -16,8 +16,7 @@ interface PluginReferencesDeps<Document> extends RecordLocationDeps<Document> {
 
 export type PluginReference<Document> = PlaceInFile | RecordLocation<Document>;
 
-/** The places found, and why each file or copy that may name the plugin went unread. */
-export interface PluginReferences<Document> {
+interface PluginReferences<Document> {
   readonly found: readonly PluginReference<Document>[];
   readonly unread: readonly string[];
 }

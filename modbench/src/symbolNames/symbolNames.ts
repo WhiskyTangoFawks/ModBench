@@ -75,8 +75,7 @@ export interface CopyNaming {
   readonly plugin: PluginSymbol;
 }
 
-/** Where a file names a plugin, and how it names it. */
-export type SymbolReference = ({ readonly place: PlaceInFile } | { readonly copy: CopyNaming }) & { readonly names: PluginName };
+type SymbolReference = ({ readonly place: PlaceInFile } | { readonly copy: CopyNaming }) & { readonly names: PluginName };
 
 /** The references an owner found, and why it left out each file it could not read. */
 export interface SymbolReading {
@@ -137,15 +136,13 @@ export interface EntryReading {
   readonly leftOut: readonly string[];
 }
 
-/** An entry, and the span of a file's text that names it, by offset. */
-export interface EntryNamed {
+interface EntryNamed {
   readonly entry: EntrySymbol;
   readonly start: number;
   readonly end: number;
 }
 
-/** An entry and the place a file names it. */
-export interface EntryPlace {
+interface EntryPlace {
   readonly entry: EntrySymbol;
   readonly place: PlaceInFile;
 }

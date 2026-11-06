@@ -13,5 +13,5 @@ export { isMEditGone, isRefused, UNLIMITED_RECORDS } from './MEditClient';
 export { isSettled } from './apiClient';
 export { attachPortOf } from './attachPort';
 export { createMEditClient, stopMEditClient } from './HttpMEditClient';
-export { recordIndexReferences, type SourceFilesOf } from './recordIndexReferences';
-export { sourceFolderMove, type SourceFolderMoveOf } from './sourceFolderMove';
+export { recordIndexReferences } from './recordIndexReferences';
+export { sourceFolderMove } from './sourceFolderMove';

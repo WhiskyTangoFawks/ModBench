@@ -16,8 +16,7 @@ export const readBy = <Symbol, Reference>(
 ): Promise<Reading<Reference>> =>
   owner.read(symbol, held).catch((error: unknown) => ({ references: [], leftOut: [errorMessage(error)] }));
 
-/** The line above a list of places: an empty list says so, and that it is no proof while a file went unread. */
-export function listMessage(found: number, unread: number): string | undefined {
+function listMessage(found: number, unread: number): string | undefined {
   if (found > 0) return undefined;
   return unread > 0 ? 'No references found in the files that could be read.' : 'No references found.';
 }

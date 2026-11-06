@@ -27,9 +27,7 @@ async function titleOf(client: ReferencedByDeps['client'], formKey: string): Pro
   return `Referenced By: ${recordTitle(formKey, overrides)}`;
 }
 
-export type ReferencedByInput = ReferencesViewInput<ReferencedByList>;
-
-function referencedByInput(title: string, location: vscode.Location, resolve: () => Promise<ReferencedByList>): ReferencedByInput {
+function referencedByInput(title: string, location: vscode.Location, resolve: () => Promise<ReferencedByList>): ReferencesViewInput<ReferencedByList> {
   return {
     title, location, contextValue: REFERENCED_BY_SOURCE, resolve,
     with: (moved) => referencedByInput(title, moved, resolve),

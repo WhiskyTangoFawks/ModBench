@@ -29,8 +29,8 @@ async function entriesIn(folder: string): Promise<Dirent[]> {
 const fileNamesIn = async (folder: string): Promise<string[]> =>
   (await entriesIn(folder)).filter((entry) => entry.isFile()).map(({ name }) => name).sort(ordinal);
 
-/** Whether a file's name is the build file's, in any case, so a folder reads alike on Windows and Linux. */
-export const isBuildFileName = (name: string): boolean => name.toLowerCase() === BUILD_FILE.toLowerCase();
+// Any case, so a folder reads alike on Windows and Linux.
+const isBuildFileName = (name: string): boolean => name.toLowerCase() === BUILD_FILE.toLowerCase();
 
 /** Whether `path` is the build file at the root of `sourceFolder`. */
 export const isBuildFileOf = (sourceFolder: string, path: string): boolean => samePath(dirname(path), sourceFolder) && isBuildFileName(basename(path));

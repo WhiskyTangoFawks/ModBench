@@ -50,6 +50,10 @@ export class Range {
     public readonly startLine: number, public readonly startChar: number,
     public readonly endLine: number, public readonly endChar: number,
   ) {}
+
+  get start() { return { line: this.startLine, character: this.startChar }; }
+
+  get end() { return { line: this.endLine, character: this.endChar }; }
 }
 
 export const DiagnosticSeverity = { Error: 0, Warning: 1, Information: 2, Hint: 3 };
