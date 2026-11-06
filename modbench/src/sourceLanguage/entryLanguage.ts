@@ -79,8 +79,8 @@ export function entryLanguage({ instance, reporter, owners, goTo, tooltip }: Ent
       const found = await nameWithSpan(document, offset);
       return found && { start: found.start, end: found.end, items: listed(found.named.kind) };
     },
-    /** Go to Symbol in Workspace: each mod and separator whose name holds `query`, at its line in the owners' list when one lists it, else the first place a file names it. A
-     *  name no file names has no place to be listed at. */
+    /** Go to Symbol in Workspace: each entry whose name holds `query`, at its line in the owners' list, else at the first
+     *  place a file names it. An entry no file names is left out. */
     symbolsFor: async (query: string): Promise<{ entry: EntrySymbol; location: vscode.Location }[]> => {
       const wanted = query.trim().toLowerCase();
       if (wanted === '') return [];
