@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('vscode', () => ({ TreeItem: class { constructor(readonly label: string) {} } }));
 
-import { everyModHere, modsOfAgent, modsToRun, type ModsToRun } from '../modsToRun';
+import { everyModHere, modsAndSourceModsOfAgent, modsAndSourceModsToRun, modsOfAgent, modsToRun, type ModsToRun } from '../modsToRun';
 import type { Argument } from '../../wire/argument';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
@@ -50,6 +50,21 @@ describe('the mods a Mods gesture runs over (instance-repository.md, Every mod)'
 
   it('are every mod under the Mods view from its title bar', () => {
     expect(everyModHere({ instance: { value } })).toEqual(everyModUnder(MODS_VIEW, EVERY_MOD));
+  });
+
+  it('skips a source mod held by a selected separator when updating its manifest', () => {
+    const sourceModValue = { ...value, paths: { ...value.paths, sourceDirs: new Map([['ModB', '/instance/source/ModB']]) } };
+
+    expect(modsAndSourceModsToRun({ ...focused(undefined), instance: { value: sourceModValue } }, separatorRow('Weapons'), [separatorRow('Weapons')]))
+      .toEqual(named(['ModA']));
+  });
+
+  it('skips a source mod held by a separator in an agent update-manifest call, but keeps a directly named source mod', () => {
+    const sourceModValue = { ...value, paths: { ...value.paths, sourceDirs: new Map([['ModB', '/instance/source/ModB']]) } };
+    const separator: Argument = { kind: 'separator', name: 'Weapons' };
+
+    expect(modsAndSourceModsOfAgent([separator], sourceModValue)).toEqual({ mods: ['ModA'], sourceMods: [], refused: [] });
+    expect(modsAndSourceModsOfAgent([{ kind: 'mod', name: 'ModB' }], sourceModValue)).toEqual({ mods: ['ModB'], sourceMods: [], refused: [] });
   });
 });
 
