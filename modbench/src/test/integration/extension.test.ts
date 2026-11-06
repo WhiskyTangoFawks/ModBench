@@ -395,7 +395,8 @@ function createMockBackend(): http.Server {
         editsAsked.push(asked);
         const { status, body: answer } = answerEdit(asked);
         res.writeHead(status, { 'Content-Type': status === 200 ? 'application/json' : 'application/problem+json' });
-        res.end(JSON.stringify(answer));
+        const landed = { plugins: [{ name: COMPILED_PLUGIN, origin: COMPILED_PLUGIN_ORIGIN }], leftBehind: [], copiesLeftBehind: [], copiesUnread: null };
+        res.end(JSON.stringify(status === 200 && isRecord(answer) ? { ...landed, ...answer } : answer));
       });
       return;
     }
