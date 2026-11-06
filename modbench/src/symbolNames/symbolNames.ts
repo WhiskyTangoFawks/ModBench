@@ -131,8 +131,17 @@ export interface EntryReading {
   readonly leftOut: readonly string[];
 }
 
+/** An entry and the place a file names it. */
+export interface EntryPlace {
+  readonly entry: EntrySymbol;
+  readonly place: PlaceInFile;
+}
+
 /** A box that owns files, saying where they name a mod or a separator (ADR-0028). */
 export interface EntryNames {
+  /** Where its own list names each entry the list holds, from one read of the list: the active profile's mod list, for the
+   *  Instance adapter. A box with no such list holds none. */
+  listed(held: HeldTexts): Promise<readonly EntryPlace[]>;
   read(entry: EntrySymbol, held: HeldTexts): Promise<EntryReading>;
   /** The mod or separator one of its files names at `offset` of the file's `text`; undefined where it names none. */
   nameAt(file: string, text: string, offset: number): Promise<EntrySymbol | undefined>;

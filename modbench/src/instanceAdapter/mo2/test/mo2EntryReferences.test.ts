@@ -60,12 +60,31 @@ describe('the MO2 Instance adapter saying where its files name a mod or a separa
     expect(references).toHaveLength(7);
   });
 
+  it('spans a name the ignore list escapes as the line writes it', async () => {
+    await put('.gitignore', IGNORE);
+
+    const { references } = await adapter.entryReferences.read(mod('Patch*Mod'), heldTexts([]));
+
+    expect(references).toEqual([at('.gitignore', 2, 7, 17)]);
+  });
+
   it('names a separator\'s folder in the ignore list', async () => {
     await put('.gitignore', IGNORE);
 
     const { references } = await adapter.entryReferences.read(separator('Patch Mod'), heldTexts([]));
 
     expect(references).toContainEqual(at('.gitignore', 6, 7, 16));
+  });
+
+  it('places every entry the active profile\'s mod list holds at its line, from that one list, and the unsaved text in its place', async () => {
+    const places = (await adapter.entryReferences.listed(heldTexts([]))).map(({ entry, place }) => [entry, place.file, place.start.line]);
+
+    expect(places).toEqual([
+      [mod('Patch Mod'), join(root, 'profiles/Default/modlist.txt'), 1], [mod('Base Mod'), join(root, 'profiles/Default/modlist.txt'), 2],
+      [separator('Patch Mod'), join(root, 'profiles/Default/modlist.txt'), 3],
+    ]);
+    const unsaved = heldTexts([[join(root, 'profiles/Default/modlist.txt'), '+Held Mod\r\n']]);
+    expect((await adapter.entryReferences.listed(unsaved)).map(({ entry }) => entry)).toEqual([mod('Held Mod')]);
   });
 
   it('reads an unsaved file in place of the one on disk', async () => {

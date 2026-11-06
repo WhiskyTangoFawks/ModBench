@@ -46,6 +46,7 @@ export function manifestEntryNames({ modFolderOf }: Pick<ManifestEntryOwnerDeps,
     return folder === undefined || own === undefined ? undefined : join(folder, own);
   };
   return {
+    listed: () => Promise.resolve([]),
     async read({ kind, name: mod }, held) {
       if (kind !== 'mod') return { references: [], leftOut: [] };
       let file: string | undefined;

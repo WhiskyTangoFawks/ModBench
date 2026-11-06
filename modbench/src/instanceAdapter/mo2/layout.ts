@@ -328,7 +328,9 @@ export function ignoreListNames(ignoreList: string): EntryInText[] {
   return ignoreList.split(/\r?\n/).flatMap((line, at) => {
     const [, parent = '', escaped = ''] = IGNORE_FOLDER_LINE.exec(line) ?? [];
     if (escaped === '') return [];
-    return [entryInText(escaped.replace(/\\(.)/g, '$1'), at, parent.length + 3)];
+    const name = escaped.replace(/\\(.)/g, '$1');
+    const found = entryInText(name, at, parent.length + 3);
+    return [{ ...found, end: found.end + escaped.length - name.length }];
   });
 }
 

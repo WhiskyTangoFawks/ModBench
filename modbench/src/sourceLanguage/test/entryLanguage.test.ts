@@ -10,7 +10,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { entryLanguage } from '../entryLanguage';
-import type { EntryNames, EntrySymbol, PlaceInFile } from '../../symbolNames/symbolNames';
+import type { EntryNames, EntryPlace, EntrySymbol, PlaceInFile } from '../../symbolNames/symbolNames';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
 const MODLIST = '/profiles/Default/modlist.txt';
@@ -21,21 +21,28 @@ const AT_NAME = 10;
 const mod = (name: string): EntrySymbol => ({ kind: 'mod', name });
 const separator = (name: string): EntrySymbol => ({ kind: 'separator', name });
 
-const owner = (named: EntrySymbol | undefined, places: PlaceInFile[] = [place(MODLIST, 1)], leftOut: string[] = []): EntryNames => ({
-  read: () => Promise.resolve({ references: places, leftOut }),
+const owner = (
+  named: EntrySymbol | undefined, places: PlaceInFile[] = [place(MODLIST, 1)], leftOut: string[] = [], listed: EntryPlace[] = [],
+  read: (entry: EntrySymbol) => void = () => undefined,
+): EntryNames => ({
+  listed: () => Promise.resolve(listed),
+  read: (entry) => { read(entry); return Promise.resolve({ references: places, leftOut }); },
   nameAt: () => Promise.resolve(named),
 });
 
-function language(named: EntrySymbol | undefined, options: { places?: PlaceInFile[]; leftOut?: string[]; tooltip?: string } = {}) {
+function language(named: EntrySymbol | undefined, options: { places?: PlaceInFile[]; leftOut?: string[]; tooltip?: string; listed?: EntryPlace[] } = {}) {
   const reporter = recordingReporter();
   const goTo = vi.fn(() => Promise.resolve());
+  const reads = vi.fn();
   const mods = [
     { kind: 'mod' as const, name: 'Base Mod', enabled: true }, { kind: 'mod' as const, name: 'Other Mod', enabled: true },
     { kind: 'separator' as const, name: 'Gear', enabled: true },
   ];
   return {
-    goTo, reporter,
-    ...entryLanguage({ instance: { value: { mods } }, reporter, owners: [owner(named, options.places, options.leftOut)], goTo, tooltip: () => options.tooltip }),
+    goTo, reporter, reads,
+    ...entryLanguage({
+      instance: { value: { mods } }, reporter, owners: [owner(named, options.places, options.leftOut, options.listed, reads)], goTo, tooltip: () => options.tooltip,
+    }),
   };
 }
 
@@ -123,6 +130,24 @@ describe('hover, completion and Go to Symbol on a mod or a separator (symbols.md
     expect((await symbolsFor('  ge ')).map(({ entry }) => entry)).toEqual([separator('Gear')]);
     expect((await symbolsFor('MOD')).map(({ entry }) => entry)).toEqual([mod('Base Mod'), mod('Other Mod')]);
     expect(await symbolsFor(' ')).toEqual([]);
+  });
+
+  it('places an entry its owners\' list names at its line there, and asks the owners for no other entry than one the list leaves out', async () => {
+    const listedAt = place(MODLIST, 4);
+    const { symbolsFor, reads } = language(undefined, { listed: [{ entry: mod('base mod'), place: listedAt }, { entry: separator('Gear'), place: place(MODLIST, 5) }] });
+
+    const found = await symbolsFor('mod');
+
+    expect(found.map(({ entry }) => entry)).toEqual([mod('Base Mod'), mod('Other Mod')]);
+    expect(found[0]?.location.range).toEqual(new Range(4, 1, 4, 9));
+    expect(reads.mock.calls).toEqual([[mod('Other Mod')]]);
+  });
+
+  it('reads nothing for entries a broad query matches when the list names every one', async () => {
+    const { symbolsFor, reads } = language(undefined, { listed: [mod('Base Mod'), mod('Other Mod'), separator('Gear')].map((entry, line) => ({ entry, place: place(MODLIST, line) })) });
+
+    expect(await symbolsFor('e')).toHaveLength(3);
+    expect(reads).not.toHaveBeenCalled();
   });
 
   it('lists no entry that no file names', async () => {

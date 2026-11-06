@@ -3,7 +3,7 @@ import { referencesView } from '../drivingLib/referencesView';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
-import { heldTexts, sameName, type EntryNames, type EntryReading, type EntrySymbol } from '../symbolNames/symbolNames';
+import { heldTexts, sameName, type EntryNames, type EntryReading, type EntrySymbol, type PlaceInFile } from '../symbolNames/symbolNames';
 import { heldText, unsavedTexts } from '../textDocuments/heldText';
 import { reportedForFeature, reportedForGesture } from './pluginReferences';
 import { placeLocation, referencedByInput, spelledAround, type AskedIn, type ListedLocations } from './symbolPlaces';
@@ -20,6 +20,8 @@ interface EntryLanguageDeps {
 
 const readBy = (owner: EntryNames, entry: EntrySymbol): Promise<EntryReading> =>
   owner.read(entry, heldTexts(unsavedTexts())).catch((error: unknown) => ({ references: [], leftOut: [errorMessage(error)] }));
+
+const entryKey = ({ kind, name }: EntrySymbol): string => `${kind}:${name.toLowerCase()}`;
 
 /** A mod and a separator as symbols in the text editor: wherever an owner's file names them, and the places files name
  *  them (symbols.md). */
@@ -77,15 +79,22 @@ export function entryLanguage({ instance, reporter, owners, goTo, tooltip }: Ent
       const found = await nameWithSpan(document, offset);
       return found && { start: found.start, end: found.end, items: listed(found.named.kind) };
     },
-    /** Go to Symbol in Workspace: each mod and separator whose name holds `query`, at the first place a file names it. A
+    /** Go to Symbol in Workspace: each mod and separator whose name holds `query`, at its line in the owners' list when one lists it, else the first place a file names it. A
      *  name no file names has no place to be listed at. */
     symbolsFor: async (query: string): Promise<{ entry: EntrySymbol; location: vscode.Location }[]> => {
       const wanted = query.trim().toLowerCase();
       if (wanted === '') return [];
       const matching = (['mod', 'separator'] as const).flatMap((kind) =>
         listed(kind).filter((name) => name.toLowerCase().includes(wanted)).map((name): EntrySymbol => ({ kind, name })));
+      const lists = await Promise.all(owners.map((owner) => owner.listed(heldTexts(unsavedTexts())).catch(() => [])));
+      const lines = new Map<string, PlaceInFile>();
+      for (const { entry, place } of lists.flat()) {
+        const key = entryKey(entry);
+        if (!lines.has(key)) lines.set(key, place);
+      }
       const placed = await Promise.all(matching.map(async (entry) => {
-        const [first] = (await locatedForFeature(entry)).locations;
+        const line = lines.get(entryKey(entry));
+        const [first] = line === undefined ? (await locatedForFeature(entry)).locations : [placeLocation(line)];
         return first && { entry, location: first };
       }));
       return placed.filter((symbol) => symbol !== undefined);

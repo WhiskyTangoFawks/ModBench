@@ -92,7 +92,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
     gameFolderOverlapping: async (folder) => overlappedGameRoot(await gameFolder(), folder),
     nonSteamPrefix: (folder) => nonSteamPrefixRunning(steamRootOn(process.platform), folder),
     gamePlaces: async () => gamePlacesOf(await gameFolder(), await context.resolveSteamInstall((await source.settings()).gameRelease)),
-    ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), originHoldsPlugin, ...mo2PluginReferences(context, planRename), ...mo2EntryReferences(context), ...mo2Landing(context, installationFileReader, source, fomodEngine), ...mo2Repository(context, publisherFile), ...mo2GameFiles(context, hashes, deployedPath), ...mo2Submodules(context), ...mo2PathTokens(context, gameFolder, publisherFile),
+    ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), originHoldsPlugin, ...mo2PluginReferences(context, planRename), ...mo2EntryReferences(context, source), ...mo2Landing(context, installationFileReader, source, fomodEngine), ...mo2Repository(context, publisherFile), ...mo2GameFiles(context, hashes, deployedPath), ...mo2Submodules(context), ...mo2PathTokens(context, gameFolder, publisherFile),
     ...packageFilesWriter(hashIndexDir(instanceRoot), installationFileReader),
     ...dataFileReads(gameFolder),
     originFileHash: hashes.originFileHash,

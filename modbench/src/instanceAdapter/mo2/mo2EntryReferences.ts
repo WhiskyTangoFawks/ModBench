@@ -7,8 +7,9 @@ import { heldTextAt, placeIn, sameName, samePath, type EntryNames, type EntrySym
 import { get, readOrAbsent } from '../files';
 import type { InstanceAdapter } from '../instanceAdapter';
 import { entryNamesIn, type EntryInText } from './codecs/modlistText';
-import { everyModlistFile, ignoreListFile, ignoreListNames, submoduleNames, submodulesFile } from './layout';
+import { everyModlistFile, ignoreListFile, ignoreListNames, modlistFile, submoduleNames, submodulesFile } from './layout';
 import type { Mo2Context } from './mo2Context';
+import type { ReadingSource } from '../instanceReading';
 
 type NamesIn = (text: string) => EntryInText[];
 
@@ -20,13 +21,18 @@ const isEntry = (found: EntryInText, { kind, name }: EntrySymbol): boolean => fo
 const isBefore = (a: { line: number; character: number }, b: { line: number; character: number }): boolean =>
   a.line < b.line || (a.line === b.line && a.character <= b.character);
 
-export function mo2EntryReferences({ instanceRoot }: Mo2Context): Pick<InstanceAdapter, 'entryReferences'> {
+export function mo2EntryReferences({ instanceRoot }: Mo2Context, source: Pick<ReadingSource, 'settings'>): Pick<InstanceAdapter, 'entryReferences'> {
   const namingFiles = async (): Promise<(readonly [string, NamesIn])[]> => [
     ...(await everyModlistFile(instanceRoot)).map((file) => [file, entryNamesIn] as const),
     [ignoreListFile(instanceRoot), ignoreListNames],
     [submodulesFile(instanceRoot), submoduleNames],
   ];
   const entryReferences: EntryNames = {
+    async listed(held) {
+      const file = modlistFile(instanceRoot, (await source.settings()).profile);
+      const text = heldTextAt(held, file) ?? await readOrAbsent(() => get(file), undefined);
+      return text === undefined ? [] : entryNamesIn(stripBom(text)).map((found) => ({ entry: found.entry, place: placeOf(file, found) }));
+    },
     async read(entry, held: HeldTexts) {
       const read = await Promise.all((await namingFiles()).map(async ([file, namesIn]) => {
         try {
