@@ -40,7 +40,7 @@ export interface EditorCommandDeps {
   // not from a command argument.
   tabs: RecordTabs;
   meditClient: Pick<MEditClient,
-    | 'getEditChanges' | 'getFormKeyReferences' | 'searchRecords'
+    | 'getEditChanges' | 'searchRecords'
     | 'getDeleteChanges' | 'getCopyChanges'
     | 'getPlugins' | 'getRecordHolders'
     | 'getComparison' | 'getRecordsComparison' | 'onNotification' | 'loadOrderStatus' | 'onLoadOrderSettled' | 'getRecordOwner'

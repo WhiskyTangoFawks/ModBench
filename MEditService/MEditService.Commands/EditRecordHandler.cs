@@ -1,5 +1,6 @@
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 
@@ -20,10 +21,13 @@ public sealed class EditRecordHandler
         ILogger<EditRecordHandler> logger) =>
         (_changes, _source, _unsaved, _loadOrder, _logger) = (changes, source, unsaved, loadOrder, logger);
 
-    public RecordEditResult Edit(PluginAddress plugin, string formKey, RecordEditEnvelope envelope)
+    /// <summary><paramref name="copiesWithNoPluginSource"/> as <see cref="EditRecordChangesHandler.Changes"/> takes them.</summary>
+    public Answer<RecordEdited, RecordEditRefused> Edit(
+        PluginAddress plugin, string formKey, RecordEditEnvelope envelope, IReadOnlyList<RecordAt> copiesWithNoPluginSource)
     {
         var sessions = new WriteSessions(_source, _unsaved.Current);
-        var outcome = _changes.Changes(plugin, formKey, envelope, sessions).Outcome;
-        return sessions.Written(outcome, $"Could not write the edit of {formKey}", _loadOrder, _logger);
+        var edited = _changes.Edited(plugin, formKey, envelope, copiesWithNoPluginSource, sessions);
+        var written = sessions.Written(edited.Outcome, $"Could not write the edit of {formKey}", _loadOrder, _logger);
+        return written.Applied ? new RecordEdited(written.NewFormKey, edited.LeftBehind, edited.CopiesLeftBehind) : written.AsRefused();
     }
 }

@@ -328,8 +328,16 @@ internal sealed class RecordQueries(
     public Answer<IReadOnlyList<CopyNaming>, IndexRefused> GetPluginNameReferences(string name) =>
         _answer.Of(() => _index.RequireWholeSetReads().GetCopiesNaming(name));
 
-    public Answer<IReadOnlyList<CopyNaming>, IndexRefused> GetFormKeyReferences(string formKey) =>
-        _answer.Of(() => _index.RequireWholeSetReads().GetCopiesNamingFormKey(formKey));
+    // A file name alone names the copy mod order resolves it to (ADR-0012): another copy of it holds its own record at
+    // the key, and another plugin names this copy's record only when this is that copy.
+    public Answer<IReadOnlyList<CopyNaming>, IndexRefused> GetFormKeyReferences(PluginAddress plugin, string formKey) => _answer.Of(() =>
+    {
+        var snapshot = _loadOrder.Require();
+        var resolved = snapshot.Plugin(plugin) is { } copy && snapshot.ReadsTheGamesStrings(copy.Path);
+        bool Names(PluginAddress other) =>
+            PluginAddress.Comparer.Equals(other, plugin) || (resolved && !other.Name.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase));
+        return (IReadOnlyList<CopyNaming>)[.. _index.RequireWholeSetReads().GetCopiesNamingFormKey(formKey).Where(naming => Names(naming.Plugin))];
+    });
 
     public Answer<ScriptReferences, IndexRefused> GetScriptReferences(string name) => _answer.Of(() =>
     {

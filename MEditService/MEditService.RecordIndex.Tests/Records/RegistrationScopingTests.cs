@@ -226,12 +226,46 @@ public class RegistrationScopingTests
         SourceMods.Init(fx.Plugins.Plugins.Single(p => p.Name == BetaKey.Name));
         fx.Reconcile(fx.WithBetaDisabled);
 
-        var naming = fx.Index.Queries.GetFormKeyReferences(fx.SharedNpcFk).Value();
-        var linking = fx.Index.Queries.GetFormKeyReferences(fx.BetaRaceFk).Value();
+        var naming = fx.Index.Queries.GetFormKeyReferences(AlphaKey, fx.SharedNpcFk).Value();
+        var linking = fx.Index.Queries.GetFormKeyReferences(BetaKey, fx.BetaRaceFk).Value();
 
         Assert.Contains(new CopyNaming(fx.SharedNpcFk, AlphaKey, InPluginSource: false), naming);
         Assert.Contains(new CopyNaming(fx.SharedNpcFk, BetaKey, InPluginSource: true), naming);
         Assert.Contains(new CopyNaming(fx.BetaNpcFk, BetaKey, InPluginSource: true), linking);
+    }
+
+    [Fact]
+    public void ARecordsFormKey_IsNamedInAnotherCopyOfItsFileNameNever_AndInAnotherPluginOnlyForTheCopyModOrderResolvesTo()
+    {
+        PluginAddress losing = new("Base.esm", "LosingMod"), winning = new("Base.esm", "WinningMod");
+        var race = "";
+        void Populate(Fallout4Mod mod)
+        {
+            var added = mod.Races.AddNew("Race");
+            mod.Npcs.AddNew("Npc").Race.SetTo(added);
+            race = added.FormKey.ToString();
+        }
+        using var plugins = new PluginFixtureBuilder("form-key-references-same-file-name")
+            .WithPlugin(losing.Name, Populate, origin: losing.Origin)
+            .WithPlugin(winning.Name, Populate, origin: winning.Origin)
+            .WithPlugin("Child.esp", (mod, built) =>
+            {
+                mod.ModHeader.MasterReferences.Add(new MasterReference { Master = built[1].ModKey });
+                mod.Npcs.AddNew("ChildNpc").Race.SetTo(FormKey.Factory(race));
+            }, origin: "ChildMod")
+            .BuildScattered();
+        SourceMods.Init(plugins.Plugins.Single(p => p.Origin == losing.Origin));
+        var holder = new LoadOrderHolder();
+        using var opens = new GatedPluginAdapter();
+        using var index = Indexes.Open(holder, opens);
+        index.Reconcile(holder, plugins.DataFolder, plugins.Plugins, GameRelease.Fallout4);
+
+        var forLosing = index.Queries.GetFormKeyReferences(losing, race).Value();
+        var forWinning = index.Queries.GetFormKeyReferences(winning, race).Value();
+
+        Assert.Equal([losing], forLosing.Select(copy => copy.Plugin).Distinct());
+        Assert.Contains(forWinning, copy => copy.Plugin.Name == "Child.esp");
+        Assert.DoesNotContain(forWinning, copy => PluginAddress.Comparer.Equals(copy.Plugin, losing));
     }
 
     private static IReadOnlyList<CopyNaming> NamingAlpha(FixtureWithEveryKindOfExtractedRowAndBetaOverridingAlphasNpc fx, string name = "Alpha.esp") =>

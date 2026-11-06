@@ -1,6 +1,7 @@
 import type { Reporter } from '../ports/reporter';
 import type { MEditClient, RecordEditChangesOutcome, RecordEditEnvelope, SourceChanges } from '../client';
-import { failureReason, isReadFailed } from '../wire/readFailed';
+import { reportPartial } from '../drivingLib/agentGesture';
+import { renameOutcome } from '../drivingLib/renameOutcome';
 import type { PluginAddress } from '../wire/pluginAddress';
 import type { PathHop } from '../wire/messages';
 import type { RecordDocument } from '../textDocuments/recordDocument';
@@ -14,7 +15,7 @@ import type { EditAddress } from './recordTab';
  *  inline and keyboard edits through the message router, the right-click menus straight from the
  *  command they invoke. */
 export interface RecordWriteDeps {
-  meditClient: Pick<MEditClient, 'getEditChanges' | 'getFormKeyReferences'>;
+  meditClient: Pick<MEditClient, 'getEditChanges'>;
   // The document carrying the record: an open tab's, or the one the record opens as.
   documentOf: (address: EditAddress) => Promise<RecordDocument>;
   // Told before VS Code moves a file, so a tab the move takes along shows its record where it lands.
@@ -63,7 +64,6 @@ async function editDocuments(
   }
 
   const { newFormKey } = outcome;
-  const references = newFormKey === undefined ? NO_REFERENCES : await referencesOf(deps.meditClient, address.formKey, outcome.leftBehind);
   const applying = {
     applyWorkspaceChanges: (items: readonly WorkspaceChanges[]) => applyWorkspaceChanges(items, {
       read: carrying.uri,
@@ -71,12 +71,9 @@ async function editDocuments(
     }),
     refreshSourceControlFor: deps.refreshSourceControlFor,
   };
-  const failure = await applyAnswered(applying, [outcome], [address.plugin, ...references.carried]);
+  const failure = await applyAnswered(applying, [outcome], outcome.plugins);
   if (failure === undefined) {
-    const { cannotFollow } = references;
-    if (cannotFollow.length > 0) {
-      deps.reporter.report('warning', `Changed ${address.formKey} to ${newFormKey ?? ''}. ${String(cannotFollow.length)} references to it could not follow.`, cannotFollow.join('\n'));
-    }
+    if (newFormKey !== undefined) reportLeftBehind(deps.reporter, address.formKey, newFormKey, outcome);
     await afterApplied(deps, field, applied);
     return newFormKey;
   }
@@ -84,23 +81,17 @@ async function editDocuments(
   return undefined;
 }
 
-interface References {
-  readonly carried: readonly PluginAddress[];
-  readonly cannotFollow: readonly string[];
-}
+type Applied = Extract<RecordEditChangesOutcome, { applied: true }>;
 
-const NO_REFERENCES: References = { carried: [], cannotFollow: [] };
-
-// A FormKey change carries each plugin source mEdit could read, and a copy in a plugin with no plugin source stays as
-// it was (symbols.md, The features, story 7).
-async function referencesOf(client: RecordWriteDeps['meditClient'], formKey: string, leftBehind: Extract<RecordEditChangesOutcome, { applied: true }>['leftBehind']): Promise<References> {
-  const copies = await client.getFormKeyReferences(formKey);
-  const unread = leftBehind.map(({ plugin, reason }) => `${plugin.name} (${plugin.origin}): ${reason}`);
-  if (isReadFailed(copies)) return { carried: [], cannotFollow: [...unread, `the plugins mEdit reads: ${failureReason(copies)}`] };
-  return {
-    carried: copies.filter(({ inPluginSource }) => inPluginSource).map(({ plugin }) => plugin),
-    cannotFollow: [...copies.filter(({ inPluginSource }) => !inPluginSource).map(({ formKey: copy, plugin }) => `${copy} in ${plugin.name} (${plugin.origin})`), ...unread],
-  };
+// A reference that cannot follow does not stop a FormKey change, and the warning names each (symbols.md, The features,
+// story 7).
+function reportLeftBehind(reporter: Reporter, formKey: string, newFormKey: string, { leftBehind, copiesLeftBehind }: Applied): void {
+  const cannotFollow = [
+    ...copiesLeftBehind.map(({ formKey: copy, plugin }) => `${copy} in ${plugin.name} (${plugin.origin})`),
+    ...leftBehind.map(({ plugin, reason }) => `${plugin.name} (${plugin.origin}): ${reason}`),
+  ];
+  const outcome = renameOutcome({ applied: true, cannotFollow }, { named: formKey, newName: newFormKey, landed: newFormKey, definition: 'its file' });
+  if (outcome.applied) reportPartial(reporter, outcome.partial);
 }
 
 // The edit landed, so a failure here is the copy's (ADR-0019; editor.md, Reporting, story 2).

@@ -10,7 +10,7 @@ public sealed class TestEditor(EditRecordChangesHandler edits)
 {
     public RecordEditResult Edit(PluginAddress plugin, string formKey, RecordEditEnvelope envelope)
     {
-        var answer = edits.Changes(plugin, formKey, envelope);
+        var answer = edits.Changes(plugin, formKey, envelope, copiesWithNoPluginSource: []);
         if (answer.Holds(out var changes, out _))
         {
             EditSaving.Save(

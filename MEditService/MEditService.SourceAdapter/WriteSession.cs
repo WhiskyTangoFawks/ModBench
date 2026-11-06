@@ -70,7 +70,9 @@ internal sealed class WriteSession : IWriteSession, ISourceFiles
         }
     }
 
-    public SourceFailure? Write()
+    public SourceFailure? Write() => WriteThen(() => null);
+
+    public SourceFailure? WriteThen(Func<SourceFailure?> following)
     {
         if (_writing) throw new InvalidOperationException("Write waits for Atomically to end: the changes inside it may still be put back.");
         var (moves, deletions, documents) = Changes;
@@ -78,10 +80,10 @@ internal sealed class WriteSession : IWriteSession, ISourceFiles
             .SelectMany(_unsaved.HeldAtOrUnder)
             .Distinct(StringComparer.Ordinal)
             .ToList();
-        return held.Count > 0 ? new SourceFailure.Unsaved(held) : SourceFailure.Answer(WriteToDisk);
+        return held.Count > 0 ? new SourceFailure.Unsaved(held) : SourceFailure.Answer(() => WriteToDisk(following));
     }
 
-    private void WriteToDisk()
+    private void WriteToDisk(Func<SourceFailure?> following)
     {
         var journal = new WriteJournal(_repository.SourceFolder);
         try
@@ -91,6 +93,7 @@ internal sealed class WriteSession : IWriteSession, ISourceFiles
                 foreach (var (from, to) in Changes.Moves) journal.Move(from, to);
                 foreach (var path in Changes.Deletions) journal.DeleteTree(path);
                 foreach (var (path, text) in Changes.Documents) journal.Write(path, Encoding.UTF8.GetBytes(text));
+                if (following() is { } failure) throw SourceStopException.Of(failure);
             });
         }
         finally

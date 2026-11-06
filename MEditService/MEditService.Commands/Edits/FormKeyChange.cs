@@ -12,27 +12,29 @@ namespace MEditService.Commands.Edits;
 /// naming it follows (ADR-0028).</summary>
 internal sealed class FormKeyChange(ILogger logger)
 {
-    /// <summary>Each plugin source of the load order, the record's own included, naming <paramref name="newFormKey"/>
-    /// where it named <paramref name="formKey"/>, in <paramref name="sessions"/>. Answers each it left as it was, and why.</summary>
-    internal static IReadOnlyList<SourceLeftBehind> Follow(
-        ISourceAdapter source, LoadOrderSnapshot loadOrder, string formKey, string newFormKey, WriteSessions sessions)
+    /// <summary>Each plugin source naming <paramref name="plugin"/>'s record <paramref name="formKey"/> names
+    /// <paramref name="newFormKey"/> instead, in <paramref name="sessions"/>. Answers each plugin it changed, and each it
+    /// left as it was, with why.</summary>
+    internal static (IReadOnlyList<PluginAddress> Changed, IReadOnlyList<SourceLeftBehind> LeftBehind) Follow(
+        ISourceAdapter source, LoadOrderSnapshot loadOrder, PluginAddress plugin, string formKey, string newFormKey, WriteSessions sessions)
     {
-        var (reading, leftBehind) = PluginSources.Of(source, loadOrder);
-        foreach (var (plugin, mod) in reading)
+        var edited = loadOrder.Plugin(plugin) ?? throw new InvalidOperationException($"Expected {plugin.Name} ({plugin.Origin}), once edited, in the load order.");
+        var (reading, leftBehind) = PluginSources.Naming(source, loadOrder, edited);
+        var changed = new List<PluginAddress>();
+        foreach (var (naming, mod) in reading)
         {
             var session = sessions.Over(mod, loadOrder.GameRelease);
-            if (session.Atomically(() => session.Apply(session.Repository.ChangesToFollowFormKeyChange(plugin.Key, formKey, newFormKey))) is { } failure)
-                leftBehind.Add(new(plugin.Key, failure.Reason));
+            var before = session.Changes;
+            if (session.Atomically(() => session.Apply(session.Repository.ChangesToFollowFormKeyChange(naming.Key, formKey, newFormKey))) is { } failure)
+                leftBehind.Add(new(naming.Key, failure.Reason));
+            else if (session.ChangesAddedSince(before).Documents.Count > 0)
+                changed.Add(naming.Key);
         }
-        return leftBehind;
+        return (changed, leftBehind);
     }
 
     /// <summary>The document member a record's FormID is, which the edit's path names.</summary>
     internal const string Member = RecordMembers.FormKey;
-
-    /// <summary>Whether the envelope sets the record's FormID rather than a field of its document.</summary>
-    internal static bool IsFormIdEdit(RecordEditEnvelope envelope) =>
-        envelope is { Op: RecordEditEnvelope.Set, Path: [{ Kind: PathHop.MemberKind, Name: Member }] };
 
     /// <summary>The record under its new key.</summary>
     internal Answer<RecordEditResult, SourceFailure> Change(

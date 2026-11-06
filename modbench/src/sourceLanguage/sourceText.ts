@@ -118,6 +118,9 @@ export function referenceSpan(text: string, referrer: string, formKey: string): 
 // A FormKey's six-digit object ID and its delimiter come before its plugin's name.
 const PLUGIN_NAME_OFFSET = 7;
 
+/** The plugin's name in a FormKey. */
+export const pluginNameIn = (formKey: string): string => formKey.slice(PLUGIN_NAME_OFFSET);
+
 const pluginPartOf = (node: Node): TextSpan & { name: string } =>
   ({ name: String(node.value).slice(PLUGIN_NAME_OFFSET), start: node.offset + 1 + PLUGIN_NAME_OFFSET, end: node.offset + node.length - 1 });
 

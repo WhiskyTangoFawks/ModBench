@@ -36,7 +36,6 @@ const height: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: '
 function makeDeps(answer: Awaited<ReturnType<InMemoryMEditClient['getEditChanges']>>) {
   const meditClient = new InMemoryMEditClient();
   meditClient.setQueryAnswer('getEditChanges', answer);
-  meditClient.setQueryAnswer('getFormKeyReferences', []);
   const reporter = recordingReporter();
   const refreshSourceControlFor = vi.fn();
   const moving = vi.fn<RecordWriteDeps['moving']>();
@@ -54,7 +53,7 @@ beforeEach(() => {
 
 describe('an edit of a record', () => {
   it('asks mEdit for the edit, which reads the documents it holds', async () => {
-    const { deps, meditClient } = makeDeps({ applied: true, leftBehind: [], moves: [], deletions: [], documents: [] });
+    const { deps, meditClient } = makeDeps({ applied: true, plugins: [plugin], leftBehind: [], copiesLeftBehind: [], moves: [], deletions: [], documents: [] });
 
     await applyRecordEdit(deps, address, height);
 
@@ -63,7 +62,7 @@ describe('an edit of a record', () => {
 
   it('tells the panel host the moves and the new FormKey, refreshes Source Control, and resolves the new FormKey', async () => {
     const { deps, refreshSourceControlFor, moving } = makeDeps({
-      applied: true, newFormKey: '000900:A.esp', leftBehind: [], moves: [{ from: FILE, to: MOVED }], deletions: [], documents: [{ path: MOVED, text: 'renamed' }],
+      applied: true, newFormKey: '000900:A.esp', plugins: [plugin], leftBehind: [], copiesLeftBehind: [], moves: [{ from: FILE, to: MOVED }], deletions: [], documents: [{ path: MOVED, text: 'renamed' }],
     });
 
     const newFormKey = await applyRecordEdit(deps, address, height);
@@ -74,7 +73,7 @@ describe('an edit of a record', () => {
   });
 
   it('changes nothing and says nothing when mEdit answers no change', async () => {
-    const { deps, reporter, refreshSourceControlFor } = makeDeps({ applied: true, leftBehind: [], moves: [], deletions: [], documents: [] });
+    const { deps, reporter, refreshSourceControlFor } = makeDeps({ applied: true, plugins: [plugin], leftBehind: [], copiesLeftBehind: [], moves: [], deletions: [], documents: [] });
 
     await applyRecordEdit(deps, address, height);
 
@@ -97,8 +96,8 @@ describe('an edit of a record', () => {
   });
 
   it.each([
-    ['an edit applied', { applied: true, leftBehind: [], moves: [], deletions: [], documents: [{ path: FILE, text: 'edited' }] }, 1],
-    ['an edit that changes nothing', { applied: true, leftBehind: [], moves: [], deletions: [], documents: [] }, 1],
+    ['an edit applied', { applied: true, plugins: [plugin], leftBehind: [], copiesLeftBehind: [], moves: [], deletions: [], documents: [{ path: FILE, text: 'edited' }] }, 1],
+    ['an edit that changes nothing', { applied: true, plugins: [plugin], leftBehind: [], copiesLeftBehind: [], moves: [], deletions: [], documents: [] }, 1],
     ['an edit mEdit refuses', { applied: false, refusal: 'ReadOnly', message: 'Read-only.' }, 0],
   ] as [string, Awaited<ReturnType<InMemoryMEditClient['getEditChanges']>>, number][])('runs what follows only for %s', async (_what, answer, times) => {
     const { deps } = makeDeps(answer);
@@ -111,7 +110,7 @@ describe('an edit of a record', () => {
 
   it('reports a failure after the edit landed as a failed copy, not a failed edit', async () => {
     const { deps, reporter } = makeDeps({
-      applied: true, newFormKey: '000900:A.esp', leftBehind: [], moves: [], deletions: [], documents: [{ path: FILE, text: 'edited' }],
+      applied: true, newFormKey: '000900:A.esp', plugins: [plugin], leftBehind: [], copiesLeftBehind: [], moves: [], deletions: [], documents: [{ path: FILE, text: 'edited' }],
     });
 
     const newFormKey = await applyRecordEdit(deps, address, height, () => Promise.reject(new Error('clipboard busy')));
@@ -122,7 +121,7 @@ describe('an edit of a record', () => {
 
   it('reports an edit VS Code did not apply as one that may have partly landed, and refreshes Source Control', async () => {
     const { deps, reporter, refreshSourceControlFor } = makeDeps({
-      applied: true, newFormKey: '000900:A.esp', leftBehind: [], moves: [{ from: FILE, to: MOVED }], deletions: [], documents: [{ path: MOVED, text: 'renamed' }],
+      applied: true, newFormKey: '000900:A.esp', plugins: [plugin], leftBehind: [], copiesLeftBehind: [], moves: [{ from: FILE, to: MOVED }], deletions: [], documents: [{ path: MOVED, text: 'renamed' }],
     });
     h.applyLands = false;
 
@@ -137,7 +136,7 @@ describe('an edit of a record', () => {
   });
 
   it('reports a record with no document to edit, saying why', async () => {
-    const { deps, meditClient, reporter } = makeDeps({ applied: true, leftBehind: [], moves: [], deletions: [], documents: [] });
+    const { deps, meditClient, reporter } = makeDeps({ applied: true, plugins: [plugin], leftBehind: [], copiesLeftBehind: [], moves: [], deletions: [], documents: [] });
     deps.documentOf = () => Promise.resolve({ refused: 'A.esp (ModA) holds no 000800:A.esp.' });
 
     await applyRecordEdit(deps, address, height);
@@ -151,32 +150,27 @@ describe('a change of the FormKey', () => {
   const rekeyed = { applied: true as const, newFormKey: '000900:A.esp', moves: [], deletions: [], documents: [{ path: FILE, text: 'rekeyed' }] };
   const inSource = { name: 'B.esp', origin: 'ModB' };
 
-  it('refreshes Source Control for each plugin whose source it carried, and warns naming each reference that could not follow', async () => {
-    const { deps, meditClient, reporter, refreshSourceControlFor } = makeDeps({ ...rekeyed, leftBehind: [{ plugin: { name: 'D.esp', origin: 'ModD' }, reason: 'unreadable' }] });
-    meditClient.setQueryAnswer('getFormKeyReferences', [
-      { formKey: '000801:B.esp', plugin: inSource, inPluginSource: true },
-      { formKey: '000802:C.esp', plugin: { name: 'C.esp', origin: 'ModC' }, inPluginSource: false },
-    ]);
+  it('refreshes Source Control for each plugin mEdit says it changed, and warns naming each reference left behind', async () => {
+    const { deps, reporter, refreshSourceControlFor } = makeDeps({
+      ...rekeyed, plugins: [plugin, inSource],
+      leftBehind: [{ plugin: { name: 'D.esp', origin: 'ModD' }, reason: 'unreadable' }],
+      copiesLeftBehind: [{ formKey: '000802:C.esp', plugin: { name: 'C.esp', origin: 'ModC' } }],
+    });
 
     await applyRecordEdit(deps, address, height);
 
-    expect(meditClient.calls).toContainEqual({ method: 'getFormKeyReferences', args: ['000800:A.esp'] });
     expect(refreshSourceControlFor.mock.calls).toEqual([[plugin], [inSource]]);
     expect(reporter.reports).toEqual([{
-      severity: 'warning', message: 'Changed 000800:A.esp to 000900:A.esp. 2 references to it could not follow.',
+      severity: 'warning', message: 'Renamed 000800:A.esp to "000900:A.esp". 2 references to it could not follow.',
       detail: '000802:C.esp in C.esp (ModC)\nD.esp (ModD): unreadable',
     }]);
   });
 
-  it('names the plugins mEdit reads as left behind when it cannot say which reference the record', async () => {
-    const { deps, meditClient, reporter } = makeDeps({ ...rekeyed, leftBehind: [] });
-    meditClient.setQueryFailure('getFormKeyReferences', { failed: 'unreachable' });
+  it('says nothing when every reference followed', async () => {
+    const { deps, reporter } = makeDeps({ ...rekeyed, plugins: [plugin], leftBehind: [], copiesLeftBehind: [] });
 
-    await applyRecordEdit(deps, address, height);
+    expect(await applyRecordEdit(deps, address, height)).toBe('000900:A.esp');
 
-    expect(reporter.reports).toEqual([{
-      severity: 'warning', message: 'Changed 000800:A.esp to 000900:A.esp. 1 references to it could not follow.',
-      detail: 'the plugins mEdit reads: mEdit could not be reached.',
-    }]);
+    expect(reporter.reports).toEqual([]);
   });
 });

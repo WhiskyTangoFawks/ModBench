@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -216,22 +217,45 @@ public sealed class FormIdEditTests
     }
 
     [Fact]
-    public void AScriptsEditOfTheFormId_WritesOneFolder_LeavingAReferencerInAnotherModsPluginSourceAsItWas()
+    public void AScriptsEditOfTheFormId_CarriesAReferencerInAnotherModsPluginSource()
     {
         using var two = TwoModReferenceFixture.Create(initReferencer: true);
-        var before = SourceModTree.Records(two.ReferencerModFolder, two.ReferencerPlugin);
 
-        var result = two.ScriptEditHandler.Edit(
-            two.TargetPlugin, two.TargetRace.ToString(), Envelopes.SetAt(JsonSerializer.SerializeToElement("000F00:Base.esm"), Envelopes.Member("FormKey")));
+        var result = two.ScriptEditHandler.Edit(two.TargetPlugin, two.TargetRace.ToString(), FormKeySet, copiesWithNoPluginSource: []).AsResult();
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal(before, SourceModTree.Records(two.ReferencerModFolder, two.ReferencerPlugin));
+        Assert.Contains("000F00:Base.esm", two.DocumentCarrying(two.ReferencerPlugin, TwoModReferenceFixture.ReferencerNpcEditorId).Body, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void AFormKeyChange_AnswersTheCopiesWithNoPluginSourceItIsHanded_AsLeftBehind_AndThePluginsItChanges()
+    {
+        using var two = TwoModReferenceFixture.Create(initReferencer: true);
+        RecordAt binary = new(new PluginAddress("Binary.esp", "BinaryMod"), "000801:Binary.esp");
+
+        Assert.True(two.EditChangesHandler.Changes(two.TargetPlugin, two.TargetRace.ToString(), FormKeySet, [binary]).Holds(out var changes, out var refused), refused?.Message);
+
+        Assert.Equal([binary], changes.CopiesLeftBehind);
+        Assert.Equal([two.TargetPlugin, two.ReferencerPlugin], changes.Plugins);
+    }
+
+    [Fact]
+    public void AnEditOfAnotherField_LeavesNothingBehind_WhateverCopiesItIsHanded()
+    {
+        using var two = TwoModReferenceFixture.Create(initReferencer: true);
+        var envelope = Envelopes.SetAt(JsonSerializer.SerializeToElement("Renamed"), Envelopes.Member("EditorID"));
+
+        Assert.True(two.EditChangesHandler.Changes(two.TargetPlugin, two.TargetRace.ToString(), envelope, [new(two.ReferencerPlugin, "000801:Winner.esp")]).Holds(out var changes, out var refused), refused?.Message);
+
+        Assert.Empty(changes.CopiesLeftBehind);
+        Assert.Equal([two.TargetPlugin], changes.Plugins);
+    }
+
+    private static readonly RecordEditEnvelope FormKeySet = Envelopes.SetAt(JsonSerializer.SerializeToElement("000F00:Base.esm"), Envelopes.Member("FormKey"));
 
     private static EditRecordChanges TargetRaceRekeyed(TwoModReferenceFixture two)
     {
-        var envelope = Envelopes.SetAt(JsonSerializer.SerializeToElement("000F00:Base.esm"), Envelopes.Member("FormKey"));
-        Assert.True(two.EditChangesHandler.Changes(two.TargetPlugin, two.TargetRace.ToString(), envelope).Holds(out var changes, out var refused), refused?.Message);
+        Assert.True(two.EditChangesHandler.Changes(two.TargetPlugin, two.TargetRace.ToString(), FormKeySet, []).Holds(out var changes, out var refused), refused?.Message);
         return changes;
     }
 

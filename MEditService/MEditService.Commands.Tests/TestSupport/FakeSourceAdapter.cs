@@ -108,6 +108,8 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
         public SourceFailure? Write() => throw Unreached();
 
+        public SourceFailure? WriteThen(Func<SourceFailure?> following) => throw Unreached();
+
         public SourceChanges ChangesAddedSince(SourceChanges before) =>
             new(
                 [.. Changes.Moves.Skip(before.Moves.Count)],

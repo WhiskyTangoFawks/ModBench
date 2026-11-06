@@ -9,19 +9,25 @@ commands: @../../spec/architecture/target-architecture.medit_core.commands
 commands.label: Commands
 sourceadapter: @../../spec/architecture/target-architecture.medit_repositories.sourceadapter
 sourceadapter.label: Source adapter
+recordindex: @../../spec/architecture/target-architecture.medit_readmodel.recordindex
+recordindex.label: Record index
 source: @../../spec/architecture/target-architecture.medit_data.source
 
 scripts -> http: "edit: plugin, origin, FormKey, op, field path, value" {class: edit}
-http -> commands: envelope {class: edit}
+formkeyread: "a change of the FormKey, before the edit" {
+  http -> recordindex: "each copy that names the record" {class: query}
+  recordindex -> http: "answer: each copy, and whether its plugin has plugin source" {class: query}
+}
+http -> commands: "envelope; for the FormKey, each copy in a plugin with no plugin source" {class: edit}
 source -> sourceadapter: documents {class: edit}
 sourceadapter -> commands: "the documents it reads, an unsaved one in place of its file" {class: edit}
-commands -> sourceadapter: "the record's new text" {class: edit}
+commands -> sourceadapter: "the record's new text; for the FormKey, each plugin source that names it follows" {class: edit}
 sourceadapter."the moves, deletions and documents that text makes"
 commands -> sourceadapter: write {class: signal}
-sourceadapter -> source: "moves, then deletions, then documents" {class: edit}
+sourceadapter -> source: "moves, then deletions, then documents, one source folder after another; a later folder's failure puts back the earlier" {class: edit}
 sourceadapter -> commands: written {class: edit}
 commands -> http: applied {class: edit}
-http -> scripts: "204: nothing" {class: edit}
+http -> scripts: "200: the new FormKey, and each plugin source and copy left behind" {class: edit}
 
 edit_refused: "refused before any write: no git, not a compiled plugin, or the edit itself" {
   commands -> http: the refusal {class: edit}

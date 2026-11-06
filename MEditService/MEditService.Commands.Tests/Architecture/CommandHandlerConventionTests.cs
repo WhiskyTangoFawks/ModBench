@@ -45,6 +45,7 @@ public sealed class CommandHandlerConventionTests
         typeof(PutLoadOrderRefused),
         typeof(RecordCopied),
         typeof(RecordDeleted),
+        typeof(RecordEdited),
         typeof(RecordEditRefused),
         typeof(RecordWritten),
         typeof(RenameSourceChanges),

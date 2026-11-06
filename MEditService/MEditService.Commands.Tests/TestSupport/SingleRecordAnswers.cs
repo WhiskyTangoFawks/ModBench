@@ -23,6 +23,12 @@ internal static class SingleRecordAnswers
             ? new RecordEditResult(true, RecordEditRefusal.None, "", written.FormKey)
             : Refusing(refused);
 
+    /// <summary>What a script's edit answered, as the outcome the tests read.</summary>
+    internal static RecordEditResult AsResult(this Answer<RecordEdited, RecordEditRefused> answer) =>
+        answer.Holds(out var edited, out var refused)
+            ? new RecordEditResult(true, RecordEditRefusal.None, "", edited.NewFormKey)
+            : Refusing(refused);
+
     private static RecordEditResult Refusing(RecordEditRefused refused) =>
         new(false, refused.Refusal, refused.Message, Path: refused.Path);
 

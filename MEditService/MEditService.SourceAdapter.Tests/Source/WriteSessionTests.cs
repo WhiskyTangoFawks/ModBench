@@ -513,6 +513,31 @@ public sealed class WriteSessionTests : IDisposable
     }
 
     [Fact]
+    public void AWriteFollowedByOneThatFails_PutsBackWhatItWrote_AndAnswersTheLaterFailure()
+    {
+        var session = Session();
+        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell"))));
+        var later = Session(new DocumentChange(FullPath(QuestPath), UnsavedQuest()));
+        Assert.Null(Write(later, repository => repository.ChangesToRemove(Plugin, Identity(_response, "info"))));
+        var before = TreeSnapshot.Of(_modFolder);
+
+        Assert.IsType<SourceFailure.Unsaved>(session.WriteThen(later.Write));
+
+        Assert.Equal(before, TreeSnapshot.Of(_modFolder));
+    }
+
+    [Fact]
+    public void AWriteFollowedByOneThatLands_KeepsWhatItWrote()
+    {
+        var session = Session();
+        Assert.Null(Write(session, repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell"))));
+
+        Assert.Null(session.WriteThen(() => null));
+
+        Assert.False(File.Exists(FullPath(ExteriorCellPath)));
+    }
+
+    [Fact]
     public void AFileHeldUnsavedThatTheWriteDoesNotReach_IsNoRefusal()
     {
         var session = Session(new DocumentChange(FullPath(QuestPath), UnsavedQuest()));

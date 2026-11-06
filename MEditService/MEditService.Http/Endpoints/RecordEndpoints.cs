@@ -168,16 +168,6 @@ internal static class RecordEndpoints
         .ProducesProblem(503)
         .ProducesProblem(500);
 
-        app.MapGet("/form-keys/{formKey}/references", (string formKey, IQueries svc) =>
-            EndpointMapping.Ok(svc.GetFormKeyReferences(Uri.UnescapeDataString(formKey))))
-        .WithName("GetFormKeyReferences")
-        .WithTags("Records")
-        .WithDescription(
-            "Each copy of the record, and each copy that links it, in an active plugin or one with plugin source. Answers " +
-            "only once the record index is ready. Each says whether its plugin has plugin source, which a FormKey change changes.")
-        .Produces<IReadOnlyList<CopyNaming>>()
-        .ProducesProblem(503);
-
         app.MapGet("/script-names/{name}/references", (string name, IQueries svc) => EndpointMapping.Ok(svc.GetScriptReferences(name)))
         .WithName("GetScriptReferences")
         .WithTags("Records")
@@ -190,8 +180,8 @@ internal static class RecordEndpoints
 
         // ADR-0001: the document is the caller's to change and save.
         app.MapPost("/records/{formKey}/edit-changes", (
-            string formKey, RecordEditChangesRequest request, EditRecordChangesHandler edits) =>
-            EditRecordChanges(formKey, request, edits, logger))
+            string formKey, RecordEditChangesRequest request, EditRecordChangesHandler edits, IQueries svc) =>
+            EditRecordChanges(formKey, request, edits, svc, logger))
         .WithName("EditRecordChanges")
         .WithSummary("The changes an edit of a record makes to plugin source, writing nothing.")
         .WithDescription(
@@ -200,7 +190,8 @@ internal static class RecordEndpoints
             "against the tree the one before it left, and each document's " +
             "path is where it stands once moved. Every path is absolute. Any other document the edit reads is read from " +
             "disk. A refusal is the one the edit itself gives. A change of the FormKey carries every plugin source that " +
-            "names the record, and names each whose source does not read as left behind.")
+            "names the record, and names each that does not read, and each copy in a plugin with no plugin source, as " +
+            "left behind; it answers only once the record index is ready.")
         .WithTags("Records")
         .Produces<EditRecordChanges>()
         .ProducesProblem(400)
@@ -210,16 +201,16 @@ internal static class RecordEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        app.MapPost("/records/{formKey}/edit", (string formKey, RecordEditRequest request, EditRecordHandler edits) =>
-            EditRecord(formKey, request, edits, logger))
+        app.MapPost("/records/{formKey}/edit", (string formKey, RecordEditRequest request, EditRecordHandler edits, IQueries svc) =>
+            EditRecord(formKey, request, edits, svc, logger))
         .WithName("EditRecord")
         .WithSummary("Writes an edit of a record to plugin source: a script's edit.")
         .WithDescription(
             "Writes to the working tree what the same edit's changes answer, an unsaved document read in place of its " +
-            "file, but for a change of the FormKey, which leaves each reference to the record as it was. An edit that " +
-            "would write a file held unsaved is refused naming it, and nothing is written.")
+            "file, and answers what they leave behind. An edit that would write a file held unsaved is refused naming " +
+            "it, and nothing is written.")
         .WithTags("Records")
-        .Produces(204)
+        .Produces<RecordEdited>()
         .ProducesProblem(400)
         .ProducesProblem(404)
         .ProducesProblem(409)
@@ -306,32 +297,39 @@ internal static class RecordEndpoints
     }
 
     internal static IResult EditRecordChanges(
-        string formKey, RecordEditChangesRequest request, EditRecordChangesHandler edits, ILogger logger)
+        string formKey, RecordEditChangesRequest request, EditRecordChangesHandler edits, IQueries svc, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
         // A body missing its edit binds it as null, whatever the type says; validation answers that.
         RecordEditRequest? edit = request.Edit;
         var spelled = RecordEditEnvelope.Spell(edit?.Path ?? []);
         LogEditReceived(logger, "EditRecordChanges", edit, decoded, spelled);
-        return EditRequestProblem(edit) ?? EndpointMapping.Answered(
-            "EditChanges", logger,
-            edits.Changes(
-                new PluginAddress(request.Edit.Plugin, request.Edit.Origin), decoded,
-                new RecordEditEnvelope(request.Edit.Op, request.Edit.Path ?? [], request.Edit.EditedValue)),
-            Results.Ok);
+        if (EditRequestProblem(edit) is { } problem) return problem;
+        var (plugin, envelope) = (new PluginAddress(request.Edit.Plugin, request.Edit.Origin), EnvelopeOf(request.Edit));
+        return WithCopiesWithNoPluginSource(svc, plugin, decoded, envelope,
+            copies => EndpointMapping.Answered("EditChanges", logger, edits.Changes(plugin, decoded, envelope, copies), Results.Ok));
     }
 
-    internal static IResult EditRecord(string formKey, RecordEditRequest request, EditRecordHandler edits, ILogger logger)
+    internal static IResult EditRecord(string formKey, RecordEditRequest request, EditRecordHandler edits, IQueries svc, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
         var spelled = RecordEditEnvelope.Spell(request.Path ?? []);
         LogEditReceived(logger, "EditRecord", request, decoded, spelled);
-        return EditRequestProblem(request) ?? EndpointMapping.Answered(
-            "EditRecord", logger,
-            edits.Edit(
-                new PluginAddress(request.Plugin, request.Origin), decoded,
-                new RecordEditEnvelope(request.Op, request.Path ?? [], request.EditedValue)));
+        if (EditRequestProblem(request) is { } problem) return problem;
+        var (plugin, envelope) = (new PluginAddress(request.Plugin, request.Origin), EnvelopeOf(request));
+        return WithCopiesWithNoPluginSource(svc, plugin, decoded, envelope,
+            copies => EndpointMapping.Answered("EditRecord", logger, edits.Edit(plugin, decoded, envelope, copies), Results.Ok));
     }
+
+    private static RecordEditEnvelope EnvelopeOf(RecordEditRequest edit) => new(edit.Op, edit.Path ?? [], edit.EditedValue);
+
+    // Read before the edit, while the record index still holds the FormKey it changes.
+    private static IResult WithCopiesWithNoPluginSource(
+        IQueries svc, PluginAddress plugin, string formKey, RecordEditEnvelope envelope, Func<IReadOnlyList<RecordAt>, IResult> edit) =>
+        envelope.SetsTheFormKey
+            ? EndpointMapping.Answered(svc.GetFormKeyReferences(plugin, formKey), copies =>
+                edit([.. copies.Where(copy => !copy.InPluginSource).Select(copy => new RecordAt(copy.Plugin, copy.FormKey))]))
+            : edit([]);
 
     internal static async Task<IResult> CopyRecord(ScriptCopyRequest request, CopyRecordHandler copies, ILogger logger)
     {

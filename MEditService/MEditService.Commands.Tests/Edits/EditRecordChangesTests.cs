@@ -34,14 +34,14 @@ public sealed class EditRecordChangesTests : IDisposable
 
     private static (RecordEditResult Outcome, EditRecordChanges? Changes) Changes(
         TestInstance instance, PluginAddress plugin, string formKey, RecordEditEnvelope envelope) =>
-        instance.EditChangesHandler.Changes(plugin, formKey, envelope).Seen();
+        instance.EditChangesHandler.Changes(plugin, formKey, envelope, copiesWithNoPluginSource: []).Seen();
 
     private static (RecordEditResult Outcome, EditRecordChanges? Changes) ChangesOver(
         TestInstance instance, PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string unsaved)
     {
         var file = Path.Combine(instance.ModFolderOf(plugin), SourceModTree.DocumentFile(instance.ModFolderOf(plugin), plugin, formKey).Require());
         instance.Unsaved.Apply([new DocumentChange(file, unsaved)]);
-        return instance.EditChangesHandler.Changes(plugin, formKey, envelope).Seen();
+        return instance.EditChangesHandler.Changes(plugin, formKey, envelope, copiesWithNoPluginSource: []).Seen();
     }
 
     [Fact]
@@ -90,7 +90,7 @@ public sealed class EditRecordChangesTests : IDisposable
         _mod.Unsaved.Apply([new DocumentChange(file, given)]);
         File.WriteAllText(file, "not a document");
 
-        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, _mod.Npc.ToString(), Set("HeightMax", "0.75")).Seen();
+        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, _mod.Npc.ToString(), Set("HeightMax", "0.75"), copiesWithNoPluginSource: []).Seen();
 
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
         var document = Assert.Single(answer.Changes.Require().Documents);

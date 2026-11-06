@@ -348,11 +348,25 @@ internal sealed class RelationReads(
           ON d.plugin = fr.source_plugin AND d.origin = fr.source_origin
         """;
 
+    private static readonly string Copies = $"""
+        {TableDdlBuilder.MirrorSchema}.records r
+        {TableDdlBuilder.RegisteredJoin("r", "plugin", "origin")}
+        JOIN {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} d
+          ON d.plugin = r.plugin AND d.origin = r.origin
+        """;
+
+    private static readonly string ActiveOrCompiled = $"(p.load_order_idx IS NOT NULL OR d.derived_from <> '{DerivedFrom.Binary}')";
+
+    private static readonly string InPluginSource = $"d.derived_from <> '{DerivedFrom.Binary}'";
+
+    private static CopyNaming CopyNamingOf(System.Data.Common.DbDataReader reader) =>
+        new(reader.GetString(0), new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.GetBoolean(3));
+
     /// <summary>The same read over the active plugins and the inactive compiled ones (ADR-0012).</summary>
     public IReadOnlyList<ReferenceRow> GetReferencedByInActiveOrCompiledPlugins(string targetFormKey)
     {
         using var context = store.OpenRead();
-        return GetReferences(context, ActiveOrCompiledPluginReferrers, $"AND (p.load_order_idx IS NOT NULL OR d.derived_from <> '{DerivedFrom.Binary}')", targetFormKey);
+        return GetReferences(context, ActiveOrCompiledPluginReferrers, $"AND {ActiveOrCompiled}", targetFormKey);
     }
 
     // SQL's 1-based position of a FormKey's plugin name, after its six-digit object ID and its colon.
@@ -363,28 +377,24 @@ internal sealed class RelationReads(
     public IReadOnlyList<CopyNaming> GetCopiesNaming(string name)
     {
         using var context = store.OpenRead();
-        var inPluginSource = $"d.derived_from <> '{DerivedFrom.Binary}'";
         var copies = context.Rows($"""
-            SELECT r.form_key, r.plugin, r.origin, {inPluginSource}
-            FROM {TableDdlBuilder.MirrorSchema}.records r
-            {TableDdlBuilder.RegisteredJoin("r", "plugin", "origin")}
-            JOIN {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} d
-              ON d.plugin = r.plugin AND d.origin = r.origin
+            SELECT r.form_key, r.plugin, r.origin, {InPluginSource}
+            FROM {Copies}
             WHERE (lower(r.form_key_plugin) = lower($1)
                    OR list_contains(list_transform(r.masters, m -> lower(m)), lower($1))
                    OR (lower(r.plugin) = lower($1) AND EXISTS (
                        SELECT 1 FROM {TableDdlBuilder.MirrorSchema}.form_references fr
                        WHERE fr.source_form_key = r.form_key AND fr.source_plugin = r.plugin AND fr.source_origin = r.origin
                          AND lower(substr(fr.target_form_key, {FormKeyPluginStart})) = lower($1))))
-              AND (p.load_order_idx IS NOT NULL OR d.derived_from <> '{DerivedFrom.Binary}')
+              AND {ActiveOrCompiled}
             ORDER BY r.plugin, r.origin, r.form_key
-            """, reader => new CopyNaming(reader.GetString(0), new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.GetBoolean(3)), name);
+            """, CopyNamingOf, name);
         var headers = context.Rows($"""
-            SELECT d.plugin, d.origin, {inPluginSource}
+            SELECT d.plugin, d.origin, {InPluginSource}
             FROM {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} d
             {TableDdlBuilder.RegisteredJoin("d", "plugin", "origin")}
             WHERE d.derived_from <> '{DerivedFrom.SourceTree}'
-              AND (p.load_order_idx IS NOT NULL OR d.derived_from <> '{DerivedFrom.Binary}')
+              AND {ActiveOrCompiled}
             ORDER BY d.plugin, d.origin
             """, reader => (Plugin: reader.GetPluginAddress(), InPluginSource: reader.GetBoolean(2)))
             .Where(header => OpenedPlugins.GetValueOrDefault(header.Plugin)?.Masters.Contains(name, StringComparer.OrdinalIgnoreCase) == true)
@@ -397,21 +407,16 @@ internal sealed class RelationReads(
     public IReadOnlyList<CopyNaming> GetCopiesNamingFormKey(string formKey)
     {
         using var context = store.OpenRead();
-        var inPluginSource = $"d.derived_from <> '{DerivedFrom.Binary}'";
-        var activeOrCompiled = $"(p.load_order_idx IS NOT NULL OR d.derived_from <> '{DerivedFrom.Binary}')";
         return [.. context.Rows($"""
-            SELECT r.form_key, r.plugin, r.origin, {inPluginSource}
-            FROM {TableDdlBuilder.MirrorSchema}.records r
-            {TableDdlBuilder.RegisteredJoin("r", "plugin", "origin")}
-            JOIN {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} d
-              ON d.plugin = r.plugin AND d.origin = r.origin
-            WHERE r.form_key = $1 AND {activeOrCompiled}
+            SELECT r.form_key, r.plugin, r.origin, {InPluginSource}
+            FROM {Copies}
+            WHERE r.form_key = $1 AND {ActiveOrCompiled}
             UNION
-            SELECT fr.source_form_key, fr.source_plugin, fr.source_origin, {inPluginSource}
+            SELECT fr.source_form_key, fr.source_plugin, fr.source_origin, {InPluginSource}
             FROM {ActiveOrCompiledPluginReferrers}
-            WHERE fr.target_form_key = $1 AND {activeOrCompiled}
+            WHERE fr.target_form_key = $1 AND {ActiveOrCompiled}
             ORDER BY 2, 3, 1
-            """, reader => new CopyNaming(reader.GetString(0), new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.GetBoolean(3)), formKey)];
+            """, CopyNamingOf, formKey)];
     }
 
     /// <summary>Each copy in an active or compiled plugin whose document holds <paramref name="text"/> in any case.</summary>

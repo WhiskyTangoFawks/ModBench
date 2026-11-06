@@ -21,15 +21,13 @@ internal sealed class WriteSessions(ISourceAdapter source, IReadOnlyList<Documen
     /// <summary>What every session's writes change, with absolute paths.</summary>
     internal SourceChanges Made => _byFolder.Values.Aggregate(SourceChanges.None, (all, session) => all.Then(session.Changes));
 
-    // Writes the one session that holds changes; a write across folders could not put back a folder it wrote.
-    private SourceFailure? Write() =>
-        _byFolder.Values.Where(Changes).ToList() switch
-        {
-            [] => null,
-            [var changed] => changed.Write(),
-            var changed => throw new InvalidOperationException(
-                $"Expected a written gesture to change one folder, not {changed.Count}: nothing puts back a folder already written."),
-        };
+    // Each folder writes after the ones before it, and a later folder's failure puts back the earlier ones.
+    private SourceFailure? Write()
+    {
+        var changed = _byFolder.Values.Where(Changes).ToList();
+        if (changed.Count == 0) return null;
+        return changed.SkipLast(1).Reverse().Aggregate<IWriteSession, Func<SourceFailure?>>(changed[^1].Write, (following, session) => () => session.WriteThen(following))();
+    }
 
     /// <summary>The <paramref name="outcome"/> of a gesture whose changes are in these sessions, once they are written and
     /// <paramref name="loadOrder"/> marks it; an outcome that changed nothing is not written.</summary>
