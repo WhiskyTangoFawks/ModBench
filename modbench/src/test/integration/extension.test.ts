@@ -604,6 +604,31 @@ describe('Mod sync', () => {
   });
 });
 
+describe('a rename VS Code makes of a mod\'s folder', () => {
+  const modDir = path.join(root, 'mods', 'Explorer Mod');
+  const renamedDir = path.join(root, 'mods', 'Renamed Mod');
+  let original = '';
+
+  before(() => {
+    original = readFileSync(modlistPath, 'utf8');
+    mkdirSync(modDir);
+    writeFileSync(modlistPath, '+Explorer Mod\r\n');
+  });
+  after(() => {
+    writeFileSync(modlistPath, original);
+    for (const folder of [modDir, renamedDir]) rmSync(folder, { recursive: true, force: true });
+  });
+
+  it('carries the mod\'s line to the folder\'s new name, enabled as it was', async () => {
+    const edit = new vscode.WorkspaceEdit();
+    edit.renameFile(vscode.Uri.file(modDir), vscode.Uri.file(renamedDir));
+
+    assert.ok(await vscode.workspace.applyEdit(edit));
+
+    await waitFor('the line to follow the folder', () => readFileSync(modlistPath, 'utf8') === '+Renamed Mod\r\n');
+  });
+});
+
 describe('Deploy', () => {
   const modDir = path.join(root, 'mods', 'Deployed Mod');
   const deploymentFolder = path.join(root, '..', 'deployment');

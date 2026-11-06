@@ -11,6 +11,8 @@
     { "path": "../drivingLib" },
     { "path": "../instanceAdapter" },
     { "path": "../instanceLoader" },
+    { "path": "../modCommands" },
+    { "path": "../pluginCommands" },
     { "path": "../ports" },
     { "path": "../symbolNames" },
     { "path": "../textDocuments" },

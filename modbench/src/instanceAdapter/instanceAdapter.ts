@@ -9,7 +9,7 @@ import type { MoveToTrash } from '../ports/trash';
 import type { NexusFileInfo } from '../ports/nexusFileInfo';
 import type { NexusPage } from './nexusPage';
 import { PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
-import { OVERWRITE_ORIGIN } from '../wire/pluginAddress';
+import { OVERWRITE_ORIGIN, type PluginAddress } from '../wire/pluginAddress';
 import type { FomodMove, FomodState, ReleaseImage } from '../wire/fomodPage';
 import type { FolderRefusal } from './foldersRefused';
 import type { FileStamp } from '../repositoriesLib/stampedReads';
@@ -121,6 +121,12 @@ export interface ModGroups {
 
 /** A mod or a separator, by its kind and name. */
 export type EntryRef = Pick<ModlistEntry, 'kind' | 'name'>;
+
+/** What a rename of a file or folder in place renames: a plugin at the root of a mod or Overwrite, and the file name it
+ *  takes; or the folder of a mod or a separator, and the entry its new name holds. */
+export type RenamedSymbol =
+  | { readonly kind: 'plugin'; readonly plugin: PluginAddress; readonly to: string }
+  | { readonly kind: 'entry'; readonly entry: EntryRef; readonly to: EntryRef };
 
 /** Whether two entries are one to the mod manager: the same kind, and the same key. */
 export const sameEntry = (manager: Pick<InstanceAdapter, 'entryKey'>, a: EntryRef, b: EntryRef): boolean =>
@@ -894,6 +900,9 @@ export interface InstanceAdapter extends DataFileReads {
   readonly pluginReferences: SymbolOwner;
   /** Where the instance's files name a mod: each profile's mod list. */
   readonly entryReferences: EntryNames;
+  /** What another program's rename of the file or folder `from` to `to`, in its folder, renames; undefined for anything
+   *  else. */
+  renamedSymbol(from: string, to: string): Promise<RenamedSymbol | undefined>;
   /** Moves the folder that holds `entry` out of mods/ into the trash; false when none does. */
   trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;
   /** Moves a downloaded file to the trash, then what the manager keeps about it. Rejects when the

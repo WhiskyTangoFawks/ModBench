@@ -148,8 +148,10 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
 
     async renameModFolder(from, to) {
       const holding = await folderHolding(context, { kind: 'mod', name: from });
-      if (holding === undefined) throw new Error(entryNotFound({ kind: 'mod', name: from }));
       const target = newModFolder(context, to);
+      // A folder already at its new name, as VS Code's rename leaves it, has moved.
+      if (holding === undefined && await exists(target)) return;
+      if (holding === undefined) throw new Error(entryNotFound({ kind: 'mod', name: from }));
       if (entryKey(holding) !== entryKey({ kind: 'mod', name: to })) {
         await refuseFolderTaken(context, { kind: 'mod', name: to }, target);
       }

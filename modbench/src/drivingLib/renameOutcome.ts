@@ -8,6 +8,8 @@ export interface Renamed<T> {
   readonly landed: T;
   /** What the definition writes last, such as `its file and lines`. */
   readonly definition: string;
+  /** How a failure opens, `Could not rename` the renamed thing unless given. */
+  readonly couldNot?: string;
 }
 
 type Refused = { readonly applied: false; readonly refusal: string; readonly detail?: string };
@@ -15,8 +17,7 @@ type Refused = { readonly applied: false; readonly refusal: string; readonly det
 const refused = <T>(refusal: string, detail?: string): GestureResult<T> => ({ applied: false, refusal, detail });
 
 // symbols.md, The features, story 7. A move on disk is no change git can revert, so no message offers that way back.
-export function renameOutcome<T>(result: ChangeResult | Refused, { named, newName, landed, definition }: Renamed<T>): GestureResult<T> {
-  const couldNot = `Could not rename ${named}`;
+export function renameOutcome<T>(result: ChangeResult | Refused, { named, newName, landed, definition, couldNot = `Could not rename ${named}` }: Renamed<T>): GestureResult<T> {
   if (result.applied) {
     const { cannotFollow } = result;
     return {

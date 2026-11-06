@@ -524,6 +524,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.symbol.followRename",
+        "title": "Follow Rename",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.plugin.create",
         "title": "Create Plugin…",
         "icon": "$(add)",
@@ -1200,6 +1205,10 @@
         },
         {
           "command": "modbench.plugin.sync",
+          "when": "false"
+        },
+        {
+          "command": "modbench.symbol.followRename",
           "when": "false"
         },
         {

@@ -628,6 +628,7 @@ describe('package.json command titles and categories', () => {
     'modbench.instance.signalChange',
     'modbench.mod.sync',
     'modbench.plugin.sync',
+    'modbench.symbol.followRename',
   ] as const;
 
   it('gates every entry point out of the palette too', () => {
