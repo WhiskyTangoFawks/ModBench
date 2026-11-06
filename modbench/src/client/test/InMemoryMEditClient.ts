@@ -18,7 +18,7 @@ type QueryMethod =
   | 'getContainerChildren' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
 
 type CommandMethod =
-  | 'createPlugin' | 'getRenameSourceChanges' | 'moveLastWritten' | 'rebuildIndex' | 'versionInGit' | 'build' | 'cloneSubmodules' | 'setPluginFileFlags' | 'getCreateChanges' | 'getDeleteChanges'
+  | 'createPlugin' | 'getRenameSourceChanges' | 'moveLastWritten' | 'getSourceFolderMoveChanges' | 'followSourceFolderMove' | 'rebuildIndex' | 'versionInGit' | 'build' | 'cloneSubmodules' | 'setPluginFileFlags' | 'getCreateChanges' | 'getDeleteChanges'
   | 'getCopyChanges' | 'decompile' | 'decompileAndRepair';
 
 // Homomorphic over `MEditClient`'s own keys, so indexing either by a generic `K` below — read or
@@ -307,6 +307,12 @@ export class InMemoryMEditClient implements MEditClient {
   }
   moveLastWritten(...args: Parameters<MEditClient['moveLastWritten']>): ReturnType<MEditClient['moveLastWritten']> {
     return this.command('moveLastWritten', args);
+  }
+  getSourceFolderMoveChanges(...args: Parameters<MEditClient['getSourceFolderMoveChanges']>): ReturnType<MEditClient['getSourceFolderMoveChanges']> {
+    return this.command('getSourceFolderMoveChanges', args);
+  }
+  followSourceFolderMove(...args: Parameters<MEditClient['followSourceFolderMove']>): ReturnType<MEditClient['followSourceFolderMove']> {
+    return this.command('followSourceFolderMove', args);
   }
   rebuildIndex(...args: Parameters<MEditClient['rebuildIndex']>): ReturnType<MEditClient['rebuildIndex']> {
     return this.command('rebuildIndex', args);

@@ -15,13 +15,13 @@ import { loadOrderTextOf } from './codecs/loadOrderText';
 import { parseDownloadedFileMeta, setHiddenInText, setInstalledInText, setNexusFileInfoInText, setUninstalledInText } from './codecs/downloads';
 import { readSelectedProfile, setSelectedProfileInText } from './codecs/modOrganizerIni';
 import { spliceDownloadedFileMeta, trashDownloadedFileMeta } from './downloadedFileMeta';
-import { ensureDir, exists, get, isRepository, putIfChanged, putStreamedIf, remove, undoAll, type Undo, withLock, write } from '../files';
+import { ensureDir, exists, get, isRepository, putIfChanged, putStreamedIf, remove, rename, undoAll, type Undo, withLock, write } from '../files';
 import { git } from '../git';
 import { digestOf } from '../fileContents/contentDigest';
 import { entryNotFound, type DownloadedFileMark, InstanceAdapter, PluginOrderChange } from '../instanceAdapter';
 import { downloadedFileMetadataPath, downloadedFilePath, pluginOrderFiles, settingsFile, sortingRuleFilePaths } from './layout';
 import { addLoadAfter } from '../../sortingRules/lootMetadata';
-import { currentDownloadsDir, entryKey, folderHolding, newModFolder, metaGameOfDomain, refuseFolderTaken, renameFolderWithManifest, type Mo2Context } from './mo2Context';
+import { currentDownloadsDir, entryKey, folderHolding, newModFolder, metaGameOfDomain, refuseFolderTaken, type Mo2Context } from './mo2Context';
 import { readPluginsProvided, type ReadingSource } from '../instanceReading';
 
 type Mo2Changes = Pick<InstanceAdapter,
@@ -153,7 +153,7 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
       if (entryKey(holding) !== entryKey({ kind: 'mod', name: to })) {
         await refuseFolderTaken(context, { kind: 'mod', name: to }, target);
       }
-      await renameFolderWithManifest(holding, target, to);
+      await rename(holding.path, target);
     },
 
     async trashEntryFolder(entry, trash) {

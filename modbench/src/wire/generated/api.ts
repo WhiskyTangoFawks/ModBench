@@ -168,6 +168,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/source-folders/move-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The moves that take a source mod's source folder to a new path as a rename of its mod does, then each of its files the request names to its new name, writing nothing. Every path is absolute. */
+        post: operations["SourceFolderMoveChanges"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/source-folders/follow-move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Once a source folder has moved, what git holds of it follows, as git mv leaves it: each entry the instance repository's index holds under it, the refs naming what Modbench last wrote there, and a submodule's work tree. */
+        post: operations["FollowSourceFolderMove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/clone-submodules": {
         parameters: {
             query?: never;
@@ -1743,6 +1777,20 @@ export interface components {
         SignalChangeRequest: {
             paths?: string[] | null;
         };
+        SourceChanges: {
+            moves: components["schemas"]["SourceMove"][];
+            deletions: string[];
+            documents: components["schemas"]["DocumentChange"][];
+        };
+        SourceFolderMoveChangesRequest: {
+            sourceFolder: string;
+            movedTo: string;
+            files?: components["schemas"]["SourceMove"][] | null;
+        };
+        SourceFolderMovedRequest: {
+            sourceFolder: string;
+            movedTo: string;
+        };
         SourceFolderRequest: {
             path: string;
             in?: components["schemas"]["SourceModIn"] | null;
@@ -2279,6 +2327,97 @@ export interface operations {
             };
             /** @description Service Unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    SourceFolderMoveChanges: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourceFolderMoveChangesRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceChanges"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    FollowSourceFolderMove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourceFolderMovedRequest"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

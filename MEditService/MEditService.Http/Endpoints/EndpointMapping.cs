@@ -6,6 +6,7 @@ using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.RepositoriesLib;
+using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Strings;
 
@@ -120,6 +121,12 @@ internal static class EndpointMapping
             // Well-formed, addressed at something real, and its source holds a file nothing can read.
             _ => 422,
         });
+
+    /// <summary>A source folder move's refusal: a folder in the way is the folder's present state, the rest the machine's (ADR-0019).</summary>
+    internal static IResult Refusal(SourceFolderMoveRefused refused) => Results.Problem(
+        detail: refused.Message,
+        statusCode: refused.Refusal == SourceFolderMoveRefusal.FolderTaken ? 409 : 500,
+        extensions: new Dictionary<string, object?> { ["refusal"] = refused.Refusal.ToString() });
 
     /// <summary>Put load order's own refusal: a bad request, since none of them is found by touching the Index.</summary>
     internal static IResult Refusal(PutLoadOrderRefused refused) => Results.Problem(
@@ -246,6 +253,22 @@ internal static class EndpointMapping
 
         LogRefusal(logger, gesture, refusal, result.Message, plugin);
         return Refusal(refusal, result.Message);
+    }
+
+    internal static IResult Answered(string gesture, ILogger logger, string sourceFolder, Answer<SourceChanges, SourceFolderMoveRefused> answer)
+    {
+        if (answer.Holds(out var changes, out var refused)) return Results.Ok(changes);
+
+        LogRefusal(logger, gesture, refused.Refusal, refused.Message, sourceFolder);
+        return Refusal(refused);
+    }
+
+    internal static IResult Answered(string gesture, ILogger logger, string sourceFolder, SourceFolderMoveRefused? refused)
+    {
+        if (refused is null) return Results.NoContent();
+
+        LogRefusal(logger, gesture, refused.Refusal, refused.Message, sourceFolder);
+        return Refusal(refused);
     }
 
     internal static void LogRefusal<TRefusal>(ILogger logger, string gesture, TRefusal refusal, string? message) =>

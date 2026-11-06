@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Text;
 using MEditService.RepositoriesLib;
 
 namespace MEditService.SourceAdapter;
@@ -29,6 +31,44 @@ internal abstract class SourceRepositoryGit
 
     /// <summary>The repository that holds the source folder: its own, else the one above it.</summary>
     internal static SourceRepositoryGit Holding(string sourceFolder) => HoldsGit(sourceFolder) ? Own(sourceFolder) : Above(sourceFolder);
+
+    /// <summary>What git holds of the source folder <paramref name="from"/>, now at <paramref name="to"/>, as git mv leaves
+    /// it.</summary>
+    internal static void FollowMove(string from, string to)
+    {
+        ReconnectWorkTree(to);
+        if (WorkTreeAbove(to) is { } workTree) new RepositoryAbove(to, workTree, besideFolder: null).TakeOver(ToGitPath(Path.GetRelativePath(workTree, from)));
+    }
+
+    // A submodule git checked out names its work tree in its git directory.
+    private static void ReconnectWorkTree(string folder)
+    {
+        if (!File.Exists(Path.Combine(folder, ".git"))) return;
+        var gitDir = GitDirOf(folder);
+        if (GitCli.TryRun(gitDir, folder, folder, out _, "config", "--get", "core.worktree"))
+            GitCli.Run(gitDir, folder, folder, "config", "core.worktree", ToGitPath(Path.GetRelativePath(gitDir, folder)));
+    }
+
+    // Each index entry under `from`, staged as it is, and each ref of what Modbench last wrote there, moves to this folder.
+    private void TakeOver(string from)
+    {
+        var to = SourceFolderInWorkTree.TrimEnd('/');
+        var entries = new StringBuilder();
+        foreach (var entry in Run("ls-files", "-s", "-z", "--full-name", "--", $":(top,literal){from}").Split('\0', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var (info, path) = (entry[..entry.IndexOf('\t', StringComparison.Ordinal)], entry[(entry.IndexOf('\t', StringComparison.Ordinal) + 1)..]);
+            var removed = new string('0', info.Split(' ')[1].Length);
+            entries.Append(CultureInfo.InvariantCulture, $"0 {removed}\t{path}\0{info}\t{to}{path[from.Length..]}\0");
+        }
+        if (entries.Length > 0) GitCli.RunFed(_gitDir, _workTree, _sourceFolder, entries.ToString(), "update-index", "-z", "--index-info");
+
+        var (fromRefs, toRefs) = (LastCompileRefsOf(from), LastCompileRefsOf(to));
+        foreach (var gitRef in Run("for-each-ref", "--format=%(refname)", fromRefs.TrimEnd('/')).Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            SetRef(toRefs + gitRef[fromRefs.Length..], CommitOf(gitRef));
+            SetRef(gitRef, null);
+        }
+    }
 
     private protected abstract string SourceFolderInWorkTree { get; }
 
@@ -410,9 +450,11 @@ internal abstract class SourceRepositoryGit
         if (string.IsNullOrEmpty(plugin))
             throw new ArgumentException("Plugin filename must not be empty.", nameof(plugin));
 
-        var folder = string.Concat(SourceFolderInWorkTree.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(segment => $"{EncodeRefComponent(segment)}/"));
-        return $"refs/medit/last-compile/{folder}{EncodeRefComponent(plugin)}";
+        return $"{LastCompileRefsOf(SourceFolderInWorkTree)}{EncodeRefComponent(plugin)}";
     }
+
+    private static string LastCompileRefsOf(string folderInWorkTree) =>
+        $"refs/medit/last-compile/{string.Concat(folderInWorkTree.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(segment => $"{EncodeRefComponent(segment)}/"))}";
 
     // Percent-encodes every byte outside ASCII alnum/-/_, plus '.' where a literal one would make a
     // component git rejects (leading, trailing, "..", trailing ".lock"). '%' is always escaped, which

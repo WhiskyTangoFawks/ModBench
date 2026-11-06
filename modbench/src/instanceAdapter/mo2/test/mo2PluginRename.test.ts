@@ -256,7 +256,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     const lines = await text(SECONDARY_PLUGINS);
 
     const plan = await renamePlanOf(adapter, PATCH, 'Renamed Patch.esp', [{ ...PATCH, origin: 'Other Mod', winning: true }, { ...PATCH, winning: false }]);
-    expect(await plan.commit()).toBeUndefined();
+    expect(await plan.commit()).toEqual({ cannotFollow: [] });
 
     expect(plan.cannotFollow).toEqual([]);
     expect((await snapshotTree(root)).has(`${MOD}/Renamed Patch.esp`)).toBe(true);
@@ -269,7 +269,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     const plan = await renamePlanOf(adapter, PATCH, 'Renamed Patch.esp');
 
     expect(plan.cannotFollow).toEqual([expect.stringContaining(at(MASTERLIST))]);
-    expect(await plan.commit()).toBeUndefined();
+    expect(await plan.commit()).toEqual({ cannotFollow: [] });
   });
 
   it('renames the files and no line when no profile lists the plugin', async () => {

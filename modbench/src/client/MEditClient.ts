@@ -97,6 +97,9 @@ export interface UnsavedDocument { path: string; text: string }
  *  each document's text once moved. */
 export type SourceChanges = Pick<components['schemas']['EditRecordChanges'], 'moves' | 'deletions' | 'documents'>;
 
+/** A file's move, by its path. */
+export type SourceMove = components['schemas']['SourceMove'];
+
 /** A delete's changes per record, in the order to make them, and the records mEdit refused. */
 export interface DeleteChangesOutcome {
   applied: readonly components['schemas']['RecordDeleted'][];
@@ -240,6 +243,10 @@ export interface MEditClient {
   getRenameSourceChanges(plugin: PluginAddress, newName: string, asked: RenameSourceAsked): Promise<RenameSourceChangesOutcome | WriteRefused>;
   // Moves what Modbench last wrote, filed under `treeName`, to the plugin's new name, once the source rename is applied and saved.
   moveLastWritten(plugin: PluginAddress, treeName: string, newName: string): Promise<{ moved: true } | WriteRefused>;
+  // The source folder's move to `movedTo`, then each of `files` it holds, relative to it, as a rename of its mod moves them. Nothing is written.
+  getSourceFolderMoveChanges(sourceFolder: string, movedTo: string, files: readonly SourceMove[]): Promise<SourceChanges | WriteRefused>;
+  // What git holds of the source folder follows it, once the move is applied.
+  followSourceFolderMove(sourceFolder: string, movedTo: string): Promise<{ followed: true } | WriteRefused>;
   rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;
   versionInGit(mods: readonly ModToVersionInGit[], options?: { onProgress?: (status: VersionInGitProgress) => void }): Promise<VersionInGitOutcome | WriteRefused>;
   // Over the unsaved documents mEdit holds. A WriteRefused is the call failing or mEdit refusing. Nothing is written.

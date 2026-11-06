@@ -299,6 +299,63 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
         Assert.False(TestAdapters.Source().IsSourceMod(outside));
     }
 
+    [Fact]
+    public void AMoveOfASourceFolder_MovesTheFolder_ThenEachOfTheFilesItHoldsThatTheMoveNames()
+    {
+        Directory.CreateDirectory(_sourceFolder);
+        File.WriteAllText(Path.Combine(_sourceFolder, "TestMod.manifest.json"), "{}");
+        var renamed = SourceFolderOf("Renamed");
+
+        var changes = TestAdapters.Source().ChangesToMoveSourceFolder(
+            _sourceFolder, renamed, [new SourceMove("TestMod.manifest.json", "Renamed.manifest.json"), new SourceMove("absent.json", "other.json")]).Value();
+
+        Assert.Equal(
+            [new SourceMove(_sourceFolder, renamed), new SourceMove(Path.Combine(renamed, "TestMod.manifest.json"), Path.Combine(renamed, "Renamed.manifest.json"))],
+            Assert.IsType<SourceChanges>(changes).Moves);
+        Assert.True(Directory.Exists(_sourceFolder));
+    }
+
+    [Fact]
+    public void AMoveOfASourceFolderOntoAFolderAlreadyThere_ChangesNothing()
+    {
+        Directory.CreateDirectory(_sourceFolder);
+        var taken = Directory.CreateDirectory(SourceFolderOf("Taken")).FullName;
+
+        Assert.Null(TestAdapters.Source().ChangesToMoveSourceFolder(_sourceFolder, taken, []).Value());
+    }
+
+    [Fact]
+    public void AMovedSourceFolder_IsHeldInTheIndexUnderItsNewPath_StagedAsItWas_SoItIsStillASourceMod()
+    {
+        Assert.Null(InitInInstanceRepository(_sourceFolder, commit: true));
+        File.WriteAllText(Path.Combine(_sourceFolder, "build.json"), "staged");
+        Git("add", "--", $"source/{TestMod.Name}/build.json");
+        StageAnotherChange();
+        var held = Git("ls-files", "-s", "--", $"source/{TestMod.Name}").Replace($"\tsource/{TestMod.Name}/", "\tsource/Renamed/", StringComparison.Ordinal);
+        var renamed = SourceFolderOf("Renamed");
+        Directory.Move(_sourceFolder, renamed);
+
+        Assert.Null(TestAdapters.Source().FollowSourceFolderMove(_sourceFolder, renamed));
+
+        Assert.Equal((held, ""), (Git("ls-files", "-s", "--", "source/Renamed"), Git("ls-files", "-s", "--", $"source/{TestMod.Name}")));
+        Assert.Contains("modlist.txt", Lines(Git("diff", "--cached", "--name-only")));
+        Assert.True(TestAdapters.Source().IsSourceMod(renamed));
+    }
+
+    [Fact]
+    public void AMovedSourceFolder_KeepsTheBinaryLastWrittenForItsPlugin()
+    {
+        Assert.Null(InitInInstanceRepository(_sourceFolder, commit: true));
+        TestAdapters.Source().OverFolder(TestMod.In(_sourceFolder), GameRelease.Fallout4).WriteBinary(A, "WRITTEN", () => { }).Value();
+        var renamed = SourceFolderOf("Renamed");
+        Directory.Move(_sourceFolder, renamed);
+
+        Assert.Null(TestAdapters.Source().FollowSourceFolderMove(_sourceFolder, renamed));
+
+        var moved = TestAdapters.Source().OverFolder(new PluginProvider.FromMod("Renamed", renamed, renamed), GameRelease.Fallout4);
+        Assert.Equal(["WRITTEN"], moved.LastWrittenBinarySha256s(A with { Origin = "Renamed" }).Value());
+    }
+
     private static SourceFailure? InitInInstanceRepository(string sourceFolder, bool commit, ModFolderManifest? modFolderManifest = null) =>
         TestAdapters.Source().Init(
             sourceFolder, SourceInits.BuildFile, [OneRecordOf("A.esp")], [], commit, heldIn: SourceModIn.InstanceRepository, modFolderManifest: modFolderManifest);

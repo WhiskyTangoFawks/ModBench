@@ -2397,25 +2397,6 @@ describe('the MO2 Instance adapter', () => {
       expect(await isThere(join(root, 'mods', 'HARDER VATS 2', 'meta.ini'))).toBe(true);
     });
 
-    it('renames the manifest in a mod\'s folder to the new name in the same rename, leaving no manifest of the old name', async () => {
-      await writeFile(join(root, 'mods', 'Harder VATS', 'Harder VATS.manifest.json'), '');
-
-      await adapter.renameModFolder('harder vats', 'Harder VATS 2');
-
-      expect(await isThere(join(root, 'mods', 'Harder VATS 2', 'Harder VATS 2.manifest.json'))).toBe(true);
-      expect(await isThere(join(root, 'mods', 'Harder VATS 2', 'Harder VATS.manifest.json'))).toBe(false);
-    });
-
-    it('puts the folder back when its manifest cannot be renamed, so no rename lands in part', async () => {
-      await writeFile(join(root, 'mods', 'Harder VATS', 'Harder VATS.manifest.json'), '');
-      await mkdir(join(root, 'mods', 'Harder VATS', 'Harder VATS 2.manifest.json'));
-
-      await expect(adapter.renameModFolder('Harder VATS', 'Harder VATS 2')).rejects.toThrow();
-
-      expect(await isThere(join(root, 'mods', 'Harder VATS', 'Harder VATS.manifest.json'))).toBe(true);
-      expect(await isThere(join(root, 'mods', 'Harder VATS 2'))).toBe(false);
-    });
-
     it('moves the folder that holds a separator to the trash', async () => {
       const trashed: string[] = [];
 
@@ -2843,6 +2824,16 @@ describe('the MO2 Instance adapter', () => {
       expect(modNames(await source.modOrder('Default'))).toContain('separator:Core Mods:false');
       expect(await isThere(separatorFolder('Core Mods'))).toBe(true);
       expect(await isThere(separatorFolder('Unassigned (Modlist Development)'))).toBe(false);
+    });
+
+    it('renames a separator\'s line in a second profile, its folder moved with the first', async () => {
+      await writeFile(join(root, 'profiles', 'Secondary', 'modlist.txt'), await text(root, DEFAULT_MODLIST));
+      await change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'Core Mods' }]);
+
+      await adapter.changeModOrder('Secondary', () => [{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'Core Mods' }]);
+
+      expect(modNames(await source.modOrder('Secondary'))).toContain('separator:Core Mods:false');
+      expect(await isThere(separatorFolder('Core Mods'))).toBe(true);
     });
 
     it('renames a mod\'s line in place, keeping its state, and nothing else', async () => {

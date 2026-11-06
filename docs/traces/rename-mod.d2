@@ -1,0 +1,42 @@
+# Rename a mod or a separator, cyan and blue.
+...@../../spec/architecture/styles
+shape: sequence_diagram
+mods: "Mods" {class: driving}
+modcommands: @../../spec/architecture/target-architecture.modbench_core.modcommands
+modcommands.label: mod commands
+instanceadapter: @../../spec/architecture/target-architecture.modbench_repositories.instanceadapter
+instanceadapter.label: Instance adapter
+manifestadapter: @../../spec/architecture/target-architecture.modbench_repositories.manifestadapter
+manifestadapter.label: Manifest adapter
+client: @../../spec/architecture/target-architecture.modbench_repositories.client
+client.label: mEdit client
+textdocuments: @../../spec/architecture/target-architecture.modbench_repositories.textdocuments
+textdocuments.label: Text documents
+wabbajack: @../../spec/architecture/target-architecture.modbench_repositories.instanceadapter.wabbajack
+wabbajack.label: Wabbajack
+instanceloader: @../../spec/architecture/target-architecture.modbench_readmodel.instanceloader
+instanceloader.label: Instance loader
+
+mods."the name"
+mods -> modcommands: "the gesture: the mod or separator, the new name, the unsaved texts" {class: loadorder}
+modcommands -> instanceadapter: "get: mod order, folders, profiles, and the source folder named for a mod" {class: loadorder}
+a_mod: "a mod" {
+  modcommands -> manifestadapter: "plan: the manifest's file name and repository · the source folder's files named for it" {class: edit}
+  modcommands -> client: "plan: the source folder's move" {class: edit}
+}
+modcommands -> textdocuments: "every owner's changes, one workspace edit" {class: edit}
+moved: "a mod's source folder moved" {
+  modcommands -> client: "commit: git follows the source folder" {class: edit}
+}
+modcommands -> instanceadapter: "commit, last: the folder · the line, every profile · the instance repository's lines and submodule entry" {class: loadorder}
+modcommands -> instanceadapter: "each folder's new place" {class: loadorder}
+instanceadapter -> wabbajack: "the move" {class: loadorder}
+modcommands -> mods: "applied, and each reference that could not follow; or refusal" {class: loadorder}
+mods -> instanceloader: refresh {class: loadorder}
+
+refused: "refused, before any write" {
+  modcommands -> mods: "the refusal" {class: loadorder}
+}
+failed: "a commit failed after the edit" {
+  modcommands -> mods: "the failure: the mod or separator" {class: loadorder}
+}

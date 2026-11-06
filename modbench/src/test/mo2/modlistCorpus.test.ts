@@ -10,6 +10,11 @@ import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, modFolderNames, snapshotTree,
 } from './corpusFixture';
 import { adapterOver, readModlistEntries } from './adapterOver';
+import { entryRenameCommands } from '../../modCommands/renameEntry';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { onDisk } from '../onDisk';
+
+const renamesOver = (dir: string) => entryRenameCommands({ adapter: adapterOver(dir), client: new InMemoryMEditClient() });
 import type { Mod } from '../../instanceLoader/instance';
 
 
@@ -77,36 +82,35 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
   });
 
   it('renameSeparator answers the name the separator was written under, folded as MO2 folds a folder name', async () => {
-    const outcome = await modCommands(adapterOver(dir)).renameSeparator('Unassigned (Modlist Development)', 'Renamed  QA Group.');
+    const outcome = await renamesOver(dir).renameSeparator(onDisk, 'Unassigned (Modlist Development)', 'Renamed  QA Group.');
 
-    expect(outcome).toEqual({ applied: true, wrote: true, name: 'Renamed QA Group' });
+    expect(outcome).toEqual({ applied: true, cannotFollow: [], name: 'Renamed QA Group' });
     expect(await separatorNames(dir)).toContain('Renamed QA Group');
   });
 
   it('renameSeparator to the separator\'s own name writes nothing', async () => {
     const before = await snapshotTree(dir);
-    const outcome = await modCommands(adapterOver(dir)).renameSeparator('Unassigned (Modlist Development)', 'Unassigned (Modlist Development)');
+    const outcome = await renamesOver(dir).renameSeparator(onDisk, 'Unassigned (Modlist Development)', 'Unassigned (Modlist Development)');
     assertOnlyChanged(before, await snapshotTree(dir), new Set());
 
-    expect(outcome).toMatchObject({ applied: true, wrote: false });
+    expect(outcome).toMatchObject({ applied: true });
   });
 
   it.each(['', '   ', '...'])('insertSeparator and renameSeparator refuse the name %j the adapter folds to nothing, writing nothing', async (name) => {
-    const commands = modCommands(adapterOver(dir));
     const before = await snapshotTree(dir);
-    const added = await commands.insertSeparator(name, { kind: 'mod', name: 'Cracked and Smudged Pip-Boy Screen' });
-    const renamed = await commands.renameSeparator('Unassigned (Modlist Development)', name);
+    const added = await modCommands(adapterOver(dir)).insertSeparator(name, { kind: 'mod', name: 'Cracked and Smudged Pip-Boy Screen' });
+    const renamed = await renamesOver(dir).renameSeparator(onDisk, 'Unassigned (Modlist Development)', name);
     assertOnlyChanged(before, await snapshotTree(dir), new Set());
 
-    const refusal = { applied: false, refusal: `Not a valid separator name: "${name}"` };
-    expect([added, renamed]).toEqual([refusal, refusal]);
+    const refusal = `Not a valid separator name: "${name}"`;
+    expect([added, renamed]).toEqual([{ applied: false, refusal }, { applied: false, failed: refusal, edited: false }]);
   });
 
   it('renameSeparator renames the line and its mods/ folder, its meta.ini carried along unchanged', async () => {
     const OLD_META = 'mods/Unassigned (Modlist Development)_separator/meta.ini';
     const NEW_META = 'mods/Renamed QA Group_separator/meta.ini';
     const before = await snapshotTree(dir);
-    await modCommands(adapterOver(dir)).renameSeparator('Unassigned (Modlist Development)', 'Renamed QA Group');
+    await renamesOver(dir).renameSeparator(onDisk, 'Unassigned (Modlist Development)', 'Renamed QA Group');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST, OLD_META, NEW_META]));
 
@@ -117,7 +121,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
 
   it('renameSeparator of a separator with no folder renames its line alone, and makes no folder', async () => {
     const before = await snapshotTree(dir);
-    await modCommands(adapterOver(dir)).renameSeparator('Radfall - All-In-One Survival Overhaul', 'Renamed QA Group');
+    await renamesOver(dir).renameSeparator(onDisk, 'Radfall - All-In-One Survival Overhaul', 'Renamed QA Group');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
@@ -286,7 +290,7 @@ describe('compiler_settings.json corpus — a publisher tag change touches the p
     const settings = async () => (await snapshotTree(dir)).get(SETTINGS)?.toString() ?? '';
     await commands.changePublisherTag('add', 'Ignore', [row]);
 
-    await commands.renameMod('DragIn Manual Extract', 'Renamed');
+    await renamesOver(dir).renameMod(onDisk, 'DragIn Manual Extract', 'Renamed');
 
     expect(await settings()).toContain('"Ignore": [\n    "mods\\\\Renamed"');
 
@@ -295,15 +299,22 @@ describe('compiler_settings.json corpus — a publisher tag change touches the p
     expect(await settings()).not.toContain('Renamed');
   });
 
-  it('refuses a rename and an uninstall, changing nothing, while the settings cannot be read', async () => {
+  it('refuses an uninstall, changing nothing, while the settings cannot be read', async () => {
     await writeFile(join(dir, SETTINGS), 'not json');
     const before = await snapshotTree(dir);
-    const commands = modCommands(adapterOver(dir));
 
-    const renamed = await commands.renameMod('DragIn Manual Extract', 'Renamed');
-    const uninstalled = await commands.uninstallMods(['DragIn Manual Extract'], () => Promise.resolve());
+    const uninstalled = await modCommands(adapterOver(dir)).uninstallMods(['DragIn Manual Extract'], () => Promise.resolve());
 
-    expect([renamed.applied, uninstalled.applied]).toEqual([false, false]);
+    expect(uninstalled.applied).toBe(false);
     assertOnlyChanged(before, await snapshotTree(dir), new Set());
+  });
+
+  it('lands a rename while the settings cannot be read, naming its publisher tags left behind, and leaves the settings as they were', async () => {
+    await writeFile(join(dir, SETTINGS), 'not json');
+
+    const renamed = await renamesOver(dir).renameMod(onDisk, 'DragIn Manual Extract', 'Renamed');
+
+    expect(renamed).toMatchObject({ applied: true, cannotFollow: [expect.stringMatching(/^its publisher tags: /)] });
+    expect((await snapshotTree(dir)).get(SETTINGS)?.toString()).toBe('not json');
   });
 });

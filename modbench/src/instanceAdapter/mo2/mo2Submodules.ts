@@ -1,20 +1,23 @@
 // A source mod with a remote is a submodule of the instance repository; git decides the config and the staging.
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { basename, isAbsolute, join, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { gitPath } from '../foldersHeldWhole';
 import { errnoCode } from '../../ports/errno';
 import { git } from '../git';
 import { keptByIndex } from '../keptByIndex';
 import { errorMessage } from '../../ports/errorMessage';
 import { exists, get, ignoreSkippedLink, isRepository, listFolders, putIfChanged, readOrAbsent, remove } from '../files';
 import type { InstanceAdapter, SourceHost, Submodule, SubmoduleLacks, SubmoduleNote, UnclonedSubmodule } from '../instanceAdapter';
-import { ignoreListFile, sourceModLinesOf, sourceModPath, sourceRootDir, submodulesFile, leavesOutSourceFolders, withSourceModLines, type SourceFolders } from './layout';
+import {
+  ignoreListFile, modsDir, sourceModLinesOf, sourceModPath, sourceRootDir, submodulesFile, leavesOutSourceFolders, withHeldWholeFollowed, withSourceModLines, type SourceFolders,
+} from './layout';
 import type { FileProblems } from '../../ports/fileProblems';
 import type { Mo2Context } from './mo2Context';
 import { PRE_PUSH_HOOK, PRE_PUSH_HOOK_NAME } from '../prePushHook';
 import { sourceFoldersTracked } from './sourceModFolders';
 
-type Mo2Submodules = Pick<InstanceAdapter, 'writeSubmodules' | 'writeSourceModLines' | 'sourceHost' | 'submodule' | 'unclonedSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk' | 'sourceFolderTracked'>;
+type Mo2Submodules = Pick<InstanceAdapter, 'writeSubmodules' | 'writeSourceModLines' | 'followFoldersInRepository' | 'sourceHost' | 'submodule' | 'unclonedSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk' | 'sourceFolderTracked'>;
 
 interface SubmoduleEntry { readonly name: string; readonly url: string; readonly branch: string }
 
@@ -69,14 +72,18 @@ async function submoduleOf(folder: string): Promise<SubmoduleEntry | undefined |
   }
 }
 
-async function sourceEntries(instanceRoot: string, file: string): Promise<string[]> {
-  if (!(await exists(file))) return [];
+// Each submodule's path in the instance repository, by its name.
+async function submodulePaths(instanceRoot: string, file: string): Promise<Map<string, string>> {
+  if (!(await exists(file))) return new Map();
   const listed = await git(instanceRoot, 'config', '-f', file, '--null', '--list');
-  return listed.split('\0').filter((entry) => entry !== '').flatMap((entry) => {
+  return new Map(listed.split('\0').filter((entry) => entry !== '').flatMap((entry) => {
     const [key = '', value = ''] = entry.split('\n');
-    return key.startsWith('submodule.') && key.endsWith('.path') && value.startsWith(sourceModPath(''))
-      ? [key.slice('submodule.'.length, -'.path'.length)] : [];
-  });
+    return key.startsWith('submodule.') && key.endsWith('.path') ? [[key.slice('submodule.'.length, -'.path'.length), value] as const] : [];
+  }));
+}
+
+async function sourceEntries(instanceRoot: string, file: string): Promise<string[]> {
+  return [...await submodulePaths(instanceRoot, file)].flatMap(([name, path]) => (path.startsWith(sourceModPath('')) ? [name] : []));
 }
 
 // An unset key is exit code 5.
@@ -278,6 +285,27 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
 
     async writeSourceModLines(letIn) {
       if (await isRepository(instanceRoot)) await sourceModLinesWritten(instanceRoot, undefined, letIn);
+    },
+
+    async followFoldersInRepository(moves) {
+      if (!(await isRepository(instanceRoot))) return;
+      const list = ignoreListFile(instanceRoot);
+      const heldWhole = moves.filter(({ from }) => dirname(from) === modsDir(instanceRoot));
+      if (heldWhole.length > 0 && await exists(list)) {
+        await putIfChanged(list, (before) => heldWhole.reduce((text, { from, to }) => {
+          const after = withHeldWholeFollowed(text, basename(from), basename(to));
+          if (after === undefined) throw new Error(`${list} has a marker of the mod folders held whole with no match, so their lines are left as they are`);
+          return after;
+        }, before));
+      }
+      const file = submodulesFile(instanceRoot);
+      const paths = await submodulePaths(instanceRoot, file);
+      for (const { from, to } of moves) {
+        const [name] = [...paths].find(([, path]) => path === gitPath(instanceRoot, from)) ?? [];
+        if (name === undefined) continue;
+        if (name !== basename(to)) await git(instanceRoot, 'config', '-f', file, '--rename-section', `submodule.${name}`, `submodule.${basename(to)}`);
+        await git(instanceRoot, 'config', '-f', file, `submodule.${basename(to)}.path`, gitPath(instanceRoot, to));
+      }
     },
 
     sourceHost: (folder) => sourceHostOf(folder).then(

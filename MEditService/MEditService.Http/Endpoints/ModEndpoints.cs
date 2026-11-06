@@ -40,7 +40,42 @@ internal static class ModEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
+        app.MapPost("/source-folders/move-changes", SourceFolderMoveChanges)
+            .WithName("SourceFolderMoveChanges")
+            .WithTags("Mods")
+            .WithDescription(
+                "The moves that take a source mod's source folder to a new path as a rename of its mod does, then each of its files " +
+                "the request names to its new name, writing nothing. Every path is absolute.")
+            .Produces<SourceChanges>()
+            .ProducesProblem(400)
+            .ProducesProblem(409)
+            .ProducesProblem(500);
+
+        app.MapPost("/source-folders/follow-move", FollowSourceFolderMove)
+            .WithName("FollowSourceFolderMove")
+            .WithTags("Mods")
+            .WithDescription(
+                "Once a source folder has moved, what git holds of it follows, as git mv leaves it: each entry the instance " +
+                "repository's index holds under it, the refs naming what Modbench last wrote there, and a submodule's work tree.")
+            .Produces(204)
+            .ProducesProblem(400)
+            .ProducesProblem(500);
+
         return app;
+    }
+
+    internal static IResult SourceFolderMoveChanges(SourceFolderMoveChangesRequest req, SourceFolderMoveChangesHandler move, ILoggerFactory loggerFactory)
+    {
+        if (string.IsNullOrWhiteSpace(req.SourceFolder) || string.IsNullOrWhiteSpace(req.MovedTo)) return EndpointMapping.BadRequest(SourceFolderMovedRequest.NotWhole);
+        return EndpointMapping.Answered(
+            "Move source folder", loggerFactory.CreateLogger(nameof(ModEndpoints)), req.SourceFolder, move.Changes(req.SourceFolder, req.MovedTo, req.Files ?? []));
+    }
+
+    internal static IResult FollowSourceFolderMove(SourceFolderMovedRequest req, FollowSourceFolderMoveHandler move, ILoggerFactory loggerFactory)
+    {
+        if (string.IsNullOrWhiteSpace(req.SourceFolder) || string.IsNullOrWhiteSpace(req.MovedTo)) return EndpointMapping.BadRequest(SourceFolderMovedRequest.NotWhole);
+        return EndpointMapping.Answered(
+            "Follow source folder move", loggerFactory.CreateLogger(nameof(ModEndpoints)), req.SourceFolder, move.Follow(req.SourceFolder, req.MovedTo));
     }
 
     // version-in-git: the selection (commands.md, A selection is one gesture); the load order says each mod's plugins and folder.
@@ -215,3 +250,12 @@ internal sealed record SourceFolderRequest(
 
     private static byte[] Utf8(string text) => new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(text);
 }
+
+/// <summary>A source folder and where its move puts it, each an absolute path.</summary>
+internal sealed record SourceFolderMovedRequest(string SourceFolder, string MovedTo)
+{
+    internal const string NotWhole = "The source folder and where it moves to are required.";
+}
+
+/// <summary>A source folder, where its move puts it, and each of its files the move renames, relative to it.</summary>
+internal sealed record SourceFolderMoveChangesRequest(string SourceFolder, string MovedTo, IReadOnlyList<SourceMove>? Files = null);

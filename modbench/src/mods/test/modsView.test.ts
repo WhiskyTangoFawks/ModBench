@@ -75,6 +75,8 @@ import type { ModSyncRun } from '../../modCommands/modCommands';
 import { rowLabelOf } from '../../drivingLib/argument';
 import { present } from '../../ports/present';
 import { modCommands } from '../../modCommands/modCommands';
+import { entryRenameCommands } from '../../modCommands/renameEntry';
+import { oneAtATime } from '../../textDocuments/oneAtATime';
 import { sourceCommands } from '../../sourceCommands/sourceCommands';
 import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
@@ -109,7 +111,10 @@ const shownRows = async () => (await treeViews.view('modbench.modList').treeData
 const shownLabels = async () => (await shownRows()).map((row) => rowLabelOf(row));
 
 const otherDeps = () => ({
-  commands: modCommands(fakeInstanceAdapter().adapter), copyReads: fakeInstanceAdapter().adapter, reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
+  commands: modCommands(fakeInstanceAdapter().adapter),
+  renames: entryRenameCommands({ adapter: fakeInstanceAdapter().adapter, client: new InMemoryMEditClient() }),
+  source: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: oneAtATime(), refreshSourceControlFor: () => undefined },
+  copyReads: fakeInstanceAdapter().adapter, reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
   extensionUri: Uri.file('/extension'), downloadsView: 'modbench.downloads', channel: { warn: () => undefined },
   focusedView: { id: () => undefined, selection: () => [], selectionOf: () => [], follow: () => ({ dispose: () => undefined }), enter: () => undefined, onDidChange: () => ({ dispose: () => undefined }) },
   statuses: new ModStatuses(foldersHoldingNothing(), () => undefined),

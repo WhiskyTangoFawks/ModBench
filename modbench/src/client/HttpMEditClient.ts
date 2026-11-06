@@ -21,7 +21,7 @@ import {
   type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginIndexedState, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
   type RebuildIndexOutcome, type CopyChangesOutcome, type CopyMode,
   type GridPosition, type RecordAt, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument, type RenameSourceChangesOutcome, type RenameSourceAsked,
-  type RecordFilter, type ReferenceResult, type NameQuery, type NamedObject, type PluginAddress, type PluginToRepair, type ModToVersionInGit, type VersionInGitOutcome, type VersionInGitProgress,
+  type SourceChanges, type SourceMove, type RecordFilter, type ReferenceResult, type NameQuery, type NamedObject, type PluginAddress, type PluginToRepair, type ModToVersionInGit, type VersionInGitOutcome, type VersionInGitProgress,
   type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
@@ -282,6 +282,23 @@ class HttpMEditClient implements MEditClient {
       failMsg: `Could not move what Modbench last wrote for "${plugin.name}"`,
       post: () => this.apiClient.POST('/plugins/move-last-written', { body: { origin: plugin.origin, name: plugin.name, treeName, newName } }),
       noContent: { moved: true },
+    });
+  }
+
+  async getSourceFolderMoveChanges(sourceFolder: string, movedTo: string, files: readonly SourceMove[]): Promise<SourceChanges | WriteRefused> {
+    return this.mutate<SourceChanges>({
+      op: `getSourceFolderMoveChanges(${sourceFolder})`,
+      failMsg: `Could not move "${sourceFolder}"`,
+      post: () => this.apiClient.POST('/source-folders/move-changes', { body: { sourceFolder, movedTo, files: [...files] } }),
+    });
+  }
+
+  async followSourceFolderMove(sourceFolder: string, movedTo: string): Promise<{ followed: true } | WriteRefused> {
+    return this.mutate({
+      op: `followSourceFolderMove(${sourceFolder})`,
+      failMsg: `Could not follow the move of "${sourceFolder}" in git`,
+      post: () => this.apiClient.POST('/source-folders/follow-move', { body: { sourceFolder, movedTo } }),
+      noContent: { followed: true },
     });
   }
 

@@ -72,6 +72,7 @@ import { instanceRepositoryCommands } from './sourceCommands/instanceRepositoryC
 import { placeModsOver } from './sourceCommands/newRepository';
 import { sourceCommands } from './sourceCommands/sourceCommands';
 import { modSyncOver, modCommands } from './modCommands/modCommands';
+import { entryRenameCommands } from './modCommands/renameEntry';
 import { downloadedFileCommands } from './downloadedFileCommands/downloads';
 import { editingFlow } from './instanceCommands/editing';
 import { instanceCommands } from './instanceCommands/instanceCommands';
@@ -94,7 +95,7 @@ type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
   'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'signalChange' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
-  | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'getPluginNameReferences' | 'moveLastWritten' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'getPluginIndexing'>;
+  | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'getPluginNameReferences' | 'moveLastWritten' | 'getSourceFolderMoveChanges' | 'followSourceFolderMove' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'getPluginIndexing'>;
 
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -112,6 +113,7 @@ interface ViewsDeps {
   lootMetadata: LootMetadata;
   focusedView: FocusedView;
   editor: Pick<Editor, 'copyValue'>;
+  sourceEditing: SourceEditing;
 }
 
 interface InstanceSide {
@@ -211,7 +213,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const placeForGame: PluginsTxtPlaceOf = (gameName, folder) => placeOfPluginsTxt(gameReleaseForGame(gameName), folder);
   const toolbox = own(createToolboxView({ instance, channel: outputChannel, deploymentFolder: deploymentFolderSetting, pluginsTxtPlace: placeForGame }));
   const mods = own(createModsView({
-    instance, commands: modCommands(adapter), copyReads: adapter, channel: outputChannel, modSync, reporterFor, ask, trash,
+    instance, commands: modCommands(adapter), renames: entryRenameCommands({ adapter, client }), source: deps.sourceEditing, copyReads: adapter, channel: outputChannel, modSync, reporterFor, ask, trash,
     extensionUri: deps.extensionUri,
     downloadsView: DOWNLOADS_KEY_ARGS.view, focusedView: deps.focusedView,
     sourceGestures: {
@@ -350,6 +352,7 @@ function start(context: vscode.ExtensionContext): void {
     lootMetadata: createHttpLootMetadata(),
     focusedView,
     editor,
+    sourceEditing,
   });
   const scriptEnvironmentFailures = toastOncePerFailure(reporterFor('scriptEnvironment'));
   const scriptsPath = vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath;

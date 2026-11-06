@@ -3,14 +3,13 @@
 
 import { gameReleaseForGame, nexusDomainForMetaGame, nexusDomainsForGame, shortNameForNexusDomain, shortNameOfRelease } from '../../tables/gamePaths';
 import { readGameName } from './codecs/modOrganizerIni';
-import { errorMessage } from '../../ports/errorMessage';
 import { entryNamed, modNameKey, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
 import type { DownloadsDirectoryResolver } from './downloadsDirectory';
-import { exists, get, textByStamp, ignoreSkippedLink, listFolders, readOrAbsent, rename, type SkippedLink, type Undo } from '../files';
+import { exists, get, textByStamp, ignoreSkippedLink, listFolders, readOrAbsent, type SkippedLink } from '../files';
 import type { GameFolderResolver, SteamInstallResolver } from '../gameFolder/gameFolderResolver';
 import type { EntryRef, ModFolder, ModFolders, ModlistEntry } from '../instanceAdapter';
 import type { FileOrigin } from '../instanceAdapter';
-import { entryDir, manifestFileIn, mo2FolderName, modDir, modsDir, overwriteDir, settingsFile } from './layout';
+import { entryDir, mo2FolderName, modDir, modsDir, overwriteDir, settingsFile } from './layout';
 import type { MyGamesResolver } from '../gameFolder/myGames';
 import type { Mo2Watch } from './mo2Watch';
 
@@ -110,25 +109,4 @@ export async function originFolder(context: Mo2Context, origin: FileOrigin, fold
 export async function refuseFolderTaken(context: Mo2Context, entry: EntryRef, folder: string): Promise<void> {
   const inTheWay = (await folderHolding(context, entry))?.path ?? ((await exists(folder)) ? folder : undefined);
   if (inTheWay !== undefined) throw new Error(`The folder "${inTheWay}" is in the way`);
-}
-
-/** Renames a mod folder with its manifest, which is named for the mod, so no rename lands in part: a manifest that cannot
- *  be renamed puts the folder back and rejects. Answers how to put both back. */
-export async function renameFolderWithManifest(from: ModFolder, toPath: string, toModName: string): Promise<Undo> {
-  await rename(from.path, toPath);
-  const undoFolder: Undo = () => rename(toPath, from.path);
-  const old = manifestFileIn(toPath, from.modName);
-  const renamed = manifestFileIn(toPath, toModName);
-  if (old === renamed || !(await exists(old))) return undoFolder;
-  try {
-    await rename(old, renamed);
-  } catch (err) {
-    try {
-      await undoFolder();
-    } catch (undoErr) {
-      throw new Error(`${errorMessage(err)}; the folder now sits at ${toPath} because putting it back failed: ${errorMessage(undoErr)}`);
-    }
-    throw err;
-  }
-  return async () => { await rename(renamed, old); await undoFolder(); };
 }

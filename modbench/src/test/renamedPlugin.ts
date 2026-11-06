@@ -13,6 +13,6 @@ export async function renamePlanOf(
 
 /** Renames `plugin` through the adapter alone, as its commit writes it; rejects with a refusal or a failed write. */
 export async function renamedPlugin(adapter: Pick<InstanceAdapter, 'pluginReferences'>, plugin: PluginSymbol, newName: string): Promise<void> {
-  const failed = await (await renamePlanOf(adapter, plugin, newName)).commit();
-  if (failed !== undefined) throw new Error(failed);
+  const committed = await (await renamePlanOf(adapter, plugin, newName)).commit();
+  if ('failed' in committed) throw new Error(committed.failed);
 }

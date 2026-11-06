@@ -43,7 +43,7 @@ export const manifestsIn = async (folder: string): Promise<string[]> => (await f
 const manifestFileIn = async (folder: string): Promise<string> => join(folder, (await manifestsIn(folder))[0] ?? manifestNameOf(folder));
 
 // An editor may write a byte order mark, which JSON does not allow.
-const textAt = async (path: string): Promise<string> => (await readFile(path, 'utf8')).replace(/^\uFEFF/, '');
+export const textAt = async (path: string): Promise<string> => (await readFile(path, 'utf8')).replace(/^\uFEFF/, '');
 
 const manifestReadAt = keptByStamp(async (path: string): Promise<ManifestRead> => readManifest(await textAt(path)));
 

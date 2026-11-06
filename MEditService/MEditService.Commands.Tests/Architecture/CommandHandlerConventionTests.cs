@@ -51,6 +51,8 @@ public sealed class CommandHandlerConventionTests
         typeof(RenameSourceRefusal),
         typeof(RenameSourceResult),
         typeof(SetPluginFileFlagsResult),
+        typeof(SourceFolderMoveRefusal),
+        typeof(SourceFolderMoveRefused),
         typeof(SourceLeftBehind),
     ];
 

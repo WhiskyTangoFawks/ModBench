@@ -8,7 +8,7 @@ import {
   CHECK_THE_DISK, entryNotFound, filesWinningFirst, type ChangeListener, type Reread, isBareName, type DecideModOrder, type DownloadedFile, type DownloadedFileQuery, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp,  type GameFile, type GamePlace, type HashedFile, type InstallationFile, type InstallOutcome, type InstalledPackage, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type NexusModFile, type OtherManifest, type UnsearchedFolder, type OriginFile, type FomodAnswer, type PluginOrderChange, type PublisherTag, type PublisherTagChange, type Subscription } from '../instanceAdapter/instanceAdapter';
 import { fileOriginOfPlugin } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
-import { namesPlugin, NO_FILE_CHANGES } from '../symbolNames/symbolNames';
+import { COMMITTED, namesPlugin, NO_FILE_CHANGES } from '../symbolNames/symbolNames';
 import { modOrderAfter, pluginOrderAfter } from './fakeOrderChanges';
 import { groupModOrder } from '../instanceAdapter/modGroups';
 import { parseNexusPage } from '../instanceAdapter/nexusPage';
@@ -107,6 +107,7 @@ export type AdapterCall =
   | { readonly verb: 'writeOtherManifestLines' }
   | { readonly verb: 'writeSourceModLines'; readonly letIn: readonly string[] }
   | { readonly verb: 'writeHeldWholeLines'; readonly modFolders: readonly string[]; readonly held: boolean }
+  | { readonly verb: 'followFoldersInRepository'; readonly moves: Parameters<InstanceAdapter['followFoldersInRepository']>[0] }
   | { readonly verb: 'commitFolder'; readonly folder: string; readonly message: string }
   | { readonly verb: 'refuseUnpublishedPins' }
   | { readonly verb: 'writePathTokens' }
@@ -443,6 +444,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     otherManifests: () => unreadable('otherManifests', { manifests: answers.otherManifests ?? [], unsearched: answers.unsearched ?? [], nested: [] }),
     writeOtherManifestLines: () => record({ verb: 'writeOtherManifestLines' }, undefined),
     writeSourceModLines: (letIn = []) => record({ verb: 'writeSourceModLines', letIn }, undefined),
+    followFoldersInRepository: (moves) => write({ verb: 'followFoldersInRepository', moves }, () => undefined),
     writeHeldWholeLines: (modFolders, held) => write({ verb: 'writeHeldWholeLines', modFolders, held }, () => {
       for (const folder of modFolders) {
         if (held) letInByLines.add(folder);
@@ -643,7 +645,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
             const files = originFilesOf(origin);
             if (files !== undefined) withOriginFiles(origin, { ...files, files: files.files.map((file) => (file === own ? fileIn(files.folder ?? '', to) : file)) });
             if (namedByFileName) current = { ...current, pluginOrder: current.pluginOrder.map((plugin) => (sameAsFrom(plugin.name) ? { ...plugin, name: to } : plugin)) };
-          }).then(() => undefined, errorMessage),
+          }).then(() => COMMITTED, (err: unknown) => ({ failed: errorMessage(err) })),
         });
       },
     },

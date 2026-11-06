@@ -73,7 +73,6 @@ const validatorOfThePrompt = (): ((value: string) => unknown) => {
   return (value) => options.validateInput?.(value);
 };
 
-const MOD_CLASH = 'A mod with this name already exists';
 const SEPARATOR_CLASH = 'A separator with this name already exists';
 
 describe('create empty mod', () => {
@@ -151,80 +150,6 @@ describe('create empty mod', () => {
     await invoke('modbench.mod.createEmpty');
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to create "New Mod".', detail: 'The folder "/instance/mods/New Mod" is in the way' }]);
-  });
-});
-
-describe('rename mod', () => {
-  beforeEach(() => { vi.clearAllMocks(); progressSteps.length = 0; });
-
-  const mods = [mod('Mod A'), mod('Mod B')];
-  const instance = instanceOf(mods);
-  const twoProfiles = { profiles: ['Default', 'Secondary'] };
-  const modA = new ModNode({ kind: 'mod', name: 'Mod A', enabled: true });
-  const modB = new ModNode({ kind: 'mod', name: 'Mod B', enabled: true });
-  const register = (commands: ModCommands, reporter = recordingReporter(), selection: readonly ModlistNode[] = []) =>
-    registerModContextCommands({ commands, instance, viewSelection: () => selection, reporter, ask: scriptedDialog(), trash: vi.fn(), log: vi.fn() });
-  const renames = (calls: readonly AdapterCall[]) => calls.filter((call) => call.verb === 'renameModFolder' || call.verb === 'changeModOrder');
-
-  it('prompts with the right-clicked mod\'s name and renames it in every profile', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed');
-    const { fake, commands } = commandsOver(mods, {}, twoProfiles);
-    const reporter = recordingReporter();
-
-    register(commands, reporter);
-    await invoke('modbench.mod.rename', modB, [modA, modB]);
-
-    expect(optionsOfTheLastShowInputBoxCall()).toMatchObject({ prompt: 'Rename mod', value: 'Mod B' });
-    expect(renames(fake.calls)).toEqual([
-      { verb: 'renameModFolder', from: 'Mod B', to: 'Renamed' },
-      modOrderChange({ kind: 'renameMod', from: 'Mod B', to: 'Renamed' }),
-      { ...modOrderChange({ kind: 'renameMod', from: 'Mod B', to: 'Renamed' }), profile: 'Secondary' },
-    ]);
-    expect(reporter.reports).toEqual([]);
-  });
-
-  it('renames the one selected mod from F2', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed');
-    const { fake, commands } = commandsOver(mods);
-
-    register(commands, recordingReporter(), [modA]);
-    await invoke('modbench.mod.rename', MODS_KEY_ARGS);
-
-    expect(renames(fake.calls)[0]).toEqual({ verb: 'renameModFolder', from: 'Mod A', to: 'Renamed' });
-  });
-
-  it('asks the command in the prompt whether the name is free of the other mods, the mod\'s own name being free', async () => {
-    showInputBox.mockResolvedValueOnce(undefined);
-
-    register(commandsOver(mods).commands);
-    await invoke('modbench.mod.rename', modB);
-    const validate = validatorOfThePrompt();
-
-    expect([await validate('mod a'), await validate('mod b')]).toEqual([MOD_CLASH, undefined]);
-  });
-
-  it('reports a refusal, the folder not having moved, as a failed rename', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed');
-    const reporter = recordingReporter();
-
-    register(commandsOver(mods, { refusals: refusing('renameModFolder', 'is in the way') }).commands, reporter);
-    await invoke('modbench.mod.rename', modA);
-
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to rename mod.', detail: 'is in the way' }]);
-  });
-
-  it('warns once for each profile whose line could not be renamed, naming it and the mod order file', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed');
-    const lineRefusalIn: Record<string, string> = { Default: 'disk full', Secondary: 'locked' };
-    const reporter = recordingReporter();
-
-    register(commandsOver(mods, { refusals: (call) => (call.verb === 'changeModOrder' ? lineRefusalIn[call.profile] : undefined) }, twoProfiles).commands, reporter);
-    await invoke('modbench.mod.rename', modA);
-
-    expect(reporter.reports).toEqual([
-      { severity: 'warning', message: '"Mod A" was renamed, but its modlist.txt line in profile "Default" could not be renamed.', detail: 'disk full' },
-      { severity: 'warning', message: '"Mod A" was renamed, but its modlist.txt line in profile "Secondary" could not be renamed.', detail: 'locked' },
-    ]);
   });
 });
 
@@ -398,57 +323,6 @@ describe('delete separator: the whole selection of separators, asked once', () =
   });
 });
 
-describe('rename separator takes its separator through the gesture entry', () => {
-  beforeEach(() => { vi.clearAllMocks(); progressSteps.length = 0; });
-
-  const mods = [separator('Group A'), mod('Mod A'), separator('Group B'), separator('Taken Meanwhile')];
-  const instance = instanceOf(mods);
-  const groupA = new SeparatorNode({ kind: 'separator', name: 'Group A', enabled: true }, []);
-  const groupB = new SeparatorNode({ kind: 'separator', name: 'Group B', enabled: true }, []);
-
-  it('prompts with the right-clicked separator\'s name and renames it, not the selection around it', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed');
-    const { fake, commands } = commandsOver(mods);
-
-    registerSeparatorCommands(commands, instance, recordingReporter(), scriptedDialog(), vi.fn(), () => [groupA, groupB]);
-    await invoke('modbench.separator.rename', groupB, [groupA, groupB]);
-
-    expect(optionsOfTheLastShowInputBoxCall()).toMatchObject({ prompt: 'Rename separator', value: 'Group B' });
-    expect(fake.calls).toEqual([modOrderChange({ kind: 'renameSeparator', from: 'Group B', to: 'Renamed' })]);
-  });
-
-  it('asks the command in the prompt whether the name is free of the other separators, the separator\'s own name being free', async () => {
-    showInputBox.mockResolvedValueOnce(undefined);
-
-    registerSeparatorCommands(commandsOver(mods).commands, instance, recordingReporter(), scriptedDialog(), vi.fn(), () => []);
-    await invoke('modbench.separator.rename', groupB);
-    const validate = validatorOfThePrompt();
-
-    expect([await validate('group a'), await validate('group b')]).toEqual([SEPARATOR_CLASH, undefined]);
-  });
-
-  it('reports the refusal of a name another separator took after the prompt closed', async () => {
-    showInputBox.mockResolvedValueOnce('Taken Meanwhile');
-    const reporter = recordingReporter();
-
-    registerSeparatorCommands(commandsOver(mods).commands, instance, reporter, scriptedDialog(), vi.fn(), () => []);
-    await invoke('modbench.separator.rename', groupB);
-
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to rename separator.', detail: SEPARATOR_CLASH }]);
-  });
-
-  it('renames the one selected separator from F2', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed');
-    const { fake, commands } = commandsOver(mods);
-
-    registerSeparatorCommands(commands, instance, recordingReporter(), scriptedDialog(), vi.fn(), () => [groupB]);
-    await invoke('modbench.separator.rename', MODS_KEY_ARGS);
-
-    expect(optionsOfTheLastShowInputBoxCall()).toMatchObject({ value: 'Group B' });
-    expect(fake.calls).toEqual([modOrderChange({ kind: 'renameSeparator', from: 'Group B', to: 'Renamed' })]);
-  });
-});
-
 describe('add separator: one command for a mod anchor and a separator anchor', () => {
   beforeEach(() => { vi.clearAllMocks(); progressSteps.length = 0; });
 
@@ -512,14 +386,6 @@ describe('a name prompt asks the command nothing of an empty name, so an unreada
   const unreadable = { unreadReads: { modOrder: 'modlist.txt is locked' } };
 
   it.each<[string, (commands: ModCommands) => Promise<unknown>]>([
-    ['rename mod', (commands) => {
-      registerModContextCommands({ commands, instance, viewSelection: () => [], reporter: recordingReporter(), ask: scriptedDialog(), trash: vi.fn(), log: vi.fn() });
-      return invoke('modbench.mod.rename', new ModNode({ kind: 'mod', name: 'Mod A', enabled: true }));
-    }],
-    ['rename separator', (commands) => {
-      registerSeparatorCommands(commands, instance, recordingReporter(), scriptedDialog(), vi.fn(), () => []);
-      return invoke('modbench.separator.rename', new SeparatorNode({ kind: 'separator', name: 'Group A', enabled: true }, []));
-    }],
     ['add separator', (commands) => {
       registerSeparatorCommands(commands, instance, recordingReporter(), scriptedDialog(), vi.fn(), () => []);
       return invoke('modbench.separator.add', new ModNode({ kind: 'mod', name: 'Mod A', enabled: true }));
@@ -1033,11 +899,6 @@ describe('a Mods gesture that writes ends on the Instance loader\'s read, with t
       registerSeparatorCommands(commands(), instance, reporter(), scriptedDialog('Delete'), vi.fn(), () => []);
       return invoke('modbench.separator.delete', groupA);
     }, ['trashEntryFolder', 'changeModOrder']],
-    ['separator rename', () => {
-      showInputBox.mockResolvedValueOnce('Renamed');
-      registerSeparatorCommands(commands(), instance, reporter(), scriptedDialog(), vi.fn(), () => []);
-      return invoke('modbench.separator.rename', groupA);
-    }, ['changeModOrder']],
     ['separator add', () => {
       showInputBox.mockResolvedValueOnce('New Group');
       registerSeparatorCommands(commands(), instance, reporter(), scriptedDialog(), vi.fn(), () => []);
@@ -1151,45 +1012,6 @@ describe('the mod gestures, called by the agent', () => {
 
       await expect(invoke('modbench.mod.move', new AgentCall([{ kind: 'mod', name: 'Mod A' }, { kind: 'separator', name: 'Group' }], { place: group, end: 'winning' })))
         .rejects.toBeInstanceOf(Refusal);
-
-      expect(fake.calls).toEqual([]);
-    });
-  });
-
-  describe('rename', () => {
-    const renameCall = (name: string) => new AgentCall([{ kind: 'mod', name: 'Mod A' }], { name });
-    const register = (commands: ModCommands, reporter = recordingReporter()) =>
-      registerModContextCommands({ commands, instance, viewSelection: () => [selected], reporter, ask: scriptedDialog(), trash: vi.fn(), log: vi.fn() });
-
-    it('renames the mod given to the name given, never the selection, asking nothing, and answers the outcome', async () => {
-      const { fake, commands } = commandsOver(mods);
-      const reporter = recordingReporter();
-      register(commands, reporter);
-
-      const answered = await invoke('modbench.mod.rename', renameCall('Renamed'));
-
-      expect(fake.calls.filter((call) => call.verb === 'renameModFolder')).toEqual([{ verb: 'renameModFolder', from: 'Mod A', to: 'Renamed' }]);
-      expect(answered).toEqual({ applied: true, outcome: { landed: ['Renamed'], refused: [] }, partial: [] });
-      expect(reporter.reports).toEqual([]);
-      nothingOpened();
-    });
-
-    it('answers a rename to the mod\'s own name as nothing landed and nothing refused, writing and reporting nothing', async () => {
-      const { fake, commands } = commandsOver(mods);
-      const reporter = recordingReporter();
-      register(commands, reporter);
-
-      const answered = await invoke('modbench.mod.rename', renameCall('Mod A'));
-
-      expect(answered).toEqual({ applied: true, outcome: { landed: [], refused: [] } });
-      expect([fake.calls, reporter.reports]).toEqual([[], []]);
-    });
-
-    it('refuses an Argument of more than one mod', async () => {
-      const { fake, commands } = commandsOver(mods);
-      register(commands);
-
-      await expect(invoke('modbench.mod.rename', new AgentCall([{ kind: 'mod', name: 'Mod A' }, { kind: 'mod', name: 'Mod B' }], { name: 'X' }))).rejects.toBeInstanceOf(Refusal);
 
       expect(fake.calls).toEqual([]);
     });
@@ -1322,36 +1144,13 @@ describe('the separator gestures, called by the agent', () => {
     nothingOpened(ask);
   });
 
-  it.each([
-    ['add', 'modbench.separator.add'],
-    ['rename', 'modbench.separator.rename'],
-  ])('%s refuses an Argument of more than one entry, writing nothing', async (_case, command) => {
+  it('add refuses an Argument of more than one entry, writing nothing', async () => {
     const { fake, commands } = commandsOver(mods);
     register(commands);
 
-    await expect(invoke(command, new AgentCall([group('Group A'), group('Group B')], { name: 'X' }))).rejects.toBeInstanceOf(Refusal);
+    await expect(invoke('modbench.separator.add', new AgentCall([group('Group A'), group('Group B')], { name: 'X' }))).rejects.toBeInstanceOf(Refusal);
 
     expect(fake.calls).toEqual([]);
-  });
-
-  it('rename renames the separator given to the name given, never the selection, asking nothing, and answers the outcome', async () => {
-    const { fake, commands } = commandsOver(mods);
-    const reporter = recordingReporter();
-    const ask = scriptedDialog();
-    register(commands, reporter, ask);
-
-    const answered = await invoke('modbench.separator.rename', new AgentCall([group('Group A')], { name: 'Renamed' }));
-
-    expect(fake.calls).toEqual([modOrderChange({ kind: 'renameSeparator', from: 'Group A', to: 'Renamed' })]);
-    expect(answered).toEqual({ applied: true, outcome: { landed: ['Renamed'], refused: [] } });
-    expect(reporter.reports).toEqual([]);
-    nothingOpened(ask);
-  });
-
-  it('rename answers a rename that wrote nothing as nothing landed and nothing refused', async () => {
-    register(commandsOver(mods).commands);
-
-    expect(await invoke('modbench.separator.rename', new AgentCall([group('Group A')], { name: 'Group A' }))).toEqual({ applied: true, outcome: { landed: [], refused: [] } });
   });
 
   describe('delete for an agent', () => {
@@ -1480,11 +1279,9 @@ describe('a Mods gesture called by the agent refuses an Argument of a kind it do
     ['modbench.mod.disable', plugin, registerEnable],
     ['modbench.mod.move', plugin, (commands) => registerModMoveCommand(commands, instance, { selection: () => [], direction: () => 'losingAtTop' }, recordingReporter())],
     ['modbench.mod.uninstall', plugin, registerContext],
-    ['modbench.mod.rename', plugin, registerContext],
     ['modbench.mod.excludeFile', modArgument, registerExclusion],
     ['modbench.mod.includeFile', modArgument, registerExclusion],
     ['modbench.separator.add', plugin, registerSeparators],
-    ['modbench.separator.rename', modArgument, registerSeparators],
     ['modbench.separator.delete', modArgument, registerSeparators],
   ])('%s', async (command, argument, register) => {
     const { fake, commands } = commandsOver([mod('Mod A')]);

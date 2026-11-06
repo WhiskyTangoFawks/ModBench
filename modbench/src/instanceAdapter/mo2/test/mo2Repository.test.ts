@@ -675,6 +675,18 @@ describe('the MO2 adapter\'s repository', () => {
       ]);
     });
 
+    it('holds a renamed folder whole by its new name alone', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await put('.gitignore', whitelistIgnoreList(undefined));
+      const held = await modFolder('Mod [A]');
+      await adapter.writeHeldWholeLines([held], true);
+
+      await adapter.followFoldersInRepository([{ from: held, to: join(root, 'mods', 'Renamed') }]);
+
+      expect(await readFile(join(root, '.gitignore'), 'utf8')).toBe(withHeldWholeLines(whitelistIgnoreList(undefined), ['Renamed'], true));
+    });
+
     async function committed(ignoreList: string): Promise<Awaited<ReturnType<typeof instance>>> {
       const adapter = await instance();
       runGit('init', '--quiet');
@@ -772,6 +784,19 @@ describe('the MO2 adapter\'s repository', () => {
       expect(runGit('config', '-f', '.gitmodules', 'submodule.Mod A.path').trim()).toBe('source/Mod A');
       expect(runGit('ls-files', '-s', 'source').trim().split('\n').map((line) => line.slice(0, 6) + line.slice(line.indexOf('\t')))).toEqual(['160000\tsource/Mod A']);
       expect(runGit('ls-files', '.gitmodules')).toBe('.gitmodules\n');
+    });
+
+    it('names a moved source folder\'s entry for its new folder, with all it held', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await sourceMod('Mod A', 'https://example.test/a.git');
+      await everySourceModNamedForItsRepository(adapter);
+
+      await adapter.followFoldersInRepository([{ from: join(root, 'source', 'Mod A'), to: join(root, 'source', 'Renamed') }]);
+
+      expect(runGit('config', '-f', '.gitmodules', '--list').trim().split('\n')).toEqual([
+        'submodule.Renamed.path=source/Renamed', 'submodule.Renamed.url=https://example.test/a.git', 'submodule.Renamed.branch=main',
+      ]);
     });
 
     it('writes the entry and line of the source mods it acts on alone, and keeps those of every other, though it sweeps none', async () => {

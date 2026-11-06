@@ -7,7 +7,7 @@ import { parsePlugins, pluginKey, renamePluginInText } from '../../loadOrderFile
 import { errorMessage } from '../../ports/errorMessage';
 import { present } from '../../ports/present';
 import { ruleFilePluginNames } from '../../sortingRules/lootMetadata';
-import { namesPlugin, NO_FILE_CHANGES, placeIn, spliced, type SymbolOwner } from '../../symbolNames/symbolNames';
+import { COMMITTED, namesPlugin, NO_FILE_CHANGES, placeIn, spliced, type SymbolOwner } from '../../symbolNames/symbolNames';
 import { namesIn, ruleFileNames } from './mo2PluginReferences';
 import { pluginCompanionRule, type PluginCompanionRule } from '../../tables/gamePaths';
 import { get, listEntries, readOrAbsent, rename, undoAll, type Undo, withLock, write } from '../files';
@@ -201,7 +201,7 @@ export function mo2PluginRename(context: Mo2Context, source: ReadingSource): Pic
       return {
         changes: NO_FILE_CHANGES,
         cannotFollow,
-        commit: () => renamePlugin(fileOrigin, name, newName, namedByFileName).then(() => undefined, errorMessage),
+        commit: () => renamePlugin(fileOrigin, name, newName, namedByFileName).then(() => COMMITTED, (err: unknown) => ({ failed: errorMessage(err) })),
       };
     },
   };
