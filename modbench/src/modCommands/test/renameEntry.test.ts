@@ -133,6 +133,13 @@ describe('rename separator: its line in each profile, its folder, and each refer
     expect(renamer.fake.calls).toEqual([]);
   });
 
+  it('refuses a name the manager matches as no name, writing nothing', async () => {
+    const renamer = over();
+
+    expect(await renamer.commands.renameSeparator(renamer.editing, 'Core', '')).toEqual({ applied: false, refusal: 'Not a valid separator name: ""' });
+    expect(renamer.fake.calls).toEqual([]);
+  });
+
   it('says its line was not renamed when the active profile\'s write failed', async () => {
     const renamer = over({ refusals: refusing('changeModOrder', 'ENOENT: no such file') });
 

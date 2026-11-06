@@ -61,6 +61,10 @@ async function profilesActiveFirst(adapter: InstanceAdapter): Promise<string[]> 
 function entryDefinition(adapter: InstanceAdapter, sourceFolder: FolderMove | undefined): EntryOwner {
   return {
     async plan(entry, to) {
+      // A name the manager folds to nothing gives no folder and no line.
+      if (adapter.entryKey({ kind: entry.kind, name: to }) === adapter.entryKey({ kind: entry.kind, name: '' })) {
+        return { refused: `Not a valid ${entry.kind} name: "${to}"` };
+      }
       let from: string | undefined;
       let ordered: string[];
       try {

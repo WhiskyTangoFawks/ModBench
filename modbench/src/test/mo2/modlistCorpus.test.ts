@@ -102,8 +102,8 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
     const renamed = await renamesOver(dir).renameSeparator(onDisk, 'Unassigned (Modlist Development)', name);
     assertOnlyChanged(before, await snapshotTree(dir), new Set());
 
-    const refusal = `Not a valid separator name: "${name}"`;
-    expect([added, renamed]).toEqual([{ applied: false, refusal }, { applied: false, failed: refusal, edited: false }]);
+    const refusal = { applied: false, refusal: `Not a valid separator name: "${name}"` };
+    expect([added, renamed]).toEqual([refusal, refusal]);
   });
 
   it('renameSeparator renames the line and its mods/ folder, its meta.ini carried along unchanged', async () => {
