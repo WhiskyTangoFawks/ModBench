@@ -238,9 +238,9 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       path: '/records/delete-changes', body: { records: [kept, nonCompiledPlugin, gone] } },
     { name: 'createPlugin', verb: (c) => c.createPlugin(newPlugin, '/mods/ModA', '/source/ModA', ['Small']), ...same({ ...newPlugin, path: '/mods/ModA/New.esp' }),
       path: '/plugins/create', body: { origin: 'ModA', name: 'New.esp', folder: '/mods/ModA', sourceFolder: '/source/ModA', flags: ['Small'] } },
-    { name: 'getRenameSourceChanges', verb: (c) => c.getRenameSourceChanges({ name: 'Old.esp', origin: 'ModA' }, 'New.esp'),
+    { name: 'getRenameSourceChanges', verb: (c) => c.getRenameSourceChanges({ name: 'Old.esp', origin: 'ModA' }, 'New.esp', { namedByFileName: false, sourceFiles: [{ from: 'Old.esp', to: 'New.esp' }] }),
       ...same({ treeName: 'Old.esp', ...editChanges }),
-      path: '/plugins/rename-source-changes', body: { origin: 'ModA', name: 'Old.esp', newName: 'New.esp' } },
+      path: '/plugins/rename-source-changes', body: { origin: 'ModA', name: 'Old.esp', newName: 'New.esp', namedByFileName: false, sourceFiles: [{ from: 'Old.esp', to: 'New.esp' }] } },
     { name: 'getCopyChanges', verb: (c) => c.getCopyChanges([kept], 'Override', [patch, other], true),
       answer: { applied: [copied], refused: [{ item: { record: kept, destination: other }, refusal: 'DestinationHoldsRecord', message: 'Other.esp already holds it.' }] },
       reads: { applied: [copied], refused: [{ item: { record: kept, destination: other }, reason: 'Other.esp already holds it.' }] },
@@ -403,7 +403,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       { name: 'createPlugin', verb: (c) => c.createPlugin(newPlugin, '/mods/ModA', '/source/ModA', undefined), status: 409,
         body: { detail: 'A file is already at /mods/ModA/New.esp, so New.esp was not created.', refusal: 'FileExists' },
         text: 'A file is already at /mods/ModA/New.esp, so New.esp was not created.', refusal: 'Could not create "New.esp"' },
-      { name: 'getRenameSourceChanges', verb: (c) => c.getRenameSourceChanges({ name: 'Old.esp', origin: 'ModA' }, 'New.esp'), status: 409,
+      { name: 'getRenameSourceChanges', verb: (c) => c.getRenameSourceChanges({ name: 'Old.esp', origin: 'ModA' }, 'New.esp', { namedByFileName: true, sourceFiles: [] }), status: 409,
         body: { detail: 'ModA already holds New.esp.', refusal: 'NameTaken' }, text: 'ModA already holds New.esp.', refusal: 'Could not rename "Old.esp"' },
       { name: 'versionInGit', verb: (c) => c.versionInGit([modToVersionInGit('ModA'), modToVersionInGit('ModB')]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not put 2 mods under git' },
       { name: 'versionInGit', verb: (c) => c.versionInGit([modToVersionInGit('ModA')]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not put 1 mod under git' },
@@ -883,7 +883,7 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     ['create', (client) => client.getCreateChanges(plugin, 'npc_'), '/create-record-changes'],
     ['delete', (client) => client.getDeleteChanges([record]), '/delete-changes'],
     ['copy', (client) => client.getCopyChanges([record], 'Override', [plugin], false), '/copy-changes'],
-    ['rename source', (client) => client.getRenameSourceChanges(plugin, 'New.esp'), '/rename-source-changes'],
+    ['rename source', (client) => client.getRenameSourceChanges(plugin, 'New.esp', { namedByFileName: true, sourceFiles: [] }), '/rename-source-changes'],
   ];
 
   it.each(gestures)('sends the %s request only once the pending hand-over has answered', async (_name, gesture, route) => {

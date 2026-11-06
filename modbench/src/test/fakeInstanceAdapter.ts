@@ -6,6 +6,9 @@ import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import type { NexusFileInfo } from '../ports/nexusFileInfo';
 import {
   CHECK_THE_DISK, entryNotFound, filesWinningFirst, type ChangeListener, type Reread, isBareName, type DecideModOrder, type DownloadedFile, type DownloadedFileQuery, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp,  type GameFile, type GamePlace, type HashedFile, type InstallationFile, type InstallOutcome, type InstalledPackage, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type NexusModFile, type OtherManifest, type UnsearchedFolder, type OriginFile, type FomodAnswer, type PluginOrderChange, type PublisherTag, type PublisherTagChange, type Subscription } from '../instanceAdapter/instanceAdapter';
+import { fileOriginOfPlugin } from '../instanceAdapter/instanceAdapter';
+import { errorMessage } from '../ports/errorMessage';
+import { namesPlugin, NO_FILE_CHANGES } from '../symbolNames/symbolNames';
 import { modOrderAfter, pluginOrderAfter } from './fakeOrderChanges';
 import { groupModOrder } from '../instanceAdapter/modGroups';
 import { parseNexusPage } from '../instanceAdapter/nexusPage';
@@ -610,20 +613,40 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     pathInFolder: (path, exclude) => pathInFolderOf(path, exclude, EXCLUSION_MARK),
     ownPath: (pathInFolder) => ownPathOf(pathInFolder, EXCLUSION_MARK).path,
     originHoldsPlugin: (origin, name) => Promise.resolve(rootFileOf(origin, name) !== undefined),
-    pluginReferences: { read: () => Promise.resolve({ references: [], leftOut: [] }), nameAt: () => Promise.resolve(undefined) },
-    renamePlugin: (origin, from, to) =>
-      write({ verb: 'renamePlugin', origin, from, to }, () => {
+    pluginReferences: {
+      read: () => Promise.resolve({ references: [], leftOut: [] }),
+      nameAt: () => Promise.resolve(undefined),
+      plan: (symbol, to, _held, plugins) => {
+        const { name: from, origin: named } = symbol;
+        const origin = fileOriginOfPlugin(named);
+        const namedByFileName = namesPlugin({ name: from }, symbol, plugins);
         const sameAsFrom = (name: string): boolean => pluginKey(name) === pluginKey(from);
-        const other = current.pluginOrder.find((plugin) => pluginKey(plugin.name) === pluginKey(to) && !sameAsFrom(plugin.name));
-        if (other !== undefined && current.pluginOrder.some((plugin) => sameAsFrom(plugin.name))) throw new Error(`Plugin already in plugins.txt: ${other.name}`);
-        const own = rootFileOf(origin, from);
-        if (own === undefined) throw new Error(`Not a file of ${origin.kind === 'mod' ? `mod "${origin.name}"` : 'Overwrite'}: "${from}"`);
-        const taken = rootFileOf(origin, to);
-        if (taken !== undefined && taken !== own) throw new Error(`The file "${taken.path}" is in the way`);
-        const files = originFilesOf(origin);
-        if (files !== undefined) withOriginFiles(origin, { ...files, files: files.files.map((file) => (file === own ? fileIn(files.folder ?? '', to) : file)) });
-        current = { ...current, pluginOrder: current.pluginOrder.map((plugin) => (sameAsFrom(plugin.name) ? { ...plugin, name: to } : plugin)) };
-      }),
+        const ownFile = () => {
+          const other = current.pluginOrder.find((plugin) => pluginKey(plugin.name) === pluginKey(to) && !sameAsFrom(plugin.name));
+          if (other !== undefined && current.pluginOrder.some((plugin) => sameAsFrom(plugin.name))) throw new Error(`Plugin already in plugins.txt: ${other.name}`);
+          const own = rootFileOf(origin, from);
+          if (own === undefined) throw new Error(`Not a file of ${origin.kind === 'mod' ? `mod "${origin.name}"` : 'Overwrite'}: "${from}"`);
+          const taken = rootFileOf(origin, to);
+          if (taken !== undefined && taken !== own) throw new Error(`The file "${taken.path}" is in the way`);
+          return own;
+        };
+        try {
+          ownFile();
+        } catch (err) {
+          return Promise.resolve({ refused: errorMessage(err) });
+        }
+        return Promise.resolve({
+          changes: NO_FILE_CHANGES,
+          cannotFollow: [],
+          commit: () => write({ verb: 'renamePlugin', origin, from, to }, () => {
+            const own = ownFile();
+            const files = originFilesOf(origin);
+            if (files !== undefined) withOriginFiles(origin, { ...files, files: files.files.map((file) => (file === own ? fileIn(files.folder ?? '', to) : file)) });
+            if (namedByFileName) current = { ...current, pluginOrder: current.pluginOrder.map((plugin) => (sameAsFrom(plugin.name) ? { ...plugin, name: to } : plugin)) };
+          }).then(() => undefined, errorMessage),
+        });
+      },
+    },
     trashEntryFolder: async (entry, trash) => {
       const held = await write({ verb: 'trashEntryFolder', entry }, () => foldersNow().holding(entry));
       if (held === undefined) return false;

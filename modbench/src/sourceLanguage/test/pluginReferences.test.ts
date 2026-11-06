@@ -23,6 +23,7 @@ function fakeOwner(reading: SymbolReading): SymbolOwner & { asked: [PluginSymbol
     asked,
     read: (symbol, held) => { asked.push([symbol, held]); return Promise.resolve(reading); },
     nameAt: () => Promise.resolve(undefined),
+    plan: () => Promise.reject(new Error('Not planned here.')),
   };
 }
 
@@ -89,7 +90,7 @@ describe('Find All References on a plugin (symbols.md, The features, story 2)', 
   describe('a file an owner could not read, or a copy it could not open (common.md, Reporting)', () => {
     const unreadable = () => references([
       fakeOwner({ references: [{ copy: { formKey: '000800:Child.esp', plugin: CHILD }, names: { name: 'Base.esm' } }], leftOut: ['/userlist.yaml: it does not read'] }),
-      { read: () => Promise.reject(new Error('The disk is gone.')), nameAt: () => Promise.resolve(undefined) },
+      { ...fakeOwner({ references: [], leftOut: [] }), read: () => Promise.reject(new Error('The disk is gone.')) },
     ]);
     const unread = ['/userlist.yaml: it does not read', 'The disk is gone.', 'Child.esp (Child Mod) holds no 000800:Child.esp.'];
 

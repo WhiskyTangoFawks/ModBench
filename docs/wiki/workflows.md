@@ -52,7 +52,7 @@ While the instance holds a repository, Version in Git also offers the mod's whol
 
 The mod's manifest goes to the trash, since git holds everything it recorded. A mod whose manifest ignores files is refused, naming them: git would hold them too.
 
-The build file is yours: Modbench writes the first one and never rewrites it. Build makes the mod folder exactly what the build file makes, and records it in a manifest in the mod folder, like any other mod's. When a build comes out differently on another machine, from a tool or the load order, the manifest changes and Source Control shows it.
+The build file is yours: Modbench writes the first one, and after that changes only the names a rename carries. Build makes the mod folder exactly what the build file makes, and records it in a manifest in the mod folder, like any other mod's. When a build comes out differently on another machine, from a tool or the load order, the manifest changes and Source Control shows it.
 
 The mod folder's name and the files you exclude belong to the modlist, not the source. Renaming the mod or excluding a file never touches the repository, and the next build keeps it.
 

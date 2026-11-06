@@ -20,7 +20,7 @@ import {
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginIndexedState, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
   type RebuildIndexOutcome, type CopyChangesOutcome, type CopyMode,
-  type GridPosition, type RecordAt, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument, type RenameSourceChangesOutcome,
+  type GridPosition, type RecordAt, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument, type RenameSourceChangesOutcome, type RenameSourceAsked,
   type RecordFilter, type ReferenceResult, type NameQuery, type NamedObject, type PluginAddress, type PluginToRepair, type ModToVersionInGit, type VersionInGitOutcome, type VersionInGitProgress,
   type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
 } from './MEditClient';
@@ -265,13 +265,13 @@ class HttpMEditClient implements MEditClient {
   }
 
   async getRenameSourceChanges(
-    plugin: PluginAddress, newName: string,
+    plugin: PluginAddress, newName: string, { namedByFileName, sourceFiles }: RenameSourceAsked,
   ): Promise<RenameSourceChangesOutcome | WriteRefused> {
     return this.mutate<RenameSourceChangesOutcome>({
       op: `getRenameSourceChanges(${plugin.name}, ${plugin.origin})`,
       failMsg: `Could not rename "${plugin.name}"`,
       post: () => this.apiClient.POST('/plugins/rename-source-changes', {
-        body: { origin: plugin.origin, name: plugin.name, newName },
+        body: { origin: plugin.origin, name: plugin.name, newName, namedByFileName, sourceFiles },
       }),
     });
   }
@@ -727,7 +727,7 @@ class HttpMEditClient implements MEditClient {
       (data) => data ?? []);
   }
 
-  getPluginNameReferences(name: string): Promise<components['schemas']['RecordCopy'][] | ReadFailed> {
+  getPluginNameReferences(name: string): Promise<components['schemas']['CopyNaming'][] | ReadFailed> {
     return this.read(`getPluginNameReferences(${name})`,
       (api, signal) => api.GET('/plugin-names/{name}/references', { params: { path: { name } }, signal }),
       (data) => data ?? []);

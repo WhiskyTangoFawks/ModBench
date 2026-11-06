@@ -3,7 +3,7 @@
 
 import * as vscode from 'vscode';
 import { attachPortOf, createMEditClient, recordIndexReferences, stopMEditClient, type MEditClient } from './client';
-import { buildFileReferences } from './manifestAdapter/manifestAdapter';
+import { manifestFileReferences } from './manifestAdapter/manifestAdapter';
 import type { SymbolOwner } from './symbolNames/symbolNames';
 import { makeReporter } from './drivingLib/reporter';
 import { commandTitles } from './drivingLib/commandTitles';
@@ -14,7 +14,7 @@ import { highlightFollowingFocus } from './drivingLib/highlightFollowsFocus';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, loadOrderComing, sourceModRepositoriesOver, type Editor } from './editor';
 import { createSourceLanguage, formKeyLocation } from './sourceLanguage';
-import { saveUnsavedPluginSource } from './textDocuments/saveUnsavedPluginSource';
+import { saveUnsavedUnder } from './textDocuments/saveUnsavedUnder';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
 import { registerCopyValueCommand, type CopyValueAdapter } from './drivingLib/copyValue';
 import type { SourceEditing } from './textDocuments/sourceEditing';
@@ -45,7 +45,7 @@ import { DOWNLOADS_KEY_ARGS } from './downloads/keyContext';
 import { createDownloadsView } from './downloads/downloadsView';
 import { createToolboxView, type ToolboxView } from './toolbox/toolboxView';
 import type { PluginsTxtPlaceOf } from './toolbox/ToolboxProvider';
-import { gameReleaseForGame } from './tables/gamePaths';
+import { gameReleaseForGame, pluginCompanionRule } from './tables/gamePaths';
 import { hostGit } from './hostGit';
 import { hostTasks, scriptHostIn } from './tasks';
 import { stepTasks } from './sourceCommands/steps';
@@ -94,7 +94,7 @@ type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
   'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'signalChange' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
-  | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'getPluginIndexing'>;
+  | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'getPluginNameReferences' | 'moveLastWritten' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'getPluginIndexing'>;
 
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -174,7 +174,11 @@ function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, 
       const instance = own(new Instance({
         adapter, gameFolderSettingId: gameFolderSetting.id, window: vscode.window, log: outputChannel,
       }));
-      const owners = [adapter.pluginReferences, buildFileReferences(() => instance.value.paths.sourceDirs)];
+      const owners = [adapter.pluginReferences, manifestFileReferences({
+        sourceFolders: () => instance.value.paths.sourceDirs,
+        modFolderOf: (mod) => adapter.modFolderPath(mod),
+        companions: async () => pluginCompanionRule(await adapter.gameRelease()),
+      })];
       return { facts: factsOf(instance), instance, scriptEnvironmentFile: adapter.scriptEnvironmentFile, owners, side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
     },
     notAnInstance: () => ({ facts: NO_INSTANCE_FACTS, owners: [], side: buildBareSide }),
@@ -211,7 +215,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     extensionUri: deps.extensionUri,
     downloadsView: DOWNLOADS_KEY_ARGS.view, focusedView: deps.focusedView,
     sourceGestures: {
-      commands: sourceCommands({ client, adapter, saveUnsaved: saveUnsavedPluginSource, loadOrderSnapshot: () => instance.value.loadOrderSnapshot, tasks, trash }), pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say,
+      commands: sourceCommands({ client, adapter, saveUnsaved: saveUnsavedUnder, loadOrderSnapshot: () => instance.value.loadOrderSnapshot, tasks, trash }), pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say,
       registerRepositories: deps.registerRepositories,
     },
     checkForUpdates: checkForUpdatesOver(adapter, deps.nexus),
@@ -351,7 +355,7 @@ function start(context: vscode.ExtensionContext): void {
   const scriptsPath = vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath;
   const sourceLanguage = createSourceLanguage({
     client: meditClient, instance: views.instance, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
-    owners: [recordIndexReferences(meditClient), ...opened.owners],
+    owners: [recordIndexReferences(meditClient, () => Promise.resolve([])), ...opened.owners],
   });
   const agentServer = serveAgent({ port: agentPort(), instance: views.instance, copyReads: views.copyReads, statuses: views.statuses, deployment: views.deployment, pluginsShown: views.pluginsShown, standing: { mEdit: () => plugins.standing.mEdit(), plugins: () => plugins.standing.plugins(), sortingRules: () => plugins.standing.sortingRules(), modList: () => views.modsLines(), sourceLanguage: () => sourceLanguage.messages() }, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
   context.subscriptions.push(

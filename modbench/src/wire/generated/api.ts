@@ -228,8 +228,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * The changes renaming a compiled plugin's source makes, writing nothing.
-         * @description Over the unsaved documents mEdit holds, the files and folders renaming the plugin's source moves and the text each document it changes holds afterwards: every FormKey of the plugin follows. Moves come first, then deletions, then documents, and every path is absolute. The plugin file, its plugins.txt lines and what Modbench last wrote stay as they are.
+         * The changes renaming a plugin makes to plugin source, writing nothing.
+         * @description Over the unsaved documents mEdit holds, the files and folders renaming the plugin's source moves and the text each document it changes holds afterwards: every FormKey of the plugin follows, in its own source and in every other plugin source. Moves come first, then deletions, then documents, and every path is absolute. Each other plugin source that cannot follow is left behind, saying why. The plugin file, its plugins.txt lines and what Modbench last wrote stay as they are.
          */
         post: operations["RenameSourceChanges"];
         delete?: never;
@@ -311,7 +311,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Each copy, in an active plugin or one with plugin source, whose text names the plugin file name, and the Plugin Header record of each plugin with no plugin source that lists it as a master. Answers only once the record index is ready. */
+        /** @description Each copy, in an active plugin or one with plugin source, whose text names the plugin file name, and the Plugin Header record of each plugin with no plugin source that lists it as a master. Answers only once the record index is ready. Each says whether its plugin has plugin source, which a rename changes. */
         get: operations["GetPluginNameReferences"];
         put?: never;
         post?: never;
@@ -1186,6 +1186,11 @@ export interface components {
         CopyMissingReason: "RecordGone" | "NotInPlugin";
         /** @enum {string} */
         CopyMode: "New" | "Override";
+        CopyNaming: {
+            formKey: string;
+            plugin: components["schemas"]["PluginAddress"];
+            inPluginSource: boolean;
+        };
         CopyRecordRefused: {
             item: components["schemas"]["CopyItem"];
             refusal: components["schemas"]["RecordEditRefusal"];
@@ -1690,11 +1695,14 @@ export interface components {
             moves: components["schemas"]["SourceMove"][];
             deletions: string[];
             documents: components["schemas"]["DocumentChange"][];
+            leftBehind: components["schemas"]["SourceLeftBehind"][];
         };
         RenameSourceChangesRequest: {
             origin: string;
             name: string;
             newName: string;
+            namedByFileName: boolean;
+            sourceFiles?: components["schemas"]["SourceMove"][] | null;
         };
         RenderedDocument: {
             fileName: string;
@@ -1746,6 +1754,10 @@ export interface components {
             modFolderManifestFile?: string | null;
             modFolderManifest?: string | null;
             modFolderManifestInInit?: boolean | null;
+        };
+        SourceLeftBehind: {
+            plugin: components["schemas"]["PluginAddress"];
+            reason: string;
         };
         /** @enum {string} */
         SourceModIn: "NewRepository" | "InstanceRepository";
@@ -2586,7 +2598,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RecordCopy"][];
+                    "application/json": components["schemas"]["CopyNaming"][];
                 };
             };
             /** @description Service Unavailable */

@@ -16,6 +16,7 @@ export function pluginCommandsWith(
       getPlugins: client.getPlugins?.bind(client) ?? unanswered,
       getRenameSourceChanges: client.getRenameSourceChanges?.bind(client) ?? unanswered,
       moveLastWritten: client.moveLastWritten?.bind(client) ?? unanswered,
+      getPluginNameReferences: client.getPluginNameReferences?.bind(client) ?? unanswered,
       getCreatablePluginExtensions: client.getCreatablePluginExtensions?.bind(client) ?? unanswered,
       decompileAndRepair: client.decompileAndRepair?.bind(client) ?? unanswered,
     },

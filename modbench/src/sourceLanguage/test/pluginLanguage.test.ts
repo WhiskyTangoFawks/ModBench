@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Range, TreeItem, TreeItemCollapsibleState, Uri } from '../../test/vscodeMock';
 
 const setInput = vi.hoisted(() => vi.fn());
@@ -23,6 +23,7 @@ const ownerThatCannotReadAFile: SymbolOwner = {
     leftOut: [UNREAD],
   }),
   nameAt: () => Promise.resolve({ name: 'Base.esm' }),
+  plan: () => Promise.reject(new Error('Not planned here.')),
 };
 
 function plugin() {
@@ -32,9 +33,41 @@ function plugin() {
     reporter,
     client: { getCopyDocument: () => Promise.resolve(null), getRecordOwner: () => Promise.resolve(undefined) },
     owners: [ownerThatCannotReadAFile],
+    renamePlugin: () => Promise.reject(new Error('Not renamed here.')),
   });
   return { language, reporter };
 }
+
+describe('Rename Symbol on a plugin\'s name is the plugin\'s rename (source.md, In the text editor)', () => {
+  const document = { uri: Uri.file(PLUGINS_TXT), getText: () => '*Mid.esp\r\n*base.ESM\r\n' };
+  const renamePlugin = vi.fn(() => Promise.resolve());
+  const naming = (name?: string) => pluginLanguage({
+    instance: { value: { plugins: [{ ...BASE, path: '/data/Base.esm', line: 0, enabled: true, winning: true }] } },
+    reporter: recordingReporter(),
+    client: { getCopyDocument: () => Promise.resolve(null), getRecordOwner: () => Promise.resolve(undefined) },
+    owners: [{ ...ownerThatCannotReadAFile, nameAt: () => Promise.resolve(name === undefined ? undefined : { name }) }],
+    renamePlugin,
+  });
+  beforeEach(() => { renamePlugin.mockClear(); });
+
+  it('renames the plugin mod order resolves the name to, with the name VS Code asked for', async () => {
+    await naming('base.ESM').renameAt(document, 14, 'New.esm');
+
+    expect(renamePlugin).toHaveBeenCalledWith(BASE, 'New.esm');
+  });
+
+  it('offers the name under the place, as the file spells it', async () => {
+    expect(await naming('Base.esm').renameRangeAt(document, 14)).toEqual({ start: 11, end: 19, name: 'base.ESM' });
+  });
+
+  it('offers nothing where no plugin\'s name is, and renames nothing a name resolves to no plugin', async () => {
+    const gone = { uri: Uri.file(PLUGINS_TXT), getText: () => '*Gone.esp\r\n' };
+
+    expect(await naming().renameRangeAt(gone, 3)).toBeUndefined();
+    await expect(naming('Gone.esp').renameAt(gone, 3, 'New.esp')).rejects.toThrow('Mod order resolves Gone.esp to no plugin.');
+    expect(renamePlugin).not.toHaveBeenCalled();
+  });
+});
 
 describe('what a plugin\'s references could not read, as each surface says it (common.md, Reporting)', () => {
   it('is a notification naming it for referenced by, a gesture that landed in part', async () => {

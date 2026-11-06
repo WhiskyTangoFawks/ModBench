@@ -360,11 +360,12 @@ internal sealed class RelationReads(
 
     /// <summary>Each copy naming the plugin file <paramref name="name"/> in an active or compiled plugin, by its own
     /// FormKey or a link, and the Plugin Header of each such plugin read from its binary that lists it.</summary>
-    public IReadOnlyList<RecordCopy> GetCopiesNaming(string name)
+    public IReadOnlyList<CopyNaming> GetCopiesNaming(string name)
     {
         using var context = store.OpenRead();
+        var inPluginSource = $"d.derived_from <> '{DerivedFrom.Binary}'";
         var copies = context.Rows($"""
-            SELECT r.form_key, r.plugin, r.origin
+            SELECT r.form_key, r.plugin, r.origin, {inPluginSource}
             FROM {TableDdlBuilder.MirrorSchema}.records r
             {TableDdlBuilder.RegisteredJoin("r", "plugin", "origin")}
             JOIN {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} d
@@ -377,17 +378,17 @@ internal sealed class RelationReads(
                          AND lower(substr(fr.target_form_key, {FormKeyPluginStart})) = lower($1))))
               AND (p.load_order_idx IS NOT NULL OR d.derived_from <> '{DerivedFrom.Binary}')
             ORDER BY r.plugin, r.origin, r.form_key
-            """, reader => new RecordCopy(reader.GetString(0), new PluginAddress(reader.GetString(1), reader.GetString(2))), name);
+            """, reader => new CopyNaming(reader.GetString(0), new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.GetBoolean(3)), name);
         var headers = context.Rows($"""
-            SELECT d.plugin, d.origin
+            SELECT d.plugin, d.origin, {inPluginSource}
             FROM {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} d
             {TableDdlBuilder.RegisteredJoin("d", "plugin", "origin")}
             WHERE d.derived_from <> '{DerivedFrom.SourceTree}'
               AND (p.load_order_idx IS NOT NULL OR d.derived_from <> '{DerivedFrom.Binary}')
             ORDER BY d.plugin, d.origin
-            """, reader => reader.GetPluginAddress())
-            .Where(plugin => OpenedPlugins.GetValueOrDefault(plugin)?.Masters.Contains(name, StringComparer.OrdinalIgnoreCase) == true)
-            .Select(plugin => new RecordCopy(PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)), plugin));
+            """, reader => (Plugin: reader.GetPluginAddress(), InPluginSource: reader.GetBoolean(2)))
+            .Where(header => OpenedPlugins.GetValueOrDefault(header.Plugin)?.Masters.Contains(name, StringComparer.OrdinalIgnoreCase) == true)
+            .Select(header => new CopyNaming(PluginHeader.FormKeyFor(ModKey.FromFileName(header.Plugin.Name)), header.Plugin, header.InPluginSource));
         return [.. headers.Concat(copies).DistinctBy(copy => (copy.FormKey, copy.Plugin.Name, copy.Plugin.Origin))];
     }
 

@@ -54,7 +54,7 @@ public sealed class GitMissingRefusalTests : IDisposable
         services.GetRequiredService<CreateRecordChangesHandler>().CreateRecord(mod.Plugin, "npc_").AsResult())));
 
     private static readonly Gesture RenameSource = new("rename-source", (services, mod, _) => Task.FromResult(
-        services.GetRequiredService<RenameSourceChangesHandler>().RenameSource(mod.Plugin, "Renamed.esp")
+        services.GetRequiredService<RenameSourceChangesHandler>().RenameSource(mod.Plugin, "Renamed.esp", namedByFileName: true, sourceFiles: [])
             .Match(_ => ("Landed", ""), (refusal, message) => (refusal.ToString(), message))));
 
     public static TheoryData<Gesture> Every { get; } = [Delete, Copy, Decompile, VersionInGit, Compile, DecompileAndRepair, Build, Edit, Create, RenameSource];

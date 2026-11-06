@@ -33,12 +33,21 @@ import { PluginNode } from '../plugins/pluginRows';
 import { recordingReporter } from './surfacingDoubles';
 import { present } from '../ports/present';
 import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
+import type { SymbolOwner } from '../symbolNames/symbolNames';
 
 const PLUGIN = { name: 'Patch Mod.esp', origin: 'Patch Mod' };
 const RENAMED = 'Renamed Patch.esp';
 
 let root: string | undefined;
 let instance: Instance | undefined;
+
+const releasingOnCommit = (owner: SymbolOwner, release: () => void): SymbolOwner => ({
+  ...owner,
+  plan: async (...args) => {
+    const plan = await owner.plan(...args);
+    return 'refused' in plan ? plan : { ...plan, commit: () => plan.commit().finally(release) };
+  },
+});
 
 afterEach(async () => {
   instance?.dispose();
@@ -86,12 +95,13 @@ describe('a rename while a recompute is reading', () => {
     const overlapping = instance.refresh();
     await filesReadBeforeRename;
     const client = new InMemoryMEditClient();
-    client.setCommandResult('getRenameSourceChanges', { treeName: PLUGIN.name, moves: [], deletions: [], documents: [] });
+    client.setCommandResult('getRenameSourceChanges', { treeName: PLUGIN.name, moves: [], deletions: [], documents: [], leftBehind: [] });
     client.setCommandResult('moveLastWritten', { moved: true });
+    client.setQueryAnswer('getPluginNameReferences', []);
     client.setQueryAnswer('getCreatablePluginExtensions', ['.esm', '.esl', '.esp']);
     showInputBox.mockResolvedValue(RENAMED);
     registerRenamePluginCommand({
-      client, commands: pluginCommandsWith({ ...writer, renamePlugin: async (...args) => { await writer.renamePlugin(...args); release(); } }, client),
+      client, commands: pluginCommandsWith({ ...writer, pluginReferences: releasingOnCommit(writer.pluginReferences, release) }, client),
       instance, reporter: recordingReporter(),
       source: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
     }, () => []);

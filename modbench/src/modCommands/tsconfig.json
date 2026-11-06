@@ -11,6 +11,7 @@
     { "path": "../manifestAdapter" },
     { "path": "../nexus" },
     { "path": "../ports" },
+    { "path": "../symbolNames" },
     { "path": "../wire" }
   ],
   "include": ["**/*.ts"],

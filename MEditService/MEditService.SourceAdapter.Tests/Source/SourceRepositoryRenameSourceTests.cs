@@ -56,12 +56,24 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
             """),
     ];
 
+    private static readonly (string Path, string Text)[] OtherTree =
+    [
+        ("000000_Other.esp.json", """{ "ModKey": "Other.esp" }"""),
+        ("Npcs/OtherNpc - 000801_Other.esp.json", """
+            {
+              "FormKey": "000801:Other.esp",
+              "Name": "Old.esp",
+              "Race": "000802:Old.esp"
+            }
+            """),
+    ];
+
     public SourceRepositoryRenameSourceTests() =>
         TestAdapters.Source().Init(
             _modFolder,
             [
                 (Files(OldTree), PluginBaselines.Decompiled(Old.Name, LastWritten)),
-                (Files([("000000_Other.esp.json", """{ "ModKey": "Other.esp" }""")]), PluginBaselines.Decompiled(Other.Name, null)),
+                (Files(OtherTree), PluginBaselines.Decompiled(Other.Name, null)),
             ]);
 
     public void Dispose() => _modFolder.Dispose();
@@ -137,6 +149,27 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
         Assert.Equal(
             ["000000_New.esp.json", "Cells/0/0/EmbedCell - 000804_New.esp/EmbedCell - 000804_New.esp.json", "Npcs/MasterNpc - 000800_DLC.esm.json", "Npcs/SelfNpc - 000801_New.esp.json"],
             changes.Documents.Select(document => Path.GetRelativePath(PluginSourceRoot.In(_modFolder, "New.esp"), Path.Combine(_modFolder, document.Path)).Replace('\\', '/')).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void AnotherPluginsSource_FollowsARename_EachFormKeyOfTheRenamedPluginInItNamingTheNewName_AndWritesNothing()
+    {
+        var before = TreeOf(Other.Name);
+
+        var changes = Session().Repository.ChangesToFollowRename(Other, Old.Name, "New.esm").Value();
+
+        Assert.Equal(([], []), (changes.Moves, changes.Deletions));
+        var document = Assert.Single(changes.Documents);
+        Assert.Equal(
+            (Path.Combine(Path.GetRelativePath(_modFolder, PluginSourceRoot.In(_modFolder, Other.Name)), "Npcs", "OtherNpc - 000801_Other.esp.json"), """
+                {
+                  "FormKey": "000801:Other.esp",
+                  "Name": "Old.esp",
+                  "Race": "000802:New.esm"
+                }
+                """),
+            (document.Path, document.Text));
+        Assert.Equal(before, TreeOf(Other.Name));
     }
 
     [Fact]

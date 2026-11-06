@@ -31,7 +31,7 @@ public sealed class RenameSourceApiTests : HostedTests
     }
 
     private Task<HttpResponseMessage> RenameSource(string name, string origin, string newName) =>
-        Client.PostAsJsonAsync("/plugins/rename-source-changes", new { origin, name, newName });
+        Client.PostAsJsonAsync("/plugins/rename-source-changes", new { origin, name, newName, namedByFileName = true });
 
     private Task<HttpResponseMessage> MoveLastWritten(string name, string origin, string newName) =>
         Client.PostAsJsonAsync("/plugins/move-last-written", new { origin, name, treeName = name, newName });

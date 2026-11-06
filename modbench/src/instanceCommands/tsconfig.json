@@ -12,6 +12,7 @@
     { "path": "../nexus" },
     { "path": "../lootMetadata" },
     { "path": "../deployment" },
+    { "path": "../symbolNames" },
     { "path": "../tables" },
     { "path": "../wire" }
   ],

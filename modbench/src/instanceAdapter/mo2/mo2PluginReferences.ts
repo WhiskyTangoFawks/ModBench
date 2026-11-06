@@ -4,7 +4,7 @@ import { stripBom } from '../../loadOrderFileCodec/lineScan';
 import { pluginNamesIn } from '../../loadOrderFileCodec/pluginsText';
 import { errorMessage } from '../../ports/errorMessage';
 import { ruleFilePluginNames } from '../../sortingRules/lootMetadata';
-import { placeIn, sameName, samePath, type PlaceInFile, type PluginName, type SymbolReading } from '../../symbolNames/symbolNames';
+import { placeIn, sameName, samePath, type PlaceInFile, type PluginName, type SymbolOwner, type SymbolReading } from '../../symbolNames/symbolNames';
 import { get, readOrAbsent } from '../files';
 import type { InstanceAdapter } from '../instanceAdapter';
 import type { Mo2Context } from './mo2Context';
@@ -20,13 +20,14 @@ type NamesIn = (file: string, text: string) => PlacedName[] | { readonly refused
 const orderFileNames: NamesIn = (file, text) => pluginNamesIn(text).map(({ name, line, start, end }) =>
   ({ place: { file, start: { line, character: start }, end: { line, character: end } }, names: { name } }));
 
-const ruleFileNames: NamesIn = (file, text) => {
+export const ruleFileNames: NamesIn = (file, text) => {
   const read = stripBom(text);
   const names = ruleFilePluginNames(read);
   return 'refused' in names ? names : names.map(({ name, start, end }) => ({ place: placeIn(file, read, start, end), names: { name } }));
 };
 
-async function namesIn(file: string, namesOf: NamesIn, plugin: string): Promise<SymbolReading> {
+/** Each place `file` names `plugin` by its file name, and why the file could not be read. */
+export async function namesIn(file: string, namesOf: NamesIn, plugin: string): Promise<{ readonly references: readonly PlacedName[]; readonly leftOut: SymbolReading['leftOut'] }> {
   try {
     const text = await readOrAbsent(() => get(file), undefined);
     const names = text === undefined ? [] : namesOf(file, text);
@@ -40,13 +41,14 @@ async function namesIn(file: string, namesOf: NamesIn, plugin: string): Promise<
 const isBefore = (a: { line: number; character: number }, b: { line: number; character: number }): boolean =>
   a.line < b.line || (a.line === b.line && a.character <= b.character);
 
-export function mo2PluginReferences({ instanceRoot }: Mo2Context): Pick<InstanceAdapter, 'pluginReferences'> {
+export function mo2PluginReferences({ instanceRoot }: Mo2Context, plan: SymbolOwner['plan']): Pick<InstanceAdapter, 'pluginReferences'> {
   const namingFiles = async (): Promise<(readonly [string, NamesIn])[]> => [
     ...(await everyPluginOrderFile(instanceRoot)).map((file) => [file, orderFileNames] as const),
     ...Object.values(sortingRuleFilePaths(instanceRoot)).map((file) => [file, ruleFileNames] as const),
   ];
   return {
     pluginReferences: {
+      plan,
       async read({ name }) {
         const read = await Promise.all((await namingFiles()).map(([file, namesOf]) => namesIn(file, namesOf, name)));
         return { references: read.flatMap(({ references }) => references), leftOut: read.flatMap(({ leftOut }) => leftOut) };

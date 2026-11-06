@@ -3,7 +3,7 @@ import {
 } from '../client';
 import { isPluginSourcePath, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import {
-  buildFileIn, exclusionsOf, manifestIn, sourceModsOf, type BuildFile, type SourceMods,
+  buildFileIn, exclusionsOf, isBuildFileOf, manifestIn, sourceModsOf, type BuildFile, type SourceMods,
 } from '../manifestAdapter/manifestAdapter';
 import { BUILD_FILE } from '../wire/sourceMod';
 import { errorMessage } from '../ports/errorMessage';
@@ -23,8 +23,9 @@ interface SourceCommandsDeps {
     | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'nexusFileAt' | 'gamePlaces' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash' | 'filesIn'
     | 'originFileHash' | 'flaggedHash' | 'keepFlaggedHash' | 'folderValue' | 'writeFilesIn' | 'trashFileIn' | 'trashingReplaced' | 'fileStamp' | 'copyDownloadedFile' | 'putDownloadedFile' | 'unheldFolderValue'
     | 'repositoryOnDisk' | 'writeSourceModLines' | 'writeHeldWholeLines' | 'commitFolder' | 'foldersHeldWhole' | 'foldersInReach'>;
-  /** Saves the unsaved plugin source under a folder, as Text documents holds it; answers the paths VS Code left unsaved. */
-  saveUnsaved: (folder: string, isPluginSource: (path: string) => boolean) => Promise<string[]>;
+  /** Saves the unsaved documents under a folder that `picked` picks, as Text documents holds them; answers the paths VS
+   *  Code left unsaved. */
+  saveUnsaved: (folder: string, picked: (path: string) => boolean) => Promise<string[]>;
   loadOrderSnapshot: LoadOrderSnapshot;
   tasks: StepTasks;
   trash: MoveToTrash;
@@ -37,7 +38,9 @@ export type InitProgress = Omit<VersionInGitProgress, 'phase'> & { phase?: Versi
 export type InitializedSourceMod = VersionInGitOutcome & { readonly notes?: readonly string[] };
 
 const unsavedRefusal = (mod: string, paths: readonly string[]): ItemRefusal<string> =>
-  ({ item: mod, reason: `VS Code did not save its plugin source: ${paths.join(', ')}` });
+  ({ item: mod, reason: `VS Code did not save its source: ${paths.join(', ')}` });
+
+const builtFrom = (sourceFolder: string) => (path: string): boolean => isPluginSourcePath(path) || isBuildFileOf(sourceFolder, path);
 
 type Adapter = SourceCommandsDeps['adapter'];
 
@@ -76,12 +79,12 @@ async function keptByBuildIn(adapter: Adapter, folder: string): Promise<{ exclud
   }
 }
 
-// source.md, Build, story 5: the mod is built from the plugin source as VS Code shows it.
+// source.md, Build, story 5: the mod is built from its plugin source and build file as VS Code shows them.
 async function sourceModOf(
   { adapter, saveUnsaved }: Pick<SourceCommandsDeps, 'adapter' | 'saveUnsaved'>, mod: string, sourceMods: SourceMods,
 ): Promise<SourceModToBuild | ItemRefusal<string>> {
   const sourceFolder = sourceMods.folderOf(mod);
-  const unsaved = sourceFolder === undefined ? [] : await saveUnsaved(sourceFolder, isPluginSourcePath);
+  const unsaved = sourceFolder === undefined ? [] : await saveUnsaved(sourceFolder, builtFrom(sourceFolder));
   return unsaved.length > 0 ? unsavedRefusal(mod, unsaved) : sourceModRead(adapter, mod, sourceMods);
 }
 

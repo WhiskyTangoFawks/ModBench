@@ -9,6 +9,7 @@ import type { MoveToTrash } from '../ports/trash';
 import type { NexusFileInfo } from '../ports/nexusFileInfo';
 import type { NexusPage } from './nexusPage';
 import { PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
+import { OVERWRITE_ORIGIN } from '../wire/pluginAddress';
 import type { FomodMove, FomodState, ReleaseImage } from '../wire/fomodPage';
 import type { FolderRefusal } from './foldersRefused';
 import type { FileStamp } from '../repositoriesLib/stampedReads';
@@ -18,7 +19,7 @@ import type { ProgramVersions } from './gameFolder/programVersions';
 import type { NonSteamPrefix } from './gameFolder/steamPrefix';
 import type { Depot } from './gameFolder/steamAppManifest';
 import type { ScriptEnvironmentFile } from './scriptEnvironmentFile';
-import type { SymbolOwner } from '../symbolNames/symbolNames';
+import { originsWinningFirst, type SymbolOwner } from '../symbolNames/symbolNames';
 
 export type { ProgramVersion, ProgramVersions } from './gameFolder/programVersions';
 
@@ -405,6 +406,9 @@ export const CHECK_THE_DISK: Reread = { named: [], disk: true };
 /** Where a file's contents come from: a mod, or the files the game wrote at run time. */
 export type FileOrigin = { readonly kind: 'mod'; readonly name: string } | { readonly kind: 'runtimeOutput' };
 
+/** The origin a plugin's origin names (ADR-0012). */
+export const fileOriginOfPlugin = (origin: string): FileOrigin => (origin === OVERWRITE_ORIGIN ? { kind: 'runtimeOutput' } : { kind: 'mod', name: origin });
+
 /** A folder in an origin, by the relative path its tree names it with, and the path it has when
  *  nothing excludes it. `excluded` holds when its own mark or a folder's above it keeps it from the game. */
 export interface OriginFolder {
@@ -657,7 +661,7 @@ export interface InstanceReading extends InstanceGame {
 /** The names an entry may not take: the entries mod order lists and the folders mods are in. `modFolders` is undefined
  *  when there is no folder for mods at all. */
 export interface TakenNames {
-  readonly mods: readonly EntryRef[];
+  readonly mods: readonly ModlistEntry[];
   readonly modFolders: readonly ModFolder[] | undefined;
 }
 
@@ -882,11 +886,8 @@ export interface InstanceAdapter extends DataFileReads {
   readonly exclusionMark: string;
   /** Whether the origin's folder holds a file of the name now on disk, compared as the game compares plugin names. */
   originHoldsPlugin(origin: FileOrigin, name: string): Promise<boolean>;
-  /** Renames plugin `from` of `origin`, its named files and its line in every profile, in one
-   *  write; a failed write puts every file back. Refuses, changing nothing, a taken name or a
-   *  plugin not there. */
-  renamePlugin(origin: FileOrigin, from: string, to: string): Promise<void>;
-  /** Where the instance's files name a plugin: each profile's plugin order, and the sorting rule files. */
+  /** Where the instance's files name a plugin: each profile's plugin order, and the sorting rule files. A rename's commit
+   *  writes the plugin, its named files and those names at once; a failed write puts every file back. */
   readonly pluginReferences: SymbolOwner;
   /** Moves the folder that holds `entry` out of mods/ into the trash; false when none does. */
   trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;
@@ -947,13 +948,9 @@ export interface OriginProvides {
 const provides = (origin: FileOrigin, files: readonly OriginFile[]): OriginProvides =>
   ({ origin, files: files.filter((file) => !file.excluded) });
 
-/** The origins the game gets a file from, winning-first: Overwrite, then each enabled mod in mod
- *  order, each with the files nothing excludes. */
+/** The origins the game gets a file from, winning-first, as Symbol names ranks them, each with the files nothing excludes. */
 export function filesWinningFirst(
   mods: readonly ModlistEntry[], runtimeOutput: readonly OriginFile[], filesOf: (mod: string) => readonly OriginFile[],
 ): OriginProvides[] {
-  return [
-    provides({ kind: 'runtimeOutput' }, runtimeOutput),
-    ...mods.flatMap((entry) => (entry.kind === 'mod' && entry.enabled ? [provides({ kind: 'mod', name: entry.name }, filesOf(entry.name))] : [])),
-  ];
+  return originsWinningFirst(mods).map((origin) => provides(origin, origin.kind === 'mod' ? filesOf(origin.name) : runtimeOutput));
 }

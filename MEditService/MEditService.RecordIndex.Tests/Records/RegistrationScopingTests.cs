@@ -219,7 +219,7 @@ public class RegistrationScopingTests
         Assert.Empty(fx.Index.Queries.GetReferencesInActiveOrCompiledPlugins(fx.BetaRaceFk).Value());
     }
 
-    private static IReadOnlyList<RecordCopy> NamingAlpha(FixtureWithEveryKindOfExtractedRowAndBetaOverridingAlphasNpc fx, string name = "Alpha.esp") =>
+    private static IReadOnlyList<CopyNaming> NamingAlpha(FixtureWithEveryKindOfExtractedRowAndBetaOverridingAlphasNpc fx, string name = "Alpha.esp") =>
         fx.Index.Queries.GetPluginNameReferences(name).Value();
 
     [Fact]
@@ -280,6 +280,32 @@ public class RegistrationScopingTests
         fx.Reconcile(fx.WithBetaDisabled);
 
         Assert.Contains(NamingAlpha(fx), c => c.FormKey == fx.SharedNpcFk);
+    }
+
+    [Fact]
+    public void ACopyNamingAPlugin_SaysWhetherItsPluginHasPluginSource()
+    {
+        using var fx = Build("plugin-name-references-in-source");
+        SourceMods.Init(fx.Plugins.Plugins.Single(p => p.Name == BetaKey.Name));
+        fx.Reconcile(fx.WithBetaDisabled);
+
+        var copies = NamingAlpha(fx);
+
+        Assert.All(copies, c => Assert.Equal(PluginAddress.Comparer.Equals(c.Plugin, BetaKey), c.InPluginSource));
+        Assert.Contains(copies, c => c.InPluginSource);
+    }
+
+    [Fact]
+    public void ACopyInAPluginWhosePluginSourceDoesNotRead_IsInPluginSource_WhichARenameLeavesBehindItself()
+    {
+        using var fx = Build("plugin-name-references-unreadable-source");
+        var beta = fx.Plugins.Plugins.Single(p => p.Name == BetaKey.Name);
+        SourceMods.Init(beta);
+        Directory.Delete(PluginSourceRoot.In(beta.ModFolderOf(), BetaKey.Name), recursive: true);
+
+        fx.Reconcile(fx.WithBetaDisabled);
+
+        Assert.Contains(NamingAlpha(fx), c => PluginAddress.Comparer.Equals(c.Plugin, BetaKey) && c.InPluginSource);
     }
 
     [Theory]

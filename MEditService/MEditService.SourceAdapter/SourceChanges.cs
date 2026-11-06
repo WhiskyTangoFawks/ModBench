@@ -7,7 +7,7 @@ public sealed record SourceChanges(
 {
     public static SourceChanges None { get; } = new([], [], []);
 
-    internal SourceChanges Then(SourceChanges next) =>
+    public SourceChanges Then(SourceChanges next) =>
         new([.. Moves, .. next.Moves], [.. Deletions, .. next.Deletions], [.. Documents, .. next.Documents]);
 
     /// <summary>These changes with every path made absolute under <paramref name="sourceFolder"/>.</summary>

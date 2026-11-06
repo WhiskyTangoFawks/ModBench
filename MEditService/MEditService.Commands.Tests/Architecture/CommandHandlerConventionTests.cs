@@ -51,6 +51,7 @@ public sealed class CommandHandlerConventionTests
         typeof(RenameSourceRefusal),
         typeof(RenameSourceResult),
         typeof(SetPluginFileFlagsResult),
+        typeof(SourceLeftBehind),
     ];
 
     private const string CommandsNamespace = "MEditService.Commands";

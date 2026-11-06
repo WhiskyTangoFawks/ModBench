@@ -1,68 +1,70 @@
-// Rename plugin (rename-plugin trace). The client's reach is the plugin source's changes, which only mEdit
-// can answer; the file and its lines are the Instance adapter's.
+// Rename plugin (rename-plugin trace): every box whose files name the plugin carries the rename (ADR-0028). The plugin
+// source's changes are mEdit's to answer; the file and its lines are the Instance adapter's.
 
 import type { TailOf } from '../coreLib/boundCommand';
-import type { FileOrigin, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import type { PluginAddress } from '../wire/pluginAddress';
-import { isRefused, type MEditClient, type SourceChanges } from '../client';
+import { change, type ChangeResult, type Changing, type SymbolOwners } from '../coreLib/change';
+import { fileOriginOfPlugin, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import { manifestFileReferences, sourceModsOf } from '../manifestAdapter/manifestAdapter';
+import { originsWinningFirst, type RankedOrigin, type ResolvedPlugin } from '../symbolNames/symbolNames';
+import { pluginCompanionRule } from '../tables/gamePaths';
+import { OVERWRITE_ORIGIN, type PluginAddress } from '../wire/pluginAddress';
+import { recordIndexReferences, type MEditClient } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginNameRefusal } from './pluginName';
 import { answerOf } from '../wire/readFailed';
 
-export type PluginRenameClient = Pick<MEditClient, 'getRenameSourceChanges' | 'moveLastWritten' | 'getCreatablePluginExtensions'>;
+export type PluginRenameClient = Pick<MEditClient, 'getRenameSourceChanges' | 'moveLastWritten' | 'getCreatablePluginExtensions' | 'getPluginNameReferences'>;
 
 interface PluginRenameAccess {
   readonly adapter: InstanceAdapter;
   readonly client: PluginRenameClient;
 }
 
-/** `reported` is why the source changes could not be applied. `sourceRenamed` is on a failure of the files and lines, true
- *  when the source had moved before it; a refusal without it wrote nothing. */
-export type PluginRenameResult =
-  | { applied: true }
-  | { applied: false; reported: string }
-  | { applied: false; refusal: string; detail?: string }
-  | { applied: false; sourceRenamed: boolean; refusal: string };
+/** What Text documents gives a rename: the unsaved texts the owners read, and the edit that applies their changes. */
+export type RenameEditing = Omit<Changing, 'owners' | 'plugins'>;
 
-const fileOriginOf = (origin: string): FileOrigin => ({ kind: 'mod', name: origin });
+export type PluginRenameResult = ChangeResult | { readonly applied: false; readonly refusal: string; readonly detail: string };
 
 async function renameRefusal(
   access: PluginRenameAccess, plugin: PluginAddress, newName: string, creatableExtensions: readonly string[],
 ): Promise<string | undefined> {
   const refusal = pluginNameRefusal(newName, creatableExtensions);
   if (refusal !== undefined) return refusal;
-  return await access.adapter.originHoldsPlugin(fileOriginOf(plugin.origin), newName) ? `"${plugin.origin}" already holds "${newName}".` : undefined;
+  return await access.adapter.originHoldsPlugin(fileOriginOfPlugin(plugin.origin), newName) ? `"${plugin.origin}" already holds "${newName}".` : undefined;
 }
 
-async function refusalBeforeWrite(access: PluginRenameAccess, plugin: PluginAddress, newName: string): Promise<PluginRenameResult | undefined> {
-  let refusal: string | undefined;
+// The Instance adapter defines a plugin; mEdit's plugins, the build files and the manifests name it.
+async function ownersOf({ adapter, client }: PluginRenameAccess): Promise<SymbolOwners> {
+  const sourceMods = await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceModFolders(), (name) => adapter.entryKey({ kind: 'mod', name }));
+  const manifestFiles = manifestFileReferences({
+    sourceFolders: () => sourceMods.folders,
+    modFolderOf: (mod) => adapter.modFolderPath(mod),
+    companions: async () => pluginCompanionRule(await adapter.gameRelease()),
+  });
+  return { definition: adapter.pluginReferences, references: [recordIndexReferences(client, manifestFiles.sourceFilesOf), manifestFiles] };
+}
+
+const originName = (origin: RankedOrigin): string => (origin.kind === 'mod' ? origin.name : OVERWRITE_ORIGIN);
+
+// The copy mod order resolves the plugin's file name to; the Data folder's, which no rename names, when no origin holds it.
+async function rowsOf(adapter: InstanceAdapter, { name }: PluginAddress): Promise<ResolvedPlugin[]> {
+  for (const origin of originsWinningFirst((await adapter.modOrder()).mods)) {
+    if (await adapter.originHoldsPlugin(origin, name)) return [{ name, origin: originName(origin), winning: true }];
+  }
+  return [];
+}
+
+async function renamePlugin(access: PluginRenameAccess, editing: RenameEditing, plugin: PluginAddress, newName: string): Promise<PluginRenameResult> {
+  let owners: SymbolOwners;
+  let plugins: ResolvedPlugin[];
   try {
-    refusal = await renameRefusal(access, plugin, newName, answerOf(await access.client.getCreatablePluginExtensions()));
+    const refusal = await renameRefusal(access, plugin, newName, answerOf(await access.client.getCreatablePluginExtensions()));
+    if (refusal !== undefined) return { applied: false, refusal };
+    [owners, plugins] = await Promise.all([ownersOf(access), rowsOf(access.adapter, plugin)]);
   } catch (err) {
     return { applied: false, refusal: `Could not check "${newName}" for "${plugin.name}" (${plugin.origin}).`, detail: errorMessage(err) };
   }
-  return refusal === undefined ? undefined : { applied: false, refusal };
-}
-
-async function renamePlugin(
-  access: PluginRenameAccess, source: { apply(changes: SourceChanges): Promise<string | undefined> }, plugin: PluginAddress, newName: string,
-): Promise<PluginRenameResult> {
-  const refused = await refusalBeforeWrite(access, plugin, newName);
-  if (refused !== undefined) return refused;
-  const changes = await access.client.getRenameSourceChanges(plugin, newName);
-  if (isRefused(changes)) return { applied: false, refusal: changes.message };
-  const unapplied = await source.apply(changes);
-  if (unapplied !== undefined) return { applied: false, reported: unapplied };
-
-  const sourceRenamed = changes.moves.length + changes.deletions.length + changes.documents.length > 0;
-  const moved = await access.client.moveLastWritten(plugin, changes.treeName, newName);
-  if (isRefused(moved)) return { applied: false, sourceRenamed, refusal: moved.message };
-  try {
-    await access.adapter.renamePlugin(fileOriginOf(plugin.origin), plugin.name, newName);
-    return { applied: true };
-  } catch (err) {
-    return { applied: false, sourceRenamed, refusal: errorMessage(err) };
-  }
+  return change({ owners, plugins, ...editing }, plugin, newName);
 }
 
 export function pluginRenameCommands(access: PluginRenameAccess) {

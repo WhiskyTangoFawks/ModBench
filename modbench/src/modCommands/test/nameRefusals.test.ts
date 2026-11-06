@@ -3,8 +3,8 @@ import type { EntryRef, TakenNames } from '../../instanceAdapter/instanceAdapter
 import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 import { entryNameRefusal, newModNameRefusal } from '../nameRefusals';
 
-const mod = (name: string) => ({ kind: 'mod', name } as const);
-const separator = (name: string) => ({ kind: 'separator', name } as const);
+const mod = (name: string) => ({ kind: 'mod', name, enabled: true } as const);
+const separator = (name: string) => ({ kind: 'separator', name, enabled: true } as const);
 const folder = (kind: 'mod' | 'separator', name: string) => ({ kind, name, path: `/instance/mods/${name}`, modName: name });
 
 const { adapter } = fakeInstanceAdapter();

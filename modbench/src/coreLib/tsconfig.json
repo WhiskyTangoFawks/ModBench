@@ -5,7 +5,8 @@
     "outDir": "../../out/projects/coreLib"
   },
   "references": [
-    { "path": "../ports" }
+    { "path": "../ports" },
+    { "path": "../symbolNames" }
   ],
   "include": ["**/*.ts"],
   "exclude": ["test", "**/*.test.ts"]

@@ -15,6 +15,16 @@ export interface ResolvedPlugin extends PluginSymbol {
   readonly winning: boolean;
 }
 
+/** Where the game takes a file from: a mod, or the files it wrote at run time. */
+export type RankedOrigin = { readonly kind: 'mod'; readonly name: string } | { readonly kind: 'runtimeOutput' };
+
+/** The origins a file name resolves through, winning first: the run-time output, then each enabled mod of `modOrder`,
+ *  which lists them winning first. A name no origin holds resolves to the game's Data folder. */
+export const originsWinningFirst = (modOrder: readonly { readonly kind: string; readonly name: string; readonly enabled: boolean }[]): RankedOrigin[] => [
+  { kind: 'runtimeOutput' },
+  ...modOrder.flatMap((entry): RankedOrigin[] => (entry.kind === 'mod' && entry.enabled ? [{ kind: 'mod', name: entry.name }] : [])),
+];
+
 /** Whether two plugin file names, or two mod names, name one thing: the game compares them in any case. */
 export const sameName = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
@@ -84,9 +94,34 @@ export const heldTextAt = ({ byPath }: HeldTexts, path: string): string | undefi
 /** Whether two paths, as VS Code and the instance spell them, are one file. */
 export const samePath = (a: string, b: string): boolean => heldKey(a) === heldKey(b);
 
+/** Changes to files by absolute path, which Text documents applies: each move, then each deletion, then each
+ *  document's text. */
+export interface FileChanges {
+  readonly moves: readonly { readonly from: string; readonly to: string }[];
+  readonly deletions: readonly string[];
+  readonly documents: readonly { readonly path: string; readonly text: string }[];
+}
+
+export const NO_FILE_CHANGES: FileChanges = { moves: [], deletions: [], documents: [] };
+
+/** An owner's part of a rename, with nothing written: the changes Text documents applies, each reference that cannot
+ *  follow, and the owner's own write once every owner's changes are applied, which answers why it failed. */
+export interface RenamePlan {
+  readonly changes: FileChanges;
+  readonly cannotFollow: readonly string[];
+  commit(): Promise<string | undefined>;
+}
+
+/** `text` with each span replaced by what `spelled` makes of the text at its start. */
+export const spliced = (text: string, spans: readonly { readonly start: number; readonly end: number }[], spelled: (start: number) => string): string =>
+  [...spans].sort((a, b) => b.start - a.start).reduce((after, { start, end }) => after.slice(0, start) + spelled(start) + after.slice(end), text);
+
 /** A box that owns files, saying where they name a symbol (ADR-0028). */
 export interface SymbolOwner {
   read(symbol: PluginSymbol, held: HeldTexts): Promise<SymbolReading>;
+  /** Its part of renaming `symbol` to `newName`, or why it refuses the rename. A name alone names the copy `plugins`,
+   *  the rows of its file name, resolve it to. */
+  plan(symbol: PluginSymbol, newName: string, held: HeldTexts, plugins: readonly ResolvedPlugin[]): Promise<RenamePlan | { readonly refused: string }>;
   /** The plugin one of its files names at `offset` of the file's `text`; undefined where it names none. */
   nameAt(file: string, text: string, offset: number): Promise<PluginName | undefined>;
 }

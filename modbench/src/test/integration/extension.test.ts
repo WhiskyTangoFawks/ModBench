@@ -279,6 +279,11 @@ function createMockBackend(): http.Server {
       res.end(JSON.stringify([[], ['Small']]));
       return;
     }
+    if (url.startsWith('/plugin-names/')) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end('[]');
+      return;
+    }
     if (method === 'POST' && url === '/plugins/rename-source-changes') {
       let body = '';
       req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
@@ -286,7 +291,7 @@ function createMockBackend(): http.Server {
         const asked: unknown = JSON.parse(body);
         if (!isRecord(asked) || typeof asked.name !== 'string') throw new Error(`expected a rename body naming a plugin, got: ${body}`);
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ treeName: asked.name, moves: [], deletions: [], documents: [] }));
+        res.end(JSON.stringify({ treeName: asked.name, moves: [], deletions: [], documents: [], leftBehind: [] }));
       });
       return;
     }

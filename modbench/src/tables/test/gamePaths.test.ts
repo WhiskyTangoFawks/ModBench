@@ -187,6 +187,18 @@ describe('pluginCompanionRule', () => {
     expect(rule(release).inStringsFolder('Foo.esp', file)).toBe(taken);
   });
 
+  it.each<[string, string | undefined]>([
+    ['foo.ESP', 'New.esm'],
+    ['Foo - Main.ba2', 'New - Main.ba2'],
+    ['FOO.ini', 'New.ini'],
+    ['Strings/Foo_en.STRINGS', 'Strings/New_en.STRINGS'],
+    ['Foo - Bar - Main.ba2', undefined],
+    ['textures/Foo.ba2', undefined],
+    ['Strings/Other_en.STRINGS', undefined],
+  ])('takes %s, a path a rename of Foo.esp to New.esm carries, to %s', (path, renamed) => {
+    expect(rule('Fallout4').renamedWith('Foo.esp', path, 'New.esm')).toBe(renamed);
+  });
+
   it.each([['no release', undefined], ['a release the table holds no row for', 'SomeRelease']])('answers undefined for %s', (_case, release) => {
     expect(pluginCompanionRule(release)).toBeUndefined();
   });

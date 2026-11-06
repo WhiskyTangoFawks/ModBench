@@ -7,6 +7,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 
 import type { FileOrigin, InstanceAdapter } from '../instanceAdapter';
 import { implementationsOver, pluginOrderOf, type Subject } from './adapterContract';
+import { renamedPlugin } from '../../test/renamedPlugin';
 
 const ALPHA: FileOrigin = { kind: 'mod', name: 'Alpha' };
 const BETA: FileOrigin = { kind: 'mod', name: 'Beta' };
@@ -175,22 +176,22 @@ describe.each(implementationsOver('holdings-instance'))('$name holds the contrac
     });
 
     it('refuses to rename a plugin its origin does not hold', async () => {
-      await expect(adapter.renamePlugin(ALPHA, 'Ghost.esp', 'Real.esp')).rejects.toThrow('Not a file of mod "Alpha": "Ghost.esp"');
+      await expect(renamedPlugin(adapter, { name: 'Ghost.esp', origin: 'Alpha' }, 'Real.esp')).rejects.toThrow('Not a file of mod "Alpha": "Ghost.esp"');
     });
 
     it('refuses to rename a plugin to a name its origin holds', async () => {
-      await expect(adapter.renamePlugin(ALPHA, 'Patch.esp', 'other.ESP')).rejects.toThrow(/is in the way/);
+      await expect(renamedPlugin(adapter, { name: 'Patch.esp', origin: 'Alpha' }, 'other.ESP')).rejects.toThrow(/is in the way/);
       expect(await filesOf(ALPHA)).toEqual(['Other.esp', 'Patch.esp', 'textures/a.dds']);
     });
 
     it('refuses to rename a plugin to a name the plugin order lists, and changes nothing', async () => {
-      await expect(adapter.renamePlugin(ALPHA, 'Patch.esp', 'taken.esp')).rejects.toThrow('Plugin already in plugins.txt: Taken.esp');
+      await expect(renamedPlugin(adapter, { name: 'Patch.esp', origin: 'Alpha' }, 'taken.esp')).rejects.toThrow('Plugin already in plugins.txt: Taken.esp');
       expect(await pluginOrderOf(adapter)).toEqual(['Patch.esp', 'Taken.esp']);
       expect(await filesOf(ALPHA)).toEqual(['Other.esp', 'Patch.esp', 'textures/a.dds']);
     });
 
     it('shows a plugin it renamed to the next read, in its origin and the plugin order', async () => {
-      await adapter.renamePlugin(ALPHA, 'patch.esp', 'Renamed.esp');
+      await renamedPlugin(adapter, { name: 'patch.esp', origin: 'Alpha' }, 'Renamed.esp');
       expect(await adapter.originHoldsPlugin(ALPHA, 'Renamed.esp')).toBe(true);
       expect(await adapter.originHoldsPlugin(ALPHA, 'Patch.esp')).toBe(false);
       expect(await pluginOrderOf(adapter)).toEqual(['Renamed.esp', 'Taken.esp']);

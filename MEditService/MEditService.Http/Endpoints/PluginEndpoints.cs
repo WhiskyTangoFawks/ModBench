@@ -3,6 +3,7 @@ using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.RepositoriesLib;
+using MEditService.SourceAdapter;
 
 namespace MEditService.Http.Endpoints;
 
@@ -60,8 +61,8 @@ internal static class PluginEndpoints
             .WithDescription(
                 "Each copy, in an active plugin or one with plugin source, whose text names the plugin file name, and " +
                 "the Plugin Header record of each plugin with no plugin source that lists it as a master. Answers only " +
-                "once the record index is ready.")
-            .Produces<IReadOnlyList<RecordCopy>>()
+                "once the record index is ready. Each says whether its plugin has plugin source, which a rename changes.")
+            .Produces<IReadOnlyList<CopyNaming>>()
             .ProducesProblem(503);
 
         app.MapGet("/plugins/{plugin}/indexed-as-on-disk", (string plugin, string? origin, IQueries svc) =>
@@ -217,12 +218,13 @@ internal static class PluginEndpoints
 
         app.MapPost("/plugins/rename-source-changes", RenameSourceChanges)
             .WithName("RenameSourceChanges")
-            .WithSummary("The changes renaming a compiled plugin's source makes, writing nothing.")
+            .WithSummary("The changes renaming a plugin makes to plugin source, writing nothing.")
             .WithDescription(
                 "Over the unsaved documents mEdit holds, the files and folders renaming the plugin's source " +
-                "moves and the text each document it changes holds afterwards: every FormKey of the plugin follows. " +
-                "Moves come first, then deletions, then documents, and every path is absolute. The plugin file, its " +
-                "plugins.txt lines and what Modbench last wrote stay as they are.")
+                "moves and the text each document it changes holds afterwards: every FormKey of the plugin follows, in its " +
+                "own source and in every other plugin source. Moves come first, then deletions, then documents, and every " +
+                "path is absolute. Each other plugin source that cannot follow is left behind, saying why. The plugin " +
+                "file, its plugins.txt lines and what Modbench last wrote stay as they are.")
             .Produces<RenameSourceChanges>()
             .ProducesProblem(400)
             .ProducesProblem(404)
@@ -341,7 +343,7 @@ internal static class PluginEndpoints
         if (RenamedPlugin(req.Name, req.Origin) is not { } plugin) return EndpointMapping.BadRequest("Plugin name and origin are required.");
 
         return EndpointMapping.Answered(
-            "Rename source", loggerFactory.CreateLogger(nameof(PluginEndpoints)), plugin, rename.RenameSource(plugin, req.NewName ?? string.Empty));
+            "Rename source", loggerFactory.CreateLogger(nameof(PluginEndpoints)), plugin, rename.RenameSource(plugin, req.NewName ?? string.Empty, req.NamedByFileName, req.SourceFiles ?? []));
     }
 
     internal static IResult MoveLastWritten(
@@ -441,8 +443,10 @@ internal sealed record CreatePluginRequest(string Origin, string Name, string Fo
 /// <summary>The mod that provides the plugin (ADR-0012) and its file name.</summary>
 internal sealed record CreatePluginInModRequest(string Origin, string Name, IReadOnlyList<string>? Flags = null);
 
-/// <summary>The plugin by its origin and file name (ADR-0012), and the file name its source takes.</summary>
-internal sealed record RenameSourceChangesRequest(string Origin, string Name, string NewName);
+/// <summary>The plugin by its origin and file name (ADR-0012), its new file name, whether mod order resolves its file
+/// name to this copy, and each file of its source folder a build reads by its name.</summary>
+internal sealed record RenameSourceChangesRequest(
+    string Origin, string Name, string NewName, bool NamedByFileName, IReadOnlyList<SourceMove>? SourceFiles = null);
 
 /// <summary>The plugin, the name its tree was filed under before the rename, and the file name its source took.</summary>
 internal sealed record MoveLastWrittenRequest(string Origin, string Name, string TreeName, string NewName);

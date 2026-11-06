@@ -20,15 +20,20 @@ internal static class PluginSourceRename
             .. underRoot.Split(Path.DirectorySeparatorChar).Select(leaf => SourceRepositoryLayout.LeafWithOrigin(leaf, from, to)),
         ]);
         return relativePath.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.OrdinalIgnoreCase)
-            ? new TreeFile(renamedPath, RenamedDocument(relativePath, bytes, from, to))
+            ? new TreeFile(renamedPath, RenamedDocument(relativePath, bytes, from, to, new LayoutPath(relativePath).IsHeaderDocument))
             : new TreeFile(renamedPath, bytes);
     }
 
-    private static byte[] RenamedDocument(string relativePath, byte[] bytes, ModKey from, ModKey to)
+    /// <summary><paramref name="bytes"/>, a document of another plugin's source, with each FormKey of
+    /// <paramref name="fromPlugin"/> naming <paramref name="toPlugin"/>.</summary>
+    internal static byte[] Following(string relativePath, byte[] bytes, string fromPlugin, string toPlugin) =>
+        RenamedDocument(relativePath, bytes, ModKey.FromFileName(fromPlugin), ModKey.FromFileName(toPlugin), isHeader: false);
+
+    private static byte[] RenamedDocument(string relativePath, byte[] bytes, ModKey from, ModKey to, bool isHeader)
     {
         var text = DocumentText.StripUtf8Bom(bytes);
         var bom = bytes[..^text.Length];
-        return RecordDocumentEdits.TryWithPluginRenamed(text, new LayoutPath(relativePath).IsHeaderDocument, from, to, out var renamed, out var whyNot)
+        return RecordDocumentEdits.TryWithPluginRenamed(text, isHeader, from, to, out var renamed, out var whyNot)
             ? [.. bom, .. renamed]
             : throw SourceStopException.Unreadable(new UnreadableFile(
                 relativePath, $"'{relativePath}' in this plugin's source tree is no JSON document: {whyNot.TrimEnd('.')}."));

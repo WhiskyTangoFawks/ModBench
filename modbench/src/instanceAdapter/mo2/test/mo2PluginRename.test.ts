@@ -28,9 +28,14 @@ import type { FileOrigin } from '../../instanceAdapter';
 import type { ManagerAdapter } from '../../publisher';
 import { managerOver, readPluginLines } from '../../../test/mo2/adapterOver';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree, textsUnder } from '../../../test/mo2/corpusFixture';
+import { renamePlanOf, renamedPlugin } from '../../../test/renamedPlugin';
+import { OVERWRITE_ORIGIN } from '../../../wire/pluginAddress';
 
 const MOD = 'mods/Patch Mod';
 const ORIGIN: FileOrigin = { kind: 'mod', name: 'Patch Mod' };
+const PATCH = { name: 'Patch Mod.esp', origin: 'Patch Mod' };
+const USERLIST = 'userlist.yaml';
+const MASTERLIST = 'masterlist.yaml';
 const DEFAULT_PLUGINS = 'profiles/Default/plugins.txt';
 const SECONDARY_PLUGINS = 'profiles/Secondary/plugins.txt';
 const DEFAULT_LOAD_ORDER = 'profiles/Default/loadorder.txt';
@@ -58,8 +63,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
   let adapter: ManagerAdapter;
   const at = (relative: string): string => join(root, relative);
   const text = (relative: string): Promise<string> => readFile(at(relative), 'utf8');
-  const rename = (to = 'Renamed Patch.esp'): Promise<void> =>
-    adapter.renamePlugin(ORIGIN, 'Patch Mod.esp', to);
+  const rename = (to = 'Renamed Patch.esp'): Promise<void> => renamedPlugin(adapter, PATCH, to);
 
   async function settingsNameGame(gameName: string): Promise<void> {
     const file = join(root, 'ModOrganizer.ini');
@@ -176,7 +180,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     await put(`${MOD}/Strings/Patch Mod_English.STRINGS`);
     await settingsNameGame('Skyrim Special Edition');
 
-    await adapter.renamePlugin(ORIGIN, 'Patch Mod.esp', 'Renamed Patch.esp');
+    await rename();
 
     const after = await snapshotTree(root);
     expect(after.has(`${MOD}/Renamed Patch - Main.bsa`)).toBe(true);
@@ -198,10 +202,74 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     await put('overwrite/Run.esp');
     await put(DEFAULT_PLUGINS, '*Run.esp\r\n');
 
-    await adapter.renamePlugin({ kind: 'runtimeOutput' }, 'Run.esp', 'Ran.esp');
+    await renamedPlugin(adapter, { name: 'Run.esp', origin: OVERWRITE_ORIGIN }, 'Ran.esp');
 
     expect((await snapshotTree(root)).has('overwrite/Ran.esp')).toBe(true);
     expect(await text(DEFAULT_PLUGINS)).toBe('*Ran.esp\r\n');
+  });
+
+  it('plans with nothing written, and the plan writes when it commits', async () => {
+    const before = await snapshotTree(root);
+
+    const plan = await renamePlanOf(adapter, PATCH, 'Renamed Patch.esp');
+
+    assertOnlyChanged(before, await snapshotTree(root), new Set());
+    await plan.commit();
+    expect((await snapshotTree(root)).has(`${MOD}/Renamed Patch.esp`)).toBe(true);
+  });
+
+  it('renames each name the userlist gives the plugin, in the quoting it is written in, and nothing else of it', async () => {
+    await put(USERLIST, '﻿plugins:\n  - name: Patch Mod.esp\n    after: [ \'patch mod.esp\', "Other.esp" ]\n    condition: \'file("Patch Mod.esp")\'\n  - name: Other.esp\n    req: [ "Patch Mod.esp" ]\n');
+
+    expect((await renamePlanOf(adapter, PATCH, 'Renamed Patch.esp')).cannotFollow).toEqual([]);
+    await rename();
+
+    expect(await text(USERLIST)).toBe('﻿plugins:\n  - name: Renamed Patch.esp\n    after: [ \'Renamed Patch.esp\', "Other.esp" ]\n    condition: \'file("Renamed Patch.esp")\'\n  - name: Other.esp\n    req: [ "Renamed Patch.esp" ]\n');
+  });
+
+  it('leaves a userlist name that would not read back as the new name, and says so', async () => {
+    const userlist = 'plugins:\n  - name: Other.esp\n    after: [ Patch Mod.esp ]\n';
+    await put(USERLIST, userlist);
+
+    const plan = await renamePlanOf(adapter, PATCH, 'Renamed, Patch.esp');
+    await plan.commit();
+
+    expect(plan.cannotFollow).toEqual([`${at(USERLIST)}, line 3: names Patch Mod.esp where Renamed, Patch.esp does not read as written.`]);
+    expect(await text(USERLIST)).toBe(userlist);
+  });
+
+  it('leaves LOOT\'s masterlist as it is, saying each place it names the plugin', async () => {
+    const masterlist = 'plugins:\n  - name: Other.esp\n    after: [ Patch Mod.esp ]\n';
+    await put(MASTERLIST, masterlist);
+
+    const plan = await renamePlanOf(adapter, PATCH, 'Renamed Patch.esp');
+    await plan.commit();
+
+    expect(plan.cannotFollow).toEqual([`${at(MASTERLIST)}, line 3: LOOT's metadata names Patch Mod.esp, and its update replaces the file.`]);
+    expect(await text(MASTERLIST)).toBe(masterlist);
+  });
+
+  it('renames only the files of a copy whose file name resolves to another, each line and rule naming the copy that wins', async () => {
+    const userlist = 'plugins:\n  - name: Patch Mod.esp\n';
+    await put(USERLIST, userlist);
+    await put(MASTERLIST, userlist);
+    const lines = await text(SECONDARY_PLUGINS);
+
+    const plan = await renamePlanOf(adapter, PATCH, 'Renamed Patch.esp', [{ ...PATCH, origin: 'Other Mod', winning: true }, { ...PATCH, winning: false }]);
+    expect(await plan.commit()).toBeUndefined();
+
+    expect(plan.cannotFollow).toEqual([]);
+    expect((await snapshotTree(root)).has(`${MOD}/Renamed Patch.esp`)).toBe(true);
+    expect([await text(SECONDARY_PLUGINS), await text(USERLIST)]).toEqual([lines, userlist]);
+  });
+
+  it('cannot carry the names in LOOT\'s masterlist when it cannot be read, saying why, and renames the plugin', async () => {
+    await mkdir(at(MASTERLIST));
+
+    const plan = await renamePlanOf(adapter, PATCH, 'Renamed Patch.esp');
+
+    expect(plan.cannotFollow).toEqual([expect.stringContaining(at(MASTERLIST))]);
+    expect(await plan.commit()).toBeUndefined();
   });
 
   it('renames the files and no line when no profile lists the plugin', async () => {
@@ -222,7 +290,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     };
 
     it('refuses a plugin that is not in the origin', () =>
-      refused(() => adapter.renamePlugin(ORIGIN, 'Missing.esp', 'Renamed Patch.esp'), /Missing\.esp/));
+      refused(() => renamedPlugin(adapter, { ...PATCH, name: 'Missing.esp' }, 'Renamed Patch.esp'), /Missing\.esp/));
 
     it('refuses a name a file of the origin already has, in any case', async () => {
       await put(`${MOD}/RENAMED PATCH.esp`);

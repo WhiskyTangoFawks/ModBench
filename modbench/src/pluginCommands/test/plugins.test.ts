@@ -11,6 +11,7 @@ import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, fileIn, modFoldersIn, refusing, readingFixture } from '../../test/fakeInstanceAdapter';
 import type { PluginMetadata } from '../../client';
 import { manifestedIn } from '../../test/modStatusFixture';
+import { renamedPlugin } from '../../test/renamedPlugin';
 import type { DataFolderPlugins, PluginOrderChange } from '../../instanceAdapter/instanceAdapter';
 
 const PROFILE = 'Default';
@@ -253,11 +254,9 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
       mods: [{ kind: 'mod', name: 'Provider', enabled: true }], modFolders: modFoldersIn(mods, 'Provider'),
       modFiles: new Map([['Provider', { origin: 'Provider', folder: '/mods/Provider', files: [fileIn('/mods/Provider', 'MBDevLight.esl')], folders: [], notes: [] }]]),
     }), { repositoryOnDisk: true });
-    const provider = { kind: 'mod', name: 'Provider' } as const;
-
-    await fake.adapter.renamePlugin(provider, 'MBDevLight.esl', 'temp.esp');
+    await renamedPlugin(fake.adapter, { name: 'MBDevLight.esl', origin: 'Provider' }, 'temp.esp');
     await pluginSyncOver(fake.adapter)();
-    await fake.adapter.renamePlugin(provider, 'temp.esp', 'MBDevLight.esl');
+    await renamedPlugin(fake.adapter, { name: 'temp.esp', origin: 'Provider' }, 'MBDevLight.esl');
     await pluginSyncOver(fake.adapter)();
 
     let order: readonly string[] = [];

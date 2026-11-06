@@ -8,12 +8,12 @@ const h = vi.hoisted(() => ({ textDocuments: [] as unknown[] }));
 
 vi.mock('vscode', () => ({ workspace: { get textDocuments() { return h.textDocuments; } } }));
 
-import { saveUnsavedPluginSource } from '../saveUnsavedPluginSource';
+import { saveUnsavedUnder } from '../saveUnsavedUnder';
 
 const FOLDER = '/source/ModA/plugin-source/A.esp';
 const MOD = '/source/ModA';
 const isPluginSource = (path: string) => path.toLowerCase().includes('/plugin-source/');
-const save = () => saveUnsavedPluginSource(MOD, isPluginSource);
+const save = () => saveUnsavedUnder(MOD, isPluginSource);
 const CELL = `${FOLDER}/Cells/Cell.json`;
 
 function document(scheme: string, fsPath: string, options: { saves?: boolean } = {}): FakeDocument {
