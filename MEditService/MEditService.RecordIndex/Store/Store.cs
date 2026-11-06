@@ -1001,13 +1001,11 @@ internal sealed class Store : IDisposable
     public void SetWorkingTreeStates(PluginAddress key, IReadOnlyList<(string FormKey, WorkingTreeState State)> moved)
     {
         using var tx = BeginTransaction();
-        foreach (var (formKey, state) in moved)
-        {
-            DuckDbSql.Execute(Connection, $"""
-                UPDATE {EffectiveRows} SET working_tree_state = $4
-                WHERE form_key = $1 AND plugin = $2 AND origin = $3
-                """, formKey, key.Name, key.Origin, state.Stored());
-        }
+        DuckDbSql.Execute(Connection, $"""
+            UPDATE {EffectiveRows} r SET working_tree_state = m.state
+            FROM (SELECT unnest($3::VARCHAR[]) AS form_key, unnest($4::VARCHAR[]) AS state) m
+            WHERE r.form_key = m.form_key AND r.plugin = $1 AND r.origin = $2
+            """, key.Name, key.Origin, moved.Select(m => m.FormKey).ToList(), moved.Select(m => m.State.Stored()).ToList());
         BumpSequence();
         tx.Commit();
     }

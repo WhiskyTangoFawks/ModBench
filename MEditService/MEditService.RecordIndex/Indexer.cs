@@ -920,6 +920,7 @@ internal sealed class Indexer : IDisposable
     // the whole index's failure.
     private void ReadOne(OpenScope scope, RegisteredPlugin plugin, Func<ReadState, ReadOutcome> read, CancellationToken token)
     {
+        var started = _timeProvider.GetUtcNow();
         try
         {
             if (scope.Failed.Read(plugin, read).Failure is { } failure)
@@ -929,6 +930,10 @@ internal sealed class Indexer : IDisposable
         {
             _logger.LogWarning(ex, "Could not read {Plugin} ({Origin})", plugin.Name, plugin.Origin);
             FailRead(scope, plugin.Key, ReadFailure(LoadFailureReason.Of(ex), scope.Store.DerivationOf(plugin.Key)));
+        }
+        finally
+        {
+            WarnIfSlow("Reading", plugin.Key, started);
         }
     }
 
@@ -1158,6 +1163,7 @@ internal sealed class Indexer : IDisposable
         var (held, store) = (scope.Held, scope.Store);
         var key = plugin.Key;
         var holdsTree = scope.Projector.TruthOf(plugin.Registered) == DerivedFrom.SourceTree;
+        var started = _timeProvider.GetUtcNow();
         try
         {
             if (!holdsTree && !_adapter.Exists(plugin.Path))
@@ -1187,6 +1193,19 @@ internal sealed class Indexer : IDisposable
             if (!held.IsHeldWithAFailure(key)) FailRead(scope, key, ValidationFailure(holdsTree, LoadFailureReason.Of(ex)));
             return false;
         }
+        finally
+        {
+            WarnIfSlow("Checking", key, started);
+        }
+    }
+
+    private static readonly TimeSpan SlowForOnePlugin = TimeSpan.FromSeconds(10);
+
+    private void WarnIfSlow(string operation, PluginAddress key, DateTimeOffset started)
+    {
+        var took = _timeProvider.GetUtcNow() - started;
+        if (took > SlowForOnePlugin)
+            _logger.LogWarning("{Operation} {Plugin} ({Origin}) took {Seconds} s", operation, key.Name, key.Origin, (int)took.TotalSeconds);
     }
 
     // When the rows cannot be brought true here. A tree that cannot be read is read whole, which reads
