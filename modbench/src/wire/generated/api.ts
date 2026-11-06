@@ -798,6 +798,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/form-keys/{formKey}/references": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Each copy of the record, and each copy that links it, in an active plugin or one with plugin source. Answers only once the record index is ready. Each says whether its plugin has plugin source, which a FormKey change changes. */
+        get: operations["GetFormKeyReferences"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/script-names/{name}/references": {
         parameters: {
             query?: never;
@@ -826,7 +843,7 @@ export interface paths {
         put?: never;
         /**
          * The changes an edit of a record makes to plugin source, writing nothing.
-         * @description Over the unsaved documents mEdit holds, the text each document the edit changes or creates holds afterwards, and each file or folder it moves. Moves come first and apply in order, each against the tree the one before it left, and each document's path is where it stands once moved. Every path is absolute. Any other document the edit reads is read from disk. A refusal is the one the edit itself gives.
+         * @description Over the unsaved documents mEdit holds, the text each document the edit changes or creates holds afterwards, and each file or folder it moves. Moves come first and apply in order, each against the tree the one before it left, and each document's path is where it stands once moved. Every path is absolute. Any other document the edit reads is read from disk. A refusal is the one the edit itself gives. A change of the FormKey carries every plugin source that names the record, and names each whose source does not read as left behind.
          */
         post: operations["EditRecordChanges"];
         delete?: never;
@@ -846,7 +863,7 @@ export interface paths {
         put?: never;
         /**
          * Writes an edit of a record to plugin source: a script's edit.
-         * @description Writes to the working tree what the same edit's changes answer, an unsaved document read in place of its file. An edit that would write a file held unsaved is refused naming it, and nothing is written.
+         * @description Writes to the working tree what the same edit's changes answer, an unsaved document read in place of its file, but for a change of the FormKey, which leaves each reference to the record as it was. An edit that would write a file held unsaved is refused naming it, and nothing is written.
          */
         post: operations["EditRecord"];
         delete?: never;
@@ -1330,6 +1347,7 @@ export interface components {
             deletions: string[];
             documents: components["schemas"]["DocumentChange"][];
             newFormKey?: string | null;
+            leftBehind: components["schemas"]["SourceLeftBehind"][];
         };
         EnumMember: {
             value: string;
@@ -4131,6 +4149,37 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetFormKeyReferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                formKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CopyNaming"][];
                 };
             };
             /** @description Service Unavailable */

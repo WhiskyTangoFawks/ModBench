@@ -219,6 +219,21 @@ public class RegistrationScopingTests
         Assert.Empty(fx.Index.Queries.GetReferencesInActiveOrCompiledPlugins(fx.BetaRaceFk).Value());
     }
 
+    [Fact]
+    public void ARecordsFormKey_IsNamedByEachCopyOfIt_AndByEachCopyThatLinksIt_EachSayingWhetherItsPluginHasPluginSource()
+    {
+        using var fx = Build("form-key-references");
+        SourceMods.Init(fx.Plugins.Plugins.Single(p => p.Name == BetaKey.Name));
+        fx.Reconcile(fx.WithBetaDisabled);
+
+        var naming = fx.Index.Queries.GetFormKeyReferences(fx.SharedNpcFk).Value();
+        var linking = fx.Index.Queries.GetFormKeyReferences(fx.BetaRaceFk).Value();
+
+        Assert.Contains(new CopyNaming(fx.SharedNpcFk, AlphaKey, InPluginSource: false), naming);
+        Assert.Contains(new CopyNaming(fx.SharedNpcFk, BetaKey, InPluginSource: true), naming);
+        Assert.Contains(new CopyNaming(fx.BetaNpcFk, BetaKey, InPluginSource: true), linking);
+    }
+
     private static IReadOnlyList<CopyNaming> NamingAlpha(FixtureWithEveryKindOfExtractedRowAndBetaOverridingAlphasNpc fx, string name = "Alpha.esp") =>
         fx.Index.Queries.GetPluginNameReferences(name).Value();
 

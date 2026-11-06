@@ -11,7 +11,7 @@ import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getPluginIndexing' | 'getPluginProblems' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags'
   | 'getRecords' | 'searchRecords'
-  | 'getRecordOwner' | 'getRecordHolders' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getRecordsComparison' | 'getReferences' | 'getReferencesInActiveOrCompiledPlugins' | 'getPluginNameReferences' | 'getScriptReferences'
+  | 'getRecordOwner' | 'getRecordHolders' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getRecordsComparison' | 'getReferences' | 'getReferencesInActiveOrCompiledPlugins' | 'getPluginNameReferences' | 'getFormKeyReferences' | 'getScriptReferences'
   | 'getRenderedDocument' | 'getCopyDocument' | 'getRecordOfFile'
   | 'getEditChanges'
   | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellChildRecords' | 'getInteriorCells'
@@ -422,6 +422,9 @@ export class InMemoryMEditClient implements MEditClient {
   }
   getPluginNameReferences(...args: Parameters<MEditClient['getPluginNameReferences']>): ReturnType<MEditClient['getPluginNameReferences']> {
     return this.query('getPluginNameReferences', args);
+  }
+  getFormKeyReferences(...args: Parameters<MEditClient['getFormKeyReferences']>): ReturnType<MEditClient['getFormKeyReferences']> {
+    return this.query('getFormKeyReferences', args);
   }
   getScriptReferences(...args: Parameters<MEditClient['getScriptReferences']>): ReturnType<MEditClient['getScriptReferences']> {
     return this.query('getScriptReferences', args);

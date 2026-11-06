@@ -579,8 +579,8 @@ class HttpMEditClient implements MEditClient {
     }
     const { data, error, response } = result;
     if (response.ok && data) {
-      const { moves, deletions, documents, newFormKey } = data;
-      return newFormKey ? { applied: true, moves, deletions, documents, newFormKey } : { applied: true, moves, deletions, documents };
+      const { moves, deletions, documents, newFormKey, leftBehind } = data;
+      return newFormKey ? { applied: true, moves, deletions, documents, newFormKey, leftBehind } : { applied: true, moves, deletions, documents, leftBehind };
     }
 
     const outcome = editRefused(error);
@@ -747,6 +747,12 @@ class HttpMEditClient implements MEditClient {
   getPluginNameReferences(name: string): Promise<components['schemas']['CopyNaming'][] | ReadFailed> {
     return this.read(`getPluginNameReferences(${name})`,
       (api, signal) => api.GET('/plugin-names/{name}/references', { params: { path: { name } }, signal }),
+      (data) => data ?? []);
+  }
+
+  getFormKeyReferences(formKey: string): Promise<components['schemas']['CopyNaming'][] | ReadFailed> {
+    return this.read(`getFormKeyReferences(${formKey})`,
+      (api, signal) => api.GET('/form-keys/{formKey}/references', { params: { path: { formKey } }, signal }),
       (data) => data ?? []);
   }
 

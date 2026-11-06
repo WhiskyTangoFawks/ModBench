@@ -245,6 +245,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
         public Answer<SourceChanges?, SourceFailure> ChangesToRenameSource(PluginAddress plugin, string newName) => throw Unreached();
 
         public Answer<SourceChanges, SourceFailure> ChangesToFollowRename(PluginAddress plugin, string renamed, string newName) => throw Unreached();
+        public Answer<SourceChanges, SourceFailure> ChangesToFollowFormKeyChange(PluginAddress plugin, string formKey, string newFormKey) => throw Unreached();
 
         public Answer<SourceChanges?, SourceFailure> ChangesToMoveFiles(IReadOnlyList<SourceMove> moves) => throw Unreached();
 

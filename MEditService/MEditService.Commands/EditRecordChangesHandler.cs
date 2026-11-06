@@ -7,6 +7,7 @@ using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands;
 
@@ -22,23 +23,29 @@ public sealed class EditRecordChangesHandler
     private readonly CellLanding _cellLanding;
     private readonly ISourceAdapter _source;
     private readonly UnsavedDocuments _unsaved;
+    private readonly LoadOrderHolder _loadOrder;
 
     internal EditRecordChangesHandler(
         WriteTargets targets, LoadOrderResolution resolution, SchemaReflector schemaReflector, ISourceAdapter source, UnsavedDocuments unsaved,
-        ILogger<EditRecordChangesHandler> logger)
+        LoadOrderHolder loadOrder, ILogger<EditRecordChangesHandler> logger)
     {
-        (_targets, _resolution, _schemaReflector, _source, _unsaved, _logger) = (targets, resolution, schemaReflector, source, unsaved, logger);
+        (_targets, _resolution, _schemaReflector, _source, _unsaved, _loadOrder, _logger) = (targets, resolution, schemaReflector, source, unsaved, loadOrder, logger);
         _formKeyChange = new(logger);
         _cellLanding = new(resolution, schemaReflector, logger);
     }
 
-    /// <summary>Over the unsaved documents mEdit holds, which stand in for their files.</summary>
+    /// <summary>Over the unsaved documents mEdit holds, which stand in for their files. A FormKey change carries every
+    /// plugin source naming the record, which a script's write, held to one folder, does not.</summary>
     public Answer<EditRecordChanges, RecordEditRefused> Changes(PluginAddress plugin, string formKey, RecordEditEnvelope envelope)
     {
-        var (outcome, (moves, deletions, documents)) = Changes(plugin, formKey, envelope, new WriteSessions(_source, _unsaved.Current));
-        return outcome.Applied
-            ? new EditRecordChanges(formKey, RecordEditEnvelope.Spell(envelope.Path), moves, deletions, documents, outcome.NewFormKey)
-            : outcome.AsRefused();
+        var sessions = new WriteSessions(_source, _unsaved.Current);
+        var outcome = Changes(plugin, formKey, envelope, sessions).Outcome;
+        if (!outcome.Applied) return outcome.AsRefused();
+        var leftBehind = outcome.NewFormKey is { } newFormKey
+            ? FormKeyChange.Follow(_source, _loadOrder.Current, FormKey.Factory(formKey).ToString(), newFormKey, sessions)
+            : [];
+        var (moves, deletions, documents) = sessions.Made;
+        return new EditRecordChanges(formKey, RecordEditEnvelope.Spell(envelope.Path), moves, deletions, documents, outcome.NewFormKey, leftBehind);
     }
 
     /// <summary>The changes stay in <paramref name="sessions"/>, for a caller that writes them.</summary>

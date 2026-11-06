@@ -168,6 +168,16 @@ internal static class RecordEndpoints
         .ProducesProblem(503)
         .ProducesProblem(500);
 
+        app.MapGet("/form-keys/{formKey}/references", (string formKey, IQueries svc) =>
+            EndpointMapping.Ok(svc.GetFormKeyReferences(Uri.UnescapeDataString(formKey))))
+        .WithName("GetFormKeyReferences")
+        .WithTags("Records")
+        .WithDescription(
+            "Each copy of the record, and each copy that links it, in an active plugin or one with plugin source. Answers " +
+            "only once the record index is ready. Each says whether its plugin has plugin source, which a FormKey change changes.")
+        .Produces<IReadOnlyList<CopyNaming>>()
+        .ProducesProblem(503);
+
         app.MapGet("/script-names/{name}/references", (string name, IQueries svc) => EndpointMapping.Ok(svc.GetScriptReferences(name)))
         .WithName("GetScriptReferences")
         .WithTags("Records")
@@ -189,7 +199,8 @@ internal static class RecordEndpoints
             "changes or creates holds afterwards, and each file or folder it moves. Moves come first and apply in order, each " +
             "against the tree the one before it left, and each document's " +
             "path is where it stands once moved. Every path is absolute. Any other document the edit reads is read from " +
-            "disk. A refusal is the one the edit itself gives.")
+            "disk. A refusal is the one the edit itself gives. A change of the FormKey carries every plugin source that " +
+            "names the record, and names each whose source does not read as left behind.")
         .WithTags("Records")
         .Produces<EditRecordChanges>()
         .ProducesProblem(400)
@@ -205,7 +216,8 @@ internal static class RecordEndpoints
         .WithSummary("Writes an edit of a record to plugin source: a script's edit.")
         .WithDescription(
             "Writes to the working tree what the same edit's changes answer, an unsaved document read in place of its " +
-            "file. An edit that would write a file held unsaved is refused naming it, and nothing is written.")
+            "file, but for a change of the FormKey, which leaves each reference to the record as it was. An edit that " +
+            "would write a file held unsaved is refused naming it, and nothing is written.")
         .WithTags("Records")
         .Produces(204)
         .ProducesProblem(400)

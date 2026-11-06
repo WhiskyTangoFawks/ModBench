@@ -173,6 +173,26 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
     }
 
     [Fact]
+    public void APluginsSource_FollowsAFormKeyChange_EachDocumentNamingItNamingTheNewKeyAtItsOwnPath_AndWritesNothing()
+    {
+        var before = TreeOf(Old.Name);
+
+        var changes = Session().Repository.ChangesToFollowFormKeyChange(Old, "000802:Old.esp", "000F00:Old.esp").Value();
+
+        Assert.Equal(([], []), (changes.Moves, changes.Deletions));
+        var root = Path.GetRelativePath(_modFolder, PluginSourceRoot.In(_modFolder, Old.Name));
+        Assert.Equal(
+            [
+                (Path.Combine(root, "Npcs", "MasterNpc - 000800_DLC.esm.json"), OldText("Npcs/MasterNpc - 000800_DLC.esm.json").Replace("000802:Old.esp", "000F00:Old.esp")),
+                (Path.Combine(root, "Npcs", "SelfNpc - 000801_Old.esp.json"), OldText("Npcs/SelfNpc - 000801_Old.esp.json").Replace("\"000802:Old.esp\"", "\"000F00:Old.esp\"")),
+            ],
+            changes.Documents.Select(document => (document.Path, document.Text)));
+        Assert.Equal(before, TreeOf(Old.Name));
+    }
+
+    private static string OldText(string path) => OldTree.Single(file => file.Path == path).Text;
+
+    [Fact]
     public void ARenameToANameWithAnUppercaseExtension_LeavesTheHeaderWhereTheLayoutLooksForIt()
     {
         var renamed = Old with { Name = "New.ESM" };

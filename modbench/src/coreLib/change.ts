@@ -1,6 +1,6 @@
 import type { ChangeResult } from '../ports/changeResult';
 import { errorMessage } from '../ports/errorMessage';
-import { NO_FILE_CHANGES, type EntryOwner, type FileChanges, type HeldTexts, type Planned, type RenamePlan } from '../symbolNames/symbolNames';
+import { NO_FILE_CHANGES, type EntryOwner, type EntrySymbol, type FileChanges, type ScriptSymbol, type HeldTexts, type Planned, type RenamePlan } from '../symbolNames/symbolNames';
 
 /** The boxes whose files hold a symbol: the one that defines it, and each whose files name it. */
 export interface SymbolOwners<Owner> {
@@ -41,7 +41,7 @@ export async function change<Owner>(owners: SymbolOwners<Owner>, plan: (owner: O
 
 /** An owner whose part of a rename is a write at its commit: `write` answers each reference that could not follow, and
  *  its rejection is the commit's failure. */
-export const committedBy = (write: () => Promise<readonly string[]>): EntryOwner => ({
+export const committedBy = <Symbol extends EntrySymbol | ScriptSymbol = EntrySymbol>(write: () => Promise<readonly string[]>): EntryOwner<Symbol> => ({
   plan: () => Promise.resolve({
     changes: NO_FILE_CHANGES,
     cannotFollow: [],

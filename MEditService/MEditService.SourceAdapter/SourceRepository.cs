@@ -385,6 +385,9 @@ internal sealed class SourceRepository : ISourceRepository
     public Answer<SourceChanges, SourceFailure> ChangesToFollowRename(PluginAddress plugin, string renamed, string newName) =>
         SourceFailure.Answer(() => Writes.ChangesToFollowRename(Spelled(plugin).Name, renamed, newName));
 
+    public Answer<SourceChanges, SourceFailure> ChangesToFollowFormKeyChange(PluginAddress plugin, string formKey, string newFormKey) =>
+        SourceFailure.Answer(() => Writes.ChangesToFollowFormKeyChange(Spelled(plugin).Name, formKey, newFormKey));
+
     public Answer<SourceChanges?, SourceFailure> ChangesToMoveFiles(IReadOnlyList<SourceMove> moves) =>
         SourceFailure.Answer<SourceChanges?>(() =>
         {

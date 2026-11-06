@@ -392,6 +392,28 @@ internal sealed class RelationReads(
         return [.. headers.Concat(copies).DistinctBy(copy => (copy.FormKey, copy.Plugin.Name, copy.Plugin.Origin))];
     }
 
+    /// <summary>Each copy of the record <paramref name="formKey"/> names in an active or compiled plugin, and each copy
+    /// there that links it.</summary>
+    public IReadOnlyList<CopyNaming> GetCopiesNamingFormKey(string formKey)
+    {
+        using var context = store.OpenRead();
+        var inPluginSource = $"d.derived_from <> '{DerivedFrom.Binary}'";
+        var activeOrCompiled = $"(p.load_order_idx IS NOT NULL OR d.derived_from <> '{DerivedFrom.Binary}')";
+        return [.. context.Rows($"""
+            SELECT r.form_key, r.plugin, r.origin, {inPluginSource}
+            FROM {TableDdlBuilder.MirrorSchema}.records r
+            {TableDdlBuilder.RegisteredJoin("r", "plugin", "origin")}
+            JOIN {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} d
+              ON d.plugin = r.plugin AND d.origin = r.origin
+            WHERE r.form_key = $1 AND {activeOrCompiled}
+            UNION
+            SELECT fr.source_form_key, fr.source_plugin, fr.source_origin, {inPluginSource}
+            FROM {ActiveOrCompiledPluginReferrers}
+            WHERE fr.target_form_key = $1 AND {activeOrCompiled}
+            ORDER BY 2, 3, 1
+            """, reader => new CopyNaming(reader.GetString(0), new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.GetBoolean(3)), formKey)];
+    }
+
     /// <summary>Each copy in an active or compiled plugin whose document holds <paramref name="text"/> in any case.</summary>
     public IReadOnlyList<CopyHoldingText> GetCopiesHoldingText(string text)
     {

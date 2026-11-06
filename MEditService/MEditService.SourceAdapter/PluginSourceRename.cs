@@ -29,13 +29,25 @@ internal static class PluginSourceRename
     internal static byte[] Following(string relativePath, byte[] bytes, string fromPlugin, string toPlugin) =>
         RenamedDocument(relativePath, bytes, ModKey.FromFileName(fromPlugin), ModKey.FromFileName(toPlugin), isHeader: false);
 
-    private static byte[] RenamedDocument(string relativePath, byte[] bytes, ModKey from, ModKey to, bool isHeader)
+    /// <summary><paramref name="bytes"/>, a document of a plugin's source, with each string naming
+    /// <paramref name="from"/> naming <paramref name="to"/>.</summary>
+    internal static byte[] FollowingFormKeyChange(string relativePath, byte[] bytes, FormKey from, FormKey to) =>
+        Spliced(relativePath, bytes, (byte[] text, out byte[]? changed, out string? whyNot) =>
+            RecordDocumentEdits.TryWithFormKeyChanged(text, from, to, out changed, out whyNot));
+
+    private static byte[] RenamedDocument(string relativePath, byte[] bytes, ModKey from, ModKey to, bool isHeader) =>
+        Spliced(relativePath, bytes, (byte[] text, out byte[]? renamed, out string? whyNot) =>
+            RecordDocumentEdits.TryWithPluginRenamed(text, isHeader, from, to, out renamed, out whyNot));
+
+    private delegate bool Splice(byte[] text, out byte[]? spliced, out string? whyNot);
+
+    private static byte[] Spliced(string relativePath, byte[] bytes, Splice splice)
     {
         var text = DocumentText.StripUtf8Bom(bytes);
         var bom = bytes[..^text.Length];
-        return RecordDocumentEdits.TryWithPluginRenamed(text, isHeader, from, to, out var renamed, out var whyNot)
-            ? [.. bom, .. renamed]
+        return splice(text, out var spliced, out var whyNot) && spliced is not null
+            ? [.. bom, .. spliced]
             : throw SourceStopException.Unreadable(new UnreadableFile(
-                relativePath, $"'{relativePath}' in this plugin's source tree is no JSON document: {whyNot.TrimEnd('.')}."));
+                relativePath, $"'{relativePath}' in this plugin's source tree is no JSON document: {whyNot?.TrimEnd('.')}."));
     }
 }

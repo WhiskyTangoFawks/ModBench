@@ -118,9 +118,9 @@ export type CreateChangesOutcome = components['schemas']['CreateRecordChanges'];
 
 /** An edit's changes to plugin source, each move and then each document's text at its absolute path,
  *  or its refusal: `refusal` is the backend's name, `'Unknown'` this side's. An edit of the FormID
- *  sets `newFormKey`. */
+ *  sets `newFormKey`, and `leftBehind` names each plugin source it could not carry. */
 export type RecordEditChangesOutcome =
-  | ({ applied: true; newFormKey?: string } & SourceChanges)
+  | ({ applied: true; newFormKey?: string; leftBehind: readonly components['schemas']['SourceLeftBehind'][] } & SourceChanges)
   | { applied: false; refusal: string; message: string };
 
 /** `rebuildIndex`'s own outcome (ADR-0010). */
@@ -318,6 +318,8 @@ export interface MEditClient {
   getReferencesInActiveOrCompiledPlugins(formKey: string): Promise<ReferenceResult[] | ReadFailed>;
   /** Each copy whose text names the plugin file `name`, and the Plugin Header of each plugin with no plugin source that lists it as a master. */
   getPluginNameReferences(name: string): Promise<components['schemas']['CopyNaming'][] | ReadFailed>;
+  /** Each copy of the record `formKey` names, and each copy that links it. */
+  getFormKeyReferences(formKey: string): Promise<components['schemas']['CopyNaming'][] | ReadFailed>;
   getScriptReferences(name: string): Promise<components['schemas']['ScriptReferences'] | ReadFailed>;
   /** Null: the plugin holds no such record. */
   getRenderedDocument(plugin: PluginAddress, formKey: string): Promise<RenderedDocument | null | ReadFailed>;

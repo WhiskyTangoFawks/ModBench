@@ -23,11 +23,13 @@ import type { PluginsShown } from '../drivingLib/pluginsShown';
 import { pluginLanguage } from './pluginLanguage';
 import { entryLanguage } from './entryLanguage';
 import { scriptLanguage, type ScriptClient } from './scriptLanguage';
+import { recordEditAt } from './recordRename';
+import { failureReason, isReadFailed } from '../wire/readFailed';
 
 interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'sourceFiles'> {
   instance: Pick<Instance, 'value' | 'subscribe'> | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
-  client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlugins' | 'handUnsavedDocuments'> & RecordDocumentClient & ScriptClient & SourceProblemsDeps['client'];
+  client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlugins' | 'handUnsavedDocuments' | 'getRecordOfFile'> & RecordDocumentClient & ScriptClient & SourceProblemsDeps['client'];
   /** Each box that owns files, saying where they name a symbol (ADR-0028). */
   owners: readonly SymbolOwner[];
   /** Each box that owns files, saying where they name a symbol its name alone names. */
@@ -222,16 +224,34 @@ function registerDefinition(deps: SourceLanguageDeps, plugin: PluginLanguage, en
   });
 }
 
-function registerRename(plugin: PluginLanguage): vscode.Disposable {
+// Rename Symbol on a FormKey or an EditorID is an entry point to `edit field` (source.md, In the text editor).
+const recordEditIn = (document: vscode.TextDocument, offset: number) =>
+  (isPluginSourcePath(document.uri.fsPath) ? recordEditAt(heldText(document), offset) : undefined);
+
+async function copyOfFile(client: SourceLanguageDeps['client'], path: string): Promise<PluginSymbol | undefined> {
+  const record = await client.getRecordOfFile(path);
+  if (isReadFailed(record)) throw new Error(failureReason(record));
+  return record?.plugin;
+}
+
+function registerRename(deps: SourceLanguageDeps, plugin: PluginLanguage): vscode.Disposable {
   return vscode.languages.registerRenameProvider(ownedFiles, {
     async prepareRename(document, position) {
-      const found = await plugin.renameRangeAt(document, document.offsetAt(position));
-      if (found === undefined) throw new Error('Rename Symbol renames a plugin, and no plugin\'s name is here.');
-      return { range: rangeIn(document, found), placeholder: found.name };
+      const offset = document.offsetAt(position);
+      const found = await plugin.renameRangeAt(document, offset) ?? recordEditIn(document, offset);
+      if (found === undefined) throw new Error('Rename Symbol renames a plugin, or changes a record\'s FormKey or EditorID, and none is here.');
+      return { range: rangeIn(document, found), placeholder: 'name' in found ? found.name : found.value };
     },
     // The gesture applies its own changes, and writes after them what no workspace edit can hold.
     async provideRenameEdits(document, position, newName) {
-      await plugin.renameAt(document, document.offsetAt(position), newName);
+      const offset = document.offsetAt(position);
+      const record = await plugin.renameRangeAt(document, offset) === undefined ? recordEditIn(document, offset) : undefined;
+      if (record === undefined) {
+        await plugin.renameAt(document, offset, newName);
+      } else {
+        const args = await record.edit(newName, deps.instance?.value.plugins ?? [], () => copyOfFile(deps.client, document.uri.fsPath));
+        await vscode.commands.executeCommand('modbench.record.editField', ...args);
+      }
       return new vscode.WorkspaceEdit();
     },
   });
@@ -291,7 +311,7 @@ export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
   const entryPoints = deps.instance ? [registerBuildEntryPoint({ instance: deps.instance, reporter: deps.reporter }), registerUpdateManifestEntryPoint({ instance: deps.instance, reporter: deps.reporter })] : [];
   const disposable = vscode.Disposable.from(
     handUnsavedPluginSource(deps.client, isPluginSourcePath),
-    registerHover(deps, plugin, entry, script), registerCompletion(deps, plugin, entry, script), registerDefinition(deps, plugin, entry, script), registerRename(plugin),
+    registerHover(deps, plugin, entry, script), registerCompletion(deps, plugin, entry, script), registerDefinition(deps, plugin, entry, script), registerRename(deps, plugin),
     registerReferences(deps, plugin, entry, script), registerSymbols(deps, plugin, entry, script),
     problems, ...entryPoints,
   );

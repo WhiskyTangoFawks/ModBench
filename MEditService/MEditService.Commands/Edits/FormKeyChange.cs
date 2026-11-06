@@ -8,10 +8,25 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>An edit of a record's FormID changes its FormKey, and moves the Next Object ID past it. The records
-/// that reference it, itself included, are left as they are, and updating them is a script.</summary>
+/// <summary>An edit of a record's FormID changes its FormKey, and moves the Next Object ID past it. Every plugin source
+/// naming it follows (ADR-0028).</summary>
 internal sealed class FormKeyChange(ILogger logger)
 {
+    /// <summary>Each plugin source of the load order, the record's own included, naming <paramref name="newFormKey"/>
+    /// where it named <paramref name="formKey"/>, in <paramref name="sessions"/>. Answers each it left as it was, and why.</summary>
+    internal static IReadOnlyList<SourceLeftBehind> Follow(
+        ISourceAdapter source, LoadOrderSnapshot loadOrder, string formKey, string newFormKey, WriteSessions sessions)
+    {
+        var (reading, leftBehind) = PluginSources.Of(source, loadOrder);
+        foreach (var (plugin, mod) in reading)
+        {
+            var session = sessions.Over(mod, loadOrder.GameRelease);
+            if (session.Atomically(() => session.Apply(session.Repository.ChangesToFollowFormKeyChange(plugin.Key, formKey, newFormKey))) is { } failure)
+                leftBehind.Add(new(plugin.Key, failure.Reason));
+        }
+        return leftBehind;
+    }
+
     /// <summary>The document member a record's FormID is, which the edit's path names.</summary>
     internal const string Member = RecordMembers.FormKey;
 

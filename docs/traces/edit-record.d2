@@ -51,6 +51,14 @@ sourceadapter -> commands: "the documents it reads, an unsaved one in place of i
 commands -> http: "each document's new text, each create, delete and move, per item" {class: edit}
 http -> client: "the changes, per item" {class: edit}
 client -> editor: "the changes, per item" {class: edit}
+formkey: "a change of the FormKey: the changes carry every plugin source that names the record" {
+  editor -> client: "each copy that names the record" {class: query}
+  client -> http: question {class: query}
+  http -> recordindex: question {class: query}
+  recordindex -> http: "answer: each copy, and whether its plugin has plugin source" {class: query}
+  http -> client: answer {class: query}
+  client -> editor: "the copies; one with no plugin source, or a plugin source left behind, is named in a warning" {class: query}
+}
 editor -> textdocuments: "the changes, per item" {class: edit}
 textdocuments -> vscode: "the changes, as one workspace edit" {class: outside}
 vscode."apply, as a refactoring"

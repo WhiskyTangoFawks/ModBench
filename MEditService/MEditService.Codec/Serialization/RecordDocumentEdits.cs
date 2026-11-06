@@ -55,16 +55,30 @@ public static class RecordDocumentEdits
     public static bool TryWithPluginRenamed(
         byte[] text, bool isHeader, ModKey from, ModKey to,
         [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out byte[]? renamed,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(false)] out string? whyNot) =>
+        TrySpliced(() => FormKeySplice.PluginRenamed(text, isHeader, from, to), out renamed, out whyNot);
+
+    /// <summary>The document with every string naming <paramref name="from"/> naming <paramref name="to"/>, every
+    /// other byte as it was. False, with the reader's words, for text that is no JSON.</summary>
+    public static bool TryWithFormKeyChanged(
+        byte[] text, FormKey from, FormKey to,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out byte[]? changed,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(false)] out string? whyNot) =>
+        TrySpliced(() => FormKeySplice.FormKeyChanged(text, from, to), out changed, out whyNot);
+
+    private static bool TrySpliced(
+        Func<byte[]> splice,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out byte[]? spliced,
         [System.Diagnostics.CodeAnalysis.NotNullWhen(false)] out string? whyNot)
     {
         try
         {
-            (renamed, whyNot) = (PluginRenameSplice.Apply(text, isHeader, from, to), null);
+            (spliced, whyNot) = (splice(), null);
             return true;
         }
         catch (System.Text.Json.JsonException ex)
         {
-            (renamed, whyNot) = (null, ex.Message);
+            (spliced, whyNot) = (null, ex.Message);
             return false;
         }
     }

@@ -313,13 +313,21 @@ internal sealed class SourceRepositoryWrites(
 
     /// <summary>What renaming the plugin <paramref name="from"/> changes in the source of the plugin whose tree is
     /// <paramref name="treeName"/>: each document holding a FormKey of it, at the same path.</summary>
-    internal SourceChanges ChangesToFollowRename(string treeName, string from, string to)
+    internal SourceChanges ChangesToFollowRename(string treeName, string from, string to) =>
+        ChangesFollowing(treeName, (relative, bytes) => PluginSourceRename.Following(relative, bytes, from, to));
+
+    /// <summary>What changing the FormKey <paramref name="from"/> to <paramref name="to"/> changes in the source of
+    /// the plugin whose tree is <paramref name="treeName"/>: each document naming it, at the same path.</summary>
+    internal SourceChanges ChangesToFollowFormKeyChange(string treeName, string from, string to) =>
+        ChangesFollowing(treeName, (relative, bytes) => PluginSourceRename.FollowingFormKeyChange(relative, bytes, FormKey.Factory(from), FormKey.Factory(to)));
+
+    private SourceChanges ChangesFollowing(string treeName, Func<string, byte[], byte[]> following)
     {
         var documents = files.FilesIn(SourceRepositoryLayout.RootIn(_sourceFolder, treeName), "*", SearchOption.AllDirectories)
             .Where(path => path.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.OrdinalIgnoreCase))
             .Order(StringComparer.Ordinal)
             .Select(path => (Relative: Path.GetRelativePath(_sourceFolder, path), Bytes: files.ReadAllBytes(path)))
-            .Select(file => (file.Relative, file.Bytes, Renamed: PluginSourceRename.Following(file.Relative, file.Bytes, from, to)))
+            .Select(file => (file.Relative, file.Bytes, Renamed: following(file.Relative, file.Bytes)))
             .Where(file => !file.Renamed.AsSpan().SequenceEqual(file.Bytes))
             .Select(file => new DocumentChange(file.Relative, Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(file.Renamed))));
         return new SourceChanges([], [], [.. documents]);

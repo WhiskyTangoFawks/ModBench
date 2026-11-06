@@ -141,7 +141,7 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
     }
 
     [Fact]
-    public void EditingTheFormIdOfARecordReferencedByAContainer_LeavesTheContainersDocumentAsItWas()
+    public void EditingTheFormIdOfARecordReferencedByAContainer_CarriesTheReferenceInTheContainersDocument()
     {
         const string pluginName = "ContainerReferencer.esp";
         var referenced = FormKey.Null;
@@ -162,11 +162,13 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
         var result = referencer.EditHandler.SetFormId(referencer.Plugin, referenced.ToString(), $"000F00:{pluginName}");
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal(before, SourceModTree.DocumentCarrying(referencer.ModFolder, referencer.Plugin, "ReferencerRef").Body);
+        Assert.Equal(
+            before.Replace(referenced.ToString(), $"000F00:{pluginName}", StringComparison.Ordinal),
+            SourceModTree.DocumentCarrying(referencer.ModFolder, referencer.Plugin, "ReferencerRef").Body);
     }
 
     [Fact]
-    public void EditingTheFormIdOfAnEmbeddedChild_LeavesASiblingThatLinksIt_AsItWas()
+    public void EditingTheFormIdOfAnEmbeddedChild_CarriesASiblingThatLinksIt()
     {
         const string pluginName = "SiblingReferencer.esp";
         var enabler = FormKey.Null;
@@ -186,15 +188,14 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
             enabler = first.FormKey;
         });
         var before = SourceModTree.DocumentCarrying(mod.ModFolder, mod.Plugin, "EnablerRef").Body;
-        var formKeyLine = $"\"FormKey\": \"{enabler}\"";
-        Assert.Contains(formKeyLine, before, StringComparison.Ordinal);
+        Assert.Contains($"\"FormKey\": \"{enabler}\"", before, StringComparison.Ordinal);
         Assert.Contains($"\"Reference\": \"{enabler}\"", before, StringComparison.Ordinal);
 
         var result = mod.EditHandler.SetFormId(mod.Plugin, enabler.ToString(), $"000F00:{pluginName}");
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal(
-            before.Replace(formKeyLine, $"\"FormKey\": \"{result.NewFormKey.Require()}\"", StringComparison.Ordinal),
+            before.Replace(enabler.ToString(), result.NewFormKey.Require(), StringComparison.Ordinal),
             SourceModTree.DocumentCarrying(mod.ModFolder, mod.Plugin, "EnablerRef").Body);
     }
 

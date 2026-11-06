@@ -100,15 +100,10 @@ public sealed class RenameSourceChangesHandler
         LoadOrderSnapshot loadOrder, RegisteredPlugin renamed, string newName, Func<PluginProvider.FromMod, ISourceRepository> repositoryOf)
     {
         var followed = SourceChanges.None;
-        var leftBehind = new List<SourceLeftBehind>();
-        foreach (var other in loadOrder.Plugins.Where(other => other.Key != renamed.Key && _source.IsSourceMod(other)))
+        var (reading, leftBehind) = PluginSources.Of(_source, loadOrder);
+        leftBehind.RemoveAll(left => left.Plugin == renamed.Key);
+        foreach (var (other, mod) in reading.Where(other => other.Plugin.Key != renamed.Key))
         {
-            if (other.Provider is not PluginProvider.FromMod mod) continue;
-            if (!_source.SourceReads(other))
-            {
-                if (_source.WhySourceDoesNotRead(other) is { } why and not SourceFailure.NotCarried) leftBehind.Add(new(other.Key, why.Reason));
-                continue;
-            }
             var repository = repositoryOf(mod);
             if (repository.ChangesToFollowRename(other.Key, renamed.Name, newName).Holds(out var changes, out var failure))
                 followed = followed.Then(changes.Under(repository.SourceFolder));

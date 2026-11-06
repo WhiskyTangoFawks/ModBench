@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { scriptRenameCommands } from '../renameScript';
 import type { FileOrigin, FileSource, RenamedSymbol } from '../../instanceAdapter/instanceAdapter';
-import { COMMITTED, heldTexts, type FileChanges } from '../../symbolNames/symbolNames';
+import { COMMITTED, heldTexts, NO_FILE_CHANGES, type FileChanges } from '../../symbolNames/symbolNames';
 
 type Held = Record<string, readonly string[]>;
 
@@ -41,7 +41,7 @@ describe('a Papyrus script\'s file renamed from the Explorer (symbols.md, The fe
 
     expect(await rename(renamedAt(WINNING, COMPILED, { path: 'Scripts/Renamed.pex', name: 'Renamed' }))).toEqual({ applied: true, cannotFollow: [] });
     expect(plan).toHaveBeenCalledWith({ kind: 'script', name: 'Quest' }, 'Renamed', expect.anything());
-    expect(applied).toEqual([[CHANGES]]);
+    expect(applied).toEqual([[CHANGES, NO_FILE_CHANGES]]);
   });
 
   it('carries them for a source when no copy of the script is compiled', async () => {

@@ -93,6 +93,10 @@ public interface ISourceRepository : ISourceRepositoryReads
     /// <paramref name="plugin"/>'s source: each FormKey of the renamed plugin follows it.</summary>
     Answer<SourceChanges, SourceFailure> ChangesToFollowRename(PluginAddress plugin, string renamed, string newName);
 
+    /// <summary>What changing the FormKey <paramref name="formKey"/> to <paramref name="newFormKey"/> changes in
+    /// <paramref name="plugin"/>'s source: each document naming it names the new key, at the same path.</summary>
+    Answer<SourceChanges, SourceFailure> ChangesToFollowFormKeyChange(PluginAddress plugin, string formKey, string newFormKey);
+
     /// <summary>The moves of each file of the source folder <paramref name="moves"/> names that it holds; none when a
     /// file already holds a name one moves to.</summary>
     Answer<SourceChanges?, SourceFailure> ChangesToMoveFiles(IReadOnlyList<SourceMove> moves);

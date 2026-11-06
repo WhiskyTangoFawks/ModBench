@@ -328,6 +328,9 @@ internal sealed class RecordQueries(
     public Answer<IReadOnlyList<CopyNaming>, IndexRefused> GetPluginNameReferences(string name) =>
         _answer.Of(() => _index.RequireWholeSetReads().GetCopiesNaming(name));
 
+    public Answer<IReadOnlyList<CopyNaming>, IndexRefused> GetFormKeyReferences(string formKey) =>
+        _answer.Of(() => _index.RequireWholeSetReads().GetCopiesNamingFormKey(formKey));
+
     public Answer<ScriptReferences, IndexRefused> GetScriptReferences(string name) => _answer.Of(() =>
     {
         var schemas = RequireSchemas();

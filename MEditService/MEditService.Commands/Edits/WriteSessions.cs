@@ -18,6 +18,9 @@ internal sealed class WriteSessions(ISourceAdapter source, IReadOnlyList<Documen
         return session;
     }
 
+    /// <summary>What every session's writes change, with absolute paths.</summary>
+    internal SourceChanges Made => _byFolder.Values.Aggregate(SourceChanges.None, (all, session) => all.Then(session.Changes));
+
     // Writes the one session that holds changes; a write across folders could not put back a folder it wrote.
     private SourceFailure? Write() =>
         _byFolder.Values.Where(Changes).ToList() switch
