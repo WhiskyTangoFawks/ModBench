@@ -45,12 +45,20 @@ unsaved: "on each change to plugin source" {
 
 editor -> client: "the gesture and its Options" {class: edit}
 client -> http: envelope {class: edit}
-http -> commands: envelope {class: edit}
+http -> commands: "envelope, and the read of each copy naming the record in an active plugin with no plugin source" {class: edit}
 source -> sourceadapter: documents {class: edit}
 sourceadapter -> commands: "the documents it reads, an unsaved one in place of its file" {class: edit}
-commands -> http: "each document's new text, each create, delete and move, per item" {class: edit}
+formkeyread: "a change of the FormKey: Commands calls the read before anything is written" {
+  http -> recordindex: "each copy naming the record in an active plugin with no plugin source" {class: query}
+  recordindex -> http: "answer: those copies, or why it cannot say" {class: query}
+}
+formkeyfollow: "a change of the FormKey" {
+  sourceadapter -> commands: "each plugin source that names the record: its own, and the others' when mod order resolves its file name to it" {class: edit}
+}
+commands -> http: "each document's new text, each create, delete and move, per item; each plugin it changes; for the FormKey, each plugin source that does not read and each copy with no plugin source, left behind, or why those copies went unread" {class: edit}
 http -> client: "the changes, per item" {class: edit}
 client -> editor: "the changes, per item" {class: edit}
+editor."a warning names each reference left behind"
 editor -> textdocuments: "the changes, per item" {class: edit}
 textdocuments -> vscode: "the changes, as one workspace edit" {class: outside}
 vscode."apply, as a refactoring"

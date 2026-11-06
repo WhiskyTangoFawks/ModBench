@@ -48,7 +48,7 @@ public sealed class GitMissingRefusalTests : IDisposable
 
     private static readonly Gesture Edit = new("edit", (services, mod, _) => Task.FromResult(Single(
         services.GetRequiredService<EditRecordChangesHandler>()
-            .Changes(mod.Plugin, mod.Npc.ToString(), SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax"))).AsResult())));
+            .Changes(mod.Plugin, mod.Npc.ToString(), SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax")), copiesWithNoPluginSource: Envelopes.NoCopies).AsResult())));
 
     private static readonly Gesture Create = new("create", (services, mod, _) => Task.FromResult(Single(
         services.GetRequiredService<CreateRecordChangesHandler>().CreateRecord(mod.Plugin, "npc_").AsResult())));

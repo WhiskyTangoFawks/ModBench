@@ -2,7 +2,7 @@
 // the copy the game takes the script from.
 
 import { basename } from 'node:path';
-import { change, type RenameEditing } from '../coreLib/change';
+import { change, committedBy, type RenameEditing } from '../coreLib/change';
 import type { MEditClient } from '../client';
 import type { InstanceAdapter, RenamedSymbol } from '../instanceAdapter/instanceAdapter';
 import type { ChangeResult } from '../ports/changeResult';
@@ -57,7 +57,7 @@ async function leftBehind(access: ScriptRenameAccess, name: string): Promise<str
 
 // The game takes a script from its compiled script, and a script with none yet is its source. Its records follow only
 // once no copy the game finds keeps the name: renaming a source leaves any compiled copy.
-async function refusalOf(access: ScriptRenameAccess, { origin, path, name, to }: ScriptRenamed): Promise<Refused | undefined> {
+async function newNameOf(access: ScriptRenameAccess, { origin, path, name, to }: ScriptRenamed): Promise<Refused | string> {
   const isRenamed = (copy: Copy): boolean => sameSource(copy.source, origin) && sameName(copy.path, path);
   const held = await copiesOf(access, name);
   if (![...held.compiled, ...held.sources].some(isRenamed)) {
@@ -67,22 +67,26 @@ async function refusalOf(access: ScriptRenameAccess, { origin, path, name, to }:
   const [kept] = held.compiled.some(isRenamed) ? others(held.compiled) : [...held.compiled, ...others(held.sources)];
   if (kept !== undefined) return { applied: false, refusal: `the game still finds "${name}" at ${placeOf(kept)}.` };
   if (to.name === undefined) return { applied: false, refusal: `"${basename(to.path)}" names no Papyrus script.`, detail: await leftBehind(access, name) };
-  if (sameName(name, to.name)) return undefined;
+  if (sameName(name, to.name)) return to.name;
   const newCopies = await copiesOf(access, to.name);
   const other = [...newCopies.compiled, ...newCopies.sources].find((copy) => !(sameSource(copy.source, origin) && sameName(copy.path, to.path)));
-  return other === undefined ? undefined : { applied: false, refusal: `"${to.name}" already names the Papyrus script at ${placeOf(other)}.` };
+  return other === undefined ? to.name : { applied: false, refusal: `"${to.name}" already names the Papyrus script at ${placeOf(other)}.` };
 }
 
+// VS Code has already renamed the script's file, so its definition writes nothing more.
+const RENAMED_BY_VS_CODE = committedBy<ScriptSymbol>(() => Promise.resolve([]));
+
 async function renameScript(access: ScriptRenameAccess, { held, apply }: RenameEditing, renamed: ScriptRenamed): Promise<ChangeResult | Refused> {
-  const { name, to } = renamed;
+  const { name } = renamed;
+  let newName: string;
   try {
-    const refused = await refusalOf(access, renamed);
-    if (refused !== undefined || to.name === undefined) return refused ?? { applied: false, refusal: `"${basename(to.path)}" names no Papyrus script.` };
+    const checked = await newNameOf(access, renamed);
+    if (typeof checked !== 'string') return checked;
+    newName = checked;
   } catch (err) {
     return { applied: false, refusal: `Could not check "${name}" against the scripts the game takes.`, detail: errorMessage(err) };
   }
-  const newName = to.name;
-  return change({ definition: access.references, references: [] }, (owner) => owner.plan({ kind: 'script', name }, newName, held), apply);
+  return change({ definition: RENAMED_BY_VS_CODE, references: [access.references] }, (owner) => owner.plan({ kind: 'script', name }, newName, held), apply);
 }
 
 export type ScriptRenameCommands = ReturnType<typeof scriptRenameCommands>;

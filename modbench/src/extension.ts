@@ -218,7 +218,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const entryRenames = entryRenameCommands({ adapter, client });
   own(registerFollowRename(followRenames({
     adapter, plugins: commandsOfPlugins, entries: entryRenames, downloads: downloadedFileCommands(adapter), profiles: commands, source: deps.sourceEditing, instance,
-    scripts: scriptRenameCommands({ adapter, client, references: scriptReferences({ client, open: openPluginSourceDocument, readText: readHeldText }).owner }),
+    scripts: scriptRenameCommands({ adapter, client, references: scriptReferences({ client, open: openPluginSourceDocument, readText: readHeldText }).owner(deps.sourceEditing.refreshSourceControlFor) }),
     reporter: reporterFor('symbol.followRename'),
   })));
   const plugins = own(pluginsBox.onInstance({

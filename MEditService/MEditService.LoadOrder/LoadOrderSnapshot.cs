@@ -207,8 +207,15 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     /// <summary>Whether the copy at <paramref name="path"/> is the one the game resolves its filename to, whose strings the
     /// game's lists hold: the copy its line names, or one loaded with no line.</summary>
     public bool ReadsTheGamesStrings(string path) =>
-        Plugins.FirstOrDefault(p => string.Equals(p.Path, path, StringComparison.Ordinal)) is { } copy
-        && (copy.Line is { NamesIt: true } || LoadedWithNoLine.Contains(copy));
+        Plugins.FirstOrDefault(p => string.Equals(p.Path, path, StringComparison.Ordinal)) is { } copy && IsTheResolvedCopy(copy);
+
+    /// <summary>Whether <paramref name="other"/> names the records of the copy <paramref name="plugin"/>: it is that copy,
+    /// or has another file name while mod order resolves the name to that copy (ADR-0012).</summary>
+    public bool NamesRecordsOf(PluginAddress plugin, PluginAddress other) =>
+        PluginAddress.Comparer.Equals(other, plugin)
+        || (!other.Name.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase) && Plugin(plugin) is { } copy && IsTheResolvedCopy(copy));
+
+    private bool IsTheResolvedCopy(RegisteredPlugin copy) => copy.Line is { NamesIt: true } || LoadedWithNoLine.Contains(copy);
 
     /// <summary>The stamp handed with the game's archive or loose strings file at <paramref name="path"/>, or null when the
     /// game reads none at it.</summary>

@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { scriptRenameCommands } from '../renameScript';
-import type { FileOrigin, FileSource, RenamedSymbol } from '../../instanceAdapter/instanceAdapter';
-import { COMMITTED, heldTexts, type FileChanges } from '../../symbolNames/symbolNames';
+import type { FileOrigin, InstanceAdapter, RenamedSymbol } from '../../instanceAdapter/instanceAdapter';
+import { COMMITTED, heldTexts, NO_FILE_CHANGES, type FileChanges } from '../../symbolNames/symbolNames';
 
 type Held = Record<string, readonly string[]>;
 
 const DATA = 'dataFolder';
-const keyOf = (source: FileSource): string => (source.kind === 'mod' ? source.name : source.kind === 'dataFolder' ? DATA : 'Overwrite');
+const keyOf = (source: Parameters<InstanceAdapter['originHoldsFile']>[0]): string => (source.kind === 'mod' ? source.name : source.kind === 'dataFolder' ? DATA : 'Overwrite');
 const WINNING: FileOrigin = { kind: 'mod', name: 'Winning' };
 const LOSING: FileOrigin = { kind: 'mod', name: 'Losing' };
 const CHANGES: FileChanges = { moves: [], deletions: [], documents: [{ path: '/source/Mod/plugin-source/Quest.json', text: 'renamed' }] };
@@ -41,7 +41,7 @@ describe('a Papyrus script\'s file renamed from the Explorer (symbols.md, The fe
 
     expect(await rename(renamedAt(WINNING, COMPILED, { path: 'Scripts/Renamed.pex', name: 'Renamed' }))).toEqual({ applied: true, cannotFollow: [] });
     expect(plan).toHaveBeenCalledWith({ kind: 'script', name: 'Quest' }, 'Renamed', expect.anything());
-    expect(applied).toEqual([[CHANGES]]);
+    expect(applied).toEqual([[CHANGES, NO_FILE_CHANGES]]);
   });
 
   it('carries them for a source when no copy of the script is compiled', async () => {

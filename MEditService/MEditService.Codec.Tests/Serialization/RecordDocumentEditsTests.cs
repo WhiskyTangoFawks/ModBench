@@ -56,4 +56,16 @@ public sealed class RecordDocumentEditsTests
         Assert.False(RecordDocumentEdits.TryWithPluginRenamed(Encoding.UTF8.GetBytes(text), false, Old, New, out _, out var whyNot));
         Assert.Contains("LineNumber: 0 | BytePositionInLine:", whyNot, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void AChangeOfAFormKey_FollowsEveryStringNamingIt_InEitherSpelling_AndLeavesEveryOtherByteAlone()
+    {
+        const string Text = "{\r\n\t\"FormKey\":   \"000801:Old.esp\",\n  \"Race\": \"000801_old.esp\",  \"Link\": \"000802:Old.esp\", \"Name\": \"000801\" }";
+
+        Assert.True(RecordDocumentEdits.TryWithFormKeyChanged(
+            Encoding.UTF8.GetBytes(Text), FormKey.Factory("000801:Old.esp"), FormKey.Factory("000F00:Old.esp"), out var changed, out var whyNot), whyNot);
+        Assert.Equal(
+            Text.Replace("000801:Old.esp", "000F00:Old.esp").Replace("000801_old.esp", "000F00:Old.esp"),
+            Encoding.UTF8.GetString(changed));
+    }
 }

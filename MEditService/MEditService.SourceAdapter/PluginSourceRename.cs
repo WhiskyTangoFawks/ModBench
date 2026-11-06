@@ -29,13 +29,7 @@ internal static class PluginSourceRename
     internal static byte[] Following(string relativePath, byte[] bytes, string fromPlugin, string toPlugin) =>
         RenamedDocument(relativePath, bytes, ModKey.FromFileName(fromPlugin), ModKey.FromFileName(toPlugin), isHeader: false);
 
-    private static byte[] RenamedDocument(string relativePath, byte[] bytes, ModKey from, ModKey to, bool isHeader)
-    {
-        var text = DocumentText.StripUtf8Bom(bytes);
-        var bom = bytes[..^text.Length];
-        return RecordDocumentEdits.TryWithPluginRenamed(text, isHeader, from, to, out var renamed, out var whyNot)
-            ? [.. bom, .. renamed]
-            : throw SourceStopException.Unreadable(new UnreadableFile(
-                relativePath, $"'{relativePath}' in this plugin's source tree is no JSON document: {whyNot.TrimEnd('.')}."));
-    }
+    private static byte[] RenamedDocument(string relativePath, byte[] bytes, ModKey from, ModKey to, bool isHeader) =>
+        FollowedDocument.Spliced(relativePath, bytes, (byte[] text, out byte[]? renamed, out string? whyNot) =>
+            RecordDocumentEdits.TryWithPluginRenamed(text, isHeader, from, to, out renamed, out whyNot));
 }

@@ -1,5 +1,7 @@
 import type { Reporter } from '../ports/reporter';
-import type { MEditClient, RecordEditEnvelope, SourceChanges } from '../client';
+import type { MEditClient, RecordEditChangesOutcome, RecordEditEnvelope, SourceChanges } from '../client';
+import { reportPartial } from '../drivingLib/agentGesture';
+import { renameOutcome } from '../drivingLib/renameOutcome';
 import type { PluginAddress } from '../wire/pluginAddress';
 import type { PathHop } from '../wire/messages';
 import type { RecordDocument } from '../textDocuments/recordDocument';
@@ -61,20 +63,36 @@ async function editDocuments(
     return outcome.newFormKey;
   }
 
+  const { newFormKey } = outcome;
   const applying = {
     applyWorkspaceChanges: (items: readonly WorkspaceChanges[]) => applyWorkspaceChanges(items, {
       read: carrying.uri,
-      moving: (moves) => deps.moving(moves, address, outcome.newFormKey),
+      moving: (moves) => deps.moving(moves, address, newFormKey),
     }),
     refreshSourceControlFor: deps.refreshSourceControlFor,
   };
-  const failure = await applyAnswered(applying, [outcome], [address.plugin]);
+  const failure = await applyAnswered(applying, [outcome], outcome.plugins);
   if (failure === undefined) {
+    if (newFormKey !== undefined) reportLeftBehind(deps.reporter, address.formKey, newFormKey, outcome);
     await afterApplied(deps, field, applied);
-    return outcome.newFormKey;
+    return newFormKey;
   }
   deps.reporter.report('error', `Could not edit ${field}.`, failure);
   return undefined;
+}
+
+type Applied = Extract<RecordEditChangesOutcome, { applied: true }>;
+
+// A reference that cannot follow does not stop a FormKey change, and the warning names each (symbols.md, The features,
+// story 7).
+function reportLeftBehind(reporter: Reporter, formKey: string, newFormKey: string, { leftBehind, copiesLeftBehind, copiesUnread }: Applied): void {
+  const cannotFollow = [
+    ...copiesLeftBehind.map(({ formKey: copy, plugin }) => `${copy} in ${plugin.name} (${plugin.origin})`),
+    ...leftBehind.map(({ plugin, reason }) => `${plugin.name} (${plugin.origin}): ${reason}`),
+    ...copiesUnread ? [`the plugins mEdit reads: ${copiesUnread}`] : [],
+  ];
+  const outcome = renameOutcome({ applied: true, cannotFollow }, { named: formKey, newName: newFormKey, landed: newFormKey, definition: 'its file' });
+  if (outcome.applied) reportPartial(reporter, outcome.partial);
 }
 
 // The edit landed, so a failure here is the copy's (ADR-0019; editor.md, Reporting, story 2).

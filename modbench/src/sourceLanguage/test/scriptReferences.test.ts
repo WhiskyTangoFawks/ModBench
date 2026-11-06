@@ -17,7 +17,7 @@ const COMPILED = { name: 'Other.esp', origin: 'Other' };
 
 type Answer = Awaited<ReturnType<ScriptReferencesClient['getScriptReferences']>>;
 
-const planning = (answer: Answer, unsaved?: string) => scriptReferences({
+const planning = (answer: Answer, unsaved?: string, refreshSourceControlFor = vi.fn()) => scriptReferences({
   client: {
     getScriptReferences: () => Promise.resolve(answer),
     getRecordOwner: () => Promise.resolve(undefined),
@@ -25,7 +25,7 @@ const planning = (answer: Answer, unsaved?: string) => scriptReferences({
   },
   open: () => Promise.reject(new Error('Not opened here.')),
   readText: () => Promise.resolve(TEXT),
-}).owner.plan({ kind: 'script', name: 'Ns:Quest' }, 'Ns:Renamed', heldTexts(unsaved === undefined ? [] : [[CONTAINER, unsaved]]));
+}).owner(refreshSourceControlFor).plan({ kind: 'script', name: 'Ns:Quest' }, 'Ns:Renamed', heldTexts(unsaved === undefined ? [] : [[CONTAINER, unsaved]]));
 
 const planned = async (answer: Answer, unsaved?: string) => {
   const plan = await planning(answer, unsaved);
@@ -42,6 +42,24 @@ describe('plugin source\'s part in renaming a Papyrus script (symbols.md, The fe
       changes: { moves: [], deletions: [], documents: [{ path: CONTAINER, text: TEXT.replace('ns:quest', 'Ns:Renamed').replace('Ns:Quest', 'Ns:Renamed') }] },
       cannotFollow: [],
     });
+  });
+
+  it('refreshes Source Control, once its edit applied, for each plugin whose source it edited', async () => {
+    const refreshSourceControlFor = vi.fn();
+    const plan = await planning({
+      copies: [
+        { formKey: QUEST, plugin: MOD, inPluginSource: true, fieldPaths: [PATH] },
+        { formKey: ALIAS, plugin: MOD, inPluginSource: true, fieldPaths: [PATH] },
+        { formKey: QUEST, plugin: COMPILED, inPluginSource: false, fieldPaths: [PATH] },
+      ],
+      unread: [],
+    }, undefined, refreshSourceControlFor);
+    if ('refused' in plan) throw new Error(plan.refused);
+    expect(refreshSourceControlFor).not.toHaveBeenCalled();
+
+    await plan.commit();
+
+    expect(refreshSourceControlFor.mock.calls).toEqual([[MOD]]);
   });
 
   it('reads a file\'s unsaved text in place of the file', async () => {

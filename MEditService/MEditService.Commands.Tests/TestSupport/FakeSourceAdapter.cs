@@ -108,6 +108,8 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
         public SourceFailure? Write() => throw Unreached();
 
+        public SourceFailure? WriteThen(Func<SourceFailure?> following) => throw Unreached();
+
         public SourceChanges ChangesAddedSince(SourceChanges before) =>
             new(
                 [.. Changes.Moves.Skip(before.Moves.Count)],
@@ -245,6 +247,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
         public Answer<SourceChanges?, SourceFailure> ChangesToRenameSource(PluginAddress plugin, string newName) => throw Unreached();
 
         public Answer<SourceChanges, SourceFailure> ChangesToFollowRename(PluginAddress plugin, string renamed, string newName) => throw Unreached();
+        public Answer<SourceChanges, SourceFailure> ChangesToFollowFormKeyChange(PluginAddress plugin, string formKey, string newFormKey) => throw Unreached();
 
         public Answer<SourceChanges?, SourceFailure> ChangesToMoveFiles(IReadOnlyList<SourceMove> moves) => throw Unreached();
 

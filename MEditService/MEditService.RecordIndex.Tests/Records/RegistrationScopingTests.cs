@@ -219,6 +219,67 @@ public class RegistrationScopingTests
         Assert.Empty(fx.Index.Queries.GetReferencesInActiveOrCompiledPlugins(fx.BetaRaceFk).Value());
     }
 
+    private const string Base = "Base.esm";
+
+    private static ScatteredFixtureData TwoCopiesOfBaseAndAChild(string prefix, out string race, out string childNpc)
+    {
+        var (raceKey, childKey) = ("", "");
+        void Populate(Fallout4Mod mod)
+        {
+            var added = mod.Races.AddNew("Race");
+            mod.Npcs.AddNew("Npc").Race.SetTo(added);
+            raceKey = added.FormKey.ToString();
+        }
+        var plugins = new PluginFixtureBuilder(prefix)
+            .WithPlugin(Base, Populate, origin: "LosingMod")
+            .WithPlugin(Base, Populate, origin: "WinningMod")
+            .WithPlugin("Child.esp", (mod, built) =>
+            {
+                mod.ModHeader.MasterReferences.Add(new MasterReference { Master = built[1].ModKey });
+                mod.Races.GetOrAddAsOverride(built[1].Races.Single());
+                var npc = mod.Npcs.AddNew("ChildNpc");
+                npc.Race.SetTo(FormKey.Factory(raceKey));
+                childKey = npc.FormKey.ToString();
+            }, origin: "ChildMod")
+            .BuildScattered();
+        (race, childNpc) = (raceKey, childKey);
+        return plugins;
+    }
+
+    private static OpenedIndex Indexed(ScatteredFixtureData plugins, LoadOrderHolder holder, GatedPluginAdapter opens)
+    {
+        var index = Indexes.Open(holder, opens);
+        index.Reconcile(holder, plugins.DataFolder, plugins.Plugins, GameRelease.Fallout4);
+        return index;
+    }
+
+    [Fact]
+    public void TheCopiesNamingARecord_InAnActivePluginWithNoPluginSource_AreEachCopyOfIt_AndEachCopyThatLinksIt()
+    {
+        using var plugins = TwoCopiesOfBaseAndAChild("form-key-copies-with-no-source", out var race, out var childNpc);
+        PluginAddress winning = new(Base, "WinningMod"), child = new("Child.esp", "ChildMod");
+        using var opens = new GatedPluginAdapter();
+        using var index = Indexed(plugins, new LoadOrderHolder(), opens);
+
+        var copies = index.Queries.GetCopiesWithNoPluginSourceNaming(winning, race).Value();
+
+        Assert.Contains(new RecordAt(winning, race), copies);
+        Assert.Contains(new RecordAt(child, race), copies);
+        Assert.Contains(new RecordAt(child, childNpc), copies);
+    }
+
+    [Fact]
+    public void TheCopiesNamingARecord_OfACopyModOrderDoesNotResolveItsNameTo_AreNoneElsewhere()
+    {
+        using var plugins = TwoCopiesOfBaseAndAChild("form-key-copies-same-file-name", out var race, out _);
+        PluginAddress losing = new(Base, "LosingMod");
+        SourceMods.Init(plugins.Plugins.Single(p => p.Origin == losing.Origin));
+        using var opens = new GatedPluginAdapter();
+        using var index = Indexed(plugins, new LoadOrderHolder(), opens);
+
+        Assert.Empty(index.Queries.GetCopiesWithNoPluginSourceNaming(losing, race).Value());
+    }
+
     private static IReadOnlyList<CopyNaming> NamingAlpha(FixtureWithEveryKindOfExtractedRowAndBetaOverridingAlphasNpc fx, string name = "Alpha.esp") =>
         fx.Index.Queries.GetPluginNameReferences(name).Value();
 

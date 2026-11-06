@@ -35,6 +35,7 @@ public static class CommandHandlers
             sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<UnsavedDocuments>(),
+            sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<ILogger<EditRecordChangesHandler>>()));
 
         services.AddSingleton(sp => new EditRecordHandler(

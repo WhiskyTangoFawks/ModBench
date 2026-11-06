@@ -24,13 +24,13 @@ public sealed class ScriptEditTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task AnEdit_Is204_AndWritesTheRecordsDocument()
+    public async Task AnEdit_Is200_AndWritesTheRecordsDocument()
     {
         var (npcFile, formKey) = await LoadedAndCompiledPlugin();
 
         var response = await Client.ScriptEdit(formKey, Plugin, Origin, "HeightMax", 0.75);
 
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("0.75", File.ReadAllText(npcFile), StringComparison.Ordinal);
     }
 }

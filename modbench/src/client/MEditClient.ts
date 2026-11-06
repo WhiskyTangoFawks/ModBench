@@ -116,11 +116,10 @@ export type RenameSourceAsked = Pick<components['schemas']['RenameSourceChangesR
 /** The changes creating a record makes to plugin source, and the new record's FormKey. */
 export type CreateChangesOutcome = components['schemas']['CreateRecordChanges'];
 
-/** An edit's changes to plugin source, each move and then each document's text at its absolute path,
- *  or its refusal: `refusal` is the backend's name, `'Unknown'` this side's. An edit of the FormID
- *  sets `newFormKey`. */
+/** An edit's changes to plugin source, or its refusal: `refusal` is the backend's name, `'Unknown'`
+ *  this side's. An edit of the FormID sets `newFormKey`. */
 export type RecordEditChangesOutcome =
-  | ({ applied: true; newFormKey?: string } & SourceChanges)
+  | ({ applied: true; newFormKey?: string } & Pick<components['schemas']['EditRecordChanges'], 'plugins' | 'leftBehind' | 'copiesLeftBehind' | 'copiesUnread'> & SourceChanges)
   | { applied: false; refusal: string; message: string };
 
 /** `rebuildIndex`'s own outcome (ADR-0010). */

@@ -21,6 +21,8 @@ REPO = pathlib.Path(__file__).resolve().parents[2]
 HTTP_PROJECT = REPO / 'MEditService' / 'MEditService.Http'
 INSTANCE = REPO / 'DevListFallout'
 CONDITIONS = Plugin('MBDevConditions.esp', 'MB-DEV Conditions')
+FIXES = Plugin('MBDevFixes.esm', 'MB-DEV Fixes')
+FIXES_ADDON = Plugin('MBDevFixesAddon.esp', 'MB-DEV Fixes Addon')
 LIGHT = Plugin('MBDevLight.esl', 'MB-DEV Light')
 CONFLICT_A = Plugin('MBDevConflictA.esp', 'MB-DEV Conflict A')
 CONFLICT_B = Plugin('MBDevConflictB.esp', 'MB-DEV Conflict B')
@@ -28,7 +30,7 @@ EMPTY_MOD = 'MB-DEV Scratch'
 OVERWRITE = 'overwrite/'
 # DevListFallout's plugins.txt in its order, each enabled.
 PLUGINS = [
-    Plugin('MBDevFixes.esm', 'MB-DEV Fixes'), Plugin('MBDevFixesAddon.esp', 'MB-DEV Fixes Addon'), CONFLICT_A, CONFLICT_B,
+    FIXES, FIXES_ADDON, CONFLICT_A, CONFLICT_B,
     LIGHT, CONDITIONS, Plugin('MBDevMissingMaster.esp', 'MB-DEV Missing Master'), Plugin('MBDevPatchAB.esp', 'MB-DEV Patch A+B')]
 RECIPE = '000800:MBDevConditions.esp'
 RECIPE_FILE = 'MBDevConditionedRecipe - *.json'

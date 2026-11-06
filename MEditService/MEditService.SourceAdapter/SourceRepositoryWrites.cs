@@ -312,18 +312,61 @@ internal sealed class SourceRepositoryWrites(
     }
 
     /// <summary>What renaming the plugin <paramref name="from"/> changes in the source of the plugin whose tree is
-    /// <paramref name="treeName"/>: each document holding a FormKey of it, at the same path.</summary>
-    internal SourceChanges ChangesToFollowRename(string treeName, string from, string to)
+    /// <paramref name="treeName"/>: each document holding a FormKey of it.</summary>
+    internal SourceChanges ChangesToFollowRename(string treeName, string from, string to) =>
+        ChangesFollowing(treeName, (relative, bytes) => PluginSourceRename.Following(relative, bytes, from, to));
+
+    /// <summary>What changing the FormKey <paramref name="from"/> to <paramref name="to"/> changes in the source of
+    /// the plugin whose tree is <paramref name="treeName"/>: each document naming it.</summary>
+    internal SourceChanges ChangesToFollowFormKeyChange(string treeName, string from, string to) =>
+        ChangesFollowing(treeName, (relative, bytes) => FollowedDocument.FormKeyChanged(relative, bytes, FormKey.Factory(from), FormKey.Factory(to)));
+
+    // A document whose own record takes another FormKey moves where the layout names that key: this is Modbench's
+    // write to that record (source.md, Changes outside Modbench, story 3).
+    private SourceChanges ChangesFollowing(string treeName, Func<string, byte[], byte[]> following)
     {
-        var documents = files.FilesIn(SourceRepositoryLayout.RootIn(_sourceFolder, treeName), "*", SearchOption.AllDirectories)
+        var followed = files.FilesIn(SourceRepositoryLayout.RootIn(_sourceFolder, treeName), "*", SearchOption.AllDirectories)
             .Where(path => path.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.OrdinalIgnoreCase))
             .Order(StringComparer.Ordinal)
-            .Select(path => (Relative: Path.GetRelativePath(_sourceFolder, path), Bytes: files.ReadAllBytes(path)))
-            .Select(file => (file.Relative, file.Bytes, Renamed: PluginSourceRename.Following(file.Relative, file.Bytes, from, to)))
-            .Where(file => !file.Renamed.AsSpan().SequenceEqual(file.Bytes))
-            .Select(file => new DocumentChange(file.Relative, Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(file.Renamed))));
-        return new SourceChanges([], [], [.. documents]);
+            .Select(path => (Path: path, Before: files.ReadAllBytes(path)))
+            .Select(file => (file.Path, file.Before, After: following(Path.GetRelativePath(_sourceFolder, file.Path), file.Before)))
+            .Where(file => !file.After.AsSpan().SequenceEqual(file.Before))
+            .Select(file => (file.Path, Before: TextOf(file.Before), After: TextOf(file.After)))
+            .Select(file => (Text: file.After, Plan: Relocated(file.Path, file.Before, file.After)))
+            .ToList();
+        var moves = RebasedTopDown(followed.SelectMany(file => file.Plan.Moves));
+        return new SourceChanges(
+            [.. moves.Select(move => Moved(move.From, move.To))], [],
+            [.. followed.Select(file => Document(moves.Aggregate(file.Plan.Written, Rebased), file.Text))]);
     }
+
+    private static string TextOf(byte[] bytes) => Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(bytes));
+
+    // A document whose own FormKey is unchanged stays where it is.
+    private LeafMoves Relocated(string path, string before, string after)
+    {
+        var (from, to) = (OwnFormKeyIn(before), OwnFormKeyIn(after));
+        if (from is not { } held || to is not { } taken || held == taken || new LayoutPath(Path.GetRelativePath(_sourceFolder, path)).IsHeaderDocument)
+            return new LeafMoves([], path);
+        return LeafPlan(locator.Unit(path, held.ToString(), null, isEmbedded: false), taken, DocumentTokens.EditorIdIn(after).EditorId);
+    }
+
+    private static FormKey? OwnFormKeyIn(string text) =>
+        DocumentTokens.RootStringIn(text, RecordMembers.FormKey) is { } spelled && FormKey.TryFactory(spelled, out var formKey) ? formKey : null;
+
+    // A folder moves before what is in it, and each later path is spelled as the moves before it left it.
+    private static List<(string From, string To)> RebasedTopDown(IEnumerable<(string From, string To)> moves)
+    {
+        var rebased = new List<(string From, string To)>();
+        foreach (var (from, to) in moves.OrderBy(move => move.From.Count(c => c == Path.DirectorySeparatorChar)))
+            rebased.Add((rebased.Aggregate(from, Rebased), rebased.Aggregate(to, Rebased)));
+        return rebased;
+    }
+
+    private static string Rebased(string path, (string From, string To) move) =>
+        path == move.From || path.StartsWith(move.From + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+            ? move.To + path[move.From.Length..]
+            : path;
 
     // A directory moves before what is in it, so each move names a path as the moves before it left it.
     private static List<SourceMove> MovesTopDown(IEnumerable<string> from, IEnumerable<string> to)
@@ -348,20 +391,23 @@ internal sealed class SourceRepositoryWrites(
 
     // The moves, in order, that put the document where its layout leaf name does, and where it is written
     // then; none when it is already there.
-    private LeafMoves LeafPlan(SourceUnit unit, SourceDocument document)
-    {
-        if (document.RecordType == PluginHeader.RecordType || unit.IsEmbedded || !files.FileExists(unit.FullPath))
-            return new LeafMoves([], unit.FullPath);
+    private LeafMoves LeafPlan(SourceUnit unit, SourceDocument document) =>
+        document.RecordType == PluginHeader.RecordType
+            ? new LeafMoves([], unit.FullPath)
+            : LeafPlan(unit, FormKey.Factory(document.FormKey), document.EditorId);
 
-        var formKey = FormKey.Factory(document.FormKey);
+    private LeafMoves LeafPlan(SourceUnit unit, FormKey formKey, string? editorId)
+    {
+        if (unit.IsEmbedded || !files.FileExists(unit.FullPath)) return new LeafMoves([], unit.FullPath);
+
         if (unit.IsDirectoryPerRecord)
         {
             return ContainerPlan(unit, Path.Combine(
                 PathShape.DirectoryOf(PathShape.DirectoryOf(unit.FullPath)),
-                SourceRepositoryLayout.LeafNameFor(formKey, document.EditorId, isDirectory: true)));
+                SourceRepositoryLayout.LeafNameFor(formKey, editorId, isDirectory: true)));
         }
 
-        var to = Path.Combine(PathShape.DirectoryOf(unit.FullPath), SourceRepositoryLayout.FileNameFor(formKey, document.EditorId));
+        var to = Path.Combine(PathShape.DirectoryOf(unit.FullPath), SourceRepositoryLayout.FileNameFor(formKey, editorId));
         return new LeafMoves(Differing([(unit.FullPath, to)]), to);
     }
 

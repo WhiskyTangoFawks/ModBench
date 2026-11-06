@@ -44,7 +44,7 @@ describe('a file\'s tab an edit moves the file of', () => {
   async function editMovingTheFile() {
     const meditClient = new InMemoryMEditClient();
     meditClient.setQueryAnswer('getRecordOfFile', { formKey: NPC, plugin });
-    meditClient.setQueryAnswer('getEditChanges', { applied: true, moves: [{ from: FILE, to: MOVED }], deletions: [], documents: [{ path: MOVED, text: '{}' }] });
+    meditClient.setQueryAnswer('getEditChanges', { applied: true, plugins: [], leftBehind: [], copiesLeftBehind: [], copiesUnread: null, moves: [{ from: FILE, to: MOVED }], deletions: [], documents: [{ path: MOVED, text: '{}' }] });
     register({ meditClient });
     const provider = editorProviders.get('modbench.record');
     if (!isProvider(provider)) throw new Error('no record grid registered');

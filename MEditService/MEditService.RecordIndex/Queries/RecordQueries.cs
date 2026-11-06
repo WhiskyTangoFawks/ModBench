@@ -328,6 +328,13 @@ internal sealed class RecordQueries(
     public Answer<IReadOnlyList<CopyNaming>, IndexRefused> GetPluginNameReferences(string name) =>
         _answer.Of(() => _index.RequireWholeSetReads().GetCopiesNaming(name));
 
+    public Answer<IReadOnlyList<RecordAt>, IndexRefused> GetCopiesWithNoPluginSourceNaming(PluginAddress plugin, string formKey) => _answer.Of(() =>
+    {
+        var snapshot = _loadOrder.Require();
+        return (IReadOnlyList<RecordAt>)[.. _index.RequireWholeSetReads().GetCopiesWithNoPluginSourceNaming(formKey)
+            .Where(copy => snapshot.NamesRecordsOf(plugin, copy.Plugin))];
+    });
+
     public Answer<ScriptReferences, IndexRefused> GetScriptReferences(string name) => _answer.Of(() =>
     {
         var schemas = RequireSchemas();

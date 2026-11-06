@@ -158,7 +158,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
 
         var changes = Session().Repository.ChangesToFollowRename(Other, Old.Name, "New.esm").Value();
 
-        Assert.Equal(([], []), (changes.Moves, changes.Deletions));
+        Assert.Empty(changes.Moves.Concat<object>(changes.Deletions));
         var document = Assert.Single(changes.Documents);
         Assert.Equal(
             (Path.Combine(Path.GetRelativePath(_modFolder, PluginSourceRoot.In(_modFolder, Other.Name)), "Npcs", "OtherNpc - 000801_Other.esp.json"), """
@@ -170,6 +170,44 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
                 """),
             (document.Path, document.Text));
         Assert.Equal(before, TreeOf(Other.Name));
+    }
+
+    [Fact]
+    public void APluginsSource_FollowsAFormKeyChange_EachDocumentNamingItNamingTheNewKeyAtItsOwnPath_AndWritesNothing()
+    {
+        var before = TreeOf(Old.Name);
+
+        var changes = Session().Repository.ChangesToFollowFormKeyChange(Old, "000802:Old.esp", "000F00:Old.esp").Value();
+
+        Assert.Empty(changes.Moves.Concat<object>(changes.Deletions));
+        var root = Path.GetRelativePath(_modFolder, PluginSourceRoot.In(_modFolder, Old.Name));
+        Assert.Equal(
+            [
+                (Path.Combine(root, "Npcs", "MasterNpc - 000800_DLC.esm.json"), OldText("Npcs/MasterNpc - 000800_DLC.esm.json").Replace("000802:Old.esp", "000F00:Old.esp")),
+                (Path.Combine(root, "Npcs", "SelfNpc - 000801_Old.esp.json"), OldText("Npcs/SelfNpc - 000801_Old.esp.json").Replace("\"000802:Old.esp\"", "\"000F00:Old.esp\"")),
+            ],
+            changes.Documents.Select(document => (document.Path, document.Text)));
+        Assert.Equal(before, TreeOf(Old.Name));
+    }
+
+    private static string OldText(string path) => OldTree.Single(file => file.Path == path).Text;
+
+    public static TheoryData<string, Func<ISourceRepository, SourceChanges>, string> OverridesFollowing { get; } = new()
+    {
+        { "a FormKey change", repository => repository.ChangesToFollowFormKeyChange(Old, "000800:DLC.esm", "000F00:DLC.esm").Value(), "000F00_DLC.esm.json" },
+        { "a plugin rename", repository => repository.ChangesToFollowRename(Old, "DLC.esm", "New.esm").Value(), "000800_New.esm.json" },
+    };
+
+    [Theory]
+    [MemberData(nameof(OverridesFollowing))]
+    public void AnOverrideWhoseOwnFormKeyFollows_MovesWhereTheLayoutNamesItsNewKey(string _, Func<ISourceRepository, SourceChanges> follow, string leaf)
+    {
+        var npcs = Path.Combine(Path.GetRelativePath(_modFolder, PluginSourceRoot.In(_modFolder, Old.Name)), "Npcs");
+
+        var changes = follow(Session().Repository);
+
+        Assert.Equal([new SourceMove(Path.Combine(npcs, "MasterNpc - 000800_DLC.esm.json"), Path.Combine(npcs, leaf))], changes.Moves);
+        Assert.Contains(changes.Documents, document => document.Path == Path.Combine(npcs, leaf));
     }
 
     [Fact]

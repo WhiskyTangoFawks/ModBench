@@ -23,11 +23,12 @@ import type { PluginsShown } from '../drivingLib/pluginsShown';
 import { pluginLanguage } from './pluginLanguage';
 import { entryLanguage } from './entryLanguage';
 import { scriptLanguage, type ScriptClient } from './scriptLanguage';
+import { renameSymbol } from './renameSymbol';
 
 interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'sourceFiles'> {
   instance: Pick<Instance, 'value' | 'subscribe'> | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
-  client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlugins' | 'handUnsavedDocuments'> & RecordDocumentClient & ScriptClient & SourceProblemsDeps['client'];
+  client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlugins' | 'handUnsavedDocuments' | 'getRecordOfFile'> & RecordDocumentClient & ScriptClient & SourceProblemsDeps['client'];
   /** Each box that owns files, saying where they name a symbol (ADR-0028). */
   owners: readonly SymbolOwner[];
   /** Each box that owns files, saying where they name a symbol its name alone names. */
@@ -222,16 +223,19 @@ function registerDefinition(deps: SourceLanguageDeps, plugin: PluginLanguage, en
   });
 }
 
-function registerRename(plugin: PluginLanguage): vscode.Disposable {
+function registerRename(deps: SourceLanguageDeps, plugin: PluginLanguage): vscode.Disposable {
+  const symbol = renameSymbol({
+    plugin, client: deps.client, plugins: () => deps.instance?.value.plugins ?? [],
+    executeCommand: (command, ...args) => vscode.commands.executeCommand(command, ...args),
+  });
   return vscode.languages.registerRenameProvider(ownedFiles, {
     async prepareRename(document, position) {
-      const found = await plugin.renameRangeAt(document, document.offsetAt(position));
-      if (found === undefined) throw new Error('Rename Symbol renames a plugin, and no plugin\'s name is here.');
-      return { range: rangeIn(document, found), placeholder: found.name };
+      const { placeholder, ...span } = await symbol.prepare(document, document.offsetAt(position));
+      return { range: rangeIn(document, span), placeholder };
     },
     // The gesture applies its own changes, and writes after them what no workspace edit can hold.
     async provideRenameEdits(document, position, newName) {
-      await plugin.renameAt(document, document.offsetAt(position), newName);
+      await symbol.rename(document, document.offsetAt(position), newName);
       return new vscode.WorkspaceEdit();
     },
   });
@@ -291,7 +295,7 @@ export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
   const entryPoints = deps.instance ? [registerBuildEntryPoint({ instance: deps.instance, reporter: deps.reporter }), registerUpdateManifestEntryPoint({ instance: deps.instance, reporter: deps.reporter })] : [];
   const disposable = vscode.Disposable.from(
     handUnsavedPluginSource(deps.client, isPluginSourcePath),
-    registerHover(deps, plugin, entry, script), registerCompletion(deps, plugin, entry, script), registerDefinition(deps, plugin, entry, script), registerRename(plugin),
+    registerHover(deps, plugin, entry, script), registerCompletion(deps, plugin, entry, script), registerDefinition(deps, plugin, entry, script), registerRename(deps, plugin),
     registerReferences(deps, plugin, entry, script), registerSymbols(deps, plugin, entry, script),
     problems, ...entryPoints,
   );

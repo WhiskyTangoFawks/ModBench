@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -167,28 +168,112 @@ public sealed class FormIdEditTests
         Assert.Equal(before, SourceModTree.Records(two.ReferencerModFolder, two.ReferencerPlugin));
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void EditingTheFormId_LeavesAReferencerInAnotherMod_AsItWas_CompiledPluginOrNot(bool initReferencer)
+    [Fact]
+    public void EditingTheFormId_CarriesAReferencerInAnotherModsPluginSource_AndLeavesNothingBehind()
     {
-        using var two = TwoModReferenceFixture.Create(initReferencer);
-        var before = ReferencerState(two);
+        using var two = TwoModReferenceFixture.Create(initReferencer: true);
+        var oldFormKey = two.TargetRace.ToString();
+        var referencerBefore = two.DocumentCarrying(two.ReferencerPlugin, TwoModReferenceFixture.ReferencerNpcEditorId).Body;
+
+        var changes = TargetRaceRekeyed(two);
+        EditSaving.Save(changes.Moves.Select(move => (move.From, move.To)), changes.Deletions, changes.Documents.Select(document => (document.Path, document.Text)));
+
+        Assert.Empty(changes.LeftBehind);
+        Assert.Contains($"\"Race\": \"{oldFormKey}\"", referencerBefore, StringComparison.Ordinal);
+        Assert.Equal(
+            referencerBefore.Replace(oldFormKey, "000F00:Base.esm", StringComparison.Ordinal),
+            two.DocumentCarrying(two.ReferencerPlugin, TwoModReferenceFixture.ReferencerNpcEditorId).Body);
+    }
+
+    [Fact]
+    public void EditingTheFormId_LeavesAReferencerInAPluginWithNoPluginSource_AsItWas()
+    {
+        using var two = TwoModReferenceFixture.Create(initReferencer: false);
+        var binary = Path.Combine(two.ReferencerModFolder, two.ReferencerPlugin.Name);
+        var before = File.ReadAllBytes(binary);
 
         var result = two.EditHandler.SetFormId(two.TargetPlugin, two.TargetRace.ToString(), "000F00:Base.esm");
 
         Assert.True(result.Applied, result.Message);
-        Assert.NotNull(two.Document(two.TargetPlugin, result.NewFormKey.Require()));
-        Assert.Equal(before, ReferencerState(two));
+        Assert.Equal(before, File.ReadAllBytes(binary));
     }
 
-    private static IReadOnlyList<string> ReferencerState(TwoModReferenceFixture two) =>
-        TestAdapters.Source().IsSourceMod(two.ReferencerModFolder)
-            ? SourceModTree.Records(two.ReferencerModFolder, two.ReferencerPlugin)
-            : [Convert.ToHexString(File.ReadAllBytes(Path.Combine(two.ReferencerModFolder, two.ReferencerPlugin.Name)))];
+    [Fact]
+    public void EditingTheFormId_LeavesBehindAPluginSourceThatCannotBeRead_NamingWhy_AndStillChangesTheRecord()
+    {
+        using var two = TwoModReferenceFixture.Create(initReferencer: true);
+        var referencer = two.DocumentCarrying(two.ReferencerPlugin, TwoModReferenceFixture.ReferencerNpcEditorId);
+        var referencerFile = SourceModTree.DocumentFile(two.ReferencerModFolder, two.ReferencerPlugin, referencer.FormKey).Require();
+        var unreadable = Path.Combine(two.ReferencerModFolder, Path.GetDirectoryName(referencerFile).Require(), "Broken.json");
+        File.WriteAllText(unreadable, "{ not json");
+
+        var changes = TargetRaceRekeyed(two);
+
+        var left = Assert.Single(changes.LeftBehind);
+        Assert.Equal(two.ReferencerPlugin, left.Plugin);
+        Assert.Contains("Broken.json", left.Reason, StringComparison.Ordinal);
+        Assert.Equal("000F00:Base.esm", changes.NewFormKey);
+        Assert.DoesNotContain(changes.Documents, document => document.Path.StartsWith(two.ReferencerModFolder, StringComparison.Ordinal));
+    }
 
     [Fact]
-    public void EditingTheFormId_ChangesOnlyTheFormKey_LeavingItsOwnLinkAndItsPluginsOtherRecordsAsTheyWere()
+    public void AScriptsEditOfTheFormId_CarriesAReferencerInAnotherModsPluginSource()
+    {
+        using var two = TwoModReferenceFixture.Create(initReferencer: true);
+
+        var result = two.ScriptEditHandler.Edit(two.TargetPlugin, two.TargetRace.ToString(), FormKeySet, copiesWithNoPluginSource: Envelopes.NoCopies).AsResult();
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Contains("000F00:Base.esm", two.DocumentCarrying(two.ReferencerPlugin, TwoModReferenceFixture.ReferencerNpcEditorId).Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFormKeyChange_AnswersTheCopiesWithNoPluginSourceItReads_AsLeftBehind_AndThePluginsItChanges()
+    {
+        using var two = TwoModReferenceFixture.Create(initReferencer: true);
+        RecordAt binary = new(new PluginAddress("Binary.esp", "BinaryMod"), "000801:Binary.esp");
+
+        Assert.True(two.EditChangesHandler.Changes(two.TargetPlugin, two.TargetRace.ToString(), FormKeySet, () => new[] { binary }).Holds(out var changes, out var refused), refused?.Message);
+
+        Assert.Equal([binary], changes.CopiesLeftBehind);
+        Assert.Null(changes.CopiesUnread);
+        Assert.Equal([two.TargetPlugin, two.ReferencerPlugin], changes.Plugins);
+    }
+
+    [Fact]
+    public void AFormKeyChange_WhoseCopiesCannotBeRead_Lands_NamingWhy()
+    {
+        using var two = TwoModReferenceFixture.Create(initReferencer: true);
+
+        Assert.True(two.EditChangesHandler.Changes(two.TargetPlugin, two.TargetRace.ToString(), FormKeySet, () => "The record index is not ready.").Holds(out var changes, out var refused), refused?.Message);
+
+        Assert.Equal(("000F00:Base.esm", "The record index is not ready."), (changes.NewFormKey, changes.CopiesUnread));
+    }
+
+    [Fact]
+    public void AnEditOfAnotherField_NeverReadsTheCopies_AndLeavesNothingBehind()
+    {
+        using var two = TwoModReferenceFixture.Create(initReferencer: true);
+        var envelope = Envelopes.SetAt(JsonSerializer.SerializeToElement("Renamed"), Envelopes.Member("EditorID"));
+        var reads = 0;
+
+        Assert.True(two.EditChangesHandler.Changes(two.TargetPlugin, two.TargetRace.ToString(), envelope, () => { reads++; return Array.Empty<RecordAt>(); }).Holds(out var changes, out var refused), refused?.Message);
+
+        Assert.Equal((0, (string?)null), (reads, changes.CopiesUnread));
+        Assert.Empty(changes.CopiesLeftBehind);
+        Assert.Equal([two.TargetPlugin], changes.Plugins);
+    }
+
+    private static readonly RecordEditEnvelope FormKeySet = Envelopes.SetAt(JsonSerializer.SerializeToElement("000F00:Base.esm"), Envelopes.Member("FormKey"));
+
+    private static EditRecordChanges TargetRaceRekeyed(TwoModReferenceFixture two)
+    {
+        Assert.True(two.EditChangesHandler.Changes(two.TargetPlugin, two.TargetRace.ToString(), FormKeySet, Envelopes.NoCopies).Holds(out var changes, out var refused), refused?.Message);
+        return changes;
+    }
+
+    [Fact]
+    public void EditingTheFormId_CarriesItsOwnLinkAndItsPluginsOtherRecords()
     {
         const string pluginName = "SelfLinked.esp";
         const string newFormKey = "000F00:SelfLinked.esp";
@@ -207,13 +292,12 @@ public sealed class FormIdEditTests
         var result = mod.EditHandler.SetFormId(mod.Plugin, oldFormKey, newFormKey);
 
         Assert.True(result.Applied, result.Message);
-        var formKeyLine = $"\"FormKey\": \"{oldFormKey}\"";
-        Assert.Contains(formKeyLine, before, StringComparison.Ordinal);
         Assert.Contains($"\"MorphRace\": \"{oldFormKey}\"", before, StringComparison.Ordinal);
+        Assert.Contains($"\"Race\": \"{oldFormKey}\"", referencerBefore, StringComparison.Ordinal);
+        Assert.Equal(before.Replace(oldFormKey, newFormKey, StringComparison.Ordinal), mod.Body(FormKey.Factory(newFormKey)));
         Assert.Equal(
-            before.Replace(formKeyLine, $"\"FormKey\": \"{newFormKey}\"", StringComparison.Ordinal),
-            mod.Body(FormKey.Factory(newFormKey)));
-        Assert.Equal(referencerBefore, SourceModTree.DocumentCarrying(mod.ModFolder, mod.Plugin, "SamePluginNpc").Body);
+            referencerBefore.Replace(oldFormKey, newFormKey, StringComparison.Ordinal),
+            SourceModTree.DocumentCarrying(mod.ModFolder, mod.Plugin, "SamePluginNpc").Body);
     }
 
     [Fact]

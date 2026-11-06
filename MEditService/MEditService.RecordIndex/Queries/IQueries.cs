@@ -29,6 +29,9 @@ public interface IQueries
     Answer<IReadOnlyList<ReferenceResult>, IndexRefused> GetReferences(string targetFormKey);
     Answer<IReadOnlyList<ReferenceResult>, IndexRefused> GetReferencesInActiveOrCompiledPlugins(string targetFormKey);
     Answer<IReadOnlyList<CopyNaming>, IndexRefused> GetPluginNameReferences(string name);
+    /// <summary>Each copy, in an active plugin with no plugin source, that names the record the copy <paramref name="plugin"/>
+    /// holds: a copy of it, or one that links it.</summary>
+    Answer<IReadOnlyList<RecordAt>, IndexRefused> GetCopiesWithNoPluginSourceNaming(PluginAddress plugin, string formKey);
     Answer<ScriptReferences, IndexRefused> GetScriptReferences(string name);
     // Null when the plugin holds no such record; a source stop when its source tree cannot say.
     Answer<RenderedDocument?, IndexRefused> GetRenderedDocument(PluginAddress plugin, string formKey);

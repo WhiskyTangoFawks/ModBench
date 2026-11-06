@@ -7,6 +7,7 @@ using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands;
 
@@ -22,29 +23,47 @@ public sealed class EditRecordChangesHandler
     private readonly CellLanding _cellLanding;
     private readonly ISourceAdapter _source;
     private readonly UnsavedDocuments _unsaved;
+    private readonly LoadOrderHolder _loadOrder;
 
     internal EditRecordChangesHandler(
         WriteTargets targets, LoadOrderResolution resolution, SchemaReflector schemaReflector, ISourceAdapter source, UnsavedDocuments unsaved,
-        ILogger<EditRecordChangesHandler> logger)
+        LoadOrderHolder loadOrder, ILogger<EditRecordChangesHandler> logger)
     {
-        (_targets, _resolution, _schemaReflector, _source, _unsaved, _logger) = (targets, resolution, schemaReflector, source, unsaved, logger);
+        (_targets, _resolution, _schemaReflector, _source, _unsaved, _loadOrder, _logger) = (targets, resolution, schemaReflector, source, unsaved, loadOrder, logger);
         _formKeyChange = new(logger);
         _cellLanding = new(resolution, schemaReflector, logger);
     }
 
-    /// <summary>Over the unsaved documents mEdit holds, which stand in for their files.</summary>
-    public Answer<EditRecordChanges, RecordEditRefused> Changes(PluginAddress plugin, string formKey, RecordEditEnvelope envelope)
+    /// <summary>Over the unsaved documents mEdit holds, which stand in for their files. <paramref name="copiesWithNoPluginSource"/>
+    /// reads the copies a FormKey change leaves behind in active plugins with no plugin source.</summary>
+    public Answer<EditRecordChanges, RecordEditRefused> Changes(
+        PluginAddress plugin, string formKey, RecordEditEnvelope envelope, Func<Answer<RecordAt[], string>> copiesWithNoPluginSource)
     {
-        var (outcome, (moves, deletions, documents)) = Changes(plugin, formKey, envelope, new WriteSessions(_source, _unsaved.Current));
-        return outcome.Applied
-            ? new EditRecordChanges(formKey, RecordEditEnvelope.Spell(envelope.Path), moves, deletions, documents, outcome.NewFormKey)
-            : outcome.AsRefused();
+        var sessions = new WriteSessions(_source, _unsaved.Current);
+        var (outcome, plugins, leftBehind, copiesLeftBehind, copiesUnread) = Edited(plugin, formKey, envelope, copiesWithNoPluginSource, sessions);
+        if (!outcome.Applied) return outcome.AsRefused();
+        var (moves, deletions, documents) = sessions.Made;
+        return new EditRecordChanges(
+            formKey, RecordEditEnvelope.Spell(envelope.Path), moves, deletions, documents, outcome.NewFormKey, plugins, leftBehind, copiesLeftBehind,
+            copiesUnread);
     }
 
-    /// <summary>The changes stay in <paramref name="sessions"/>, for a caller that writes them.</summary>
-    internal RecordEditChanges Changes(PluginAddress plugin, string formKey, RecordEditEnvelope envelope, WriteSessions sessions) =>
-        WriteFailure.Refused(
-            EditSource(plugin, formKey, envelope, sessions), refused => refused, $"Could not read the source of {formKey}", _logger);
+    /// <summary>The edit, its changes left in <paramref name="sessions"/> for a caller that writes them, before anything
+    /// is written. A FormKey change carries every plugin source naming the record (ADR-0028).</summary>
+    internal EditedRecord Edited(
+        PluginAddress plugin, string formKey, RecordEditEnvelope envelope, Func<Answer<RecordAt[], string>> copiesWithNoPluginSource,
+        WriteSessions sessions)
+    {
+        var outcome = WriteFailure.Refused(
+            EditSource(plugin, formKey, envelope, sessions), refused => refused, $"Could not read the source of {formKey}", _logger).Outcome;
+        if (!outcome.Applied) return new(outcome, [], [], [], null);
+        if (outcome.NewFormKey is not { } newFormKey) return new(outcome, [plugin], [], [], null);
+        var (followed, leftBehind) = FormKeyChange.Follow(_source, _loadOrder.Current, plugin, FormKey.Factory(formKey).ToString(), newFormKey, sessions);
+        var changed = (IReadOnlyList<PluginAddress>)[plugin, .. followed.Where(other => !PluginAddress.Comparer.Equals(other, plugin))];
+        return copiesWithNoPluginSource().Holds(out var copies, out var unread)
+            ? new(outcome, changed, leftBehind, copies, null)
+            : new(outcome, changed, leftBehind, [], unread);
+    }
 
     private Answer<RecordEditChanges, SourceFailure> EditSource(
         PluginAddress plugin, string formKey, RecordEditEnvelope envelope, WriteSessions sessions)

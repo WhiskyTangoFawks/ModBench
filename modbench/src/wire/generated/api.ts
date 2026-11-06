@@ -826,7 +826,7 @@ export interface paths {
         put?: never;
         /**
          * The changes an edit of a record makes to plugin source, writing nothing.
-         * @description Over the unsaved documents mEdit holds, the text each document the edit changes or creates holds afterwards, and each file or folder it moves. Moves come first and apply in order, each against the tree the one before it left, and each document's path is where it stands once moved. Every path is absolute. Any other document the edit reads is read from disk. A refusal is the one the edit itself gives.
+         * @description Over the unsaved documents mEdit holds, the text each document the edit changes or creates holds afterwards, and each file or folder it moves. Moves come first and apply in order, each against the tree the one before it left, and each document's path is where it stands once moved. Every path is absolute. Any other document the edit reads is read from disk. A refusal is the one the edit itself gives. A change of the FormKey carries every plugin source that names the record, and names each that does not read, and each copy in a plugin with no plugin source, as left behind; it answers only once the record index is ready.
          */
         post: operations["EditRecordChanges"];
         delete?: never;
@@ -846,7 +846,7 @@ export interface paths {
         put?: never;
         /**
          * Writes an edit of a record to plugin source: a script's edit.
-         * @description Writes to the working tree what the same edit's changes answer, an unsaved document read in place of its file. An edit that would write a file held unsaved is refused naming it, and nothing is written.
+         * @description Writes to the working tree what the same edit's changes answer, an unsaved document read in place of its file, and answers what they leave behind. An edit that would write a file held unsaved is refused naming it, and nothing is written.
          */
         post: operations["EditRecord"];
         delete?: never;
@@ -1330,6 +1330,10 @@ export interface components {
             deletions: string[];
             documents: components["schemas"]["DocumentChange"][];
             newFormKey?: string | null;
+            plugins: components["schemas"]["PluginAddress"][];
+            leftBehind: components["schemas"]["SourceLeftBehind"][];
+            copiesLeftBehind: components["schemas"]["RecordAt"][];
+            copiesUnread?: string | null;
         };
         EnumMember: {
             value: string;
@@ -1704,6 +1708,12 @@ export interface components {
             op: string;
             path: components["schemas"]["PathHop"][];
             value?: unknown;
+        };
+        RecordEdited: {
+            newFormKey?: string | null;
+            leftBehind: components["schemas"]["SourceLeftBehind"][];
+            copiesLeftBehind: components["schemas"]["RecordAt"][];
+            copiesUnread?: string | null;
         };
         RecordFilter: {
             sql: string;
@@ -4270,12 +4280,14 @@ export interface operations {
             };
         };
         responses: {
-            /** @description No Content */
-            204: {
+            /** @description OK */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["RecordEdited"];
+                };
             };
             /** @description Bad Request */
             400: {
