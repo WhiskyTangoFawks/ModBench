@@ -72,6 +72,17 @@ public sealed class LoadOrderAtScaleTests
     }
 
     [Fact]
+    public void APluginsOverrides_AreJudgedWithinItsMastersInOneCallWithinTheQueryBudget()
+    {
+        using var scale = new LoadOrderAtScale();
+        IReadOnlyList<RecordCopyStates>? judged = null;
+
+        Budgets.Ran(OneGesture, () => judged = scale.Index.Queries.GetCopyStates(scale.RecordsTheOverridingPluginOverrides, scale.OverridingPlugin).Value(), "Judging 1,500 overrides within their masters");
+        Assert.All(judged ?? [], record => Assert.Equal(2, record.Copies.Count));
+        Assert.Equal(scale.RecordsTheOverridingPluginOverrides.Count, judged?.Count);
+    }
+
+    [Fact]
     public void TheConflictStackOfARecordWithManyCopies_ComparesWithinTheNavigationBudget()
     {
         const int copies = 200;

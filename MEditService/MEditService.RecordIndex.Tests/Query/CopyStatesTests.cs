@@ -1,0 +1,132 @@
+using MEditService.LoadOrder;
+using MEditService.RecordIndex.Queries;
+using MEditService.RecordIndex.Tests.TestSupport;
+using MEditService.TestSupport;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
+
+namespace MEditService.RecordIndex.Tests.Query;
+
+public sealed class CopyStatesTests : IDisposable
+{
+    private static readonly PluginAddress First = new("A.esp", PluginOrigin.DataDirectory);
+    private static readonly PluginAddress Second = new("B.esp", PluginOrigin.DataDirectory);
+    private static readonly PluginAddress Third = new("C.esp", PluginOrigin.DataDirectory);
+    private static readonly PluginAddress Inactive = new("Off.esp", PluginOrigin.DataDirectory);
+    private static readonly FormKey Item = new(ModKey.FromFileName(First.Name), 0x800);
+    private static readonly FormKey OtherItem = new(ModKey.FromFileName(First.Name), 0x801);
+
+    private readonly PluginFixtureData _fixture;
+    private readonly OpenedIndex _index;
+
+    public CopyStatesTests()
+    {
+        _fixture = Fixture();
+        _index = Indexes.Reconciled(_fixture);
+    }
+
+    public void Dispose()
+    {
+        _index.Dispose();
+        _fixture.Dispose();
+    }
+
+    private static MiscItem Named(FormKey key, string name) => new(key, Fallout4Release.Fallout4) { EditorID = $"E{key.ID:X}", Name = name };
+
+    private static PluginFixtureData Fixture() =>
+        new PluginFixtureBuilder("medit-copy-states")
+            .WithPlugin(First.Name, mod =>
+            {
+                mod.MiscItems.Add(Named(Item, "Item"));
+                mod.MiscItems.Add(Named(OtherItem, "Other"));
+            })
+            .WithPlugin(Second.Name, mod =>
+            {
+                mod.MiscItems.Set(Named(Item, "Changed"));
+                mod.MiscItems.Set(Named(OtherItem, "Other"));
+            })
+            .WithPlugin(Third.Name, mod =>
+            {
+                mod.MiscItems.Set(Named(Item, "Item"));
+            })
+            .WithPlugin(Inactive.Name, _ => { }, enabled: false)
+            .Build();
+
+    private static Dictionary<PluginAddress, ConflictThis?> StatesOf(OpenedIndex index, FormKey record, PluginAddress? plugin = null) =>
+        index.Queries.GetCopyStates([record.ToString()], plugin).Value().Single().Copies.ToDictionary(c => c.Plugin, c => c.ConflictThis);
+
+    [Fact]
+    public void ACopyIdenticalToTheMaster_OverAModOutsideTheStack_IsIdenticalToMaster()
+    {
+        var states = StatesOf(_index, Item, Third);
+
+        Assert.Equal([First, Third], states.Keys);
+        Assert.Equal(ConflictThis.IdenticalToMaster, states[Third]);
+    }
+
+    [Fact]
+    public void ACopyIdenticalToTheMaster_OverAModInTheStack_IsIdenticalToMasterWinsConflict_AsXEditSetsIt()
+    {
+        Assert.Equal(ConflictThis.IdenticalToMasterWinsConflict, StatesOf(_index, Item)[Third]);
+    }
+
+    [Fact]
+    public void AGivenPlugin_IsJudgedWithItsMastersAlone()
+    {
+        var states = StatesOf(_index, Item, Second);
+
+        Assert.Equal([First, Second], states.Keys);
+        Assert.Equal(ConflictThis.Override, states[Second]);
+    }
+
+    [Fact]
+    public void AGivenPlugin_IsJudgedWithTheMastersOfItsMasters()
+    {
+        var master = new PluginAddress("Master.esp", PluginOrigin.DataDirectory);
+        var middle = new PluginAddress("Middle.esp", PluginOrigin.DataDirectory);
+        var judged = new PluginAddress("Judged.esp", PluginOrigin.DataDirectory);
+        var inMiddle = new FormKey(ModKey.FromFileName(middle.Name), 0x900);
+        using var fixture = new PluginFixtureBuilder("medit-copy-states-transitive")
+            .WithPlugin(First.Name, mod => mod.MiscItems.Add(Named(Item, "Item")))
+            .WithPlugin(master.Name, mod => mod.MiscItems.Set(Named(Item, "Changed")))
+            .WithPlugin(middle.Name, mod => mod.FormLists.Add(new FormList(mod, "Lists") { Items = [new FormLink<IFallout4MajorRecordGetter>(new FormKey(ModKey.FromFileName(master.Name), 0x900))] }))
+            .WithPlugin(judged.Name, mod =>
+            {
+                mod.MiscItems.Set(Named(Item, "Item"));
+                mod.FormLists.Add(new FormList(mod, "Lists") { Items = [new FormLink<IFallout4MajorRecordGetter>(inMiddle)] });
+            })
+            .Build();
+        using var index = Indexes.Reconciled(fixture);
+
+        var states = StatesOf(index, Item, judged);
+
+        Assert.Equal(
+            [(First, ConflictThis.Master), (master, ConflictThis.ConflictLoses), (judged, ConflictThis.IdenticalToMasterWinsConflict)],
+            states.Select(state => (state.Key, state.Value)));
+    }
+
+    [Fact]
+    public void WithNoPlugin_EveryActivePluginHoldingTheRecordIsJudged()
+    {
+        Assert.Equal([First, Second, Third], StatesOf(_index, Item).Keys);
+    }
+
+    [Fact]
+    public void ManyRecordsInOneCall_AreAnsweredEachAsItIsAlone()
+    {
+        var answer = _index.Queries.GetCopyStates([Item.ToString(), OtherItem.ToString()], plugin: null).Value();
+
+        Assert.Equal([Item.ToString(), OtherItem.ToString()], answer.Select(r => r.FormKey));
+        Assert.Equal(StatesOf(_index, Item), answer[0].Copies.ToDictionary(c => c.Plugin, c => c.ConflictThis));
+        Assert.Equal(StatesOf(_index, OtherItem), answer[1].Copies.ToDictionary(c => c.Plugin, c => c.ConflictThis));
+    }
+
+    [Fact]
+    public void APluginNotActive_IsRefused_ForItHasNoMastersInTheLoadOrder()
+    {
+        var refused = _index.Queries.GetCopyStates([Item.ToString()], Inactive).Refused();
+
+        Assert.Equal(IndexRefusal.NameRefused, refused.Refusal);
+    }
+}

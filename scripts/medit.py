@@ -79,10 +79,16 @@ def read(plugin: Name, form_key: str) -> JsonRecord:
     return json.loads(document['text'])
 
 
-def compare(form_key: str) -> list[RecordCopy]:
-    """Each plugin's copy of a record in load order, with the state xEdit gives it against the master, such as IdenticalToMaster."""
-    overrides = _call('GET', f'/records/{_quoted(form_key)}/compare')['overrides']
-    return [RecordCopy(Plugin(copy['plugin'], copy['origin']), copy['conflictThis']) for copy in overrides]
+def compare(form_keys: list[str], plugin: Name | None = None) -> dict[str, list[RecordCopy]]:
+    """Each record's copies with their xEdit state against the master, such as IdenticalToMaster: within a plugin and its masters, or the active load order."""
+    body: JsonRecord = {'formKeys': form_keys}
+    if plugin is not None:
+        named = _plugin(plugin)
+        body['plugin'] = {'name': named.name, 'origin': named.origin}
+    answered = _call('POST', '/records/copy-states', body)
+    return {
+        record['formKey']: [RecordCopy(_plugin_of(copy['plugin']), copy['conflictThis']) for copy in record['copies']]
+        for record in answered}
 
 
 def referenced_by(form_key: str) -> list[Referrer]:

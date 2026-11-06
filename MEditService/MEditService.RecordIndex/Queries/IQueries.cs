@@ -19,6 +19,9 @@ public interface IQueries
 
     Answer<CompareRecordsAnswer, IndexRefused> GetCompareRecords(IReadOnlyList<RecordCopy> copies);
 
+    // Given a plugin, each stack holds that plugin and its masters; given none, the active load order.
+    Answer<IReadOnlyList<RecordCopyStates>, IndexRefused> GetCopyStates(IReadOnlyList<string> formKeys, PluginAddress? plugin);
+
     Answer<IReadOnlyList<PluginRecordTypeCount>, IndexRefused> GetPluginRecordTypes(PluginAddress plugin);
     Answer<WorkingTreeStatesBeneath, IndexRefused> GetWorkingTreeStatesBeneath(PluginAddress plugin);
     Answer<IReadOnlyList<RecordTypeChoice>, IndexRefused> GetCreatableRecordTypes();

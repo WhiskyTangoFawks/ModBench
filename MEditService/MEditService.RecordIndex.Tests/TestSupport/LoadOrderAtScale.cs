@@ -11,6 +11,7 @@ internal sealed class LoadOrderAtScale : IDisposable
 {
     private const int Rows = 100_000;
     private const int ReferencesInABigCell = 4_000;
+    private const int RecordsOverridden = 1_500;
 
     private readonly ScatteredFixtureData _fixture;
 
@@ -24,6 +25,10 @@ internal sealed class LoadOrderAtScale : IDisposable
     internal string AnOverriddenRecord { get; }
     internal IEnumerable<LoadOrderEntry> PluginsHoldingTheOverriddenRecord => _fixture.Plugins.Where(p => p.Name.StartsWith("Plugin", StringComparison.Ordinal));
 
+    /// <summary>A plugin overriding about as many records of its master as Prydwen overrides of Fallout4.esm.</summary>
+    internal PluginAddress OverridingPlugin { get; }
+    internal IReadOnlyList<string> RecordsTheOverridingPluginOverrides { get; }
+
     /// <summary>A source mod no commit holds the tree of, kept out of the load order until a test brings it in.</summary>
     internal LoadOrderEntry UncommittedPlugin { get; }
     internal string AReferenceInTheUncommittedCell { get; }
@@ -31,6 +36,7 @@ internal sealed class LoadOrderAtScale : IDisposable
     internal LoadOrderAtScale(int plugins = 70)
     {
         string bigCell = "", aReference = "", anUncommittedReference = "", overridden = "";
+        List<string> manyOverridden = [];
         var builder = new PluginFixtureBuilder("at-scale");
         for (var p = 0; p < plugins; p++)
             builder.WithPlugin($"Plugin{p:D3}.esp", (mod, masters) =>
@@ -45,6 +51,20 @@ internal sealed class LoadOrderAtScale : IDisposable
                 }
                 else mod.Npcs.GetOrAddAsOverride(masters[0].Npcs.First());
             }, origin: $"Mod{p:D3}");
+        builder.WithPlugin("ManyBase.esp", mod =>
+        {
+            for (var r = 0; r < RecordsOverridden; r++)
+            {
+                var keyword = new Keyword(mod) { EditorID = $"Many{r:D4}" };
+                mod.Keywords.Add(keyword);
+                manyOverridden.Add(keyword.FormKey.ToString());
+            }
+        }, origin: "ManyBaseMod");
+        builder.WithPlugin("ManyOverride.esp", (mod, masters) =>
+        {
+            foreach (var keyword in masters.Single(m => m.ModKey.FileName == "ManyBase.esp").Keywords)
+                mod.Keywords.GetOrAddAsOverride(keyword);
+        }, origin: "ManyOverrideMod");
         builder.WithPlugin("BigCell.esp", mod =>
         {
             var cell = AddCell(mod, "BigCell", ReferencesInABigCell);
@@ -57,6 +77,8 @@ internal sealed class LoadOrderAtScale : IDisposable
         _fixture = builder.BuildScattered();
 
         AnOverriddenRecord = overridden;
+        OverridingPlugin = _fixture.Plugins.Single(p => p.Name == "ManyOverride.esp").Key;
+        RecordsTheOverridingPluginOverrides = manyOverridden;
         BigCellPlugin = _fixture.Plugins.Single(p => p.Name == "BigCell.esp");
         BigCell = bigCell;
         AReferenceInTheBigCell = aReference;

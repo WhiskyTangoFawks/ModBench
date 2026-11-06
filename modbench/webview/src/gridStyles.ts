@@ -91,6 +91,7 @@ const STATE_NAME: Record<ConflictThis, string> = {
   Master: 'Master',
   OnlyOne: 'Single Record',
   IdenticalToMaster: 'Identical to Master',
+  IdenticalToMasterWinsConflict: 'Identical to Master, wins conflict',
   Override: 'Override without conflict',
   ConflictWins: 'Conflict winner',
   ConflictLoses: 'Conflict loser',
