@@ -20,7 +20,7 @@ The run never waits. A tactical question is decided, and a strategic one parks i
 
 ## 1. Lane
 
-The stack is an epic's `ready-for-agent` sub-issues with their blocking edges, and every open `ready-for-agent` bug, which fills a lane the epic leaves idle. A bug is its own ticket and its own epic: the spec line it names is its story, and the drain comments on it. Edges decide what can start. Boxes decide what can run beside what.
+The stack is an epic's `ready-for-agent` sub-issues with their blocking edges. An open `ready-for-agent` bug is filler, outside the run's commitment: it fills a lane the epic leaves idle and never delays the drain, and a bug opened after the first dispatch is not picked up. A bug is its own ticket and its own epic: the spec line it names is its story, and the drain comments on it. Edges decide what can start. Boxes decide what can run beside what.
 
 A box is a module `spec/architecture/target-architecture.d2` draws, or a band's lib, and its folder is the unit the kernel scans hold: a folder under `modbench/src/`, or an `MEditService.*` project. Read each ticket once, with its comments and its epic's comments, and name the boxes it touches and the tier it runs on: the one its Notes name, else Sonnet. Raise a ticket's tier only when its text leaves a judgement the chain does not answer, and say why in its lane line. A ticket you would raise for size alone is too coarse: park it for the user to split rather than spend the larger tier on it. Cut the stack into lanes so that tickets touching one box share a lane. Work is serial within a lane and parallel across lanes. Run 3 lanes at most.
 
