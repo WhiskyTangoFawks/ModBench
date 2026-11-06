@@ -65,6 +65,7 @@ Gestures Modbench does differently.
 | 41 | Remove a record | Asks nothing: Undo takes it back | Confirms each Remove | Principle: Minimal by default (commands.md, Confirm what destroys). |
 | 42 | Editing a column | Only the file's column edits; a column that is not the file's opens no editor | Edits any column in one window | Ruling: a record tab is its file's editor (ADR-0001). |
 | 43 | Cut in the record panel | Ctrl+X cuts a field's value or an element, in one edit (catalog `cut`) | No cut in the grid | VS Code's interaction: Ctrl+X is cut. |
+| 44 | Undelete and disable references, in the default clean script | Clears the reference's enable parent | Sets the enable parent to the player, with Set Enable State to Opposite of Parent | Ruling: Initially Disabled hides the reference once no enable parent overrides it. The player is a reference the engine hardcodes and no plugin defines. |
 
 ## Omissions by object
 
