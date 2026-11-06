@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { modbenchDiagnostic } from '../drivingLib/modbenchDiagnostic';
+import { commandLink } from '../drivingLib/quickFixes';
 import type { MEditClient } from '../client';
 import type { Reporter } from '../ports/reporter';
 import { isPluginSourcePath, PLUGIN_SOURCE_GLOB, type EntryRef } from '../instanceAdapter/instanceAdapter';
@@ -64,8 +65,11 @@ const pluginSource: vscode.DocumentSelector = { language: 'json' };
 const ownedFiles: vscode.DocumentSelector = [pluginSource, { scheme: 'file' }];
 const pluginSourceStatusSelector: vscode.DocumentSelector = { language: 'json', pattern: PLUGIN_SOURCE_GLOB };
 
-const diagnosticOf = ({ message, start, end }: ProblemOnFile): vscode.Diagnostic =>
-  modbenchDiagnostic(new vscode.Range(start.line, start.character, end.line, end.character), message, vscode.DiagnosticSeverity.Warning);
+function diagnosticOf({ message, start, end, clearing }: ProblemOnFile): vscode.Diagnostic {
+  const diagnostic = modbenchDiagnostic(new vscode.Range(start.line, start.character, end.line, end.character), message, vscode.DiagnosticSeverity.Warning);
+  if (clearing) diagnostic.code = commandLink('clear reference', 'modbench.record.editField', [clearing.record, clearing.envelope]);
+  return diagnostic;
+}
 
 class PluginSymbolInformation extends vscode.SymbolInformation {
   constructor(readonly plugin: PluginSymbol, location: vscode.Location) {

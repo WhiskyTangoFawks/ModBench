@@ -50,17 +50,49 @@ function feed(files: Record<string, string>, sourceFiles = sourceFolders, answer
 }
 
 describe('feedSourceProblems (source.md, In the text editor, story 6)', () => {
+  it('carries the edit that clears a reference: its field set to null, on the copy that holds it', async () => {
+    const text = `{\n  "FormKey": "${REFERRER}",\n  "Race": "${MISSING}"\n}`;
+    const { answered } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': text });
+
+    const shown = await answered([{ plugin: PLUGIN, problems: [problem()] }]);
+
+    expect(shown.get('/source/ReferringMod/Refers.esp/Npc.json')?.map(({ clearing }) => clearing)).toEqual([{
+      record: { formKey: REFERRER, plugin: 'Refers.esp', origin: 'ReferringMod' },
+      envelope: { op: 'set', path: [{ kind: 'member', name: 'Race' }], value: null },
+    }]);
+  });
+
+  it('clears a reference in a list by removing its element', async () => {
+    const text = `{\n  "FormKey": "${REFERRER}",\n  "Items": [{ "Item": "${MISSING}" }, "${MISSING}"]\n}`;
+    const { answered } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': text });
+
+    const shown = await answered([{ plugin: PLUGIN, problems: [problem({ fieldPath: 'Items[0].Item' }), problem({ fieldPath: 'Items[1]' })] }]);
+
+    expect(shown.get('/source/ReferringMod/Refers.esp/Npc.json')?.map(({ clearing }) => clearing?.envelope)).toEqual([
+      { op: 'set', path: [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 0 }, { kind: 'member', name: 'Item' }], value: null },
+      { op: 'remove', path: [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 1 }] },
+    ]);
+  });
+
+  it('carries no clearing edit on a problem that names no field', async () => {
+    const { answered } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': '{}' });
+
+    const shown = await answered([{ plugin: PLUGIN, problems: [problem({ fieldPath: null })] }]);
+
+    expect(shown.get('/source/ReferringMod/Refers.esp/Npc.json')?.map(({ clearing }) => clearing)).toEqual([undefined]);
+  });
+
   it('puts a reference to a missing record on its file, spanning the FormKey no active plugin holds', async () => {
     const text = `{\n  "FormKey": "${REFERRER}",\n  "Race": "${MISSING}"\n}`;
     const { answered } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': text });
 
     const shown = await answered([{ plugin: PLUGIN, problems: [problem()] }]);
 
-    expect([...shown]).toEqual([['/source/ReferringMod/Refers.esp/Npc.json', [{
+    expect([...shown]).toEqual([['/source/ReferringMod/Refers.esp/Npc.json', [expect.objectContaining({
       message: `Race: [${MISSING}] <Error: Could not be resolved>`,
       start: { line: 2, character: 10 },
       end: { line: 2, character: 10 + MISSING.length + 2 },
-    }]]]);
+    })]]]);
   });
 
   it('spans each child record\'s own reference when several records of one file cite the same missing record', async () => {

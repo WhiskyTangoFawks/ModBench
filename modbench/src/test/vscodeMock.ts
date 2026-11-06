@@ -91,7 +91,15 @@ export const Uri = {
 };
 
 class ParsedUri {
-  constructor(readonly href: string) {}
+  readonly scheme: string;
+  readonly path: string;
+  readonly query: string;
+  constructor(readonly href: string) {
+    const [head = '', ...query] = href.split('?');
+    this.scheme = head.slice(0, head.indexOf(':'));
+    this.path = head.slice(head.indexOf(':') + 1);
+    this.query = decodeURIComponent(query.join('?'));
+  }
   toString(): string { return this.href; }
 }
 

@@ -65,7 +65,6 @@ export function registerDeployCommands({ commands, instance, reporterFor }: Depl
     registerMoveToOverwriteCommand({ commands, instance, reporter }, publishProblems),
     collection,
     subscription,
-    vscode.languages.registerCodeActionsProvider({ scheme: 'file' }, problems.quickFixes, { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }),
   ];
 }
 

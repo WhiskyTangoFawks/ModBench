@@ -1,8 +1,9 @@
-import type { MEditClient, PluginProblems } from '../client';
+import type { MEditClient, PluginAddress, PluginProblems } from '../client';
 import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import { coalesced } from '../ports/coalesced';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
+import type { PathHop, RecordEditEnvelope } from '../wire/messages';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { problemSpan } from './sourceText';
 import { answerOf, failureReason, type ReadFailed } from '../wire/readFailed';
@@ -10,7 +11,9 @@ import { answerOf, failureReason, type ReadFailed } from '../wire/readFailed';
 type SourceProblem = PluginProblems['problems'][number];
 
 interface Position { line: number; character: number }
-export interface ProblemOnFile { message: string; start: Position; end: Position }
+/** The `edit field` that clears a reference: on the copy of `record` the plugin holds. */
+interface ClearingEdit { record: { formKey: string; plugin: string; origin: string }; envelope: RecordEditEnvelope }
+export interface ProblemOnFile { message: string; start: Position; end: Position; clearing?: ClearingEdit }
 /** Every problem mEdit answered, by the absolute path of the file it sits on. */
 export type ProblemsByFile = ReadonlyMap<string, ProblemOnFile[]>;
 
@@ -32,11 +35,25 @@ function positionAt(text: string, offset: number): Position {
   return { line: lines.length - 1, character: lines.at(-1)?.length ?? 0 };
 }
 
-function onText(text: string, problem: SourceProblem): ProblemOnFile {
+// mEdit's field path is the document's own member names, an element's index in brackets.
+const hopsOf = (fieldPath: string): PathHop[] =>
+  fieldPath.split('.').flatMap((member) => [
+    { kind: 'member' as const, name: member.split('[')[0] ?? member },
+    ...[...member.matchAll(/\[(\d+)\]/g)].map((index) => ({ kind: 'index' as const, index: Number(index[1]) })),
+  ]);
+
+function clearingEdit({ plugin, problem }: { plugin: PluginAddress; problem: SourceProblem }): ClearingEdit | undefined {
+  if (!problem.formKey || !problem.fieldPath) return undefined;
+  const path = hopsOf(problem.fieldPath);
+  const record = { formKey: problem.formKey, plugin: plugin.name, origin: plugin.origin };
+  return { record, envelope: path.at(-1)?.kind === 'index' ? { op: 'remove', path } : { op: 'set', path, value: null } };
+}
+
+function onText(text: string, plugin: PluginAddress, problem: SourceProblem): ProblemOnFile {
   const target = problemSpan(text, problem);
-  return target
-    ? { message: problem.message, start: positionAt(text, target.start), end: positionAt(text, target.end) }
-    : { message: problem.message, start: FIRST_LINE, end: FIRST_LINE };
+  const clearing = clearingEdit({ plugin, problem });
+  const place = target ? { start: positionAt(text, target.start), end: positionAt(text, target.end) } : { start: FIRST_LINE, end: FIRST_LINE };
+  return { message: problem.message, ...place, ...clearing && { clearing } };
 }
 
 interface Told { key: string; message: string; why: string }
@@ -79,8 +96,8 @@ async function placed(answer: PluginProblems[], { sourceFiles, readText }: Sourc
         unread.push({ key: path, message: `The Problems panel shows the problems of "${path}" on its first line.`, why: errorMessage(error) });
         return '';
       });
-      contribution.links.set(path, onPath.filter(isLink).map((problem) => onText(text, problem)));
-      contribution.stops.set(path, onPath.filter((problem) => !isLink(problem)).map((problem) => onText(text, problem)));
+      contribution.links.set(path, onPath.filter(isLink).map((problem) => onText(text, plugin, problem)));
+      contribution.stops.set(path, onPath.filter((problem) => !isLink(problem)).map((problem) => onText(text, plugin, problem)));
     }));
     return [key, contribution] as const;
   })));

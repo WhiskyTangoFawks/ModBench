@@ -13,6 +13,7 @@ import { moveToTrash } from './trash';
 import { highlightFollowingFocus } from './drivingLib/highlightFollowsFocus';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, loadOrderComing, sourceModRepositoriesOver, type Editor } from './editor';
+import { quickFixes } from './drivingLib/quickFixes';
 import { createSourceLanguage, followRenames, formKeyLocation, registerFollowRename, scriptReferences } from './sourceLanguage';
 import { saveUnsavedUnder } from './textDocuments/saveUnsavedUnder';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
@@ -395,6 +396,7 @@ function start(context: vscode.ExtensionContext): void {
     plugins,
     editor,
     agentServer,
+    vscode.languages.registerCodeActionsProvider({ scheme: 'file' }, quickFixes(), { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }),
     offerToVsCodeChat(agentServer),
     reachMEditFromTerminals(context.environmentVariableCollection, meditClient, scriptsPath),
     reachMEditFromEnvFile({
