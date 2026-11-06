@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { scriptRenameCommands } from '../renameScript';
-import type { FileOrigin, FileSource, RenamedSymbol } from '../../instanceAdapter/instanceAdapter';
+import type { FileOrigin, InstanceAdapter, RenamedSymbol } from '../../instanceAdapter/instanceAdapter';
 import { COMMITTED, heldTexts, NO_FILE_CHANGES, type FileChanges } from '../../symbolNames/symbolNames';
 
 type Held = Record<string, readonly string[]>;
 
 const DATA = 'dataFolder';
-const keyOf = (source: FileSource): string => (source.kind === 'mod' ? source.name : source.kind === 'dataFolder' ? DATA : 'Overwrite');
+const keyOf = (source: Parameters<InstanceAdapter['originHoldsFile']>[0]): string => (source.kind === 'mod' ? source.name : source.kind === 'dataFolder' ? DATA : 'Overwrite');
 const WINNING: FileOrigin = { kind: 'mod', name: 'Winning' };
 const LOSING: FileOrigin = { kind: 'mod', name: 'Losing' };
 const CHANGES: FileChanges = { moves: [], deletions: [], documents: [{ path: '/source/Mod/plugin-source/Quest.json', text: 'renamed' }] };

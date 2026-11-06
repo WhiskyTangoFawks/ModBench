@@ -1,6 +1,5 @@
 using System.Globalization;
 using MEditService.Codec.Schema;
-using MEditService.Codec.Serialization;
 
 namespace MEditService.Commands.Edits;
 
@@ -23,10 +22,6 @@ public sealed record RecordEditEnvelope(string Op, IReadOnlyList<PathHop> Path, 
     public const string Add = "add";
     public const string Remove = "remove";
     public const string Move = "move";
-
-    /// <summary>Whether the envelope sets the record's FormID, which the document holds as its FormKey member, rather than
-    /// a field of the document.</summary>
-    public bool SetsTheFormKey => this is { Op: Set, Path: [{ Kind: PathHop.MemberKind, Name: RecordMembers.FormKey }] };
 
     /// <summary>The path as a refusal names it: <c>Conditions[0].Data.Function</c>.</summary>
     public static string Spell(IEnumerable<PathHop> path) => DocumentHop.Spell(path.Select(hop => hop.Hop));

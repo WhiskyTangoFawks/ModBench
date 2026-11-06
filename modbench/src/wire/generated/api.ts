@@ -1333,6 +1333,7 @@ export interface components {
             plugins: components["schemas"]["PluginAddress"][];
             leftBehind: components["schemas"]["SourceLeftBehind"][];
             copiesLeftBehind: components["schemas"]["RecordAt"][];
+            copiesUnread?: string | null;
         };
         EnumMember: {
             value: string;
@@ -1712,6 +1713,7 @@ export interface components {
             newFormKey?: string | null;
             leftBehind: components["schemas"]["SourceLeftBehind"][];
             copiesLeftBehind: components["schemas"]["RecordAt"][];
+            copiesUnread?: string | null;
         };
         RecordFilter: {
             sql: string;

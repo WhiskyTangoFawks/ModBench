@@ -219,53 +219,67 @@ public class RegistrationScopingTests
         Assert.Empty(fx.Index.Queries.GetReferencesInActiveOrCompiledPlugins(fx.BetaRaceFk).Value());
     }
 
-    [Fact]
-    public void ARecordsFormKey_IsNamedByEachCopyOfIt_AndByEachCopyThatLinksIt_EachSayingWhetherItsPluginHasPluginSource()
+    private const string Base = "Base.esm";
+
+    // A copy of Base.esm in each of two mods, the later one winning, each a race and an NPC that links it, and Child.esp
+    // overriding the race and linking it from an NPC of its own.
+    private static ScatteredFixtureData TwoCopiesOfBaseAndAChild(string prefix, out string race, out string childNpc)
     {
-        using var fx = Build("form-key-references");
-        SourceMods.Init(fx.Plugins.Plugins.Single(p => p.Name == BetaKey.Name));
-        fx.Reconcile(fx.WithBetaDisabled);
-
-        var naming = fx.Index.Queries.GetFormKeyReferences(AlphaKey, fx.SharedNpcFk).Value();
-        var linking = fx.Index.Queries.GetFormKeyReferences(BetaKey, fx.BetaRaceFk).Value();
-
-        Assert.Contains(new CopyNaming(fx.SharedNpcFk, AlphaKey, InPluginSource: false), naming);
-        Assert.Contains(new CopyNaming(fx.SharedNpcFk, BetaKey, InPluginSource: true), naming);
-        Assert.Contains(new CopyNaming(fx.BetaNpcFk, BetaKey, InPluginSource: true), linking);
-    }
-
-    [Fact]
-    public void ARecordsFormKey_IsNamedInAnotherCopyOfItsFileNameNever_AndInAnotherPluginOnlyForTheCopyModOrderResolvesTo()
-    {
-        PluginAddress losing = new("Base.esm", "LosingMod"), winning = new("Base.esm", "WinningMod");
-        var race = "";
+        var (raceKey, childKey) = ("", "");
         void Populate(Fallout4Mod mod)
         {
             var added = mod.Races.AddNew("Race");
             mod.Npcs.AddNew("Npc").Race.SetTo(added);
-            race = added.FormKey.ToString();
+            raceKey = added.FormKey.ToString();
         }
-        using var plugins = new PluginFixtureBuilder("form-key-references-same-file-name")
-            .WithPlugin(losing.Name, Populate, origin: losing.Origin)
-            .WithPlugin(winning.Name, Populate, origin: winning.Origin)
+        var plugins = new PluginFixtureBuilder(prefix)
+            .WithPlugin(Base, Populate, origin: "LosingMod")
+            .WithPlugin(Base, Populate, origin: "WinningMod")
             .WithPlugin("Child.esp", (mod, built) =>
             {
                 mod.ModHeader.MasterReferences.Add(new MasterReference { Master = built[1].ModKey });
-                mod.Npcs.AddNew("ChildNpc").Race.SetTo(FormKey.Factory(race));
+                mod.Races.GetOrAddAsOverride(built[1].Races.Single());
+                var npc = mod.Npcs.AddNew("ChildNpc");
+                npc.Race.SetTo(FormKey.Factory(raceKey));
+                childKey = npc.FormKey.ToString();
             }, origin: "ChildMod")
             .BuildScattered();
-        SourceMods.Init(plugins.Plugins.Single(p => p.Origin == losing.Origin));
-        var holder = new LoadOrderHolder();
-        using var opens = new GatedPluginAdapter();
-        using var index = Indexes.Open(holder, opens);
+        (race, childNpc) = (raceKey, childKey);
+        return plugins;
+    }
+
+    private static OpenedIndex Indexed(ScatteredFixtureData plugins, LoadOrderHolder holder, GatedPluginAdapter opens)
+    {
+        var index = Indexes.Open(holder, opens);
         index.Reconcile(holder, plugins.DataFolder, plugins.Plugins, GameRelease.Fallout4);
+        return index;
+    }
 
-        var forLosing = index.Queries.GetFormKeyReferences(losing, race).Value();
-        var forWinning = index.Queries.GetFormKeyReferences(winning, race).Value();
+    [Fact]
+    public void TheCopiesNamingARecord_InAnActivePluginWithNoPluginSource_AreEachCopyOfIt_AndEachCopyThatLinksIt()
+    {
+        using var plugins = TwoCopiesOfBaseAndAChild("form-key-copies-with-no-source", out var race, out var childNpc);
+        PluginAddress winning = new(Base, "WinningMod"), child = new("Child.esp", "ChildMod");
+        using var opens = new GatedPluginAdapter();
+        using var index = Indexed(plugins, new LoadOrderHolder(), opens);
 
-        Assert.Equal([losing], forLosing.Select(copy => copy.Plugin).Distinct());
-        Assert.Contains(forWinning, copy => copy.Plugin.Name == "Child.esp");
-        Assert.DoesNotContain(forWinning, copy => PluginAddress.Comparer.Equals(copy.Plugin, losing));
+        var copies = index.Queries.GetCopiesWithNoPluginSourceNaming(winning, race).Value();
+
+        Assert.Contains(new RecordAt(winning, race), copies);
+        Assert.Contains(new RecordAt(child, race), copies);
+        Assert.Contains(new RecordAt(child, childNpc), copies);
+    }
+
+    [Fact]
+    public void TheCopiesNamingARecord_OfACopyModOrderDoesNotResolveItsNameTo_AreNoneElsewhere()
+    {
+        using var plugins = TwoCopiesOfBaseAndAChild("form-key-copies-same-file-name", out var race, out _);
+        PluginAddress losing = new(Base, "LosingMod");
+        SourceMods.Init(plugins.Plugins.Single(p => p.Origin == losing.Origin));
+        using var opens = new GatedPluginAdapter();
+        using var index = Indexed(plugins, new LoadOrderHolder(), opens);
+
+        Assert.Empty(index.Queries.GetCopiesWithNoPluginSourceNaming(losing, race).Value());
     }
 
     private static IReadOnlyList<CopyNaming> NamingAlpha(FixtureWithEveryKindOfExtractedRowAndBetaOverridingAlphasNpc fx, string name = "Alpha.esp") =>

@@ -100,7 +100,7 @@ public sealed class RenameSourceChangesHandler
         LoadOrderSnapshot loadOrder, RegisteredPlugin renamed, string newName, Func<PluginProvider.FromMod, ISourceRepository> repositoryOf)
     {
         var followed = SourceChanges.None;
-        var (reading, leftBehind) = PluginSources.Naming(_source, loadOrder, renamed);
+        var (reading, leftBehind) = PluginSources.Naming(_source, loadOrder, renamed.Key);
         leftBehind.RemoveAll(left => PluginAddress.Comparer.Equals(left.Plugin, renamed.Key));
         foreach (var (other, mod) in reading.Where(other => !PluginAddress.Comparer.Equals(other.Plugin.Key, renamed.Key)))
         {

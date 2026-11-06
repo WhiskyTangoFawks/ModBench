@@ -126,7 +126,7 @@ public sealed class RecordEditTests : IDisposable
         var unreadableBefore = Unreadable();
 
         var (result, _) = _mod.EditChangesHandler.Changes(
-            _mod.Plugin, _mod.Npc.ToString(), Envelopes.SetAt(Json("0.75"), Envelopes.Member("HeightMax")), copiesWithNoPluginSource: []);
+            _mod.Plugin, _mod.Npc.ToString(), Envelopes.SetAt(Json("0.75"), Envelopes.Member("HeightMax")), copiesWithNoPluginSource: Envelopes.NoCopies);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);

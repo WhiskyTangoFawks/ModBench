@@ -221,32 +221,45 @@ public sealed class FormIdEditTests
     {
         using var two = TwoModReferenceFixture.Create(initReferencer: true);
 
-        var result = two.ScriptEditHandler.Edit(two.TargetPlugin, two.TargetRace.ToString(), FormKeySet, copiesWithNoPluginSource: []).AsResult();
+        var result = two.ScriptEditHandler.Edit(two.TargetPlugin, two.TargetRace.ToString(), FormKeySet, copiesWithNoPluginSource: Envelopes.NoCopies).AsResult();
 
         Assert.True(result.Applied, result.Message);
         Assert.Contains("000F00:Base.esm", two.DocumentCarrying(two.ReferencerPlugin, TwoModReferenceFixture.ReferencerNpcEditorId).Body, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void AFormKeyChange_AnswersTheCopiesWithNoPluginSourceItIsHanded_AsLeftBehind_AndThePluginsItChanges()
+    public void AFormKeyChange_AnswersTheCopiesWithNoPluginSourceItReads_AsLeftBehind_AndThePluginsItChanges()
     {
         using var two = TwoModReferenceFixture.Create(initReferencer: true);
         RecordAt binary = new(new PluginAddress("Binary.esp", "BinaryMod"), "000801:Binary.esp");
 
-        Assert.True(two.EditChangesHandler.Changes(two.TargetPlugin, two.TargetRace.ToString(), FormKeySet, [binary]).Holds(out var changes, out var refused), refused?.Message);
+        Assert.True(two.EditChangesHandler.Changes(two.TargetPlugin, two.TargetRace.ToString(), FormKeySet, () => new[] { binary }).Holds(out var changes, out var refused), refused?.Message);
 
         Assert.Equal([binary], changes.CopiesLeftBehind);
+        Assert.Null(changes.CopiesUnread);
         Assert.Equal([two.TargetPlugin, two.ReferencerPlugin], changes.Plugins);
     }
 
     [Fact]
-    public void AnEditOfAnotherField_LeavesNothingBehind_WhateverCopiesItIsHanded()
+    public void AFormKeyChange_WhoseCopiesCannotBeRead_Lands_NamingWhy()
+    {
+        using var two = TwoModReferenceFixture.Create(initReferencer: true);
+
+        Assert.True(two.EditChangesHandler.Changes(two.TargetPlugin, two.TargetRace.ToString(), FormKeySet, () => "The record index is not ready.").Holds(out var changes, out var refused), refused?.Message);
+
+        Assert.Equal(("000F00:Base.esm", "The record index is not ready."), (changes.NewFormKey, changes.CopiesUnread));
+    }
+
+    [Fact]
+    public void AnEditOfAnotherField_NeverReadsTheCopies_AndLeavesNothingBehind()
     {
         using var two = TwoModReferenceFixture.Create(initReferencer: true);
         var envelope = Envelopes.SetAt(JsonSerializer.SerializeToElement("Renamed"), Envelopes.Member("EditorID"));
+        var reads = 0;
 
-        Assert.True(two.EditChangesHandler.Changes(two.TargetPlugin, two.TargetRace.ToString(), envelope, [new(two.ReferencerPlugin, "000801:Winner.esp")]).Holds(out var changes, out var refused), refused?.Message);
+        Assert.True(two.EditChangesHandler.Changes(two.TargetPlugin, two.TargetRace.ToString(), envelope, () => { reads++; return Array.Empty<RecordAt>(); }).Holds(out var changes, out var refused), refused?.Message);
 
+        Assert.Equal((0, (string?)null), (reads, changes.CopiesUnread));
         Assert.Empty(changes.CopiesLeftBehind);
         Assert.Equal([two.TargetPlugin], changes.Plugins);
     }
@@ -255,7 +268,7 @@ public sealed class FormIdEditTests
 
     private static EditRecordChanges TargetRaceRekeyed(TwoModReferenceFixture two)
     {
-        Assert.True(two.EditChangesHandler.Changes(two.TargetPlugin, two.TargetRace.ToString(), FormKeySet, []).Holds(out var changes, out var refused), refused?.Message);
+        Assert.True(two.EditChangesHandler.Changes(two.TargetPlugin, two.TargetRace.ToString(), FormKeySet, Envelopes.NoCopies).Holds(out var changes, out var refused), refused?.Message);
         return changes;
     }
 

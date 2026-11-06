@@ -119,7 +119,7 @@ export type CreateChangesOutcome = components['schemas']['CreateRecordChanges'];
 /** An edit's changes to plugin source, or its refusal: `refusal` is the backend's name, `'Unknown'`
  *  this side's. An edit of the FormID sets `newFormKey`. */
 export type RecordEditChangesOutcome =
-  | ({ applied: true; newFormKey?: string } & Pick<components['schemas']['EditRecordChanges'], 'plugins' | 'leftBehind' | 'copiesLeftBehind'> & SourceChanges)
+  | ({ applied: true; newFormKey?: string } & Pick<components['schemas']['EditRecordChanges'], 'plugins' | 'leftBehind' | 'copiesLeftBehind' | 'copiesUnread'> & SourceChanges)
   | { applied: false; refusal: string; message: string };
 
 /** `rebuildIndex`'s own outcome (ADR-0010). */

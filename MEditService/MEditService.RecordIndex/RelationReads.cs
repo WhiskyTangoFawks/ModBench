@@ -402,21 +402,22 @@ internal sealed class RelationReads(
         return [.. headers.Concat(copies).DistinctBy(copy => (copy.FormKey, copy.Plugin.Name, copy.Plugin.Origin))];
     }
 
-    /// <summary>Each copy of the record <paramref name="formKey"/> names in an active or compiled plugin, and each copy
-    /// there that links it.</summary>
-    public IReadOnlyList<CopyNaming> GetCopiesNamingFormKey(string formKey)
+    /// <summary>Each copy of the record <paramref name="formKey"/> names in an active plugin with no plugin source, and
+    /// each copy there that links it.</summary>
+    public IReadOnlyList<RecordAt> GetCopiesWithNoPluginSourceNaming(string formKey)
     {
         using var context = store.OpenRead();
+        var activeWithNoPluginSource = $"p.load_order_idx IS NOT NULL AND NOT {InPluginSource}";
         return [.. context.Rows($"""
-            SELECT r.form_key, r.plugin, r.origin, {InPluginSource}
+            SELECT r.form_key, r.plugin, r.origin
             FROM {Copies}
-            WHERE r.form_key = $1 AND {ActiveOrCompiled}
+            WHERE r.form_key = $1 AND {activeWithNoPluginSource}
             UNION
-            SELECT fr.source_form_key, fr.source_plugin, fr.source_origin, {InPluginSource}
+            SELECT fr.source_form_key, fr.source_plugin, fr.source_origin
             FROM {ActiveOrCompiledPluginReferrers}
-            WHERE fr.target_form_key = $1 AND {ActiveOrCompiled}
+            WHERE fr.target_form_key = $1 AND {activeWithNoPluginSource}
             ORDER BY 2, 3, 1
-            """, CopyNamingOf, formKey)];
+            """, reader => new RecordAt(new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.GetString(0)), formKey)];
     }
 
     /// <summary>Each copy in an active or compiled plugin whose document holds <paramref name="text"/> in any case.</summary>

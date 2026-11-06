@@ -579,8 +579,8 @@ class HttpMEditClient implements MEditClient {
     }
     const { data, error, response } = result;
     if (response.ok && data) {
-      const { moves, deletions, documents, newFormKey, plugins, leftBehind, copiesLeftBehind } = data;
-      const changes = { applied: true as const, moves, deletions, documents, plugins, leftBehind, copiesLeftBehind };
+      const { moves, deletions, documents, newFormKey, plugins, leftBehind, copiesLeftBehind, copiesUnread } = data;
+      const changes = { applied: true as const, moves, deletions, documents, plugins, leftBehind, copiesLeftBehind, copiesUnread };
       return newFormKey ? { ...changes, newFormKey } : changes;
     }
 

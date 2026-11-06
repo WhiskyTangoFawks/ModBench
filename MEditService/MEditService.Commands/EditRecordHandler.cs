@@ -23,11 +23,13 @@ public sealed class EditRecordHandler
 
     /// <summary><paramref name="copiesWithNoPluginSource"/> as <see cref="EditRecordChangesHandler.Changes"/> takes them.</summary>
     public Answer<RecordEdited, RecordEditRefused> Edit(
-        PluginAddress plugin, string formKey, RecordEditEnvelope envelope, IReadOnlyList<RecordAt> copiesWithNoPluginSource)
+        PluginAddress plugin, string formKey, RecordEditEnvelope envelope, Func<Answer<RecordAt[], string>> copiesWithNoPluginSource)
     {
         var sessions = new WriteSessions(_source, _unsaved.Current);
         var edited = _changes.Edited(plugin, formKey, envelope, copiesWithNoPluginSource, sessions);
         var written = sessions.Written(edited.Outcome, $"Could not write the edit of {formKey}", _loadOrder, _logger);
-        return written.Applied ? new RecordEdited(written.NewFormKey, edited.LeftBehind, edited.CopiesLeftBehind) : written.AsRefused();
+        return written.Applied
+            ? new RecordEdited(written.NewFormKey, edited.LeftBehind, edited.CopiesLeftBehind, edited.CopiesUnread)
+            : written.AsRefused();
     }
 }

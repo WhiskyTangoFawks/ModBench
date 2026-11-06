@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 
 namespace MEditService.Commands.Tests.TestSupport;
 
@@ -9,6 +10,9 @@ namespace MEditService.Commands.Tests.TestSupport;
 internal static class Envelopes
 {
     internal static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
+
+    /// <summary>A record index that holds no copy, in a plugin with no plugin source, naming the edited record.</summary>
+    internal static readonly Func<Answer<RecordAt[], string>> NoCopies = () => Array.Empty<RecordAt>();
 
     internal static PathHop Member(string name) => new(PathHop.MemberKind, Name: name);
     internal static PathHop At(int index) => new(PathHop.IndexKind, Index: index);

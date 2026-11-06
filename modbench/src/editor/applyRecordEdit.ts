@@ -85,10 +85,11 @@ type Applied = Extract<RecordEditChangesOutcome, { applied: true }>;
 
 // A reference that cannot follow does not stop a FormKey change, and the warning names each (symbols.md, The features,
 // story 7).
-function reportLeftBehind(reporter: Reporter, formKey: string, newFormKey: string, { leftBehind, copiesLeftBehind }: Applied): void {
+function reportLeftBehind(reporter: Reporter, formKey: string, newFormKey: string, { leftBehind, copiesLeftBehind, copiesUnread }: Applied): void {
   const cannotFollow = [
     ...copiesLeftBehind.map(({ formKey: copy, plugin }) => `${copy} in ${plugin.name} (${plugin.origin})`),
     ...leftBehind.map(({ plugin, reason }) => `${plugin.name} (${plugin.origin}): ${reason}`),
+    ...copiesUnread ? [`the plugins mEdit reads: ${copiesUnread}`] : [],
   ];
   const outcome = renameOutcome({ applied: true, cannotFollow }, { named: formKey, newName: newFormKey, landed: newFormKey, definition: 'its file' });
   if (outcome.applied) reportPartial(reporter, outcome.partial);

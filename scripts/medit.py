@@ -33,6 +33,25 @@ class RecordName:
     editor_id: str | None
 
 
+class SourceLeftBehind(NamedTuple):
+    plugin: Plugin
+    reason: str
+
+
+class CopyLeftBehind(NamedTuple):
+    plugin: Plugin
+    form_key: str
+
+
+@dataclass(frozen=True)
+class Edited:
+    """A FormKey change's new FormKey, and each plugin source and copy left naming the old one, or why those copies went unread."""
+    new_form_key: str | None
+    left_behind: list[SourceLeftBehind]
+    copies_left_behind: list[CopyLeftBehind]
+    copies_unread: str | None
+
+
 @dataclass(frozen=True)
 class Referrer:
     plugin: Plugin
@@ -78,7 +97,7 @@ def referenced_by(form_key: str) -> list[Referrer]:
 _NO_VALUE = object()
 
 
-def edit(plugin: Name, form_key: str, op: EditOp, path: str, value: object = _NO_VALUE) -> None:
+def edit(plugin: Name, form_key: str, op: EditOp, path: str, value: object = _NO_VALUE) -> Edited:
     """Writes op to the plugin's copy of a record in its plugin source, at a field path spelled as referenced_by
     spells one, such as Conditions[0].ComparisonValue. A value of None clears a member."""
     hops = _hops(path)
@@ -86,7 +105,12 @@ def edit(plugin: Name, form_key: str, op: EditOp, path: str, value: object = _NO
     body: JsonRecord = {'plugin': name, 'origin': origin, 'op': op, 'path': hops}
     if value is not _NO_VALUE:
         body['value'] = value
-    _call('POST', f'/records/{_quoted(form_key)}/edit', body)
+    edited = _call('POST', f'/records/{_quoted(form_key)}/edit', body)
+    return Edited(
+        edited['newFormKey'],
+        [SourceLeftBehind(_plugin_of(left['plugin']), left['reason']) for left in edited['leftBehind']],
+        [CopyLeftBehind(_plugin_of(copy['plugin']), copy['formKey']) for copy in edited['copiesLeftBehind']],
+        edited['copiesUnread'])
 
 
 def copy(plugin: Name, form_key: str, destination: Name, mode: CopyMode = 'override', replace: bool = False) -> str:
@@ -127,6 +151,10 @@ def _named(named: JsonRecord) -> Plugin | RecordName:
     plugin = named['plugin']
     if plugin is None:
         return RecordName(form_key=named['formKey'], editor_id=named['editorId'])
+    return _plugin_of(plugin)
+
+
+def _plugin_of(plugin: JsonRecord) -> Plugin:
     return Plugin(plugin['name'], plugin['origin'])
 
 

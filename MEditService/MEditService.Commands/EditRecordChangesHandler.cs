@@ -35,29 +35,35 @@ public sealed class EditRecordChangesHandler
     }
 
     /// <summary>Over the unsaved documents mEdit holds, which stand in for their files. <paramref name="copiesWithNoPluginSource"/>:
-    /// each copy naming the record in a plugin with no plugin source, which a FormKey change leaves behind.</summary>
+    /// reads each copy naming the record in an active plugin with no plugin source, or why it could not, which a FormKey
+    /// change leaves behind.</summary>
     public Answer<EditRecordChanges, RecordEditRefused> Changes(
-        PluginAddress plugin, string formKey, RecordEditEnvelope envelope, IReadOnlyList<RecordAt> copiesWithNoPluginSource)
+        PluginAddress plugin, string formKey, RecordEditEnvelope envelope, Func<Answer<RecordAt[], string>> copiesWithNoPluginSource)
     {
         var sessions = new WriteSessions(_source, _unsaved.Current);
-        var (outcome, plugins, leftBehind, copiesLeftBehind) = Edited(plugin, formKey, envelope, copiesWithNoPluginSource, sessions);
+        var (outcome, plugins, leftBehind, copiesLeftBehind, copiesUnread) = Edited(plugin, formKey, envelope, copiesWithNoPluginSource, sessions);
         if (!outcome.Applied) return outcome.AsRefused();
         var (moves, deletions, documents) = sessions.Made;
         return new EditRecordChanges(
-            formKey, RecordEditEnvelope.Spell(envelope.Path), moves, deletions, documents, outcome.NewFormKey, plugins, leftBehind, copiesLeftBehind);
+            formKey, RecordEditEnvelope.Spell(envelope.Path), moves, deletions, documents, outcome.NewFormKey, plugins, leftBehind, copiesLeftBehind,
+            copiesUnread);
     }
 
-    /// <summary>The edit, its changes left in <paramref name="sessions"/> for a caller that writes them. A FormKey change
-    /// carries every plugin source naming the record (ADR-0028).</summary>
+    /// <summary>The edit, its changes left in <paramref name="sessions"/> for a caller that writes them, before anything
+    /// is written. A FormKey change carries every plugin source naming the record (ADR-0028).</summary>
     internal EditedRecord Edited(
-        PluginAddress plugin, string formKey, RecordEditEnvelope envelope, IReadOnlyList<RecordAt> copiesWithNoPluginSource, WriteSessions sessions)
+        PluginAddress plugin, string formKey, RecordEditEnvelope envelope, Func<Answer<RecordAt[], string>> copiesWithNoPluginSource,
+        WriteSessions sessions)
     {
         var outcome = WriteFailure.Refused(
             EditSource(plugin, formKey, envelope, sessions), refused => refused, $"Could not read the source of {formKey}", _logger).Outcome;
-        if (!outcome.Applied) return new(outcome, [], [], []);
-        if (outcome.NewFormKey is not { } newFormKey) return new(outcome, [plugin], [], []);
+        if (!outcome.Applied) return new(outcome, [], [], [], null);
+        if (outcome.NewFormKey is not { } newFormKey) return new(outcome, [plugin], [], [], null);
         var (followed, leftBehind) = FormKeyChange.Follow(_source, _loadOrder.Current, plugin, FormKey.Factory(formKey).ToString(), newFormKey, sessions);
-        return new(outcome, [plugin, .. followed.Where(other => !PluginAddress.Comparer.Equals(other, plugin))], leftBehind, copiesWithNoPluginSource);
+        var changed = (IReadOnlyList<PluginAddress>)[plugin, .. followed.Where(other => !PluginAddress.Comparer.Equals(other, plugin))];
+        return copiesWithNoPluginSource().Holds(out var copies, out var unread)
+            ? new(outcome, changed, leftBehind, copies, null)
+            : new(outcome, changed, leftBehind, [], unread);
     }
 
     private Answer<RecordEditChanges, SourceFailure> EditSource(
@@ -75,7 +81,7 @@ public sealed class EditRecordChangesHandler
     {
         var (release, identity, session) = editTarget;
         var repository = editTarget.Repository;
-        if (envelope.SetsTheFormKey) return _formKeyChange.Change(plugin, formKey, editTarget, envelope.Value);
+        if (FormKeyChange.IsFormIdEdit(envelope)) return _formKeyChange.Change(plugin, formKey, editTarget, envelope.Value);
         var schemas = _schemaReflector.GetSchemas(release);
         var spelled = RecordEditEnvelope.Spell(envelope.Path);
 

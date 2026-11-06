@@ -5,6 +5,8 @@ import unittest
 import medit
 from tests.fixture_medit import (
     CONDITIONS,
+    FIXES,
+    FIXES_ADDON,
     LIGHT,
     LIGHT_RECORD,
     RECIPE,
@@ -34,7 +36,8 @@ class EditAgainstTheFixtureInstance(unittest.TestCase):
 
     def test_writes_an_edited_field_to_the_records_file_as_a_working_tree_change(self) -> None:
         with window_of(self.fixture.url):
-            medit.edit(CONDITIONS.name, RECIPE, 'set', 'Conditions[0].ComparisonValue', 7.5)
+            edited = medit.edit(CONDITIONS.name, RECIPE, 'set', 'Conditions[0].ComparisonValue', 7.5)
+        self.assertEqual(edited, medit.Edited(None, [], [], None))
         self.assertEqual(json.loads(self.recipe_file.read_text())['Conditions'][0]['ComparisonValue'], 7.5)
         self.assertEqual(changed(self.source), [f' M {self.recipe_file.relative_to(self.source).as_posix()}'])
 
@@ -67,6 +70,17 @@ class EditAgainstTheFixtureInstance(unittest.TestCase):
             medit.edit(CONDITIONS.name, RECIPE, 'set', 'Conditions[0]].ComparisonValue', 9.5)
         self.assertIn('Conditions[0]].ComparisonValue', str(raised.exception))
         self.assertEqual(self.recipe_file.read_text(), saved)
+
+
+class FormKeyChangeAgainstTheFixtureInstance(unittest.TestCase):
+    def test_answers_each_copy_in_a_plugin_with_no_plugin_source_as_left_behind(self) -> None:
+        with fixture_medit() as fixture, window_of(fixture.url):
+            version_in_git(fixture, FIXES.origin)
+            [overridden, *_] = medit.select(
+                f"SELECT form_key FROM records WHERE plugin = '{FIXES_ADDON.name}' AND form_key LIKE '%:{FIXES.name}'")
+            edited = medit.edit(FIXES.name, overridden['form_key'], 'set', 'FormKey', f'000FFE:{FIXES.name}')
+        self.assertEqual(edited.new_form_key, f'000FFE:{FIXES.name}')
+        self.assertIn(medit.CopyLeftBehind(FIXES_ADDON, overridden['form_key']), edited.copies_left_behind)
 
 
 if __name__ == '__main__':

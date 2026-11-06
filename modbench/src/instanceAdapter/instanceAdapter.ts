@@ -414,7 +414,7 @@ export const CHECK_THE_DISK: Reread = { named: [], disk: true };
 export type FileOrigin = { readonly kind: 'mod'; readonly name: string } | { readonly kind: 'runtimeOutput' };
 
 /** Where the game takes a file from: a mod or Overwrite, or, below every one, its own Data folder. */
-export type FileSource = FileOrigin | { readonly kind: 'dataFolder' };
+type FileSource = FileOrigin | { readonly kind: 'dataFolder' };
 
 /** The origin a plugin's origin names (ADR-0012). */
 export const fileOriginOfPlugin = (origin: string): FileOrigin => (origin === OVERWRITE_ORIGIN ? { kind: 'runtimeOutput' } : { kind: 'mod', name: origin });

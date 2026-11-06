@@ -43,6 +43,28 @@ public sealed class LoadOrderTests
         Assert.NotEqual(OfA(), other);
     }
 
+    private static readonly RegisteredPlugin Winning = Registered("Base.esm", "WinningMod", line: 0);
+    private static readonly RegisteredPlugin Losing = Registered("Base.esm", "LosingMod", line: 0, lineNamesIt: false);
+    private static readonly RegisteredPlugin Patch = Registered("Patch.esp", "PatchMod", line: 1);
+
+    public static TheoryData<string, RegisteredPlugin, RegisteredPlugin, bool> Naming => new()
+    {
+        { "a copy, its own records", Losing, Losing, true },
+        { "a plugin of another file name, the records of the copy mod order resolves the name to", Winning, Patch, true },
+        { "a plugin of another file name, the records of a copy mod order does not resolve the name to", Losing, Patch, false },
+        { "another copy of the file name, the records of the copy mod order resolves the name to", Winning, Losing, false },
+    };
+
+    [Theory]
+    [MemberData(nameof(Naming))]
+    public void APluginNamesACopysRecords_OnlyAsAFileNameAloneNamesTheCopyModOrderResolvesItTo(
+        string _, RegisteredPlugin copy, RegisteredPlugin other, bool names)
+    {
+        var order = Order([Winning, Losing, Patch], Winning, Patch);
+
+        Assert.Equal(names, order.NamesRecordsOf(copy.Key, other.Key));
+    }
+
     public static TheoryData<string, RegisteredPlugin[], PluginAddress[], PluginAddress[], string> Refusals => new()
     {
         {

@@ -306,8 +306,8 @@ internal static class RecordEndpoints
         LogEditReceived(logger, "EditRecordChanges", edit, decoded, spelled);
         if (EditRequestProblem(edit) is { } problem) return problem;
         var (plugin, envelope) = (new PluginAddress(request.Edit.Plugin, request.Edit.Origin), EnvelopeOf(request.Edit));
-        return WithCopiesWithNoPluginSource(svc, plugin, decoded, envelope,
-            copies => EndpointMapping.Answered("EditChanges", logger, edits.Changes(plugin, decoded, envelope, copies), Results.Ok));
+        return EndpointMapping.Answered(
+            "EditChanges", logger, edits.Changes(plugin, decoded, envelope, CopiesWithNoPluginSource(svc, plugin, decoded)), Results.Ok);
     }
 
     internal static IResult EditRecord(string formKey, RecordEditRequest request, EditRecordHandler edits, IQueries svc, ILogger logger)
@@ -317,19 +317,14 @@ internal static class RecordEndpoints
         LogEditReceived(logger, "EditRecord", request, decoded, spelled);
         if (EditRequestProblem(request) is { } problem) return problem;
         var (plugin, envelope) = (new PluginAddress(request.Plugin, request.Origin), EnvelopeOf(request));
-        return WithCopiesWithNoPluginSource(svc, plugin, decoded, envelope,
-            copies => EndpointMapping.Answered("EditRecord", logger, edits.Edit(plugin, decoded, envelope, copies), Results.Ok));
+        return EndpointMapping.Answered(
+            "EditRecord", logger, edits.Edit(plugin, decoded, envelope, CopiesWithNoPluginSource(svc, plugin, decoded)), Results.Ok);
     }
 
     private static RecordEditEnvelope EnvelopeOf(RecordEditRequest edit) => new(edit.Op, edit.Path ?? [], edit.EditedValue);
 
-    // Read before the edit, while the record index still holds the FormKey it changes.
-    private static IResult WithCopiesWithNoPluginSource(
-        IQueries svc, PluginAddress plugin, string formKey, RecordEditEnvelope envelope, Func<IReadOnlyList<RecordAt>, IResult> edit) =>
-        envelope.SetsTheFormKey
-            ? EndpointMapping.Answered(svc.GetFormKeyReferences(plugin, formKey), copies =>
-                edit([.. copies.Where(copy => !copy.InPluginSource).Select(copy => new RecordAt(copy.Plugin, copy.FormKey))]))
-            : edit([]);
+    private static Func<Answer<RecordAt[], string>> CopiesWithNoPluginSource(IQueries svc, PluginAddress plugin, string formKey) =>
+        () => svc.GetCopiesWithNoPluginSourceNaming(plugin, formKey).Holds(out var copies, out var refused) ? copies.ToArray() : refused.Message;
 
     internal static async Task<IResult> CopyRecord(ScriptCopyRequest request, CopyRecordHandler copies, ILogger logger)
     {

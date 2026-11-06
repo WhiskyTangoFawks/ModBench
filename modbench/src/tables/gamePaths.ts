@@ -44,7 +44,7 @@ export interface Programs {
 
 /** Under the Data folder: where a Papyrus script's source sits, each folder in the order the game's Creation Kit reads
  *  them, and where its compiled script sits. A script's namespaces are folders below them. */
-export interface PapyrusFolders {
+interface PapyrusFolders {
   readonly sources: readonly string[];
   readonly compiled: string;
 }

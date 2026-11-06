@@ -18,8 +18,7 @@ internal sealed class FormKeyChange(ILogger logger)
     internal static (IReadOnlyList<PluginAddress> Changed, IReadOnlyList<SourceLeftBehind> LeftBehind) Follow(
         ISourceAdapter source, LoadOrderSnapshot loadOrder, PluginAddress plugin, string formKey, string newFormKey, WriteSessions sessions)
     {
-        var edited = loadOrder.Plugin(plugin) ?? throw new InvalidOperationException($"Expected {plugin.Name} ({plugin.Origin}), once edited, in the load order.");
-        var (reading, leftBehind) = PluginSources.Naming(source, loadOrder, edited);
+        var (reading, leftBehind) = PluginSources.Naming(source, loadOrder, plugin);
         var changed = new List<PluginAddress>();
         foreach (var (naming, mod) in reading)
         {
@@ -35,6 +34,10 @@ internal sealed class FormKeyChange(ILogger logger)
 
     /// <summary>The document member a record's FormID is, which the edit's path names.</summary>
     internal const string Member = RecordMembers.FormKey;
+
+    /// <summary>Whether the envelope sets the record's FormID rather than a field of its document.</summary>
+    internal static bool IsFormIdEdit(RecordEditEnvelope envelope) =>
+        envelope is { Op: RecordEditEnvelope.Set, Path: [{ Kind: PathHop.MemberKind, Name: Member }] };
 
     /// <summary>The record under its new key.</summary>
     internal Answer<RecordEditResult, SourceFailure> Change(

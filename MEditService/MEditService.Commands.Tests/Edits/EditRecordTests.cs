@@ -16,7 +16,7 @@ public sealed class EditRecordTests : IDisposable
     private string NpcFile => Path.Combine(_mod.ModFolder, _mod.DocumentFile(_mod.Npc.ToString()).Require());
 
     private RecordEditResult EditHeightMax() =>
-        _mod.ScriptEditHandler.Edit(_mod.Plugin, _mod.Npc.ToString(), SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax")), copiesWithNoPluginSource: []).AsResult();
+        _mod.ScriptEditHandler.Edit(_mod.Plugin, _mod.Npc.ToString(), SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax")), copiesWithNoPluginSource: Envelopes.NoCopies).AsResult();
 
     [Fact]
     public void AFieldEdit_IsWrittenToTheRecordsFile()

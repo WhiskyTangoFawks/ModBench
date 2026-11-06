@@ -37,7 +37,7 @@ public sealed class WriteGatesOverAFakeSourceTests
 
     private static (RecordEditResult Outcome, EditRecordChanges? Changes) SetHeight(IServiceProvider services, string formKey) =>
         services.GetRequiredService<EditRecordChangesHandler>()
-            .Changes(Plugin, formKey, SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax")), copiesWithNoPluginSource: []).Seen();
+            .Changes(Plugin, formKey, SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax")), copiesWithNoPluginSource: Envelopes.NoCopies).Seen();
 
     [Fact]
     public void EditingAFormKeyNoDocumentHolds_OnANonCompiledPlugin_StillRefusesAsNonCompiledPlugin()
@@ -46,7 +46,7 @@ public sealed class WriteGatesOverAFakeSourceTests
         using var _ = disk;
 
         var result = services.GetRequiredService<EditRecordChangesHandler>()
-            .Changes(disk.Plugin, $"ABCDEF:{disk.Plugin.Name}", SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax")), copiesWithNoPluginSource: []).AsResult();
+            .Changes(disk.Plugin, $"ABCDEF:{disk.Plugin.Name}", SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax")), copiesWithNoPluginSource: Envelopes.NoCopies).AsResult();
 
         Assert.Equal(RecordEditRefusal.PluginNotCompiledPlugin, result.Refusal);
     }
