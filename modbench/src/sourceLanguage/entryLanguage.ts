@@ -23,6 +23,9 @@ const entryKey = ({ kind, name }: EntrySymbol): string => `${kind}:${name.toLowe
 
 const KINDS = ['mod', 'separator', 'downloadedFile', 'profile'] as const;
 
+// The kinds each owner lists every place of; a mod's or a separator's listing is the active profile's mod list alone.
+const LISTED_WHOLE: ReadonlySet<EntrySymbol['kind']> = new Set(['downloadedFile', 'profile']);
+
 const unlisted = ({ kind, name }: EntrySymbol): string => ({
   mod: `Mods lists no mod named ${name}.`,
   separator: `Mods lists no separator named ${name}.`,
@@ -92,8 +95,8 @@ export function entryLanguage({ instance, reporter, owners, goTo, entryTooltip, 
       const found = await nameWithSpan(document, offset);
       return found && { start: found.start, end: found.end, kind: found.named.kind, items: listed(found.named.kind) };
     },
-    /** Go to Symbol in Workspace: each symbol whose name holds `query`, at the first place the owners list it, else at the
-     *  first place a file names it. A symbol no file names is left out. */
+    /** Go to Symbol in Workspace: each symbol whose name holds `query`, at the first place the owners list it, else, for a
+     *  mod or a separator, the first place a file names it. One no file names is left out. */
     symbolsFor: async (query: string): Promise<{ entry: EntrySymbol; location: vscode.Location }[]> => {
       const wanted = query.trim().toLowerCase();
       if (wanted === '') return [];
@@ -111,7 +114,8 @@ export function entryLanguage({ instance, reporter, owners, goTo, entryTooltip, 
       }
       const placed = await Promise.all(matching.map(async (entry) => {
         const line = lines.get(entryKey(entry));
-        const [first] = line === undefined ? (await locatedForFeature(entry)).locations : [placeLocation(line)];
+        if (line !== undefined) return { entry, location: placeLocation(line) };
+        const [first] = LISTED_WHOLE.has(entry.kind) ? [] : (await locatedForFeature(entry)).locations;
         return first && { entry, location: first };
       }));
       return placed.filter((symbol) => symbol !== undefined);

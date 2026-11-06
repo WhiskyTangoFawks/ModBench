@@ -184,6 +184,17 @@ describe('where a mod\'s manifest names a downloaded file: each installation fil
     });
   });
 
+  it('writes the renamed manifest in canonical text, its installation files in order by name', async () => {
+    const second = '{"kind":"installationFile","name":"Patch-1.7z","size":2,"hash":"BBBBBBBBBBA="}';
+    const two = INSTALLED.replace('"hash":"AAAAAAAAAAA="}\n', `"hash":"AAAAAAAAAAA="},\n${second}\n`);
+    await writeFile(file(), two);
+
+    const plan = await manifestDownloadedFileReferences([modFolder]).plan(DOWNLOADED, 'Zed-1.7z', NONE);
+
+    const first = '{"kind":"installationFile","name":"Zed-1.7z","size":1,"hash":"AAAAAAAAAAA="}';
+    expect(plan).toMatchObject({ changes: { documents: [{ path: file(), text: INSTALLED.replace(/\{"kind".*\}\n\]/, `${second},\n${first}\n]`) }] } });
+  });
+
   it('cannot follow a manifest it cannot read, saying why', async () => {
     await writeFile(file(), '{ not json');
 

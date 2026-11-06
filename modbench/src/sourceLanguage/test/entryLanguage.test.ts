@@ -136,7 +136,6 @@ describe('Go to Symbol in Workspace on a symbol its name alone names (symbols.md
     const { symbolsFor } = language(undefined);
 
     expect((await symbolsFor('  ge ')).map(({ entry }) => entry)).toEqual([separator('Gear')]);
-    expect((await symbolsFor('ARMOR')).map(({ entry }) => entry)).toEqual([downloadedFile('Armor-2.zip'), profile('Armor Test')]);
     expect((await symbolsFor('MOD')).map(({ entry }) => entry)).toEqual([mod('Base Mod'), mod('Other Mod')]);
     expect(await symbolsFor(' ')).toEqual([]);
   });
@@ -149,6 +148,18 @@ describe('Go to Symbol in Workspace on a symbol its name alone names (symbols.md
     expect(found.map(({ entry }) => entry)).toEqual([mod('Base Mod'), mod('Other Mod')]);
     expect(located(found.map(({ location }) => location))).toEqual([locationAt(4), locationAt(1)]);
     expect(reads.mock.calls).toEqual([[mod('Other Mod')]]);
+  });
+
+  it('places a downloaded file or a profile, whatever the case of the query, only where the owners list it, and reads no file for one they leave out', async () => {
+    const listed = [{ entry: downloadedFile('armor-2.zip'), place: place(MODLIST, 2) }, { entry: profile('Armor Test'), place: place(MODLIST, 3) }];
+    const { symbolsFor, reads } = language(undefined, { listed });
+
+    const found = await symbolsFor('ARMOR');
+    const unlisted = await symbolsFor('patch');
+
+    expect(found.map(({ entry }) => entry)).toEqual([downloadedFile('Armor-2.zip'), profile('Armor Test')]);
+    expect(located(found.map(({ location }) => location))).toEqual([locationAt(2), locationAt(3)]);
+    expect([unlisted, reads.mock.calls]).toEqual([[], []]);
   });
 
   it('asks the owners for the places of no kind that no name of the query holds', async () => {

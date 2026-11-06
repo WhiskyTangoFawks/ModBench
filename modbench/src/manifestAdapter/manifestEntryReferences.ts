@@ -5,6 +5,8 @@ import { isManifestPath } from '../repositoriesLib/manifestPath';
 import { stringsOf, VALUE, type StringAt } from './jsonStrings';
 import { manifestNameOf, manifestsIn, textAt, twoManifests } from './manifestFiles';
 import { readManifest } from './manifestRead';
+import type { Manifest, ManifestPackage } from './manifest';
+import { manifestText } from './manifestText';
 
 export interface ManifestEntryOwnerDeps {
   /** The folder of a mod, which holds its manifest. */
@@ -33,21 +35,21 @@ function packageNamesIn(text: string, kind: 'repository' | 'installationFile'): 
     path.length === 4 && path[0] === 'packages' && path[2] === 'name' && path[3] === VALUE && path[1] !== undefined && kindOf(path[1]) === kind);
 }
 
-// The text with each package of `kind` named `name` named `newName`.
-function withPackageRenamed(text: string, kind: 'repository' | 'installationFile', name: string, newName: string): string {
-  const named = packageNamesIn(text, kind).filter(({ name: spelled }) => sameName(spelled, name));
+// The text with each repository package named `name` named `newName`.
+function withRepositoryRenamed(text: string, name: string, newName: string): string {
+  const named = packageNamesIn(text, 'repository').filter(({ name: spelled }) => sameName(spelled, name));
   return spliced(text, named, () => JSON.stringify(newName).slice(1, -1));
 }
 
 // The one manifest a mod's folder holds, whatever its name, and its text; or why it cannot be read.
-async function manifestTextIn(folder: string, held: HeldTexts): Promise<{ file: string; text: string } | { file: string; refused: string } | undefined> {
+async function manifestTextIn(folder: string, held: HeldTexts): Promise<{ file: string; text: string; manifest: Manifest } | { file: string; refused: string } | undefined> {
   const [one, other] = await manifestsIn(folder);
   if (one === undefined) return undefined;
   const file = join(folder, one);
   if (other !== undefined) return { file, refused: twoManifests(one, other) };
   const text = heldTextAt(held, file) ?? await textAt(file);
   const read = readManifest(text);
-  return 'refused' in read ? { file, refused: read.refused } : { file, text };
+  return 'refused' in read ? { file, refused: read.refused } : { file, text, manifest: read.manifest };
 }
 
 // Each installation file package of every manifest of `folders`, and why each manifest that could not be read was left out.
@@ -141,7 +143,7 @@ export function manifestEntryReferences({ modFolderOf, sourceFolder }: ManifestE
         const text = heldTextAt(held, file) ?? await textAt(file);
         const read = readManifest(text);
         if ('refused' in read) return changed({ moves }, [`${file}: ${read.refused}`]);
-        const renamed = withPackageRenamed(text, 'repository', basename(sourceFolder), newName);
+        const renamed = withRepositoryRenamed(text, basename(sourceFolder), newName);
         return changed({ moves, documents: renamed === text ? [] : [{ path: moved, text: renamed }] });
       } catch (err) {
         return changed({}, [`${folder}: ${errorMessage(err)}`]);
@@ -162,9 +164,11 @@ export function manifestDownloadedFileReferences(modFolders: readonly string[]):
     async plan({ kind, name }, newName, held) {
       if (kind !== 'downloadedFile') return changed({});
       const { named, leftOut } = await installationFilesIn(modFolders, held);
-      const documents = named.flatMap(({ file, text }) => {
-        const renamed = withPackageRenamed(text, 'installationFile', name, newName);
-        return renamed === text ? [] : [{ path: file, text: renamed }];
+      const isRenamed = (pkg: ManifestPackage): boolean => pkg.kind === 'installationFile' && sameName(pkg.name, name);
+      const documents = named.flatMap(({ file, manifest }) => {
+        if (!manifest.packages.some(isRenamed)) return [];
+        const packages = manifest.packages.map((pkg) => (isRenamed(pkg) ? { ...pkg, name: newName } : pkg));
+        return [{ path: file, text: manifestText({ ...manifest, packages }) }];
       });
       return changed({ documents }, leftOut);
     },
