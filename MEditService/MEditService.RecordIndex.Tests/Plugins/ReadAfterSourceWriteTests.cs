@@ -16,6 +16,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
 
     private readonly FakeTimeProvider _clock = new(Start);
     private readonly LoadOrderHolder _holder = new();
+    private readonly GatedPluginAdapter _gate = new();
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderEntry _compiledPlugin;
     private readonly string _npc;
@@ -30,7 +31,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
         _compiledPlugin = _fixture.Plugins.Single(p => p.Name == CompiledPlugin);
         _npc = npc;
         SourceMods.Init(_compiledPlugin);
-        _index = Indexes.Open(_holder, timeProvider: _clock);
+        _index = Indexes.Open(_holder, _gate, timeProvider: _clock);
         _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         _compiledPlugin.HandEdit(_index.DocumentOf(_npc, _compiledPlugin.Key), "\"CompiledPluginNpc\"", "\"Written\"");
         _holder.SourceWritten();
@@ -39,6 +40,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     public void Dispose()
     {
         _index.Dispose();
+        _gate.Dispose();
         _fixture.Dispose();
     }
 
@@ -71,11 +73,13 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
         Assert.Contains("\"Written\"", (await read.WaitAsync(Generous)).Value()?.Text, StringComparison.Ordinal);
     }
 
+    private const string NotCompiled = "NotCompiled.esp";
+
     private LoadOrderEntry NotCompiledPlugin()
     {
-        var path = Path.Combine(_fixture.DataFolder, "NotCompiled.esp");
+        var path = Path.Combine(_fixture.DataFolder, NotCompiled);
         PluginBinaries.Rewrite(path, mod => mod.Npcs.AddNew("NotCompiledNpc"));
-        return new LoadOrderEntry("NotCompiled.esp", path, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true);
+        return new LoadOrderEntry(NotCompiled, path, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true);
     }
 
     [Fact]
@@ -88,6 +92,25 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
         var refused = (await read.WaitAsync(Generous)).Refused();
         Assert.Equal(IndexRefusal.IndexNotReady, refused.Refusal);
         Assert.Contains("no change was signalled after the write", refused.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("its check of the disk did not finish", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AReadAfterASourceWrite_WhoseCheckIsSignalledButUnfinished_IsRefusedOnceItsWaitExpires_NamingTheCheck()
+    {
+        var read = Read();
+        _gate.ParkNextOpenOf(NotCompiled);
+        _holder.Apply(SnapshotPlugins.Snapshot(
+            _fixture.DataFolder, _fixture.InstanceRoot, GameRelease.Fallout4, [.. _fixture.Plugins, NotCompiledPlugin()]));
+        await _gate.WaitUntilParkedAsync();
+        _index.SignalChange();
+
+        await _clock.AdvancingUntil(read, TimeSpan.FromMinutes(2));
+
+        var refused = (await read.WaitAsync(Generous)).Refused();
+        Assert.Equal(IndexRefusal.IndexNotReady, refused.Refusal);
+        Assert.Contains("its check of the disk did not finish", refused.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("no change was signalled", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]

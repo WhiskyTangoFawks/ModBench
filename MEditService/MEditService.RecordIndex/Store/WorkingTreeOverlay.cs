@@ -210,26 +210,33 @@ internal sealed class WorkingTreeOverlay
         PluginAddress key, string recordType, IReadOnlyList<ContainerDocuments.ChildDocument> children,
         ICollection<string> movedKeys)
     {
-        foreach (var child in children)
+        var embedded = children.Where(child => _types.IsEmbeddedSlot(recordType, child.SlotName)).ToList();
+        var stamps = EffectiveStamps(key, embedded);
+        foreach (var child in embedded)
         {
-            if (!_types.IsEmbeddedSlot(recordType, child.SlotName)) continue;
             var childType = child.RecordType ?? throw new InvalidOperationException(
                 $"{child.FormKey} in {key.Name} ({key.Origin}) reached projection untyped, past the read that refuses it.");
 
             var childBody = _containers.TextOf(child);
-            if (string.Equals(_contentStamp(childBody), EffectiveStamp(key, child.FormKey), StringComparison.Ordinal)) continue;
+            var held = stamps.TryGetValue(child.FormKey, out var stamp);
+            if (string.Equals(_contentStamp(childBody), stamp, StringComparison.Ordinal)) continue;
 
             movedKeys.Add(child.FormKey);
-            if (RowExistsAtEffective(key, child.FormKey))
+            if (held)
                 ApplyOneWorkingTreeChange(key, child.FormKey, childBody, movedKeys);
             else
                 MaterializeRecord(key, child.FormKey, childType, childBody, movedKeys);
         }
     }
 
-    private string? EffectiveStamp(PluginAddress key, string formKey) =>
-        DuckDbSql.ScalarString(_connection, "SELECT content_hash FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin);
+    // One query for every child: a cell carries thousands, and a point query scans the whole load order's rows.
+    private Dictionary<string, string?> EffectiveStamps(PluginAddress key, IReadOnlyList<ContainerDocuments.ChildDocument> children) =>
+        DuckDbSql.Rows(
+                _connection,
+                "SELECT form_key, content_hash FROM mirror.records WHERE plugin = $1 AND origin = $2 AND form_key IN (SELECT unnest($3::VARCHAR[]))",
+                reader => (FormKey: reader.GetString(0), Stamp: reader.GetStringOrNull(1)),
+                key.Name, key.Origin, children.Select(child => child.FormKey).ToList())
+            .ToDictionary(row => row.FormKey, row => row.Stamp, StringComparer.Ordinal);
 
     // A container's child set and slot order live in its document, so delete-then-insert per parent
     // is correct. A worldspace's exterior cells are not in its document: their own records place them.
