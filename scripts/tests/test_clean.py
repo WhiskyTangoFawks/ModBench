@@ -25,6 +25,7 @@ DELETED = 0x20
 PERSISTENT = 0x400
 INITIALLY_DISABLED = 0x800
 FLAGS = 'MajorRecordFlagsRaw'
+ENABLE_PARENT = 'EnableParent'
 
 
 class Created:
@@ -88,13 +89,10 @@ class CleanAgainstTheFixtureInstance(unittest.TestCase):
         version_in_git(cls.fixture, CONDITIONS.origin)
         cls.enterClassContext(window_of(cls.fixture.url))
         cls.enterClassContext(watching(cls.fixture, cls.created))
-        player_holder = cls.enabled('MBDevPlayerHolder.esp')
-        cls.player = medit.create_record(player_holder, 'misc')
-        medit.edit(player_holder, cls.player, 'set', 'EditorID', 'PlayerRef')
 
     @classmethod
-    def enabled(cls, name: str | None = None) -> medit.Plugin:
-        return cls.created.create(name or f'MBDevClean{next(cls.names)}.esp', CONDITIONS.origin, active=True)
+    def enabled(cls) -> medit.Plugin:
+        return cls.created.create(f'MBDevClean{next(cls.names)}.esp', CONDITIONS.origin, active=True)
 
     def keys_of(self, plugin: medit.Plugin) -> set[str]:
         return {row['form_key'] for row in medit.select(f"SELECT form_key FROM records WHERE plugin = '{plugin.name}'")}
@@ -105,11 +103,12 @@ class CleanAgainstTheFixtureInstance(unittest.TestCase):
 
     def deleted_override(self, base_set: bool = True, flags: int = DELETED) -> tuple[medit.Plugin, str]:
         master = self.enabled()
-        _, reference = self.cell_and_reference_in(master)
+        cell, reference = self.cell_and_reference_in(master)
         if base_set:
             medit.edit(master, reference, 'set', 'Base', ITEM_A)
         medit.edit(master, reference, 'set', 'Position', '1, 2, 3')
         medit.edit(master, reference, 'set', 'TeleportDestination.Door', ITEM_A)
+        medit.edit(master, reference, 'set', ENABLE_PARENT, {'Reference': medit.create_record(master, 'refr', container=cell), 'Flags': []})
         override = self.enabled()
         medit.copy(master, reference, override)
         medit.edit(override, reference, 'set', FLAGS, flags & PERSISTENT)
@@ -171,13 +170,13 @@ class CleanAgainstTheFixtureInstance(unittest.TestCase):
         clean(override)
         self.assertEqual(self.keys_of(override) & {cell, reference}, {cell, reference})
 
-    def test_undeletes_disables_and_lowers_a_deleted_reference_keeping_x_and_y_and_enables_it_opposite_the_player(self) -> None:
+    def test_undeletes_disables_and_lowers_a_deleted_reference_keeping_x_and_y_with_no_teleport_or_enable_parent(self) -> None:
         override, reference = self.deleted_override()
         self.assertEqual(clean(override).undeleted_and_disabled, [reference])
         record = medit.read(override, reference)
         self.assertEqual(
-            [record[FLAGS], record['Position'], 'TeleportDestination' in record, record['EnableParent']['Reference'], record['EnableParent']['Flags']],
-            [INITIALLY_DISABLED, '1, 2, -30000', False, self.player, ['SetEnableStateToOppositeOfParent']])
+            [record[FLAGS], record['Position'], 'TeleportDestination' in record, ENABLE_PARENT in record],
+            [INITIALLY_DISABLED, '1, 2, -30000', False, False])
 
     def test_leaves_the_position_of_a_persistent_deleted_reference(self) -> None:
         override, reference = self.deleted_override(flags=DELETED | PERSISTENT)
@@ -218,14 +217,3 @@ class CleanAgainstTheFixtureInstance(unittest.TestCase):
         inactive = self.created.create('MBDevCleanInactive.esp', CONDITIONS.origin, active=False)
         with self.assertRaisesRegex(medit.MEditError, 'is not active'):
             clean(inactive)
-
-    def test_names_both_records_when_two_define_the_player_reference(self) -> None:
-        second = self.enabled()
-        duplicate = medit.create_record(second, 'misc')
-        medit.edit(second, duplicate, 'set', 'EditorID', 'PlayerRef')
-        self.addCleanup(medit.delete, second, duplicate)
-        override, _ = self.deleted_override()
-        with self.assertRaises(medit.MEditError) as raised:
-            clean(override)
-        self.assertIn(self.player, str(raised.exception))
-        self.assertIn(duplicate, str(raised.exception))
