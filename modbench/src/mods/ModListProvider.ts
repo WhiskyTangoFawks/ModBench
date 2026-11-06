@@ -3,7 +3,6 @@ import type { EntryRef, FileOrigin, Mod, OriginFile, OriginFolder, Separator } f
 import { tagsHeldAt } from './tagsHeldAt';
 import { modNameOf } from '../instanceLoader/modName';
 import { fileOrderConflictOf, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
-import type { EntrySymbol } from '../symbolNames/symbolNames';
 import { instanceMessages, type InstanceValue, type InstanceView, type ModGroup, type ModGroups } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
@@ -474,7 +473,7 @@ export class ModListProvider
   }
 
   /** The row the tree shows for a mod or a separator, or undefined when it shows none. */
-  entryRow({ kind, name }: EntrySymbol & { readonly kind: 'mod' | 'separator' }): ModNode | SeparatorNode | undefined {
+  entryRow({ kind, name }: EntryRef): ModNode | SeparatorNode | undefined {
     if (kind === 'separator') return this.separatorRowNamed(name);
     const row = this.rowFor(modOrigin(name));
     return row?.kind === 'mod' ? row : undefined;

@@ -152,9 +152,9 @@ export interface EntryPlace {
 
 /** A box that owns files, saying where they name a symbol its name alone names (ADR-0028). */
 export interface EntryNames {
-  /** Where its files name each symbol of `kind`, from one read of each file: every place of a downloaded file or a
-   *  profile. For mods and separators, the Instance adapter's is the active profile's mod list alone. */
-  listed(kind: EntrySymbol['kind'], held: HeldTexts): Promise<readonly EntryPlace[]>;
+  /** Where its own list names each mod and separator the list holds, from one read of the list: the active profile's
+   *  mod list, for the Instance adapter. A box with no such list holds none. */
+  listed(held: HeldTexts): Promise<readonly EntryPlace[]>;
   read(entry: EntrySymbol, held: HeldTexts): Promise<EntryReading>;
   /** The symbol one of its files names at `offset` of the file's `text`, and the span of the text that names it;
    *  undefined where it names none. */

@@ -53,8 +53,8 @@ export function readIniSection(text: string, section: string): Map<string, strin
 export const readIniValue = (text: string, section: string, key: string): string | undefined =>
   readIniSection(text, section).get(key);
 
-/** The name `nameOf` reads from one key's value, and the span of its line that spells it, the whole value where it is
- *  escaped or bytes; undefined for no such key or an empty name. */
+/** The name `nameOf` reads from one key's value, and the span of its line that spells it as Qt writes it, plain or as
+ *  a byte array; undefined for no such key, an empty name or another spelling. */
 export function iniNameAt(
   text: string, section: string, key: string, nameOf: (value: string) => string = (value) => value,
 ): { name: string; line: number; start: number; end: number } | undefined {
@@ -68,8 +68,9 @@ export function iniNameAt(
   const start = written.indexOf(raw, afterEquals);
   const name = nameOf(decodeIniValue(raw));
   if (name === '') return undefined;
-  const spelled = raw.lastIndexOf(name);
-  return spelled === -1 ? { name, line, start, end: start + raw.length } : { name, line, start: start + spelled, end: start + spelled + name.length };
+  const spellings = [name, escapeUnits(name, false), escapeUnits(Buffer.from(name, 'utf8').toString('latin1'), true)];
+  const found = spellings.map((spelling) => ({ spelling, at: raw.lastIndexOf(spelling) })).find(({ at }) => at !== -1);
+  return found && { name, line, start: start + found.at, end: start + found.at + found.spelling.length };
 }
 
 // Qt's INI reader and writer (qsettings.cpp: iniUnescapedStringList, iniEscapedString,

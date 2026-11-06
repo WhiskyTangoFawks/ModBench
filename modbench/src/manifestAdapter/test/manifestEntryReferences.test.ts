@@ -157,11 +157,6 @@ describe('where a mod\'s manifest names a downloaded file: each installation fil
     expect(await names().read(DOWNLOADED, NONE)).toEqual({ references: [{ file: file(), ...place }], leftOut: [] });
   });
 
-  it('places every downloaded file a manifest names', async () => {
-    expect((await names().listed('downloadedFile', NONE)).map(({ entry }) => entry.name)).toEqual(['Old-1.7z', 'Other-1.7z']);
-    expect(await names().listed('mod', NONE)).toEqual([]);
-  });
-
   it('says why a manifest it cannot read is left out', async () => {
     await writeFile(file(), '{ not json');
 

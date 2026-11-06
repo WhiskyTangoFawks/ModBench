@@ -45,17 +45,36 @@ const manifestFileIn = async (folder: string): Promise<string> => join(folder, (
 // An editor may write a byte order mark, which JSON does not allow.
 export const textAt = async (path: string): Promise<string> => (await readFile(path, 'utf8')).replace(/^\uFEFF/, '');
 
-const manifestReadAt = keptByStamp(async (path: string): Promise<ManifestRead> => readManifest(await textAt(path)));
+interface ManifestText {
+  readonly text: string;
+  readonly read: ManifestRead;
+}
 
-export const twoManifests = (one: string, other: string): string => `its folder holds two manifests, '${one}' and '${other}'`;
+const manifestTextAt = keptByStamp(async (path: string): Promise<ManifestText> => {
+  const text = await textAt(path);
+  return { text, read: readManifest(text) };
+});
+
+const twoManifests = (one: string, other: string): string => `its folder holds two manifests, '${one}' and '${other}'`;
 
 const twoBuildFiles = (one: string, other: string): string => `its repository holds two build files, '${one}' and '${other}'`;
 
+/** The one manifest `folder` holds, whatever its name, with its text, the unsaved text when `held` holds it; undefined
+ *  when it holds none. */
+export async function manifestTextIn(
+  folder: string, held: HeldTexts = heldTexts([]),
+): Promise<{ readonly file: string; readonly read: { readonly refused: string } } | ({ readonly file: string } & ManifestText) | undefined> {
+  const [one, other] = await manifestsIn(folder);
+  if (one === undefined) return undefined;
+  const file = join(folder, one);
+  if (other !== undefined) return { file, read: { refused: twoManifests(one, other) } };
+  const unsaved = heldTextAt(held, file);
+  return { file, ...unsaved === undefined ? await manifestTextAt(file) : { text: unsaved, read: readManifest(unsaved) } };
+}
+
 /** The one manifest `folder` holds, whatever its name; undefined when it holds none. */
 export async function manifestIn(folder: string): Promise<ManifestRead | undefined> {
-  const [one, other] = await manifestsIn(folder);
-  if (other !== undefined) return { refused: twoManifests(one ?? '', other) };
-  return one === undefined ? undefined : manifestReadAt(join(folder, one));
+  return (await manifestTextIn(folder))?.read;
 }
 
 async function writeWhole(folder: string, path: string, text: string): Promise<void> {

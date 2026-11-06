@@ -54,13 +54,14 @@ export function mo2RenamedSymbol(context: Mo2Context): Pick<InstanceAdapter, 're
         const profile = profiles.find((name) => samePath(profileDir(instanceRoot, name), from));
         return profile === undefined ? undefined : { kind: 'entry', entry: { kind: 'profile', name: profile }, to: { kind: 'profile', name: basename(to) } };
       }
-      const downloadsDir = await currentDownloadsDir(context).catch(() => undefined);
-      if (downloadsDir !== undefined && samePath(folder, downloadsDir)) {
-        return isInstallationFileName(from) ? { kind: 'entry', entry: { kind: 'downloadedFile', name: basename(from) }, to: { kind: 'downloadedFile', name: basename(to) } } : undefined;
-      }
       const folders = await listModFolders(context, ignoreSkippedLink) ?? [];
       const entry = folders.find(({ path }) => samePath(path, from));
       if (entry !== undefined) return { kind: 'entry', entry: { kind: entry.kind, name: entry.name }, to: entryNamed(basename(to)) };
+      if (isInstallationFileName(from)) {
+        return samePath(folder, await currentDownloadsDir(context))
+          ? { kind: 'entry', entry: { kind: 'downloadedFile', name: basename(from) }, to: { kind: 'downloadedFile', name: basename(to) } }
+          : undefined;
+      }
       if (!isPluginFile(from)) return undefined;
       const origin = samePath(folder, overwriteDir(instanceRoot))
         ? OVERWRITE_ORIGIN

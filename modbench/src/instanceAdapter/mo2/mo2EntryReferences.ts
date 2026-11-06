@@ -61,17 +61,12 @@ export function mo2EntryReferences(context: Mo2Context, source: Pick<ReadingSour
     return (await namingFiles('mod')).find(([naming]) => samePath(naming, file))?.[1];
   };
   const textOf = async (file: string, held: HeldTexts): Promise<string | undefined> => heldTextAt(held, file) ?? await readOrAbsent(() => get(file), undefined);
-  // Go to Symbol places a mod or a separator at its line in the active profile's mod list alone.
-  const listingFiles = async (kind: Kind): Promise<(readonly [string, NamesIn])[]> =>
-    (kind === 'mod' || kind === 'separator' ? [[modlistFile(instanceRoot, (await source.settings()).profile), modlistNames]] : await namingFiles(kind));
 
   const entryReferences: EntryNames = {
-    async listed(kind, held) {
-      const listed = await Promise.all((await listingFiles(kind)).map(async ([file, namesIn]) => {
-        const text = await textOf(file, held);
-        return text === undefined ? [] : namesIn(text).filter((found) => found.entry.kind === kind).map((found) => ({ entry: found.entry, place: placeOf(file, found) }));
-      }));
-      return listed.flat();
+    async listed(held) {
+      const file = modlistFile(instanceRoot, (await source.settings()).profile);
+      const text = await textOf(file, held);
+      return text === undefined ? [] : modlistNames(text).map((found) => ({ entry: found.entry, place: placeOf(file, found) }));
     },
     async read(entry, held: HeldTexts) {
       const read = await Promise.all((await namingFiles(entry.kind)).map(async ([file, namesIn]) => {

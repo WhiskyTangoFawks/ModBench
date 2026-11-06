@@ -52,14 +52,15 @@ describe('the MO2 Instance adapter saying where its files name a mod or a separa
     expect(references).toEqual([at('profiles/Default/modlist.txt', 3, 1, 10)]);
   });
 
-  it('places every entry of a kind the active profile\'s mod list holds at its line, from that one list, and the unsaved text in its place', async () => {
-    const places = async (kind: EntrySymbol['kind']) =>
-      (await adapter.entryReferences.listed(kind, heldTexts([]))).map(({ entry, place }) => [entry, place.file, place.start.line]);
+  it('places every entry the active profile\'s mod list holds at its line, from that one list, and the unsaved text in its place', async () => {
+    const places = (await adapter.entryReferences.listed(heldTexts([]))).map(({ entry, place }) => [entry, place.file, place.start.line]);
 
-    expect(await places('mod')).toEqual([[mod('Patch Mod'), join(root, 'profiles/Default/modlist.txt'), 1], [mod('Base Mod'), join(root, 'profiles/Default/modlist.txt'), 2]]);
-    expect(await places('separator')).toEqual([[separator('Patch Mod'), join(root, 'profiles/Default/modlist.txt'), 3]]);
+    expect(places).toEqual([
+      [mod('Patch Mod'), join(root, 'profiles/Default/modlist.txt'), 1], [mod('Base Mod'), join(root, 'profiles/Default/modlist.txt'), 2],
+      [separator('Patch Mod'), join(root, 'profiles/Default/modlist.txt'), 3],
+    ]);
     const unsaved = heldTexts([[join(root, 'profiles/Default/modlist.txt'), '+Held Mod\r\n']]);
-    expect((await adapter.entryReferences.listed('mod', unsaved)).map(({ entry }) => entry)).toEqual([mod('Held Mod')]);
+    expect((await adapter.entryReferences.listed(unsaved)).map(({ entry }) => entry)).toEqual([mod('Held Mod')]);
   });
 
   describe('a downloaded file and a profile', () => {
@@ -81,13 +82,6 @@ describe('the MO2 Instance adapter saying where its files name a mod or a separa
       expect((await adapter.entryReferences.read(profile('Secondary'), heldTexts([]))).references).toEqual([]);
     });
 
-    it('places each downloaded file a meta.ini names, and the profile ModOrganizer.ini selects', async () => {
-      const listed = async (kind: EntrySymbol['kind']) => (await adapter.entryReferences.listed(kind, heldTexts([]))).map(({ entry }) => entry);
-
-      expect(await listed('downloadedFile')).toEqual(expect.arrayContaining([downloadedFile('Patch-1.7z'), downloadedFile('patch-1.7z'), downloadedFile('SKKFastStartNewGame_021-29227-021-1745492845.zip')]));
-      expect(await listed('profile')).toEqual([profile('Default')]);
-    });
-
     it.each([
       ['a downloaded file at the file name of installationFile', 'mods/Patch Mod/meta.ini', PATCH_META, PATCH_META.indexOf('Patch-1') + 2,
         { entry: downloadedFile('Patch-1.7z'), start: PATCH_META.indexOf('Patch-1'), end: PATCH_META.indexOf('Patch-1') + 10 }],
@@ -95,6 +89,8 @@ describe('the MO2 Instance adapter saying where its files name a mod or a separa
       ['no downloaded file at another key of meta.ini', 'mods/Patch Mod/meta.ini', PATCH_META, PATCH_META.indexOf('version') + 1, undefined],
       ['the profile ModOrganizer.ini selects', 'ModOrganizer.ini', '[General]\nselected_profile=@ByteArray(Default)\n', 39,
         { entry: profile('Default'), start: 38, end: 45 }],
+      ['a profile whose name MO2 writes escaped, over its escaped bytes alone and never the byte array around them', 'ModOrganizer.ini',
+        '[General]\nselected_profile=@ByteArray(\\xc3\\x91o\\xc3\\xb1o)\n', 40, { entry: profile('Ñoño'), start: 38, end: 56 }],
     ])('says what a file names at a place: %s', async (_case, file, text, offset, expected) => {
       expect(await adapter.entryReferences.nameAt(join(root, file), text, offset)).toEqual(expected);
     });

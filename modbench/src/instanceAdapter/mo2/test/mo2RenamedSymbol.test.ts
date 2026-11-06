@@ -60,6 +60,13 @@ describe('the MO2 Instance adapter, on a file or folder another program renames'
     expect(await renamed(from, to)).toBeUndefined();
   });
 
+  it('says why it cannot tell whether a file install can take is a downloaded file while the downloads folder cannot be resolved, and names a mod\'s folder still', async () => {
+    const unresolved = managerOver(root, { downloadsFolder: { kind: 'unresolved', reason: 'download_directory names no folder' } });
+
+    await expect(unresolved.renamedSymbol(at(`downloads/${UFO4P}`), at('downloads/UFO4P.7z'))).rejects.toThrow('download_directory names no folder');
+    expect(await unresolved.renamedSymbol(at('mods/Patch Mod'), at('mods/Renamed Mod'))).toMatchObject({ entry: { kind: 'mod', name: 'Patch Mod' } });
+  });
+
   describe('renaming a downloaded file', () => {
     const META = 'mods/Unofficial Fallout 4 Patch/meta.ini';
 

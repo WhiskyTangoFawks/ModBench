@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { referencesView } from '../drivingLib/referencesView';
-import type { InstanceValue } from '../instanceLoader/instance';
+import type { EntryRef, InstanceValue } from '../instanceLoader/instance';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { heldTexts, sameName, type EntryNames, type EntrySymbol, type PlaceInFile } from '../symbolNames/symbolNames';
@@ -14,17 +14,16 @@ interface EntryLanguageDeps {
   /** The mod's `go to`. */
   goTo: (mod: string) => Promise<void>;
   /** The tooltip of the row Mods shows for a mod or a separator; undefined where it shows none. */
-  entryTooltip: (entry: EntrySymbol & { readonly kind: 'mod' | 'separator' }) => string | undefined;
+  entryTooltip: (entry: EntryRef) => string | undefined;
   /** The tooltip of the row Downloads shows for a downloaded file; undefined where it shows none. */
   downloadedFileTooltip: (name: string) => string | undefined;
+  /** The file that holds the profile's mod order; undefined with no instance. */
+  modOrderFileOf: (profile: string) => string | undefined;
 }
 
 const entryKey = ({ kind, name }: EntrySymbol): string => `${kind}:${name.toLowerCase()}`;
 
 const KINDS = ['mod', 'separator', 'downloadedFile', 'profile'] as const;
-
-// The kinds each owner lists every place of; a mod's or a separator's listing is the active profile's mod list alone.
-const LISTED_WHOLE: ReadonlySet<EntrySymbol['kind']> = new Set(['downloadedFile', 'profile']);
 
 const unlisted = ({ kind, name }: EntrySymbol): string => ({
   mod: `Mods lists no mod named ${name}.`,
@@ -35,7 +34,7 @@ const unlisted = ({ kind, name }: EntrySymbol): string => ({
 
 /** A mod, a separator, a downloaded file and a profile as symbols in the text editor: wherever an owner's file names
  *  them, and the places files name them (symbols.md). */
-export function entryLanguage({ instance, reporter, owners, goTo, entryTooltip, downloadedFileTooltip }: EntryLanguageDeps) {
+export function entryLanguage({ instance, reporter, owners, goTo, entryTooltip, downloadedFileTooltip, modOrderFileOf }: EntryLanguageDeps) {
   // A profile has no row.
   const tooltip = ({ kind, name }: EntrySymbol): string | undefined => {
     if (kind === 'downloadedFile') return downloadedFileTooltip(name);
@@ -47,6 +46,12 @@ export function entryLanguage({ instance, reporter, owners, goTo, entryTooltip, 
     if (kind === 'profile') return value.profiles;
     if (kind === 'downloadedFile') return value.downloadedFiles.kind === 'listed' ? value.downloadedFiles.rows.map(({ name }) => name) : [];
     return value.mods.flatMap((entry) => (entry.kind === kind ? [entry.name] : []));
+  };
+  // Go to Symbol places a downloaded file at its own file and a profile at its mod order file, as a plugin at its own.
+  const ownFile = ({ kind, name }: EntrySymbol): string | undefined => {
+    if (kind === 'profile') return modOrderFileOf(name);
+    const files = instance?.value.downloadedFiles;
+    return kind === 'downloadedFile' && files?.kind === 'listed' ? files.rows.find((row) => row.name === name)?.path : undefined;
   };
   const entryListed = ({ kind, name }: EntrySymbol): EntrySymbol | undefined => {
     const found = listed(kind).find((each) => sameName(each, name));
@@ -95,27 +100,27 @@ export function entryLanguage({ instance, reporter, owners, goTo, entryTooltip, 
       const found = await nameWithSpan(document, offset);
       return found && { start: found.start, end: found.end, kind: found.named.kind, items: listed(found.named.kind) };
     },
-    /** Go to Symbol in Workspace: each symbol whose name holds `query`, at the first place the owners list it, else, for a
-     *  mod or a separator, the first place a file names it. One no file names is left out. */
+    /** Go to Symbol in Workspace: each symbol whose name holds `query`, at its own file, else at its line in the owners'
+     *  list, else at the first place a file names it. An entry no file names is left out. */
     symbolsFor: async (query: string): Promise<{ entry: EntrySymbol; location: vscode.Location }[]> => {
       const wanted = query.trim().toLowerCase();
       if (wanted === '') return [];
       const matching = KINDS.flatMap((kind) =>
         listed(kind).filter((name) => name.toLowerCase().includes(wanted)).map((name): EntrySymbol => ({ kind, name })));
-      const kinds = KINDS.filter((kind) => matching.some((entry) => entry.kind === kind));
-      const lists = await Promise.all(kinds.flatMap((kind) => owners.map((owner) => owner.listed(kind, heldTexts(unsavedTexts())).catch((error: unknown) => {
-        reporter.shownOnSurface('warning', 'Go to Symbol in Workspace could not read where an owner\'s files name its symbols.', errorMessage(error));
+      const lists = await Promise.all(owners.map((owner) => owner.listed(heldTexts(unsavedTexts())).catch((error: unknown) => {
+        reporter.shownOnSurface('warning', 'Go to Symbol in Workspace could not read an owner\'s list of mods and separators.', errorMessage(error));
         return [];
-      }))));
+      })));
       const lines = new Map<string, PlaceInFile>();
       for (const { entry, place } of lists.flat()) {
         const key = entryKey(entry);
         if (!lines.has(key)) lines.set(key, place);
       }
       const placed = await Promise.all(matching.map(async (entry) => {
+        const own = ownFile(entry);
+        if (own !== undefined) return { entry, location: new vscode.Location(vscode.Uri.file(own), new vscode.Range(0, 0, 0, 0)) };
         const line = lines.get(entryKey(entry));
-        if (line !== undefined) return { entry, location: placeLocation(line) };
-        const [first] = LISTED_WHOLE.has(entry.kind) ? [] : (await locatedForFeature(entry)).locations;
+        const [first] = line === undefined ? (await locatedForFeature(entry)).locations : [placeLocation(line)];
         return first && { entry, location: first };
       }));
       return placed.filter((symbol) => symbol !== undefined);

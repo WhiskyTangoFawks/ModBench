@@ -716,6 +716,8 @@ export interface InstanceAdapter extends DataFileReads {
   /** The folder a build of `mod` writes: the one that holds it, else the one its name gives it; undefined when its
    *  name gives none. `among`: a listing the caller holds, so many mods list `mods/` once. */
   modFolderPath(mod: string, among?: readonly ModFolder[]): Promise<string | undefined>;
+  /** The file that holds `profile`'s mod order. */
+  modOrderFileOf(profile: string): string;
   /** The manifests among `asked` whose folder restore refuses (ADR-0022). `folders` is every manifest's folder by its name. */
   foldersRefused(folders: ReadonlyMap<string, string>, asked: readonly string[]): Promise<readonly FolderRefusal[]>;
   /** The source folder init makes a mod's repository in (ADR-0007); undefined when its name gives it none. */

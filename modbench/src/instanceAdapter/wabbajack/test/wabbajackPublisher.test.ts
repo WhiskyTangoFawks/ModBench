@@ -738,18 +738,18 @@ describe('where the compiler settings name a profile (ADR-0028)', () => {
     expect(references).toEqual([place(1, 14, 18), place(2, 36, 40)]);
   });
 
-  it('places every profile the settings name, and names no mod', async () => {
+  it('names no mod', async () => {
     await writeSettings(SETTINGS);
 
-    expect((await publisherOver().profileNames.listed('profile', heldTexts([]))).map(({ entry }) => entry)).toEqual([profile('Main'), profile('Extra'), profile('main')]);
-    expect(await publisherOver().profileNames.listed('mod', heldTexts([]))).toEqual([]);
     expect((await publisherOver().profileNames.read({ kind: 'mod', name: 'Main' }, heldTexts([]))).references).toEqual([]);
   });
 
-  it('says why settings it cannot read are left out', async () => {
+  it('says why settings it cannot read are left out, naming the file first as every owner does', async () => {
     await writeSettings('{ not json');
 
-    expect((await publisherOver().profileNames.read(profile('Main'), heldTexts([]))).leftOut).toEqual([expect.stringContaining(SETTINGS_FILE) as unknown]);
+    const [why] = (await publisherOver().profileNames.read(profile('Main'), heldTexts([]))).leftOut;
+
+    expect(why?.startsWith(`${join(root, SETTINGS_FILE)}: `)).toBe(true);
   });
 
   it.each([

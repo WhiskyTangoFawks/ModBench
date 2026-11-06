@@ -26,8 +26,9 @@ async function switchProfile(adapter: InstanceAdapter, profile: string): Promise
 
 // commands.md, `modbench.symbol.followRename`: its folder, the mod manager's selected profile and the publisher's
 // configuration.
-function renameProfile(adapter: InstanceAdapter, { apply }: RenameEditing, from: string, to: string): Promise<ChangeResult> {
-  return change({ definition: { plan: () => Promise.resolve(committedBy(() => adapter.renameProfile(from, to))) }, references: [] }, (owner) => owner.plan(), apply);
+function renameProfile(adapter: InstanceAdapter, { held, apply }: RenameEditing, from: string, to: string): Promise<ChangeResult> {
+  const owners = { definition: committedBy(() => adapter.renameProfile(from, to)), references: [] };
+  return change(owners, (owner) => owner.plan({ kind: 'profile', name: from }, to, held), apply);
 }
 
 async function refresh(

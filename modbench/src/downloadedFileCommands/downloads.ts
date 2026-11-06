@@ -10,7 +10,6 @@ import { selectionOutcomeOf, type CommandResult } from '../coreLib/commandResult
 import { change, committedBy, type RenameEditing } from '../coreLib/change';
 import { manifestDownloadedFileReferences } from '../manifestAdapter/manifestAdapter';
 import type { ChangeResult } from '../ports/changeResult';
-import type { EntryOwner } from '../symbolNames/symbolNames';
 
 type DownloadedFileCommandResult = CommandResult<{ wrote: boolean; metadataLeftBehind?: string }>;
 
@@ -79,8 +78,8 @@ async function renameDownloadedFile(adapter: InstanceAdapter, { held, apply }: R
   } catch (err) {
     return refuse(err);
   }
-  const definition: EntryOwner = { plan: () => Promise.resolve(committedBy(() => adapter.renameDownloadedFile(from, to))) };
-  return change({ definition, references: [manifestDownloadedFileReferences(modFolders)] }, (owner) => owner.plan({ kind: 'downloadedFile', name: from }, to, held), apply);
+  const owners = { definition: committedBy(() => adapter.renameDownloadedFile(from, to)), references: [manifestDownloadedFileReferences(modFolders)] };
+  return change(owners, (owner) => owner.plan({ kind: 'downloadedFile', name: from }, to, held), apply);
 }
 
 /** The downloads' commands, bound to one instance: each takes the gesture's arguments only. */

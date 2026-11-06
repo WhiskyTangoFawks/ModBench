@@ -70,7 +70,7 @@ export function withPublisher(manager: ManagerAdapter, publisher: Publisher, scr
   return {
     ...manager,
     entryReferences: {
-      listed: async (kind, held) => [...await manager.entryReferences.listed(kind, held), ...await publisher.profileNames.listed(kind, held)],
+      listed: (held) => manager.entryReferences.listed(held),
       read: async (entry, held) => {
         const folder = entry.kind === 'mod' ? await manager.modFolderPath(entry.name) : undefined;
         const readings = await Promise.all([

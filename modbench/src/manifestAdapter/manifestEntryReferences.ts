@@ -3,9 +3,9 @@ import { errorMessage } from '../ports/errorMessage';
 import { COMMITTED, heldTextAt, NO_FILE_CHANGES, placeIn, sameName, samePath, spliced, type EntryOwner, type EntryNames, type EntryReading, type EntrySymbol, type FileChanges, type HeldTexts, type RenamePlan } from '../symbolNames/symbolNames';
 import { isManifestPath } from '../repositoriesLib/manifestPath';
 import { stringsOf, VALUE, type StringAt } from './jsonStrings';
-import { manifestNameOf, manifestsIn, textAt, twoManifests } from './manifestFiles';
+import { manifestNameOf, manifestsIn, manifestTextIn, textAt } from './manifestFiles';
 import { readManifest } from './manifestRead';
-import type { Manifest, ManifestPackage } from './manifest';
+import type { ManifestPackage } from './manifest';
 import { manifestText } from './manifestText';
 
 export interface ManifestEntryOwnerDeps {
@@ -41,25 +41,16 @@ function withRepositoryRenamed(text: string, name: string, newName: string): str
   return spliced(text, named, () => JSON.stringify(newName).slice(1, -1));
 }
 
-// The one manifest a mod's folder holds, whatever its name, and its text; or why it cannot be read.
-async function manifestTextIn(folder: string, held: HeldTexts): Promise<{ file: string; text: string; manifest: Manifest } | { file: string; refused: string } | undefined> {
-  const [one, other] = await manifestsIn(folder);
-  if (one === undefined) return undefined;
-  const file = join(folder, one);
-  if (other !== undefined) return { file, refused: twoManifests(one, other) };
-  const text = heldTextAt(held, file) ?? await textAt(file);
-  const read = readManifest(text);
-  return 'refused' in read ? { file, refused: read.refused } : { file, text, manifest: read.manifest };
-}
-
 // Each installation file package of every manifest of `folders`, and why each manifest that could not be read was left out.
 async function installationFilesIn(folders: readonly string[], held: HeldTexts) {
   const read = await Promise.all(folders.map(async (folder) => {
     try {
       const at = await manifestTextIn(folder, held);
       if (at === undefined) return { named: [], leftOut: [] };
-      if ('refused' in at) return { named: [], leftOut: [`${at.file}: ${at.refused}`] };
-      return { named: [{ ...at, packages: packageNamesIn(at.text, 'installationFile') }], leftOut: [] };
+      if (!('text' in at)) return { named: [], leftOut: [`${at.file}: ${at.read.refused}`] };
+      if ('refused' in at.read) return { named: [], leftOut: [`${at.file}: ${at.read.refused}`] };
+      const { file, text, read: { manifest } } = at;
+      return { named: [{ file, text, manifest, packages: packageNamesIn(text, 'installationFile') }], leftOut: [] };
     } catch (err) {
       return { named: [], leftOut: [`${folder}: ${errorMessage(err)}`] };
     }
@@ -85,11 +76,7 @@ export function manifestEntryNames({ modFolderOf, modFolders }: ManifestNamesDep
     return folder === undefined || own === undefined ? undefined : join(folder, own);
   };
   return {
-    async listed(kind, held) {
-      if (kind !== 'downloadedFile') return [];
-      const { named } = await installationFilesIn([...modFolders().values()], held);
-      return named.flatMap(({ file, text, packages }) => packages.map(({ name, start, end }) => ({ entry: { kind, name }, place: placeIn(file, text, start, end) })));
-    },
+    listed: () => Promise.resolve([]),
     async read({ kind, name: mod }, held) {
       if (kind === 'downloadedFile') {
         const { named, leftOut } = await installationFilesIn([...modFolders().values()], held);

@@ -452,17 +452,14 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
     return { text, profiles: profilesIn(text) };
   };
   const profileNames: EntryNames = {
-    listed: async (kind, held) => {
-      const read = kind === 'profile' ? await readProfiles(held) : undefined;
-      return read === undefined ? [] : read.profiles.map(({ name, start, end }) => ({ entry: { kind, name }, place: placeIn(file, read.text, start, end) }));
-    },
+    listed: () => Promise.resolve([]),
     read: async ({ kind, name }, held) => {
       try {
         const read = kind === 'profile' ? await readProfiles(held) : undefined;
         const named = read?.profiles.filter((profile) => sameName(profile.name, name)) ?? [];
         return { references: named.map(({ start, end }) => placeIn(file, read?.text ?? '', start, end)), leftOut: [] };
       } catch (err) {
-        return { references: [], leftOut: [errorMessage(err)] };
+        return { references: [], leftOut: [`${file}: ${errorMessage(err)}`] };
       }
     },
     nameAt: (named, text, offset) => {

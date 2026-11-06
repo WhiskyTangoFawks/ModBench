@@ -12,6 +12,7 @@ vi.mock('vscode', () => ({
 import { entryLanguage } from '../entryLanguage';
 import type { EntryNames, EntryNamed, EntryPlace, EntrySymbol, PlaceInFile } from '../../symbolNames/symbolNames';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { downloadedFileRowFixture } from '../../test/mo2/downloadedFileRowFixture';
 
 const MODLIST = '/profiles/Default/modlist.txt';
 const UNREAD = '/profiles/Other/modlist.txt: it does not read';
@@ -22,9 +23,6 @@ const mod = (name: string): EntrySymbol => ({ kind: 'mod', name });
 const separator = (name: string): EntrySymbol => ({ kind: 'separator', name });
 const downloadedFile = (name: string): EntrySymbol => ({ kind: 'downloadedFile', name });
 const profile = (name: string): EntrySymbol => ({ kind: 'profile', name });
-const row = (name: string) => ({
-  name, displayName: name, status: 'Downloaded' as const, size: 0, mtimeMs: 0, hasMeta: false, excluded: false, upgrades: [], path: `/downloads/${name}`, metadataPath: '',
-});
 const spelled = (entry: EntrySymbol): EntryNamed => ({ entry, start: 7, end: 15 });
 const SPAN = { start: 7, end: 15 };
 const locationAt = (line: number) => ({ uri: Uri.file(MODLIST), range: new Range(line, 1, line, 9) });
@@ -43,12 +41,8 @@ function language(named: EntryNamed | undefined, options: Options = {}) {
   const reporter = recordingReporter();
   const goTo = vi.fn((_mod: string) => Promise.resolve());
   const reads = vi.fn();
-  const listings = vi.fn();
   const owner: EntryNames = {
-    listed: (kind) => {
-      listings(kind);
-      return options.listedFails ? Promise.reject(new Error('the list is gone')) : Promise.resolve((options.listed ?? []).filter(({ entry }) => entry.kind === kind));
-    },
+    listed: () => (options.listedFails ? Promise.reject(new Error('the list is gone')) : Promise.resolve(options.listed ?? [])),
     read: (entry) => { reads(entry); return Promise.resolve({ references: options.places ?? [place(MODLIST, 1)], leftOut: options.leftOut ?? [] }); },
     nameAt: () => Promise.resolve(named),
   };
@@ -56,9 +50,10 @@ function language(named: EntryNamed | undefined, options: Options = {}) {
     { kind: 'mod' as const, name: 'Base Mod', enabled: true }, { kind: 'mod' as const, name: 'Other Mod', enabled: true },
     { kind: 'separator' as const, name: 'Gear', enabled: true },
   ];
-  const value = { mods, downloadedFiles: { kind: 'listed' as const, rows: [row('Patch-1.7z'), row('Armor-2.zip')] }, profiles: ['Default', 'Armor Test'] };
-  return { goTo, reporter, reads, listings, ...entryLanguage({
+  const value = { mods, downloadedFiles: { kind: 'listed' as const, rows: [downloadedFileRowFixture('Patch-1.7z'), downloadedFileRowFixture('Armor-2.zip')] }, profiles: ['Default', 'Armor Test'] };
+  return { goTo, reporter, reads, ...entryLanguage({
     instance: { value }, reporter, owners: [owner], goTo, entryTooltip: () => options.tooltip, downloadedFileTooltip: () => options.downloadedFileTooltip,
+    modOrderFileOf: (name) => `/profiles/${name}/modlist.txt`,
   }) };
 }
 
@@ -150,24 +145,16 @@ describe('Go to Symbol in Workspace on a symbol its name alone names (symbols.md
     expect(reads.mock.calls).toEqual([[mod('Other Mod')]]);
   });
 
-  it('places a downloaded file or a profile, whatever the case of the query, only where the owners list it, and reads no file for one they leave out', async () => {
-    const listed = [{ entry: downloadedFile('armor-2.zip'), place: place(MODLIST, 2) }, { entry: profile('Armor Test'), place: place(MODLIST, 3) }];
-    const { symbolsFor, reads } = language(undefined, { listed });
+  it('places a downloaded file at its own file and a profile at its mod order file, even where no file names them, reading no file', async () => {
+    const { symbolsFor, reads } = language(undefined, { places: [] });
 
     const found = await symbolsFor('ARMOR');
-    const unlisted = await symbolsFor('patch');
 
     expect(found.map(({ entry }) => entry)).toEqual([downloadedFile('Armor-2.zip'), profile('Armor Test')]);
-    expect(located(found.map(({ location }) => location))).toEqual([locationAt(2), locationAt(3)]);
-    expect([unlisted, reads.mock.calls]).toEqual([[], []]);
-  });
-
-  it('asks the owners for the places of no kind that no name of the query holds', async () => {
-    const { symbolsFor, listings } = language(undefined);
-
-    await symbolsFor('patch');
-
-    expect(listings.mock.calls).toEqual([['downloadedFile']]);
+    expect(located(found.map(({ location }) => location))).toEqual([
+      { uri: Uri.file(downloadedFileRowFixture('Armor-2.zip').path), range: new Range(0, 0, 0, 0) }, { uri: Uri.file('/profiles/Armor Test/modlist.txt'), range: new Range(0, 0, 0, 0) },
+    ]);
+    expect(reads).not.toHaveBeenCalled();
   });
 
   it('reads nothing for entries a broad query matches when the list names every one', async () => {

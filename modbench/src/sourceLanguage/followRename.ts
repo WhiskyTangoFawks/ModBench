@@ -60,9 +60,6 @@ interface Followed {
   readonly report: () => void;
 }
 
-// What each kind's definition writes last, as a failed rename names it.
-const DEFINITIONS = { mod: 'its lines', separator: 'its lines', downloadedFile: 'its file and its metadata', profile: 'its folder' } as const;
-
 async function followed({ plugins, entries, downloads, profiles, reporter }: FollowRenameDeps, symbol: RenamedSymbol, editing: Editing): Promise<Followed> {
   if (symbol.kind === 'plugin') {
     const { plugin, to } = symbol;
@@ -78,10 +75,12 @@ async function followed({ plugins, entries, downloads, profiles, reporter }: Fol
       report: () => { reporter.report('warning', `${named} was renamed to "${to.name}", which names a ${to.kind} and not a ${entry.kind}, so no reference to it followed.`); },
     };
   }
-  const renames = { mod: entries.renameMod, separator: entries.renameSeparator, downloadedFile: downloads.renameDownloadedFile, profile: profiles.renameProfile };
-  const result = await renames[entry.kind](editing([]), entry.name, to.name);
-  const landedAs = result.applied && 'name' in result && typeof result.name === 'string' ? result.name : to.name;
-  return { named, report: () => { reportFollowed(reporter, named, landedAs, result, DEFINITIONS[entry.kind]); } };
+  if (entry.kind === 'mod' || entry.kind === 'separator') {
+    const result = await (entry.kind === 'mod' ? entries.renameMod : entries.renameSeparator)(editing([]), entry.name, to.name);
+    return { named, report: () => { reportFollowed(reporter, named, result.applied ? result.name : to.name, result, 'its lines'); } };
+  }
+  const result = await (entry.kind === 'downloadedFile' ? downloads.renameDownloadedFile : profiles.renameProfile)(editing([]), entry.name, to.name);
+  return { named, report: () => { reportFollowed(reporter, named, to.name, result, entry.kind === 'downloadedFile' ? 'its file and its metadata' : 'its folder'); } };
 }
 
 /** commands.md, System commands, `modbench.symbol.followRename`: carries each reference to what VS Code renames. The

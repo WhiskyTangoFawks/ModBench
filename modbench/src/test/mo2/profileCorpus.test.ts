@@ -34,7 +34,7 @@ describe('profile corpus', () => {
     ]);
   });
 
-  it('renameProfile, once another program has renamed its folder, repoints ModOrganizer.ini only', async () => {
+  it('a profile whose folder another program renamed is followed in ModOrganizer.ini alone', async () => {
     await rename(join(dir, 'profiles', 'Default'), join(dir, 'profiles', 'Main'));
     const before = await snapshotTree(dir);
 
