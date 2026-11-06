@@ -78,26 +78,39 @@ internal sealed class RelationReads(
         return ([.. copies.Select(copy => held[copy.FormKey].FirstOrDefault(document => PluginAddress.Comparer.Equals(document.Plugin, copy.Plugin)))], resolve);
     }
 
-    /// <summary>The active copies of each of <paramref name="formKeys"/>, in load order, read in one query narrowed
-    /// by FormKey and, given <paramref name="plugins"/>, by plugin before the body is named. Links are not resolved.</summary>
-    public ILookup<string, RecordDocument> GetStacks(IReadOnlyList<string> formKeys, IReadOnlyList<PluginAddress>? plugins)
+    /// <summary>The active copies of each of <paramref name="formKeys"/>, in load order, in one query. Given
+    /// <paramref name="within"/>, only that plugin and its masters (ADR-0008), followed over the active plugins.</summary>
+    public ILookup<string, RecordDocument> GetStacks(IReadOnlyList<string> formKeys, PluginAddress? within)
     {
         var values = new List<string>(formKeys);
         var keys = string.Join(", ", formKeys.Select((_, i) => $"${i + 1}"));
+        var prefix = "";
         var narrowedByPlugin = "";
-        if (plugins is not null)
+        if (within is { } judged)
         {
-            narrowedByPlugin = " AND (" + string.Join(" OR ", plugins.Select((_, i) =>
-                $"(plugin = ${formKeys.Count + 2 * i + 1} AND origin = ${formKeys.Count + 2 * i + 2})")) + ")";
-            values.AddRange(plugins.SelectMany(plugin => new[] { plugin.Name, plugin.Origin }));
+            var name = $"${formKeys.Count + 1}";
+            var origin = $"${formKeys.Count + 2}";
+            values.AddRange([judged.Name, judged.Origin]);
+            prefix = $"""
+                WITH RECURSIVE stack(plugin, origin) AS (
+                    SELECT {name}, {origin}
+                    UNION
+                    SELECT a.plugin, a.origin
+                    FROM stack s
+                    JOIN (SELECT plugin, origin, unnest(masters) AS master FROM {TableDdlBuilder.MirrorSchema}.records) r
+                      ON r.plugin = s.plugin AND r.origin = s.origin
+                    JOIN {TableDdlBuilder.ActiveRelation} a ON a.plugin = r.master)
+                """;
+            narrowedByPlugin = " AND (plugin, origin) IN (SELECT plugin, origin FROM stack)";
         }
         using var context = store.OpenRead();
-        return ActiveCopies(context, $"form_key IN ({keys}){narrowedByPlugin}", _ => null, [.. values]);
+        return ActiveCopies(context, $"form_key IN ({keys}){narrowedByPlugin}", _ => null, [.. values], prefix);
     }
 
     private ILookup<string, RecordDocument> ActiveCopies(
-        ReadContext context, string where, Func<string, RecordLookupEntry?> resolve, string[] values) =>
+        ReadContext context, string where, Func<string, RecordLookupEntry?> resolve, string[] values, string prefix = "") =>
         context.Rows($"""
+            {prefix}
             SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, parse_diagnosis, record_type
             FROM records
             WHERE {where}

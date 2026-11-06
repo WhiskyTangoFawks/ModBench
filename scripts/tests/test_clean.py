@@ -3,14 +3,12 @@ import threading
 import unittest
 from collections.abc import Generator, Iterator
 from contextlib import contextmanager
-from unittest import mock
 
 import medit
 from default.clean import clean
 from tests.fixture_medit import (
     CONDITIONS,
     CONFLICT_A,
-    CONFLICT_B,
     PLUGINS,
     Fixture,
     call,
@@ -22,8 +20,6 @@ from tests.fixture_medit import (
 
 PATCH = medit.Plugin('MBDevPatchAB.esp', 'MB-DEV Patch A+B')
 ITEM_A = '000800:MBDevConflictA.esp'
-LEVELED_LIST = '03678C:Fallout4.esm'
-IDENTICAL_TO_MASTER = 'IdenticalToMaster'
 WATCH_INTERVAL_S = 0.25
 DELETED = 0x20
 PERSISTENT = 0x400
@@ -105,24 +101,6 @@ class CleanAgainstTheFixtureInstance(unittest.TestCase):
         cell = medit.create_record(plugin, 'cell')
         return cell, medit.create_record(plugin, 'refr', container=cell)
 
-    def overriding_cell_and_reference(self) -> tuple[medit.Plugin, str, str]:
-        master = self.enabled()
-        cell, reference = self.cell_and_reference_in(master)
-        override = self.enabled()
-        medit.copy(master, cell, override)
-        medit.copy(master, reference, override)
-        return override, cell, reference
-
-    @contextmanager
-    def answering(self, states: dict[str, str]) -> Generator[None]:
-        """A plugin made in this run has no masters until it is compiled, so its stack holds no master to compare with."""
-        def compare(form_keys: list[str], plugin: medit.Name | None = None) -> dict[str, list[medit.RecordCopy]]:
-            assert isinstance(plugin, medit.Plugin)
-            return {form_key: [medit.RecordCopy(plugin, states[form_key])] for form_key in form_keys}
-
-        with mock.patch.object(medit, 'compare', compare):
-            yield
-
     def deleted_override(self, base_set: bool = True, flags: int = DELETED) -> tuple[medit.Plugin, str]:
         master = self.enabled()
         cell, reference = self.cell_and_reference_in(master)
@@ -145,31 +123,52 @@ class CleanAgainstTheFixtureInstance(unittest.TestCase):
         self.assertEqual(cleaned.undeleted_and_disabled, [])
         self.assertEqual(before - self.keys_of(PATCH), {ITEM_A})
 
-    def test_keeps_an_override_identical_to_its_master_when_a_master_of_the_plugin_between_them_changed_the_record(self) -> None:
-        medit.copy(CONFLICT_A, LEVELED_LIST, PATCH, replace=True)
-        self.assertEqual(clean(PATCH).identical_to_master, [])
-        self.assertIn(LEVELED_LIST, self.keys_of(PATCH))
+    def test_removes_an_override_identical_to_the_master_though_a_plugin_loaded_between_them_changed_the_record(self) -> None:
+        later = self.enabled()
+        medit.copy(CONFLICT_A, ITEM_A, later)
+        self.assertEqual(clean(later).identical_to_master, [ITEM_A])
 
     def test_keeps_an_override_identical_to_the_previous_override_but_not_to_the_master(self) -> None:
-        medit.copy(CONFLICT_B, LEVELED_LIST, PATCH, replace=True)
-        self.assertEqual(clean(PATCH).identical_to_master, [])
-        self.assertIn(LEVELED_LIST, self.keys_of(PATCH))
+        master = self.enabled()
+        record = medit.create_record(master, 'misc')
+        previous = self.enabled()
+        medit.copy(master, record, previous)
+        medit.edit(previous, record, 'set', 'EditorID', 'MBDevCleanPrevious')
+        later = self.enabled()
+        medit.copy(previous, record, later)
+        self.assertEqual(clean(later).identical_to_master, [])
+        self.assertIn(record, self.keys_of(later))
 
-    def test_removes_an_override_that_differs_from_the_master_only_in_its_version_stamp(self) -> None:
-        medit.copy(CONFLICT_A, ITEM_A, PATCH, replace=True)
-        medit.edit(PATCH, ITEM_A, 'set', 'VersionControl', 123)
-        self.assertEqual(clean(PATCH).identical_to_master, [ITEM_A])
+    def test_keeps_an_override_identical_to_its_master_when_a_master_of_the_plugin_between_them_changed_the_record(self) -> None:
+        master = self.enabled()
+        record = medit.create_record(master, 'misc')
+        between = self.enabled()
+        medit.copy(master, record, between)
+        medit.edit(between, record, 'set', 'EditorID', 'MBDevCleanBetween')
+        override = self.enabled()
+        medit.copy(master, record, override)
+        _, reference = self.cell_and_reference_in(override)
+        medit.edit(override, reference, 'set', 'Base', medit.create_record(between, 'misc'))
+        self.assertEqual(clean(override).identical_to_master, [])
+        self.assertIn(record, self.keys_of(override))
 
     def test_removes_a_cell_identical_to_its_master_once_its_references_are_removed(self) -> None:
-        override, cell, reference = self.overriding_cell_and_reference()
-        with self.answering({cell: IDENTICAL_TO_MASTER, reference: IDENTICAL_TO_MASTER}):
-            clean(override)
+        master = self.enabled()
+        cell, reference = self.cell_and_reference_in(master)
+        override = self.enabled()
+        medit.copy(master, cell, override)
+        medit.copy(master, reference, override)
+        clean(override)
         self.assertEqual(self.keys_of(override) & {cell, reference}, set())
 
     def test_keeps_a_cell_identical_to_its_master_while_one_of_its_references_differs(self) -> None:
-        override, cell, reference = self.overriding_cell_and_reference()
-        with self.answering({cell: IDENTICAL_TO_MASTER, reference: 'Override'}):
-            clean(override)
+        master = self.enabled()
+        cell, reference = self.cell_and_reference_in(master)
+        override = self.enabled()
+        medit.copy(master, cell, override)
+        medit.copy(master, reference, override)
+        medit.edit(override, reference, 'set', 'Scale', 2)
+        clean(override)
         self.assertEqual(self.keys_of(override) & {cell, reference}, {cell, reference})
 
     def test_undeletes_disables_and_lowers_a_deleted_reference_keeping_x_and_y_with_no_teleport_or_enable_parent(self) -> None:
