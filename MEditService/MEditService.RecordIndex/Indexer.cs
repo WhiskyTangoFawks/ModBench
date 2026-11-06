@@ -503,13 +503,19 @@ internal sealed class Indexer : IDisposable
                 var remaining = deadline - _timeProvider.GetUtcNow();
                 if (remaining <= TimeSpan.Zero)
                 {
+                    var reason = Status.Message is { } message ? $" ({message})" : "";
                     throw new IndexNotReadyException(
-                        "mEdit's record index has not read the plugin source mEdit wrote: no change was signalled after the write, " +
-                        $"or its check of the disk did not finish{(Status.Message is { } reason ? $" ({reason})" : "")}.");
+                        "mEdit's record index has not read the plugin source mEdit wrote: " +
+                        (CheckSignalledAfter(awaited) ? $"its check of the disk did not finish{reason}." : "no change was signalled after the write."));
                 }
                 Monitor.Wait(_reconciled, remaining < SequencePollInterval ? remaining : SequencePollInterval);
             }
         }
+    }
+
+    private bool CheckSignalledAfter(long writes)
+    {
+        lock (_turns) return _writesSignalled >= writes;
     }
 
     private long WritesChecked
