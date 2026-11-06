@@ -15,7 +15,7 @@ import { sourceFolderMove, type MEditClient } from '../client';
 import { renameModNameRefusal, separatorNameRefusal } from './modCommands';
 import { EMPTY_MOD_NAME } from './nameRefusals';
 
-export type EntryRenameClient = Pick<MEditClient, 'getSourceFolderMoveChanges' | 'followSourceFolderMove'>;
+type EntryRenameClient = Pick<MEditClient, 'getSourceFolderMoveChanges' | 'followSourceFolderMove'>;
 
 interface EntryRenameAccess {
   readonly adapter: InstanceAdapter;

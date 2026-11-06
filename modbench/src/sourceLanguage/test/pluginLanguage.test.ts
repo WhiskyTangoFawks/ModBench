@@ -1,39 +1,40 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Range, TreeItem, TreeItemCollapsibleState, Uri } from '../../test/vscodeMock';
 
-const setInput = vi.hoisted(() => vi.fn());
+const setInput = vi.hoisted(() => vi.fn<(input: ReferencesViewInput) => void>());
 vi.mock('vscode', () => ({
   Uri, Range, TreeItem, TreeItemCollapsibleState,
   Location: class { constructor(readonly uri: unknown, readonly range: unknown) {} },
-  workspace: { textDocuments: [] },
+  workspace: { textDocuments: [], openTextDocument: () => Promise.resolve({ lineAt: () => ({ text: '*Base.esm' }) }) },
   extensions: { getExtension: () => ({ activate: () => Promise.resolve({ setInput }) }) },
 }));
 
 import { pluginLanguage } from '../pluginLanguage';
 import type { InstanceValue } from '../../instanceLoader/instance';
-import type { SymbolOwner } from '../../symbolNames/symbolNames';
+import type { SymbolOwner, SymbolReading } from '../../symbolNames/symbolNames';
+import type { ReferencesViewInput } from '../../drivingLib/referencesView';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { present } from '../../ports/present';
 
 const BASE = { name: 'Base.esm', origin: 'Base Mod' };
 const PLUGINS_TXT = '/profiles/Default/plugins.txt';
 const UNREAD = '/userlist.yaml: it does not read';
 
+const namedAt = (line: number) => ({ place: { file: PLUGINS_TXT, start: { line, character: 1 }, end: { line, character: 9 } }, names: { name: 'Base.esm' } });
+
 const ownerThatCannotReadAFile: SymbolOwner = {
-  read: () => Promise.resolve({
-    references: [{ place: { file: PLUGINS_TXT, start: { line: 0, character: 1 }, end: { line: 0, character: 9 } }, names: { name: 'Base.esm' } }],
-    leftOut: [UNREAD],
-  }),
+  read: () => Promise.resolve({ references: [namedAt(0)], leftOut: [UNREAD] }),
   nameAt: () => Promise.resolve({ name: 'Base.esm' }),
   plan: () => Promise.reject(new Error('Not planned here.')),
 };
 
-function plugin() {
+function plugin(owner: SymbolOwner = ownerThatCannotReadAFile) {
   const reporter = recordingReporter();
   const language = pluginLanguage({
     instance: { value: { plugins: [{ ...BASE, path: '/data/Base.esm', line: 0, enabled: true, winning: true }] } },
     reporter,
     client: { getCopyDocument: () => Promise.resolve(null), getRecordOwner: () => Promise.resolve(undefined) },
-    owners: [ownerThatCannotReadAFile],
+    owners: [owner],
     renamePlugin: () => Promise.reject(new Error('Not renamed here.')),
     goTo: () => Promise.resolve(),
     tooltip: () => [],
@@ -92,6 +93,23 @@ describe('what a plugin\'s references could not read, as each surface says it (c
 
     expect(found).toHaveLength(1);
     expect([reporter.reports, reporter.shownFailures.map(({ severity, detail }) => [severity, detail])]).toEqual([[], [['warning', UNREAD]]]);
+  });
+});
+
+describe('the line above a plugin\'s list, read again (common.md, States, story 3)', () => {
+  it.each([
+    { found: [], unread: [], message: 'No references found.' },
+    { found: [], unread: [UNREAD], message: 'No references found in the files that could be read.' },
+    { found: [namedAt(0), namedAt(1)], unread: [UNREAD], message: undefined },
+  ])('is $message where $found.length places are found and $unread.length files are unread', async ({ found, unread, message }) => {
+    let reading: SymbolReading = { references: [namedAt(0)], leftOut: [] };
+    const { language } = plugin({ ...ownerThatCannotReadAFile, read: () => Promise.resolve(reading) });
+    await language.referencedBy(BASE);
+    const shown = present(setInput.mock.lastCall?.[0], 'the list shown');
+    await shown.resolve();
+    reading = { references: found, leftOut: unread };
+
+    expect((await shown.resolve()).message).toBe(message);
   });
 });
 

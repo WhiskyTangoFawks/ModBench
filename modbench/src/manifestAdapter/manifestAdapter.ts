@@ -9,5 +9,5 @@ export { exclusionsOf, exclusionsOfFiles, isUnderAny, ownFilesOf } from './folde
 export { installationFileLack } from './packageLack';
 export { isAddress, repositoryOf } from './manifestPackages';
 export { sourceModsOf, type SourceMods } from './sourceMods';
-export { manifestFileReferences, type ManifestFileOwner } from './manifestFileReferences';
-export { manifestDownloadedFileReferences, manifestEntryReferences, manifestEntryNames, type ManifestEntryOwner } from './manifestEntryReferences';
+export { manifestFileReferences } from './manifestFileReferences';
+export { manifestDownloadedFileReferences, manifestEntryReferences, manifestEntryNames } from './manifestEntryReferences';

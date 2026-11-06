@@ -131,8 +131,7 @@ export function followRenames(deps: FollowRenameDeps) {
   };
 }
 
-/** Whether VS Code renamed each of `renames`: true once it says so, false past `within` milliseconds. */
-export function landing(renames: readonly FileRename[], within: number): Promise<boolean> {
+function landing(renames: readonly FileRename[], within: number): Promise<boolean> {
   return new Promise((resolve) => {
     const settle = (landed: boolean) => {
       heard.dispose();

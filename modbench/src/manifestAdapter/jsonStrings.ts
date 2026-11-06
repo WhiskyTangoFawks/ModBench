@@ -1,4 +1,4 @@
-export interface NameInText {
+interface NameInText {
   readonly name: string;
   readonly start: number;
   readonly end: number;

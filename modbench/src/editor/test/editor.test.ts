@@ -1,9 +1,8 @@
 import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { ReferencedByInput as ReferencesViewInput } from '../referencedBy';
 import {
   commandHandlers, contextKeys, disk, documentChanges, editorProviderDisposals, editorProviderOptions, editorProviders, editorVscode,
-  executeCommand, executed, fakePanel, fileSystems, openedDocuments, pickers, referencesView, type FakePanel,
+  executeCommand, executed, fakePanel, fileSystems, openedDocuments, pickers, referencesView, type FakePanel, type ReferencesViewInput,
 } from './editorVscode';
 
 vi.mock('vscode', () => editorVscode);
