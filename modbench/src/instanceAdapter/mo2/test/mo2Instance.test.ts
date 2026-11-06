@@ -2397,6 +2397,21 @@ describe('the MO2 Instance adapter', () => {
       expect(await isThere(join(root, 'mods', 'HARDER VATS 2', 'meta.ini'))).toBe(true);
     });
 
+    it('counts a folder another program moved to the new name as renamed, and moves nothing', async () => {
+      await actualRename(join(root, 'mods', 'Harder VATS'), join(root, 'mods', 'Harder VATS 2'));
+      const moved = await snapshotTree(root);
+
+      await adapter.renameModFolder('Harder VATS', 'Harder VATS 2');
+
+      assertOnlyChanged(moved, await snapshotTree(root), new Set());
+    });
+
+    it('refuses a name another mod\'s folder holds when the mod\'s own folder is gone, never counting it as renamed', async () => {
+      await rm(join(root, 'mods', 'Harder VATS'), { recursive: true });
+
+      await expect(adapter.renameModFolder('Harder VATS', 'Patch Mod')).rejects.toThrow('Mod not found in modlist: Harder VATS');
+    });
+
     it('moves the folder that holds a separator to the trash', async () => {
       const trashed: string[] = [];
 

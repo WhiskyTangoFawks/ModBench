@@ -37,16 +37,10 @@ interface FollowRenameDeps {
 
 type Editing = (touched: readonly PluginAddress[]) => RenameEditing;
 
-const NOT_LANDED = 'VS Code did not report the rename.';
+// The reason change() is given for an edit VS Code's rename never let apply; the not-landed warning says it instead.
+const NOT_RENAMED = 'VS Code did not rename it.';
 
-function reportFollowed(
-  reporter: FollowRenameDeps['reporter'], named: string, newName: string, result: ChangeResult | { applied: false; refusal: string; detail?: string }, definition: string,
-): void {
-  if (!result.applied && 'unapplied' in result && result.unapplied === NOT_LANDED) {
-    reporter.report('warning', `VS Code did not report renaming ${named}, so no reference to it followed.`);
-    return;
-  }
-  // symbols.md, The features, story 9: VS Code has renamed it already.
+function reportFollowed(reporter: Reporter, named: string, newName: string, result: ChangeResult | { applied: false; refusal: string; detail?: string }, definition: string): void {
   if (!result.applied && 'refusal' in result) {
     reporter.report('warning', `${named} was renamed to "${newName}", and no reference to it followed: ${result.refusal}`, 'detail' in result ? result.detail : undefined);
     return;
@@ -56,20 +50,29 @@ function reportFollowed(
   else reporter.report('error', outcome.refusal, outcome.detail);
 }
 
-async function followed({ plugins, entries, reporter }: FollowRenameDeps, symbol: RenamedSymbol, editing: Editing): Promise<void> {
+interface Followed {
+  readonly named: string;
+  /** What the follow says once VS Code has renamed the file (symbols.md, The features, story 9). */
+  readonly report: () => void;
+}
+
+async function followed({ plugins, entries, reporter }: FollowRenameDeps, symbol: RenamedSymbol, editing: Editing): Promise<Followed> {
   if (symbol.kind === 'plugin') {
     const { plugin, to } = symbol;
+    const named = `"${plugin.name}" (${plugin.origin})`;
     const result = await plugins.renamePlugin(editing([plugin, { name: to, origin: plugin.origin }]), plugin, to);
-    reportFollowed(reporter, `"${plugin.name}" (${plugin.origin})`, to, result, 'the files named for it and its lines');
-    return;
+    return { named, report: () => { reportFollowed(reporter, named, to, result, 'the files named for it and its lines'); } };
   }
   const { entry, to } = symbol;
+  const named = `"${entry.name}"`;
   if (to.kind !== entry.kind) {
-    reporter.report('warning', `"${entry.name}" was renamed to "${to.name}", which names a ${to.kind} and not a ${entry.kind}, so no reference to it followed.`);
-    return;
+    return {
+      named,
+      report: () => { reporter.report('warning', `${named} was renamed to "${to.name}", which names a ${to.kind} and not a ${entry.kind}, so no reference to it followed.`); },
+    };
   }
   const result = await (entry.kind === 'mod' ? entries.renameMod : entries.renameSeparator)(editing([]), entry.name, to.name);
-  reportFollowed(reporter, `"${entry.name}"`, result.applied ? result.name : to.name, result, 'its lines');
+  return { named, report: () => { reportFollowed(reporter, named, result.applied ? result.name : to.name, result, 'its lines'); } };
 }
 
 /** commands.md, System commands, `modbench.symbol.followRename`: carries each reference to what VS Code renames. The
@@ -96,14 +99,17 @@ export function followRenames(deps: FollowRenameDeps) {
             held,
             apply: async (changes: readonly FileChanges[]) => {
               hasPlanned();
-              return await landed ? applyAnswered(deps.source, changes, touched) : NOT_LANDED;
+              return await landed ? applyAnswered(deps.source, changes, touched) : NOT_RENAMED;
             },
           });
+          let outcome: Followed;
           try {
-            await followed(deps, symbol, editing);
+            outcome = await followed(deps, symbol, editing);
           } finally {
             hasPlanned();
           }
+          if (await landed) outcome.report();
+          else deps.reporter.report('warning', `VS Code did not report renaming ${outcome.named}, so no reference to it followed.`);
         }));
       }));
     })().catch((error: unknown) => { deps.reporter.report('error', 'Could not carry the references to what VS Code renamed.', errorMessage(error)); });

@@ -8,7 +8,6 @@ export interface Renamed<T> {
   readonly landed: T;
   /** What the definition writes last, such as `its file and lines`. */
   readonly definition: string;
-  /** How a failure opens, `Could not rename` the renamed thing unless given. */
   readonly couldNot?: string;
 }
 

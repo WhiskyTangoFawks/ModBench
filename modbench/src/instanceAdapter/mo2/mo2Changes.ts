@@ -15,13 +15,14 @@ import { loadOrderTextOf } from './codecs/loadOrderText';
 import { parseDownloadedFileMeta, setHiddenInText, setInstalledInText, setNexusFileInfoInText, setUninstalledInText } from './codecs/downloads';
 import { readSelectedProfile, setSelectedProfileInText } from './codecs/modOrganizerIni';
 import { spliceDownloadedFileMeta, trashDownloadedFileMeta } from './downloadedFileMeta';
-import { ensureDir, exists, get, isRepository, putIfChanged, putStreamedIf, remove, rename, undoAll, type Undo, withLock, write } from '../files';
+import { ensureDir, exists, get, isRepository, putIfChanged, putStreamedIf, readOrAbsent, remove, rename, undoAll, type Undo, withLock, write } from '../files';
 import { git } from '../git';
 import { digestOf } from '../fileContents/contentDigest';
 import { entryNotFound, type DownloadedFileMark, InstanceAdapter, PluginOrderChange } from '../instanceAdapter';
-import { downloadedFileMetadataPath, downloadedFilePath, pluginOrderFiles, settingsFile, sortingRuleFilePaths } from './layout';
+import { downloadedFileMetadataPath, downloadedFilePath, everyModlistFile, pluginOrderFiles, settingsFile, sortingRuleFilePaths } from './layout';
+import { parseModlist } from './codecs/modlistText';
 import { addLoadAfter } from '../../sortingRules/lootMetadata';
-import { currentDownloadsDir, entryKey, folderHolding, newModFolder, metaGameOfDomain, refuseFolderTaken, type Mo2Context } from './mo2Context';
+import { currentDownloadsDir, entryKey, folderHolding, listedAs, newModFolder, metaGameOfDomain, refuseFolderTaken, type Mo2Context } from './mo2Context';
 import { readPluginsProvided, type ReadingSource } from '../instanceReading';
 
 type Mo2Changes = Pick<InstanceAdapter,
@@ -114,6 +115,11 @@ async function copyDownloadedFile(context: Mo2Context, from: string, name: strin
   });
 }
 
+async function listedInAModOrder({ instanceRoot }: Mo2Context, mod: string): Promise<boolean> {
+  const orders = await Promise.all((await everyModlistFile(instanceRoot)).map((file) => readOrAbsent(() => get(file), '')));
+  return orders.some((text) => listedAs(parseModlist(text), { kind: 'mod', name: mod }) !== undefined);
+}
+
 export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Changes {
   const { instanceRoot } = context;
 
@@ -149,8 +155,8 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
     async renameModFolder(from, to) {
       const holding = await folderHolding(context, { kind: 'mod', name: from });
       const target = newModFolder(context, to);
-      // A folder already at its new name, as VS Code's rename leaves it, has moved.
-      if (holding === undefined && await exists(target)) return;
+      // A folder already at its new name, as VS Code's rename leaves it, has moved; one a mod order lists is another mod's.
+      if (holding === undefined && await exists(target) && !await listedInAModOrder(context, to)) return;
       if (holding === undefined) throw new Error(entryNotFound({ kind: 'mod', name: from }));
       if (entryKey(holding) !== entryKey({ kind: 'mod', name: to })) {
         await refuseFolderTaken(context, { kind: 'mod', name: to }, target);

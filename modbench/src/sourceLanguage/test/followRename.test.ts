@@ -87,34 +87,46 @@ describe('following a rename VS Code makes of a file or folder that is a symbol 
     expect(reporter.reports).toEqual([]);
   });
 
-  it('renames a mod as the entry its folder\'s new name holds', async () => {
-    const { follow, renameMod } = follower(new Map([renaming(OTHER_RENAME, MOD_RENAMED)]));
+  it.each([
+    ['a mod', MOD_RENAMED, 'renameMod', ['Base', 'Renamed Base']],
+    ['a separator', { kind: 'entry', entry: { kind: 'separator', name: 'Gear' }, to: { kind: 'separator', name: 'Armour' } }, 'renameSeparator', ['Gear', 'Armour']],
+  ] as const)('renames %s as the entry its folder\'s new name holds', async (_case, symbol, command, names) => {
+    const renamer = follower(new Map([renaming(OTHER_RENAME, symbol)]));
 
-    await follow([OTHER_RENAME], Promise.resolve(true)).done;
+    await renamer.follow([OTHER_RENAME], Promise.resolve(true)).done;
 
-    expect(renameMod).toHaveBeenCalledWith(expect.anything(), 'Base', 'Renamed Base');
+    expect(renamer[command].mock.calls.map(([, from, to]) => [from, to])).toEqual([names]);
   });
 
-  it('renames a separator as the entry its folder\'s new name holds', async () => {
-    const symbol: RenamedSymbol = { kind: 'entry', entry: { kind: 'separator', name: 'Gear' }, to: { kind: 'separator', name: 'Armour' } };
-    const { follow, renameSeparator } = follower(new Map([renaming(OTHER_RENAME, symbol)]));
+  const REFUSED = { 'Patch.esp': { refusal: 'Not a valid plugin file name: "Renamed.esp"' } };
 
-    await follow([OTHER_RENAME], Promise.resolve(true)).done;
+  it('lands a name the rename gesture refuses, with a warning once VS Code has renamed it that says why, and no reference follows', async () => {
+    const landing = deferred<boolean>();
+    const { follow, events, reporter } = follower(new Map([renaming(RENAME, PLUGIN_RENAMED)]), REFUSED);
 
-    expect(renameSeparator).toHaveBeenCalledWith(expect.anything(), 'Gear', 'Armour');
-  });
-
-  it('lands a name the rename gesture refuses, with a warning that says why, and no reference follows', async () => {
-    const { follow, events, reporter } = follower(new Map([renaming(RENAME, PLUGIN_RENAMED)]), { 'Patch.esp': { refusal: 'Not a valid plugin file name: "Renamed.esp"' } });
-
-    const following = follow([RENAME], new Promise<boolean>(() => undefined));
+    const following = follow([RENAME], landing.promise);
     await following.planned;
-    await following.done;
+    expect(reporter.reports).toEqual([]);
 
+    landing.resolve(true);
+    await following.done;
     expect(events).toEqual(['plan Patch.esp as Renamed.esp']);
     expect(reporter.reports).toEqual([{
       severity: 'warning', message: '"Patch.esp" (Patch Mod) was renamed to "Renamed.esp", and no reference to it followed: Not a valid plugin file name: "Renamed.esp"', detail: undefined,
     }]);
+  });
+
+  it.each([
+    ['a name the rename gesture refuses', new Map([renaming(RENAME, PLUGIN_RENAMED)]), REFUSED, '"Patch.esp" (Patch Mod)'],
+    ['a separator\'s folder given a mod\'s name', new Map([renaming(RENAME, { kind: 'entry', entry: { kind: 'separator', name: 'Gear' }, to: { kind: 'mod', name: 'Armour' } })]), {}, '"Gear"'],
+  ])('says for %s that VS Code did not report the rename, when it never lands, and never that it was renamed', async (_case, symbols, answers, named) => {
+    const { follow, reporter } = follower(symbols, answers);
+
+    await follow([RENAME], Promise.resolve(false)).done;
+
+    expect(reporter.reports.map(({ severity, message }) => ({ severity, message }))).toEqual([
+      { severity: 'warning', message: `VS Code did not report renaming ${named}, so no reference to it followed.` },
+    ]);
   });
 
   it('warns naming each reference that could not follow (story 7)', async () => {

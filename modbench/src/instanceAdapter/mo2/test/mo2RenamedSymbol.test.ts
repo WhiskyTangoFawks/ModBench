@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { rename, rm } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 
@@ -48,21 +48,5 @@ describe('the MO2 Instance adapter, on a file or folder another program renames'
     ['a profile\'s file', 'profiles/Default/plugins.txt', 'profiles/Default/plugins.old'],
   ])('names nothing for %s', async (_case, from, to) => {
     expect(await renamed(from, to)).toBeUndefined();
-  });
-});
-
-describe('the MO2 Instance adapter renaming a mod\'s folder', () => {
-  let root: string;
-  let adapter: ManagerAdapter;
-  beforeEach(() => {
-    root = cloneCorpusFixture();
-    adapter = managerOver(root);
-  });
-  afterEach(() => rm(root, { recursive: true, force: true }));
-
-  it('counts a folder another program renamed to the new name as renamed', async () => {
-    await rename(join(root, 'mods/Patch Mod'), join(root, 'mods/Renamed Mod'));
-
-    await expect(adapter.renameModFolder('Patch Mod', 'Renamed Mod')).resolves.toBeUndefined();
   });
 });
