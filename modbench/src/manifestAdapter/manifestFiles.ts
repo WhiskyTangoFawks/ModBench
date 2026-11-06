@@ -59,17 +59,20 @@ const twoManifests = (one: string, other: string): string => `its folder holds t
 
 const twoBuildFiles = (one: string, other: string): string => `its repository holds two build files, '${one}' and '${other}'`;
 
-/** The one manifest `folder` holds, whatever its name, with its text, the unsaved text when `held` holds it; undefined
- *  when it holds none. */
-export async function manifestTextIn(
-  folder: string, held: HeldTexts = heldTexts([]),
-): Promise<{ readonly file: string; readonly read: { readonly refused: string } } | ({ readonly file: string } & ManifestText) | undefined> {
+/** The one manifest `folder` holds, whatever its name, with its text, the unsaved text when `held` holds it, or why it
+ *  could not be read; undefined when it holds none. */
+export async function manifestTextIn(folder: string, held: HeldTexts = heldTexts([])): Promise<
+  | { readonly file: string; readonly read: Extract<ManifestRead, { readonly refused: string }> }
+  | { readonly file: string; readonly text: string; readonly read: Extract<ManifestRead, { readonly manifest: Manifest }> }
+  | undefined
+> {
   const [one, other] = await manifestsIn(folder);
   if (one === undefined) return undefined;
   const file = join(folder, one);
   if (other !== undefined) return { file, read: { refused: twoManifests(one, other) } };
   const unsaved = heldTextAt(held, file);
-  return { file, ...unsaved === undefined ? await manifestTextAt(file) : { text: unsaved, read: readManifest(unsaved) } };
+  const { text, read } = unsaved === undefined ? await manifestTextAt(file) : { text: unsaved, read: readManifest(unsaved) };
+  return 'refused' in read ? { file, read } : { file, text, read };
 }
 
 /** The one manifest `folder` holds, whatever its name; undefined when it holds none. */

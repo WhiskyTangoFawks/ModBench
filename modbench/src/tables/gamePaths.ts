@@ -29,6 +29,8 @@ export interface GamePathInfo {
   readonly programs: Programs;
   readonly pluginCompanions: PluginCompanions;
   readonly archiveLists: ArchiveLists;
+  /** Absent for a release whose folders no reference names. */
+  readonly papyrusFolders?: PapyrusFolders;
   /** The BA2 versions the release reads its archives of textures and its other archives as; absent until what mEdit
    *  writes is known to load in the game. */
   readonly ba2Versions?: Ba2Versions;
@@ -38,6 +40,13 @@ export interface GamePathInfo {
 export interface Programs {
   readonly game: string;
   readonly extenderLoader: string;
+}
+
+/** Under the Data folder: where a Papyrus script's source sits, each folder in the order the game's Creation Kit reads
+ *  them, and where its compiled script sits. A script's namespaces are folders below them. */
+export interface PapyrusFolders {
+  readonly sources: readonly string[];
+  readonly compiled: string;
 }
 
 export interface Ba2Versions {
@@ -76,6 +85,10 @@ const STARFIELD_MASTERS = [
   'SFBGS006.esm', 'SFBGS007.esm', 'SFBGS003.esm', 'SFBGS008.esm', 'SFBGS004.esm', 'SFBGS00D.esm', 'SFBGS047.esm',
   'SFBGS050.esm', 'BlueprintShips-SFBGS050.esm',
 ];
+const FALLOUT4_PAPYRUS: PapyrusFolders = { sources: ['Scripts/Source/User', 'Scripts/Source/Base'], compiled: 'Scripts' };
+// The Creation Kit of Skyrim Special Edition reads Source/Scripts; Mutagen's SkyrimScriptSourceAssetType, the original's
+// Scripts/Source.
+const SKYRIM_PAPYRUS: PapyrusFolders = { sources: ['Source/Scripts', 'Scripts/Source'], compiled: 'Scripts' };
 const FALLOUT4_COMPANIONS: PluginCompanions = {
   archiveExtension: '.ba2',
   stringsLanguages: ['en', 'de', 'it', 'es', 'esmx', 'fr', 'pl', 'cn', 'zhhans', 'ja', 'ptbr', 'ru'],
@@ -102,27 +115,29 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
     gameName: 'Fallout 4', nexusSlug: 'fallout4', lootRepository: 'fallout4', steamAppId: '377160', steamFolderName: 'Fallout 4',
     masters: FALLOUT4_MASTERS, creationClubList: 'Fallout4.ccc',
     scriptExtenderFolder: 'f4se', programs: { game: 'Fallout4.exe', extenderLoader: 'f4se_loader.exe' },
-    pluginCompanions: FALLOUT4_COMPANIONS, archiveLists: FALLOUT4_ARCHIVES,
+    pluginCompanions: FALLOUT4_COMPANIONS, archiveLists: FALLOUT4_ARCHIVES, papyrusFolders: FALLOUT4_PAPYRUS,
     ba2Versions: FALLOUT4_BA2_VERSIONS,
   },
   Fallout4VR: {
     gameName: 'Fallout 4 VR', nexusSlug: 'fallout4', lootRepository: 'fallout4vr', validShortNames: ['Fallout4'], masters: [...FALLOUT4_MASTERS, 'Fallout4_VR.esm'],
     creationClubList: 'Fallout4.ccc',
     scriptExtenderFolder: 'f4se', programs: { game: 'Fallout4VR.exe', extenderLoader: 'f4sevr_loader.exe' }, pluginCompanions: FALLOUT4_COMPANIONS,
-    archiveLists: { ...FALLOUT4_ARCHIVES, myGamesFolder: 'Fallout4VR', defaultIni: 'Fallout4.ini' }, ba2Versions: FALLOUT4_BA2_VERSIONS,
+    archiveLists: { ...FALLOUT4_ARCHIVES, myGamesFolder: 'Fallout4VR', defaultIni: 'Fallout4.ini' }, papyrusFolders: FALLOUT4_PAPYRUS,
+    ba2Versions: FALLOUT4_BA2_VERSIONS,
   },
   SkyrimSE: {
     gameName: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition', lootRepository: 'skyrimse', validShortNames: ['Skyrim'], steamAppId: '489830', steamFolderName: 'Skyrim Special Edition',
     masters: SKYRIM_MASTERS,
     creationClubList: 'Skyrim.ccc',
     scriptExtenderFolder: 'skse', programs: { game: 'SkyrimSE.exe', extenderLoader: 'skse64_loader.exe' },
-    pluginCompanions: SKYRIM_COMPANIONS, archiveLists: SKYRIM_ARCHIVES,
+    pluginCompanions: SKYRIM_COMPANIONS, archiveLists: SKYRIM_ARCHIVES, papyrusFolders: SKYRIM_PAPYRUS,
   },
   SkyrimVR: {
     gameName: 'Skyrim VR', nexusSlug: 'skyrimspecialedition', lootRepository: 'skyrimvr', validShortNames: ['Skyrim', 'SkyrimSE'], masters: [...SKYRIM_MASTERS, 'SkyrimVR.esm'],
     creationClubList: 'Skyrim.ccc',
     scriptExtenderFolder: 'skse', programs: { game: 'SkyrimVR.exe', extenderLoader: 'sksevr_loader.exe' }, pluginCompanions: SKYRIM_COMPANIONS,
     archiveLists: { ...SKYRIM_ARCHIVES, myGamesFolder: 'Skyrim VR', defaultIni: 'Skyrim.ini', userInis: ['Skyrim.ini', 'SkyrimVR.ini', 'SkyrimCustom.ini'] },
+    papyrusFolders: SKYRIM_PAPYRUS,
   },
   Starfield: {
     gameName: 'Starfield', nexusSlug: 'starfield', lootRepository: 'starfield', steamAppId: '1716740', steamFolderName: 'Starfield',
@@ -312,4 +327,39 @@ export function pluginCompanionRule(release: string | undefined): PluginCompanio
  *  holds no row for. */
 export function archiveListsOf(release: string | undefined): ArchiveLists | undefined {
   return release === undefined ? undefined : GAME_PATHS[release]?.archiveLists;
+}
+
+const PAPYRUS_EXTENSIONS = { source: '.psc', compiled: '.pex' };
+
+const papyrusFoldersOf = (release: string | undefined): PapyrusFolders | undefined =>
+  (release === undefined ? undefined : GAME_PATHS[release]?.papyrusFolders);
+
+// A namespace is a folder below the script folder, and the game names it before a colon.
+function scriptNamed(relativePath: string, folder: string, extension: string): string | undefined {
+  const under = `${folder.toLowerCase()}/`;
+  if (!relativePath.toLowerCase().startsWith(under) || !relativePath.toLowerCase().endsWith(extension)) return undefined;
+  const name = relativePath.slice(under.length, relativePath.length - extension.length);
+  return name === '' || name.endsWith('/') ? undefined : name.replaceAll('/', ':');
+}
+
+/** The Papyrus script the file at `relativePath` under the Data folder is, and whether it is the script's compiled
+ *  script or a source. None for any other file, or a release the table holds no folders for. */
+export function papyrusScriptAt(release: string | undefined, relativePath: string): { name: string; compiled: boolean } | undefined {
+  const folders = papyrusFoldersOf(release);
+  if (folders === undefined) return undefined;
+  const compiled = scriptNamed(relativePath, folders.compiled, PAPYRUS_EXTENSIONS.compiled);
+  if (compiled !== undefined) return { name: compiled, compiled: true };
+  const source = folders.sources.map((folder) => scriptNamed(relativePath, folder, PAPYRUS_EXTENSIONS.source)).find((name) => name !== undefined);
+  return source === undefined ? undefined : { name: source, compiled: false };
+}
+
+/** Under the Data folder: the compiled script the game takes the script `name` from, and each of its sources, in the
+ *  order the Creation Kit reads them. None for a release the table holds no folders for. */
+export function papyrusScriptFiles(release: string | undefined, name: string): { compiled: string; sources: string[] } | undefined {
+  const folders = papyrusFoldersOf(release);
+  const path = name.replaceAll(':', '/');
+  return folders && {
+    compiled: `${folders.compiled}/${path}${PAPYRUS_EXTENSIONS.compiled}`,
+    sources: folders.sources.map((folder) => `${folder}/${path}${PAPYRUS_EXTENSIONS.source}`),
+  };
 }

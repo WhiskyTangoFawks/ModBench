@@ -617,7 +617,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     exclusionMark: EXCLUSION_MARK,
     pathInFolder: (path, exclude) => pathInFolderOf(path, exclude, EXCLUSION_MARK),
     ownPath: (pathInFolder) => ownPathOf(pathInFolder, EXCLUSION_MARK).path,
-    originHoldsPlugin: (origin, name) => Promise.resolve(rootFileOf(origin, name) !== undefined),
+    originHoldsFile: (source, relativePath) => Promise.resolve(source.kind !== 'dataFolder'
+      && originFilesOf(source)?.files.some((file) => file.relativePath.toLowerCase() === relativePath.toLowerCase()) === true),
     renamedSymbol: () => Promise.resolve(undefined),
     entryReferences: { listed: () => Promise.resolve([]), read: () => Promise.resolve({ references: [], leftOut: [] }), nameAt: () => Promise.resolve(undefined) },
     pluginReferences: {

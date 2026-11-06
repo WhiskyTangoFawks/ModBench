@@ -141,6 +141,7 @@ internal static class SubFieldReflection
             Default: nullable ? null : leaf.Default,
             HoldsAlpha: leaf.HoldsAlpha,
             IsPlacedRotation: game.Annotations.IsPlacedRotation(prop),
+            IsScriptName: game.Annotations.IsScriptName(prop),
             IndexWhen: leaf.IndexWhen);
     }
 }

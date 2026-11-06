@@ -14,6 +14,14 @@ export function isBelow(folder: string, path: string): boolean {
   return below !== '..' && !below.startsWith(`..${sep}`) && !isAbsolute(below);
 }
 
+/** The path of `path` below `folder`, by forward slashes, each name compared without case; undefined when it is not
+ *  below it. */
+export function pathBelow(folder: string, path: string): string | undefined {
+  const below = relative(folder.toLowerCase(), path.toLowerCase());
+  if (below === '' || !isBelow(folder.toLowerCase(), path.toLowerCase())) return undefined;
+  return path.slice(path.length - below.length).split(sep).join('/');
+}
+
 /** Whether `path` is `folder` or below it, links resolved. */
 export async function isWithin(folder: string, path: string): Promise<boolean> {
   return isBelow(await realPathOf(folder), await realPathOf(path));

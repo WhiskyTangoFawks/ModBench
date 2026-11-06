@@ -59,6 +59,11 @@ internal static class GameAnnotations
             PermittedNullFormLinks: [.. Fallout4VmadAnnotations.PermittedNullFormLinks],
             // xEdit's wbVec3PosRot: the Data of REFR, ACHR and the projectile placements.
             PlacedRotations: [("IPlacedObjectGetter", "Rotation"), ("IPlacedNpcGetter", "Rotation"), ("IAPlacedTrapGetter", "Rotation")],
+            ScriptNames:
+            [
+                ("IScriptEntryGetter", "Name"), ("IScriptFragmentGetter", "ScriptName"), ("IScriptFragmentIndexedGetter", "ScriptName"),
+                ("IPerkScriptFragmentGetter", "ScriptName"), ("IQuestScriptFragmentGetter", "ScriptName"), ("IScenePhaseFragmentGetter", "ScriptName"),
+            ],
             SyntheticFlagMembers: new()
             {
                 [(ModHeaderGetterName, "IsSmallMaster")] = ("Flags", "Small"),

@@ -1,7 +1,7 @@
 // MO2's rename of a plugin: its files, its line in every profile's plugins.txt and loadorder.txt, and its names in the
 // userlist, under every plugin order's lock, and put back if a write fails.
 
-import { basename } from 'node:path';
+import { basename, join } from 'node:path';
 import { stripBom } from '../../loadOrderFileCodec/lineScan';
 import { parsePlugins, pluginKey, renamePluginInText } from '../../loadOrderFileCodec/pluginsText';
 import { errorMessage } from '../../ports/errorMessage';
@@ -14,7 +14,9 @@ import { get, listEntries, readOrAbsent, rename, undoAll, type Undo, withLock, w
 import { fileInFolder, fileOriginOfPlugin, isBareName, type FileOrigin, InstanceAdapter } from '../instanceAdapter';
 import { everyPluginOrderFile, sortingRuleFilePaths } from './layout';
 import type { ReadingSource } from '../instanceReading';
+import { dataFolderOf } from '../gameFolder/dataFolder';
 import { originFolder, type Mo2Context } from './mo2Context';
+import { currentGameFolder } from './mo2Reads';
 
 interface Move {
   readonly from: string;
@@ -35,6 +37,12 @@ async function entriesIn(folder: string): Promise<Entry[]> {
   const unfollowable: Entry[] = [];
   const dirents = await readOrAbsent(() => listEntries(folder, (link) => unfollowable.push({ name: basename(link), isFolder: false })), []);
   return [...dirents.map((d) => ({ name: d.name, isFolder: d.isDirectory })), ...unfollowable];
+}
+
+async function holdsFileBelow(folder: string, [name, ...below]: readonly string[]): Promise<boolean> {
+  const entry = (await entriesIn(folder)).find((each) => each.isFolder === below.length > 0 && sameName(each.name, name ?? ''));
+  if (entry === undefined) return false;
+  return below.length === 0 || holdsFileBelow(join(folder, entry.name), below);
 }
 
 interface Line {
@@ -128,7 +136,7 @@ function withLocks<T>(keys: readonly string[], task: () => Promise<T>): Promise<
   return first === undefined ? task() : withLock(first, () => withLocks(rest, task));
 }
 
-export function mo2PluginRename(context: Mo2Context, source: ReadingSource): Pick<InstanceAdapter, 'originHoldsPlugin'> & { readonly planRename: SymbolOwner['plan'] } {
+export function mo2PluginRename(context: Mo2Context, source: ReadingSource): Pick<InstanceAdapter, 'originHoldsFile'> & { readonly planRename: SymbolOwner['plan'] } {
   const { instanceRoot } = context;
   const ruleFiles = sortingRuleFilePaths(instanceRoot);
 
@@ -182,9 +190,9 @@ export function mo2PluginRename(context: Mo2Context, source: ReadingSource): Pic
   }
 
   return {
-    async originHoldsPlugin(origin, name) {
-      const folder = await originFolder(context, origin, 'list');
-      return folder !== undefined && (await entriesIn(folder)).some((entry) => !entry.isFolder && sameName(entry.name, name));
+    async originHoldsFile(source, relativePath) {
+      const folder = source.kind === 'dataFolder' ? dataFolderOf(await currentGameFolder(context)) : await originFolder(context, source, 'list');
+      return folder !== undefined && holdsFileBelow(folder, relativePath.split('/'));
     },
 
     async planRename(symbol, newName, _held, plugins) {

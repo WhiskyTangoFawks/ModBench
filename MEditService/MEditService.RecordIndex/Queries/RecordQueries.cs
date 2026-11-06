@@ -328,6 +328,25 @@ internal sealed class RecordQueries(
     public Answer<IReadOnlyList<CopyNaming>, IndexRefused> GetPluginNameReferences(string name) =>
         _answer.Of(() => _index.RequireWholeSetReads().GetCopiesNaming(name));
 
+    public Answer<ScriptReferences, IndexRefused> GetScriptReferences(string name) => _answer.Of(() =>
+    {
+        var schemas = RequireSchemas();
+        var copies = new List<CopyAttaching>();
+        var unread = new List<string>();
+        foreach (var copy in _index.RequireWholeSetReads().GetCopiesHoldingText(name))
+        {
+            if (!schemas.TryGetValue(copy.RecordType, out var schema))
+            {
+                unread.Add($"{copy.FormKey} in {copy.Plugin.Name} ({copy.Plugin.Origin}): mEdit has no schema for its record type {copy.RecordType}");
+                continue;
+            }
+            var paths = ScriptAttachments.Collect(copy.Body, schema.RecordColumns)
+                .Where(attached => attached.Name.Equals(name, StringComparison.OrdinalIgnoreCase)).Select(attached => attached.FieldPath).ToList();
+            if (paths.Count > 0) copies.Add(new CopyAttaching(copy.FormKey, copy.Plugin, copy.InPluginSource, paths));
+        }
+        return new ScriptReferences(copies, unread);
+    });
+
     private IReadOnlyList<ReferenceResult> Referrers(IReadOnlyList<ReferenceRow> rows)
     {
         var schemas = RequireSchemas();

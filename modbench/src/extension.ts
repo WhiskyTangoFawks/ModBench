@@ -13,13 +13,14 @@ import { moveToTrash } from './trash';
 import { highlightFollowingFocus } from './drivingLib/highlightFollowsFocus';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, loadOrderComing, sourceModRepositoriesOver, type Editor } from './editor';
-import { createSourceLanguage, followRenames, formKeyLocation, registerFollowRename } from './sourceLanguage';
+import { createSourceLanguage, followRenames, formKeyLocation, registerFollowRename, scriptReferences } from './sourceLanguage';
 import { saveUnsavedUnder } from './textDocuments/saveUnsavedUnder';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
 import { registerCopyValueCommand, type CopyValueAdapter } from './drivingLib/copyValue';
 import type { SourceEditing } from './textDocuments/sourceEditing';
 import { applyWorkspaceChanges } from './textDocuments/applyWorkspaceChanges';
 import { oneAtATime } from './textDocuments/oneAtATime';
+import { openPluginSourceDocument, readHeldText } from './textDocuments/pluginSource';
 import { Instance } from './instanceLoader/instance';
 import { factsOf, NO_INSTANCE_FACTS, type InstanceFacts } from './instanceLoader/instanceFacts';
 import { sourceFiles, NO_SOURCE_FILES, type SourceFilesOf } from './instanceLoader/loadOrderSnapshot';
@@ -73,6 +74,7 @@ import { placeModsOver } from './sourceCommands/newRepository';
 import { sourceCommands } from './sourceCommands/sourceCommands';
 import { modSyncOver, modCommands } from './modCommands/modCommands';
 import { entryRenameCommands } from './modCommands/renameEntry';
+import { scriptRenameCommands } from './modCommands/renameScript';
 import { downloadedFileCommands } from './downloadedFileCommands/downloads';
 import { editingFlow } from './instanceCommands/editing';
 import { instanceCommands } from './instanceCommands/instanceCommands';
@@ -95,7 +97,7 @@ type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
   'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'signalChange' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
-  | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'getPluginNameReferences' | 'moveLastWritten' | 'getSourceFolderMoveChanges' | 'followSourceFolderMove' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'getPluginIndexing'>;
+  | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'getPluginNameReferences' | 'getScriptReferences' | 'getCopyDocument' | 'getRecordOwner' | 'moveLastWritten' | 'getSourceFolderMoveChanges' | 'followSourceFolderMove' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'getPluginIndexing'>;
 
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -216,6 +218,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const entryRenames = entryRenameCommands({ adapter, client });
   own(registerFollowRename(followRenames({
     adapter, plugins: commandsOfPlugins, entries: entryRenames, downloads: downloadedFileCommands(adapter), profiles: commands, source: deps.sourceEditing, instance,
+    scripts: scriptRenameCommands({ adapter, client, references: scriptReferences({ client, open: openPluginSourceDocument, readText: readHeldText }).owner }),
     reporter: reporterFor('symbol.followRename'),
   })));
   const plugins = own(pluginsBox.onInstance({

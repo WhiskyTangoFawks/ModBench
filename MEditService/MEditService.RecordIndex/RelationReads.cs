@@ -392,6 +392,23 @@ internal sealed class RelationReads(
         return [.. headers.Concat(copies).DistinctBy(copy => (copy.FormKey, copy.Plugin.Name, copy.Plugin.Origin))];
     }
 
+    /// <summary>Each copy in an active or compiled plugin whose document holds <paramref name="text"/> in any case.</summary>
+    public IReadOnlyList<CopyHoldingText> GetCopiesHoldingText(string text)
+    {
+        using var context = store.OpenRead();
+        return context.Rows($"""
+            SELECT r.form_key, r.plugin, r.origin, r.record_type, r.body, d.derived_from <> '{DerivedFrom.Binary}'
+            FROM {TableDdlBuilder.MirrorSchema}.records r
+            {TableDdlBuilder.RegisteredJoin("r", "plugin", "origin")}
+            JOIN {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} d
+              ON d.plugin = r.plugin AND d.origin = r.origin
+            WHERE contains(lower(r.body), lower($1))
+              AND (p.load_order_idx IS NOT NULL OR d.derived_from <> '{DerivedFrom.Binary}')
+            ORDER BY r.plugin, r.origin, r.form_key
+            """, reader => new CopyHoldingText(
+                reader.GetString(0), new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.GetString(3), reader.GetString(4), reader.GetBoolean(5)), text);
+    }
+
     /// <summary>Every plugin at least one filtered record matches, restricted to
     /// <paramref name="tableNames"/> (plugins.md). Empty when no filter is active: every plugin
     /// already has matches.</summary>

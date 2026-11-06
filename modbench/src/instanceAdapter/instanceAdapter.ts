@@ -122,11 +122,12 @@ export interface ModGroups {
 /** A mod or a separator, by its kind and name. */
 export type EntryRef = Pick<ModlistEntry, 'kind' | 'name'>;
 
-/** A plugin at the root of a mod or Overwrite and its new file name; or a mod's or a separator's folder, a downloaded
- *  file or a profile's folder, and the symbol its new name holds. */
+/** The symbol a file or folder of the instance is, and what its new name names: a plugin at its origin's root, an entry,
+ *  or a Papyrus script's file in a mod or Overwrite, by its path there. */
 export type RenamedSymbol =
   | { readonly kind: 'plugin'; readonly plugin: PluginAddress; readonly to: string }
-  | { readonly kind: 'entry'; readonly entry: EntrySymbol; readonly to: EntrySymbol };
+  | { readonly kind: 'entry'; readonly entry: EntrySymbol; readonly to: EntrySymbol }
+  | { readonly kind: 'script'; readonly origin: FileOrigin; readonly path: string; readonly name: string; readonly to: { readonly path: string; readonly name?: string } };
 
 /** Whether two entries are one to the mod manager: the same kind, and the same key. */
 export const sameEntry = (manager: Pick<InstanceAdapter, 'entryKey'>, a: EntryRef, b: EntryRef): boolean =>
@@ -219,10 +220,10 @@ export type DataFolderPlugins =
   | { readonly kind: 'unresolved' }
   | { readonly kind: 'unreadable'; readonly reason: string };
 
-/** Every file in the game folder's Data folder, at any depth, by its path in it, lower case; or why
- *  there is no answer, as for its plugins. */
+/** Every file at any depth of the game's Data folder, by its path in it in lower case: that path as spelled, and its
+ *  own path; or why there is no answer. */
 export type DataFolderFiles =
-  | { readonly kind: 'listed'; readonly files: ReadonlySet<string> }
+  | { readonly kind: 'listed'; readonly files: ReadonlyMap<string, { readonly relativePath: string; readonly path: string }> }
   | { readonly kind: 'unresolved' }
   | { readonly kind: 'unreadable'; readonly reason: string };
 
@@ -411,6 +412,9 @@ export const CHECK_THE_DISK: Reread = { named: [], disk: true };
 
 /** Where a file's contents come from: a mod, or the files the game wrote at run time. */
 export type FileOrigin = { readonly kind: 'mod'; readonly name: string } | { readonly kind: 'runtimeOutput' };
+
+/** Where the game takes a file from: a mod or Overwrite, or, below every one, its own Data folder. */
+export type FileSource = FileOrigin | { readonly kind: 'dataFolder' };
 
 /** The origin a plugin's origin names (ADR-0012). */
 export const fileOriginOfPlugin = (origin: string): FileOrigin => (origin === OVERWRITE_ORIGIN ? { kind: 'runtimeOutput' } : { kind: 'mod', name: origin });
@@ -901,8 +905,9 @@ export interface InstanceAdapter extends DataFileReads {
   entryKey(entry: EntryRef): string;
   /** The mark the manager reads as excluded. */
   readonly exclusionMark: string;
-  /** Whether the origin's folder holds a file of the name now on disk, compared as the game compares plugin names. */
-  originHoldsPlugin(origin: FileOrigin, name: string): Promise<boolean>;
+  /** Whether the origin's folder, or the game's Data folder, holds a file at `relativePath` now on disk, each name
+   *  compared as the game compares names. */
+  originHoldsFile(origin: FileSource, relativePath: string): Promise<boolean>;
   /** Where the instance's files name a plugin: each profile's plugin order, and the sorting rule files. A rename's commit
    *  writes the plugin, its named files and those names at once; a failed write puts every file back. */
   readonly pluginReferences: SymbolOwner;

@@ -161,7 +161,7 @@ describe('modbench.plugin.rename', () => {
 
     it('shows why when the name cannot be checked, rather than rejecting', async () => {
       const { validate, fake } = setup();
-      vi.spyOn(fake.adapter, 'originHoldsPlugin').mockRejectedValue(new Error('EACCES'));
+      vi.spyOn(fake.adapter, 'originHoldsFile').mockRejectedValue(new Error('EACCES'));
       expect(await validate('Other.esp')).toBe('Could not check "Other.esp": EACCES');
     });
   });

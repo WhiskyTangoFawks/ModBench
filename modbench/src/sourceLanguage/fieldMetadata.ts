@@ -1,6 +1,7 @@
-import type { CompareResult } from '../client';
-import type { Segment } from './sourceText';
+import type { CompareResult, MEditClient } from '../client';
+import type { FieldAtOffset, Segment } from './sourceText';
 import { shapeUnderOwner } from '../wire/indexShape';
+import { answerOf } from '../wire/readFailed';
 
 type Field = CompareResult['overrides'][number]['fields'][number];
 type FieldMetadata = Field['metadata'];
@@ -27,4 +28,12 @@ export function metadataAt(fields: Field[], record: unknown, path: Segment[]): F
     shape = current;
   }
   return current;
+}
+
+/** The metadata of the field `found` sits in, from mEdit's answer for its record's winning copy; rejects when mEdit
+ *  cannot answer. */
+export async function fieldOfRecord(client: Pick<MEditClient, 'getComparison'>, found: FieldAtOffset): Promise<FieldMetadata | undefined> {
+  const comparison = answerOf(await client.getComparison(found.recordFormKey));
+  const copy = comparison?.overrides.find((candidate) => candidate.isWinner);
+  return copy && metadataAt(copy.fields, found.record, found.path);
 }

@@ -6,6 +6,7 @@ import type { Instance } from '../instanceLoader/instance';
 import type { DownloadedFileCommands } from '../downloadedFileCommands/downloads';
 import type { InstanceCommands } from '../instanceCommands/instanceCommands';
 import type { EntryRenameCommands, RenameEditing } from '../modCommands/renameEntry';
+import type { ScriptRenameCommands } from '../modCommands/renameScript';
 import type { PluginCommands } from '../pluginCommands/plugins';
 import type { ChangeResult } from '../ports/changeResult';
 import type { Reporter } from '../ports/reporter';
@@ -34,6 +35,7 @@ interface FollowRenameDeps {
   readonly entries: Pick<EntryRenameCommands, 'renameMod' | 'renameSeparator'>;
   readonly downloads: Pick<DownloadedFileCommands, 'renameDownloadedFile'>;
   readonly profiles: Pick<InstanceCommands, 'renameProfile'>;
+  readonly scripts: Pick<ScriptRenameCommands, 'renameScript'>;
   readonly source: SourceEditing;
   readonly instance: Pick<Instance, 'quiet'>;
   readonly reporter: Reporter;
@@ -60,7 +62,12 @@ interface Followed {
   readonly report: () => void;
 }
 
-async function followed({ plugins, entries, downloads, profiles, reporter }: FollowRenameDeps, symbol: RenamedSymbol, editing: Editing): Promise<Followed> {
+async function followed({ plugins, entries, downloads, profiles, scripts, reporter }: FollowRenameDeps, symbol: RenamedSymbol, editing: Editing): Promise<Followed> {
+  if (symbol.kind === 'script') {
+    const named = `"${symbol.name}"`;
+    const result = await scripts.renameScript(editing([]), symbol);
+    return { named, report: () => { reportFollowed(reporter, named, symbol.to.name ?? symbol.to.path.split('/').at(-1) ?? symbol.to.path, result, 'its file'); } };
+  }
   if (symbol.kind === 'plugin') {
     const { plugin, to } = symbol;
     const named = `"${plugin.name}" (${plugin.origin})`;

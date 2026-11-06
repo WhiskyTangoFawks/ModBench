@@ -48,7 +48,6 @@ async function installationFilesIn(folders: readonly string[], held: HeldTexts) 
       const at = await manifestTextIn(folder, held);
       if (at === undefined) return { named: [], leftOut: [] };
       if (!('text' in at)) return { named: [], leftOut: [`${at.file}: ${at.read.refused}`] };
-      if ('refused' in at.read) return { named: [], leftOut: [`${at.file}: ${at.read.refused}`] };
       const { file, text, read: { manifest } } = at;
       return { named: [{ file, text, manifest, packages: packageNamesIn(text, 'installationFile') }], leftOut: [] };
     } catch (err) {

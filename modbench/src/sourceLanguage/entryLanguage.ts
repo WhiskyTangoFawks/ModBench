@@ -47,7 +47,6 @@ export function entryLanguage({ instance, reporter, owners, goTo, entryTooltip, 
     if (kind === 'downloadedFile') return value.downloadedFiles.kind === 'listed' ? value.downloadedFiles.rows.map(({ name }) => name) : [];
     return value.mods.flatMap((entry) => (entry.kind === kind ? [entry.name] : []));
   };
-  // Go to Symbol places a downloaded file at its own file and a profile at its mod order file, as a plugin at its own.
   const ownFile = ({ kind, name }: EntrySymbol): string | undefined => {
     if (kind === 'profile') return modOrderFileOf(name);
     const files = instance?.value.downloadedFiles;

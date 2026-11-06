@@ -28,7 +28,7 @@ async function renameRefusal(
 ): Promise<string | undefined> {
   const refusal = pluginNameRefusal(newName, creatableExtensions);
   if (refusal !== undefined) return refusal;
-  return await access.adapter.originHoldsPlugin(fileOriginOfPlugin(plugin.origin), newName) ? `"${plugin.origin}" already holds "${newName}".` : undefined;
+  return await access.adapter.originHoldsFile(fileOriginOfPlugin(plugin.origin), newName) ? `"${plugin.origin}" already holds "${newName}".` : undefined;
 }
 
 // The Instance adapter defines a plugin; mEdit's plugins, the build files and the manifests name it.
@@ -47,7 +47,7 @@ const originName = (origin: RankedOrigin): string => (origin.kind === 'mod' ? or
 // The copy mod order resolves the plugin's file name to; the Data folder's, which no rename names, when no origin holds it.
 async function rowsOf(adapter: InstanceAdapter, { name }: PluginAddress): Promise<ResolvedPlugin[]> {
   for (const origin of originsWinningFirst((await adapter.modOrder()).mods)) {
-    if (await adapter.originHoldsPlugin(origin, name)) return [{ name, origin: originName(origin), winning: true }];
+    if (await adapter.originHoldsFile(origin, name)) return [{ name, origin: originName(origin), winning: true }];
   }
   return [];
 }

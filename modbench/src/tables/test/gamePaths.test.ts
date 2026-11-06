@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import {
-  archiveListsOf, ba2VersionsOf, blueprintLoadsLastIn, creationClubListFile, gameReleaseForGame, loadedWithNoLineOf, nexusDomainsForGame, shortNameForNexusDomain, nexusDomainForMetaGame, gamePathInfoForRelease, lootRepositoryOf, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
+  archiveListsOf, ba2VersionsOf, blueprintLoadsLastIn, creationClubListFile, gameReleaseForGame, loadedWithNoLineOf, nexusDomainsForGame, shortNameForNexusDomain, nexusDomainForMetaGame, gamePathInfoForRelease, lootRepositoryOf, papyrusScriptAt, papyrusScriptFiles, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
 } from '../gamePaths';
 
 const NOT_WRITTEN = 'a game whose plugins.txt Modbench does not write';
@@ -259,5 +259,40 @@ describe('lootRepositoryOf', () => {
 describe('blueprintLoadsLastIn', () => {
   it.each([['Starfield', true], ['Fallout4', false], ['SkyrimSE', false], ['SomeRelease', false], [undefined, false]])('answers for %s: %s', (release, answer) => {
     expect(blueprintLoadsLastIn(release)).toBe(answer);
+  });
+});
+
+describe('papyrusScriptAt', () => {
+  it.each([
+    ['Fallout4', 'Scripts/Source/User/Ns/Quest.psc', { name: 'Ns:Quest', compiled: false }],
+    ['Fallout4', 'scripts/source/base/Actor.psc', { name: 'Actor', compiled: false }],
+    ['Fallout4', 'Scripts/Ns/Quest.pex', { name: 'Ns:Quest', compiled: true }],
+    ['SkyrimSE', 'Source/Scripts/Quest.psc', { name: 'Quest', compiled: false }],
+    ['SkyrimSE', 'Scripts/Source/Quest.psc', { name: 'Quest', compiled: false }],
+    ['SkyrimSE', 'Scripts/Quest.pex', { name: 'Quest', compiled: true }],
+  ])('names the script a file of %s at %s is, and whether it is compiled', (release, path, expected) => {
+    expect(papyrusScriptAt(release, path)).toEqual(expected);
+  });
+
+  it.each([
+    ['a source outside the source folders', 'Fallout4', 'Scripts/Quest.psc'],
+    ['a file outside the script folders', 'Fallout4', 'Textures/Quest.pex'],
+    ['a file with no name', 'Fallout4', 'Scripts/.pex'],
+    ['a release no reference names the folders of', 'Starfield', 'Scripts/Quest.pex'],
+    ['no release', undefined, 'Scripts/Quest.pex'],
+  ])('names no script for %s', (_case, release, path) => {
+    expect(papyrusScriptAt(release, path)).toBeUndefined();
+  });
+});
+
+describe('papyrusScriptFiles', () => {
+  it('places a script\'s compiled script and each of its sources by its namespaces, in the order the Creation Kit reads the sources', () => {
+    expect(papyrusScriptFiles('Fallout4', 'Ns:Quest')).toEqual({
+      compiled: 'Scripts/Ns/Quest.pex', sources: ['Scripts/Source/User/Ns/Quest.psc', 'Scripts/Source/Base/Ns/Quest.psc'],
+    });
+  });
+
+  it('places none for a release no reference names the folders of', () => {
+    expect(papyrusScriptFiles('Starfield', 'Quest')).toBeUndefined();
   });
 });

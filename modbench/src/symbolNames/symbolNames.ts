@@ -158,8 +158,14 @@ export interface EntryNames {
   nameAt(file: string, text: string, offset: number): Promise<EntryNamed | undefined>;
 }
 
+/** A Papyrus script, which its name alone names (symbols.md, The symbols). */
+export interface ScriptSymbol {
+  readonly kind: 'script';
+  readonly name: string;
+}
+
 /** A box that owns files naming a symbol its name alone names, in its part of a rename. */
-export interface EntryOwner<Symbol extends EntrySymbol = EntrySymbol> {
+export interface EntryOwner<Symbol extends EntrySymbol | ScriptSymbol = EntrySymbol> {
   plan(symbol: Symbol, newName: string, held: HeldTexts): Promise<Planned>;
 }
 

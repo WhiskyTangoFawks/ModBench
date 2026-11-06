@@ -88,23 +88,38 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  describe('whether an origin holds a plugin', () => {
+  describe('whether an origin holds a file', () => {
     it('finds the folder of a mod named in another case', async () => {
-      expect(await adapter.originHoldsPlugin({ kind: 'mod', name: 'patch mod' }, 'Patch Mod.esp')).toBe(true);
+      expect(await adapter.originHoldsFile({ kind: 'mod', name: 'patch mod' }, 'Patch Mod.esp')).toBe(true);
     });
 
     it('answers false for a folder of the name and for a mod with no folder', async () => {
       await mkdir(at(`${MOD}/Folder.esp`));
 
-      expect(await adapter.originHoldsPlugin(ORIGIN, 'Folder.esp')).toBe(false);
-      expect(await adapter.originHoldsPlugin({ kind: 'mod', name: 'Gone' }, 'Patch Mod.esp')).toBe(false);
+      expect(await adapter.originHoldsFile(ORIGIN, 'Folder.esp')).toBe(false);
+      expect(await adapter.originHoldsFile({ kind: 'mod', name: 'Gone' }, 'Patch Mod.esp')).toBe(false);
     });
 
     it('answers for Overwrite as the run-time output', async () => {
       await put('overwrite/Ran.esp');
 
-      expect(await adapter.originHoldsPlugin({ kind: 'runtimeOutput' }, 'Ran.esp')).toBe(true);
-      expect(await adapter.originHoldsPlugin({ kind: 'runtimeOutput' }, 'Patch Mod.esp')).toBe(false);
+      expect(await adapter.originHoldsFile({ kind: 'runtimeOutput' }, 'Ran.esp')).toBe(true);
+      expect(await adapter.originHoldsFile({ kind: 'runtimeOutput' }, 'Patch Mod.esp')).toBe(false);
+    });
+
+    it('finds a file below the origin\'s root, each name in another case', async () => {
+      await put(`${MOD}/Scripts/Ns/Quest.pex`);
+
+      expect(await adapter.originHoldsFile(ORIGIN, 'scripts/NS/quest.PEX')).toBe(true);
+      expect(await adapter.originHoldsFile(ORIGIN, 'Scripts/Quest.pex')).toBe(false);
+    });
+
+    it('answers for the game\'s Data folder', async () => {
+      await put('game/Data/Scripts/Actor.pex');
+      const withGame = managerOver(root, { gameFolder: { kind: 'found', root: at('game'), dataFolder: at('game/Data') } });
+
+      expect(await withGame.originHoldsFile({ kind: 'dataFolder' }, 'scripts/actor.pex')).toBe(true);
+      expect(await withGame.originHoldsFile({ kind: 'dataFolder' }, 'Scripts/Quest.pex')).toBe(false);
     });
   });
 

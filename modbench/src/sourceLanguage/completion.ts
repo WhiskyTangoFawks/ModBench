@@ -1,8 +1,8 @@
 import type { MEditClient } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
-import { metadataAt } from './fieldMetadata';
-import { fieldAt, type FieldAtOffset } from './sourceText';
+import { fieldOfRecord, type metadataAt } from './fieldMetadata';
+import { fieldAt } from './sourceText';
 import { answerOf } from '../wire/readFailed';
 
 interface SourceCompletion {
@@ -40,12 +40,6 @@ async function referenceCompletions(client: Client, field: FieldMetadata, typed:
     isIncomplete: true,
     items: records.map(({ editorId, formKey }) => ({ label: editorId || formKey, detail: formKey, insertText: formKey })),
   };
-}
-
-async function fieldOfRecord(client: Client, found: FieldAtOffset): Promise<FieldMetadata | undefined> {
-  const comparison = answerOf(await client.getComparison(found.recordFormKey));
-  const copy = comparison?.overrides.find((candidate) => candidate.isWinner);
-  return copy && metadataAt(copy.fields, found.record, found.path);
 }
 
 /** What the string under the cursor completes to: the records a reference field offers for the text typed so

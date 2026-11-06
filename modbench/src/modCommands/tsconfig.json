@@ -12,6 +12,7 @@
     { "path": "../nexus" },
     { "path": "../ports" },
     { "path": "../symbolNames" },
+    { "path": "../tables" },
     { "path": "../wire" }
   ],
   "include": ["**/*.ts"],
