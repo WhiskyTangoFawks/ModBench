@@ -72,14 +72,16 @@ describe('change: a rename that carries every reference', () => {
     expect(log.filter((line) => line.startsWith('commit'))).toEqual([]);
   });
 
-  it.each<[string, Partial<RenamePlan>, boolean]>([
-    ['were applied', { changes: edit('/source') }, true],
-    ['were none', {}, false],
-  ])('stops at a commit that fails, saying whether changes %s before it', async (_case, planned, edited) => {
+  const MOVE = { from: '/source/Old', to: '/source/New' };
+
+  it.each<[string, Partial<RenamePlan>, boolean, readonly (typeof MOVE)[]]>([
+    ['were applied', { changes: { ...edit('/source'), moves: [MOVE] } }, true, [MOVE]],
+    ['were none', {}, false, []],
+  ])('stops at a commit that fails, saying whether changes %s before it, and what moved', async (_case, planned, edited, moved) => {
     const log: string[] = [];
     const owners = { definition: owner('definition'), references: [owner('source', { ...planned, commit: committing({ failed: 'disk full' }) })] };
 
-    expect(await change(owners, planning(log), applying(log))).toEqual({ applied: false, failed: 'disk full', edited });
+    expect(await change(owners, planning(log), applying(log))).toEqual({ applied: false, failed: 'disk full', edited, moved });
     expect(log.filter((line) => line.startsWith('commit'))).toEqual(['commit source']);
   });
 });

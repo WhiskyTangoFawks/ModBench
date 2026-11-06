@@ -86,7 +86,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
     public Answer<SubmoduleHead, SourceFailure> CommitAtHead(Submodule submodule, CancellationToken cancel) => throw Unreached();
 
-    public Answer<SourceChanges?, SourceFailure> ChangesToMoveSourceFolder(string sourceFolder, string movedTo, IReadOnlyList<SourceMove> files) => throw Unreached();
+    public Answer<SourceChanges, SourceFailure> ChangesToMoveSourceFolder(string sourceFolder, string movedTo, IReadOnlyList<SourceMove> files) => throw Unreached();
 
     public SourceFailure? FollowSourceFolderMove(string sourceFolder, string movedTo) => throw Unreached();
 

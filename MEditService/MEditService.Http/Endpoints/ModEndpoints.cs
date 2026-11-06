@@ -55,7 +55,7 @@ internal static class ModEndpoints
             .WithName("FollowSourceFolderMove")
             .WithTags("Mods")
             .WithDescription(
-                "Once a source folder has moved, what git holds of it follows, as git mv leaves it: each entry the instance " +
+                "Once a source folder has moved, what git holds of it follows: each entry the instance " +
                 "repository's index holds under it, the refs naming what Modbench last wrote there, and a submodule's work tree.")
             .Produces(204)
             .ProducesProblem(400)

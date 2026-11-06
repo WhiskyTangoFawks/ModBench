@@ -45,6 +45,7 @@ const held = (name: string, origin: string) => ({ name, origin: { kind: 'mod', n
 const PLUGIN = { name: 'Patch.esp', origin: 'ModA' };
 const CHANGES = { treeName: 'Patch.esp', moves: [{ from: '/m/plugin-source/Patch.esp', to: '/m/plugin-source/Renamed.esp' }], deletions: [], documents: [], leftBehind: [] };
 const NO_CHANGES = { moves: [], deletions: [], documents: [] };
+const MOVED = '/m/plugin-source/Patch.esp moved to /m/plugin-source/Renamed.esp.';
 
 function setup(selection: readonly PluginsTreeNode[] = []) {
   const client = new InMemoryMEditClient();
@@ -176,7 +177,7 @@ describe('modbench.plugin.rename', () => {
     expect(source.refreshSourceControlFor).toHaveBeenCalledWith(PLUGIN);
   });
 
-  it('names the rename and the plugin, and points to git, when VS Code cannot apply the changes', async () => {
+  it('names the rename and the plugin when VS Code cannot apply the changes, writing no file', async () => {
     showInputBox.mockResolvedValueOnce('Renamed.esp');
     const { client, fake, reporter, apply, run } = setup();
     apply.mockRejectedValueOnce(new Error('EEXIST'));
@@ -185,7 +186,7 @@ describe('modbench.plugin.rename', () => {
 
     expect(reporter.reports).toMatchObject([{
       severity: 'error',
-      message: 'Could not rename "Patch.esp" (ModA): its references may be partly changed. Reverting them in git undoes it.',
+      message: 'Could not rename "Patch.esp" (ModA): its references may be partly changed, and its files and folders partly moved.',
     }]);
     expect(client.calls.filter((c) => c.method === 'moveLastWritten')).toEqual([]);
     expect(fake.calls).toEqual([]);
@@ -239,7 +240,7 @@ describe('modbench.plugin.rename', () => {
 
     expect(reporter.reports).toEqual([{
       severity: 'error',
-      message: 'Could not rename "Patch.esp" (ModA): its references were changed, and its file and lines were not.',
+      message: `Could not rename "Patch.esp" (ModA): its references were changed, and its file and lines were not. ${MOVED}`,
       detail: 'disk full',
     }]);
   });
@@ -274,7 +275,7 @@ describe('modbench.plugin.rename, called by the agent', () => {
 
     expect(await run(calling('Renamed.esp'))).toMatchObject({
       applied: false,
-      refusal: 'Could not rename "Patch.esp" (ModA): its references were changed, and its file and lines were not.',
+      refusal: `Could not rename "Patch.esp" (ModA): its references were changed, and its file and lines were not. ${MOVED}`,
       detail: 'disk full',
     });
     expect(reporter.reports).toEqual([]);

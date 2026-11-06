@@ -3,13 +3,14 @@
 
 import { basename } from 'node:path';
 import type { TailOf } from '../coreLib/boundCommand';
-import { change, type ChangeResult, type RenameEditing, type SymbolOwners } from '../coreLib/change';
+import { change, type RenameEditing, type SymbolOwners } from '../coreLib/change';
+import type { ChangeResult } from '../ports/changeResult';
 export type { RenameEditing } from '../coreLib/change';
 import { refuse } from '../coreLib/refuse';
 import { sameEntry, type EntryRef, type InstanceAdapter, type ModOrderChange } from '../instanceAdapter/instanceAdapter';
 import { manifestEntryReferences, sourceModsOf } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
-import { COMMITTED, NO_FILE_CHANGES, sameName, type EntryOwner } from '../symbolNames/symbolNames';
+import { COMMITTED, NO_FILE_CHANGES, sameName, type Committed, type EntryOwner } from '../symbolNames/symbolNames';
 import { sourceFolderMove, type MEditClient } from '../client';
 import { renameModNameRefusal, separatorNameRefusal } from './modCommands';
 import { EMPTY_MOD_NAME } from './nameRefusals';
@@ -42,13 +43,21 @@ async function followed(what: string, write: () => Promise<unknown>): Promise<st
 const renamedLine = ({ kind, name }: EntryRef, to: string): ModOrderChange =>
   (kind === 'mod' ? { kind: 'renameMod', from: name, to } : { kind: 'renameSeparator', from: name, to });
 
-async function linesRenamed(adapter: InstanceAdapter, entry: EntryRef, to: string, inProfiles: readonly string[]): Promise<string[]> {
-  const left: string[] = [];
+// The line in each profile that lists the entry. A separator's folder moves with the first line renamed, so a failure
+// before it writes nothing.
+async function linesRenamed(adapter: InstanceAdapter, entry: EntryRef, to: string, inProfiles: readonly string[]): Promise<Committed> {
+  const cannotFollow: string[] = [];
+  let folderMoved = entry.kind === 'mod';
   for (const profile of inProfiles) {
-    left.push(...await followed(`profile "${profile}"'s ${adapter.names.modOrderFile}`, () =>
-      adapter.changeModOrder(profile, (order) => (order.some((listed) => sameEntry(adapter, listed, entry)) ? [renamedLine(entry, to)] : []))));
+    try {
+      const { landed } = await adapter.changeModOrder(profile, (order) => (order.some((listed) => sameEntry(adapter, listed, entry)) ? [renamedLine(entry, to)] : []));
+      folderMoved ||= landed.length > 0;
+    } catch (err) {
+      if (!folderMoved) return { failed: errorMessage(err) };
+      cannotFollow.push(`profile "${profile}"'s ${adapter.names.modOrderFile}: ${errorMessage(err)}`);
+    }
   }
-  return left;
+  return { cannotFollow };
 }
 
 async function profilesActiveFirst(adapter: InstanceAdapter): Promise<string[]> {
@@ -57,7 +66,7 @@ async function profilesActiveFirst(adapter: InstanceAdapter): Promise<string[]> 
 }
 
 // A mod's folder moves before its lines, so a failed line costs that profile the mod's place (mods.md, Rename mod,
-// story 4). A separator's folder moves with its line in the active profile.
+// story 4).
 function entryDefinition(adapter: InstanceAdapter, sourceFolder: FolderMove | undefined): EntryOwner {
   return {
     async plan(entry, to) {
@@ -72,21 +81,21 @@ function entryDefinition(adapter: InstanceAdapter, sourceFolder: FolderMove | un
       } catch (err) {
         return { refused: errorMessage(err) };
       }
-      const [active, ...others] = ordered;
       return {
         changes: NO_FILE_CHANGES,
         cannotFollow: [],
         commit: async () => {
           try {
             if (entry.kind === 'mod') await adapter.renameModFolder(entry.name, to);
-            else if (active !== undefined) await adapter.changeModOrder(active, () => [renamedLine(entry, to)]);
           } catch (err) {
             return { failed: errorMessage(err) };
           }
+          const lines = await linesRenamed(adapter, entry, to, ordered);
+          if ('failed' in lines) return lines;
           const moved = await folderOf(adapter, { kind: entry.kind, name: to });
           const folders = from === undefined || moved === undefined ? [] : [{ from, to: moved }];
           const cannotFollow = [
-            ...await linesRenamed(adapter, entry, to, entry.kind === 'mod' ? ordered : others),
+            ...lines.cannotFollow,
             ...await followed('the instance repository', () => adapter.followFoldersInRepository([...folders, ...sourceFolder === undefined ? [] : [sourceFolder]])),
             ...await followed('its publisher tags', () => adapter.followModFolders(folders)),
           ];
@@ -97,7 +106,6 @@ function entryDefinition(adapter: InstanceAdapter, sourceFolder: FolderMove | un
   };
 }
 
-// The source folder that builds the mod, when it is named for it.
 async function sourceFolderNamedFor(adapter: InstanceAdapter, mod: string): Promise<string | undefined> {
   const sourceMods = await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceModFolders(), (name) => adapter.entryKey({ kind: 'mod', name }));
   const folder = sourceMods.folderOf(mod);
@@ -108,7 +116,7 @@ async function modOwners({ adapter, client }: EntryRenameAccess, from: string, t
   const sourceFolder = await sourceFolderNamedFor(adapter, from);
   const movedTo = sourceFolder === undefined ? undefined : adapter.sourceFolder(to);
   const move = sourceFolder === undefined || movedTo === undefined ? undefined : { from: sourceFolder, to: movedTo };
-  const manifest = manifestEntryReferences({ modFolderOf: (mod) => adapter.modFolderPath(mod), sourceFolderOf: () => move?.from });
+  const manifest = manifestEntryReferences({ modFolderOf: (mod) => adapter.modFolderPath(mod), sourceFolder: move?.from });
   const source = sourceFolderMove(client, async (symbol, newName) => move && { ...move, files: await manifest.sourceFilesOf(symbol, newName) });
   return { definition: entryDefinition(adapter, move), references: [manifest, source] };
 }

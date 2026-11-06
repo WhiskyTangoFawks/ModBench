@@ -2,7 +2,8 @@
 // source's changes are mEdit's to answer; the file and its lines are the Instance adapter's.
 
 import type { TailOf } from '../coreLib/boundCommand';
-import { change, type ChangeResult, type RenameEditing, type SymbolOwners } from '../coreLib/change';
+import { change, type RenameEditing, type SymbolOwners } from '../coreLib/change';
+import type { ChangeResult } from '../ports/changeResult';
 import { fileOriginOfPlugin, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { manifestFileReferences, sourceModsOf } from '../manifestAdapter/manifestAdapter';
 import { originsWinningFirst, type RankedOrigin, type ResolvedPlugin, type SymbolOwner } from '../symbolNames/symbolNames';

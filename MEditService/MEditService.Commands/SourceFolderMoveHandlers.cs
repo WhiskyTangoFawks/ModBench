@@ -12,16 +12,8 @@ public sealed class SourceFolderMoveChangesHandler
     internal SourceFolderMoveChangesHandler(ISourceAdapter source) => _source = source;
 
     /// <summary>The source folder's move, and each of <paramref name="files"/> it holds, written nowhere (ADR-0001).</summary>
-    public Answer<SourceChanges, SourceFolderMoveRefused> Changes(string sourceFolder, string movedTo, IReadOnlyList<SourceMove> files)
-    {
-        if (!_source.ChangesToMoveSourceFolder(sourceFolder, movedTo, files).Holds(out var changes, out var failure)) return SourceFolderMoveRefused.Of(failure);
-        if (changes is null)
-        {
-            return new SourceFolderMoveRefused(
-                SourceFolderMoveRefusal.FolderTaken, $"'{movedTo}', or a name one of its files moves to, is taken, so '{sourceFolder}' was not moved.");
-        }
-        return changes;
-    }
+    public Answer<SourceChanges, SourceFolderMoveRefused> Changes(string sourceFolder, string movedTo, IReadOnlyList<SourceMove> files) =>
+        _source.ChangesToMoveSourceFolder(sourceFolder, movedTo, files).Holds(out var changes, out var failure) ? changes : SourceFolderMoveRefused.Of(failure);
 }
 
 /// <summary>The second step of moving a source folder: what git holds of it follows, once VS Code has moved it.</summary>
@@ -38,8 +30,12 @@ public sealed class FollowSourceFolderMoveHandler
 
 public sealed record SourceFolderMoveRefused(SourceFolderMoveRefusal Refusal, string Message)
 {
-    internal static SourceFolderMoveRefused Of(SourceFailure failure) =>
-        new(failure is SourceFailure.GitUnavailable ? SourceFolderMoveRefusal.GitUnavailable : SourceFolderMoveRefusal.WriteFailed, failure.Reason);
+    internal static SourceFolderMoveRefused Of(SourceFailure failure) => new(failure switch
+    {
+        SourceFailure.Taken => SourceFolderMoveRefusal.FolderTaken,
+        SourceFailure.GitUnavailable => SourceFolderMoveRefusal.GitUnavailable,
+        _ => SourceFolderMoveRefusal.WriteFailed,
+    }, failure.Reason);
 }
 
 /// <summary>Why a step of moving a source folder wrote nothing (ADR-0019).</summary>

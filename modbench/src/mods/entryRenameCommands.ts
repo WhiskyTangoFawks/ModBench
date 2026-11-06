@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { registerAgentGesture, reportPartial, type AgentGesture, type GestureResult } from '../drivingLib/agentGesture';
 import { singularArgument } from '../drivingLib/gestureEntry';
 import { promptRename } from '../drivingLib/promptRename';
+import { renameOutcome } from '../drivingLib/renameOutcome';
 import { Refusal } from '../drivingLib/refusal';
 import type { Instance } from '../instanceLoader/instance';
 import type { ModCommands } from '../modCommands/modCommands';
@@ -28,25 +29,9 @@ interface Rename {
   readonly newName: string;
 }
 
-const refused = (refusal: string, detail?: string): GestureResult<string> => ({ applied: false, refusal, detail });
-
-// symbols.md, The features, story 7: a reference that could not follow lands as a warning naming it.
-function resultOf(kind: 'mod' | 'separator', { oldName }: Rename, result: EntryRenameResult): GestureResult<string> {
-  const couldNot = `Could not rename "${oldName}"`;
-  if (result.applied) {
-    const { cannotFollow } = result;
-    return {
-      applied: true,
-      outcome: { landed: [result.name], refused: [] },
-      ...cannotFollow.length === 0 ? {} : {
-        partial: [{ message: `Renamed "${oldName}" to "${result.name}". ${String(cannotFollow.length)} references to it could not follow.`, detail: cannotFollow.join('\n'), severity: 'warning' }],
-      },
-    };
-  }
-  if ('unapplied' in result) return refused(`${couldNot}: its references may be partly changed. Reverting them in git undoes it.`, result.unapplied);
-  if ('refusal' in result) return refused(`Failed to rename ${kind}.`, result.refusal);
-  if (!result.edited) return refused(`${couldNot}: its folder and lines were not renamed.`, result.failed);
-  return refused(`${couldNot}: its references were changed, and its folder and lines were not.`, result.failed);
+function resultOf({ oldName, newName }: Rename, result: EntryRenameResult): GestureResult<string> {
+  const landed = result.applied ? result.name : newName;
+  return renameOutcome(result, { named: `"${oldName}"`, newName: landed, landed, definition: 'its folder and lines' });
 }
 
 function renameGesture(
@@ -70,7 +55,7 @@ function renameGesture(
     },
     run: async (asked) => (asked.oldName === asked.newName ? { applied: true, outcome: { landed: [], refused: [] } } : runModsWriting(kind === 'mod' ? 'modbench.mod.rename' : 'modbench.separator.rename', instance, () => instance.quiet(() => source.oneAtATime(async () => {
       const apply = (changes: readonly FileChanges[]) => applyAnswered(source, changes, []);
-      return resultOf(kind, asked, await rename({ held: heldTexts(unsavedTexts()), apply }, asked.oldName, asked.newName));
+      return resultOf(asked, await rename({ held: heldTexts(unsavedTexts()), apply }, asked.oldName, asked.newName));
     })))),
     report: (result) => {
       if (result.applied) reportPartial(reporter, result.partial);

@@ -119,6 +119,18 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
     expect(after.get(NEW_META)).toEqual(before.get(OLD_META));
   });
 
+  it('renameSeparator renames a separator the active profile does not list in each profile that lists it, its folder with it', async () => {
+    await appendFile(join(dir, 'profiles', 'Secondary', 'modlist.txt'), '-Elsewhere_separator\n');
+    await mkdir(join(dir, 'mods', 'Elsewhere_separator'));
+    const before = await snapshotTree(dir);
+
+    expect(await renamesOver(dir).renameSeparator(onDisk, 'Elsewhere', 'Renamed QA Group')).toMatchObject({ applied: true, cannotFollow: [] });
+
+    expect((await snapshotTree(dir)).get('profiles/Secondary/modlist.txt')?.toString()).toContain('-Renamed QA Group_separator');
+    expect(await modFolderNames(dir)).toContain('Renamed QA Group_separator');
+    expect((await snapshotTree(dir)).get(MODLIST)).toEqual(before.get(MODLIST));
+  });
+
   it('renameSeparator of a separator with no folder renames its line alone, and makes no folder', async () => {
     const before = await snapshotTree(dir);
     await renamesOver(dir).renameSeparator(onDisk, 'Radfall - All-In-One Survival Overhaul', 'Renamed QA Group');

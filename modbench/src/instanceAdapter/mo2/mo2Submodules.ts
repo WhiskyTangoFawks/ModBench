@@ -72,7 +72,6 @@ async function submoduleOf(folder: string): Promise<SubmoduleEntry | undefined |
   }
 }
 
-// Each submodule's path in the instance repository, by its name.
 async function submodulePaths(instanceRoot: string, file: string): Promise<Map<string, string>> {
   if (!(await exists(file))) return new Map();
   const listed = await git(instanceRoot, 'config', '-f', file, '--null', '--list');

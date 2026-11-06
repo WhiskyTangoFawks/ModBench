@@ -63,7 +63,7 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved, TimeProvider time
     public Answer<SubmoduleHead, SourceFailure> CommitAtHead(Submodule submodule, CancellationToken cancel) =>
         SourceFailure.Answer(() => Submodules.CommitAtHead(submodule, cancel));
 
-    public Answer<SourceChanges?, SourceFailure> ChangesToMoveSourceFolder(string sourceFolder, string movedTo, IReadOnlyList<SourceMove> files) =>
+    public Answer<SourceChanges, SourceFailure> ChangesToMoveSourceFolder(string sourceFolder, string movedTo, IReadOnlyList<SourceMove> files) =>
         SourceFailure.Answer(() => SourceFolderMove.Changes(sourceFolder, movedTo, files));
 
     public SourceFailure? FollowSourceFolderMove(string sourceFolder, string movedTo) =>

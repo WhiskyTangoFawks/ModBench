@@ -1,3 +1,4 @@
+import type { ChangeResult } from '../ports/changeResult';
 import type { FileChanges, HeldTexts, Planned, RenamePlan } from '../symbolNames/symbolNames';
 
 /** The boxes whose files hold a symbol: the one that defines it, and each whose files name it. */
@@ -12,14 +13,6 @@ export interface RenameEditing {
   readonly held: HeldTexts;
   readonly apply: (changes: readonly FileChanges[]) => Promise<string | undefined>;
 }
-
-/** `unapplied`: the edit failed, and may have partly landed. `failed`: a commit failed after the edit, which changed
- *  files when `edited`. */
-export type ChangeResult =
-  | { readonly applied: true; readonly cannotFollow: readonly string[] }
-  | { readonly applied: false; readonly refusal: string }
-  | { readonly applied: false; readonly unapplied: string }
-  | { readonly applied: false; readonly failed: string; readonly edited: boolean };
 
 const isRefused = (planned: Planned): planned is { readonly refused: string } => 'refused' in planned;
 
@@ -39,7 +32,7 @@ export async function change<Owner>(owners: SymbolOwners<Owner>, plan: (owner: O
   const cannotFollow = plans.flatMap((each) => each.cannotFollow);
   for (const each of plans) {
     const committed = await each.commit();
-    if ('failed' in committed) return { applied: false, failed: committed.failed, edited: changes.some(changesAnything) };
+    if ('failed' in committed) return { applied: false, failed: committed.failed, edited: changes.some(changesAnything), moved: changes.flatMap(({ moves }) => moves) };
     cannotFollow.push(...committed.cannotFollow);
   }
   return { applied: true, cannotFollow };

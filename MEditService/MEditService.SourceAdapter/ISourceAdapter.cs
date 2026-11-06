@@ -86,11 +86,11 @@ public interface ISourceAdapter
     Answer<SubmoduleHead, SourceFailure> CommitAtHead(Submodule submodule, CancellationToken cancel);
 
     /// <summary>The source folder <paramref name="sourceFolder"/> moving to <paramref name="movedTo"/>, then each of
-    /// <paramref name="files"/> it holds, written nowhere; none when a name moved to is taken.</summary>
-    Answer<SourceChanges?, SourceFailure> ChangesToMoveSourceFolder(string sourceFolder, string movedTo, IReadOnlyList<SourceMove> files);
+    /// <paramref name="files"/> it holds, written nowhere; <see cref="SourceFailure.Taken"/> when a name moved to is.</summary>
+    Answer<SourceChanges, SourceFailure> ChangesToMoveSourceFolder(string sourceFolder, string movedTo, IReadOnlyList<SourceMove> files);
 
-    /// <summary>What git holds of the source folder <paramref name="sourceFolder"/>, now at <paramref name="movedTo"/>, as
-    /// git mv leaves it: its index entries, the refs of what Modbench last wrote, and a submodule's work tree.</summary>
+    /// <summary>What git holds of the source folder <paramref name="sourceFolder"/> follows it to <paramref name="movedTo"/>:
+    /// its index entries, staged as they were, the refs of what Modbench last wrote, and a submodule's work tree.</summary>
     SourceFailure? FollowSourceFolderMove(string sourceFolder, string movedTo);
 
     /// <summary><paramref name="tree"/>, the whole-mod door's, as <see cref="ISourceRepository.TreeOf"/> answers it once

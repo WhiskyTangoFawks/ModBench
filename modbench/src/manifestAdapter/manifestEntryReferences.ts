@@ -8,8 +8,8 @@ import { readManifest } from './manifestRead';
 export interface ManifestEntryOwnerDeps {
   /** The folder of a mod, which holds its manifest. */
   readonly modFolderOf: (mod: string) => Promise<string | undefined>;
-  /** The source folder named for a mod, which its rename moves; undefined when it has none. */
-  readonly sourceFolderOf: (mod: string) => string | undefined;
+  /** The source folder named for the mod renamed, which the rename moves; undefined when it has none. */
+  readonly sourceFolder: string | undefined;
 }
 
 export type ManifestEntryOwner = EntryOwner & {
@@ -35,7 +35,7 @@ function withRepositoryRenamed(text: string, name: string, newName: string): str
 
 /** A mod's manifest as an owner of the files that name a mod: its file is named for the mod, and its repository package
  *  names the source folder named for it, which moves with the rename. */
-export function manifestEntryReferences({ modFolderOf, sourceFolderOf }: ManifestEntryOwnerDeps): ManifestEntryOwner {
+export function manifestEntryReferences({ modFolderOf, sourceFolder }: ManifestEntryOwnerDeps): ManifestEntryOwner {
   return {
     async plan({ kind, name }, newName, held) {
       const folder = kind === 'mod' ? await modFolderOf(name) : undefined;
@@ -45,19 +45,18 @@ export function manifestEntryReferences({ modFolderOf, sourceFolderOf }: Manifes
         if (own === undefined) return changed({});
         const [file, moved] = [join(folder, own), join(folder, manifestNameOf(newName))];
         const moves = own === manifestNameOf(newName) ? [] : [{ from: file, to: moved }];
-        const source = sourceFolderOf(name);
-        if (source === undefined) return changed({ moves });
+        if (sourceFolder === undefined) return changed({ moves });
         const text = heldTextAt(held, file) ?? await textAt(file);
         const read = readManifest(text);
         if ('refused' in read) return changed({ moves }, [`${file}: ${read.refused}`]);
-        const renamed = withRepositoryRenamed(text, basename(source), newName);
+        const renamed = withRepositoryRenamed(text, basename(sourceFolder), newName);
         return changed({ moves, documents: renamed === text ? [] : [{ path: moved, text: renamed }] });
       } catch (err) {
         return changed({}, [`${folder}: ${errorMessage(err)}`]);
       }
     },
-    async sourceFilesOf({ kind, name }, newName) {
-      const source = kind === 'mod' ? sourceFolderOf(name) : undefined;
+    async sourceFilesOf({ kind }, newName) {
+      const source = kind === 'mod' ? sourceFolder : undefined;
       const own = source === undefined ? undefined : await namedFor(source, basename(source));
       return own === undefined ? [] : [{ from: own, to: manifestNameOf(newName) }];
     },

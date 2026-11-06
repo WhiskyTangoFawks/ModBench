@@ -55,7 +55,7 @@ describe('rename mod: the folder, its line in each profile, and each reference t
   it('writes no line and follows nothing when the folder did not move', async () => {
     const renamer = over({ refusals: refusing('renameModFolder', 'The folder is in the way') });
 
-    expect(await rename(renamer)).toEqual({ applied: false, failed: 'The folder is in the way', edited: false });
+    expect(await rename(renamer)).toEqual({ applied: false, failed: 'The folder is in the way', edited: false, moved: [] });
     expect(verbs(renamer.fake.calls)).toEqual(['renameModFolder']);
   });
 
@@ -143,6 +143,6 @@ describe('rename separator: its line in each profile, its folder, and each refer
   it('says its line was not renamed when the active profile\'s write failed', async () => {
     const renamer = over({ refusals: refusing('changeModOrder', 'ENOENT: no such file') });
 
-    expect(await renamer.commands.renameSeparator(renamer.editing, 'Core', 'Renamed')).toEqual({ applied: false, failed: 'ENOENT: no such file', edited: false });
+    expect(await renamer.commands.renameSeparator(renamer.editing, 'Core', 'Renamed')).toEqual({ applied: false, failed: 'ENOENT: no such file', edited: false, moved: [] });
   });
 });

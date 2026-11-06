@@ -75,17 +75,14 @@ describe('rename mod', () => {
   const modA = new ModNode({ kind: 'mod', name: 'Mod A', enabled: true });
   const modB = new ModNode({ kind: 'mod', name: 'Mod B', enabled: true });
 
-  it('prompts with the right-clicked mod\'s name and renames its folder, then its line in every profile', async () => {
+  it('prompts with the right-clicked mod\'s name and renames it, not the selection around it', async () => {
     showInputBox.mockResolvedValueOnce('Renamed');
-    const { fake, reporter } = renamesOver(mods, { reading: { profiles: ['Default', 'Secondary'] } });
+    const { fake, reporter } = renamesOver(mods);
 
     await invoke('modbench.mod.rename', modB, [modA, modB]);
 
     expect(promptOptions()).toMatchObject({ prompt: 'Rename mod', value: 'Mod B' });
-    expect(renamed(fake.calls).map((call) => ('profile' in call ? call.profile : call.verb))).toEqual(['renameModFolder', 'Default', 'Secondary']);
-    expect(renamed(fake.calls).slice(0, 2)).toEqual([
-      { verb: 'renameModFolder', from: 'Mod B', to: 'Renamed' }, { verb: 'changeModOrder', profile: 'Default', changes: [{ kind: 'renameMod', from: 'Mod B', to: 'Renamed' }] },
-    ]);
+    expect(renamed(fake.calls)[0]).toEqual({ verb: 'renameModFolder', from: 'Mod B', to: 'Renamed' });
     expect(reporter.reports).toEqual([]);
   });
 
@@ -108,17 +105,14 @@ describe('rename mod', () => {
     expect([await validate('mod a'), await validate('mod b')]).toEqual(['A mod with this name already exists', undefined]);
   });
 
-  it('moves its source folder, named for it, through mEdit, and follows the move in the instance repository', async () => {
+  it('applies its owners\' changes through Text documents, as one workspace edit', async () => {
     showInputBox.mockResolvedValueOnce('Renamed');
-    const { fake, client, apply } = renamesOver(mods, { reading: { sourceModFolders: repositoriesOf({ 'Mod A': '/instance/source/Mod A' }) } });
+    const { apply } = renamesOver(mods, { reading: { sourceModFolders: repositoriesOf({ 'Mod A': '/instance/source/Mod A' }) } });
 
     await invoke('modbench.mod.rename', modA);
 
+    expect(apply).toHaveBeenCalledOnce();
     expect(apply).toHaveBeenCalledWith(expect.arrayContaining([{ moves: SOURCE_MOVES, deletions: [], documents: [] }]));
-    expect(client.calls.filter(({ method }) => method === 'followSourceFolderMove').map(({ args }) => args)).toEqual([['/instance/source/Mod A', '/source/Renamed']]);
-    expect(fake.calls.filter((call) => call.verb === 'followFoldersInRepository')).toEqual([{
-      verb: 'followFoldersInRepository', moves: [{ from: '/instance/mods/Mod A', to: '/instance/mods/Renamed' }, { from: '/instance/source/Mod A', to: '/source/Renamed' }],
-    }]);
   });
 
   it('says its folder and lines were not renamed when its folder could not move', async () => {
@@ -222,7 +216,7 @@ describe('rename separator', () => {
 
     await invoke('modbench.separator.rename', groupB);
 
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to rename separator.', detail: 'A separator with this name already exists' }]);
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'A separator with this name already exists', detail: undefined }]);
   });
 
   it('ends on the Instance loader\'s read, with the view\'s progress bar open throughout', async () => {

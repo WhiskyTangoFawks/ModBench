@@ -32,8 +32,7 @@ internal abstract class SourceRepositoryGit
     /// <summary>The repository that holds the source folder: its own, else the one above it.</summary>
     internal static SourceRepositoryGit Holding(string sourceFolder) => HoldsGit(sourceFolder) ? Own(sourceFolder) : Above(sourceFolder);
 
-    /// <summary>What git holds of the source folder <paramref name="from"/>, now at <paramref name="to"/>, as git mv leaves
-    /// it.</summary>
+    /// <summary>What git holds of the source folder <paramref name="from"/> follows it to <paramref name="to"/>.</summary>
     internal static void FollowMove(string from, string to)
     {
         ReconnectWorkTree(to);
@@ -49,7 +48,6 @@ internal abstract class SourceRepositoryGit
             GitCli.Run(gitDir, folder, folder, "config", "core.worktree", ToGitPath(Path.GetRelativePath(gitDir, folder)));
     }
 
-    // Each index entry under `from`, staged as it is, and each ref of what Modbench last wrote there, moves to this folder.
     private void TakeOver(string from)
     {
         var to = SourceFolderInWorkTree.TrimEnd('/');

@@ -311,17 +311,32 @@ public sealed class SourceModInTheInstanceRepositoryTests : IDisposable
 
         Assert.Equal(
             [new SourceMove(_sourceFolder, renamed), new SourceMove(Path.Combine(renamed, "TestMod.manifest.json"), Path.Combine(renamed, "Renamed.manifest.json"))],
-            Assert.IsType<SourceChanges>(changes).Moves);
+            changes.Moves);
         Assert.True(Directory.Exists(_sourceFolder));
     }
 
     [Fact]
-    public void AMoveOfASourceFolderOntoAFolderAlreadyThere_ChangesNothing()
+    public void AMoveOfASourceFolderOntoAFolderAlreadyThere_IsTaken_NamingIt()
     {
         Directory.CreateDirectory(_sourceFolder);
         var taken = Directory.CreateDirectory(SourceFolderOf("Taken")).FullName;
 
-        Assert.Null(TestAdapters.Source().ChangesToMoveSourceFolder(_sourceFolder, taken, []).Value());
+        var failure = TestAdapters.Source().ChangesToMoveSourceFolder(_sourceFolder, taken, []).Stopped();
+
+        Assert.Equal($"'{taken}' is already there, so '{_sourceFolder}' was not moved.", Assert.IsType<SourceFailure.Taken>(failure).Reason);
+    }
+
+    [Fact]
+    public void AMoveOfASourceFolderWhoseFileWouldTakeTheNameOfAnother_IsTaken()
+    {
+        Directory.CreateDirectory(_sourceFolder);
+        File.WriteAllText(Path.Combine(_sourceFolder, "TestMod.manifest.json"), "{}");
+        File.WriteAllText(Path.Combine(_sourceFolder, "Renamed.manifest.json"), "{}");
+
+        var failure = TestAdapters.Source().ChangesToMoveSourceFolder(
+            _sourceFolder, SourceFolderOf("Renamed"), [new SourceMove("TestMod.manifest.json", "Renamed.manifest.json")]).Stopped();
+
+        Assert.IsType<SourceFailure.Taken>(failure);
     }
 
     [Fact]

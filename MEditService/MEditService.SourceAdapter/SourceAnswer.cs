@@ -79,6 +79,16 @@ public abstract record SourceFailure
         }
     }
 
+    /// <summary>A file or folder is already where a move puts one.</summary>
+    public sealed record Taken : SourceFailure
+    {
+        internal Taken(string reason) : base(reason)
+        {
+        }
+
+        public override bool DecompileRepairs => false;
+    }
+
     /// <summary>git cannot be run (ADR-0007).</summary>
     public sealed record GitUnavailable : SourceFailure
     {
@@ -206,6 +216,8 @@ internal sealed class SourceStopException : InvalidOperationException
     internal static SourceStopException GitUnavailable(Exception? cause = null) => new(new SourceFailure.GitUnavailable(), cause);
 
     internal static SourceStopException GitFailed(string reason) => new(new SourceFailure.GitFailed(reason));
+
+    internal static SourceStopException Taken(string reason) => new(new SourceFailure.Taken(reason));
 
     internal static SourceStopException Inaccessible(string reason, Exception? error = null) =>
         new(new SourceFailure.Inaccessible(reason, error));
