@@ -22,6 +22,10 @@ interface PluginLanguageDeps {
   owners: readonly SymbolOwner[];
   /** The plugin's `rename`, with the new name an entry point supplies. */
   renamePlugin: (plugin: PluginSymbol, newName: string) => Promise<void>;
+  /** The plugin's `go to`. */
+  goTo: (plugin: PluginSymbol) => Promise<void>;
+  /** The lines of the tooltip its row shows. */
+  tooltip: (plugin: PluginSymbol) => readonly string[];
 }
 
 // The span of `name` around `offset`, as the text spells it; an owner's name may sit anywhere in its file's text.
@@ -61,7 +65,7 @@ function referencedByInput(title: string, location: vscode.Location, read: () =>
 
 /** A plugin as a symbol in the text editor: inside a FormKey, and wherever an owner's file names it (source.md, In the
  *  text editor), and the places files name it. */
-export function pluginLanguage({ instance, reporter, client, owners, renamePlugin }: PluginLanguageDeps) {
+export function pluginLanguage({ instance, reporter, client, owners, renamePlugin, goTo, tooltip }: PluginLanguageDeps) {
   const referencesTo = pluginReferencesOf({
     owners, reporter, client, open: openPluginSourceDocument,
     plugins: () => instance?.value.plugins ?? [],
@@ -83,6 +87,12 @@ export function pluginLanguage({ instance, reporter, client, owners, renamePlugi
     return undefined;
   };
 
+  const nameWithSpan = async (document: AskedIn, offset: number) => {
+    const named = await nameAt(document, offset);
+    const span = named && spelledAround(heldText(document), offset, named.name);
+    return named && span && { named, ...span };
+  };
+
   // Referenced By anchors at the plugin's header, as a record's anchors at its FormKey; else at a place that names it.
   const anchorOf = async (plugin: PluginSymbol, first: ListedLocations): Promise<vscode.Location | { refused: string }> => {
     const header = await locateRecord({ client, open: openPluginSourceDocument }, { formKey: headerFormKeyOf(plugin), plugin }, formKeyValue)
@@ -92,10 +102,46 @@ export function pluginLanguage({ instance, reporter, client, owners, renamePlugi
   };
 
   return {
+    /** Go to Definition on the plugin whose name is at `offset`: the plugin's `go to`. False where no plugin's name is. */
+    definitionAt: async (document: AskedIn, offset: number): Promise<boolean> => {
+      const named = await nameAt(document, offset);
+      if (named === undefined) return false;
+      const plugin = pluginNamed(named, instance?.value.plugins ?? []);
+      if (plugin) await goTo(plugin);
+      else reporter.shownOnSurface('warning', `Go to Definition cannot go to ${named.name}.`, `Mod order resolves ${named.name} to no plugin.`);
+      return true;
+    },
+    /** What a hover on the plugin's name at `offset` says: its row's tooltip, or its name when it has none. */
+    hoverAt: async (document: AskedIn, offset: number): Promise<{ start: number; end: number; lines: readonly string[] } | undefined> => {
+      const found = await nameWithSpan(document, offset);
+      if (found === undefined) return undefined;
+      const plugin = pluginNamed(found.named, instance?.value.plugins ?? []);
+      const lines = plugin ? tooltip(plugin) : [];
+      return { start: found.start, end: found.end, lines: lines.length > 0 ? lines : [found.name] };
+    },
+    /** Completion where a file names a plugin: each plugin file name with the mods that hold it, over the name so far. */
+    completionsAt: async (document: AskedIn, offset: number): Promise<{ start: number; end: number; items: { name: string; origins: string[] }[] } | undefined> => {
+      const found = await nameWithSpan(document, offset);
+      if (found === undefined) return undefined;
+      const byName = new Map<string, { name: string; origins: string[] }>();
+      for (const { name, origin } of instance?.value.plugins ?? []) {
+        const item = byName.get(name.toLowerCase()) ?? { name, origins: [] };
+        item.origins.push(origin);
+        byName.set(name.toLowerCase(), item);
+      }
+      return { start: found.start, end: found.end, items: [...byName.values()].sort((a, b) => a.name.localeCompare(b.name)) };
+    },
+    /** Go to Symbol in Workspace: each plugin copy whose file name holds `query`, and whose file VS Code can place it at. */
+    symbolsFor: (query: string): (PluginSymbol & { readonly path: string })[] => {
+      const wanted = query.trim().toLowerCase();
+      if (wanted === '') return [];
+      return (instance?.value.plugins ?? []).flatMap(({ name, origin, path }) =>
+        path !== undefined && name.toLowerCase().includes(wanted) ? [{ name, origin, path }] : []);
+    },
     /** The plugin's name at `offset`, which Rename Symbol offers to rename; undefined where no plugin's name is. */
     renameRangeAt: async (document: AskedIn, offset: number) => {
-      const named = await nameAt(document, offset);
-      return named && spelledAround(heldText(document), offset, named.name);
+      const found = await nameWithSpan(document, offset);
+      return found && { start: found.start, end: found.end, name: found.name };
     },
     /** Rename Symbol on the plugin whose name is at `offset`: the plugin's `rename` (source.md, In the text editor). */
     renameAt: async (document: AskedIn, offset: number, newName: string): Promise<void> => {

@@ -803,6 +803,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.plugin.goTo",
+        "title": "Go to Plugin",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.plugin.move",
         "title": "Move Plugin…",
         "category": "Modbench"
@@ -1078,6 +1083,10 @@
         {
           "command": "modbench.plugin.referencedBy",
           "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singlePlugin && modbench.referencesView"
+        },
+        {
+          "command": "modbench.plugin.goTo",
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singlePlugin"
         },
         {
           "command": "modbench.plugin.rename",

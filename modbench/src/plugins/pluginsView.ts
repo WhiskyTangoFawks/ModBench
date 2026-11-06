@@ -25,6 +25,7 @@ import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
 import {
   pluginsCopyValueText, registerCreatePluginCommand, registerReferencedByCommand, registerRevealInExplorerCommand,
 } from './pluginListCommands';
+import { registerGoToCommand } from './goToPlugin';
 import { registerRenamePluginCommand, type RenamePluginDeps } from './pluginRenameCommand';
 import { registerRecordCreateCommand } from './createRecordCommand';
 import { createdRecordSelection } from './createdRecordSelection';
@@ -174,6 +175,10 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     ...registerSortDirectionToggle('plugin', tree),
     registerRevealInExplorerCommand(tree, reporterFor('pluginListTree.revealInExplorer'), selected.rows),
     registerReferencedByCommand(deps.referencedBy, selected.rows),
+    registerGoToCommand({
+      rowOf: (plugin) => tree.rowOf(plugin), fileOf: (plugin) => tree.pluginFile(plugin),
+      reveal: (row) => view.reveal(row, { select: true, focus: true }), reporter: reporterFor('pluginListTree.goTo'),
+    }, selected.rows),
     view.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(
       e, commands, reporterFor('pluginListTree.checkbox'), instance)),
     // Grays an implicit master's row the way the reference tool grays COL_NAME for a forceLoaded

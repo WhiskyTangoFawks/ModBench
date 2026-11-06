@@ -81,6 +81,7 @@ const sortingRead: { rules: ReturnType<PluginsShown['brokenRules']>[number][]; m
 const pluginsShown = {
   shown: (plugin: PluginAddress) => shownRead.answer.get(exactPluginAddressKey(plugin)) ?? NOT_READ,
   isBlueprint: ({ name }: PluginAddress) => name.startsWith('Blueprint'),
+  tooltipLines: ({ name }: PluginAddress) => [name],
   sortingNotJudged: () => sortingRead.notJudged,
   brokenRules: () => sortingRead.rules,
   suggestedMoves: () => sortingRead.moves,

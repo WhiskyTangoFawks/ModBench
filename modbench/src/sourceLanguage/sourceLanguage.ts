@@ -19,6 +19,7 @@ import { registerUpdateManifestEntryPoint } from './updateManifestEntryPoint';
 import type { Instance } from '../instanceLoader/instance';
 import { feedSourceProblems, type ProblemOnFile, type ProblemsByFile, type SourceProblemsDeps } from './sourceProblems';
 import type { PluginSymbol, SymbolOwner } from '../symbolNames/symbolNames';
+import type { PluginsShown } from '../drivingLib/pluginsShown';
 import { pluginLanguage } from './pluginLanguage';
 
 interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'sourceFiles'> {
@@ -27,7 +28,14 @@ interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'sourceFiles'> {
   client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlugins' | 'handUnsavedDocuments'> & RecordDocumentClient & SourceProblemsDeps['client'];
   /** Each box that owns files, saying where they name a symbol (ADR-0028). */
   owners: readonly SymbolOwner[];
+  /** What Plugins shows of a plugin's row; absent with no instance. */
+  pluginsShown: Pick<PluginsShown, 'tooltipLines'> | undefined;
 }
+
+// Go to Definition, and Go to Symbol in Workspace, are entry points to the plugin's `go to` (commands.md).
+const goToPlugin = async (plugin: PluginSymbol): Promise<void> => {
+  await vscode.commands.executeCommand('modbench.plugin.goTo', { argument: { kind: 'plugin', plugin } });
+};
 
 // Rename Symbol is an entry point to the plugin's `rename`, supplying the plugin and the new name (commands.md).
 const renamePluginNamed = async (plugin: PluginSymbol, name: string): Promise<void> => {
@@ -42,6 +50,12 @@ const pluginSourceStatusSelector: vscode.DocumentSelector = { language: 'json', 
 
 const diagnosticOf = ({ message, start, end }: ProblemOnFile): vscode.Diagnostic =>
   modbenchDiagnostic(new vscode.Range(start.line, start.character, end.line, end.character), message, vscode.DiagnosticSeverity.Warning);
+
+class PluginSymbolInformation extends vscode.SymbolInformation {
+  constructor(readonly plugin: PluginSymbol, path: string) {
+    super(plugin.name, vscode.SymbolKind.File, plugin.origin, new vscode.Location(vscode.Uri.file(path), new vscode.Position(0, 0)));
+  }
+}
 
 // Located at its document's start until VS Code resolves it, when it is opened.
 class RecordSymbolInformation extends vscode.SymbolInformation {
@@ -84,8 +98,15 @@ export function formKeyLocation(client: RecordDocumentClient) {
 
 export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
   const { client } = deps;
-  const hover = vscode.languages.registerHoverProvider(pluginSource, {
+  const plugin = pluginLanguage({ ...deps, renamePlugin: renamePluginNamed, goTo: goToPlugin, tooltip: (shown) => deps.pluginsShown?.tooltipLines(shown) ?? [] });
+  const hover = vscode.languages.registerHoverProvider(ownedFiles, {
     async provideHover(document, position) {
+      const offset = document.offsetAt(position);
+      const ofPlugin = await plugin.hoverAt(document, offset);
+      if (ofPlugin !== undefined) {
+        const range = new vscode.Range(document.positionAt(ofPlugin.start), document.positionAt(ofPlugin.end));
+        return new vscode.Hover(new vscode.MarkdownString(ofPlugin.lines.join('\n\n')), range);
+      }
       if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
       const found = await hoverAt(deps, heldText(document), document.offsetAt(position));
       if (found === undefined) return undefined;
@@ -93,8 +114,17 @@ export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
       return new vscode.Hover(new vscode.MarkdownString(found.markdown), range);
     },
   });
-  const completion = vscode.languages.registerCompletionItemProvider(pluginSource, {
+  const completion = vscode.languages.registerCompletionItemProvider(ownedFiles, {
     async provideCompletionItems(document, position) {
+      const ofPlugin = await plugin.completionsAt(document, document.offsetAt(position));
+      if (ofPlugin !== undefined) {
+        const range = new vscode.Range(document.positionAt(ofPlugin.start), document.positionAt(ofPlugin.end));
+        return ofPlugin.items.map(({ name, origins }) => {
+          const item = new vscode.CompletionItem({ label: name, description: origins.join(', ') }, vscode.CompletionItemKind.File);
+          item.range = range;
+          return item;
+        });
+      }
       if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
       const found = await completionsAt(deps, heldText(document), document.offsetAt(position));
       if (found === undefined) return undefined;
@@ -110,15 +140,15 @@ export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
     },
   });
   const definitionAt = definitionsOf({ client, reporter: deps.reporter, open: openPluginSourceDocument });
-  const definition = vscode.languages.registerDefinitionProvider(pluginSource, {
+  const definition = vscode.languages.registerDefinitionProvider(ownedFiles, {
     async provideDefinition(document, position) {
+      if (await plugin.definitionAt(document, document.offsetAt(position))) return undefined;
       if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
       const found = await definitionAt(heldText(document), document.offsetAt(position));
       return found && locationOf(found);
     },
   });
   const referencesAt = referencesOf({ client, reporter: deps.reporter, open: openPluginSourceDocument });
-  const plugin = pluginLanguage({ ...deps, renamePlugin: renamePluginNamed });
   const rename = vscode.languages.registerRenameProvider(ownedFiles, {
     async prepareRename(document, position) {
       const found = await plugin.renameRangeAt(document, document.offsetAt(position));
@@ -141,11 +171,16 @@ export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
     },
   });
   const workspace = workspaceSymbolsOf({ client, reporter: deps.reporter, open: openPluginSourceDocument });
-  const symbolProvider: vscode.WorkspaceSymbolProvider<RecordSymbolInformation> = {
+  const symbolProvider: vscode.WorkspaceSymbolProvider<RecordSymbolInformation | PluginSymbolInformation> = {
     async provideWorkspaceSymbols(query) {
-      return (await workspace.symbolsFor(query)).map((record) => new RecordSymbolInformation(record));
+      const records = (await workspace.symbolsFor(query)).map((record) => new RecordSymbolInformation(record));
+      return [...plugin.symbolsFor(query).map(({ path, ...symbol }) => new PluginSymbolInformation(symbol, path)), ...records];
     },
     async resolveWorkspaceSymbol(symbol) {
+      if (symbol instanceof PluginSymbolInformation) {
+        await goToPlugin(symbol.plugin);
+        return symbol;
+      }
       const found = await workspace.locate(symbol.record);
       if (found) symbol.location = locationOf(found);
       return symbol;

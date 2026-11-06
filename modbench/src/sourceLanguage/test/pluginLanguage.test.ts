@@ -10,6 +10,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { pluginLanguage } from '../pluginLanguage';
+import type { InstanceValue } from '../../instanceLoader/instance';
 import type { SymbolOwner } from '../../symbolNames/symbolNames';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
@@ -34,6 +35,8 @@ function plugin() {
     client: { getCopyDocument: () => Promise.resolve(null), getRecordOwner: () => Promise.resolve(undefined) },
     owners: [ownerThatCannotReadAFile],
     renamePlugin: () => Promise.reject(new Error('Not renamed here.')),
+    goTo: () => Promise.resolve(),
+    tooltip: () => [],
   });
   return { language, reporter };
 }
@@ -47,6 +50,8 @@ describe('Rename Symbol on a plugin\'s name is the plugin\'s rename (source.md, 
     client: { getCopyDocument: () => Promise.resolve(null), getRecordOwner: () => Promise.resolve(undefined) },
     owners: [{ ...ownerThatCannotReadAFile, nameAt: () => Promise.resolve(name === undefined ? undefined : { name }) }],
     renamePlugin,
+    goTo: () => Promise.resolve(),
+    tooltip: () => [],
   });
   beforeEach(() => { renamePlugin.mockClear(); });
 
@@ -87,5 +92,78 @@ describe('what a plugin\'s references could not read, as each surface says it (c
 
     expect(found).toHaveLength(1);
     expect([reporter.reports, reporter.shownFailures.map(({ severity, detail }) => [severity, detail])]).toEqual([[], [['warning', UNREAD]]]);
+  });
+});
+
+describe('Go to Definition, hover, Go to Symbol and completion on a plugin (symbols.md, The features)', () => {
+  const MID = { name: 'Mid.esp', origin: 'Mid Mod' };
+  const rows = [BASE, { name: 'Base.esm', origin: 'Other Mod' }, MID].map((row, line) => ({ ...row, path: `/data/${row.name}`, line, enabled: true, winning: row.origin !== 'Other Mod' }));
+  const goTo = vi.fn(() => Promise.resolve());
+  const naming = (name?: string, plugins: InstanceValue['plugins'] = rows) => {
+    const reporter = recordingReporter();
+    const language = pluginLanguage({
+      instance: { value: { plugins } },
+      reporter,
+      client: { getCopyDocument: () => Promise.resolve(null), getRecordOwner: () => Promise.resolve(undefined) },
+      owners: [{ ...ownerThatCannotReadAFile, nameAt: () => Promise.resolve(name === undefined ? undefined : { name }) }],
+      renamePlugin: () => Promise.reject(new Error('Not renamed here.')),
+      goTo,
+      tooltip: ({ name: file, origin }) => [file, origin, 'read-only'],
+    });
+    return { language, reporter };
+  };
+  const document = { uri: Uri.file(PLUGINS_TXT), getText: () => '*Mid.esp\r\n*base.ESM\r\n' };
+  beforeEach(() => { goTo.mockClear(); });
+
+  it('goes to the plugin mod order resolves the name under the place to', async () => {
+    expect(await naming('base.ESM').language.definitionAt(document, 14)).toBe(true);
+
+    expect(goTo).toHaveBeenCalledWith(BASE);
+  });
+
+  it('says in the Output, and goes nowhere, when mod order resolves the name to no plugin', async () => {
+    const { language, reporter } = naming('Gone.esp');
+
+    expect(await language.definitionAt(document, 14)).toBe(true);
+
+    expect([goTo.mock.calls.length, reporter.shownFailures.map(({ severity, detail }) => [severity, detail])]).toEqual([0, [['warning', 'Mod order resolves Gone.esp to no plugin.']]]);
+  });
+
+  it('answers where no plugin is named, so another feature may', async () => {
+    expect(await naming().language.definitionAt(document, 3)).toBe(false);
+  });
+
+  it('hovers with the row\'s tooltip, over the name as the file spells it', async () => {
+    expect(await naming('Base.esm').language.hoverAt(document, 14)).toEqual({ start: 11, end: 19, lines: ['Base.esm', 'Base Mod', 'read-only'] });
+  });
+
+  it('hovers with the name alone when mod order resolves it to no plugin', async () => {
+    const gone = { uri: Uri.file(PLUGINS_TXT), getText: () => '*Gone.esp\r\n' };
+
+    expect(await naming('Gone.esp').language.hoverAt(gone, 3)).toEqual({ start: 1, end: 9, lines: ['Gone.esp'] });
+  });
+
+  it('completes where a file names a plugin with every plugin, over the name typed so far', async () => {
+    const found = await naming('Ba').language.completionsAt({ uri: Uri.file(PLUGINS_TXT), getText: () => '*Ba' }, 3);
+
+    expect(found).toEqual({
+      start: 1, end: 3,
+      items: [{ name: 'Base.esm', origins: ['Base Mod', 'Other Mod'] }, { name: 'Mid.esp', origins: ['Mid Mod'] }],
+    });
+  });
+
+  it('completes nothing where no plugin is named', async () => {
+    expect(await naming().language.completionsAt(document, 3)).toBeUndefined();
+  });
+
+  it('lists each plugin copy whose name holds the query, whatever the case', () => {
+    expect(naming().language.symbolsFor('BASE').map(({ name, origin }) => ({ name, origin }))).toEqual([BASE, { name: 'Base.esm', origin: 'Other Mod' }]);
+    expect(naming().language.symbolsFor('  ')).toEqual([]);
+  });
+
+  it('lists no line that names no file, which has no place in the workspace', () => {
+    const { language } = naming(undefined, [{ ...MID, path: undefined, line: 0, enabled: true, winning: true }]);
+
+    expect(language.symbolsFor('mid')).toEqual([]);
   });
 });
