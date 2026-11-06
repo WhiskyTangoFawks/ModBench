@@ -78,8 +78,11 @@ export function modsAndSourceModsOfAgent(argument: readonly Argument[], value: I
   const isFolder = (entry: Argument): entry is ArgumentOf<'archive' | 'folder'> => entry.kind === 'folder';
   const located = argument.filter(isFolder).map(({ path }) => ({ path, mod: sourceModOfFolder(path, value) }));
   const named = argument.filter((entry) => !isFolder(entry));
+  const explicitlyNamedMods = new Set(named.flatMap((entry) => entry.kind === 'mod' ? modsHeldBy('mod', entry.name, value) ?? [] : []));
+  const selectedMods = argument.length === 0 ? everyMod(value) : named.length > 0 ? modsOfAgent(named, value) : [];
+  const skipSourceModsInSelection = argument.length > 0 && named.length > 0;
   return {
-    mods: argument.length > 0 && named.length === 0 ? [] : modsOfAgent(named, value),
+    mods: selectedMods.filter((mod) => !skipSourceModsInSelection || !value.paths.sourceDirs.has(mod) || explicitlyNamedMods.has(mod)),
     sourceMods: [...new Set(located.flatMap(({ mod }) => mod ?? []))],
     refused: located.filter(({ mod }) => mod === undefined).map(({ path }) => ({ item: path, reason: NOT_A_SOURCE_FOLDER })),
   };
@@ -90,18 +93,22 @@ const sourceModOfFolderRow = (row: unknown, value: InstanceValue): string | unde
 
 function toRun(
   deps: ModsToRunDeps, clicked: unknown, selected: readonly unknown[] | undefined, sourceModOf: (row: unknown, value: InstanceValue) => string | undefined,
+  skipSourceModsInSeparators = false,
 ): ModsToRun {
   const { value } = deps.instance;
   const rows = rowsOf(deps, clicked, selected, (row) => isModOrSeparator(row) || sourceModOf(row, value) !== undefined);
   if (rows.length === 0) return { mods: everyMod(value), sourceMods: [], refused: [], everyMod: true, view: deps.toolboxView };
   const refused: ItemRefusal<string>[] = [];
   const sourceMods: string[] = [];
+  const sourceModNames = skipSourceModsInSeparators ? new Set(value.paths.sourceDirs.keys()) : undefined;
   const mods = rows.flatMap((row) => {
     const sourceMod = sourceModOf(row, value);
     if (sourceMod !== undefined) { sourceMods.push(sourceMod); return []; }
     const held = modsOf(row, value);
     if (held === undefined) refused.push({ item: rowNameOf(row), reason: NEITHER });
-    return held ?? [];
+    return sourceModNames !== undefined && kindOf(row) === 'separator'
+      ? (held ?? []).filter((mod) => !sourceModNames.has(mod))
+      : held ?? [];
   });
   return { mods: [...new Set(mods)], sourceMods: [...new Set(sourceMods)], refused, everyMod: false, view: MODS_KEY_ARGS.view };
 }
@@ -111,4 +118,4 @@ export const modsToRun = (deps: ModsToRunDeps, clicked: unknown, selected: reado
 
 /** Update manifest also takes a source folder, which stands for its source mod. */
 export const modsAndSourceModsToRun = (deps: ModsToRunDeps, clicked: unknown, selected: readonly unknown[] | undefined): ModsToRun =>
-  toRun(deps, clicked, selected, sourceModOfFolderRow);
+  toRun(deps, clicked, selected, sourceModOfFolderRow, true);
