@@ -22,7 +22,7 @@ As a user, I want:
 4. To name a plugin and a record as my agent does. Cites: agent.md, Names, stories 1 and 2; ADR-0012
 5. Every field named as plugin source and the record index name it. Cites: Mutagen's data
 6. A SELECT to read the records of every plugin the record index holds, each row saying whether its plugin is active, so a Modbench script sees the patch plugin it builds before I enable it. Cites: ADR-0012; Writing, story 4
-7. A SELECT to find the copies of a record that are the same in every value that takes part in a conflict, active or not, so a Modbench script finds each copy identical to its master's. Cites: editor-conflicts.md, What takes part; Default scripts, story 2
+7. To compare copies of a record in a SELECT by every value that takes part in a conflict, active or not, so a Modbench script finds each copy identical to its master's. Cites: editor-conflicts.md, What takes part; Default scripts, story 2
 
 ## Writing
 
