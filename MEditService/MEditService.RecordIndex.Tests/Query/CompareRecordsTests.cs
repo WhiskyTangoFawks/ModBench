@@ -165,6 +165,25 @@ public sealed class CompareRecordsTests : IDisposable
         Assert.Equal(ConflictThis.Override, focusedOnSword[otherSword]);
     }
 
+    [Theory]
+    [InlineData(0, 1, 2)]
+    [InlineData(2, 0, 1)]
+    [InlineData(1, 2, 0)]
+    public void AnAbsentValueIsOverrideAgainstEveryValueTheCodecOmits_WhateverTheColumnOrder(int absent, int zero, int zeroPointZero)
+    {
+        var text = RecordTextCodec.SerializeToText(_chest, GameRelease.Fallout4);
+        string? SpelledAs(string? spelling) => spelling is null ? text : text.Replace("\"EditorID\": \"Chest\",", $"\"EditorID\": \"Chest\", \"Version2\": {spelling},");
+        var spellings = new string?[3];
+        (spellings[absent], spellings[zero], spellings[zeroPointZero]) = (null, "0", "0.0");
+
+        var compare = Compare([.. spellings.Select(spelling => Copy(_chest, BasePlugin, SpelledAs(spelling)))]);
+
+        var byFocus = Row(compare, "Version2").CellStatesByFocus.Require();
+        Assert.Equal(ConflictThis.Override, byFocus[Column(compare, zeroPointZero)][Column(compare, absent)]);
+        Assert.Equal(ConflictThis.Override, byFocus[Column(compare, zero)][Column(compare, absent)]);
+        Assert.Equal(ConflictThis.ConflictLoses, byFocus[Column(compare, zero)][Column(compare, zeroPointZero)]);
+    }
+
     [Fact]
     public void AFieldTheGameIgnoresStillTakesStatesInACompare_ForXEditsPaintRecoloursEveryCell()
     {

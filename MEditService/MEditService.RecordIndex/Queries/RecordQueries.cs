@@ -135,7 +135,7 @@ internal sealed class RecordQueries(
 
         // One memoizing cache per response (ADR-0005): a FormKey repeated across sibling
         // cells/plugins/leaves (generic fields and VMAD alike) is resolved at most once.
-        var resolveFormKey = reads.LinkResolver(formKey);
+        var resolveFormKey = reads.LinkResolver([formKey]);
         var formIds = LoadIndex.FormIdsOf(snapshot, reads.OpenedPlugins);
         var overrides = active.ConvertAll(ToRecordDetail);
         var outsideTheComparison = outside.ConvertAll(ToRecordDetail);
@@ -184,13 +184,15 @@ internal sealed class RecordQueries(
         var reads = _index.RequireWholeSetReads();
         var snapshot = _loadOrder.Require();
 
+        var (fromIndex, resolveFormKey) = reads.GetDocuments(copies);
         var documents = new List<RecordDocument>(copies.Count);
         var missing = new List<RecordCopy>();
-        foreach (var copy in copies)
+        for (var i = 0; i < copies.Count; i++)
         {
+            var copy = copies[i];
             var document = copy.DocumentText is { } text
                 ? CopyFromText(reads, copy.FormKey, copy.Plugin, snapshot.LoadOrderIndex(copy.Plugin) ?? NotInLoadOrder, text)
-                : reads.GetDocument(copy.FormKey, copy.Plugin);
+                : fromIndex[i];
             if (document == null) missing.Add(copy);
             else documents.Add(document);
         }
@@ -201,7 +203,7 @@ internal sealed class RecordQueries(
         // Two copies may come from one plugin, so a column is named by its place as well.
         var columns = records.Select((r, i) => $"{i}#{ColumnKey.Of(r.Plugin, r.Origin)}").ToList();
         var diffs = _conflictClassifier.Align(
-            records, columns, snapshot.GameRelease, reads.LinkResolver(copies[0].FormKey), LoadIndex.FormIdsOf(snapshot, reads.OpenedPlugins),
+            records, columns, snapshot.GameRelease, resolveFormKey, LoadIndex.FormIdsOf(snapshot, reads.OpenedPlugins),
             indexed: true);
         var overrides = records.Select((r, i) => ToCompareOverride(r, state: null, columns[i], snapshot, reads)).ToList();
 

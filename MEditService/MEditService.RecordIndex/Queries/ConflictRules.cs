@@ -93,16 +93,59 @@ internal static class ConflictRules
     public static Dictionary<string, IReadOnlyDictionary<string, ConflictThis>> StatesByFocus(
         IReadOnlyDictionary<string, object?> valuesByColumn, Func<object?, object?, bool> valuesEqual)
     {
-        ConflictThis StateOf(string focused, string column) => column == focused ? ConflictThis.Master
-            : ComparedWith(valuesByColumn[focused], valuesByColumn[column], valuesEqual);
+        var present = new List<object>();
+        var classes = new Dictionary<string, int>();
+        foreach (var (column, value) in valuesByColumn)
+        {
+            if (value is null)
+            {
+                classes[column] = Absent;
+                continue;
+            }
+            var at = present.FindIndex(representative => valuesEqual(representative, value));
+            if (at < 0) present.Add(value);
+            classes[column] = at < 0 ? present.Count - 1 : at;
+        }
+        var equalsAbsent = present.ConvertAll(representative => valuesEqual(null, representative));
 
         return valuesByColumn.Keys.ToDictionary(
             focused => focused,
-            focused => (IReadOnlyDictionary<string, ConflictThis>)valuesByColumn.Keys.ToDictionary(column => column, column => StateOf(focused, column)));
+            focused => (IReadOnlyDictionary<string, ConflictThis>)new StatesWithFocusOn(focused, classes, equalsAbsent));
     }
 
-    private static ConflictThis ComparedWith(object? focused, object? cell, Func<object?, object?, bool> valuesEqual) =>
-        valuesEqual(focused, cell) ? ConflictThis.Override : ConflictThis.ConflictLoses;
+    private const int Absent = -1;
+
+    // SameNode is not transitive: an absent cell equals only the spellings the codec omits, so it is never grouped.
+    private sealed class StatesWithFocusOn(string focused, Dictionary<string, int> classes, List<bool> equalsAbsent)
+        : IReadOnlyDictionary<string, ConflictThis>
+    {
+        public int Count => classes.Count;
+        public IEnumerable<string> Keys => classes.Keys;
+        public IEnumerable<ConflictThis> Values => classes.Keys.Select(column => this[column]);
+        public ConflictThis this[string column] => column == focused ? ConflictThis.Master : Compared(classes[focused], classes[column]);
+        public bool ContainsKey(string key) => classes.ContainsKey(key);
+
+        public bool TryGetValue(string key, out ConflictThis value)
+        {
+            value = classes.ContainsKey(key) ? this[key] : default;
+            return classes.ContainsKey(key);
+        }
+
+        public IEnumerator<KeyValuePair<string, ConflictThis>> GetEnumerator() =>
+            classes.Keys.Select(column => KeyValuePair.Create(column, this[column])).GetEnumerator();
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+
+        private ConflictThis Compared(int focusedClass, int cellClass) => Equal(focusedClass, cellClass) ? ConflictThis.Override : ConflictThis.ConflictLoses;
+
+        private bool Equal(int focusedClass, int cellClass)
+        {
+            if (focusedClass == Absent && cellClass == Absent) return true;
+            if (focusedClass == Absent) return equalsAbsent[cellClass];
+            if (cellClass == Absent) return equalsAbsent[focusedClass];
+            return focusedClass == cellClass;
+        }
+    }
 
     // One column's own state across every row: the most severe cell it holds, Master for the
     // master's own column, and none for a column with no cell.

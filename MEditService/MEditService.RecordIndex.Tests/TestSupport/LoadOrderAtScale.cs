@@ -20,16 +20,31 @@ internal sealed class LoadOrderAtScale : IDisposable
     internal string BigCell { get; }
     internal string AReferenceInTheBigCell { get; }
 
+    /// <summary>A record every ordinary plugin holds a copy of.</summary>
+    internal string AnOverriddenRecord { get; }
+    internal IEnumerable<LoadOrderEntry> PluginsHoldingTheOverriddenRecord => _fixture.Plugins.Where(p => p.Name.StartsWith("Plugin", StringComparison.Ordinal));
+
     /// <summary>A source mod no commit holds the tree of, kept out of the load order until a test brings it in.</summary>
     internal LoadOrderEntry UncommittedPlugin { get; }
     internal string AReferenceInTheUncommittedCell { get; }
 
     internal LoadOrderAtScale(int plugins = 70)
     {
-        string bigCell = "", aReference = "", anUncommittedReference = "";
+        string bigCell = "", aReference = "", anUncommittedReference = "", overridden = "";
         var builder = new PluginFixtureBuilder("at-scale");
         for (var p = 0; p < plugins; p++)
-            builder.WithPlugin($"Plugin{p:D3}.esp", mod => AddCell(mod, $"Cell{p:D3}", Rows / plugins), origin: $"Mod{p:D3}");
+            builder.WithPlugin($"Plugin{p:D3}.esp", (mod, masters) =>
+            {
+                AddCell(mod, $"Cell{p:D3}", Rows / plugins);
+                if (masters.Count == 0)
+                {
+                    var keyword = new Keyword(mod) { EditorID = "SharedKeyword" };
+                    mod.Keywords.Add(keyword);
+                    mod.Npcs.Add(new Npc(mod) { EditorID = "Shared", Keywords = [keyword.ToLink()] });
+                    overridden = mod.Npcs.First().FormKey.ToString();
+                }
+                else mod.Npcs.GetOrAddAsOverride(masters[0].Npcs.First());
+            }, origin: $"Mod{p:D3}");
         builder.WithPlugin("BigCell.esp", mod =>
         {
             var cell = AddCell(mod, "BigCell", ReferencesInABigCell);
@@ -41,6 +56,7 @@ internal sealed class LoadOrderAtScale : IDisposable
             origin: "UncommittedMod");
         _fixture = builder.BuildScattered();
 
+        AnOverriddenRecord = overridden;
         BigCellPlugin = _fixture.Plugins.Single(p => p.Name == "BigCell.esp");
         BigCell = bigCell;
         AReferenceInTheBigCell = aReference;

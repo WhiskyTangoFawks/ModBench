@@ -16,7 +16,7 @@ internal static class LinkResolution
     private static readonly string SourceIsTheRecordOrAnInlineChild = $"""
         source_form_key IN (
             WITH RECURSIVE carried(form_key) AS (
-                SELECT $1
+                SELECT unnest($1::VARCHAR[])
                 UNION
                 SELECT inline.child FROM {TableDdlBuilder.MirrorSchema}.holdings inline
                 JOIN carried ON inline.parent = carried.form_key
@@ -24,32 +24,32 @@ internal static class LinkResolution
             SELECT form_key FROM carried)
         """;
 
-    /// <summary>Resolves every link form_references lists for <paramref name="formKey"/> and the
-    /// records its document carries inline, in any plugin, up front; a FormKey it did not list still
+    /// <summary>Resolves every link form_references lists for <paramref name="formKeys"/> and the
+    /// records their documents carry inline, in any plugin, up front; a FormKey it did not list still
     /// resolves alone.</summary>
-    internal static Func<string, RecordLookupEntry?> ForLinksOf(ReadContext context, string formKey) =>
-        ForLinksOf(context, formKey, alone => Resolve(context, alone));
+    internal static Func<string, RecordLookupEntry?> ForLinksOf(ReadContext context, List<string> formKeys) =>
+        ForLinksOf(context, formKeys, alone => Resolve(context, alone));
 
     /// <summary>The same, resolving an unlisted FormKey through <paramref name="resolveAlone"/>, for
     /// a resolver that outlives <paramref name="context"/>.</summary>
     internal static Func<string, RecordLookupEntry?> ForLinksOf(
-        ReadContext context, string formKey, Func<string, RecordLookupEntry?> resolveAlone) =>
-        Prefetched(context, resolveAlone, SourceIsTheRecordOrAnInlineChild, formKey);
+        ReadContext context, List<string> formKeys, Func<string, RecordLookupEntry?> resolveAlone) =>
+        Prefetched(context, resolveAlone, SourceIsTheRecordOrAnInlineChild, formKeys);
 
     internal static RecordLookupEntry? Resolve(ReadContext context, string formKey) =>
         context.Rows("SELECT record_type, editor_id FROM form_lookup WHERE form_key = $1 AND is_winner LIMIT 1",
             reader => Entry(reader), formKey) is [var entry] ? entry : null;
 
     private static Func<string, RecordLookupEntry?> Prefetched(
-        ReadContext context, Func<string, RecordLookupEntry?> resolveAlone, string sourceFilter, params string[] values)
+        ReadContext context, Func<string, RecordLookupEntry?> resolveAlone, string sourceFilter, List<string> formKeys)
     {
-        var linked = Resolve(context, LinkTargets(context, sourceFilter, values));
+        var linked = Resolve(context, LinkTargets(context, sourceFilter, formKeys));
         return FormKeyResolutionCache.Memoize(formKey => linked.TryGetValue(formKey, out var entry) ? entry : resolveAlone(formKey));
     }
 
-    private static List<string> LinkTargets(ReadContext context, string sourceFilter, string[] values) =>
+    private static List<string> LinkTargets(ReadContext context, string sourceFilter, List<string> formKeys) =>
         context.Rows($"SELECT DISTINCT target_form_key FROM {TableDdlBuilder.MirrorSchema}.form_references WHERE {sourceFilter}",
-            reader => reader.GetString(0), values);
+            reader => reader.GetString(0), formKeys);
 
     // Keyed by the FormKey as asked, not as the lookup row spells it: the join ignores filename case.
     private static Dictionary<string, RecordLookupEntry?> Resolve(ReadContext context, List<string> formKeys)

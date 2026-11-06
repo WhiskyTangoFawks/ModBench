@@ -8,6 +8,7 @@ namespace MEditService.RecordIndex.Tests.Plugins;
 public sealed class LoadOrderAtScaleTests
 {
     private static readonly TimeSpan OneGesture = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan Navigating = TimeSpan.FromSeconds(0.1);
     private static readonly TimeSpan LitRsSevenHundredPluginsInTenSeconds = TimeSpan.FromSeconds(10) / 700;
 
     [Fact]
@@ -68,5 +69,17 @@ public sealed class LoadOrderAtScaleTests
 
         Budgets.Ran(OneGesture, () => listed = scale.Index.Queries.GetCellChildRecords(scale.BigCellPlugin.Key, scale.BigCell).Value(), "Expanding a big cell");
         Assert.Equal(4_000, listed?.Temporary.Count);
+    }
+
+    [Fact]
+    public void TheConflictStackOfARecordWithManyCopies_ComparesWithinTheNavigationBudget()
+    {
+        const int copies = 200;
+        using var scale = new LoadOrderAtScale(copies);
+        var stack = scale.PluginsHoldingTheOverriddenRecord.Select(p => new RecordCopy(scale.AnOverriddenRecord, p.Key)).ToList();
+        CompareRecordsAnswer? compared = null;
+
+        Budgets.Ran(Navigating, () => compared = scale.Index.Queries.GetCompareRecords(stack).Value(), "Comparing a record of 200 copies");
+        Assert.Equal(copies, compared?.Compare?.Overrides.Count);
     }
 }
