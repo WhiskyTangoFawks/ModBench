@@ -83,6 +83,28 @@ public sealed class CopyStatesTests : IDisposable
     }
 
     [Fact]
+    public void AGivenPlugin_IsJudgedWithTheMastersOfItsMasters()
+    {
+        var master = new PluginAddress("Master.esp", PluginOrigin.DataDirectory);
+        var middle = new PluginAddress("Middle.esp", PluginOrigin.DataDirectory);
+        var judged = new PluginAddress("Judged.esp", PluginOrigin.DataDirectory);
+        var inMiddle = new FormKey(ModKey.FromFileName(middle.Name), 0x900);
+        using var fixture = new PluginFixtureBuilder("medit-copy-states-transitive")
+            .WithPlugin(First.Name, mod => mod.MiscItems.Add(Named(Item, "Item")))
+            .WithPlugin(master.Name, mod => mod.MiscItems.Set(Named(Item, "Changed")))
+            .WithPlugin(middle.Name, mod => mod.FormLists.Add(new FormList(mod, "Lists") { Items = [new FormLink<IFallout4MajorRecordGetter>(new FormKey(ModKey.FromFileName(master.Name), 0x900))] }))
+            .WithPlugin(judged.Name, mod =>
+            {
+                mod.MiscItems.Set(Named(Item, "Item"));
+                mod.FormLists.Add(new FormList(mod, "Lists") { Items = [new FormLink<IFallout4MajorRecordGetter>(inMiddle)] });
+            })
+            .Build();
+        using var index = Indexes.Reconciled(fixture);
+
+        Assert.Equal([First, master, judged], StatesOf(index, Item, judged).Keys);
+    }
+
+    [Fact]
     public void WithNoPlugin_EveryActivePluginHoldingTheRecordIsJudged()
     {
         Assert.Equal([First, Second, Third], StatesOf(_index, Item).Keys);
