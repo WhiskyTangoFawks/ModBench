@@ -2,7 +2,7 @@ import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   commandHandlers, contextKeys, disk, documentChanges, editorProviderDisposals, editorProviderOptions, editorProviders, editorVscode,
-  executeCommand, executed, fakePanel, fileSystems, openedDocuments, pickers, referencesView, type FakePanel, type ReferencesViewInput,
+  executeCommand, executed, fakePanel, fileSystems, openedDocuments, pickers, referencesView, type FakePanel, type ReferencedByInput as ReferencesViewInput,
 } from './editorVscode';
 
 vi.mock('vscode', () => editorVscode);

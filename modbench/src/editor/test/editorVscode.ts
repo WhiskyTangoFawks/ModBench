@@ -5,7 +5,7 @@ import {
 import type { ReferencesViewInput as ViewInput } from '../../drivingLib/referencesView';
 import type { ReferencedByList } from '../referencedByList';
 
-export type ReferencesViewInput = ViewInput<ReferencedByList>;
+export type ReferencedByInput = ViewInput<ReferencedByList>;
 
 /** The VS Code the Editor runs against, for a test's `vi.mock('vscode', () => editorVscode)`, and the state it keeps.
  *  This module loads nothing that imports `vscode`, so the hoisted mock can read it. */
@@ -18,7 +18,7 @@ export const fileSystems = new Map<string, unknown>();
 export const openedDocuments: unknown[] = [];
 export const documentChanges = new Set<(event: { document: unknown; contentChanges: unknown[] }) => void>();
 export const disk = new Map<string, string | Uint8Array>();
-export const referencesView = { enabled: true, inputs: [] as ReferencesViewInput[], changed: [] as (() => void)[] };
+export const referencesView = { enabled: true, inputs: [] as ReferencedByInput[], changed: [] as (() => void)[] };
 export const pickers = { shown: 0 };
 export const tabGroups: { viewColumn: number; tabs: unknown[] }[] = [];
 export const applyEdit = vi.fn<() => Promise<boolean>>(() => Promise.resolve(true));
@@ -119,7 +119,7 @@ export const editorVscode = {
   extensions: {
     onDidChange: (listener: () => void) => { referencesView.changed.push(listener); return { dispose: () => undefined }; },
     getExtension: (id: string) => (id === 'vscode.references-view' && referencesView.enabled
-      ? { activate: () => Promise.resolve({ setInput: (input: ReferencesViewInput) => { referencesView.inputs.push(input); } }) }
+      ? { activate: () => Promise.resolve({ setInput: (input: ReferencedByInput) => { referencesView.inputs.push(input); } }) }
       : undefined),
   },
 };
