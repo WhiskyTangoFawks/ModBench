@@ -2523,6 +2523,21 @@ describe('The Problems panel on plugin source', () => {
     saved([]);
     await waitFor('the problem to clear', () => shown().length === 0);
   });
+
+  it('offers clearing the reference as its quick fix, which asks mEdit to set the field to null', async () => {
+    const [problem] = await waitFor('the problem on its file', () => {
+      saved([{ formKey: HELD_FORM_KEY, targetFormKey: NOT_HELD_FORM_KEY, fieldPath: 'Armor', sourceRelativePath: SOURCE_FILE, message: MESSAGE }]);
+      const found = shown();
+      return found.length > 0 && found;
+    });
+    const fixes = await vscode.commands.executeCommand<vscode.CodeAction[]>('vscode.executeCodeActionProvider', vscode.Uri.file(file), problem?.range, vscode.CodeActionKind.QuickFix.value);
+    const fix = fixes.find(({ title }) => title === 'Clear reference');
+    const asked = editsAsked.length;
+
+    await vscode.commands.executeCommand(fix?.command?.command ?? 'no quick fix', ...fix?.command?.arguments ?? []);
+
+    assert.deepStrictEqual(editsAsked.slice(asked).map(({ value }) => value), [null]);
+  });
 });
 
 async function waitFor<T>(label: string, read: () => Promise<T | false | undefined> | T | false | undefined, timeoutMs = 10_000): Promise<T> {

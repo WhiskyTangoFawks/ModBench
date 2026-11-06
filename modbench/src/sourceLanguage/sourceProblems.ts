@@ -11,7 +11,7 @@ import { answerOf, failureReason, type ReadFailed } from '../wire/readFailed';
 type SourceProblem = PluginProblems['problems'][number];
 
 interface Position { line: number; character: number }
-/** The `edit field` that clears a reference: on the copy of `record` the plugin holds. */
+// The `edit field` that clears a reference: on the copy of `record` the plugin holds.
 interface ClearingEdit { record: { formKey: string; plugin: string; origin: string }; envelope: RecordEditEnvelope }
 export interface ProblemOnFile { message: string; start: Position; end: Position; clearing?: ClearingEdit }
 /** Every problem mEdit answered, by the absolute path of the file it sits on. */
