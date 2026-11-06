@@ -103,13 +103,13 @@ export function pluginLanguage({ instance, reporter, client, owners, renamePlugi
 
   return {
     /** Go to Definition on the plugin whose name is at `offset`: the plugin's `go to`. False where no plugin's name is. */
-    definitionAt: async (document: AskedIn, offset: number): Promise<boolean> => {
-      const named = await nameAt(document, offset);
-      if (named === undefined) return false;
-      const plugin = pluginNamed(named, instance?.value.plugins ?? []);
+    definitionAt: async (document: AskedIn, offset: number): Promise<{ start: number; end: number; resolved: boolean } | undefined> => {
+      const found = await nameWithSpan(document, offset);
+      if (found === undefined) return undefined;
+      const plugin = pluginNamed(found.named, instance?.value.plugins ?? []);
       if (plugin) await goTo(plugin);
-      else reporter.shownOnSurface('warning', `Go to Definition cannot go to ${named.name}.`, `Mod order resolves ${named.name} to no plugin.`);
-      return true;
+      else reporter.shownOnSurface('warning', `Go to Definition cannot go to ${found.named.name}.`, `Mod order resolves ${found.named.name} to no plugin.`);
+      return { start: found.start, end: found.end, resolved: plugin !== undefined };
     },
     /** What a hover on the plugin's name at `offset` says: its row's tooltip, or its name when it has none. */
     hoverAt: async (document: AskedIn, offset: number): Promise<{ start: number; end: number; lines: readonly string[] } | undefined> => {
@@ -131,12 +131,19 @@ export function pluginLanguage({ instance, reporter, client, owners, renamePlugi
       }
       return { start: found.start, end: found.end, items: [...byName.values()].sort((a, b) => a.name.localeCompare(b.name)) };
     },
-    /** Go to Symbol in Workspace: each plugin copy whose file name holds `query`, and whose file VS Code can place it at. */
-    symbolsFor: (query: string): (PluginSymbol & { readonly path: string })[] => {
+    /** Go to Symbol in Workspace: each plugin copy whose file name holds `query`, at its file, else at a place a file
+     *  names it. A copy with neither has no place to be listed at. */
+    symbolsFor: async (query: string): Promise<{ plugin: PluginSymbol; location: vscode.Location }[]> => {
       const wanted = query.trim().toLowerCase();
       if (wanted === '') return [];
-      return (instance?.value.plugins ?? []).flatMap(({ name, origin, path }) =>
-        path !== undefined && name.toLowerCase().includes(wanted) ? [{ name, origin, path }] : []);
+      const matching = (instance?.value.plugins ?? []).filter(({ name }) => name.toLowerCase().includes(wanted));
+      const placed = await Promise.all(matching.map(async ({ name, origin, path }) => {
+        const plugin = { name, origin };
+        if (path !== undefined) return { plugin, location: new vscode.Location(vscode.Uri.file(path), new vscode.Range(0, 0, 0, 0)) };
+        const named = (await referencesTo.forFeature(plugin)).found.find((reference) => 'file' in reference);
+        return named && 'file' in named ? { plugin, location: placeLocation(named) } : undefined;
+      }));
+      return placed.filter((symbol) => symbol !== undefined);
     },
     /** The plugin's name at `offset`, which Rename Symbol offers to rename; undefined where no plugin's name is. */
     renameRangeAt: async (document: AskedIn, offset: number) => {

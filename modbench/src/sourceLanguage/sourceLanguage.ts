@@ -52,8 +52,8 @@ const diagnosticOf = ({ message, start, end }: ProblemOnFile): vscode.Diagnostic
   modbenchDiagnostic(new vscode.Range(start.line, start.character, end.line, end.character), message, vscode.DiagnosticSeverity.Warning);
 
 class PluginSymbolInformation extends vscode.SymbolInformation {
-  constructor(readonly plugin: PluginSymbol, path: string) {
-    super(plugin.name, vscode.SymbolKind.File, plugin.origin, new vscode.Location(vscode.Uri.file(path), new vscode.Position(0, 0)));
+  constructor(readonly plugin: PluginSymbol, location: vscode.Location) {
+    super(plugin.name, vscode.SymbolKind.File, plugin.origin, location);
   }
 }
 
@@ -96,64 +96,73 @@ export function formKeyLocation(client: RecordDocumentClient) {
   };
 }
 
-export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
-  const { client } = deps;
-  const plugin = pluginLanguage({ ...deps, renamePlugin: renamePluginNamed, goTo: goToPlugin, tooltip: (shown) => deps.pluginsShown?.tooltipLines(shown) ?? [] });
-  const hover = vscode.languages.registerHoverProvider(ownedFiles, {
+type PluginLanguage = ReturnType<typeof pluginLanguage>;
+type Spanned = { readonly start: number; readonly end: number };
+
+const rangeIn = (document: vscode.TextDocument, { start, end }: Spanned): vscode.Range =>
+  new vscode.Range(document.positionAt(start), document.positionAt(end));
+
+function registerHover(deps: SourceLanguageDeps, plugin: PluginLanguage): vscode.Disposable {
+  return vscode.languages.registerHoverProvider(ownedFiles, {
     async provideHover(document, position) {
       const offset = document.offsetAt(position);
       const ofPlugin = await plugin.hoverAt(document, offset);
-      if (ofPlugin !== undefined) {
-        const range = new vscode.Range(document.positionAt(ofPlugin.start), document.positionAt(ofPlugin.end));
-        return new vscode.Hover(new vscode.MarkdownString(ofPlugin.lines.join('\n\n')), range);
-      }
+      if (ofPlugin !== undefined) return new vscode.Hover(new vscode.MarkdownString(ofPlugin.lines.join('\n\n')), rangeIn(document, ofPlugin));
       if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
-      const found = await hoverAt(deps, heldText(document), document.offsetAt(position));
-      if (found === undefined) return undefined;
-      const range = new vscode.Range(document.positionAt(found.start), document.positionAt(found.end));
-      return new vscode.Hover(new vscode.MarkdownString(found.markdown), range);
+      const found = await hoverAt(deps, heldText(document), offset);
+      return found && new vscode.Hover(new vscode.MarkdownString(found.markdown), rangeIn(document, found));
     },
   });
-  const completion = vscode.languages.registerCompletionItemProvider(ownedFiles, {
+}
+
+function registerCompletion(deps: SourceLanguageDeps, plugin: PluginLanguage): vscode.Disposable {
+  return vscode.languages.registerCompletionItemProvider(ownedFiles, {
     async provideCompletionItems(document, position) {
       const ofPlugin = await plugin.completionsAt(document, document.offsetAt(position));
       if (ofPlugin !== undefined) {
-        const range = new vscode.Range(document.positionAt(ofPlugin.start), document.positionAt(ofPlugin.end));
         return ofPlugin.items.map(({ name, origins }) => {
           const item = new vscode.CompletionItem({ label: name, description: origins.join(', ') }, vscode.CompletionItemKind.File);
-          item.range = range;
+          item.range = rangeIn(document, ofPlugin);
           return item;
         });
       }
       if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
       const found = await completionsAt(deps, heldText(document), document.offsetAt(position));
       if (found === undefined) return undefined;
-      const range = new vscode.Range(document.positionAt(found.start), document.positionAt(found.end));
       const items = found.items.map(({ label, detail, insertText }) => {
         const item = new vscode.CompletionItem({ label, description: detail }, kinds[found.kind]);
         item.insertText = insertText;
         item.filterText = `${label} ${insertText}`;
-        item.range = range;
+        item.range = rangeIn(document, found);
         return item;
       });
       return new vscode.CompletionList(items, found.isIncomplete);
     },
   });
-  const definitionAt = definitionsOf({ client, reporter: deps.reporter, open: openPluginSourceDocument });
-  const definition = vscode.languages.registerDefinitionProvider(ownedFiles, {
+}
+
+// A plugin's `go to` selects a row and the editor stays put, so the definition is the name asked about: VS Code stays
+// where it is and says nothing.
+function registerDefinition(deps: SourceLanguageDeps, plugin: PluginLanguage): vscode.Disposable {
+  const definitionAt = definitionsOf({ client: deps.client, reporter: deps.reporter, open: openPluginSourceDocument });
+  return vscode.languages.registerDefinitionProvider(ownedFiles, {
     async provideDefinition(document, position) {
-      if (await plugin.definitionAt(document, document.offsetAt(position))) return undefined;
+      const offset = document.offsetAt(position);
+      const ofPlugin = await plugin.definitionAt(document, offset);
+      if (ofPlugin !== undefined) return ofPlugin.resolved ? new vscode.Location(document.uri, rangeIn(document, ofPlugin)) : undefined;
       if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
-      const found = await definitionAt(heldText(document), document.offsetAt(position));
+      const found = await definitionAt(heldText(document), offset);
       return found && locationOf(found);
     },
   });
-  const referencesAt = referencesOf({ client, reporter: deps.reporter, open: openPluginSourceDocument });
-  const rename = vscode.languages.registerRenameProvider(ownedFiles, {
+}
+
+function registerRename(plugin: PluginLanguage): vscode.Disposable {
+  return vscode.languages.registerRenameProvider(ownedFiles, {
     async prepareRename(document, position) {
       const found = await plugin.renameRangeAt(document, document.offsetAt(position));
       if (found === undefined) throw new Error('Rename Symbol renames a plugin, and no plugin\'s name is here.');
-      return { range: new vscode.Range(document.positionAt(found.start), document.positionAt(found.end)), placeholder: found.name };
+      return { range: rangeIn(document, found), placeholder: found.name };
     },
     // The gesture applies its own changes, and writes after them what no workspace edit can hold.
     async provideRenameEdits(document, position, newName) {
@@ -161,7 +170,11 @@ export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
       return new vscode.WorkspaceEdit();
     },
   });
-  const references = vscode.languages.registerReferenceProvider(ownedFiles, {
+}
+
+function registerReferences(deps: SourceLanguageDeps, plugin: PluginLanguage): vscode.Disposable {
+  const referencesAt = referencesOf({ client: deps.client, reporter: deps.reporter, open: openPluginSourceDocument });
+  return vscode.languages.registerReferenceProvider(ownedFiles, {
     async provideReferences(document, position) {
       const offset = document.offsetAt(position);
       const toPlugin = await plugin.referencesAt(document, offset);
@@ -170,11 +183,15 @@ export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
       return (await referencesAt(heldText(document), offset)).map(locationOf);
     },
   });
-  const workspace = workspaceSymbolsOf({ client, reporter: deps.reporter, open: openPluginSourceDocument });
-  const symbolProvider: vscode.WorkspaceSymbolProvider<RecordSymbolInformation | PluginSymbolInformation> = {
+}
+
+function registerSymbols(deps: SourceLanguageDeps, plugin: PluginLanguage): vscode.Disposable {
+  const workspace = workspaceSymbolsOf({ client: deps.client, reporter: deps.reporter, open: openPluginSourceDocument });
+  const provider: vscode.WorkspaceSymbolProvider<RecordSymbolInformation | PluginSymbolInformation> = {
     async provideWorkspaceSymbols(query) {
       const records = (await workspace.symbolsFor(query)).map((record) => new RecordSymbolInformation(record));
-      return [...plugin.symbolsFor(query).map(({ path, ...symbol }) => new PluginSymbolInformation(symbol, path)), ...records];
+      const plugins = (await plugin.symbolsFor(query)).map((symbol) => new PluginSymbolInformation(symbol.plugin, symbol.location));
+      return [...plugins, ...records];
     },
     async resolveWorkspaceSymbol(symbol) {
       if (symbol instanceof PluginSymbolInformation) {
@@ -186,9 +203,18 @@ export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
       return symbol;
     },
   };
-  const symbols = vscode.languages.registerWorkspaceSymbolProvider(symbolProvider);
+  return vscode.languages.registerWorkspaceSymbolProvider(provider);
+}
+
+export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
+  const plugin = pluginLanguage({ ...deps, renamePlugin: renamePluginNamed, goTo: goToPlugin, tooltip: (shown) => deps.pluginsShown?.tooltipLines(shown) ?? [] });
   const problems = sourceProblems(deps);
-  const disposable = vscode.Disposable.from(handUnsavedPluginSource(client, isPluginSourcePath), hover, completion, definition, rename, references, symbols, problems, ...(deps.instance ? [registerBuildEntryPoint({ instance: deps.instance, reporter: deps.reporter }), registerUpdateManifestEntryPoint({ instance: deps.instance, reporter: deps.reporter })] : []));
+  const entryPoints = deps.instance ? [registerBuildEntryPoint({ instance: deps.instance, reporter: deps.reporter }), registerUpdateManifestEntryPoint({ instance: deps.instance, reporter: deps.reporter })] : [];
+  const disposable = vscode.Disposable.from(
+    handUnsavedPluginSource(deps.client, isPluginSourcePath),
+    registerHover(deps, plugin), registerCompletion(deps, plugin), registerDefinition(deps, plugin), registerRename(plugin), registerReferences(deps, plugin), registerSymbols(deps, plugin),
+    problems, ...entryPoints,
+  );
   return {
     dispose: () => { disposable.dispose(); },
     messages: () => problems.messages(),

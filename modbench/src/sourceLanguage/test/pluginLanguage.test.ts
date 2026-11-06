@@ -116,21 +116,22 @@ describe('Go to Definition, hover, Go to Symbol and completion on a plugin (symb
   beforeEach(() => { goTo.mockClear(); });
 
   it('goes to the plugin mod order resolves the name under the place to', async () => {
-    expect(await naming('base.ESM').language.definitionAt(document, 14)).toBe(true);
+    expect(await naming('base.ESM').language.definitionAt(document, 14)).toEqual({ start: 11, end: 19, resolved: true });
 
     expect(goTo).toHaveBeenCalledWith(BASE);
   });
 
   it('says in the Output, and goes nowhere, when mod order resolves the name to no plugin', async () => {
     const { language, reporter } = naming('Gone.esp');
+    const gone = { uri: Uri.file(PLUGINS_TXT), getText: () => '*Gone.esp\r\n' };
 
-    expect(await language.definitionAt(document, 14)).toBe(true);
+    expect(await language.definitionAt(gone, 3)).toEqual({ start: 1, end: 9, resolved: false });
 
     expect([goTo.mock.calls.length, reporter.shownFailures.map(({ severity, detail }) => [severity, detail])]).toEqual([0, [['warning', 'Mod order resolves Gone.esp to no plugin.']]]);
   });
 
   it('answers where no plugin is named, so another feature may', async () => {
-    expect(await naming().language.definitionAt(document, 3)).toBe(false);
+    expect(await naming().language.definitionAt(document, 3)).toBeUndefined();
   });
 
   it('hovers with the row\'s tooltip, over the name as the file spells it', async () => {
@@ -156,14 +157,27 @@ describe('Go to Definition, hover, Go to Symbol and completion on a plugin (symb
     expect(await naming().language.completionsAt(document, 3)).toBeUndefined();
   });
 
-  it('lists each plugin copy whose name holds the query, whatever the case', () => {
-    expect(naming().language.symbolsFor('BASE').map(({ name, origin }) => ({ name, origin }))).toEqual([BASE, { name: 'Base.esm', origin: 'Other Mod' }]);
-    expect(naming().language.symbolsFor('  ')).toEqual([]);
+  const located = (found: { plugin: { name: string; origin: string }; location: unknown }[]) => found.map(({ plugin, location }) => [plugin.name, plugin.origin, location]);
+
+  it('lists each plugin copy whose name holds the query, whatever the case, at its file', async () => {
+    const found = await naming().language.symbolsFor('BASE');
+
+    expect(located(found)).toEqual([
+      ['Base.esm', 'Base Mod', { uri: Uri.file('/data/Base.esm'), range: new Range(0, 0, 0, 0) }],
+      ['Base.esm', 'Other Mod', { uri: Uri.file('/data/Base.esm'), range: new Range(0, 0, 0, 0) }],
+    ]);
+    expect(await naming().language.symbolsFor('  ')).toEqual([]);
   });
 
-  it('lists no line that names no file, which has no place in the workspace', () => {
+  it('places a line that names no file at a place a file names it', async () => {
+    const { language } = naming(undefined, [{ ...BASE, path: undefined, line: 0, enabled: true, winning: true }]);
+
+    expect(located(await language.symbolsFor('base'))).toEqual([['Base.esm', 'Base Mod', { uri: Uri.file(PLUGINS_TXT), range: new Range(0, 1, 0, 9) }]]);
+  });
+
+  it('lists no plugin that has no file and that no file names', async () => {
     const { language } = naming(undefined, [{ ...MID, path: undefined, line: 0, enabled: true, winning: true }]);
 
-    expect(language.symbolsFor('mid')).toEqual([]);
+    expect(await language.symbolsFor('mid')).toEqual([]);
   });
 });
