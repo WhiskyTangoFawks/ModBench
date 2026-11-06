@@ -312,18 +312,17 @@ internal sealed class SourceRepositoryWrites(
     }
 
     /// <summary>What renaming the plugin <paramref name="from"/> changes in the source of the plugin whose tree is
-    /// <paramref name="treeName"/>: each document holding a FormKey of it, as <see cref="ChangesFollowing"/> says.</summary>
+    /// <paramref name="treeName"/>: each document holding a FormKey of it.</summary>
     internal SourceChanges ChangesToFollowRename(string treeName, string from, string to) =>
         ChangesFollowing(treeName, (relative, bytes) => PluginSourceRename.Following(relative, bytes, from, to));
 
     /// <summary>What changing the FormKey <paramref name="from"/> to <paramref name="to"/> changes in the source of
-    /// the plugin whose tree is <paramref name="treeName"/>: each document naming it, as <see cref="ChangesFollowing"/> says.</summary>
+    /// the plugin whose tree is <paramref name="treeName"/>: each document naming it.</summary>
     internal SourceChanges ChangesToFollowFormKeyChange(string treeName, string from, string to) =>
         ChangesFollowing(treeName, (relative, bytes) => FollowedDocument.FormKeyChanged(relative, bytes, FormKey.Factory(from), FormKey.Factory(to)));
 
-    /// <summary>Each document whose text <paramref name="following"/> changes. One whose own record takes another
-    /// FormKey moves where the layout names that key: this is Modbench's write to that record (source.md, Changes
-    /// outside Modbench, story 3).</summary>
+    // A document whose own record takes another FormKey moves where the layout names that key: this is Modbench's
+    // write to that record (source.md, Changes outside Modbench, story 3).
     private SourceChanges ChangesFollowing(string treeName, Func<string, byte[], byte[]> following)
     {
         var followed = files.FilesIn(SourceRepositoryLayout.RootIn(_sourceFolder, treeName), "*", SearchOption.AllDirectories)
