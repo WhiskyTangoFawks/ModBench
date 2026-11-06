@@ -5,8 +5,7 @@ using MEditService.SourceAdapter;
 namespace MEditService.Commands;
 
 /// <summary>The changes an edit makes to plugin source, written nowhere: each move, then each deletion, then each
-/// document's new text at its absolute path once moved. Plugins: each plugin whose source they change. CopiesUnread: why
-/// the copies a FormKey change leaves in plugins with no plugin source could not be read.</summary>
+/// document's new text at its absolute path once moved. CopiesUnread: why the copies left behind went unread.</summary>
 public sealed record EditRecordChanges(
     string FormKey, string Path, IReadOnlyList<SourceMove> Moves, IReadOnlyList<string> Deletions, IReadOnlyList<DocumentChange> Documents,
     string? NewFormKey, IReadOnlyList<PluginAddress> Plugins, IReadOnlyList<SourceLeftBehind> LeftBehind, IReadOnlyList<RecordAt> CopiesLeftBehind,

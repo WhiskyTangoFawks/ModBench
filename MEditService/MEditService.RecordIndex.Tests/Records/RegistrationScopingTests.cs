@@ -221,8 +221,6 @@ public class RegistrationScopingTests
 
     private const string Base = "Base.esm";
 
-    // A copy of Base.esm in each of two mods, the later one winning, each a race and an NPC that links it, and Child.esp
-    // overriding the race and linking it from an NPC of its own.
     private static ScatteredFixtureData TwoCopiesOfBaseAndAChild(string prefix, out string race, out string childNpc)
     {
         var (raceKey, childKey) = ("", "");

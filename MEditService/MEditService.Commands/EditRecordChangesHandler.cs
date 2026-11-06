@@ -34,9 +34,8 @@ public sealed class EditRecordChangesHandler
         _cellLanding = new(resolution, schemaReflector, logger);
     }
 
-    /// <summary>Over the unsaved documents mEdit holds, which stand in for their files. <paramref name="copiesWithNoPluginSource"/>:
-    /// reads each copy naming the record in an active plugin with no plugin source, or why it could not, which a FormKey
-    /// change leaves behind.</summary>
+    /// <summary>Over the unsaved documents mEdit holds, which stand in for their files. <paramref name="copiesWithNoPluginSource"/>
+    /// reads the copies a FormKey change leaves behind in active plugins with no plugin source.</summary>
     public Answer<EditRecordChanges, RecordEditRefused> Changes(
         PluginAddress plugin, string formKey, RecordEditEnvelope envelope, Func<Answer<RecordAt[], string>> copiesWithNoPluginSource)
     {
