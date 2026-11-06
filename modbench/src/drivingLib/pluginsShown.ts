@@ -24,6 +24,8 @@ interface SuggestedMoveShown {
 export interface PluginsShown {
   shown(plugin: PluginAddress): PluginShown;
   isBlueprint(plugin: PluginAddress): boolean;
+  /** The lines of the row's tooltip. */
+  tooltipLines(plugin: PluginAddress): readonly string[];
   /** No rules before the order is judged is not yet checked, not none broken. */
   sortingNotJudged(): string | undefined;
   brokenRules(): readonly SortingRuleShown[];

@@ -394,6 +394,11 @@ export class PluginsTreeProvider
     return isRow(row) ? this.shownRows().find((shown) => shown.id === row.id) : undefined;
   }
 
+  /** The row the tree shows for `plugin`; undefined when the plugin has none, or the name filter hides it. */
+  rowOf(plugin: PluginAddress): PluginListNode | undefined {
+    return this.shownRows().find((row) => samePluginAddress(addressOfRow(row), plugin));
+  }
+
   private rowsInViewOrder(): PluginListNode[] {
     const losingFirst = this.builtRows();
     return this.direction === 'winningAtTop' ? [...losingFirst].reverse() : losingFirst;

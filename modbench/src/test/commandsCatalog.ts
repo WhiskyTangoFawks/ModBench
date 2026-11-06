@@ -8,7 +8,7 @@ const SYSTEM_COMMANDS = COMMANDS_MARKDOWN.indexOf('## System commands');
 export const GESTURES_MARKDOWN = COMMANDS_MARKDOWN.slice(0, SYSTEM_COMMANDS);
 export const SYSTEM_COMMANDS_MARKDOWN = COMMANDS_MARKDOWN.slice(SYSTEM_COMMANDS);
 
-export const SPECIFIED_AHEAD_OF_CODE: string[] = ['modbench.archive.open', 'modbench.mod.goTo', 'modbench.mod.referencedBy', 'modbench.plugin.goTo'];
+export const SPECIFIED_AHEAD_OF_CODE: string[] = ['modbench.archive.open', 'modbench.mod.goTo', 'modbench.mod.referencedBy'];
 
 export const RETIRED_AHEAD_OF_CODE: string[] = [];
 

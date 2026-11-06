@@ -43,7 +43,7 @@ async function followed(what: string, write: () => Promise<unknown>): Promise<st
 const renamedLine = ({ kind, name }: EntryRef, to: string): ModOrderChange =>
   (kind === 'mod' ? { kind: 'renameMod', from: name, to } : { kind: 'renameSeparator', from: name, to });
 
-// The line in each profile that lists the entry. A separator's folder moves with the first line renamed, so a failure
+// A separator's folder moves with the first line renamed, so a failure
 // before it writes nothing.
 async function linesRenamed(adapter: InstanceAdapter, entry: EntryRef, to: string, inProfiles: readonly string[]): Promise<Committed> {
   const cannotFollow: string[] = [];
