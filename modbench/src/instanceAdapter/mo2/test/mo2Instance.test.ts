@@ -738,13 +738,16 @@ describe('the MO2 Instance adapter', () => {
 
       const found = (dataFolder: string): GameFolder => ({ kind: 'found', root: game, dataFolder });
 
-      it('answers every file at any depth of the Data folder, by its path in it in lower case', async () => {
+      it('answers every file at any depth of the Data folder, as the folder spells it and at its own path, by its path in it in lower case', async () => {
         const data = join(game, 'Data');
         await mkdir(join(data, 'F4SE', 'Plugins'), { recursive: true });
         await writeFile(join(data, 'Fallout4 - Main.ba2'), '');
         await writeFile(join(data, 'F4SE', 'Plugins', 'X.dll'), '');
 
-        expect(await source.gameFolderFiles(found(data), ignoreLink)).toEqual({ kind: 'listed', files: new Set(['fallout4 - main.ba2', 'f4se/plugins/x.dll']) });
+        expect(await source.gameFolderFiles(found(data), ignoreLink)).toEqual({ kind: 'listed', files: new Map([
+          ['fallout4 - main.ba2', { relativePath: 'Fallout4 - Main.ba2', path: join(data, 'Fallout4 - Main.ba2') }],
+          ['f4se/plugins/x.dll', { relativePath: 'F4SE/Plugins/X.dll', path: join(data, 'F4SE/Plugins/X.dll') }],
+        ]) });
       });
 
       it('answers no file that is a hard link, and hands over the link', async () => {
@@ -754,7 +757,7 @@ describe('the MO2 Instance adapter', () => {
         await link(join(game, 'Real.dll'), join(data, 'F4SE', 'Hard.dll'));
         const ignored: string[] = [];
 
-        expect(await source.gameFolderFiles(found(data), (path) => ignored.push(path))).toEqual({ kind: 'listed', files: new Set() });
+        expect(await source.gameFolderFiles(found(data), (path) => ignored.push(path))).toEqual({ kind: 'listed', files: new Map() });
         expect(ignored).toEqual([join(data, 'F4SE', 'Hard.dll')]);
       });
 

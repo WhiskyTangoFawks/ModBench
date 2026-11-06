@@ -39,12 +39,14 @@ const adapter = fieldOf({
   }).metadata],
 });
 
+const QUEST_SOURCE = '/instance/mods/Mod/Scripts/Source/User/Ns/Quest.psc';
 const SCRIPTS = [
-  { name: 'Ns:Quest', file: '/instance/mods/Mod/Scripts/Source/User/Ns/Quest.psc' },
-  { name: 'Other', file: '/instance/mods/Mod/Scripts/Other.pex' },
+  { name: 'Ns:Quest', source: QUEST_SOURCE, compiled: '/instance/mods/Mod/Scripts/Ns/Quest.pex' },
+  { name: 'Other', compiled: '/instance/mods/Mod/Scripts/Other.pex' },
 ];
+const NONE = { copies: [], unread: [] };
 
-function language(references: Awaited<ReturnType<ScriptClient['getScriptReferences']>> = [], scripts = SCRIPTS) {
+function language(references: Awaited<ReturnType<ScriptClient['getScriptReferences']>> = NONE, scripts: { name: string; source?: string; compiled?: string }[] = SCRIPTS) {
   const reporter = recordingReporter();
   const client: ScriptClient = {
     getComparison: () => Promise.resolve<CompareResult | null>(comparisonOf(QUEST, [{ plugin: 'Mod.esp', isWinner: true, fields: [adapter] }])),
@@ -71,15 +73,15 @@ describe('a Papyrus script\'s name in plugin source (symbols.md, The symbols)', 
   });
 
   it('goes to its source, else its compiled script, as the instance holds them', async () => {
-    expect(await language().language.definitionAt(document(), AT_SCRIPT)).toEqual({ ...SPAN, file: SCRIPTS[0]?.file });
+    expect(await language().language.definitionAt(document(), AT_SCRIPT)).toEqual({ ...SPAN, file: QUEST_SOURCE });
   });
 
   it('says why Go to Definition cannot go to a script no mod holds', async () => {
-    const { language: unheld, reporter } = language([], []);
+    const { language: unheld, reporter } = language(NONE, []);
 
     expect(await unheld.definitionAt(document(), AT_SCRIPT)).toEqual({ ...SPAN, file: undefined });
     expect(reporter.shownFailures).toEqual([{
-      severity: 'warning', message: 'Go to Definition cannot go to Ns:Quest.', detail: 'No mod and no Overwrite holds a source or a compiled script of Ns:Quest.',
+      severity: 'warning', message: 'Go to Definition cannot go to Ns:Quest.', detail: 'No mod, Overwrite or the Data folder holds a source or a compiled script of Ns:Quest.',
     }]);
   });
 
@@ -87,9 +89,12 @@ describe('a Papyrus script\'s name in plugin source (symbols.md, The symbols)', 
     expect(await language().language.completionsAt(document(), AT_SCRIPT)).toEqual({ ...SPAN, items: ['Ns:Quest', 'Other'] });
   });
 
-  it('is found by Go to Symbol at its own file', () => {
-    expect(language().language.symbolsFor('ns:').map(({ name, location }) => [name, location])).toEqual([
-      ['Ns:Quest', { uri: Uri.file(SCRIPTS[0]?.file ?? ''), range: new Range(0, 0, 0, 0) }],
+  it('is found by Go to Symbol at its source, else its compiled script', () => {
+    const { language: symbols } = language();
+
+    expect([...symbols.symbolsFor('QUEST'), ...symbols.symbolsFor('other')].map(({ name, location }) => [name, location])).toEqual([
+      ['Ns:Quest', { uri: Uri.file(QUEST_SOURCE), range: new Range(0, 0, 0, 0) }],
+      ['Other', { uri: Uri.file('/instance/mods/Mod/Scripts/Other.pex'), range: new Range(0, 0, 0, 0) }],
     ]);
   });
 });
@@ -99,14 +104,14 @@ describe('Find All References on a Papyrus script', () => {
 
   it('lists each member of a record mEdit says attaches it, and says in the Output why it left out a copy', async () => {
     opened.set(SOURCE, TEXT);
-    const { language: answering, reporter } = language([copy('Mod'), copy('Gone')]);
+    const { language: answering, reporter } = language({ copies: [copy('Mod'), copy('Gone')], unread: ['000802:Mod.esp in Mod.esp (Mod): mEdit has no schema for its record type xxxx'] });
 
     const found = await answering.referencesAt(document(), AT_SCRIPT);
 
     expect(found?.map(({ uri, range }) => [uri, range])).toEqual([[Uri.file(SOURCE), new Range({ line: 0, character: SPAN.start }, { line: 0, character: SPAN.end })]]);
-    expect(reporter.shownFailures).toEqual([{
-      severity: 'warning', message: 'Find All References on Ns:Quest could not read a file that may name it.', detail: 'Mod.esp (Gone) holds no 000801:Mod.esp.',
-    }]);
+    expect(reporter.shownFailures.map(({ detail }) => detail)).toEqual([
+      '000802:Mod.esp in Mod.esp (Mod): mEdit has no schema for its record type xxxx', 'Mod.esp (Gone) holds no 000801:Mod.esp.',
+    ]);
   });
 
   it('says in the Output why it could not read what mEdit reads', async () => {

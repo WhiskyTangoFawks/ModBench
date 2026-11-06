@@ -805,7 +805,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Each copy, in an active plugin or one with plugin source, that attaches the Papyrus script of that name in any case, with the member paths that name it. Answers only once the record index is ready. Each says whether its plugin has plugin source, which a rename changes. */
+        /** @description Each copy, in an active plugin or one with plugin source, that attaches the Papyrus script of that name in any case, with the member paths that name it. Answers only once the record index is ready. Each says whether its plugin has plugin source, which a rename changes, and why each copy that may attach it went unread. */
         get: operations["GetScriptReferences"];
         put?: never;
         post?: never;
@@ -1778,6 +1778,10 @@ export interface components {
             mode: components["schemas"]["CopyMode"];
             destination: components["schemas"]["PluginAddress"];
             replace: boolean;
+        };
+        ScriptReferences: {
+            copies: components["schemas"]["CopyAttaching"][];
+            unread: string[];
         };
         SelectRequest: {
             sql: string;
@@ -4157,7 +4161,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CopyAttaching"][];
+                    "application/json": components["schemas"]["ScriptReferences"];
                 };
             };
             /** @description Service Unavailable */

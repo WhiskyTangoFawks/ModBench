@@ -27,7 +27,7 @@ export function filesPresent(facts: PresenceFacts): { names: readonly string[]; 
     ...plugins.flatMap(({ name, path }) => (path === undefined ? [] : [name])),
     ...pluginsLoadedWithNoLine.map(({ name }) => name),
     ...dataFolderPlugins.kind === 'listed' ? dataFolderPlugins.names : [],
-    ...dataFolderFiles.kind === 'listed' ? dataFolderFiles.files : [],
+    ...dataFolderFiles.kind === 'listed' ? [...dataFolderFiles.files.values()].map(({ relativePath }) => relativePath) : [],
   ];
   return {
     names: [...new Map(named.map((name) => [name.toLowerCase(), name])).values()],

@@ -750,10 +750,9 @@ class HttpMEditClient implements MEditClient {
       (data) => data ?? []);
   }
 
-  getScriptReferences(name: string): Promise<components['schemas']['CopyAttaching'][] | ReadFailed> {
+  getScriptReferences(name: string): Promise<components['schemas']['ScriptReferences'] | ReadFailed> {
     return this.read(`getScriptReferences(${name})`,
-      (api, signal) => api.GET('/script-names/{name}/references', { params: { path: { name } }, signal }),
-      (data) => data ?? []);
+      (api, signal) => api.GET('/script-names/{name}/references', { params: { path: { name } }, signal }), noBodyFails);
   }
 
   getRenderedDocument({ name: plugin, origin }: PluginAddress, formKey: string): Promise<RenderedDocument | null | ReadFailed> {

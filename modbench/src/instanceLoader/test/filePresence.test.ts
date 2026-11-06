@@ -14,7 +14,7 @@ const value = instanceValueFixture({
   ],
   pluginsLoadedWithNoLine: [{ name: 'DLCRobot.esm', origin: 'Data/', path: '/game/Data/DLCRobot.esm' }],
   dataFolderPlugins: { kind: 'listed', names: new Set(['Fallout4.esm']) },
-  dataFolderFiles: { kind: 'listed', files: new Set(['f4se/plugins/game.dll', 'fallout4 - main.ba2']) },
+  dataFolderFiles: { kind: 'listed', files: new Map(['f4se/plugins/game.dll', 'fallout4 - main.ba2'].map((relativePath) => [relativePath, { relativePath, path: `/game/Data/${relativePath}` }])) },
 });
 
 describe('filePresence: a file the game finds in its Data folder', () => {
@@ -66,7 +66,7 @@ describe('filesPresent: every file the game finds in its Data folder', () => {
     const overlapping = new FileConflictLookup();
     overlapping.set({ relativePath: 'Provided.esp', winner: '/m/Provided.esp', winnerOrigin: { kind: 'mod', name: 'M' }, providers: [{ kind: 'mod', name: 'M' }] });
     const { names } = filesPresent({
-      ...value, files: overlapping, dataFolderFiles: { kind: 'listed', files: new Set(['fallout4.esm']) },
+      ...value, files: overlapping, dataFolderFiles: { kind: 'listed', files: new Map([['fallout4.esm', { relativePath: 'Fallout4.esm', path: '/game/Data/Fallout4.esm' }]]) },
     });
 
     expect([...names].filter((name) => /^(provided\.esp|fallout4\.esm)$/i.test(name))).toHaveLength(2);

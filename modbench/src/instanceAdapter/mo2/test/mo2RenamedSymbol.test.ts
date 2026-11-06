@@ -47,9 +47,16 @@ describe('the MO2 Instance adapter, on a file or folder another program renames'
       { kind: 'entry', entry: { kind: 'profile', name: 'Secondary' }, to: { kind: 'profile', name: 'Third' } }],
     ['a mod\'s folder with a name install can take', 'mods/Patch Mod.zip', 'mods/Patch Mod.7z',
       { kind: 'entry', entry: { kind: 'mod', name: 'Patch Mod.zip' }, to: { kind: 'mod', name: 'Patch Mod.7z' } }],
-    ['a script\'s source in a mod', 'mods/Patch Mod/Scripts/Source/User/Ns/Quest.psc', 'mods/Patch Mod/Scripts/Source/User/Ns/Renamed.psc',
-      { kind: 'script', name: 'Ns:Quest', to: 'Ns:Renamed' }],
-    ['a compiled script of Overwrite', 'overwrite/Scripts/Quest.pex', 'overwrite/Scripts/Renamed.pex', { kind: 'script', name: 'Quest', to: 'Renamed' }],
+    ['a script\'s source in a mod', 'mods/Patch Mod/Scripts/Source/User/Ns/Quest.psc', 'mods/Patch Mod/Scripts/Source/User/Ns/Renamed.psc', {
+      kind: 'script', origin: { kind: 'mod', name: 'Patch Mod' }, path: 'Scripts/Source/User/Ns/Quest.psc', name: 'Ns:Quest',
+      to: { path: 'Scripts/Source/User/Ns/Renamed.psc', name: 'Ns:Renamed' },
+    }],
+    ['a compiled script of Overwrite', 'overwrite/Scripts/Quest.pex', 'overwrite/Scripts/Renamed.pex', {
+      kind: 'script', origin: { kind: 'runtimeOutput' }, path: 'Scripts/Quest.pex', name: 'Quest', to: { path: 'Scripts/Renamed.pex', name: 'Renamed' },
+    }],
+    ['a script given a name that is no script\'s', 'mods/Patch Mod/Scripts/Quest.pex', 'mods/Patch Mod/Scripts/Quest.pex.bak', {
+      kind: 'script', origin: { kind: 'mod', name: 'Patch Mod' }, path: 'Scripts/Quest.pex', name: 'Quest', to: { path: 'Scripts/Quest.pex.bak' },
+    }],
   ])('names %s and the name it takes', async (_case, from, to, expected) => {
     await mkdir(at('mods/Patch Mod.zip'), { recursive: true });
     expect(await renamed(from, to)).toEqual(expected);
@@ -62,7 +69,6 @@ describe('the MO2 Instance adapter, on a file or folder another program renames'
     ['a profile\'s file', 'profiles/Default/plugins.txt', 'profiles/Default/plugins.old'],
     ['a downloaded file\'s metadata', `downloads/${UFO4P}.meta`, 'downloads/UFO4P.7z.meta'],
     ['a file of the downloads folder install cannot take', 'downloads/notes.txt', 'downloads/notes.old'],
-    ['a script given a name that is no script\'s', 'mods/Patch Mod/Scripts/Quest.pex', 'mods/Patch Mod/Scripts/Quest.pex.bak'],
     ['a script outside a mod', 'Scripts/Quest.pex', 'Scripts/Renamed.pex'],
   ])('names nothing for %s', async (_case, from, to) => {
     expect(await renamed(from, to)).toBeUndefined();

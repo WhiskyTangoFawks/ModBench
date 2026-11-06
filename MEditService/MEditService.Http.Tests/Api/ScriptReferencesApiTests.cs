@@ -22,9 +22,9 @@ public sealed class ScriptReferencesApiTests : HostedTests
             .BuildScattered());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
 
-        var answer = await Client.GetFromJsonAsync<JsonElement[]>("/script-names/Attached/references");
+        var answer = await Client.GetFromJsonAsync<JsonElement>("/script-names/Attached/references");
 
-        var copy = Assert.Single(answer ?? []);
+        var copy = Assert.Single(answer.GetProperty("copies").EnumerateArray());
         Assert.Equal("HoldingMod", copy.GetProperty("plugin").GetProperty("origin").GetString());
         Assert.Equal(["VirtualMachineAdapter.Scripts[0].Name"], copy.GetProperty("fieldPaths").EnumerateArray().Select(path => path.GetString()));
     }

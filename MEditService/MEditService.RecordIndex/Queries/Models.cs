@@ -144,6 +144,9 @@ public sealed record CopyNaming(string FormKey, PluginAddress Plugin, bool InPlu
 /// which a rename can change.</summary>
 public sealed record CopyAttaching(string FormKey, PluginAddress Plugin, bool InPluginSource, IReadOnlyList<string> FieldPaths);
 
+/// <summary>The copies that attach a Papyrus script, and why each copy that may attach it went unread.</summary>
+public sealed record ScriptReferences(IReadOnlyList<CopyAttaching> Copies, IReadOnlyList<string> Unread);
+
 /// <summary>The document carrying the record, its own or its container's, that a comparison reads
 /// <paramref name="Plugin"/>'s copy from in place of the record index's copy. <paramref name="Alone"/>
 /// compares that copy with no other.</summary>

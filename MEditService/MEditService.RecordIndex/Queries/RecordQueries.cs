@@ -328,17 +328,23 @@ internal sealed class RecordQueries(
     public Answer<IReadOnlyList<CopyNaming>, IndexRefused> GetPluginNameReferences(string name) =>
         _answer.Of(() => _index.RequireWholeSetReads().GetCopiesNaming(name));
 
-    // A plugin the record index has not reached would read as attaching nothing.
-    public Answer<IReadOnlyList<CopyAttaching>, IndexRefused> GetScriptReferences(string name) => _answer.Of<IReadOnlyList<CopyAttaching>>(() =>
+    public Answer<ScriptReferences, IndexRefused> GetScriptReferences(string name) => _answer.Of(() =>
     {
         var schemas = RequireSchemas();
-        return [.. _index.RequireWholeSetReads().GetCopiesHoldingText(name)
-            .Select(copy => (copy, paths: schemas.TryGetValue(copy.RecordType, out var schema)
-                ? ScriptAttachments.Collect(copy.Body, schema.RecordColumns)
-                    .Where(attached => attached.Name.Equals(name, StringComparison.OrdinalIgnoreCase)).Select(attached => attached.FieldPath).ToList()
-                : []))
-            .Where(attaching => attaching.paths.Count > 0)
-            .Select(attaching => new CopyAttaching(attaching.copy.FormKey, attaching.copy.Plugin, attaching.copy.InPluginSource, attaching.paths))];
+        var copies = new List<CopyAttaching>();
+        var unread = new List<string>();
+        foreach (var copy in _index.RequireWholeSetReads().GetCopiesHoldingText(name))
+        {
+            if (!schemas.TryGetValue(copy.RecordType, out var schema))
+            {
+                unread.Add($"{copy.FormKey} in {copy.Plugin.Name} ({copy.Plugin.Origin}): mEdit has no schema for its record type {copy.RecordType}");
+                continue;
+            }
+            var paths = ScriptAttachments.Collect(copy.Body, schema.RecordColumns)
+                .Where(attached => attached.Name.Equals(name, StringComparison.OrdinalIgnoreCase)).Select(attached => attached.FieldPath).ToList();
+            if (paths.Count > 0) copies.Add(new CopyAttaching(copy.FormKey, copy.Plugin, copy.InPluginSource, paths));
+        }
+        return new ScriptReferences(copies, unread);
     });
 
     private IReadOnlyList<ReferenceResult> Referrers(IReadOnlyList<ReferenceRow> rows)

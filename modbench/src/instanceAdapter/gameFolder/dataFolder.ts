@@ -39,7 +39,9 @@ export async function listDataFolderFiles(gameFolder: GameFolder, ignoredLink: I
   const dataFolder = dataFolderOf(gameFolder);
   if (dataFolder === undefined) return { kind: 'unresolved' };
   const listing = await readOrReason(() => filesBeneath(dataFolder, '', ignoredLink));
-  return listing.kind === 'read' ? { kind: 'listed', files: new Set(listing.answer.map((file) => file.toLowerCase())) } : listing;
+  return listing.kind === 'read'
+    ? { kind: 'listed', files: new Map(listing.answer.map((relativePath) => [relativePath.toLowerCase(), { relativePath, path: join(dataFolder, relativePath) }])) }
+    : listing;
 }
 
 /** The Creation Club list in a game folder found, undefined when it was not or the release has none. */

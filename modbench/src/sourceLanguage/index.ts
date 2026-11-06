@@ -1,3 +1,3 @@
 export { createSourceLanguage, formKeyLocation } from './sourceLanguage';
 export { followRenames, registerFollowRename } from './followRename';
-export { scriptRename } from './scriptRename';
+export { scriptReferences } from './scriptReferences';

@@ -53,6 +53,14 @@ internal static class GameAnnotations
             PermittedNullFormLinks: [.. SkyrimVmadAnnotations.PermittedNullFormLinks],
             // xEdit's wbVec3PosRot: which Mutagen's Placement holds here.
             PlacedRotations: [("IPlacementGetter", "Rotation")],
+            // A Skyrim fragment's script is named by its fragments' FileName as well as each fragment's ScriptName.
+            ScriptNames:
+            [
+                ("IScriptEntryGetter", "Name"), ("IScriptFragmentGetter", "ScriptName"), ("IIndexedScriptFragmentGetter", "ScriptName"),
+                ("IQuestScriptFragmentGetter", "ScriptName"), ("IScenePhaseFragmentGetter", "ScriptName"),
+                ("IScriptFragmentsGetter", "FileName"), ("IQuestAdapterGetter", "FileName"), ("IPerkScriptFragmentsGetter", "FileName"),
+                ("IPackageScriptFragmentsGetter", "FileName"),
+            ],
             SyntheticFlagMembers: new()
             {
                 [(ModHeaderGetterName, "IsSmallMaster")] = ("Flags", "Small"),

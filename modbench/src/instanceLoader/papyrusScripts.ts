@@ -1,22 +1,28 @@
-import { papyrusScriptAt } from '../tables/gamePaths';
+import { papyrusScriptAt, papyrusScriptFiles } from '../tables/gamePaths';
+import type { DataFolderFiles } from '../instanceAdapter/instanceAdapter';
 import type { FileWinners } from './fileConflictIndex';
 
-/** A Papyrus script, and the file Go to Definition opens for it. */
+/** A Papyrus script: the copy of its first source the game folder's Creation Kit reads, and the compiled script the
+ *  game takes, each as mod order resolves it, the Data folder's last. */
 export interface PapyrusScript {
   readonly name: string;
-  readonly file: string;
+  readonly source?: string;
+  readonly compiled?: string;
 }
 
-/** Each Papyrus script an enabled mod or Overwrite holds, by name: the winning copy of its source in the first source
- *  folder that holds one, else of its compiled script. */
-export function papyrusScriptsOf(files: FileWinners, release: string | undefined): PapyrusScript[] {
-  const best = new Map<string, PapyrusScript & { readonly preference: number }>();
-  for (const { relativePath, winner } of files.values()) {
+/** Each Papyrus script an enabled mod, Overwrite or the Data folder holds, by name. */
+export function papyrusScriptsOf(files: FileWinners, dataFolderFiles: DataFolderFiles, release: string | undefined): PapyrusScript[] {
+  const inData = dataFolderFiles.kind === 'listed' ? dataFolderFiles.files : new Map<string, { relativePath: string; path: string }>();
+  const copyOf = (relativePath: string): string | undefined => files.get(relativePath)?.winner ?? inData.get(relativePath.toLowerCase())?.path;
+  const names = new Map<string, string>();
+  for (const relativePath of [...files.values(), ...inData.values()].map((file) => file.relativePath)) {
     const script = papyrusScriptAt(release, relativePath);
-    if (script === undefined) continue;
-    const key = script.name.toLowerCase();
-    const held = best.get(key);
-    if (held === undefined || script.preference < held.preference) best.set(key, { name: script.name, file: winner, preference: script.preference });
+    if (script !== undefined && !names.has(script.name.toLowerCase())) names.set(script.name.toLowerCase(), script.name);
   }
-  return [...best.values()].map(({ name, file }) => ({ name, file })).sort((a, b) => a.name.localeCompare(b.name));
+  return [...names.values()].sort((a, b) => a.localeCompare(b)).map((name) => {
+    const placed = papyrusScriptFiles(release, name);
+    const source = placed?.sources.map(copyOf).find((file) => file !== undefined);
+    const compiled = placed && copyOf(placed.compiled);
+    return { name, ...source === undefined ? {} : { source }, ...compiled === undefined ? {} : { compiled } };
+  });
 }

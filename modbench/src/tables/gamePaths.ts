@@ -29,7 +29,8 @@ export interface GamePathInfo {
   readonly programs: Programs;
   readonly pluginCompanions: PluginCompanions;
   readonly archiveLists: ArchiveLists;
-  readonly papyrusFolders: PapyrusFolders;
+  /** Absent for a release whose folders no reference names. */
+  readonly papyrusFolders?: PapyrusFolders;
   /** The BA2 versions the release reads its archives of textures and its other archives as; absent until what mEdit
    *  writes is known to load in the game. */
   readonly ba2Versions?: Ba2Versions;
@@ -143,7 +144,6 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
     masters: STARFIELD_MASTERS, creationClubList: 'Starfield.ccc', blueprintLoadsLast: true,
     scriptExtenderFolder: 'sfse', programs: { game: 'Starfield.exe', extenderLoader: 'sfse_loader.exe' }, pluginCompanions: FALLOUT4_COMPANIONS,
     archiveLists: { myGamesFolder: 'Starfield', defaultIni: 'Starfield.ini', userInis: ['StarfieldCustom.ini'], keys: RESOURCE_INDEX_KEYS },
-    papyrusFolders: FALLOUT4_PAPYRUS,
   },
 };
 
@@ -331,6 +331,9 @@ export function archiveListsOf(release: string | undefined): ArchiveLists | unde
 
 const PAPYRUS_EXTENSIONS = { source: '.psc', compiled: '.pex' };
 
+const papyrusFoldersOf = (release: string | undefined): PapyrusFolders | undefined =>
+  (release === undefined ? undefined : GAME_PATHS[release]?.papyrusFolders);
+
 // A namespace is a folder below the script folder, and the game names it before a colon.
 function scriptNamed(relativePath: string, folder: string, extension: string): string | undefined {
   const under = `${folder.toLowerCase()}/`;
@@ -339,15 +342,24 @@ function scriptNamed(relativePath: string, folder: string, extension: string): s
   return name === '' || name.endsWith('/') ? undefined : name.replaceAll('/', ':');
 }
 
-/** The Papyrus script the file at `relativePath` under the Data folder is, and its preference: each source folder in
- *  turn, then the compiled script, lowest first. None for any other file, or a release the table holds no row for. */
-export function papyrusScriptAt(release: string | undefined, relativePath: string): { name: string; preference: number } | undefined {
-  const folders = release === undefined ? undefined : GAME_PATHS[release]?.papyrusFolders;
+/** The Papyrus script the file at `relativePath` under the Data folder is, and whether it is the script's compiled
+ *  script or a source. None for any other file, or a release the table holds no folders for. */
+export function papyrusScriptAt(release: string | undefined, relativePath: string): { name: string; compiled: boolean } | undefined {
+  const folders = papyrusFoldersOf(release);
   if (folders === undefined) return undefined;
-  const places = [...folders.sources.map((folder) => ({ folder, extension: PAPYRUS_EXTENSIONS.source })), { folder: folders.compiled, extension: PAPYRUS_EXTENSIONS.compiled }];
-  for (const [preference, { folder, extension }] of places.entries()) {
-    const name = scriptNamed(relativePath, folder, extension);
-    if (name !== undefined) return { name, preference };
-  }
-  return undefined;
+  const compiled = scriptNamed(relativePath, folders.compiled, PAPYRUS_EXTENSIONS.compiled);
+  if (compiled !== undefined) return { name: compiled, compiled: true };
+  const source = folders.sources.map((folder) => scriptNamed(relativePath, folder, PAPYRUS_EXTENSIONS.source)).find((name) => name !== undefined);
+  return source === undefined ? undefined : { name: source, compiled: false };
+}
+
+/** Under the Data folder: the compiled script the game takes the script `name` from, and each of its sources, in the
+ *  order the Creation Kit reads them. None for a release the table holds no folders for. */
+export function papyrusScriptFiles(release: string | undefined, name: string): { compiled: string; sources: string[] } | undefined {
+  const folders = papyrusFoldersOf(release);
+  const path = name.replaceAll(':', '/');
+  return folders && {
+    compiled: `${folders.compiled}/${path}${PAPYRUS_EXTENSIONS.compiled}`,
+    sources: folders.sources.map((folder) => `${folder}/${path}${PAPYRUS_EXTENSIONS.source}`),
+  };
 }

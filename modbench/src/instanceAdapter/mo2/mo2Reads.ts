@@ -17,7 +17,7 @@ import { pathTokensWritten } from './mo2PathTokens';
 import { pushRefusalWritten } from './mo2Submodules';
 import { get, ignoreSkippedLink, parsedBy, textByStamp, isRepository, listEntries, listFolders, readOrAbsent, readOrReason, identityOf, type SkippedLink, stampOf } from '../files';
 import { isOwnTemp } from '../../repositoriesLib/wholeWrites';
-import type { DownloadedFile, DownloadedFiles, InstanceAdapter, ManagerNames, ManagerRunning, ModFolder, ModFolders, SortingRuleFile } from '../instanceAdapter';
+import type { DownloadedFile, DownloadedFiles, GameFolder, InstanceAdapter, ManagerNames, ManagerRunning, ModFolder, ModFolders, SortingRuleFile } from '../instanceAdapter';
 import { DATA_FOLDER_GLOB, DOWNLOADS_WATCH_GLOB, FIRST_LEVEL, PROFILE_WATCH_PATTERN, profileDir, downloadedFilePath, downloadedFileMetadataPath, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile, sortingRuleFilePaths } from './layout';
 import { mo2Archives } from './mo2Archives';
 import type { ReadingSource } from '../instanceReading';
@@ -67,6 +67,14 @@ function gamePathOf(iniText: string): string | undefined {
   }
 }
 
+const managedGamePath = (iniText: string, release: string): ManagerGamePath => ({ path: gamePathOf(iniText), place: GAME_PATH_PLACE, release });
+
+/** The game folder the mod manager's configuration names now. */
+export async function currentGameFolder({ instanceRoot, resolveGameFolder }: Mo2Context): Promise<GameFolder> {
+  const iniText = await get(settingsFile(instanceRoot));
+  return resolveGameFolder(managedGamePath(iniText, gameOfSettings(iniText).gameRelease));
+}
+
 const MO2_NAMES: ManagerNames = { manager: 'MO2', modOrderFile: MODLIST_FILE_NAME, downloadedFileMetadataFile: METADATA_FILE_SUFFIX };
 
 /** A mod's meta.ini as it reads, `{}` for a separator, a mod with no folder and a meta that is gone. */
@@ -112,8 +120,7 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
         ...game,
         // What the settings resolve is what the watch follows.
         gameFolder: async () => {
-          const managed: ManagerGamePath = { path: gamePathOf(iniText), place: GAME_PATH_PLACE, release: game.gameRelease };
-          const gameFolder = await resolveGameFolder(managed);
+          const gameFolder = await resolveGameFolder(managedGamePath(iniText, game.gameRelease));
           const dataFolder = dataFolderOf(gameFolder);
           watch.follow('dataFolder', dataFolder === undefined ? [] : [dataFolder], DATA_FOLDER_GLOB);
           const creationClubList = creationClubFileOf(gameFolder, game.gameRelease);

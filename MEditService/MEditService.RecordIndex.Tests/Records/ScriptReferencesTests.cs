@@ -36,7 +36,7 @@ public class ScriptReferencesTests
         using var index = Indexes.Open(holder, opens);
         index.Reconcile(holder, plugins.DataFolder, plugins.Plugins, GameRelease.Fallout4);
 
-        var copies = index.Queries.GetScriptReferences("ns:ATTACHED").Value();
+        var copies = index.Queries.GetScriptReferences("ns:ATTACHED").Value().Copies;
 
         var copy = Assert.Single(copies);
         Assert.Equal((attaching, Holding, false), (copy.FormKey, copy.Plugin, copy.InPluginSource));

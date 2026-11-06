@@ -170,9 +170,9 @@ describe.each(implementationsOver('holdings-instance'))('$name holds the contrac
 
   describe('plugins', () => {
     it('holds a plugin its origin holds at its root, named in any case', async () => {
-      expect(await adapter.originHoldsPlugin(ALPHA, 'patch.ESP')).toBe(true);
-      expect(await adapter.originHoldsPlugin(BETA, 'Patch.esp')).toBe(false);
-      expect(await adapter.originHoldsPlugin(ALPHA, 'a.dds')).toBe(false);
+      expect(await adapter.originHoldsFile(ALPHA, 'patch.ESP')).toBe(true);
+      expect(await adapter.originHoldsFile(BETA, 'Patch.esp')).toBe(false);
+      expect(await adapter.originHoldsFile(ALPHA, 'a.dds')).toBe(false);
     });
 
     it('refuses to rename a plugin its origin does not hold', async () => {
@@ -192,8 +192,8 @@ describe.each(implementationsOver('holdings-instance'))('$name holds the contrac
 
     it('shows a plugin it renamed to the next read, in its origin and the plugin order', async () => {
       await renamedPlugin(adapter, { name: 'patch.esp', origin: 'Alpha' }, 'Renamed.esp');
-      expect(await adapter.originHoldsPlugin(ALPHA, 'Renamed.esp')).toBe(true);
-      expect(await adapter.originHoldsPlugin(ALPHA, 'Patch.esp')).toBe(false);
+      expect(await adapter.originHoldsFile(ALPHA, 'Renamed.esp')).toBe(true);
+      expect(await adapter.originHoldsFile(ALPHA, 'Patch.esp')).toBe(false);
       expect(await pluginOrderOf(adapter)).toEqual(['Renamed.esp', 'Taken.esp']);
     });
   });

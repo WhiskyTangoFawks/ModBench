@@ -69,20 +69,32 @@ public class ScriptAttachmentsTests
         Assert.Equal([new ScriptAttachment("Attached", "VirtualMachineAdapter.Scripts[0].Name")], attached);
     }
 
-    private static FieldMetadata Member(FieldMetadata meta, string name) =>
-        (meta.Fields ?? throw new InvalidOperationException($"Expected '{meta.Name}' to have fields.")).Single(f => f.Name == name);
+    [Fact]
+    public void AFallout4RecordsFragmentScripts_AreEachNamedAtItsPath()
+    {
+        var quest = NewMod().Quests.AddNew("Holder");
+        quest.VirtualMachineAdapter = new Fo4.QuestAdapter();
+        quest.VirtualMachineAdapter.Fragments.Add(new Fo4.QuestScriptFragment { ScriptName = "Fragments:Quest", FragmentName = "Fragment_Stage_0010" });
+        var text = RecordTextCodec.SerializeToText(quest, GameRelease.Fallout4);
 
-    private static FieldMetadata Element(FieldMetadata meta) =>
-        meta.ElementType ?? throw new InvalidOperationException($"Expected '{meta.Name}' to have an element type.");
+        var attached = ScriptAttachments.Collect(text, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["qust"].RecordColumns);
+
+        Assert.Contains(new ScriptAttachment("Fragments:Quest", "VirtualMachineAdapter.Fragments[0].ScriptName"), attached);
+    }
 
     [Fact]
-    public void TheSchema_MarksAScriptsNameAndNotItsPropertysName()
+    public void ASkyrimRecordsFragmentScripts_AreEachNamedAtItsPath()
     {
-        var adapter = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["npc_"].RecordColumns
-            .Single(c => c.Name == "VirtualMachineAdapter").Field;
-        var script = Element(Member(adapter, "Scripts"));
+        var mod = new Tes5.SkyrimMod(ModKey.FromFileName("Vmad.esp"), Tes5.SkyrimRelease.SkyrimSE);
+        var quest = mod.Quests.AddNew("Holder");
+        quest.VirtualMachineAdapter = new Tes5.QuestAdapter { FileName = "QF_Holder" };
+        quest.VirtualMachineAdapter.Fragments.Add(new Tes5.QuestScriptFragment { ScriptName = "QF_Holder", FragmentName = "Fragment_0" });
+        var text = RecordTextCodec.SerializeToText(quest, GameRelease.SkyrimSE);
 
-        Assert.True(Member(script, "Name").IsScriptName);
-        Assert.False(Member(Element(Member(script, "Properties")), "Name").IsScriptName);
+        var attached = ScriptAttachments.Collect(text, SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["qust"].RecordColumns);
+
+        Assert.Equal(
+            [new ScriptAttachment("QF_Holder", "VirtualMachineAdapter.FileName"), new ScriptAttachment("QF_Holder", "VirtualMachineAdapter.Fragments[0].ScriptName")],
+            attached.OrderBy(a => a.FieldPath, StringComparer.Ordinal));
     }
 }

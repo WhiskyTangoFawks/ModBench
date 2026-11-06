@@ -96,7 +96,7 @@ export interface InstanceValue {
   readonly filesByMod: ReadonlyMap<string, readonly OriginFile[]>;
   /** Each listed mod's folders, a disabled mod's too. */
   readonly foldersByMod: ReadonlyMap<string, readonly OriginFolder[]>;
-  /** Each Papyrus script an enabled mod or Overwrite holds (`papyrusScriptsOf`). */
+  /** Each Papyrus script an enabled mod, Overwrite or the Data folder holds (`papyrusScriptsOf`). */
   readonly papyrusScripts: readonly PapyrusScript[];
   /** Every plugin file, with origin, line, enabled and winning. A listed
    *  name neither a mod nor overwrite/ provides is still a row — a line-only one, `path`
@@ -627,7 +627,7 @@ export class Instance implements Subscription {
       files: index.files,
       filesByMod: index.filesByMod,
       foldersByMod: index.foldersByMod,
-      papyrusScripts: papyrusScriptsOf(index.files, gameRelease),
+      papyrusScripts: papyrusScriptsOf(index.files, dataFolderFiles, gameRelease),
       plugins,
       downloadedFiles: downloadedFilesOutcome.kind === 'unresolved'
         ? { kind: 'unresolved', reason: downloadedFilesOutcome.reason }

@@ -174,8 +174,8 @@ internal static class RecordEndpoints
         .WithDescription(
             "Each copy, in an active plugin or one with plugin source, that attaches the Papyrus script of that name in any " +
             "case, with the member paths that name it. Answers only once the record index is ready. Each says whether its " +
-            "plugin has plugin source, which a rename changes.")
-        .Produces<IReadOnlyList<CopyAttaching>>()
+            "plugin has plugin source, which a rename changes, and why each copy that may attach it went unread.")
+        .Produces<ScriptReferences>()
         .ProducesProblem(503);
 
         // ADR-0001: the document is the caller's to change and save.
