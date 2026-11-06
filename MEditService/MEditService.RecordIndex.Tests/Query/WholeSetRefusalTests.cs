@@ -15,6 +15,7 @@ public sealed class WholeSetRefusalTests
     {
         [nameof(IQueries.GetRecord)] = q => q.GetRecord("000800:First.esp").Refused(),
         [nameof(IQueries.GetCompareRecords)] = q => q.GetCompareRecords([new RecordCopy("000800:First.esp", FirstPlugin)]).Refused(),
+        [nameof(IQueries.GetCopyStates)] = q => q.GetCopyStates(["000800:First.esp"], plugin: null).Refused(),
         [nameof(IQueries.GetLoadOrderDiagnoses)] = q => q.GetLoadOrderDiagnoses().Refused(),
         [nameof(IQueries.GetDependants)] = q => q.GetDependants(FirstPlugin).Refused(),
         [nameof(IQueries.GetProblems)] = q => q.GetProblems().Refused(),

@@ -35,10 +35,15 @@ class ReadAgainstTheFixtureInstance(unittest.TestCase):
 
     def test_compares_each_copy_of_a_record_with_the_master_in_load_order(self) -> None:
         with window_of(self.url):
-            copies = medit.compare('000800:MBDevConflictA.esp')
+            copies = medit.compare(['000800:MBDevConflictA.esp'])['000800:MBDevConflictA.esp']
         self.assertEqual(
             [(copy.plugin.name, copy.conflict_this) for copy in copies],
             [(CONFLICT_A.name, 'Master'), ('MBDevPatchAB.esp', 'Override')])
+
+    def test_compares_a_record_within_a_plugin_and_its_masters(self) -> None:
+        with window_of(self.url):
+            copies = medit.compare(['000800:MBDevConflictA.esp'], 'MBDevPatchAB.esp')['000800:MBDevConflictA.esp']
+        self.assertEqual([copy.plugin.name for copy in copies], [CONFLICT_A.name, 'MBDevPatchAB.esp'])
 
     def test_raises_for_a_plugin_that_holds_no_such_record(self) -> None:
         with window_of(self.url), self.assertRaises(medit.MEditError) as raised:

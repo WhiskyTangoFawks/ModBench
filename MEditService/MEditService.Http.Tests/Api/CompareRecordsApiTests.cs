@@ -46,6 +46,22 @@ public sealed class CompareRecordsApiTests : HostedTests
     }
 
     [Fact]
+    public async Task ManyRecords_AreAnsweredWithEachCopysState_AndNoFields()
+    {
+        var (npc, weapon) = await Loaded();
+
+        var response = await Client.PostAsJsonAsync("/records/copy-states", new { formKeys = new[] { npc, weapon } });
+
+        response.EnsureSuccessStatusCode();
+        var records = (await response.Body()).EnumerateArray().ToList();
+        Assert.Equal([npc, weapon], records.Select(r => r.GetProperty("formKey").GetString()));
+        var copy = records[0].GetProperty("copies").EnumerateArray().First();
+        Assert.Equal(WithNpc, copy.GetProperty("plugin").GetProperty("name").GetString());
+        Assert.Equal("OnlyOne", copy.GetProperty("conflictThis").GetString());
+        Assert.Equal(["conflictThis", "plugin"], copy.EnumerateObject().Select(p => p.Name).Order());
+    }
+
+    [Fact]
     public async Task ACopyNoPluginGives_IsAnAnswerWithNoComparison_NamingEachCopyAndWhyItIsMissing()
     {
         var (npc, weapon) = await Loaded();
@@ -85,6 +101,8 @@ public sealed class CompareRecordsApiTests : HostedTests
     public static TheoryData<string, string, string> NotAComparison => new()
     {
         { "/records/compare", "no copies", """{"copies": []}""" },
+        { "/records/copy-states", "no FormKeys", """{"formKeys": []}""" },
+        { "/records/copy-states", "a plugin missing its origin", """{"formKeys": ["000800:WithNpc.esp"], "plugin": {"name": "WithNpc.esp", "origin": ""}}""" },
         { "/records/compare", "a copy missing its origin", """{"copies": [{"formKey": "000800:WithNpc.esp", "plugin": {"name": "WithNpc.esp", "origin": ""}}]}""" },
         {
             "/records/000800%3AWithNpc.esp/compare", "a text with no origin",

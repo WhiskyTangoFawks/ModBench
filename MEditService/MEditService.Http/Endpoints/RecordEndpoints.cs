@@ -127,6 +127,19 @@ internal static class RecordEndpoints
         .ProducesProblem(400)
         .ProducesProblem(503);
 
+        app.MapPost("/records/copy-states", (CopyStatesRequest request, IQueries svc) =>
+            CopyStates(request, svc))
+        .WithName("CompareCopyStates")
+        .WithSummary("Many records' copies, each with its state against the master, in one call.")
+        .WithDescription(
+            "Given a plugin, each record's stack holds that plugin and its masters, as xEdit's cleaning loads them; " +
+            "given none, the active load order. A record no plugin of the stack holds has no copy. " +
+            "The answer holds no fields and no resolved links.")
+        .WithTags("Records")
+        .Produces<List<RecordCopyStates>>()
+        .ProducesProblem(400)
+        .ProducesProblem(503);
+
         app.MapGet("/plugin-source/record", (string? path, IQueries svc) =>
         {
             if (path is null || !Path.IsPathFullyQualified(path))
@@ -426,6 +439,16 @@ internal static class RecordEndpoints
         return EndpointMapping.Ok(svc.GetCompareRecords(copies));
     }
 
+    internal static IResult CopyStates(CopyStatesRequest request, IQueries svc)
+    {
+        var formKeys = request.FormKeys ?? [];
+        if (formKeys.Count == 0 || formKeys.Any(string.IsNullOrWhiteSpace))
+            return EndpointMapping.BadRequest("At least one FormKey is required.");
+        if (request.Plugin is { } plugin && (string.IsNullOrWhiteSpace(plugin.Name) || string.IsNullOrWhiteSpace(plugin.Origin)))
+            return EndpointMapping.BadRequest("A plugin needs a name and an origin.");
+        return EndpointMapping.Ok(svc.GetCopyStates(formKeys, request.Plugin));
+    }
+
     internal static IResult CompareRecord(string formKey, CopyText copy, IQueries svc)
     {
         if (copy.DocumentText is null || string.IsNullOrWhiteSpace(copy.Plugin.Name) || string.IsNullOrWhiteSpace(copy.Plugin.Origin))
@@ -472,6 +495,8 @@ internal sealed record RecordEditRequest(
 internal sealed record RecordEditChangesRequest(RecordEditRequest Edit);
 
 internal sealed record CompareRecordsRequest(IReadOnlyList<RecordCopy> Copies);
+
+internal sealed record CopyStatesRequest(IReadOnlyList<string> FormKeys, PluginAddress? Plugin = null);
 
 internal sealed record RecordDeleteChangesRequest(IReadOnlyList<RecordAt> Records);
 

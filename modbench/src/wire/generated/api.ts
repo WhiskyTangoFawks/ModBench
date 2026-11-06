@@ -749,6 +749,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/records/copy-states": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Many records' copies, each with its state against the master, in one call.
+         * @description Given a plugin, each record's stack holds that plugin and its masters, as xEdit's cleaning loads them; given none, the active load order. A record no plugin of the stack holds has no copy. The answer holds no fields and no resolved links.
+         */
+        post: operations["CompareCopyStates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugin-source/record": {
         parameters: {
             query?: never;
@@ -1200,7 +1220,7 @@ export interface components {
         /** @enum {string} */
         ConflictAll: "OnlyOne" | "NoConflict" | "Override" | "Conflict" | "ConflictBenign";
         /** @enum {string} */
-        ConflictThis: "OnlyOne" | "Master" | "IdenticalToMaster" | "Override" | "ConflictWins" | "ConflictLoses";
+        ConflictThis: "OnlyOne" | "Master" | "IdenticalToMaster" | "IdenticalToMasterWinsConflict" | "Override" | "ConflictWins" | "ConflictLoses";
         ContainerChildSummary: {
             formKey: string;
             editorId?: string | null;
@@ -1256,6 +1276,14 @@ export interface components {
         CopyRecordResult: {
             applied: components["schemas"]["RecordCopied"][];
             refused: components["schemas"]["CopyRecordRefused"][];
+        };
+        CopyState: {
+            plugin: components["schemas"]["PluginAddress"];
+            conflictThis: components["schemas"]["ConflictThis"];
+        };
+        CopyStatesRequest: {
+            formKeys: string[];
+            plugin?: components["schemas"]["PluginAddress"] | null;
         };
         CopyText: {
             plugin: components["schemas"]["PluginAddress"];
@@ -1667,6 +1695,10 @@ export interface components {
             mode: components["schemas"]["CopyMode"];
             destinations: components["schemas"]["PluginAddress"][];
             replace: boolean;
+        };
+        RecordCopyStates: {
+            formKey: string;
+            copies: components["schemas"]["CopyState"][];
         };
         RecordCreateChangesRequest: {
             origin: string;
@@ -3996,6 +4028,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CompareRecordsAnswer"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    CompareCopyStates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CopyStatesRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordCopyStates"][];
                 };
             };
             /** @description Bad Request */

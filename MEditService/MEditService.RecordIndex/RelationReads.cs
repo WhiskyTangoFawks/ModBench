@@ -83,6 +83,30 @@ internal sealed class RelationReads(
         return ([.. copies.Select(copy => held[copy.FormKey].FirstOrDefault(document => PluginAddress.Comparer.Equals(document.Plugin, copy.Plugin)))], resolve);
     }
 
+    /// <summary>The active copies of each of <paramref name="formKeys"/>, in load order, read in one query narrowed
+    /// by FormKey and, given <paramref name="plugins"/>, by plugin before the body is named. Links are not resolved.</summary>
+    public ILookup<string, RecordDocument> GetStacks(IReadOnlyList<string> formKeys, IReadOnlyList<PluginAddress>? plugins)
+    {
+        var values = new List<string>(formKeys);
+        var keys = string.Join(", ", formKeys.Select((_, i) => $"${i + 1}"));
+        var narrowedByPlugin = "";
+        if (plugins is not null)
+        {
+            narrowedByPlugin = " AND (" + string.Join(" OR ", plugins.Select((_, i) =>
+                $"(plugin = ${formKeys.Count + 2 * i + 1} AND origin = ${formKeys.Count + 2 * i + 2})")) + ")";
+            values.AddRange(plugins.SelectMany(plugin => new[] { plugin.Name, plugin.Origin }));
+        }
+        using var context = store.OpenRead();
+        return context.Rows($"""
+            SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, parse_diagnosis, record_type
+            FROM records
+            WHERE form_key IN ({keys}){narrowedByPlugin}
+            ORDER BY load_order_idx
+            """, reader => ReadDocumentFromBody(context, reader, store.Schemas[reader.GetString(8)], _ => null),
+            [.. values])
+            .ToLookup(document => document.FormKey, StringComparer.OrdinalIgnoreCase);
+    }
+
     /// <summary>Whether any registered plugin, active or not, holds <paramref name="formKey"/>.</summary>
     public bool IsHeldByAnyPlugin(string formKey)
     {

@@ -137,6 +137,12 @@ public record CompareResult(
 /// or the one <paramref name="DocumentText"/> spells in its place (ADR-0012).</summary>
 public record RecordCopy(string FormKey, PluginAddress Plugin, string? DocumentText = null);
 
+/// <summary>A record's copies in the stack judged, in load order, each with its state against the stack's master. A record
+/// no plugin of the stack holds has no copy.</summary>
+public sealed record RecordCopyStates(string FormKey, IReadOnlyList<CopyState> Copies);
+
+public sealed record CopyState(PluginAddress Plugin, ConflictThis ConflictThis);
+
 /// <summary>A copy whose text names a plugin, and whether its plugin has plugin source, which a rename can change.</summary>
 public sealed record CopyNaming(string FormKey, PluginAddress Plugin, bool InPluginSource);
 
@@ -231,6 +237,7 @@ public enum ConflictThis
     OnlyOne,
     Master,
     IdenticalToMaster,
+    IdenticalToMasterWinsConflict,
     Override,
     ConflictWins,
     ConflictLoses,
