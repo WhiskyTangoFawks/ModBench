@@ -52,7 +52,7 @@ internal sealed class RelationReads(
         var (body, editorId, parseDiagnosis) = CallerText.Read(text);
         return DocumentFromBody(
             context, formKey, plugin.Name, plugin.Origin, loadOrderIndex, isWinner: false, editorId, body,
-            store.Schemas[tableName], LinkResolution.ForLinksOf(context, formKey, Resolve), parseDiagnosis);
+            store.Schemas[tableName], LinkResolution.ForLinksOf(context, [formKey], Resolve), parseDiagnosis);
     }
 
     /// <summary>What <paramref name="plugin"/> holds <paramref name="formKey"/> as, and its document as
@@ -63,6 +63,22 @@ internal sealed class RelationReads(
         return context.Rows($"SELECT record_type, editor_id, body FROM {TableDdlBuilder.PluginRecordsView} WHERE form_key = $1 AND plugin = $2 AND origin = $3 LIMIT 1",
             reader => (new RecordIdentity(formKey, reader.GetString(0), reader.GetStringOrNull(1)), reader.GetString(2)),
             formKey, plugin.Name, plugin.Origin) is [var copy] ? copy : null;
+    }
+
+    /// <summary>Each of <paramref name="copies"/>' documents, null where no plugin copy is indexed, read in
+    /// one query with the links of every copy resolved in another.</summary>
+    public List<RecordDocument?> GetDocuments(IReadOnlyList<RecordCopy> copies)
+    {
+        var formKeys = copies.Select(copy => copy.FormKey).Distinct().ToList();
+        using var context = store.OpenRead();
+        var resolve = LinkResolution.ForLinksOf(context, formKeys);
+        var held = context.Rows($"""
+            SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, parse_diagnosis, record_type
+            FROM records
+            WHERE form_key IN ({string.Join(", ", formKeys.Select((_, i) => $"${i + 1}"))})
+            """, reader => ReadDocumentFromBody(context, reader, store.Schemas[reader.GetString(8)], resolve), [.. formKeys])
+            .ToLookup(document => document.FormKey, StringComparer.OrdinalIgnoreCase);
+        return [.. copies.Select(copy => held[copy.FormKey].FirstOrDefault(document => PluginAddress.Comparer.Equals(document.Plugin, copy.Plugin)))];
     }
 
     /// <summary>Whether any registered plugin, active or not, holds <paramref name="formKey"/>.</summary>
@@ -97,7 +113,7 @@ internal sealed class RelationReads(
         var tableName = FindRecordType(context, formKey);
         if (tableName == null) return null;
         var schema = store.Schemas[tableName];
-        var resolve = LinkResolution.ForLinksOf(context, formKey);
+        var resolve = LinkResolution.ForLinksOf(context, [formKey]);
         var entries = context.Rows("""
             SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, parse_diagnosis, working_tree_state
             FROM records
@@ -281,12 +297,12 @@ internal sealed class RelationReads(
     }
 
     /// <summary>One response's FormKey → (record type, EditorID) lookup against the winning override,
-    /// about <paramref name="formKey"/>, each distinct FormKey asked once. The store resolves the
+    /// about <paramref name="formKeys"/>, each distinct FormKey asked once. The store resolves the
     /// links its copies carry in one query up front.</summary>
-    public Func<string, RecordLookupEntry?> LinkResolver(string formKey)
+    public Func<string, RecordLookupEntry?> LinkResolver(List<string> formKeys)
     {
         using var context = store.OpenRead();
-        return LinkResolution.ForLinksOf(context, formKey, Resolve);
+        return LinkResolution.ForLinksOf(context, formKeys, Resolve);
     }
 
     private List<MissingReference> GetReferencesToMissingRecords()
@@ -778,7 +794,7 @@ internal sealed class RelationReads(
         conditions.Add($"record_type = ${values.Count + 1}");
         values.Add(NormalizeRecordType(tableName));
 
-        var resolve = LinkResolution.ForLinksOf(context, formKey);
+        var resolve = LinkResolution.ForLinksOf(context, [formKey]);
         return context.Rows($"""
             SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, parse_diagnosis
             FROM records WHERE {string.Join(" AND ", conditions)}

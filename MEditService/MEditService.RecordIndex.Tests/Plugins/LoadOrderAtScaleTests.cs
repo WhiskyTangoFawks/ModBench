@@ -69,4 +69,16 @@ public sealed class LoadOrderAtScaleTests
         Budgets.Ran(OneGesture, () => listed = scale.Index.Queries.GetCellChildRecords(scale.BigCellPlugin.Key, scale.BigCell).Value(), "Expanding a big cell");
         Assert.Equal(4_000, listed?.Temporary.Count);
     }
+
+    [Fact]
+    public void TheConflictStackOfARecordWithManyCopies_ComparesWithinTheNavigationBudget()
+    {
+        const int copies = 100;
+        using var scale = new LoadOrderAtScale(copies);
+        var stack = scale.PluginsHoldingTheOverriddenRecord.Select(p => new RecordCopy(scale.AnOverriddenRecord, p.Key)).ToList();
+        CompareRecordsAnswer? compared = null;
+
+        Budgets.Ran(TimeSpan.FromSeconds(0.1), () => compared = scale.Index.Queries.GetCompareRecords(stack).Value(), "Comparing a record of 100 copies");
+        Assert.Equal(copies, compared?.Compare?.Overrides.Count);
+    }
 }
