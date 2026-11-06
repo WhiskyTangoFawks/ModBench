@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { hasSection, isRecordEditEnvelope, moveEnvelope, type ArrayElementContext, type EditableCellContext, type ArrayParentContext, type ReferenceContext, type StringValueContext } from '../wire/messages';
+import { hasSection, isRecordEditEnvelope, moveEnvelope, type ArrayElementContext, type PathHop, type EditableCellContext, type ArrayParentContext, type ReferenceContext, type StringValueContext } from '../wire/messages';
 import type { RecordEditEnvelope } from '../client';
 import { pluginAddressOf } from '../wire/pluginAddress';
 import type { ExtendedFieldDocuments, FieldAddress } from './extendedFieldEditor';
@@ -40,6 +40,11 @@ function isArrayParentContext(value: unknown): value is ArrayParentContext {
 
 function isArrayElementContext(value: unknown): value is ArrayElementContext {
   return hasWebviewSection(value, 'arrayElement');
+}
+
+// commands.md, Argument: an element is its copy's address and its path, which the panel's context also carries.
+function isElementAddress(value: unknown): value is PluginCopyAddress & { path: PathHop[] } {
+  return isPluginCopyAddress(value) && Array.isArray(Reflect.get(value, 'path'));
 }
 
 function isReferenceContext(value: unknown): value is ReferenceContext {
@@ -129,7 +134,7 @@ const CONTEXT_COMMANDS: ContextCommand[] = [
   { command: 'modbench.record.editField', run: editField },
   { command: 'modbench.record.cut', run: cut },
   editCommand('modbench.record.addElement', isArrayParentContext, (ctx, value) => ({ op: 'add', path: ctx.path, value })),
-  editCommand('modbench.record.removeElement', isArrayElementContext, ctx => ({ op: 'remove', path: ctx.path })),
+  editCommand('modbench.record.removeElement', isElementAddress, ctx => ({ op: 'remove', path: ctx.path })),
   editCommand('modbench.record.moveElementUp', isArrayElementContext, ctx => moveEnvelope(ctx.path, -1)),
   editCommand('modbench.record.moveElementDown', isArrayElementContext, ctx => moveEnvelope(ctx.path, 1)),
 ];

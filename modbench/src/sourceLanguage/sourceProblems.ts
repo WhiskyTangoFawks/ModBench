@@ -3,7 +3,7 @@ import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import { coalesced } from '../ports/coalesced';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
-import type { PathHop, RecordEditEnvelope } from '../wire/messages';
+import type { PathHop } from '../wire/messages';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { locationOf, problemSpan, type Segment } from './sourceText';
 import { answerOf, failureReason, type ReadFailed } from '../wire/readFailed';
@@ -11,8 +11,8 @@ import { answerOf, failureReason, type ReadFailed } from '../wire/readFailed';
 type SourceProblem = PluginProblems['problems'][number];
 
 interface Position { line: number; character: number }
-interface ClearingEdit { record: { formKey: string; plugin: string; origin: string }; envelope: RecordEditEnvelope }
-export interface ProblemOnFile { message: string; start: Position; end: Position; clearing?: ClearingEdit }
+interface ClearingGesture { label: string; command: string; args: unknown[] }
+export interface ProblemOnFile { message: string; start: Position; end: Position; clearing?: ClearingGesture }
 /** Every problem mEdit answered, by the absolute path of the file it sits on. */
 export type ProblemsByFile = ReadonlyMap<string, ProblemOnFile[]>;
 
@@ -36,15 +36,19 @@ function positionAt(text: string, offset: number): Position {
 
 const hopOf = (segment: Segment): PathHop => typeof segment === 'number' ? { kind: 'index', index: segment } : { kind: 'member', name: segment };
 
-function clearingEdit({ plugin, problem }: { plugin: PluginAddress; problem: SourceProblem }): ClearingEdit | undefined {
+// A list element is removed, since mEdit refuses a null element; any other field is set to null.
+function clearingGesture({ plugin, problem }: { plugin: PluginAddress; problem: SourceProblem }): ClearingGesture | undefined {
   if (!problem.formKey || !problem.fieldPath) return undefined;
+  const path = locationOf(problem.fieldPath).map(hopOf);
   const record = { formKey: problem.formKey, plugin: plugin.name, origin: plugin.origin };
-  return { record, envelope: { op: 'set', path: locationOf(problem.fieldPath).map(hopOf), value: null } };
+  return path.at(-1)?.kind === 'index'
+    ? { label: 'remove element', command: 'modbench.record.removeElement', args: [{ ...record, path }] }
+    : { label: 'clear reference', command: 'modbench.record.editField', args: [record, { op: 'set', path, value: null }] };
 }
 
 function onText(text: string, plugin: PluginAddress, problem: SourceProblem): ProblemOnFile {
   const target = problemSpan(text, problem);
-  const clearing = clearingEdit({ plugin, problem });
+  const clearing = clearingGesture({ plugin, problem });
   const place = target ? { start: positionAt(text, target.start), end: positionAt(text, target.end) } : { start: FIRST_LINE, end: FIRST_LINE };
   return { message: problem.message, ...place, ...clearing && { clearing } };
 }

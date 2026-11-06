@@ -50,19 +50,18 @@ function feed(files: Record<string, string>, sourceFiles = sourceFolders, answer
 }
 
 describe('feedSourceProblems (source.md, In the text editor, story 6)', () => {
+  const RECORD = { formKey: REFERRER, plugin: 'Refers.esp', origin: 'ReferringMod' };
+  const ITEMS = { kind: 'member', name: 'Items' };
   it.each([
-    ['a member', 'Race', [{ kind: 'member', name: 'Race' }]],
-    ['a list element', 'Items[1]', [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 1 }]],
-    ['a member of a list element', 'Items[0].Item', [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 0 }, { kind: 'member', name: 'Item' }]],
-  ])('carries the edit that clears a reference in %s: its field set to null, on the copy that holds it', async (_label, fieldPath, path) => {
+    ['a member', 'Race', { label: 'clear reference', command: 'modbench.record.editField', args: [RECORD, { op: 'set', path: [{ kind: 'member', name: 'Race' }], value: null }] }],
+    ['a member of a list element', 'Items[0].Item', { label: 'clear reference', command: 'modbench.record.editField', args: [RECORD, { op: 'set', path: [ITEMS, { kind: 'index', index: 0 }, { kind: 'member', name: 'Item' }], value: null }] }],
+    ['a list element', 'Items[1]', { label: 'remove element', command: 'modbench.record.removeElement', args: [{ ...RECORD, path: [ITEMS, { kind: 'index', index: 1 }] }] }],
+  ])('carries the gesture that clears a reference in %s, on the copy that holds it', async (_label, fieldPath, gesture) => {
     const { answered } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': '{}' });
 
     const shown = await answered([{ plugin: PLUGIN, problems: [problem({ fieldPath })] }]);
 
-    expect(shown.get('/source/ReferringMod/Refers.esp/Npc.json')?.map(({ clearing }) => clearing)).toEqual([{
-      record: { formKey: REFERRER, plugin: 'Refers.esp', origin: 'ReferringMod' },
-      envelope: { op: 'set', path, value: null },
-    }]);
+    expect(shown.get('/source/ReferringMod/Refers.esp/Npc.json')?.map(({ clearing }) => clearing)).toEqual([gesture]);
   });
 
   it('carries no clearing edit on a problem that names no field', async () => {

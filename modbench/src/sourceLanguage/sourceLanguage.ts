@@ -67,7 +67,7 @@ const pluginSourceStatusSelector: vscode.DocumentSelector = { language: 'json', 
 
 function diagnosticOf({ message, start, end, clearing }: ProblemOnFile): vscode.Diagnostic {
   const diagnostic = modbenchDiagnostic(new vscode.Range(start.line, start.character, end.line, end.character), message, vscode.DiagnosticSeverity.Warning);
-  if (clearing) diagnostic.code = commandLink('clear reference', 'modbench.record.editField', [clearing.record, clearing.envelope]);
+  if (clearing) diagnostic.code = commandLink(clearing.label, clearing.command, clearing.args);
   return diagnostic;
 }
 
