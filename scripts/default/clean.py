@@ -95,6 +95,10 @@ def _undelete_and_disable(plugin: medit.Plugin) -> list[str]:
     return [form_key for form_key, _, _ in undeletable]
 
 
+def _same_plugin(a: medit.Plugin, b: medit.Plugin) -> bool:
+    return (a.name.lower(), a.origin.lower()) == (b.name.lower(), b.origin.lower())
+
+
 def _identical_to_master(plugin: medit.Plugin) -> set[str]:
     overrides = medit.select(
         f'SELECT form_key FROM records WHERE {_in_plugin(plugin)} AND lower(form_key_plugin) <> lower(plugin)')
@@ -103,7 +107,7 @@ def _identical_to_master(plugin: medit.Plugin) -> set[str]:
     stacks = medit.compare([row['form_key'] for row in overrides], plugin)
     return {
         form_key for form_key, copies in stacks.items()
-        if any(copy.plugin == plugin and copy.conflict_this == IDENTICAL_TO_MASTER for copy in copies)}
+        if any(_same_plugin(copy.plugin, plugin) and copy.conflict_this == IDENTICAL_TO_MASTER for copy in copies)}
 
 
 def _removed_with_their_references(plugin: medit.Plugin, identical: set[str]) -> list[str]:
