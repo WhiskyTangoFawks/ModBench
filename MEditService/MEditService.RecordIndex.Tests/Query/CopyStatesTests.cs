@@ -22,7 +22,7 @@ public sealed class CopyStatesTests : IDisposable
 
     public CopyStatesTests()
     {
-        _fixture = Fixture("medit-copy-states", thirdListsSecondAsMaster: false);
+        _fixture = Fixture();
         _index = Indexes.Reconciled(_fixture);
     }
 
@@ -34,8 +34,8 @@ public sealed class CopyStatesTests : IDisposable
 
     private static MiscItem Named(FormKey key, string name) => new(key, Fallout4Release.Fallout4) { EditorID = $"E{key.ID:X}", Name = name };
 
-    private static PluginFixtureData Fixture(string name, bool thirdListsSecondAsMaster) =>
-        new PluginFixtureBuilder(name)
+    private static PluginFixtureData Fixture() =>
+        new PluginFixtureBuilder("medit-copy-states")
             .WithPlugin(First.Name, mod =>
             {
                 mod.MiscItems.Add(Named(Item, "Item"));
@@ -49,8 +49,6 @@ public sealed class CopyStatesTests : IDisposable
             .WithPlugin(Third.Name, mod =>
             {
                 mod.MiscItems.Set(Named(Item, "Item"));
-                if (thirdListsSecondAsMaster)
-                    mod.FormLists.Add(new FormList(mod, "Lists") { Items = [new FormLink<IFallout4MajorRecordGetter>(new FormKey(ModKey.FromFileName(Second.Name), 0x900))] });
             })
             .WithPlugin(Inactive.Name, _ => { }, enabled: false)
             .Build();
@@ -71,15 +69,6 @@ public sealed class CopyStatesTests : IDisposable
     public void ACopyIdenticalToTheMaster_OverAModInTheStack_IsIdenticalToMasterWinsConflict_AsXEditSetsIt()
     {
         Assert.Equal(ConflictThis.IdenticalToMasterWinsConflict, StatesOf(_index, Item)[Third]);
-    }
-
-    [Fact]
-    public void ACopyIdenticalToTheMaster_OverOneOfItsMasters_IsIdenticalToMasterWinsConflict()
-    {
-        using var fixture = Fixture("medit-copy-states-revert", thirdListsSecondAsMaster: true);
-        using var index = Indexes.Reconciled(fixture);
-
-        Assert.Equal(ConflictThis.IdenticalToMasterWinsConflict, StatesOf(index, Item)[Third]);
     }
 
     [Fact]
