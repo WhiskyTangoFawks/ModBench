@@ -93,29 +93,38 @@ internal static class ConflictRules
     public static Dictionary<string, IReadOnlyDictionary<string, ConflictThis>> StatesByFocus(
         IReadOnlyDictionary<string, object?> valuesByColumn, Func<object?, object?, bool> valuesEqual)
     {
+        var present = new List<object>();
         var classes = new Dictionary<string, int>();
-        var representatives = new List<object?>();
         foreach (var (column, value) in valuesByColumn)
         {
-            var at = representatives.FindIndex(representative => valuesEqual(representative, value));
-            if (at < 0) representatives.Add(value);
-            classes[column] = at < 0 ? representatives.Count - 1 : at;
+            if (value is null)
+            {
+                classes[column] = Absent;
+                continue;
+            }
+            var at = present.FindIndex(representative => valuesEqual(representative, value));
+            if (at < 0) present.Add(value);
+            classes[column] = at < 0 ? present.Count - 1 : at;
         }
+        var equalsAbsent = present.ConvertAll(representative => valuesEqual(null, representative));
 
         return valuesByColumn.Keys.ToDictionary(
             focused => focused,
-            focused => (IReadOnlyDictionary<string, ConflictThis>)new StatesWithFocusOn(focused, classes));
+            focused => (IReadOnlyDictionary<string, ConflictThis>)new StatesWithFocusOn(focused, classes, equalsAbsent));
     }
 
-    // The states every column takes with one column focused, read from the classes of equal values rather
-    // than held per cell, as every column is focused in turn.
-    private sealed class StatesWithFocusOn(string focused, Dictionary<string, int> classes) : IReadOnlyDictionary<string, ConflictThis>
+    private const int Absent = -1;
+
+    // Present values equal as their codec text does, which groups them. Whether an absent cell equals a value
+    // depends on the value alone (the codec omits some spellings of a default and not others), so it is asked
+    // once of each group and never groups an absent cell with them.
+    private sealed class StatesWithFocusOn(string focused, Dictionary<string, int> classes, List<bool> equalsAbsent)
+        : IReadOnlyDictionary<string, ConflictThis>
     {
         public int Count => classes.Count;
         public IEnumerable<string> Keys => classes.Keys;
         public IEnumerable<ConflictThis> Values => classes.Keys.Select(column => this[column]);
-        public ConflictThis this[string column] => column == focused ? ConflictThis.Master
-            : StateOfEqual(classes[column] == classes[focused]);
+        public ConflictThis this[string column] => column == focused ? ConflictThis.Master : Compared(classes[focused], classes[column]);
         public bool ContainsKey(string key) => classes.ContainsKey(key);
 
         public bool TryGetValue(string key, out ConflictThis value)
@@ -129,7 +138,15 @@ internal static class ConflictRules
 
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
 
-        private static ConflictThis StateOfEqual(bool equal) => equal ? ConflictThis.Override : ConflictThis.ConflictLoses;
+        private ConflictThis Compared(int focusedClass, int cellClass) => Equal(focusedClass, cellClass) ? ConflictThis.Override : ConflictThis.ConflictLoses;
+
+        private bool Equal(int focusedClass, int cellClass)
+        {
+            if (focusedClass == Absent && cellClass == Absent) return true;
+            if (focusedClass == Absent) return equalsAbsent[cellClass];
+            if (cellClass == Absent) return equalsAbsent[focusedClass];
+            return focusedClass == cellClass;
+        }
     }
 
     // One column's own state across every row: the most severe cell it holds, Master for the

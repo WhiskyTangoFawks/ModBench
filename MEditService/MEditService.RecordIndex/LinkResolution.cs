@@ -25,8 +25,8 @@ internal static class LinkResolution
         """;
 
     /// <summary>Resolves every link form_references lists for <paramref name="formKeys"/> and the
-    /// records their documents carry inline, in any plugin, up front in one query; a FormKey it did
-    /// not list still resolves alone.</summary>
+    /// records their documents carry inline, in any plugin, up front; a FormKey it did not list still
+    /// resolves alone.</summary>
     internal static Func<string, RecordLookupEntry?> ForLinksOf(ReadContext context, List<string> formKeys) =>
         ForLinksOf(context, formKeys, alone => Resolve(context, alone));
 
