@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { heldTexts, NO_FILE_CHANGES, type RenamePlan } from '../../symbolNames/symbolNames';
-import { manifestEntryReferences } from '../manifestEntryReferences';
+import { manifestEntryReferences, manifestModNames } from '../manifestEntryReferences';
 
 let root: string;
 let modFolder: string;
@@ -82,5 +82,39 @@ describe('a mod\'s manifest names the mod: its file name, and the repository of 
 
   it('owns nothing of a separator', async () => {
     expect(await owner().plan({ kind: 'separator', name: 'Old' }, 'New', NONE)).toMatchObject({ changes: NO_FILE_CHANGES, cannotFollow: [] });
+  });
+});
+
+describe('where a mod\'s manifest names the mod (ADR-0028)', () => {
+  const names = () => manifestModNames({ modFolderOf: (mod) => Promise.resolve(mod === 'Old' ? modFolder : undefined) });
+  const file = () => join(modFolder, 'Old.manifest.json');
+
+  it('names it at its own manifest\'s repository package named for it, whatever the case, and for no other name', async () => {
+    await writeFile(file(), LINKED.replace('"name":"Old"', '"name":"old"'));
+
+    const { references, leftOut } = await names().read('Old', NONE);
+
+    expect(leftOut).toEqual([]);
+    expect((await names().read('Other', NONE)).references).toEqual([]);
+    expect(references).toEqual([{ file: file(), start: { line: 3, character: 29 }, end: { line: 3, character: 32 } }]);
+  });
+
+  it('reads the text the editor holds unsaved, and names the mod at a package of the manifest', async () => {
+    await writeFile(file(), '{"version":1}');
+
+    const { references } = await names().read('Old', heldTexts([[file(), LINKED]]));
+    const offset = LINKED.indexOf('"Old"}') + 2;
+
+    expect(references).toHaveLength(1);
+    expect(await names().nameAt(file(), LINKED, offset)).toBe('Old');
+    expect(await names().nameAt(file(), LINKED, LINKED.indexOf('Old.esp'))).toBeUndefined();
+  });
+
+  it('says why a manifest it cannot read is left out', async () => {
+    await writeFile(file(), '{ not json');
+
+    const { references, leftOut } = await names().read('Old', NONE);
+
+    expect([references, leftOut]).toEqual([[], [expect.stringContaining(file()) as unknown]]);
   });
 });

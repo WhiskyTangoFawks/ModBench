@@ -31,6 +31,24 @@ export function listMessage(found: number, unread: number): string | undefined {
   return unread > 0 ? 'No references found in the files that could be read.' : 'No references found.';
 }
 
+type Unread = Pick<Reporter, 'report' | 'shownOnSurface'>;
+
+/** `references` of `subject`, with a notification naming each file the gesture could not read. */
+export function reportedForGesture<References extends { readonly unread: readonly string[] }>(reporter: Unread, subject: string, references: References): References {
+  if (references.unread.length > 0) {
+    reporter.report('warning', `Referenced by on ${subject} could not read every file that may name it.`, references.unread.join('\n'));
+  }
+  return references;
+}
+
+/** `references` of `subject`, with a line in the Output for each file the feature could not read. */
+export function reportedForFeature<References extends { readonly unread: readonly string[] }>(reporter: Unread, subject: string, references: References): References {
+  for (const why of references.unread) {
+    reporter.shownOnSurface('warning', `Find All References on ${subject} could not read a file that may name it.`, why);
+  }
+  return references;
+}
+
 type Read<Document> = (symbol: PluginSymbol) => Promise<PluginReferences<Document>>;
 
 /** Each place a file names the plugin, as each owner of files says (ADR-0028). What went unread is a notification for
@@ -41,20 +59,8 @@ export function pluginReferencesOf<Document extends { getText(): string }>(
   const read = readReferences(deps);
   const { reporter } = deps;
   return {
-    forGesture: async (symbol) => {
-      const references = await read(symbol);
-      if (references.unread.length > 0) {
-        reporter.report('warning', `Referenced by on ${pluginRowName(symbol)} could not read every file that may name it.`, references.unread.join('\n'));
-      }
-      return references;
-    },
-    forFeature: async (symbol) => {
-      const references = await read(symbol);
-      for (const why of references.unread) {
-        reporter.shownOnSurface('warning', `Find All References on ${pluginRowName(symbol)} could not read a file that may name it.`, why);
-      }
-      return references;
-    },
+    forGesture: async (symbol) => reportedForGesture(reporter, pluginRowName(symbol), await read(symbol)),
+    forFeature: async (symbol) => reportedForFeature(reporter, pluginRowName(symbol), await read(symbol)),
   };
 }
 

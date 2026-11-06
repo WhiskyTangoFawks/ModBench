@@ -651,6 +651,16 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.mod.goTo",
+        "title": "Go to Mod Row",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.mod.referencedBy",
+        "title": "Referenced By Mod",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.mod.openConflicts",
         "title": "Open Mod Conflicts",
         "category": "Modbench"
@@ -1011,6 +1021,14 @@
         {
           "command": "modbench.mod.goToMod",
           "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.singleGoToModRow"
+        },
+        {
+          "command": "modbench.mod.goTo",
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.selectionKind == mod && modbench.mod.singleRow"
+        },
+        {
+          "command": "modbench.mod.referencedBy",
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.selectionKind == mod && modbench.mod.singleRow && modbench.referencesView"
         },
         {
           "command": "modbench.mod.openConflicts",
@@ -1605,9 +1623,14 @@
           "group": "1_open@3"
         },
         {
+          "command": "modbench.mod.referencedBy",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && modbench.referencesView",
+          "group": "1_open@4"
+        },
+        {
           "command": "modbench.mod.viewOnNexus",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bhasNexus\\b/",
-          "group": "1_open@4"
+          "group": "1_open@5"
         },
         {
           "command": "modbench.mod.addPublisherTag",

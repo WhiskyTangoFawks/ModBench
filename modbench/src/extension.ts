@@ -3,8 +3,8 @@
 
 import * as vscode from 'vscode';
 import { attachPortOf, createMEditClient, recordIndexReferences, stopMEditClient, type MEditClient } from './client';
-import { manifestFileReferences } from './manifestAdapter/manifestAdapter';
-import type { SymbolOwner } from './symbolNames/symbolNames';
+import { manifestFileReferences, manifestModNames } from './manifestAdapter/manifestAdapter';
+import type { ModNames, SymbolOwner } from './symbolNames/symbolNames';
 import { makeReporter } from './drivingLib/reporter';
 import { commandTitles } from './drivingLib/commandTitles';
 import { surfaceRefusedWrites } from './drivingLib/writingGesture';
@@ -114,6 +114,7 @@ interface ViewsDeps {
   focusedView: FocusedView;
   editor: Pick<Editor, 'copyValue'>;
   sourceEditing: SourceEditing;
+  referencedByMod: (mod: string) => Promise<void>;
 }
 
 interface InstanceSide {
@@ -156,6 +157,8 @@ interface Opened {
   scriptEnvironmentFile?: InstanceAdapter['scriptEnvironmentFile'];
   /** Each box over the instance's files that says where they name a symbol. */
   owners: readonly SymbolOwner[];
+  /** Each box over the instance's files that says where they name a mod. */
+  modOwners: readonly ModNames[];
   side: (own: Own, deps: ViewsDeps) => InstanceSide;
 }
 
@@ -181,9 +184,10 @@ function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, 
         modFolderOf: (mod) => adapter.modFolderPath(mod),
         companions: async () => pluginCompanionRule(await adapter.gameRelease()),
       })];
-      return { facts: factsOf(instance), instance, scriptEnvironmentFile: adapter.scriptEnvironmentFile, owners, side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
+      const modOwners = [adapter.modReferences, manifestModNames({ modFolderOf: (mod) => adapter.modFolderPath(mod) })];
+      return { facts: factsOf(instance), instance, scriptEnvironmentFile: adapter.scriptEnvironmentFile, owners, modOwners, side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
     },
-    notAnInstance: () => ({ facts: NO_INSTANCE_FACTS, owners: [], side: buildBareSide }),
+    notAnInstance: () => ({ facts: NO_INSTANCE_FACTS, owners: [], modOwners: [], side: buildBareSide }),
   });
 }
 
@@ -223,6 +227,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     checkForUpdates: checkForUpdatesOver(adapter, deps.nexus),
     manifestGestures: { commands: instanceRepository, toolboxView: TOOLBOX_VIEW, say: toolbox.say },
     statuses: modStatuses,
+    referencedBy: deps.referencedByMod,
   }));
   const editing = own(editingFlow({
     client, instanceRoot, ...plugins.editingInPluginsView, log: (line) => outputChannel.error(line),
@@ -353,6 +358,7 @@ function start(context: vscode.ExtensionContext): void {
     focusedView,
     editor,
     sourceEditing,
+    referencedByMod: (mod) => sourceLanguage.referencedByMod(mod),
   });
   const scriptEnvironmentFailures = toastOncePerFailure(reporterFor('scriptEnvironment'));
   const scriptsPath = vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath;
@@ -360,6 +366,7 @@ function start(context: vscode.ExtensionContext): void {
     client: meditClient, instance: views.instance, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
     pluginsShown: views.pluginsShown,
     owners: [recordIndexReferences(meditClient, () => Promise.resolve([])), ...opened.owners],
+    modOwners: opened.modOwners,
   });
   const agentServer = serveAgent({ port: agentPort(), instance: views.instance, copyReads: views.copyReads, statuses: views.statuses, deployment: views.deployment, pluginsShown: views.pluginsShown, standing: { mEdit: () => plugins.standing.mEdit(), plugins: () => plugins.standing.plugins(), sortingRules: () => plugins.standing.sortingRules(), modList: () => views.modsLines(), sourceLanguage: () => sourceLanguage.messages() }, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
   context.subscriptions.push(

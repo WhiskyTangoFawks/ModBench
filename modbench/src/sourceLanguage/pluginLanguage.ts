@@ -1,17 +1,17 @@
 import * as vscode from 'vscode';
-import { referencesView, type ReferencesViewInput } from '../drivingLib/referencesView';
+import { referencesView } from '../drivingLib/referencesView';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { isPluginSourcePath } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
-import { heldTexts, pluginNamed, sameName, type PlaceInFile, type PluginName, type PluginSymbol, type SymbolOwner } from '../symbolNames/symbolNames';
+import { heldTexts, pluginNamed, type PluginName, type PluginSymbol, type SymbolOwner } from '../symbolNames/symbolNames';
 import { heldText, unsavedTexts } from '../textDocuments/heldText';
 import { openPluginSourceDocument } from '../textDocuments/pluginSource';
 import type { RecordDocumentClient } from '../textDocuments/recordDocument';
 import { headerFormKeyOf } from '../wire/headerFormKey';
 import { pluginRowName } from '../wire/pluginAddress';
-import { locationsList } from './locationsList';
-import { listMessage, pluginReferencesOf, type PluginReference } from './pluginReferences';
+import { placeLocation, referencedByInput, spelledAround, type AskedIn, type ListedLocations } from './symbolPlaces';
+import { pluginReferencesOf, type PluginReference } from './pluginReferences';
 import { locateRecord, locationOf } from './recordLocation';
 import { formKeyPluginAt, formKeyValue } from './sourceText';
 
@@ -28,40 +28,8 @@ interface PluginLanguageDeps {
   tooltip: (plugin: PluginSymbol) => readonly string[];
 }
 
-// The span of `name` around `offset`, as the text spells it; an owner's name may sit anywhere in its file's text.
-function spelledAround(text: string, offset: number, name: string): { start: number; end: number; name: string } | undefined {
-  for (let start = Math.max(0, offset - name.length); start <= offset; start += 1) {
-    const spelled = text.slice(start, start + name.length);
-    if (sameName(spelled, name)) return { start, end: start + name.length, name: spelled };
-  }
-  return undefined;
-}
-
-type AskedIn = Pick<vscode.TextDocument, 'getText'> & { readonly uri: Pick<vscode.Uri, 'fsPath'> };
-
-interface ListedLocations {
-  readonly locations: vscode.Location[];
-  readonly unread: number;
-}
-
-const placeLocation = ({ file, start, end }: PlaceInFile): vscode.Location =>
-  new vscode.Location(vscode.Uri.file(file), new vscode.Range(start.line, start.character, end.line, end.character));
-
 const locationOfReference = (found: PluginReference<vscode.TextDocument>): vscode.Location =>
   ('file' in found ? placeLocation(found) : locationOf(found));
-
-function referencedByInput(title: string, location: vscode.Location, read: () => Promise<ListedLocations>, first?: ListedLocations): ReferencesViewInput {
-  let unshown = first;
-  return {
-    title, location, contextValue: 'modbench.pluginReferencedBy',
-    resolve: async () => {
-      const { locations, unread } = unshown ?? await read();
-      unshown = undefined;
-      return locationsList(locations, listMessage(locations.length, unread));
-    },
-    with: (moved) => referencedByInput(title, moved, read),
-  };
-}
 
 /** A plugin as a symbol in the text editor: inside a FormKey, and wherever an owner's file names it (source.md, In the
  *  text editor), and the places files name it. */
@@ -177,7 +145,7 @@ export function pluginLanguage({ instance, reporter, client, owners, renamePlugi
         reporter.report('error', `Could not list where files name ${pluginRowName(plugin)}.`, anchor.refused);
         return;
       }
-      view.setInput(referencedByInput(`Referenced By: ${pluginRowName(plugin)}`, anchor, () => listedForGesture(plugin), first));
+      view.setInput(referencedByInput(`Referenced By: ${pluginRowName(plugin)}`, 'modbench.pluginReferencedBy', anchor, () => listedForGesture(plugin), first));
     },
   };
 }

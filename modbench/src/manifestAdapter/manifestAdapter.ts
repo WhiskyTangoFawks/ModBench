@@ -10,4 +10,4 @@ export { installationFileLack } from './packageLack';
 export { isAddress, repositoryOf } from './manifestPackages';
 export { sourceModsOf, type SourceMods } from './sourceMods';
 export { manifestFileReferences, type ManifestFileOwner } from './manifestFileReferences';
-export { manifestEntryReferences, type ManifestEntryOwner } from './manifestEntryReferences';
+export { manifestEntryReferences, manifestModNames, type ManifestEntryOwner } from './manifestEntryReferences';

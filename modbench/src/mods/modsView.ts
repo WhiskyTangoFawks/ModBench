@@ -31,6 +31,8 @@ import { registerModInstallCommands } from './installCommands';
 import { fomodDialog } from './fomodDialog';
 import { registerCompareFileCommand } from './compareFile';
 import { registerGoToModCommand } from './goToMod';
+import { registerGoToModRowCommand, registerModReferencedByCommand } from './modSymbolCommands';
+import { modOrigin } from '../instanceLoader/fileConflictIndex';
 import { registerBuildCommand } from './buildCommand';
 import { registerBuildTask } from './buildTask';
 import { BuildProblems } from './buildProblems';
@@ -84,6 +86,8 @@ interface ModsViewDeps {
   checkForUpdates: CheckForUpdates;
   /** Each mod's status, as mEdit last answered it. */
   statuses: ModStatuses;
+  /** Lists each place a file names a mod, in VS Code's References view. */
+  referencedBy: (mod: string) => Promise<void>;
 }
 
 const checkForUpdatesDeps = (
@@ -194,6 +198,12 @@ export function createModsView(deps: ModsViewDeps): ModsView {
       rowFor: (origin) => provider.rowFor(origin),
       reveal: (row) => view.reveal(row, { select: true, focus: true }),
     }),
+    registerModReferencedByCommand(deps.referencedBy, () => view.selection),
+    registerGoToModRowCommand({
+      rowOf: (mod) => { const row = provider.rowFor(modOrigin(mod)); return row?.kind === 'mod' ? row : undefined; },
+      folderOf: (mod) => instance.value.paths.modDirs.get(mod),
+      reveal: (row) => view.reveal(row, { select: true, focus: true }), reporter: reporterFor('mod.goTo'),
+    }, () => view.selection),
     registerCompareFileCommand(instance, reporterFor('mod.compareFile'), () => view.selection),
     ...registerConflictTable(instance, (files) => sameCopies(deps.copyReads, files), deps.extensionUri, () => view.selection, reporterFor('mod.openConflicts'), vscode.workspace),
     ...registerModInstallCommands({

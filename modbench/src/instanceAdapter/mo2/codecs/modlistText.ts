@@ -38,6 +38,16 @@ function readLine(line: string): ModlistLine | undefined {
   return name === '' ? undefined : { prefix, name };
 }
 
+/** Each mod's name where a line spells it: its zero-based line, and the characters it spans there. A separator's line names no mod. */
+export function modNamesIn(text: string): { name: string; line: number; start: number; end: number }[] {
+  return stripBom(text).split(/\r\n|\r|\n/).flatMap((raw, line) => {
+    const read = readLine(raw);
+    if (read === undefined || read.name.endsWith(SEPARATOR_SUFFIX)) return [];
+    const start = raw.indexOf(read.name, read.prefix.length);
+    return [{ name: read.name, line, start, end: start + read.name.length }];
+  });
+}
+
 const nameOfLine = (line: string): string | undefined => readLine(line)?.name;
 
 const matchesModLine = (line: string, name: string): boolean => nameOfLine(line) === name;

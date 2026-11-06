@@ -119,6 +119,12 @@ export async function everyPluginOrderFile(instanceRoot: string): Promise<string
   return profiles.sort().flatMap((name) => pluginOrderFiles(instanceRoot, name));
 }
 
+/** Every profile's mod list. */
+export async function everyModlistFile(instanceRoot: string): Promise<string[]> {
+  const profiles = await readOrAbsent(() => listFolders(profilesDir(instanceRoot), ignoreSkippedLink), []);
+  return profiles.sort().map((name) => modlistFile(instanceRoot, name));
+}
+
 /** LOOT's metadata files, at the instance root. */
 export const sortingRuleFilePaths = (instanceRoot: string): Record<keyof typeof SORTING_RULE_FILES, string> => ({
   masterlist: join(instanceRoot, SORTING_RULE_FILES.masterlist),

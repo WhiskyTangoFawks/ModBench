@@ -118,6 +118,7 @@ const otherDeps = () => ({
   extensionUri: Uri.file('/extension'), downloadsView: 'modbench.downloads', channel: { warn: () => undefined },
   focusedView: { id: () => undefined, selection: () => [], selectionOf: () => [], follow: () => ({ dispose: () => undefined }), enter: () => undefined, onDidChange: () => ({ dispose: () => undefined }) },
   statuses: new ModStatuses(foldersHoldingNothing(), () => undefined),
+  referencedBy: () => Promise.resolve(),
   sourceGestures: {
     commands: sourceCommands({ client: new InMemoryMEditClient(), adapter: fakeInstanceAdapter().adapter, saveUnsaved: () => Promise.resolve([]), loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }),
     pluginsView: 'modbench.pluginListTree', say: () => undefined,

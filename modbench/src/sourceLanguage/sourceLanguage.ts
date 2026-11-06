@@ -18,9 +18,10 @@ import { registerBuildEntryPoint } from './buildEntryPoint';
 import { registerUpdateManifestEntryPoint } from './updateManifestEntryPoint';
 import type { Instance } from '../instanceLoader/instance';
 import { feedSourceProblems, type ProblemOnFile, type ProblemsByFile, type SourceProblemsDeps } from './sourceProblems';
-import type { PluginSymbol, SymbolOwner } from '../symbolNames/symbolNames';
+import type { ModNames, PluginSymbol, SymbolOwner } from '../symbolNames/symbolNames';
 import type { PluginsShown } from '../drivingLib/pluginsShown';
 import { pluginLanguage } from './pluginLanguage';
+import { modLanguage } from './modLanguage';
 
 interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'sourceFiles'> {
   instance: Pick<Instance, 'value' | 'subscribe'> | undefined;
@@ -28,6 +29,8 @@ interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'sourceFiles'> {
   client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlugins' | 'handUnsavedDocuments'> & RecordDocumentClient & SourceProblemsDeps['client'];
   /** Each box that owns files, saying where they name a symbol (ADR-0028). */
   owners: readonly SymbolOwner[];
+  /** Each box that owns files, saying where they name a mod. */
+  modOwners: readonly ModNames[];
   /** What Plugins shows of a plugin's row; absent with no instance. */
   pluginsShown: Pick<PluginsShown, 'tooltipLines'> | undefined;
 }
@@ -35,6 +38,11 @@ interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'sourceFiles'> {
 // Go to Definition, and Go to Symbol in Workspace, are entry points to the plugin's `go to` (commands.md).
 const goToPlugin = async (plugin: PluginSymbol): Promise<void> => {
   await vscode.commands.executeCommand('modbench.plugin.goTo', { argument: { kind: 'plugin', plugin } });
+};
+
+// Go to Definition is an entry point to the mod's `go to` (commands.md).
+const goToMod = async (name: string): Promise<void> => {
+  await vscode.commands.executeCommand('modbench.mod.goTo', { argument: { kind: 'mod', name } });
 };
 
 // Rename Symbol is an entry point to the plugin's `rename`, supplying the plugin and the new name (commands.md).
@@ -68,6 +76,8 @@ interface SourceLanguage extends vscode.Disposable {
   messages(): string[];
   /** Lists each place a file names `plugin`, in VS Code's References view. */
   referencedBy(plugin: PluginSymbol): Promise<void>;
+  /** Lists each place a file names the mod, in VS Code's References view. */
+  referencedByMod(mod: string): Promise<void>;
 }
 
 function sourceProblems(deps: SourceLanguageDeps): Pick<SourceLanguage, 'dispose' | 'messages'> {
@@ -97,6 +107,7 @@ export function formKeyLocation(client: RecordDocumentClient) {
 }
 
 type PluginLanguage = ReturnType<typeof pluginLanguage>;
+type ModLanguage = ReturnType<typeof modLanguage>;
 type Spanned = { readonly start: number; readonly end: number };
 
 const rangeIn = (document: vscode.TextDocument, { start, end }: Spanned): vscode.Range =>
@@ -143,13 +154,15 @@ function registerCompletion(deps: SourceLanguageDeps, plugin: PluginLanguage): v
 
 // A plugin's `go to` selects a row and the editor stays put, so the definition is the name asked about: VS Code stays
 // where it is and says nothing.
-function registerDefinition(deps: SourceLanguageDeps, plugin: PluginLanguage): vscode.Disposable {
+function registerDefinition(deps: SourceLanguageDeps, plugin: PluginLanguage, mod: ModLanguage): vscode.Disposable {
   const definitionAt = definitionsOf({ client: deps.client, reporter: deps.reporter, open: openPluginSourceDocument });
   return vscode.languages.registerDefinitionProvider(ownedFiles, {
     async provideDefinition(document, position) {
       const offset = document.offsetAt(position);
       const ofPlugin = await plugin.definitionAt(document, offset);
       if (ofPlugin !== undefined) return ofPlugin.resolved ? new vscode.Location(document.uri, rangeIn(document, ofPlugin)) : undefined;
+      const ofMod = await mod.definitionAt(document, offset);
+      if (ofMod !== undefined) return ofMod.resolved ? new vscode.Location(document.uri, rangeIn(document, ofMod)) : undefined;
       if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
       const found = await definitionAt(heldText(document), offset);
       return found && locationOf(found);
@@ -172,13 +185,15 @@ function registerRename(plugin: PluginLanguage): vscode.Disposable {
   });
 }
 
-function registerReferences(deps: SourceLanguageDeps, plugin: PluginLanguage): vscode.Disposable {
+function registerReferences(deps: SourceLanguageDeps, plugin: PluginLanguage, mod: ModLanguage): vscode.Disposable {
   const referencesAt = referencesOf({ client: deps.client, reporter: deps.reporter, open: openPluginSourceDocument });
   return vscode.languages.registerReferenceProvider(ownedFiles, {
     async provideReferences(document, position) {
       const offset = document.offsetAt(position);
       const toPlugin = await plugin.referencesAt(document, offset);
       if (toPlugin !== undefined) return toPlugin;
+      const toMod = await mod.referencesAt(document, offset);
+      if (toMod !== undefined) return toMod;
       if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
       return (await referencesAt(heldText(document), offset)).map(locationOf);
     },
@@ -208,16 +223,18 @@ function registerSymbols(deps: SourceLanguageDeps, plugin: PluginLanguage): vsco
 
 export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
   const plugin = pluginLanguage({ ...deps, renamePlugin: renamePluginNamed, goTo: goToPlugin, tooltip: (shown) => deps.pluginsShown?.tooltipLines(shown) ?? [] });
+  const mod = modLanguage({ instance: deps.instance, reporter: deps.reporter, owners: deps.modOwners, goTo: goToMod });
   const problems = sourceProblems(deps);
   const entryPoints = deps.instance ? [registerBuildEntryPoint({ instance: deps.instance, reporter: deps.reporter }), registerUpdateManifestEntryPoint({ instance: deps.instance, reporter: deps.reporter })] : [];
   const disposable = vscode.Disposable.from(
     handUnsavedPluginSource(deps.client, isPluginSourcePath),
-    registerHover(deps, plugin), registerCompletion(deps, plugin), registerDefinition(deps, plugin), registerRename(plugin), registerReferences(deps, plugin), registerSymbols(deps, plugin),
+    registerHover(deps, plugin), registerCompletion(deps, plugin), registerDefinition(deps, plugin, mod), registerRename(plugin), registerReferences(deps, plugin, mod), registerSymbols(deps, plugin),
     problems, ...entryPoints,
   );
   return {
     dispose: () => { disposable.dispose(); },
     messages: () => problems.messages(),
     referencedBy: plugin.referencedBy,
+    referencedByMod: mod.referencedBy,
   };
 }
