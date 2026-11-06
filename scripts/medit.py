@@ -62,7 +62,7 @@ class Referrer:
 
 
 def select(sql: str) -> list[JsonRecord]:
-    """The rows of one SQL SELECT over the views of every plugin the index holds; view_columns lists them. Equal conflict_hash(record_type, body, parse_diagnosis) means identical copies; unequal may still be."""
+    """The rows of one SQL SELECT over the views of every plugin the index holds; view_columns lists them."""
     return _call('POST', '/records/select', {'sql': sql})['rows']
 
 

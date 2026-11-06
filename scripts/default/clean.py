@@ -15,6 +15,7 @@ FLAGS_FIELD = 'MajorRecordFlagsRaw'
 TELEPORT_FIELD = 'TeleportDestination'
 ENABLE_PARENT_FIELD = 'EnableParent'
 UNDERGROUND_Z = '-30000'
+IDENTICAL_TO_MASTER = 'IdenticalToMaster'
 
 log = logging.getLogger('clean')
 
@@ -95,14 +96,14 @@ def _undelete_and_disable(plugin: medit.Plugin) -> list[str]:
 
 
 def _identical_to_master(plugin: medit.Plugin) -> set[str]:
-    rows = medit.select(
-        'WITH copies AS MATERIALIZED (SELECT form_key, form_key_plugin, record_type, body, parse_diagnosis FROM records '
-        f'WHERE {_in_plugin(plugin)} AND lower(form_key_plugin) <> lower(plugin)), '
-        'masters AS MATERIALIZED (SELECT m.form_key, m.record_type, m.body, m.parse_diagnosis FROM records m JOIN copies c '
-        'ON m.form_key = c.form_key AND lower(m.plugin) = lower(c.form_key_plugin) WHERE m.is_active) '
-        'SELECT c.form_key FROM copies c JOIN masters m ON m.form_key = c.form_key '
-        'WHERE conflict_hash(c.record_type, c.body, c.parse_diagnosis) = conflict_hash(m.record_type, m.body, m.parse_diagnosis)')
-    return {row['form_key'] for row in rows}
+    overrides = medit.select(
+        f'SELECT form_key FROM records WHERE {_in_plugin(plugin)} AND lower(form_key_plugin) <> lower(plugin)')
+    if not overrides:
+        return set()
+    stacks = medit.compare([row['form_key'] for row in overrides], plugin)
+    return {
+        form_key for form_key, copies in stacks.items()
+        if any(copy.plugin == plugin and copy.conflict_this == IDENTICAL_TO_MASTER for copy in copies)}
 
 
 def _removed_with_their_references(plugin: medit.Plugin, identical: set[str]) -> list[str]:
