@@ -3,8 +3,8 @@
 
 import * as vscode from 'vscode';
 import { attachPortOf, createMEditClient, recordIndexReferences, stopMEditClient, type MEditClient } from './client';
-import { manifestFileReferences } from './manifestAdapter/manifestAdapter';
-import type { SymbolOwner } from './symbolNames/symbolNames';
+import { manifestFileReferences, manifestEntryNames } from './manifestAdapter/manifestAdapter';
+import type { EntryNames, EntrySymbol, SymbolOwner } from './symbolNames/symbolNames';
 import { makeReporter } from './drivingLib/reporter';
 import { commandTitles } from './drivingLib/commandTitles';
 import { surfaceRefusedWrites } from './drivingLib/writingGesture';
@@ -114,6 +114,7 @@ interface ViewsDeps {
   focusedView: FocusedView;
   editor: Pick<Editor, 'copyValue'>;
   sourceEditing: SourceEditing;
+  referencedByMod: (mod: string) => Promise<void>;
 }
 
 interface InstanceSide {
@@ -125,6 +126,7 @@ interface InstanceSide {
   pluginsShown?: PluginsShown;
   toolbox: ToolboxView;
   modsLines: () => string[];
+  entryTooltip: (entry: EntrySymbol) => string | undefined;
   sourceFiles: SourceFilesOf;
   copyValue: CopyValueAdapter[];
 }
@@ -139,6 +141,7 @@ function buildBareSide(own: Own): InstanceSide {
   return {
     toolbox: own(createToolboxView({ instance: undefined })),
     modsLines: () => [],
+    entryTooltip: () => undefined,
     sourceFiles: NO_SOURCE_FILES,
     copyValue: [],
   };
@@ -156,6 +159,8 @@ interface Opened {
   scriptEnvironmentFile?: InstanceAdapter['scriptEnvironmentFile'];
   /** Each box over the instance's files that says where they name a symbol. */
   owners: readonly SymbolOwner[];
+  /** Each box over the instance's files that says where they name a mod. */
+  entryOwners: readonly EntryNames[];
   side: (own: Own, deps: ViewsDeps) => InstanceSide;
 }
 
@@ -181,9 +186,10 @@ function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, 
         modFolderOf: (mod) => adapter.modFolderPath(mod),
         companions: async () => pluginCompanionRule(await adapter.gameRelease()),
       })];
-      return { facts: factsOf(instance), instance, scriptEnvironmentFile: adapter.scriptEnvironmentFile, owners, side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
+      const entryOwners = [adapter.entryReferences, manifestEntryNames({ modFolderOf: (mod) => adapter.modFolderPath(mod), modFolders: () => instance.value.paths.modDirs })];
+      return { facts: factsOf(instance), instance, scriptEnvironmentFile: adapter.scriptEnvironmentFile, owners, entryOwners, side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
     },
-    notAnInstance: () => ({ facts: NO_INSTANCE_FACTS, owners: [], side: buildBareSide }),
+    notAnInstance: () => ({ facts: NO_INSTANCE_FACTS, owners: [], entryOwners: [], side: buildBareSide }),
   });
 }
 
@@ -223,6 +229,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     checkForUpdates: checkForUpdatesOver(adapter, deps.nexus),
     manifestGestures: { commands: instanceRepository, toolboxView: TOOLBOX_VIEW, say: toolbox.say },
     statuses: modStatuses,
+    referencedBy: deps.referencedByMod,
   }));
   const editing = own(editingFlow({
     client, instanceRoot, ...plugins.editingInPluginsView, log: (line) => outputChannel.error(line),
@@ -263,6 +270,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   return {
     instance, toolbox, statuses: modStatuses, pluginsShown: plugins.pluginsShown, copyReads: adapter,
     modsLines: () => mods.standingLines(),
+    entryTooltip: (entry) => mods.tooltipOf(entry),
     deployment: { folder: () => deploymentFolderOf(deploymentFolderSetting), pluginsTxtPlace: placeForGame },
     sourceFiles: (origin) => sourceFiles(instance.value, origin),
     copyValue: [mods.copyValue, plugins.copyValue, downloads.copyValue],
@@ -353,13 +361,16 @@ function start(context: vscode.ExtensionContext): void {
     focusedView,
     editor,
     sourceEditing,
+    referencedByMod: (mod) => sourceLanguage.referencedByMod(mod),
   });
   const scriptEnvironmentFailures = toastOncePerFailure(reporterFor('scriptEnvironment'));
   const scriptsPath = vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath;
   const sourceLanguage = createSourceLanguage({
     client: meditClient, instance: views.instance, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
     pluginsShown: views.pluginsShown,
+    entryTooltip: views.entryTooltip,
     owners: [recordIndexReferences(meditClient, () => Promise.resolve([])), ...opened.owners],
+    entryOwners: opened.entryOwners,
   });
   const agentServer = serveAgent({ port: agentPort(), instance: views.instance, copyReads: views.copyReads, statuses: views.statuses, deployment: views.deployment, pluginsShown: views.pluginsShown, standing: { mEdit: () => plugins.standing.mEdit(), plugins: () => plugins.standing.plugins(), sortingRules: () => plugins.standing.sortingRules(), modList: () => views.modsLines(), sourceLanguage: () => sourceLanguage.messages() }, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
   context.subscriptions.push(

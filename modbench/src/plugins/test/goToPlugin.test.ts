@@ -42,20 +42,4 @@ describe('the plugin go to command (commands.md, `go to` under Plugin)', () => {
 
     expect([reveal.mock.calls, executeCommand.mock.calls, reporter.reports]).toEqual([[[aRow]], [], []]);
   });
-
-  it('shows the plugin\'s file in the Explorer when Plugins shows no row for it', async () => {
-    const { reveal, run } = setup({ file: '/data/Base.esm' });
-
-    await run(asked);
-
-    expect([reveal.mock.calls, executeCommand.mock.calls]).toEqual([[], [['revealInExplorer', Uri.file('/data/Base.esm')]]]);
-  });
-
-  it('says why when there is neither a row nor a file', async () => {
-    const { run, reporter } = setup({});
-
-    await run(asked);
-
-    expect(reporter.reports.map(({ severity, message }) => [severity, message])).toEqual([['error', 'Could not go to "Base.esm" (Base Mod): Plugins shows no row for it and no file holds it.']]);
-  });
 });

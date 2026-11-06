@@ -11,6 +11,7 @@ import type { Covering, Listed, PathRefusal, PublisherConfiguration, PublisherTa
 import type { ConfigurationFile, Publisher } from '../publisher';
 import { sedReplacement, sedSubstitution } from '../pathTokens';
 import { watchFiles } from '../watchFiles';
+import { heldTextAt, placeIn, samePath } from '../../symbolNames/symbolNames';
 
 // Wabbajack's configuration, at the instance root. Wabbajack writes this machine's own paths, or on Wine a Windows
 // program's, a Windows one in JSON's escaped backslashes (AbsolutePathConverter).
@@ -286,6 +287,38 @@ function followedEntries(entries: readonly string[], moves: readonly InstanceMov
   return { changed, appended: [] };
 }
 
+interface Segment {
+  readonly name: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+// The names of an entry's path where the text spells them, at either separator as the JSON spells it.
+function segmentsOf(text: string, entry: Node): Segment[] {
+  const first = entry.offset + 1;
+  const raw = text.slice(first, entry.offset + entry.length - 1);
+  const segments: Segment[] = [];
+  let from = 0;
+  const closeAt = (to: number): void => {
+    if (to > from) segments.push({ name: raw.slice(from, to), start: first + from, end: first + to });
+  };
+  for (const separator of raw.matchAll(/\\\\|\\\/|\//g)) {
+    closeAt(separator.index);
+    from = separator.index + separator[0].length;
+  }
+  closeAt(raw.length);
+  return segments;
+}
+
+// Each entry of every list of tags, as the segments it spells.
+function entrySegmentsIn(text: string): Segment[][] {
+  return (parseTree(text, [], READS)?.children ?? []).flatMap((property) => {
+    const [key, list] = property.children ?? [];
+    if (!TAGS.some(({ listedUnder }) => listedUnder === key?.value)) return [];
+    return (list?.children ?? []).flatMap((entry) => (entry.type === 'string' ? [segmentsOf(text, entry)] : []));
+  });
+}
+
 function layoutOf(text: string): { eol: string; unit: string } {
   return { eol: text.includes('\r\n') ? '\r\n' : '\n', unit: /\n([ \t]+)"/.exec(text)?.[1] ?? '  ' };
 }
@@ -429,6 +462,35 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
       } catch (err) {
         return errorMessage(err);
       }
+    },
+    namesFolder: async (folder, held) => {
+      const inside = inInstance(instanceRoot, folder);
+      try {
+        const text = heldTextAt(held, file) ?? await settingsText();
+        if (text === undefined || inside === undefined) return { references: [], leftOut: [] };
+        settingsIn(text, file);
+        const names = namesOf(inside);
+        const references = entrySegmentsIn(text).flatMap((segments) => {
+          const named = segments[names.length - 1];
+          return isUnder(segments.map(({ name }) => name.toLowerCase()), names) && named !== undefined ? [placeIn(file, text, named.start, named.end)] : [];
+        });
+        return { references, leftOut: [] };
+      } catch (err) {
+        return { references: [], leftOut: [errorMessage(err)] };
+      }
+    },
+    folderAt: async (named, text, offset, folderOf) => {
+      if (!samePath(named, file)) return undefined;
+      for (const segments of entrySegmentsIn(text)) {
+        const at = segments.findIndex(({ start, end }) => start <= offset && offset <= end);
+        const segment = segments[at];
+        if (segment === undefined) continue;
+        const folder = await folderOf(segment.name);
+        const inside = folder === undefined ? undefined : inInstance(instanceRoot, folder);
+        const above = segments.slice(0, at + 1).map(({ name }) => name.toLowerCase());
+        return inside !== undefined && namesOf(inside).join('/') === above.join('/') ? segment : undefined;
+      }
+      return undefined;
     },
     changeTag: async (change, tagName, paths) => {
       const wabbajackTag = TAGS.find(({ tag }) => tag.name === tagName);

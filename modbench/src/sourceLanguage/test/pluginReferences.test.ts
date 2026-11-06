@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Uri } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, Uri } from '../../test/vscodeMock';
 
-vi.mock('vscode', () => ({ Uri }));
+vi.mock('vscode', () => ({ Uri, TreeItem, TreeItemCollapsibleState }));
 
 import type * as vscode from 'vscode';
-import { listMessage, pluginReferencesOf } from '../pluginReferences';
+import { pluginReferencesOf } from '../pluginReferences';
+import { listMessage } from '../symbolPlaces';
 import { heldTexts, type HeldTexts, type PlaceInFile, type PluginSymbol, type SymbolOwner, type SymbolReading } from '../../symbolNames/symbolNames';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { copyDocumentsOf, copyKey as key, type CopyOnDisk } from './copyDocuments';

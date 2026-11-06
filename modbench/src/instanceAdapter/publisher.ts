@@ -4,6 +4,7 @@
 import type { ChangeListener, InstanceAdapter, InstanceReading, PublisherConfiguration, PublisherTag, Reread, Subscription } from './instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { PathSpelling, TokenProgram } from './pathTokens';
+import type { EntryReading, HeldTexts } from '../symbolNames/symbolNames';
 
 export type ManagerReading = Omit<InstanceReading, 'publisherConfiguration'>;
 
@@ -26,12 +27,24 @@ interface KeptFiles {
   readonly owns: (path: string) => boolean;
 }
 
+interface NamedSpan {
+  readonly name: string;
+  readonly start: number;
+  readonly end: number;
+}
+
 export interface Publisher {
   readonly tags: readonly PublisherTag[];
   readonly configurationFile: ConfigurationFile;
   configuration(): Promise<PublisherConfiguration>;
   /** Why the configuration cannot be read, without checking the paths it names. */
   refusal(): Promise<string | undefined>;
+  /** Each place the configuration's entries name the folder, at its segment of every entry at or under it, and why the
+   *  configuration could not be read. */
+  namesFolder(folder: string, held: HeldTexts): Promise<EntryReading>;
+  /** The segment of an entry at `offset` of the configuration's `text`, when `folderOf` says the folder it names is at
+   *  that path; undefined where `file` is no configuration or no such segment is there. */
+  folderAt(file: string, text: string, offset: number, folderOf: (name: string) => Promise<string | undefined>): Promise<NamedSpan | undefined>;
   changeTag: InstanceAdapter['changePublisherTag'];
   followFolders: InstanceAdapter['followModFolders'];
   /** Lists each kept file in the ignore list, leaving every other entry as written. Rejects, writing nothing, for a
@@ -52,6 +65,20 @@ export function withPublisher(manager: ManagerAdapter, publisher: Publisher, scr
   };
   return {
     ...manager,
+    entryReferences: {
+      listed: (held) => manager.entryReferences.listed(held),
+      read: async (entry, held) => {
+        const [files, folder] = await Promise.all([manager.entryReferences.read(entry, held), entry.kind === 'mod' ? manager.modFolderPath(entry.name) : undefined]);
+        const tags = folder === undefined ? { references: [], leftOut: [] } : await publisher.namesFolder(folder, held);
+        return { references: [...files.references, ...tags.references], leftOut: [...files.leftOut, ...tags.leftOut] };
+      },
+      nameAt: async (file, text, offset) => {
+        const named = await manager.entryReferences.nameAt(file, text, offset);
+        if (named !== undefined) return named;
+        const folder = await publisher.folderAt(file, text, offset, (name) => manager.modFolderPath(name));
+        return folder && { entry: { kind: 'mod', name: folder.name }, start: folder.start, end: folder.end };
+      },
+    },
     publisherTags: publisher.tags,
     changePublisherTag: (...change) => afterKeepingOut(publisher.changeTag(...change)),
     followModFolders: (moves) => afterKeepingOut(publisher.followFolders(moves)),

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { pluginArgumentOf } from '../drivingLib/argument';
+import { goToRowOrFile } from '../drivingLib/goToRow';
 import type { Reporter } from '../ports/reporter';
 import type { PluginAddress } from '../wire/pluginAddress';
 import { PLUGIN_ROW_KINDS, onlySelected } from './gestureEntry';
@@ -19,16 +20,9 @@ export function registerGoToCommand(
   return vscode.commands.registerCommand('modbench.plugin.goTo', async (clicked?: unknown) => {
     const plugin = pluginArgumentOf(clicked ?? onlySelected(viewSelection(), ...PLUGIN_ROW_KINDS))?.plugin;
     if (plugin === undefined) return;
-    const row = rowOf(plugin);
-    if (row !== undefined) {
-      await reveal(row);
-      return;
-    }
-    const file = fileOf(plugin);
-    if (file === undefined) {
-      reporter.report('error', `Could not go to "${plugin.name}" (${plugin.origin}): Plugins shows no row for it and no file holds it.`);
-      return;
-    }
-    await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(file));
+    await goToRowOrFile({
+      name: `"${plugin.name}" (${plugin.origin})`, row: rowOf(plugin), file: fileOf(plugin), reveal, reporter,
+      nowhere: 'Plugins shows no row for it and no file holds it.',
+    });
   });
 }
