@@ -125,9 +125,10 @@ The row menus follow VS Code's groups: open, change, create, source control, cop
 | Mod menu | inline: open source (a source mod). Menu: open folder · open source (a source mod) · open conflicts · referenced by · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add publisher tag… (the instance has a publisher) · remove publisher tag… (the row holds a publisher tag) · check for updates (the mod has a Nexus mod ID, and I am logged in) · add separator · create empty mod · install… · version in git… (a mod that is not a source mod) · update manifest (a mod that is not a source mod and whose folder git does not hold whole) · restore from manifest… (the instance has a repository, and git does not hold the mod's whole folder) · copy value · uninstall |
 | Separator menu | move… · add separator · rename… · check for updates (I am logged in) · update manifest · restore from manifest… (the instance has a repository) · copy value · delete |
 | Overwrite menu | open folder |
-| File menu | open folder · compare file (a file in a file order conflict, not the winning copy) · go to mod (a file in a file order conflict) · exclude or include (not in an archive) · ignore or unignore (an instance with a repository, not in an archive) · add publisher tag… (the instance has a publisher whose publisher tags mark paths, not in an archive) · remove publisher tag… (the row holds a publisher tag) · copy value |
+| File menu | open folder · referenced by · compare file (a file in a file order conflict, not the winning copy) · go to mod (a file in a file order conflict) · exclude or include (not in an archive) · ignore or unignore (an instance with a repository, not in an archive) · add publisher tag… (the instance has a publisher whose publisher tags mark paths, not in an archive) · remove publisher tag… (the row holds a publisher tag) · copy value |
 | Folder menu | open folder · add publisher tag… (the instance has a publisher whose publisher tags mark paths) · remove publisher tag… (the row holds a publisher tag) · copy value |
 | Explorer menu, on an archive | open |
+| Explorer menu, on a file in a mod or the game folder | referenced by |
 | Check box | enable or disable |
 | Keys | Space: enable or disable. Delete: uninstall, or delete a separator. F2: rename a mod or a separator. Ctrl+C: copy value. |
 

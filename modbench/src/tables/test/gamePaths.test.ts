@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import {
-  archiveListsOf, ba2VersionsOf, blueprintLoadsLastIn, creationClubListFile, gameReleaseForGame, loadedWithNoLineOf, nexusDomainsForGame, shortNameForNexusDomain, nexusDomainForMetaGame, gamePathInfoForRelease, lootRepositoryOf, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
+  archiveListsOf, ba2VersionsOf, blueprintLoadsLastIn, creationClubListFile, gameReleaseForGame, loadedWithNoLineOf, nexusDomainsForGame, shortNameForNexusDomain, nexusDomainForMetaGame, gamePathInfoForRelease, lootRepositoryOf, papyrusScriptAt, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
 } from '../gamePaths';
 
 const NOT_WRITTEN = 'a game whose plugins.txt Modbench does not write';
@@ -259,5 +259,29 @@ describe('lootRepositoryOf', () => {
 describe('blueprintLoadsLastIn', () => {
   it.each([['Starfield', true], ['Fallout4', false], ['SkyrimSE', false], ['SomeRelease', false], [undefined, false]])('answers for %s: %s', (release, answer) => {
     expect(blueprintLoadsLastIn(release)).toBe(answer);
+  });
+});
+
+describe('papyrusScriptAt', () => {
+  it.each([
+    ['Fallout4', 'Scripts/Source/User/Ns/Quest.psc', { name: 'Ns:Quest', preference: 0 }],
+    ['Fallout4', 'scripts/source/base/Actor.psc', { name: 'Actor', preference: 1 }],
+    ['Fallout4', 'Scripts/Ns/Quest.pex', { name: 'Ns:Quest', preference: 2 }],
+    ['Starfield', 'Scripts/Ns/Quest.pex', { name: 'Ns:Quest', preference: 2 }],
+    ['SkyrimSE', 'Source/Scripts/Quest.psc', { name: 'Quest', preference: 0 }],
+    ['SkyrimSE', 'Scripts/Source/Quest.psc', { name: 'Quest', preference: 1 }],
+    ['SkyrimSE', 'Scripts/Quest.pex', { name: 'Quest', preference: 2 }],
+  ])('names the script a file of %s at %s is, and how it ranks: each source folder in turn, then the compiled script', (release, path, expected) => {
+    expect(papyrusScriptAt(release, path)).toEqual(expected);
+  });
+
+  it.each([
+    ['Fallout4', 'Scripts/Quest.psc', 'a source outside the source folders'],
+    ['Fallout4', 'Textures/Quest.pex', 'a file outside the script folders'],
+    ['Fallout4', 'Scripts/.pex', 'a file with no name'],
+    ['Oblivion', 'Scripts/Quest.pex', 'a release the table holds no row for'],
+    [undefined, 'Scripts/Quest.pex', 'no release'],
+  ])('names no script for %s %s: %s', (release, path, _why) => {
+    expect(papyrusScriptAt(release, path)).toBeUndefined();
   });
 });

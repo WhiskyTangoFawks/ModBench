@@ -22,11 +22,12 @@ import type { EntryNames, EntrySymbol, PluginSymbol, SymbolOwner } from '../symb
 import type { PluginsShown } from '../drivingLib/pluginsShown';
 import { pluginLanguage } from './pluginLanguage';
 import { entryLanguage } from './entryLanguage';
+import { scriptLanguage, type ScriptClient } from './scriptLanguage';
 
 interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'sourceFiles'> {
   instance: Pick<Instance, 'value' | 'subscribe'> | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
-  client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlugins' | 'handUnsavedDocuments'> & RecordDocumentClient & SourceProblemsDeps['client'];
+  client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlugins' | 'handUnsavedDocuments'> & RecordDocumentClient & ScriptClient & SourceProblemsDeps['client'];
   /** Each box that owns files, saying where they name a symbol (ADR-0028). */
   owners: readonly SymbolOwner[];
   /** Each box that owns files, saying where they name a symbol its name alone names. */
@@ -78,6 +79,12 @@ const entryShown: Record<EntrySymbol['kind'], { readonly kind: vscode.SymbolKind
   profile: { kind: vscode.SymbolKind.Module, completion: vscode.CompletionItemKind.Folder, word: 'profile' },
 };
 
+class ScriptSymbolInformation extends vscode.SymbolInformation {
+  constructor(name: string, location: vscode.Location) {
+    super(name, vscode.SymbolKind.Class, 'Papyrus script', location);
+  }
+}
+
 class EntrySymbolInformation extends vscode.SymbolInformation {
   constructor(readonly entry: EntrySymbol, location: vscode.Location) {
     super(entry.name, entryShown[entry.kind].kind, entryShown[entry.kind].word, location);
@@ -127,6 +134,7 @@ export function formKeyLocation(client: RecordDocumentClient) {
 
 type PluginLanguage = ReturnType<typeof pluginLanguage>;
 type EntryLanguage = ReturnType<typeof entryLanguage>;
+type ScriptLanguage = ReturnType<typeof scriptLanguage>;
 type Spanned = { readonly start: number; readonly end: number };
 
 const rangeIn = (document: vscode.TextDocument, { start, end }: Spanned): vscode.Range =>
@@ -135,7 +143,7 @@ const rangeIn = (document: vscode.TextDocument, { start, end }: Spanned): vscode
 const hoverOf = (document: vscode.TextDocument, { lines, ...span }: Spanned & { lines: readonly string[] }): vscode.Hover =>
   new vscode.Hover(new vscode.MarkdownString(lines.join('\n\n')), rangeIn(document, span));
 
-function registerHover(deps: SourceLanguageDeps, plugin: PluginLanguage, entry: EntryLanguage): vscode.Disposable {
+function registerHover(deps: SourceLanguageDeps, plugin: PluginLanguage, entry: EntryLanguage, script: ScriptLanguage): vscode.Disposable {
   return vscode.languages.registerHoverProvider(ownedFiles, {
     async provideHover(document, position) {
       const offset = document.offsetAt(position);
@@ -143,6 +151,8 @@ function registerHover(deps: SourceLanguageDeps, plugin: PluginLanguage, entry: 
       if (ofPlugin !== undefined) return hoverOf(document, ofPlugin);
       const ofEntry = await entry.hoverAt(document, offset);
       if (ofEntry !== undefined) return hoverOf(document, ofEntry);
+      const ofScript = await script.hoverAt(document, offset);
+      if (ofScript !== undefined) return hoverOf(document, ofScript);
       if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
       const found = await hoverAt(deps, heldText(document), offset);
       return found && new vscode.Hover(new vscode.MarkdownString(found.markdown), rangeIn(document, found));
@@ -150,7 +160,7 @@ function registerHover(deps: SourceLanguageDeps, plugin: PluginLanguage, entry: 
   });
 }
 
-function registerCompletion(deps: SourceLanguageDeps, plugin: PluginLanguage, entry: EntryLanguage): vscode.Disposable {
+function registerCompletion(deps: SourceLanguageDeps, plugin: PluginLanguage, entry: EntryLanguage, script: ScriptLanguage): vscode.Disposable {
   return vscode.languages.registerCompletionItemProvider(ownedFiles, {
     async provideCompletionItems(document, position) {
       const ofEntry = await entry.completionsAt(document, document.offsetAt(position));
@@ -166,6 +176,14 @@ function registerCompletion(deps: SourceLanguageDeps, plugin: PluginLanguage, en
         return ofPlugin.items.map(({ name, origins }) => {
           const item = new vscode.CompletionItem({ label: name, description: origins.join(', ') }, vscode.CompletionItemKind.File);
           item.range = rangeIn(document, ofPlugin);
+          return item;
+        });
+      }
+      const ofScript = await script.completionsAt(document, document.offsetAt(position));
+      if (ofScript !== undefined) {
+        return ofScript.items.map((name) => {
+          const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Class);
+          item.range = rangeIn(document, ofScript);
           return item;
         });
       }
@@ -186,7 +204,7 @@ function registerCompletion(deps: SourceLanguageDeps, plugin: PluginLanguage, en
 
 // A plugin's `go to` selects a row and the editor stays put, so the definition is the name asked about: VS Code stays
 // where it is and says nothing.
-function registerDefinition(deps: SourceLanguageDeps, plugin: PluginLanguage, entry: EntryLanguage): vscode.Disposable {
+function registerDefinition(deps: SourceLanguageDeps, plugin: PluginLanguage, entry: EntryLanguage, script: ScriptLanguage): vscode.Disposable {
   const definitionAt = definitionsOf({ client: deps.client, reporter: deps.reporter, open: openPluginSourceDocument });
   return vscode.languages.registerDefinitionProvider(ownedFiles, {
     async provideDefinition(document, position) {
@@ -195,6 +213,8 @@ function registerDefinition(deps: SourceLanguageDeps, plugin: PluginLanguage, en
       if (ofPlugin !== undefined) return ofPlugin.resolved ? new vscode.Location(document.uri, rangeIn(document, ofPlugin)) : undefined;
       const ofMod = await entry.definitionAt(document, offset);
       if (ofMod !== undefined) return ofMod.resolved ? new vscode.Location(document.uri, rangeIn(document, ofMod)) : undefined;
+      const ofScript = await script.definitionAt(document, offset);
+      if (ofScript !== undefined) return ofScript.file === undefined ? undefined : new vscode.Location(vscode.Uri.file(ofScript.file), new vscode.Position(0, 0));
       if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
       const found = await definitionAt(heldText(document), offset);
       return found && locationOf(found);
@@ -217,7 +237,7 @@ function registerRename(plugin: PluginLanguage): vscode.Disposable {
   });
 }
 
-function registerReferences(deps: SourceLanguageDeps, plugin: PluginLanguage, entry: EntryLanguage): vscode.Disposable {
+function registerReferences(deps: SourceLanguageDeps, plugin: PluginLanguage, entry: EntryLanguage, script: ScriptLanguage): vscode.Disposable {
   const referencesAt = referencesOf({ client: deps.client, reporter: deps.reporter, open: openPluginSourceDocument });
   return vscode.languages.registerReferenceProvider(ownedFiles, {
     async provideReferences(document, position) {
@@ -226,20 +246,23 @@ function registerReferences(deps: SourceLanguageDeps, plugin: PluginLanguage, en
       if (toPlugin !== undefined) return toPlugin;
       const toMod = await entry.referencesAt(document, offset);
       if (toMod !== undefined) return toMod;
+      const toScript = await script.referencesAt(document, offset);
+      if (toScript !== undefined) return toScript;
       if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
       return (await referencesAt(heldText(document), offset)).map(locationOf);
     },
   });
 }
 
-function registerSymbols(deps: SourceLanguageDeps, plugin: PluginLanguage, entry: EntryLanguage): vscode.Disposable {
+function registerSymbols(deps: SourceLanguageDeps, plugin: PluginLanguage, entry: EntryLanguage, script: ScriptLanguage): vscode.Disposable {
   const workspace = workspaceSymbolsOf({ client: deps.client, reporter: deps.reporter, open: openPluginSourceDocument });
-  const provider: vscode.WorkspaceSymbolProvider<RecordSymbolInformation | PluginSymbolInformation | EntrySymbolInformation> = {
+  const provider: vscode.WorkspaceSymbolProvider<RecordSymbolInformation | PluginSymbolInformation | EntrySymbolInformation | ScriptSymbolInformation> = {
     async provideWorkspaceSymbols(query) {
       const records = (await workspace.symbolsFor(query)).map((record) => new RecordSymbolInformation(record));
       const plugins = (await plugin.symbolsFor(query)).map((symbol) => new PluginSymbolInformation(symbol.plugin, symbol.location));
       const entries = (await entry.symbolsFor(query)).map((symbol) => new EntrySymbolInformation(symbol.entry, symbol.location));
-      return [...plugins, ...entries, ...records];
+      const scripts = script.symbolsFor(query).map(({ name, location }) => new ScriptSymbolInformation(name, location));
+      return [...plugins, ...entries, ...scripts, ...records];
     },
     async resolveWorkspaceSymbol(symbol) {
       if (symbol instanceof PluginSymbolInformation) {
@@ -250,6 +273,7 @@ function registerSymbols(deps: SourceLanguageDeps, plugin: PluginLanguage, entry
         if (symbol.entry.kind === 'mod') await goToMod(symbol.entry.name);
         return symbol;
       }
+      if (symbol instanceof ScriptSymbolInformation) return symbol;
       const found = await workspace.locate(symbol.record);
       if (found) symbol.location = locationOf(found);
       return symbol;
@@ -262,11 +286,13 @@ export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
   const plugin = pluginLanguage({ ...deps, renamePlugin: renamePluginNamed, goTo: goToPlugin, tooltip: (shown) => deps.pluginsShown?.tooltipLines(shown) ?? [] });
   const { instance, reporter, entryOwners: owners, entryTooltip, downloadedFileTooltip, modOrderFileOf } = deps;
   const entry = entryLanguage({ instance, reporter, owners, goTo: goToMod, entryTooltip, downloadedFileTooltip, modOrderFileOf });
+  const script = scriptLanguage({ instance, reporter, client: deps.client });
   const problems = sourceProblems(deps);
   const entryPoints = deps.instance ? [registerBuildEntryPoint({ instance: deps.instance, reporter: deps.reporter }), registerUpdateManifestEntryPoint({ instance: deps.instance, reporter: deps.reporter })] : [];
   const disposable = vscode.Disposable.from(
     handUnsavedPluginSource(deps.client, isPluginSourcePath),
-    registerHover(deps, plugin, entry), registerCompletion(deps, plugin, entry), registerDefinition(deps, plugin, entry), registerRename(plugin), registerReferences(deps, plugin, entry), registerSymbols(deps, plugin, entry),
+    registerHover(deps, plugin, entry, script), registerCompletion(deps, plugin, entry, script), registerDefinition(deps, plugin, entry, script), registerRename(plugin),
+    registerReferences(deps, plugin, entry, script), registerSymbols(deps, plugin, entry, script),
     problems, ...entryPoints,
   );
   return {

@@ -157,6 +157,20 @@ function stringInScope(scope: Node, spanned: string, fieldPath: string | null | 
   return atPath && isStringOf(spanned)(atPath) ? atPath : find(scope, isStringOf(spanned));
 }
 
+/** Each string the record `formKey` holds at one of `fieldPaths`, mEdit's member paths, by the span between its
+ *  quotes. */
+export function stringsAt(text: string, formKey: string, fieldPaths: readonly string[]): (TextSpan & { value: string })[] {
+  const root = parseTree(text);
+  const record = root && recordOf(root, formKey);
+  if (!record) return [];
+  return fieldPaths.flatMap((fieldPath) => {
+    const node = findNodeAtLocation(record, locationOf(fieldPath));
+    return node && isStringValue(node) && typeof node.value === 'string'
+      ? [{ value: node.value, start: node.offset + 1, end: node.offset + node.length - 1 }]
+      : [];
+  });
+}
+
 /** The span a problem sits on: the string of the FormKey it names at its field path, else the first
  *  such string in its record; undefined where the text holds none. */
 export function problemSpan(text: string, { formKey, targetFormKey, fieldPath }: ProblemPlace): TextSpan | undefined {

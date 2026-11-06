@@ -168,6 +168,16 @@ internal static class RecordEndpoints
         .ProducesProblem(503)
         .ProducesProblem(500);
 
+        app.MapGet("/script-names/{name}/references", (string name, IQueries svc) => EndpointMapping.Ok(svc.GetScriptReferences(name)))
+        .WithName("GetScriptReferences")
+        .WithTags("Records")
+        .WithDescription(
+            "Each copy, in an active plugin or one with plugin source, that attaches the Papyrus script of that name in any " +
+            "case, with the member paths that name it. Answers only once the record index is ready. Each says whether its " +
+            "plugin has plugin source, which a rename changes.")
+        .Produces<IReadOnlyList<CopyAttaching>>()
+        .ProducesProblem(503);
+
         // ADR-0001: the document is the caller's to change and save.
         app.MapPost("/records/{formKey}/edit-changes", (
             string formKey, RecordEditChangesRequest request, EditRecordChangesHandler edits) =>

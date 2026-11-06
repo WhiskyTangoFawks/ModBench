@@ -130,6 +130,9 @@ public sealed record SchemaAnnotations(
         ("IAMagicEffectArchetypeGetter", "AssociationKey"),  // IFormLinkIdentifier alias of Association
     ];
 
+    // The member that names the Papyrus script a record attaches. No type marks it as a script's name.
+    private static readonly IReadOnlyList<(string, string)> ScriptNamesInEveryGame = [("IScriptEntryGetter", "Name")];
+
     // Mutagen's names for a condition slot's raw value under a function that reads nothing from it.
     public static readonly IReadOnlyList<(string, string)> UnusedConditionSlotCarriers =
     [
@@ -293,6 +296,7 @@ public sealed record SchemaAnnotations(
     internal string? RefusedShapeReason(Type shape) => RefusedShapes.GetValueOrDefault(ShapeName(shape));
     internal bool IsPermittedNullFormLink(PropertyInfo prop) => PermittedNullFormLinks.Contains(Key(prop));
     internal bool IsPlacedRotation(PropertyInfo prop) => PlacedRotations.Contains(Key(prop));
+    internal static bool IsScriptName(PropertyInfo prop) => ScriptNamesInEveryGame.Contains(Key(prop));
     internal IReadOnlyDictionary<string, string>? EnumLabelsFor(PropertyInfo prop) =>
         EnumMemberLabels.GetValueOrDefault(Key(prop));
     internal IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUseFor(PropertyInfo prop) =>
@@ -645,6 +649,7 @@ public sealed record SchemaAnnotations(
             .. UnresolvedMembers(typesByName, nameof(PermittedNullFormLinks), PermittedNullFormLinks),
             .. UnresolvedPermittedNullLinks(typesByName),
             .. UnresolvedMembers(typesByName, nameof(PlacedRotations), PlacedRotations),
+            .. UnresolvedMembers(typesByName, nameof(ScriptNamesInEveryGame), ScriptNamesInEveryGame),
             .. UnresolvedMembers(typesByName, nameof(SiblingsInUse), SiblingsInUse.Keys),
             .. UnresolvedSiblingRelations(typesByName),
             .. UnresolvedMembers(typesByName, nameof(KeyedArrays), KeyedArrays.Keys),

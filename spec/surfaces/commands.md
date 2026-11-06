@@ -159,7 +159,7 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | exclude / include file | writes | `modbench.mod.excludeFile`, `modbench.mod.includeFile` | files in mods or Overwrite | - | MO2 Information dialog, Conflicts tab, Hide; MO2 mod list, Restore hidden files | Keep each file from the game with the mod manager's exclusion mark, or clear the mark. | update-load-order-file |
 | ignore / unignore file | writes | `modbench.mod.ignoreFile`, `modbench.mod.unignoreFile` | files in mods | - | none | Keep each file out of its mod's manifest, or put it back. | update-manifest |
 | rename | writes | `modbench.mod.rename` | mod | name | MO2 mod list | Rename a mod's folder, and each reference to it. | update-load-order-file |
-| referenced by | reads | `modbench.mod.referencedBy` | mod | - | none | List each place a file names a mod, in VS Code's References view. | - |
+| referenced by | reads | `modbench.mod.referencedBy` | mod, or a file | - | none | List each place a file names a mod or a file, in VS Code's References view. | - |
 | go to | reads | `modbench.mod.goTo` | mod | - | none | Select a mod's row in Mods, or show its folder in the Explorer when Mods shows no row for it. | none |
 | add / remove publisher tag | writes | `modbench.mod.addPublisherTag`, `modbench.mod.removePublisherTag` | mods, or files and folders in mods | publisher tag: a pick | none | Add a publisher tag to each mod, folder or file, or remove it ([publishing.md](publishing.md), Publisher tags). | change-publisher-tag |
 

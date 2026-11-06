@@ -18,6 +18,7 @@ import {
 } from '../instanceAdapter/instanceAdapter';
 import { sourceModsOf, type SourceMods } from '../manifestAdapter/manifestAdapter';
 import { pluginPlacesOf } from './pluginPlacesOf';
+import { papyrusScriptsOf, type PapyrusScript } from './papyrusScripts';
 import { errorMessage } from '../ports/errorMessage';
 
 /** The rows this value is made of. A view names a row's shape through the read model that
@@ -25,6 +26,7 @@ import { errorMessage } from '../ports/errorMessage';
 export { sameEntry } from '../instanceAdapter/instanceAdapter';
 export type { EntryRef, FileOrigin, Mod, ModGroup, ModGroups, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
 export type { LocatedDownloadedFileRow, DownloadedFileRow, UpgradeCandidate, UpgradeTier } from './downloadedFileRows';
+export type { PapyrusScript } from './papyrusScripts';
 export type { Covering, DownloadedFileStatus, PublisherTag, PublisherTagChange, TagPathProblem } from '../instanceAdapter/instanceAdapter';
 export type { GameFolder, ProgramVersion, Reread } from '../instanceAdapter/instanceAdapter';
 
@@ -94,6 +96,8 @@ export interface InstanceValue {
   readonly filesByMod: ReadonlyMap<string, readonly OriginFile[]>;
   /** Each listed mod's folders, a disabled mod's too. */
   readonly foldersByMod: ReadonlyMap<string, readonly OriginFolder[]>;
+  /** Each Papyrus script an enabled mod or Overwrite holds (`papyrusScriptsOf`). */
+  readonly papyrusScripts: readonly PapyrusScript[];
   /** Every plugin file, with origin, line, enabled and winning. A listed
    *  name neither a mod nor overwrite/ provides is still a row — a line-only one, `path`
    *  undefined — when the Data folder does not hold it or cannot be listed. */
@@ -255,6 +259,7 @@ const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey' | 'publi
   files: new FileConflictLookup(),
   filesByMod: new Map(),
   foldersByMod: new Map(),
+  papyrusScripts: [],
   plugins: [],
   downloadedFiles: { kind: 'listed', rows: [] },
   activeProfile: '',
@@ -622,6 +627,7 @@ export class Instance implements Subscription {
       files: index.files,
       filesByMod: index.filesByMod,
       foldersByMod: index.foldersByMod,
+      papyrusScripts: papyrusScriptsOf(index.files, gameRelease),
       plugins,
       downloadedFiles: downloadedFilesOutcome.kind === 'unresolved'
         ? { kind: 'unresolved', reason: downloadedFilesOutcome.reason }

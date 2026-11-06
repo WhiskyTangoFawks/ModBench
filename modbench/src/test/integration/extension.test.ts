@@ -689,6 +689,36 @@ describe('a rename VS Code makes of a plugin to a name its rename gesture refuse
   });
 });
 
+describe('a rename VS Code makes of a Papyrus script\'s source', () => {
+  const scriptsDir = path.join(root, 'mods', 'Explorer Script Mod', 'Scripts', 'Source', 'User');
+  const warnings: string[] = [];
+  const realShowWarning = vscode.window.showWarningMessage;
+
+  before(() => {
+    mkdirSync(scriptsDir, { recursive: true });
+    writeFileSync(path.join(scriptsDir, 'Quest.psc'), '');
+    Object.defineProperty(vscode.window, 'showWarningMessage', {
+      configurable: true,
+      value: (message: string) => { warnings.push(message); return Promise.resolve(undefined); },
+    });
+  });
+  after(() => {
+    Object.defineProperty(vscode.window, 'showWarningMessage', { configurable: true, value: realShowWarning });
+    rmSync(path.join(root, 'mods', 'Explorer Script Mod'), { recursive: true, force: true });
+  });
+
+  it('lands, with a warning that says why no record that attaches it followed', async () => {
+    const edit = new vscode.WorkspaceEdit();
+    edit.renameFile(vscode.Uri.file(path.join(scriptsDir, 'Quest.psc')), vscode.Uri.file(path.join(scriptsDir, 'Renamed.psc')));
+
+    assert.ok(await vscode.workspace.applyEdit(edit));
+
+    const warning = await waitFor('the warning', () => warnings.find((message) => message.startsWith('"Quest"')));
+    assert.strictEqual(warning, '"Quest" was renamed to "Renamed", and no reference to it followed: the plugins mEdit reads: mEdit gave no answer.');
+    assert.deepStrictEqual(readdirSync(scriptsDir), ['Renamed.psc']);
+  });
+});
+
 describe('Deploy', () => {
   const modDir = path.join(root, 'mods', 'Deployed Mod');
   const deploymentFolder = path.join(root, '..', 'deployment');

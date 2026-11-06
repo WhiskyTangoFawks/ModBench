@@ -15,6 +15,7 @@ import type { RenamedSymbol } from '../../instanceAdapter/instanceAdapter';
 import type { ChangeResult } from '../../ports/changeResult';
 import type { RenameEditing } from '../../modCommands/renameEntry';
 import type { FileChanges } from '../../symbolNames/symbolNames';
+import type { PluginAddress } from '../../wire/pluginAddress';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
 const RENAME: FileRename = { from: '/mods/Patch Mod/Patch.esp', to: '/mods/Patch Mod/Renamed.esp' };
@@ -52,12 +53,14 @@ function follower(symbols: ReadonlyMap<string, RenamedSymbol> | Error, answers: 
   const renameSeparator = vi.fn(renameMod);
   const renameDownloadedFile = vi.fn(rename);
   const renameProfile = vi.fn(rename);
+  const renameScript = vi.fn(async (editing: (touched: readonly PluginAddress[]) => RenameEditing, from: string, to: string) => rename(editing([]), from, to));
   const follow = followRenames({
     adapter: { renamedSymbol: (from, to) => (symbols instanceof Error ? Promise.reject(symbols) : Promise.resolve(symbols.get(`${from} > ${to}`))) },
     plugins: { renamePlugin },
     entries: { renameMod, renameSeparator },
     downloads: { renameDownloadedFile },
     profiles: { renameProfile },
+    renameScript,
     source: {
       applyWorkspaceChanges: (items) => { events.push(`apply ${String(items.length)}${quiet > 0 ? ', quiet' : ''}`); return Promise.resolve(); },
       oneAtATime: (job) => job(),
@@ -71,7 +74,7 @@ function follower(symbols: ReadonlyMap<string, RenamedSymbol> | Error, answers: 
     },
     reporter,
   });
-  return { follow, events, reporter, renamePlugin, renameMod, renameSeparator, renameDownloadedFile, renameProfile };
+  return { follow, events, reporter, renamePlugin, renameMod, renameSeparator, renameDownloadedFile, renameProfile, renameScript };
 }
 
 const renaming = (rename: FileRename, symbol: RenamedSymbol): [string, RenamedSymbol] => [`${rename.from} > ${rename.to}`, symbol];
@@ -96,6 +99,7 @@ describe('following a rename VS Code makes of a file or folder that is a symbol 
     ['a separator', { kind: 'entry', entry: { kind: 'separator', name: 'Gear' }, to: { kind: 'separator', name: 'Armour' } }, 'renameSeparator', ['Gear', 'Armour']],
     ['a downloaded file', { kind: 'entry', entry: { kind: 'downloadedFile', name: 'Gear-1.7z' }, to: { kind: 'downloadedFile', name: 'Gear-2.7z' } }, 'renameDownloadedFile', ['Gear-1.7z', 'Gear-2.7z']],
     ['a profile', { kind: 'entry', entry: { kind: 'profile', name: 'Default' }, to: { kind: 'profile', name: 'Main' } }, 'renameProfile', ['Default', 'Main']],
+    ['a Papyrus script', { kind: 'script', name: 'Ns:Quest', to: 'Ns:Renamed' }, 'renameScript', ['Ns:Quest', 'Ns:Renamed']],
   ] as const)('renames %s as the symbol its new name holds', async (_case, symbol, command, names) => {
     const renamer = follower(new Map([renaming(OTHER_RENAME, symbol)]));
 

@@ -34,6 +34,7 @@ interface FollowRenameDeps {
   readonly entries: Pick<EntryRenameCommands, 'renameMod' | 'renameSeparator'>;
   readonly downloads: Pick<DownloadedFileCommands, 'renameDownloadedFile'>;
   readonly profiles: Pick<InstanceCommands, 'renameProfile'>;
+  readonly renameScript: (editing: Editing, name: string, to: string) => Promise<ChangeResult>;
   readonly source: SourceEditing;
   readonly instance: Pick<Instance, 'quiet'>;
   readonly reporter: Reporter;
@@ -60,7 +61,12 @@ interface Followed {
   readonly report: () => void;
 }
 
-async function followed({ plugins, entries, downloads, profiles, reporter }: FollowRenameDeps, symbol: RenamedSymbol, editing: Editing): Promise<Followed> {
+async function followed({ plugins, entries, downloads, profiles, renameScript, reporter }: FollowRenameDeps, symbol: RenamedSymbol, editing: Editing): Promise<Followed> {
+  if (symbol.kind === 'script') {
+    const named = `"${symbol.name}"`;
+    const result = await renameScript(editing, symbol.name, symbol.to);
+    return { named, report: () => { reportFollowed(reporter, named, symbol.to, result, 'its file'); } };
+  }
   if (symbol.kind === 'plugin') {
     const { plugin, to } = symbol;
     const named = `"${plugin.name}" (${plugin.origin})`;

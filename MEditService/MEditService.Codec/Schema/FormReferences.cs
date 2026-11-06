@@ -69,21 +69,28 @@ public static class FormReferences
     /// document omits an unset link, which is a fact about the record.</summary>
     internal static void Walk(
         FieldMetadata meta, JsonElement? value, string path,
-        Action<string, string?, IReadOnlyList<string>> onFormKeyLeaf)
+        Action<string, string?, IReadOnlyList<string>> onFormKeyLeaf) =>
+        WalkLeaves(meta, value, path, leaf => leaf.Type == "formKey",
+            (leaf, leafPath, leafValue) => onFormKeyLeaf(leafPath, ExtractString(leafValue), leaf.ValidFormKeyTypes));
+
+    /// <summary>Visits every leaf under the metadata that <paramref name="isLeaf"/> picks, with its path and value.</summary>
+    internal static void WalkLeaves(
+        FieldMetadata meta, JsonElement? value, string path,
+        Func<FieldMetadata, bool> isLeaf, Action<FieldMetadata, string, JsonElement?> onLeaf)
     {
-        if (meta.Type == "formKey")
+        if (isLeaf(meta))
         {
-            onFormKeyLeaf(path, ExtractString(value), meta.ValidFormKeyTypes);
+            onLeaf(meta, path, value);
             return;
         }
 
-        if (meta.Type == "struct" && meta.Fields is { } fields) WalkStruct(fields, value, path, onFormKeyLeaf);
-        else if (meta.Type == "array" && meta.ElementType is { } elementType) WalkArray(elementType, value, path, onFormKeyLeaf);
+        if (meta.Type == "struct" && meta.Fields is { } fields) WalkStruct(fields, value, path, isLeaf, onLeaf);
+        else if (meta.Type == "array" && meta.ElementType is { } elementType) WalkArray(elementType, value, path, isLeaf, onLeaf);
     }
 
     private static void WalkStruct(
         IReadOnlyList<FieldMetadata> fields, JsonElement? value, string path,
-        Action<string, string?, IReadOnlyList<string>> onFormKeyLeaf)
+        Func<FieldMetadata, bool> isLeaf, Action<FieldMetadata, string, JsonElement?> onLeaf)
     {
         if (value is not { ValueKind: JsonValueKind.Object } obj) return;
         var idle = IdleMembers(fields, obj);
@@ -94,7 +101,7 @@ public static class FormReferences
             JsonElement? member = null;
             if (present && prop.ValueKind != JsonValueKind.Null) member = prop;
             else if (field.Default is { } declared) member = JsonSerializer.SerializeToElement(declared);
-            Walk(DocumentNodes.VariantFor(field, obj), member, path.Length > 0 ? $"{path}.{field.Name}" : field.Name, onFormKeyLeaf);
+            WalkLeaves(DocumentNodes.VariantFor(field, obj), member, path.Length > 0 ? $"{path}.{field.Name}" : field.Name, isLeaf, onLeaf);
         }
     }
 
@@ -122,12 +129,12 @@ public static class FormReferences
 
     private static void WalkArray(
         FieldMetadata elementType, JsonElement? value, string path,
-        Action<string, string?, IReadOnlyList<string>> onFormKeyLeaf)
+        Func<FieldMetadata, bool> isLeaf, Action<FieldMetadata, string, JsonElement?> onLeaf)
     {
         if (value is not { ValueKind: JsonValueKind.Array } array) return;
         var idx = 0;
         foreach (var elem in array.EnumerateArray())
-            Walk(elementType, elem, $"{path}[{idx++}]", onFormKeyLeaf);
+            WalkLeaves(elementType, elem, $"{path}[{idx++}]", isLeaf, onLeaf);
     }
 
     private static bool IsRealRef([NotNullWhen(true)] string? s) => s is not null && s != "Null";

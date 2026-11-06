@@ -86,6 +86,9 @@ public record FieldMetadata(
     // (xedit.md, divergence 39).
     bool IsPlacedRotation = false,
 
+    // The name of a Papyrus script the record attaches (symbols.md, The symbols).
+    bool IsScriptName = false,
+
     // A reference Mutagen holds as an index instead while one of these boolean siblings is set (an
     // alias or package-data parameter), when DocumentNodes.VariantFor shapes it an integer.
     IReadOnlyList<string>? IndexWhen = null,

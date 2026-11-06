@@ -747,9 +747,10 @@ describe('where the compiler settings name a profile (ADR-0028)', () => {
   it('says why settings it cannot read are left out, naming the file first as every owner does', async () => {
     await writeSettings('{ not json');
 
-    const [why] = (await publisherOver().profileNames.read(profile('Main'), heldTexts([]))).leftOut;
+    const { leftOut } = await publisherOver().profileNames.read(profile('Main'), heldTexts([]));
 
-    expect(why?.startsWith(`${join(root, SETTINGS_FILE)}: `)).toBe(true);
+    const file = join(root, SETTINGS_FILE);
+    expect(leftOut).toEqual([`${file}: ${file} is not JSON: InvalidSymbol at line 1, column 3`]);
   });
 
   it.each([

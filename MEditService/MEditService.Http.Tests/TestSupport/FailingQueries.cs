@@ -37,6 +37,7 @@ internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null)
     public Answer<IReadOnlyList<ReferenceResult>, IndexRefused> GetReferences(string targetFormKey) => throw Failed();
     public Answer<IReadOnlyList<ReferenceResult>, IndexRefused> GetReferencesInActiveOrCompiledPlugins(string targetFormKey) => throw Failed();
     public Answer<IReadOnlyList<CopyNaming>, IndexRefused> GetPluginNameReferences(string name) => throw Failed();
+    public Answer<IReadOnlyList<CopyAttaching>, IndexRefused> GetScriptReferences(string name) => throw Failed();
 
     public Answer<RenderedDocument?, IndexRefused> GetRenderedDocument(PluginAddress plugin, string formKey) => throw Failed();
 

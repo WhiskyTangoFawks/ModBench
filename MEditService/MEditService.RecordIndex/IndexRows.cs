@@ -7,6 +7,9 @@ namespace MEditService.RecordIndex;
 // ADR-0012.
 internal sealed record ReferenceRow(string FormKey, string Plugin, string FieldPath, string RecordType, string? EditorId, string Origin);
 
+/// <summary>A copy's document as the record index stores it, and whether its plugin has plugin source.</summary>
+internal sealed record CopyHoldingText(string FormKey, PluginAddress Plugin, string RecordType, string Body, bool InPluginSource);
+
 internal record struct FormReferenceRow(
     string SourceFormKey,
     string TargetFormKey,

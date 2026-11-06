@@ -122,11 +122,12 @@ export interface ModGroups {
 /** A mod or a separator, by its kind and name. */
 export type EntryRef = Pick<ModlistEntry, 'kind' | 'name'>;
 
-/** A plugin at the root of a mod or Overwrite and its new file name; or a mod's or a separator's folder, a downloaded
- *  file or a profile's folder, and the symbol its new name holds. */
+/** The symbol a file or folder of the instance is, and what its new name names: a plugin at its origin's root, an entry,
+ *  or a Papyrus script in a mod or Overwrite. */
 export type RenamedSymbol =
   | { readonly kind: 'plugin'; readonly plugin: PluginAddress; readonly to: string }
-  | { readonly kind: 'entry'; readonly entry: EntrySymbol; readonly to: EntrySymbol };
+  | { readonly kind: 'entry'; readonly entry: EntrySymbol; readonly to: EntrySymbol }
+  | { readonly kind: 'script'; readonly name: string; readonly to: string };
 
 /** Whether two entries are one to the mod manager: the same kind, and the same key. */
 export const sameEntry = (manager: Pick<InstanceAdapter, 'entryKey'>, a: EntryRef, b: EntryRef): boolean =>
