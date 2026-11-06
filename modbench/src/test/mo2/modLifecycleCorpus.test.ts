@@ -6,6 +6,9 @@ vi.mock('vscode', () => fakeVscodeModule());
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { modCommands } from '../../modCommands/modCommands';
+import { entryRenameCommands } from '../../modCommands/renameEntry';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { onDisk } from '../onDisk';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, snapshotTree, textsUnder,
 } from './corpusFixture';
@@ -56,7 +59,7 @@ describe('mod lifecycle corpus (uninstall)', () => {
     await writeFile(join(dir, 'source', 'Harder VATS', '.git', 'HEAD'), 'ref: refs/heads/main\n');
     const before = await snapshotTree(dir);
 
-    await modCommands(adapterOver(dir)).renameMod('Harder VATS', 'Harder VATS 2');
+    await entryRenameCommands({ adapter: adapterOver(dir), client: new InMemoryMEditClient() }).renameMod(onDisk, 'Harder VATS', 'Harder VATS 2');
     const after = await snapshotTree(dir);
 
     expect([textsUnder(after, 'mods/Harder VATS'), textsUnder(after, 'mods/Harder VATS 2')]).toEqual([{}, {
@@ -67,6 +70,15 @@ describe('mod lifecycle corpus (uninstall)', () => {
       'mods/Harder VATS/meta.ini', 'mods/Harder VATS/Scripts/a.pex', 'mods/Harder VATS 2/meta.ini', 'mods/Harder VATS 2/Scripts/a.pex', MODLIST, 'profiles/Secondary/modlist.txt',
     ]));
     expect((await readModlistEntries(dir)).find((e) => e.name === 'Harder VATS 2')).toEqual({ kind: 'mod', name: 'Harder VATS 2', enabled: false });
+  });
+
+  it('renameMod takes the manifest named for the mod to the new name, in the moved folder', async () => {
+    const manifest = '{\n"version":1,\n"packages":[\n{"kind":"gameFolder"}\n]\n}\n';
+    await writeFile(join(dir, 'mods', 'Harder VATS', 'Harder VATS.manifest.json'), manifest);
+
+    await entryRenameCommands({ adapter: adapterOver(dir), client: new InMemoryMEditClient() }).renameMod(onDisk, 'Harder VATS', 'Harder VATS 2');
+
+    expect(textsUnder(await snapshotTree(dir), 'mods/Harder VATS 2')).toMatchObject({ 'mods/Harder VATS 2/Harder VATS 2.manifest.json': manifest });
   });
 });
 

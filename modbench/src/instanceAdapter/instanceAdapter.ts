@@ -772,6 +772,9 @@ export interface InstanceAdapter extends DataFileReads {
   /** Lets the instance repository hold the files of each mod folder of `modFolders`, or with `held` false leaves them out.
    *  Writes nothing without an ignore list; rejects, writing nothing, for a folder outside the mods folder or an unpaired marker. */
   writeHeldWholeLines(modFolders: readonly string[], held: boolean): Promise<void>;
+  /** Each line of the ignore list that holds a mod folder `from` whole, and each submodule entry of a folder `from`, names
+   *  `to` instead, the entry by `to`'s name. Writes nothing without a repository; rejects for an unpaired marker. */
+  followFoldersInRepository(moves: readonly { readonly from: string; readonly to: string }[]): Promise<void>;
   /** Commits the mod folder `folder` and the ignore list's lines that let it in, and nothing else, as `message`. Rejects,
    *  committing nothing, for a folder outside the mods folder, an unpaired marker HEAD holds, or when git does. */
   commitFolder(folder: string, message: string): Promise<void>;

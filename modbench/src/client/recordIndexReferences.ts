@@ -1,4 +1,4 @@
-import { namesPlugin, sameName, type HeldTexts, type PluginSymbol, type SymbolOwner } from '../symbolNames/symbolNames';
+import { COMMITTED, namesPlugin, sameName, type HeldTexts, type PluginSymbol, type SymbolOwner } from '../symbolNames/symbolNames';
 import { failureReason, isReadFailed } from '../wire/readFailed';
 import { isRefused, type MEditClient, type RenameSourceAsked } from './MEditClient';
 
@@ -38,7 +38,7 @@ export function recordIndexReferences(
         cannotFollow: [...leftBehind.map(({ plugin, reason }) => `${plugin.name} (${plugin.origin}): ${reason}`), ...inNoSource],
         commit: async () => {
           const moved = await client.moveLastWritten(symbol, treeName, newName);
-          return isRefused(moved) ? moved.message : undefined;
+          return isRefused(moved) ? { failed: moved.message } : COMMITTED;
         },
       };
     },

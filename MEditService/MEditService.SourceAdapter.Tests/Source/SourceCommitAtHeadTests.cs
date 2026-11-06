@@ -387,6 +387,20 @@ public sealed class SourceCommitAtHeadTests : IDisposable
         Assert.Equal($"'{SourceFolder}' holds no repository.", Assert.IsType<SourceFailure.Unreadable>(failure).Reason);
     }
 
+    [Fact]
+    public void AMovedSubmodule_IsPinnedAtItsNewPath_AndItsGitDirectoryNamesItsNewFolder()
+    {
+        CommitAtHead(_commits["second"]).Value();
+        var moved = Path.Combine(_submodule.Instance, "source", "Renamed");
+        Directory.Move(SourceFolder, moved);
+
+        Assert.Null(TestAdapters.Source().FollowSourceFolderMove(SourceFolder, moved));
+
+        Assert.Equal($"160000 {_commits["second"]} 0\tsource/Renamed\n", Git(_submodule.Instance, "ls-files", "-s", "--", "source"));
+        var gitDir = Path.Combine(_submodule.Instance, ".git", "modules", _submodule.Name);
+        Assert.Equal(moved, Path.GetFullPath(GitProbe.Run(gitDir, moved, "config", "core.worktree").Trim(), gitDir));
+    }
+
     private RepositoriesLib.Answer<SubmoduleHead, SourceFailure> CommitAtHead(string pin, CancellationToken cancel = default)
     {
         _submodule.Pin(pin);

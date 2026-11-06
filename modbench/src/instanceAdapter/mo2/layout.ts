@@ -93,7 +93,6 @@ export const settingsFile = (instanceRoot: string): string => join(instanceRoot,
 
 // A mod's manifest, in its folder, named for the mod.
 const manifestFileName = (modName: string): string => `${modName}${MANIFEST_SUFFIX}`;
-export const manifestFileIn = (modFolder: string, modName: string): string => join(modFolder, manifestFileName(modName));
 
 /** The meta file of the mod folder `modFolder`, wherever that folder is. */
 export const modMetaFileIn = (modFolder: string): string => join(modFolder, MOD_META_FILE_NAME);
@@ -320,6 +319,13 @@ export function sourceModLinesOf(ignoreList: string, name: string): string[] {
  *  other line kept. Undefined when the markers do not pair. */
 export const withHeldWholeLines = (ignoreList: string, folderNames: readonly string[], held: boolean): string | undefined =>
   withOwnLines(ignoreList, HELD_WHOLE, withLinesOf(ignoreList, HELD_WHOLE.letIn,folderNames.map((name) => `!/${MODS}/${escapedForIgnoreList(name)}/*`), held));
+
+/** An ignore list whose line holding the mod folder `from` whole holds `to` instead. Undefined when the markers do not pair. */
+export function withHeldWholeFollowed(ignoreList: string, from: string, to: string): string | undefined {
+  if (!ignoreList.split(/\r?\n/).includes(`!/${MODS}/${escapedForIgnoreList(from)}/*`)) return ignoreList;
+  const without = withHeldWholeLines(ignoreList, [from], false);
+  return without === undefined ? undefined : withHeldWholeLines(without, [to], true);
+}
 
 // The lines between `markers` with each of `lines` added, or with `held` false taken out.
 function withLinesOf(ignoreList: string, [first, last]: Markers, lines: readonly string[], held: boolean): string[] {

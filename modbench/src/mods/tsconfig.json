@@ -17,6 +17,8 @@
     { "path": "../modCommands" },
     { "path": "../ports" },
     { "path": "../sourceCommands" },
+    { "path": "../symbolNames" },
+    { "path": "../textDocuments" },
     { "path": "../wire" }
   ],
   "include": ["**/*.ts"],

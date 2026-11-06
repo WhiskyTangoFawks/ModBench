@@ -3,7 +3,6 @@ import { OVERWRITE_LABEL } from '../instanceLoader/fileConflictIndex';
 import type { ModlistNode } from './ModListProvider';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 import type { NexusModRow } from '../drivingLib/inFocusedView';
-import { promptRename } from '../drivingLib/promptRename';
 import { MODS_KEY_ARGS, entryRefOf, fileRefOf, modNameOf, separatorNameOf, runModsWriting, openFolderArgument } from './gestureEntry';
 import { registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { viewCopyValueText } from '../drivingLib/copyValue';
@@ -202,11 +201,6 @@ interface ModContextDeps {
   log: (line: string) => void;
 }
 
-interface Rename {
-  readonly oldName: string;
-  readonly newName: string;
-}
-
 interface UninstallRequest {
   readonly mods: readonly string[];
   readonly force: boolean;
@@ -230,42 +224,6 @@ function partialsOfUninstall(item: Uninstalled, modOrderFile: string): PartialFa
 export function registerModContextCommands(
   { commands, instance, viewSelection, reporter, ask, trash, log }: ModContextDeps,
 ): vscode.Disposable[] {
-  const rename: AgentGesture<ModlistNode, Rename, GestureResult<string>, { name: string }> = {
-    fromView: async (entry) => {
-      const node = singularArgument(entry, 'mod');
-      if (!node) return undefined;
-      const oldName = node.mod.name;
-      const newName = await promptRename('Rename mod', oldName, modNamePrompt(commands, oldName));
-      return newName === undefined ? undefined : { oldName, newName };
-    },
-    fromAgent: ({ argument, options: { name } }) => {
-      const [only, ...more] = argument;
-      if (only === undefined || more.length > 0) throw new Refusal('An agent call to rename a mod carries one mod.');
-      const oldName = modNameOf(only);
-      return { oldName, newName: name };
-    },
-    run: ({ oldName, newName }) => runModsWriting('modbench.mod.rename', instance, async (): Promise<GestureResult<string>> => {
-      const result = await instance.quiet(() => commands.renameMod(oldName, newName));
-      if (!result.applied) return { applied: false, refusal: 'Failed to rename mod.', detail: result.refusal };
-      if (result.unchanged) return { applied: true, outcome: { landed: [], refused: [] } };
-      return {
-        applied: true,
-        outcome: { landed: [newName], refused: [] },
-        partial: [
-          ...(result.tagRefusal === undefined ? [] : [{ message: `"${oldName}" was renamed, but its publisher tags could not follow it.`, detail: result.tagRefusal, severity: 'warning' as const }]),
-          ...result.lineRefusals.map(({ profile, refusal }) => ({
-            message: `"${oldName}" was renamed, but its ${commands.names.modOrderFile} line in profile "${profile}" could not be renamed.`,
-            detail: refusal, severity: 'warning' as const,
-          })),
-        ],
-      };
-    }),
-    report: (result) => {
-      if (!result.applied) reporter.report('error', result.refusal, result.detail);
-      else reportPartial(reporter, result.partial);
-    },
-  };
-
   const uninstallForced = (mods: readonly string[]) => runModsWriting('modbench.mod.uninstall', instance, async (): Promise<GestureResult<Uninstalled>> => {
     const result = await commands.uninstallMods(mods, trash);
     if (!result.applied) return { applied: false, refusal: 'Failed to uninstall mods.', detail: result.refusal };
@@ -296,7 +254,6 @@ export function registerModContextCommands(
   };
 
   return [
-    registerAgentGesture('modbench.mod.rename', viewSelection, rename),
     registerAgentGesture('modbench.mod.uninstall', viewSelection, uninstall),
   ];
 }
@@ -304,12 +261,6 @@ function separatorNamePrompt(
   commands: ModCommands, own?: string,
 ): (value: string) => Promise<string | undefined> | undefined {
   return (value) => (value === '' ? undefined : promptRefusal(commands.separatorNameRefusal(value, own)));
-}
-
-function modNamePrompt(
-  commands: ModCommands, own: string,
-): (value: string) => Promise<string | undefined> | undefined {
-  return (value) => (value === '' ? undefined : promptRefusal(commands.renameModNameRefusal(value, own)));
 }
 
 // mods.md, Delete separator. A separator holds the mods before it, so they join the nearest separator the selection leaves
@@ -349,40 +300,7 @@ interface SeparatorAdd {
   readonly anchor: EntryRef;
 }
 
-interface SeparatorRename {
-  readonly oldName: string;
-  readonly newName: string;
-}
-
 type DeletedSeparator = Extract<Awaited<ReturnType<ModCommands['deleteSeparators']>>, { applied: true }>['outcome']['landed'][number];
-
-function renameGesture(
-  commands: ModCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
-): AgentGesture<ModlistNode, SeparatorRename, GestureResult<string>, { name: string }> {
-  return {
-    fromView: async (entry) => {
-      const node = singularArgument(entry, 'separator');
-      if (!node) return undefined;
-      const oldName = node.separator.name;
-      const newName = await promptRename('Rename separator', oldName, separatorNamePrompt(commands, oldName));
-      return newName === undefined ? undefined : { oldName, newName };
-    },
-    fromAgent: ({ argument, options: { name } }) => {
-      const [only, ...more] = argument;
-      if (only === undefined || more.length > 0) throw new Refusal('An agent call to rename a separator carries one separator.');
-      const oldName = separatorNameOf(only);
-      return { oldName, newName: name };
-    },
-    run: ({ oldName, newName }) => runModsWriting('modbench.separator.rename', instance, async (): Promise<GestureResult<string>> => {
-      const result = await commands.renameSeparator(oldName, newName);
-      if (!result.applied) return { applied: false, refusal: 'Failed to rename separator.', detail: result.refusal };
-      return { applied: true, outcome: { landed: result.wrote ? [result.name] : [], refused: [] } };
-    }),
-    report: (result) => {
-      if (!result.applied) reporter.report('error', result.refusal, result.detail);
-    },
-  };
-  }
 
   function addGesture(
     commands: ModCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
@@ -456,7 +374,6 @@ function renameGesture(
     viewSelection: () => readonly ModlistNode[],
   ): vscode.Disposable[] {
     return [
-      registerAgentGesture('modbench.separator.rename', viewSelection, renameGesture(commands, instance, reporter)),
       registerAgentGesture('modbench.separator.add', viewSelection, addGesture(commands, instance, reporter)),
       registerAgentGesture('modbench.separator.delete', viewSelection, deleteGesture(commands, instance, reporter, ask, trash)),
     ];

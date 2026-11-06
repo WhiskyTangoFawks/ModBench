@@ -63,6 +63,11 @@ public abstract class DelegatingSourceAdapter(ISourceAdapter inner) : ISourceAda
 
     public virtual Answer<SubmoduleHead, SourceFailure> CommitAtHead(Submodule submodule, CancellationToken cancel) => inner.CommitAtHead(submodule, cancel);
 
+    public virtual Answer<SourceChanges, SourceFailure> ChangesToMoveSourceFolder(string sourceFolder, string movedTo, IReadOnlyList<SourceMove> files) =>
+        inner.ChangesToMoveSourceFolder(sourceFolder, movedTo, files);
+
+    public virtual SourceFailure? FollowSourceFolderMove(string sourceFolder, string movedTo) => inner.FollowSourceFolderMove(sourceFolder, movedTo);
+
     public virtual IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>
         inner.ReadBackOf(pluginFileName, tree, gameRelease);
 }

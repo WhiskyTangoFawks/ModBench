@@ -241,6 +241,9 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     { name: 'getRenameSourceChanges', verb: (c) => c.getRenameSourceChanges({ name: 'Old.esp', origin: 'ModA' }, 'New.esp', { namedByFileName: false, sourceFiles: [{ from: 'Old.esp', to: 'New.esp' }] }),
       ...same({ treeName: 'Old.esp', ...editChanges }),
       path: '/plugins/rename-source-changes', body: { origin: 'ModA', name: 'Old.esp', newName: 'New.esp', namedByFileName: false, sourceFiles: [{ from: 'Old.esp', to: 'New.esp' }] } },
+    { name: 'getSourceFolderMoveChanges', verb: (c) => c.getSourceFolderMoveChanges('/source/Old', '/source/New', [{ from: 'Old.manifest.json', to: 'New.manifest.json' }]),
+      ...same({ moves: [{ from: '/source/Old', to: '/source/New' }], deletions: [], documents: [] }),
+      path: '/source-folders/move-changes', body: { sourceFolder: '/source/Old', movedTo: '/source/New', files: [{ from: 'Old.manifest.json', to: 'New.manifest.json' }] } },
     { name: 'getCopyChanges', verb: (c) => c.getCopyChanges([kept], 'Override', [patch, other], true),
       answer: { applied: [copied], refused: [{ item: { record: kept, destination: other }, refusal: 'DestinationHoldsRecord', message: 'Other.esp already holds it.' }] },
       reads: { applied: [copied], refused: [{ item: { record: kept, destination: other }, reason: 'Other.esp already holds it.' }] },
@@ -308,6 +311,8 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   it.each([
     { name: 'moveLastWritten', verb: (c: MEditClient) => c.moveLastWritten({ name: 'Old.esp', origin: 'ModA' }, 'OLD.esp', 'New.esp'),
       reads: { moved: true }, path: '/plugins/move-last-written', body: { origin: 'ModA', name: 'Old.esp', treeName: 'OLD.esp', newName: 'New.esp' } },
+    { name: 'followSourceFolderMove', verb: (c: MEditClient) => c.followSourceFolderMove('/source/Old', '/source/New'),
+      reads: { followed: true }, path: '/source-folders/follow-move', body: { sourceFolder: '/source/Old', movedTo: '/source/New' } },
     { name: 'rebuildIndex', verb: (c: MEditClient) => c.rebuildIndex('/instance', 'Fallout4'),
       reads: { rebuilt: true }, path: '/index/rebuild', body: { instanceRoot: '/instance', gameRelease: 'Fallout4' } },
   ])('$name posts $path and reads a 204 as done', async ({ verb, reads, path, body }) => {

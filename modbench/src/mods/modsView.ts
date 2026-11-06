@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
 import type { Instance, InstanceView } from '../instanceLoader/instance';
 import type { ModCommands } from '../modCommands/modCommands';
+import type { EntryRenameCommands } from '../modCommands/renameEntry';
+import type { SourceEditing } from '../textDocuments/sourceEditing';
+import { registerEntryRenameCommands } from './entryRenameCommands';
 import type { SourceCommands } from '../sourceCommands/sourceCommands';
 import { sourceFiles } from '../instanceLoader/loadOrderSnapshot';
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
@@ -63,6 +66,8 @@ type ManifestDeps = Pick<ManifestGestureDeps, 'toolboxView' | 'say'> & {
 interface ModsViewDeps {
   instance: InstanceView & Pick<Instance, 'refresh' | 'quiet'>;
   commands: ModCommands;
+  renames: EntryRenameCommands;
+  source: SourceEditing;
   copyReads: CopyReads;
   channel: { warn(line: string): void };
   reporterFor: (tag: string) => Reporter;
@@ -172,6 +177,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     }),
     ...registerSourceGestures(deps, provider, sourceGestureRows, sayPhase),
     ...registerManifestGestures({ ...deps.manifestGestures, focusedView, instance, reporter: reporterFor('modlist') }),
+    ...registerEntryRenameCommands({ commands, renames: deps.renames, source: deps.source, instance, reporter: reporterFor('mod.rename') }, () => view.selection),
     ...registerCheckForUpdatesGestures(checkForUpdatesDeps(deps, instance, reporterFor('mod.checkForUpdates'))),
     ...registerModEnableCommands(commands, instance, () => view.selection, reporterFor('mod.enableDisable')),
     ...registerFileExclusionCommands(commands, instance, () => view.selection, reporterFor('mod.excludeFile')),

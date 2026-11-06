@@ -104,12 +104,30 @@ export interface FileChanges {
 
 export const NO_FILE_CHANGES: FileChanges = { moves: [], deletions: [], documents: [] };
 
+/** An owner's write: why it failed, or each reference it could not carry once it wrote. */
+export type Committed = { readonly failed: string } | { readonly cannotFollow: readonly string[] };
+
+export const COMMITTED: Committed = { cannotFollow: [] };
+
 /** An owner's part of a rename, with nothing written: the changes Text documents applies, each reference that cannot
- *  follow, and the owner's own write once every owner's changes are applied, which answers why it failed. */
+ *  follow, and the owner's own write once every owner's changes are applied. */
 export interface RenamePlan {
   readonly changes: FileChanges;
   readonly cannotFollow: readonly string[];
-  commit(): Promise<string | undefined>;
+  commit(): Promise<Committed>;
+}
+
+export type Planned = RenamePlan | { readonly refused: string };
+
+/** A mod or a mod separator as a symbol: its name (symbols.md, The symbols). */
+export interface EntrySymbol {
+  readonly kind: 'mod' | 'separator';
+  readonly name: string;
+}
+
+/** A box that owns files naming a mod or a separator, in its part of a rename. */
+export interface EntryOwner {
+  plan(symbol: EntrySymbol, newName: string, held: HeldTexts): Promise<Planned>;
 }
 
 /** `text` with each span replaced by what `spelled` makes of the text at its start. */
@@ -121,7 +139,7 @@ export interface SymbolOwner {
   read(symbol: PluginSymbol, held: HeldTexts): Promise<SymbolReading>;
   /** Its part of renaming `symbol` to `newName`, or why it refuses the rename. A name alone names the copy `plugins`,
    *  the rows of its file name, resolve it to. */
-  plan(symbol: PluginSymbol, newName: string, held: HeldTexts, plugins: readonly ResolvedPlugin[]): Promise<RenamePlan | { readonly refused: string }>;
+  plan(symbol: PluginSymbol, newName: string, held: HeldTexts, plugins: readonly ResolvedPlugin[]): Promise<Planned>;
   /** The plugin one of its files names at `offset` of the file's `text`; undefined where it names none. */
   nameAt(file: string, text: string, offset: number): Promise<PluginName | undefined>;
 }

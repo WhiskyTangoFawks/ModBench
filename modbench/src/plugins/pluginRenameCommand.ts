@@ -3,7 +3,8 @@ import type { MEditClient } from '../client';
 import type { Instance } from '../instanceLoader/instance';
 import type { PluginCommands } from '../pluginCommands/plugins';
 import { singularArgument } from '../drivingLib/gestureEntry';
-import { registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
+import { registerAgentGesture, reportPartial, type AgentGesture, type GestureResult } from '../drivingLib/agentGesture';
+import { renameOutcome } from '../drivingLib/renameOutcome';
 import { promptRename } from '../drivingLib/promptRename';
 import { heldTexts, type FileChanges } from '../symbolNames/symbolNames';
 import { applyAnswered } from '../textDocuments/applyAnswered';
@@ -38,29 +39,10 @@ type RenameDeps = Pick<RenamePluginDeps, 'commands' | 'source'>;
 const isSupplied = (option: unknown): option is { readonly plugin: PluginAddress; readonly name: string } =>
   typeof option === 'object' && option !== null && typeof Reflect.get(option, 'name') === 'string' && isPluginAddress(Reflect.get(option, 'plugin'));
 
-const refused = (refusal: string, detail?: string): GestureResult<PluginAddress> => ({ applied: false, refusal, detail });
-
-// symbols.md, The features, story 7: what could not follow lands as a warning naming each reference.
-const leftBehind = (plugin: PluginAddress, newName: string, cannotFollow: readonly string[]): { partial?: PartialFailure[] } =>
-  (cannotFollow.length === 0 ? {} : {
-    partial: [{
-      message: `Renamed "${plugin.name}" (${plugin.origin}) to "${newName}". ${String(cannotFollow.length)} references to it could not follow.`,
-      detail: cannotFollow.join('\n'),
-      severity: 'warning',
-    }],
-  });
-
 async function renamed({ commands, source }: RenameDeps, plugin: PluginAddress, newName: string): Promise<GestureResult<PluginAddress>> {
-  const couldNot = `Could not rename "${plugin.name}" (${plugin.origin})`;
   const apply = (changes: readonly FileChanges[]) => applyAnswered(source, changes, [plugin]);
   const result = await commands.renamePlugin({ held: heldTexts(unsavedTexts()), apply }, plugin, newName);
-  if (result.applied) {
-    return { applied: true, outcome: { landed: [{ name: newName, origin: plugin.origin }], refused: [] }, ...leftBehind(plugin, newName, result.cannotFollow) };
-  }
-  if ('unapplied' in result) return refused(`${couldNot}: its references may be partly changed. Reverting them in git undoes it.`, result.unapplied);
-  if ('refusal' in result) return refused(result.refusal, 'detail' in result ? result.detail : undefined);
-  if (!result.edited) return refused(`${couldNot}: its file and lines were not renamed.`, result.failed);
-  return refused(`${couldNot}: its references were changed, and its file and lines were not.`, result.failed);
+  return renameOutcome(result, { named: `"${plugin.name}" (${plugin.origin})`, newName, landed: { name: newName, origin: plugin.origin }, definition: 'its file and lines' });
 }
 
 /** commands.md, `rename` under Plugin. */

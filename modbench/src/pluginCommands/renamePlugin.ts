@@ -2,10 +2,11 @@
 // source's changes are mEdit's to answer; the file and its lines are the Instance adapter's.
 
 import type { TailOf } from '../coreLib/boundCommand';
-import { change, type ChangeResult, type Changing, type SymbolOwners } from '../coreLib/change';
+import { change, type RenameEditing, type SymbolOwners } from '../coreLib/change';
+import type { ChangeResult } from '../ports/changeResult';
 import { fileOriginOfPlugin, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { manifestFileReferences, sourceModsOf } from '../manifestAdapter/manifestAdapter';
-import { originsWinningFirst, type RankedOrigin, type ResolvedPlugin } from '../symbolNames/symbolNames';
+import { originsWinningFirst, type RankedOrigin, type ResolvedPlugin, type SymbolOwner } from '../symbolNames/symbolNames';
 import { pluginCompanionRule } from '../tables/gamePaths';
 import { OVERWRITE_ORIGIN, type PluginAddress } from '../wire/pluginAddress';
 import { recordIndexReferences, type MEditClient } from '../client';
@@ -20,9 +21,6 @@ interface PluginRenameAccess {
   readonly client: PluginRenameClient;
 }
 
-/** What Text documents gives a rename: the unsaved texts the owners read, and the edit that applies their changes. */
-export type RenameEditing = Omit<Changing, 'owners' | 'plugins'>;
-
 export type PluginRenameResult = ChangeResult | { readonly applied: false; readonly refusal: string; readonly detail: string };
 
 async function renameRefusal(
@@ -34,7 +32,7 @@ async function renameRefusal(
 }
 
 // The Instance adapter defines a plugin; mEdit's plugins, the build files and the manifests name it.
-async function ownersOf({ adapter, client }: PluginRenameAccess): Promise<SymbolOwners> {
+async function ownersOf({ adapter, client }: PluginRenameAccess): Promise<SymbolOwners<SymbolOwner>> {
   const sourceMods = await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceModFolders(), (name) => adapter.entryKey({ kind: 'mod', name }));
   const manifestFiles = manifestFileReferences({
     sourceFolders: () => sourceMods.folders,
@@ -54,8 +52,8 @@ async function rowsOf(adapter: InstanceAdapter, { name }: PluginAddress): Promis
   return [];
 }
 
-async function renamePlugin(access: PluginRenameAccess, editing: RenameEditing, plugin: PluginAddress, newName: string): Promise<PluginRenameResult> {
-  let owners: SymbolOwners;
+async function renamePlugin(access: PluginRenameAccess, { held, apply }: RenameEditing, plugin: PluginAddress, newName: string): Promise<PluginRenameResult> {
+  let owners: SymbolOwners<SymbolOwner>;
   let plugins: ResolvedPlugin[];
   try {
     const refusal = await renameRefusal(access, plugin, newName, answerOf(await access.client.getCreatablePluginExtensions()));
@@ -64,7 +62,7 @@ async function renamePlugin(access: PluginRenameAccess, editing: RenameEditing, 
   } catch (err) {
     return { applied: false, refusal: `Could not check "${newName}" for "${plugin.name}" (${plugin.origin}).`, detail: errorMessage(err) };
   }
-  return change({ owners, plugins, ...editing }, plugin, newName);
+  return change(owners, (owner) => owner.plan(plugin, newName, held, plugins), apply);
 }
 
 export function pluginRenameCommands(access: PluginRenameAccess) {

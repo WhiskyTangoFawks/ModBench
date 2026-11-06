@@ -32,6 +32,8 @@ public sealed class WriteRouteHandlerTests
         ("POST", "/build", typeof(BuildModHandler), "Build"),
         ("POST", "/version-in-git", typeof(VersionInGitHandler), "VersionInGit"),
         ("POST", "/clone-submodules", typeof(CloneSubmodulesHandler), "CloneSubmodules"),
+        ("POST", "/source-folders/move-changes", typeof(SourceFolderMoveChangesHandler), "SourceFolderMoveChanges"),
+        ("POST", "/source-folders/follow-move", typeof(FollowSourceFolderMoveHandler), "FollowSourceFolderMove"),
         ("POST", "/plugin-files/set-flags", typeof(SetPluginFileFlagsHandler), "SetPluginFileFlags"),
     ];
 

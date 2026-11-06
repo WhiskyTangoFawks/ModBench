@@ -50,6 +50,13 @@ internal static class GitCli
         return stdout;
     }
 
+    /// <summary>As <see cref="Run"/>, with <paramref name="input"/> on git's stdin.</summary>
+    internal static void RunFed(string gitDir, string workTree, string at, string input, params string[] args)
+    {
+        var (exitCode, _, stderr) = Execute(StartInfo(gitDir, workTree, at, args), at, CancellationToken.None, input);
+        if (exitCode != 0) throw Failed(args[0], args, exitCode, stderr);
+    }
+
     /// <summary>Runs git without throwing on a non-zero exit — for existence checks
     /// (<c>git cat-file -e</c>) where "not found" is an expected, non-exceptional outcome.</summary>
     internal static bool TryRun(string gitDir, string workTree, string at, out string stdout, params string[] args) =>
@@ -82,6 +89,7 @@ internal static class GitCli
             // Git writes UTF-8; unset, Windows decodes with the console's code page.
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
+            StandardInputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
             WorkingDirectory = workingDirectory,
         };
         foreach (var arg in args) psi.ArgumentList.Add(arg);
@@ -102,11 +110,12 @@ internal static class GitCli
     private static (int ExitCode, string Stdout, string Stderr) Execute(string gitDir, string workTree, string at, string[] args) =>
         Execute(StartInfo(gitDir, workTree, at, args), at, CancellationToken.None);
 
-    private static (int ExitCode, string Stdout, string Stderr) Execute(ProcessStartInfo psi, string at, CancellationToken cancel)
+    private static (int ExitCode, string Stdout, string Stderr) Execute(ProcessStartInfo psi, string at, CancellationToken cancel, string input = "")
     {
         using var process = Start(psi, at);
         using var stopping = cancel.Register(() => process.Kill(entireProcessTree: true));
-        // Closed at once: git otherwise inherits this process's stdin, and a socket never reaches EOF.
+        // Closed once written: git otherwise inherits this process's stdin, and a socket never reaches EOF.
+        process.StandardInput.Write(input);
         process.StandardInput.Close();
 
         // Draining one stream to completion before the other is the classic .NET Process deadlock once

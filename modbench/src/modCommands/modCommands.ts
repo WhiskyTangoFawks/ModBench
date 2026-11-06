@@ -7,7 +7,7 @@ import {
   type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type PublisherTag, type PublisherTagChange, type SeparatorsPlace,
 } from '../instanceAdapter/instanceAdapter';
 import { goneFromDisk } from '../coreLib/commandRefusals';
-import { EMPTY_MOD_NAME, entryNameRefusal, newModNameRefusal, newNameRefusal, type EntryKey } from './nameRefusals';
+import { entryNameRefusal, newModNameRefusal, newNameRefusal, type EntryKey } from './nameRefusals';
 import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
 import { installMod } from './install';
@@ -179,12 +179,12 @@ const MOD_NAME_CLASH = 'A mod with this name already exists';
 
 // Why `requested` cannot name a separator, or `undefined` when it can: a separator of that name is
 // listed or has a folder, compared without case. `own`, the separator being renamed, is no clash.
-async function separatorNameRefusal(adapter: InstanceAdapter, requested: string, own?: string): Promise<string | undefined> {
+export async function separatorNameRefusal(adapter: InstanceAdapter, requested: string, own?: string): Promise<string | undefined> {
   return entryNameRefusal(keyOf(adapter), await adapter.modOrder(), 'separator', requested, SEPARATOR_NAME_CLASH, own);
 }
 
 // Why `requested` cannot rename mod `own`, or `undefined` when it can: another mod of that name is listed or has a folder, compared without case.
-async function renameModNameRefusal(adapter: InstanceAdapter, requested: string, own: string): Promise<string | undefined> {
+export async function renameModNameRefusal(adapter: InstanceAdapter, requested: string, own: string): Promise<string | undefined> {
   return entryNameRefusal(keyOf(adapter), await adapter.modOrder(), 'mod', requested, MOD_NAME_CLASH, own);
 }
 
@@ -208,15 +208,6 @@ async function insertSeparator(
   const refused = await refusedName(separatorNameRefusal(adapter, requested));
   if (refused) return refused;
   return changeSeparator(adapter, () => [{ kind: 'addSeparator', separator: requested, anchor }]);
-}
-
-// Rename a separator in place, and its folder with it.
-async function renameSeparator(
-  adapter: InstanceAdapter, oldName: string, requested: string,
-): Promise<SeparatorResult> {
-  const refused = await refusedName(separatorNameRefusal(adapter, requested, oldName));
-  if (refused) return refused;
-  return changeSeparator(adapter, () => [{ kind: 'renameSeparator', from: oldName, to: requested }]);
 }
 
 interface TrashedEntry {
@@ -364,57 +355,6 @@ async function createEmptyMod(adapter: InstanceAdapter, name: string): Promise<C
   return line;
 }
 
-/** `lineRefusals` names each profile whose line could not be renamed: it loses the mod's place until
- *  `mod sync`. `tagRefusal`: the publisher tags could not follow, or Modbench's files could not be
- *  kept out of the publisher. */
-export type RenameModResult =
-  | { applied: true; lineRefusals: { profile: string; refusal: string }[]; unchanged?: true; tagRefusal?: string }
-  | { applied: false; refusal: string };
-
-async function refusalOf(attempt: () => Promise<unknown>): Promise<string | undefined> {
-  try {
-    await attempt();
-    return undefined;
-  } catch (err) {
-    return errorMessage(err);
-  }
-}
-
-async function updatePublisherAfterRename(adapter: InstanceAdapter, from: string | undefined, to: string) {
-  const tagRefusal = await refusalOf(async () => {
-    const target = await adapter.modFolderPath(to);
-    if (from !== undefined && target !== undefined) await adapter.followModFolders([{ from, to: target }]);
-  });
-  return tagRefusal === undefined ? {} : { tagRefusal };
-}
-
-// The folder, then the line in each profile, the active one first. A profile that does not list the mod is left as it was.
-async function renameMod(adapter: InstanceAdapter, from: string, to: string): Promise<RenameModResult> {
-  if (to.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };
-  if (from === to) return { applied: true, lineRefusals: [], unchanged: true };
-  const refused = await refusedName(renameModNameRefusal(adapter, to, from));
-  if (refused) return refused;
-  let activeProfile: string;
-  let profiles: readonly string[];
-  let fromFolder: string | undefined;
-  try {
-    const unreadable = await adapter.publisherConfigurationRefusal();
-    if (unreadable !== undefined) return { applied: false, refusal: unreadable };
-    [activeProfile, profiles, fromFolder] = await Promise.all([adapter.activeProfile(), adapter.profiles(), adapter.modFolderPath(from)]);
-    await adapter.renameModFolder(from, to);
-  } catch (err) {
-    return refuse(err);
-  }
-  const publisherRefusals = await updatePublisherAfterRename(adapter, fromFolder, to);
-  const lineRefusals: { profile: string; refusal: string }[] = [];
-  const ordered = [activeProfile, ...profiles.filter((profile) => profile !== activeProfile)];
-  for (const profile of ordered) {
-    const line = wrote(await landIn(adapter, profile, () => [{ kind: 'renameMod', from, to }]));
-    if (!line.applied) lineRefusals.push({ profile, refusal: line.refusal });
-  }
-  return { applied: true, lineRefusals, ...publisherRefusals };
-}
-
 type ModSyncResult =
   | { applied: true; added: string[]; dropped: string[] }
   | { applied: false; refusal: string };
@@ -461,11 +401,9 @@ export function modCommands(adapter: InstanceAdapter) {
     markFiles: (...args: TailOf<typeof markFiles>) => markFiles(adapter, ...args),
     changePublisherTag: (...args: TailOf<typeof changePublisherTag>) => changePublisherTag(adapter, ...args),
     insertSeparator: (...args: TailOf<typeof insertSeparator>) => insertSeparator(adapter, ...args),
-    renameSeparator: (...args: TailOf<typeof renameSeparator>) => renameSeparator(adapter, ...args),
     deleteSeparators: (...args: TailOf<typeof deleteSeparators>) => deleteSeparators(adapter, ...args),
     uninstallMods: (...args: TailOf<typeof uninstallMods>) => uninstallMods(adapter, ...args),
     createEmptyMod: (...args: TailOf<typeof createEmptyMod>) => createEmptyMod(adapter, ...args),
-    renameMod: (...args: TailOf<typeof renameMod>) => renameMod(adapter, ...args),
     separatorNameRefusal: (...args: TailOf<typeof separatorNameRefusal>) => separatorNameRefusal(adapter, ...args),
     renameModNameRefusal: (...args: TailOf<typeof renameModNameRefusal>) => renameModNameRefusal(adapter, ...args),
     newModNameRefusal: (...args: TailOf<typeof newModNameRefusalInInstance>) => newModNameRefusalInInstance(adapter, ...args),

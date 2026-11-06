@@ -71,7 +71,7 @@ describe('the record index plans a rename of a plugin (ADR-0028)', () => {
     expect(plan.changes).toEqual({ moves: SOURCE_CHANGES.moves, deletions: [], documents: SOURCE_CHANGES.documents });
     expect(client.asked).toEqual([[symbol, 'New.esm', { namedByFileName: true, sourceFiles: SOURCE_FILES }]]);
     expect(client.moved).toEqual([]);
-    expect(await plan.commit()).toBeUndefined();
+    expect(await plan.commit()).toEqual({ cannotFollow: [] });
     expect(client.moved).toEqual([[symbol, 'BASE.esm', 'New.esm']]);
   });
 
@@ -111,6 +111,6 @@ describe('the record index plans a rename of a plugin (ADR-0028)', () => {
   it('answers why its commit failed when mEdit refuses to move what Modbench last wrote', async () => {
     const plan = await planned(planClient({ moveLastWritten: () => Promise.resolve({ refused: true, message: 'git refused the ref.' }) }));
 
-    expect(await plan.commit()).toBe('git refused the ref.');
+    expect(await plan.commit()).toEqual({ failed: 'git refused the ref.' });
   });
 });

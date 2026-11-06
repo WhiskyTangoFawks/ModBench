@@ -37,7 +37,6 @@ describe('the mod commands refuse the whole selection once when the adapter refu
     ['moveMods', (c: ReturnType<typeof over>['commands']) => c.moveMods(['Harder VATS', 'ENBoost'], place, 'losing')],
     ['moveSeparators', (c: ReturnType<typeof over>['commands']) => c.moveSeparators([UNASSIGNED, RADFALL], separatorsPlace, 'losing')],
     ['insertSeparator', (c: ReturnType<typeof over>['commands']) => c.insertSeparator('New Section', { kind: 'mod', name: 'ENBoost' })],
-    ['renameSeparator', (c: ReturnType<typeof over>['commands']) => c.renameSeparator(UNASSIGNED, 'Renamed')],
   ])('%s', async (_, run) => {
     const { fake, commands } = over(FIXTURE_ORDER, { refusals: refusing('changeModOrder', 'ENOENT: no such file') });
 
@@ -159,17 +158,6 @@ describe('insertSeparator', () => {
 
     expect(outcome).toEqual({ applied: true, wrote: true, name: 'New Section' });
     expect(fake.calls).toEqual([orderWrite([{ kind: 'addSeparator', separator: 'New Section', anchor }])]);
-  });
-});
-
-describe('renameSeparator', () => {
-  it('hands the adapter one change, which renames the line and its folder', async () => {
-    const { fake, commands } = over();
-
-    const outcome = await commands.renameSeparator(UNASSIGNED, 'Renamed');
-
-    expect(outcome).toEqual({ applied: true, wrote: true, name: 'Renamed' });
-    expect(fake.calls).toEqual([orderWrite([{ kind: 'renameSeparator', from: UNASSIGNED, to: 'Renamed' }])]);
   });
 });
 
@@ -356,70 +344,6 @@ describe('uninstallMods', () => {
 
     expect(await commands.uninstallMods(['Harder VATS'], NO_TRASH)).toEqual({ applied: false, refusal: 'modlist.txt is locked' });
     expect(fake.calls).toEqual([]);
-  });
-});
-
-describe('renameMod', () => {
-  const rename = (commands: ReturnType<typeof over>['commands']) => commands.renameMod('Harder VATS', 'Harder VATS 2');
-  const profiles = { profiles: ['Secondary', 'Default'] };
-  const line = { kind: 'renameMod', from: 'Harder VATS', to: 'Harder VATS 2' } as const;
-
-  it('renames the folder, then the line in each profile, the active one first', async () => {
-    const { fake, commands } = over(FIXTURE_ORDER, {}, profiles);
-
-    const outcome = await rename(commands);
-
-    expect(outcome).toEqual({ applied: true, lineRefusals: [] });
-    expect(fake.calls).toEqual([
-      { verb: 'renameModFolder', from: 'Harder VATS', to: 'Harder VATS 2' },
-      orderWrite([line], 'Default'),
-      orderWrite([line], 'Secondary'),
-    ]);
-  });
-
-  it('names each profile whose line could not be written, the folder staying renamed', async () => {
-    const { fake, commands } = over(FIXTURE_ORDER, {
-      refusals: (call) => (call.verb === 'changeModOrder' && call.profile === 'Secondary' ? 'disk full' : undefined),
-    }, profiles);
-
-    const outcome = await rename(commands);
-
-    expect(outcome).toEqual({ applied: true, lineRefusals: [{ profile: 'Secondary', refusal: 'disk full' }] });
-    expect(verbs(fake.calls)).toEqual(['renameModFolder', 'changeModOrder', 'changeModOrder']);
-  });
-
-  it('writes nothing for the name it already has, saying nothing changed', async () => {
-    const { fake, commands } = over();
-
-    const outcome = await commands.renameMod('Harder VATS', 'Harder VATS');
-
-    expect(outcome).toEqual({ applied: true, lineRefusals: [], unchanged: true });
-    expect(fake.calls).toEqual([]);
-  });
-
-  it('refuses a blank name, writing nothing', async () => {
-    const { fake, commands } = over();
-
-    const outcome = await commands.renameMod('Harder VATS', '  ');
-
-    expect(outcome).toEqual({ applied: false, refusal: 'A mod name cannot be empty.' });
-    expect(fake.calls).toEqual([]);
-  });
-
-  it.each([['profiles'], ['modOrder']] as const)('refuses, renaming nothing, when %s cannot be read', async (read) => {
-    const { fake, commands } = over(FIXTURE_ORDER, { unreadReads: { [read]: 'the read failed' } });
-
-    expect(await rename(commands)).toEqual({ applied: false, refusal: 'the read failed' });
-    expect(fake.calls).toEqual([]);
-  });
-
-  it('writes no line when the folder did not move', async () => {
-    const { fake, commands } = over(FIXTURE_ORDER, { refusals: refusing('renameModFolder', 'The folder is in the way') });
-
-    const outcome = await rename(commands);
-
-    expect(outcome).toEqual({ applied: false, refusal: 'The folder is in the way' });
-    expect(verbs(fake.calls)).toEqual(['renameModFolder']);
   });
 });
 
@@ -651,8 +575,6 @@ describe('the names a separator or mod may take', () => {
 describe('a name that is not a folder name', () => {
   it.each<[string, (c: ModCommands, name: string) => Promise<unknown>]>([
     ['add separator', (c, name) => c.insertSeparator(name, { kind: 'mod', name: 'ENBoost' })],
-    ['rename separator', (c, name) => c.renameSeparator(UNASSIGNED, name)],
-    ['rename mod', (c, name) => c.renameMod('Harder VATS', name)],
     ['create empty mod', (c, name) => c.createEmptyMod(name)],
   ])('is refused by %s, writing nothing', async (_case, run) => {
     for (const name of ['a/b', 'a\\b', '.', '..']) {
@@ -671,22 +593,11 @@ describe('a name that is not a folder name', () => {
 });
 
 describe('a name the mod order already holds', () => {
-  it.each<[string, (c: ModCommands) => Promise<unknown>, string]>([
-    ['add separator, writing nothing', (c) => c.insertSeparator(RADFALL, { kind: 'mod', name: 'ENBoost' }), 'A separator with this name already exists'],
-    ['rename separator, writing nothing', (c) => c.renameSeparator(UNASSIGNED, RADFALL), 'A separator with this name already exists'],
-    ['rename mod, renaming no folder', (c) => c.renameMod('Harder VATS', 'ENBoost'), 'A mod with this name already exists'],
-  ])('is refused by %s', async (_case, run, refusal) => {
+  it('is refused by add separator, writing nothing', async () => {
     const { fake, commands } = over();
 
-    expect(await run(commands)).toEqual({ applied: false, refusal });
+    expect(await commands.insertSeparator(RADFALL, { kind: 'mod', name: 'ENBoost' })).toEqual({ applied: false, refusal: 'A separator with this name already exists' });
     expect(verbs(fake.calls)).toEqual([]);
-  });
-
-  it('is no clash for the entry being renamed, in another case', async () => {
-    const { commands } = over();
-
-    expect(await commands.renameSeparator(UNASSIGNED, UNASSIGNED.toUpperCase())).toMatchObject({ applied: true });
-    expect(await commands.renameMod('Harder VATS', 'harder vats')).toMatchObject({ applied: true });
   });
 });
 
@@ -696,43 +607,6 @@ describe('publisher tags follow a mod (publishing.md, Publisher tags, story 3)',
     over(FIXTURE_ORDER, { publisherTags: [INCLUDE], ...answers }, reading);
   const follow = (...moves: Parameters<InstanceAdapter['followModFolders']>[0]): AdapterCall => ({ verb: 'followModFolders', moves });
   const unreadable = { unreadablePublisher: 'compiler_settings.json is not JSON' };
-
-  it('rename moves them to the new folder once the folder has moved', async () => {
-    const { fake, commands } = publisherOver();
-
-    await commands.renameMod('Harder VATS', 'Harder VATS 2');
-
-    expect(fake.calls).toEqual([
-      { verb: 'renameModFolder', from: 'Harder VATS', to: 'Harder VATS 2' },
-      follow({ from: '/instance/mods/Harder VATS', to: '/instance/mods/Harder VATS 2' }),
-      expect.objectContaining({ verb: 'changeModOrder' }),
-    ]);
-  });
-
-  it('rename moves none when the folder does not move', async () => {
-    const { fake, commands } = publisherOver({ refusals: refusing('renameModFolder', 'The folder is in the way') });
-
-    await commands.renameMod('Harder VATS', 'Harder VATS 2');
-
-    expect(verbs(fake.calls)).toEqual(['renameModFolder']);
-  });
-
-  it('rename refuses, writing nothing, when the configuration cannot be read', async () => {
-    const { fake, commands } = publisherOver(unreadable);
-
-    const outcome = await commands.renameMod('Harder VATS', 'Harder VATS 2');
-
-    expect(outcome).toEqual({ applied: false, refusal: 'compiler_settings.json is not JSON' });
-    expect(fake.calls).toEqual([]);
-  });
-
-  it('rename lands with the failure when the tags cannot follow after the folder moved', async () => {
-    const { commands } = publisherOver({ refusals: refusing('followModFolders', 'compiler_settings.json is not JSON') });
-
-    const outcome = await commands.renameMod('Harder VATS', 'Harder VATS 2');
-
-    expect(outcome).toEqual({ applied: true, lineRefusals: [], tagRefusal: 'compiler_settings.json is not JSON' });
-  });
 
   it('uninstall removes them for every mod it trashed, in one write after the trash', async () => {
     const { fake, commands } = publisherOver();

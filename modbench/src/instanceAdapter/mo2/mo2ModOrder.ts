@@ -131,9 +131,12 @@ export function mo2ModOrder(context: Mo2Context): Mo2ModOrder {
     return sameName ? undefined : change.to;
   };
 
+  // A separator renamed in another profile's mod order has moved its folder already.
   const refuseFolderInTheWay = async (change: ModOrderChange): Promise<void> => {
     const name = folderTaken(change);
-    if (name !== undefined) await refuseFolderTaken(context, { kind: 'separator', name }, separatorFolderOf(name));
+    if (name === undefined) return;
+    if (change.kind === 'renameSeparator' && await folderHolding(context, { kind: 'separator', name: change.from }) === undefined) return;
+    await refuseFolderTaken(context, { kind: 'separator', name }, separatorFolderOf(name));
   };
 
   // A separator's folder moves with its line; anything else in mod order is a line alone.

@@ -27,9 +27,12 @@ vi.mock('vscode', async () => {
 import { Instance } from '../instanceLoader/instance';
 import { modSyncOn } from '../mods/modSync';
 import { modCommands, modSyncOver } from '../modCommands/modCommands';
-import { registerModContextCommands } from '../mods/modManagementCommands';
+import { registerEntryRenameCommands } from '../mods/entryRenameCommands';
+import { entryRenameCommands } from '../modCommands/renameEntry';
+import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
+import { oneAtATime } from '../textDocuments/oneAtATime';
 import { ModNode } from '../mods/ModListProvider';
-import { recordingReporter, scriptedDialog } from './surfacingDoubles';
+import { recordingReporter } from './surfacingDoubles';
 import { present } from '../ports/present';
 
 const MOD = 'Patch Mod';
@@ -88,10 +91,12 @@ describe('a rename while a recompute is reading', () => {
       await modSync.settled();
     };
     showInputBox.mockResolvedValue(RENAMED);
-    registerModContextCommands({
-      commands: modCommands({ ...writer, renameModFolder: folderRenamed }),
-      instance, viewSelection: () => [], reporter: recordingReporter(), ask: scriptedDialog(), trash: vi.fn(), log: vi.fn(),
-    });
+    const renaming = { ...writer, renameModFolder: folderRenamed };
+    registerEntryRenameCommands({
+      commands: modCommands(renaming), renames: entryRenameCommands({ adapter: renaming, client: new InMemoryMEditClient() }),
+      source: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: oneAtATime(), refreshSourceControlFor: () => undefined },
+      instance, reporter: recordingReporter(),
+    }, () => []);
     await present(handlers.get('modbench.mod.rename'), 'the rename mod command')(new ModNode({ kind: 'mod', name: MOD, enabled: true }));
     await modSync.settled();
 
