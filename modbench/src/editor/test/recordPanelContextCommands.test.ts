@@ -189,6 +189,16 @@ describe('a field gesture from the palette, which hands it no cell', () => {
     expect(envelopesOf(edit)).toEqual([{ op: 'remove', path }]);
   });
 
+  it('removes the element a caller addresses by its copy and path, with no panel context', async () => {
+    const path: ArrayElementContext['path'] = [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 1 }];
+    const { deps, edit } = makeDeps();
+    registerRecordPanelContextCommands(deps);
+
+    await present(handlers.get('modbench.record.removeElement'), 'the remove element handler')({ ...IDENTITY, path });
+
+    expect(editsOf(edit)).toEqual([[ADDRESS, { op: 'remove', path }]]);
+  });
+
   it('does nothing with no focused cell', async () => {
     const { deps, edit } = makeDeps();
     registerRecordPanelContextCommands(deps);

@@ -116,11 +116,11 @@ function compiledPluginTextHeld(): string {
   return isRecord(held) && typeof held.text === 'string' ? held.text : readFileSync(COMPILED_PLUGIN_FILE, 'utf8');
 }
 
-interface EditAsked { value: unknown; text: string }
+interface EditAsked { value: unknown; text: string; edit: unknown }
 function editAskedOf(body: string): EditAsked {
   const parsed: unknown = JSON.parse(body);
   if (!isRecord(parsed) || !isRecord(parsed.edit)) throw new Error(`expected an edit, got: ${body}`);
-  return { value: parsed.edit.value, text: compiledPluginTextHeld() };
+  return { value: parsed.edit.value, text: compiledPluginTextHeld(), edit: parsed.edit };
 }
 const editsAsked: EditAsked[] = [];
 const carriedIn = new Map<string, string>();
@@ -2522,6 +2522,39 @@ describe('The Problems panel on plugin source', () => {
 
     saved([]);
     await waitFor('the problem to clear', () => shown().length === 0);
+  });
+
+  it('offers clearing the reference as its quick fix, which asks mEdit to set the field to null', async () => {
+    const [problem] = await waitFor('the problem on its file', () => {
+      saved([{ formKey: HELD_FORM_KEY, targetFormKey: NOT_HELD_FORM_KEY, fieldPath: 'Armor', sourceRelativePath: SOURCE_FILE, message: MESSAGE }]);
+      const found = shown();
+      return found.length > 0 && found;
+    });
+    const fixes = await vscode.commands.executeCommand<vscode.CodeAction[]>('vscode.executeCodeActionProvider', vscode.Uri.file(file), problem?.range, vscode.CodeActionKind.QuickFix.value);
+    const fix = fixes.find(({ title }) => title === 'Clear reference');
+    assert.strictEqual(typeof problem?.code === 'object' ? problem.code.value : problem?.code, 'clear reference');
+    const args: unknown[] = fix?.command?.arguments ?? [];
+    const asked = editsAsked.length;
+
+    await vscode.commands.executeCommand(fix?.command?.command ?? 'no quick fix', ...args);
+
+    assert.deepStrictEqual(editsAsked.slice(asked).map(({ value }) => value), [null]);
+  });
+
+  it('offers removing a list element as the quick fix of a reference in a list, which asks mEdit to remove it', async () => {
+    const fix = await waitFor('the quick fix to remove the element', async () => {
+      saved([{ formKey: HELD_FORM_KEY, targetFormKey: NOT_HELD_FORM_KEY, fieldPath: 'Armor[1]', sourceRelativePath: SOURCE_FILE, message: MESSAGE }]);
+      const [problem] = shown();
+      const fixes = await vscode.commands.executeCommand<vscode.CodeAction[]>('vscode.executeCodeActionProvider', vscode.Uri.file(file), problem?.range, vscode.CodeActionKind.QuickFix.value);
+      return fixes.find(({ title }) => title === 'Remove element');
+    });
+    const args: unknown[] = fix.command?.arguments ?? [];
+    const asked = editsAsked.length;
+
+    await vscode.commands.executeCommand(fix.command?.command ?? 'no quick fix', ...args);
+
+    assert.strictEqual(editsAsked.length, asked + 1);
+    assert.deepStrictEqual(editsAsked.at(-1)?.edit, { op: 'remove', plugin: plugin.name, origin: plugin.origin, path: [{ kind: 'member', name: 'Armor' }, { kind: 'index', index: 1 }] });
   });
 });
 

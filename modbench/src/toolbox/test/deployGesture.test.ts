@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { handlers, registerCommand, executeCommand, collections, actionProviders } = vi.hoisted(() => {
+const { handlers, registerCommand, executeCommand, collections } = vi.hoisted(() => {
   const handlers = new Map<string, (...args: unknown[]) => Promise<unknown>>();
   return {
     handlers,
@@ -9,7 +9,6 @@ const { handlers, registerCommand, executeCommand, collections, actionProviders 
       return { dispose: vi.fn() };
     }),
     executeCommand: vi.fn(),
-    actionProviders: [] as { provideCodeActions(...args: never[]): unknown }[],
     collections: [] as { clear(): void; [Symbol.iterator](): IterableIterator<[{ fsPath: string }, readonly { message: string }[]]> }[],
   };
 });
@@ -18,12 +17,10 @@ vi.mock('vscode', async () => {
   const { recordedWithProgress } = await import('../../test/recordedProgress');
   const { taskModule } = await import('../../test/taskDouble');
   const { Diagnostic, Range, DiagnosticSeverity, FakeDiagnosticCollection, uriParse, Uri } = await import('../../test/vscodeMock');
-  class CodeAction { diagnostics: unknown[] = []; command: unknown; constructor(readonly title: string, readonly kind: string) {} }
   return {
-    ...taskModule(), Diagnostic, Range, DiagnosticSeverity, Uri: { ...Uri, parse: uriParse }, CodeAction, CodeActionKind: { QuickFix: 'quickfix' },
+    ...taskModule(), Diagnostic, Range, DiagnosticSeverity, Uri: { ...Uri, parse: uriParse },
     commands: { registerCommand, executeCommand }, window: { withProgress: recordedWithProgress },
     languages: {
-      registerCodeActionsProvider: (_selector: unknown, provider: { provideCodeActions(...args: never[]): unknown }) => { actionProviders.push(provider); return { dispose: () => undefined }; },
       createDiagnosticCollection: () => { const collection = new FakeDiagnosticCollection(); collections.push(collection); return collection; },
     },
   };
@@ -71,7 +68,6 @@ beforeEach(() => {
   handlers.clear();
   collections.length = 0;
   subscribers.length = 0;
-  actionProviders.length = 0;
   executeCommand.mockClear();
   progressSteps.length = 0;
 });
@@ -249,12 +245,6 @@ describe('the problems on the files the deployment folder holds that deploy does
     await run();
 
     expect(held()).toEqual([['/deployed/a.ini', 'Deploy does not manage this file.']]);
-  });
-
-  it('are offered move to Overwrite as a quick fix, by a provider registered once', () => {
-    deployAnswering(NOTHING_DEPLOYED);
-
-    expect(actionProviders.length).toBe(1);
   });
 
   it('are read again after a purge', async () => {

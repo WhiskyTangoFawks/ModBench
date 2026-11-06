@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { modbenchDiagnostic } from '../drivingLib/modbenchDiagnostic';
+import { commandLink } from '../drivingLib/quickFixes';
 import type { PluginAddress } from '../client';
 import type { PluginPlace, PluginProblem } from './pluginFacts';
 import type { RuleFileDiagnostic } from '../sortingRules/ruleFileDiagnostics';
@@ -46,18 +47,12 @@ export function publishRuleFileDiagnostics(collection: vscode.DiagnosticCollecti
  *  gesture on its plugin. Only a mod can hold a plugin's source, as on the row's menu. */
 export const decompileAndRepairLink = (plugin: PluginAddress, place: PluginPlace | undefined): vscode.Diagnostic['code'] =>
   place === 'inSourceMod' || place === 'inNonSourceMod'
-    ? {
-      value: 'decompile and repair',
-      target: vscode.Uri.parse(`command:modbench.plugin.decompileAndRepair?${encodeURIComponent(JSON.stringify([plugin]))}`),
-    }
+    ? commandLink('decompile and repair', 'modbench.plugin.decompileAndRepair', [plugin])
     : undefined;
 
 /** source.md, Decompile: a Plugin source unreadable entry's link in the Problems panel, which fires the gesture on its
  *  plugin. Offered only where decompile writes the plugin source. */
 export const decompileLink = (plugin: PluginAddress, decompileRepairs: boolean): vscode.Diagnostic['code'] =>
   decompileRepairs
-    ? {
-      value: 'decompile',
-      target: vscode.Uri.parse(`command:modbench.plugin.decompile?${encodeURIComponent(JSON.stringify([plugin]))}`),
-    }
+    ? commandLink('decompile', 'modbench.plugin.decompile', [plugin])
     : undefined;

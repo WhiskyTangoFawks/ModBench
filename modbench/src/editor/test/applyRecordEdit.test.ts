@@ -154,15 +154,15 @@ describe('a change of the FormKey', () => {
     const { deps, reporter, refreshSourceControlFor } = makeDeps({
       ...rekeyed, plugins: [plugin, inSource],
       leftBehind: [{ plugin: { name: 'D.esp', origin: 'ModD' }, reason: 'unreadable' }],
-      copiesLeftBehind: [{ formKey: '000802:C.esp', plugin: { name: 'C.esp', origin: 'ModC' } }], copiesUnread: null,
+      copiesLeftBehind: [{ formKey: '000802:C.esp', plugin: { name: 'C.esp', origin: 'ModC' } }], copiesUnread: 'The record index is not ready.',
     });
 
     await applyRecordEdit(deps, address, height);
 
     expect(refreshSourceControlFor.mock.calls).toEqual([[plugin], [inSource]]);
     expect(reporter.reports).toEqual([{
-      severity: 'warning', message: 'Renamed 000800:A.esp to "000900:A.esp". 2 references to it could not follow.',
-      detail: '000802:C.esp in C.esp (ModC)\nD.esp (ModD): unreadable',
+      severity: 'warning', message: 'Renamed 000800:A.esp to "000900:A.esp". 3 references to it could not follow.',
+      detail: '000802:C.esp in C.esp (ModC)\nD.esp (ModD): unreadable\nthe plugins mEdit reads: The record index is not ready.',
     }]);
   });
 
@@ -172,16 +172,5 @@ describe('a change of the FormKey', () => {
     expect(await applyRecordEdit(deps, address, height)).toBe('000900:A.esp');
 
     expect(reporter.reports).toEqual([]);
-  });
-
-  it('names the plugins mEdit reads as left behind when it could not read the copies with no plugin source', async () => {
-    const { deps, reporter } = makeDeps({ ...rekeyed, plugins: [plugin], leftBehind: [], copiesLeftBehind: [], copiesUnread: 'The record index is not ready.' });
-
-    await applyRecordEdit(deps, address, height);
-
-    expect(reporter.reports).toEqual([{
-      severity: 'warning', message: 'Renamed 000800:A.esp to "000900:A.esp". 1 references to it could not follow.',
-      detail: 'the plugins mEdit reads: The record index is not ready.',
-    }]);
   });
 });
