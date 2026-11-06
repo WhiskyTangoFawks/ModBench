@@ -334,17 +334,28 @@ export function ignoreListNames(ignoreList: string): EntryInText[] {
   });
 }
 
-const SUBMODULE_HEADER = /^\[submodule "([^"]+)"\]\s*$/;
-const SUBMODULE_PATH = new RegExp(String.raw`^(\s*path\s*=\s*(?:${MODS}|${SOURCE_MODS_FOLDER})/)([^/]+?)\s*$`);
 
-/** Each mod and separator `.gitmodules` names: its entry, and the folder its path names. */
+const SUBMODULE_HEADER = /^\[submodule "([^"]+)"\]/;
+const SUBMODULE_PATH = new RegExp(String.raw`^(\s*path\s*=\s*(?:${MODS}|${SOURCE_MODS_FOLDER})/)([^/]+?)(?:/.*)?\s*$`);
+
+/** Each mod and separator `.gitmodules` names: the folder under mods/ or source/ a section's path names, and the section's
+ *  own name. A section whose path is elsewhere names none. */
 export function submoduleNames(gitmodules: string): EntryInText[] {
-  return gitmodules.split(/\r?\n/).flatMap((line, at) => {
-    const header = SUBMODULE_HEADER.exec(line);
-    if (header?.[1] !== undefined) return [entryInText(header[1], at, line.indexOf(header[1]))];
+  const names: EntryInText[] = [];
+  let header: EntryInText | undefined;
+  gitmodules.split(/\r?\n/).forEach((line, at) => {
+    const opened = SUBMODULE_HEADER.exec(line);
+    if (opened?.[1] !== undefined) {
+      header = entryInText(opened[1], at, line.indexOf('"') + 1);
+      return;
+    }
     const [, before = '', name = ''] = SUBMODULE_PATH.exec(line) ?? [];
-    return name === '' ? [] : [entryInText(name, at, before.length)];
+    if (name === '') return;
+    if (header !== undefined) names.push(header);
+    header = undefined;
+    names.push(entryInText(name, at, before.length));
   });
+  return names;
 }
 
 /** An ignore list that lets in the files of each mod folder of `folderNames`, or with `held` false leaves them out, every

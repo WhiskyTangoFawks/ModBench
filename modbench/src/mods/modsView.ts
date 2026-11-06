@@ -32,7 +32,6 @@ import { fomodDialog } from './fomodDialog';
 import { registerCompareFileCommand } from './compareFile';
 import { registerGoToModCommand } from './goToMod';
 import { registerGoToModRowCommand, registerModReferencedByCommand } from './modSymbolCommands';
-import { modOrigin } from '../instanceLoader/fileConflictIndex';
 import type { EntrySymbol } from '../symbolNames/symbolNames';
 import { registerBuildCommand } from './buildCommand';
 import { registerBuildTask } from './buildTask';
@@ -203,7 +202,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     }),
     registerModReferencedByCommand(deps.referencedBy, () => view.selection),
     registerGoToModRowCommand({
-      rowOf: (mod) => { const row = provider.rowFor(modOrigin(mod)); return row?.kind === 'mod' ? row : undefined; },
+      rowOf: (mod) => provider.entryRow({ kind: 'mod', name: mod }),
       folderOf: (mod) => instance.value.paths.modDirs.get(mod),
       reveal: (row) => view.reveal(row, { select: true, focus: true }), reporter: reporterFor('mod.goTo'),
     }, () => view.selection),
@@ -224,10 +223,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     relatesRows: { related: (selection) => ({ plugins: pluginsHeld(instance.value, selection), origins: [] }) },
     drawsHighlight: { highlight: (related) => { provider.highlight(related.origins); } },
     standingLines: () => [modSync.message(), statusMessage()].filter((line) => line !== undefined),
-    tooltipOf: ({ kind, name }) => {
-      const row = kind === 'mod' ? provider.rowFor(modOrigin(name)) : undefined;
-      return typeof row?.tooltip === 'string' ? row.tooltip : undefined;
-    },
+    tooltipOf: (entry) => { const { tooltip } = provider.entryRow(entry) ?? {}; return typeof tooltip === 'string' ? tooltip : undefined; },
     dispose: () => { disposable.dispose(); },
   };
 }

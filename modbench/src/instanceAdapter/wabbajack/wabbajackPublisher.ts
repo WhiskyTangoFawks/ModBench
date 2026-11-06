@@ -479,11 +479,16 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
         return { references: [], leftOut: [errorMessage(err)] };
       }
     },
-    folderAt: (named, text, offset) => {
+    folderAt: async (named, text, offset, folderOf) => {
       if (!samePath(named, file)) return undefined;
       for (const segments of entrySegmentsIn(text)) {
         const at = segments.findIndex(({ start, end }) => start <= offset && offset <= end);
-        if (at !== -1) return segments.slice(0, at + 1).map(({ name }) => name);
+        const segment = segments[at];
+        if (segment === undefined) continue;
+        const folder = await folderOf(segment.name);
+        const inside = folder === undefined ? undefined : inInstance(instanceRoot, folder);
+        const above = segments.slice(0, at + 1).map(({ name }) => name.toLowerCase());
+        return inside !== undefined && namesOf(inside).join('/') === above.join('/') ? segment : undefined;
       }
       return undefined;
     },

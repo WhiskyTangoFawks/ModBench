@@ -1,10 +1,10 @@
-import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
-import { namesPlugin, type CopyNaming, type HeldTexts, type PlaceInFile, type PluginSymbol, type ResolvedPlugin, type SymbolOwner, type SymbolReading } from '../symbolNames/symbolNames';
+import { namesPlugin, type CopyNaming, type HeldTexts, type PlaceInFile, type PluginSymbol, type ResolvedPlugin, type SymbolOwner } from '../symbolNames/symbolNames';
 import { heldText } from '../textDocuments/heldText';
 import { pluginRowName } from '../wire/pluginAddress';
 import { locateCopies, type RecordLocation, type RecordLocationDeps } from './recordLocation';
 import { pluginNameSpans } from './sourceText';
+import { readBy, reportedForFeature, reportedForGesture } from './symbolPlaces';
 
 interface PluginReferencesDeps<Document> extends RecordLocationDeps<Document> {
   owners: readonly SymbolOwner[];
@@ -22,32 +22,6 @@ export interface PluginReferences<Document> {
   readonly unread: readonly string[];
 }
 
-const readBy = (owner: SymbolOwner, symbol: PluginSymbol, held: HeldTexts): Promise<SymbolReading> =>
-  owner.read(symbol, held).catch((error: unknown) => ({ references: [], leftOut: [errorMessage(error)] }));
-
-/** The line above a plugin's list: an empty list says so, and that it is no proof while a file went unread. */
-export function listMessage(found: number, unread: number): string | undefined {
-  if (found > 0) return undefined;
-  return unread > 0 ? 'No references found in the files that could be read.' : 'No references found.';
-}
-
-type Unread = Pick<Reporter, 'report' | 'shownOnSurface'>;
-
-/** `references` of `subject`, with a notification naming each file the gesture could not read. */
-export function reportedForGesture<References extends { readonly unread: readonly string[] }>(reporter: Unread, subject: string, references: References): References {
-  if (references.unread.length > 0) {
-    reporter.report('warning', `Referenced by on ${subject} could not read every file that may name it.`, references.unread.join('\n'));
-  }
-  return references;
-}
-
-/** `references` of `subject`, with a line in the Output for each file the feature could not read. */
-export function reportedForFeature<References extends { readonly unread: readonly string[] }>(reporter: Unread, subject: string, references: References): References {
-  for (const why of references.unread) {
-    reporter.shownOnSurface('warning', `Find All References on ${subject} could not read a file that may name it.`, why);
-  }
-  return references;
-}
 
 type Read<Document> = (symbol: PluginSymbol) => Promise<PluginReferences<Document>>;
 

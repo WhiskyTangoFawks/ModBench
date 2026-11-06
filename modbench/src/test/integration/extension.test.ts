@@ -1901,6 +1901,56 @@ describe('Referenced By on a plugin, as VS Code\'s References view takes it', ()
   });
 });
 
+describe('Referenced By and Go to on a mod, as VS Code runs them from the Mods view', () => {
+  const modName = 'Referenced Mod';
+  const modDir = path.join(root, 'mods', modName);
+  const asked = { argument: { kind: 'mod', name: modName } };
+  let original = '';
+
+  before(function () {
+    this.timeout(30_000);
+    original = readFileSync(modlistPath, 'utf8');
+    mkdirSync(modDir, { recursive: true });
+    writeFileSync(modlistPath, '+Referenced Mod\r\n');
+  });
+
+  after(() => {
+    writeFileSync(modlistPath, original);
+    rmSync(modDir, { recursive: true, force: true });
+  });
+
+  it('lists the mod list line that names the mod in the References view, anchored at it', async function () {
+    this.timeout(30_000);
+    const referencesView = await present(
+      vscode.extensions.getExtension<{ getInput(): ReferencesViewInput | undefined }>('vscode.references-view'), 'VS Code\'s References view',
+    ).activate();
+
+    const input = await waitFor(`the References view showing ${modName}`, async () => {
+      await vscode.commands.executeCommand('modbench.mod.referencedBy', asked);
+      return referencesView.getInput()?.title === `Referenced By: ${modName}` && referencesView.getInput();
+    });
+
+    const files = await input.resolve().then(({ provider }) => provider.getChildren());
+    assert.ok(Array.isArray(files) && files.some((row) => row instanceof vscode.TreeItem && row.resourceUri?.fsPath === modlistPath));
+    assert.strictEqual(input.location.uri.fsPath, modlistPath);
+  });
+
+  it('goes to the mod: selects its row in Mods', async function () {
+    this.timeout(30_000);
+    const selectedRow = async (): Promise<string> => {
+      await vscode.env.clipboard.writeText('');
+      await vscode.commands.executeCommand('modbench.copyValue', copyValueKeyArgs('modbench.modList'));
+      return vscode.env.clipboard.readText();
+    };
+    assert.strictEqual(await selectedRow(), '', 'no row of Mods is selected before go to');
+
+    await waitFor(`go to to select ${modName}`, async () => {
+      await vscode.commands.executeCommand('modbench.mod.goTo', asked);
+      return (await selectedRow()) === modName;
+    });
+  });
+});
+
 describe('The game folder setting reaches the Instance as a recompute', () => {
   let providing = '';
   let empty = '';

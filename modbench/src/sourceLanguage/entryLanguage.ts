@@ -3,10 +3,9 @@ import { referencesView } from '../drivingLib/referencesView';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
-import { heldTexts, sameName, type EntryNames, type EntryReading, type EntrySymbol, type PlaceInFile } from '../symbolNames/symbolNames';
+import { heldTexts, sameName, type EntryNames, type EntrySymbol, type PlaceInFile } from '../symbolNames/symbolNames';
 import { heldText, unsavedTexts } from '../textDocuments/heldText';
-import { reportedForFeature, reportedForGesture } from './pluginReferences';
-import { placeLocation, referencedByInput, spelledAround, type AskedIn, type ListedLocations } from './symbolPlaces';
+import { placeLocation, readBy, referencedByInput, reportedForFeature, reportedForGesture, type AskedIn, type ListedLocations } from './symbolPlaces';
 
 interface EntryLanguageDeps {
   instance: { readonly value: Pick<InstanceValue, 'mods'> } | undefined;
@@ -17,9 +16,6 @@ interface EntryLanguageDeps {
   /** The tooltip of the entry's row; undefined where Mods shows none. */
   tooltip: (entry: EntrySymbol) => string | undefined;
 }
-
-const readBy = (owner: EntryNames, entry: EntrySymbol): Promise<EntryReading> =>
-  owner.read(entry, heldTexts(unsavedTexts())).catch((error: unknown) => ({ references: [], leftOut: [errorMessage(error)] }));
 
 const entryKey = ({ kind, name }: EntrySymbol): string => `${kind}:${name.toLowerCase()}`;
 
@@ -34,7 +30,7 @@ export function entryLanguage({ instance, reporter, owners, goTo, tooltip }: Ent
   };
 
   const referencesTo = async (entry: EntrySymbol) => {
-    const readings = await Promise.all(owners.map((owner) => readBy(owner, entry)));
+    const readings = await Promise.all(owners.map((owner) => readBy(owner, entry, heldTexts(unsavedTexts()))));
     return { found: readings.flatMap(({ references }) => references), unread: readings.flatMap(({ leftOut }) => leftOut) };
   };
   const located = (report: typeof reportedForGesture) => async (entry: EntrySymbol): Promise<ListedLocations> => {
@@ -44,11 +40,9 @@ export function entryLanguage({ instance, reporter, owners, goTo, tooltip }: Ent
   const [locatedForGesture, locatedForFeature] = [located(reportedForGesture), located(reportedForFeature)];
 
   const nameWithSpan = async (document: AskedIn, offset: number) => {
-    const text = heldText(document);
     for (const owner of owners) {
-      const named = await owner.nameAt(document.uri.fsPath, text, offset);
-      const span = named === undefined ? undefined : spelledAround(text, offset, named.name);
-      if (named !== undefined && span !== undefined) return { named, ...span };
+      const found = await owner.nameAt(document.uri.fsPath, heldText(document), offset);
+      if (found !== undefined) return { named: found.entry, start: found.start, end: found.end };
     }
     return undefined;
   };
@@ -72,7 +66,7 @@ export function entryLanguage({ instance, reporter, owners, goTo, tooltip }: Ent
       if (found === undefined) return undefined;
       const shown = entryListed(found.named);
       const lines = (shown && tooltip(shown))?.split('\n').filter((line) => line !== '') ?? [];
-      return { start: found.start, end: found.end, lines: lines.length > 0 ? lines : [found.name] };
+      return { start: found.start, end: found.end, lines: lines.length > 0 ? lines : [found.named.name] };
     },
     /** Completion where a file names a mod or a separator: each of its kind, over the name so far. */
     completionsAt: async (document: AskedIn, offset: number): Promise<{ start: number; end: number; items: string[] } | undefined> => {
@@ -86,7 +80,10 @@ export function entryLanguage({ instance, reporter, owners, goTo, tooltip }: Ent
       if (wanted === '') return [];
       const matching = (['mod', 'separator'] as const).flatMap((kind) =>
         listed(kind).filter((name) => name.toLowerCase().includes(wanted)).map((name): EntrySymbol => ({ kind, name })));
-      const lists = await Promise.all(owners.map((owner) => owner.listed(heldTexts(unsavedTexts())).catch(() => [])));
+      const lists = await Promise.all(owners.map((owner) => owner.listed(heldTexts(unsavedTexts())).catch((error: unknown) => {
+        reporter.shownOnSurface('warning', 'Go to Symbol in Workspace could not read an owner\'s list of mods and separators.', errorMessage(error));
+        return [];
+      })));
       const lines = new Map<string, PlaceInFile>();
       for (const { entry, place } of lists.flat()) {
         const key = entryKey(entry);

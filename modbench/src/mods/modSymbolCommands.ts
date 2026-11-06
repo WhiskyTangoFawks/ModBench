@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { modArgumentOf } from '../drivingLib/argument';
+import { goToRowOrFile } from '../drivingLib/goToRow';
 import type { Reporter } from '../ports/reporter';
 import type { ModlistNode, ModNode } from './ModListProvider';
 
@@ -12,9 +13,9 @@ const modOf = (clicked: unknown, viewSelection: () => readonly ModlistNode[]): s
   modArgumentOf(clicked ?? onlyModRow(viewSelection()))?.name;
 
 interface GoToModRowDeps {
-  rowOf: (mod: string) => ModNode | undefined;
+  rowOf: (mod: string) => ModlistNode | undefined;
   folderOf: (mod: string) => string | undefined;
-  reveal: (row: ModNode) => PromiseLike<void>;
+  reveal: (row: ModlistNode) => PromiseLike<void>;
   reporter: Pick<Reporter, 'report'>;
 }
 
@@ -25,17 +26,9 @@ export function registerGoToModRowCommand(
   return vscode.commands.registerCommand('modbench.mod.goTo', async (clicked?: unknown) => {
     const mod = modOf(clicked, viewSelection);
     if (mod === undefined) return;
-    const row = rowOf(mod);
-    if (row !== undefined) {
-      await reveal(row);
-      return;
-    }
-    const folder = folderOf(mod);
-    if (folder === undefined) {
-      reporter.report('error', `Could not go to "${mod}": Mods shows no row for it and no folder holds it.`);
-      return;
-    }
-    await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(folder));
+    await goToRowOrFile({
+      name: `"${mod}"`, row: rowOf(mod), file: folderOf(mod), reveal, reporter, nowhere: 'Mods shows no row for it and no folder holds it.',
+    });
   });
 }
 

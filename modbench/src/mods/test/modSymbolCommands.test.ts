@@ -16,7 +16,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { registerGoToModRowCommand, registerModReferencedByCommand } from '../modSymbolCommands';
-import { ModNode } from '../ModListProvider';
+import { ModNode, type ModlistNode } from '../ModListProvider';
 import { present } from '../../ports/present';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
@@ -26,43 +26,27 @@ const asked = { argument: { kind: 'mod', name: 'Base Mod' } };
 describe('the mod go to command (commands.md, `go to` under Mod)', () => {
   beforeEach(() => { handlers.clear(); executeCommand.mockClear(); });
 
-  function setup(shown: { row?: ModNode; folder?: string }, selection: readonly ModNode[] = []) {
-    const reveal = vi.fn((_row: ModNode) => Promise.resolve());
-    const reporter = recordingReporter();
-    registerGoToModRowCommand({ rowOf: () => shown.row, folderOf: () => shown.folder, reveal, reporter }, () => selection);
-    return { reveal, reporter, run: present(handlers.get('modbench.mod.goTo'), 'the go to command') };
+  function setup(selection: readonly ModNode[] = []) {
+    const reveal = vi.fn((_row: ModlistNode) => Promise.resolve());
+    const asking = vi.fn((_mod: string) => aRow);
+    registerGoToModRowCommand({ rowOf: asking, folderOf: () => '/mods/Base Mod', reveal, reporter: recordingReporter() }, () => selection);
+    return { reveal, asking, run: present(handlers.get('modbench.mod.goTo'), 'the go to command') };
   }
 
-  it('selects the mod\'s row in Mods', async () => {
-    const { reveal, run, reporter } = setup({ row: aRow, folder: '/mods/Base Mod' });
+  it('goes to the mod the clicked row carries, which Mods shows as that row', async () => {
+    const { reveal, asking, run } = setup();
 
     await run(asked);
 
-    expect([reveal.mock.calls, executeCommand.mock.calls, reporter.reports]).toEqual([[[aRow]], [], []]);
+    expect([asking.mock.calls, reveal.mock.calls, executeCommand.mock.calls]).toEqual([[['Base Mod']], [[aRow]], []]);
   });
 
   it('takes the one selected row from the palette', async () => {
-    const { reveal, run } = setup({ row: aRow }, [aRow]);
+    const { asking, run } = setup([aRow]);
 
     await run();
 
-    expect(reveal.mock.calls).toEqual([[aRow]]);
-  });
-
-  it('shows the mod\'s folder in the Explorer when Mods shows no row for it', async () => {
-    const { reveal, run } = setup({ folder: '/mods/Base Mod' });
-
-    await run(asked);
-
-    expect([reveal.mock.calls, executeCommand.mock.calls]).toEqual([[], [['revealInExplorer', Uri.file('/mods/Base Mod')]]]);
-  });
-
-  it('says why when there is neither a row nor a folder', async () => {
-    const { run, reporter } = setup({});
-
-    await run(asked);
-
-    expect(reporter.reports.map(({ severity, message }) => [severity, message])).toEqual([['error', 'Could not go to "Base Mod": Mods shows no row for it and no folder holds it.']]);
+    expect(asking.mock.calls).toEqual([['Base Mod']]);
   });
 });
 

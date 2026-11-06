@@ -3,7 +3,7 @@
 
 import { stripBom } from '../../loadOrderFileCodec/lineScan';
 import { errorMessage } from '../../ports/errorMessage';
-import { heldTextAt, placeIn, sameName, samePath, type EntryNames, type EntrySymbol, type HeldTexts, type PlaceInFile } from '../../symbolNames/symbolNames';
+import { heldTextAt, offsetOf, sameName, samePath, type EntryNames, type EntrySymbol, type HeldTexts, type PlaceInFile } from '../../symbolNames/symbolNames';
 import { get, readOrAbsent } from '../files';
 import type { InstanceAdapter } from '../instanceAdapter';
 import { entryNamesIn, type EntryInText } from './codecs/modlistText';
@@ -18,26 +18,26 @@ const placeOf = (file: string, { line, start, end }: EntryInText): PlaceInFile =
 
 const isEntry = (found: EntryInText, { kind, name }: EntrySymbol): boolean => found.entry.kind === kind && sameName(found.entry.name, name);
 
-const isBefore = (a: { line: number; character: number }, b: { line: number; character: number }): boolean =>
-  a.line < b.line || (a.line === b.line && a.character <= b.character);
+const withoutBom = (namesIn: NamesIn): NamesIn => (text) => namesIn(stripBom(text));
 
 export function mo2EntryReferences({ instanceRoot }: Mo2Context, source: Pick<ReadingSource, 'settings'>): Pick<InstanceAdapter, 'entryReferences'> {
+  const modlistNames = withoutBom(entryNamesIn);
   const namingFiles = async (): Promise<(readonly [string, NamesIn])[]> => [
-    ...(await everyModlistFile(instanceRoot)).map((file) => [file, entryNamesIn] as const),
-    [ignoreListFile(instanceRoot), ignoreListNames],
-    [submodulesFile(instanceRoot), submoduleNames],
+    ...(await everyModlistFile(instanceRoot)).map((file) => [file, modlistNames] as const),
+    [ignoreListFile(instanceRoot), withoutBom(ignoreListNames)],
+    [submodulesFile(instanceRoot), withoutBom(submoduleNames)],
   ];
   const entryReferences: EntryNames = {
     async listed(held) {
       const file = modlistFile(instanceRoot, (await source.settings()).profile);
       const text = heldTextAt(held, file) ?? await readOrAbsent(() => get(file), undefined);
-      return text === undefined ? [] : entryNamesIn(stripBom(text)).map((found) => ({ entry: found.entry, place: placeOf(file, found) }));
+      return text === undefined ? [] : modlistNames(text).map((found) => ({ entry: found.entry, place: placeOf(file, found) }));
     },
     async read(entry, held: HeldTexts) {
       const read = await Promise.all((await namingFiles()).map(async ([file, namesIn]) => {
         try {
           const text = heldTextAt(held, file) ?? await readOrAbsent(() => get(file), undefined);
-          const named = text === undefined ? [] : namesIn(stripBom(text)).filter((found) => isEntry(found, entry));
+          const named = text === undefined ? [] : namesIn(text).filter((found) => isEntry(found, entry));
           return { references: named.map((found) => placeOf(file, found)), leftOut: [] };
         } catch (err) {
           return { references: [], leftOut: [`${file}: ${errorMessage(err)}`] };
@@ -48,8 +48,9 @@ export function mo2EntryReferences({ instanceRoot }: Mo2Context, source: Pick<Re
     async nameAt(file, text, offset) {
       const namesIn = (await namingFiles()).find(([named]) => samePath(named, file))?.[1];
       if (namesIn === undefined) return undefined;
-      const { start: at } = placeIn(file, stripBom(text), offset, offset);
-      return namesIn(stripBom(text)).find(({ line, start, end }) => isBefore({ line, character: start }, at) && isBefore(at, { line, character: end }))?.entry;
+      const spans = namesIn(text).map(({ entry, line, start, end }) =>
+        ({ entry, start: offsetOf(text, { line, character: start }), end: offsetOf(text, { line, character: end }) }));
+      return spans.find((span) => span.start <= offset && offset <= span.end);
     },
   };
   return { entryReferences };

@@ -54,7 +54,7 @@ export function entryInText(modName: string, line: number, start: number): Entry
 
 /** Each mod and separator where a line spells it. */
 export function entryNamesIn(text: string): EntryInText[] {
-  return stripBom(text).split(/\r\n|\r|\n/).flatMap((raw, line) => {
+  return text.split(/\r\n|\r|\n/).flatMap((raw, line) => {
     const read = readLine(raw);
     return read === undefined ? [] : [entryInText(read.name, line, raw.indexOf(read.name, read.prefix.length))];
   });

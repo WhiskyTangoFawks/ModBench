@@ -708,12 +708,17 @@ describe('where the publisher tags name a mod folder (ADR-0028)', () => {
     expect([references, leftOut]).toEqual([[], [expect.stringContaining(SETTINGS_FILE) as unknown]]);
   });
 
-  it('says which folder the segment under a place names, as the entry spells it', () => {
-    const publisher = publisherOver();
-    const file = join(root, SETTINGS_FILE);
+  const OTHER_PARENT = '{ "Include": [ "other\\\\A" ] }';
+  const A_UNDER_MODS = SETTINGS.indexOf('"mods\\\\A\\\\x') + 7;
+  it.each([
+    ['the mod folder\'s segment', SETTINGS_FILE, SETTINGS, A_UNDER_MODS, { name: 'A', start: A_UNDER_MODS, end: A_UNDER_MODS + 1 }],
+    ['no segment above the mod folder, which names no mod', SETTINGS_FILE, SETTINGS, A_UNDER_MODS - 4, undefined],
+    ['no segment under a parent other than the mods folder', SETTINGS_FILE, OTHER_PARENT, OTHER_PARENT.indexOf('A'), undefined],
+    ['no segment outside an entry', SETTINGS_FILE, SETTINGS, SETTINGS.indexOf('Include'), undefined],
+    ['no segment in a file that is no configuration', 'notes.json', SETTINGS, A_UNDER_MODS, undefined],
+  ])('says which folder\'s segment is under a place, as the entry spells it: %s', async (_case, name, text, offset, expected) => {
+    const folderOf = (mod: string) => Promise.resolve(folder(mod));
 
-    expect(publisher.folderAt(file, SETTINGS, SETTINGS.indexOf('"mods\\\\A\\\\x') + 7)).toEqual(['mods', 'A']);
-    expect(publisher.folderAt(file, SETTINGS, SETTINGS.indexOf('Include'))).toBeUndefined();
-    expect(publisher.folderAt(join(root, 'notes.json'), SETTINGS, SETTINGS.indexOf('MODS') + 5)).toBeUndefined();
+    expect(await publisherOver().folderAt(join(root, name), text, offset, folderOf)).toEqual(expected);
   });
 });

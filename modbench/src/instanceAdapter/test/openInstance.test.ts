@@ -46,7 +46,8 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
     const { references } = await adapter.entryReferences.read(harder, heldTexts([]));
 
     expect(references.map(({ file }) => file)).toContain(join(root, SETTINGS_FILE));
-    expect(await adapter.entryReferences.nameAt(join(root, SETTINGS_FILE), settings, settings.indexOf('Harder') + 2)).toEqual(harder);
+    const start = settings.indexOf('Harder');
+    expect(await adapter.entryReferences.nameAt(join(root, SETTINGS_FILE), settings, start + 2)).toEqual({ entry: harder, start, end: start + 'Harder VATS'.length });
     expect(await adapter.entryReferences.nameAt(join(root, SETTINGS_FILE), settings, settings.indexOf('x.esp'))).toBeUndefined();
   });
 

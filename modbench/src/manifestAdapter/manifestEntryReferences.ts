@@ -1,6 +1,6 @@
 import { basename, dirname, join } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
-import { COMMITTED, heldTextAt, NO_FILE_CHANGES, placeIn, sameName, samePath, spliced, type EntryOwner, type EntryNames, type EntrySymbol, type FileChanges, type RenamePlan } from '../symbolNames/symbolNames';
+import { COMMITTED, heldTextAt, NO_FILE_CHANGES, placeIn, sameName, samePath, spliced, type EntryOwner, type EntryNames, type EntryReading, type EntrySymbol, type FileChanges, type RenamePlan } from '../symbolNames/symbolNames';
 import { stringsOf, VALUE, type StringAt } from './jsonStrings';
 import { manifestNameOf, manifestsIn, textAt } from './manifestFiles';
 import { readManifest } from './manifestRead';
@@ -38,8 +38,17 @@ function withRepositoryRenamed(text: string, name: string, newName: string): str
   return spliced(text, named, () => JSON.stringify(newName).slice(1, -1));
 }
 
+interface ManifestNamesDeps extends Pick<ManifestEntryOwnerDeps, 'modFolderOf'> {
+  /** Each listed mod's folder, by the mod's name. */
+  readonly modFolders: () => ReadonlyMap<string, string>;
+}
+
+const noReferences = { references: [], leftOut: [] };
+
+const unreadable = (where: string, err: unknown): EntryReading => ({ references: [], leftOut: [`${where}: ${errorMessage(err)}`] });
+
 /** A mod's manifest as an owner of the files that name a mod: its repository package names the source folder named for it. */
-export function manifestEntryNames({ modFolderOf }: Pick<ManifestEntryOwnerDeps, 'modFolderOf'>): EntryNames {
+export function manifestEntryNames({ modFolderOf, modFolders }: ManifestNamesDeps): EntryNames {
   const ownManifestOf = async (mod: string): Promise<string | undefined> => {
     const folder = await modFolderOf(mod);
     const own = folder === undefined ? undefined : await namedFor(folder, mod);
@@ -48,29 +57,32 @@ export function manifestEntryNames({ modFolderOf }: Pick<ManifestEntryOwnerDeps,
   return {
     listed: () => Promise.resolve([]),
     async read({ kind, name: mod }, held) {
-      if (kind !== 'mod') return { references: [], leftOut: [] };
-      let file: string | undefined;
+      if (kind !== 'mod') return noReferences;
+      const owned = await ownManifestOf(mod).then((own) => ({ file: own }), (err: unknown) => ({ err }));
+      if ('err' in owned) return unreadable(mod, owned.err);
+      const { file } = owned;
+      if (file === undefined) return noReferences;
       try {
-        file = await ownManifestOf(mod);
-        if (file === undefined) return { references: [], leftOut: [] };
         const text = heldTextAt(held, file) ?? await textAt(file);
         const read = readManifest(text);
         if ('refused' in read) return { references: [], leftOut: [`${file}: ${read.refused}`] };
         const named = repositoryNamesIn(text).filter(({ name }) => sameName(name, mod));
-        return { references: named.map(({ start, end }) => placeIn(file ?? '', text, start, end)), leftOut: [] };
+        return { references: named.map(({ start, end }) => placeIn(file, text, start, end)), leftOut: [] };
       } catch (err) {
-        return { references: [], leftOut: [`${file ?? mod}: ${errorMessage(err)}`] };
+        return unreadable(file, err);
       }
     },
     async nameAt(file, text, offset) {
-      const mod = basename(dirname(file));
-      const own = await ownManifestOf(mod).catch(() => undefined);
-      if (own === undefined || !samePath(own, file) || 'refused' in readManifest(text)) return undefined;
-      const [at] = repositoryNamesIn(text).filter(({ name, start, end }) => sameName(name, mod) && start <= offset && offset <= end);
-      return at && { kind: 'mod', name: mod };
+      const holder = [...modFolders()].find(([, folder]) => samePath(folder, dirname(file)));
+      const mod = holder?.[0];
+      const own = mod === undefined ? undefined : await ownManifestOf(mod).catch(() => undefined);
+      if (mod === undefined || own === undefined || !samePath(own, file) || 'refused' in readManifest(text)) return undefined;
+      const at = repositoryNamesIn(text).find(({ name, start, end }) => sameName(name, mod) && start <= offset && offset <= end);
+      return at && { entry: { kind: 'mod', name: mod }, start: at.start, end: at.end };
     },
   };
 }
+
 
 /** A mod's manifest as an owner of the files that name a mod: its file is named for the mod, and its repository package
  *  names the source folder named for it, which moves with the rename. */

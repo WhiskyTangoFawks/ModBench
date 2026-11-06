@@ -186,7 +186,7 @@ function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, 
         modFolderOf: (mod) => adapter.modFolderPath(mod),
         companions: async () => pluginCompanionRule(await adapter.gameRelease()),
       })];
-      const entryOwners = [adapter.entryReferences, manifestEntryNames({ modFolderOf: (mod) => adapter.modFolderPath(mod) })];
+      const entryOwners = [adapter.entryReferences, manifestEntryNames({ modFolderOf: (mod) => adapter.modFolderPath(mod), modFolders: () => instance.value.paths.modDirs })];
       return { facts: factsOf(instance), instance, scriptEnvironmentFile: adapter.scriptEnvironmentFile, owners, entryOwners, side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
     },
     notAnInstance: () => ({ facts: NO_INSTANCE_FACTS, owners: [], entryOwners: [], side: buildBareSide }),

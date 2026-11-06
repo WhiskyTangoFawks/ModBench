@@ -63,6 +63,12 @@ function positionAt(text: string, offset: number): TextPosition {
 export const placeIn = (file: string, text: string, start: number, end: number): PlaceInFile =>
   ({ file, start: positionAt(text, start), end: positionAt(text, end) });
 
+/** The offset of `position` in `text`. */
+export function offsetOf(text: string, { line, character }: TextPosition): number {
+  const lineBreak = line === 0 ? undefined : [...text.matchAll(/\r\n|\r|\n/g)][line - 1];
+  return (lineBreak === undefined ? 0 : lineBreak.index + lineBreak[0].length) + character;
+}
+
 /** A record's copy in a plugin, whose document Source opens to find where it names the symbol. */
 export interface CopyNaming {
   readonly formKey: string;
@@ -131,6 +137,13 @@ export interface EntryReading {
   readonly leftOut: readonly string[];
 }
 
+/** An entry, and the span of a file's text that names it, by offset. */
+export interface EntryNamed {
+  readonly entry: EntrySymbol;
+  readonly start: number;
+  readonly end: number;
+}
+
 /** An entry and the place a file names it. */
 export interface EntryPlace {
   readonly entry: EntrySymbol;
@@ -143,8 +156,9 @@ export interface EntryNames {
    *  Instance adapter. A box with no such list holds none. */
   listed(held: HeldTexts): Promise<readonly EntryPlace[]>;
   read(entry: EntrySymbol, held: HeldTexts): Promise<EntryReading>;
-  /** The mod or separator one of its files names at `offset` of the file's `text`; undefined where it names none. */
-  nameAt(file: string, text: string, offset: number): Promise<EntrySymbol | undefined>;
+  /** The mod or separator one of its files names at `offset` of the file's `text`, and the span of the text that names
+   *  it; undefined where it names none. */
+  nameAt(file: string, text: string, offset: number): Promise<EntryNamed | undefined>;
 }
 
 /** A box that owns files naming a mod or a separator, in its part of a rename. */

@@ -86,7 +86,10 @@ describe('a mod\'s manifest names the mod: its file name, and the repository of 
 });
 
 describe('where a mod\'s manifest names the mod (ADR-0028)', () => {
-  const names = () => manifestEntryNames({ modFolderOf: (mod) => Promise.resolve(mod === 'Old' ? modFolder : undefined) });
+  const names = (folder = modFolder) => manifestEntryNames({
+    modFolderOf: (mod) => Promise.resolve(mod === 'Old' ? folder : undefined),
+    modFolders: () => new Map([['Old', folder]]),
+  });
   const file = () => join(modFolder, 'Old.manifest.json');
 
   it('names it at its own manifest\'s repository package named for it, whatever the case, and for no other name', async () => {
@@ -100,15 +103,12 @@ describe('where a mod\'s manifest names the mod (ADR-0028)', () => {
     expect(references).toEqual([{ file: file(), start: { line: 3, character: 29 }, end: { line: 3, character: 32 } }]);
   });
 
-  it('reads the text the editor holds unsaved, and names the mod at a package of the manifest', async () => {
+  it('reads the text the editor holds unsaved in place of the file', async () => {
     await writeFile(file(), '{"version":1}');
 
     const { references } = await names().read(MOD, heldTexts([[file(), LINKED]]));
-    const offset = LINKED.indexOf('"Old"}') + 2;
 
-    expect(references).toHaveLength(1);
-    expect(await names().nameAt(file(), LINKED, offset)).toEqual(MOD);
-    expect(await names().nameAt(file(), LINKED, LINKED.indexOf('Old.esp'))).toBeUndefined();
+    expect(references).toEqual([{ file: file(), start: { line: 3, character: 29 }, end: { line: 3, character: 32 } }]);
   });
 
   it('says why a manifest it cannot read is left out', async () => {
@@ -118,4 +118,24 @@ describe('where a mod\'s manifest names the mod (ADR-0028)', () => {
 
     expect([references, leftOut]).toEqual([[], [expect.stringContaining(file()) as unknown]]);
   });
+
+  it('says which mod a package of a mod\'s manifest names at a place, by the folder the instance lists the mod in, whatever the folder is called', async () => {
+    const renamed = join(root, 'mods', 'Folder named otherwise');
+    await mkdir(renamed, { recursive: true });
+    const inRenamed = join(renamed, 'Old.manifest.json');
+    await writeFile(inRenamed, LINKED);
+    const start = LINKED.indexOf('"Old"}') + 1;
+
+    expect(await names(renamed).nameAt(inRenamed, LINKED, start + 1)).toEqual({ entry: MOD, start, end: start + 3 });
+  });
+
+  it.each([
+    ['a string of the manifest that is no package name', () => modFolder, LINKED.indexOf('Old.esp')],
+    ['a manifest in a folder the instance lists the mod elsewhere than', () => join(root, 'mods', 'Elsewhere'), LINKED.indexOf('"Old"}') + 2],
+  ])('says no mod is named at %s', async (_case, listedIn, offset) => {
+    await writeFile(file(), LINKED);
+
+    expect(await names(listedIn()).nameAt(file(), LINKED, offset)).toBeUndefined();
+  });
 });
+
