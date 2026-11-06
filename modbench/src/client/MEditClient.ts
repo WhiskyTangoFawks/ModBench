@@ -116,9 +116,9 @@ export type RenameSourceAsked = Pick<components['schemas']['RenameSourceChangesR
 /** The changes creating a record makes to plugin source, and the new record's FormKey. */
 export type CreateChangesOutcome = components['schemas']['CreateRecordChanges'];
 
-/** An edit's changes to plugin source, each move and then each document's text at its absolute path,
- *  or its refusal: `refusal` is the backend's name, `'Unknown'` this side's. An edit of the FormID
- *  sets `newFormKey`, and `leftBehind` names each plugin source it could not carry. */
+/** An edit's changes to plugin source, or its refusal: `refusal` is the backend's name, `'Unknown'`
+ *  this side's. An edit of the FormID sets `newFormKey`, and `leftBehind` names each plugin source it
+ *  could not carry. */
 export type RecordEditChangesOutcome =
   | ({ applied: true; newFormKey?: string; leftBehind: readonly components['schemas']['SourceLeftBehind'][] } & SourceChanges)
   | { applied: false; refusal: string; message: string };

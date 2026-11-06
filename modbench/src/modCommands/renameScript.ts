@@ -56,7 +56,7 @@ async function leftBehind(access: ScriptRenameAccess, name: string): Promise<str
 }
 
 // The game takes a script from its compiled script, and a script with none yet is its source. Its records follow only
-// once no copy the game finds keeps the name: renaming a source leaves any compiled copy. Answers the new name.
+// once no copy the game finds keeps the name: renaming a source leaves any compiled copy.
 async function newNameOf(access: ScriptRenameAccess, { origin, path, name, to }: ScriptRenamed): Promise<Refused | string> {
   const isRenamed = (copy: Copy): boolean => sameSource(copy.source, origin) && sameName(copy.path, path);
   const held = await copiesOf(access, name);
