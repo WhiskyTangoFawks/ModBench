@@ -230,18 +230,16 @@ internal sealed class RecordQueries(
 
         var copies = reads.GetStacks(formKeys, stack);
         var formIds = LoadIndex.FormIdsOf(snapshot, reads.OpenedPlugins);
-        IReadOnlyList<string> MastersOf(PluginAddress plugin) =>
-            [.. WithMasters(plugin, snapshot, reads.OpenedPlugins).Select(held => held.Name)];
         return formKeys.Select(formKey =>
         {
             var documents = copies[formKey].ToList();
             if (documents.Count == 0) return new RecordCopyStates(formKey, []);
-            var states = _conflictClassifier.StatesOf(documents.ConvertAll(ToRecordDetail), snapshot.GameRelease, formIds, MastersOf);
+            var states = _conflictClassifier.StatesOf(documents.ConvertAll(ToRecordDetail), snapshot.GameRelease, formIds);
             return new RecordCopyStates(formKey, [.. documents.Select((d, i) => new CopyState(d.Plugin, states[i]))]);
         }).ToList();
     }
 
-    // xEdit loads a plugin's masters recursively; master lists hold file names only (ADR-0012).
+    // xEdit loads a plugin's masters recursively.
     private static List<PluginAddress> WithMasters(
         PluginAddress plugin, LoadOrderSnapshot snapshot, IReadOnlyDictionary<PluginAddress, PluginContent> opened)
     {
@@ -250,7 +248,7 @@ internal sealed class RecordQueries(
         {
             var masters = opened[held[at]].Masters;
             held.AddRange(snapshot.Active
-                .Where(active => masters.Contains(active.Name, StringComparer.OrdinalIgnoreCase) && !held.Contains(active.Key))
+                .Where(active => masters.Contains(active.Name, StringComparer.OrdinalIgnoreCase) && !held.Contains(active.Key, PluginAddress.Comparer))
                 .Select(active => active.Key));
         }
         return held;

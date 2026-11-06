@@ -55,13 +55,22 @@ public sealed class CopyStatesTests : IDisposable
             .WithPlugin(Inactive.Name, _ => { }, enabled: false)
             .Build();
 
-    private static Dictionary<PluginAddress, ConflictThis> StatesOf(OpenedIndex index, FormKey record, PluginAddress? plugin = null) =>
+    private static Dictionary<PluginAddress, ConflictThis?> StatesOf(OpenedIndex index, FormKey record, PluginAddress? plugin = null) =>
         index.Queries.GetCopyStates([record.ToString()], plugin).Value().Single().Copies.ToDictionary(c => c.Plugin, c => c.ConflictThis);
 
     [Fact]
-    public void ACopyIdenticalToTheMaster_OverAModOutsideItsMasters_IsIdenticalToMaster()
+    public void ACopyIdenticalToTheMaster_OverAModOutsideTheStack_IsIdenticalToMaster()
     {
-        Assert.Equal(ConflictThis.IdenticalToMaster, StatesOf(_index, Item)[Third]);
+        var states = StatesOf(_index, Item, Third);
+
+        Assert.Equal([First, Third], states.Keys);
+        Assert.Equal(ConflictThis.IdenticalToMaster, states[Third]);
+    }
+
+    [Fact]
+    public void ACopyIdenticalToTheMaster_OverAModInTheStack_IsIdenticalToMasterWinsConflict_AsXEditSetsIt()
+    {
+        Assert.Equal(ConflictThis.IdenticalToMasterWinsConflict, StatesOf(_index, Item)[Third]);
     }
 
     [Fact]
@@ -101,7 +110,11 @@ public sealed class CopyStatesTests : IDisposable
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        Assert.Equal([First, master, judged], StatesOf(index, Item, judged).Keys);
+        var states = StatesOf(index, Item, judged);
+
+        Assert.Equal(
+            [(First, ConflictThis.Master), (master, ConflictThis.ConflictLoses), (judged, ConflictThis.IdenticalToMasterWinsConflict)],
+            states.Select(state => (state.Key, state.Value)));
     }
 
     [Fact]

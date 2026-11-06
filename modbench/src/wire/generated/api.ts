@@ -1279,7 +1279,7 @@ export interface components {
         };
         CopyState: {
             plugin: components["schemas"]["PluginAddress"];
-            conflictThis: components["schemas"]["ConflictThis"];
+            conflictThis?: components["schemas"]["ConflictThis"] | null;
         };
         CopyStatesRequest: {
             formKeys: string[];

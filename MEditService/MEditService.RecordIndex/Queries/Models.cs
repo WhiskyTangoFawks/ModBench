@@ -141,7 +141,7 @@ public record RecordCopy(string FormKey, PluginAddress Plugin, string? DocumentT
 /// no plugin of the stack holds has no copy.</summary>
 public sealed record RecordCopyStates(string FormKey, IReadOnlyList<CopyState> Copies);
 
-public sealed record CopyState(PluginAddress Plugin, ConflictThis ConflictThis);
+public sealed record CopyState(PluginAddress Plugin, ConflictThis? ConflictThis);
 
 /// <summary>A copy whose text names a plugin, and whether its plugin has plugin source, which a rename can change.</summary>
 public sealed record CopyNaming(string FormKey, PluginAddress Plugin, bool InPluginSource);

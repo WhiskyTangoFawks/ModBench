@@ -1,6 +1,5 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
-using MEditService.LoadOrder;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
@@ -59,27 +58,18 @@ internal sealed class ConflictClassifier(ILogger logger)
         return new ClassifyResult(conflictAll, pluginConflictThis, diffs);
     }
 
-    // Each copy's state against the first, in the order given; the last copy is the winner. The last copy
-    // identical to the first, over a copy that differs and is one of its masters, wins that conflict.
-    public IReadOnlyList<ConflictThis> StatesOf(
-        IReadOnlyList<RecordDetail> stack,
-        GameRelease release,
-        Func<string, uint?> loadOrderFormIds,
-        Func<PluginAddress, IReadOnlyList<string>> mastersOf)
+    // Each copy's state against the first, null where nothing of it was compared; the last copy wins. As xEdit
+    // sets it, the last copy identical to the first wins the conflict its record has.
+    public IReadOnlyList<ConflictThis?> StatesOf(
+        IReadOnlyList<RecordDetail> stack, GameRelease release, Func<string, uint?> loadOrderFormIds)
     {
         var last = stack.Count - 1;
         var copies = stack.Select((copy, at) => copy with { IsWinner = at == last }).ToList();
-        var states = Classify(copies, release, _ => null, loadOrderFormIds, indexed: true).PluginStates;
-        var result = copies.ConvertAll(copy => states.GetValueOrDefault(Column(copy), ConflictThis.IdenticalToMaster));
-        if (result.Count > 1 && result[last] == ConflictThis.IdenticalToMaster)
-        {
-            var masters = mastersOf(new PluginAddress(copies[last].Plugin, copies[last].Origin));
-            var overDifferingMaster = Enumerable.Range(0, last).Any(at =>
-                result[at] is not (ConflictThis.Master or ConflictThis.IdenticalToMaster)
-                && masters.Contains(copies[at].Plugin, StringComparer.OrdinalIgnoreCase));
-            if (overDifferingMaster) result[last] = ConflictThis.IdenticalToMasterWinsConflict;
-        }
-        return result;
+        var classified = Classify(copies, release, _ => null, loadOrderFormIds, indexed: true);
+        var states = copies.ConvertAll(copy => classified.PluginStates.TryGetValue(Column(copy), out var state) ? state : (ConflictThis?)null);
+        if (states[last] == ConflictThis.IdenticalToMaster && classified.ConflictAll is ConflictAll.Override or ConflictAll.Conflict)
+            states[last] = ConflictThis.IdenticalToMasterWinsConflict;
+        return states;
     }
 
     // The rows of copies compared with each other, one column named for each: a row is NoConflict
