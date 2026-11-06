@@ -2027,7 +2027,7 @@ describe('the agent server, given an input its tool does not take', () => {
     expect(description).toContain('only the views');
     expect(description).toContain('is_active');
     expect(description).toContain('view_columns');
-    expect(description).toContain('conflict_hash');
+    expect(description).toContain('narrow by the plugin, its origin and the FormKey before naming body');
   });
 
   it('tells the agent, in what Claude Code shows of mod_install, that a FOMOD\'s choices are the user\'s, and how to hand the user the installer', async () => {

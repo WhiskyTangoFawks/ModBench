@@ -107,6 +107,26 @@ public sealed class CopyStatesTests : IDisposable
     }
 
     [Fact]
+    public void ASourceOnlyPlugin_IsJudgedWithTheMastersItsRecordsReference()
+    {
+        var edited = new PluginAddress("Edited.esp", "EditedMod");
+        using var fixture = new PluginFixtureBuilder("medit-copy-states-source-only")
+            .WithPlugin(First.Name, mod => mod.MiscItems.Add(Named(Item, "Item")))
+            .WithPlugin(Second.Name, mod => mod.MiscItems.Set(Named(Item, "Changed")))
+            .WithPlugin(edited.Name, mod => mod.MiscItems.Add(Named(new FormKey(ModKey.FromFileName(edited.Name), 0x800), "Own")), origin: edited.Origin)
+            .BuildScattered();
+        var entry = fixture.Plugins.Single(p => p.Key == edited);
+        SourceMods.Init(entry);
+        using var index = Indexes.Reconciled(fixture);
+        index.Create(entry, Item.ToString(), "misc", "E800", index.BodyOf(Item.ToString(), First));
+
+        var states = StatesOf(index, Item, edited);
+
+        Assert.Equal([First, edited], states.Keys);
+        Assert.Equal(ConflictThis.IdenticalToMaster, states[edited]);
+    }
+
+    [Fact]
     public void WithNoPlugin_EveryActivePluginHoldingTheRecordIsJudged()
     {
         Assert.Equal([First, Second, Third], StatesOf(_index, Item).Keys);

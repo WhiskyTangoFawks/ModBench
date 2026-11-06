@@ -1,7 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.RecordIndex.Store;
 using MEditService.RepositoriesLib;
@@ -220,15 +219,10 @@ internal sealed class RecordQueries(
     {
         var reads = _index.RequireWholeSetReads();
         var snapshot = _loadOrder.Require();
-        IReadOnlyList<PluginAddress>? stack = null;
-        if (plugin is { } judged)
-        {
-            if (!snapshot.Active.Any(active => PluginAddress.Comparer.Equals(active.Key, judged)))
-                return new IndexRefused(IndexRefusal.NameRefused, $"{judged.Name} ({judged.Origin}) is not active.");
-            stack = WithMasters(judged, snapshot, reads.OpenedPlugins);
-        }
+        if (plugin is { } judged && !snapshot.Active.Any(active => PluginAddress.Comparer.Equals(active.Key, judged)))
+            return new IndexRefused(IndexRefusal.NameRefused, $"{judged.Name} ({judged.Origin}) is not active.");
 
-        var copies = reads.GetStacks(formKeys, stack);
+        var copies = reads.GetStacks(formKeys, plugin);
         var formIds = LoadIndex.FormIdsOf(snapshot, reads.OpenedPlugins);
         return formKeys.Select(formKey =>
         {
@@ -237,21 +231,6 @@ internal sealed class RecordQueries(
             var states = _conflictClassifier.StatesOf(documents.ConvertAll(ToRecordDetail), snapshot.GameRelease, formIds);
             return new RecordCopyStates(formKey, [.. documents.Select((d, i) => new CopyState(d.Plugin, states[i]))]);
         }).ToList();
-    }
-
-    // xEdit loads a plugin's masters recursively.
-    private static List<PluginAddress> WithMasters(
-        PluginAddress plugin, LoadOrderSnapshot snapshot, IReadOnlyDictionary<PluginAddress, PluginContent> opened)
-    {
-        var held = new List<PluginAddress> { plugin };
-        for (var at = 0; at < held.Count; at++)
-        {
-            var masters = opened[held[at]].Masters;
-            held.AddRange(snapshot.Active
-                .Where(active => masters.Contains(active.Name, StringComparer.OrdinalIgnoreCase) && !held.Contains(active.Key, PluginAddress.Comparer))
-                .Select(active => active.Key));
-        }
-        return held;
     }
 
     // The text is the document carrying the record. A plugin's source tree says which document that is, as it

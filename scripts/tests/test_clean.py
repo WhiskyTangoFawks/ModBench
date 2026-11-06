@@ -129,27 +129,28 @@ class CleanAgainstTheFixtureInstance(unittest.TestCase):
         self.assertEqual(clean(later).identical_to_master, [ITEM_A])
 
     def test_keeps_an_override_identical_to_the_previous_override_but_not_to_the_master(self) -> None:
-        later = self.enabled()
-        medit.copy(PATCH, ITEM_A, later)
-        self.assertEqual(clean(later).identical_to_master, [])
-        self.assertIn(ITEM_A, self.keys_of(later))
-
-    def test_removes_an_override_that_differs_from_the_master_only_in_its_version_stamp(self) -> None:
-        later = self.enabled()
-        medit.copy(CONFLICT_A, ITEM_A, later)
-        medit.edit(later, ITEM_A, 'set', 'VersionControl', 123)
-        self.assertEqual(clean(later).identical_to_master, [ITEM_A])
-
-    def test_keeps_an_override_identical_to_a_plugin_of_the_masters_name_that_is_not_active(self) -> None:
         master = self.enabled()
         record = medit.create_record(master, 'misc')
-        inactive = self.created.create(master.name, PATCH.origin, active=False)
-        medit.create_record(inactive, 'misc')
-        medit.edit(inactive, record, 'set', 'EditorID', 'MBDevCleanRenamed')
+        previous = self.enabled()
+        medit.copy(master, record, previous)
+        medit.edit(previous, record, 'set', 'EditorID', 'MBDevCleanPrevious')
+        later = self.enabled()
+        medit.copy(previous, record, later)
+        self.assertEqual(clean(later).identical_to_master, [])
+        self.assertIn(record, self.keys_of(later))
+
+    def test_keeps_an_override_identical_to_its_master_when_a_master_of_the_plugin_between_them_changed_the_record(self) -> None:
+        master = self.enabled()
+        record = medit.create_record(master, 'misc')
+        between = self.enabled()
+        medit.copy(master, record, between)
+        medit.edit(between, record, 'set', 'EditorID', 'MBDevCleanBetween')
         override = self.enabled()
         medit.copy(master, record, override)
-        medit.edit(override, record, 'set', 'EditorID', 'MBDevCleanRenamed')
+        _, reference = self.cell_and_reference_in(override)
+        medit.edit(override, reference, 'set', 'Base', medit.create_record(between, 'misc'))
         self.assertEqual(clean(override).identical_to_master, [])
+        self.assertIn(record, self.keys_of(override))
 
     def test_removes_a_cell_identical_to_its_master_once_its_references_are_removed(self) -> None:
         master = self.enabled()
