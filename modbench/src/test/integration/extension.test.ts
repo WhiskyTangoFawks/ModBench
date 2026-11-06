@@ -2542,20 +2542,19 @@ describe('The Problems panel on plugin source', () => {
   });
 
   it('offers removing a list element as the quick fix of a reference in a list, which asks mEdit to remove it', async () => {
-    const [problem] = await waitFor('the problem on its file', () => {
+    const fix = await waitFor('the quick fix to remove the element', async () => {
       saved([{ formKey: HELD_FORM_KEY, targetFormKey: NOT_HELD_FORM_KEY, fieldPath: 'Armor[1]', sourceRelativePath: SOURCE_FILE, message: MESSAGE }]);
-      const found = shown();
-      return found.length > 0 && found;
+      const [problem] = shown();
+      const fixes = await vscode.commands.executeCommand<vscode.CodeAction[]>('vscode.executeCodeActionProvider', vscode.Uri.file(file), problem?.range, vscode.CodeActionKind.QuickFix.value);
+      return fixes.find(({ title }) => title === 'Remove element');
     });
-    const fixes = await vscode.commands.executeCommand<vscode.CodeAction[]>('vscode.executeCodeActionProvider', vscode.Uri.file(file), problem?.range, vscode.CodeActionKind.QuickFix.value);
-    const fix = fixes.find(({ title }) => title === 'Remove element');
-    const args: unknown[] = fix?.command?.arguments ?? [];
+    const args: unknown[] = fix.command?.arguments ?? [];
     const asked = editsAsked.length;
 
-    await vscode.commands.executeCommand(fix?.command?.command ?? 'no quick fix', ...args);
+    await vscode.commands.executeCommand(fix.command?.command ?? 'no quick fix', ...args);
 
     assert.strictEqual(editsAsked.length, asked + 1);
-    assert.deepStrictEqual(editsAsked.at(-1)?.edit, { op: 'remove', path: [{ kind: 'member', name: 'Armor' }, { kind: 'index', index: 1 }] });
+    assert.deepStrictEqual(editsAsked.at(-1)?.edit, { op: 'remove', plugin: plugin.name, origin: plugin.origin, path: [{ kind: 'member', name: 'Armor' }, { kind: 'index', index: 1 }] });
   });
 });
 
