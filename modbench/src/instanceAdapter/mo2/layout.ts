@@ -5,7 +5,7 @@
 import { join, relative, sep } from 'node:path';
 import { METADATA_FILE_SUFFIX } from './codecs/downloads';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
-import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
+import { entryInText, MODLIST_FILE_NAME, OVERWRITE_DIR_NAME, separatorModName, type EntryInText } from './codecs/modlistText';
 import { SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
 import { PROFILE_SETTINGS_FILE_NAME } from './codecs/profileSettings';
 import { GIT_DIR, ignoreSkippedLink, listFolders, readOrAbsent } from '../files';
@@ -319,6 +319,30 @@ export const withSourceModLines = (ignoreList: string, { submodules, plain }: So
 export function sourceModLinesOf(ignoreList: string, name: string): string[] {
   const line = `!/${SOURCE_MODS_FOLDER}/${escapedForIgnoreList(name)}`;
   return ignoreList.split(/\r?\n/).filter((each) => each === line || each === `${line}/`);
+}
+
+const IGNORE_FOLDER_LINE = new RegExp(String.raw`^!/(${MODS}|${SOURCE_MODS_FOLDER})/((?:\\.|[^/\\])+)(?:/\*?)?$`);
+
+/** Each mod and separator the ignore list names: its folder, held whole or let in as a source folder. */
+export function ignoreListNames(ignoreList: string): EntryInText[] {
+  return ignoreList.split(/\r?\n/).flatMap((line, at) => {
+    const [, parent = '', escaped = ''] = IGNORE_FOLDER_LINE.exec(line) ?? [];
+    if (escaped === '') return [];
+    return [entryInText(escaped.replace(/\\(.)/g, '$1'), at, parent.length + 3)];
+  });
+}
+
+const SUBMODULE_HEADER = /^\[submodule "([^"]+)"\]\s*$/;
+const SUBMODULE_PATH = new RegExp(String.raw`^(\s*path\s*=\s*(?:${MODS}|${SOURCE_MODS_FOLDER})/)([^/]+?)\s*$`);
+
+/** Each mod and separator `.gitmodules` names: its entry, and the folder its path names. */
+export function submoduleNames(gitmodules: string): EntryInText[] {
+  return gitmodules.split(/\r?\n/).flatMap((line, at) => {
+    const header = SUBMODULE_HEADER.exec(line);
+    if (header?.[1] !== undefined) return [entryInText(header[1], at, line.indexOf(header[1]))];
+    const [, before = '', name = ''] = SUBMODULE_PATH.exec(line) ?? [];
+    return name === '' ? [] : [entryInText(name, at, before.length)];
+  });
 }
 
 /** An ignore list that lets in the files of each mod folder of `folderNames`, or with `held` false leaves them out, every

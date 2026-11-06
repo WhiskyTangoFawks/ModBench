@@ -1,6 +1,6 @@
 import { basename, dirname, join } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
-import { COMMITTED, heldTextAt, NO_FILE_CHANGES, placeIn, sameName, samePath, spliced, type EntryOwner, type ModNames, type EntrySymbol, type FileChanges, type RenamePlan } from '../symbolNames/symbolNames';
+import { COMMITTED, heldTextAt, NO_FILE_CHANGES, placeIn, sameName, samePath, spliced, type EntryOwner, type EntryNames, type EntrySymbol, type FileChanges, type RenamePlan } from '../symbolNames/symbolNames';
 import { stringsOf, VALUE, type StringAt } from './jsonStrings';
 import { manifestNameOf, manifestsIn, textAt } from './manifestFiles';
 import { readManifest } from './manifestRead';
@@ -39,14 +39,15 @@ function withRepositoryRenamed(text: string, name: string, newName: string): str
 }
 
 /** A mod's manifest as an owner of the files that name a mod: its repository package names the source folder named for it. */
-export function manifestModNames({ modFolderOf }: Pick<ManifestEntryOwnerDeps, 'modFolderOf'>): ModNames {
+export function manifestEntryNames({ modFolderOf }: Pick<ManifestEntryOwnerDeps, 'modFolderOf'>): EntryNames {
   const ownManifestOf = async (mod: string): Promise<string | undefined> => {
     const folder = await modFolderOf(mod);
     const own = folder === undefined ? undefined : await namedFor(folder, mod);
     return folder === undefined || own === undefined ? undefined : join(folder, own);
   };
   return {
-    async read(mod, held) {
+    async read({ kind, name: mod }, held) {
+      if (kind !== 'mod') return { references: [], leftOut: [] };
       let file: string | undefined;
       try {
         file = await ownManifestOf(mod);
@@ -65,7 +66,7 @@ export function manifestModNames({ modFolderOf }: Pick<ManifestEntryOwnerDeps, '
       const own = await ownManifestOf(mod).catch(() => undefined);
       if (own === undefined || !samePath(own, file) || 'refused' in readManifest(text)) return undefined;
       const [at] = repositoryNamesIn(text).filter(({ name, start, end }) => sameName(name, mod) && start <= offset && offset <= end);
-      return at && mod;
+      return at && { kind: 'mod', name: mod };
     },
   };
 }

@@ -33,6 +33,7 @@ import { registerCompareFileCommand } from './compareFile';
 import { registerGoToModCommand } from './goToMod';
 import { registerGoToModRowCommand, registerModReferencedByCommand } from './modSymbolCommands';
 import { modOrigin } from '../instanceLoader/fileConflictIndex';
+import type { EntrySymbol } from '../symbolNames/symbolNames';
 import { registerBuildCommand } from './buildCommand';
 import { registerBuildTask } from './buildTask';
 import { BuildProblems } from './buildProblems';
@@ -102,6 +103,8 @@ interface ModsView extends vscode.Disposable {
   drawsHighlight: DrawsHighlight;
   /** The lines that bear on a read of the mods, for the agent, without the instance's own. */
   standingLines(): string[];
+  /** The tooltip of the row the view shows for the entry; undefined where it shows none. */
+  tooltipOf: (entry: EntrySymbol) => string | undefined;
 }
 
 /** Tree, filter and count readout together, because the view's description and message line
@@ -221,6 +224,10 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     relatesRows: { related: (selection) => ({ plugins: pluginsHeld(instance.value, selection), origins: [] }) },
     drawsHighlight: { highlight: (related) => { provider.highlight(related.origins); } },
     standingLines: () => [modSync.message(), statusMessage()].filter((line) => line !== undefined),
+    tooltipOf: ({ kind, name }) => {
+      const row = kind === 'mod' ? provider.rowFor(modOrigin(name)) : undefined;
+      return typeof row?.tooltip === 'string' ? row.tooltip : undefined;
+    },
     dispose: () => { disposable.dispose(); },
   };
 }

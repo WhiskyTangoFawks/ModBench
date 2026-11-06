@@ -38,13 +38,25 @@ function readLine(line: string): ModlistLine | undefined {
   return name === '' ? undefined : { prefix, name };
 }
 
-/** Each mod's name where a line spells it: its zero-based line, and the characters it spans there. A separator's line names no mod. */
-export function modNamesIn(text: string): { name: string; line: number; start: number; end: number }[] {
+/** An entry and where its name sits in a text: its zero-based line, and the characters it spans there. */
+export interface EntryInText {
+  readonly entry: EntryRef;
+  readonly line: number;
+  readonly start: number;
+  readonly end: number;
+}
+
+/** An entry named by MO2's own name for it, spelled at `start` of `line`: a separator's span leaves out the suffix MO2 adds. */
+export function entryInText(modName: string, line: number, start: number): EntryInText {
+  const entry = entryNamed(modName);
+  return { entry, line, start, end: start + entry.name.length };
+}
+
+/** Each mod and separator where a line spells it. */
+export function entryNamesIn(text: string): EntryInText[] {
   return stripBom(text).split(/\r\n|\r|\n/).flatMap((raw, line) => {
     const read = readLine(raw);
-    if (read === undefined || read.name.endsWith(SEPARATOR_SUFFIX)) return [];
-    const start = raw.indexOf(read.name, read.prefix.length);
-    return [{ name: read.name, line, start, end: start + read.name.length }];
+    return read === undefined ? [] : [entryInText(read.name, line, raw.indexOf(read.name, read.prefix.length))];
   });
 }
 

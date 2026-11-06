@@ -125,17 +125,17 @@ export interface EntrySymbol {
   readonly name: string;
 }
 
-/** The places a box's files name a mod, and why it left out each file it could not read. */
-export interface ModReading {
+/** The places a box's files name a mod or a separator, and why it left out each file it could not read. */
+export interface EntryReading {
   readonly references: readonly PlaceInFile[];
   readonly leftOut: readonly string[];
 }
 
-/** A box that owns files, saying where they name a mod (ADR-0028). */
-export interface ModNames {
-  read(mod: string, held: HeldTexts): Promise<ModReading>;
-  /** The mod one of its files names at `offset` of the file's `text`; undefined where it names none. */
-  nameAt(file: string, text: string, offset: number): Promise<string | undefined>;
+/** A box that owns files, saying where they name a mod or a separator (ADR-0028). */
+export interface EntryNames {
+  read(entry: EntrySymbol, held: HeldTexts): Promise<EntryReading>;
+  /** The mod or separator one of its files names at `offset` of the file's `text`; undefined where it names none. */
+  nameAt(file: string, text: string, offset: number): Promise<EntrySymbol | undefined>;
 }
 
 /** A box that owns files naming a mod or a separator, in its part of a rename. */

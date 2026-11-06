@@ -6,6 +6,7 @@ import { watchers, fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { adapterOver } from '../../test/mo2/adapterOver';
 import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
 import { expectKind } from '../../test/expectKind';
+import { heldTexts } from '../../symbolNames/symbolNames';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
@@ -34,6 +35,19 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
       profile,
       covering: expectKind(publisherConfiguration, 'read').covering(join(root, 'mods', 'Harder VATS'), 'Harder VATS').map(({ badge }) => badge),
     }).toEqual({ declared: ['NM', 'IN', 'IG', 'AE'], profile: 'Default', covering: ['IN'] });
+  });
+
+  it('names a mod in the publisher\'s tags beside the mod manager\'s files, and says which mod an entry names at a place', async () => {
+    const settings = '{ "Include": [ "mods\\\\Harder VATS\\\\x.esp" ] }';
+    await writeFile(join(root, SETTINGS_FILE), settings);
+    const adapter = adapterOver(root);
+    const harder = { kind: 'mod', name: 'Harder VATS' } as const;
+
+    const { references } = await adapter.entryReferences.read(harder, heldTexts([]));
+
+    expect(references.map(({ file }) => file)).toContain(join(root, SETTINGS_FILE));
+    expect(await adapter.entryReferences.nameAt(join(root, SETTINGS_FILE), settings, settings.indexOf('Harder') + 2)).toEqual(harder);
+    expect(await adapter.entryReferences.nameAt(join(root, SETTINGS_FILE), settings, settings.indexOf('x.esp'))).toBeUndefined();
   });
 
   it('gives the publisher the mods its compile profiles enable, not the instance\'s selected profile', async () => {

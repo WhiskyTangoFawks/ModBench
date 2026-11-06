@@ -3,8 +3,8 @@
 
 import * as vscode from 'vscode';
 import { attachPortOf, createMEditClient, recordIndexReferences, stopMEditClient, type MEditClient } from './client';
-import { manifestFileReferences, manifestModNames } from './manifestAdapter/manifestAdapter';
-import type { ModNames, SymbolOwner } from './symbolNames/symbolNames';
+import { manifestFileReferences, manifestEntryNames } from './manifestAdapter/manifestAdapter';
+import type { EntryNames, EntrySymbol, SymbolOwner } from './symbolNames/symbolNames';
 import { makeReporter } from './drivingLib/reporter';
 import { commandTitles } from './drivingLib/commandTitles';
 import { surfaceRefusedWrites } from './drivingLib/writingGesture';
@@ -126,6 +126,7 @@ interface InstanceSide {
   pluginsShown?: PluginsShown;
   toolbox: ToolboxView;
   modsLines: () => string[];
+  entryTooltip: (entry: EntrySymbol) => string | undefined;
   sourceFiles: SourceFilesOf;
   copyValue: CopyValueAdapter[];
 }
@@ -140,6 +141,7 @@ function buildBareSide(own: Own): InstanceSide {
   return {
     toolbox: own(createToolboxView({ instance: undefined })),
     modsLines: () => [],
+    entryTooltip: () => undefined,
     sourceFiles: NO_SOURCE_FILES,
     copyValue: [],
   };
@@ -158,7 +160,7 @@ interface Opened {
   /** Each box over the instance's files that says where they name a symbol. */
   owners: readonly SymbolOwner[];
   /** Each box over the instance's files that says where they name a mod. */
-  modOwners: readonly ModNames[];
+  entryOwners: readonly EntryNames[];
   side: (own: Own, deps: ViewsDeps) => InstanceSide;
 }
 
@@ -184,10 +186,10 @@ function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, 
         modFolderOf: (mod) => adapter.modFolderPath(mod),
         companions: async () => pluginCompanionRule(await adapter.gameRelease()),
       })];
-      const modOwners = [adapter.modReferences, manifestModNames({ modFolderOf: (mod) => adapter.modFolderPath(mod) })];
-      return { facts: factsOf(instance), instance, scriptEnvironmentFile: adapter.scriptEnvironmentFile, owners, modOwners, side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
+      const entryOwners = [adapter.entryReferences, manifestEntryNames({ modFolderOf: (mod) => adapter.modFolderPath(mod) })];
+      return { facts: factsOf(instance), instance, scriptEnvironmentFile: adapter.scriptEnvironmentFile, owners, entryOwners, side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
     },
-    notAnInstance: () => ({ facts: NO_INSTANCE_FACTS, owners: [], modOwners: [], side: buildBareSide }),
+    notAnInstance: () => ({ facts: NO_INSTANCE_FACTS, owners: [], entryOwners: [], side: buildBareSide }),
   });
 }
 
@@ -268,6 +270,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   return {
     instance, toolbox, statuses: modStatuses, pluginsShown: plugins.pluginsShown, copyReads: adapter,
     modsLines: () => mods.standingLines(),
+    entryTooltip: (entry) => mods.tooltipOf(entry),
     deployment: { folder: () => deploymentFolderOf(deploymentFolderSetting), pluginsTxtPlace: placeForGame },
     sourceFiles: (origin) => sourceFiles(instance.value, origin),
     copyValue: [mods.copyValue, plugins.copyValue, downloads.copyValue],
@@ -365,8 +368,9 @@ function start(context: vscode.ExtensionContext): void {
   const sourceLanguage = createSourceLanguage({
     client: meditClient, instance: views.instance, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
     pluginsShown: views.pluginsShown,
+    entryTooltip: views.entryTooltip,
     owners: [recordIndexReferences(meditClient, () => Promise.resolve([])), ...opened.owners],
-    modOwners: opened.modOwners,
+    entryOwners: opened.entryOwners,
   });
   const agentServer = serveAgent({ port: agentPort(), instance: views.instance, copyReads: views.copyReads, statuses: views.statuses, deployment: views.deployment, pluginsShown: views.pluginsShown, standing: { mEdit: () => plugins.standing.mEdit(), plugins: () => plugins.standing.plugins(), sortingRules: () => plugins.standing.sortingRules(), modList: () => views.modsLines(), sourceLanguage: () => sourceLanguage.messages() }, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
   context.subscriptions.push(

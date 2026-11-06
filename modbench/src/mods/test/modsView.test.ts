@@ -246,6 +246,14 @@ describe('the Mods view registers its own gestures', () => {
     expect(h.taskTypes).toEqual(['modbench.mod.build']);
   });
 
+  it('says the tooltip of a mod\'s row, and none for a separator or a mod it lists no row for', () => {
+    const { tooltipOf } = createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
+
+    expect([
+      tooltipOf({ kind: 'mod', name: 'Harder VATS' }), tooltipOf({ kind: 'separator', name: 'Unassigned (Modlist Development)' }), tooltipOf({ kind: 'mod', name: 'Gone' }),
+    ]).toEqual(['Harder VATS', undefined, undefined]);
+  });
+
   it('hears its copy value in the Mods view\'s key', () => {
     const { copyValue } = createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
     expect([copyValue.reporterTag, copyValue.text({ view: 'modbench.modList' }, undefined)]).toEqual(['mod.copyValue', '']);

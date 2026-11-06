@@ -4,6 +4,7 @@
 import type { ChangeListener, InstanceAdapter, InstanceReading, PublisherConfiguration, PublisherTag, Reread, Subscription } from './instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { PathSpelling, TokenProgram } from './pathTokens';
+import { heldTexts, placeIn, type EntryReading, type HeldTexts } from '../symbolNames/symbolNames';
 
 export type ManagerReading = Omit<InstanceReading, 'publisherConfiguration'>;
 
@@ -32,6 +33,12 @@ export interface Publisher {
   configuration(): Promise<PublisherConfiguration>;
   /** Why the configuration cannot be read, without checking the paths it names. */
   refusal(): Promise<string | undefined>;
+  /** Each place the configuration's entries name the folder, at its segment of every entry at or under it, and why the
+   *  configuration could not be read. */
+  namesFolder(folder: string, held: HeldTexts): Promise<EntryReading>;
+  /** The names of the path, from the instance, whose last segment an entry spells at `offset` of the configuration's
+   *  `text`; undefined where `file` is no configuration or no segment is there. */
+  folderAt(file: string, text: string, offset: number): readonly string[] | undefined;
   changeTag: InstanceAdapter['changePublisherTag'];
   followFolders: InstanceAdapter['followModFolders'];
   /** Lists each kept file in the ignore list, leaving every other entry as written. Rejects, writing nothing, for a
@@ -52,6 +59,23 @@ export function withPublisher(manager: ManagerAdapter, publisher: Publisher, scr
   };
   return {
     ...manager,
+    entryReferences: {
+      read: async (entry, held) => {
+        const [files, folder] = await Promise.all([manager.entryReferences.read(entry, held), entry.kind === 'mod' ? manager.modFolderPath(entry.name) : undefined]);
+        const tags = folder === undefined ? { references: [], leftOut: [] } : await publisher.namesFolder(folder, held);
+        return { references: [...files.references, ...tags.references], leftOut: [...files.leftOut, ...tags.leftOut] };
+      },
+      nameAt: async (file, text, offset) => {
+        const named = await manager.entryReferences.nameAt(file, text, offset);
+        if (named !== undefined) return named;
+        const name = publisher.folderAt(file, text, offset)?.at(-1);
+        const folder = name === undefined ? undefined : await manager.modFolderPath(name);
+        if (name === undefined || folder === undefined) return undefined;
+        const { start: at } = placeIn(file, text, offset, offset);
+        const { references } = await publisher.namesFolder(folder, heldTexts([[file, text]]));
+        return references.some(({ start, end }) => start.line === at.line && start.character <= at.character && at.character <= end.character) ? { kind: 'mod', name } : undefined;
+      },
+    },
     publisherTags: publisher.tags,
     changePublisherTag: (...change) => afterKeepingOut(publisher.changeTag(...change)),
     followModFolders: (moves) => afterKeepingOut(publisher.followFolders(moves)),

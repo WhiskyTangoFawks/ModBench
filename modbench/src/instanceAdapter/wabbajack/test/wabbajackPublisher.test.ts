@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 import { wabbajackPublisher } from '../wabbajackPublisher';
 import { expectKind } from '../../../test/expectKind';
+import { heldTexts } from '../../../symbolNames/symbolNames';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
@@ -674,5 +675,45 @@ describe('a write to the compiler settings changes only the entries it names (Ne
     await publisherOver().changeTag('remove', 'Ignore', [folder('C')]);
 
     expect(await settingsText()).toBe('{\n  "Ignore": [\n    "ignored"\n  ],\n  "Ignore": [\n    "mods\\\\D"\n  ]\n}');
+  });
+});
+
+describe('where the publisher tags name a mod folder (ADR-0028)', () => {
+  const folder = (name: string) => join(root, 'mods', name);
+  const SETTINGS = '{\n  "Include": [ "MODS/a/", "mods\\\\A\\\\x.esp", "mods\\\\B" ],\n  "AlwaysEnabled": [ "mods\\\\A" ]\n}';
+  const place = (line: number, start: number, end: number) => ({ file: join(root, SETTINGS_FILE), start: { line, character: start }, end: { line, character: end } });
+
+  it('names the mod folder at its segment of each entry at or under it, in every list, and in no entry of another folder', async () => {
+    await writeSettings(SETTINGS);
+
+    const { references, leftOut } = await publisherOver().namesFolder(folder('A'), heldTexts([]));
+
+    expect(leftOut).toEqual([]);
+    expect(references).toEqual([place(1, 21, 22), place(1, 33, 34), place(2, 28, 29)]);
+  });
+
+  it('reads the text the editor holds unsaved in place of the file, and names nothing in a configuration the instance lacks', async () => {
+    expect((await publisherOver().namesFolder(folder('A'), heldTexts([]))).references).toEqual([]);
+
+    const { references } = await publisherOver().namesFolder(folder('A'), heldTexts([[join(root, SETTINGS_FILE), '{"Ignore":["mods/A"]}']]));
+
+    expect(references).toHaveLength(1);
+  });
+
+  it('says why a configuration it cannot read is left out', async () => {
+    await writeSettings('{ not json');
+
+    const { references, leftOut } = await publisherOver().namesFolder(folder('A'), heldTexts([]));
+
+    expect([references, leftOut]).toEqual([[], [expect.stringContaining(SETTINGS_FILE) as unknown]]);
+  });
+
+  it('says which folder the segment under a place names, as the entry spells it', () => {
+    const publisher = publisherOver();
+    const file = join(root, SETTINGS_FILE);
+
+    expect(publisher.folderAt(file, SETTINGS, SETTINGS.indexOf('"mods\\\\A\\\\x') + 7)).toEqual(['mods', 'A']);
+    expect(publisher.folderAt(file, SETTINGS, SETTINGS.indexOf('Include'))).toBeUndefined();
+    expect(publisher.folderAt(join(root, 'notes.json'), SETTINGS, SETTINGS.indexOf('MODS') + 5)).toBeUndefined();
   });
 });
