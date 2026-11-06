@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
@@ -64,6 +65,25 @@ public sealed class ValidateContainerByStampsTests : IDisposable
             },
             problems.Problems.Select(p => p.SourceRelativePath),
             strict: true);
+    }
+
+    [Fact]
+    public void APlacedReferenceOneCellCarriesTwice_IsDiagnosed_NamingTheCell()
+    {
+        var cellDocument = _fixture.Mod.SourceFileContaining(ContainerModPlugin.TemporaryRefEditorId);
+        var cell = JsonNode.Parse(File.ReadAllText(cellDocument)).Require().AsObject();
+        var temporary = cell["Temporary"].Require().AsArray();
+        var added = temporary[0].Require().DeepClone().AsObject();
+        added["FormKey"] = $"000F10:{ContainerMod.PluginName}";
+        temporary.Add(added);
+        temporary.Add(added.DeepClone());
+        File.WriteAllText(cellDocument, cell.ToJsonString());
+
+        ValidateUntilSourceUnreadable();
+
+        var problem = _fixture.Index.Queries.GetProblems().Value().Single(p => PluginAddress.Comparer.Equals(p.Plugin, _fixture.Plugin)).Problems.Single();
+        Assert.Equal(Path.GetRelativePath(_fixture.Entry.ModFolderOf(), cellDocument), problem.SourceRelativePath);
+        Assert.Contains($"000F10:{ContainerMod.PluginName} more than once", problem.Message, StringComparison.Ordinal);
     }
 
     [Fact]

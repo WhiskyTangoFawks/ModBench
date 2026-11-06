@@ -218,11 +218,11 @@ internal sealed class WorkingTreeOverlay
                 $"{child.FormKey} in {key.Name} ({key.Origin}) reached projection untyped, past the read that refuses it.");
 
             var childBody = _containers.TextOf(child);
-            var held = stamps.TryGetValue(child.FormKey, out var stamp);
+            var existsAtEffective = stamps.TryGetValue(child.FormKey, out var stamp);
             if (string.Equals(_contentStamp(childBody), stamp, StringComparison.Ordinal)) continue;
 
             movedKeys.Add(child.FormKey);
-            if (held)
+            if (existsAtEffective)
                 ApplyOneWorkingTreeChange(key, child.FormKey, childBody, movedKeys);
             else
                 MaterializeRecord(key, child.FormKey, childType, childBody, movedKeys);

@@ -111,6 +111,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
         Assert.Equal(IndexRefusal.IndexNotReady, refused.Refusal);
         Assert.Contains("its check of the disk did not finish", refused.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("no change was signalled", refused.Message, StringComparison.Ordinal);
+        _gate.Release();
     }
 
     [Fact]

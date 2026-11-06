@@ -506,14 +506,14 @@ internal sealed class Indexer : IDisposable
                     var reason = Status.Message is { } message ? $" ({message})" : "";
                     throw new IndexNotReadyException(
                         "mEdit's record index has not read the plugin source mEdit wrote: " +
-                        (CheckSignalledSince(awaited) ? $"its check of the disk did not finish{reason}." : "no change was signalled after the write."));
+                        (CheckSignalledAfter(awaited) ? $"its check of the disk did not finish{reason}." : "no change was signalled after the write."));
                 }
                 Monitor.Wait(_reconciled, remaining < SequencePollInterval ? remaining : SequencePollInterval);
             }
         }
     }
 
-    private bool CheckSignalledSince(long writes)
+    private bool CheckSignalledAfter(long writes)
     {
         lock (_turns) return _writesSignalled >= writes;
     }
