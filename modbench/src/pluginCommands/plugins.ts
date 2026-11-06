@@ -12,12 +12,13 @@ import type { TailOf } from '../coreLib/boundCommand';
 import { pluginRenameCommands, type PluginRenameClient } from './renamePlugin';
 import type { PluginFactsOf } from '../sortingRules/judge';
 import { moveOrderRefusal } from './pluginOrder';
-import { decompileAndRepair, type DecompileAndRepairClient, type PlaceMods } from './decompileAndRepair';
+import { decompileAndRepair, outsideSourceMods, type DecompileAndRepairClient, type PlaceMods } from './decompileAndRepair';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type {
   DecidePluginOrder, DecidePluginOrderOverProvided, InstanceAdapter, PluginEntry, PluginOrderChange, PluginsProvided,
 } from '../instanceAdapter/instanceAdapter';
 import { pluginsNotRestored } from './pluginsNotRestored';
+import type { FileReads } from '../sortingRules/lootConditions';
 import { isReadFailed } from '../wire/readFailed';
 
 interface Decision<T> {
@@ -175,7 +176,8 @@ async function askedManifests(adapter: InstanceAdapter): Promise<ManifestsRead> 
     const folder = await adapter.modFolderPath(name);
     if (folder === undefined) return [];
     const manifest = await manifestAt(folder);
-    return [statusFrom({ name, folder }, manifest, await adapter.modValue(folder, packagesAskedAt(manifest)))];
+    // A plugin is gone only when its file is absent, whether git holds it or not.
+    return [statusFrom({ name, folder }, manifest, await adapter.modValue(folder, packagesAskedAt(manifest), []))];
   }));
   const statusOf = new Map(statuses.flat().map((status) => [status.mod, status]));
   return {
@@ -218,6 +220,17 @@ async function syncPlugins(adapter: InstanceAdapter): Promise<PluginSyncResult> 
 /** Plugin sync over the active profile. */
 export type PluginSyncRun = () => Promise<PluginSyncResult>;
 
+/** The Instance adapter's file reads, each at the file mod order provides, else the game folder's. */
+export function fileReadsOver(adapter: Pick<InstanceAdapter, 'dataFileChecksum' | 'dataFileVersion' | 'dataFileReadable'>, winners: () => { get: (path: string) => { winner: string } | undefined }): FileReads {
+  const forward = (path: string): string => path.replace(/\\/g, '/');
+  const winnerOf = (path: string): string | undefined => winners().get(path)?.winner;
+  return {
+    checksum: (path) => adapter.dataFileChecksum(forward(path), winnerOf(forward(path))),
+    version: (path, field) => adapter.dataFileVersion(forward(path), winnerOf(forward(path)), field),
+    readable: (path) => adapter.dataFileReadable(forward(path), winnerOf(forward(path))),
+  };
+}
+
 /** `syncPlugins` bound to one instance. */
 export function pluginSyncOver(adapter: InstanceAdapter): PluginSyncRun {
   return () => syncPlugins(adapter);
@@ -233,15 +246,16 @@ async function loadAfter(adapter: InstanceAdapter, plugins: readonly string[], a
 }
 
 /** Plugin commands, bound to one instance and one mEdit client: each takes the gesture's arguments only. */
-export function pluginCommands({ adapter, client, newRepositories }: {
-  adapter: InstanceAdapter; client: PluginMasters & PluginRenameClient & DecompileAndRepairClient; newRepositories: PlaceMods;
+export function pluginCommands({ adapter, client, placeMods }: {
+  adapter: InstanceAdapter; client: PluginMasters & PluginRenameClient & DecompileAndRepairClient; placeMods: PlaceMods;
 }) {
   return {
     setPluginsParticipation: (...args: TailOf<typeof setPluginsParticipation>) => setPluginsParticipation(adapter, ...args),
     setPluginsEnabled: (...args: TailOf<typeof setPluginsEnabled>) => setPluginsEnabled(adapter, ...args),
     loadAfter: (...args: TailOf<typeof loadAfter>) => loadAfter(adapter, ...args),
     reorderPlugins: (...args: TailOf<typeof reorderPlugins>) => reorderPlugins({ adapter, client }, ...args),
-    decompileAndRepair: (...args: TailOf<typeof decompileAndRepair>) => decompileAndRepair({ adapter, client, newRepositories }, ...args),
+    decompileAndRepair: (...args: TailOf<typeof decompileAndRepair>) => decompileAndRepair({ adapter, client, placeMods }, ...args),
+    outsideSourceMods: (...args: TailOf<typeof outsideSourceMods>) => outsideSourceMods({ adapter }, ...args),
     ...pluginRenameCommands({ adapter, client }),
   };
 }

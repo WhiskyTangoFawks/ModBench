@@ -43,7 +43,7 @@ async function over({ files = { ModA: {}, ModB: {} }, answers = {}, sourceFolder
   const folderFiles = new Map(folders.map(([folder, held]) => [folder, Object.keys(held)]));
   const hashes = new Map(folders.flatMap(([folder, held]) => Object.entries(held).map(([path, hash]) => [join(folder, path), { size: 1, hash }] as const)));
   const fake = fakeInstanceAdapter(
-    readingFixture({ gameFolder, sourceRepositories: repositoriesOf(sourceFolders), modFolders: modFoldersIn(modsDir, ...Object.keys(files)) }),
+    readingFixture({ gameFolder, sourceModFolders: repositoriesOf(sourceFolders), modFolders: modFoldersIn(modsDir, ...Object.keys(files)) }),
     { folderFiles, hashes, ...answers });
   const deps = { adapter: { ...fake.adapter, ...adapterOver } };
   return {
@@ -90,9 +90,17 @@ describe('update manifest', () => {
     const result = await update(['ModA', 'ModB']);
 
     expect([result.landed, result.refused, await manifestOf('ModA'), await manifestOf('ModB')]).toEqual([
-      [{ mod: 'ModA', manifestWritten: true, notInPackage: ['a.nif'], otherBytes: [] }, { mod: 'ModB', manifestWritten: true, notInPackage: ['b.nif'], otherBytes: [] }], [],
+      [{ mod: 'ModA', manifestWritten: true, repositoryWritten: false, notInPackage: ['a.nif'], otherBytes: [] }, { mod: 'ModB', manifestWritten: true, repositoryWritten: false, notInPackage: ['b.nif'], otherBytes: [] }], [],
       { manifest: { ...EMPTY, files: holding({ 'a.nif': HA }) } }, { manifest: { ...EMPTY, files: holding({ 'b.nif': HB }) } },
     ]);
+  });
+
+  it('names no file git holds in a mod\'s folder (The manifest, story 5)', async () => {
+    const { update, manifestOf } = await over({ files: { ModA: { 'a.nif': HA, 'config.ini': HB } }, answers: { heldByGit: new Map([[join(modsDir, 'ModA'), ['config.ini']]]) } });
+
+    await update(['ModA']);
+
+    expect(await manifestOf('ModA')).toEqual({ manifest: { ...EMPTY, files: holding({ 'a.nif': HA }) } });
   });
 
   it('names the installation file as a package with its file on Nexus as its host, and none of the mod\'s metadata (Query info, story 1)', async () => {
@@ -104,7 +112,7 @@ describe('update manifest', () => {
     const result = await update(['ModA']);
 
     expect([result.landed, await manifestOf('ModA')]).toEqual([
-      [{ mod: 'ModA', manifestWritten: true, notInPackage: [], otherBytes: [] }],
+      [{ mod: 'ModA', manifestWritten: true, repositoryWritten: false, notInPackage: [], otherBytes: [] }],
       { manifest: { ...EMPTY, packages: [{ kind: 'installationFile', name: 'ModA-1.0.7z', size: 10, hash: INSTALLED.hash, host: { nexus: { game: 'fallout4', mod: 1, file: 2 } } }], files: holding({ 'a.nif': HA }) } },
     ]);
   });
@@ -121,6 +129,22 @@ describe('update manifest', () => {
     expect(await manifestOf('ModA')).toEqual({
       manifest: { ...EMPTY, packages: [{ kind: 'installationFile', name: 'ModA-1.0.7z', size: 10, hash: INSTALLED.hash, host: { nexus: { game: 'fallout4', mod: 1, file: 2 } } }], files: holding({ 'a.nif': HA }) },
     });
+  });
+
+  it('reports a downloaded file whose page could not be read only for the mod whose manifest names it', async () => {
+    const OTHER = { ...INSTALLED, path: '/downloads/Other.7z', hash: 'OTHERHASH0=' };
+    const { update } = await over({
+      files: { ModA: { 'a.nif': HA } },
+      answers: {
+        installations: new Map([['ModA', read(INSTALLED)]]),
+        downloadedFilesHashed: { files: [{ ...INSTALLED, pageUnreadable: 'EISDIR' }, { ...OTHER, pageUnreadable: 'EISDIR' }], notes: [] },
+      },
+    });
+
+    const result = await update(['ModA']);
+
+    expect(result.notes).toEqual([{ mod: 'ModA', note: 'the page of ModA-1.0.7z could not be read, so its manifest names no host: EISDIR' }]);
+    expect(result.repositoryNotes).toEqual([]);
   });
 
   it('names the direct URL of the downloaded file\'s metadata, not the Nexus file the mod\'s metadata names', async () => {
@@ -227,7 +251,7 @@ describe('update manifest', () => {
     const unreadable = { path: 'Game.mem', excluded: false, read: { kind: 'unreadable' as const, reason: 'EBUSY: resource busy' } };
     const { update, manifestOf } = await over({
       files: { ModA: {} },
-      adapterOver: { folderValue: () => Promise.resolve({ files: new Map([['Game.mem', unreadable]]), exclude: [], ignoresCase: false }) },
+      adapterOver: { unheldFolderValue: () => Promise.resolve({ files: new Map([['Game.mem', unreadable]]), exclude: [], ignoresCase: false }) },
     });
     await writeManifestIn(join(modsDir, 'ModA'), { ...EMPTY, ignore: ['Game.mem'] });
 
@@ -241,7 +265,7 @@ describe('update manifest', () => {
 
     await update(['ModA']);
 
-    expect((await update(['ModA'])).landed).toEqual([{ mod: 'ModA', manifestWritten: false, notInPackage: ['a.nif'], otherBytes: [] }]);
+    expect((await update(['ModA'])).landed).toEqual([{ mod: 'ModA', manifestWritten: false, repositoryWritten: false, notInPackage: ['a.nif'], otherBytes: [] }]);
   });
 
   it('updates a mod named twice once', async () => {
@@ -249,13 +273,13 @@ describe('update manifest', () => {
 
     const result = await update(['ModA', 'ModA']);
 
-    expect(result.landed).toEqual([{ mod: 'ModA', manifestWritten: true, notInPackage: ['a.nif'], otherBytes: [] }]);
+    expect(result.landed).toEqual([{ mod: 'ModA', manifestWritten: true, repositoryWritten: false, notInPackage: ['a.nif'], otherBytes: [] }]);
   });
 
   it('names each file a package holds with other bytes apart from each nothing holds', async () => {
     const { update } = await over({ files: { ModA: { 'a.nif': HX, 'z.txt': HZ } }, answers: { installations: new Map([['ModA', read(INSTALLED)]]) } });
 
-    expect((await update(['ModA'])).landed).toEqual([{ mod: 'ModA', manifestWritten: true, notInPackage: ['z.txt'], otherBytes: ['a.nif'] }]);
+    expect((await update(['ModA'])).landed).toEqual([{ mod: 'ModA', manifestWritten: true, repositoryWritten: false, notInPackage: ['z.txt'], otherBytes: ['a.nif'] }]);
   });
 
   it('writes a manifest of the format before version 1 over in version 1 (formats/CLAUDE.md, Versions)', async () => {
@@ -331,7 +355,7 @@ describe('update manifest', () => {
 
     it('a file of which could not be read, naming why', async () => {
       const unreadable = { files: new Map([['a.nif', { path: 'a.nif', excluded: false, read: { kind: 'unreadable' as const, reason: 'EACCES: permission denied' } }]]), exclude: [], ignoresCase: false };
-      const { result } = await refusedBy({ files: { ModA: { 'a.nif': HA }, ModB: {} }, adapterOver: { folderValue: (folder) => Promise.resolve(folder.endsWith('ModA') ? unreadable : { files: new Map(), exclude: [], ignoresCase: false }) } });
+      const { result } = await refusedBy({ files: { ModA: { 'a.nif': HA }, ModB: {} }, adapterOver: { unheldFolderValue: (folder) => Promise.resolve(folder.endsWith('ModA') ? unreadable : { files: new Map(), exclude: [], ignoresCase: false }) } });
 
       expect([result.refused, result.landed.map(({ mod }) => mod)]).toEqual([[{ item: 'ModA', reason: 'was not updated: a file could not be read: EACCES: permission denied' }], ['ModB']]);
     });
@@ -366,14 +390,23 @@ describe('update manifest', () => {
     const SOURCE_FILES = { 'tool.dll': HA, 'plugin.json': HX, '.git': HB, '.git/HEAD': HB };
     const GIT_HOLDS = () => ({ heldByGit: new Map([[SOURCE(), ['plugin.json']]]) });
 
-    it('is refused, with neither its mod folder nor its source folder recorded, when named as a mod', async () => {
+    it('has its source folder recorded, and not its mod folder, when named as a mod', async () => {
       const { update, manifestOf } = await among({ 'extra.nif': HX }, GIT_HOLDS(), SOURCE_FILES);
 
       const result = await update(['ModA', 'ModB']);
 
-      expect([result.landed.map(({ mod }) => mod), result.refused, await manifestOf('ModB'), await manifestIn(SOURCE())]).toEqual([
-        ['ModA'], [{ item: 'ModB', reason: "was not updated: its mod folder is a source mod's build; run build." }], undefined, undefined,
+      expect([result.landed.map(({ mod }) => mod), result.refused, await manifestOf('ModB'), await heldIn(SOURCE())]).toEqual([
+        ['ModA', 'ModB'], [], undefined, { ...EMPTY, files: holding({ 'tool.dll': HA }) },
       ]);
+    });
+
+    it('counts each mod whose submodule entry or ignore lines were written, a mod with a manifest unchanged too', async () => {
+      const { update } = await among({}, { submodules: { notes: [], other: [], written: ['ModB'] } }, SOURCE_FILES);
+
+      const first = await update(['ModB']);
+      const second = await update(['ModB']);
+
+      expect([first, second].map(({ landed }) => landed.map(({ manifestWritten, repositoryWritten }) => [manifestWritten, repositoryWritten]))).toEqual([[[true, true]], [[false, true]]]);
     });
 
     it('is refused when named as a mod, but passed over when every mod is updated, though its folder is one git holds whole', async () => {
@@ -427,7 +460,7 @@ describe('update manifest', () => {
 
       const result = await update(['ModB']);
 
-      expect([fake.calls, result.landed, result.refused.map(({ item }) => item)]).toEqual([[], [], ['ModB']]);
+      expect([fake.calls[0], result.landed.map(({ mod }) => mod), result.refused]).toEqual([{ verb: 'writeSubmodules', acted: ['ModB'] }, ['ModB'], []]);
     });
 
     it('has its submodule entry written for the mods that land, not for a source mod named as a mod', async () => {
@@ -449,7 +482,7 @@ describe('update manifest', () => {
       const result = await update(['ModA']);
 
       expect([result.landed, await manifestOf('ModA')]).toEqual([
-        [{ mod: 'ModA', manifestWritten: true, notInPackage: [], otherBytes: [] }], { manifest: { ...EMPTY, packages: [{ kind: 'gameFolder' }], files: holding({ 'meshes/a.nif': HA }) } },
+        [{ mod: 'ModA', manifestWritten: true, repositoryWritten: false, notInPackage: [], otherBytes: [] }], { manifest: { ...EMPTY, packages: [{ kind: 'gameFolder' }], files: holding({ 'meshes/a.nif': HA }) } },
       ]);
     });
 
@@ -542,7 +575,7 @@ describe('update manifest', () => {
 
   describe('what it writes in the repository', () => {
     it('makes each source mod with a remote a submodule once its mods are updated, naming a source mod that is not one', async () => {
-      const { update, fake } = await over({ answers: { submodules: { notes: [{ mod: 'ModA', note: 'it has a remote but no branch checked out' }], other: ['source/Odd is not a source mod'] } } });
+      const { update, fake } = await over({ answers: { submodules: { notes: [{ mod: 'ModA', note: 'it has a remote but no branch checked out' }], other: ['source/Odd is not a source mod'], written: [] } } });
 
       const result = await update(['ModA']);
 
@@ -660,7 +693,7 @@ describe('update manifest', () => {
 
       const held = await manifestHeld('ModA');
       expect([result.landed, held.flags, held.files]).toEqual([
-        [{ mod: 'ModA', manifestWritten: false, notInPackage: [], otherBytes: [] }], new Map([['Mod.esp', FLAGS]]), holding({ 'Mod.esp': HA }),
+        [{ mod: 'ModA', manifestWritten: false, repositoryWritten: false, notInPackage: [], otherBytes: [] }], new Map([['Mod.esp', FLAGS]]), holding({ 'Mod.esp': HA }),
       ]);
     });
 
@@ -728,6 +761,6 @@ describe('update manifest', () => {
       files: { ModA: { 'Renamed.esp': HA } }, answers: { installations: new Map([['ModA', read({ ...INSTALLED, entries: [{ path: 'Original.esp', hash: HA }] })]]) },
     });
 
-    expect((await update(['ModA'])).landed).toEqual([{ mod: 'ModA', manifestWritten: true, notInPackage: [], otherBytes: [] }]);
+    expect((await update(['ModA'])).landed).toEqual([{ mod: 'ModA', manifestWritten: true, repositoryWritten: false, notInPackage: [], otherBytes: [] }]);
   });
 });

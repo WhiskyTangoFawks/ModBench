@@ -4,7 +4,7 @@ export {
   filesNoPackageHolds, folderAgainst, heldWholeStatus, statusFrom, unreadableStatus, type FolderAgainst, type ModAt, type ModStatus,
 } from './modStatus';
 export { manifestText, ordinal } from './manifestText';
-export { buildFileIn, manifestAt, manifestIn, manifestNameOf, packagesAskedAt, writeManifestIn } from './manifestFiles';
+export { buildFileAgainst, buildFileIn, manifestAt, manifestFileFor, manifestIn, manifestNameOf, manifestsIn, packagesAskedAt, writeManifestIn } from './manifestFiles';
 export { exclusionsOf, exclusionsOfFiles, isUnderAny, ownFilesOf } from './folderPaths';
 export { installationFileLack } from './packageLack';
 export { isAddress, repositoryOf } from './manifestPackages';

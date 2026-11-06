@@ -205,6 +205,24 @@ public sealed class RecordDocumentEditTests : IDisposable
         Assert.Equal(before, _fixture.Document(formKey));
     }
 
+    [Theory]
+    [InlineData("VirtualMachineAdapter.ExtraBindDataVersion", "5", "VirtualMachineAdapter.ExtraBindDataVersion")]
+    [InlineData("VirtualMachineAdapter.Script.Name", "\"QuestFragments\"", "VirtualMachineAdapter.Script")]
+    public void AValueForAMemberPastItsOwnersSetBreak_IsRefusedNamingTheOutermostUnheldMemberAndThatBreak(string path, string value, string unheld)
+    {
+        _quest.VirtualMachineAdapter = new QuestAdapter { Versioning = QuestAdapter.VersioningBreaks.Break0 };
+        var formKey = _fixture.Seed(_quest, "qust");
+
+        var (result, after) = _fixture.Apply(formKey, SetAt(Json(value), [.. path.Split('.').Select(Member)]));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.CodecDroppedValue, result.Refusal);
+        Assert.Equal(
+            $"'{unheld}' lies past its owner's Versioning.Break0, which is set, so the record does not hold it and nothing was written.",
+            result.Message);
+        Assert.Null(after);
+    }
+
     [Fact]
     public void RecordFlags_ClearedToNone_LeavesNoSpellingOfThemBehind()
     {

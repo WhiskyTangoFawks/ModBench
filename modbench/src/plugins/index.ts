@@ -28,7 +28,7 @@ export interface PluginsDeps {
   sourceEditing: PluginsViewDeps['sourceEditing'];
 }
 
-type PluginsInstanceDeps = Pick<PluginsViewDeps, 'instance' | 'commands' | 'modStatuses'> & {
+type PluginsInstanceDeps = Pick<PluginsViewDeps, 'instance' | 'commands' | 'modStatuses' | 'fileReads'> & {
   syncPlugins: PluginSyncRun;
 };
 
@@ -40,7 +40,7 @@ interface PluginsOnInstance extends vscode.Disposable {
   drawsHighlight: PluginsView['drawsHighlight'];
   /** The Plugins view's message line, where another view's gesture says its phase. */
   say: PluginsView['progress']['say'];
-  editingInPluginsView: Pick<EditingDeps, 'around' | 'onPut'>;
+  editingInPluginsView: Pick<EditingDeps, 'around' | 'onPut' | 'inGameOrder'>;
   nextRefill: ReconcileNarrator['nextRefill'];
   pluginsShown: PluginsView['pluginsShown'];
 }
@@ -71,10 +71,13 @@ export function createPlugins(deps: PluginsDeps): Plugins {
       });
       pluginLines = view.standingLines;
       ruleLines = view.sortingRuleLines;
-      const editingInPluginsView = editingView({
-        narrator: view.narrator, progress: view.progress, log: channel, revealLog: () => channel.show(true), loadOrderPut: view.loadOrderPut,
-        reporterFor,
-      });
+      const editingInPluginsView = {
+        ...editingView({
+          narrator: view.narrator, progress: view.progress, log: channel, revealLog: () => channel.show(true), loadOrderPut: view.loadOrderPut,
+          reporterFor,
+        }),
+        inGameOrder: view.inGameOrder,
+      };
       return {
         followed: view.followed, nameFilter: view.nameFilter, copyValue: view.copyValue, relatesRows: view.relatesRows, drawsHighlight: view.drawsHighlight, say: view.progress.say, editingInPluginsView, pluginsShown: view.pluginsShown,
         nextRefill: () => view.narrator.nextRefill(),

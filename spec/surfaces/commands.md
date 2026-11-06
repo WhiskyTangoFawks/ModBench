@@ -77,7 +77,7 @@ A template is a standalone program. Modbench is not. A gesture leaves this file 
 | Source | Referenced By, Ctrl + click | - | [source.md](source.md) |
 | Agent | - | - | [agent.md](agent.md) |
 | Scripts | Apply Script | - | [scripts.md](scripts.md) |
-| Modlist repository | - | - | [modlist-repository.md](modlist-repository.md) |
+| Instance repository | - | - | [instance-repository.md](instance-repository.md) |
 | Deployment: hardlink | - | - | [deployment-hardlink.md](deployment-hardlink.md) |
 
 The xEdit Messages tab is not a surface: failures and wrong states go where common.md, Reporting says.
@@ -95,7 +95,7 @@ The xEdit Messages tab is not a surface: failures and wrong states go where comm
 | Mods, the conflict table | an editor tab | - | opened by the user |
 | Mods, the FOMOD installer | an editor tab | - | opened by install |
 | Source | the Explorer, an editor tab, and Source Control | - | opened by the user, or by version in git |
-| Modlist repository, the manifests | an editor tab, and Source Control | - | opened by the user |
+| Instance repository, the manifests | an editor tab, and Source Control | - | opened by the user |
 
 Every view is always present. A view with nothing to show renders its own empty state, and no view hides itself.
 
@@ -127,7 +127,7 @@ What every list view does to whatever it shows, whatever the object. common.md s
 
 ## Modlist
 
-The instance's mods and profiles as git holds them ([modlist-repository.md](modlist-repository.md)).
+The instance's mods and profiles as git holds them ([instance-repository.md](instance-repository.md)).
 
 | Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
@@ -143,8 +143,8 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | move | writes | `modbench.mod.move` | mods or separators | target: a separator, above a mod, or the view's end | MO2 mod list | Move mods in mod order. | update-load-order-file |
 | uninstall | writes | `modbench.mod.uninstall` | mods | force: [agent.md](agent.md#any-agent), story 7 | MO2 mod list | Send each mod's folder to the trash, and remove the mod from mod order. | update-load-order-file |
 | create empty mod | writes | `modbench.mod.createEmpty` | - | name | MO2 mod list | Create an empty mod folder and its line. | update-load-order-file |
-| install | writes | `modbench.mod.install` | a file, a folder or a downloaded file | name, for a new mod; target mod, for an upgrade; choices, for a FOMOD ([mods-fomod.md](mods-fomod.md)); install anyway, for a FOMOD that names a missing file | MO2 mod list; MO2 Downloads | Install it as a new mod, or over an installed mod as an upgrade. | install-mod |
-| version in git | writes | `modbench.mod.versionInGit` | mods | where: a source mod in a new repository, a source mod in the modlist repository, or the mod's whole folder in the modlist repository; commit | none | Put a mod's work under git. | version-in-git |
+| install | writes | `modbench.mod.install` | a file, a folder or a downloaded file | name, for a new mod; target mod, for an upgrade; choices, for a FOMOD ([mods-fomod.md](mods-fomod.md)); install anyway, for a FOMOD that names a missing file; handing the installer to me: [agent.md](agent.md#gestures), story 8 | MO2 mod list; MO2 Downloads | Install it as a new mod, or over an installed mod as an upgrade. | install-mod |
+| version in git | writes | `modbench.mod.versionInGit` | mods | where: a source mod in a new repository, a source mod in the instance repository, or the mod's whole folder in the instance repository; commit | none | Put a mod's work under git. | version-in-git |
 | build | writes | `modbench.mod.build` | mods, or none for every source mod | - | none | Write a source mod's folder as its build file says, and record it in its manifest. | build-mod |
 | update manifest | writes | `modbench.mod.updateManifest` | mods, separators or source folders, or none for every manifest | - | none | Record each folder in its manifest. | update-manifest |
 | restore from manifest | writes | `modbench.mod.restoreFromManifest` | mods or separators, or none for every manifest | - | none | Make each folder what its manifest says, building each source mod's. | restore-from-manifest |
@@ -158,7 +158,9 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | go to mod | reads | `modbench.mod.goToMod` | a copy of a file in a mod or Overwrite | other mod: a pick, when the copy wins over several | MO2 Information dialog, Conflicts tab, Go to... | Select, in Mods, the mod or Overwrite whose copy wins the file, or a mod whose copy it wins over. | none |
 | exclude / include file | writes | `modbench.mod.excludeFile`, `modbench.mod.includeFile` | files in mods or Overwrite | - | MO2 Information dialog, Conflicts tab, Hide; MO2 mod list, Restore hidden files | Keep each file from the game with the mod manager's exclusion mark, or clear the mark. | update-load-order-file |
 | ignore / unignore file | writes | `modbench.mod.ignoreFile`, `modbench.mod.unignoreFile` | files in mods | - | none | Keep each file out of its mod's manifest, or put it back. | update-manifest |
-| rename | writes | `modbench.mod.rename` | mod | name | MO2 mod list | Rename a mod's folder, and the mod wherever a profile names it. | update-load-order-file |
+| rename | writes | `modbench.mod.rename` | mod | name | MO2 mod list | Rename a mod's folder, and each reference to it. | update-load-order-file |
+| referenced by | reads | `modbench.mod.referencedBy` | mod | - | none | List each place a file names a mod, in VS Code's References view. | - |
+| go to | reads | `modbench.mod.goTo` | mod | - | none | Select a mod's row in Mods, or show its folder in the Explorer when Mods shows no row for it. | none |
 | add / remove publisher tag | writes | `modbench.mod.addPublisherTag`, `modbench.mod.removePublisherTag` | mods, or files and folders in mods | publisher tag: a pick | none | Add a publisher tag to each mod, folder or file, or remove it ([publishing.md](publishing.md), Publisher tags). | change-publisher-tag |
 
 ## Separator
@@ -166,7 +168,7 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
 | add | writes | `modbench.separator.add` | mod or separator (the anchor) | name; position: above a mod, and the mod joins the new separator; below a separator, after its mods | MO2 mod list | Add a mod separator. | update-load-order-file |
-| rename | writes | `modbench.separator.rename` | separator | name | MO2 mod list | Rename a mod separator. | update-load-order-file |
+| rename | writes | `modbench.separator.rename` | separator | name | MO2 mod list | Rename a mod separator, and each reference to it. | update-load-order-file |
 | delete | writes | `modbench.separator.delete` | separators | force: [agent.md](agent.md#any-agent), story 7 | MO2 mod list | Delete a mod separator, and keep its mods. | update-load-order-file |
 
 ## Plugin
@@ -175,12 +177,14 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 |---|---|---|---|---|---|---|---|
 | enable / disable | writes | `modbench.plugin.enable`, `modbench.plugin.disable` | plugins | - | MO2 plugin list | Enable or disable each plugin in the active profile. | update-load-order-file |
 | move | writes | `modbench.plugin.move` | plugins | target: the row it is dropped on, or the view's end. Several plugins move as one block | MO2 plugin list | Move plugins in plugin order. | update-load-order-file |
-| create | writes | `modbench.plugin.create` | Overwrite or an enabled mod | name | xEdit navigator | Create an empty plugin. | create-plugin |
+| create | writes | `modbench.plugin.create` | Overwrite or an enabled mod | name; flags | xEdit navigator | Create an empty plugin. | create-plugin |
 | decompile | writes | `modbench.plugin.decompile` | plugins | force: [agent.md](agent.md#any-agent), story 7 | none | Read each plugin's bytes into its plugin source in the working tree. | decompile-plugin |
-| decompile and repair | writes | `modbench.plugin.decompileAndRepair` | plugins | force: [agent.md](agent.md#any-agent), story 7 | none | Decompile each malformed plugin and repair it, in two commits to its mod's plugin source. | - |
+| decompile and repair | writes | `modbench.plugin.decompileAndRepair` | plugins | where: a source mod in a new repository, or a source mod in the instance repository; force: [agent.md](agent.md#any-agent), story 7 | none | Decompile each malformed plugin and repair it, in two commits to its mod's plugin source. | - |
 | sort direction | reads | `modbench.plugin.sortWinningAtTop`, `modbench.plugin.sortLosingAtTop` | - | - | MO2 plugin list | List plugins with the winning end at the top or at the bottom. | none |
 | reveal | reads | `modbench.plugin.reveal` | plugin | - | MO2 plugin list | Show a plugin file in the system's file manager. | none |
-| rename | writes | `modbench.plugin.rename` | plugin | name | none | Rename a compiled plugin, the files named for it, and its lines. | rename-plugin |
+| rename | writes | `modbench.plugin.rename` | plugin | name | none | Rename a plugin, the files named for it, and each reference to it. | rename-plugin |
+| referenced by | reads | `modbench.plugin.referencedBy` | plugin | - | none | List each place a file names a plugin, in VS Code's References view. | - |
+| go to | reads | `modbench.plugin.goTo` | plugin | - | none | Select a plugin's row in Plugins, or show its file in the Explorer when Plugins shows no row for it. | none |
 | apply suggested move | writes | `modbench.plugin.applySuggestedMove` | plugin | broken sorting rule: a pick, when more than one offers a move | none | Move a plugin to the nearest place that keeps a broken sorting rule. | update-load-order-file |
 | load after | writes | `modbench.plugin.loadAfter` | plugins | plugins to load after: a pick | LOOT, Edit Metadata, Load After | Add a sorting rule to the userlist that each plugin loads after the picked plugins. | update-load-order-file |
 
@@ -188,7 +192,7 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 
 | Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
-| edit field | edits | `modbench.record.editField` | record, plugin, field path | value: set, or paste by keys or by drag and drop | xEdit View grid; xEdit drag between columns | Change a field's value in plugin source. | edit-record |
+| edit field | edits | `modbench.record.editField` | record, plugin, field path | value: set, or paste by keys or by drag and drop | xEdit View grid; xEdit drag between columns | Change a field's value in plugin source, and for the FormKey each reference to the record. | edit-record |
 | add element | edits | `modbench.record.addElement` | array | value (a paste by keys or by drag and drop supplies it; otherwise a new element) | xEdit View grid | Add an element to an array field. | edit-record |
 | remove element | edits | `modbench.record.removeElement` | element | - | xEdit View grid | Remove an element from an array field. | edit-record |
 | cut | edits | `modbench.record.cut` | record, plugin, field path | - | none | Copy a field's value, or an element, and remove it, in one edit. | edit-record |
@@ -209,6 +213,7 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | exclude / include | writes | `modbench.downloadedFile.exclude`, `modbench.downloadedFile.include` | downloaded files | - | MO2 Downloads | Mark downloaded files excluded in the metadata the mod manager keeps for them, or clear the mark. | update-load-order-file |
 | delete | writes | `modbench.downloadedFile.delete` | downloaded files | - | MO2 Downloads | Send downloaded files to the trash. | update-load-order-file |
 | query info | writes | `modbench.downloadedFile.queryInfo` | downloaded files | - | MO2 Downloads, Query Info (MD5) | Look each file up on Nexus, and write what Nexus knows of it in its metadata. | - |
+| download | writes | `modbench.downloadedFile.download` | - | a Nexus mod and its file | MO2 Downloads | Fetch a file from Nexus into the downloads. | - |
 | open | reads | `modbench.downloadedFile.open` | downloaded file | - | MO2 Downloads | Open a downloaded file in its system application. | none |
 | open metadata | reads | `modbench.downloadedFile.openMeta` | downloaded file | - | MO2 Downloads | Open the file that holds a downloaded file's metadata in an editor tab. | none |
 | sort | reads | `modbench.downloadedFile.sort` | - | field; direction | MO2 Downloads | Choose the field the downloaded files sort by. | none |
@@ -216,10 +221,12 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 
 ## System commands
 
-Commands Modbench runs itself. No user starts them, so they have no gesture. The first column is the trigger that fires each one. Each is a command for the same reason a gesture is: one handler, and one identity. Each is internal: registered under its Command ID, with no entry point and no palette entry. A system command keeps the disk and mEdit in line with the instance. Put load order takes the snapshot as its Argument, because it hands mEdit the instance value as state ([ADR-0013](../adr/0013-mod-management-hands-editing-the-load-order.md)). A sync takes none, and reads the files it corrects through the Instance adapter ([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md)).
+Commands Modbench runs itself. No user starts them, so they have no gesture. The first column is the trigger that fires each one. Each is a command for the same reason a gesture is: one handler, and one identity. Each is internal: registered under its Command ID, with no entry point and no palette entry. A system command keeps the disk in line with the instance, and mEdit in line with both. Put load order takes the snapshot as its Argument, because it hands mEdit the instance value as state ([ADR-0013](../adr/0013-mod-management-hands-editing-the-load-order.md)). A sync takes none, and reads the files it corrects through the Instance adapter ([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md)).
 
 | Trigger | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
-| The Instance loader recomputed the instance value ([load-instance](../../docs/traces/load-instance.d2)) | writes | `modbench.instance.putLoadOrder` | snapshot: the instance value mEdit edits against ([ADR-0013](../adr/0013-mod-management-hands-editing-the-load-order.md)) | - | none | Hand mEdit the whole snapshot at every recompute. | index-load-order |
+| The Instance loader recomputed the instance value, and the snapshot changed ([load-instance](../../docs/traces/load-instance.d2)) | writes | `modbench.instance.putLoadOrder` | snapshot: the instance value mEdit edits against ([ADR-0013](../adr/0013-mod-management-hands-editing-the-load-order.md)) | - | none | Hand mEdit the whole snapshot. | index-load-order |
+| The watch saw a change, or a check of the disk is due ([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md)) | writes | `modbench.instance.signalChange` | the paths the events name, or none to check the disk | - | none | Tell mEdit what changed on disk, or to check it. | index-load-order, detect-external-change |
 | The active profile's mod order disagrees with the mods, each what its manifest says where it has one ([ADR-0022](../adr/0022-git-holds-what-the-user-chooses-a-manifest-rebuilds-the-rest.md)) | writes | `modbench.mod.sync` | - | - | MO2 refresh | Add a line for each mod that has none, and drop each line whose mod is gone. | update-load-order-file |
 | The active profile's `plugins.txt` disagrees with the plugins provided: each plugin the game can load, and each an enabled mod's manifest names | writes | `modbench.plugin.sync` | - | - | MO2 refresh | Add a line at the winning end, disabled, for each plugin that has none, and drop each line that nothing provides. | update-load-order-file |
+| VS Code renames a file or folder that is a symbol, from the Explorer or another extension | writes | `modbench.symbol.followRename` | the file or folder, and its new name | - | VS Code's rename of a file, as a language's references follow it | Carry each reference to what was renamed ([symbols.md](symbols.md), The features, stories 6 and 9). | - |

@@ -173,10 +173,11 @@ def version_in_git(fixture: Fixture, mod: str) -> None:
             'buildFile': json.dumps({'output': mod})}}]})
 
 
-def watcher_resends_load_order(fixture: Fixture, *created: Plugin) -> None:
-    """Modbench's watcher, which sends the load order again once the instance changed; a created plugin joins it with no line."""
+def watcher_sees_a_change(fixture: Fixture, *created: Plugin) -> None:
+    """Modbench's watcher once the instance changed: the load order, which a created plugin joins with no line, then the change signalled."""
     plugins = fixture.load_order['plugins'] + [plugin_entry(fixture.instance, plugin, None) for plugin in created]
     call('PUT', fixture.url + '/load-order', {**fixture.load_order, 'plugins': plugins})
+    call('POST', fixture.url + '/signal-change')
 
 
 @contextlib.contextmanager

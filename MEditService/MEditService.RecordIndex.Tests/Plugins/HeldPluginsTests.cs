@@ -92,10 +92,10 @@ public sealed class HeldPluginsTests
     [Fact]
     public void ThePluginRow_CarriesTheLightAndMasterFlagsThePluginReads()
     {
-        using var data = new PluginFixtureBuilder("lo-flags").WithPlugin("TestMod.esl").Build();
+        using var data = new PluginFixtureBuilder("lo-flags").WithPlugin("TestMod.esp", mod => mod.IsSmallMaster = true).Build();
         using var held = Open(data);
 
-        var row = Opened(held)[Key("TestMod.esl")];
+        var row = Opened(held)[Key("TestMod.esp")];
         Assert.True(row.IsLight);
         Assert.False(row.IsMaster);
     }

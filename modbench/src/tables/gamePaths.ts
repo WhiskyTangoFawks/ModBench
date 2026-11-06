@@ -6,6 +6,8 @@ import { join, parse } from 'node:path';
 export interface GamePathInfo {
   /** The game's name as an instance's settings spell it. */
   readonly gameName: string;
+  /** The game's repository in LOOT's organisation. */
+  readonly lootRepository: string;
   /** The Nexus slug — the {game} segment of nexusmods.com/{game}/mods/{id}. */
   readonly nexusSlug: string;
   /** The other releases whose files the mod manager also accepts as this game's, by the short names it knows them by, in the order it asks Nexus about them. */
@@ -16,9 +18,10 @@ export interface GamePathInfo {
   readonly steamAppId?: string;
   /** The `steamapps/common/<name>` folder holding the install. Absent alongside `steamAppId`. */
   readonly steamFolderName?: string;
-  /** The game's masters: the plugins it loads with no plugins.txt line, in the order it loads
-   *  them. Mutagen's `Implicits.Listings` for the release. */
+  /** The game's masters: the plugins it loads with no plugins.txt line, in Mutagen's `Implicits.Listings` order for the release. */
   readonly masters: readonly string[];
+  /** The release loads a blueprint plugin after every plugin that is not one. */
+  readonly blueprintLoadsLast?: true;
   /** The Creation Club list's file name in the game folder, for a release that has one. */
   readonly creationClubList?: string;
   /** The folder a mod's script-extender files sit in, under the Data folder. */
@@ -96,34 +99,34 @@ const SKYRIM_ARCHIVES: ArchiveLists = {
 
 const GAME_PATHS: Record<string, GamePathInfo> = {
   Fallout4: {
-    gameName: 'Fallout 4', nexusSlug: 'fallout4', steamAppId: '377160', steamFolderName: 'Fallout 4',
+    gameName: 'Fallout 4', nexusSlug: 'fallout4', lootRepository: 'fallout4', steamAppId: '377160', steamFolderName: 'Fallout 4',
     masters: FALLOUT4_MASTERS, creationClubList: 'Fallout4.ccc',
     scriptExtenderFolder: 'f4se', programs: { game: 'Fallout4.exe', extenderLoader: 'f4se_loader.exe' },
     pluginCompanions: FALLOUT4_COMPANIONS, archiveLists: FALLOUT4_ARCHIVES,
     ba2Versions: FALLOUT4_BA2_VERSIONS,
   },
   Fallout4VR: {
-    gameName: 'Fallout 4 VR', nexusSlug: 'fallout4', validShortNames: ['Fallout4'], masters: [...FALLOUT4_MASTERS, 'Fallout4_VR.esm'],
+    gameName: 'Fallout 4 VR', nexusSlug: 'fallout4', lootRepository: 'fallout4vr', validShortNames: ['Fallout4'], masters: [...FALLOUT4_MASTERS, 'Fallout4_VR.esm'],
     creationClubList: 'Fallout4.ccc',
     scriptExtenderFolder: 'f4se', programs: { game: 'Fallout4VR.exe', extenderLoader: 'f4sevr_loader.exe' }, pluginCompanions: FALLOUT4_COMPANIONS,
     archiveLists: { ...FALLOUT4_ARCHIVES, myGamesFolder: 'Fallout4VR', defaultIni: 'Fallout4.ini' }, ba2Versions: FALLOUT4_BA2_VERSIONS,
   },
   SkyrimSE: {
-    gameName: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition', validShortNames: ['Skyrim'], steamAppId: '489830', steamFolderName: 'Skyrim Special Edition',
+    gameName: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition', lootRepository: 'skyrimse', validShortNames: ['Skyrim'], steamAppId: '489830', steamFolderName: 'Skyrim Special Edition',
     masters: SKYRIM_MASTERS,
     creationClubList: 'Skyrim.ccc',
     scriptExtenderFolder: 'skse', programs: { game: 'SkyrimSE.exe', extenderLoader: 'skse64_loader.exe' },
     pluginCompanions: SKYRIM_COMPANIONS, archiveLists: SKYRIM_ARCHIVES,
   },
   SkyrimVR: {
-    gameName: 'Skyrim VR', nexusSlug: 'skyrimspecialedition', validShortNames: ['Skyrim', 'SkyrimSE'], masters: [...SKYRIM_MASTERS, 'SkyrimVR.esm'],
+    gameName: 'Skyrim VR', nexusSlug: 'skyrimspecialedition', lootRepository: 'skyrimvr', validShortNames: ['Skyrim', 'SkyrimSE'], masters: [...SKYRIM_MASTERS, 'SkyrimVR.esm'],
     creationClubList: 'Skyrim.ccc',
     scriptExtenderFolder: 'skse', programs: { game: 'SkyrimVR.exe', extenderLoader: 'sksevr_loader.exe' }, pluginCompanions: SKYRIM_COMPANIONS,
     archiveLists: { ...SKYRIM_ARCHIVES, myGamesFolder: 'Skyrim VR', defaultIni: 'Skyrim.ini', userInis: ['Skyrim.ini', 'SkyrimVR.ini', 'SkyrimCustom.ini'] },
   },
   Starfield: {
-    gameName: 'Starfield', nexusSlug: 'starfield', steamAppId: '1716740', steamFolderName: 'Starfield',
-    masters: STARFIELD_MASTERS, creationClubList: 'Starfield.ccc',
+    gameName: 'Starfield', nexusSlug: 'starfield', lootRepository: 'starfield', steamAppId: '1716740', steamFolderName: 'Starfield',
+    masters: STARFIELD_MASTERS, creationClubList: 'Starfield.ccc', blueprintLoadsLast: true,
     scriptExtenderFolder: 'sfse', programs: { game: 'Starfield.exe', extenderLoader: 'sfse_loader.exe' }, pluginCompanions: FALLOUT4_COMPANIONS,
     archiveLists: { myGamesFolder: 'Starfield', defaultIni: 'Starfield.ini', userInis: ['StarfieldCustom.ini'], keys: RESOURCE_INDEX_KEYS },
   },
@@ -158,24 +161,21 @@ function gameReleaseForNexusDomain(domain: string): string | undefined {
   return Object.keys(GAME_PATHS).find((release) => GAME_PATHS[release]?.nexusSlug === domain);
 }
 
+// The games a valid short name can name though Modbench supports none of their releases: short name to Nexus domain.
+const NEXUS_DOMAINS_OF_UNSUPPORTED_SHORT_NAMES: Readonly<Record<string, string>> = { Skyrim: 'skyrim' };
+
 /** The Nexus domain of a game as a mod's or a downloaded file's metadata spells it; `undefined` when the table holds none.
  *  Never a guess from the name: a wrong domain opens another game's page. */
 export function nexusDomainForMetaGame(gameName: string): string | undefined {
   const release = gameReleaseForMetaGame(gameName);
-  return release === undefined ? undefined : GAME_PATHS[release]?.nexusSlug;
+  return release === undefined ? NEXUS_DOMAINS_OF_UNSUPPORTED_SHORT_NAMES[gameName] : GAME_PATHS[release]?.nexusSlug;
 }
-
-// The games a valid short name can name though Modbench supports none of their releases: short name to Nexus domain.
-const NEXUS_DOMAINS_OF_UNSUPPORTED_SHORT_NAMES: Readonly<Record<string, string>> = { Skyrim: 'skyrim' };
-
-const nexusDomainOfShortName = (shortName: string): string | undefined =>
-  nexusDomainForMetaGame(shortName) ?? NEXUS_DOMAINS_OF_UNSUPPORTED_SHORT_NAMES[shortName];
 
 /** The Nexus domains the mod manager asks about a file of the game `gameName` names, in its order: the game's own, then each valid short name's. */
 export function nexusDomainsForGame(gameName: string): string[] {
   const release = gameReleaseForGame(gameName);
   if (release === undefined) return [];
-  const domains = [release, ...(GAME_PATHS[release]?.validShortNames ?? [])].flatMap((name) => nexusDomainOfShortName(name) ?? []);
+  const domains = [release, ...(GAME_PATHS[release]?.validShortNames ?? [])].flatMap((name) => nexusDomainForMetaGame(name) ?? []);
   return domains.filter((domain, i) => domains.indexOf(domain) === i);
 }
 
@@ -196,13 +196,23 @@ export function gamePathInfoForRelease(release: string): GamePathInfo | undefine
   return GAME_PATHS[release];
 }
 
+/** The release's repository in LOOT's organisation; none for a release the table holds no row for. */
+export function lootRepositoryOf(release: string): string | undefined {
+  return GAME_PATHS[release]?.lootRepository;
+}
+
 /** The game's programs in the game folder; none for no release, or a release the table holds no row for. */
 export function programsOf(release: string | undefined): Programs | undefined {
   return release === undefined ? undefined : GAME_PATHS[release]?.programs;
 }
 
-/** The plugins the game loads with no line (ADR-0013): its masters in the order the game loads
- *  them, none for a release the table holds no row for, then those its Creation Club list names. */
+/** Whether the release loads a blueprint plugin after every plugin that is not one. */
+export function blueprintLoadsLastIn(release: string | undefined): boolean {
+  return (release === undefined ? undefined : GAME_PATHS[release])?.blueprintLoadsLast === true;
+}
+
+/** The plugins the game loads with no line (ADR-0013): its masters in Mutagen's
+ *  listing order (none for an unknown release), then the Creation Club list's. */
 export function loadedWithNoLineOf(release: string | undefined, creationClubList: readonly string[]): readonly string[] {
   const masters = (release === undefined ? undefined : GAME_PATHS[release])?.masters ?? [];
   return [...masters, ...creationClubList];

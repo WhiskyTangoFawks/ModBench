@@ -67,8 +67,31 @@ public sealed class VersionInGitTraceTests : HostedTests
         var committed = GitProbe.Run(Path.Combine(sourceFolder, ".git"), sourceFolder, "ls-tree", "-r", "--name-only", "HEAD")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Where(path => !path.StartsWith("plugin-source/", StringComparison.Ordinal));
-        Assert.Equal([".gitignore", "build.json", "textures/added.dds"], committed);
+        Assert.Equal([".gitattributes", ".gitignore", "build.json", "textures/added.dds"], committed);
         Assert.Equal("the build file", GitProbe.Run(Path.Combine(sourceFolder, ".git"), sourceFolder, "show", "HEAD:build.json"));
+    }
+
+    [Fact]
+    public async Task Init_WritesTheModFoldersManifestItIsHanded_InTheModFolder()
+    {
+        var modFolder = OtherTool.ModFolderOf(_instance, Origin);
+        await Loaded();
+        var sourceFolder = Client.SourceFolderSentFor(Origin);
+
+        var response = await Client.PostAsJsonAsync("/version-in-git", new
+        {
+            mods = new[]
+            {
+                new
+                {
+                    name = Origin, modFolder, commit = true,
+                    sourceFolder = new { path = sourceFolder, @in = "NewRepository", buildFile = "{}", modFolderManifestFile = "Linked.manifest.json", modFolderManifest = "the link" },
+                },
+            },
+        });
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("the link", File.ReadAllText(Path.Combine(modFolder, "Linked.manifest.json")));
     }
 
     public static TheoryData<string, string> NotARequestToInit => new()
@@ -101,6 +124,9 @@ public sealed class VersionInGitTraceTests : HostedTests
     [InlineData("\"manifest\": \"{}\"", "ManifestFile is missing")]
     [InlineData("\"manifestFile\": \"M.manifest.json\"", "Manifest is missing")]
     [InlineData("\"manifestFile\": \"a/M.manifest.json\", \"manifest\": \"{}\"", "bare file name")]
+    [InlineData("\"modFolderManifest\": \"{}\"", "ModFolderManifestFile is missing")]
+    [InlineData("\"modFolderManifestFile\": \"M.manifest.json\"", "ModFolderManifest is missing")]
+    [InlineData("\"modFolderManifestFile\": \"../M.manifest.json\", \"modFolderManifest\": \"{}\"", "ModFolderManifestFile must be a bare file name")]
     public async Task ARequestWithHalfAManifest_IsRefused_NamingWhatIsWrong(string manifestMembers, string named)
     {
         await Loaded();
@@ -114,13 +140,13 @@ public sealed class VersionInGitTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task AfterInit_TheNextSnapshotReportsThePluginCompiledPlugin()
+    public async Task AfterInit_TheNextCheckReportsThePluginCompiledPlugin()
     {
         await Loaded();
         Assert.False((await Client.Plugin(Plugin)).GetProperty("isCompiledPlugin").GetBoolean());
 
         (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(_instance);
+        await Client.NextCheck(_instance);
 
         await Client.PluginReportsCompiledPlugin(Plugin);
     }

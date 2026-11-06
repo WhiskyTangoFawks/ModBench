@@ -34,4 +34,14 @@ public sealed class ArchivePackerBytesTests : IDisposable
 
         Golden.VerifyBytes("pack-textures.ba2", archive);
     }
+
+    [Fact]
+    public void ACompressedBsa_IsTheSameBytesOnEveryMachine()
+    {
+        var archive = Packed(new BsaVariant(104, ArchiveFlags: 0x7, FileFlags: 0x3),
+            ("Meshes/Actors/A.nif", Encoding.ASCII.GetBytes(string.Concat(Enumerable.Repeat("nif data ", 500)))),
+            ("scripts/a.pex", Encoding.ASCII.GetBytes("Scriptname A")));
+
+        Golden.VerifyBytes("pack-compressed.bsa", archive);
+    }
 }

@@ -17,7 +17,7 @@ let entries: HashedPath[];
 let notDownloaded: Set<string>;
 let downloadedHash: Map<string, string>;
 let gameFiles: HashedPath[] | undefined;
-let repositoryHosted: boolean;
+let repositoryPin: ReadValues['repositoryPin'];
 let exclude: string[];
 let flaggedHashes: Map<string, string>;
 
@@ -29,7 +29,7 @@ beforeEach(async () => {
   notDownloaded = new Set();
   downloadedHash = new Map();
   gameFiles = [];
-  repositoryHosted = true;
+  repositoryPin = 'pinned';
   exclude = [];
   flaggedHashes = new Map();
 });
@@ -54,7 +54,7 @@ async function valuesHashingEachFileAsItsText(manifest: ManifestAt, ignoresCase:
     downloadedFiles: new Map(asked.installationFiles.map((name) => [name, {
       kind: 'read' as const, answer: notDownloaded.has(name) ? undefined : { hash: downloadedHash.get(name) ?? PACK, entries },
     }])),
-    gameFiles, flaggedHashes, repositoryHosted,
+    gameFiles, flaggedHashes, repositoryPin,
   };
 }
 
@@ -78,7 +78,7 @@ async function statusWith(values: (read: ReadValues) => StatusValues = (read) =>
 const status = (fileSystemIgnoresCase = false): Promise<ModStatus> => statusWith((read) => read, fileSystemIgnoresCase);
 
 const nothing = (over: Partial<ModStatus> = {}): ModStatus =>
-  ({ mod: 'mod', packages: [], noManifest: false, differing: [], namedByNoLine: [], ignored: [], ignoreEntries: [], gone: [], notInPackage: [], otherBytes: [], noHost: [], packagesLacking: [], ...over });
+  ({ mod: 'mod', packages: [], noManifest: false, differing: [], namedByNoLine: [], ignored: [], ignoreEntries: [], gone: [], notInPackage: [], otherBytes: [], unpackaged: [], noHost: [], unpinned: [], packagesLacking: [], ...over });
 
 const heldAs = (over: Partial<ModStatus> = {}): ModStatus => nothing({ manifestFile: join(folder, 'mod.manifest.json'), packages: [MOD_ZIP], ...over });
 
@@ -119,7 +119,7 @@ describe('a mod\'s status against its manifest', () => {
     await write('MOD.manifest.json', manifestText(manifest({ 'a.nif': HELLO })));
     entries = [{ path: 'a.nif', hash: HELLO }];
 
-    expect(await status()).toEqual(nothing({ namedByNoLine: ['mine.txt'], manifestFile: join(folder, 'MOD.manifest.json'), packages: [MOD_ZIP] }));
+    expect(await status()).toEqual(nothing({ namedByNoLine: ['mine.txt'], unpackaged: ['mine.txt'], manifestFile: join(folder, 'MOD.manifest.json'), packages: [MOD_ZIP] }));
   });
 
   it('lists a file its manifest ignores as ignored, neither differing nor named by no line, though its bytes are none the manifest records', async () => {
@@ -182,14 +182,14 @@ describe('a mod\'s status against its manifest', () => {
       ['a.nif', { path: 'a.nif', excluded: false, read: { kind: 'read', answer: { hash: HELLO } } }],
     ]) } });
 
-    expect(await statusWith(read)).toEqual(heldAs({ namedByNoLine: ['a.nif.mohidden'] }));
+    expect(await statusWith(read)).toEqual(heldAs({ namedByNoLine: ['a.nif.mohidden'], unpackaged: ['a.nif.mohidden'] }));
   });
 
   it('never checks a file a step makes, but names it gone when the folder lacks it', async () => {
     await write('made.dds', 'whatever the step wrote');
     await manifested(manifest({ 'made.dds': null, 'lacked.dds': null }, { packages: [REPOSITORY] }));
 
-    expect(await status()).toEqual(heldAs({ packages: [REPOSITORY], gone: ['lacked.dds'] }));
+    expect(await status()).toEqual(heldAs({ packages: [REPOSITORY], gone: ['lacked.dds'], unpackaged: ['made.dds'] }));
   });
 
   it.each([
@@ -207,15 +207,15 @@ describe('a mod\'s status against its manifest', () => {
 
   describe('a file a clone cannot rebuild (Status, story 5)', () => {
     it.each([
-      ['a package holds its bytes at another path', [{ path: '00 Core/meshes/a.nif', hash: HELLO }], [], []],
-      ['a package holds a file of its name, its path in any case, with other bytes', [{ path: 'Meshes/A.NIF', hash: EDITED }], [], ['meshes/a.nif']],
-      ['no package holds its bytes, though one holds a file of its base name at another path', [{ path: '00 Core/a.nif', hash: EDITED }], ['meshes/a.nif'], []],
-    ])('says why when %s', async (_case, held, notInPackage, otherBytes) => {
+      ['a package holds its bytes at another path', [{ path: '00 Core/meshes/a.nif', hash: HELLO }], [], [], []],
+      ['a package holds a file of its name, its path in any case, with other bytes', [{ path: 'Meshes/A.NIF', hash: EDITED }], [], ['meshes/a.nif'], ['meshes/a.nif']],
+      ['no package holds its bytes, though one holds a file of its base name at another path', [{ path: '00 Core/a.nif', hash: EDITED }], ['meshes/a.nif'], [], ['meshes/a.nif']],
+    ])('says why when %s', async (_case, held, notInPackage, otherBytes, unpackaged) => {
       entries = held;
       await write('meshes/a.nif', HELLO);
       await manifested(manifest({ 'meshes/a.nif': HELLO }));
 
-      expect(await status()).toEqual(heldAs({ notInPackage, otherBytes }));
+      expect(await status()).toEqual(heldAs({ notInPackage, otherBytes, unpackaged }));
     });
 
     it('reads the game folder as a package that holds the game files the folder\'s files may be', async () => {
@@ -238,21 +238,69 @@ describe('a mod\'s status against its manifest', () => {
       await write('a.esp', HELLO);
       await manifested(manifest({ 'a.esp': HELLO }, { packages: [REPOSITORY] }));
 
-      expect(await status()).toEqual(heldAs({ packages: [REPOSITORY] }));
+      expect(await status()).toEqual(heldAs({ packages: [REPOSITORY], unpackaged: ['a.esp'] }));
     });
   });
 
-  it.each<[string, ManifestPackage, boolean, string[]]>([
-    ['an installation file with no host', { kind: 'installationFile', name: 'Mod.zip', size: 7, hash: PACK }, true, ["installation file 'Mod.zip'"]],
-    ['a game folder with no host', { kind: 'gameFolder' }, true, ['the game folder']],
-    ['a repository that is no submodule', REPOSITORY, false, ["repository 'Mod'"]],
-    ['a repository that is a submodule', REPOSITORY, true, []],
-    ['an installation file on Nexus', MOD_ZIP, true, []],
-  ])('names each package with no host (The manifest, story 5): %s', async (_case, pkg, hosted, noHost) => {
-    repositoryHosted = hosted;
+  describe('a file no package holds (publishing.md, What ships, story 2)', () => {
+    it('lists none a package holds the bytes of at another path', async () => {
+      entries = [{ path: '00 Core/meshes/a.nif', hash: HELLO }];
+      await write('meshes/a.nif', HELLO);
+      await manifested(manifest({ 'meshes/a.nif': HELLO }));
+
+      expect((await status()).unpackaged).toEqual([]);
+    });
+
+    it('lists a file edited, a file the manifest names no line for, and a file no package holds the bytes of', async () => {
+      entries = [{ path: 'edited.nif', hash: HELLO }, { path: 'foreign.nif', hash: EDITED }];
+      await Promise.all([write('edited.nif', EDITED), write('mine.txt', 'mine'), write('foreign.nif', PACK)]);
+      await manifested(manifest({ 'edited.nif': HELLO, 'foreign.nif': PACK }));
+
+      expect((await status()).unpackaged).toEqual(['edited.nif', 'foreign.nif', 'mine.txt']);
+    });
+
+    it('lists a file a step makes and every file of a source mod, though none is gone', async () => {
+      await Promise.all([write('made.dds', 'step'), write('a.esp', HELLO)]);
+      await manifested(manifest({ 'made.dds': null, 'a.esp': HELLO, 'lacked.dds': null }, { packages: [REPOSITORY] }));
+
+      expect((await status()).unpackaged).toEqual(['a.esp', 'made.dds']);
+    });
+
+    it('lists none it cannot judge while this machine lacks a package, but a file named by no line', async () => {
+      notDownloaded.add('Mod.zip');
+      await Promise.all([write('a.nif', HELLO), write('mine.txt', 'mine')]);
+      await manifested(manifest({ 'a.nif': HELLO }));
+
+      expect((await status()).unpackaged).toEqual(['mine.txt']);
+    });
+
+    it('lists none of a file the manifest ignores', async () => {
+      await write('logs/a.log', EDITED);
+      await manifested(manifest({}, { ignore: ['logs'] }));
+
+      expect((await status()).unpackaged).toEqual([]);
+    });
+  });
+
+  it.each<[string, ManifestPackage, ReadValues['repositoryPin'], string[]]>([
+    ['an installation file with no host', { kind: 'installationFile', name: 'Mod.zip', size: 7, hash: PACK }, 'pinned', ["installation file 'Mod.zip'"]],
+    ['a game folder with no host', { kind: 'gameFolder' }, 'pinned', ['the game folder']],
+    ['a repository that is no submodule', REPOSITORY, 'none', ["repository 'Mod'"]],
+    ['a repository that is a submodule', REPOSITORY, 'pinned', []],
+    ['a repository that is a submodule with no pin', REPOSITORY, 'unpinned', []],
+    ['an installation file on Nexus', MOD_ZIP, 'pinned', []],
+  ])('names each package with no host (The manifest, story 5): %s', async (_case, pkg, host, noHost) => {
+    repositoryPin = host;
     await manifested(manifest({}, { packages: [pkg] }));
 
     expect((await status()).noHost).toEqual(noHost);
+  });
+
+  it('names a repository whose submodule the instance repository pins no commit of', async () => {
+    repositoryPin = 'unpinned';
+    await manifested(manifest({}, { packages: [REPOSITORY] }));
+
+    expect((await status()).unpinned).toEqual(["repository 'Mod'"]);
   });
 
   it.each([

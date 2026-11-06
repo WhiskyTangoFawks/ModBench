@@ -60,11 +60,11 @@ public sealed class IndexLoadOrderTraceTests : HostedTests
         using var fx = OneMod();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.VersionInGit(Origin)).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(fx);
+        await Client.NextCheck(fx);
         await Client.PluginReportsCompiledPlugin(Plugin);
 
         Directory.Delete(PluginSourceRoot.In(OtherTool.ModFolderOf(fx, Origin), Plugin), recursive: true);
-        await Client.NextSnapshot(fx);
+        await Client.NextCheck(fx);
 
         await Wire.Eventually(
             async () => (await Client.Plugin(Plugin)).GetProperty("pluginSourceUnreadable") is { ValueKind: JsonValueKind.Object } unreadable
@@ -89,7 +89,7 @@ public sealed class IndexLoadOrderTraceTests : HostedTests
         using var stream = await Client.NotificationStream();
 
         OtherTool.WritesThePlugin(fx.Plugins.Single(p => p.Origin == Origin).Path, mod => mod.Npcs.AddNew("NotANumber"));
-        await Client.NextSnapshot(fx);
+        await Client.NextCheck(fx);
 
         var cleared = (await stream.EventsUntil("record-filter-cleared"))[^1].GetProperty("recordFilterCleared");
         Assert.Equal("sevens.sql", cleared.GetProperty("source").GetString());

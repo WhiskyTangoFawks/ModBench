@@ -10,7 +10,7 @@ The issue tracker's conventions are in `docs/agents/issue-tracker.md`, and the t
 
 ## Process
 
-1. Find the work. Each `/to-spec` commit the conversation made is work. Work with no commit, such as a bug or a line drawn but never built, is a spec line on `main`: find it.
+1. Find the work. Each `/to-spec` commit the conversation made is work. Work with no commit, such as a line drawn but never built, is a spec line on `main`: find it. A bug is no epic's work: it stands alone (`docs/agents/issue-tracker.md`).
 
    A settled behaviour with neither is a gap in the spec, and the spec is the user's. Name each gap to the user and leave it out of the epic until `/to-spec` draws it.
 

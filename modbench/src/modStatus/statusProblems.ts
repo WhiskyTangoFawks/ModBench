@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { repositoryOf, type ModStatus } from '../manifestAdapter/manifestAdapter';
+import { repositoryOf, type BuildFileLack, type ModStatus } from '../manifestAdapter/manifestAdapter';
 import type { ManifestPackage } from '../manifestAdapter/manifest';
 
 /** A problem on the file it concerns. */
@@ -8,23 +8,37 @@ export interface StatusProblem {
   readonly message: string;
 }
 
-/** Each unfinished state of a mod, on the file it concerns (modlist-repository.md, Status, story 2). */
+const lackMessage = ({ step, path }: BuildFileLack): string =>
+  `Its ${step} step names '${path}', ${step === 'compile' ? 'whose plugin source' : 'which'} the source folder lacks.`;
+
+const capitalised = (clause: string): string => `${clause.charAt(0).toUpperCase()}${clause.slice(1)}`;
+
+const sentence = (clause: string): string => `${capitalised(clause)}.`;
+
+const buildFileProblems = ({ buildFile }: ModStatus): StatusProblem[] =>
+  (buildFile === undefined ? [] : [...buildFile.lacks.map(lackMessage), ...buildFile.unreadable.map(sentence)].map((message) => ({ file: buildFile.file, message })));
+
+/** Each unfinished state of a mod, on the file it concerns (instance-repository.md, Status, story 2). */
 export function statusProblems(status: ModStatus, folder: string): StatusProblem[] {
-  const installation = status.installationFileProblem === undefined ? [] : [{ file: folder, message: status.installationFileProblem }];
-  if (status.noManifest) return [{ file: folder, message: 'No manifest.' }, ...installation];
+  const outsideManifest = [
+    ...status.installationFileProblem === undefined ? [] : [{ file: folder, message: status.installationFileProblem }],
+    ...buildFileProblems(status),
+  ];
+  if (status.noManifest) return [{ file: folder, message: 'No manifest.' }, ...outsideManifest];
   const onFiles = (paths: readonly string[], message: string): StatusProblem[] => paths.map((path) => ({ file: join(folder, path), message }));
   const { manifestFile } = status;
   const onManifest = (messages: readonly string[]): StatusProblem[] =>
     (manifestFile === undefined ? [] : messages.map((message) => ({ file: manifestFile, message })));
   return [
-    ...installation,
-    ...onManifest(status.unreadable === undefined ? [] : [`${status.unreadable.charAt(0).toUpperCase()}${status.unreadable.slice(1)}.`]),
+    ...outsideManifest,
+    ...onManifest(status.unreadable === undefined ? [] : [sentence(status.unreadable)]),
     ...onFiles(status.differing, 'Differs from its manifest.'),
     ...onFiles(status.namedByNoLine, 'No line of the mod\'s manifest names this file.'),
     ...onManifest(status.gone.map((path) => `Names '${path}', which the mod's folder lacks.`)),
     ...onManifest(status.notInPackage.map((path) => `No package it names holds the bytes of '${path}'.`)),
     ...onManifest(status.otherBytes.map((path) => `No package it names holds the bytes of '${path}'; one holds a file of its name.`)),
-    ...onManifest(status.noHost.map((pkg) => `${pkg.charAt(0).toUpperCase()}${pkg.slice(1)} has no host.`)),
+    ...onManifest(status.noHost.map((pkg) => `${capitalised(pkg)} has no host.`)),
+    ...onManifest(status.unpinned.map((repository) => `${capitalised(repository)} is not pinned: the instance repository pins no commit for it until its gitlink is staged.`)),
     ...onManifest(status.packagesLacking.map((lacking) => `This machine does not hold a package it names: ${lacking}.`)),
   ];
 }
@@ -32,7 +46,7 @@ export function statusProblems(status: ModStatus, folder: string): StatusProblem
 const packageNoun = (pkg: ManifestPackage): string =>
   (pkg.kind === 'gameFolder' ? 'the game folder' : `${pkg.kind === 'repository' ? 'repository' : 'installation file'} '${pkg.name}'`);
 
-/** A mod made from several packages, on its manifest (modlist-repository.md, Status, story 6). */
+/** A mod made from several packages, on its manifest (instance-repository.md, Status, story 6). */
 export function severalPackagesNote(status: ModStatus, holdsPlugin: boolean): StatusProblem | undefined {
   const { packages, manifestFile } = status;
   if (packages.length < 2 || manifestFile === undefined) return undefined;

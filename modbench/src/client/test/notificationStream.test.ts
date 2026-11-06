@@ -277,14 +277,14 @@ describe('SseNotificationSubscriber', () => {
 describe('SseNotificationSubscriber — typed listeners', () => {
   const loadOrderStatus: NotificationEvent['loadOrderStatus'] = {
     state: 'Ready', totalPlugins: 3, activePlugins: 2, indexedPlugins: [{ name: 'A.esp', origin: 'ModA' }],
-    conflictsComputed: true, failures: [], version: 4,
+    conflictsComputed: true, failures: [], version: 4, validating: false,
   };
   const modlistProgress: NotificationEvent['modlistProgress'] = { mod: 'ModA', modsDone: 1, modsTotal: 2 };
   const changedPlugins = [{ name: 'A.esp', bytesSha256: 'abc' }];
 
   const cases: [NotificationKind, NotificationEvent, unknown][] = [
     ['load-order-status', rowsChanged([], { kind: 'load-order-status', loadOrderStatus }), {
-      totalPlugins: 3, activePlugins: 2, version: 4, indexedPlugins: [{ name: 'A.esp', origin: 'ModA' }], conflictsComputed: true, failures: [], holdsNone: false,
+      totalPlugins: 3, activePlugins: 2, version: 4, indexedPlugins: [{ name: 'A.esp', origin: 'ModA' }], conflictsComputed: true, failures: [], holdsNone: false, validating: false,
     }],
     ['version-in-git-progress', rowsChanged([], { kind: 'version-in-git-progress', modlistProgress, versionInGitPhase: 'Parsing' }), { ...modlistProgress, phase: 'Parsing' }],
     ['external-change', rowsChanged([], { kind: 'external-change', changedPlugins }), { origin: 'ModA', changedPlugins }],

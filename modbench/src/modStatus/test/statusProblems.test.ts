@@ -8,7 +8,7 @@ const folder = join('/instance', 'mods', 'Mod');
 const manifestFile = join(folder, 'MOD.Manifest.json');
 const held = (over: Partial<ModStatus>): ModStatus => status('Mod', { manifestFile, ...over });
 
-describe('a mod\'s unfinished states, each on the file it concerns (modlist-repository.md, Status, story 2)', () => {
+describe('a mod\'s unfinished states, each on the file it concerns (instance-repository.md, Status, story 2)', () => {
   it('has none for a folder that matches its manifest', () => {
     expect(statusProblems(held({}), folder)).toEqual([]);
   });
@@ -41,8 +41,26 @@ describe('a mod\'s unfinished states, each on the file it concerns (modlist-repo
     ['a file no package holds', { notInPackage: ['b.esp'] }, "No package it names holds the bytes of 'b.esp'."],
     ['a file a package holds one of its name of with other bytes', { otherBytes: ['b.esp'] }, "No package it names holds the bytes of 'b.esp'; one holds a file of its name."],
     ['a package with no host', { noHost: ['the game folder'] }, 'The game folder has no host.'],
+    ['a repository with no pin', { unpinned: ["repository 'Mod'"] }, "Repository 'Mod' is not pinned: the instance repository pins no commit for it until its gitlink is staged."],
     ['a package this machine lacks', { packagesLacking: ['the game folder was not found'] }, 'This machine does not hold a package it names: the game folder was not found.'],
   ])('puts %s on the manifest, as the folder spells it', (_state, over, message) => {
     expect(statusProblems(held(over), folder)).toEqual([{ file: manifestFile, message }]);
+  });
+
+  it.each([
+    ['with a manifest', held({})],
+    ['with none', status('Mod', { noManifest: true })],
+    ['held whole by git', status('Mod', { heldWhole: true })],
+  ])('puts each path its build file names that the source folder lacks, and each it cannot read, on the build file, %s', (_manifest, mod) => {
+    const file = join('/instance', 'source', 'Mod', 'build.json');
+    const buildFile = {
+      file, lacks: [{ step: 'compile', path: 'Old.esp' }, { step: 'copy', path: 'meshes' }] as const, unreadable: ["'locked' could not be read: EACCES"],
+    };
+
+    expect(statusProblems({ ...mod, buildFile }, folder).filter((problem) => problem.file === file)).toEqual([
+      { file, message: "Its compile step names 'Old.esp', whose plugin source the source folder lacks." },
+      { file, message: "Its copy step names 'meshes', which the source folder lacks." },
+      { file, message: "'locked' could not be read: EACCES." },
+    ]);
   });
 });

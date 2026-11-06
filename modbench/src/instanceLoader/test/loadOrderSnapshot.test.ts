@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { join } from 'node:path';
 import type { DataFolderPlugins, FileRead, FileStamp, GameFolder, ModFolders, OriginFile, PluginEntry } from '../../instanceAdapter/instanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
@@ -349,17 +349,22 @@ describe('the snapshot the sync PUTs, read straight from the value rather than a
         files: winners({ 'Fallout4 - Interface.ba2': 'Interface Fix', 'A - Textures.ba2': 'ModA', 'A - Main.ba2': 'ModA', 'Nested/A.ba2': 'ModA' }),
       };
 
-      expect(snapshotOf([a], [inGameFolder('DLCRobot.esm')], archives)?.archives).toEqual([
-        join('/game/Data', 'Fallout4 - Startup.ba2'), '/mods/Interface Fix/Fallout4 - Interface.ba2', join('/game/Data', 'DLCRobot - Main.ba2'),
-        '/mods/ModA/A - Main.ba2', '/mods/ModA/A - Textures.ba2',
-      ]);
+      const snapshot = snapshotOf([a], [inGameFolder('DLCRobot.esm')], archives);
+
+      expect({ listed: snapshot?.listedArchives, byPlugin: snapshot?.archivesByPlugin }).toEqual({
+        listed: [join('/game/Data', 'Fallout4 - Startup.ba2'), '/mods/Interface Fix/Fallout4 - Interface.ba2'],
+        byPlugin: [
+          { name: 'DLCRobot.esm', origin: 'Data/', archives: [join('/game/Data', 'DLCRobot - Main.ba2')] },
+          { name: 'A.esp', origin: 'ModA', archives: ['/mods/ModA/A - Main.ba2', '/mods/ModA/A - Textures.ba2'] },
+        ],
+      });
     });
 
-    it('loads an archive once, where it first loads, and leaves out a listed archive nothing holds', () => {
+    it('leaves out a listed archive nothing holds', () => {
       const a = row('A.esp', 'ModA', 0);
       const archives: ArchiveSources = { ...NO_ARCHIVES, listed: ['A - Main.ba2', 'Gone.ba2'], files: winners({ 'A - Main.ba2': 'ModA' }) };
 
-      expect(snapshotOf([a], [], archives)?.archives).toEqual(['/mods/ModA/A - Main.ba2']);
+      expect(snapshotOf([a], [], archives)?.listedArchives).toEqual(['/mods/ModA/A - Main.ba2']);
     });
 
     it.each([
@@ -372,6 +377,18 @@ describe('the snapshot the sync PUTs, read straight from the value rather than a
       };
 
       expect(listedArchivesNothingHolds(archives)).toEqual(nothingHolds);
+    });
+
+    it('scans the files once for the same index, whatever the INIs list', () => {
+      const files = winners({ 'A - Main.ba2': 'ModA' });
+      const scan = vi.spyOn(files, Symbol.iterator);
+      const archives: ArchiveSources = { ...NO_ARCHIVES, inData: inData([]), files };
+
+      const first = listedArchivesNothingHolds({ ...archives, listed: ['Gone.ba2'] });
+      const second = listedArchivesNothingHolds({ ...archives, listed: ['A - Main.ba2', 'Gone.ba2'] });
+
+      expect([first, second]).toEqual([['Gone.ba2'], ['Gone.ba2']]);
+      expect(scan).toHaveBeenCalledTimes(1);
     });
 
     it('reads every loose strings file at the path the Mod override order resolves it to, a mod\'s over the game folder\'s', () => {
@@ -431,7 +448,8 @@ describe('the snapshot the sync PUTs, read straight from the value rather than a
         archives: ['/a/A - Main.ba2'], stringsFiles: ['/a/A_en.STRINGS'],
       }],
       active: [], loadedWithNoLine: [],
-      archives: ['/g/Interface.ba2', '/a/A - Main.ba2'], stringsFiles: ['/t/A_en.STRINGS'],
+      listedArchives: ['/g/Interface.ba2'],
+      archivesByPlugin: [{ name: 'A.esp', origin: 'ModA', archives: ['/a/A - Main.ba2'] }], stringsFiles: ['/t/A_en.STRINGS'],
     };
 
     const stamped = await stampedSnapshot(value, stampOf);
@@ -443,7 +461,8 @@ describe('the snapshot the sync PUTs, read straight from the value rather than a
         archives: [{ path: '/a/A - Main.ba2', stamp: '15/1/2' }],
         stringsFiles: [{ path: '/a/A_en.STRINGS', stamp: 'EACCES /a/A_en.STRINGS' }],
       }],
-      archives: [{ path: '/g/Interface.ba2', stamp: '16/1/2' }, { path: '/a/A - Main.ba2', stamp: '15/1/2' }],
+      listedArchives: [{ path: '/g/Interface.ba2', stamp: '16/1/2' }],
+      archivesByPlugin: [{ name: 'A.esp', origin: 'ModA', archives: [{ path: '/a/A - Main.ba2', stamp: '15/1/2' }] }],
       stringsFiles: [{ path: '/t/A_en.STRINGS', stamp: 'EACCES /t/A_en.STRINGS' }],
     });
     expect(asked.sort()).toEqual(['/a/A - Main.ba2', '/a/A_en.STRINGS', '/g/Interface.ba2', '/t/A_en.STRINGS']);

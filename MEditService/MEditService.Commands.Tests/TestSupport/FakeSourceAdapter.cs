@@ -55,7 +55,11 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
     public ISourceRepository OverFolder(PluginProvider.FromMod provider, GameRelease release) => throw Unreached();
 
-    public bool TreeHolds(RegisteredPlugin plugin, string path) => throw Unreached();
+    public PathAnswer Touching(LoadOrderSnapshot loadOrder, string path) => throw Unreached();
+
+    public void SignalChange(IReadOnlyList<PluginAddress>? plugins) => ChangeSignalled?.Invoke(plugins);
+
+    public event Action<IReadOnlyList<PluginAddress>?>? ChangeSignalled;
 
     public RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path) => throw Unreached();
 
@@ -68,7 +72,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
     public SourceFailure? Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<FileToCopy> assets, bool commit, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest, IReadOnlyList<string> ignored,
-        SourceModIn heldIn)
+        SourceModIn heldIn, ModFolderManifest? modFolderManifest)
     {
         if (IsSourceMod(sourceFolder) || HoldsAnotherRepository(sourceFolder))
             throw new InvalidOperationException($"'{sourceFolder}' already holds a repository.");
@@ -176,6 +180,8 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
         private static string PathOf(PluginAddress plugin, string formKey) => Path.Combine(plugin.Name, $"{formKey}.json");
 
         public RecordStamps StampsOf(PluginAddress plugin) => throw Unreached();
+
+        public FilesStamp RepositoryStamp() => throw Unreached();
 
         public Answer<T, SourceFailure> ReadDocuments<T>(PluginAddress plugin, Func<IPluginDocuments, T> read) => throw Unreached();
 

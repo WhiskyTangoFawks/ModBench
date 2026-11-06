@@ -2,6 +2,7 @@ import type {
   InstallationFileReader, DownloadedFile, GameFolder, InstanceAdapter, InstanceReading, ModlistEntry, OriginFiles, PluginEntry, Subscription,
 } from '../../instanceAdapter/instanceAdapter';
 import { fileProblemsFake } from '../fileProblemsFake';
+import type { FileProblems } from '../../ports/fileProblems';
 import type { DownloadsDirectoryResolver } from '../../instanceAdapter/mo2/downloadsDirectory';
 import type { Mo2Context } from '../../instanceAdapter/mo2/mo2Context';
 import { downloadsDirectoryResolver } from '../../instanceAdapter/mo2/downloadsDirectory';
@@ -35,6 +36,7 @@ export interface AdapterAnswers {
   gameFolderSettingChanged?: (listener: () => void) => Subscription;
   detectors?: GameDetectors;
   mo2Running?: () => Promise<boolean>;
+  fileProblems?: FileProblems;
 }
 
 /** MO2's context over `root`, detecting no game install, with the answers a test fixes in place. */
@@ -60,7 +62,7 @@ export function contextOver(root: string, answers: AdapterAnswers = {}): Mo2Cont
 export const sourceOver = (root: string, answers: AdapterAnswers = {}): ReadingSource => readingSource(contextOver(root, answers), undefined);
 
 export const managerOver = (root: string, answers: AdapterAnswers = {}, publisherFile?: ConfigurationFile): ManagerAdapter => mo2InstanceAdapter({
-  instanceRoot: root, installationFileReader: answers.installationFileReader ?? fakeInstallationFileReader([]), fileProblems: fileProblemsFake(), fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH, context: contextOver(root, answers),
+  instanceRoot: root, installationFileReader: answers.installationFileReader ?? fakeInstallationFileReader([]), fileProblems: answers.fileProblems ?? fileProblemsFake(), fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH, context: contextOver(root, answers),
 }, publisherFile);
 
 /** The adapter the build composes over `root`, MO2's context fixed as `answers` say. */

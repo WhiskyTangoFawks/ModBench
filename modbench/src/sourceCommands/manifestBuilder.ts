@@ -43,8 +43,8 @@ export function nexusFileOf(adapter: Pick<InstanceAdapter, 'nexusFileAt'>): (pag
 const sameIgnoringCase = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
 /** The installation file with the host and version its downloaded file's own metadata gives, none when that gives none, never the mod's. */
-export const describedBy = (file: InstallationFile, downloaded: Pick<InstallationFile, 'page' | 'directUrl' | 'version'> | undefined): InstallationFile => ({
-  ...file, page: downloaded?.page, directUrl: downloaded?.directUrl, version: downloaded?.version,
+export const describedBy = (file: InstallationFile, downloaded: Pick<InstallationFile, 'page' | 'directUrl' | 'version' | 'pageUnreadable'> | undefined): InstallationFile => ({
+  ...file, page: downloaded?.page, directUrl: downloaded?.directUrl, version: downloaded?.version, pageUnreadable: downloaded?.pageUnreadable,
 });
 
 const isId = (id: number): boolean => Number.isInteger(id) && id >= 1;
@@ -76,6 +76,8 @@ export interface Recorded {
   readonly sources: ReadonlyMap<string, Source>;
   readonly notInPackage: readonly string[];
   readonly otherBytes: readonly string[];
+  /** Why a package of the manifest names no host the downloaded file's metadata would have given. */
+  readonly notes: readonly string[];
 }
 
 // An entry at the file's own path before another that holds its bytes.
@@ -149,5 +151,6 @@ export function buildManifest(
     ...used.flatMap(({ file }) => file.entries),
     ...game === undefined || takenFromTheGame.length === 0 ? [] : game.places.flatMap((place) => place.files.map((one) => ({ path: one.pathInFolder ?? one.path, hash: one.hash }))),
   ];
-  return { manifest, sources, ...filesNoPackageHolds(manifest, packageFiles) };
+  const notes = used.flatMap(({ file }) => file.pageUnreadable === undefined ? [] : [`the page of ${basename(file.path)} could not be read, so its manifest names no host: ${file.pageUnreadable}`]);
+  return { manifest, sources, notes, ...filesNoPackageHolds(manifest, packageFiles) };
 }

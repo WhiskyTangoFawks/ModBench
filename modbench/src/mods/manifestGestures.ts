@@ -1,15 +1,15 @@
 import * as vscode from 'vscode';
-import { AgentCall, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
+import { AgentCall, registerWritingCommand, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { MODS_KEY_ARGS } from './gestureEntry';
 import type { Instance } from '../instanceLoader/instance';
 import { everyModHere, modsAndSourceModsOfAgent, modsAndSourceModsToRun, modsOfAgent, modsToRun, type ModsToRun, type ModsToRunDeps } from './modsToRun';
 import type { Reporter } from '../ports/reporter';
-import type { ModlistRepositoryCommands, OtherManifests, RestoreResult, RestoreStatus } from '../sourceCommands/modlistRepositoryCommands';
+import type { InstanceRepositoryCommands, OtherManifests, RestoreResult, RestoreStatus } from '../sourceCommands/instanceRepositoryCommands';
 import type { ModNote, UpdateManifestResult, UpdateManifestStatus } from '../sourceCommands/updateManifest';
 
 export interface ManifestGestureDeps extends ModsToRunDeps {
-  commands: Pick<ModlistRepositoryCommands, 'updateManifest' | 'restoreFromManifest' | 'otherManifests'>;
+  commands: Pick<InstanceRepositoryCommands, 'updateManifest' | 'restoreFromManifest' | 'otherManifests'>;
   instance: Pick<Instance, 'value' | 'refresh'>;
   reporter: Reporter;
   /** The Toolbox's message line: `undefined` gives it back to whatever else had something to say. */
@@ -24,23 +24,23 @@ const isAgentCall = (value: unknown): value is ModlistCall => value instanceof A
 // view (commands.md, Entry points are not gestures).
 export function registerManifestGestures(deps: ManifestGestureDeps): vscode.Disposable[] {
   return [
-    vscode.commands.registerCommand('modbench.mod.updateManifest', (clicked?: unknown, selected?: readonly unknown[]) =>
+    registerWritingCommand('modbench.mod.updateManifest', (clicked?: unknown, selected?: readonly unknown[]) =>
       (isAgentCall(clicked) ? updateManifestForAgent(deps, clicked) : updateManifest(deps, modsAndSourceModsToRun(deps, clicked, selected)))),
-    vscode.commands.registerCommand('modbench.mod.restoreFromManifest', (clicked?: unknown, selected?: readonly unknown[]) =>
+    registerWritingCommand('modbench.mod.restoreFromManifest', (clicked?: unknown, selected?: readonly unknown[]) =>
       (isAgentCall(clicked) ? restoreFromManifestForAgent(deps, clicked) : restoreFromManifest(deps, modsToRun(deps, clicked, selected)))),
-    vscode.commands.registerCommand('modbench.modList.updateManifestHere', () => updateManifest(deps, everyModHere(deps))),
-    vscode.commands.registerCommand('modbench.modList.restoreFromManifestHere', () => restoreFromManifest(deps, everyModHere(deps))),
+    registerWritingCommand('modbench.modList.updateManifestHere', () => updateManifest(deps, everyModHere(deps))),
+    registerWritingCommand('modbench.modList.restoreFromManifestHere', () => restoreFromManifest(deps, everyModHere(deps))),
   ];
 }
 
-// modlist-repository.md, Every mod, story 1: every manifest is every mod's and every other one in the instance.
+// instance-repository.md, Every mod, story 1: every manifest is every mod's and every other one in the instance.
 const othersOf = ({ commands }: ManifestGestureDeps, everyManifest: boolean): Promise<OtherManifests> =>
   (everyManifest ? commands.otherManifests() : Promise.resolve({ others: [], refused: [] }));
 
 type AgentOutcome<Landed> = GestureResult<Landed, string>;
 type Restored = RestoreResult['landed'];
 
-// modlist-repository.md, Every mod, story 3: progress by mod with Cancel, which stops after the mod in hand. The
+// instance-repository.md, Every mod, story 3: progress by mod with Cancel, which stops after the mod in hand. The
 // Toolbox's message line says what the notification says (Reporting).
 function withProgressAndCancel<T>(
   { say }: ManifestGestureDeps, run: (show: (message: string) => void, signal: AbortSignal) => Promise<T>,
@@ -59,7 +59,7 @@ function withProgressAndCancel<T>(
 
 async function updateManifest(deps: ManifestGestureDeps, { mods, sourceMods, refused, view, everyMod }: ModsToRun): Promise<void> {
   const { commands, instance, reporter } = deps;
-  await runWritingGesture(view, instance, async () => {
+  await runWritingGesture('modbench.mod.updateManifest', view, instance, async () => {
     const found = await othersOf(deps, everyMod);
     const outcome = await withProgressAndCancel(deps, (show, signal) =>
       commands.updateManifest(mods, { onProgress: (status) => { show(updateMessage(status)); }, signal }, found.others, everyMod, sourceMods));
@@ -73,7 +73,7 @@ async function updateManifestForAgent(
   const { commands, instance } = deps;
   const { mods, sourceMods, refused } = modsAndSourceModsOfAgent(argument, instance.value);
   const found = await othersOf(deps, argument.length === 0);
-  const result = await runWritingGesture(MODS_KEY_ARGS.view, instance, () => commands.updateManifest(mods, {}, found.others, argument.length === 0, sourceMods));
+  const result = await runWritingGesture('modbench.mod.updateManifest', MODS_KEY_ARGS.view, instance, () => commands.updateManifest(mods, {}, found.others, argument.length === 0, sourceMods));
   const { notHeld, otherBytes } = gapsOf(result.landed, (mod, path) => `${mod}: its package does not hold ${path}`, (mod, path) => `${mod}: its package holds ${path} with other bytes`);
   return {
     applied: true,
@@ -107,10 +107,10 @@ const gapsOf = (
   otherBytes: landed.flatMap(({ mod, otherBytes }) => otherBytes.map((path) => otherBytesLine(mod, path))),
 });
 
-// modlist-repository.md, Reporting, story 1
+// instance-repository.md, Reporting, story 1
 function reportUpdated(reporter: Reporter, outcome: UpdateManifestResult): void {
   const { notHeld, otherBytes } = gapsOf(outcome.landed, (mod, path) => `${mod}: ${path}`, (mod, path) => `${mod}: ${path} (other bytes)`);
-  const updated = outcome.landed.filter(({ manifestWritten }) => manifestWritten).length;
+  const updated = outcome.landed.filter(({ manifestWritten, repositoryWritten }) => manifestWritten || repositoryWritten).length;
   const unchanged = outcome.landed.length - updated;
   const line = `Update manifest${outcome.cancelled ? ' cancelled' : ''}: ${unchanged} mod${unchanged === 1 ? '' : 's'} unchanged, ${updated} updated, `
     + `${outcome.refused.length} refused; their packages do not hold ${counted(notHeld.length, 'file', 'files')} and hold ${counted(otherBytes.length, 'file', 'files')} with other bytes.`;
@@ -143,7 +143,7 @@ async function restoreFromManifest(deps: ManifestGestureDeps, toRun: ModsToRun):
     reportRestored(reporter, total, { landed: [], refused });
     return;
   }
-  await runWritingGesture(view, instance, async () => {
+  await runWritingGesture('modbench.mod.restoreFromManifest', view, instance, async () => {
     const outcome = await withProgressAndCancel(deps, (show, signal) =>
       commands.restoreFromManifest(mods, { onProgress: (status) => { show(restoreMessage(status)); }, signal }, toRun.everyMod, found.others));
     reportRestored(reporter, total, { ...outcome, refused: [...outcome.refused, ...refused] });
@@ -155,7 +155,7 @@ async function restoreFromManifestForAgent(deps: ManifestGestureDeps, { argument
   const mods = modsOfAgent(argument, instance.value);
   const found = await othersOf(deps, argument.length === 0);
   if (mods.length + found.others.length === 0) return { applied: true, outcome: { landed: [], refused: found.refused } };
-  const outcome = await runWritingGesture(MODS_KEY_ARGS.view, instance, () => commands.restoreFromManifest(mods, {}, argument.length === 0, found.others));
+  const outcome = await runWritingGesture('modbench.mod.restoreFromManifest', MODS_KEY_ARGS.view, instance, () => commands.restoreFromManifest(mods, {}, argument.length === 0, found.others));
   return {
     applied: true,
     outcome: { landed: outcome.landed, refused: [...outcome.refused, ...found.refused] },

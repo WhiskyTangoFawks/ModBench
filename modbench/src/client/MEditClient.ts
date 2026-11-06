@@ -9,7 +9,8 @@ import {
   type PluginLoadFailure, type CompareResult, type CompareRecordsAnswer, type CopyText,
 } from './apiClient';
 import type { RecordEditEnvelope } from '../wire/messages';
-import type { PluginAddress } from '../wire/pluginAddress';
+import type { PluginAddress, SourceModIn } from '../wire/pluginAddress';
+export type { SourceModIn };
 import type { ReadFailed } from '../wire/readFailed';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
@@ -149,8 +150,7 @@ export interface VersionInGitOutcome {
   refused: readonly ItemRefusal<string>[];
 }
 
-/** A plugin to repair, and the source folder its mod's repository is made in when it
- *  has none. */
+/** A plugin to repair, and the source folder made for its mod when the mod is not a source mod. */
 export type PluginToRepair = components['schemas']['PluginToRepairRequest'];
 
 /** A mod to version in git, and the source folder made for it: its assets and its manifest, as the extension hands them (ADR-0016). */
@@ -158,9 +158,6 @@ export type ModToVersionInGit = components['schemas']['ModToVersionInGitRequest'
 
 /** The source folder made for a mod, the repository that holds it, its assets by path in the mod folder, and its manifest. */
 export type SourceFolderRequest = components['schemas']['SourceFolderRequest'];
-
-/** Which repository holds the source folder version in git makes: a new one of its own, or the modlist repository. */
-export type SourceModIn = components['schemas']['SourceModIn'];
 
 /** A mod to build, as the extension hands it (ADR-0016): the paths it excludes, and the built-in step of its build file to run. */
 export type BuildMod = components['schemas']['BuildModRequest'];
@@ -231,7 +228,9 @@ export type RecordFilter = components['schemas']['RecordFilter'];
 export interface MEditClient {
   // Commands — the HTTP adapter's verbs by today's names, each answering applied-or-refusal;
   // `rebuildIndex` answers with its own outcome shape (RebuildIndexOutcome).
-  createPlugin(plugin: PluginAddress, folder: string, sourceFolder: string | undefined): Promise<PluginAddress | WriteRefused>;
+  createPlugin(
+    plugin: PluginAddress, folder: string, sourceFolder: string | undefined, flags: readonly string[] | undefined,
+  ): Promise<PluginAddress | WriteRefused>;
   // The changes renaming the plugin source makes over the unsaved documents mEdit holds, and the name its tree is
   // filed under. A WriteRefused is the call failing or mEdit refusing. Nothing is written.
   getRenameSourceChanges(plugin: PluginAddress, newName: string): Promise<RenameSourceChangesOutcome | WriteRefused>;
@@ -283,6 +282,8 @@ export interface MEditClient {
   /** The types the plugin's copy of a container record can hold, in name order. */
   getChildRecordTypes(plugin: PluginAddress, formKey: string): Promise<RecordTypeChoice[] | ReadFailed>;
   getCreatablePluginExtensions(): Promise<string[] | ReadFailed>;
+  /** The header flag combinations a new plugin of the file name's extension may take. */
+  getCreatablePluginFlags(name: string): Promise<string[][] | ReadFailed>;
   getRecords(plugin: PluginAddress, type: string, offset: number, limit: number): Promise<RecordPage | ReadFailed>;
   /** Every active plugin's copies, or one plugin's. */
   searchRecords(query: string, validTypes: string[], plugin?: PluginAddress): Promise<RecordPage | ReadFailed>;
@@ -345,6 +346,9 @@ export interface MEditClient {
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome>;
   /** The newest snapshot's outcome, following a superseding one. Undefined when none was sent. */
   latestLoadOrder(): Promise<LoadOrderOutcome | undefined>;
+  /** Tells mEdit the files at `paths` changed, or, with none, to check the disk (ADR-0015), once every snapshot handed
+   *  before has answered. Signals handed while one is in flight fold into one more. */
+  signalChange(paths: readonly string[]): void;
   /** Each put of the newest snapshot that no send asked for: after a reconnect, since the process
    *  behind the stream may hold nothing sent before. */
   onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void;

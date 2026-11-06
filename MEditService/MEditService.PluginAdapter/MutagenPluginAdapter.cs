@@ -26,6 +26,7 @@ internal interface ILoadedMod : IDisposable
 public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAdapter
 {
     private readonly PluginFileHashes _hashes = new(timeProvider);
+    private readonly RecentPluginMemo<PluginRecordFacts> _facts = new(timeProvider, capacity: 2);
 
     // The getter looks its strings up as they are read, so the folder it reads them from lives as long as it does.
     internal static ILoadedMod OpenForRead(
@@ -66,7 +67,14 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     {
         var modPath = new ModPath(plugin.Path);
         return Opened<IPluginRecords>(modPath, plugin.Strings, loadOrder, loaded =>
-            new ModRecordLookup(loaded.Getter, new PluginRecordBytes(modPath, loadOrder), schemas, loaded));
+            new ModRecordLookup(
+                loaded.Getter, new PluginRecordBytes(modPath, loadOrder), schemas,
+                () => _facts.Of(plugin.Path, MasterStyles.Fingerprint(modPath, loadOrder), () =>
+                {
+                    using var own = OpenForRead(modPath, loadOrder.GameRelease, plugin.Strings, loadOrder, loadOrder.StringsLanguage);
+                    return PluginRecordFacts.Of(own.Getter, new PluginRecordBytes(modPath, loadOrder));
+                }),
+                loaded));
     }
 
     // The open passes to what its result holds; until it has, a failure disposes it here.
@@ -104,7 +112,22 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     public string? HashOf(string pluginPath) => _hashes.Of(pluginPath);
 
-    public void KeepHashesOf(IReadOnlySet<string> pluginPaths) => _hashes.Keep(pluginPaths);
+    public PathAnswer Touching(LoadOrderSnapshot loadOrder, string path)
+    {
+        var full = Path.GetFullPath(path);
+        bool At(string file) => string.Equals(file, full, FilePaths.Comparison);
+        bool AtOneOf(IEnumerable<StampedFile> files) => files.Any(file => At(file.Path));
+        // Every plugin that reads the game's strings reads each of these.
+        if (AtOneOf(loadOrder.Archives) || AtOneOf(loadOrder.StringsFiles)) return new PathAnswer.Unnamed();
+        return PathAnswer.Of([.. loadOrder.Plugins
+            .Where(plugin => At(plugin.Path) || AtOneOf(plugin.Strings.Archives) || AtOneOf(plugin.Strings.StringsFiles))]);
+    }
+
+    public void KeepStateOf(IReadOnlySet<string> pluginPaths)
+    {
+        _hashes.Keep(pluginPaths);
+        _facts.Retain(pluginPaths);
+    }
 
     public Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath, GameRelease gameRelease) => PluginBinaryHash.ClaimOfFile(pluginPath, gameRelease);
 
@@ -175,7 +198,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
                 var (content, unreachable) = OpenedPlugins.ContentIn(loaded.Getter, name, isBlueprint);
                 var missing = LocalizedStrings.FindMissingStringsFiles(
                     loaded.Getter, modPath, strings, loadOrder, loadOrder.GameRelease, loadOrder.StringsLanguage);
-                return (content with { MissingStringsFiles = missing }, unreachable);
+                return (content with { MissingStringsFiles = missing, Description = PluginDescription.Of(modPath, loadOrder.GameRelease, loadOrder.StringsLanguage) }, unreachable);
             }
         });
 
@@ -233,12 +256,15 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
             var pairing = PluginBinaryWalk.PairByFormKey(
                 originalBytes, PluginBinaryWalk.MastersOf(new ModPath(plugin, originalPath), loadOrder),
                 recompiledBytes, PluginBinaryWalk.MastersOf(new ModPath(plugin, recompiledPath), loadOrder), loadOrder.GameRelease);
-            var deletedRecordEmptied = PluginBinaryWalk.FirstEmptiedDeletedRecord(pairing.Pairs) is { } emptied
-                ? $"{emptied.Original.RecordType} {emptied.FormKey}"
-                : null;
+            IReadOnlyList<RepairPreview> deletedRecordCauses =
+            [
+                .. Malformations.In(originalBytes, loadOrder.GameRelease)
+                    .Where(found => found.Diagnosis.DefectClass == DeletedRecordHoldingFields.DefectClass)
+                    .Select(found => found.Preview),
+            ];
             var unverified = PluginBinaryWalk.FirstUnverified(pairing);
             if (PluginBinaryWalk.FindFirstSubrecordLoss(pairing.Pairs) is not { } loss)
-                return new PluginByteComparison(Identical: false, DeletedRecordEmptied: deletedRecordEmptied, Unverified: unverified);
+                return new PluginByteComparison(Identical: false, DeletedRecordCauses: deletedRecordCauses.Count > 0 ? deletedRecordCauses : null, Unverified: unverified);
 
             IReadOnlyList<RepairPreview> causes =
             [
@@ -246,7 +272,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
                     .Where(found => found.Diagnosis.Anchor?.StartsWith($"{loss.RecordType} {loss.FormId:X8}", StringComparison.Ordinal) == true)
                     .Select(found => found.Preview),
             ];
-            return new PluginByteComparison(Identical: false, loss, causes.Count > 0 ? causes : null, deletedRecordEmptied, unverified);
+            return new PluginByteComparison(Identical: false, loss, causes.Count > 0 ? causes : null, deletedRecordCauses.Count > 0 ? deletedRecordCauses : null, unverified);
         });
 
     // Mutagen's parallel import shares the form version of the record being read across threads, so a
@@ -294,15 +320,16 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         });
 
     public async Task<Answer<EmptyPluginCreated, PluginFailure>> CreateAndWriteAsync(
-        ModKey modKey, string folder, GameRelease gameRelease)
+        ModKey modKey, string folder, GameRelease gameRelease, IReadOnlyCollection<HeaderFlag> flags)
     {
         var destinationPath = PathOfEmpty(modKey, folder);
         if (!Directory.Exists(folder)) return PluginAnswer.Of<EmptyPluginCreated>(EmptyPluginWrite.FolderGone);
         if (File.Exists(destinationPath)) return PluginAnswer.Of<EmptyPluginCreated>(EmptyPluginWrite.FileExists);
 
         var plugin = CreateEmpty(modKey, gameRelease);
-        plugin.IsMaster = modKey.Type == ModType.Master;
-        plugin.IsSmallMaster = modKey.Type == ModType.Light;
+        plugin.IsMaster = flags.Contains(HeaderFlag.Master);
+        plugin.IsSmallMaster = flags.Contains(HeaderFlag.Small);
+        if (flags.Contains(HeaderFlag.Medium)) plugin.IsMediumMaster = true;
 
         // NoModKeySync lifts Mutagen's file-name-matches-ModKey check, so the temp file needs no
         // folder of its own — nothing here can create or resurrect one. The fixed .tmp suffix

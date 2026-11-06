@@ -303,6 +303,18 @@ public sealed class ModelIdentityTests
     }
 
     [Fact]
+    public async Task DivergenceFrom_WhenTheTextOfAStringInAPluginNotLocalizedDiffers_NamesIt()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        var door = mod.Doors.AddNew("Door");
+        door.Name = "Door";
+        var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        recompiled.Doors.Add(new Door(door.FormKey, Fallout4Release.Fallout4) { EditorID = "Door", Name = "Gate" });
+
+        Assert.Contains("field 'Name' changed", await DivergenceAsync(mod, recompiled), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task DivergenceFrom_WhenAnOrderedKeyValueShapedListIsReordered_ReportsTheDivergence_BecauseNpcMorphsIsAnOrderedListSoAReorderIsARealContentChangeNotDictionaryEnumerationOrderEvenThoughNpcMorphIsExactlyKeyAndValue()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
@@ -421,6 +433,18 @@ public sealed class ModelIdentityTests
         var path = Path.Combine(Directory.CreateDirectory(folder).FullName, mod.ModKey.FileName);
         await mod.BeginWrite.ToPath(path).WithNoLoadOrder().WriteAsync();
         return path;
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DivergenceFrom_OfADeletedReferenceHoldingItsBaseRecord_ReturnsNull_BecauseMutagenWritesADeletedRecordAsItsHeaderAlone(bool trap)
+    {
+        var bytes = trap ? DeletedReferencePlugin.TrapBytes("Fixture.esp") : DeletedReferencePlugin.Bytes("Fixture.esp");
+
+        var (divergence, _, _) = await ParseRewriteAndCompare(new GeneratedPlugin("Fixture.esp", bytes));
+
+        Assert.Null(divergence);
     }
 
     private static async Task<string?> DivergenceAsync(Fallout4Mod original, Fallout4Mod recompiled)

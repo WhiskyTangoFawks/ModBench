@@ -19,7 +19,7 @@ public sealed class ReadOutlivesTheDrainTests : IDisposable
         $"WITH RECURSIVE {SlowReadsOwnText} AS (SELECT 1 UNION ALL SELECT n + 1 FROM steps WHERE n < 60000) SELECT count(*) AS n FROM steps";
 
     private const string NotReopened =
-        "mEdit's record index was not reopened: a read of it was still open after 120s. It is retried with the next load order.";
+        "mEdit's record index was not reopened: a read of it was still open after 120s. It is retried at the next check of the disk.";
 
     private readonly PluginFixtureData _fixture = new PluginFixtureBuilder("read-outlives-drain")
         .WithPlugin(Plugin, mod => mod.Npcs.AddNew("DrainedNpc"))
@@ -80,7 +80,7 @@ public sealed class ReadOutlivesTheDrainTests : IDisposable
         Assert.Equal(StoreRebuildRefusal.StillServingReads, refused?.Refusal);
         AwaitNotReopened();
         await ReadEnds(read);
-        _index.NextSnapshotUnsettledUntil(() => _index.Status.State == LoadOrderState.Ready, "the reopened index");
+        _index.NextCheckUnsettledUntil(() => _index.Status.State == LoadOrderState.Ready, "the reopened index");
         Assert.NotEmpty(_index.ListedIn(Key));
     }
 

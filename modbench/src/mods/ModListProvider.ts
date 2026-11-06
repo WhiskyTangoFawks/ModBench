@@ -66,7 +66,7 @@ interface ModFacts {
   readonly sourceMod: boolean;
   readonly holdsPublisherTag?: boolean;
   readonly sourceFolder?: string;
-  /** Shown only while the instance holds a repository (modlist-repository.md, Status, story 1). */
+  /** Shown only while the instance holds a repository (instance-repository.md, Status, story 1). */
   readonly status?: ModStatus;
 }
 
@@ -184,6 +184,7 @@ export class ModListProvider
   private instanceValue: InstanceValue;
   private readonly instanceSubscription: vscode.Disposable;
   private readonly readFailureSubscription: vscode.Disposable;
+  private readonly redrawSubscription: vscode.Disposable;
   private readonly statusSubscription: vscode.Disposable;
   private readonly openSubscription: vscode.Disposable;
   private readonly statuses: ModListProviderOptions['statuses'];
@@ -200,6 +201,7 @@ export class ModListProvider
       this.invalidate();
     });
     this.readFailureSubscription = options.instance.onReadFailure(() => this.render());
+    this.redrawSubscription = options.instance.onRedraw(() => this.render());
     this.statuses = options.statuses;
     this.open = options.open;
     this.reporter = options.reporter;
@@ -213,6 +215,7 @@ export class ModListProvider
   dispose(): void {
     this.instanceSubscription.dispose();
     this.readFailureSubscription.dispose();
+    this.redrawSubscription.dispose();
     this.statusSubscription.dispose();
     this.openSubscription.dispose();
     this.firstRead.dispose();
@@ -251,7 +254,7 @@ export class ModListProvider
     return entry?.enabled ?? row.mod.enabled;
   }
 
-  /** The modlist's badge: how many mods differ from their manifests or have none (modlist-repository.md, Status, story 4). */
+  /** The modlist's badge: how many mods differ from their manifests or have none (instance-repository.md, Status, story 4). */
   badge(): { value: number; tooltip: string } | undefined {
     const count = this.instanceValue.mods.filter((entry) => {
       const status = entry.kind === 'mod' ? this.statusOf(entry) : undefined;

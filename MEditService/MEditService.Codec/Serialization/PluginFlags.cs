@@ -19,8 +19,10 @@ public static class PluginFlags
     public static bool IsMedium(IModFlagsGetter mod, string fileName) =>
         mod.CanBeMediumMaster && mod.IsMediumMaster && !IsLight(mod, fileName);
 
+    /// <summary>The game loads a <c>.esl</c> as a master where it has light plugins, as libloot's
+    /// <c>is_master_file</c> reads it.</summary>
     public static bool IsMaster(IModFlagsGetter mod, string fileName) =>
-        mod.IsMaster || fileName.EndsWith(".esm", StringComparison.OrdinalIgnoreCase);
+        mod.IsMaster || fileName.EndsWith(".esm", StringComparison.OrdinalIgnoreCase) || (mod.CanBeSmallMaster && IsEsl(fileName));
 
     /// <summary>The local FormIDs <paramref name="mod"/>'s light or medium flag, or its <c>.esl</c> name,
     /// limits its native records to, or null for a plugin none limits.</summary>

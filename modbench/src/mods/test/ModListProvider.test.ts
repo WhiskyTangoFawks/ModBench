@@ -166,6 +166,17 @@ describe('what the view says of itself', () => {
     expect(provider.viewMessage()).toBeUndefined();
   });
 
+  it('draws the tree again when the instance redraws', () => {
+    const instance = new FakeInstance(valueOf([mod('A')]));
+    const provider = makeProvider([], { instance });
+    const fired: unknown[] = [];
+    provider.onDidChangeTreeData((e) => fired.push(e));
+
+    instance.redraw();
+
+    expect(fired).toHaveLength(1);
+  });
+
   it('says it shows the last good read, with the reason, when a later read fails, and not once a read lands', () => {
     const instance = new FakeInstance(valueOf([mod('A')]));
     const provider = makeProvider([], { instance });

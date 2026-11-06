@@ -18,6 +18,7 @@ import { GESTURE_TOOLS } from './gestures';
 import { RESOLVE_INSTANCE_NAMES } from './instanceNames';
 import { INSTANCE_READS, type DeploymentRead } from './instanceReads';
 import { LIST_PLUGINS } from './listPlugins';
+import { LIST_SORTING_RULES } from './listSortingRules';
 import { withNotRestored } from './notRestored';
 import { Refusal } from '../drivingLib/refusal';
 import { parseOrRefuse } from './refusal';
@@ -82,7 +83,7 @@ interface Tool<Shape extends z.ZodRawShape> {
 function register<Shape extends z.ZodRawShape>(
   server: McpServer, log: Log, standing: () => string[], { name, description, input }: Tool<Shape>, run: (args: z.output<z.ZodObject<Shape>>) => unknown,
 ): void {
-  const schema = z.object(input);
+  const schema = z.strictObject(input);
   const anyObject = z.looseObject({}).meta(z.toJSONSchema(schema, { io: 'input', target: 'draft-7' }));
   server.registerTool(name, { description, inputSchema: anyObject }, (args) => answer(log, standing, name, () => {
     return run(parseOrRefuse(schema, args));
@@ -98,9 +99,11 @@ const namesAnOrigin = (args: unknown): boolean =>
 
 const INSTRUCTIONS = `Name objects as Modbench's views do: a plugin by its file name, a mod or a separator by its name, a record by its EditorID or FormKey, a downloaded file by its file name, an archive or a folder outside the downloads by its path, a file in a mod by its path in the mod. A name that means more than one thing is refused with each match listed as you can name it; name the one you mean that way.
 
-A plugin with source is a text file in a repository: edit it with your file tools, and the user reviews the change in Source Control. A plugin with no source is a binary: never edit it. Mod manager files change only through the gesture tools. A gesture runs on the argument and options given, never on the selection, with no picker, prompt or confirmation, and answers once Modbench's views show its change: with its outcome, or with what landed and each item refused and why. A change to many records by a rule is a script: write a Python file with import medit and run it in your shell with the variables script_environment returns. help(medit) lists its functions.
+A plugin with source is a text file in a repository: edit it with your file tools, and the user reviews the change in Source Control. A plugin with no source is a binary: never edit it. Mod manager files change only through the gesture tools. A gesture runs on the argument and options given, never on the selection, with no picker, prompt or confirmation but the FOMOD installer you ask install for, and answers once Modbench's views show its change: with its outcome, or with what landed and each item refused and why. A change to many records by a rule is a script: write a Python file with import medit and run it in your shell with the variables script_environment returns. help(medit) lists its functions.
 
 A SELECT reads only the views: select_rows says which.
+
+Read Nexus yourself where it needs no key: its GraphQL endpoint, https://api.nexusmods.com/v2/graphql, answers mod search by name, a mod's requirements, its files with their IDs and changelogs, and MD5 lookup. A fetch of a nexusmods.com page is refused with a Cloudflare challenge.
 
 Ask Modbench what the files cannot answer.`;
 
@@ -113,6 +116,7 @@ function mcpServerOf({ instance, copyReads, mEdit, terminalEnvironment, statuses
   for (const read of INSTANCE_READS) register(server, log, reading(...read.reads), { ...read, input: NO_INPUT }, () => read.of(currentValue(instance), deployment));
   const naming = (args?: unknown) => (namesAnOrigin(args) ? withNotRestored(currentValue(instance), statuses) : Promise.resolve(currentValue(instance)));
   register(server, log, reading('instance', 'mEdit', 'plugins', 'sortingRules'), { ...LIST_PLUGINS, input: NO_INPUT }, async () => LIST_PLUGINS.of(await withNotRestored(currentValue(instance), statuses), pluginsShown));
+  register(server, log, reading('instance', 'mEdit', 'plugins', 'sortingRules'), { ...LIST_SORTING_RULES, input: NO_INPUT }, () => LIST_SORTING_RULES.of(pluginsShown));
   register(server, log, reading('instance', 'modList'), { ...LIST_MOD_STATUSES, input: NO_INPUT }, () => LIST_MOD_STATUSES.of(currentValue(instance), statuses));
   register(server, log, reading('instance', 'modList'), FILE_CONFLICTS, (args) => FILE_CONFLICTS.of(currentValue(instance), copyReads, args));
   register(server, log, reading('instance', 'modList'), RESOLVE_INSTANCE_NAMES, (args) => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args));
@@ -174,6 +178,9 @@ export function serveAgent(options: AgentServerOptions): AgentServer {
       response.end();
     });
   });
+  // The extension host's loop can be held past the keep-alive window, and the expired timer then
+  // resets a connection with a request already sent on it.
+  http.keepAliveTimeout = 0;
   const listening = new Promise<AddressInfo | undefined>((done) => {
     http.once('error', (error) => {
       reporter.report('error', `Modbench cannot take port ${port} for your agent. Set ${AGENT_PORT_SETTING} to a free port.`, errorMessage(error));

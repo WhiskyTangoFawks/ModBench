@@ -31,9 +31,9 @@ internal static class ModEndpoints
             .WithName("VersionInGit")
             .WithTags("Mods")
             .WithDescription(
-                "Puts each mod under git (ADR-0007): its source folder, in a repository of its own or the modlist repository it sits in, holding " +
+                "Puts each mod under git (ADR-0007): its source folder, in a repository of its own or the instance repository it sits in, holding " +
                 "the plugin source of every plugin it provides, the assets it is handed, read from its folder, and the build file it is handed, " +
-                "committed when asked: in a new repository to main, in the modlist repository only the source folder's paths. " +
+                "committed when asked: in a new repository to main, in the instance repository only the source folder's paths. " +
                 "A mod lands or is refused whole. Progress is the version-in-git-progress notification.")
             .Produces<VersionInGitResult>()
             .ProducesProblem(400)
@@ -178,30 +178,29 @@ internal sealed record ModToVersionInGitRequest(string Name, string ModFolder, S
     internal const string LacksCommit = "A mod to version in git needs commit: true to commit what it tracks, or false to leave it uncommitted.";
 }
 
-/// <summary>The source folder made for a mod, the repository that holds it, and what the extension hands its first commit
-/// (ADR-0016): its assets by path, its build file's text, and its manifest's name and text.</summary>
+/// <summary><see cref="SourceFolderContents"/> on the wire: each file's text, and each manifest by name.</summary>
 internal sealed record SourceFolderRequest(
     string Path, SourceModIn? In, IReadOnlyList<string>? Assets, string BuildFile, string? ManifestFile = null, string? Manifest = null,
-    IReadOnlyList<string>? Ignored = null)
+    IReadOnlyList<string>? Ignored = null, string? ModFolderManifestFile = null, string? ModFolderManifest = null, bool? ModFolderManifestInInit = null)
 {
     internal const string NotWhole =
-        "A source folder to make needs its path, in: NewRepository or ModlistRepository, forward-slash paths in the mod folder for its assets, and its build file.";
+        "A source folder to make needs its path, in: NewRepository or InstanceRepository, forward-slash paths in the mod folder for its assets, and its build file.";
 
     internal string? WhyNotWhole =>
         !string.IsNullOrWhiteSpace(Path) && In is not null && FolderPaths.AreInTheFolder(Assets ?? []) && BuildFile is not null
-            ? WhyManifestIsNotWhole
+            ? WhyManifestIsNotWhole(ManifestFile, Manifest) ?? WhyManifestIsNotWhole(ModFolderManifestFile, ModFolderManifest)
             : NotWhole;
 
-    internal const string ManifestLacksItsFile = "A manifest needs its file name: ManifestFile is missing.";
-    internal const string ManifestLacksItsText = "A manifest needs its text: Manifest is missing.";
-    internal const string ManifestFileIsAPath = "ManifestFile must be a bare file name, not a path.";
+    internal const string ManifestLacksItsFile = "A manifest needs its file name: ManifestFile or ModFolderManifestFile is missing.";
+    internal const string ManifestLacksItsText = "A manifest needs its text: Manifest or ModFolderManifest is missing.";
+    internal const string ManifestFileIsAPath = "ManifestFile or ModFolderManifestFile must be a bare file name, not a path.";
 
-    private string? WhyManifestIsNotWhole => (ManifestFile, Manifest) switch
+    private static string? WhyManifestIsNotWhole(string? file, string? text) => (file, text) switch
     {
         (null, null) => null,
         (null, _) => ManifestLacksItsFile,
         (_, null) => ManifestLacksItsText,
-        var (file, _) when !IsBareFileName(file) => ManifestFileIsAPath,
+        (var name, _) when !IsBareFileName(name) => ManifestFileIsAPath,
         _ => null,
     };
 
@@ -209,7 +208,10 @@ internal sealed record SourceFolderRequest(
         !string.IsNullOrWhiteSpace(name) && name is not ("." or "..") && name.IndexOfAny(['/', '\\']) < 0;
 
     internal SourceFolderContents ToSourceFolderContents() =>
-        new(Path, In ?? throw new InvalidOperationException(NotWhole), Assets ?? [], Utf8(BuildFile), ManifestFile is { } name && Manifest is { } text ? new RootFile(name, Utf8(text)) : null, Ignored);
+        new(Path, In ?? throw new InvalidOperationException(NotWhole), Assets ?? [], Utf8(BuildFile), RootFileOf(ManifestFile, Manifest), Ignored,
+            RootFileOf(ModFolderManifestFile, ModFolderManifest), ModFolderManifestInInit == true);
+
+    private static RootFile? RootFileOf(string? name, string? text) => name is not null && text is not null ? new RootFile(name, Utf8(text)) : null;
 
     private static byte[] Utf8(string text) => new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(text);
 }

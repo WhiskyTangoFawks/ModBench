@@ -17,6 +17,7 @@ function knownGameNameLiterals(): string[] {
     if (info) {
       literals.add(info.gameName);
       literals.add(info.nexusSlug);
+      literals.add(info.lootRepository);
       literals.add(info.scriptExtenderFolder);
       literals.add(info.programs.game);
       literals.add(info.programs.extenderLoader);

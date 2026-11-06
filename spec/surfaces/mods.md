@@ -10,7 +10,7 @@ A native tree view (commands.md, Where surfaces live). Separators hold the mods 
 
 The view's description shows how many mods are enabled out of how many are listed, counting the whole list even while a filter is active. Cites: MO2's active-mod counter
 
-The view's badge is the modlist's ([modlist-repository.md](modlist-repository.md), Status, story 4).
+The view's badge is the modlist's ([instance-repository.md](instance-repository.md), Status, story 4).
 
 ## The tree
 
@@ -37,7 +37,7 @@ As a user, I want:
 |---|---|---|
 | Label | the mod's name | MO2 |
 | Check box | checked when the mod is enabled | MO2 |
-| Description | the version in the mod's metadata, then the mod's status against its manifest ([modlist-repository.md](modlist-repository.md), Status) | MO2 |
+| Description | the version in the mod's metadata, then the mod's status against its manifest ([instance-repository.md](instance-repository.md), Status) | MO2 |
 | Icon | one for a mod, and another for a source mod | |
 | Indicators | a badge at the right edge, and a colour on the label, for each indicator that holds ([Indicators](#indicators)) | MO2's Conflicts and Flags columns |
 | Tooltip | name, version, Nexus mod ID and installation file, each only when known, and, for a source mod, its repository and that the folder is built from it, then the files its folder lacks | MO2's columns |
@@ -68,7 +68,7 @@ Overwrite is always a row, even when it holds nothing. It is not a mod: it has n
 | Label | the file's or folder's name | VS Code's Explorer |
 | Icon | the file icon theme's icon | VS Code's Explorer |
 | Colour | greyed when the game does not get the file (The tree, story 8) | |
-| Description | ignored, or differs ([modlist-repository.md](modlist-repository.md), The manifest, story 11; Status) | |
+| Description | ignored, or differs ([instance-repository.md](instance-repository.md), The manifest, story 11; Status) | |
 | Indicators | a badge at the right edge for each publisher tag that covers it ([Indicators](#indicators)) | [publishing.md](publishing.md), Publisher tags |
 | Tooltip | the path in its mod | |
 
@@ -92,7 +92,7 @@ Each publisher tag is an indicator of its own, with the badge its publisher decl
 A source mod's folder is its build's output ([source.md](source.md), Build). As a user, I want:
 
 1. Its row to open into the folder's files as any mod's, since they are what the game gets. The source is in the Explorer and Source Control, and `open source` shows it. Cites: catalog `open source`
-2. Rename, and exclude or include, to be choices of my modlist: they change the folder, never the source, and the next build keeps them. Cites: ADR-0022
+2. Rename, and exclude or include, to be choices of my modlist that the next build keeps. Exclude and include change the folder, never the source. Cites: ADR-0022; Rename mod, story 5
 3. No gesture that changes content the build makes: an edit lands in the source. Cites: ADR-0006; ADR-0007
 4. Uninstall to leave the source, so a build makes the mod again. Cites: source.md, Build, story 7
 
@@ -116,7 +116,7 @@ The row menus follow VS Code's groups: open, change, create, source control, cop
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. Overflow: install… · create empty mod · check for updates, on every mod (I am logged in) · update manifest, on every manifest · restore from manifest…, on every manifest (the instance has a repository). Collapse All last. |
-| Mod menu | inline: open source (a source mod). Menu: open folder · open source (a source mod) · open conflicts · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add publisher tag… (the instance has a publisher) · remove publisher tag… (the row holds a publisher tag) · check for updates (the mod has a Nexus mod ID, and I am logged in) · add separator · create empty mod · install… · version in git… (a mod that is not a source mod) · update manifest (a mod that is not a source mod and whose folder git does not hold whole) · restore from manifest… (the instance has a repository) · copy value · uninstall |
+| Mod menu | inline: open source (a source mod). Menu: open folder · open source (a source mod) · open conflicts · referenced by · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add publisher tag… (the instance has a publisher) · remove publisher tag… (the row holds a publisher tag) · check for updates (the mod has a Nexus mod ID, and I am logged in) · add separator · create empty mod · install… · version in git… (a mod that is not a source mod) · update manifest (a mod that is not a source mod and whose folder git does not hold whole) · restore from manifest… (the instance has a repository, and git does not hold the mod's whole folder) · copy value · uninstall |
 | Separator menu | move… · add separator · rename… · check for updates (I am logged in) · update manifest · restore from manifest… (the instance has a repository) · copy value · delete |
 | Overwrite menu | open folder |
 | File menu | open folder · compare file (a file in a file order conflict, not the winning copy) · go to mod (a file in a file order conflict) · exclude or include · ignore or unignore (an instance with a repository) · add publisher tag… (the instance has a publisher whose publisher tags mark paths) · remove publisher tag… (the row holds a publisher tag) · copy value |
@@ -173,8 +173,9 @@ As a user, I want:
 
 1. A prompt filled with the current name. Esc, an empty name or the same name renames nothing. Cites: MO2
 2. A name another mod has, or for a separator another separator, compared without case, refused in the prompt, so Windows and Linux agree. A name with a path separator refused. Every name a gesture here gives a folder follows this rule. Cites: MO2 compares without case; Windows and Linux alike; Refuse, do not repair
-3. The mod to keep everything but its name: its place in mod order, its enabled state and its separator in every profile, and all its folder holds. A source mod's repository stays where it is. Cites: MO2; ADR-0007
+3. The mod to keep everything but its name: its place in mod order, its enabled state and its separator in every profile, and all its folder holds. Cites: MO2
 4. A rename that renamed the folder and then failed on a profile's mod order to say so, naming the profile. That profile loses the mod's place, and `mod sync` places it as a new folder when the profile is active.
+5. Each reference to its folder to follow it, and a source mod's source folder, named for it, with them. Cites: symbols.md, The features, story 6
 
 ### Delete separator
 

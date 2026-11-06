@@ -12,6 +12,7 @@ export interface InstanceFacts {
   standingOf: (plugin: PluginAddress) => PluginStanding;
   onChange: (listener: () => void) => Subscription;
   refresh: () => Promise<void>;
+  redraw: () => void;
 }
 
 export const factsOf = (instance: Instance): InstanceFacts => ({
@@ -22,6 +23,7 @@ export const factsOf = (instance: Instance): InstanceFacts => ({
   standingOf: (plugin) => pluginStanding(instance.value, plugin),
   onChange: (listener) => instance.subscribe(() => { listener(); }),
   refresh: () => instance.refresh(),
+  redraw: () => { instance.redraw(); },
 });
 
 export const NO_INSTANCE_FACTS: InstanceFacts = {
@@ -32,4 +34,5 @@ export const NO_INSTANCE_FACTS: InstanceFacts = {
   standingOf: () => ({ kind: 'enabled' }),
   onChange: () => ({ dispose: () => undefined }),
   refresh: () => Promise.resolve(),
+  redraw: () => undefined,
 };

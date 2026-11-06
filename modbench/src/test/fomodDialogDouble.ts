@@ -5,7 +5,7 @@ export const FOMOD_PAGE: FomodDialog = {
 };
 
 /** What a view install answers a FOMOD's installer with. */
-export const VIEW_ANSWER: FomodAnswer = { kind: 'dialog', dialog: FOMOD_PAGE };
+export const VIEW_ANSWER: FomodAnswer = { kind: 'dialog', dialog: FOMOD_PAGE, steps: [] };
 
 /** A page that answers a refusal as given, recording what the install asked of it. */
 export function refusingPage(answer: 'manual' | 'cancelled'): { readonly dialog: FomodDialog; readonly events: string[] } {

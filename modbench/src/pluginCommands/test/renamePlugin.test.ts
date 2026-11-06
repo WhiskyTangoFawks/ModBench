@@ -3,7 +3,6 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
 import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, pluginFilesHeld, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import type { PluginAddress } from '../../wire/pluginAddress';
@@ -23,7 +22,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
   });
   const rename = (newName: string, plugin: PluginAddress = PLUGIN, answers: InstanceAnswers = {}, held: readonly string[] = []) => {
     const fake = fakeInstanceAdapter(readingFixture(pluginFilesHeld(
-      { origin: plugin.origin === OVERWRITE_ORIGIN ? { kind: 'runtimeOutput' } : { kind: 'mod', name: plugin.origin }, name: plugin.name },
+      { origin: { kind: 'mod', name: plugin.origin }, name: plugin.name },
       ...held.map((name) => ({ origin: { kind: 'mod', name: plugin.origin } as const, name })),
     )), answers);
     const result = pluginCommandsWith(fake.adapter, client).renamePlugin({ apply }, plugin, newName);
@@ -56,18 +55,10 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     ]);
   });
 
-  it('puts a rename of Overwrite\'s plugin to the adapter as the run-time output', async () => {
-    const { fake, result } = rename('Ran.esp', { name: 'Run.esp', origin: OVERWRITE_ORIGIN });
-
-    await result;
-
-    expect(fake.calls).toEqual([{ verb: 'renamePlugin', origin: { kind: 'runtimeOutput' }, from: 'Run.esp', to: 'Ran.esp' }]);
-  });
-
   it('refuses a name the origin already holds before any write', async () => {
     const { fake, result } = rename('Renamed Patch.esp', PLUGIN, {}, ['Renamed Patch.esp']);
 
-    expect(await result).toEqual({ applied: false, sourceRenamed: false, refusal: '"Patch Mod" already holds "Renamed Patch.esp".' });
+    expect(await result).toEqual({ applied: false, refusal: '"Patch Mod" already holds "Renamed Patch.esp".' });
     expect(client.calls.map((call) => call.method)).toEqual(['getCreatablePluginExtensions']);
     expect(apply).not.toHaveBeenCalled();
     expect(fake.calls).toEqual([]);
@@ -76,7 +67,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
   it('refuses a name that is not a folder name before the source moves', async () => {
     const { fake, result } = rename('a/b.esp');
 
-    expect(await result).toEqual({ applied: false, sourceRenamed: false, refusal: 'A name cannot be . or .. or contain / or \\' });
+    expect(await result).toEqual({ applied: false, refusal: 'A name cannot be . or .. or contain / or \\' });
     expect(client.calls.map((call) => call.method)).toEqual(['getCreatablePluginExtensions']);
     expect(apply).not.toHaveBeenCalled();
     expect(fake.calls).toEqual([]);
@@ -87,18 +78,18 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     const { fake, result } = rename('Renamed Patch.esp');
 
     expect(await result).toEqual({
-      applied: false, sourceRenamed: false, refusal: 'Could not check "Renamed Patch.esp" for "Patch Mod.esp" (Patch Mod).', detail: 'mEdit is not ready.',
+      applied: false, refusal: 'Could not check "Renamed Patch.esp" for "Patch Mod.esp" (Patch Mod).', detail: 'mEdit is not ready.',
     });
     expect(apply).not.toHaveBeenCalled();
     expect(fake.calls).toEqual([]);
   });
 
   it('applies nothing and renames nothing when mEdit refuses the changes, and carries the refusal', async () => {
-    client.setCommandResult('getRenameSourceChanges', { refused: true, message: 'Could not rename the source of "Patch Mod.esp" — NotCompiledPlugin' });
+    client.setCommandResult('getRenameSourceChanges', { refused: true, message: 'Could not rename "Patch Mod.esp" — NotCompiledPlugin' });
     const { fake, result } = rename('Renamed Patch.esp');
 
     expect(await result).toEqual({
-      applied: false, sourceRenamed: false, refusal: 'Could not rename the source of "Patch Mod.esp" — NotCompiledPlugin',
+      applied: false, refusal: 'Could not rename "Patch Mod.esp" — NotCompiledPlugin',
     });
     expect(apply).not.toHaveBeenCalled();
     expect(fake.calls).toEqual([]);
@@ -119,6 +110,13 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
 
     expect(await result).toEqual({ applied: false, sourceRenamed: true, refusal: 'git refused' });
     expect(fake.calls).toEqual([]);
+  });
+
+  it('reports no source renamed when a plugin with no plugin source has its files refused', async () => {
+    client.setCommandResult('getRenameSourceChanges', { ...CHANGES, moves: [] });
+    const { result } = rename('Renamed Patch.esp', PLUGIN, { refusals: refusing('renamePlugin', 'disk full') });
+
+    expect(await result).toEqual({ applied: false, sourceRenamed: false, refusal: 'disk full' });
   });
 
   it('reports the source renamed when the adapter refuses the rename of the files after it', async () => {

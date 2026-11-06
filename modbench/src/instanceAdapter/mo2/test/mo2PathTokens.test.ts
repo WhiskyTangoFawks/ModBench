@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -7,8 +7,9 @@ import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 import { NO_DETECTORS } from '../../../test/noDetectors';
 import type { GameDetectors } from '../../gameFolder/gameFolderResolver';
 import type { ConfigurationFile } from '../../publisher';
-import { sedSubstitution } from '../../pathTokens';
+import { sedReplacement, sedSubstitution } from '../../pathTokens';
 import { managerOver } from '../../../test/mo2/adapterOver';
+import { fileProblemsFake } from '../../../test/fileProblemsFake';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
@@ -34,7 +35,13 @@ async function gameFolder(): Promise<string> {
 const PUBLISHER: ConfigurationFile = {
   name: 'publisher.json',
   spelling: { separators: [{ first: '\\\\', rest: '\\\\' }], ends: '"', nativeStarts: ['"'] },
-  blanked: { clean: [sedSubstitution('"Output":"[^"]*"', '"Output":""')], smudge: [] },
+  blanked: (thisMachine) => {
+    const output = /"Output":("[^"]*")/.exec(thisMachine)?.[1];
+    return {
+      clean: [sedSubstitution('"Output":"[^"]*"', '"Output":""')],
+      smudge: output === undefined ? [] : [sedSubstitution('"Output":""', `"Output":${sedReplacement(output)}`)],
+    };
+  },
 };
 const PUBLISHER_FILE = PUBLISHER.name;
 
@@ -93,6 +100,15 @@ describe('the MO2 adapter\'s path tokens', () => {
     expect(held(root, 'ModOrganizer.ini')).toBe(SETTINGS([token]));
   });
 
+  it('holds a mod\'s meta.ini by its tokens, for a mod whose whole folder the repository holds', async () => {
+    const { root, adapter } = await instanceRepository([]);
+    await put(root, 'mods/ModA/meta.ini', `[General]\r\ninstallationFile=${onWineDrive(root, '/')}/downloads/x.7z\r\n`);
+
+    await adapter.writePathTokens();
+
+    expect(held(root, 'mods/ModA/meta.ini')).toBe('[General]\r\ninstallationFile={instance folder:/}/downloads/x.7z\r\n');
+  });
+
   it('holds the game folder by its own token', async () => {
     const game = await gameFolder();
     const { root, adapter } = await instanceRepository([], game);
@@ -136,6 +152,112 @@ describe('the MO2 adapter\'s path tokens', () => {
     git(root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '-m', 'paths');
 
     expect([git(root, 'show', '--textconv', 'HEAD:ModOrganizer.ini'), git(root, 'status', '--porcelain', '--', 'ModOrganizer.ini')]).toEqual([written, '']);
+  });
+
+  describe('a value the filter blanks or drops', () => {
+    const commit = (root: string, file: string): void => {
+      git(root, 'add', '--', file);
+      git(root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '-m', 'machine');
+    };
+    const RECENT = ['[recentDirectories]', '1\\name=Mod', '1\\directory=D:/Elsewhere'];
+
+    it.each([
+      ['a blanked value', PUBLISHER_FILE, (edit: string) => `{\n"Source":"${edit}",\n"Output":"C:\\\\out\\\\list.out"\n}`],
+      ['a dropped section before another', 'ModOrganizer.ini', (edit: string) => SETTINGS([...RECENT, '[Settings]', `style=${edit}`])],
+      ['a dropped section at the end', 'ModOrganizer.ini', (edit: string) => SETTINGS(['[Settings]', `style=${edit}`, ...RECENT])],
+    ])('shows git diff only a change beside %s', async (_what, file, text) => {
+      const { root, adapter } = await instanceRepository([]);
+      await put(root, file, text('before'));
+      await adapter.writePathTokens();
+      commit(root, file);
+      await put(root, file, text('after'));
+
+      const changed = git(root, 'diff', '-U0').split('\n').filter((line) => /^[-+][^-+]/.test(line));
+      expect(changed.map((line) => line.slice(0, 1) + (line.includes('before') ? 'before' : line.includes('after') ? 'after' : line))).toEqual(['-before', '+after']);
+    });
+
+    it.each([
+      ['a blanked value', PUBLISHER_FILE, () => JSON.stringify({ Source: '{x}', Output: 'C:\\out\\list.out' })],
+      ['a dropped section', 'ModOrganizer.ini', () => SETTINGS([...RECENT, '[Settings]', 'style=dark'])],
+      ['a dropped section at the end', 'ModOrganizer.ini', () => SETTINGS(['[Settings]', 'style=dark', ...RECENT])],
+    ])('puts %s back on checkout as this machine\'s own', async (_what, file, text) => {
+      const { root, adapter } = await instanceRepository([]);
+      await put(root, file, text());
+      await adapter.writePathTokens();
+      commit(root, file);
+      await rm(join(root, file));
+
+      git(root, 'checkout', '--', file);
+
+      expect(await readFile(join(root, file), 'utf8')).toBe(text());
+    });
+
+    it('puts a dropped section back at the end of a file that lacks the header of the section that followed it', async () => {
+      const { root, adapter } = await instanceRepository([]);
+      await put(root, 'ModOrganizer.ini', SETTINGS([...RECENT, '[Settings]', 'style=dark']));
+      await adapter.writePathTokens();
+      await put(root, 'ModOrganizer.ini', SETTINGS([]));
+      commit(root, 'ModOrganizer.ini');
+      await rm(join(root, 'ModOrganizer.ini'));
+
+      git(root, 'checkout', '--', 'ModOrganizer.ini');
+
+      expect(await readFile(join(root, 'ModOrganizer.ini'), 'utf8')).toBe(SETTINGS(RECENT));
+    });
+
+    it.each([
+      ['a blanked value', PUBLISHER_FILE, (output: string) => JSON.stringify({ Source: '{x}', Output: output })],
+      ['a dropped section', 'ModOrganizer.ini', (directory: string) => SETTINGS(['[recentDirectories]', `1\\directory=${directory}`, '[Settings]', 'style=dark'])],
+    ])('puts %s back as this machine\'s latest after the watch hears it change', async (_what, file, text) => {
+      const { root, adapter } = await instanceRepository([]);
+      await put(root, 'profiles/Default/plugins.txt', '');
+      await put(root, file, text('C:\\old'));
+      await adapter.writePathTokens();
+      await put(root, file, text('C:\\new'));
+      await adapter.reading();
+      commit(root, file);
+      await rm(join(root, file));
+
+      git(root, 'checkout', '--', file);
+
+      expect(await readFile(join(root, file), 'utf8')).toBe(text('C:\\new'));
+    });
+
+    it('puts a dropped section back once into a file that holds it and a token', async () => {
+      const { root, adapter } = await instanceRepository([]);
+      await put(root, 'ModOrganizer.ini', SETTINGS([...RECENT, '[Settings]', 'path={instance folder:/}/x']));
+
+      await adapter.writePathTokens();
+
+      expect(await readFile(join(root, 'ModOrganizer.ini'), 'utf8')).toBe(SETTINGS([...RECENT, '[Settings]', `path=${onWineDrive(root, '/')}/x`]));
+    });
+  });
+
+  it('leaves its filter programs as its own write has them while a reading of the instance waits', async () => {
+    const { root } = await instanceRepository([]);
+    const game = await folder('game');
+    await mkdir(join(game, 'Data'));
+    await put(root, 'profiles/Default/plugins.txt', '');
+    await put(root, 'ModOrganizer.ini', SETTINGS([`path=${onWineDrive(game, '/')}/x.exe`]));
+    const found = { kind: 'found' as const, root: game, dataFolder: join(game, 'Data') };
+    let reading: Promise<unknown> | undefined;
+    let untouched: boolean | undefined;
+    const adapter = managerOver(root, {
+      gameFolder: async () => {
+        if (reading === undefined) {
+          const before = await programsIn(root);
+          reading = adapter.reading();
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          untouched = JSON.stringify(before) === JSON.stringify(await programsIn(root));
+        }
+        return found;
+      },
+    }, PUBLISHER);
+
+    await adapter.writePathTokens();
+    await reading;
+
+    expect(untouched).toBe(true);
   });
 
   it('takes a file committed before the game folder was found as changed once the game folder is found', async () => {
@@ -308,6 +430,106 @@ describe('the MO2 adapter\'s path tokens', () => {
       expect(held(root, PUBLISHER_FILE)).toBe(JSON.stringify({ Source: '{instance folder}', Output: '' }));
     });
 
+  });
+
+  describe('a file the index or HEAD holds unfiltered', () => {
+    beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 3_600_000 }); });
+    afterEach(() => { vi.useRealTimers(); });
+
+    const commit = (root: string): void => { git(root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '-m', 'commit'); };
+
+    const stagedAsTextWithNoFilter = (root: string, path: string): void => {
+      const blob = git(root, 'hash-object', '-w', '--no-filters', '--', path).trim();
+      git(root, 'update-index', '--add', '--cacheinfo', `100644,${blob},${path}`);
+    };
+
+    async function problemsOver(file: string, text: (root: string) => string) {
+      const { root } = await instanceRepository([]);
+      const problems = fileProblemsFake();
+      const adapter = managerOver(root, { fileProblems: problems }, PUBLISHER);
+      await put(root, 'profiles/Default/plugins.txt', '');
+      await writeFile(join(root, file), text(root));
+      await adapter.writePathTokens();
+      const shown = async () => {
+        await adapter.reading();
+        return problems.held.get(join(root, file));
+      };
+      return { root, shown };
+    }
+
+    const unfiltered = (holders: string, remedy: string) =>
+      [{ line: 1, message: `${holders} this file unfiltered, so a clone gets this machine's own values, such as its paths. ${remedy}` }];
+
+    it('shows the index holding it on the file, until a stage of the whole file', async () => {
+      const { root, shown } = await problemsOver(PUBLISHER_FILE, (instance) => JSON.stringify({ Source: instance }));
+      stagedAsTextWithNoFilter(root, PUBLISHER_FILE);
+
+      const staged = await shown();
+      git(root, 'add', '--', PUBLISHER_FILE);
+
+      expect([staged, await shown()]).toEqual([unfiltered('The index holds', 'Stage the whole file to filter it.'), undefined]);
+    });
+
+    it('shows HEAD holding it on the file, until a commit of it filtered', async () => {
+      const { root, shown } = await problemsOver('ModOrganizer.ini', (instance) => SETTINGS([`path=${onWineDrive(instance, '/')}/tools`]));
+      stagedAsTextWithNoFilter(root, 'ModOrganizer.ini');
+      commit(root);
+
+      const committed = await shown();
+      git(root, 'add', '--', 'ModOrganizer.ini');
+      const restaged = await shown();
+      commit(root);
+
+      expect([committed, restaged, await shown()]).toEqual([
+        unfiltered('The index and HEAD hold', 'Stage the whole file to filter it, then commit it.'),
+        unfiltered('HEAD holds', 'Commit it as staged.'),
+        undefined,
+      ]);
+    });
+
+    it('shows HEAD holding it until HEAD moves off it, though the index stays as it is', async () => {
+      const { root, shown } = await problemsOver('ModOrganizer.ini', (instance) => SETTINGS([`path=${onWineDrive(instance, '/')}/tools`]));
+      git(root, 'add', '--', 'ModOrganizer.ini');
+      commit(root);
+      stagedAsTextWithNoFilter(root, 'ModOrganizer.ini');
+      commit(root);
+      git(root, 'add', '--', 'ModOrganizer.ini');
+
+      const committed = await shown();
+      git(root, 'reset', '--soft', 'HEAD~1');
+
+      expect([committed, await shown()]).toEqual([unfiltered('HEAD holds', 'Commit it as staged.'), undefined]);
+    });
+
+    it('says a file its filter fails on could not be checked, and checks it again on the next reading', async () => {
+      const { root, shown } = await problemsOver(PUBLISHER_FILE, (instance) => JSON.stringify({ Source: instance }));
+      git(root, 'add', '--', PUBLISHER_FILE);
+      const clean = git(root, 'config', 'filter.modbench-publisher-tokens.clean').trim();
+      git(root, 'config', 'filter.modbench-publisher-tokens.clean', 'false');
+
+      const failed = await shown();
+      git(root, 'config', 'filter.modbench-publisher-tokens.clean', clean);
+
+      expect([failed?.map(({ message }) => message.startsWith('could not be checked against its filter: ')), await shown()]).toEqual([[true], undefined]);
+    });
+
+    it('shows nothing for a file staged filtered with bytes outside UTF-8 while the working tree holds UTF-8', async () => {
+      const { root, shown } = await problemsOver('ModOrganizer.ini', () => SETTINGS([]));
+      await writeFile(join(root, 'ModOrganizer.ini'), Buffer.from(SETTINGS(['name=Caf\xe9']), 'latin1'));
+      git(root, 'add', '--', 'ModOrganizer.ini');
+      await writeFile(join(root, 'ModOrganizer.ini'), SETTINGS([]));
+
+      expect(await shown()).toBeUndefined();
+    });
+
+    it('shows nothing for a file committed with other line ends than git converts to', async () => {
+      const { root, shown } = await problemsOver('ModOrganizer.ini', (instance) => SETTINGS([`path=${onWineDrive(instance, '/')}/tools`]));
+      git(root, 'add', '--', 'ModOrganizer.ini');
+      commit(root);
+      git(root, 'config', 'core.autocrlf', 'true');
+
+      expect(await shown()).toBeUndefined();
+    });
   });
 
   describe('on a clone', () => {

@@ -13,8 +13,8 @@ const SCHEMA = 'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noName
 
 const config = (body: string): string => `<?xml version="1.0" encoding="UTF-8"?><config ${SCHEMA}><moduleName>Test</moduleName>${body}</config>`;
 
-const option = (name: string, files: string, type = 'Optional', flag = ''): string =>
-  `<plugin name="${name}"><description/><files>${files}</files>${flag}<typeDescriptor><type name="${type}"/></typeDescriptor></plugin>`;
+const option = (name: string, files: string, type = 'Optional', flag = '', description = ''): string =>
+  `<plugin name="${name}"><description>${description}</description><files>${files}</files>${flag}<typeDescriptor><type name="${type}"/></typeDescriptor></plugin>`;
 
 const group = (name: string, type: string, options: string): string =>
   `<group name="${name}" type="${type}"><plugins order="Explicit">${options}</plugins></group>`;
@@ -30,7 +30,7 @@ const TWO_STEPS = config(`<requiredInstallFiles><folder source="core" destinatio
   step('Main', group('Pick', 'SelectExactlyOne',
     option('Option A', file('a/A.esp', 'A.esp'), 'Optional', '<conditionFlags><flag name="picked">A</flag></conditionFlags>')
     + option('Option B', file('b/B.esp', 'textures/B.esp'), 'Recommended', '<conditionFlags><flag name="picked">B</flag></conditionFlags>'))),
-  step('Only for B', group('Extras', 'SelectAny', option('Extra', file('a/A.esp', 'extra/A.esp'), 'Recommended')),
+  step('Only for B', group('Extras', 'SelectAny', option('Extra', file('a/A.esp', 'extra/A.esp'), 'Recommended', '', ' Lands "A" again, ')),
     '<visible><flagDependency flag="picked" value="B"/></visible>'),
 )}`);
 const TWO_STEPS_FILES = ['core/Core.esp', 'a/A.esp', 'b/B.esp'];
@@ -64,10 +64,10 @@ describe('the FOMOD installer', () => {
   });
   afterEach(() => rm(base, { recursive: true, force: true }));
 
-  async function release(moduleConfig: string | Buffer, files: readonly string[]): Promise<void> {
-    for (const path of [...files, 'fomod/ModuleConfig.xml']) {
+  async function release(moduleConfig: string | Buffer, files: readonly string[], configPath = 'fomod/ModuleConfig.xml'): Promise<void> {
+    for (const path of [...files, configPath]) {
       await mkdir(dirname(join(root, path)), { recursive: true });
-      await writeFile(join(root, path), path === 'fomod/ModuleConfig.xml' ? moduleConfig : `bytes of ${path}`);
+      await writeFile(join(root, path), path === configPath ? moduleConfig : `bytes of ${path}`);
     }
   }
 
@@ -97,18 +97,19 @@ describe('the FOMOD installer', () => {
     expect(await filesLanded()).toEqual(['Core.esp', 'textures/B.esp']);
   });
 
-  it('refuses choices that leave a step it shows unanswered, listing the step\'s groups and options, and lands nothing', async () => {
+  it('refuses choices that leave a step it shows unanswered, listing the step\'s groups and options with their descriptions, and naming the Option that hands the user the installer, and lands nothing', async () => {
     await release(TWO_STEPS, TWO_STEPS_FILES);
 
     await expect(install(choose(['Main', { Pick: ['Option B'] }]))).rejects.toThrow(
-      'The choices leave step "Only for B" unanswered. Step "Only for B": group "Extras" takes any of "Extra" (recommended).',
+      'The choices leave step "Only for B" unanswered. Step "Only for B": group "Extras" takes any of "Extra" (recommended): "Lands \\"A\\" again,". '
+      + 'Put it to the user, or request it again with installer to open the installer for them.',
     );
     await releaseLeftAsItWas(TWO_STEPS_FILES);
   });
 
   it.each([
     ['no choices at all, listing the first step', [],
-      'The choices leave step "Main" unanswered. Step "Main": group "Pick" takes exactly one of "Option A", "Option B" (recommended).'],
+      'The choices leave step "Main" unanswered. Step "Main": group "Pick" takes exactly one of "Option A", "Option B" (recommended). Put it'],
     ['two picked in a group that takes exactly one', choose(['Main', { Pick: ['Option A', 'Option B'] }]), 'Group "Pick" of step "Main" takes exactly one, and the choices pick 2.'],
     ['none picked in a group that takes exactly one', choose(['Main', { Pick: [] }]), 'Group "Pick" of step "Main" takes exactly one, and the choices pick 0.'],
     ['a group the step does not have', choose(['Main', { Pik: ['Option A'] }]), 'Step "Main" has no group "Pik".'],
@@ -119,6 +120,48 @@ describe('the FOMOD installer', () => {
     await release(TWO_STEPS, TWO_STEPS_FILES);
 
     await expect(install(choices)).rejects.toThrow(refusal);
+  });
+
+  it('matches a group and an option by the name the installer shows, without the spaces around it', async () => {
+    await release(config(steps(step('Main', group('Pick ', 'SelectExactlyOne',
+      option(' Option A', file('a/A.esp', 'A.esp'), 'Optional') + option('Option B', file('b/B.esp', 'B.esp'), 'Optional'))))), TWO_STEPS_FILES);
+
+    await install(choose(['Main', { Pick: ['Option A'] }]));
+
+    expect(await filesLanded()).toEqual(['A.esp']);
+  });
+
+  it('refuses a name that two options show alike once the spaces around it are gone', async () => {
+    await release(config(steps(step('Main', group('Pick', 'SelectAny',
+      option('Option A', file('a/A.esp', 'A.esp'), 'Optional') + option('Option A ', file('b/B.esp', 'B.esp'), 'Optional'))))), TWO_STEPS_FILES);
+
+    await expect(install(choose(['Main', { Pick: ['Option A'] }]))).rejects.toThrow('more than one option named "Option A"');
+  });
+
+  it('goes on past two options alike once trimmed when no choice names them', async () => {
+    await release(config(steps(step('Main', group('Pick', 'SelectAny',
+      option('Option A', file('a/A.esp', 'A.esp'), 'Optional') + option('Option A ', file('b/B.esp', 'B.esp'), 'Optional'))))), TWO_STEPS_FILES);
+
+    await install(choose(['Main', { Pick: [] }]));
+
+    expect(await filesLanded()).toEqual([]);
+  });
+
+  it('refuses a group name that two groups show alike, and goes on when no choice names it', async () => {
+    const twins = (name: string): string => group(name, 'SelectAny', option('Option A', file('a/A.esp', 'A.esp'), 'Optional'));
+    await release(config(steps(step('Main', twins('Pick') + twins('Pick ') + group('Other', 'SelectAny', option('Option B', file('b/B.esp', 'B.esp'), 'Optional'))))), TWO_STEPS_FILES);
+
+    await expect(install(choose(['Main', { Pick: [] }]))).rejects.toThrow('Step "Main" has more than one group named "Pick"');
+    await install(choose(['Main', { Other: ['Option B'] }]));
+    expect(await filesLanded()).toEqual(['B.esp']);
+  });
+
+  it('matches a step by the name the installer shows, without the spaces around it', async () => {
+    await release(config(steps(step(' Main ', group('Pick', 'SelectAny', option('Option A', file('a/A.esp', 'A.esp'), 'Optional'))))), TWO_STEPS_FILES);
+
+    await install(choose(['Main', { Pick: ['Option A'] }]));
+
+    expect(await filesLanded()).toEqual(['A.esp']);
   });
 
   describe('each option\'s type', () => {
@@ -216,6 +259,13 @@ describe('the FOMOD installer', () => {
     expect(await readFile(join(root, 'fomod', 'ModuleConfig.xml'), 'utf8')).toBe(unnamed);
   });
 
+  it('installs a release whose installer folder is spelled in another case, where the filesystem tells the cases apart', async () => {
+    await release(TWO_STEPS, TWO_STEPS_FILES, 'FOMod/ModuleConfig.xml');
+
+    expect(await install(choose(['Main', { Pick: ['Option A'] }]))).toEqual({ kind: 'installer', missing: [], notes: [] });
+    expect(await filesLanded()).toEqual(['A.esp', 'Core.esp']);
+  });
+
   it.each([
     ['UTF-16 little-endian, by its byte order mark', '<?xml version="1.0" encoding="UTF-16"?>', utf16le],
     ['UTF-16 big-endian, by its byte order mark', '<?xml version="1.0" encoding="UTF-16"?>', utf16be],
@@ -257,7 +307,7 @@ describe('the FOMOD installer', () => {
     ] as const)('is refused to the page, which %s, while the install waits on the user', async (__, reply, ended) => {
       const { dialog, events } = refusingPage(reply);
 
-      expect(await landing({ kind: 'dialog', dialog })).toMatchObject(ended);
+      expect(await landing({ kind: 'dialog', dialog, steps: [] })).toMatchObject(ended);
       expect(events).toEqual(['asking true', expect.stringMatching(why), 'asking false']);
     });
 
@@ -390,7 +440,7 @@ describe('the FOMOD installer', () => {
         const show = vi.fn();
         const dialog: FomodDialog = { ...FOMOD_PAGE, show };
 
-        await expect(fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, { kind: 'dialog', dialog }, () => Promise.resolve(KNOWN)))
+        await expect(fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, { kind: 'dialog', dialog, steps: [] }, () => Promise.resolve(KNOWN)))
           .rejects.toThrow(new Error(GAME));
         expect(show).not.toHaveBeenCalled();
       });
@@ -412,7 +462,8 @@ describe('the FOMOD installer', () => {
 
     async function answered(
       replies: readonly Reply[],
-      { engine = FOMOD_ENGINE, confirms = true, onShow = () => undefined }: { engine?: FomodEngine; confirms?: boolean; onShow?: () => void } = {},
+      { engine = FOMOD_ENGINE, confirms = true, onShow = () => undefined, choices = [] }:
+        { engine?: FomodEngine; confirms?: boolean; onShow?: () => void; choices?: readonly FomodStepChoice[] } = {},
     ): Promise<{ page: Page; landing: Awaited<ReturnType<typeof fomodLanding>> }> {
       const page: Page = { states: [], roots: [], confirmed: [], asking: [], closed: 0 };
       let handler: ((move: FomodMove) => void) | undefined;
@@ -441,7 +492,7 @@ describe('the FOMOD installer', () => {
           page.closed += 1;
         },
       };
-      const landing = await fomodLanding(engine, { root, fomod: 'xml' }, { kind: 'dialog', dialog }, () => Promise.resolve(KNOWN));
+      const landing = await fomodLanding(engine, { root, fomod: 'xml' }, { kind: 'dialog', dialog, steps: choices }, () => Promise.resolve(KNOWN));
       if (landing.kind === 'landing') landedIn = landing.root;
       return { page, landing };
     }
@@ -581,6 +632,51 @@ describe('the FOMOD installer', () => {
       await releaseLeftAsItWas(TWO_STEPS_FILES);
     });
 
+    describe('opened on the choices the install names', () => {
+      const selectedIn = (state: FomodState<ReleaseImage> | undefined): boolean[][] =>
+        (present(state, 'a state').steps[state?.current ?? 0]?.optionalFileGroups?.group ?? []).map(({ options }) => options.map(({ selected }) => selected));
+
+      it('shows each group the choices name as they pick it, and every other group on the author\'s defaults', async () => {
+        await release(config(steps(step('Main', group('Pick', 'SelectExactlyOne',
+          option('Option A', file('a/A.esp', 'A.esp')) + option('Option B', file('b/B.esp', 'B.esp'), 'Recommended'))
+          + group('Extras', 'SelectAny', option('Extra', file('core/Core.esp', 'Core.esp'), 'Recommended'))))), TWO_STEPS_FILES);
+
+        const { page } = await answered([INSTALL], { choices: choose(['Main', { Pick: ['Option A'] }]) });
+
+        expect(selectedIn(page.states[0])).toEqual([[true, false], [true]]);
+        expect(await filesLanded()).toEqual(['A.esp', 'Core.esp']);
+      });
+
+      it('keeps the user\'s choices on a step the user goes Back to', async () => {
+        await release(TWO_STEPS, TWO_STEPS_FILES);
+
+        const { page } = await answered([pick('Option B'), INSTALL, { kind: 'continue', forward: false, stepId: 1 }, CANCEL], { choices: choose(['Main', { Pick: ['Option A'] }]) });
+
+        expect(selectedIn(page.states.at(-1))).toEqual([[false, true]]);
+      });
+
+      it.each([
+        ['a step the installer does not have', choose(['Nowhere', {}]), 'The installer has no step "Nowhere". Its steps are "Main", "Only for B".'],
+        ['a group of a step not yet reached', choose(['Only for B', { Extrs: [] }]), 'Step "Only for B" has no group "Extrs".'],
+        ['an option of a step not yet reached', choose(['Only for B', { Extras: ['Extar'] }]), 'Group "Extras" of step "Only for B" has no option "Extar".'],
+      ])('refuses a choice that names %s before the page shows a step', async (_, choices, refusal) => {
+        await release(TWO_STEPS, TWO_STEPS_FILES);
+        let shows = 0;
+
+        await expect(answered([CANCEL], { choices, onShow: () => { shows += 1; } })).rejects.toThrow(refusal);
+        expect(shows).toBe(0);
+      });
+
+      it('lands the user\'s install, naming the steps of the choices the user did not reach', async () => {
+        await release(TWO_STEPS, TWO_STEPS_FILES);
+
+        const { landing } = await answered([INSTALL], { choices: choose(['Main', { Pick: ['Option A'] }], ['Only for B', { Extras: [] }]) });
+
+        expect(landing).toMatchObject({ fomod: { kind: 'installer', missing: [], notes: [], unused: ['Only for B'] } });
+        expect(await filesLanded()).toEqual(['A.esp', 'Core.esp']);
+      });
+    });
+
     it('lands the release as a plain copy, saying Manual was asked for, when the user picks Manual', async () => {
       await release(TWO_STEPS, TWO_STEPS_FILES);
 
@@ -663,7 +759,7 @@ describe('the FOMOD installer', () => {
       const close = vi.fn();
       const { dialog } = refusingPage('cancelled');
 
-      await fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, { kind: 'dialog', dialog: { ...dialog, close } }, () => Promise.resolve(KNOWN));
+      await fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, { kind: 'dialog', dialog: { ...dialog, close }, steps: [] }, () => Promise.resolve(KNOWN));
 
       expect(close).toHaveBeenCalledTimes(1);
     });

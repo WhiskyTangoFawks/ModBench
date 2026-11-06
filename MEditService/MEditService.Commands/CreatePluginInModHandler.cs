@@ -13,7 +13,7 @@ public sealed class CreatePluginInModHandler
     internal CreatePluginInModHandler(CreatePluginHandler create, LoadOrderHolder holder) =>
         (_create, _holder) = (create, holder);
 
-    public async Task<Answer<PluginAddress, PluginCreateRefused>> CreatePluginIn(string origin, string name)
+    public async Task<Answer<PluginAddress, PluginCreateRefused>> CreatePluginIn(string origin, string name, IReadOnlyList<string>? flags = null)
     {
         if (_holder.Held is not { Snapshot: var loadOrder })
             return new PluginCreateRefused(PluginCreateRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
@@ -25,7 +25,7 @@ public sealed class CreatePluginInModHandler
                 $"'{origin}' is not an enabled mod or Overwrite, so {name} was not created in it.");
         }
 
-        var result = await _create.CreatePlugin(new PluginAddress(name, place.Name), place.Folder, place.SourceFolder);
+        var result = await _create.CreatePlugin(new PluginAddress(name, place.Name), place.Folder, place.SourceFolder, flags);
         if (result.Holds(out _, out _)) _holder.SourceWritten();
         return result;
     }

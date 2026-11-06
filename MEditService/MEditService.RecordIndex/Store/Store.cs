@@ -34,6 +34,7 @@ internal sealed class Store : IDisposable
     private readonly IndexWriteGate _gate;
     private readonly FilterInForce _filterInForce;
     private readonly INotificationPublisher? _notifications;
+    private readonly long _memoryLimit;
     private readonly Projection _projection;
     private IReadOnlyDictionary<string, RecordTableSchema>? _schemas;
     private PluginIngest? _pluginIngest;
@@ -72,8 +73,9 @@ internal sealed class Store : IDisposable
     public Store(
         ILogger logger, string? databasePath, string? instanceRoot, SchemaReflector schemaReflector, TableDdlBuilder ddlBuilder, IPluginAdapter plugins,
         TimeProvider? timeProvider, Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, Func<bool> indexed,
-        IndexWriteGate gate, FilterInForce filterInForce, INotificationPublisher? notifications)
+        IndexWriteGate gate, FilterInForce filterInForce, INotificationPublisher? notifications, long memoryLimit)
     {
+        _memoryLimit = memoryLimit;
         _logger = logger;
         _gate = gate;
         _filterInForce = filterInForce;
@@ -219,14 +221,15 @@ internal sealed class Store : IDisposable
         _connection?.Dispose();
     }
 
-    // DuckDB sizes its buffer pool from the machine's memory, and cannot see the share a desktop
-    // with other programs leaves it.
-    private const string MemoryLimit = "1GB";
+    // DuckDB needs 125 MB a thread to spill, and a join that hashes bodies twice that: on less, a read that
+    // outgrows memory fails rather than slows.
+    private const long MemoryPerThread = 250_000_000;
 
-    private static DuckDBConnection OpenFile(string databasePath)
+    private DuckDBConnection OpenFile(string databasePath)
     {
         var connection = Opened($"DataSource={databasePath}");
-        DuckDbSql.Execute(connection, $"SET GLOBAL memory_limit = '{MemoryLimit}'");
+        var threads = Math.Clamp(_memoryLimit / MemoryPerThread, 1, Environment.ProcessorCount);
+        DuckDbSql.Execute(connection, $"SET GLOBAL memory_limit = '{_memoryLimit}B'; SET GLOBAL threads = {threads}");
         return connection;
     }
 
@@ -241,9 +244,25 @@ internal sealed class Store : IDisposable
         _pluginIngest = new PluginIngest(Connection, _logger, release, contentStamp);
         _workingTreeOverlay = new WorkingTreeOverlay(Connection, _logger, _schemas, release, contentStamp);
         TableDdlBuilder.CreateTables(Connection);
+        RegisterConflictHash(_schemas, release);
         DuckDbSql.Execute(Connection, $"DELETE FROM {IndexVersionRelation}");
         DuckDbSql.Execute(Connection, $"INSERT INTO {IndexVersionRelation} (value) VALUES ($1)", indexVersion);
     }
+
+    // conflict_hash(record_type, body, parse_diagnosis): null for a document the codec refused, which is a stub with
+    // no values to compare.
+    private void RegisterConflictHash(IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release) =>
+        Connection.RegisterScalarFunction<string, string, string, string>("conflict_hash", (columns, hashes, rows) =>
+        {
+            for (ulong row = 0; row < rows; row++)
+            {
+                if (columns[0].IsValid(row) && columns[1].IsValid(row) && !columns[2].IsValid(row)
+                    && schemas.TryGetValue(columns[0].GetValue<string>(row), out var schema) && !schema.IsHeader)
+                    hashes.WriteValue(ConflictHash.Of(columns[1].GetValue<string>(row), schema, release), row);
+                else
+                    hashes.WriteNull(row);
+            }
+        }, new ScalarFunctionOptions { IsPureFunction = true, HandlesNulls = true });
 
     public void CreateRecordTypeViews()
     {
@@ -394,9 +413,8 @@ internal sealed class Store : IDisposable
             ? derivedFrom
             : null;
 
-    /// <summary>Restates which truth <paramref name="key"/>'s rows read as, leaving the file claim
-    /// beside it: a refresh re-derives the rows in place, and the binary they were stamped against
-    /// is still the file on disk.</summary>
+    /// <summary>Restates which truth <paramref name="key"/>'s rows read as, and nothing else: a refresh
+    /// re-derives the rows in place.</summary>
     public void RestampDerivation(PluginAddress key, DerivedFrom derivedFrom)
     {
         using var tx = BeginTransaction();
@@ -437,17 +455,38 @@ internal sealed class Store : IDisposable
             INSERT INTO {PluginDerivationRelation} (plugin, origin, derived_from) VALUES ($1, $2, $3)
             """, plugin, origin, derivedFrom.ToString());
         if (filePath == null) return;
-        if (!_plugins.ClaimOf(filePath, Release).Holds(out var claim, out var unread))
-        {
-            _logger.LogWarning(unread.Error, "Could not read {Path} to hash it, so nothing vouches for its rows: {Reason}", filePath, unread.Reason);
-            return;
-        }
+        if (ClaimOf(filePath) is { } claim) StampFileClaim(plugin, origin, filePath, claim, stringsRead);
+    }
 
+    private FileClaim? ClaimOf(string filePath)
+    {
+        if (_plugins.ClaimOf(filePath, Release).Holds(out var claim, out var unread)) return claim;
+        _logger.LogWarning(unread.Error, "Could not read {Path} to hash it, so nothing vouches for its rows: {Reason}", filePath, unread.Reason);
+        return null;
+    }
+
+    private void StampFileClaim(string plugin, string origin, string filePath, FileClaim claim, string? stringsRead)
+    {
         DuckDbSql.Execute(Connection, $"""
             INSERT INTO {FilesRelation} (plugin, origin, file_path, content_hash, strings_read)
             VALUES ($1, $2, $3, $4, $5)
             """, plugin, origin, StoredFilePath(filePath), claim.Hash, stringsRead);
         StampDiagnoses(plugin, origin, claim);
+    }
+
+    /// <summary>Claims the binary now at <paramref name="filePath"/> for rows its tree vouches for: a build rewrites
+    /// the binary and moves no row.</summary>
+    public void ReclaimTreeBinary(PluginAddress key, string filePath)
+    {
+        if (IndexedFile(key) is not { } held || FileContentHash(filePath) is not { } now || now == held.ContentHash) return;
+        if (ClaimOf(filePath) is not { } claim) return;
+
+        using var tx = BeginTransaction();
+        DuckDbSql.Execute(Connection, $"DELETE FROM {FilesRelation} WHERE plugin = $1 AND origin = $2", key.Name, key.Origin);
+        DuckDbSql.Execute(Connection, $"DELETE FROM {PluginDiagnosisRelation} WHERE plugin = $1 AND origin = $2", key.Name, key.Origin);
+        StampFileClaim(key.Name, key.Origin, filePath, claim, stringsRead: null);
+        BumpSequence();
+        tx.Commit();
     }
 
     // A scan that threw is logged and leaves no rows, never a refused ingest.
@@ -510,9 +549,14 @@ internal sealed class Store : IDisposable
         return scope;
     }
 
-    private ProjectionScope OpenProjection =>
-        _openProjection.Value
-        ?? throw new InvalidOperationException("A row change outside Store.Commit skips the filter and the announcement.");
+    private const string OutsideCommit = "A row change outside Store.Commit skips the filter and the announcement.";
+
+    private ProjectionScope OpenProjection => _openProjection.Value ?? throw new InvalidOperationException(OutsideCommit);
+
+    private void RequireOpenProjection()
+    {
+        if (_openProjection.Value is null) throw new InvalidOperationException(OutsideCommit);
+    }
 
     public void BumpSequence()
     {
@@ -520,10 +564,24 @@ internal sealed class Store : IDisposable
         lock (_projectionLock) scope.BumpOwed = true;
     }
 
-    internal void OweWinnerSweep()
+    // Outlives the projection that owed it: a failed sweep stands owed for the next commit to land.
+    private OwedSweep _owedSweep = OwedSweep.None;
+
+    internal bool SweepOwed
     {
-        var scope = OpenProjection;
-        lock (_projectionLock) scope.SweepOwed = true;
+        get { lock (_projectionLock) return _owedSweep.IsOwed; }
+    }
+
+    internal void OweWinnerSweep() => Owe(OwedSweep.Every);
+
+    /// <summary>Owed by rows that moved which copy wins only these FormKeys.</summary>
+    internal void OweWinnerSweep(IEnumerable<string> formKeys) =>
+        Owe(new OwedSweep(new HashSet<string>(formKeys, StringComparer.OrdinalIgnoreCase)));
+
+    private void Owe(OwedSweep owed)
+    {
+        RequireOpenProjection();
+        lock (_projectionLock) _owedSweep = _owedSweep.Union(owed);
     }
 
     /// <summary>Runs <paramref name="publish"/> after the outermost projection's advance: a
@@ -555,7 +613,6 @@ internal sealed class Store : IDisposable
             if (scope.Parent is { } parent)
             {
                 parent.BumpOwed |= scope.BumpOwed;
-                parent.SweepOwed |= scope.SweepOwed;
                 parent.Announcements.AddRange(scope.Announcements);
                 scope.Announcements.Clear();
                 return;
@@ -578,7 +635,6 @@ internal sealed class Store : IDisposable
     {
         internal ProjectionScope? Parent { get; } = parent;
         internal bool BumpOwed { get; set; }
-        internal bool SweepOwed { get; set; }
         internal List<Action> Announcements { get; } = [];
         private Action<ProjectionScope>? _endProjection = endProjection;
 
@@ -631,18 +687,18 @@ internal sealed class Store : IDisposable
         }
         catch (Exception ex)
         {
-            Land(scope, ExceptionDispatchInfo.Capture(ex));
+            Land(ExceptionDispatchInfo.Capture(ex));
             throw;
         }
-        Land(scope, first: null);
+        Land(first: null);
         return written;
     }
 
     // Each step runs whatever threw before it. A later throw is logged rather than rethrown, which
     // would hide the first.
-    private void Land(ProjectionScope scope, ExceptionDispatchInfo? first)
+    private void Land(ExceptionDispatchInfo? first)
     {
-        Action[] steps = [() => { if (scope.SweepOwed) SweepWinners(); }, Checkpoint, () => _filterInForce.Reapply(this)];
+        Action[] steps = [SweepWinners, Checkpoint, () => _filterInForce.Reapply(this)];
         foreach (var step in steps)
         {
             try
@@ -679,11 +735,13 @@ internal sealed class Store : IDisposable
         /// once for all of them.</summary>
         public void OweWinnerSweep() => store.OweWinnerSweep();
 
+        public void OweWinnerSweep(IEnumerable<string> formKeys) => store.OweWinnerSweep(formKeys);
+
         public void Announce(Func<long, INotification> announcement) =>
             store.Announce(() => store._notifications?.Publish(announcement(store.Sequence)));
 
-        /// <summary>ADR-0015: a whole plugin re-derived or removed has too many rows to name, and can
-        /// move the winner of every FormKey it holds.</summary>
+        /// <summary>ADR-0015: a whole plugin re-derived or removed can move the winner of every
+        /// FormKey it holds.</summary>
         public void PluginChanged(PluginAddress key)
         {
             OweWinnerSweep();
@@ -852,28 +910,38 @@ internal sealed class Store : IDisposable
             Connection, $"DELETE FROM {TableDdlBuilder.RegistrationsRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
     }
 
-    /// <summary>Wholesale rather than incremental because there is no smaller correct unit:
-    /// registering a plugin can move the winner of every FormKey it holds. Measured at ~75 ms
-    /// on a 48,000-record, 60-plugin fixture.</summary>
     public void UpdateWinners(IReadOnlyList<RegisteredPlugin> active)
     {
         using var tx = BeginTransaction();
         ReplaceActive(active);
-        UpdateWinnersCore();
+        UpdateWinnersCore(null);
         BumpSequence();
         tx.Commit();
+        lock (_projectionLock) _owedSweep = OwedSweep.None;
     }
 
-    // The same sweep for a projection that moved rows without moving the load order: which plugins
-    // are active cannot change here, so the set the last sweep was handed still holds.
+    // Pays what rows moved since the last sweep: the active plugins are the set that sweep was handed.
     private void SweepWinners()
     {
-        var timer = Stopwatch.StartNew();
-        using (var tx = BeginTransaction())
+        OwedSweep owed;
+        lock (_projectionLock)
         {
-            UpdateWinnersCore();
+            owed = _owedSweep;
+            _owedSweep = OwedSweep.None;
+        }
+        if (!owed.IsOwed) return;
+        var timer = Stopwatch.StartNew();
+        try
+        {
+            using var tx = BeginTransaction();
+            UpdateWinnersCore(owed.FormKeys);
             BumpSequence();
             tx.Commit();
+        }
+        catch
+        {
+            lock (_projectionLock) _owedSweep = _owedSweep.Union(owed);
+            throw;
         }
         if (_logger.IsEnabled(LogLevel.Debug))
             _logger.LogDebug("Swept winners in {ElapsedMs} ms", timer.ElapsedMilliseconds);
@@ -891,11 +959,11 @@ internal sealed class Store : IDisposable
         }
     }
 
-    // The sweep itself, unwrapped: a caller already inside a transaction (the projection verbs
-    // below) calls this directly, since DuckDB refuses a second BeginTransaction on one connection.
-    private void UpdateWinnersCore()
+    private void UpdateWinnersCore(IReadOnlyCollection<string>? formKeys)
     {
-        DuckDbSql.Execute(Connection, $"DELETE FROM {TableDdlBuilder.WinnersRelation}");
+        object[] keys = formKeys is null ? [] : [formKeys.ToList()];
+        string Among(string formKey) => formKeys is null ? "TRUE" : $"{formKey} IN (SELECT unnest($1::VARCHAR[]))";
+        DuckDbSql.Execute(Connection, $"DELETE FROM {TableDdlBuilder.WinnersRelation} WHERE {Among("form_key")}", keys);
 
         // QUALIFY and the (plugin, origin) tiebreak make a load_order_idx tie deterministic.
         DuckDbSql.Execute(Connection, $"""
@@ -904,10 +972,11 @@ internal sealed class Store : IDisposable
             FROM mirror.records r
             JOIN {TableDdlBuilder.ActiveRelation} p
               ON p.plugin = r.plugin AND p.origin = r.origin
+            WHERE {Among("r.form_key")}
             QUALIFY ROW_NUMBER() OVER (
                 PARTITION BY r.form_key
                 ORDER BY p.load_order_idx DESC, r.plugin, r.origin) = 1
-            """);
+            """, keys);
     }
 
     // --- Working-tree changes ---
@@ -921,14 +990,11 @@ internal sealed class Store : IDisposable
         if (deltas.Count == 0) return [];
 
         using var tx = BeginTransaction();
-        var projected = StoreFaults.Translating(() => Overlay.ProjectDocuments(key, deltas));
+        var movedKeys = StoreFaults.Translating(() => Overlay.ProjectDocuments(key, deltas));
         BumpSequence();
         tx.Commit();
-        // Only a delta that added or removed a row can move winner status. Re-swept for the whole
-        // load order rather than per FormKey because UpdateWinners is the one definition of winning
-        // (measured at 18 ms over 48k records).
-        if (projected.Structural) OweWinnerSweep();
-        return projected.Touched;
+        OweWinnerSweep(movedKeys);
+        return movedKeys;
     }
 
     /// <summary>Sets each listed row to the state it is now in (ADR-0007), in one advance.</summary>

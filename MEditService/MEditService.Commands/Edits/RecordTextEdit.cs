@@ -34,7 +34,7 @@ internal static class RecordTextEdit
         if (ValidateEnvelope(envelope, spelled, out var op) is { } malformed) return malformed;
 
         var record = request.Record;
-        if (DocumentEdit.Locate(record, request.Schema, op, [.. envelope.Path.Select(hop => hop.Hop)], out var located) is { } unaddressed)
+        if (DocumentEdit.Locate(record, request.Schema, op, [.. envelope.Path.Select(hop => hop.Hop)], request.Localized, out var located) is { } unaddressed)
             return Refusal(unaddressed);
         var edit = located ?? throw new InvalidOperationException("Expected Locate to answer an edit when it does not refuse.");
         if (edit.ReadOnlyTarget is { } readOnly) return ReadOnlyRefusal(readOnly.Path, readOnly.Member, readOnly.Reason);
@@ -81,7 +81,9 @@ internal static class RecordTextEdit
         {
             return RecordEditResult.RefusedAt(
                 RecordEditRefusal.CodecDroppedValue, dropped,
-                $"'{dropped}' was not kept by the codec: the record's own class has no member the document can carry it in, so nothing was written.");
+                patch.OutermostUnheld(patched) is { } unheld
+                    ? $"'{unheld.Member}' lies past its owner's {unheld.Break}, which is set, so the record does not hold it and nothing was written."
+                    : $"'{dropped}' was not kept by the codec: the record's own class has no member the document can carry it in, so nothing was written.");
         }
 
         foreach (var other in request.Schema.RecordColumns)

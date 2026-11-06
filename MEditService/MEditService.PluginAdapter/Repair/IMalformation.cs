@@ -8,11 +8,14 @@ internal interface IMalformation
 {
     bool Reads(string recordType, CreationKitShapes shapes);
 
+    bool ReadsOnlyDeleted => false;
+
     IEnumerable<Malformed> Detect(InspectedRecord record);
 }
 
 /// <summary>A record's subrecords as the game's Creation Kit shapes judge them.</summary>
-internal sealed record InspectedRecord(string Type, IReadOnlyList<Subrecord> Subrecords, CreationKitShapes Shapes);
+internal sealed record InspectedRecord(
+    string Type, IReadOnlyList<Subrecord> Subrecords, CreationKitShapes Shapes, RecordTypes Types);
 
 /// <summary>One malformation in one record. A null <paramref name="Repair"/> is one no byte operation answers.</summary>
 internal sealed record Malformed(string DefectClass, string Message, IReadOnlyList<SubrecordEdit>? Repair);

@@ -13,7 +13,11 @@ namespace MEditService.RecordIndex;
 /// <summary>The record index's one registration: the host takes its face.</summary>
 public static class RecordIndexServices
 {
-    public static IServiceCollection AddRecordIndex(this IServiceCollection services)
+    // The store's engine sizes its memory from the machine's, and cannot see the share a desktop
+    // with other programs leaves it.
+    private const long Gigabyte = 1_000_000_000;
+
+    public static IServiceCollection AddRecordIndex(this IServiceCollection services, long? memoryLimit = null)
     {
         services.AddSingleton<IQueries>(sp =>
         {
@@ -25,6 +29,7 @@ public static class RecordIndexServices
                 sp.GetRequiredService<ISourceAdapter>(),
                 sp.GetRequiredService<SchemaReflector>(),
                 filter,
+                memoryLimit ?? Gigabyte,
                 sp.GetRequiredService<ILoggerFactory>(),
                 sp.GetService<INotificationPublisher>(),
                 sp.GetRequiredService<TimeProvider>());

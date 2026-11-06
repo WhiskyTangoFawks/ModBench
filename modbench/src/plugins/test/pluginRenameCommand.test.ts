@@ -42,7 +42,7 @@ import { present } from '../../ports/present';
 const held = (name: string, origin: string) => ({ name, origin: { kind: 'mod', name: origin } }) as const;
 
 const PLUGIN = { name: 'Patch.esp', origin: 'ModA' };
-const CHANGES = { treeName: 'Patch.esp', moves: [], deletions: [], documents: [] };
+const CHANGES = { treeName: 'Patch.esp', moves: [{ from: '/m/plugin-source/Patch.esp', to: '/m/plugin-source/Renamed.esp' }], deletions: [], documents: [] };
 
 function setup(selection: readonly PluginsTreeNode[] = []) {
   const client = new InMemoryMEditClient();
@@ -180,14 +180,25 @@ describe('modbench.plugin.rename', () => {
   it('tells a refused source, writing no file', async () => {
     showInputBox.mockResolvedValueOnce('Renamed.esp');
     const { client, fake, reporter, run } = setup();
-    client.setCommandResult('getRenameSourceChanges', { refused: true, message: 'Could not rename the source of "Patch.esp" — NotCompiledPlugin' });
+    client.setCommandResult('getRenameSourceChanges', { refused: true, message: 'Could not rename "Patch.esp" — NotCompiledPlugin' });
 
     await run(row());
 
     expect(fake.calls).toEqual([]);
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not rename the source of "Patch.esp" — NotCompiledPlugin', detail: undefined },
+      { severity: 'error', message: 'Could not rename "Patch.esp" — NotCompiledPlugin', detail: undefined },
     ]);
+  });
+
+  it('names the plugin when the file and lines of a plugin with no plugin source failed', async () => {
+    showInputBox.mockResolvedValueOnce('Renamed.esp');
+    const { client, instanceAnswers, reporter, run } = setup();
+    client.setCommandResult('getRenameSourceChanges', { ...CHANGES, moves: [] });
+    instanceAnswers.refusals = refusing('renamePlugin', 'disk full');
+
+    await run(row());
+
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not rename "Patch.esp" (ModA): its file and lines were not renamed.', detail: 'disk full' }]);
   });
 
   it('names the plugin and says its source was renamed when the file and lines failed after it', async () => {
@@ -222,9 +233,9 @@ describe('modbench.plugin.rename, called by the agent', () => {
 
   it('answers a refused source, reporting nothing', async () => {
     const { client, reporter, run } = setup();
-    client.setCommandResult('getRenameSourceChanges', { refused: true, message: 'Could not rename the source of "Patch.esp" — NotCompiledPlugin' });
+    client.setCommandResult('getRenameSourceChanges', { refused: true, message: 'Could not rename "Patch.esp" — NotCompiledPlugin' });
 
-    expect(await run(calling('Renamed.esp'))).toMatchObject({ applied: false, refusal: 'Could not rename the source of "Patch.esp" — NotCompiledPlugin' });
+    expect(await run(calling('Renamed.esp'))).toMatchObject({ applied: false, refusal: 'Could not rename "Patch.esp" — NotCompiledPlugin' });
     expect(reporter.reports).toEqual([]);
   });
 

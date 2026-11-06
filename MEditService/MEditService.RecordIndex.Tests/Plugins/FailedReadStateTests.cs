@@ -84,7 +84,7 @@ public sealed class FailedReadStateTests : IDisposable
         using var index = Reconciled();
         File.WriteAllText(StrayDocument, "{}");
 
-        index.NextSnapshotUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
+        index.NextCheckUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
 
         var failure = Assert.Single(index.SourceProblems());
         Assert.Equal((Relative(StrayDocument), (string?)null), (failure.SourceRelativePath, failure.FormKey));
@@ -102,7 +102,7 @@ public sealed class FailedReadStateTests : IDisposable
         var original = NpcDocument;
         ClaimedTwice();
 
-        index.NextSnapshotUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
+        index.NextCheckUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
 
         var copy = Path.Combine(Path.GetDirectoryName(original).Require(), "Backup", Path.GetFileName(original));
         Assert.Equivalent(
@@ -133,10 +133,10 @@ public sealed class FailedReadStateTests : IDisposable
         SourceMods.Init(Plugin);
         using var index = Reconciled();
         ClaimedTwice();
-        index.NextSnapshotUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
+        index.NextCheckUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
         Mend();
 
-        index.NextSnapshotUntil(() => ReadFromSource(index), "the mended tree read again");
+        index.NextCheckUntil(() => ReadFromSource(index), "the mended tree read again");
 
         Assert.Empty(index.SourceProblems());
     }
@@ -160,7 +160,7 @@ public sealed class FailedReadStateTests : IDisposable
         SourceMods.Init(Plugin);
         ClaimedTwice();
 
-        index.NextSnapshotUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
+        index.NextCheckUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
 
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
         Assert.False(Failed(index));
@@ -176,7 +176,7 @@ public sealed class FailedReadStateTests : IDisposable
         Mend();
         File.WriteAllText(StrayDocument, "{}");
 
-        index.NextSnapshotUntil(() => TreeReads() > readsBefore, "the changed tree read again");
+        index.NextCheckUntil(() => TreeReads() > readsBefore, "the changed tree read again");
 
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
         Assert.True(SourceUnreadable(index));
@@ -193,7 +193,7 @@ public sealed class FailedReadStateTests : IDisposable
         Mend();
         File.WriteAllText(StrayDocument, "{}");
 
-        index.NextSnapshotUntil(() => TreeReads() > readsBefore, "the changed tree read again");
+        index.NextCheckUntil(() => TreeReads() > readsBefore, "the changed tree read again");
 
         Assert.Empty(index.ListedIn(Plugin.Key));
         Assert.DoesNotContain("showing", Reason(index), StringComparison.OrdinalIgnoreCase);
@@ -231,16 +231,16 @@ public sealed class FailedReadStateTests : IDisposable
     }
 
     [Fact]
-    public void ATreeMendedDuringTheReadItFailedOnceRead_IsReadAgainAtTheNextSnapshot()
+    public void ATreeMendedDuringTheReadItFailedOnceRead_IsReadAgainAtTheNextCheck()
     {
         SourceMods.Init(Plugin);
         using var index = Reconciled();
         ClaimedTwice();
         Arm(TreeMoment.ReadEnds, Mend);
-        index.NextSnapshotUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
+        index.NextCheckUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
         Assert.Null(_armed);
 
-        index.NextSnapshotUntil(() => ReadFromSource(index), "the mended tree read again");
+        index.NextCheckUntil(() => ReadFromSource(index), "the mended tree read again");
     }
 
     private string GitIndex => Path.Combine(Plugin.ModFolderOf(), ".git", "index");
@@ -253,51 +253,51 @@ public sealed class FailedReadStateTests : IDisposable
         File.Copy(GitIndex, GitIndex + ".good");
         File.WriteAllText(GitIndex, "not an index");
         File.WriteAllText(npc, File.ReadAllText(npc).Replace(NpcEditorId, "RenamedNpc", StringComparison.Ordinal));
-        index.NextSnapshotUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
+        index.NextCheckUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
         return index;
     }
 
     [Fact]
-    public void ATreeWhoseStatusGitCannotReport_WhenARecordChanges_ReadsThePluginFile_MarkedAsSuch_AtThisSnapshotAndTheNext()
+    public void ATreeWhoseStatusGitCannotReport_WhenARecordChanges_ReadsThePluginFile_MarkedAsSuch_AtThisCheckAndTheNext()
     {
         using var index = ATreeWhoseStatusGitCannotReport_OnceARecordChanges();
         Assert.False(Failed(index));
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
         var readsBefore = TreeReads();
 
-        index.NextSnapshotUntil(() => TreeReads() > readsBefore, "the tree read again");
+        index.NextCheckUntil(() => TreeReads() > readsBefore, "the tree read again");
 
         Assert.True(SourceUnreadable(index));
         Assert.False(Failed(index));
     }
 
     [Fact]
-    public void ATreeWhoseGitIsRepairedOutsideModbench_IsReadFromItsTree_AtTheNextSnapshot()
+    public void ATreeWhoseGitIsRepairedOutsideModbench_IsReadFromItsTree_AtTheNextCheck()
     {
         using var index = ATreeWhoseStatusGitCannotReport_OnceARecordChanges();
 
         File.Move(GitIndex + ".good", GitIndex, overwrite: true);
 
-        index.NextSnapshotUntil(() => ReadFromSource(index), "the tree read again");
+        index.NextCheckUntil(() => ReadFromSource(index), "the tree read again");
         Assert.Contains(index.ListedIn(Plugin.Key), row => row.EditorId == "RenamedNpc");
     }
 
     [Fact]
-    public void ATreeWithAnUnreadableDocument_IsReadAgainAtEverySnapshot()
+    public void ATreeWithAnUnreadableDocument_IsReadAgainAtEveryCheck()
     {
         SourceMods.Init(Plugin);
         using var index = Reconciled();
         File.WriteAllText(StrayDocument, "{}");
-        index.NextSnapshotUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
+        index.NextCheckUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
 
-        TreeReadAgainAtTheNextSnapshot(index);
-        TreeReadAgainAtTheNextSnapshot(index);
+        TreeReadAgainAtTheNextCheck(index);
+        TreeReadAgainAtTheNextCheck(index);
     }
 
-    private void TreeReadAgainAtTheNextSnapshot(OpenedIndex index)
+    private void TreeReadAgainAtTheNextCheck(OpenedIndex index)
     {
         var readsBefore = TreeReads();
-        index.NextSnapshotUntil(() => TreeReads() > readsBefore, "the tree read again at the next snapshot");
+        index.NextCheckUntil(() => TreeReads() > readsBefore, "the tree read again at the next check");
     }
 
     [Fact]
@@ -320,7 +320,7 @@ public sealed class FailedReadStateTests : IDisposable
     }
 
     [Fact]
-    public void ATreeReadAgainAtEverySnapshot_ReadsTheBinaryInItsPlaceOncePerChangeOfItsBytes()
+    public void ATreeReadAgainAtEveryCheck_ReadsTheBinaryInItsPlaceOncePerChangeOfItsBytes()
     {
         SourceMods.Init(Plugin);
         File.WriteAllText(StrayDocument, "{}");
@@ -329,8 +329,8 @@ public sealed class FailedReadStateTests : IDisposable
         Assert.True(SourceUnreadable(index));
         var binaryReads = adapter.OpenedTotal;
 
-        TreeReadAgainAtTheNextSnapshot(index);
-        TreeReadAgainAtTheNextSnapshot(index);
+        TreeReadAgainAtTheNextCheck(index);
+        TreeReadAgainAtTheNextCheck(index);
 
         Assert.Equal(binaryReads, adapter.OpenedTotal);
     }
@@ -343,22 +343,22 @@ public sealed class FailedReadStateTests : IDisposable
         var untyped = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(NpcDocument)).Require(), "Untyped")).FullName;
         Arm(TreeMoment.StampsTaken, () => File.WriteAllText(StrayDocument, "{}"));
         File.WriteAllText(Path.Combine(untyped, "Gained.json"), $$"""{"FormKey":"000ABC:{{PluginName}}"}""");
-        index.NextSnapshotUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
+        index.NextCheckUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
         Assert.Null(_armed);
         File.Delete(StrayDocument);
         var readsBefore = TreeReads();
 
-        index.NextSnapshotUntil(() => TreeReads() > readsBefore, "the tree read again");
+        index.NextCheckUntil(() => TreeReads() > readsBefore, "the tree read again");
     }
 
     [Fact]
-    public void ABinaryHeldByAnotherProcessWhenItIsReadAgain_IsReadAtTheNextSnapshot()
+    public void ABinaryHeldByAnotherProcessWhenItIsReadAgain_IsReadAtTheNextCheck()
     {
         using var index = Reconciled(new FailsToOpen(PluginFailures.Inaccessible(), atOpen: n => n == 2));
         PluginBinaries.Rewrite(Plugin.Path, mod => mod.Npcs.AddNew("WrittenBeforeTheHold"));
-        index.NextSnapshotUntil(() => Failed(index), "the held read's failure");
+        index.NextCheckUntil(() => Failed(index), "the held read's failure");
 
-        index.NextSnapshotUntil(() => !Failed(index), "the binary read again");
+        index.NextCheckUntil(() => !Failed(index), "the binary read again");
 
         Assert.Contains(index.ListedIn(Plugin.Key), row => row.EditorId == "WrittenBeforeTheHold");
     }
@@ -382,7 +382,7 @@ public sealed class FailedReadStateTests : IDisposable
         using var index = Reconciled(adapter);
         Assert.True(adapter.Failed);
 
-        index.NextSnapshotUntil(() => !Failed(index), "the plugin read again");
+        index.NextCheckUntil(() => !Failed(index), "the plugin read again");
 
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
     }
@@ -412,7 +412,7 @@ public sealed class FailedReadStateTests : IDisposable
         SourceMods.Init(Plugin);
         ClaimedTwice();
 
-        index.NextSnapshotUntil(() => Failed(index), "the tree's and the binary's failure");
+        index.NextCheckUntil(() => Failed(index), "the tree's and the binary's failure");
 
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
         Assert.Contains("Still showing what was last read from its compiled binary", Reason(index), StringComparison.Ordinal);
@@ -424,7 +424,7 @@ public sealed class FailedReadStateTests : IDisposable
         using var index = Reconciled(new FailsToOpen(PluginFailures.Unparsed(), atOpen: n => n == 2));
         PluginBinaries.Rewrite(Plugin.Path, mod => mod.Npcs.AddNew("WrittenByAnotherTool"));
 
-        index.NextSnapshotUntil(() => Failed(index), "the rewritten binary's failure");
+        index.NextCheckUntil(() => Failed(index), "the rewritten binary's failure");
 
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
         Assert.Contains("Still showing what was last read from its compiled binary", Reason(index), StringComparison.Ordinal);
@@ -442,12 +442,12 @@ public sealed class FailedReadStateTests : IDisposable
     }
 
     [Fact]
-    public void ABinaryThatHashesButIsHeldWhenItOpens_IsOpenedAtTheNextSnapshot()
+    public void ABinaryThatHashesButIsHeldWhenItOpens_IsOpenedAtTheNextCheck()
     {
         using var index = Reconciled(new HeldAtFirstRead());
         Assert.True(Failed(index));
 
-        index.NextSnapshotUntil(() => !Failed(index), "the binary opened again");
+        index.NextCheckUntil(() => !Failed(index), "the binary opened again");
 
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
     }
@@ -463,7 +463,7 @@ public sealed class FailedReadStateTests : IDisposable
         Arm(TreeMoment.RecordRead, () => throw thrown);
         var readsBefore = TreeReads();
 
-        index.NextSnapshotUntil(() => Failed(index), "the plugin's failure");
+        index.NextCheckUntil(() => Failed(index), "the plugin's failure");
 
         Assert.Contains(thrown.Message, Reason(index), StringComparison.Ordinal);
         Assert.Equal(readsBefore, TreeReads());
@@ -648,6 +648,8 @@ public sealed class FailedReadStateTests : IDisposable
             at(TreeMoment.RecordRead, plugin);
             return inner.RecordOf(plugin, identity);
         }
+
+        public FilesStamp RepositoryStamp() => inner.RepositoryStamp();
 
         public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommit(PluginAddress plugin) =>
             inner.ChangedSinceLastCommit(plugin);

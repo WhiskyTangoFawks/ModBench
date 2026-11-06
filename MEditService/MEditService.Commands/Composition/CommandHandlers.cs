@@ -110,12 +110,14 @@ public static class CommandHandlers
             sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<IModFolderRepository>(),
             sp.GetRequiredService<INotificationPublisher>(),
+            sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ILogger<VersionInGitHandler>>()));
 
         services.AddSingleton(sp => new DecompilePluginHandler(
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<ISourceAdapter>(),
+            sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ILogger<DecompilePluginHandler>>()));
 
         services.AddSingleton(sp => new DecompileAndRepairPluginHandler(
@@ -123,6 +125,7 @@ public static class CommandHandlers
             sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<IModFolderRepository>(),
+            sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ILogger<DecompileAndRepairPluginHandler>>()));
 
         services.AddSingleton(sp => new RenameSourceChangesHandler(
@@ -147,7 +150,8 @@ public static class CommandHandlers
             sp.GetRequiredService<IModFolderRepository>(),
             sp.GetRequiredService<IPluginAdapter>(),
             new PluginDecompiler(
-                sp.GetRequiredService<ILogger<SourceModBuild>>(), sp.GetRequiredService<IPluginAdapter>(), sp.GetRequiredService<ISourceAdapter>())));
+                sp.GetRequiredService<ILogger<SourceModBuild>>(), sp.GetRequiredService<IPluginAdapter>(), sp.GetRequiredService<ISourceAdapter>(),
+                sp.GetRequiredService<SchemaReflector>())));
 
         services.AddSingleton(sp => new BuildModHandler(
             sp.GetRequiredService<SourceModBuild>(),
@@ -163,6 +167,7 @@ public static class CommandHandlers
             sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<ISourceAdapter>(),
+            sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ILogger<CreatePluginHandler>>()));
 
         services.AddSingleton(sp => new CreatePluginInModHandler(
@@ -172,7 +177,12 @@ public static class CommandHandlers
         services.AddSingleton(sp => new PutLoadOrderHandler(
             sp.GetRequiredService<IModFolderRepository>(),
             sp.GetRequiredService<LoadOrderHolder>(),
-            sp.GetRequiredService<SchemaReflector>(),
+            sp.GetRequiredService<SchemaReflector>()));
+
+        services.AddSingleton(sp => new SignalChangeHandler(
+            sp.GetRequiredService<LoadOrderHolder>(),
+            sp.GetRequiredService<ISourceAdapter>(),
+            sp.GetRequiredService<IPluginAdapter>(),
             new ExternalChangeCheck(
                 sp.GetRequiredService<INotificationPublisher>(),
                 sp.GetRequiredService<IPluginAdapter>(),

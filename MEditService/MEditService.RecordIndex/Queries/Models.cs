@@ -39,7 +39,9 @@ public sealed record PluginResponse(
     // source is missing or cannot be read. Null when the plugin source reads.
     UnreadableSource? PluginSourceUnreadable,
     // common.md, States, story 6: the files that stopped its last read, while its rows are the last good read's.
-    IReadOnlyList<SourceProblem>? LaterReadFailure);
+    IReadOnlyList<SourceProblem>? LaterReadFailure,
+    // The description in the plugin's header, which LOOT's version() reads. Null for a header with none.
+    string? Description = null);
 
 public record RecordDetail(
     string FormKey,

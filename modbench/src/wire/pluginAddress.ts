@@ -33,3 +33,6 @@ export const samePluginAddress = (a: PluginAddress, b: PluginAddress): boolean =
 
 // ADR-0012.
 export const pluginRowName = ({ name, origin }: PluginAddress): string => `${name} (${origin})`;
+
+/** Which repository holds the source folder version in git makes: a new one of its own, or the instance repository. */
+export type SourceModIn = components['schemas']['SourceModIn'];

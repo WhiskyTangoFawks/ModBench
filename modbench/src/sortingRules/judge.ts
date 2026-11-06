@@ -4,7 +4,7 @@ interface PluginFacts {
   origin: string;
   masters: readonly string[];
   blueprint: boolean;
-  /** The master flag, which a plugin of the `.esm` extension also has. */
+  /** Whether the game loads it as a master, by its master flag or its extension. */
   master: boolean;
 }
 
@@ -20,7 +20,7 @@ export interface PluginRef {
 export const addressOfRef = ({ origin, filename }: PluginRef): { name: string; origin: string } => ({ name: filename, origin });
 
 export interface BrokenRule {
-  rule: 'master' | 'missingMaster' | 'blueprint' | 'masterFlag' | 'requirement' | 'incompatibility' | 'loadAfter' | 'group' | 'message' | 'condition';
+  rule: 'master' | 'missingMaster' | 'blueprint' | 'masterFlag' | 'requirement' | 'incompatibility' | 'loadAfter' | 'group' | 'message' | 'cleaning' | 'condition';
   level: RuleLevel;
   plugins: PluginRef[];
   reason: string;
@@ -74,21 +74,22 @@ function brokenBlueprints(order: readonly string[], factsOf: PluginFactsOf): Bro
   });
 }
 
-function brokenMasterFlags(order: readonly string[], factsOf: PluginFactsOf): BrokenRule[] {
+function brokenMasterFlags(order: readonly string[], factsOf: PluginFactsOf, loadedWithNoLine: (filename: string) => boolean): BrokenRule[] {
   return order.flatMap((flagged, index): BrokenRule[] => {
     const facts = factsOf(flagged);
-    if (facts?.master !== true) return [];
-    const first = order.slice(0, index).find((other) => factsOf(other)?.master === false);
+    if (facts?.master !== true || facts.blueprint) return [];
+    const first = order.slice(0, index).find((other) => factsOf(other)?.master === false && !(loadedWithNoLine(flagged) && loadedWithNoLine(other)));
     const firstFacts = first === undefined ? undefined : factsOf(first);
     if (first === undefined || firstFacts === undefined) return [];
     return [{
       rule: 'masterFlag', level: 'warning', plugins: [refOf(flagged, facts), refOf(first, firstFacts)],
-      reason: `"${flagged}" has the master flag, so the game loads it before "${first}", which has not.`,
+      reason: `"${flagged}" loads as a master, by its master flag or its extension, so before "${first}", which does not.`,
     }];
   });
 }
 
-/** The game's sorting rules `order` breaks, `plugins.txt`'s names losing end first. */
-export function judge(order: readonly string[], factsOf: PluginFactsOf): BrokenRule[] {
-  return [...brokenMasters(order, factsOf), ...brokenBlueprints(order, factsOf), ...brokenMasterFlags(order, factsOf)];
+/** The game's sorting rules `order` breaks, `plugins.txt`'s names losing end first.
+ *  A rule between two plugins the game loads with no line judges nothing the user owns. */
+export function judge(order: readonly string[], factsOf: PluginFactsOf, loadedWithNoLine: (filename: string) => boolean = () => false): BrokenRule[] {
+  return [...brokenMasters(order, factsOf), ...brokenBlueprints(order, factsOf), ...brokenMasterFlags(order, factsOf, loadedWithNoLine)];
 }

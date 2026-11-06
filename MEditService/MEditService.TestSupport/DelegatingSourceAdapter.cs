@@ -29,7 +29,15 @@ public abstract class DelegatingSourceAdapter(ISourceAdapter inner) : ISourceAda
     public virtual IWriteSession WriteSessionOver(PluginProvider.FromMod provider, GameRelease release, IReadOnlyList<DocumentChange> held) =>
         inner.WriteSessionOver(provider, release, held);
 
-    public virtual bool TreeHolds(RegisteredPlugin plugin, string path) => inner.TreeHolds(plugin, path);
+    public virtual PathAnswer Touching(LoadOrderSnapshot loadOrder, string path) => inner.Touching(loadOrder, path);
+
+    public void SignalChange(IReadOnlyList<PluginAddress>? plugins) => inner.SignalChange(plugins);
+
+    public event Action<IReadOnlyList<PluginAddress>?>? ChangeSignalled
+    {
+        add => inner.ChangeSignalled += value;
+        remove => inner.ChangeSignalled -= value;
+    }
 
     public virtual RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path) => inner.RecordOfFile(loadOrder, path);
 
@@ -45,8 +53,8 @@ public abstract class DelegatingSourceAdapter(ISourceAdapter inner) : ISourceAda
     public virtual SourceFailure? Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<FileToCopy> assets, bool commit, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest, IReadOnlyList<string> ignored,
-        SourceModIn heldIn) =>
-        inner.Init(sourceFolder, buildFile, plugins, assets, commit, repair, manifest, ignored, heldIn);
+        SourceModIn heldIn, ModFolderManifest? modFolderManifest) =>
+        inner.Init(sourceFolder, buildFile, plugins, assets, commit, repair, manifest, ignored, heldIn, modFolderManifest);
 
     public virtual string FileIn(string sourceFolder, string path) => inner.FileIn(sourceFolder, path);
 

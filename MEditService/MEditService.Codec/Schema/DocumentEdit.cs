@@ -34,11 +34,11 @@ public sealed class DocumentEdit
     /// <summary>Where <paramref name="path"/> lands in <paramref name="record"/>. A set or an add makes
     /// the objects on the way that the document omits.</summary>
     public static EditFailure? Locate(
-        Document record, RecordTableSchema schema, EditOp op, IReadOnlyList<DocumentHop> path, out DocumentEdit? edit)
+        Document record, RecordTableSchema schema, EditOp op, IReadOnlyList<DocumentHop> path, bool localized, out DocumentEdit? edit)
     {
         edit = null;
         var tree = record.Tree();
-        if (Resolve(tree, schema, path, op is EditOp.Set or EditOp.Add, out var resolved) is { } unresolved) return unresolved;
+        if (Resolve(tree, schema, path, op is EditOp.Set or EditOp.Add, localized, out var resolved) is { } unresolved) return unresolved;
         var cursor = resolved ?? throw new InvalidOperationException("Expected Resolve to set a cursor when it does not refuse.");
         var spelled = DocumentHop.Spell(path);
         var readOnly = cursor.Field?.ReadOnlyReason is { } why ? new ReadOnlyMember(spelled, cursor.MemberName ?? cursor.Column.Name, why) : null;
@@ -86,7 +86,7 @@ public sealed class DocumentEdit
             };
         if (failure is not null) return failure;
         var chain = IndexChain(edited ?? throw new InvalidOperationException("Expected the edit to set which node changed."));
-        patch = new Patch(Document.Of(_record).WithoutAliasesOf(_cursor.Column), chain, editedMeta, _spelled);
+        patch = new Patch(Document.Of(_record).WithoutAliasesOf(_cursor.Column), chain, _cursor.Column.Field, editedMeta, _spelled);
         return null;
     }
 
@@ -120,7 +120,7 @@ public sealed class DocumentEdit
     }
 
     private static EditFailure? Resolve(
-        JsonObject record, RecordTableSchema schema, IReadOnlyList<DocumentHop> path, bool creating, out Cursor? cursor)
+        JsonObject record, RecordTableSchema schema, IReadOnlyList<DocumentHop> path, bool creating, bool localized, out Cursor? cursor)
     {
         cursor = null;
         var spelled = DocumentHop.Spell(path);
@@ -157,7 +157,12 @@ public sealed class DocumentEdit
             var before = DocumentHop.Spell(path.Take(i));
             if (hop.Member is { } member)
             {
-                if (cursor.Meta.Fields is not { } fields) return new EditFailure.NoMembers(sofar, before);
+                var translated = cursor.Meta.Type == TranslatedStringValues.ApiType;
+                if (translated && cursor.Node is not JsonObject) return new EditFailure.Absent(sofar, before);
+                var fields = translated && cursor.Node is JsonObject held
+                    ? TranslatedStringValues.ShapeOf(held, localized, cursor.Meta.ReadOnlyReason).Fields
+                    : cursor.Meta.Fields;
+                if (fields is null) return new EditFailure.NoMembers(sofar, before);
                 if (cursor.Node is not JsonObject obj)
                 {
                     if (cursor.Node != null || !creating) return new EditFailure.Absent(sofar, before);
@@ -495,19 +500,53 @@ public sealed class DocumentEdit
     public sealed class Patch
     {
         private readonly List<object> _chain;
+        private readonly FieldMetadata _column;
         private readonly FieldMetadata _meta;
         private readonly string _spelled;
 
-        internal Patch(Document document, List<object> chain, FieldMetadata meta, string spelled) =>
-            (Document, _chain, _meta, _spelled) = (document, chain, meta, spelled);
+        internal Patch(Document document, List<object> chain, FieldMetadata column, FieldMetadata meta, string spelled) =>
+            (Document, _chain, _column, _meta, _spelled) = (document, chain, column, meta, spelled);
 
         public Document Document { get; }
+
+        /// <summary>A member and the set break of its owner's, as <c>Versioning.Break0</c>, that leaves it unheld.</summary>
+        public sealed record Unheld(string Member, string Break);
 
         /// <summary>The first member the patch spelled that <paramref name="written"/>, the codec's text of
         /// <paramref name="patched"/>, did not keep, unless a default the codec omits; null when it kept
         /// them all.</summary>
         public string? FirstDropped(Document patched, Document written) =>
             SilentSkipGuard.Keeps(At(written.Tree(), _chain), At(patched.Tree(), _chain), _meta, _spelled, out var dropped) ? null : dropped;
+
+        /// <summary>The outermost member on the way to the one the patch spelled that its owner's set break
+        /// leaves unheld in <paramref name="patched"/>; null when none is.</summary>
+        public Unheld? OutermostUnheld(Document patched)
+        {
+            JsonNode? owner = patched.Tree();
+            FieldMetadata? ownerMeta = null;
+            var spelled = "";
+            FieldMetadata? MemberOf(string name)
+            {
+                if (spelled.Length == 0) return _column;
+                return ownerMeta?.Fields?.FirstOrDefault(field => field.Name == name) is { } field ? DocumentNodes.VariantFor(field, owner) : null;
+            }
+            foreach (var step in _chain)
+            {
+                if (step is int index)
+                {
+                    (owner, ownerMeta, spelled) = ((owner as JsonArray)?[index], ownerMeta?.ElementType, $"{spelled}[{index}]");
+                    continue;
+                }
+                var name = (string)step;
+                var member = MemberOf(name);
+                spelled = spelled.Length == 0 ? name : $"{spelled}.{name}";
+                if (owner is JsonObject held && member?.UnheldWhen?.FirstOrDefault(entry => entry.Split('.') is [var flags, var flag]
+                    && held[flags] is JsonArray set && set.Any(each => each?.GetValue<string>() == flag)) is { } unheldBy)
+                    return new Unheld(spelled, unheldBy);
+                (owner, ownerMeta) = ((owner as JsonObject)?[name], member);
+            }
+            return null;
+        }
 
         private static JsonNode? At(JsonNode root, List<object> chain)
         {

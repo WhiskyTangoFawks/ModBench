@@ -52,7 +52,7 @@ internal sealed class SourceRepository : ISourceRepository
             release, mod.Name, DiskFiles.Instance, stamps);
 
     /// <summary>True exactly when <paramref name="sourceFolder"/> is a source mod's, in a repository of its own or the
-    /// modlist repository.</summary>
+    /// instance repository.</summary>
     internal static bool IsSourceMod(string sourceFolder) => SourceRepositoryGit.HoldsSourceMod(sourceFolder);
 
     internal static bool IsSourceMod(RegisteredPlugin plugin) => plugin.Provider is PluginProvider.FromMod mod && IsSourceMod(mod);
@@ -179,7 +179,21 @@ internal sealed class SourceRepository : ISourceRepository
         return new RecordOfFileAnswer.Refused($"{fullPath} is under no compiled plugin's source.");
     }
 
-    internal static bool TreeHolds(RegisteredPlugin plugin, string fullPath) => TreeFolderHolding(plugin, fullPath) is not null;
+    internal static PathAnswer Touching(LoadOrderSnapshot loadOrder, string fullPath)
+    {
+        var holding = loadOrder.Plugins.Where(plugin => TreeFolderHolding(plugin, fullPath) is not null).ToList();
+        if (holding.Count > 0) return new PathAnswer.Touches(holding);
+        return loadOrder.Plugins
+            .Select(plugin => plugin.Provider)
+            .OfType<PluginProvider.FromMod>()
+            .Select(mod => mod.SourceFolder)
+            .OfType<string>()
+            .Distinct(StringComparer.Ordinal)
+            .Any(sourceFolder => SourceRepositoryLayout.ReadForThePluginsOf(sourceFolder, fullPath)
+                || SourceRepositoryGit.RepositoryHolds(sourceFolder, fullPath))
+            ? new PathAnswer.Unnamed()
+            : new PathAnswer.Untouched();
+    }
 
     private static string? TreeFolderHolding(RegisteredPlugin plugin, string fullPath) =>
         plugin.Provider is PluginProvider.FromMod { SourceFolder: { } sourceFolder }
@@ -187,7 +201,7 @@ internal sealed class SourceRepository : ISourceRepository
         && tree.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)
         && IsSourceMod(sourceFolder)
         && SourceRepositoryLayout.TreeNameIn(sourceFolder, plugin.Name).Holds(out var named, out _)
-        && string.Equals(named, tree, SourceRepositoryLocator.PathComparison)
+        && string.Equals(named, tree, FilePaths.Comparison)
             ? tree
             : null;
 
@@ -299,6 +313,8 @@ internal sealed class SourceRepository : ISourceRepository
     /// settled is not read again, unless an unsaved text stands in for it.</summary>
     public RecordStamps StampsOf(PluginAddress plugin) => _stamps.StampsOf(_sourceFolder, Spelled(plugin), _release, Files);
 
+    public FilesStamp RepositoryStamp() => _stamps.StampOf(_git.StateFiles());
+
     /// <summary>Every record the tree holds whose text differs from the last commit's, an embedded
     /// child among them; a tree with no repository is all added. A failed read answers why, never
     /// reads as a deletion.</summary>
@@ -361,7 +377,7 @@ internal sealed class SourceRepository : ISourceRepository
             var name = Spelled(plugin).Name;
             var sources = Path.Combine(_sourceFolder, SourceRepositoryLayout.RootFolderName);
             return Files.EntriesUnder(sources).Any(entry => string.Equals(Path.GetFileName(entry), newName, StringComparison.OrdinalIgnoreCase)
-                    && string.Equals(PathShape.DirectoryOf(entry), sources, SourceRepositoryLocator.PathComparison))
+                    && string.Equals(PathShape.DirectoryOf(entry), sources, FilePaths.Comparison))
                 ? null
                 : Writes.ChangesToRenameSource(name, newName);
         });

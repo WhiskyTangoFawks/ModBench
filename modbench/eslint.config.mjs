@@ -118,7 +118,7 @@ function restrictedImports({ vscode, packages, path, client = false, inAdapter =
 const BOUND_COMMAND_BOXES = {
     mods: ['modCommands/modCommands', 'modCommands/install'],
     downloads: ['downloadedFileCommands/downloads'],
-    toolbox: ['instanceCommands/instanceCommands', 'sourceCommands/modlistRepositoryCommands'],
+    toolbox: ['instanceCommands/instanceCommands', 'sourceCommands/instanceRepositoryCommands'],
     plugins: ['pluginCommands/plugins', 'pluginCommands/renamePlugin', 'sourceCommands/sourceCommands'],
 };
 /** Mods reaches the Instance adapter for the installation file extensions install extracts, and for the
@@ -325,7 +325,7 @@ export default defineConfig(
     // Every backend call goes through the generated client, so the wire shape stays typed.
     {
         files: ['src/**/*.ts', 'webview/src/**/*.{ts,tsx}'],
-        ignores: ['src/nexus/**'],
+        ignores: ['src/nexus/**', 'src/lootMetadata/httpLootMetadata.ts'],
         rules: {
             'no-restricted-globals': ['error', { name: 'fetch', message: 'Backend HTTP goes through the mEdit client.' }],
         },

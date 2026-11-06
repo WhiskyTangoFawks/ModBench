@@ -83,7 +83,7 @@ internal sealed class SourceModBuild
     {
         var ignored = names.Where(written.Ignores).ToList();
         var plugins = Placed(loadOrder, mod, [.. names.Except(ignored)]);
-        var (landed, refused) = await CompileAsync(plugins, path =>
+        var (landed, refused) = await CompileAsync(mod, plugins, path =>
         {
             if (!written.Ignores(path)) return false;
             ignored.Add(path);
@@ -236,13 +236,18 @@ internal sealed class SourceModBuild
     }
 
     private async Task<(IReadOnlyList<ItemLanded<PluginAddress, IReadOnlyList<CompileDiagnostic>>> Landed, IReadOnlyList<ItemRefused<PluginAddress, CompileRefusal>> Refused)> CompileAsync(
-        IReadOnlyList<RegisteredPlugin> plugins, Func<string, bool> leavesUnwritten)
+        ModToBuild mod, IReadOnlyList<RegisteredPlugin> plugins, Func<string, bool> leavesUnwritten)
     {
         var twins = plugins.GroupBy(plugin => plugin.Name, StringComparer.OrdinalIgnoreCase).Where(named => named.Count() > 1).ToList();
-        List<RegisteredPlugin> compilable = [.. plugins.Except(twins.SelectMany(named => named))];
+        var untwinned = plugins.Except(twins.SelectMany(named => named)).ToList();
+        var unsourced = untwinned.Where(plugin => _source.WhySourceDoesNotRead(plugin) is SourceFailure.NotCarried).ToList();
+        List<RegisteredPlugin> compilable = [.. untwinned.Except(unsourced)];
         var compiled = await _compile.CompileAsync(compilable, leavesUnwritten);
-        return (compiled.Landed, [.. twins.SelectMany(TwinsRefused), .. compiled.Refused]);
+        return (compiled.Landed, [.. twins.SelectMany(TwinsRefused), .. unsourced.Select(plugin => UnsourcedRefused(mod, plugin)), .. compiled.Refused]);
     }
+
+    private static ItemRefused<PluginAddress, CompileRefusal> UnsourcedRefused(ModToBuild mod, RegisteredPlugin plugin) =>
+        new(plugin.Key, CompileRefusal.NoSource, $"The build file's compile step names {plugin.Name}, and '{mod.SourceFolder}' holds no plugin source for it.");
 
     private static IEnumerable<ItemRefused<PluginAddress, CompileRefusal>> TwinsRefused(IEnumerable<RegisteredPlugin> twins)
     {

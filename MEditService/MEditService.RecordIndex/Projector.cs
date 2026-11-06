@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -30,6 +31,7 @@ internal sealed class Projector(
     internal SourceFailure? Ingest(PluginMetadata plugin, CancellationToken cancel = default)
     {
         cancel.ThrowIfCancellationRequested();
+        _matched.TryRemove(plugin.Key, out _);
 
         // Over rather than Open: the documents read the same either way, and a repository verb over an
         // folder that is no source mod answers empty instead of throwing.
@@ -69,7 +71,9 @@ internal sealed class Projector(
             change => change.Key,
             change => change.Value == RecordChange.Added ? WorkingTreeState.Added : WorkingTreeState.Modified,
             StringComparer.Ordinal);
+        // A key git names with no row is a document saved since the stamps were read: a later check holds its row and names it.
         var moved = KeysDiffering(index.HeldWorkingTreeStates(key), learned)
+            .Where(formKey => index.StoredRow(key, formKey) is not null)
             .Select(formKey => (FormKey: formKey, State: learned.GetValueOrDefault(formKey)))
             .ToList();
         if (moved.Count == 0) return SourceAnswer.Of<IReadOnlyList<string>>([]);
@@ -91,6 +95,7 @@ internal sealed class Projector(
     internal SourceFailure? RefreshByKeys(RegisteredPlugin plugin, IReadOnlyList<string> formKeys) => index.Commit(projection =>
     {
         var key = plugin.Key;
+        _matched.TryRemove(key, out _);
 
         // The tree is what these rows are re-derived from, so it is what the plugin is derived from
         // (ADR-0007), bytes moved or not: a plugin made compiled after indexing arrives here
@@ -162,8 +167,8 @@ internal sealed class Projector(
         var before = index.EffectiveContentHashes(key);
         var statesBefore = index.HeldWorkingTreeStates(key);
         if (Ingest(plugin) is { } stopped) return stopped;
-        projection.OweWinnerSweep();
         var after = index.EffectiveContentHashes(key);
+        projection.OweWinnerSweep(before.Keys.Union(after.Keys));
         var statesAfter = index.HeldWorkingTreeStates(key);
 
         // ADR-0015: the keys asked about, and every row the tree read again moved, gone
@@ -213,15 +218,28 @@ internal sealed class Projector(
             : new ValidationReport([], NeedsRebuild: true, []);
     }
 
+    // A commit moves what git status says and touches no document, so the repository stamp counts beside the documents'.
+    private readonly ConcurrentDictionary<PluginAddress, (RecordStamps Documents, FilesStamp Repository)> _matched = new(PluginAddress.Comparer);
+
     // A plugin's rows against the source documents they came from, by content stamp (ADR-0003).
-    private ValidationReport ValidateAgainstTree(RegisteredPlugin plugin, RecordStamps stamps) =>
-        Reconcile(plugin, stamps.ByFormKey, index.HeldDocumentStamps(plugin.Key));
+    private ValidationReport ValidateAgainstTree(RegisteredPlugin plugin, RecordStamps stamps)
+    {
+        var repository = Over(plugin).RepositoryStamp();
+        if (repository.Vouches && index.DerivationOf(plugin.Key) == DerivedFrom.SourceTree
+            && _matched.TryGetValue(plugin.Key, out var last) && last.Documents.Equals(stamps) && last.Repository.Equals(repository))
+        {
+            index.ReclaimTreeBinary(plugin.Key, plugin.Path);
+            return ValidationReport.Clean;
+        }
+        return Reconcile(plugin, stamps, repository, index.HeldDocumentStamps(plugin.Key));
+    }
 
     // An embedded child's system of record is its owner's document, so a matching document vouches
     // for every row derived from it.
     private ValidationReport Reconcile(
-        RegisteredPlugin plugin, IReadOnlyDictionary<string, string> onDisk, Dictionary<string, string> heldStamps)
+        RegisteredPlugin plugin, RecordStamps stamps, FilesStamp repository, Dictionary<string, string> heldStamps)
     {
+        var onDisk = stamps.ByFormKey;
         var key = plugin.Key;
         // A document the record index never saw moves which records the plugin has, which only a rebuild
         // expresses; the report names the records gained.
@@ -256,6 +274,9 @@ internal sealed class Projector(
             });
 
         // A tree that stopped the refresh is read whole, which reads the binary in its place and says why.
-        return stopped is null ? ValidationReport.Clean : new ValidationReport([], NeedsRebuild: true, [stopped.Reason]);
+        if (stopped is not null) return new ValidationReport([], NeedsRebuild: true, [stopped.Reason]);
+        index.ReclaimTreeBinary(key, plugin.Path);
+        if (stale.Count == 0 && repository.Vouches) _matched[key] = (stamps, repository);
+        return ValidationReport.Clean;
     }
 }

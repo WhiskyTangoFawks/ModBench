@@ -1,14 +1,14 @@
 // The Instance adapter as a mod manager's implementation and a publisher's make it together
 // (ADR-0024): the mod manager answers everything but the publisher's configuration.
 
-import type { InstanceAdapter, InstanceReading, PublisherConfiguration, PublisherTag, Subscription } from './instanceAdapter';
+import type { ChangeListener, InstanceAdapter, InstanceReading, PublisherConfiguration, PublisherTag, Reread, Subscription } from './instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { PathSpelling, TokenProgram } from './pathTokens';
 
 export type ManagerReading = Omit<InstanceReading, 'publisherConfiguration'>;
 
 export type ManagerAdapter = Omit<InstanceAdapter, 'reading' | 'publisherTags' | 'changePublisherTag' | 'followModFolders' | 'publisherConfigurationRefusal' | 'scriptEnvironmentFile'> & {
-  reading(): Promise<ManagerReading>;
+  reading(reread?: Reread): Promise<ManagerReading>;
   filesKept(): Promise<KeptFiles>;
 };
 
@@ -16,8 +16,8 @@ export type ManagerAdapter = Omit<InstanceAdapter, 'reading' | 'publisherTags' |
 export interface ConfigurationFile {
   readonly name: string;
   readonly spelling: PathSpelling;
-  /** What the file holds of this machine alone, blanked when git holds the file. */
-  readonly blanked?: TokenProgram;
+  /** What the file holds of this machine alone, blanked when git holds the file, and put back from the text this machine holds. */
+  readonly blanked?: (thisMachine: string) => TokenProgram;
 }
 
 interface KeptFiles {
@@ -37,8 +37,8 @@ export interface Publisher {
   /** Lists each kept file in the ignore list, leaving every other entry as written. Rejects, writing nothing, for a
    *  configuration it cannot read; does nothing when the instance holds none. */
   keepOut(kept: KeptFiles): Promise<void>;
-  /** Hears that the publisher's configuration changed. */
-  subscribe(listener: () => void): Subscription;
+  /** Hears each change to the publisher's configuration. */
+  subscribe(listener: ChangeListener): Subscription;
 }
 
 const withEnvironmentFile = ({ present, owns }: KeptFiles, environmentFile: string): KeptFiles => ({ present: [...present, environmentFile], owns });
@@ -56,8 +56,8 @@ export function withPublisher(manager: ManagerAdapter, publisher: Publisher, scr
     changePublisherTag: (...change) => afterKeepingOut(publisher.changeTag(...change)),
     followModFolders: (moves) => afterKeepingOut(publisher.followFolders(moves)),
     publisherConfigurationRefusal: () => publisher.refusal(),
-    reading: async () => {
-      const [reading, publisherConfiguration] = await Promise.all([manager.reading(), keptOutConfiguration()]);
+    reading: async (reread) => {
+      const [reading, publisherConfiguration] = await Promise.all([manager.reading(reread), keptOutConfiguration()]);
       return { ...reading, publisherConfiguration };
     },
     subscribe: (listener) => {

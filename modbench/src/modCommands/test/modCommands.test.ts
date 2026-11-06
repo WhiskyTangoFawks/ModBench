@@ -15,7 +15,7 @@ const FIXTURE_ORDER = [
   mod('SKK Fast Start'), separator(UNASSIGNED), mod('[NODELETE] Radfall'), mod('Unofficial Patch'),
   separator(RADFALL), mod('ENBoost'), mod('Harder VATS', false), mod('Cracked Screen'),
 ];
-const sourceMods = (repositories: ReadonlyMap<string, string>): Pick<InstanceReading, 'sourceRepositories'> => ({ sourceRepositories: repositories });
+const sourceMods = (repositories: ReadonlyMap<string, string>): Pick<InstanceReading, 'sourceModFolders'> => ({ sourceModFolders: repositories });
 const NO_TRASH = () => Promise.resolve();
 
 function over(order: readonly ModlistEntry[] = FIXTURE_ORDER, answers: InstanceAnswers = {}, reading: Partial<InstanceReading> = {}) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addLoadAfter, rulesReader, type SortingRuleFiles } from '../lootMetadata';
+import { addLoadAfter, metadataProblem, rulesReader, type MetadataTexts, type SortingRuleFiles } from '../lootMetadata';
 
 const readRules = (files: SortingRuleFiles) => rulesReader()(files);
 type SortingRuleFile = SortingRuleFiles['masterlist'];
@@ -67,6 +67,27 @@ describe('readRules: LOOT\'s masterlist, prelude and userlist as sorting rules',
 `) }));
 
     expect([entries[0]?.req[0]?.condition, entries[0]?.msg[0]?.condition]).toEqual(['active("C.esp")', 'file("D.esp")']);
+  });
+
+  it('reads a plugin\'s dirty cleaning data, with its counts, utility, detail and condition', () => {
+    const { entries, problems } = readRules(filesOf({ masterlist: text(`plugins:
+  - name: A.esp
+    dirty:
+      - {crc: 0x6462841A, util: 'FO4Edit v4', itm: 51, udr: 38, nav: 1, detail: 'Clean it.', condition: 'active("B.esp")'}
+      - {crc: 0x95CE281B, util: 'FO4Edit v4'}
+`) }));
+
+    expect(problems).toEqual([]);
+    expect(entries[0]?.dirty).toEqual([
+      { crc: 0x6462841a, utility: 'FO4Edit v4', itm: 51, udr: 38, nav: 1, detail: 'Clean it.', condition: 'active("B.esp")', source: { file: 'masterlist', line: 3 } },
+      { crc: 0x95ce281b, utility: 'FO4Edit v4', itm: 0, udr: 0, nav: 0, source: { file: 'masterlist', line: 4 } },
+    ]);
+  });
+
+  it('names cleaning data that has no crc or no utility, on its line', () => {
+    const { entries, problems } = readRules(filesOf({ userlist: text('plugins:\n  - name: A.esp\n    dirty:\n      - {util: x}\n      - {crc: 0x1}\n') }));
+
+    expect([entries[0]?.dirty, problems.map(({ line }) => line)]).toEqual([[], [3, 4]]);
   });
 
   it('matches an exact name without case, and a regex name against the whole file name', () => {
@@ -400,5 +421,24 @@ plugins:
     expect(problems).toEqual([]);
     expect(entries[0]?.msg[0]?.text).toBe('hi\n\n\n');
     expect(entries[0]?.after.map((file) => file.name)).toEqual(['B.esp']);
+  });
+});
+
+describe('metadataProblem: whether texts read as LOOT\'s masterlist and prelude', () => {
+  const MASTERLIST = 'plugins:\n  - name: A.esp\n';
+  const PRELUDE = 'common:\n  - &anchor x\nglobals: []\n';
+
+  it.each<[string, MetadataTexts, string]>([
+    ['a masterlist that is a page of HTML', { masterlist: '<!DOCTYPE html>\n<html><body>Sign in to the network</body></html>\n', prelude: PRELUDE }, 'The masterlist is not LOOT metadata.'],
+    ['a masterlist that is a map of no LOOT key', { masterlist: 'title: Sign in\nmessage: the network needs you to log in\n', prelude: PRELUDE }, 'The masterlist is not LOOT metadata.'],
+    ['a prelude that is a page of HTML', { masterlist: MASTERLIST, prelude: '<html><body>Sign in</body></html>\n' }, 'The prelude is not LOOT metadata.'],
+    ['a masterlist that is not YAML', { masterlist: 'plugins: [unclosed\n', prelude: PRELUDE }, 'The masterlist does not read: '],
+    ['a masterlist with an alias no anchor defines', { masterlist: 'plugins:\n  - *missing\n', prelude: PRELUDE }, 'The masterlist does not read: '],
+  ])('names %s', (_case, texts, start) => {
+    expect(metadataProblem(texts)?.startsWith(start)).toBe(true);
+  });
+
+  it('finds none in a masterlist and prelude that read, the masterlist using the prelude\'s anchors', () => {
+    expect(metadataProblem({ masterlist: 'prelude:\nplugins:\n  - name: A.esp\n    after: [*anchor]\n', prelude: PRELUDE })).toBeUndefined();
   });
 });

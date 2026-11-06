@@ -4,8 +4,9 @@ import { ModStatuses } from '../../modStatus/modStatuses';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { LIST_MOD_STATUSES } from '../modStatuses';
 
-const gitGone: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole'> = {
+const gitGone: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole' | 'filesHeldByGit'> = {
   foldersHeldWhole: () => Promise.reject(new Error('git is gone')),
+  filesHeldByGit: () => Promise.reject(new Error('git is gone')),
   modValue: () => Promise.reject(new Error('never asked')),
   installationFile: () => Promise.reject(new Error('never asked')),
 };
@@ -19,7 +20,7 @@ describe('list_mod_statuses while git cannot say which folders it holds', () => 
       ],
     });
     const statuses = new ModStatuses(gitGone, () => undefined);
-    statuses.derive({ holdsRepository: true, mods: value.mods, modFolders: value.modFolders, entryKey: ({ name }) => name });
+    statuses.derive({ holdsRepository: true, mods: value.mods, modFolders: value.modFolders, entryKey: ({ name }) => name, paths: value.paths, filesByMod: value.filesByMod });
 
     expect(await LIST_MOD_STATUSES.of(value, statuses)).toEqual([{ mods: ['ModA', 'ModB'], unreadable: 'git could not say which folders it holds: git is gone' }]);
   });

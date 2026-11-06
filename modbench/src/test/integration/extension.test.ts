@@ -102,6 +102,7 @@ const requestLog: string[] = [];
 const putLoadOrders: string[][] = [];
 const putPlaces: string[][] = [];
 const handedUnsaved: unknown[][] = [];
+const signalledPaths: string[][] = [];
 const comparedTexts: unknown[] = [];
 const comparedSideBySide: unknown[] = [];
 
@@ -136,6 +137,13 @@ function pluginNamesOf(body: string): string[] {
   if (!Array.isArray(plugins)) throw new Error(`expected a PUT /load-order body with a plugins array, got: ${body}`);
   return plugins.map((p: unknown) => (typeof p === 'object' && p !== null && 'name' in p ? String(p.name) : '?'));
 }
+function pathsSignalled(body: string): string[] {
+  const parsed: unknown = JSON.parse(body);
+  const paths = isRecord(parsed) ? parsed.paths : undefined;
+  if (!Array.isArray(paths)) throw new Error(`expected a POST /signal-change body with a paths array, got: ${body}`);
+  return paths.map(String);
+}
+
 function namesIn(body: string, list: 'places'): string[] {
   const parsed: unknown = JSON.parse(body);
   const entries = isRecord(parsed) ? parsed[list] : undefined;
@@ -178,6 +186,16 @@ function createMockBackend(): http.Server {
     if (url === '/health') {
       res.writeHead(200);
       res.end();
+      return;
+    }
+    if (method === 'POST' && url === '/signal-change') {
+      let body = '';
+      req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+      req.on('end', () => {
+        signalledPaths.push(pathsSignalled(body));
+        res.writeHead(204);
+        res.end();
+      });
       return;
     }
     if (method === 'POST' && url === '/index/rebuild') {
@@ -254,6 +272,30 @@ function createMockBackend(): http.Server {
     if (url === '/plugins/creatable-extensions') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(['.esp', '.esm', '.esl']));
+      return;
+    }
+    if (url.startsWith('/plugins/creatable-flags')) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify([[], ['Small']]));
+      return;
+    }
+    if (method === 'POST' && url === '/plugins/rename-source-changes') {
+      let body = '';
+      req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+      req.on('end', () => {
+        const asked: unknown = JSON.parse(body);
+        if (!isRecord(asked) || typeof asked.name !== 'string') throw new Error(`expected a rename body naming a plugin, got: ${body}`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ treeName: asked.name, moves: [], deletions: [], documents: [] }));
+      });
+      return;
+    }
+    if (method === 'POST' && url === '/plugins/move-last-written') {
+      req.on('data', () => {});
+      req.on('end', () => {
+        res.writeHead(204);
+        res.end();
+      });
       return;
     }
     if (method === 'POST' && url === '/plugins/create') {
@@ -628,6 +670,20 @@ describe('a gesture the agent runs', () => {
     assert.strictEqual(answer.isError, false, answer.text);
     assert.strictEqual(await agentModEnabled(), true);
     assert.ok(readFileSync(modlistPath, 'utf8').includes('+Agent Mod'));
+  });
+
+  it('renames a plugin with no plugin source, mEdit answering no source changes', async () => {
+    writeFileSync(modlistPath, '+Agent Mod\r\n');
+    writeFileSync(path.join(modDir, 'Plain.esp'), '');
+    await waitFor('the agent to read Plain.esp in Agent Mod', async () => {
+      const read = await callTool('list_plugins');
+      return read.text.includes('Plain.esp');
+    });
+
+    const answer = await callTool('plugin_rename', { argument: { name: 'Plain.esp', origin: 'Agent Mod' }, options: { name: 'Renamed.esp' } });
+
+    assert.strictEqual(answer.isError, false, answer.text);
+    assert.deepStrictEqual(readdirSync(modDir).filter((file) => file.endsWith('.esp')), ['Renamed.esp']);
   });
 
   it('reads the Toolbox\'s deployment folder from the setting the live wiring reads', async () => {
@@ -1757,7 +1813,7 @@ describe('modbench.plugin.create', () => {
     this.timeout(30_000);
     Object.assign(vscode.window, {
       showInputBox: () => Promise.resolve('Created.esp'),
-      showQuickPick: (places: readonly { label: string }[]) => Promise.resolve(places.find((place) => place.label === modName)),
+      showQuickPick: (places: readonly { label: string }[]) => Promise.resolve(places.find((place) => place.label === modName || place.label === 'No flags')),
     });
 
     await waitFor('the create to write the file into the chosen mod, the Instance having read the mod enabled', async () => {
@@ -1838,6 +1894,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
   let gameFolder = '';
   let swapped = false;
   const putCount = () => requestLog.filter((l) => l === 'PUT /load-order').length;
+  const signalCount = () => requestLog.filter((l) => l === 'POST /signal-change').length;
 
   async function swapPluginOrder(): Promise<void> {
     swapped = !swapped;
@@ -1872,13 +1929,14 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
     assert.ok(putCount() >= before + 1, 'a plugins.txt change must send a fresh snapshot, not merely re-render the tree');
   });
 
-  it('a plugins.txt write that leaves the load order equal puts it again', async () => {
+  it('a plugins.txt write that leaves the load order equal signals a change and puts nothing', async () => {
     const sent = putLoadOrders.length;
-    const order = swapped ? ['Second.esp', 'TestMod.esp'] : ['TestMod.esp', 'Second.esp'];
+    const signalled = signalCount();
 
-    await writePluginsTxt(`${readFileSync(pluginsTxtPath, 'utf8')}\n`);
+    writeFileSync(pluginsTxtPath, `${readFileSync(pluginsTxtPath, 'utf8')}\n`);
+    await waitFor('a POST /signal-change after plugins.txt changed', () => signalCount() > signalled ? true : undefined);
 
-    assert.deepStrictEqual(putLoadOrders.slice(sent), [order]);
+    assert.deepStrictEqual(putLoadOrders.slice(sent), []);
   });
 
   describe('a file of a source mod\'s plugin source, written after its folders arrive', () => {
@@ -1941,12 +1999,12 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
           rmSync(path.join(root, 'source'), { recursive: true, force: true });
         });
 
-        it('puts the load order again on a write to it', async () => {
-          const before = putCount();
+        it('signals a change naming it on a write to it', async () => {
+          const before = signalledPaths.length;
 
           writeThroughTemp(file, '{ }');
 
-          await waitFor('a PUT /load-order after the write', () => putCount() > before);
+          await waitFor('a POST /signal-change naming the file after the write', () => signalledPaths.slice(before).some((paths) => paths.includes(file)));
         });
       });
     }
@@ -1956,15 +2014,15 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
 describe('Refresh rebuilds the record index, then re-reads the instance', () => {
   afterEach(() => { rebuildIndexShouldFail = false; });
 
-  it('POSTs /index/rebuild, then PUTs the load order the re-read built', async () => {
+  it('POSTs /index/rebuild, then signals the change the re-read found', async () => {
     const since = requestLog.length;
 
     await vscode.commands.executeCommand('modbench.instance.refresh');
 
     const rebuilt = requestLog.indexOf('POST /index/rebuild', since);
     assert.ok(rebuilt !== -1, 'modbench.instance.refresh must rebuild the record index');
-    await waitFor('a PUT /load-order after the rebuild',
-      () => requestLog.slice(rebuilt).includes('PUT /load-order') ? true : undefined);
+    await waitFor('a POST /signal-change after the rebuild',
+      () => requestLog.slice(rebuilt).includes('POST /signal-change') ? true : undefined);
   });
 
   it('reports that another window holds the record index, naming this instance', async () => {

@@ -1,3 +1,4 @@
+import { ORDER_SENT } from '../../test/orderSent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -67,11 +68,11 @@ async function over({ files = {}, manifests = {}, answers = {}, sourceFolders = 
   const hashes = new Map<string, HashedFile>(inFolders.flatMap(([folder, inFolder]) =>
     Object.entries(inFolder).map(([path, hash]) => [join(folder, path), { size: 1, hash }] as const)));
   const fake = fakeInstanceAdapter(
-    readingFixture({ gameFolder, sourceRepositories: repositoriesOf(sourceFolders), modFolders: modFoldersIn(modsDir, ...mods), ...reading }),
+    readingFixture({ gameFolder, sourceModFolders: repositoriesOf(sourceFolders), modFolders: modFoldersIn(modsDir, ...mods), ...reading }),
     { folderFiles: new Map(inFolders.map(([folder, inFolder]) => [folder, Object.keys(inFolder)])), hashes, ...answers });
   const client = new InMemoryMEditClient();
   const steps = recordingTasks(tasks, failures);
-  const deps = { client, adapter: fake.adapter, nexus: nexus ?? nexusAnswering(answeringFrom({})).nexus, trash: () => Promise.resolve(), tasks: steps };
+  const deps = { client, adapter: fake.adapter, nexus: nexus ?? nexusAnswering(answeringFrom({})).nexus, trash: () => Promise.resolve(), loadOrderSnapshot: ORDER_SENT, tasks: steps };
   return {
     fake, client, hashes, steps, deps,
     restore: (asked: readonly string[], options: Parameters<typeof restoreFromManifest>[2] = {}) => restoreFromManifest(deps, asked, options, false, []),
@@ -124,6 +125,20 @@ describe('restore from manifest', () => {
       { verb: 'writeInstalledFrom', folder: folderOf('ModA'), packages: [{ name: 'ModA.7z' }] },
     ]);
     expect(outcome).toEqual({ landed: [{ mod: 'ModA', written: ['b.nif', 'c.nif'], namedByNoLine: ['mine.txt'] }], refused: [] });
+  });
+
+  it('sends to the trash no file git holds in a mod\'s folder, which its manifest does not name (The manifest, story 5)', async () => {
+    const { restore, fake } = await over({
+      files: { ModA: { 'a.nif': HA, 'config.ini': 'C' } },
+      manifests: { ModA: fromTheZip({ 'a.nif': HA }) },
+      answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]), heldByGit: new Map([[folderOf('ModA'), ['config.ini']]]) },
+    });
+
+    const outcome = await restore(['ModA']);
+
+    expect([writes(fake.calls), outcome.landed]).toEqual([
+      [{ verb: 'writeInstalledFrom', folder: folderOf('ModA'), packages: [{ name: 'ModA.7z' }] }], [{ mod: 'ModA', written: [], namedByNoLine: [] }],
+    ]);
   });
 
   it('writes and sends to the trash nothing of a file its manifest ignores, whatever its bytes (The manifest, story 11)', async () => {
@@ -526,7 +541,7 @@ describe('restore from manifest', () => {
 
       it('is skipped, naming why, and not built, when git cannot list its source folder', async () => {
         const { restore, client, deps } = await sourceMod({}, [], sourceHolds);
-        Object.assign(deps.adapter, { sourceFolderValue: () => Promise.reject(new Error('fatal: not a git repository')) });
+        Object.assign(deps.adapter, { unheldFolderValue: () => Promise.reject(new Error('fatal: not a git repository')) });
 
         const outcome = await restore(['ModA']);
 
@@ -544,7 +559,7 @@ describe('restore from manifest', () => {
       });
     });
 
-    it('is built from a repository the source folder holds that is no submodule, cloning nothing (modlist-repository.md, Restore from manifest, story 1)', async () => {
+    it('is built from a repository the source folder holds that is no submodule, cloning nothing (instance-repository.md, Restore from manifest, story 1)', async () => {
       const { restore, client } = await sourceMod({ pins: new Map() });
 
       const outcome = await restore(['ModA']);
@@ -638,7 +653,7 @@ describe('restore from manifest', () => {
     });
 
     it.each([
-      ['never reaches the record index', { state: 'NotYet' } as const, 121_000, 'was restored, but plugin C.esp did not reach the record index within 120 seconds'],
+      ['is not answered of by mEdit', { failed: 'timed-out', cause: 'mEdit cannot say.' } as const, 0, 'was restored, but plugin C.esp (mEdit cannot say.)'],
       ['could not be read by mEdit', { state: 'ReadFailed', reason: 'C.esp is not a plugin.' } as const, 0, 'was restored, but plugin C.esp could not be read: C.esp is not a plugin.'],
     ])('names a mod whose plugin %s, and restores the source mod after it', async (_case, indexing, wait, reason) => {
       const { restore, client } = await aSourceModAfterTwoMods();
@@ -651,6 +666,33 @@ describe('restore from manifest', () => {
       expect(await outcome).toEqual({
         landed: [{ mod: 'ModB', written: [], namedByNoLine: [] }, { mod: 'ModA', written: [], namedByNoLine: [] }], refused: [{ item: 'ModC', reason }],
       });
+    });
+
+    it('ends the wait for the record index when a cancel aborts its signal, naming no plugin', async () => {
+      const { restore, client } = await aSourceModAfterTwoMods();
+      client.setQueryAnswer('getPluginIndexing', { state: 'NotYet' });
+      const cancel = new AbortController();
+
+      const outcome = restore(['ModA', 'ModB', 'ModC'], { signal: cancel.signal });
+      await waiting(client);
+      cancel.abort();
+
+      expect((await outcome).refused).toEqual([]);
+    });
+
+    it('waits while mEdit says a read is not yet answerable', async () => {
+      const { restore, client } = await aSourceModAfterTwoMods();
+      client.setQueryAnswer('getPluginIndexing', { failed: 'no-load-order' });
+      let ended = false;
+
+      const outcome = restore(['ModA', 'ModB', 'ModC']).finally(() => { ended = true; });
+      await waiting(client);
+      await vi.advanceTimersByTimeAsync(1_000);
+      const endedBeforeIndexed = ended;
+      client.setQueryAnswer('getPluginIndexing', { state: 'AsOnDisk' });
+      client.emit(loadOrderStatusEventFixture());
+
+      expect([endedBeforeIndexed, (await outcome).refused]).toEqual([false, []]);
     });
 
     it('waits on no mod before a mod that is not a source mod', async () => {

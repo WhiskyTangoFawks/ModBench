@@ -40,7 +40,16 @@ public interface ISourceAdapter
     /// place of the file at its absolute path.</summary>
     IWriteSession WriteSessionOver(PluginProvider.FromMod provider, GameRelease release, IReadOnlyList<DocumentChange> held);
 
-    bool TreeHolds(RegisteredPlugin plugin, string path);
+    /// <summary>The plugins whose plugin source holds <paramref name="path"/>, or plugins it cannot name for a source mod's
+    /// build file, repository, or plugin source no plugin's tree holds.</summary>
+    PathAnswer Touching(LoadOrderSnapshot loadOrder, string path);
+
+    /// <summary>Relays Mod Management's word that the disk changed to the record index (ADR-0015): the plugins its paths name,
+    /// which it re-reads, or null, and it checks every plugin.</summary>
+    void SignalChange(IReadOnlyList<PluginAddress>? plugins);
+
+    /// <summary>Raised by each <see cref="SignalChange"/>, with its plugins.</summary>
+    event Action<IReadOnlyList<PluginAddress>?>? ChangeSignalled;
 
     RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path);
 
@@ -58,12 +67,12 @@ public interface ISourceAdapter
     /// file that is not valid UTF-8 stamps alike on disk and in the record index.</summary>
     string ContentStamp(string text);
 
-    /// <summary>A source folder for a mod that has none, in the repository <paramref name="heldIn"/> names: one commit,
-    /// <c>Init &lt;mod&gt;</c>, of its files, then any repair. Without <paramref name="commit"/>, neither.</summary>
+    /// <summary>A source folder in the repository <paramref name="heldIn"/> names, and the mod folder's manifest: one commit,
+    /// <c>Init &lt;mod&gt;</c>, of the source folder, and in the instance repository that manifest, then any repair.</summary>
     SourceFailure? Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<FileToCopy> assets, bool commit, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest, IReadOnlyList<string> ignored,
-        SourceModIn heldIn);
+        SourceModIn heldIn, ModFolderManifest? modFolderManifest);
 
     /// <summary>Where <paramref name="sourceFolder"/> holds the file at its forward-slash <paramref name="path"/>.</summary>
     string FileIn(string sourceFolder, string path);

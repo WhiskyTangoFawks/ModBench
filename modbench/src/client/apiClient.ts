@@ -83,6 +83,8 @@ export interface LoadOrderStatus {
   version: number;
   /** The wire's `None`: no load order has arrived, or a rebuild dropped the record index it filled. */
   holdsNone: boolean;
+  /** A change signalled is asked for and the record index has not yet validated what it names (ADR-0015). */
+  validating: boolean;
 }
 
 // A refusal state with no message is not carried as a refusal at all.
@@ -105,13 +107,19 @@ export function toLoadOrderStatus(wire: Schemas['LoadOrderStatus']): LoadOrderSt
     refusal: refusalOf(wire),
     version: wire.version,
     holdsNone: wire.state === 'None',
+    validating: wire.validating,
   };
+}
+
+/** Ready and validating nothing, or either refusal: the record index has nothing more to say until something changes. */
+export function isSettled(status: LoadOrderStatus): boolean {
+  return status.refusal !== undefined || (status.conflictsComputed && !status.validating);
 }
 
 /** Ready, or either refusal, and for the version an Apply actually answers — a status still
  *  settling an older version, or one a no-op resend left untouched, is not this one's answer. */
 export function isTerminalLoadOrderStatusFor(status: LoadOrderStatus, appliedVersion: number): boolean {
-  return status.version >= appliedVersion && (status.conflictsComputed || status.refusal !== undefined);
+  return status.version >= appliedVersion && isSettled(status);
 }
 
 export function createApiClient(port: number, fetch?: (input: Request) => Promise<Response>) {

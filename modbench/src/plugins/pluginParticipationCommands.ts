@@ -23,7 +23,7 @@ export function registerPluginEnableCommands(
     },
     fromAgent: ({ argument }) => argument.map(pluginOf),
     run: async (plugins) => {
-      const result = await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, () =>
+      const result = await runWritingGesture(enabled ? 'modbench.plugin.enable' : 'modbench.plugin.disable', PLUGINS_KEY_ARGS.view, instance, () =>
         commands.setPluginsEnabled(plugins.map(({ name }) => name), enabled));
       if (!result.applied) return result;
       const addressOf = (name: string): PluginAddress => present(plugins.find((plugin) => plugin.name === name), `the plugin given as ${name}`);
@@ -42,20 +42,11 @@ const namesOf = (result: SelectionResult<PluginAddress>): SelectionResult<string
   ? { applied: true, outcome: { landed: result.outcome.landed.map(({ name }) => name), refused: result.outcome.refused.map(({ item, reason }) => ({ item: item.name, reason })) } }
   : result;
 
-// The verb every entry shares, or "update" when the entries ask for more than one state — the
-// check box's own case, when several rows toggled at once land in different directions.
-function participationVerb(entries: readonly PluginParticipation[]): string {
-  const [first, ...rest] = entries;
-  if (first === undefined) return 'update';
-  if (rest.some((entry) => entry.enabled !== first.enabled)) return 'update';
-  return first.enabled ? 'enable' : 'disable';
-}
-
 // Shared by the menu/key path above and the check box, so both read one outcome the same way.
 export function reportPluginsParticipation(
   result: SelectionResult<string>, entries: readonly PluginParticipation[], reporter: Reporter,
 ): void {
-  const verb = participationVerb(entries);
+  const verb = entries[0]?.enabled ? 'enable' : 'disable';
   if (!result.applied) {
     reporter.report('error', `Failed to ${verb} plugins.`, result.refusal);
     return;

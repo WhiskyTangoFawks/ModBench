@@ -4,6 +4,7 @@ using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
 namespace MEditService.RecordIndex.Tests.Records;
@@ -65,7 +66,7 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.False(Directory.Exists(gone));
 
         Directory.CreateDirectory(gone);
-        _index.NextSnapshotUntil(() => _index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
+        _index.NextCheckUntil(() => _index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
 
         Assert.NotEmpty(_index.ListedIn(Key));
     }
@@ -83,7 +84,7 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.False(Directory.Exists(gone));
 
         Directory.CreateDirectory(gone);
-        _index.NextSnapshotUntil(() => _index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
+        _index.NextCheckUntil(() => _index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
     }
 
     [Fact]
@@ -111,7 +112,7 @@ public sealed class StoreRebuildTests : IDisposable
 
     private const string MatchesNpcA = "SELECT form_key FROM npc_ WHERE editor_id = 'NpcA'";
 
-    private const string SlowlyMatchesNpcA = MatchesNpcA + " UNION ALL SELECT NULL FROM range(1) WHERE (SELECT sum(range % 7) FROM range(200000000)) < 0";
+    private const string SlowlyMatchesNpcA = MatchesNpcA + " UNION ALL SELECT NULL FROM range(1) WHERE (SELECT sum(range % 7) FROM range(70000000)) < 0";
 
     private static PluginFixtureData NpcAAndNpcOtherInAespAndNpcBInBespFixture(string name) => new PluginFixtureBuilder(name)
         .WithPlugin("A.esp", mod => { mod.Npcs.AddNew("NpcA"); mod.Npcs.AddNew("NpcOther"); })
@@ -210,7 +211,7 @@ public sealed class StoreRebuildTests : IDisposable
         var filterTakes = filtering.Elapsed;
         PluginBinaries.Touch(data.Plugins.Single(plugin => plugin.Name == "B.esp").Path);
 
-        holder.Apply(holder.Current);
+        index.SignalChange();
         var longestRead = Waits.LongestReadUntil(() => index.Status.State, state => state == LoadOrderState.Failed);
 
         Assert.True(longestRead < filterTakes / 2, $"The longest status read took {longestRead}; the filter takes {filterTakes}.");
@@ -238,7 +239,7 @@ public sealed class StoreRebuildTests : IDisposable
             Assert.NotNull(index.Queries.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot));
             index.ClearFilter();
             otherWindow.ForEach(window => window.Dispose());
-            index.NextSnapshot();
+            index.NextCheck();
 
             Assert.Null(index.Queries.GetFilter().Value());
             Assert.Equal(["NpcBeforeRebuild"], ListedNpcs(index));
@@ -278,6 +279,32 @@ public sealed class StoreRebuildTests : IDisposable
 
         Assert.Equal(version, index.Status.Version);
         Assert.NotNull(index.PluginResponseOf(data.Plugins[1].Key));
+    }
+
+    [Fact]
+    public async Task ARebuild_StopsTheReconcileInFlight_AndItsOwnReconcileAnswers()
+    {
+        using var data = new PluginFixtureBuilder("store-rebuild-stops-reconcile")
+            .WithPlugin("A.esp").WithPlugin("B.esp").WithPlugin("C.esp", mod => mod.Npcs.AddNew("FromC")).Build();
+        var log = new List<LogEntry>();
+        using var loggerFactory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider(log)));
+        using var gate = new GatedPluginAdapter(gateBefore: "B.esp");
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, gate, loggerFactory: loggerFactory);
+        var version = holder.Apply(SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        await gate.WaitUntilParkedAsync();
+
+        var rebuild = Task.Run(() => index.Queries.RebuildStore(GameRelease.Fallout4, data.InstanceRoot));
+        Assert.True(
+            Waits.ReachedWithin(() => { lock (log) return log.Exists(e => e.Message == "Asked the reconcile in flight to stop"); }, TimeSpan.FromSeconds(20)),
+            "the rebuild asking the parked reconcile to stop");
+        gate.Release();
+        Assert.Null(await rebuild);
+        AwaitRefill(index);
+
+        Assert.Equal(["A.esp", "B.esp", "A.esp", "B.esp", "C.esp"], gate.Opened);
+        Assert.Equal(version, index.Status.Version);
+        Assert.NotEmpty(index.ListedIn(data.Plugins[2].Key));
     }
 
     [Fact]

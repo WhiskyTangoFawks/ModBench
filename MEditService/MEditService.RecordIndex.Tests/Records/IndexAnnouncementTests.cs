@@ -76,7 +76,7 @@ public sealed class IndexAnnouncementTests : IDisposable
         ReconcileHeld();
 
         BinaryChanges[change](_pluginPath);
-        _index.NextSnapshot();
+        _index.NextCheck();
 
         TheOnePluginChanged();
     }
@@ -110,7 +110,7 @@ public sealed class IndexAnnouncementTests : IDisposable
         _publishedByReconcile = _notifications.Notifications.Count;
         PluginBinaries.Touch(otherPath);
 
-        _index.NextSnapshot();
+        _index.NextCheck();
 
         Assert.DoesNotContain(SinceReconcile.OfType<PluginChangedNotification>(), n => n.Plugin.Equals(Key));
     }

@@ -54,7 +54,7 @@ public sealed class ValidateByStampsTests : IDisposable
         _index.RowOf(_npc, _mod.Key)?.WorkingTreeState ?? throw new InvalidOperationException($"Expected {_npc} to be listed.");
 
     private void ValidateUntilEditorId(string editorId) =>
-        _index.NextSnapshotUntil(() => NpcNamed(editorId), $"the record named {editorId}");
+        _index.NextCheckUntil(() => NpcNamed(editorId), $"the record named {editorId}");
 
     private bool NpcNamed(string editorId) =>
         _index.Queries.GetCompareRecords([new RecordCopy(_npc, _mod.Key)]).Holds(out var answer, out _)
@@ -62,7 +62,7 @@ public sealed class ValidateByStampsTests : IDisposable
         && compare.Overrides.Single().EditorId == editorId;
 
     private void ValidateUntilSourceUnreadable() =>
-        _index.NextSnapshotUntil(() => _index.ReadFromItsPluginFileForItsUnreadableSource(_mod.Key), "the plugin file read in place of its source");
+        _index.NextCheckUntil(() => _index.ReadFromItsPluginFileForItsUnreadableSource(_mod.Key), "the plugin file read in place of its source");
 
     private string NpcFile => _mod.SourceFileOf(Npc);
 
@@ -72,9 +72,9 @@ public sealed class ValidateByStampsTests : IDisposable
     public void ADirtyDocumentUnchangedSinceTheLastValidation_IsNotAnnouncedAgain()
     {
         _mod.HandEdit(Npc, "\"FixtureNpc\"", "\"RenamedByHand\"");
-        _index.NextSnapshot();
+        _index.NextCheck();
 
-        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _partner.RenamedByHand(_index));
+        var announced = _index.AnnouncedByChecks(_notifications, () => _partner.RenamedByHand(_index));
 
         Assert.DoesNotContain(announced, Announcements.RowsChanged(_npc));
         Assert.DoesNotContain(announced, Announcements.PluginChanged(_mod));
@@ -83,7 +83,7 @@ public sealed class ValidateByStampsTests : IDisposable
     [Fact]
     public void AnExteriorCellsDocument_IsADocumentTheRowsWereDerivedFrom_SoAQuietValidationLeavesItsPluginAlone()
     {
-        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _partner.RenamedByHand(_index));
+        var announced = _index.AnnouncedByChecks(_notifications, () => _partner.RenamedByHand(_index));
 
         Assert.DoesNotContain(announced, Announcements.PluginChanged(_mod));
     }
@@ -123,7 +123,7 @@ public sealed class ValidateByStampsTests : IDisposable
         var file = NpcFile;
         var text = File.ReadAllText(file);
         File.Delete(file);
-        _index.NextSnapshotUntil(() => _index.CopyIn(_npc, _mod.Key) is null, "the record gone");
+        _index.NextCheckUntil(() => _index.CopyIn(_npc, _mod.Key) is null, "the record gone");
         File.WriteAllText(AnotherTool.Beside(file, writtenTo), text);
 
         ValidateUntilEditorId("FixtureNpc");
@@ -142,7 +142,7 @@ public sealed class ValidateByStampsTests : IDisposable
                 .Replace("\"FixtureNpc\"", "\"CreatedNpc\"", StringComparison.Ordinal));
         File.Delete(_mod.SourceFileOf(_index.DocumentOf(created, _mod.Key)));
 
-        _index.NextSnapshot();
+        _index.NextCheck();
 
         Assert.Null(_index.CopyIn(created, _mod.Key));
     }
@@ -151,13 +151,13 @@ public sealed class ValidateByStampsTests : IDisposable
     public void ADocumentThatCouldNotBeRead_IsRefreshedByTheNextValidation()
     {
         _mod.HandEdit(Npc, "\"FixtureNpc\"", "\"RenamedByHand\"");
-        _index.NextSnapshot();
+        _index.NextCheck();
         Assert.Equal(WorkingTreeState.Modified, NpcState);
         using (new FileStream(NpcFile, FileMode.Open, FileAccess.Read, FileShare.None))
             ValidateUntilSourceUnreadable();
         Assert.Equal("FixtureNpc", Npc.EditorId);
 
-        _index.NextSnapshot();
+        _index.NextCheck();
 
         Assert.Equal("RenamedByHand", Npc.EditorId);
     }
@@ -166,7 +166,7 @@ public sealed class ValidateByStampsTests : IDisposable
     public void ATreeThatReturns_ReplacesTheBinarysRows()
     {
         _mod.HandEdit(Npc, "\"FixtureNpc\"", "\"RenamedByHand\"");
-        _index.NextSnapshot();
+        _index.NextCheck();
         var treeThatLeavesAndReturns = PluginSourceRoot.In(_mod.ModFolderOf(), _mod.Name);
         Directory.Move(treeThatLeavesAndReturns, treeThatLeavesAndReturns + ".away");
         ValidateUntilEditorId("FixtureNpc");
@@ -197,7 +197,7 @@ public sealed class ValidateByStampsTests : IDisposable
         var document = NpcFile;
         File.Move(document, AnotherTool.Beside(document, movedTo));
 
-        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _partner.RenamedByHand(_index));
+        var announced = _index.AnnouncedByChecks(_notifications, () => _partner.RenamedByHand(_index));
 
         Assert.Equal("FixtureNpc", Npc.EditorId);
         Assert.DoesNotContain(announced, Announcements.RowsChanged(_npc));
@@ -216,7 +216,7 @@ public sealed class ValidateByStampsTests : IDisposable
         var document = NpcFile;
         Directory.CreateDirectory(AnotherTool.Beside(document, "Backup"));
         var partnerRenamed = _partner.RenamedByHand(_index);
-        _index.NextSnapshotUntil(() => _notifications.Notifications.Any(n => partnerRenamed(n)), "the partner's change");
+        _index.NextCheckUntil(() => _notifications.Notifications.Any(n => partnerRenamed(n)), "the partner's change");
         var copy = AnotherTool.Beside(document, copiedTo);
         File.Copy(document, copy);
 
@@ -229,7 +229,7 @@ public sealed class ValidateByStampsTests : IDisposable
             strict: true);
 
         File.Delete(AnotherTool.Beside(document, deleted));
-        _index.NextSnapshotUntil(() => !_index.ReadFromItsPluginFileForItsUnreadableSource(_mod.Key), "the plugin read from its source again");
+        _index.NextCheckUntil(() => !_index.ReadFromItsPluginFileForItsUnreadableSource(_mod.Key), "the plugin read from its source again");
 
         Assert.Equal("FixtureNpc", Npc.EditorId);
     }
@@ -251,7 +251,7 @@ public sealed class ValidateByStampsTests : IDisposable
         File.Copy(brokenDocument, backup);
         sound.HandEdit(index.DocumentOf(other.ToString(), sound.Key), "\"SoundNpc\"", "\"EditedSoundNpc\"");
 
-        index.NextSnapshotUntil(
+        index.NextCheckUntil(
             () => index.ReadFromItsPluginFileForItsUnreadableSource(broken.Key),
             "the broken plugin's file read in place of its source");
 

@@ -1,11 +1,11 @@
-interface NexusFileEntry { file_id: number; version: string; category_id: number; file_name: string }
+interface NexusFileEntry { file_id: number; version: string; category_id: number; file_name: string; name?: string; category_name?: string }
 interface NexusFileUpdate { old_file_id: number; new_file_id: number; old_file_name?: string; new_file_name?: string }
 export interface FileList { files: NexusFileEntry[]; file_updates: NexusFileUpdate[] }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
-const isEntry = (value: unknown): value is NexusFileEntry => isRecord(value) && typeof value.file_id === 'number' && typeof value.version === 'string'
-  && typeof value.category_id === 'number' && typeof value.file_name === 'string';
 const isOptionalString = (value: unknown): boolean => value === undefined || typeof value === 'string';
+const isEntry = (value: unknown): value is NexusFileEntry => isRecord(value) && typeof value.file_id === 'number' && typeof value.version === 'string'
+  && typeof value.category_id === 'number' && typeof value.file_name === 'string' && isOptionalString(value.name) && isOptionalString(value.category_name);
 const isUpdate = (value: unknown): value is NexusFileUpdate => isRecord(value) && typeof value.old_file_id === 'number' && typeof value.new_file_id === 'number'
   && isOptionalString(value.old_file_name) && isOptionalString(value.new_file_name);
 

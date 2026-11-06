@@ -220,9 +220,9 @@ public sealed class ArchitectureTests
         Assert.DoesNotMatch(ParticipationRule, "registration.Enabled && registration.LoadOrderIndex is not null");
     }
 
-    private static readonly string[] PluginBinaryWriters = ["MutagenPluginAdapter.cs"];
+    private static readonly string[] PluginBinaryWriters = ["MutagenPluginAdapter.cs", "ReferenceBases.cs"];
 
-    private static readonly string[] ModFactoryCallers = ["MutagenPluginAdapter.cs", "RecordTypes.cs"];
+    private static readonly string[] ModFactoryCallers = ["MutagenPluginAdapter.cs", "ReferenceBases.cs", "RecordTypes.cs"];
 
     [Fact]
     public void APluginBinary_IsOpenedAndWrittenOnlyByThePluginAdapter()

@@ -188,6 +188,18 @@ export function declaresMember(meta: FieldMetadata, owner: unknown, ownerMeta: F
   return typeof leaf !== 'string' || leaf in meta.variants;
 }
 
+/** Whether the owner holds the member at all: none of the flags its metadata names as `member.flag`,
+ *  the owner's versioning breaks, is set (editor-fields.md, Every field, story 2). */
+export function heldUnder(meta: FieldMetadata, owner: unknown): boolean {
+  if (!meta.unheldWhen || owner == null || typeof owner !== 'object') return true;
+  const held = owner as Record<string, unknown>;
+  return !meta.unheldWhen.some(entry => {
+    const dot = entry.lastIndexOf('.');
+    const flags = held[entry.slice(0, dot)];
+    return Array.isArray(flags) && flags.includes(entry.slice(dot + 1));
+  });
+}
+
 // The member of a struct that names the concrete class its object is, as the metadata marks it.
 export const discriminatorOf = (meta: FieldMetadata | undefined): string | undefined =>
   meta?.fields?.find(f => f.isDiscriminator)?.name;

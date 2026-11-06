@@ -31,7 +31,7 @@ public sealed class InvalidatedIndexFileTests : IDisposable
         var rewritten = new Fallout4Mod(ModKey.FromFileName(Aborted), Fallout4Release.Fallout4);
         rewritten.Npcs.AddNew("RewrittenNpc");
         rewritten.WriteToBinary(_fixture.Plugins.Single(p => p.Name == Aborted).Path);
-        _index.NextSnapshotUnsettledUntil(() => _index.Status.State == LoadOrderState.Failed, "the validation failing");
+        _index.NextCheckUnsettledUntil(() => _index.Status.State == LoadOrderState.Failed, "the validation failing");
     }
 
     public void Dispose()
@@ -50,7 +50,7 @@ public sealed class InvalidatedIndexFileTests : IDisposable
     }
 
     [Fact]
-    public void AFatalError_LeavesThePluginsReadBeforeItAnswering_BeforeTheNextSnapshot()
+    public void AFatalError_LeavesThePluginsReadBeforeItAnswering_BeforeTheNextCheck()
     {
         var read = _index.ListedIn(_fixture.Plugins.Single(p => p.Name == Before).Key);
 
@@ -63,10 +63,10 @@ public sealed class InvalidatedIndexFileTests : IDisposable
         [.. _notifications.Notifications.OfType<LoadOrderStatusNotification>().Last().Status.IndexedPlugins.Select(p => p.Name).Order()];
 
     [Fact]
-    public void TheNextSnapshotAfterAFatalError_OpensTheIndexFileAgain_AndReadsEveryPlugin()
+    public void TheNextCheckAfterAFatalError_OpensTheIndexFileAgain_AndReadsEveryPlugin()
     {
         var before = _notifications.Notifications.Count;
-        _index.NextSnapshotUnsettledUntil(() => Answered(before) is not null, "the snapshot's answer");
+        _index.NextCheckUnsettledUntil(() => Answered(before) is not null, "the check's answer");
 
         Assert.Equal(LoadOrderState.Ready, Answered(before));
         Assert.Equal([Aborted, After, Before], _index.Status.IndexedPlugins.Select(p => p.Name).Order());
@@ -74,5 +74,6 @@ public sealed class InvalidatedIndexFileTests : IDisposable
 
     private LoadOrderState? Answered(int before) =>
         _notifications.Since(before).OfType<LoadOrderStatusNotification>()
+            .Where(n => !n.Status.Validating)
             .Select(n => (LoadOrderState?)n.Status.State).LastOrDefault(state => state is LoadOrderState.Ready or LoadOrderState.Failed);
 }

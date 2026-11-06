@@ -14,14 +14,14 @@ import { mo2Changes } from './mo2Changes';
 import { mo2ModOrder } from './mo2ModOrder';
 import { mo2OriginFiles } from './mo2OriginFiles';
 import { filesBelow } from './mo2Files';
-import { git } from '../git';
-import { foldersHeldWhole } from '../foldersHeldWhole';
-import { folderValueOver, modValueOver, sourceFolderValueOver } from '../modValue';
+import { foldersHeldWhole, foldersInReach } from '../foldersHeldWhole';
+import { filesHeldByGit } from '../filesHeldByGit';
+import { folderValueOver, modValueOver, unheldFolderValueOver } from '../modValue';
 import type { Mo2Context } from './mo2Context';
 import { mo2Landing } from './mo2Landing';
-import { mo2Repository } from './mo2Repository';
-import { mo2Submodules } from './mo2Submodules';
-import { mo2PathTokens } from './mo2PathTokens';
+import { mo2GameFiles, mo2Repository } from './mo2Repository';
+import { mo2Submodules, sourceModLinesFollowed } from './mo2Submodules';
+import { mo2PathTokens, pathTokensFollowed, unfilteredShown } from './mo2PathTokens';
 import { mo2PluginRename } from './mo2PluginRename';
 import { mo2Installation } from './mo2Installation';
 import { readInstance } from '../instanceReading';
@@ -31,6 +31,7 @@ import { programRunning } from '../processes';
 import type { FileProblems } from '../../ports/fileProblems';
 import { packageFilesWriter } from '../fileContents/packageFiles';
 import { hashIndex } from '../fileContents/hashIndex';
+import { dataFileReads } from '../gameFolder/dataFileReads';
 import { textHash } from '../fileContents/contentDigest';
 import { hashIndexDir, modlistFile, modsDir, profilesDir, settingsFile } from './layout';
 import { parseModlist } from './codecs/modlistText';
@@ -76,17 +77,21 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
   const hashes = hashIndex(hashIndexDir(instanceRoot), installationFileReader, fileProblems);
   const source = readingSource(context, publisherFile);
   const gameFolder = async (): Promise<GameFolder> => (await source.settings()).gameFolder();
+  const showUnfiltered = unfilteredShown(instanceRoot, publisherFile, fileProblems);
+  const followSourceModLines = sourceModLinesFollowed(instanceRoot, fileProblems);
+  const followPathTokens = pathTokensFollowed(context, gameFolder, publisherFile);
   const adapter: ManagerAdapter = {
     names: source.names,
-    reading: () => readInstance(source),
+    reading: async (reread) => (await Promise.all([readInstance(source, reread), showUnfiltered(), followPathTokens(), followSourceModLines()]))[0],
     activeProfile: async () => (await source.settings()).profile,
     gameRelease: async () => (await source.settings()).gameRelease,
     gameFolder,
     gameFolderOverlapping: async (folder) => overlappedGameRoot(await gameFolder(), folder),
     nonSteamPrefix: (folder) => nonSteamPrefixRunning(steamRootOn(process.platform), folder),
     gamePlaces: async () => gamePlacesOf(await gameFolder(), await context.resolveSteamInstall((await source.settings()).gameRelease)),
-    ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context, source), ...mo2Landing(context, installationFileReader, source, fomodEngine), ...mo2Repository(context, hashes, publisherFile, deployedPath), ...mo2Submodules(context), ...mo2PathTokens(context, gameFolder, publisherFile),
+    ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context, source), ...mo2Landing(context, installationFileReader, source, fomodEngine), ...mo2Repository(context, publisherFile), ...mo2GameFiles(context, hashes, deployedPath), ...mo2Submodules(context), ...mo2PathTokens(context, gameFolder, publisherFile),
     ...packageFilesWriter(hashIndexDir(instanceRoot), installationFileReader),
+    ...dataFileReads(gameFolder),
     originFileHash: hashes.originFileHash,
     flaggedHash: hashes.flaggedHash,
     keepFlaggedHash: hashes.keepFlaggedHash,
@@ -94,9 +99,11 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
     filesIn: async (folder) => (await filesBelow(folder)).files.map(({ relativePath }) => relativePath),
     folderValue: (folder) => folderValueOver(adapter, folder),
     foldersHeldWhole: (folders) => foldersHeldWhole(instanceRoot, folders),
-    sourceFolderValue: (folder) => sourceFolderValueOver(adapter, async (at) => (await git(at, 'ls-files', '-z')).split('\0').filter((path) => path !== ''), folder),
+    foldersInReach: (folders) => foldersInReach(instanceRoot, folders),
+    filesHeldByGit: (folders) => filesHeldByGit(instanceRoot, folders),
+    unheldFolderValue: async (folder) => unheldFolderValueOver(adapter, (await filesHeldByGit(instanceRoot, [folder])).get(folder) ?? [], folder),
     trashingReplaced,
-    modValue: (folder, asked) => modValueOver(adapter, folder, asked),
+    modValue: (folder, asked, heldByGit) => modValueOver(adapter, folder, asked, heldByGit),
     subscribe: (listener) => context.watch.subscribe(listener),
   };
   return adapter;

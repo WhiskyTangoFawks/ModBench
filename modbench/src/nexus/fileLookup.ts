@@ -120,12 +120,14 @@ export async function lookupByName(read: Read, { game, modID, fileID, fileName }
   return fromFileList(read, `${modPath(game, modID)}/files.json`, namesOf(fileName), page.info);
 }
 
-/** The file by its ID, from its own record and its mod's page, as the mod manager takes a file it downloads. */
-export async function lookupById(read: Read, { game, modID, fileID }: { game: string; modID: string; fileID: string }): Promise<FileFound> {
+export type FileFoundById = { found: true; info: NexusFileInfo; fileName: string | undefined } | { found: false; reason: string };
+
+/** The file by its ID, from its own record and its mod's page, as the mod manager takes a file it downloads. `fileName` is the name Nexus gives the file. */
+export async function lookupById(read: Read, { game, modID, fileID }: { game: string; modID: string; fileID: string }): Promise<FileFoundById> {
   const file = await read(`${modPath(game, modID)}/files/${fileID}.json`, 'Nexus does not hold this file.');
   if ('reason' in file) return { found: false, ...file };
   if (!isRecord(file.json)) return { found: false, reason: NOT_READ };
   const page = await fromPage(read, { game, modID, fileID });
   if (!page.found) return page;
-  return { found: true, info: overlay(page.info, { ...fileFieldsOf(file.json), fileTime: number(file.json.uploaded_timestamp), versionFromNewest: true }) };
+  return { found: true, info: overlay(page.info, { ...fileFieldsOf(file.json), fileTime: number(file.json.uploaded_timestamp), versionFromNewest: true }), fileName: text(file.json.file_name) };
 }

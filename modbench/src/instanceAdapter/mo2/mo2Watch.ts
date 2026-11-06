@@ -1,15 +1,13 @@
-// MO2's watch: every file of the instance, the downloads folder, the game folder's files Mod Management
-// reads, armed through VS Code's file watcher while anyone listens, and a change to the game-folder setting.
+// MO2's watch: the instance's files as deep as they change, the downloads folder and the game folder's files Mod
+// Management reads, armed through VS Code's file watcher while anyone listens, and the game-folder setting.
 
 import { heldFolderWatchFor, type HeldFolderWatch } from '../heldFolders';
 import { watchFiles } from '../watchFiles';
-import type { Subscription } from '../instanceAdapter';
-import {
-  MODLIST_GLOB, MODS_GLOB, OVERWRITE_GLOB, PLUGINS_GLOB, PROFILE_INIS_GLOB, HELD_BY_GIT_WATCH_GLOB, REPOSITORY_SET_UP_WATCH_GLOB, REPOSITORY_WATCH_GLOB, SETTINGS_WATCH_GLOB,
-  SORTING_RULE_FILES_GLOB, SOURCE_GLOB,
-} from './layout';
+import { outsideTrustedRead } from '../files';
+import type { ChangeListener, Subscription } from '../instanceAdapter';
+import { instanceWatches, sourceRootDir } from './layout';
 
-type FollowedFolder = 'downloadedFiles' | 'gameFolderPlugins' | 'creationClubList' | 'defaultIni' | 'myGamesInis' | 'gameFolderArchives';
+type FollowedFolder = 'downloadedFiles' | 'dataFolder' | 'creationClubList' | 'defaultIni' | 'myGamesInis' | 'gameFolderArchives' | 'modFolders' | 'profileFolders';
 
 // A repository's change is its working tree and its refs, never git's own bookkeeping.
 function isRepositoryChange(path: string): boolean {
@@ -22,55 +20,56 @@ function isRepositoryChange(path: string): boolean {
 }
 
 interface Followed {
-  readonly base: string;
   readonly glob: string;
-  watch?: Subscription;
+  readonly watches: ReadonlyMap<string, Subscription | undefined>;
 }
 
 export interface Mo2Watch {
-  subscribe(listener: () => void): Subscription;
-  /** Watches `base` under `glob` for `what` in place of the folder it followed before; undefined
-   *  follows none. A watch newly armed signals once, for a change it missed while arming. */
-  follow(what: FollowedFolder, base: string | undefined, glob: string): void;
+  subscribe(listener: ChangeListener): Subscription;
+  /** Watches each of `bases` under `glob` for `what`, in place of the folders it followed before. A watch newly armed has
+   *  the disk checked once, for a change it missed while arming. */
+  follow(what: FollowedFolder, bases: readonly string[], glob: string): void;
   watchNotes(): string[];
 }
 
 export function mo2Watch(instanceRoot: string, gameFolderChanged: (listener: () => void) => Subscription): Mo2Watch {
-  const listeners = new Set<() => void>();
+  const listeners = new Set<ChangeListener>();
   const followed = new Map<FollowedFolder, Followed>();
   let fixed: Subscription[] = [];
   // Kept across a disarm: a folder VS Code's watcher missed, it still misses once armed again.
   const held = new Map<string, HeldFolderWatch | undefined>();
+  const sources = sourceRootDir(instanceRoot);
 
-  const changed = (): void => {
-    for (const listener of [...listeners]) listener();
+  const changed: ChangeListener = (path) => {
+    for (const listener of [...listeners]) listener(path);
   };
+  const checkDue = (): void => { changed(undefined); };
   const onSourceChange = (path: string): void => {
-    if (isRepositoryChange(path)) changed();
+    if (isRepositoryChange(path)) changed(path);
   };
-  const onChangeFor = (glob: string): ((path: string) => void) => (glob === SOURCE_GLOB ? onSourceChange : changed);
+  const onChangeFor = (base: string): ((path: string) => void) => (base === sources ? onSourceChange : changed);
   const heldKey = (base: string, glob: string): string => `${base}\0${glob}`;
   const heldFor = (base: string, glob: string): HeldFolderWatch | undefined => {
     const key = heldKey(base, glob);
-    if (!held.has(key)) held.set(key, heldFolderWatchFor(glob, { onChange: onChangeFor(glob), holds: isRepositoryChange, onFailure: changed }));
+    if (!held.has(key)) held.set(key, heldFolderWatchFor(glob, { onChange: onChangeFor(base), holds: isRepositoryChange, onFailure: checkDue }));
     return held.get(key);
   };
-  const watch = (base: string, glob: string): Subscription => watchFiles(base, glob, onChangeFor(glob), heldFor(base, glob));
+  const watch = (base: string, glob: string): Subscription => watchFiles(base, glob, onChangeFor(base), heldFor(base, glob));
   const armed = (): boolean => listeners.size > 0;
+  const rearmed = ({ glob, watches }: Followed, arming: (base: string) => Subscription | undefined): Followed => {
+    for (const watching of watches.values()) watching?.dispose();
+    return { glob, watches: new Map([...watches.keys()].map((base) => [base, arming(base)])) };
+  };
 
   const arm = (): void => {
-    fixed = [MODS_GLOB, OVERWRITE_GLOB, SOURCE_GLOB, MODLIST_GLOB, PLUGINS_GLOB, PROFILE_INIS_GLOB, SETTINGS_WATCH_GLOB, SORTING_RULE_FILES_GLOB, REPOSITORY_WATCH_GLOB, REPOSITORY_SET_UP_WATCH_GLOB, HELD_BY_GIT_WATCH_GLOB]
-      .map((glob) => watch(instanceRoot, glob));
-    fixed.push(gameFolderChanged(changed));
-    for (const folder of followed.values()) folder.watch = watch(folder.base, folder.glob);
+    fixed = instanceWatches(instanceRoot).map(({ base, pattern }) => watch(base, pattern));
+    fixed.push(gameFolderChanged(checkDue));
+    for (const [what, folders] of followed) followed.set(what, rearmed(folders, (base) => watch(base, folders.glob)));
   };
   const disarm = (): void => {
     for (const subscription of fixed) subscription.dispose();
     fixed = [];
-    for (const folder of followed.values()) {
-      folder.watch?.dispose();
-      folder.watch = undefined;
-    }
+    for (const [what, folders] of followed) followed.set(what, rearmed(folders, () => undefined));
   };
 
   return {
@@ -84,21 +83,23 @@ export function mo2Watch(instanceRoot: string, gameFolderChanged: (listener: () 
       };
     },
 
-    follow(what, base, glob) {
-      const current = followed.get(what);
-      if (current?.base === base) return;
-      current?.watch?.dispose();
-      if (current) held.delete(heldKey(current.base, current.glob));
-      if (base === undefined) {
-        followed.delete(what);
-        return;
+    // A read that follows a folder trusts what it keeps; what the watch arms, and the listeners it calls, never do (ADR-0015).
+    follow: (what, bases, glob) => outsideTrustedRead(() => {
+      const before: Followed = followed.get(what) ?? { glob, watches: new Map<string, Subscription | undefined>() };
+      const kept = new Set(before.glob === glob ? bases : []);
+      const watches = new Map<string, Subscription | undefined>();
+      for (const [base, watching] of before.watches) {
+        if (kept.has(base)) watches.set(base, watching);
+        else {
+          watching?.dispose();
+          held.delete(heldKey(base, before.glob));
+        }
       }
-      const next: Followed = { base, glob };
-      followed.set(what, next);
-      if (!armed()) return;
-      next.watch = watch(base, glob);
-      changed();
-    },
+      const added = bases.filter((base) => !watches.has(base));
+      for (const base of added) watches.set(base, armed() ? watch(base, glob) : undefined);
+      followed.set(what, { glob, watches });
+      if (added.length > 0 && armed()) checkDue();
+    }),
 
     watchNotes: () => [...new Set([...held.values()].flatMap((folders) => folders?.failures() ?? []))]
       .map((reason) => `Modbench hears no change inside a folder whose watch failed: ${reason}`),

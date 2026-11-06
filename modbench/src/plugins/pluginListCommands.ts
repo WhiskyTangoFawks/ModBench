@@ -9,7 +9,7 @@ import {
 import type { RowOf } from '../drivingLib/gestureEntry';
 import { viewCopyValueText } from '../drivingLib/copyValue';
 import { placeFolder, pluginPlaces } from './pluginPlaces';
-import { OVERWRITE_ORIGIN, type PluginAddress } from '../wire/pluginAddress';
+import { OVERWRITE_ORIGIN, type PluginAddress, type PluginPlace } from '../wire/pluginAddress';
 import { OVERWRITE_LABEL } from '../instanceLoader/fileConflictIndex';
 import { argumentOfKind, registerAgentGesture, type AgentCall, type AgentGesture } from '../drivingLib/agentGesture';
 import { runWritingGesture } from '../drivingLib/writingGesture';
@@ -20,6 +20,7 @@ import { creatablePluginExtensionsOf } from './creatablePluginExtensions';
 import { pluginNameRefusal } from '../pluginCommands/pluginName';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
+import { answerOf } from '../wire/readFailed';
 import { recordLabel } from '../wire/recordLabel';
 
 // The row's own reveal-in-Explorer gesture — an instance-scoped fact (which plugin
@@ -87,20 +88,46 @@ function lostPlace(origin: string, lost: 'gone' | 'disabled' | 'unread'): string
 
 interface NewPlugin {
   readonly plugin: PluginAddress;
+  readonly flags?: readonly string[];
   readonly label: string;
   readonly folder: string;
   readonly sourceFolder?: string;
 }
 
-function placed(value: Pick<InstanceValue, 'mods' | 'paths' | 'entryKey'>, name: string, { origin, label }: { origin: string; label: string }): NewPlugin | string {
-  const where = placeFolder(value, origin);
-  if ('lost' in where) return `${lostPlace(origin, where.lost)}, so "${name}" was not created.`;
-  const { folder, sourceFolder } = where;
+function newPlugin(name: string, { origin, label }: { origin: string; label: string }, { folder, sourceFolder }: PluginPlace): NewPlugin {
   return { plugin: { name, origin }, label, folder, ...(sourceFolder == null ? {} : { sourceFolder }) };
+}
+
+function placed(value: Pick<InstanceValue, 'mods' | 'paths' | 'entryKey'>, name: string, at: { origin: string; label: string }): NewPlugin | string {
+  const where = placeFolder(value, at.origin);
+  return 'lost' in where ? `${lostPlace(at.origin, where.lost)}, so "${name}" was not created.` : newPlugin(name, at, where);
+}
+
+const FLAG_LABELS: Readonly<Record<string, string>> = { Master: 'ESM', Small: 'Light', Medium: 'Medium' };
+
+const flagsLabel = (combination: readonly string[]): string =>
+  combination.length === 0 ? 'No flags' : combination.map((flag) => FLAG_LABELS[flag] ?? flag).join(', ');
+
+async function pickFlags(
+  client: Pick<MEditClient, 'getCreatablePluginFlags'>, reporter: Reporter, name: string,
+): Promise<readonly string[] | undefined> {
+  let choices;
+  try {
+    choices = answerOf(await client.getCreatablePluginFlags(name));
+  } catch (error) {
+    reporter.report('error', `Could not look up which header flags "${name}" may take.`, errorMessage(error));
+    return undefined;
+  }
+  const [only, ...more] = choices;
+  if (only !== undefined && more.length === 0) return only;
+  const picked = await vscode.window.showQuickPick(
+    choices.map((flags) => ({ label: flagsLabel(flags), flags })), { placeHolder: 'Which header flags should the new plugin have?' });
+  return picked?.flags;
 }
 
 interface CreateOptions {
   readonly name: string;
+  readonly flags?: readonly string[];
 }
 
 function placeOf(call: AgentCall<CreateOptions>): { origin: string; label: string } {
@@ -114,7 +141,7 @@ function placeOf(call: AgentCall<CreateOptions>): { origin: string; label: strin
 // create-plugin: the file is the whole gesture. Its plugins.txt line is plugin sync's, once the
 // watch sees the file, so nothing here writes that line.
 export function registerCreatePluginCommand(
-  client: Pick<MEditClient, 'createPlugin' | 'getCreatablePluginExtensions'>,
+  client: Pick<MEditClient, 'createPlugin' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags'>,
   instance: Pick<Instance, 'value' | 'refresh'>,
   reporter: Reporter,
 ): vscode.Disposable {
@@ -137,24 +164,25 @@ export function registerCreatePluginCommand(
         reporter.report('error', made);
         return undefined;
       }
-      return made;
+      const flags = await pickFlags(client, reporter, name);
+      return flags === undefined ? undefined : { ...made, flags };
     },
     fromAgent: (call) => {
       const { name } = call.options;
       const { origin, label } = placeOf(call);
-      if (pluginPlaces(instance.value, name).every((place) => place.name !== origin)) {
-        if (origin === OVERWRITE_ORIGIN) {
-          const unread = placed(instance.value, name, { origin, label });
-          if (typeof unread === 'string') throw new Refusal(unread);
-        }
-        throw new Refusal(`"${label}" is not an enabled mod or Overwrite that lacks "${name}".`);
+      const where = placeFolder(instance.value, origin);
+      if ('lost' in where) {
+        throw new Refusal(where.lost === 'disabled'
+          ? `"${label}" is not enabled, so "${name}" was not created.`
+          : `${lostPlace(origin, where.lost)}, so "${name}" was not created.`);
       }
-      const made = placed(instance.value, name, { origin, label });
-      if (typeof made === 'string') throw new Refusal(made);
-      return made;
+      if (pluginPlaces(instance.value, name).every((place) => place.name !== where.name)) {
+        throw new Refusal(`"${label}" already holds "${name}".`);
+      }
+      return { ...newPlugin(name, { origin: where.name, label: placeLabel(where.name) }, where), flags: call.options.flags };
     },
-    run: ({ plugin, folder, sourceFolder }) => runWritingGesture(PLUGINS_KEY_ARGS.view, instance, async () => {
-      const result = await client.createPlugin(plugin, folder, sourceFolder);
+    run: ({ plugin, folder, sourceFolder, flags }) => runWritingGesture('modbench.plugin.create', PLUGINS_KEY_ARGS.view, instance, async () => {
+      const result = await client.createPlugin(plugin, folder, sourceFolder, flags);
       return isRefused(result)
         ? { applied: false, refusal: result.message }
         : { applied: true, outcome: { landed: [{ name: result.name, origin: plugin.origin }], refused: [] } };

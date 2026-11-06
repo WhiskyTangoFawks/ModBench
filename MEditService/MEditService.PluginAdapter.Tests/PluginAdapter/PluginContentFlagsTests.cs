@@ -4,6 +4,7 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Starfield;
+using Mutagen.Bethesda.Strings;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
@@ -37,7 +38,7 @@ public sealed class PluginContentFlagsTests
     [InlineData("Plain.esp", false, false)]
     [InlineData("Plain.esm", false, true)]
     [InlineData("Flagged.esp", true, true)]
-    public void ReadContent_IsMaster_IsTheHeaderFlagOrTheEsmExtension(string fileName, bool flagged, bool expected)
+    public void ReadContent_IsMaster_IsTheHeaderFlagOrAMasterExtension(string fileName, bool flagged, bool expected)
     {
         var content = ReadFallout4(fileName, mod => mod.IsMaster = flagged);
 
@@ -53,6 +54,50 @@ public sealed class PluginContentFlagsTests
         var content = ReadFallout4(fileName, mod => mod.IsSmallMaster = flagged);
 
         Assert.Equal(expected, content.IsLight);
+    }
+
+    [Fact]
+    public void ReadContent_Description_IsTheHeadersDescription()
+    {
+        var content = ReadFallout4("Described.esp", mod => mod.ModHeader.Description = "Patch v2.0.5");
+
+        Assert.Equal("Patch v2.0.5", content.Description);
+    }
+
+    [Fact]
+    public void ReadContent_Description_IsDecodedInTheLoadOrdersStringsLanguage()
+    {
+        const string placeholder = "AAAAAAAAAAAA";
+        var cyrillic = System.Text.Encoding.UTF8.GetBytes("\u041f\u0440\u0438\u0432\u0435\u0442");
+        using var scratch = new ScratchDirectory("content-description-");
+        var path = Path.Combine(scratch, "Described.esp");
+        var mod = new Fallout4Mod(ModKey.FromFileName("Described.esp"), Fallout4Release.Fallout4);
+        mod.ModHeader.Description = placeholder;
+        mod.WriteToBinary(path);
+        var bytes = File.ReadAllBytes(path);
+        var at = bytes.AsSpan().IndexOf(System.Text.Encoding.ASCII.GetBytes(placeholder));
+        cyrillic.CopyTo(bytes, at);
+        File.WriteAllBytes(path, bytes);
+
+        string? ReadIn(Language language) =>
+            Adapter.ReadContent(new ModPath(mod.ModKey, path), EmptyLoadOrder.Of(GameRelease.Fallout4, language), PluginStrings.None).Answered().Content.Description;
+
+        Assert.Equal("\u041f\u0440\u0438\u0432\u0435\u0442", ReadIn(Language.Russian));
+        Assert.NotEqual(ReadIn(Language.Russian), ReadIn(Language.English));
+    }
+
+    [Fact]
+    public void ReadContent_Description_IsNullForAHeaderWithNone()
+    {
+        Assert.Null(ReadFallout4("Plain.esp", _ => { }).Description);
+    }
+
+    [Fact]
+    public void ReadContent_Description_IsReadForStarfieldToo()
+    {
+        var content = ReadStarfield("Described.esp", mod => mod.ModHeader.Description = "Patch v2.0.5");
+
+        Assert.Equal("Patch v2.0.5", content.Description);
     }
 
     [Fact]

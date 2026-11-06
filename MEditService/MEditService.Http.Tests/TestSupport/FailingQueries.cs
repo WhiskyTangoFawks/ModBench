@@ -30,6 +30,7 @@ internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null)
     public Answer<IReadOnlyList<RecordTypeChoice>, IndexRefused> GetCreatableRecordTypes() => throw Failed();
 
     public Answer<IReadOnlyList<string>, IndexRefused> GetCreatablePluginExtensions() => throw Failed();
+    public Answer<IReadOnlyList<IReadOnlyList<string>>, IndexRefused> GetCreatablePluginFlags(string name) => throw Failed();
 
     public Answer<IReadOnlyList<RecordTypeChoice>?, IndexRefused> GetChildRecordTypes(PluginAddress plugin, string formKey) => throw Failed();
 

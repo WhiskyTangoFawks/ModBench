@@ -55,7 +55,7 @@ export interface PluginsKeyContext {
   readonly allInSourceMod: boolean;
   readonly allMalformedInAMod: boolean;
   readonly singleCreatable: boolean;
-  readonly singleCompiledPlugin: boolean;
+  readonly singlePluginInMod: boolean;
   readonly singleSuggestedMove: boolean;
   readonly allDeletableRecords: boolean;
   readonly allRecords: boolean;
@@ -69,6 +69,7 @@ export function pluginsKeyContext(
   const plugins = selection.filter(isOf(['plugin']));
   const [firstPlugin] = plugins;
   const creatableCandidate = onlySelected(selection, ...CREATE_ROW_KINDS);
+  const onlyPlugin = onlySelected(selection, 'plugin');
   return {
     singlePlugin: onlySelected(selection, ...PLUGIN_ROW_KINDS) !== undefined,
     holdsPluginLine: firstPlugin !== undefined,
@@ -83,8 +84,8 @@ export function pluginsKeyContext(
     singleCreatable: creatableCandidate !== undefined
       && hasFlags(creatableCandidate, 'editable')
       && (creatableCandidate.kind === 'plugin' || hasFlags(creatableCandidate, 'creatable') || isContainerRow(creatableCandidate)),
-    singleCompiledPlugin: hasFlags(onlySelected(selection, 'plugin'), 'compiledPlugin'),
-    singleSuggestedMove: hasFlags(onlySelected(selection, 'plugin'), 'suggestedMove'),
+    singlePluginInMod: hasFlags(onlyPlugin, 'inSourceMod') || hasFlags(onlyPlugin, 'inNonSourceMod'),
+    singleSuggestedMove: hasFlags(onlyPlugin, 'suggestedMove'),
     allDeletableRecords: every(selection, (row) => isOf(RECORD_ROW_KINDS)(row) && hasFlags(row, 'editable')),
     allRecords: every(selection, isOf(RECORD_ROW_KINDS)),
     selectionToggle: firstPlugin && (isEnabled(firstPlugin) ? 'disable' : 'enable'),

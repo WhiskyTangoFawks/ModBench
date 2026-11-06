@@ -1,11 +1,13 @@
 import * as vscode from 'vscode';
 import type { Nexus } from '../nexus/nexus';
 import type { NexusLogin } from '../instanceCommands/nexusLogin';
-import { AgentCall, answeredToAgent } from '../drivingLib/agentGesture';
+import { AgentCall, answeredToAgent, registerWritingCommand } from '../drivingLib/agentGesture';
+import { asViewCall, holdingTheWrite } from '../drivingLib/writingGesture';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 
 const LOGGED_IN_KEY = 'modbench.nexus.loggedIn';
+const PREMIUM_KEY = 'modbench.nexus.premium';
 
 interface NexusCommandDeps {
   commands: NexusLogin;
@@ -22,9 +24,9 @@ function askForKey(commands: NexusLogin, reporter: Reporter): Promise<void> {
   box.onDidAccept(async () => {
     if (box.busy) return;
     box.busy = true;
-    const outcome = await commands.logIn(box.value, closed.signal);
+    const outcome = await asViewCall(() => holdingTheWrite('modbench.instance.logIn', () => commands.logIn(box.value, closed.signal)));
     box.busy = false;
-    if (closed.signal.aborted) return;
+    if (outcome === undefined || closed.signal.aborted) return;
     if (outcome.applied) {
       box.hide();
       return;
@@ -43,6 +45,7 @@ export function registerNexusCommands({ commands, nexus, reporterFor }: NexusCom
   const markLoggedIn = async (): Promise<void> => {
     try {
       await vscode.commands.executeCommand('setContext', LOGGED_IN_KEY, await nexus.loggedIn());
+      await vscode.commands.executeCommand('setContext', PREMIUM_KEY, await nexus.premium());
     } catch (err) {
       reporter.report('error', 'Could not read whether you are logged in to Nexus.', errorMessage(err));
     }
@@ -51,8 +54,8 @@ export function registerNexusCommands({ commands, nexus, reporterFor }: NexusCom
   return [
     nexus.onDidChangeLogin(() => { void markLoggedIn(); }),
     vscode.commands.registerCommand('modbench.instance.logIn', () => askForKey(commands, reporter)),
-    vscode.commands.registerCommand('modbench.instance.logOut', async (called?: unknown) => {
-      const outcome = await commands.logOut();
+    registerWritingCommand('modbench.instance.logOut', async (called?: unknown) => {
+      const outcome = await holdingTheWrite('modbench.instance.logOut', () => commands.logOut());
       if (called instanceof AgentCall) return answeredToAgent(outcome);
       if (!outcome.applied) reporter.report('error', 'Failed to log out of Nexus.', outcome.refusal);
       return undefined;

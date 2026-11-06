@@ -2,9 +2,10 @@ import * as vscode from 'vscode';
 import type { LoadOrderRefusal, MEditClient, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginAddressKey } from '../wire/pluginAddress';
-import { PluginFacts, type PluginProblem, type SourceUnreadableProblem } from './pluginFacts';
+import { PluginFacts, type LootInput, type PluginProblem, type SourceUnreadableProblem } from './pluginFacts';
 import { ruleFileDiagnostics, type RuleFileDiagnostic } from '../sortingRules/ruleFileDiagnostics';
-import type { LootRules } from '../sortingRules/lootJudge';
+import type { FileFacts, FileRead } from '../sortingRules/lootConditions';
+import { readsNamed } from '../sortingRules/lootJudge';
 import type { ReadRules } from '../sortingRules/lootMetadata';
 import { answerOf, ReadFailedError } from '../wire/readFailed';
 
@@ -18,10 +19,14 @@ export interface PluginFactsFeedDeps {
   shownPlugins: () => readonly PluginAddress[];
   /** The plugins the game loads, in load order: the order the sorting rules judge. */
   activePlugins: () => readonly PluginAddress[];
+  /** Whether the game's release loads a blueprint plugin after every plugin that is not one. */
+  blueprintLoadsLast: () => boolean;
   /** Every plugins.txt line, enabled or not, in load order: the order a move is written into. */
   lines: () => readonly PluginAddress[];
   /** LOOT's rules from the instance's sorting rule files, and the files they came from. */
-  rules: () => LootRules & Pick<ReadRules, 'files' | 'problems'>;
+  rules: () => ReadRules;
+  /** What the instance says of the files the reads name: the Data folder, and the Instance adapter's reads. */
+  fileFacts: (reads: readonly FileRead[]) => Promise<FileFacts>;
   /** The malformed-plugin scan's other surface, the Problems panel. */
   publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
   /** The Changed outside Modbench status's other surface, the Problems panel. */
@@ -42,7 +47,7 @@ export interface PluginFactsFeedDeps {
 
 export type PluginRowFacts = Pick<PluginFacts,
   'expansion' | 'indexFailureMessage' | 'heldElsewhereMessage' | 'readFailureMessage' | 'noRecordMatchMessage' | 'hiddenByRecordFilter'
-  | 'mastersOf' | 'shown' | 'icon' | 'description' | 'tooltipLines' | 'contextFlags' | 'conditions' | 'suggestedMoves' | 'suggestedMovesOf'>;
+  | 'mastersOf' | 'isBlueprint' | 'blueprintPlugins' | 'shown' | 'icon' | 'description' | 'tooltipLines' | 'contextFlags' | 'conditions' | 'suggestedMoves' | 'suggestedMovesOf' | 'brokenRules' | 'sortingNotJudged'>;
 
 /** mEdit's answers about each plugin, ordered into the facts the Plugins tree's rows read: the
  *  reconcile narrator's events go in; row queries and one change event come out. Pulled once per
@@ -56,6 +61,8 @@ export class PluginFactsFeed implements vscode.Disposable {
   private generation = 0;
   // `refresh`' own order, apart from `generation` so a fact re-read never discards a hand-off.
   private refreshes = 0;
+  // The order of `rulesChanged`, so only the newest judgement of an order publishes.
+  private rejudgements = 0;
 
   readonly rows: PluginRowFacts = this.facts;
   readonly onDidChange = this.changed.event;
@@ -108,7 +115,10 @@ export class PluginFactsFeed implements vscode.Disposable {
     const plugins = await this.readPlugins();
     if (generation !== this.generation) return undefined;
     if ('failure' in plugins) return this.factsFailed(plugins.failure);
-    this.facts.reconciled(plugins, failures, this.deps.activePlugins(), this.deps.lines(), this.deps.rules());
+    const active = this.deps.activePlugins();
+    const loot = await this.lootRules(active);
+    if (generation !== this.generation) return undefined;
+    this.facts.reconciled(plugins, failures, active, this.deps.lines(), loot, this.deps.blueprintLoadsLast());
     this.deps.publishFailedToRead(this.facts.problems().failedToRead);
     this.publishSorting();
     this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);
@@ -129,9 +139,23 @@ export class PluginFactsFeed implements vscode.Disposable {
     this.deps.publishRuleFiles(ruleFileDiagnostics(files, problems, this.facts.brokenRules()));
   }
 
+  // Read again while the rules change under the reads, so a judgement never holds rules other than the ones standing.
+  private async lootRules(active: readonly PluginAddress[]): Promise<LootInput> {
+    for (;;) {
+      const read = this.deps.rules();
+      const files = await this.deps.fileFacts(readsNamed(active.map(({ name, origin }) => ({ origin, filename: name })), read.entries));
+      if (read === this.deps.rules()) return { entries: read.entries, groups: read.groups, files };
+    }
+  }
+
   /** LOOT's rules changed: the order the last reconcile judged is judged again. Before that reconcile there is nothing to judge. */
-  rulesChanged(): void {
-    if (!this.facts.rejudged(this.deps.rules())) return;
+  async rulesChanged(): Promise<void> {
+    const judged = this.facts.judgedOrder();
+    if (judged === undefined) return;
+    const rejudgement = ++this.rejudgements;
+    const loot = await this.lootRules(judged);
+    if (rejudgement !== this.rejudgements || judged !== this.facts.judgedOrder()) return;
+    this.facts.rejudged(loot);
     this.publishSorting();
     this.changed.fire();
   }

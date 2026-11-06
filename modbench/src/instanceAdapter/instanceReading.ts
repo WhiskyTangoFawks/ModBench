@@ -3,9 +3,9 @@
 
 import { firstLines } from '../loadOrderFileCodec/firstLines';
 import { pluginKey, PLUGINS_FILE_NAME } from '../loadOrderFileCodec/pluginsText';
-import { ignoreSkippedLink, type SkippedLink } from './files';
+import { ignoreSkippedLink, readTrustingKept, type SkippedLink } from './files';
 import {
-  filesWinningFirst, type DataFolderArchives, type DataFolderPlugins, type DownloadedFiles, type EntryRef, type FileOrigin, type GameFolder,
+  CHECK_THE_DISK, filesWinningFirst, type Reread, type DataFolderArchives, type DataFolderFiles, type DataFolderPlugins, type DownloadedFiles, type EntryRef, type FileOrigin, type GameFolder,
   type ManagerNames, type ManagerRunning, type ModFolders, type ModMeta, type ModlistEntry, type OriginFiles, type PluginEntry, type PluginsProvided,
   type SortingRuleFiles,
 } from './instanceAdapter';
@@ -49,6 +49,7 @@ export interface ReadingSource extends ArchiveReads {
   modMeta(mod: string, folders: ModFolders | undefined | 'list'): Promise<ModMeta>;
   pluginOrder(profile: string): Promise<PluginEntry[]>;
   gameFolderPlugins(gameFolder: GameFolder, ignoredLink: IgnoredLink): Promise<DataFolderPlugins>;
+  gameFolderFiles(gameFolder: GameFolder, ignoredLink: IgnoredLink): Promise<DataFolderFiles>;
   /** The plugins the game folder's Creation Club list names, in its order; none when the release
    *  has no Creation Club, the game folder is not found, or it holds no list. */
   creationClubList(gameFolder: GameFolder, gameRelease: string | undefined): Promise<string[]>;
@@ -59,7 +60,7 @@ export interface ReadingSource extends ArchiveReads {
   originFiles(origin: FileOrigin, folders: ModFolders | undefined | 'list'): Promise<OriginFiles>;
   /** The files at an origin's root, as `originFiles` lists them. */
   originRootFiles(origin: FileOrigin, folders: ModFolders | undefined | 'list'): Promise<OriginFiles>;
-  sourceRepositories(): Promise<ReadonlyMap<string, string>>;
+  sourceModFolders(): Promise<ReadonlyMap<string, string>>;
   sortingRuleFiles(): Promise<SortingRuleFiles>;
   holdsRepository(): Promise<boolean>;
   repositorySetUp(): Promise<boolean>;
@@ -104,7 +105,12 @@ async function folderMetaOf(
 
 /** The instance whole, every fact against the one read of the settings, so a profile switch
  *  mid-read cannot mix one profile's mod order with another's plugin order. */
-export async function readInstance(source: ReadingSource): Promise<ManagerReading> {
+export async function readInstance(source: ReadingSource, { named, disk }: Reread = CHECK_THE_DISK): Promise<ManagerReading> {
+  const { answer, unheard } = await readTrustingKept(named, disk, () => readWhole(source));
+  return { ...answer, unheardChanges: unheard };
+}
+
+async function readWhole(source: ReadingSource): Promise<Omit<ManagerReading, 'unheardChanges'>> {
   const settings = await source.settings();
   const { profile, gameName, gameRelease } = settings;
   const skippedLinks = new Map<string, string>();
@@ -116,7 +122,7 @@ export async function readInstance(source: ReadingSource): Promise<ManagerReadin
     withNotes(listed, source.modLineKey, ({ kind, name }) => `${source.names.modOrderFile} lists the ${kind} ${name}`));
   const modsKept = modsRead.then(({ kept }) => kept);
   const downloadedFilesRead = settings.downloadedFiles(skipLink);
-  const [mods, pluginsListed, downloadedFiles, game, profiles, modFolders, runtimeOutput, sourceRepositories, sortingRuleFiles, modFiles, folderMeta, holdsRepository, repositorySetUp, managerRunning] = await Promise.all([
+  const [mods, pluginsListed, downloadedFiles, game, profiles, modFolders, runtimeOutput, sourceModFolders, sortingRuleFiles, modFiles, folderMeta, holdsRepository, repositorySetUp, managerRunning] = await Promise.all([
     modsRead,
     source.pluginOrder(profile),
     downloadedFilesRead,
@@ -127,11 +133,12 @@ export async function readInstance(source: ReadingSource): Promise<ManagerReadin
       creationClubList: await source.creationClubList(gameFolder, gameRelease),
       archiveList: await source.archiveList(profile, gameFolder, gameRelease, ignoreGameLink),
       dataFolderArchives: await source.gameFolderArchives(gameFolder, gameRelease, ignoreGameLink),
+      dataFolderFiles: await source.gameFolderFiles(gameFolder, ignoreGameLink),
     })),
     source.profiles(skipLink),
     modFoldersRead,
     source.originFiles({ kind: 'runtimeOutput' }, 'list'),
-    source.sourceRepositories(),
+    source.sourceModFolders(),
     source.sortingRuleFiles(),
     Promise.all([modsKept, modFoldersRead]).then(async ([entries, folders]) => new Map(await Promise.all(entries.filter((entry) => entry.kind === 'mod')
       .map(async ({ name }) => [name, await source.originFiles({ kind: 'mod', name }, folders)] as const)))),
@@ -147,7 +154,7 @@ export async function readInstance(source: ReadingSource): Promise<ManagerReadin
     profile, gameName, gameRelease, mods: mods.kept, modGroups: groupModOrder(mods.kept), pluginOrder: pluginOrder.kept, orderNotes: [...mods.notes, ...pluginOrder.notes], downloadedFiles, ...gameFacts,
     archiveList: archiveList.archives, archiveListNotes: archiveList.notes, dataFolderArchives,
     profiles, modFolders, runtimeOutput, modFiles, folderMeta,
-    sourceRepositories, sortingRuleFiles, holdsRepository, repositorySetUp, watchNotes: source.watchNotes(), managerRunning,
+    sourceModFolders, sortingRuleFiles, holdsRepository, repositorySetUp, watchNotes: source.watchNotes(), managerRunning,
     gameFolderLinks: gameFolderLinks.size,
     linkNotes: [...skippedLinks].map(([linkPath, reason]) => `${linkPath} is a link Modbench cannot follow, so it is not read: ${reason}`),
   };

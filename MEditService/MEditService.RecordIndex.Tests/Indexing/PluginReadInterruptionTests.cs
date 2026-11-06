@@ -66,7 +66,7 @@ public class PluginReadInterruptionTests
     [Fact]
     public void ANewerSnapshotWhileItReadsAPlugin_LetsThatReadFinish()
     {
-        using var fixture = LongPlugin("read-superseded");
+        using var fixture = LongPlugin("read-newer-snapshot");
         var holder = new LoadOrderHolder();
         var reads = 0;
         var aNewerSnapshotOnTheFirstRead = Faults.InTurn(() => holder.Apply(holder.Current));

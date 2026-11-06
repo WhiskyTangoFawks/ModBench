@@ -33,7 +33,9 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
 
     public virtual string? HashOf(string pluginPath) => inner.HashOf(pluginPath);
 
-    public virtual void KeepHashesOf(IReadOnlySet<string> pluginPaths) => inner.KeepHashesOf(pluginPaths);
+    public virtual PathAnswer Touching(LoadOrderSnapshot loadOrder, string path) => inner.Touching(loadOrder, path);
+
+    public virtual void KeepStateOf(IReadOnlySet<string> pluginPaths) => inner.KeepStateOf(pluginPaths);
 
     public virtual Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath, GameRelease gameRelease) => inner.ClaimOf(pluginPath, gameRelease);
 
@@ -81,8 +83,9 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
         string originalPath, string recompiledPath, LoadOrderSnapshot loadOrder, CancellationToken cancel = default) =>
         inner.CompareBytesAsync(originalPath, recompiledPath, loadOrder, cancel);
 
-    public virtual Task<Answer<EmptyPluginCreated, PluginFailure>> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease) =>
-        inner.CreateAndWriteAsync(modKey, folder, gameRelease);
+    public virtual Task<Answer<EmptyPluginCreated, PluginFailure>> CreateAndWriteAsync(
+        ModKey modKey, string folder, GameRelease gameRelease, IReadOnlyCollection<HeaderFlag> flags) =>
+        inner.CreateAndWriteAsync(modKey, folder, gameRelease, flags);
 
     public virtual string PathOfEmpty(ModKey modKey, string folder) => inner.PathOfEmpty(modKey, folder);
 

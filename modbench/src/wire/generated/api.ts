@@ -28,9 +28,26 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description Reconciles the load order against this snapshot (ADR-0013): every plugin file in the instance, each with its origin, path, provider, strings files and archives, the active plugins in load order, the plugins loaded with no line, the archives the game loads, the loose strings files it reads and the language a translated text shows in, as Mod Management decided them. Every archive and strings file carries its stamp. Plugins new to the snapshot are opened and registered (indexed only if never seen), plugins absent from it are unregistered, plugins whose load index moved are re-registered SQL-only; then one winner sweep. Answers as soon as the snapshot is applied; the sweep runs after, reported on GET /load-order/status and the load-order-status notification. */
+        /** @description Reconciles the load order against this snapshot (ADR-0013): every plugin file in the instance, each with its origin, path, provider, strings files and archives, the active plugins in load order, the plugins loaded with no line, the archives the game loads, the loose strings files it reads and the language a translated text shows in, as Mod Management decided them. Every archive and strings file carries its stamp. Plugins new to the snapshot are opened and registered (indexed only if never seen), plugins absent from it are unregistered, plugins whose load index moved are re-registered SQL-only; then one winner sweep. A file changed on disk is read again at POST /signal-change, never here. Answers as soon as the snapshot is applied; the sweep runs after, reported on GET /load-order/status and the load-order-status notification. */
         put: operations["PutLoadOrder"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/signal-change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Says that the disk changed at the paths named, or, naming none, that mEdit is to check it (ADR-0015). A path that the record index reads for plugins mEdit cannot name, such as a build file or an archive, checks the disk; one it reads nothing of is dropped. Answers once the mods of the plugins whose files are touched, or every mod at a check, are checked for a change made outside Modbench, published as external-change; the record index validates the plugins touched, or every plugin, after, and announces what it re-read. */
+        post: operations["SignalChange"];
         delete?: never;
         options?: never;
         head?: never;
@@ -143,7 +160,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Puts each mod under git (ADR-0007): its source folder, in a repository of its own or the modlist repository it sits in, holding the plugin source of every plugin it provides, the assets it is handed, read from its folder, and the build file it is handed, committed when asked: in a new repository to main, in the modlist repository only the source folder's paths. A mod lands or is refused whole. Progress is the version-in-git-progress notification. */
+        /** @description Puts each mod under git (ADR-0007): its source folder, in a repository of its own or the instance repository it sits in, holding the plugin source of every plugin it provides, the assets it is handed, read from its folder, and the build file it is handed, committed when asked: in a new repository to main, in the instance repository only the source folder's paths. A mod lands or is refused whole. Progress is the version-in-git-progress notification. */
         post: operations["VersionInGit"];
         delete?: never;
         options?: never;
@@ -294,7 +311,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Whether the record index's rows for the plugin were built from the file now on disk (ADR-0003): AsOnDisk, also when no file claim backs the rows, as for a compiled plugin read from its source; NotYet when the file changed since or the record index holds no rows for it; ReadFailed, with mEdit's reason, when its last read of the plugin failed. */
+        /** @description Whether the record index's rows for the plugin were built from the file now on disk (ADR-0003): AsOnDisk, for a compiled plugin once its source tree is validated after the file last changed, and when no file claim backs the rows; NotYet when the file changed since or the record index holds no rows for it; ReadFailed, with mEdit's reason, when its last read of the plugin failed. */
         get: operations["GetPluginIndexedAsOnDisk"];
         put?: never;
         post?: never;
@@ -420,6 +437,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins/creatable-flags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The header flag combinations a new plugin of the given file name's extension may take. */
+        get: operations["GetCreatablePluginFlags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/create": {
         parameters: {
             query?: never;
@@ -429,7 +463,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes an empty plugin (a header whose flags its extension sets, no records and no masters) into the given folder, in the release of the held load order. Changes nothing else: no init, no load order change and no plugins.txt line. */
+        /** @description Writes an empty plugin (a header flagged as given, no records and no masters) into the given folder, in the release of the held load order. Changes nothing else: no init, no load order change and no plugins.txt line. */
         post: operations["CreatePlugin"];
         delete?: never;
         options?: never;
@@ -1152,12 +1186,14 @@ export interface components {
         CreatePluginInModRequest: {
             origin: string;
             name: string;
+            flags?: string[] | null;
         };
         CreatePluginRequest: {
             origin: string;
             name: string;
             folder: string;
             sourceFolder?: string | null;
+            flags?: string[] | null;
         };
         CreateRecordChanges: {
             formKey: string;
@@ -1277,6 +1313,7 @@ export interface components {
             holdsAlpha: boolean;
             isPlacedRotation: boolean;
             indexWhen?: string[] | null;
+            unheldWhen?: string[] | null;
         };
         FieldValue: {
             metadata: components["schemas"]["FieldMetadata"];
@@ -1345,6 +1382,7 @@ export interface components {
             message?: string | null;
             /** Format: int64 */
             version: number;
+            validating: boolean;
         };
         MadeFile: {
             path: string;
@@ -1497,6 +1535,7 @@ export interface components {
             hasParseFailure: boolean;
             pluginSourceUnreadable?: components["schemas"]["UnreadableSource"] | null;
             laterReadFailure?: components["schemas"]["SourceProblem"][] | null;
+            description?: string | null;
         };
         PluginToRepairRequest: {
             plugin: components["schemas"]["PluginAddress"];
@@ -1676,6 +1715,9 @@ export interface components {
             applied: components["schemas"]["PluginFileFlagsSet"][];
             refused: components["schemas"]["PluginFileFlagRefused"][];
         };
+        SignalChangeRequest: {
+            paths?: string[] | null;
+        };
         SourceFolderRequest: {
             path: string;
             in?: components["schemas"]["SourceModIn"] | null;
@@ -1684,9 +1726,12 @@ export interface components {
             manifestFile?: string | null;
             manifest?: string | null;
             ignored?: string[] | null;
+            modFolderManifestFile?: string | null;
+            modFolderManifest?: string | null;
+            modFolderManifestInInit?: boolean | null;
         };
         /** @enum {string} */
-        SourceModIn: "NewRepository" | "ModlistRepository";
+        SourceModIn: "NewRepository" | "InstanceRepository";
         SourceMove: {
             from: string;
             to: string;
@@ -1854,6 +1899,28 @@ export interface operations {
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
+            };
+        };
+    };
+    SignalChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SignalChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -2830,6 +2897,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": string[];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetCreatablePluginFlags: {
+        parameters: {
+            query: {
+                name: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Service Unavailable */

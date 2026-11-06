@@ -7,11 +7,14 @@ import { constants, createWriteStream, type Dirent } from 'node:fs';
 import {
   access, appendFile, chmod, cp, mkdir, mkdtemp, readFile, readdir, realpath, rename as fsRename, rm, rmdir, stat, writeFile,
 } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { dirname, join, sep } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
-import type { FileRead, FileStamp } from './instanceAdapter';
+import type { FileRead } from './instanceAdapter';
+import { keptByStamp, sameStamp, stampFrom, type FileStamp, type Kept } from '../repositoriesLib/stampedReads';
+import { isOwnTemp, ownTempPrefix, renameOver, tempOwner } from '../repositoriesLib/wholeWrites';
 import { digestOf } from './fileContents/contentDigest';
 import type { MoveToTrash } from '../ports/trash';
 
@@ -22,19 +25,6 @@ export function isRepository(sourceFolder: string): Promise<boolean> {
 
 /** The git directory, whose presence makes a folder a repository. */
 export const GIT_DIR = '.git';
-
-const TEMP_PREFIX = '.medit_tmp_';
-
-/** Whether `name` is a temp that Modbench or mEdit left in an instance folder: never a mod's file. */
-export const isOwnTemp = (name: string): boolean => name.startsWith(TEMP_PREFIX);
-
-// The prefix of a temp this process names, `.medit_tmp_<pid>_`: the process id lets any writer tell a leftover from a live temp.
-export const ownTempPrefix = (folder: string, kind: string): string => join(folder, `${TEMP_PREFIX}${process.pid}_${kind}`);
-
-function tempOwner(tempName: string): number | undefined {
-  const id = Number(tempName.slice(TEMP_PREFIX.length).split('_')[0] || Number.NaN);
-  return Number.isInteger(id) && id > 0 ? id : undefined;
-}
 
 function tempWritePath(path: string): string {
   return `${ownTempPrefix(dirname(path), '')}${randomBytes(6).toString('hex')}.tmp`;
@@ -122,8 +112,7 @@ export async function factsOf(path: string): Promise<PathFacts> {
 
 /** `path`'s stamp, following symlinks. */
 export async function stampOf(path: string): Promise<FileStamp> {
-  const info = await stat(path, { bigint: true });
-  return { size: info.size, modifiedNs: info.mtimeNs, changedNs: info.ctimeNs };
+  return stampFrom(await stat(path, { bigint: true }));
 }
 
 /** `path`'s device and inode, which name its file whatever the path's spelling; undefined where nothing is, and
@@ -219,7 +208,7 @@ async function writeAtomic(path: string, text: string): Promise<void> {
   try {
     await writeFile(tmp, text);
     if (mode !== undefined) await chmod(tmp, mode);
-    await fsRename(tmp, target);
+    await renameOver(fsRename, tmp, target);
   } catch (err) {
     await rm(tmp, { force: true });
     throw reportedAsTarget(err, tmp, target);
@@ -234,7 +223,7 @@ export async function putStreamedIf(path: string, bytes: AsyncIterable<Uint8Arra
   try {
     await pipeline(bytes, createWriteStream(tmp, { flags: 'wx' }));
     if (!(await keep(tmp))) return false;
-    await fsRename(tmp, path);
+    await renameOver(fsRename, tmp, path);
     return true;
   } finally {
     await rm(tmp, { force: true });
@@ -253,7 +242,7 @@ export async function writeTrashing(path: string, text: string, trash: MoveToTra
   try {
     await writeFile(tmp, text);
     if (await exists(path)) await trash(path);
-    await fsRename(tmp, path);
+    await renameOver(fsRename, tmp, path);
   } finally {
     await rm(tmp, { force: true });
   }
@@ -284,10 +273,69 @@ export function makeDir(path: string): Promise<void> {
   return mkdir(path).then(() => undefined);
 }
 
+// Windows names a file whatever the case of its path, and VS Code's watcher spells a drive in lower case.
+const pathKey = (path: string): string => (process.platform === 'win32' ? path.toLowerCase() : path);
+
+const everyKept: Map<string, Kept<unknown>>[] = [];
+const trusting = new AsyncLocalStorage<true>();
+
+// The stamp is the fact every write changes that ADR-0003 validates by.
+function stampKept<T>(read: (path: string) => Promise<T>, kept = new Map<string, Kept<T>>()): (path: string) => Promise<T> {
+  everyKept.push(kept);
+  return keptByStamp(stampOf, read, { kept, trusts: () => trusting.getStore() === true, keyOf: pathKey });
+}
+
 /** `path`'s directory entries; the caller's own filter picks the ones it wants. */
 export function listDir(path: string): Promise<Dirent[]> {
   return readdir(path, { withFileTypes: true });
 }
+
+const listings = new Map<string, Kept<Dirent[]>>();
+
+/** As `listDir`, for a folder of the instance or the game, which is not listed again while its stamp has not changed. */
+export const listDirByStamp = stampKept(listDir, listings);
+
+function touchedBy(named: readonly string[]): (key: string) => boolean {
+  const keys = new Set(named.flatMap((path) => [pathKey(path), pathKey(dirname(path))]));
+  const below = named.map(pathKey).filter((key) => listings.has(key)).map((key) => key + sep);
+  return (key) => keys.has(key) || below.some((folder) => key.startsWith(folder));
+}
+
+const stampStill = async ({ path, stamp }: Kept<unknown>): Promise<boolean> => {
+  try {
+    return sameStamp(await stampOf(path), stamp);
+  } catch {
+    return false;
+  }
+};
+
+async function forgetChanged(checked: (key: string) => boolean): Promise<string[]> {
+  const picked = everyKept.flatMap((kept) => [...kept].filter(([key]) => checked(key)).map(([key, held]) => ({ kept, key, held })));
+  const changed = await Promise.all(picked.map(async ({ kept, key, held }) => {
+    if (await stampStill(held)) return [];
+    if (kept.get(key) === held) kept.delete(key);
+    return [held.path];
+  }));
+  return [...new Set(changed.flat())];
+}
+
+/** Runs `read` trusting what is kept, once each kept path `named` touches, or every one when `disk`, is forgotten where its
+ *  stamp changed. Answers each changed path `named` does not touch. Any other read checks each stamp. */
+export async function readTrustingKept<T>(named: readonly string[], disk: boolean, read: () => Promise<T>): Promise<{ answer: T; unheard: string[] }> {
+  const touched = touchedBy(named);
+  const changed = await forgetChanged(disk ? () => true : touched);
+  return { answer: await trusting.run(true, read), unheard: changed.filter((path) => !touched(pathKey(path))) };
+}
+
+/** Runs `arm` outside any read that trusts what is kept, so a timer, watch or listener it arms reads as any other caller. */
+export const outsideTrustedRead = <T>(arm: () => T): T => trusting.exit(arm);
+
+/** A reader of the text `parse` makes of a file, which reads and parses it again only when the file's stamp has changed. */
+export const parsedBy = <T>(parse: (text: string) => T): ((path: string) => Promise<T>) =>
+  stampKept(async (path) => parse(await readText(path)));
+
+/** As `parsedBy`, for the text itself. */
+export const textByStamp = parsedBy((text: string) => text);
 
 /** Hands over a link that cannot be followed, by its path, with why. */
 export type SkippedLink = (linkPath: string, reason: string) => void;

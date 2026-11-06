@@ -7,7 +7,7 @@ const execFileAsync = promisify(execFile);
 const OPTIONS = { encoding: 'utf8', maxBuffer: 1 << 28 } as const;
 
 type Git = (folder: string, ...args: string[]) => Promise<string>;
-type GitFed = (folder: string, input: string, ...args: string[]) => Promise<string>;
+type GitFed = (folder: string, input: string | Buffer, ...args: string[]) => Promise<string>;
 
 function gitWith(env: NodeJS.ProcessEnv | undefined): { git: Git; gitFed: GitFed } {
   const options = env === undefined ? OPTIONS : { ...OPTIONS, env };
@@ -15,6 +15,8 @@ function gitWith(env: NodeJS.ProcessEnv | undefined): { git: Git; gitFed: GitFed
     git: async (folder, ...args) => (await execFileAsync('git', ['-C', folder, ...args], options)).stdout,
     gitFed: async (folder, input, ...args) => {
       const running = execFileAsync('git', ['-C', folder, ...args], options);
+      // git that exits before it reads its input closes the pipe; its exit says why.
+      running.child.stdin?.on('error', () => undefined);
       running.child.stdin?.end(input);
       return (await running).stdout;
     },
@@ -24,5 +26,12 @@ function gitWith(env: NodeJS.ProcessEnv | undefined): { git: Git; gitFed: GitFed
 /** What git answers in `folder`, and what it answers handed `input`. */
 export const { git, gitFed } = gitWith(undefined);
 
+/** git, staging into the index at `index` and not the repository's. */
+export const gitStagingInto = (index: string): { git: Git; gitFed: GitFed } => gitWith({ ...process.env, GIT_INDEX_FILE: index });
+
 /** git, each object it writes kept in `objects` and out of the repository. */
 export const gitWritingInto = (objects: string): { git: Git; gitFed: GitFed } => gitWith({ ...process.env, GIT_OBJECT_DIRECTORY: objects });
+
+/** What git answers in `folder`, byte for byte. */
+export const gitBytes = async (folder: string, ...args: string[]): Promise<Buffer> =>
+  (await execFileAsync('git', ['-C', folder, ...args], { ...OPTIONS, encoding: 'buffer' })).stdout;

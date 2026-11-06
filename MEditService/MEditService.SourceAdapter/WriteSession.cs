@@ -219,7 +219,7 @@ internal sealed class WriteSession : IWriteSession, ISourceFiles
 
     private static string Rebased(string path, string from, string to) => AtOrUnder(path, from) ? to + path[from.Length..] : path;
 
-    private static bool Same(string path, string other) => string.Equals(path, other, SourceRepositoryLocator.PathComparison);
+    private static bool Same(string path, string other) => string.Equals(path, other, FilePaths.Comparison);
 
     private static bool AtOrUnder(string path, string directory) => Same(path, directory) || IsUnder(directory, path);
 

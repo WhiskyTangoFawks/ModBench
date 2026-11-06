@@ -34,7 +34,7 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
             Directory.CreateDirectory(Path.Combine(scratch, "instance")).FullName,
             notifications: notifications);
 
-        var announced = index.AnnouncedByEqualArrivals(notifications, () => Announcements.Touched(partner));
+        var announced = index.AnnouncedByChecks(notifications, () => Announcements.Touched(partner));
 
         Assert.All(announced, n => Assert.True(Announcements.PluginChanged(partner)(n)));
         Assert.Empty(index.Status.Failures);

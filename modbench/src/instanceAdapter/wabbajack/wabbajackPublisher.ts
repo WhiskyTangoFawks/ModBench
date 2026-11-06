@@ -7,9 +7,9 @@ import { applyEdits, parse, parseTree, printParseErrorCode, type Edit, type Node
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { get, listDir, putIfChanged, readOrAbsent } from '../files';
-import type { Covering, Listed, PathRefusal, PublisherConfiguration, PublisherTag, PublisherTagChange, TagPathProblem } from '../instanceAdapter';
+import type { Covering, Listed, PathRefusal, PublisherConfiguration, PublisherTag, PublisherTagChange, TagPathProblem, UnshippableReason } from '../instanceAdapter';
 import type { ConfigurationFile, Publisher } from '../publisher';
-import { sedSubstitution } from '../pathTokens';
+import { sedReplacement, sedSubstitution } from '../pathTokens';
 import { watchFiles } from '../watchFiles';
 
 // Wabbajack's configuration, at the instance root. Wabbajack writes this machine's own paths, or on Wine a Windows
@@ -18,7 +18,13 @@ const COMPILER_SETTINGS: ConfigurationFile = {
   name: 'compiler_settings.json',
   spelling: { separators: [{ first: '\\\\', rest: '\\\\' }], ends: '"', nativeStarts: ['"'] },
   // The compiler's output is chosen at each compile, and Wabbajack's GUI asks for one when it is empty.
-  blanked: { clean: [sedSubstitution(String.raw`\("OutputFile" *: *\)"\(\\.\|[^"\\]\)*"`, '\\1""')], smudge: [] },
+  blanked: (thisMachine) => {
+    const output = /"OutputFile" *: *("(?:\\.|[^"\\])*")/.exec(thisMachine)?.[1];
+    return {
+      clean: [sedSubstitution(String.raw`\("OutputFile" *: *\)"\(\\.\|[^"\\]\)*"`, '\\1""')],
+      smudge: output === undefined || output === '""' ? [] : [sedSubstitution(String.raw`\("OutputFile" *: *\)""`, `\\1${sedReplacement(output)}`)],
+    };
+  },
 };
 
 /** What Wabbajack's compiler asks of the mod manager. */
@@ -36,14 +42,16 @@ interface WabbajackTag {
   readonly tag: PublisherTag;
   readonly appliedFirst: boolean;
   readonly enablesMod: boolean;
+  /** Whether it ships a file no download matches. */
+  readonly shipsUnmatched: boolean;
 }
 
 // In the order Wabbajack's compiler declares them.
 const TAGS: readonly WabbajackTag[] = [
-  { listedUnder: 'NoMatchInclude', tag: { name: 'No Match Include', badge: 'NM', marksPaths: true }, appliedFirst: false, enablesMod: false },
-  { listedUnder: 'Include', tag: { name: 'Include', badge: 'IN', marksPaths: true }, appliedFirst: false, enablesMod: false },
-  { listedUnder: 'Ignore', tag: { name: 'Ignore', badge: 'IG', marksPaths: true }, appliedFirst: true, enablesMod: false },
-  { listedUnder: 'AlwaysEnabled', tag: { name: 'Always Enabled', badge: 'AE', marksPaths: false }, appliedFirst: false, enablesMod: true },
+  { listedUnder: 'NoMatchInclude', tag: { name: 'No Match Include', badge: 'NM', marksPaths: true }, appliedFirst: false, enablesMod: false, shipsUnmatched: true },
+  { listedUnder: 'Include', tag: { name: 'Include', badge: 'IN', marksPaths: true }, appliedFirst: false, enablesMod: false, shipsUnmatched: true },
+  { listedUnder: 'Ignore', tag: { name: 'Ignore', badge: 'IG', marksPaths: true }, appliedFirst: true, enablesMod: false, shipsUnmatched: false },
+  { listedUnder: 'AlwaysEnabled', tag: { name: 'Always Enabled', badge: 'AE', marksPaths: false }, appliedFirst: false, enablesMod: true, shipsUnmatched: false },
 ];
 
 // A path relative to the instance as Wabbajack splits one: at either separator, an empty name dropped,
@@ -182,13 +190,20 @@ function listedIn(instanceRoot: string, root: PathNode): Listed {
   };
 }
 
+interface Compiled {
+  /** Each publisher tag that covers the path, in the order the compiler declares them. */
+  readonly covers: readonly WabbajackTag[];
+  /** Whether the compiler gets past Ignore, a folder it never ships and a mod no profile enables, to the rest. */
+  readonly reached: boolean;
+}
+
 // A publisher tag covers the path it names and every path in it.
-function coveringIn(instanceRoot: string, root: PathNode, neverShipped: readonly (readonly string[])[], shippedMods: ReadonlySet<string> | 'every'): Covering {
+function compiledIn(instanceRoot: string, root: PathNode, neverShipped: readonly (readonly string[])[], shippedMods: ReadonlySet<string> | 'every') {
   const isShipped = (mod: string | undefined, covers: readonly WabbajackTag[]): boolean =>
     mod === undefined || shippedMods === 'every' || shippedMods.has(mod.toLowerCase()) || covers.some(({ enablesMod }) => enablesMod);
-  return (path, mod) => {
+  return (path: string, mod: string | undefined): Compiled | undefined => {
     const inside = inInstance(instanceRoot, path);
-    if (inside === undefined) return [];
+    if (inside === undefined) return undefined;
     const names = namesOf(inside);
     const found = new Set(root.tags);
     let at: PathNode | undefined = root;
@@ -198,11 +213,23 @@ function coveringIn(instanceRoot: string, root: PathNode, neverShipped: readonly
       for (const tag of at.tags) found.add(tag);
     }
     const covers = TAGS.filter(({ tag }) => found.has(tag));
-    if (covers.some(({ appliedFirst }) => appliedFirst)) return covers.flatMap(({ tag, appliedFirst }) => (appliedFirst ? [tag] : []));
-    if (neverShipped.some((folder) => folder.every((name, depth) => names[depth] === name))) return [];
-    return isShipped(mod, covers) ? covers.map(({ tag }) => tag) : [];
+    if (covers.some(({ appliedFirst }) => appliedFirst)) return { covers: covers.filter(({ appliedFirst }) => appliedFirst), reached: false };
+    const reached = !neverShipped.some((folder) => folder.every((name, depth) => names[depth] === name)) && isShipped(mod, covers);
+    return { covers, reached };
   };
 }
+
+const coveringIn = (compiled: ReturnType<typeof compiledIn>): Covering => (path, mod) => {
+  const judged = compiled(path, mod);
+  return judged === undefined || !(judged.reached || judged.covers.some(({ appliedFirst }) => appliedFirst)) ? [] : judged.covers.map(({ tag }) => tag);
+};
+
+const UNSHIPPABLE = 'no package holds its bytes, and no Include or No Match Include publisher tag covers it';
+
+const unshippableIn = (compiled: ReturnType<typeof compiledIn>): UnshippableReason => (folder, pathInFolder, mod) => {
+  const judged = compiled(join(folder, pathInFolder), mod);
+  return judged?.reached === true && !judged.covers.some(({ shipsUnmatched }) => shipsUnmatched) ? UNSHIPPABLE : undefined;
+};
 
 interface ListChange {
   readonly changed: ReadonlyMap<number, string | undefined>;
@@ -210,6 +237,10 @@ interface ListChange {
 }
 
 const isUnder = (names: readonly string[], folder: readonly string[]): boolean => folder.every((name, depth) => names[depth] === name);
+
+// Whether `names` lie under, or at, one of the paths whose names `folders` holds joined.
+const isUnderAnyOf = (names: readonly string[], folders: ReadonlySet<string>): boolean =>
+  Array.from({ length: names.length + 1 }, (_, depth) => names.slice(0, depth).join('/')).some((prefix) => folders.has(prefix));
 
 const sameNames = (first: readonly string[], second: readonly string[]): boolean =>
   first.length === second.length && first.every((name, at) => name === second[at]);
@@ -361,10 +392,17 @@ function withListChanged(text: string, key: string, change: ListChange): string 
 export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers): Publisher {
   const file = join(instanceRoot, COMPILER_SETTINGS.name);
   const neverShipped = manager.neverShipped.map((folder) => namesOf(relative(instanceRoot, folder)));
+  let judging: { readonly key: string; readonly tags: PathNode; readonly covering: Covering; readonly reason: UnshippableReason } | undefined;
   const understood = async (text: string) => {
     const settings = settingsIn(text, file);
-    const tags = tagsByPath(settings, file);
-    return { settings, tags, covering: coveringIn(instanceRoot, tags, neverShipped, await shippedModsIn(settings, file, manager)) };
+    const shipped = await shippedModsIn(settings, file, manager);
+    const key = JSON.stringify([text, shipped === 'every' ? shipped : [...shipped].sort()]);
+    if (judging?.key !== key) {
+      const tags = tagsByPath(settings, file);
+      const compiled = compiledIn(instanceRoot, tags, neverShipped, shipped);
+      judging = { key, tags, covering: coveringIn(compiled), reason: unshippableIn(compiled) };
+    }
+    return { settings, ...judging };
   };
   const settingsText = () => readOrAbsent(() => get(file), undefined);
   return {
@@ -374,8 +412,11 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
       try {
         const text = await settingsText();
         if (text === undefined) return { kind: 'none' };
-        const { settings, tags, covering } = await understood(text);
-        return { kind: 'read', covering, listed: listedIn(instanceRoot, tags), pathProblems: await tagsWithPathProblems(instanceRoot, settings, text, file) };
+        const { settings, tags, covering, reason } = await understood(text);
+        return {
+          kind: 'read', covering, listed: listedIn(instanceRoot, tags), pathProblems: await tagsWithPathProblems(instanceRoot, settings, text, file),
+          unshippable: { file, reason },
+        };
       } catch (err) {
         return { kind: 'unreadable', reason: errorMessage(err) };
       }
@@ -422,15 +463,20 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
     keepOut: async ({ present, owns }) => {
       if (await readOrAbsent(() => get(file), undefined) === undefined) return;
       const insides = present.flatMap((path) => inInstance(instanceRoot, path) ?? []);
-      const isGone = (entry: string): boolean => owns(join(instanceRoot, ...namesOf(entry))) && !insides.some((inside) => sameNames(namesOf(inside), namesOf(entry)));
+      const insideKeys = new Set(insides.map((inside) => namesOf(inside).join('/')));
+      const isGone = (entry: string): boolean => {
+        const names = namesOf(entry);
+        return owns(join(instanceRoot, ...names)) && !insideKeys.has(names.join('/'));
+      };
       await putIfChanged(file, (before) => {
         const entries = valueOf(settingsIn(before, file), 'Ignore', file, [isNames, 'a list of paths']) ?? [];
         const changed = new Map(entries.flatMap((entry, at) => (isGone(entry) ? [[at, undefined] as const] : [])));
         const remaining = entries.filter((_, at) => !changed.has(at));
-        const missing = insides.filter((inside) => !remaining.some((entry) => isUnder(namesOf(inside), namesOf(entry))));
+        const remainingKeys = new Set(remaining.map((entry) => namesOf(entry).join('/')));
+        const missing = insides.filter((inside) => !isUnderAnyOf(namesOf(inside), remainingKeys));
         return withListChanged(before, 'Ignore', { changed, appended: missing.map(wabbajackSpelling) });
       });
     },
-    subscribe: (listener) => watchFiles(instanceRoot, COMPILER_SETTINGS.name, () => listener()),
+    subscribe: (listener) => watchFiles(instanceRoot, COMPILER_SETTINGS.name, listener),
   };
 }

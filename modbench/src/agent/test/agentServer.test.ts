@@ -32,7 +32,7 @@ import { recordingReporter } from '../../test/surfacingDoubles';
 import { SILENT_LOG } from '../../ports/log';
 import { present } from '../../ports/present';
 import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, type PluginAddress } from '../../wire/pluginAddress';
-import type { PluginShown } from '../../drivingLib/pluginsShown';
+import type { PluginShown, PluginsShown } from '../../drivingLib/pluginsShown';
 
 const PORT_SETTING = 'modbench.agent.port';
 
@@ -77,8 +77,15 @@ const statuses = { current: () => { statusRead.asked += 1; return Promise.resolv
 
 const NOT_READ: PluginShown = { statuses: [], readOnly: null, compiled: null, masters: null };
 const shownRead: { answer: ReadonlyMap<string, PluginShown> } = { answer: new Map() };
-const pluginsShown = { shown: (plugin: PluginAddress) => shownRead.answer.get(exactPluginAddressKey(plugin)) ?? NOT_READ };
-afterEach(() => { shownRead.answer = new Map(); });
+const sortingRead: { rules: ReturnType<PluginsShown['brokenRules']>[number][]; moves: ReturnType<PluginsShown['suggestedMoves']>[number][]; notJudged?: string } = { rules: [], moves: [] };
+const pluginsShown = {
+  shown: (plugin: PluginAddress) => shownRead.answer.get(exactPluginAddressKey(plugin)) ?? NOT_READ,
+  isBlueprint: ({ name }: PluginAddress) => name.startsWith('Blueprint'),
+  sortingNotJudged: () => sortingRead.notJudged,
+  brokenRules: () => sortingRead.rules,
+  suggestedMoves: () => sortingRead.moves,
+};
+afterEach(() => { shownRead.answer = new Map(); sortingRead.rules = []; sortingRead.moves = []; sortingRead.notJudged = undefined; });
 
 const copyAnswers: InstanceAnswers = {};
 
@@ -132,7 +139,7 @@ describe('the agent server, given an instance value', () => {
 
     const { tools } = await client.listTools();
 
-    expect(tools.map((tool) => tool.name)).toEqual(expect.arrayContaining(['list_downloads', 'list_file_conflicts', 'list_mod_statuses', 'list_mods', 'list_plugins', 'list_profiles', 'list_problems', 'list_references', 'read_record', 'resolve_instance_names', 'resolve_names', 'script_environment', 'select_rows']));
+    expect(tools.map((tool) => tool.name)).toEqual(expect.arrayContaining(['list_downloads', 'list_file_conflicts', 'list_mod_statuses', 'list_mods', 'list_plugins', 'list_profiles', 'list_problems', 'list_sorting_rules', 'list_references', 'read_record', 'resolve_instance_names', 'resolve_names', 'script_environment', 'select_rows']));
   });
 
   it('advertises the JSON type of every input of every tool, so a client sends JSON and never a string', async () => {
@@ -151,6 +158,12 @@ describe('the agent server, given an instance value', () => {
     const { client } = await clientOf(new FakeInstance(VALUE));
 
     expect(client.getInstructions()).toContain('select_rows says which');
+  });
+
+  it('tells the client how to read Nexus without a key', async () => {
+    const { client } = await clientOf(new FakeInstance(VALUE));
+
+    expect(client.getInstructions()).toContain('https://api.nexusmods.com/v2/graphql');
   });
 
   it('hands a shell the variables the terminals of its window hold, as they are now', async () => {
@@ -239,6 +252,32 @@ describe('the agent server, given an instance value', () => {
     ] });
   });
 
+  it('reads each broken sorting rule in its words, with its level, its plugins and the move it offers', async () => {
+    const { client } = await clientOf(new FakeInstance(VALUE));
+    const master: (typeof sortingRead.rules)[number] = { level: 'error', reason: 'A.esp loads before its master B.esp.', plugins: [{ origin: 'Big Rocks', filename: 'A.esp' }, { origin: 'Big Rocks', filename: 'B.esp' }] };
+    const dirty: (typeof sortingRead.rules)[number] = { level: 'info', reason: 'A.esp is dirty.', plugins: [{ origin: 'Big Rocks', filename: 'A.esp' }] };
+    sortingRead.rules = [master, dirty];
+    sortingRead.moves = [{ rule: master, mover: { name: 'A.esp', origin: 'Big Rocks' }, drop: { kind: 'after', name: 'B.esp' } }];
+
+    expect(await read(client, 'list_sorting_rules')).toEqual({ rules: [
+      {
+        rule: 'A.esp loads before its master B.esp.', level: 'error',
+        plugins: [{ name: 'A.esp', origin: 'Big Rocks' }, { name: 'B.esp', origin: 'Big Rocks' }],
+        suggestedMove: { plugin: { name: 'A.esp', origin: 'Big Rocks' }, side: 'after', beside: 'B.esp' },
+      },
+      { rule: 'A.esp is dirty.', level: 'info', plugins: [{ name: 'A.esp', origin: 'Big Rocks' }] },
+    ] });
+  });
+
+  it('refuses the sorting rules while the order is not judged, naming why, rather than answer no rules', async () => {
+    const { client } = await clientOf(new FakeInstance(VALUE));
+    sortingRead.notJudged = 'Still indexing…';
+
+    expect(await call(client, 'list_sorting_rules')).toEqual({
+      isError: true, text: 'The sorting rules are not judged yet: Still indexing…',
+    });
+  });
+
   it('refuses in part when the game folder is not found, answering the lines with why the plugins loaded with no line are missing, in the Output', async () => {
     const { client, warned } = await clientOf(new FakeInstance(VALUE));
 
@@ -257,6 +296,15 @@ describe('the agent server, given an instance value', () => {
       { name: 'Fallout4.esm', origin: DATA_DIRECTORY_ORIGIN, line: null, enabled: true, winning: true, ...NOT_READ },
       { name: 'A.esp', origin: 'Big Rocks', line: 0, enabled: true, winning: true, ...NOT_READ },
       { name: 'B.esp', origin: 'Big Rocks', line: 1, enabled: false, winning: true, ...NOT_READ },
+    ] });
+  });
+
+  it('reads a blueprint plugin the game loads with no line after the last line of a plugin that is not one, where the release loads blueprint plugins last', async () => {
+    const noLine = [{ name: 'Starfield.esm', origin: DATA_DIRECTORY_ORIGIN, path: '/g/Starfield.esm' }, { name: 'BlueprintShips-Starfield.esm', origin: DATA_DIRECTORY_ORIGIN, path: '/g/BlueprintShips-Starfield.esm' }];
+    const { client } = await clientOf(new FakeInstance({ ...VALUE, blueprintLoadsLast: true, pluginsLoadedWithNoLine: noLine }));
+
+    expect(await read(client, 'list_plugins')).toMatchObject({ plugins: [
+      { name: 'Starfield.esm' }, { name: 'A.esp' }, { name: 'B.esp' }, { name: 'BlueprintShips-Starfield.esm' },
     ] });
   });
 
@@ -339,16 +387,16 @@ describe('the agent server, given an instance value', () => {
     });
 
     it.each([
-      ['plugin_enable', 'modbench.plugin.enable', {}],
+      ['plugin_enable', 'modbench.plugin.enable', undefined],
       ['plugin_move', 'modbench.plugin.move', { drop: { kind: 'winningEnd' } }],
     ])('fires %s on the line named by the origin list_plugins shows, as the load order holds it', async (tool, command, options) => {
       statusRead.answer = [status('Acc Mod C', { gone: ['AccC.esp'] })];
       fired.outcome = { applied: true, outcome: { landed: ['AccC.esp'], refused: [] } };
       const { client } = await clientOf(cloned('AccC.esp'));
 
-      await call(client, tool, { argument: [{ name: 'AccC.esp', origin: 'Acc Mod C' }], options });
+      await call(client, tool, { argument: [{ name: 'AccC.esp', origin: 'Acc Mod C' }], ...options && { options } });
 
-      expect(fired.calls).toEqual([[command, new AgentCall([{ kind: 'plugin', plugin: { name: 'AccC.esp', origin: DATA_DIRECTORY_ORIGIN } }], options)]]);
+      expect(fired.calls).toEqual([[command, new AgentCall([{ kind: 'plugin', plugin: { name: 'AccC.esp', origin: DATA_DIRECTORY_ORIGIN } }], options ?? {})]]);
     });
   });
 
@@ -516,6 +564,7 @@ describe('the agent server, given an instance value', () => {
 
     it.each([
       ['list_plugins', ['mEdit is Running', 'plugins read failed', 'No masterlist']],
+      ['list_sorting_rules', ['mEdit is Running', 'plugins read failed', 'No masterlist']],
       ['list_problems', ['No masterlist', 'a source problem']],
       ['read_record', ['mEdit is Running', 'plugins read failed', 'a source problem']],
     ])('reach %s with its own sources, instance lines first', async (tool, own) => {
@@ -665,7 +714,7 @@ describe('the agent server, reading file order conflicts', () => {
       filesByMod: new Map([['E', [fileIn('/e', 'only.txt'), fileIn('/e', 'skip.txt.mohidden')]]]),
       files: asLookup(providing('only.txt', modOrigin('E'))),
       publisherConfiguration: {
-        kind: 'read', listed: () => [], pathProblems: [],
+        kind: 'read', listed: () => [], pathProblems: [], unshippable: { file: '', reason: () => undefined },
         covering: (path: string) => (path === '/e/only.txt' ? [{ name: 'Patched', badge: 'P', marksPaths: true }, { name: 'Mod only', badge: 'M', marksPaths: false }] : []),
       },
     });
@@ -1243,6 +1292,15 @@ describe('the agent server, running a gesture', () => {
       options: { force: true },
     },
     {
+      name: 'plugin_decompile_and_repair carries where and force as Options',
+      value: PLUGGED,
+      tool: 'plugin_decompile_and_repair',
+      args: { argument: [{ name: 'Solo.esp' }], options: { where: 'InstanceRepository', force: true } },
+      command: 'modbench.plugin.decompileAndRepair',
+      argument: [SOLO],
+      options: { where: 'InstanceRepository', force: true },
+    },
+    {
       name: 'plugin_move carries the drop as an Option',
       value: PLUGGED,
       tool: 'plugin_move',
@@ -1619,6 +1677,15 @@ describe('the agent server, running a gesture', () => {
       options: { target: 'B' },
     },
     {
+      name: 'mod_install carries the choices and the installer, to hand the user the installer opened on them',
+      value: CONFLICTED_WITH_DOWNLOADED_FILES,
+      tool: 'mod_install',
+      args: { argument: [outside], options: { name: 'New', installer: true, choices: [{ step: 'Main', groups: [] }] } },
+      command: 'modbench.mod.install',
+      argument: [outside],
+      options: { name: 'New', installer: true, choices: [{ step: 'Main', groups: [] }] },
+    },
+    {
       name: 'mod_install carries no Options when the call leaves out options, for the command to refuse naming them',
       value: CONFLICTED_WITH_DOWNLOADED_FILES,
       tool: 'mod_install',
@@ -1874,6 +1941,35 @@ describe('the agent server, given an input its tool does not take', () => {
     expect(reporter.reports).toEqual([]);
   });
 
+  it.each([
+    ['mod_build', { mod: 'A' }, 'mod'],
+    ['mod_enable', { argument: [{ name: 'A', nme: 'B' }] }, 'nme'],
+    ['mod_move', { argument: [{ name: 'A' }], options: { place: { kind: 'ungrouped' }, end: 'winning', extra: 1 } }, 'extra'],
+    ['read_record', { name: 'X', plugin: { name: 'A.esp', orign: 'A' } }, 'orign'],
+    ['resolve_instance_names', { files: [{ mod: { name: 'A' }, path: 'f', paht: 'g' }] }, 'paht'],
+    ['list_plugins', { sorted: true }, 'sorted'],
+    ['mod_move', { argument: [{ name: 'A' }], options: { place: { kind: 'mod', nme: 'B' }, end: 'winning' } }, 'nme'],
+    ['plugin_move', { argument: [{ name: 'A.esp' }], options: { drop: { kind: 'before', nme: 'B.esp' } } }, 'nme'],
+    ['mod_install', { argument: [{ kind: 'archive', paht: '/a.7z' }], options: { name: 'A' } }, 'paht'],
+    ['mod_update_manifest', { argument: [{ kind: 'folder', paht: '/s' }] }, 'paht'],
+    ['mod_update_manifest', { argument: [{ name: 'A', nme: 'B' }] }, 'nme'],
+  ])('%s refuses an unknown key %j, naming it, and fires nothing', async (name, args, key) => {
+    fired.calls = [];
+    const { client } = await clientOf(new FakeInstance(CONFLICTED));
+
+    const refusal = await call(client, name, args);
+
+    expect(refusal.isError).toBe(true);
+    expect(refusal.text).toContain(key);
+    expect(fired.calls).toEqual([]);
+  });
+
+  it('advertises that a tool takes no other key', async () => {
+    const { tools } = await (await clientOf(new FakeInstance(VALUE))).client.listTools();
+
+    expect(tools.find((tool) => tool.name === 'mod_build')?.inputSchema).toMatchObject({ additionalProperties: false });
+  });
+
   it('tells the agent select_rows reads only the views, and where their columns are listed', async () => {
     const { tools } = await (await clientOf(new FakeInstance(VALUE))).client.listTools();
 
@@ -1881,6 +1977,15 @@ describe('the agent server, given an input its tool does not take', () => {
     expect(description).toContain('only the views');
     expect(description).toContain('is_active');
     expect(description).toContain('view_columns');
+    expect(description).toContain('conflict_hash');
+  });
+
+  it('tells the agent, in what Claude Code shows of mod_install, that a FOMOD\'s choices are the user\'s, and how to hand the user the installer', async () => {
+    const { tools } = await (await clientOf(new FakeInstance(VALUE))).client.listTools();
+
+    const shown = tools.find((tool) => tool.name === 'mod_install')?.description?.slice(0, 2048);
+    expect(shown).toContain('a FOMOD\'s choices are the user\'s');
+    expect(shown).toContain('installer?: true');
   });
 
   it('advertises the SQL select_rows takes as a required string', async () => {
@@ -1922,6 +2027,20 @@ describe('the agent server, given a port', () => {
     const { bound } = await serve(new FakeInstance(VALUE));
 
     expect(await post(present(bound, 'a bound port'), { ...JSON_HEADERS, origin: 'https://rebound.example' }, '{}')).toBe(403);
+  });
+
+  it('keeps a connection its answer leaves open with no time after which it closes it, so a request a client sends on it while the extension host is busy is read', async () => {
+    const { bound } = await serve(new FakeInstance(VALUE));
+
+    const keptAlive = await new Promise<string | string[] | undefined>((done) => {
+      const sent = request({ host: '127.0.0.1', port: present(bound, 'a bound port'), path: '/mcp', method: 'POST', headers: JSON_HEADERS }, (response) => {
+        response.resume();
+        done(response.headers['keep-alive']);
+      });
+      sent.end(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }));
+    });
+
+    expect(keptAlive).toBeUndefined();
   });
 
   it('answers a body that is not JSON with 400', async () => {

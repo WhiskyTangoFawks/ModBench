@@ -40,9 +40,9 @@ public sealed class InvalidatedOnFirstReadTests : IDisposable
     }
 
     [Fact]
-    public void TheNextSnapshotAfterAFatalErrorOnAFirstRead_ReadsEveryPlugin()
+    public void TheNextCheckAfterAFatalErrorOnAFirstRead_ReadsEveryPlugin()
     {
-        _index.NextSnapshotUntil(() => _index.Status.State == LoadOrderState.Ready, "the snapshot's answer");
+        _index.NextCheckUntil(() => _index.Status.State == LoadOrderState.Ready, "the check's answer");
 
         Assert.Equal([Aborted, After], _index.Status.IndexedPlugins.Select(p => p.Name).Order());
     }

@@ -4,6 +4,8 @@
 import * as vscode from 'vscode';
 import { attachPortOf, createMEditClient, stopMEditClient, type MEditClient } from './client';
 import { makeReporter } from './drivingLib/reporter';
+import { commandTitles } from './drivingLib/commandTitles';
+import { surfaceRefusedWrites } from './drivingLib/writingGesture';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
 import { highlightFollowingFocus } from './drivingLib/highlightFollowsFocus';
@@ -30,6 +32,7 @@ import { offerToVsCodeChat } from './agent/vsCodeChat';
 import { agentPort } from './agent/agentPort';
 import { deploymentFolderSetting, gameFolderSetting } from './toolbox/workspaceSettings';
 import { registerPutLoadOrder } from './toolbox/putLoadOrderCommand';
+import { showProgressWhileLate } from './drivingLib/lateProgress';
 import { createPlugins, PLUGINS_KEY_ARGS, type Plugins } from './plugins';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
@@ -46,20 +49,25 @@ import { hostTasks, scriptHostIn } from './tasks';
 import { stepTasks } from './sourceCommands/steps';
 import { registerModlistCommands } from './toolbox/modlistGestures';
 import { publishRepository } from './toolbox/repositoryContext';
+import { downloadOver } from './downloadedFileCommands/download';
 import { queryInfoOver } from './downloadedFileCommands/queryInfo';
 import { checkForUpdatesOver } from './modCommands/checkForUpdates';
 import { createHttpNexus } from './nexus/httpNexus';
 import type { Nexus } from './nexus/nexus';
 import { registerNexusCommands } from './toolbox/nexusCommands';
 import { nexusLogin } from './instanceCommands/nexusLogin';
+import { masterlistCommands } from './instanceCommands/masterlist';
+import { registerMasterlistCommand } from './toolbox/masterlistGesture';
+import { createHttpLootMetadata } from './lootMetadata/httpLootMetadata';
+import type { LootMetadata } from './lootMetadata/lootMetadata';
 import { registerRefreshCommand, registerToolboxCommands, TOOLBOX_VIEW } from './toolbox/toolboxCommands';
 import { afterTrust, openedFolder, whenOpened } from './toolbox/instanceCheck';
 import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
 import { toastOncePerFailure } from './drivingLib/toastOncePerFailure';
 import { reportSubscriberThrows } from './drivingLib/reportSubscriberThrows';
-import { pluginCommands, pluginSyncOver } from './pluginCommands/plugins';
-import { modlistRepositoryCommands } from './sourceCommands/modlistRepositoryCommands';
-import { newRepositoriesOver } from './sourceCommands/newRepository';
+import { fileReadsOver, pluginCommands, pluginSyncOver } from './pluginCommands/plugins';
+import { instanceRepositoryCommands } from './sourceCommands/instanceRepositoryCommands';
+import { placeModsOver } from './sourceCommands/newRepository';
 import { sourceCommands } from './sourceCommands/sourceCommands';
 import { modSyncOver, modCommands } from './modCommands/modCommands';
 import { downloadedFileCommands } from './downloadedFileCommands/downloads';
@@ -83,8 +91,8 @@ import type { MoveToTrash } from './ports/trash';
 type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
-  'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
-  | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'getPluginIndexing'>;
+  'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'signalChange' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
+  | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'moveLastWritten' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'getPluginIndexing'>;
 
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -99,6 +107,7 @@ interface ViewsDeps {
   /** The workspace's own storage, which an opened folder always has. */
   storage: vscode.Uri | undefined;
   nexus: Nexus;
+  lootMetadata: LootMetadata;
   focusedView: FocusedView;
   editor: Pick<Editor, 'copyValue'>;
 }
@@ -171,9 +180,10 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const { outputChannel, client, plugins: pluginsBox, reporterFor, ask, trash, extensionId } = deps;
   own(markFirstReadLanded(instance));
   own(reportSubscriberThrows(instance, reporterFor));
+  own(showProgressWhileLate(instance, [TOOLBOX_VIEW, MODS_KEY_ARGS.view, PLUGINS_KEY_ARGS.view, DOWNLOADS_KEY_ARGS.view]));
   const commands = instanceCommands({ adapter, client, instanceRoot });
   const tasks = stepTasks(hostTasks, scriptHostIn(deps.extensionUri));
-  const modlist = modlistRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks });
+  const instanceRepository = instanceRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks, loadOrderSnapshot: () => instance.value.loadOrderSnapshot });
   const modStatuses = own(new ModStatuses(adapter, (line) => outputChannel.warn(line)));
   own(instance.subscribe(async (value) => {
     modStatuses.derive(value);
@@ -182,10 +192,11 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const { modSync } = own(modSyncOn({ instance, syncMods: modSyncOver(adapter), channel: outputChannel }));
   own(registerModSyncCommand(modSync));
   const plugins = own(pluginsBox.onInstance({
-    instance, commands: pluginCommands({ adapter, client, newRepositories: newRepositoriesOver(adapter) }), syncPlugins: pluginSyncOver(adapter), modStatuses,
+    instance, commands: pluginCommands({ adapter, client, placeMods: placeModsOver(adapter) }), syncPlugins: pluginSyncOver(adapter), modStatuses,
+    fileReads: fileReadsOver(adapter, () => instance.value.files),
   }));
   const downloads = own(createDownloadsView({
-    commands: downloadedFileCommands(adapter), queryInfo: queryInfoOver(adapter, deps.nexus), instance, reporterFor, trash, channel: outputChannel,
+    commands: downloadedFileCommands(adapter), queryInfo: queryInfoOver(adapter, deps.nexus), download: downloadOver(adapter, deps.nexus), instance, reporterFor, trash, channel: outputChannel,
   }));
   const placeOfPluginsTxt = pluginsTxtPlace(process.platform, process.env, (folder) => adapter.nonSteamPrefix(folder));
   const placeForGame: PluginsTxtPlaceOf = (gameName, folder) => placeOfPluginsTxt(gameReleaseForGame(gameName), folder);
@@ -195,11 +206,11 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     extensionUri: deps.extensionUri,
     downloadsView: DOWNLOADS_KEY_ARGS.view, focusedView: deps.focusedView,
     sourceGestures: {
-      commands: sourceCommands({ client, adapter, saveUnsaved: saveUnsavedPluginSource, tasks, trash }), pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say,
+      commands: sourceCommands({ client, adapter, saveUnsaved: saveUnsavedPluginSource, loadOrderSnapshot: () => instance.value.loadOrderSnapshot, tasks, trash }), pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say,
       registerRepositories: deps.registerRepositories,
     },
     checkForUpdates: checkForUpdatesOver(adapter, deps.nexus),
-    manifestGestures: { commands: modlist, toolboxView: TOOLBOX_VIEW, say: toolbox.say },
+    manifestGestures: { commands: instanceRepository, toolboxView: TOOLBOX_VIEW, say: toolbox.say },
     statuses: modStatuses,
   }));
   const editing = own(editingFlow({
@@ -210,8 +221,11 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   own(registerPutLoadOrder(editing, instance));
   ownAll(own, registerToolboxCommands({ commands, instance, extensionId, reporterFor }));
   ownAll(own, registerNexusCommands({ commands: nexusLogin(deps.nexus), nexus: deps.nexus, reporterFor }));
+  own(registerMasterlistCommand({
+    commands: masterlistCommands({ adapter, lootMetadata: deps.lootMetadata }), instance, pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say, ask, reporter: reporterFor('updateMasterlist'),
+  }));
   own(publishRepository(instance, instanceRoot));
-  ownAll(own, registerModlistCommands({ commands: modlist, instance, reporterFor }));
+  ownAll(own, registerModlistCommands({ commands: instanceRepository, instance, reporterFor }));
   own(deps.focusedView.follow(MODS_KEY_ARGS.view, mods.view));
   own(deps.focusedView.follow(PLUGINS_KEY_ARGS.view, plugins.followed));
   own(deps.focusedView.follow(DOWNLOADS_KEY_ARGS.view, downloads.view));
@@ -294,6 +308,7 @@ function start(context: vscode.ExtensionContext): void {
     refreshSourceControlFor: sourceModRepositories.refreshSourceControlFor,
   };
   const reporterFor = (tag: string) => makeReporter(outputChannel, tag);
+  context.subscriptions.push(surfaceRefusedWrites({ reporter: reporterFor('write'), titles: commandTitles(context.extension.packageJSON), redraw: opened.facts.redraw }));
   const plugins = createPlugins({
     client: meditClient, facts: opened.facts, channel: outputChannel, reporterFor,
     registerRepositories: sourceModRepositories.registerRepositories, ask: askQuestion, sourceEditing,
@@ -322,6 +337,7 @@ function start(context: vscode.ExtensionContext): void {
     extensionUri: context.extensionUri,
     storage: context.storageUri,
     nexus: createHttpNexus(context.secrets, context.extension.packageJSON),
+    lootMetadata: createHttpLootMetadata(),
     focusedView,
     editor,
   });

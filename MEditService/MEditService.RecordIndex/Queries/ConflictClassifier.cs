@@ -133,17 +133,21 @@ internal sealed class ConflictClassifier(ILogger logger)
 
         // The templated members inside the node at this dotted path, relative to it: a struct is
         // compared with them left out.
-        public List<string[]> TemplatedWithin(string path) =>
-            [.. Templated.Values.SelectMany(t => t.Keys)
-                .Where(member => member.StartsWith(path + ".", StringComparison.Ordinal))
-                .Distinct()
-                .Select(member => member[(path.Length + 1)..].Split('.'))];
+        public List<string[]> TemplatedWithin(string path) => MembersWithin(Templated.Values.SelectMany(t => t.Keys), path);
     }
+
+    internal static List<string[]> MembersWithin(IEnumerable<string> templated, string path) =>
+        [.. templated
+            .Where(member => member.StartsWith(path + ".", StringComparison.Ordinal))
+            .Distinct()
+            .Select(member => member[(path.Length + 1)..].Split('.'))];
 
     // How a node's cells take their conflict state: ComputeCellStates. A comparison of several
     // records has none, and its cells take theirs by focus.
     private delegate IReadOnlyDictionary<string, ConflictThis> CellStatesOf(
         Dictionary<string, object?> values, IReadOnlySet<string> templatedColumns, Func<object?, object?, bool> same);
+
+    private static readonly object Unheld = new();
 
     // One node of the diff tree, at whatever depth the walk reached it. absentMeansDefault is false
     // for an array element, which the codec never omits for equalling its default.
@@ -155,10 +159,17 @@ internal sealed class ConflictClassifier(ILogger logger)
         bool absentMeansDefault,
         DiffContext ctx,
         bool ignoredInConflicts = false,
-        bool partialFormTakesPart = false)
+        bool partialFormTakesPart = false,
+        HashSet<string>? unheldColumns = null)
     {
-        // A shadowed column shows its value and takes no part in the comparison.
-        var taking = values.ToDictionary(v => v.Key, v => ctx.ShadowedColumns.Contains(v.Key) ? null : v.Value);
+        // A shadowed column shows its value and takes no part in the comparison. An unheld one compares
+        // unlike any value, the default included.
+        object? Taken(string column, object? value)
+        {
+            if (ctx.ShadowedColumns.Contains(column)) return null;
+            return unheldColumns?.Contains(column) == true ? Unheld : value;
+        }
+        var taking = values.ToDictionary(v => v.Key, v => Taken(v.Key, v.Value));
         var winnerColumn = ConflictRules.WinnerOf(taking, ctx.ComparedOrder, ctx.PartialFormColumns) ?? ctx.RecordWinnerColumn;
         var shape = shapes[winnerColumn];
         var templatedColumns = ctx.TemplatedAt(path);
@@ -192,7 +203,7 @@ internal sealed class ConflictClassifier(ILogger logger)
             NoWinner: noWinner);
     }
 
-    private static object? WithoutMembers(object? value, IEnumerable<string[]> members)
+    internal static object? WithoutMembers(object? value, IEnumerable<string[]> members)
     {
         if (value is not JsonElement { ValueKind: JsonValueKind.Object or JsonValueKind.Array } element) return value;
         var node = System.Text.Json.Nodes.JsonNode.Parse(element.GetRawText());
@@ -224,17 +235,16 @@ internal sealed class ConflictClassifier(ILogger logger)
         var diffs = new List<FieldDiff>();
         foreach (var member in records.SelectMany(r => r.Fields).Select(f => f.Metadata).DistinctBy(m => m.Name))
         {
-            // A Partial Form override's own fields take no part (ADR-0018), so they fall through to
-            // the previous override that takes part; its header and EditorID take part.
+            // A Partial Form override's own fields fall through to the previous override that takes part.
             var header = member.IsRecordHeaderMember;
-            var ownField = !header && !member.IsEditorId;
+            var ownField = ConflictRules.IsOwnField(member);
             var values = records.Select((r, i) => (Column: columns[i], Value: MemberValue(r, member.Name)))
                 .ToDictionary(t => t.Column, t => t.Value);
             var memberCtx = ownField ? ctx : ctx with { ShadowedColumns = new HashSet<string>() };
             if (!header && values.Values.All(v => v == null)) continue;
             var shapes = recordClass.ToDictionary(
                 kv => kv.Key, kv => DocumentNodes.Variant(membersOf[kv.Key].GetValueOrDefault(member.Name, member), kv.Value));
-            diffs.Add(DiffNode(member.Name, member.Name, values, shapes, absentMeansDefault: true, memberCtx, member.IgnoredInConflicts, partialFormTakesPart: !ownField));
+            diffs.Add(DiffNode(member.Name, member.Name, values, shapes, absentMeansDefault: true, memberCtx, !ConflictRules.TakesPart(member, inPartialFormCopy: false), partialFormTakesPart: !ownField));
         }
         return diffs;
     }
@@ -246,10 +256,11 @@ internal sealed class ConflictClassifier(ILogger logger)
         foreach (var member in members)
         {
             var values = owners.ToDictionary(kv => kv.Key, kv => (object?)MemberValue(kv.Value, member.Name));
-            if (values.Values.All(v => v == null)) continue;
+            var unheld = owners.Where(kv => !DocumentNodes.Holds(member, kv.Value as JsonElement?)).Select(kv => kv.Key).ToHashSet(StringComparer.Ordinal);
+            if (values.Values.All(v => v == null) && (unheld.Count == 0 || unheld.Count == owners.Count)) continue;
             var shapes = owners.ToDictionary(
                 kv => kv.Key, kv => DocumentNodes.VariantFor(member, kv.Value as JsonElement?));
-            children.Add(DiffNode(member.Name, $"{path}.{member.Name}", values, shapes, absentMeansDefault: true, ctx));
+            children.Add(DiffNode(member.Name, $"{path}.{member.Name}", values, shapes, absentMeansDefault: true, ctx, unheldColumns: unheld));
         }
         return children.Count > 0 ? children : null;
     }

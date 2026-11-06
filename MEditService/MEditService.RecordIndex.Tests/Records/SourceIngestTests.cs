@@ -160,7 +160,7 @@ public sealed class SourceIngestTests : IDisposable
         _entry.HandEdit(before, NpcEditorId, "ExternallyRenamed");
 
         PluginBinaries.Touch(_entry.Path);
-        index.NextSnapshot();
+        index.NextCheck();
 
         Assert.Equal("ExternallyRenamed", index.DocumentOf(_npc, Plugin).EditorId);
     }
@@ -189,7 +189,7 @@ public sealed class SourceIngestTests : IDisposable
 
         File.WriteAllText(RootDocument, "{ this is not json");
 
-        index.NextSnapshotUntil(
+        index.NextCheckUntil(
             () => index.ReadFromItsPluginFileForItsUnreadableSource(Plugin), "the binary read in the tree's place");
 
         Assert.Equal(BaselineHeightMax, HeightMaxOf(index.DocumentOf(_npc, Plugin)));
@@ -240,7 +240,7 @@ public sealed class SourceIngestTests : IDisposable
         Assert.Contains(index.Status.Failures, f => f.Name == PluginName);
         PluginBinaries.Touch(partnerPath);
 
-        index.NextSnapshot();
+        index.NextCheck();
 
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.Contains(index.Status.Failures, f => f.Name == PluginName);

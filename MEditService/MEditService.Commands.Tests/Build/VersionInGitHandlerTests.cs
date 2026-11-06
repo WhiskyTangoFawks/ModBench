@@ -93,21 +93,23 @@ public sealed class VersionInGitHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Init_InTheModlistRepository_CommitsThePluginsSourceThere_AndMakesNoRepositoryOfItsOwn()
+    public async Task Init_InTheInstanceRepository_CommitsThePluginsSourceAndTheModFoldersManifestThere_AndMakesNoRepositoryOfItsOwn()
     {
-        var modlistRepository = Path.Combine(_instanceRoot, ".git");
-        GitProbe.Run(modlistRepository, _instanceRoot, "init", "-q", "-b", "main");
-        GitProbe.Run(modlistRepository, _instanceRoot, "config", "user.name", "Test");
-        GitProbe.Run(modlistRepository, _instanceRoot, "config", "user.email", "test@localhost");
+        var instanceRepository = Path.Combine(_instanceRoot, ".git");
+        GitProbe.Run(instanceRepository, _instanceRoot, "init", "-q", "-b", "main");
+        GitProbe.Run(instanceRepository, _instanceRoot, "config", "user.name", "Test");
+        GitProbe.Run(instanceRepository, _instanceRoot, "config", "user.email", "test@localhost");
+        var linked = new RootFile($"{Origin}.manifest.json", "the link"u8.ToArray());
 
         var result = await InitWith(new ModToVersionInGit(
-            Origin, _mod.Folder, new SourceFolderContents(SourceFolder, SourceModIn.ModlistRepository, [], SourceInits.BuildFile), Commit: true));
+            Origin, _mod.Folder, new SourceFolderContents(SourceFolder, SourceModIn.InstanceRepository, [], SourceInits.BuildFile, ModFolderManifest: linked, ModFolderManifestInInit: true), Commit: true));
 
         Assert.Equal([new PluginAddress(PluginName, Origin)], Assert.Single(result.Applied).Plugins);
         Assert.False(Path.Exists(Path.Combine(SourceFolder, ".git")));
         Assert.Contains(
             $"source/{Origin}/plugin-source/{PluginName}/",
-            GitProbe.Run(modlistRepository, _instanceRoot, "ls-tree", "-r", "--name-only", "main"), StringComparison.Ordinal);
+            GitProbe.Run(instanceRepository, _instanceRoot, "ls-tree", "-r", "--name-only", "main"), StringComparison.Ordinal);
+        Assert.Equal("the link", GitProbe.Run(instanceRepository, _instanceRoot, "show", $"main:mods/{Origin}/{linked.Name}"));
     }
 
     [Fact]
@@ -164,5 +166,5 @@ public sealed class VersionInGitHandlerTests : IDisposable
     private string[] CommittedAssets() =>
         [.. GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "ls-tree", "-r", "--name-only", "main")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-            .Where(path => path != ".gitignore" && path != "build.json" && !path.StartsWith("plugin-source/", StringComparison.Ordinal))];
+            .Where(path => path is not (".gitattributes" or ".gitignore" or "build.json") && !path.StartsWith("plugin-source/", StringComparison.Ordinal))];
 }

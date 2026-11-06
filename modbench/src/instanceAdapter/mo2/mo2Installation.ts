@@ -6,7 +6,7 @@ import { basename, dirname, isAbsolute } from 'node:path';
 import { nexusDomainForMetaGame } from '../../tables/gamePaths';
 import { changeOwnedKeysInText, type InstalledFileId, type MetaIni, metaIniOf, modMetaOf, MOD_META_FILE_NAME, type OwnedMetaKeys, parseMetaIni } from './codecs/metaIni';
 import { readGameName } from './codecs/modOrganizerIni';
-import { ensureDir, exists, get, ignoreSkippedLink, readOrReason, withLock, write, writeTrashing } from '../files';
+import { ensureDir, exists, get, ignoreSkippedLink, readOrAbsent, readOrReason, withLock, write, writeTrashing } from '../files';
 import type { HashIndex } from '../fileContents/hashIndex';
 import { md5Of } from '../fileContents/contentDigest';
 import { errorMessage } from '../../ports/errorMessage';
@@ -15,7 +15,7 @@ import { downloadedFileMetadataPath, downloadedFilePath, modMetaFileIn, settings
 import { parseDownloadedFileMeta } from './codecs/downloads';
 import { effectiveModId } from './codecs/nexusFileName';
 import { currentDownloadsDir, folderHolding, newModFolder, metaGameOfDomain, nexusDomainsOfInstance, type Mo2Context } from './mo2Context';
-import { downloadedFileNames, readMetaIni } from './mo2Reads';
+import { downloadedFileNames, downloadedMetaAt, readMetaIni, readMetaIniIn } from './mo2Reads';
 import { formatNexusPage, parseNexusPage } from '../nexusPage';
 
 // MO2 records a file installed from outside the downloads folder by its whole path, and reinstalls from the
@@ -39,20 +39,17 @@ async function nexusPageOf(meta: MetaIni, { instanceRoot }: Mo2Context): Promise
 }
 
 // The page and version of a downloaded file, from its metadata, else its name; an unreadable metadata costs the page alone.
-async function factsOfDownloadedFile(context: Mo2Context, downloadsDir: string, name: string): Promise<{ page?: string; directUrl?: string; version?: string; note?: string }> {
+async function factsOfDownloadedFile(context: Mo2Context, downloadsDir: string, name: string): Promise<{ page?: string; directUrl?: string; version?: string; pageUnreadable?: string }> {
   try {
-    const { meta } = parseDownloadedFileMeta(await get(downloadedFileMetadataPath(downloadsDir, name), ''));
+    const { meta } = await readOrAbsent(() => downloadedMetaAt(downloadedFileMetadataPath(downloadsDir, name)), parseDownloadedFileMeta(''));
     const known = { ...meta.directURL === undefined ? {} : { directUrl: meta.directURL }, ...meta.version ? { version: meta.version } : {} };
     const modId = effectiveModId(meta.modID, name);
     if (modId === undefined) return known;
     const game = meta.gameName ?? readGameName(await get(settingsFile(context.instanceRoot)));
     const domain = nexusDomainForMetaGame(game);
-    if (domain !== undefined) return { page: formatNexusPage({ game: domain, modId, fileId: meta.fileID }), ...known };
-    return meta.directURL === undefined
-      ? { ...known, note: `${name} comes from '${game}', a game the instance adapter has no Nexus page for` }
-      : known;
+    return domain === undefined ? known : { page: formatNexusPage({ game: domain, modId, fileId: meta.fileID }), ...known };
   } catch (err) {
-    return { note: `the page of ${name} could not be read, so its manifest names none: ${errorMessage(err)}` };
+    return { pageUnreadable: errorMessage(err) };
   }
 }
 
@@ -118,7 +115,7 @@ async function nexusFileOf(meta: MetaIni, context: Mo2Context): Promise<NexusMod
 
 export function mo2Installation(
   context: Mo2Context, { downloadedFileHash, downloadedFilesHashed }: Pick<HashIndex, 'downloadedFileHash' | 'downloadedFilesHashed'>,
-): Pick<InstanceAdapter, 'installationFile' | 'downloadedFile' | 'downloadedFileHolding' | 'downloadedFilesHashed' | 'nexusFileAt' | 'downloadedFileQuery' | 'modMetadata' | 'nexusFile' | 'writeNewestVersion' | 'metadataOf' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder'> {
+): Pick<InstanceAdapter, 'installationFile' | 'downloadedFile' | 'downloadedFileHolding' | 'downloadedFilesHashed' | 'nexusFileAt' | 'nexusGames' | 'downloadedFileQuery' | 'modMetadata' | 'nexusFile' | 'writeNewestVersion' | 'metadataOf' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder'> {
   return {
     modMetadata: (mod) => readOrReason(async () => metadataOf(await readMetaIni(context, mod, 'list'), context)),
 
@@ -147,8 +144,8 @@ export function mo2Installation(
       await writeTrashing(plan.file, changeOwnedKeysInText(plan.held, plan.changes), trash);
     }),
 
-    async installationFile(mod) {
-      const meta = await readMetaIni(context, mod, 'list');
+    async installationFile(mod, folder) {
+      const meta = folder === undefined ? await readMetaIni(context, mod, 'list') : await readMetaIniIn(folder);
       const { installationFileName } = meta;
       if (installationFileName === undefined) return { kind: 'read', answer: undefined };
       const refused = (why: string): FileRead<InstallationFile | undefined> =>
@@ -170,8 +167,8 @@ export function mo2Installation(
       if (!(await exists(path))) return { kind: 'read', answer: undefined };
       const hashed = await downloadedFileHash(path);
       if (hashed.kind === 'unreadable') return hashed;
-      const { page, directUrl, version } = await factsOfDownloadedFile(context, dirname(path), name);
-      return { kind: 'read', answer: { path, ...hashed.answer, ...page === undefined ? {} : { page }, ...directUrl === undefined ? {} : { directUrl }, ...version === undefined ? {} : { version } } };
+      const { page, directUrl, version, pageUnreadable } = await factsOfDownloadedFile(context, dirname(path), name);
+      return { kind: 'read', answer: { path, ...hashed.answer, ...page === undefined ? {} : { page }, ...directUrl === undefined ? {} : { directUrl }, ...version === undefined ? {} : { version }, ...pageUnreadable === undefined ? {} : { pageUnreadable } } };
     },
 
     downloadedFileHolding: async ({ size, hash }) => {
@@ -205,20 +202,22 @@ export function mo2Installation(
       const { downloadsDir, names } = listed.answer;
       const hashed = await downloadedFilesHashed(names.map((name) => downloadedFilePath(downloadsDir, name)), options);
       const paged = await Promise.all(hashed.files.map(async (file) => {
-        const { note, page, directUrl, version } = await factsOfDownloadedFile(context, downloadsDir, basename(file.path));
-        return { file: { ...file, page, directUrl, version }, notes: note === undefined ? [] : [note] };
+        const { page, directUrl, version, pageUnreadable } = await factsOfDownloadedFile(context, downloadsDir, basename(file.path));
+        return { ...file, page, directUrl, version, ...pageUnreadable === undefined ? {} : { pageUnreadable } };
       }));
-      return { files: paged.map(({ file }) => file), notes: [...hashed.notes, ...paged.flatMap(({ notes }) => notes)] };
+      return { files: paged, notes: hashed.notes };
     },
 
     nexusFileAt: parseNexusPage,
+
+    nexusGames: () => nexusDomainsOfInstance(context),
 
     downloadedFileQuery: (name) => readOrReason(async () => {
       if (basename(name) !== name || name === '..') return undefined;
       const downloadsDir = await currentDownloadsDir(context);
       const path = downloadedFilePath(downloadsDir, name);
       if (!(await exists(path))) return undefined;
-      const { meta } = parseDownloadedFileMeta(await get(downloadedFileMetadataPath(downloadsDir, name), ''));
+      const { meta } = await readOrAbsent(() => downloadedMetaAt(downloadedFileMetadataPath(downloadsDir, name)), parseDownloadedFileMeta(''));
       return { games: await nexusDomainsOfInstance(context), md5: await md5Of(path), modID: effectiveModId(meta.modID, name), fileID: meta.fileID };
     }),
 

@@ -1,9 +1,14 @@
+using System.Collections.Concurrent;
 using System.IO.Abstractions;
 using System.Reflection;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Serialization.Newtonsoft;
+using Mutagen.Bethesda.Serialization.Utility;
+using Mutagen.Bethesda.Strings;
 using Noggog;
 using Noggog.IO;
 using Noggog.WorkEngine;
@@ -33,18 +38,23 @@ internal sealed class GameCodec : IGameCodec
 
     public IReadOnlyDictionary<string, int> LoadFlags => GameSpecifics.LoadFlags;
 
+    public IReadOnlyList<IReadOnlyList<HeaderFlag>> NewPluginFlags(GameRelease release, ModType type) => GameSpecifics.NewPluginFlags(release, type);
+
     public CreationKitShapes CreationKitShapes => GameSpecifics.CreationKitShapes;
 
     public IReadOnlyList<string> TransientTypes(IModGetter plugin) => GameSpecifics.TransientTypes((IGameModGetter)plugin);
 
     public uint NextObjectIdDefault => ModStats.NextFormIDDefault;
 
-    public Task SerializeWholeMod(
+    public async Task SerializeWholeMod(
         IModGetter plugin, string folder, IWorkDropoff workDropoff, CancellationToken cancel,
         IFileSystem? fileSystem = null, ICreateStream? streamCreator = null)
-        => MutagenJsonConverter.Instance.Serialize(
+    {
+        using var cleanup = SerializationHelper.GetStreamCreator(streamCreator, fileSystem.GetOrDefault(), folder, out var creator);
+        await MutagenJsonConverter.Instance.Serialize(
             (IGameModGetter)plugin, folder, extraMeta: null, workDropoff: workDropoff,
-            fileSystem: fileSystem, streamCreator: streamCreator, cancel: cancel);
+            fileSystem: fileSystem, streamCreator: UnheldMembers.LeavingOut(plugin, creator), cancel: cancel);
+    }
 
     // Argument 0 is the folder, not a mod, so this call site emits no mixin and cannot collide (CS8785).
     public async Task<IMod> DeserializeWholeMod(
@@ -63,10 +73,15 @@ internal sealed class GameCodec : IGameCodec
         return clone;
     }
 
-    public IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record)
+    public IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record, bool localized, Func<Type, string?> baseMemberOf)
     {
-        if (record is not (ICellGetter or IWorldspaceGetter or IDialogTopicGetter) && !GameSpecifics.Normalizes(record)) return record;
+        var type = record.GetType();
+        if (record is not (ICellGetter or IWorldspaceGetter or IDialogTopicGetter) && !DeletedReferences.CanReach(type) && !GameSpecifics.Normalizes(record)
+            && !Targets.CanReach(type) && (localized || !StringHolders.CanReach(type)))
+            return record;
         var copy = record.DeepCopy();
+        Targets.ForEach(copy, DefaultTargetAsRead);
+        if (!localized) StringHolders.ForEach(copy, InDefaultLanguage);
         switch (copy)
         {
             case Cell cell:
@@ -95,8 +110,52 @@ internal sealed class GameCodec : IGameCodec
                 ZeroTopicGroupFields(topic);
                 break;
         }
+        DeletedReferences.ForEach(copy, reference => ClearBaseOfDeleted(reference, baseMemberOf));
         GameSpecifics.Normalize(copy);
         return copy;
+    }
+
+    // Mutagen reads the NAME of a deleted reference into one member and writes a deleted record as its
+    // header alone, so its reread holds no base record. Any other field of a deleted record is a divergence.
+    private static readonly RecordGraph DeletedReferences = new(typeof(IPlacedGetter).IsAssignableFrom);
+
+    private static void ClearBaseOfDeleted(object node, Func<Type, string?> baseMemberOf)
+    {
+        if ((((IMajorRecordGetter)node).MajorRecordFlagsRaw & DeletedFlag.Bit) == 0) return;
+        if (baseMemberOf(node.GetType()) is not { } member) return;
+
+        var link = node.GetType().GetProperty(member)?.GetValue(node);
+        link?.GetType().GetMethod("SetToNull", Type.EmptyTypes)?.Invoke(link, null);
+    }
+
+    private static readonly RecordGraph Targets = new(type => type == typeof(LocationTargetRadius));
+
+    // Mutagen's default target is a fallback of type NearReference, whose bytes it reads back as an
+    // empty reference.
+    private static void DefaultTargetAsRead(object node)
+    {
+        var radius = (LocationTargetRadius)node;
+        if (radius.Target is LocationFallback { Type: LocationTargetRadius.LocationType.NearReference, Data: 0 })
+            radius.Target = new LocationTarget();
+    }
+
+    private static readonly ConcurrentDictionary<Type, PropertyInfo[]> StringPropertiesByType = new();
+
+    private static PropertyInfo[] StringProperties(Type type) => StringPropertiesByType.GetOrAdd(type, declaring =>
+        [.. declaring.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.CanWrite && p.PropertyType == typeof(TranslatedString))]);
+
+    private static readonly RecordGraph StringHolders = new(type => StringProperties(type).Length > 0);
+
+    // A plugin that is not localized writes a string's one text and never its language, so its reread
+    // holds that text in the language the read gives.
+    private static void InDefaultLanguage(object holder)
+    {
+        foreach (var property in StringProperties(holder.GetType()))
+        {
+            if (property.GetValue(holder) is TranslatedString held && held.ToList() is [var (_, text)])
+                property.SetValue(holder, new TranslatedString(TranslatedString.DefaultLanguage, text));
+        }
     }
 
     internal static void ZeroTopicGroupFields(DialogTopic topic)

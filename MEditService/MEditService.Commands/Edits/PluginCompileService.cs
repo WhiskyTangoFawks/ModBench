@@ -72,7 +72,7 @@ internal sealed class PluginCompileService(
         {
             return PluginCompileOutcome.Refused(
                 CompileRefusal.SourceDoesNotParse,
-                $"{plugin.Name} cannot be compiled: {string.Join("; ", refusedFiles.Select(file => $"{file.Path}: {file.Reason}"))}");
+                $"{plugin.Name} cannot be compiled: {string.Join("; ", refusedFiles.Select(file => $"{file.Path}: {file.Reason}"))} {RegenerateTheSource}");
         }
 
         var (parsedTree, deserializeRefusal) = await DeserializeSource(files, plugin, repository, loadOrder);
@@ -161,7 +161,7 @@ internal sealed class PluginCompileService(
         {
             if (!repository.RelativePathOf(plugin, drop.Record).Holds(out var file, out var unread)) return SourceDoesNotParse(plugin, unread);
             var held = file ?? throw new InvalidOperationException($"Expected the tree this compile read to hold {drop.Record.FormKey}'s document.");
-            named.Add($"in {held}, {string.Join(", ", drop.Paths.Select(path => $"'{path}'"))}");
+            named.Add($"in {held}, '{drop.Field}'");
         }
         return PluginCompileOutcome.Refused(
             CompileRefusal.SourceValueDropped,
@@ -169,7 +169,9 @@ internal sealed class PluginCompileService(
     }
 
     private static PluginCompileOutcome SourceDoesNotParse(PluginAddress plugin, SourceFailure unread) =>
-        PluginCompileOutcome.Refused(CompileRefusal.SourceDoesNotParse, $"{plugin.Name} could not be read from its source: {unread.Reason}");
+        PluginCompileOutcome.Refused(
+            CompileRefusal.SourceDoesNotParse,
+            $"{plugin.Name} could not be read from its source: {unread.Reason}" + (unread.DecompileRepairs ? $" {RegenerateTheSource}" : ""));
 
     private static PluginCompileOutcome WriteFailed(PluginAddress plugin, string reason) =>
         PluginCompileOutcome.Refused(

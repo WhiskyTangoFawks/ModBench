@@ -157,7 +157,7 @@ public sealed class UnsavedDocumentTests : IDisposable
     {
         File.WriteAllText(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved"));
 
-        _index.NextSnapshotUntil(() => _index.ReadFromItsPluginFileForItsUnreadableSource(_compiledPlugin.Key), "the binary read in the tree's place");
+        _index.NextCheckUntil(() => _index.ReadFromItsPluginFileForItsUnreadableSource(_compiledPlugin.Key), "the binary read in the tree's place");
 
         Assert.Null(LaterReadFailureOfCompiledPlugin());
     }
@@ -179,7 +179,7 @@ public sealed class UnsavedDocumentTests : IDisposable
     {
         File.WriteAllText(_file, Typed(_npc, _race));
 
-        _index.NextSnapshotUntil(() => _index.ReadFromItsPluginFileForItsUnreadableSource(_compiledPlugin.Key), "the binary read in the tree's place");
+        _index.NextCheckUntil(() => _index.ReadFromItsPluginFileForItsUnreadableSource(_compiledPlugin.Key), "the binary read in the tree's place");
 
         Assert.Null(LaterReadFailureOfCompiledPlugin());
     }
@@ -300,13 +300,13 @@ public sealed class UnsavedDocumentTests : IDisposable
     }
 
     [Fact]
-    public void AHandOverThatValidatesCleanly_LeavesAFailureTheReconcileSet()
+    public void AHandOverThatValidatesCleanly_LeavesAFailureTheCheckSet()
     {
         var faults = new InMemoryNotificationPublisher { FaultsOn = IsRowsChanged };
         using var faulting = Indexes.Reconciled(_fixture, InstanceRootNamed("faulting"), notifications: faults);
         _compiledPlugin.HandEdit(faulting.DocumentOf(_npc, _compiledPlugin.Key), "\"CompiledPluginNpc\"", "\"EditedOnDisk\"");
-        faulting.Holder.Apply(faulting.Holder.Current);
-        Waits.Reached(() => faulting.Status.State == LoadOrderState.Failed, "the reconcile's failed status");
+        faulting.SignalChange();
+        Waits.Reached(() => faulting.Status.State == LoadOrderState.Failed, "the check's failed status");
 
         faults.FaultsOn = null;
         faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"EditedOnDisk\"", "\"TypedUnsaved\""))]);

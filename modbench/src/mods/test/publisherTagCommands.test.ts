@@ -44,7 +44,7 @@ const value: InstanceValue = {
     paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map([['M', '/instance/mods/M'], ['N', '/instance/mods/N']]), sourceDirs: new Map() },
   }),
   publisherTags: DECLARED,
-  publisherConfiguration: { kind: 'read', covering: () => [], listed: (path) => LISTED[path] ?? [], pathProblems: [] },
+  publisherConfiguration: { kind: 'read', covering: () => [], listed: (path) => LISTED[path] ?? [], pathProblems: [], unshippable: { file: '', reason: () => undefined } },
 };
 
 const instance = { ...instanceThatReads, value };

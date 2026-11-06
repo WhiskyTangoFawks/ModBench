@@ -50,7 +50,7 @@ public sealed class SequenceTrailsAnnouncementTests : IDisposable
         _released = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         PluginBinaries.Touch(_pluginPath);
-        _holder.Apply(_holder.Current);
+        _index.SignalChange();
         Waits.Reached(() => _holding, "the re-derive's announcement being published");
         var read = Task.Run(() => _index.Sequence);
 

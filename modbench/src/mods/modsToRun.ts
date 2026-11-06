@@ -39,7 +39,7 @@ function rowsOf(deps: ModsToRunDeps, clicked: unknown, selected: readonly unknow
 const sourceModOfFolder = (path: unknown, { paths }: InstanceValue): string | undefined =>
   [...paths.sourceDirs].find(([, folder]) => folder === path)?.[0];
 
-// modlist-repository.md, Every mod: every mod folder, in every profile, never the Mods view's rows. A separator has no manifest.
+// instance-repository.md, Every mod: every mod folder, in every profile, never the Mods view's rows. A separator has no manifest.
 const everyMod = (value: InstanceValue): string[] =>
   (value.modFolders ?? []).filter(({ kind }) => kind === 'mod').map(({ modName }) => modName);
 
@@ -47,7 +47,7 @@ const everyMod = (value: InstanceValue): string[] =>
 export const everyModHere = ({ instance }: Pick<ModsToRunDeps, 'instance'>): ModsToRun =>
   ({ mods: everyMod(instance.value), sourceMods: [], refused: [], everyMod: true, view: MODS_KEY_ARGS.view });
 
-// modlist-repository.md, Every mod, story 2: a separator stands for its mods.
+// instance-repository.md, Every mod, story 2: a separator stands for its mods.
 function modsHeldBy(kind: unknown, name: string, value: InstanceValue): string[] | undefined {
   if (kind !== 'mod' && kind !== 'separator') return undefined;
   const asked: EntryRef = { kind, name };
@@ -63,7 +63,7 @@ function modsOf(row: unknown, value: InstanceValue): string[] | undefined {
   return typeof name === 'string' ? modsHeldBy(kindOf(row), name, value) : undefined;
 }
 
-// modlist-repository.md, Every mod, story 1: an agent call may supply all of it, and none is every mod.
+// instance-repository.md, Every mod, story 1: an agent call may supply all of it, and none is every mod.
 export function modsOfAgent(argument: readonly Argument[], value: InstanceValue): string[] {
   if (argument.length === 0) return everyMod(value);
   const held = argument.flatMap((entry) => {

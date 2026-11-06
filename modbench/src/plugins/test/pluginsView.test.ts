@@ -155,7 +155,7 @@ function pluginsView(
   const reporters = new Map<string, RecordingReporter>();
   const plugins = createPluginsView({
     instance, commands: pluginCommandsWith(fakeInstanceAdapter().adapter), recordBrowser, client,
-    pluginSync, modStatuses: NO_MOD_STATUSES,
+    pluginSync, modStatuses: NO_MOD_STATUSES, fileReads: { checksum: () => Promise.resolve({ kind: 'read', value: undefined }), version: () => Promise.resolve({ kind: 'read', value: undefined }), readable: () => Promise.resolve({ kind: 'read', value: false }) },
     channel: silentChannel,
     log: () => undefined,
     reporterFor: (tag) => { const reporter = recordingReporter(); reporters.set(tag, reporter); return reporter; },
@@ -288,7 +288,7 @@ describe('the Plugins view\'s selection and the highlight (plugins.md, The highl
 });
 
 const APPLIED_STATUS: LoadOrderProgress = {
-  totalPlugins: 3, activePlugins: 3, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, failures: [],
+  totalPlugins: 3, activePlugins: 3, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, validating: false, failures: [],
 };
 
 function snapshotOf(...names: string[]): LoadOrderSnapshot {

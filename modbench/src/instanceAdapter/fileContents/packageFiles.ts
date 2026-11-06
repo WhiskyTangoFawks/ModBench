@@ -1,11 +1,12 @@
-// The files a manifest's packages hold, written into the folder it builds (modlist-repository.md, Restore from manifest,
+// The files a manifest's packages hold, written into the folder it builds (instance-repository.md, Restore from manifest,
 // story 1).
 
 import { randomUUID } from 'node:crypto';
 import { copyFile, rename } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import type { MoveToTrash } from '../../ports/trash';
-import { ensureDir, exists, makeTempDir, ownTempPrefix, realPathIfThere, remove, withLock } from '../files';
+import { ensureDir, exists, makeTempDir, realPathIfThere, remove, withLock } from '../files';
+import { ownTempPrefix } from '../../repositoriesLib/wholeWrites';
 import type { InstanceAdapter, PackageFile } from '../instanceAdapter';
 import { EXTRACTION_PREFIX } from './hashIndex';
 import type { InstallationFileReader } from './installationFileReader';

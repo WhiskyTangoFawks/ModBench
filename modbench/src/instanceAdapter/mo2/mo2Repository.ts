@@ -2,6 +2,7 @@
 
 import type { Dirent } from 'node:fs';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
+import { commitFolder } from '../commitFolder';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { exists, get, GIT_DIR, ignoreSkippedLink, listDir, listFolders, readOrAbsent, listEntries, putIfChanged, remove, type ResolvedEntry } from '../files';
@@ -12,13 +13,14 @@ import { DATA_FOLDER } from '../gameFolder/gameFolderResolver';
 import { isWithin } from '../gameFolder/pathWithin';
 import {
   hashIndexDir, ignoreListFile, isManifestPath, isOwnManifest, isSkippedByManifestSearch, modsDir, recordIndexDir,
-  sourceRootDir, submodulesFile, whitelistIgnoreList, withOtherManifestLines, withSourceFolderLines, withSourceModLines,
+  sourceRootDir, submodulesFile, whitelistIgnoreList, withHeldWholeLines, withOtherManifestLines, withSourceModLines,
 } from './layout';
 import type { ConfigurationFile, ManagerAdapter } from '../publisher';
 import { currentDownloadsDir, type Mo2Context } from './mo2Context';
 import { filesBelow } from './mo2Files';
+import { sourceFoldersOf } from './mo2Submodules';
 
-type Mo2Repository = Pick<InstanceAdapter, 'gameFiles' | 'gameFilesTakenBy' | 'writeIgnoreList' | 'otherManifests' | 'writeOtherManifestLines' | 'writeSourceFolderLines'> & Pick<ManagerAdapter, 'filesKept'>;
+type Mo2Repository = Pick<InstanceAdapter, 'writeIgnoreList' | 'otherManifests' | 'writeOtherManifestLines' | 'writeHeldWholeLines' | 'commitFolder'> & Pick<ManagerAdapter, 'filesKept'>;
 
 // A manifest outside the mod folders, by the names of the folders down to it and its own.
 interface FoundManifest { readonly segments: readonly string[]; readonly folder: string }
@@ -45,7 +47,7 @@ function nestedAmong(names: readonly string[]): Map<string, string> {
   return new Map([...why].sort(([a], [b]) => (a < b ? -1 : 1)).map(([name, reasons]) => [name, `was skipped: ${reasons.join('; ')}.`]));
 }
 
-// modlist-repository.md, The repository, story 2. A link is not followed: it can leave the instance. An
+// instance-repository.md, The repository, story 2. A link is not followed: it can leave the instance. An
 // unreadable folder is named; the rest are searched (commands.md, A selection is one gesture, and each item lands on its own).
 async function searchForOtherManifests(context: Mo2Context): Promise<ManifestSearch> {
   const { instanceRoot } = context;
@@ -99,17 +101,22 @@ async function otherManifestLinesWritten(context: Mo2Context): Promise<void> {
   });
 }
 
-async function sourceFolderLinesWritten(instanceRoot: string, sourceFolders: readonly string[], held: boolean): Promise<void> {
+const namesIn = (root: string, folders: readonly string[]): string[] => folders.map((folder) => {
+  const name = relative(root, folder);
+  if (!isBareName(name)) throw new Error(`${folder} is not a folder of ${root}, so the instance repository's ignore list does not name it`);
+  return name;
+});
+
+// The lines of folders of `root`, written in the ignore list when the instance has one.
+async function folderLinesWritten(
+  instanceRoot: string, root: string, folders: readonly string[], kept: string, withLines: (ignoreList: string, names: readonly string[]) => string | undefined,
+): Promise<void> {
   const file = ignoreListFile(instanceRoot);
-  const names = sourceFolders.map((folder) => {
-    const name = relative(sourceRootDir(instanceRoot), folder);
-    if (!isBareName(name)) throw new Error(`${folder} is not a folder of ${sourceRootDir(instanceRoot)}, so the instance repository's ignore list does not name it`);
-    return name;
-  });
+  const names = namesIn(root, folders);
   if (!(await exists(file))) return;
   await putIfChanged(file, (before) => {
-    const after = withSourceFolderLines(before, names, held);
-    if (after === undefined) throw new Error(`${file} has a marker of the source folders it holds with no match, so their lines are left as they are`);
+    const after = withLines(before, names);
+    if (after === undefined) throw new Error(`${file} has a marker of the ${kept} it holds with no match, so their lines are left as they are`);
     return after;
   });
 }
@@ -153,7 +160,7 @@ function caseBlindFinder({ root, holdsDataFiles }: GamePlace) {
 function whitelistAfter(ignoreList: string, whitelist: string): string {
   const whitelistLines = whitelist.trimEnd().split('\n');
   const text = ignoreList.replaceAll('\r\n', '\n');
-  const gitLines = (withSourceModLines(text, []) ?? text).trimEnd().split('\n').map((line) => line.replace(/(?<!\\) +$/, ''));
+  const gitLines = (withSourceModLines(text, { submodules: [], plain: [] }) ?? text).trimEnd().split('\n').map((line) => line.replace(/(?<!\\) +$/, ''));
   const holdsWhitelist = gitLines.some((_, at) => whitelistLines.every((line, i) => gitLines[at + i] === line));
   if (holdsWhitelist) return '';
   const lineEnding = ignoreList.includes('\r\n') ? '\r\n' : '\n';
@@ -165,34 +172,19 @@ function whitelistAfter(ignoreList: string, whitelist: string): string {
 const isModFolder = async (instanceRoot: string, folder: string): Promise<boolean> =>
   await isWithin(dirname(folder), modsDir(instanceRoot)) && await isWithin(modsDir(instanceRoot), dirname(folder));
 
-export function mo2Repository(
-  context: Mo2Context, { gameFileHash }: Pick<HashIndex, 'gameFileHash'>, publisherFile: ConfigurationFile | undefined, deployedPath: DeployedPath,
-): Mo2Repository {
+export function mo2Repository(context: Mo2Context, publisherFile: ConfigurationFile | undefined): Mo2Repository {
   const { instanceRoot } = context;
   const whitelist = whitelistIgnoreList(publisherFile?.name);
-  const gameFiles: InstanceAdapter['gameFiles'] = async (place, modFilePaths) => {
-    const find = caseBlindFinder(place);
-    const files = new Map<string, GameFile>();
-    const unreadable: Record<string, string> = {};
-    for (const modFilePath of modFilePaths) {
-      const found = await find(modFilePath);
-      if (found.kind === 'unreadable') { unreadable[modFilePath] = found.reason; continue; }
-      const names = found.answer;
-      if (names === undefined || files.has(names.join('/').toLowerCase())) continue;
-      const hashed = await gameFileHash(join(place.root, ...names));
-      if (hashed.kind === 'unreadable') { unreadable[modFilePath] = hashed.reason; continue; }
-      files.set(names.join('/').toLowerCase(), { path: names.join('/'), hash: hashed.answer.hash });
-    }
-    return { files: [...files.values()], unreadable };
-  };
 
   return {
     async writeIgnoreList() {
       const file = ignoreListFile(instanceRoot);
       const existed = await exists(file);
       let appended = '';
-      await putIfChanged(file, (before) => {
-        appended = whitelistAfter(before, whitelist);
+      await putIfChanged(file, async (before) => {
+        const whitelisted = whitelistAfter(before, whitelist);
+        const after = whitelisted === '' ? before : withSourceModLines(before + whitelisted, await sourceFoldersOf(instanceRoot)) ?? before + whitelisted;
+        appended = after.startsWith(before) ? after.slice(before.length) : whitelisted;
         return before + appended;
       }, { ifMissing: '' });
       return async () => {
@@ -230,8 +222,41 @@ export function mo2Repository(
 
     writeOtherManifestLines: () => otherManifestLinesWritten(context),
 
-    writeSourceFolderLines: (sourceFolders, held) => sourceFolderLinesWritten(instanceRoot, sourceFolders, held),
+    writeHeldWholeLines: (modFolders, held) =>
+      folderLinesWritten(instanceRoot, modsDir(instanceRoot), modFolders, 'mod folders held whole', (list, names) => withHeldWholeLines(list, names, held)),
 
+    commitFolder: async (folder, message) => {
+      const names = namesIn(modsDir(instanceRoot), [folder]);
+      await commitFolder(instanceRoot, folder, message, (list) => {
+        const lines = withHeldWholeLines(list, names, true);
+        if (lines === undefined) throw new Error('the .gitignore HEAD holds has a marker of the mod folders held whole with no match, so the lines that let the folder in cannot be committed');
+        return lines;
+      });
+    },
+  };
+}
+
+/** Which game files a mod's files take. */
+export function mo2GameFiles(
+  { instanceRoot }: Mo2Context, { gameFileHash }: Pick<HashIndex, 'gameFileHash'>, deployedPath: DeployedPath,
+): Pick<InstanceAdapter, 'gameFiles' | 'gameFilesTakenBy'> {
+  const gameFiles: InstanceAdapter['gameFiles'] = async (place, modFilePaths) => {
+    const find = caseBlindFinder(place);
+    const files = new Map<string, GameFile>();
+    const unreadable: Record<string, string> = {};
+    for (const modFilePath of modFilePaths) {
+      const found = await find(modFilePath);
+      if (found.kind === 'unreadable') { unreadable[modFilePath] = found.reason; continue; }
+      const names = found.answer;
+      if (names === undefined || files.has(names.join('/').toLowerCase())) continue;
+      const hashed = await gameFileHash(join(place.root, ...names));
+      if (hashed.kind === 'unreadable') { unreadable[modFilePath] = hashed.reason; continue; }
+      files.set(names.join('/').toLowerCase(), { path: names.join('/'), hash: hashed.answer.hash });
+    }
+    return { files: [...files.values()], unreadable };
+  };
+
+  return {
     gameFiles,
 
     async gameFilesTakenBy(place, folder, paths) {

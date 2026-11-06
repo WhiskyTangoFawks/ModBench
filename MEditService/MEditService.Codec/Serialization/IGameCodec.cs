@@ -1,6 +1,8 @@
 using System.IO.Abstractions;
 using System.Reflection;
 using MEditService.Codec.Schema;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog.IO;
 using Noggog.WorkEngine;
@@ -35,6 +37,9 @@ public interface IGameCodec
     /// The localized flag is not one: it changes how the plugin's strings are stored.</summary>
     IReadOnlyDictionary<string, int> LoadFlags { get; }
 
+    /// <summary>The header flag combinations xEdit offers a new file of the extension, in <paramref name="release"/>.</summary>
+    IReadOnlyList<IReadOnlyList<HeaderFlag>> NewPluginFlags(GameRelease release, ModType type);
+
     /// <summary>The Next Object ID the game's serializer omits from a header document.</summary>
     uint NextObjectIdDefault { get; }
 
@@ -46,10 +51,9 @@ public interface IGameCodec
     /// <summary>The header's transient types as comparable values, empty for a game whose header has none.</summary>
     IReadOnlyList<string> TransientTypes(IModGetter plugin);
 
-    /// <summary>A copy of <paramref name="record"/> without the encoding a rewrite is entitled to
-    /// change: group-header-derived fields zeroed, and a worldspace's block levels in one canonical
-    /// order (ADR-0006).</summary>
-    IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record);
+    /// <summary>A copy of <paramref name="record"/> without the encoding a rewrite may change (ADR-0006). A deleted
+    /// reference's base record is the member <paramref name="baseMemberOf"/> names for its type.</summary>
+    IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record, bool localized, Func<Type, string?> baseMemberOf);
 
     /// <summary>A mod holding <paramref name="plugin"/>'s header and no record, which the whole-mod
     /// door writes as the header document alone.</summary>

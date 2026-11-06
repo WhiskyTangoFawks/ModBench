@@ -62,4 +62,28 @@ public sealed class ReadMeetsSwapTests : IDisposable
             .OfType<LoadOrderStatusNotification>().Select(n => n.Status.State));
         Assert.NotEmpty(_index.ListedIn(_fixture.Plugins.Single().Key));
     }
+
+    [Fact]
+    public async Task ARead_OfAnIndexFileDuckDbInvalidatedMidReconcile_ReopensTheIndex_OnceThatReconcileEnds()
+    {
+        using var data = new PluginFixtureBuilder("read-meets-invalidation-mid-reconcile")
+            .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
+            .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
+            .Build();
+        using var gate = new GatedPluginAdapter(gateBefore: "B.esp");
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, gate);
+        holder.Apply(SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        await gate.WaitUntilParkedAsync();
+        IndexFiles.Invalidate(data.InstanceRoot);
+
+        var refused = index.Queries.GetPlugins().Refused();
+        gate.Release();
+
+        Assert.Contains("invalidated", refused.Message, StringComparison.Ordinal);
+        Assert.True(
+            Waits.ReachedWithin(() => index.Status.State == LoadOrderState.Ready, TimeSpan.FromSeconds(20)),
+            "the reopened index answering Ready");
+        Assert.All(data.Plugins, plugin => Assert.NotEmpty(index.ListedIn(plugin.Key)));
+    }
 }

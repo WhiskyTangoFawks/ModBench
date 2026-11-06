@@ -96,7 +96,7 @@ internal sealed class FailedReads(Store.Store index, ISourceAdapter source, ILog
     // A read that ran out of memory stands on a state that does not vouch: a file it could not read did
     // not run it out.
     private static bool StandsOn(ReadState state, ReadOutcome outcome) =>
-        outcome.StoppedBy is OutOfMemoryException || (state.Vouches && StateObserves(outcome));
+        outcome.StoppedBy is { } stoppedBy && IndexFaultException.RanOutOfMemory(stoppedBy) || (state.Vouches && StateObserves(outcome));
 
     // A stopped read stands on what the state holds: a tree's document stamps, a binary's hash. A
     // failure of git, or not of the plugin's bytes, is read again at the next reconcile.

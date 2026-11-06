@@ -8,28 +8,21 @@
           "Top.esp": "Override"
         },
         "CellStatesByFocus": null,
-        "CheckErrors": {
-          "Base.esm": "[0].Data.ParameterOneRecord: Found a NULL reference, expected: ",
-          "Top.esp": "[0].Data.ParameterOneRecord: Found a NULL reference, expected: "
-        },
+        "CheckErrors": null,
         "Children": [
           {
             "CellStates": {
               "Top.esp": "Override"
             },
             "CellStatesByFocus": null,
-            "CheckErrors": {
-              "Base.esm": "Data.ParameterOneRecord: Found a NULL reference, expected: "
-            },
+            "CheckErrors": null,
             "Children": [
               {
                 "CellStates": {
                   "Top.esp": "Override"
                 },
                 "CellStatesByFocus": null,
-                "CheckErrors": {
-                  "Base.esm": "ParameterOneRecord: Found a NULL reference, expected: "
-                },
+                "CheckErrors": null,
                 "Children": [
                   {
                     "CellStates": {
@@ -186,18 +179,14 @@
               "Top.esp": "Override"
             },
             "CellStatesByFocus": null,
-            "CheckErrors": {
-              "Top.esp": "Data.ParameterOneRecord: Found a NULL reference, expected: "
-            },
+            "CheckErrors": null,
             "Children": [
               {
                 "CellStates": {
                   "Top.esp": "Override"
                 },
                 "CellStatesByFocus": null,
-                "CheckErrors": {
-                  "Top.esp": "ParameterOneRecord: Found a NULL reference, expected: "
-                },
+                "CheckErrors": null,
                 "Children": [
                   {
                     "CellStates": {

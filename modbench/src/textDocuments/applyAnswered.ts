@@ -13,7 +13,7 @@ export async function applyAnswered(
 ): Promise<string | undefined> {
   let failure: string | undefined;
   try {
-    if (items.length > 0) await source.applyWorkspaceChanges(items);
+    await source.applyWorkspaceChanges(items);
   } catch (error) {
     failure = `${errorMessage(error)} VS Code stops at the first change it cannot make, so some changes may have landed.`;
   }

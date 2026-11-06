@@ -25,13 +25,31 @@ const lackingMasters = (...ghosts: string[]): Scene => (facts) => facts.reconcil
 const missingMaster = (ghost: string) => `"${ghost}" is a master of "A.esp", and is missing or not active.`;
 const masterFlagAfterB = (overrides: Partial<PluginMetadata> = {}): Scene => (facts) =>
   facts.reconciled([held({ isMaster: true, ...overrides }), held({ name: 'B.esp' })], [], [B, A], [B, A]);
-const MASTER_FLAG_LINE = 'Warning: "A.esp" has the master flag, so the game loads it before "B.esp", which has not.';
+const MASTER_FLAG_LINE = 'Warning: "A.esp" loads as a master, by its master flag or its extension, so before "B.esp", which does not.';
 const unreadable: Scene = (facts) => facts.reconciled([held({ hasParseFailure: true })], [], [], []);
 const sourceUnreadable: Scene = (facts) => facts.reconciled([held({ isCompiledPlugin: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } })], [], [], []);
 const sourceUnreadableForGood: Scene = (facts) => facts.reconciled([held({ isCompiledPlugin: true, pluginSourceUnreadable: { reason: 'Twin folders.', decompileRepairs: false } })], [], [], []);
 const changed: Scene = (facts) => changedOutside(facts, 'SomeMod', 'A.esp');
 const malformed: Scene = (facts) => facts.diagnosed([diagnosis('first'), diagnosis('second')]);
 const scenes = (...parts: Scene[]): Scene => (facts) => parts.forEach((part) => part(facts));
+
+describe('PluginFacts — the sorting rules are judged once a reconcile completes (plugins.md, A row, Plugin)', () => {
+  const heldElsewhereRefusal = { kind: 'heldElsewhere', message: 'another window holds this instance' } as const;
+  const failedIndexRefusal = { kind: 'failed', message: 'the record index threw' } as const;
+  it.each([
+    ['while indexing', scenes(), 'Still indexing…'],
+    ['when the snapshot failed', (facts: PluginFacts) => facts.refused(failedIndexRefusal), failedIndexRefusal.message],
+    ['when another window holds the record index', (facts: PluginFacts) => facts.refused(heldElsewhereRefusal), heldElsewhereRefusal.message],
+    ['when mEdit is unreachable', (facts: PluginFacts) => facts.unreachable('mEdit is down'), 'mEdit is down'],
+    ['after a reconcile', lackingMasters(), undefined],
+    ['while a later snapshot indexes', scenes(lackingMasters(), (facts) => facts.indexed([A], [])), undefined],
+  ] as const)('says why they are not judged %s', (_label, scene, reason) => {
+    const facts = new PluginFacts();
+    scene(facts);
+
+    expect(facts.sortingNotJudged()).toBe(reason);
+  });
+});
 
 describe('PluginFacts — the tooltip names the origin (plugins.md, A row, Plugin, Tooltip)', () => {
   it('names the game folder as the user reads it', () => {
@@ -105,6 +123,38 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
     const line = 'Error: "Late.esm" is a master of "A.esp", so it must load before it.';
     expect(facts.tooltipLines(A)).toContain(line);
     expect(facts.tooltipLines(late)).toContain(line);
+  });
+
+  it('judges the order the game loads in, where a blueprint plugin it loads with no line comes after the plugins that are not one, and before a blueprint line', () => {
+    const facts = new PluginFacts();
+    const blueprint = { name: 'Blueprint.esm', origin: 'SomeMod' };
+    const ship = { name: 'Ship.esm', origin: 'SomeMod' };
+    facts.reconciled(
+      [held(), held({ ...blueprint, isMaster: true, isBlueprint: true }), held({ ...ship, isMaster: true, isBlueprint: true, masters: [blueprint.name] })],
+      [], [blueprint, A, ship], [A, ship], undefined, true,
+    );
+
+    expect(facts.brokenRules()).toEqual([]);
+  });
+
+  it('breaks the blueprint rule on a blueprint line listed before a plugin that is not one, though the blueprint plugin with no line is placed', () => {
+    const facts = new PluginFacts();
+    const blueprint = { name: 'Blueprint.esm', origin: 'SomeMod' };
+    const ship = { name: 'Ship.esm', origin: 'SomeMod' };
+    facts.reconciled(
+      [held(), held({ ...blueprint, isMaster: true, isBlueprint: true }), held({ ...ship, isMaster: true, isBlueprint: true })],
+      [], [blueprint, ship, A], [ship, A], undefined, true,
+    );
+
+    expect(facts.brokenRules().map(({ rule }) => rule)).toEqual(['blueprint']);
+  });
+
+  it('judges a blueprint plugin with no line placed first in a release that does not load blueprint plugins last', () => {
+    const facts = new PluginFacts();
+    const blueprint = { name: 'Blueprint.esm', origin: 'SomeMod' };
+    facts.reconciled([held(), held({ ...blueprint, isMaster: true, isBlueprint: true })], [], [blueprint, A], [A]);
+
+    expect(facts.brokenRules().map(({ rule }) => rule)).toEqual(['blueprint']);
   });
 
   it('keeps the last sorting statuses through a re-read, until a reconcile judges again', () => {

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { Reporter } from '../ports/reporter';
-import type { PluginDiagnosisReport, PluginAddress } from '../client';
+import type { PluginDiagnosisReport, PluginAddress, LoadOrderSnapshot } from '../client';
 import { originsOfLinesNotRestored } from '../pluginCommands/pluginsNotRestored';
 import { linesWithoutFile, modsWithManifests } from '../instanceLoader/linesNotRestored';
 import { instanceLastGoodReadFailure, managerRunningMessage, type Instance, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
@@ -19,8 +19,10 @@ import { PluginFactsFeed, type PluginFactsClient } from './pluginFactsFeed';
 import { isRecordRow } from './gestureEntry';
 import type { RecordGroup, RecordPlace } from './createdRecordSelection';
 import { isPluginAddress } from '../wire/messages';
-import { pluginOrderOf, unplaced } from '../instanceLoader/pluginOrder';
-import { fileIsPresent } from '../instanceLoader/fileIsPresent';
+import { blueprintLoadsLastIn } from '../tables/gamePaths';
+import { activeInGameOrder, inGameOrder, pluginOrderOf, unplaced } from '../instanceLoader/pluginOrder';
+import { filePresence, filesPresent } from '../instanceLoader/filePresence';
+import { readFileFacts, type FileReads } from '../sortingRules/lootConditions';
 import { rulesReader, type ReadRules } from '../sortingRules/lootMetadata';
 import type { RuleFileDiagnostic } from '../sortingRules/ruleFileDiagnostics';
 import { sortingRuleFileLines } from './sortingRuleFilesMessage';
@@ -43,6 +45,7 @@ export type RecordBrowserFacet = Pick<
 >;
 
 interface PluginsTreeProviderOptions {
+  fileReads: FileReads;
   /** Name, origin, line, enabled and winning for every plugin: the row input. */
   instance: PluginsInstance;
   /** A row's children. */
@@ -134,6 +137,14 @@ export class PluginsTreeProvider
   // A new Instance value clears it; `render()` leaves it intact.
   private cache?: { rows: PluginListNode[] };
   private lastBuildHadNoRows = false;
+  private rowsBlueprints = '';
+
+  /** The order the game loads in, which mEdit is handed: it needs what Editing read of the plugins, so it is asked again as the facts change. */
+  readonly inGameOrder = {
+    of: (snapshot: Pick<LoadOrderSnapshot, 'active' | 'loadedWithNoLine' | 'gameRelease'>): PluginAddress[] =>
+      activeInGameOrder(snapshot, (plugin) => this.facts.rows.isBlueprint(plugin), blueprintLoadsLastIn(snapshot.gameRelease)),
+    onChange: (listener: () => void) => this.facts.onDidChange(listener),
+  };
   private lastLockedRowUris: ReadonlySet<string> = new Set();
   private highlighted: ReadonlySet<string> = new Set();
 
@@ -145,6 +156,7 @@ export class PluginsTreeProvider
       client: options.client,
       shownPlugins: () => this.builtRows().map(addressOfRow),
       activePlugins: () => this.builtRows().filter((row) => row.kind === 'implicitMaster' || row.plugin.enabled).map(addressOfRow),
+      blueprintLoadsLast: () => this.instanceValue.blueprintLoadsLast,
       lines: () => this.builtRows().flatMap((row) => (row.kind === 'plugin' ? [addressOfRow(row)] : [])),
       publishDiagnoses: options.publishDiagnoses,
       publishChangedOutside: options.publishChangedOutside,
@@ -154,7 +166,11 @@ export class PluginsTreeProvider
       publishSortingWarnings: options.publishSortingWarnings,
       publishSortingInfo: options.publishSortingInfo,
       publishRuleFiles: options.publishRuleFiles,
-      rules: () => ({ ...this.rules, isPresent: (filename) => fileIsPresent(this.instanceValue, filename) }),
+      rules: () => this.rules,
+      fileFacts: (reads) => readFileFacts(reads, options.fileReads, {
+        files: () => filesPresent(this.instanceValue),
+        isPresent: (path) => filePresence(this.instanceValue, path),
+      }),
     });
     this.instanceValue = options.instance.value;
     this.rules = this.readRules(this.instanceValue.sortingRuleFiles);
@@ -165,10 +181,10 @@ export class PluginsTreeProvider
       const rules = this.readRules(value.sortingRuleFiles);
       if (rules !== this.rules) {
         this.rules = rules;
-        this.facts.rulesChanged();
+        void this.facts.rulesChanged();
       }
       this._onDidChangeTreeData.fire(undefined);
-    }), options.instance.onReadFailure(() => this.render()));
+    }), options.instance.onReadFailure(() => this.render()), options.instance.onRedraw(() => this.render()));
     this.modStatuses = options.modStatuses;
     this.subscriptions.push(
       options.modStatuses.onDidChange(() => {
@@ -177,7 +193,10 @@ export class PluginsTreeProvider
       }),
       options.records.onDidChangeTreeData((child) => this._onDidChangeTreeData.fire(child)),
       this.facts,
-      this.facts.onDidChange(() => this._onDidChangeTreeData.fire(undefined)),
+      this.facts.onDidChange(() => {
+        if (this.facts.rows.blueprintPlugins() !== this.rowsBlueprints) this.cache = undefined;
+        this._onDidChangeTreeData.fire(undefined);
+      }),
     );
   }
 
@@ -410,10 +429,10 @@ export class PluginsTreeProvider
     );
     const lockedRows = loadedWithNoLine.map(({ name, origin }) => new ImplicitMasterNode(name, origin));
     this.lastLockedRowUris = new Set(lockedRows.map((row) => row.resourceUri.toString()));
-    return [
-      ...lockedRows,
-      ...fromLines.map((p) => new PluginNode({ name: p.name, enabled: p.enabled }, p.origin)),
-    ];
+    this.rowsBlueprints = this.facts.rows.blueprintPlugins();
+    return inGameOrder<PluginListNode>(
+      lockedRows, fromLines.map((p) => new PluginNode({ name: p.name, enabled: p.enabled }, p.origin)), (row) => this.facts.rows.isBlueprint(addressOfRow(row)), this.instanceValue.blueprintLoadsLast,
+    );
   }
 
   // plugins.md, A row, Plugin statuses: Not restored.

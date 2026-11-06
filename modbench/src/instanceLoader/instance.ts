@@ -1,20 +1,20 @@
 // The instance value (ADR-0015).
 
 import type { Log } from '../ports/log';
-import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
+import { FileConflictLookup, indexReusing, type FileWinners } from './fileConflictIndex';
 import {
   buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, stampedSnapshot, type ArchiveSources,
-  type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine, type LoadOrderSnapshotRefusal,
+  type DataFolderFiles, type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine, type LoadOrderSnapshotRefusal,
   type LoadOrderSnapshotValue, type PluginWithNoLine,
 } from './loadOrderSnapshot';
 import { OVERWRITE_ORIGIN } from '../wire/pluginAddress';
 import { modNamesOf } from './modName';
 import { buildDownloadedFileRows, modsByInstallationFileName, type LocatedDownloadedFileRow } from './downloadedFileRows';
-import { loadedWithNoLineOf, nexusDomainForMetaGame } from '../tables/gamePaths';
+import { blueprintLoadsLastIn, loadedWithNoLineOf, nexusDomainForMetaGame } from '../tables/gamePaths';
 import {
   ABSENT_SORTING_RULE_FILES, type DownloadedFiles, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
   type ProgramVersion, type ProgramVersions, type EntryRef, type ManagerNames, type ManagerRunning, type ModGroups, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type PublisherConfiguration,
-  type PublisherTag, type SortingRuleFiles, type Subscription,
+  type PublisherTag, type Reread, type SortingRuleFiles, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { sourceModsOf, type SourceMods } from '../manifestAdapter/manifestAdapter';
 import { pluginPlacesOf } from './pluginPlacesOf';
@@ -26,12 +26,30 @@ export { sameEntry } from '../instanceAdapter/instanceAdapter';
 export type { EntryRef, FileOrigin, Mod, ModGroup, ModGroups, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
 export type { LocatedDownloadedFileRow, DownloadedFileRow, UpgradeCandidate, UpgradeTier } from './downloadedFileRows';
 export type { Covering, DownloadedFileStatus, PublisherTag, PublisherTagChange, TagPathProblem } from '../instanceAdapter/instanceAdapter';
-export type { GameFolder, ProgramVersion } from '../instanceAdapter/instanceAdapter';
+export type { GameFolder, ProgramVersion, Reread } from '../instanceAdapter/instanceAdapter';
 
-// How long another tool's write takes to settle: the wait a burst coalesces into one recompute on.
+// How long another tool's write takes to settle: the wait a burst coalesces into one re-read on.
 const SETTLE_MS = 200;
+// How long the events stay quiet before the disk is checked, and how long a stream of them can put the check off.
+const QUIET_MS = 1_000;
+const CHECK_CAP_MS = 10_000;
 
-type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'gameArchives' | 'archives' | 'watchNotes' | 'listingNotes' | 'managerRunning' | 'publisherConfiguration' | 'programVersions';
+interface Run {
+  readonly named: Set<string>;
+  disk: boolean;
+  /** The check was the watch's, so a change it finds is one no event named; a refresh's finds its caller's own write. */
+  tellsUnheard: boolean;
+  readonly settled: Promise<void>;
+  land(settled: Promise<void>): void;
+}
+
+function nextRun(): Run {
+  let land!: (settled: Promise<void>) => void;
+  const settled = new Promise<void>((resolve) => { land = resolve; });
+  return { named: new Set(), disk: false, tellsUnheard: false, settled, land };
+}
+
+type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'dataFolderFiles' | 'gameArchives' | 'archives' | 'watchNotes' | 'listingNotes' | 'managerRunning' | 'publisherConfiguration' | 'programVersions';
 
 type DownloadedFilesResult =
   | { readonly kind: 'listed'; readonly rows: readonly LocatedDownloadedFileRow[] }
@@ -93,6 +111,8 @@ export interface InstanceValue {
   readonly entryKey: (entry: EntryRef) => string;
   /** The game as the mod manager's configuration names it. */
   readonly gameName: string;
+  /** The game loads a blueprint plugin after every plugin that is not one. */
+  readonly blueprintLoadsLast: boolean;
   /** The Nexus domain of a game as a mod's or a downloaded file's metadata names it, so a view linking to a mod page holds no
    *  game table; undefined when the tables hold none. */
   readonly nexusDomainOf: (game: string) => string | undefined;
@@ -105,6 +125,8 @@ export interface InstanceValue {
   /** What the game's Data folder holds at its root — presence, never provision — or the reason
    *  it could not be read. */
   readonly dataFolderPlugins: DataFolderPlugins;
+  /** Every file the game's Data folder holds, at any depth: presence, never provision. */
+  readonly dataFolderFiles: DataFolderFiles;
   /** The plugins the game loads with no line, in the order it loads them; undefined while the
    *  game folder's plugins cannot be listed. */
   readonly pluginsLoadedWithNoLine: readonly PluginWithNoLine[] | undefined;
@@ -124,8 +146,8 @@ export interface InstanceValue {
   readonly sortingRuleFiles: SortingRuleFiles;
 }
 
-/** A subscriber that returns a promise holds `refresh` until it settles. */
-export type InstanceSubscriber = (value: InstanceValue, sequence: number) => void | Promise<void>;
+/** A subscriber that returns a promise holds `refresh` until it settles. `reread` is what the value was read again for. */
+export type InstanceSubscriber = (value: InstanceValue, sequence: number, reread: Reread) => void | Promise<void>;
 
 /** Hears each recompute that failed; `readFailure` holds the reason. The value and sequence are
  *  where they were: before the first landed value that is the empty sentinel at 0. */
@@ -139,9 +161,9 @@ export interface ListenerOutcome {
 }
 export type ListenerOutcomeListener = (outcome: ListenerOutcome) => void;
 
-/** The Instance as a tree reads it: the held value, sequence and read failure, plus the two
+/** The Instance as a tree reads it: the held value, sequence and read failure, plus the
  *  channels they move on. */
-export type InstanceView = Pick<Instance, 'value' | 'sequence' | 'readFailure' | 'subscribe' | 'onReadFailure'>;
+export type InstanceView = Pick<Instance, 'value' | 'sequence' | 'readFailure' | 'subscribe' | 'onReadFailure' | 'onRedraw'>;
 
 const cannotTellRunning = (manager: string, reason: string): string => `Cannot tell whether ${manager} is running: ${reason}.`;
 
@@ -240,12 +262,14 @@ const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey' | 'publi
   managerRunning: { kind: 'notRunning' },
   entryKey: (entry) => adapter.entryKey(entry),
   gameName: '',
+  blueprintLoadsLast: false,
   nexusDomainOf: nexusDomainForMetaGame,
   // Not read yet reads as not found, so a view that says not found waits for sequence 1.
   gameFolder: { kind: 'notFound', looked: [], setting: gameFolderSettingId },
   programVersions: { kind: 'unresolved' },
   gameFolderLinks: 0,
   dataFolderPlugins: { kind: 'unresolved' },
+  dataFolderFiles: { kind: 'unresolved' },
   pluginsLoadedWithNoLine: undefined,
   loadOrderSnapshot: undefined,
   overwriteFiles: [],
@@ -266,12 +290,25 @@ export class Instance implements Subscription {
   private subscribers: InstanceSubscriber[] = [];
 
   private failureListeners: ReadFailureListener[] = [];
+  private redrawListeners: (() => void)[] = [];
+  private lateListeners: (() => void)[] = [];
+  private late = false;
   private outcomeListeners: ListenerOutcomeListener[] = [];
 
-  private timer: ReturnType<typeof setTimeout> | undefined;
+  private settleTimer: ReturnType<typeof setTimeout> | undefined;
 
-  // Recomputes never overlap, so a slow walk cannot publish over a newer one.
-  private queue: Promise<unknown> = Promise.resolve();
+  private readonly heard = new Set<string>();
+
+  private heardNoPath = false;
+
+  private checkTimer: ReturnType<typeof setTimeout> | undefined;
+
+  private uncheckedSinceMs: number | undefined;
+
+  // Recomputes never overlap, so a slow walk cannot publish over a newer one; what is asked during one folds into the next.
+  private reading = false;
+
+  private next: Run | undefined;
 
   private quiets = 0;
 
@@ -283,13 +320,14 @@ export class Instance implements Subscription {
 
   // A note is one Output line until its text changes or it clears.
   private readonly told = new Map<NoteKind, ReadonlySet<string>>();
+  private readonly indexOf = indexReusing();
 
   constructor(private readonly options: InstanceOptions) {
     this.current = emptyValue(options.adapter, options.gameFolderSettingId);
-    this.changes = options.adapter.subscribe(() => this.schedule());
+    this.changes = options.adapter.subscribe((path) => { this.hear(path); });
     let focused = options.window.state.focused;
     this.focus = options.window.onDidChangeWindowState((state) => {
-      if (state.focused && !focused) this.schedule();
+      if (state.focused && !focused && !this.checkWaits()) void this.enqueue({ disk: true, tellsUnheard: true });
       focused = state.focused;
     });
   }
@@ -338,6 +376,28 @@ export class Instance implements Subscription {
     };
   }
 
+  /** Called on each `redraw`, by the views alone: a subscriber that derives from the value or hands it on does not run again. */
+  onRedraw(listener: () => void): Subscription {
+    this.redrawListeners.push(listener);
+    return { dispose: () => { this.redrawListeners = this.redrawListeners.filter((l) => l !== listener); } };
+  }
+
+  /** Whether a change was heard that no check of the disk has confirmed since (ADR-0015). */
+  get mayBeLate(): boolean {
+    return this.late;
+  }
+
+  /** Called each time `mayBeLate` changes. */
+  onMayBeLate(listener: () => void): Subscription {
+    this.lateListeners.push(listener);
+    return { dispose: () => { this.lateListeners = this.lateListeners.filter((l) => l !== listener); } };
+  }
+
+  /** Draws the held value again, with no read: a control the user toggled returns to what the value says. */
+  redraw(): void {
+    for (const listener of [...this.redrawListeners]) listener();
+  }
+
   /** Called with the outcome of each call to a subscriber or read-failure listener, so a view that
    *  missed an update can be told of. */
   onListenerOutcome(listener: ListenerOutcomeListener): Subscription {
@@ -349,12 +409,10 @@ export class Instance implements Subscription {
     };
   }
 
-  /** The recompute activation runs, and the one that corrects the value after a change the
-   *  adapter never signalled. Identical to the one a signal runs. Settles when its read has run;
-   *  a read that overlapped `quiet` is dropped, not landed. */
+  /** A check of the disk: the recompute activation runs, and the one that corrects the value after a change the adapter
+   *  never signalled. Settles when its read has run; a read that overlapped `quiet` is dropped, not landed. */
   refresh(): Promise<void> {
-    clearTimeout(this.timer); // a refresh mid-burst is the burst's recompute, not a second one
-    return this.run();
+    return this.enqueue({ disk: true, tellsUnheard: false });
   }
 
   /** Runs `work`, a write to several files the value reads, then refreshes. A read that overlapped
@@ -378,16 +436,19 @@ export class Instance implements Subscription {
   }
 
   dispose(): void {
-    clearTimeout(this.timer);
+    clearTimeout(this.settleTimer);
+    clearTimeout(this.checkTimer);
     this.changes.dispose();
     this.focus.dispose();
     this.subscribers = [];
     this.failureListeners = [];
+    this.redrawListeners = [];
+    this.lateListeners = [];
     this.outcomeListeners = [];
   }
 
   private tellReading({
-    linkNotes, archiveListNotes, orderNotes, modFiles, runtimeOutput, dataFolderPlugins, dataFolderArchives, watchNotes, managerRunning,
+    linkNotes, archiveListNotes, orderNotes, modFiles, runtimeOutput, dataFolderPlugins, dataFolderFiles, dataFolderArchives, watchNotes, managerRunning,
     publisherConfiguration, programVersions,
   }: InstanceReading, sourceMods: SourceMods): void {
     const notes = [...runtimeOutput.notes.map((n) => `${runtimeOutput.origin}: ${n}`), ...sourceMods.notes];
@@ -401,6 +462,8 @@ export class Instance implements Subscription {
     // An unreadable Data folder or its archives is an answer, never a failed read: the whole value
     // would otherwise go stale over a folder outside the instance.
     this.tellOnce('dataFolder', dataFolderPlugins.kind === 'unreadable' ? [`[instance] the game's Data folder could not be listed: ${dataFolderPlugins.reason}`] : [], 'warn');
+    const filesAlone = dataFolderPlugins.kind !== 'unreadable' && dataFolderFiles.kind === 'unreadable';
+    this.tellOnce('dataFolderFiles', filesAlone ? [`[instance] the game's Data folder could not be listed whole: ${dataFolderFiles.reason}`] : [], 'warn');
     const { manager } = this.options.adapter.names;
     this.tellOnce('managerRunning', managerRunning.kind === 'unknown' ? [`[instance] ${cannotTellRunning(manager, managerRunning.reason)}`] : [], 'warn');
     this.tellOnce('gameArchives', dataFolderArchives.kind === 'unreadable' ? [`[instance] the game's archives and strings files could not be listed: ${dataFolderArchives.reason}`] : [], 'warn');
@@ -420,27 +483,74 @@ export class Instance implements Subscription {
     this.tellOnce('archives', missing.map((name) => `[instance] The game's INIs list the archive ${name}, which no mod, Overwrite or game folder holds.`), 'info');
   }
 
-  private schedule(): void {
-    clearTimeout(this.timer);
-    this.timer = setTimeout(() => void this.run(), SETTLE_MS);
+  private hear(path: string | undefined): void {
+    if (path === undefined) this.heardNoPath = true;
+    else this.heard.add(path);
+    this.setLate(true);
+    clearTimeout(this.settleTimer);
+    this.settleTimer = setTimeout(() => {
+      const named = [...this.heard];
+      const disk = this.heardNoPath;
+      this.heard.clear();
+      this.heardNoPath = false;
+      void this.enqueue({ named, disk, tellsUnheard: disk });
+    }, SETTLE_MS);
+    const now = Date.now();
+    this.uncheckedSinceMs ??= now;
+    clearTimeout(this.checkTimer);
+    this.checkTimer = setTimeout(() => void this.enqueue({ disk: true, tellsUnheard: true }), Math.min(QUIET_MS, this.uncheckedSinceMs + CHECK_CAP_MS - now));
   }
 
-  // A refresh settles with its value's subscribers; the queue does not wait for them.
-  private run(): Promise<void> {
-    const task = this.queue.then(() => this.recompute());
-    this.queue = task;
-    return task.then(({ settled }) => settled);
+  private setLate(late: boolean): void {
+    if (late === this.late) return;
+    this.late = late;
+    for (const listener of [...this.lateListeners]) listener();
+  }
+
+  private checkWaits(): boolean {
+    return this.checkTimer !== undefined || this.next?.disk === true;
+  }
+
+  private enqueue({ named = [], disk, tellsUnheard }: { named?: readonly string[]; disk: boolean; tellsUnheard: boolean }): Promise<void> {
+    const next = this.next ?? nextRun();
+    this.next = next;
+    for (const path of named) next.named.add(path);
+    if (disk) {
+      for (const path of this.heard) next.named.add(path);
+      this.heard.clear();
+      this.heardNoPath = false;
+      clearTimeout(this.settleTimer);
+      clearTimeout(this.checkTimer);
+      this.checkTimer = undefined;
+      this.uncheckedSinceMs = undefined;
+    }
+    next.disk ||= disk;
+    next.tellsUnheard ||= tellsUnheard;
+    void this.drain();
+    return next.settled;
+  }
+
+  // A run settles with its value's subscribers; the next run does not wait for them.
+  private async drain(): Promise<void> {
+    if (this.reading) return;
+    this.reading = true;
+    for (let run = this.next; run !== undefined; run = this.next) {
+      this.next = undefined;
+      run.land((await this.recompute(run)).settled);
+    }
+    this.reading = false;
   }
 
   // A read that throws logs and leaves the last value and the last sequence in place, so a file
   // another tool is half-way through writing never empties the trees.
-  private async recompute(): Promise<{ settled: Promise<void> }> {
+  private async recompute(run: Run): Promise<{ settled: Promise<void> }> {
     let next: InstanceValue;
     const epoch = this.quietEpoch;
     try {
-      next = await this.read();
+      next = await this.read(run);
     } catch (err) {
       if (epoch !== this.quietEpoch || this.quiets > 0) return { settled: Promise.resolve() };
+      if (run.disk) this.setLate(this.uncheckedSinceMs !== undefined);
       const failure = errorMessage(err);
       this.options.log.error(`[instance] Failed to read the instance: ${failure}`);
       this.failure = failure;
@@ -449,8 +559,10 @@ export class Instance implements Subscription {
     if (epoch !== this.quietEpoch || this.quiets > 0) return { settled: Promise.resolve() };
     this.current = next;
     this.failure = undefined;
+    if (run.disk) this.setLate(this.uncheckedSinceMs !== undefined);
     this.seq++;
-    return { settled: this.notify(this.subscribers, 'value', (subscriber) => subscriber(next, this.seq)) };
+    const reread: Reread = { named: [...run.named], disk: run.disk };
+    return { settled: this.notify(this.subscribers, 'value', (subscriber) => subscriber(next, this.seq, reread)) };
   }
 
   // A throwing subscriber would otherwise reject the queue for good, and no later recompute
@@ -467,16 +579,17 @@ export class Instance implements Subscription {
     }));
   }
 
-  private async read(): Promise<InstanceValue> {
-    const { adapter } = this.options;
-    const reading = await adapter.reading();
+  private async read({ named, disk, tellsUnheard }: Run): Promise<InstanceValue> {
+    const { adapter, log } = this.options;
+    const reading = await adapter.reading({ named: [...named], disk });
+    if (tellsUnheard) for (const path of reading.unheardChanges) log.info(`[instance] The check of the disk found a change no event named: ${path}`);
     const {
       profile, gameName, gameRelease, mods: entries, pluginOrder, downloadedFiles: downloadedFilesOutcome, gameFolder, programVersions, dataFolderPlugins,
-      creationClubList: creationClub, dataFolderArchives, runtimeOutput, modFolders, profiles,
+      creationClubList: creationClub, dataFolderArchives, dataFolderFiles, runtimeOutput, modFolders, profiles,
     } = reading;
-    const sourceMods = await sourceModsOf(modFolders?.all, reading.sourceRepositories, (name) => adapter.entryKey({ kind: 'mod', name }));
+    const sourceMods = await sourceModsOf(modFolders?.all, reading.sourceModFolders, (name) => adapter.entryKey({ kind: 'mod', name }));
     this.tellReading(reading, sourceMods);
-    const index = buildFileConflictIndex(entries, runtimeOutput.files, reading.modFiles);
+    const index = this.indexOf(entries, runtimeOutput.files, reading.modFiles);
     const plugins = buildLoadOrderRows(pluginOrder, index, runtimeOutput.files, gameFolder, dataFolderPlugins);
     const pluginsLoadedWithNoLine = pluginsLoadedWithNoLineOf(loadedWithNoLineOf(gameRelease, creationClub), dataFolderPlugins, plugins, gameFolder);
     // Installed reads every mod folder, not one profile's mod order: a folder no profile has synced
@@ -521,11 +634,13 @@ export class Instance implements Subscription {
       managerRunning: reading.managerRunning,
       entryKey: (entry) => adapter.entryKey(entry),
       gameName,
+      blueprintLoadsLast: blueprintLoadsLastIn(gameRelease),
       nexusDomainOf: nexusDomainForMetaGame,
       gameFolder,
       programVersions,
       gameFolderLinks: reading.gameFolderLinks,
       dataFolderPlugins,
+      dataFolderFiles,
       pluginsLoadedWithNoLine,
       loadOrderSnapshot: loadOrderSnapshot === undefined || 'refusal' in loadOrderSnapshot
         ? loadOrderSnapshot

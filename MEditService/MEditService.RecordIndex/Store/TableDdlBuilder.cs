@@ -196,12 +196,14 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         var winnerJoin = relation.DerivesWinner
             ? WinnerJoin("t", relation.PluginColumn, relation.OriginColumn)
             : "";
+        // Winners joins the bare table, never the scope's join: the engine hashes the side it costs smaller, costs
+        // `body` as a few bytes, and costs a lone table above a join, so it would hash every body read.
         DuckDbSql.Execute(connection, $"""
             CREATE OR REPLACE VIEW {schema}."{view}" AS
             SELECT {columns}{loadOrderColumn}{winnerColumn}{activeColumn}
             FROM {MirrorSchema}."{relation.Table}" t
-            {scope}
             {winnerJoin}
+            {scope}
             """);
     }
 

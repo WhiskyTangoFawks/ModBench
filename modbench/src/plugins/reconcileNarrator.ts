@@ -1,5 +1,5 @@
 import {
-  type LoadOrderProgress, type LoadOrderRefusal, type PluginAddress,
+  isSettled, type LoadOrderProgress, type LoadOrderRefusal, type PluginAddress,
   type PluginLoadFailure,
 } from '../client';
 import { errorMessage } from '../ports/errorMessage';
@@ -37,9 +37,6 @@ interface Span {
   close: () => void;
   tick: (status: LoadOrderProgress) => void;
 }
-
-const terminal = (status: LoadOrderProgress): boolean =>
-  status.conflictsComputed || status.refusal !== undefined;
 
 // plugins.md, States 2: the record index status says what the Plugins view shows, whoever started the
 // reconcile — a put, a rebuild's refill or the watcher.
@@ -88,7 +85,7 @@ export function createReconcileNarrator(deps: ReconcileNarratorDeps): ReconcileN
   return {
     hear(status) {
       last = status;
-      if (terminal(status)) {
+      if (isSettled(status)) {
         const reconcileSeen = closeSpan();
         refillWaits.end(false);
         settle(status, reconcileSeen);

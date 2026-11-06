@@ -27,7 +27,7 @@ function gestureInput<Shape extends z.ZodRawShape>(
   return { takes, input: input.shape, callOf: (value, given, mEdit) => callOf(value, parseOrRefuse(input, given), mEdit) };
 }
 
-const ENTRY_NAME = z.object({ name: z.string(), kind: z.enum(['mod', 'separator']).optional() });
+const ENTRY_NAME = z.strictObject({ name: z.string(), kind: z.enum(['mod', 'separator']).optional() });
 
 const entryArguments = (value: InstanceValue, argument: readonly z.infer<typeof ENTRY_NAME>[]) =>
   modsNamed(value, argument).map(({ kind, name }) => ({ kind, name }));
@@ -38,7 +38,7 @@ const modArguments = (value: InstanceValue, argument: readonly z.infer<typeof EN
     return { kind: 'mod' as const, name: entry.name };
   });
 
-const SEPARATOR_NAME = z.object({ name: z.string() });
+const SEPARATOR_NAME = z.strictObject({ name: z.string() });
 
 const separatorArguments = (value: InstanceValue, argument: readonly z.infer<typeof SEPARATOR_NAME>[]) =>
   entryArguments(value, argument.map(({ name }) => ({ name, kind: 'separator' as const })));
@@ -47,20 +47,20 @@ const MODS_TAKES = 'argument: the mods, each { name, kind? } as list_mods names 
 
 const MODS = gestureInput(
   MODS_TAKES,
-  z.object({ argument: z.array(ENTRY_NAME) }),
+  z.strictObject({ argument: z.array(ENTRY_NAME) }),
   (value, { argument }) => new AgentCall(modArguments(value, argument), {}),
 );
 
 const VERSION_IN_GIT = gestureInput(
-  `${MODS_TAKES}; options: { where: 'NewRepository' for a source mod in a new repository, 'ModlistRepository' for a source mod in the `
-  + `modlist repository; commit: true to commit what it tracks as \`Init <mod>\`, false to leave it uncommitted }`,
-  z.object({ argument: z.array(ENTRY_NAME), options: z.object({ where: z.enum(['NewRepository', 'ModlistRepository']), commit: z.boolean() }) }),
+  `${MODS_TAKES}; options: { where: 'NewRepository' for a source mod in a new repository, 'InstanceRepository' for a source mod in the `
+  + `instance repository, 'WholeFolder' for the mod's whole folder in the instance repository; commit: true to commit what it tracks as \`Init <mod>\`, false to leave it uncommitted }`,
+  z.strictObject({ argument: z.array(ENTRY_NAME), options: z.strictObject({ where: z.enum(['NewRepository', 'InstanceRepository', 'WholeFolder']), commit: z.boolean() }) }),
   (value, { argument, options }) => new AgentCall(modArguments(value, argument), options),
 );
 
-const MOVE_PLACE = z.union([
-  z.object({ kind: z.enum(['ungrouped', 'modOrder']) }),
-  z.object({ kind: z.enum(['separator', 'mod']), name: z.string() }),
+const MOVE_PLACE = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.enum(['ungrouped', 'modOrder']) }),
+  z.strictObject({ kind: z.enum(['separator', 'mod']), name: z.string() }),
 ]);
 
 const placeNamed = (value: InstanceValue, place: z.infer<typeof MOVE_PLACE>) =>
@@ -68,12 +68,12 @@ const placeNamed = (value: InstanceValue, place: z.infer<typeof MOVE_PLACE>) =>
 
 const MOVE_MODS = gestureInput(
   `argument: the mods, or the separators, each { name, kind? } as list_mods names it; options: { place: { kind: 'ungrouped' | 'modOrder' } or { kind: 'separator' | 'mod', name: the one it lands in or beside }, end: 'winning' | 'losing' }`,
-  z.object({ argument: z.array(ENTRY_NAME), options: z.object({ place: MOVE_PLACE, end: z.enum(['winning', 'losing']) }) }),
+  z.strictObject({ argument: z.array(ENTRY_NAME), options: z.strictObject({ place: MOVE_PLACE, end: z.enum(['winning', 'losing']) }) }),
   (value, { argument, options: { place, end } }) =>
     new AgentCall(entryArguments(value, argument), { place: placeNamed(value, place), end }),
 );
 
-const NAME_OPTION = z.object({ options: z.object({ name: z.string() }) });
+const NAME_OPTION = z.strictObject({ options: z.strictObject({ name: z.string() }) });
 
 const RENAME_MOD = gestureInput(
   'argument: the mod, { name } as list_mods names it; options: { name: its new name }',
@@ -89,7 +89,7 @@ const ADD_SEPARATOR = gestureInput(
 
 const UNINSTALL = gestureInput(
   `${MODS_TAKES}; options: { force?: true to uninstall, which is otherwise refused for each mod, listing what it loses }`,
-  z.object({ argument: z.array(ENTRY_NAME), options: z.object({ force: z.boolean().optional() }).optional() }),
+  z.strictObject({ argument: z.array(ENTRY_NAME), options: z.strictObject({ force: z.boolean().optional() }).optional() }),
   (value, { argument, options }) => new AgentCall(modArguments(value, argument), { force: options?.force }),
 );
 
@@ -101,7 +101,7 @@ const RENAME_SEPARATOR = gestureInput(
 
 const DELETE_SEPARATORS = gestureInput(
   'argument: the separators, each { name } as list_mods names it; options: { force?: true to delete, which is otherwise refused for each separator, naming the separator its mods would join }',
-  z.object({ argument: z.array(SEPARATOR_NAME), options: z.object({ force: z.boolean().optional() }).optional() }),
+  z.strictObject({ argument: z.array(SEPARATOR_NAME), options: z.strictObject({ force: z.boolean().optional() }).optional() }),
   (value, { argument, options }) => new AgentCall(separatorArguments(value, argument), { force: options?.force }),
 );
 
@@ -113,16 +113,16 @@ const CREATE_EMPTY_MOD = gestureInput(
 
 const FILES = gestureInput(
   'argument: the files, each { mod: { name, kind? } as list_mods names it, Overwrite included, path: its path in the mod }',
-  z.object({ argument: z.array(z.object({ mod: CONTAINER_NAME, path: z.string() })) }),
+  z.strictObject({ argument: z.array(z.strictObject({ mod: CONTAINER_NAME, path: z.string() })) }),
   (value, { argument }) => new AgentCall(filesNamed(value, argument).map(({ origin, relativePath }) =>
     ({ kind: 'file', origin, relativePath })), {}),
 );
 
 const PUBLISHER_TAG_ROWS = gestureInput(
   'argument: the mods, each { mod: { name, kind? } as list_mods names it }, or the files and folders in a mod, each { mod, path: its path in the mod }; options: { tag: the publisher tag\'s name }',
-  z.object({
-    argument: z.array(z.object({ mod: ENTRY_NAME, path: z.string().optional() })),
-    options: z.object({ tag: z.string() }),
+  z.strictObject({
+    argument: z.array(z.strictObject({ mod: ENTRY_NAME, path: z.string().optional() })),
+    options: z.strictObject({ tag: z.string() }),
   }),
   (value, { argument, options }) => {
     const mods = modArguments(value, argument.filter(({ path }) => path === undefined).map(({ mod }) => mod));
@@ -134,58 +134,73 @@ const PUBLISHER_TAG_ROWS = gestureInput(
 
 const DOWNLOADED_FILES = gestureInput(
   'argument: the downloaded files, each { name } as list_downloads names it',
-  z.object({ argument: z.array(z.object({ name: z.string() })) }),
+  z.strictObject({ argument: z.array(z.strictObject({ name: z.string() })) }),
   (value, { argument }) => new AgentCall(
     downloadedFilesNamed(value.downloadedFiles, argument.map(({ name }) => name)).map((name) => ({ kind: 'downloadedFile' as const, name })), {}),
 );
 
-const INSTALL_SOURCE = z.union([
-  z.object({ kind: z.literal('downloadedFile'), name: z.string() }),
-  z.object({ kind: z.enum(['archive', 'folder']), path: z.string() }),
+const DOWNLOAD = gestureInput(
+  'options: { mod: the Nexus mod, by its ID in the instance\'s game or by the address of its Nexus page, file?: the ID of its file to download, which a page address with a file may name instead; a request that names no file is refused, listing the mod\'s files }',
+  z.strictObject({ options: z.strictObject({ mod: z.union([z.string(), z.number()]), file: z.union([z.string(), z.number()]).optional() }) }),
+  (_value, { options: { mod, file } }) => new AgentCall([], { mod: String(mod), file: file === undefined ? undefined : String(file) }),
+);
+
+const INSTALL_SOURCE = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('downloadedFile'), name: z.string() }),
+  z.strictObject({ kind: z.enum(['archive', 'folder']), path: z.string() }),
 ]);
 
-const FOMOD_CHOICE = z.object({
+const FOMOD_CHOICE = z.strictObject({
   step: z.string(),
-  groups: z.array(z.object({ group: z.string(), options: z.array(z.string()) })),
+  groups: z.array(z.strictObject({ group: z.string(), options: z.array(z.string()) })),
 });
 
 const INSTALL = gestureInput(
   'argument: the one source, { kind: \'downloadedFile\', name } as list_downloads names it, or { kind: \'archive\' | \'folder\', path } for one outside the downloads; '
     + 'options: { name: the new mod\'s name } or { target: the installed mod it upgrades, as list_mods names it }, exactly one of the two; '
-    + 'for a FOMOD, choices?: [{ step, groups: [{ group, options: [option] }] }], each by the name its installer shows, every step it shows answered, a step that needs no pick with none, '
-    + 'or manual?: true to install it as a plain copy, which a scripted FOMOD, one whose installer cannot be read and one whose module dependencies do not hold are refused without; a step left unanswered is refused, listing its groups and options, and nothing is picked for you, not even the author\'s defaults; a FOMOD that names files its package does not hold is refused, naming each, unless installAnyway?: true',
-  z.object({
+    + 'for a FOMOD, choices?: [{ step, groups: [{ group, options: [option] }] }], each by the name its installer shows, every step it shows answered, a step that needs no pick with none; '
+    + 'a FOMOD\'s choices are the user\'s: name only those the user made or gave you to make, and put the rest to the user, or hand the user the installer with installer?: true, '
+    + 'which opens on your choices and the author\'s defaults elsewhere, and answers once the user installs or cancels; '
+    + 'or manual?: true to install it as a plain copy, which a scripted FOMOD, one whose installer cannot be read and one whose module dependencies do not hold are refused without; '
+    + 'without the installer, a step left unanswered is refused, listing its groups and options with their descriptions, and the author\'s defaults answer nothing; a FOMOD that names files its package does not hold is refused, naming each, unless installAnyway?: true',
+  z.strictObject({
     argument: z.array(INSTALL_SOURCE),
-    options: z.object({
+    options: z.strictObject({
       name: z.string().optional(), target: z.string().optional(),
-      choices: z.array(FOMOD_CHOICE).optional(), manual: z.boolean().optional(), installAnyway: z.boolean().optional(),
+      choices: z.array(FOMOD_CHOICE).optional(), installer: z.boolean().optional(), manual: z.boolean().optional(), installAnyway: z.boolean().optional(),
     }).default({}),
   }),
-  (value, { argument, options: { name, target, choices, manual, installAnyway } }) => new AgentCall(
+  (value, { argument, options: { name, target, choices, installer, manual, installAnyway } }) => new AgentCall(
     argument.map((source) => (source.kind === 'downloadedFile'
       ? { kind: source.kind, name: downloadedFilesNamed(value.downloadedFiles, [source.name])[0] ?? source.name }
       : source)),
-    { name, target: target === undefined ? undefined : modsNamed(value, [{ name: target, kind: 'mod' }])[0]?.name, choices, manual, installAnyway },
+    { name, target: target === undefined ? undefined : modsNamed(value, [{ name: target, kind: 'mod' }])[0]?.name, choices, installer, manual, installAnyway },
   ),
 );
 
-const NO_INPUT = gestureInput('', z.object({}), () => new AgentCall([], {}));
+const NO_INPUT = gestureInput('', z.strictObject({}), () => new AgentCall([], {}));
+
+const UPDATE_MASTERLIST = gestureInput(
+  'options: { force?: true to replace uncommitted changes to the masterlist, which is otherwise refused, naming the files }',
+  z.strictObject({ options: z.strictObject({ force: z.boolean().optional() }).optional() }),
+  (_value, { options }) => new AgentCall([], { force: options?.force }),
+);
 
 const SWITCH_PROFILE = gestureInput(
   'argument: the one profile, { name } as list_profiles names it',
-  z.object({ argument: z.array(z.object({ name: z.string() })) }),
+  z.strictObject({ argument: z.array(z.strictObject({ name: z.string() })) }),
   (_value, { argument }) => new AgentCall(argument.map(({ name }) => ({ kind: 'profile', name })), {}),
 );
 
 const MOVE_TO_OVERWRITE = gestureInput(
   'argument?: the files the deployment folder holds that deploy does not manage, each { path } below the deployment folder, or none for every one',
-  z.object({ argument: z.array(z.object({ path: z.string() })).optional() }),
+  z.strictObject({ argument: z.array(z.strictObject({ path: z.string() })).optional() }),
   (_value, { argument }) => new AgentCall((argument ?? []).map(({ path }) => ({ kind: 'deployedFile', path })), {}),
 );
 
 
 const EVERY_MOD_BY_DEFAULT_TAKES = 'argument?: the mods or separators, each { name, kind? } as list_mods names it, or none for every mod';
-const EVERY_MOD_BY_DEFAULT = z.object({ argument: z.array(ENTRY_NAME).optional() });
+const EVERY_MOD_BY_DEFAULT = z.strictObject({ argument: z.array(ENTRY_NAME).optional() });
 
 const MODS_OR_EVERY_MOD = gestureInput(
   EVERY_MOD_BY_DEFAULT_TAKES,
@@ -193,11 +208,11 @@ const MODS_OR_EVERY_MOD = gestureInput(
   (value, { argument }) => new AgentCall(entryArguments(value, argument ?? []), {}),
 );
 
-const SOURCE_FOLDER = z.object({ kind: z.literal('folder'), path: z.string() });
+const SOURCE_FOLDER = z.strictObject({ kind: z.literal('folder'), path: z.string() });
 
 const UPDATE_MANIFEST = gestureInput(
   `${EVERY_MOD_BY_DEFAULT_TAKES}; or a source folder, { kind: 'folder', path: the sourceFolder list_mods gives its mod }`,
-  z.object({ argument: z.array(z.union([ENTRY_NAME, SOURCE_FOLDER])).optional() }),
+  z.strictObject({ argument: z.array(z.discriminatedUnion('kind', [ENTRY_NAME, SOURCE_FOLDER])).optional() }),
   (value, { argument = [] }) => new AgentCall([
     ...entryArguments(value, argument.filter((one): one is z.infer<typeof ENTRY_NAME> => !('path' in one))),
     ...argument.filter((one): one is z.infer<typeof SOURCE_FOLDER> => 'path' in one),
@@ -210,7 +225,7 @@ const BUILD = gestureInput(
   (value, { argument }) => new AgentCall(modArguments(value, argument ?? []), {}),
 );
 
-const PLUGIN_NAME = z.object({ name: z.string(), origin: z.string().optional() });
+const PLUGIN_NAME = z.strictObject({ name: z.string(), origin: z.string().optional() });
 const PLUGIN_TAKES = 'each { name, origin? } as list_plugins shows it';
 
 const pluginArguments = (named: typeof pluginsNamed) =>
@@ -222,48 +237,49 @@ const linesCall = pluginArguments(linesNamed);
 
 const LINES = gestureInput(
   `argument: the plugins whose lines in plugins.txt it changes, ${PLUGIN_TAKES}`,
-  z.object({ argument: z.array(PLUGIN_NAME) }),
+  z.strictObject({ argument: z.array(PLUGIN_NAME) }),
   (value, { argument }) => new AgentCall(linesCall(value, argument), {}),
 );
 
 const DECOMPILE = gestureInput(
   `argument: the plugins, ${PLUGIN_TAKES}; options: { force?: true to replace a plugin source that has working-tree changes, which is otherwise refused }`,
-  z.object({ argument: z.array(PLUGIN_NAME), options: z.object({ force: z.boolean().optional() }).optional() }),
+  z.strictObject({ argument: z.array(PLUGIN_NAME), options: z.strictObject({ force: z.boolean().optional() }).optional() }),
   (value, { argument, options }) => new AgentCall(pluginsCall(value, argument), { force: options?.force }),
 );
 
 const DECOMPILE_AND_REPAIR = gestureInput(
-  `argument: the plugins, ${PLUGIN_TAKES}; options: { force?: true to repair a plugin whose plugin source has working-tree changes, which is otherwise refused, listing what it would lose }`,
-  z.object({ argument: z.array(PLUGIN_NAME), options: z.object({ force: z.boolean().optional() }).optional() }),
-  (value, { argument, options }) => new AgentCall(pluginsCall(value, argument), { force: options?.force }),
+  `argument: the plugins, ${PLUGIN_TAKES}; options: { where?: 'NewRepository' for a source mod in a new repository, 'InstanceRepository' for a source mod in the instance repository, `
+  + `which a request leaves out only when every plugin's mod is a source mod, and is otherwise refused; force?: true to repair a plugin whose plugin source has working-tree changes, which is otherwise refused, listing what it would lose }`,
+  z.strictObject({ argument: z.array(PLUGIN_NAME), options: z.strictObject({ where: z.enum(['NewRepository', 'InstanceRepository']).optional(), force: z.boolean().optional() }).optional() }),
+  (value, { argument, options }) => new AgentCall(pluginsCall(value, argument), { where: options?.where, force: options?.force }),
 );
 
-const DROP = z.union([
-  z.object({ kind: z.enum(['winningEnd', 'losingEnd']) }),
-  z.object({ kind: z.enum(['before', 'after']), name: z.string() }),
+const DROP = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.enum(['winningEnd', 'losingEnd']) }),
+  z.strictObject({ kind: z.enum(['before', 'after']), name: z.string() }),
 ]);
 
 const MOVE_PLUGINS = gestureInput(
   `argument: the plugins, ${PLUGIN_TAKES}; options: { drop: { kind: 'winningEnd' | 'losingEnd' } or { kind: 'before' | 'after', name: the plugin file name it lands beside } }`,
-  z.object({ argument: z.array(PLUGIN_NAME), options: z.object({ drop: DROP }) }),
+  z.strictObject({ argument: z.array(PLUGIN_NAME), options: z.strictObject({ drop: DROP }) }),
   (value, { argument, options }) => new AgentCall(linesCall(value, argument), options),
 );
 
 const APPLY_SUGGESTED_MOVE = gestureInput(
   'argument: the plugin to move, { name, origin? } as list_plugins shows it; options: { rule?: the broken rule\'s words, when more than one offers a move }',
-  z.object({ argument: PLUGIN_NAME, options: z.object({ rule: z.string().optional() }).optional() }),
+  z.strictObject({ argument: PLUGIN_NAME, options: z.strictObject({ rule: z.string().optional() }).optional() }),
   (value, { argument, options }) => new AgentCall(linesCall(value, [argument]), { rule: options?.rule }),
 );
 
 const LOAD_AFTER = gestureInput(
   `argument: the plugins, ${PLUGIN_TAKES}; options: { after: the plugin file names they load after, [{ name }] }`,
-  z.object({ argument: z.array(PLUGIN_NAME), options: z.object({ after: z.array(z.object({ name: z.string() }).strict()) }) }),
+  z.strictObject({ argument: z.array(PLUGIN_NAME), options: z.strictObject({ after: z.array(z.strictObject({ name: z.string() })) }) }),
   (value, { argument, options }) => new AgentCall(linesCall(value, argument), options),
 );
 
 const CREATE_PLUGIN = gestureInput(
-  'argument: the one mod it lands in, or Overwrite, { name, kind? } as list_mods names it; options: { name: the new plugin\'s file name }',
-  z.object({ argument: z.array(CONTAINER_NAME), options: z.object({ name: z.string() }) }),
+  'argument: the one mod it lands in, or Overwrite, { name, kind? } as list_mods names it; options: { name: the new plugin\'s file name, flags?: the header flags it takes, such as ["Small"], left out only where its extension offers one combination, and the refusal for a request that leaves it out lists them }',
+  z.strictObject({ argument: z.array(CONTAINER_NAME), options: z.strictObject({ name: z.string(), flags: z.array(z.string()).optional() }) }),
   (value, { argument, options }) => new AgentCall(
     argument.flatMap((container): Argument[] => (container.kind === 'runtimeOutput'
       ? [{ kind: 'runtimeOutput' }]
@@ -274,15 +290,15 @@ const CREATE_PLUGIN = gestureInput(
 
 const RENAME_PLUGIN = gestureInput(
   'argument: the plugin, { name, origin? } as list_plugins shows it; options: { name: its new file name }',
-  z.object({ argument: PLUGIN_NAME, options: z.object({ name: z.string() }) }),
+  z.strictObject({ argument: PLUGIN_NAME, options: z.strictObject({ name: z.string() }) }),
   (value, { argument, options }) => new AgentCall(linesCall(value, [argument]), options),
 );
 
 const OPEN_RECORD = gestureInput(
   'argument: the records, each { name: its EditorID or FormKey, plugin?: { name, origin? } as list_plugins shows it }, a copy when it names its plugin, else the winning copy; options: { pinned?: true to keep the tab }',
-  z.object({
-    argument: z.array(z.object({ name: z.string(), plugin: PLUGIN_NAME.optional() })),
-    options: z.object({ pinned: z.boolean().optional() }).optional(),
+  z.strictObject({
+    argument: z.array(z.strictObject({ name: z.string(), plugin: PLUGIN_NAME.optional() })),
+    options: z.strictObject({ pinned: z.boolean().optional() }).optional(),
   }),
   async (value, { argument, options }, mEdit) => {
     const formKeys = await formKeysNamed(mEdit, argument.map(({ name }) => name));
@@ -314,6 +330,7 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.mod.removePublisherTag', PUBLISHER_TAG_ROWS],
   ['modbench.mod.install', INSTALL],
   ['modbench.downloadedFile.queryInfo', DOWNLOADED_FILES],
+  ['modbench.downloadedFile.download', DOWNLOAD],
   ['modbench.downloadedFile.exclude', DOWNLOADED_FILES],
   ['modbench.downloadedFile.include', DOWNLOADED_FILES],
   ['modbench.downloadedFile.delete', DOWNLOADED_FILES],
@@ -336,6 +353,7 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.instance.deploy', NO_INPUT],
   ['modbench.instance.purge', NO_INPUT],
   ['modbench.instance.moveToOverwrite', MOVE_TO_OVERWRITE],
+  ['modbench.instance.updateMasterlist', UPDATE_MASTERLIST],
   ['modbench.instance.logOut', NO_INPUT],
   ['modbench.mod.updateManifest', UPDATE_MANIFEST],
   ['modbench.mod.checkForUpdates', MODS_OR_EVERY_MOD],

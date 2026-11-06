@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: Work an epic's ticket stack from a single go. Lane the tickets by architecture box, dispatch executors to worktrees, land serially, report on the epic.
+description: Work an epic's ticket stack from a single go, with the ready bugs as filler. Lane the tickets by architecture box, dispatch executors to worktrees, land serially, report on the epic.
 disable-model-invocation: true
 ---
 
@@ -20,7 +20,7 @@ The run never waits. A tactical question is decided, and a strategic one parks i
 
 ## 1. Lane
 
-The stack is an epic's `ready-for-agent` sub-issues with their blocking edges. Edges decide what can start. Boxes decide what can run beside what.
+The stack is an epic's `ready-for-agent` sub-issues with their blocking edges, and every open `ready-for-agent` bug, which fills a lane the epic leaves idle. A bug is its own ticket and its own epic: the spec line it names is its story, and the drain comments on it. Edges decide what can start. Boxes decide what can run beside what.
 
 A box is a module `spec/architecture/target-architecture.d2` draws, or a band's lib, and its folder is the unit the kernel scans hold: a folder under `modbench/src/`, or an `MEditService.*` project. Read each ticket once, with its comments and its epic's comments, and name the boxes it touches and the tier it runs on: the one its Notes name, else Sonnet. Raise a ticket's tier only when its text leaves a judgement the chain does not answer, and say why in its lane line. A ticket you would raise for size alone is too coarse: park it for the user to split rather than spend the larger tier on it. Cut the stack into lanes so that tickets touching one box share a lane. Work is serial within a lane and parallel across lanes. Run 3 lanes at most.
 
@@ -83,11 +83,11 @@ The tracker is yours to read, assign, close and comment on. Tickets come from th
 
 ## 4. Drain
 
-The run ends when the epic is achieved. Acceptance runs first, then the Windows gates, never beside them: a run and the VM each hold gigabytes. Start one fresh `general-purpose` agent with `run_in_background: false`, [`ACCEPT.md`](ACCEPT.md) as its brief, followed by the epic's spec stories and what landed. It reports each story as passed, failed with quoted evidence, or out of reach. A failure is a defect the run found: route it as a finding, then run the step again for the failed stories. What is out of reach is what the comment lists as needing human eyes.
+The run ends when the epic is achieved. Three runs check the final `main`, one at a time, since each holds gigabytes: the gates through `/validate` step 1, then acceptance, then the Windows gates. A red gate is a defect the run found. Start one fresh `general-purpose` agent with `run_in_background: false`, [`ACCEPT.md`](ACCEPT.md) as its brief, followed by the epic's spec stories and what landed. It reports each story as passed, failed with quoted evidence, or out of reach. A failure is a defect the run found: route it as a finding, then run the step again for the failed stories. What is out of reach is what the comment lists as needing human eyes.
 
-Run the Windows gates once on the final `main`, through `/windows-vm`: the per-ticket gates ran on Linux alone. A red Windows gate is a defect the run found. Then post one comment on the epic. It lists what landed, both ticketed and not, what needs human eyes and why, what parked and the strategic question each park waits on, what was never dispatched, and every break in the chain of authority's form. Tactical decisions stay in the commit messages. The epic is the user's review surface. If everyticket is closed and no open questions remain, close the epic ticket.
+Run the Windows gates once on the final `main`, through `/windows-vm`: the gates above ran on Linux alone. A red Windows gate is a defect the run found. Then post one comment on the epic. It lists what landed, both ticketed and not, what needs human eyes and why, what parked and the strategic question each park waits on, what was never dispatched, and every break in the chain of authority's form. Tactical decisions stay in the commit messages. The epic is the user's review surface. If everyticket is closed and no open questions remain, close the epic ticket.
 
-**Criterion:** every story is passed or out of reach, `accept.sh down` printed, the Windows gates ran on the final `main` and every red one is fixed or in the comment, the comment is posted, no worktree remains, and the checkout is clean outside the maintainer's documents.
+**Criterion:** the gates passed on the final `main`, every story is passed or out of reach, `accept.sh down` printed, the Windows gates ran on the final `main` and every red one is fixed or in the comment, the comment is posted, no worktree remains, and the checkout is clean outside the maintainer's documents.
 
 ## Unattended mechanics
 

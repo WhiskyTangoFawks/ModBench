@@ -4,7 +4,7 @@ using MEditService.TestSupport;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
-/// <summary>What an arrival announces, as a test waits for it (ADR-0015).</summary>
+/// <summary>What a check of the disk announces, as a test waits for it (ADR-0015).</summary>
 internal static class Announcements
 {
     internal static Predicate<INotification> PluginChanged(LoadOrderEntry plugin) =>
@@ -16,20 +16,28 @@ internal static class Announcements
     internal static Predicate<INotification> FailureNamed(string plugin) =>
         n => n is LoadOrderStatusNotification status && status.Status.Failures.Any(f => f.Name == plugin);
 
-    /// <summary>Two equal arrivals, each answered once the change it found is announced. An arrival
+    /// <summary>Two checks of the disk, each answered once the change it found is announced. A check
     /// validates every plugin before it announces, so a plugin neither announced is known quiet.</summary>
-    internal static IReadOnlyList<INotification> AnnouncedByEqualArrivals(
+    internal static IReadOnlyList<INotification> AnnouncedByChecks(
         this OpenedIndex index, InMemoryNotificationPublisher notifications, Func<Predicate<INotification>> change)
     {
+        AwaitValidationClosed(index, notifications);
         var start = notifications.Notifications.Count;
-        for (var arrival = 0; arrival < 2; arrival++)
+        for (var check = 0; check < 2; check++)
         {
             var announced = change();
             var before = notifications.Notifications.Count;
-            index.NextSnapshotUntil(() => notifications.Since(before).Any(n => announced(n)), "the change the arrival found");
+            index.NextCheckUntil(() => notifications.Since(before).Any(n => announced(n)), "the change the check found");
+            AwaitValidationClosed(index, notifications);
         }
-        return notifications.Since(start);
+        return notifications.Since(start).WithoutValidations();
     }
+
+    private static void AwaitValidationClosed(OpenedIndex index, InMemoryNotificationPublisher notifications) =>
+        Waits.Reached(
+            () => !index.Status.Validating
+                && notifications.Notifications.OfType<LoadOrderStatusNotification>().LastOrDefault()?.Status.Validating != true,
+            "the validation closing");
 
     /// <summary>A non-compiled plugin's binary rewritten: announced as the plugin.</summary>
     internal static Predicate<INotification> Touched(LoadOrderEntry plugin)
@@ -49,4 +57,21 @@ internal static class Announcements
 
     internal static IReadOnlyList<INotification> Since(this InMemoryNotificationPublisher notifications, int count) =>
         [.. notifications.Notifications.Skip(count)];
+
+    /// <summary>Without each validation's statuses: the validating ones, and the one that closes them.</summary>
+    internal static IReadOnlyList<INotification> WithoutValidations(this IEnumerable<INotification> notifications)
+    {
+        List<INotification> kept = [];
+        var validating = false;
+        foreach (var notification in notifications)
+        {
+            if (notification is LoadOrderStatusNotification status && (status.Status.Validating || validating))
+            {
+                validating = status.Status.Validating;
+                continue;
+            }
+            kept.Add(notification);
+        }
+        return kept;
+    }
 }

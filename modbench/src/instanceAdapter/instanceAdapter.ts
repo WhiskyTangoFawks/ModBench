@@ -4,14 +4,16 @@
 
 import { join } from 'node:path';
 import type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
-import type { LoadAfter } from '../sortingRules/lootMetadata';
+import type { LoadAfter, MetadataTexts } from '../sortingRules/lootMetadata';
 import type { MoveToTrash } from '../ports/trash';
 import type { NexusFileInfo } from '../ports/nexusFileInfo';
 import type { NexusPage } from './nexusPage';
 import { PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
 import type { FomodMove, FomodState, ReleaseImage } from '../wire/fomodPage';
 import type { FolderRefusal } from './foldersRefused';
+import type { FileStamp } from '../repositoriesLib/stampedReads';
 import type { FolderValue, PackagesAsked, PluginFlags, Read, StatusValues } from '../repositoriesLib/statusValues';
+import type { DataFileReads } from './gameFolder/dataFileReads';
 import type { ProgramVersions } from './gameFolder/programVersions';
 import type { NonSteamPrefix } from './gameFolder/steamPrefix';
 import type { Depot } from './gameFolder/steamAppManifest';
@@ -209,6 +211,13 @@ export type DataFolderPlugins =
   | { readonly kind: 'unresolved' }
   | { readonly kind: 'unreadable'; readonly reason: string };
 
+/** Every file in the game folder's Data folder, at any depth, by its path in it, lower case; or why
+ *  there is no answer, as for its plugins. */
+export type DataFolderFiles =
+  | { readonly kind: 'listed'; readonly files: ReadonlySet<string> }
+  | { readonly kind: 'unresolved' }
+  | { readonly kind: 'unreadable'; readonly reason: string };
+
 /** Each plugin the game can load, keyed as it compares names, spelled as the copy it loads: an
  *  enabled mod's or Overwrite's at their root, else the Data folder's; and the enabled mods, by name. */
 export type PluginsProvided =
@@ -259,17 +268,17 @@ export interface FomodDialog {
   readonly close: () => void;
 }
 
-/** How a FOMOD's installer is answered: its choices, step by step; the user's moves on its page; or Manual, which
- *  installs a plain copy. */
+/** How a FOMOD's installer is answered: its choices, step by step; the user's moves on its page, which opens on the
+ *  choices given; or Manual, which installs a plain copy. */
 export type FomodAnswer =
   | { readonly kind: 'choices'; readonly steps: readonly FomodStepChoice[]; readonly installAnyway?: boolean }
-  | { readonly kind: 'dialog'; readonly dialog: FomodDialog }
+  | { readonly kind: 'dialog'; readonly dialog: FomodDialog; readonly steps: readonly FomodStepChoice[] }
   | { readonly kind: 'manual' };
 
-/** A FOMOD its installer installed, with each file its archive lacks and anything else it said; or a plain copy, and
- *  why its installer did not run. */
+/** A FOMOD its installer installed, with each file its archive lacks, anything else it said, and the steps of choices
+ *  the user never reached on its page; or a plain copy, and why its installer did not run. */
 export type FomodLanded =
-  | { readonly kind: 'installer'; readonly missing: readonly string[]; readonly notes: readonly string[] }
+  | { readonly kind: 'installer'; readonly missing: readonly string[]; readonly notes: readonly string[]; readonly unused?: readonly string[] }
   | { readonly kind: 'plainCopy'; readonly why: string };
 
 /** An install that landed, and how, when its package is a FOMOD; or none, because the target's folder is there for a
@@ -354,14 +363,18 @@ export interface Submodule { readonly folder: string; readonly pin: string; read
  *  (ADR-0022). */
 export type SourceHost = { readonly kind: 'host'; readonly url: string } | { readonly kind: 'noRemote' } | { readonly kind: 'noHost'; readonly why: string };
 
+/** What the instance repository lacks of a submodule; `unpinned`: `.gitmodules` names it, and the index holds no commit at its path. */
+export interface SubmoduleLacks { readonly lacks: string; readonly unpinned?: true }
+
 /** Why one source mod is not as a submodule would be. */
 export interface SubmoduleNote { readonly mod: string; readonly note: string }
 
 /** A submodule `.gitmodules` names in the source folder that holds no repository yet, by its name, with where git checks it
  *  out and its pin, or what the instance repository lacks of it. */
-export type UnclonedSubmodule = { readonly name: string } & (Submodule | { readonly lacks: string });
+export type UnclonedSubmodule = { readonly name: string } & (Submodule | SubmoduleLacks);
 
-interface SubmoduleReport { readonly notes: readonly SubmoduleNote[]; readonly other: readonly string[] }
+// `written`: each source mod whose `.gitmodules` entry or ignore lines the call wrote.
+interface SubmoduleReport { readonly notes: readonly SubmoduleNote[]; readonly other: readonly string[]; readonly written: readonly string[] }
 
 /** A folder outside every mod folder that holds the manifest named for it, which builds it (ADR-0022). `name` is its path in the instance, ending in `/`, so no mod has it. */
 export interface OtherManifest { readonly name: string; readonly folder: string }
@@ -376,6 +389,17 @@ export type OriginFileMark = 'Excluded' | 'Included';
 export interface Subscription {
   dispose(): void;
 }
+
+/** Hears a path that changed, or undefined when a change has no path and the disk is to be checked. */
+export type ChangeListener = (path: string | undefined) => void;
+
+/** What a reading checks before it trusts what it read before: the paths the events named, and all of it when `disk`. */
+export interface Reread {
+  readonly named: readonly string[];
+  readonly disk: boolean;
+}
+
+export const CHECK_THE_DISK: Reread = { named: [], disk: true };
 
 /** Where a file's contents come from: a mod, or the files the game wrote at run time. */
 export type FileOrigin = { readonly kind: 'mod'; readonly name: string } | { readonly kind: 'runtimeOutput' };
@@ -407,13 +431,7 @@ export interface OriginFiles {
   readonly notes: readonly string[];
 }
 
-/** What the file system says of a file without a read of its bytes. A tool can keep a file's size
- *  and date modified across a write, never the time of its change. */
-export interface FileStamp {
-  readonly size: bigint;
-  readonly modifiedNs: bigint;
-  readonly changedNs: bigint;
-}
+export type { FileStamp };
 
 /** A read of one file that answers why it could not be read, rather than failing whatever asked. */
 export type FileRead<T> = Read<T>;
@@ -471,6 +489,8 @@ export interface InstallationFile extends HashedDownloadedFile {
   readonly directUrl?: string;
   /** The version the downloaded file's own metadata records. */
   readonly version?: string;
+  /** Why the downloaded file's own metadata could not be read, so that `page`, `directUrl` and `version` are none. */
+  readonly pageUnreadable?: string;
 }
 
 interface MetadataInstallationFile {
@@ -545,6 +565,10 @@ interface TagEntryAt {
   readonly entry: string;
 }
 
+/** Why the published modlist cannot ship the file `pathInFolder` of `mod`'s `folder` once no package holds it, as its
+ *  publisher judges; none when it can, or the publisher never asks for the file. */
+export type UnshippableReason = (folder: string, pathInFolder: string, mod: string) => string | undefined;
+
 /** What is wrong with the path a publisher tag's entry names. */
 export type TagPathProblem =
   | (TagEntryAt & { readonly kind: 'namesNoPath' })
@@ -553,7 +577,11 @@ export type TagPathProblem =
 /** The publisher's configuration: none while the instance holds no publisher's, or why it could not be read. */
 export type PublisherConfiguration =
   | { readonly kind: 'none' }
-  | { readonly kind: 'read'; readonly covering: Covering; readonly listed: Listed; readonly pathProblems: readonly TagPathProblem[] }
+  | {
+    readonly kind: 'read'; readonly covering: Covering; readonly listed: Listed; readonly pathProblems: readonly TagPathProblem[];
+    /** Where a mod's unshippable files are shown, and how the publisher judges them. */
+    readonly unshippable: { readonly file: string; readonly reason: UnshippableReason };
+  }
   | { readonly kind: 'unreadable'; readonly reason: string };
 
 /** One sorting rule file as the instance holds it: where it is, and its text, or that it is absent or why it could not be read. */
@@ -599,6 +627,7 @@ export interface InstanceReading extends InstanceGame {
   /** Each INI the game reads that the archive list did not. */
   readonly archiveListNotes: readonly string[];
   readonly dataFolderArchives: DataFolderArchives;
+  readonly dataFolderFiles: DataFolderFiles;
   readonly profiles: readonly string[];
   /** Undefined when there is no folder for mods at all. */
   readonly modFolders: ModFolders | undefined;
@@ -610,14 +639,16 @@ export interface InstanceReading extends InstanceGame {
   readonly modFiles: ReadonlyMap<string, OriginFiles>;
   /** Each listed mod's meta by name, and an unlisted mod folder's when downloaded files are there to match against it. */
   readonly folderMeta: ReadonlyMap<string, ModMeta>;
-  /** Every source mod's folder in the source folder, a repository or one the modlist repository holds, by its name. */
-  readonly sourceRepositories: ReadonlyMap<string, string>;
+  /** Every source mod's folder in the source folder, a repository or one the instance repository holds, by its name. */
+  readonly sourceModFolders: ReadonlyMap<string, string>;
   /** Whether the instance folder holds a repository. */
   readonly holdsRepository: boolean;
   /** Whether git init has set the repository up: the instance repository holds Modbench's push check and its path tokens. */
   readonly repositorySetUp: boolean;
   /** Why a folder's watch failed, once per reason: no change inside that folder is heard. */
   readonly watchNotes: readonly string[];
+  /** Each path the check of the disk found changed that no event named. */
+  readonly unheardChanges: readonly string[];
   readonly managerRunning: ManagerRunning;
   readonly publisherConfiguration: PublisherConfiguration;
 }
@@ -629,10 +660,10 @@ export interface TakenNames {
   readonly modFolders: readonly ModFolder[] | undefined;
 }
 
-export interface InstanceAdapter {
-  /** The whole instance in one generation. A mod order that parses to no entries is read again
-   *  after a settle before it is believed: another tool may be half-way through writing it. */
-  reading(): Promise<InstanceReading>;
+export interface InstanceAdapter extends DataFileReads {
+  /** The whole instance in one generation, reading again what `reread` finds changed. A mod order that parses to no entries
+   *  is read again after a settle before it is believed: another tool may be half-way through writing it. */
+  reading(reread?: Reread): Promise<InstanceReading>;
   /** The profile the mod manager's configuration selects now. */
   activeProfile(): Promise<string>;
   /** Mutagen's release of the game the mod manager's configuration selects now. */
@@ -653,8 +684,8 @@ export interface InstanceAdapter {
   downloadedFiles(): Promise<DownloadedFiles>;
   /** The downloaded file `path` names, however the path is spelled; undefined when it names none; or why the downloaded files could not be read. */
   downloadedFileAt(path: string): Promise<FileRead<DownloadedFile | undefined>>;
-  /** Every source mod's folder in the source folder now, a repository or one the modlist repository holds, by its name. */
-  sourceRepositories(): Promise<ReadonlyMap<string, string>>;
+  /** Every source mod's folder in the source folder now, a repository or one the instance repository holds, by its name. */
+  sourceModFolders(): Promise<ReadonlyMap<string, string>>;
   readonly names: ManagerNames;
   /** Each publisher tag the instance's publisher declares. Whenever the publisher's configuration is read or written, each
    *  file Modbench keeps in the instance is in its ignore list, every other entry as written. */
@@ -678,8 +709,8 @@ export interface InstanceAdapter {
   foldersRefused(folders: ReadonlyMap<string, string>, asked: readonly string[]): Promise<readonly FolderRefusal[]>;
   /** The source folder init makes a mod's repository in (ADR-0007); undefined when its name gives it none. */
   sourceFolder(mod: string): string | undefined;
-  /** The downloaded file the mod manager records `mod` as installed from; undefined when it records none. */
-  installationFile(mod: string): Promise<FileRead<InstallationFile | undefined>>;
+  /** The downloaded file the mod manager records `mod` as installed from, its metadata read in `folder` when the caller holds it; undefined when it records none. */
+  installationFile(mod: string, folder?: string): Promise<FileRead<InstallationFile | undefined>>;
   /** The downloaded file of `name` in the downloads folder, with its hashes; undefined when the folder holds none of that name. */
   downloadedFile(name: string): Promise<FileRead<InstallationFile | undefined>>;
   /** The downloaded file with the size and hash of `pinned`, under any name; none when the folder holds none. `notes`: why a
@@ -692,6 +723,8 @@ export interface InstanceAdapter {
   }): Promise<{ readonly files: readonly InstallationFile[]; readonly notes: readonly string[] }>;
   /** The file on Nexus a page names, or its mod alone; undefined when it is no Nexus page. */
   nexusFileAt(page: string): NexusPage | undefined;
+  /** The Nexus games to ask about a file of the instance's game, in the mod manager's order; rejects when Nexus has none for it. */
+  nexusGames(): Promise<readonly string[]>;
   /** What Nexus is asked about the downloaded file of `name`; undefined when the downloads folder holds none of that name. */
   downloadedFileQuery(name: string): Promise<FileRead<DownloadedFileQuery | undefined>>;
   /** What the mod manager's metadata says of `mod`'s version and installation file; none when it says none. */
@@ -719,8 +752,8 @@ export interface InstanceAdapter {
   /** Writes the instance repository's ignore list: a whitelist of what the repository holds, after the lines of an ignore
    *  list already there. Answers the call that takes back what it wrote. */
   writeIgnoreList(): Promise<() => Promise<void>>;
-  /** Makes each source mod of `acted`, or of every one, with a remote a submodule: its `.gitmodules` entry and ignore line.
-   *  Only `every` removes those of a source mod that is gone. `sourceMods`: each repository's folder by its mod. */
+  /** Makes each source mod of `acted`, or of every one, with a remote a submodule by its `.gitmodules` entry, then writes
+   *  the lines `writeSourceModLines` writes. Only `every` removes a gone mod's entry. `sourceMods`: by mod. */
   writeSubmodules(acted: readonly string[] | 'every', sourceMods: ReadonlyMap<string, string>): Promise<SubmoduleReport>;
   /** Each folder outside the mod folders that holds its manifest, none through a link; a folder it could not read is
    *  `unsearched`, and a manifest whose folder holds or sits inside another's is `nested`, refused with why. */
@@ -728,13 +761,19 @@ export interface InstanceAdapter {
   /** Lets the instance repository hold each manifest `otherManifests` finds, and no other file of its folder. Writes
    *  nothing without an ignore list; rejects, writing nothing, when a folder could not be searched. */
   writeOtherManifestLines(): Promise<void>;
-  /** Lets the instance repository hold each source folder of `sourceFolders`, or with `held` false leaves each out. Writes
-   *  nothing without an ignore list; rejects, writing nothing, for a folder outside the source folder or an unpaired marker. */
-  writeSourceFolderLines(sourceFolders: readonly string[], held: boolean): Promise<void>;
+  /** Lets each submodule and each source folder with no repository of its own into the instance repository, and each of
+   *  `letIn` by name before it exists. Writes nothing without a repository or an ignore list; rejects for an unpaired marker. */
+  writeSourceModLines(letIn?: readonly string[]): Promise<void>;
+  /** Lets the instance repository hold the files of each mod folder of `modFolders`, or with `held` false leaves them out.
+   *  Writes nothing without an ignore list; rejects, writing nothing, for a folder outside the mods folder or an unpaired marker. */
+  writeHeldWholeLines(modFolders: readonly string[], held: boolean): Promise<void>;
+  /** Commits the mod folder `folder` and the ignore list's lines that let it in, and nothing else, as `message`. Rejects,
+   *  committing nothing, for a folder outside the mods folder, an unpaired marker HEAD holds, or when git does. */
+  commitFolder(folder: string, message: string): Promise<void>;
   /** The host of the repository in `sourceFolder`, through `origin`, else its first remote by name. */
   sourceHost(sourceFolder: string): Promise<FileRead<SourceHost>>;
   /** The submodule of the instance repository named `name`, as its index pins it, or what the repository lacks of it. */
-  submodule(name: string): Promise<Submodule | { readonly lacks: string }>;
+  submodule(name: string): Promise<Submodule | SubmoduleLacks>;
   /** Each submodule `.gitmodules` names in the source folder whose folder holds no repository. */
   unclonedSubmodules(): Promise<readonly UnclonedSubmodule[]>;
   /** Whether the instance repository tracks the source folder named `name`, by its build file, so a clone checks it out. */
@@ -767,14 +806,20 @@ export interface InstanceAdapter {
   filesIn(folder: string): Promise<readonly string[]>;
   /** `folder`'s files by their own paths, each with its hash kept in the hash index, and the paths the manager excludes. */
   folderValue(folder: string): Promise<FolderValue>;
-  /** `folderValue` of a source folder, less the files git holds there and git's own: its manifest names the rest. Rejects
-   *  when git cannot list the folder. */
-  sourceFolderValue(folder: string): Promise<FolderValue>;
-  /** The `folders` whose whole git holds: none of their files is ignored and untracked. None of a folder outside the instance, nor of any
-   *  while the instance holds no repository. Rejects when git cannot list the instance. */
+  /** `folderValue` less git's own and each file git holds: one it tracks, or a new one it does not ignore. Its manifest
+   *  names the rest. Rejects when git cannot list a folder a repository holds. */
+  unheldFolderValue(folder: string): Promise<FolderValue>;
+  /** The `folders` git holds whole: a new file in one would not be ignored and no file in it is. Not one outside the
+   *  instance or through a symlink; none without a repository. Rejects when git cannot list the instance. */
   foldersHeldWhole(folders: readonly string[]): Promise<ReadonlySet<string>>;
-  /** What the status of the mod whose files `folder` holds reads of the instance, for the packages `asked`. */
-  modValue(folder: string, asked: PackagesAsked | undefined): Promise<StatusValues>;
+  /** Each of `folders` the instance repository can hold a file in: inside the instance, and reached through no symlink. */
+  foldersInReach(folders: readonly string[]): Promise<readonly string[]>;
+  /** The files git holds in each of `folders`, by path in it: tracked, or new and not ignored. None outside the instance
+   *  or through a symlink, unless the folder is a repository. */
+  filesHeldByGit(folders: readonly string[]): Promise<ReadonlyMap<string, readonly string[]>>;
+  /** What the status of the mod whose files `folder` holds reads of the instance, for the packages `asked`, less the
+   *  files git holds there. */
+  modValue(folder: string, asked: PackagesAsked | undefined, heldByGit: readonly string[]): Promise<StatusValues>;
   /** The path a folder holds the file at `path` at, while `exclude` names the paths the modlist excludes. */
   pathInFolder(path: string, exclude: readonly string[]): string;
   /** The file's own path, without the mark the manager reads as excluded, which a manifest's path never carries. */
@@ -799,9 +844,9 @@ export interface InstanceAdapter {
   markDownloadedFile(name: string, mark: DownloadedFileMark): Promise<Marked>;
   /** Writes what Nexus names of a downloaded file into its metadata, made when it has none. Keeps every value `info` does not name. Rejects, writing nothing, when the instance's game has no name in Nexus's terms. */
   writeNexusFileInfo(name: string, info: NexusFileInfo): Promise<Marked>;
-  /** Puts `bytes` as the downloaded file `name`, with what Nexus names of it in its metadata, when their hash is `hash`, and
-   *  puts nothing when it is not. Refuses a name the downloads folder holds, writing nothing. */
-  putDownloadedFile(name: string, bytes: AsyncIterable<Uint8Array>, file: { readonly hash: string; readonly info: NexusFileInfo }): Promise<{ readonly put: boolean }>;
+  /** Puts `bytes` as the downloaded file `name`, with what Nexus names of it in its metadata, when their hash is `hash`
+   *  (any bytes without one); puts nothing otherwise. Refuses a name the downloads folder holds, writing nothing. */
+  putDownloadedFile(name: string, bytes: AsyncIterable<Uint8Array>, file: { readonly hash?: string; readonly info: NexusFileInfo }): Promise<{ readonly put: boolean }>;
   /** Puts a copy of the downloaded file at `from` as the downloaded file `name`, with its metadata. Refuses a name the
    *  downloads folder holds, writing nothing. */
   copyDownloadedFile(from: string, name: string): Promise<void>;
@@ -809,6 +854,10 @@ export interface InstanceAdapter {
   /** Adds to the userlist a rule for each plugin that it loads after each plugin given, every other byte staying.
    *  Made when absent; writes nothing for a held rule. Rejects, writing nothing, for a file it cannot read. */
   changeUserlist(additions: readonly LoadAfter[]): Promise<Written>;
+  /** Puts the masterlist and the prelude whole, each made when absent and left alone when it already holds the text. */
+  changeMasterlist(files: MetadataTexts): Promise<Written>;
+  /** The names of the masterlist and the prelude that git holds uncommitted changes of, a file never committed among them. None in an instance that is not a repository. */
+  uncommittedMasterlist(): Promise<readonly string[]>;
 
   // Put and rename in mods/.
   /** Refuses a name that is not a bare name, and a folder already there, whatever it holds, matched as the manager matches names. */
@@ -860,9 +909,9 @@ export interface InstanceAdapter {
   writeInstalledFrom(folder: string, packages: readonly InstalledPackage[], trash: MoveToTrash): Promise<void>;
 
   // Subscribe: the instance changed.
-  /** Hears that the instance changed: any of its files, the downloads folder and the game folder's
+  /** Hears each change to the instance: any of its files, the downloads folder and the game folder's
    *  plugins, where the last read of the settings resolved them. */
-  subscribe(listener: () => void): Subscription;
+  subscribe(listener: ChangeListener): Subscription;
 }
 
 /** A file inside `folder`, by the relative path a source tree names it with. */

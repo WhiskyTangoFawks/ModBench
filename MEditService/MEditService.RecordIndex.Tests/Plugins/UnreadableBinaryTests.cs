@@ -82,13 +82,20 @@ public sealed class UnreadableBinaryTests : IDisposable
     {
         NonCompiledPluginOverAnUnreadableBinary();
         var before = _notifications.Notifications.Count;
+        var standing = _index.Status;
         var other = new Fallout4Mod(ModKey.FromFileName("Other.esp"), Fallout4Release.Fallout4);
         other.Npcs.AddNew("OtherNpcChangedBesideTheUnreadableOne");
         other.WriteToBinary(OtherPluginPath);
 
-        _index.NextSnapshot();
+        _index.NextCheck();
 
-        Assert.DoesNotContain(_notifications.Notifications.Skip(before), n => n is LoadOrderStatusNotification);
+        Assert.All(
+            _notifications.Notifications.Skip(before).OfType<LoadOrderStatusNotification>(),
+            n =>
+            {
+                Assert.Equal(standing.State, n.Status.State);
+                Assert.Equal(standing.Failures, n.Status.Failures);
+            });
     }
 
     [Fact]
@@ -97,7 +104,7 @@ public sealed class UnreadableBinaryTests : IDisposable
         NonCompiledPluginOverAnUnreadableBinary();
 
         WriteValidPlugin(_pluginPath);
-        _index.NextSnapshotUntil(() => _index.Status.Failures.All(f => f.Name != PluginName), "the status without the plugin's failure");
+        _index.NextCheckUntil(() => _index.Status.Failures.All(f => f.Name != PluginName), "the status without the plugin's failure");
 
         Assert.DoesNotContain(_index.Status.Failures, f => f.Name == PluginName);
         Assert.Contains(_index.ListedIn(_key), row => row.EditorId == "FreshlyAppearedNpc");
@@ -111,7 +118,7 @@ public sealed class UnreadableBinaryTests : IDisposable
         var before = _notifications.Notifications.Count;
 
         File.WriteAllText(_pluginPath, "still not a plugin");
-        _index.NextSnapshotUntil(
+        _index.NextCheckUntil(
             () => _notifications.Since(before).OfType<LoadOrderStatusNotification>().Any(), "the status naming the failure again");
 
         var published = _notifications.Notifications.Skip(before).OfType<LoadOrderStatusNotification>().Last();

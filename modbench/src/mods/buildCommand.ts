@@ -60,7 +60,7 @@ interface BuildGiven extends ModsGiven {
 async function buildMods(deps: BuildDeps, { mods, refusedRows, invokedFrom, everySource }: BuildGiven): Promise<Built> {
   const { commands, instance } = deps;
   if (mods.length === 0 && !everySource) return { applied: true, outcome: { landed: [], refused: refusedRows } };
-  return runWritingGesture(invokedFrom, instance, async (): Promise<Built> => {
+  return runWritingGesture('modbench.mod.build', invokedFrom, instance, async (): Promise<Built> => {
     const outcome = await commands.build(mods, everySource);
     if (isRefused(outcome)) return { applied: false, refusal: outcome.message };
     for (const { compiled } of outcome.landed) {
@@ -143,7 +143,7 @@ function builtUncommitted(outcome: BuildOutcome): PartialFailure[] {
   });
 }
 
-// modlist-repository.md, The manifest, story 11: a step that would write a path the manifest ignores leaves it as it is.
+// instance-repository.md, The manifest, story 11: a step that would write a path the manifest ignores leaves it as it is.
 function builtOverIgnored(outcome: BuildOutcome): PartialFailure[] {
   return outcome.landed.flatMap(({ mod, ignored = [] }) => ignored.map((path) => ({
     message: `Left "${path}" in "${mod}" unwritten, as its manifest ignores it.`, detail: path, severity: 'warning' as const,

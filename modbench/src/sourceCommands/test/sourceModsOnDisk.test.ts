@@ -1,3 +1,4 @@
+import { ORDER_SENT } from '../../test/orderSent';
 import { afterEach, assert, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { chmod, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
@@ -86,7 +87,7 @@ async function aSourceMod(buildFile: Partial<BuildFile> = {}, made: readonly Mad
     inTrash[inMod] = await readFile(path, 'utf8');
     await rm(path);
   };
-  const commands = sourceCommands({ client, adapter, saveUnsaved: () => Promise.resolve([]), tasks: stepping, trash });
+  const commands = sourceCommands({ client, adapter, saveUnsaved: () => Promise.resolve([]), loadOrderSnapshot: ORDER_SENT, tasks: stepping, trash });
   const status = async () => statusNow(adapter, { name: 'Mod', folder: join(root, 'mods', 'Mod') });
   const recorded = async (): Promise<Manifest | undefined> => {
     const read = await manifestIn(join(root, 'mods', 'Mod'));
@@ -409,7 +410,7 @@ describe('build over an instance on disk, of a source mod renamed outside Modben
     await build();
     const renamed = join(root, 'mods', 'Renamed');
     await rename(join(root, 'mods', 'Mod'), renamed);
-    const before = { status: await statusNow(adapter, { name: 'Renamed', folder: renamed }), sourceMods: [...(await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }))).folders.keys()] };
+    const before = { status: await statusNow(adapter, { name: 'Renamed', folder: renamed }), sourceMods: [...(await sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceModFolders(), (name) => adapter.entryKey({ kind: 'mod', name }))).folders.keys()] };
 
     const outcome = await commands.build(['Renamed']);
 
@@ -489,9 +490,12 @@ describe('a mod installed from an installation file, then decompiled and committ
       handed.push(mod);
       await put(`source/Mod/${BUILD_FILE}`, mod.sourceFolder.buildFile);
       await put(`source/Mod/${mod.sourceFolder.manifestFile ?? ''}`, mod.sourceFolder.manifest ?? '');
+      await put(`mods/Mod/${mod.sourceFolder.modFolderManifestFile ?? ''}`, mod.sourceFolder.modFolderManifest ?? '');
       const sourceFolder = join(root, 'source', 'Mod');
       execFileSync('git', ['init', '-q', sourceFolder]);
-      execFileSync('git', ['-C', sourceFolder, 'add', BUILD_FILE, mod.sourceFolder.manifestFile ?? '']);
+      const kept = [BUILD_FILE, mod.sourceFolder.manifestFile ?? '', ...mod.sourceFolder.assets ?? []];
+      await put('source/Mod/.gitignore', `*\n!/.gitignore\n${kept.map((path) => `!/${path}\n`).join('')}`);
+      execFileSync('git', ['-C', sourceFolder, 'add', '.gitignore', BUILD_FILE, mod.sourceFolder.manifestFile ?? '']);
       execFileSync('git', ['-C', sourceFolder, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'Init Mod']);
       return { landed: [{ mod: 'Mod', plugins: [{ name: 'Mod.esp', origin: 'Mod' }] }], refused: [] };
     });
@@ -500,7 +504,7 @@ describe('a mod installed from an installation file, then decompiled and committ
       return { landed: [{ mod: 'Mod', compiled: [], refused: [], archivesRefused: [], made: [...MADE] }], refused: [] };
     });
     const trashed: string[] = [];
-    const commands = sourceCommands({ client, adapter, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: (path) => { trashed.push(path); return rm(path); } });
+    const commands = sourceCommands({ client, adapter, saveUnsaved: () => Promise.resolve([]), loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: (path) => { trashed.push(path); return rm(path); } });
     expect(await commands.versionInGit(['Mod'], { where: 'NewRepository', commit: true })).toMatchObject({ refused: [] });
     const manifestText = (): Promise<string> => readFile(join(root, 'mods', 'Mod', 'Mod.manifest.json'), 'utf8');
     const restoreSourceFolder = async (): Promise<string | undefined> => {
@@ -535,7 +539,7 @@ describe('a mod installed from an installation file, then decompiled and committ
     expect([sent?.sourceFolder.manifestFile, sent?.sourceFolder.assets, sent?.sourceFolder.buildFile, pathsIn(manifest.manifest), manifest.manifest.packages.map(({ kind }) => kind), sent?.sourceFolder.ignored])
       .toEqual(['Mod.manifest.json', [], '{"version":1,"steps":[\n{"copy":["b.nif","textures"]},\n{"compile":["Mod.esp"]}\n]}\n', ASSETS, ['installationFile'], ASSETS]);
     expect(Object.keys(await textsBelow(join(root, 'source', 'Mod'))).filter((path) => !path.startsWith('.git/')).sort())
-      .toEqual(['Mod.manifest.json', 'b.nif', 'build.json', 'textures/c.dds']);
+      .toEqual(['.gitignore', 'Mod.manifest.json', 'b.nif', 'build.json', 'textures/c.dds']);
   });
 
   it('leaves a file its manifest ignores out of its repository, and keeps the ignore in the manifest its folder holds (The manifest, story 11)', async () => {
@@ -558,7 +562,7 @@ describe('a mod installed from an installation file, then decompiled and committ
     expect(await textsBelow(join(root, 'source', 'Mod'))).toMatchObject({ 'b.nif': 'bytes of b.nif', 'textures/c.dds': 'bytes of textures/c.dds' });
   });
 
-  it('is rewritten by no update manifest at its first run, neither the source folder\'s manifest nor the mod folder\'s (modlist-repository.md, Update manifest, story 2)', async () => {
+  it('is rewritten by no update manifest at its first run, neither the source folder\'s manifest nor the mod folder\'s (instance-repository.md, Update manifest, story 2)', async () => {
     const { adapter } = await anInstalledModDecompiled();
     const manifests = async (): Promise<string[]> => [
       await readFile(join(root, 'source', 'Mod', 'Mod.manifest.json'), 'utf8'), await readFile(join(root, 'mods', 'Mod', 'Mod.manifest.json'), 'utf8'),
@@ -597,11 +601,11 @@ describe('version in git over an instance on disk', () => {
     await put('mods/Mod/a.nif', 'mine');
     await writeManifestIn(join(root, 'mods', 'Mod'), { packages: [], exclude: [], ignore: [], flags: new Map(), files: new Map([['a.nif', 'AAAAAAAAAAA=']]), ...manifest });
     const client = new InMemoryMEditClient();
-    const commands = sourceCommands({ client, adapter: adapterOver(root), saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn() });
+    const commands = sourceCommands({ client, adapter: adapterOver(root), saveUnsaved: () => Promise.resolve([]), loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() });
     return { client, versionInGit: () => commands.versionInGit(['Mod'], { where: 'NewRepository', commit: true }) };
   }
 
-  it('hands mEdit the repository with its build file, then records in the manifest the mod folder holds its repository and each file with its bytes', async () => {
+  it('hands mEdit the repository with its build file, and the mod folder\'s manifest naming its repository and each file with its bytes', async () => {
     const { client, versionInGit } = await aModWithItsManifest();
     const handed: ModToVersionInGit[] = [];
     client.setCommandHandler('versionInGit', (mods) => {
@@ -612,11 +616,10 @@ describe('version in git over an instance on disk', () => {
     const outcome = await versionInGit();
 
     const [sent] = handed;
-    expect(sent?.sourceFolder).toMatchObject({ path: join(root, 'source', 'Mod'), assets: ['a.nif'] });
+    expect(sent?.sourceFolder).toMatchObject({ path: join(root, 'source', 'Mod'), assets: ['a.nif'], modFolderManifestFile: 'Mod.manifest.json' });
     expect(outcome).toEqual({ landed: [{ mod: 'Mod', plugins: [{ name: 'Mod.esp', origin: 'Mod' }] }], refused: [] });
-    expect(new Set(await readdir(join(root, 'mods', 'Mod')))).toEqual(new Set(['Mod.esp', 'Mod.manifest.json', 'a.nif', 'meta.ini']));
-    const recorded = await manifestIn(join(root, 'mods', 'Mod'));
-    expect(recorded !== undefined && 'manifest' in recorded ? [recorded.manifest.packages, pathsIn(recorded.manifest)] : recorded).toEqual([[REPOSITORY], ['Mod.esp', 'a.nif']]);
+    const linked = readManifest(sent?.sourceFolder.modFolderManifest ?? '');
+    expect('manifest' in linked ? [linked.manifest.packages, pathsIn(linked.manifest)] : linked).toEqual([[REPOSITORY], ['Mod.esp', 'a.nif']]);
   });
 
   it('refuses a mod whose folder\'s manifest names the game folder when the game folder was not found, handing mEdit nothing', async () => {
@@ -641,13 +644,14 @@ describe('version in git of a mod several downloaded files yield, over an instan
     },
   };
 
-  async function decompiled(installationFiles: string, folderFiles: readonly string[], notes: readonly string[] = []) {
+  async function decompiled(installationFiles: string, folderFiles: readonly string[], notes: readonly string[] = [], unreadablePages: readonly string[] = []) {
     root = await mkdtemp(join(tmpdir(), 'modbench-several-'));
     await put('ModOrganizer.ini', '[General]\r\ngameName=Fallout 4\r\nselected_profile=@ByteArray(Default)\r\n');
     await put('profiles/Default/modlist.txt', '# This file was automatically generated by Mod Organizer.\r\n+Multi\r\n');
     await put('mods/Multi/meta.ini', `[General]\r\n${installationFiles}`);
     for (const file of folderFiles) await put(`mods/Multi/${file}`, file === 'own.txt' ? 'mine' : `bytes of ${file}`);
     for (const name of Object.keys(YIELDS)) await put(`downloads/${name}`, `the downloaded ${name}`);
+    for (const name of unreadablePages) await mkdir(join(root, 'downloads', `${name}.meta`));
     const client = new InMemoryMEditClient();
     const handed: ModToVersionInGit[] = [];
     client.setCommandHandler('versionInGit', (mods) => {
@@ -656,7 +660,7 @@ describe('version in git of a mod several downloaded files yield, over an instan
     });
     const adapter = adapterOver(root, { installationFileReader: readerOfEachFile });
     const noting = { ...adapter, downloadedFilesHashed: async () => ({ ...await adapter.downloadedFilesHashed(), notes }) };
-    const outcome = await sourceCommands({ client, adapter: noting, saveUnsaved: () => Promise.resolve([]), tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['Multi'], { where: 'NewRepository', commit: true });
+    const outcome = await sourceCommands({ client, adapter: noting, saveUnsaved: () => Promise.resolve([]), loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['Multi'], { where: 'NewRepository', commit: true });
     const repository = handed[0]?.sourceFolder;
     const manifest = readManifest(repository?.manifest ?? '');
     assert('manifest' in manifest);
@@ -673,6 +677,12 @@ describe('version in git of a mod several downloaded files yield, over an instan
     const { assets, packages } = await decompiled('', ['delta.txt', 'own.txt']);
 
     expect([assets, packages]).toEqual([['own.txt'], ['Delta-200-2.zip']]);
+  });
+
+  it('answers a downloaded file whose page could not be read for the mod whose package it is, and not for a file no package names', async () => {
+    const { outcome } = await decompiled('installationFile=Alpha-100-1.zip\r\n', ['alpha.txt', 'own.txt'], [], ['Alpha-100-1.zip', 'Gamma-200-1.zip']);
+
+    expect(outcome).toMatchObject({ notes: [expect.stringMatching(/^Multi: the page of Alpha-100-1\.zip could not be read/) as unknown] });
   });
 
   it('hands mEdit the mod and answers the note of a downloaded file that could not be read whole, which leaves the packages right', async () => {

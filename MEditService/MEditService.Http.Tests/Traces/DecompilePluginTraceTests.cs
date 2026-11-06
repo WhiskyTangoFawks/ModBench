@@ -35,7 +35,7 @@ public sealed class DecompilePluginTraceTests : HostedTests
         var body = await decompiled.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal([Plugin], body.GetProperty("applied").EnumerateArray().Select(p => p.GetProperty("name").GetString()));
         Assert.Empty(body.GetProperty("refused").EnumerateArray());
-        await Client.NextSnapshot(_instance);
+        await Client.NextCheck(_instance);
         await Wire.Eventually(async () => await EditorIdUnlessTheIndexIsReconciling(formKey) == "UpgradedNpc", "the decompiled source reaching the answers");
     }
 

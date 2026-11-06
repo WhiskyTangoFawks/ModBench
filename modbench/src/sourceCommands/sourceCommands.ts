@@ -5,24 +5,27 @@ import { isPluginSourcePath, type InstanceAdapter } from '../instanceAdapter/ins
 import {
   buildFileIn, exclusionsOf, manifestIn, sourceModsOf, type BuildFile, type SourceMods,
 } from '../manifestAdapter/manifestAdapter';
+import { BUILD_FILE } from '../wire/sourceMod';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import { archiveVariants, buildSourceMod, type BuildPass, type BuildRefusal, type ModBuilt, type SourceBuildOutcome, type SourceModToBuild } from './buildSourceMod';
 import { inModOrder } from './inModOrder';
 import { modsPlaced, type MadeSourceFolder } from './newRepository';
+import { modsPutWholeInGit } from './wholeFolderInGit';
 import type { StepTasks } from './steps';
-import { whyNotIndexed } from './whyNotIndexed';
+import { whyNotIndexed, type LoadOrderSnapshot } from './whyNotIndexed';
 
 interface SourceCommandsDeps {
   client: Pick<MEditClient, 'build' | 'versionInGit' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
   adapter: Pick<InstanceAdapter,
-    'reading' | 'modOrder' | 'entryKey' | 'downloadedFile' | 'downloadedFilesHashed' | 'downloadedFileHolding' | 'installationFile' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceRepositories'
+    'reading' | 'modOrder' | 'entryKey' | 'downloadedFile' | 'downloadedFilesHashed' | 'downloadedFileHolding' | 'installationFile' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceModFolders'
     | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'nexusFileAt' | 'gamePlaces' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash' | 'filesIn'
-    | 'originFileHash' | 'flaggedHash' | 'keepFlaggedHash' | 'folderValue' | 'writeFilesIn' | 'trashFileIn' | 'trashingReplaced' | 'fileStamp' | 'copyDownloadedFile' | 'putDownloadedFile' | 'sourceFolderValue'
-    | 'repositoryOnDisk' | 'writeSourceFolderLines'>;
+    | 'originFileHash' | 'flaggedHash' | 'keepFlaggedHash' | 'folderValue' | 'writeFilesIn' | 'trashFileIn' | 'trashingReplaced' | 'fileStamp' | 'copyDownloadedFile' | 'putDownloadedFile' | 'unheldFolderValue'
+    | 'repositoryOnDisk' | 'writeSourceModLines' | 'writeHeldWholeLines' | 'commitFolder' | 'foldersHeldWhole' | 'foldersInReach'>;
   /** Saves the unsaved plugin source under a folder, as Text documents holds it; answers the paths VS Code left unsaved. */
   saveUnsaved: (folder: string, isPluginSource: (path: string) => boolean) => Promise<string[]>;
+  loadOrderSnapshot: LoadOrderSnapshot;
   tasks: StepTasks;
   trash: MoveToTrash;
 }
@@ -48,14 +51,20 @@ async function heldBuildFile(sourceFolder: string): Promise<BuildFile | { readon
   }
 }
 
-// A manifest that cannot be read names no repository, and says why.
-async function noRepository(folder: string | undefined): Promise<string> {
-  const held = folder === undefined ? undefined : await manifestIn(folder).catch(() => undefined);
-  return held !== undefined && 'refused' in held ? `was not built: ${held.refused}.` : 'no repository in the source folder builds it';
+const readOrUndefined = <T>(folder: string | undefined, read: (folder: string) => Promise<T>): Promise<T | undefined> =>
+  folder === undefined ? Promise.resolve(undefined) : read(folder).catch(() => undefined);
+
+async function whyNoRepositoryBuilds(adapter: Adapter, mod: string, modFolder: string | undefined): Promise<string> {
+  const [manifest, buildFile] = await Promise.all([
+    readOrUndefined(modFolder, manifestIn), readOrUndefined(adapter.sourceFolder(mod), buildFileIn),
+  ]);
+  if (manifest !== undefined && 'refused' in manifest) return `was not built: ${manifest.refused}.`;
+  if (buildFile === undefined) return 'no repository in the source folder builds it';
+  return 'refused' in buildFile ? `was not built: ${buildFile.refused}.` : `its ${BUILD_FILE} is not staged in the instance repository: stage it.`;
 }
 
 // mods.md, A source mod, story 2: the build keeps the exclusions the folder holds, and those its manifest records, and the
-// paths its manifest ignores (modlist-repository.md, The manifest, story 11).
+// paths its manifest ignores (instance-repository.md, The manifest, story 11).
 async function keptByBuildIn(adapter: Adapter, folder: string): Promise<{ exclude: readonly string[]; ignore: readonly string[] } | { readonly reason: string }> {
   try {
     const held = await manifestIn(folder);
@@ -79,7 +88,7 @@ async function sourceModOf(
 async function sourceModRead(adapter: Adapter, mod: string, sourceMods: SourceMods): Promise<SourceModToBuild | ItemRefusal<string>> {
   const sourceFolder = sourceMods.folderOf(mod);
   const folder = await adapter.modFolderPath(mod);
-  if (sourceFolder === undefined) return { item: mod, reason: await noRepository(folder) };
+  if (sourceFolder === undefined) return { item: mod, reason: await whyNoRepositoryBuilds(adapter, mod, folder) };
   if (folder === undefined) return { item: mod, reason: 'its name gives it no folder' };
   const buildFile = await heldBuildFile(sourceFolder);
   if ('reason' in buildFile) return { item: mod, reason: buildFile.reason };
@@ -90,9 +99,9 @@ async function sourceModRead(adapter: Adapter, mod: string, sourceMods: SourceMo
 
 /** The source mod gestures, bound to the mEdit client. mEdit reads each mod's plugins in the load order it holds,
  *  which lacks a snapshot still waiting to be put, so each first waits for the newest to reconcile. */
-export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: SourceCommandsDeps) {
+export function sourceCommands({ client, adapter, saveUnsaved, loadOrderSnapshot, tasks, trash }: SourceCommandsDeps) {
   const sourceModsNow = async (): Promise<SourceMods> =>
-    sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
+    sourceModsOf((await adapter.modOrder()).modFolders, await adapter.sourceModFolders(), (name) => adapter.entryKey({ kind: 'mod', name }));
   const toBuild = (sourceMods: SourceMods, asked: readonly string[], everySource: boolean): readonly string[] =>
     (everySource ? [...sourceMods.folders.keys()] : asked);
   return {
@@ -112,7 +121,7 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: S
         const decided = await sourceModOf({ adapter, saveUnsaved }, mod, sourceMods);
         if ('reason' in decided) { refused.push(decided); continue; }
         // source.md, Build, story 11: this mod's script reads the plugins of the one built before it in the load order.
-        const why = previous === undefined ? undefined : (await whyNotIndexed({ client, adapter }, [previous])).get(previous);
+        const why = previous === undefined ? undefined : (await whyNotIndexed({ client, adapter, loadOrderSnapshot }, [previous])).get(previous);
         if (previous !== undefined && why !== undefined) {
           const waited = previous;
           landed = landed.map((built) => (built.mod === waited ? { ...built, failure: built.failure ?? `Its ${why}, so the mods after it were not built.` } : built));
@@ -132,23 +141,26 @@ export function sourceCommands({ client, adapter, saveUnsaved, tasks, trash }: S
       return { landed, refused };
     },
 
-    /** A mod whose name gives it no source folder, or whose files or metadata cannot be read, is refused here, naming why,
-     *  and mEdit makes the rest source mods. */
+    /** A mod that cannot go where `options.where` says is refused here, naming why. mEdit makes the rest source mods, and
+     *  is not asked for a whole folder. */
     versionInGit: async (mods: readonly string[], options: VersionInGitOptions): Promise<InitializedSourceMod | WriteRefused> =>
-      modsVersionedInGit({ client, adapter }, mods, options),
+      options.where === 'WholeFolder' ? modsPutWholeInGit(adapter, trash, { mods, ...options }) : modsVersionedInGit({ client, adapter }, mods, options),
   };
 }
 
-interface VersionInGitOptions {
+/** Where git holds a mod: its source folder in a repository of its own or the instance repository, or its whole folder in
+ *  the instance repository. */
+export type VersionInGitWhere = SourceModIn | 'WholeFolder';
+
+type VersionInGitOptions = {
   readonly commit: boolean;
-  readonly where: SourceModIn;
   readonly onProgress?: (status: InitProgress) => void;
-}
+} & ({ readonly where: SourceModIn } | { readonly where: 'WholeFolder' });
 
 type VersionInGitDeps = Pick<SourceCommandsDeps, 'client' | 'adapter'>;
 
 async function modsVersionedInGit(
-  { client, adapter }: VersionInGitDeps, mods: readonly string[], { commit, where, onProgress }: VersionInGitOptions,
+  { client, adapter }: VersionInGitDeps, mods: readonly string[], { commit, where, onProgress }: Extract<VersionInGitOptions, { readonly where: SourceModIn }>,
 ): Promise<InitializedSourceMod | WriteRefused> {
   const sentOver = async (made: ReadonlyMap<string, MadeSourceFolder>): Promise<VersionInGitOutcome | WriteRefused> => {
     if (made.size === 0) return { landed: [], refused: [] };
@@ -159,13 +171,13 @@ async function modsVersionedInGit(
     adapter, { mods, where, onProgress: (mod, modsDone, modsTotal) => onProgress?.({ mod, modsDone, modsTotal, phase: 'ReadingFiles' }) },
     sentOver, (outcome) => outcome.landed.map(({ mod }) => mod));
   if (isRefused(placed)) return placed;
-  const { outcome, notMade, notLinked, notTakenBack, notes } = placed;
-  if (isRefused(outcome)) return { ...outcome, message: [outcome.message, ...notTakenBack.values()].join(' ') };
-  const refused = placed.withLinesLeft([
+  const { outcome, notMade, unfinished, notes } = placed;
+  if (isRefused(outcome)) return outcome;
+  const refused = [
     ...outcome.refused,
     ...[...notMade].map(([item, reason]) => ({ item, reason })),
-    ...[...notLinked].map(([item, why]) => ({ item, reason: `was ${commit ? 'committed' : 'put under git'}, but ${why}.` })),
-  ], (item) => item);
+    ...[...unfinished].map(([item, why]) => ({ item, reason: `was ${commit ? 'committed' : 'put under git'}, but ${why}.` })),
+  ];
   return { landed: outcome.landed, refused, ...notes.length === 0 ? {} : { notes } };
 }
 

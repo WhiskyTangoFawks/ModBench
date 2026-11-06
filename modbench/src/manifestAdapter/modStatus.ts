@@ -1,13 +1,14 @@
-// modlist-repository.md, Status: a mod's folder against its manifest, the rule the Mod status box and mod commands' upgrade
+// instance-repository.md, Status: a mod's folder against its manifest, the rule the Mod status box and mod commands' upgrade
 // check both read.
 
 import { isManifestPath } from '../repositoriesLib/manifestPath';
 import type { FolderFile, FolderValue, HashedPath, StatusValues } from '../repositoriesLib/statusValues';
+import type { BuildFileAgainst } from './buildFile';
 import type { Manifest, ManifestPackage } from './manifest';
 import type { ManifestAt } from './manifestFiles';
 import { isUnderAny } from './folderPaths';
 import { installationFileLack } from './packageLack';
-import { packageWithoutHost, repositoryOf } from './manifestPackages';
+import { packageWithoutHost, repositoryNoun, repositoryOf } from './manifestPackages';
 
 /** A mod by its name and the folder that holds it and its manifest. */
 export interface ModAt {
@@ -34,22 +35,29 @@ export interface ModStatus {
   /** The files no package holds the bytes of, nor a file of their name; `otherBytes`, those a package holds one of their name of. */
   readonly notInPackage: readonly string[];
   readonly otherBytes: readonly string[];
+  /** The folder's files no package holds the bytes of, by the paths it holds them at: those that differ, that no line
+   *  names, a step makes, or the lists above name, and every file of a source mod. */
+  readonly unpackaged: readonly string[];
   /** Each package with no host, as a noun phrase. */
   readonly noHost: readonly string[];
+  /** Each repository a submodule names whose commit the instance repository does not yet pin, as a noun phrase. */
+  readonly unpinned: readonly string[];
   /** Why this machine does not hold each package the manifest names, as a clause. */
   readonly packagesLacking: readonly string[];
   /** The manifest's path as the folder spells it; none when the folder holds none or it cannot be read. */
   readonly manifestFile?: string;
+  /** Its source folder's build file against that folder; none when the mod has no source folder or its build file cannot be read. */
+  readonly buildFile?: BuildFileAgainst;
   /** Why the installation file the mod manager names is missing or unreadable; none when it reads or none is named. */
   readonly installationFileProblem?: string;
   readonly unreadable?: string;
 }
 
 const nothing = (mod: string, over: Partial<ModStatus> = {}): ModStatus =>
-  ({ mod, packages: [], noManifest: false, differing: [], namedByNoLine: [], ignored: [], ignoreEntries: [], gone: [], notInPackage: [], otherBytes: [], noHost: [], packagesLacking: [], ...over });
+  ({ mod, packages: [], noManifest: false, differing: [], namedByNoLine: [], ignored: [], ignoreEntries: [], gone: [], notInPackage: [], otherBytes: [], unpackaged: [], noHost: [], unpinned: [], packagesLacking: [], ...over });
 
 /** A mod whose whole folder git holds: git's, so it lists nothing. */
-export const heldWholeStatus = (mod: string): ModStatus => nothing(mod, { heldWhole: true });
+export const heldWholeStatus = (mod: string, files: readonly string[]): ModStatus => nothing(mod, { heldWhole: true, unpackaged: ordered(files) });
 
 /** A mod whose status could not be read, for `why`. */
 export const unreadableStatus = (mod: string, why: string): ModStatus => nothing(mod, { unreadable: why });
@@ -140,7 +148,7 @@ function packagesHeld(manifest: Manifest, values: ValuesRead): { lacking: string
   return { lacking, files };
 }
 
-/** The mod's folder against its manifest (modlist-repository.md, Status). Which files no package holds waits for every
+/** The mod's folder against its manifest (instance-repository.md, Status). Which files no package holds waits for every
  *  package to be on this machine. */
 export function statusFrom(mod: ModAt, { read, file }: ManifestAt, values: StatusValues): ModStatus {
   if (read === undefined) return nothing(mod.name, { noManifest: true });
@@ -150,6 +158,12 @@ export function statusFrom(mod: ModAt, { read, file }: ManifestAt, values: Statu
   const { manifest } = read;
   const { files, namedByNoLine, ignored } = folderAgainst(manifest, values.folder, values.flaggedHashes);
   const held = packagesHeld(manifest, values);
+  const unheld = held.lacking.length === 0 ? filesNoPackageHolds(manifest, held.files) : undefined;
+  const unheldPaths = new Set([...unheld?.notInPackage ?? [], ...unheld?.otherBytes ?? []].map(folded));
+  const isUnheld = (path: string): boolean => unheldPaths.has(folded(path));
+  const isSourceMod = repositoryOf(manifest) !== undefined;
+  const unpackaged = files.flatMap(({ path, hash, pathInFolder, holdsItsBytes }) =>
+    (pathInFolder !== undefined && (isSourceMod || hash === null || holdsItsBytes === false || isUnheld(path)) ? [pathInFolder] : []));
   return {
     ...nothing(mod.name, { manifestFile: file, packages: manifest.packages }),
     differing: ordered(files.flatMap(({ pathInFolder, holdsItsBytes }) => (holdsItsBytes === false && pathInFolder !== undefined ? [pathInFolder] : []))),
@@ -157,8 +171,10 @@ export function statusFrom(mod: ModAt, { read, file }: ManifestAt, values: Statu
     ignored,
     ignoreEntries: manifest.ignore,
     gone: ordered(files.flatMap(({ path, pathInFolder }) => (pathInFolder === undefined ? [path] : []))),
-    ...held.lacking.length === 0 ? filesNoPackageHolds(manifest, held.files) : {},
-    noHost: manifest.packages.flatMap((pkg) => packageWithoutHost(pkg, values.repositoryHosted)),
+    ...unheld,
+    unpackaged: ordered([...unpackaged, ...namedByNoLine]),
+    noHost: manifest.packages.flatMap((pkg) => packageWithoutHost(pkg, values.repositoryPin)),
+    unpinned: manifest.packages.flatMap((pkg) => (pkg.kind === 'repository' && values.repositoryPin === 'unpinned' ? [repositoryNoun(pkg.name)] : [])),
     packagesLacking: held.lacking,
   };
 }

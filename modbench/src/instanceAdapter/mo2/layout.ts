@@ -8,10 +8,10 @@ import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
 import { SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
 import { PROFILE_SETTINGS_FILE_NAME } from './codecs/profileSettings';
-import { GIT_DIR, ownTempPrefix } from '../files';
+import { GIT_DIR } from '../files';
+import { ownTempPrefix } from '../../repositoriesLib/wholeWrites';
 import { PLUGINS_FILE_NAME } from '../../loadOrderFileCodec/pluginsText';
 import { anyCase, isBareName, SOURCE_MODS_FOLDER, type EntryRef } from '../instanceAdapter';
-import { PLUGIN_EXTENSIONS } from '../../tables/pluginFile';
 import { MANIFEST_SUFFIX } from '../../repositoriesLib/manifestPath';
 
 const PROFILES = 'profiles';
@@ -167,33 +167,40 @@ export const submodulesFile = (instanceRoot: string): string => join(instanceRoo
 /** A source mod's path in the instance repository, which is its submodule's path. */
 export const sourceModPath = (folderName: string): string => `${SOURCE_MODS_FOLDER}/${folderName}`;
 
-/** A repository appearing at, or vanishing from, the instance root. */
-export const REPOSITORY_WATCH_GLOB = GIT_DIR;
+/** A watch's folder, and the pattern of what in it the watch hears. VS Code watches a folder whole only for a pattern with
+ *  `**` or a path segment, and otherwise its first level alone. */
+export interface WatchedFolder {
+  readonly base: string;
+  readonly pattern: string;
+}
 
-/** The repository's config and pre-push hook, where git init's path filter and push check are written. */
-export const REPOSITORY_SET_UP_WATCH_GLOB = `${GIT_DIR}/{config,hooks/pre-push}`;
+const EVERYTHING_BELOW = '**';
+/** A folder's first level, as VS Code reads `*`. A bare `*` is plugins.txt's mark of an enabled plugin and mod order's
+ *  mark of a skipped line, which the format scan keeps to those codecs. */
+export const FIRST_LEVEL = '?*';
 
-/** What decides the folders git holds whole: its ignore lists and its index of tracked files. */
-export const HELD_BY_GIT_WATCH_GLOB = `{.gitignore,${GIT_DIR}/index,${GIT_DIR}/info/exclude}`;
+/** The instance's own watches, each as shallow as its changes are. A mod's or a profile's folder is followed once read. */
+export const instanceWatches = (instanceRoot: string): readonly WatchedFolder[] => [
+  // A profile switch rewrites the settings and nothing else; a repository appears at, or vanishes from, the root.
+  { base: instanceRoot, pattern: `{${SETTINGS_FILE_NAME},${IGNORE_LIST_FILE},${GIT_DIR},${Object.values(SORTING_RULE_FILES).join(',')}}` },
+  { base: modsDir(instanceRoot), pattern: FIRST_LEVEL },
+  { base: profilesDir(instanceRoot), pattern: FIRST_LEVEL },
+  { base: overwriteDir(instanceRoot), pattern: EVERYTHING_BELOW },
+  { base: sourceRootDir(instanceRoot), pattern: EVERYTHING_BELOW },
+  // Git init's path filter and push check, and what decides the folders git holds whole.
+  { base: join(instanceRoot, GIT_DIR), pattern: '{config,index}' },
+  { base: join(instanceRoot, GIT_DIR, 'hooks'), pattern: 'pre-push' },
+  { base: join(instanceRoot, GIT_DIR, 'info'), pattern: 'exclude' },
+];
 
-// Watch patterns, POSIX-separated and relative to the instance root: a `RelativePattern` takes a
-// glob, never a platform path, so these are built as text rather than with `join`.
-export const MODS_GLOB = `${MODS}/**`;
-export const SOURCE_GLOB = `${SOURCE_MODS_FOLDER}/**`;
-export const OVERWRITE_GLOB = `${OVERWRITE_DIR_NAME}/**`;
-export const MODLIST_GLOB = `${PROFILES}/*/${MODLIST_FILE_NAME}`;
-export const PLUGINS_GLOB = `${PROFILES}/*/${PLUGINS_FILE_NAME}`;
-export const SORTING_RULE_FILES_GLOB = `{${Object.values(SORTING_RULE_FILES).join(',')}}`;
-/** A profile switch rewrites the settings and nothing else. */
-export const SETTINGS_WATCH_GLOB = SETTINGS_FILE_NAME;
-/** Downloads' own base is the resolved folder itself, so this glob is everything under it. */
-export const DOWNLOADS_WATCH_GLOB = '**';
+/** What a profile's folder holds that the instance reads: its mod order, its plugin order, and its settings and game INIs. */
+export const PROFILE_WATCH_PATTERN = `{${MODLIST_FILE_NAME},${PLUGINS_FILE_NAME},*.${anyCase('ini')}}`;
 
-/** The plugin files at the root of the game folder's Data folder, the Data folder its base. */
-export const DATA_FOLDER_PLUGINS_GLOB = `*.{${[...PLUGIN_EXTENSIONS].map((ext) => anyCase(ext.slice(1))).join(',')}}`;
+/** A downloaded file and its metadata sit at the first level of the downloads folder. */
+export const DOWNLOADS_WATCH_GLOB = FIRST_LEVEL;
 
-/** A profile's own INIs: its settings, and the game INIs it keeps. */
-export const PROFILE_INIS_GLOB = `${PROFILES}/*/*.${anyCase('ini')}`;
+/** Everything under the game folder's Data folder, the Data folder its base. */
+export const DATA_FOLDER_GLOB = EVERYTHING_BELOW;
 
 // A repository does not look inside an ignored folder, so each folder is let in, its content ignored, and the files let back.
 const heldInEachFolderOf = (folder: string, files: readonly string[]): string[] => [
@@ -202,36 +209,38 @@ const heldInEachFolderOf = (folder: string, files: readonly string[]): string[] 
 
 const escapedForIgnoreList = (name: string): string => name.replace(/[\\*?[]/g, String.raw`\$&`);
 
-/** The whitelist (modlist-repository.md, The repository, story 2): each mod's metadata stays out. */
+/** The whitelist (instance-repository.md, The repository, story 2): each mod's metadata stays out. */
 export const whitelistIgnoreList = (publisherFileName: string | undefined): string => `${[
   '/*', `!/${IGNORE_LIST_FILE}`, `!/${SUBMODULES_FILE}`, `!/${SETTINGS_FILE_NAME}`,
   ...Object.values(SORTING_RULE_FILES).map((file) => `!/${file}`),
   ...publisherFileName === undefined ? [] : [`!/${escapedForIgnoreList(publisherFileName)}`],
+  // A source folder is let in by a line of its own, and its own ignore list says what git holds of it.
+  `!/${SOURCE_MODS_FOLDER}/`, `/${SOURCE_MODS_FOLDER}/*`,
   ...heldInEachFolderOf(PROFILES, [MODLIST_FILE_NAME, PLUGINS_FILE_NAME, PLUGIN_ORDER_FILE, `*.${anyCase('ini')}`]),
   ...heldInEachFolderOf(MODS, [`*.${MANIFEST_SUFFIX.slice(1)}`]),
+  // A separator is its folder, so a clone holds the folder by its metadata, and mod sync keeps its line.
+  `!/${MODS}/*${separatorModName('')}/${anyCase(MOD_META_FILE_NAME)}`,
 ].join('\n')}\n`;
 
 type Markers = readonly [first: string, last: string];
 
 // Git's last matching line wins: what leaves a folder out sits before the user's lines, and what lets a file in after.
-interface OwnLines { readonly leftOut: Markers; readonly letIn: Markers }
-type Role = keyof OwnLines;
+interface OwnLines { readonly leftOut?: Markers; readonly letIn: Markers }
+type Role = 'leftOut' | 'letIn';
 
-const SOURCE_MODS: OwnLines = {
-  leftOut: ['# Source mods with a remote, the rest left out', '# End of source mods with a remote, the rest left out'],
-  letIn: ['# Source mods with a remote', '# End of source mods with a remote'],
-};
+const SOURCE_MODS: OwnLines = { letIn: ['# Source folders in this repository', '# End of source folders in this repository'] };
 const OTHER_MANIFESTS: OwnLines = {
   leftOut: ['# Manifests outside the mod folders, the rest left out', '# End of manifests outside the mod folders, the rest left out'],
   letIn: ['# Manifests outside the mod folders', '# End of manifests outside the mod folders'],
 };
-const SOURCE_FOLDERS: OwnLines = {
-  leftOut: ['# Source folders this repository holds, the rest left out', '# End of source folders this repository holds, the rest left out'],
-  letIn: ['# Source folders this repository holds', '# End of source folders this repository holds'],
-};
+// A mod folder held whole needs no line to leave the rest out: the whitelist leaves out every mod's files already.
+const HELD_WHOLE: OwnLines = { letIn: ['# Mod folders this repository holds whole', '# End of mod folders this repository holds whole'] };
 const WHITELIST_LAST_LINE = whitelistIgnoreList(undefined).trimEnd().split('\n').at(-1);
 
-const markersOf = (role: Role): Markers[] => [SOURCE_MODS[role], OTHER_MANIFESTS[role], SOURCE_FOLDERS[role]];
+const markersOf = (role: Role): Markers[] => [SOURCE_MODS, OTHER_MANIFESTS, HELD_WHOLE].flatMap((kind) => {
+  const markers = kind[role];
+  return markers === undefined ? [] : [markers];
+});
 
 function afterLeftOutBlocks(lines: readonly string[], at: number): number {
   const markers = markersOf('leftOut').find(([first]) => first === lines[at]);
@@ -277,30 +286,45 @@ function withOwnLines(ignoreList: string, kind: OwnLines, own: readonly string[]
   if (lines.at(-1) === '') lines.pop();
   const letIn = own.filter((line) => line.startsWith('!'));
   const leftOut = own.filter((line) => !line.startsWith('!'));
-  return placed(lines, 'leftOut', kind.leftOut, leftOut) && placed(lines, 'letIn', kind.letIn, letIn) ? `${lines.join(lineEnding)}${lineEnding}` : undefined;
+  return (kind.leftOut === undefined || placed(lines, 'leftOut', kind.leftOut, leftOut)) && placed(lines, 'letIn', kind.letIn, letIn) ? `${lines.join(lineEnding)}${lineEnding}` : undefined;
 }
 
-/** An ignore list with the lines of `folderNames`, the source mods with a remote. Undefined when their markers do not
- *  pair. */
-export const withSourceModLines = (ignoreList: string, folderNames: readonly string[]): string | undefined =>
-  withOwnLines(ignoreList, SOURCE_MODS, folderNames.length === 0 ? [] : [
-    `!/${SOURCE_MODS_FOLDER}/`, `/${SOURCE_MODS_FOLDER}/*`, ...folderNames.map((name) => `!/${SOURCE_MODS_FOLDER}/${escapedForIgnoreList(name)}`),
+/** The source folders a clone gets, by name: each a submodule, or a plain folder, which holds no repository of its own. */
+export interface SourceFolders { readonly submodules: readonly string[]; readonly plain: readonly string[] }
+
+/** Whether the ignore list holds the whitelist's line that leaves out the source folders, which the lines of
+ *  `withSourceModLines` let back in. */
+export const leavesOutSourceFolders = (ignoreList: string): boolean => ignoreList.split(/\r?\n/).includes(`/${SOURCE_MODS_FOLDER}/*`);
+
+/** An ignore list that lets in each submodule and plain source folder, past the whitelist's line leaving out the folders in
+ *  source/. A repository with no entry gets no line. Undefined when the markers do not pair. */
+export const withSourceModLines = (ignoreList: string, { submodules, plain }: SourceFolders): string | undefined =>
+  withOwnLines(ignoreList, SOURCE_MODS, [
+    ...[...submodules].sort().map((name) => `!/${SOURCE_MODS_FOLDER}/${escapedForIgnoreList(name)}`),
+    ...[...plain].sort().map((name) => `!/${SOURCE_MODS_FOLDER}/${escapedForIgnoreList(name)}/`),
   ]);
 
-const SOURCE_FOLDERS_LET_IN = `!/${SOURCE_MODS_FOLDER}/`;
+/** The lines of `ignoreList` that let in the source folder `name`. */
+export function sourceModLinesOf(ignoreList: string, name: string): string[] {
+  const line = `!/${SOURCE_MODS_FOLDER}/${escapedForIgnoreList(name)}`;
+  return ignoreList.split(/\r?\n/).filter((each) => each === line || each === `${line}/`);
+}
 
-/** An ignore list that lets in each source folder of `folderNames`, or with `held` false leaves each out, every other line
- *  kept; each folder's own `.gitignore` says what of it is held. Undefined when the markers do not pair. */
-export function withSourceFolderLines(ignoreList: string, folderNames: readonly string[], held: boolean): string | undefined {
-  const lines = ignoreList.split(/\r?\n/);
-  const [first, last] = SOURCE_FOLDERS.letIn;
-  const begin = lines.indexOf(first);
-  const letIn = new Set(begin === -1 ? [] : lines.slice(begin + 1, lines.indexOf(last, begin)).filter((line) => line !== SOURCE_FOLDERS_LET_IN));
-  for (const line of folderNames.map((name) => `${SOURCE_FOLDERS_LET_IN}${escapedForIgnoreList(name)}`)) {
-    if (held) letIn.add(line);
-    else letIn.delete(line);
+/** An ignore list that lets in the files of each mod folder of `folderNames`, or with `held` false leaves them out, every
+ *  other line kept. Undefined when the markers do not pair. */
+export const withHeldWholeLines = (ignoreList: string, folderNames: readonly string[], held: boolean): string | undefined =>
+  withOwnLines(ignoreList, HELD_WHOLE, withLinesOf(ignoreList, HELD_WHOLE.letIn,folderNames.map((name) => `!/${MODS}/${escapedForIgnoreList(name)}/*`), held));
+
+// The lines between `markers` with each of `lines` added, or with `held` false taken out.
+function withLinesOf(ignoreList: string, [first, last]: Markers, lines: readonly string[], held: boolean): string[] {
+  const all = ignoreList.split(/\r?\n/);
+  const begin = all.indexOf(first);
+  const kept = new Set(begin === -1 ? [] : all.slice(begin + 1, all.indexOf(last, begin)));
+  for (const line of lines) {
+    if (held) kept.add(line);
+    else kept.delete(line);
   }
-  return withOwnLines(ignoreList, SOURCE_FOLDERS, letIn.size === 0 ? [] : [SOURCE_FOLDERS_LET_IN, `/${SOURCE_MODS_FOLDER}/*`, ...letIn]);
+  return [...kept];
 }
 
 // Each folder above a manifest is let in once, before the folders and the manifest it holds.
@@ -329,6 +353,9 @@ export const SETTINGS_FILE_PATTERN = `/${SETTINGS_FILE_NAME}`;
 
 /** Each profile's INIs as git's attributes match them. */
 export const PROFILE_INIS_PATTERN = `/${PROFILES}/*/*.${anyCase('ini')}`;
+
+/** Each mod's metadata file as git's attributes match it. */
+export const MOD_META_FILES_PATTERN = `/${MODS}/*/${anyCase(MOD_META_FILE_NAME)}`;
 
 /** The archives at the root of the Data folder and the files of its strings folder, the Data folder its base. */
 export const dataFolderArchivesGlob = (archiveExtension: string, stringsFolder: string): string =>

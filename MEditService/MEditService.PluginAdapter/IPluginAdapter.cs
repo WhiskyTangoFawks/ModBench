@@ -30,6 +30,10 @@ public interface IPluginAdapter
 
     bool Exists(string pluginPath);
 
+    /// <summary>The plugins whose file, or strings named for them, is at <paramref name="path"/>, or plugins it cannot name
+    /// for another archive or strings file the game loads.</summary>
+    PathAnswer Touching(LoadOrderSnapshot loadOrder, string path);
+
     /// <summary>Those of <paramref name="paths"/>, forward-slash and relative to the plugin's folder, that compile writes
     /// for <paramref name="plugin"/>: the plugin itself and, when it is localized, its strings.</summary>
     IReadOnlyList<string> WrittenByCompile(RegisteredPlugin plugin, IReadOnlyList<string> paths, GameRelease gameRelease);
@@ -38,8 +42,8 @@ public interface IPluginAdapter
     /// file cannot be read: no evidence either way, so each caller decides.</summary>
     string? HashOf(string pluginPath);
 
-    /// <summary>Forgets the hash of every file but <paramref name="pluginPaths"/>.</summary>
-    void KeepHashesOf(IReadOnlySet<string> pluginPaths);
+    /// <summary>Forgets what is kept of every plugin file but <paramref name="pluginPaths"/>: its hash, and its record facts.</summary>
+    void KeepStateOf(IReadOnlySet<string> pluginPaths);
 
     /// <summary>The hash and malformed-record diagnoses from one fresh read of the file.</summary>
     Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath, GameRelease gameRelease);
@@ -110,10 +114,11 @@ public interface IPluginAdapter
     Task<Answer<PluginByteComparison, PluginFailure>> CompareBytesAsync(
         string originalPath, string recompiledPath, LoadOrderSnapshot loadOrder, CancellationToken cancel = default);
 
-    /// <summary>A new plugin in <paramref name="folder"/>: a header whose flags the extension alone
-    /// sets, no records and no masters. Written whole or not at all, into no folder it made and over
+    /// <summary>A new plugin in <paramref name="folder"/>: a header flagged as <paramref name="flags"/> say,
+    /// no records and no masters. Written whole or not at all, into no folder it made and over
     /// no file.</summary>
-    Task<Answer<EmptyPluginCreated, PluginFailure>> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease);
+    Task<Answer<EmptyPluginCreated, PluginFailure>> CreateAndWriteAsync(
+        ModKey modKey, string folder, GameRelease gameRelease, IReadOnlyCollection<HeaderFlag> flags);
 
     /// <summary>Where <see cref="CreateAndWriteAsync"/> puts the plugin.</summary>
     string PathOfEmpty(ModKey modKey, string folder);
@@ -151,9 +156,9 @@ public enum UnverifiedReason
 /// <summary>A record whose rewrite the comparison could not prove intact.</summary>
 public readonly record struct UnverifiedRecord(UnverifiedReason Reason, string RecordType, FormKey FormKey);
 
-/// <summary>Whether two plugin files hold the same bytes, and if not, what the rewrite emptied, dropped, lacks or left unread.</summary>
+/// <summary>Whether two plugin files hold the same bytes, and if not, what the rewrite empties, drops, lacks or left unread.</summary>
 public sealed record PluginByteComparison(
-    bool Identical, PluginBinaryWalk.SubrecordLoss? Loss = null, IReadOnlyList<RepairPreview>? LossCauses = null, string? DeletedRecordEmptied = null,
+    bool Identical, PluginBinaryWalk.SubrecordLoss? Loss = null, IReadOnlyList<RepairPreview>? LossCauses = null, IReadOnlyList<RepairPreview>? DeletedRecordCauses = null,
     UnverifiedRecord? Unverified = null);
 
 /// <summary>What <see cref="IPluginAdapter.CreateAndWriteAsync"/> did, and for a plugin it wrote, the

@@ -22,6 +22,7 @@ import { recordSummaryFixture } from '../../client/test/fixtures';
 import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, refusing, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { progressSteps } from '../../test/recordedProgress';
+import { aWriteInFlight } from '../../test/writeInFlight';
 
 beforeEach(() => {
   progressSteps.length = 0;
@@ -50,20 +51,46 @@ describe('onPluginCheckboxChanged', () => {
     expect(reporter.reports).toEqual([]);
   });
 
-  it('lands boxes toggled to different states together', async () => {
+  it('lands the boxes checked and the boxes unchecked as two writes, each named by its own direction', async () => {
     const adapter = fake();
 
     await toggle(toggled(['A.esp', 1], ['B.esp', 0]), adapter);
 
-    expect(adapter.calls).toEqual(enabling(['A.esp', true], ['B.esp', false]));
+    expect(adapter.calls).toEqual([...enabling(['A.esp', true]), ...enabling(['B.esp', false])]);
   });
 
-  it('names a mixed-state toggle\'s failure generically, having no single direction to name', async () => {
+  it('names the failure of each direction by its own', async () => {
     const reporter = recordingReporter();
 
     await toggle(toggled(['A.esp', 1], ['B.esp', 0]), fake(REFUSED), reporter);
 
-    expect(reporter.reports).toMatchObject([{ severity: 'error', message: 'Failed to update plugins.' }]);
+    expect(reporter.reports).toMatchObject([
+      { severity: 'error', message: 'Failed to enable plugins.' },
+      { severity: 'error', message: 'Failed to disable plugins.' },
+    ]);
+  });
+
+  it('is refused while a write is in flight: the user is told once, the view is drawn from the held value, and nothing is written', async () => {
+    const { told, redraw } = aWriteInFlight();
+    const adapter = fake();
+    const own = recordingReporter();
+
+    await toggle(toggled(['A.esp', 1]), adapter, own);
+
+    expect({ calls: adapter.calls, own: own.reports, told: told.reports.map(({ message }) => message), redraws: redraw.mock.calls.length }).toEqual({
+      calls: [], own: [], told: ['modbench.plugin.enable did not start: modbench.test.held is still writing.'], redraws: 1,
+    });
+  });
+
+  it('is told once when a mixed batch is refused while a write is in flight', async () => {
+    const { told } = aWriteInFlight();
+    const adapter = fake();
+
+    await toggle(toggled(['A.esp', 1], ['B.esp', 0]), adapter, recordingReporter());
+
+    expect({ calls: adapter.calls, told: told.reports.map(({ message }) => message) }).toEqual({
+      calls: [], told: ['modbench.plugin.enable did not start: modbench.test.held is still writing. Nothing was enabled or disabled.'],
+    });
   });
 
   it('ignores a non-plugin row (a record-tree row sharing the merged view), writing nothing and opening no progress', async () => {

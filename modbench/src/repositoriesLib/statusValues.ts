@@ -35,6 +35,10 @@ export interface PackagesAsked {
   readonly flagged?: readonly { readonly path: string; readonly hash: string; readonly flags: PluginFlags }[];
 }
 
+/** What a clone gets of the repository asked for: `pinned`, a submodule at a commit the instance repository pins or a source folder it
+ *  tracks; `unpinned`, a submodule whose commit it does not yet pin; or `none`. */
+export type RepositoryPin = 'pinned' | 'unpinned' | 'none';
+
 /** What the status rule reads of a mod besides its manifest, as the Instance adapter hands it; `unreadable` is why a read
  *  rejected, and `notAsked` is that no manifest asked for it. */
 export type StatusValues =
@@ -47,8 +51,7 @@ export type StatusValues =
     readonly gameFiles: readonly HashedPath[] | undefined;
     /** The hash of each plugin `flagged` asks for once restore set its flags, by its path; none for a plugin restore has not. */
     readonly flaggedHashes: ReadonlyMap<string, string>;
-    /** Whether a clone gets the repository asked for: a submodule it fetches from its remote, or a source folder the instance repository tracks. */
-    readonly repositoryHosted: boolean;
+    readonly repositoryPin: RepositoryPin;
   }
   | { readonly kind: 'unreadable'; readonly reason: string }
   | { readonly kind: 'notAsked' };

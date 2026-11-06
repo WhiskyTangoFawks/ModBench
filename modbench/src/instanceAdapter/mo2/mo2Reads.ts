@@ -12,18 +12,19 @@ import { entryNamed, MODLIST_FILE_NAME, modLineKey, parseModlist } from './codec
 import { readGamePath, readSelectedProfile, SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
 import { gameOfSettings } from './mo2Game';
 import type { ManagerGamePath } from '../gameFolder/gameFolderResolver';
-import { creationClubFileOf, dataFolderOf, listDataFolderPlugins, readCreationClubList } from '../gameFolder/dataFolder';
+import { creationClubFileOf, dataFolderOf, listDataFolderFiles, listDataFolderPlugins, readCreationClubList } from '../gameFolder/dataFolder';
 import { pathTokensWritten } from './mo2PathTokens';
 import { pushRefusalWritten } from './mo2Submodules';
-import { factsOf, get, ignoreSkippedLink, isRepository, listEntries, listFolders, readOrAbsent, readOrReason, identityOf, type SkippedLink, stampOf, isOwnTemp } from '../files';
+import { get, ignoreSkippedLink, parsedBy, textByStamp, isRepository, listEntries, listFolders, readOrAbsent, readOrReason, identityOf, type SkippedLink, stampOf } from '../files';
+import { isOwnTemp } from '../../repositoriesLib/wholeWrites';
 import type { DownloadedFile, DownloadedFiles, InstanceAdapter, ManagerNames, ManagerRunning, ModFolder, ModFolders, SortingRuleFile } from '../instanceAdapter';
-import { DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadedFilePath, downloadedFileMetadataPath, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile, sortingRuleFilePaths } from './layout';
+import { DATA_FOLDER_GLOB, DOWNLOADS_WATCH_GLOB, FIRST_LEVEL, PROFILE_WATCH_PATTERN, profileDir, downloadedFilePath, downloadedFileMetadataPath, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile, sortingRuleFilePaths } from './layout';
 import { mo2Archives } from './mo2Archives';
 import type { ReadingSource } from '../instanceReading';
 import type { ConfigurationFile } from '../publisher';
 import { entryKey, listModFolders, modFolderNamed, modFoldersOf, type Mo2Context } from './mo2Context';
-import { originFilesIn } from './mo2Files';
-import { sourceRepositoriesIn } from './sourceRepositories';
+import { originFilesReader } from './mo2Files';
+import { sourceModFoldersIn } from './sourceModFolders';
 import { errorMessage } from '../../ports/errorMessage';
 import { errnoCode } from '../../ports/errno';
 import { holdsPathToken } from '../pathTokens';
@@ -40,14 +41,19 @@ async function listDownloadedFiles(downloadsDir: string, skippedLink: SkippedLin
   return Promise.all(names.map(async (name) => {
     const path = downloadedFilePath(downloadsDir, name);
     const metadataPath = downloadedFileMetadataPath(downloadsDir, name);
-    const [facts, metaText] = await Promise.all([
-      factsOf(path),
-      readOrAbsent<string | undefined>(() => get(metadataPath), undefined),
+    const [stamp, parsed] = await Promise.all([
+      stampOf(path),
+      readOrAbsent<ReturnType<typeof parseDownloadedFileMeta> | undefined>(() => downloadedMetaAt(metadataPath), undefined),
     ]);
-    const parsed = metaText === undefined ? undefined : parseDownloadedFileMeta(metaText);
-    return { name, path, metadataPath, size: facts.size, mtimeMs: facts.mtimeMs, excluded: parsed?.hidden ?? false, meta: parsed?.meta, modID: effectiveModId(parsed?.meta.modID, name) };
+    return { name, path, metadataPath, size: Number(stamp.size), mtimeMs: Number(stamp.modifiedNs) / 1e6, excluded: parsed?.hidden ?? false, meta: parsed?.meta, modID: effectiveModId(parsed?.meta.modID, name) };
   }));
 }
+
+const metaIniAt = parsedBy(parseMetaIni);
+/** A downloaded file's metadata as it reads, parsed again only when the file's stamp has changed. */
+export const downloadedMetaAt = parsedBy(parseDownloadedFileMeta);
+const modlistAt = parsedBy(parseModlist);
+const pluginsAt = parsedBy(parsePlugins);
 
 const GAME_PATH_PLACE = `${SETTINGS_FILE_NAME}'s gamePath`;
 
@@ -67,19 +73,33 @@ const MO2_NAMES: ManagerNames = { manager: 'MO2', modOrderFile: MODLIST_FILE_NAM
 export async function readMetaIni(context: Mo2Context, mod: string, folders: ModFolders | undefined | 'list'): Promise<MetaIni> {
   if (entryNamed(mod).kind === 'separator') return {};
   const folder = await modFolderNamed(context, mod, folders);
-  return folder === undefined ? {} : readOrAbsent(async () => parseMetaIni(await get(modMetaFileIn(folder))), {});
+  return folder === undefined ? {} : readMetaIniIn(folder);
 }
+
+/** The meta.ini of the mod folder `folder`, `{}` when it is gone. */
+export const readMetaIniIn = (folder: string): Promise<MetaIni> => readOrAbsent(() => metaIniAt(modMetaFileIn(folder)), {});
 
 async function sortingRuleFile(path: string): Promise<SortingRuleFile> {
   try {
-    return { path, kind: 'text', text: await get(path) };
+    return { path, kind: 'text', text: await textByStamp(path) };
   } catch (err) {
     return errnoCode(err) === 'ENOENT' ? { path, kind: 'absent' } : { path, kind: 'unreadable', reason: errorMessage(err) };
   }
 }
 
+function watchedProfiles({ instanceRoot, watch }: Mo2Context, profiles: string[]): string[] {
+  watch.follow('profileFolders', profiles.map((profile) => profileDir(instanceRoot, profile)), PROFILE_WATCH_PATTERN);
+  return profiles;
+}
+
+// A change deeper in a mod is left to the check of the disk: a watch of every folder of every mod passes the system's limit.
+const watchModFolders = ({ watch }: Mo2Context, folders: readonly ModFolder[]): void => {
+  watch.follow('modFolders', folders.map((folder) => folder.path), FIRST_LEVEL);
+};
+
 export function readingSource(context: Mo2Context, publisherFile: ConfigurationFile | undefined): ReadingSource {
   const { instanceRoot, resolveGameFolder, resolveDownloadsFolder, watch, mo2Running } = context;
+  const originFilesOf = originFilesReader(context);
   return {
     names: MO2_NAMES,
     modLineKey,
@@ -94,15 +114,16 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
         gameFolder: async () => {
           const managed: ManagerGamePath = { path: gamePathOf(iniText), place: GAME_PATH_PLACE, release: game.gameRelease };
           const gameFolder = await resolveGameFolder(managed);
-          watch.follow('gameFolderPlugins', dataFolderOf(gameFolder), DATA_FOLDER_PLUGINS_GLOB);
+          const dataFolder = dataFolderOf(gameFolder);
+          watch.follow('dataFolder', dataFolder === undefined ? [] : [dataFolder], DATA_FOLDER_GLOB);
           const creationClubList = creationClubFileOf(gameFolder, game.gameRelease);
-          if (creationClubList === undefined) watch.follow('creationClubList', undefined, '');
-          else watch.follow('creationClubList', dirname(creationClubList), basename(creationClubList));
+          if (creationClubList === undefined) watch.follow('creationClubList', [], '');
+          else watch.follow('creationClubList', [dirname(creationClubList)], basename(creationClubList));
           return gameFolder;
         },
         downloadedFiles: async (skippedLink: SkippedLink): Promise<DownloadedFiles> => {
           const resolution = await resolveDownloadsFolder(instanceRoot, iniText);
-          watch.follow('downloadedFiles', resolution.kind === 'resolved' ? resolution.downloadsDir : undefined, DOWNLOADS_WATCH_GLOB);
+          watch.follow('downloadedFiles', resolution.kind === 'resolved' ? [resolution.downloadsDir] : [], DOWNLOADS_WATCH_GLOB);
           if (resolution.kind === 'unresolved') return resolution;
           const { downloadsDir } = resolution;
           return { kind: 'listed', downloadsDir, files: await listDownloadedFiles(downloadsDir, skippedLink) };
@@ -110,34 +131,35 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
       };
     },
 
-    async profiles(skippedLink) {
-      return readOrAbsent(() => listFolders(profilesDir(instanceRoot), skippedLink), []);
-    },
+    profiles: async (skippedLink) => watchedProfiles(context, await readOrAbsent(() => listFolders(profilesDir(instanceRoot), skippedLink), [])),
 
     async modOrder(profile) {
-      return parseModlist(await get(modlistFile(instanceRoot, profile)));
+      return modlistAt(modlistFile(instanceRoot, profile));
     },
 
     modMeta: async (mod, folders) => modMetaOf(await readMetaIni(context, mod, folders)),
 
     modFolders: async (skippedLink) => {
       const all = await listModFolders(context, skippedLink);
+      watchModFolders(context, all ?? []);
       return all === undefined ? undefined : modFoldersOf(all);
     },
 
     async pluginOrder(profile) {
-      return parsePlugins(await get(pluginsFile(instanceRoot, profile)));
+      return pluginsAt(pluginsFile(instanceRoot, profile));
     },
 
     gameFolderPlugins: listDataFolderPlugins,
 
+    gameFolderFiles: listDataFolderFiles,
+
     creationClubList: readCreationClubList,
 
-    originFiles: (origin, folders) => originFilesIn(context, origin, false, folders),
+    originFiles: (origin, folders) => originFilesOf(origin, false, folders),
 
-    originRootFiles: (origin, folders) => originFilesIn(context, origin, true, folders),
+    originRootFiles: (origin, folders) => originFilesOf(origin, true, folders),
 
-    sourceRepositories: () => sourceRepositoriesIn(instanceRoot),
+    sourceModFolders: () => sourceModFoldersIn(instanceRoot),
 
     async sortingRuleFiles() {
       const paths = sortingRuleFilePaths(instanceRoot);
@@ -164,7 +186,7 @@ const indexed = (listing: readonly ModFolder[]): ModFolders => {
 
 export function mo2Reads(
   context: Mo2Context, source: ReadingSource,
-): Pick<InstanceAdapter, 'modFolderPath' | 'foldersRefused' | 'sourceFolder' | 'fileStamp' | 'entryKey' | 'profiles' | 'modOrder' | 'downloadedFiles' | 'downloadedFileAt' | 'sourceRepositories'> {
+): Pick<InstanceAdapter, 'modFolderPath' | 'foldersRefused' | 'sourceFolder' | 'fileStamp' | 'entryKey' | 'profiles' | 'modOrder' | 'downloadedFiles' | 'downloadedFileAt' | 'sourceModFolders'> {
   const { instanceRoot } = context;
   const reads: ReturnType<typeof mo2Reads> = {
     profiles: () => source.profiles(ignoreSkippedLink),
@@ -183,7 +205,7 @@ export function mo2Reads(
       return undefined;
     }),
     modOrder: async () => ({ mods: await source.modOrder((await source.settings()).profile), modFolders: await listModFolders(context, ignoreSkippedLink) }),
-    sourceRepositories: () => source.sourceRepositories(),
+    sourceModFolders: () => source.sourceModFolders(),
     modFolderPath: (name, among) => modFolderNamed(context, name, among === undefined ? 'list' : indexed(among)),
     foldersRefused: (folders, asked) => foldersRefused(instanceRoot, folders, asked),
     sourceFolder: (mod) => modSourceDir(instanceRoot, mod),

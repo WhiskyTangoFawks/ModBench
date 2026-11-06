@@ -11,6 +11,7 @@ import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 import type { PluginAddress } from '../wire/pluginAddress';
 import { Refusal } from '../drivingLib/refusal';
+import { holdingTheWrite } from '../drivingLib/writingGesture';
 import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
 import { creatablePluginExtensionsOf } from './creatablePluginExtensions';
 import type { PluginsTreeNode } from './pluginRows';
@@ -33,13 +34,14 @@ type RenameDeps = Pick<RenamePluginDeps, 'commands' | 'source'>;
 const refused = (refusal: string, detail?: string): GestureResult<PluginAddress> => ({ applied: false, refusal, detail });
 
 async function renamed({ commands, source }: RenameDeps, plugin: PluginAddress, newName: string): Promise<GestureResult<PluginAddress>> {
-  const couldNot = `Could not rename "${plugin.name}" (${plugin.origin}): its plugin source`;
+  const couldNot = `Could not rename "${plugin.name}" (${plugin.origin})`;
   const apply = (changes: SourceChanges) => applyAnswered(source, [changes], [plugin]);
   const result = await commands.renamePlugin({ apply }, plugin, newName);
   if (result.applied) return { applied: true, outcome: { landed: [{ name: newName, origin: plugin.origin }], refused: [] } };
-  if ('reported' in result) return refused(`${couldNot} may be partly renamed. Reverting the source rename in git undoes it.`, result.reported);
-  if (!result.sourceRenamed) return refused(result.refusal, result.detail);
-  return refused(`${couldNot} was renamed, its file and lines were not. Reverting the source rename in git undoes it.`, result.refusal);
+  if ('reported' in result) return refused(`${couldNot}: its plugin source may be partly renamed. Reverting the source rename in git undoes it.`, result.reported);
+  if (!('sourceRenamed' in result)) return refused(result.refusal, result.detail);
+  if (!result.sourceRenamed) return refused(`${couldNot}: its file and lines were not renamed.`, result.refusal);
+  return refused(`${couldNot}: its plugin source was renamed, its file and lines were not. Reverting the source rename in git undoes it.`, result.refusal);
 }
 
 /** commands.md, `rename` under Plugin. */
@@ -73,8 +75,8 @@ export function registerRenamePluginCommand(
       const plugin = pluginOf(only);
       return { plugin, newName: name };
     },
-    run: async ({ plugin, newName }) => vscode.window.withProgress({ location: { viewId: PLUGINS_KEY_ARGS.view } }, () =>
-      instance.quiet(() => source.oneAtATime(() => renamed({ commands, source }, plugin, newName)))),
+    run: ({ plugin, newName }) => holdingTheWrite('modbench.plugin.rename', async () => vscode.window.withProgress({ location: { viewId: PLUGINS_KEY_ARGS.view } }, () =>
+      instance.quiet(() => source.oneAtATime(() => renamed({ commands, source }, plugin, newName))))),
     report: (result) => {
       if (!result.applied) reporter.report('error', result.refusal, result.detail);
     },

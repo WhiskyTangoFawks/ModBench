@@ -5,14 +5,14 @@ import { textHash } from '../instanceAdapter/fileContents/contentDigest';
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import type { NexusFileInfo } from '../ports/nexusFileInfo';
 import {
-  entryNotFound, filesWinningFirst, isBareName, type DecideModOrder, type DownloadedFile, type DownloadedFileQuery, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp,  type GameFile, type GamePlace, type HashedFile, type InstallationFile, type InstallOutcome, type InstalledPackage, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type NexusModFile, type OtherManifest, type UnsearchedFolder, type OriginFile, type FomodAnswer, type PluginOrderChange, type PublisherTag, type PublisherTagChange, type Subscription } from '../instanceAdapter/instanceAdapter';
+  CHECK_THE_DISK, entryNotFound, filesWinningFirst, type ChangeListener, type Reread, isBareName, type DecideModOrder, type DownloadedFile, type DownloadedFileQuery, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp,  type GameFile, type GamePlace, type HashedFile, type InstallationFile, type InstallOutcome, type InstalledPackage, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type NexusModFile, type OtherManifest, type UnsearchedFolder, type OriginFile, type FomodAnswer, type PluginOrderChange, type PublisherTag, type PublisherTagChange, type Subscription } from '../instanceAdapter/instanceAdapter';
 import { modOrderAfter, pluginOrderAfter } from './fakeOrderChanges';
 import { groupModOrder } from '../instanceAdapter/modGroups';
 import { parseNexusPage } from '../instanceAdapter/nexusPage';
 import { pluginsProvidedOf } from '../instanceAdapter/pluginsProvided';
 import { loadedWithNoLineOf } from '../tables/gamePaths';
 import { ownPathOf, pathInFolderOf } from '../instanceAdapter/excludedPaths';
-import { folderValueOver, modValueOver, sourceFolderValueOver } from '../instanceAdapter/modValue';
+import { folderValueOver, modValueOver, unheldFolderValueOver } from '../instanceAdapter/modValue';
 import { overlappedGameRoot } from '../instanceAdapter/gameFolder/pathWithin';
 import { addLoadAfter, type LoadAfter } from '../sortingRules/lootMetadata';
 import { READ_SORTING_RULE_FILES } from './readSortingRuleFiles';
@@ -49,6 +49,7 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
     archiveList: [],
     archiveListNotes: [],
     dataFolderArchives: { kind: 'unresolved' },
+    dataFolderFiles: { kind: 'unresolved' },
     profiles: ['Default'],
     modFolders: undefined,
     gameFolderLinks: 0,
@@ -56,10 +57,11 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
     runtimeOutput: { origin: 'overwrite', folder: undefined, files: [], folders: [], notes: [] },
     modFiles: noFilesFor(overrides.mods ?? []),
     folderMeta: new Map(),
-    sourceRepositories: new Map(),
+    sourceModFolders: new Map(),
     holdsRepository: false,
     repositorySetUp: false,
     watchNotes: [],
+    unheardChanges: [],
     managerRunning: { kind: 'notRunning' },
     publisherConfiguration: NO_PUBLISHER,
     ...overrides,
@@ -80,6 +82,7 @@ export type AdapterCall =
   | { readonly verb: 'trashDownloadedFile'; readonly name: string }
   | { readonly verb: 'selectProfile'; readonly profile: string }
   | { readonly verb: 'changeUserlist'; readonly additions: readonly LoadAfter[] }
+  | { readonly verb: 'changeMasterlist'; readonly masterlist: string; readonly prelude: string }
   | { readonly verb: 'createModFolder'; readonly mod: string }
   | { readonly verb: 'renameModFolder'; readonly from: string; readonly to: string }
   | { readonly verb: 'markOriginFile'; readonly origin: FileOrigin; readonly relativePath: string; readonly mark: OriginFileMark }
@@ -99,7 +102,9 @@ export type AdapterCall =
   | { readonly verb: 'checkPushRefusalFree' }
   | { readonly verb: 'writeSubmodules'; readonly acted: readonly string[] | 'every' }
   | { readonly verb: 'writeOtherManifestLines' }
-  | { readonly verb: 'writeSourceFolderLines'; readonly sourceFolders: readonly string[]; readonly held: boolean }
+  | { readonly verb: 'writeSourceModLines'; readonly letIn: readonly string[] }
+  | { readonly verb: 'writeHeldWholeLines'; readonly modFolders: readonly string[]; readonly held: boolean }
+  | { readonly verb: 'commitFolder'; readonly folder: string; readonly message: string }
   | { readonly verb: 'refuseUnpublishedPins' }
   | { readonly verb: 'writePathTokens' }
   | { readonly verb: 'install'; readonly package: InstallPackage; readonly target: InstallTarget; readonly fomod?: FomodAnswer }
@@ -121,12 +126,16 @@ export interface InstanceAnswers {
   /** An origin file's size and hash by the path it is read from; a path not there is unreadable. */
   hashes?: ReadonlyMap<string, HashedFile>;
   stamps?: ReadonlyMap<string, FileStamp>;
+  /** What a file reads as, by the path it is read from: the mod order's winner, else its path in the Data folder. */
+  dataFiles?: ReadonlyMap<string, { checksum?: number; version?: string; readable?: boolean }>;
   /** Each folder's files by forward-slash path; a folder not there holds none. */
   folderFiles?: ReadonlyMap<string, readonly string[]>;
-  /** The files git holds in a source folder, by the folder. */
+  /** The files git holds in a folder, by the folder. */
   heldByGit?: ReadonlyMap<string, readonly string[]>;
   /** The mod folders whose whole git holds. */
   heldWholeByGit?: ReadonlySet<string>;
+  /** The mod folders git still leaves out after the ignore list lets them in, such as by .git/info/exclude. */
+  leftOutByGit?: ReadonlySet<string>;
   /** What the installation of each mod answers, by mod name; a mod not there records none. */
   installations?: ReadonlyMap<string, FileRead<InstallationFile | undefined>>;
   /** What each downloaded file answers, by name; a name not there is not in the downloads folder. */
@@ -162,8 +171,12 @@ export interface InstanceAnswers {
   outsideInstance?: ReadonlySet<string>;
   /** Mods whose name gives them no source folder. */
   unsourcedMods?: ReadonlySet<string>;
+  /** Each mod's source folder, by mod name, where it is not `/source/<mod>`. */
+  sourceFolders?: ReadonlyMap<string, string>;
+  /** Folders the instance repository cannot hold a file in. */
+  outOfReach?: ReadonlySet<string>;
   /** The reads beside `reading()` that reject, with the message each rejects with. */
-  unreadReads?: Partial<Record<'profiles' | 'modOrder' | 'downloadedFiles' | 'sourceRepositories' | 'otherManifests', string>>;
+  unreadReads?: Partial<Record<'profiles' | 'modOrder' | 'downloadedFiles' | 'sourceModFolders' | 'otherManifests', string>>;
   installed?: InstallOutcome;
   /** Whether the instance folder holds a repository on disk now, whatever its reading said. */
   repositoryOnDisk?: boolean;
@@ -183,6 +196,8 @@ export interface InstanceAnswers {
   uncloned?: Awaited<ReturnType<InstanceAdapter['unclonedSubmodules']>>;
   /** The reason a trashed downloaded file's metadata is left behind. */
   metadataLeftBehind?: string;
+  /** The masterlist and prelude files git holds uncommitted changes of. */
+  uncommittedMasterlist?: readonly string[];
   /** A write that rejects with the message this returns for it, after it is recorded. */
   refusals?: (call: AdapterCall) => string | undefined;
   /** The reason reading a file of an origin fails, or `undefined` when it reads. */
@@ -196,10 +211,13 @@ export interface FakeInstanceAdapter {
   readonly hashed: string[];
   /** Every `reading()` after this answers the reading with these fields replaced. */
   read(next: Partial<InstanceReading>): void;
-  changed(): void;
+  /** Signals a change to `path`, or one with no path. */
+  changed(path?: string): void;
   /** Every `reading()` after this rejects with the message, until it is called with `undefined`. */
   failReading(message: string | undefined): void;
   readonly readings: number;
+  /** What each `reading()` was handed, in order. */
+  readonly rereads: readonly Reread[];
   readonly subscribers: number;
 }
 
@@ -281,8 +299,10 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
   let calls: AdapterCall[] = [];
   const hashed: string[] = [];
   const flaggedHashes = new Map(answers.flaggedHashes);
+  const letInByLines = new Set<string>();
   const putHashedAsTheirText = new Map<string, FileRead<InstallationFile>>();
-  const listeners = new Set<() => void>();
+  const listeners = new Set<ChangeListener>();
+  const rereads: Reread[] = [];
   let readings = 0;
   let readingFailure: string | undefined;
 
@@ -326,8 +346,9 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     answers.places === undefined ? answers : answers.places.find((place) => place.root === root) ?? {};
 
   const adapter: InstanceAdapter = {
-    reading: () => {
+    reading: (reread = CHECK_THE_DISK) => {
       readings++;
+      rereads.push(reread);
       return readingFailure === undefined ? Promise.resolve(current) : Promise.reject(new Error(readingFailure));
     },
     activeProfile: () => Promise.resolve(current.profile),
@@ -344,7 +365,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       if (listed.kind === 'unresolved') return { kind: 'unreadable', reason: listed.reason };
       return { kind: 'read', answer: listed.files?.find((file) => file.path === path) };
     },
-    sourceRepositories: () => unreadable('sourceRepositories', current.sourceRepositories),
+    sourceModFolders: () => unreadable('sourceModFolders', current.sourceModFolders),
     names: { manager: 'Fake manager', modOrderFile: 'modlist.txt', downloadedFileMetadataFile: '.meta' },
     publisherTags: answers.publisherTags ?? [],
     changePublisherTag: (change, tag, paths) =>
@@ -353,7 +374,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     followModFolders: (moves) => (answers.publisherTags === undefined ? Promise.resolve() : write({ verb: 'followModFolders', moves }, () => undefined)),
     modFolderPath: (mod) => Promise.resolve(isBareName(mod) ? foldersNow().holding({ kind: 'mod', name: mod })?.path ?? folderBeside(current.modFolders, mod) : undefined),
     foldersRefused: () => Promise.resolve([]),
-    sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
+    sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : answers.sourceFolders?.get(mod) ?? `/source/${mod}`),
     installationFile: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: undefined }),
     downloadedFile: (name) => Promise.resolve(answers.downloadedFiles?.get(name) ?? putHashedAsTheirText.get(name) ?? { kind: 'read', answer: undefined }),
     downloadedFileHolding: ({ size, hash }) => Promise.resolve({
@@ -372,6 +393,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       return Promise.resolve({ files: [...files, ...hashed], notes });
     },
     nexusFileAt: parseNexusPage,
+    nexusGames: () => Promise.resolve(['fallout4']),
     downloadedFileQuery: (name) => {
       const reason = answers.unreadableQueries?.get(name);
       if (reason !== undefined) return Promise.resolve({ kind: 'unreadable', reason });
@@ -414,10 +436,17 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     unclonedSubmodules: () => Promise.resolve(answers.uncloned ?? []),
     removeRepository: () => record({ verb: 'removeRepository' }, undefined),
     checkPushRefusalFree: () => record({ verb: 'checkPushRefusalFree' }, undefined),
-    writeSubmodules: (acted) => record({ verb: 'writeSubmodules', acted }, answers.submodules ?? { notes: [], other: [] }),
+    writeSubmodules: (acted) => record({ verb: 'writeSubmodules', acted }, answers.submodules ?? { notes: [], other: [], written: [] }),
     otherManifests: () => unreadable('otherManifests', { manifests: answers.otherManifests ?? [], unsearched: answers.unsearched ?? [], nested: [] }),
     writeOtherManifestLines: () => record({ verb: 'writeOtherManifestLines' }, undefined),
-    writeSourceFolderLines: (sourceFolders, held) => record({ verb: 'writeSourceFolderLines', sourceFolders, held }, undefined),
+    writeSourceModLines: (letIn = []) => record({ verb: 'writeSourceModLines', letIn }, undefined),
+    writeHeldWholeLines: (modFolders, held) => write({ verb: 'writeHeldWholeLines', modFolders, held }, () => {
+      for (const folder of modFolders) {
+        if (held) letInByLines.add(folder);
+        else letInByLines.delete(folder);
+      }
+    }),
+    commitFolder: (folder, message) => record({ verb: 'commitFolder', folder, message }, undefined),
     refuseUnpublishedPins: () => record({ verb: 'refuseUnpublishedPins' }, () => record({ verb: 'takeBackPushRefusal' }, undefined)),
     writePathTokens: () => record({ verb: 'writePathTokens' }, answers.pathTokenLeft),
     fileStamp: (path) => answer(answers.stamps?.get(path), path),
@@ -429,10 +458,17 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     },
     filesIn: (folder) => Promise.resolve((answers.folderFiles?.get(folder) ?? []).filter((path) => !isManifestPath(path))),
     folderValue: (folder) => folderValueOver(adapter, folder),
-    foldersHeldWhole: (folders) => Promise.resolve(new Set(folders.filter((folder) => answers.heldWholeByGit?.has(folder) === true))),
-    sourceFolderValue: (folder) => sourceFolderValueOver(adapter, (at) => Promise.resolve(answers.heldByGit?.get(at) ?? []), folder),
-    modValue: (folder, asked) => modValueOver(adapter, folder, asked),
+    foldersHeldWhole: (folders) => Promise.resolve(new Set(
+      folders.filter((folder) => answers.heldWholeByGit?.has(folder) === true || (letInByLines.has(folder) && answers.leftOutByGit?.has(folder) !== true)),
+    )),
+    foldersInReach: (folders) => Promise.resolve(folders.filter((folder) => answers.outOfReach?.has(folder) !== true)),
+    filesHeldByGit: (folders) => Promise.resolve(new Map(folders.map((folder) => [folder, answers.heldByGit?.get(folder) ?? []]))),
+    unheldFolderValue: (folder) => unheldFolderValueOver(adapter, answers.heldByGit?.get(folder) ?? [], folder),
+    modValue: (folder, asked, heldByGit) => modValueOver(adapter, folder, asked, heldByGit),
     textHash,
+    dataFileChecksum: (path, winner) => Promise.resolve({ kind: 'read', value: answers.dataFiles?.get(winner ?? path)?.checksum }),
+    dataFileVersion: (path, winner) => Promise.resolve({ kind: 'read', value: answers.dataFiles?.get(winner ?? path)?.version }),
+    dataFileReadable: (path, winner) => Promise.resolve({ kind: 'read', value: answers.dataFiles?.get(winner ?? path)?.readable === true }),
     changeModOrder: (profile, decide: DecideModOrder) => {
       const changes = decide(current.mods, current.modFolders);
       return write({ verb: 'changeModOrder', profile, changes }, () => {
@@ -470,8 +506,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       const chunks: Uint8Array[] = [];
       for await (const chunk of bytes) chunks.push(chunk);
       const text = Buffer.concat(chunks).toString();
-      if (text !== hash) return { put: false };
-      putHashedAsTheirText.set(name, { kind: 'read', answer: { path: `/downloads/${name}`, size: text.length, hash, entries: [] } });
+      if (hash !== undefined && text !== hash) return { put: false };
+      putHashedAsTheirText.set(name, { kind: 'read', answer: { path: `/downloads/${name}`, size: text.length, hash: hash ?? text, entries: [] } });
       return { put: true };
     },
     copyDownloadedFile: (from, name) =>
@@ -501,6 +537,22 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         current = { ...current, sortingRuleFiles: { ...current.sortingRuleFiles, userlist: { path: userlist.path, kind: 'text', text: after } } };
         return { wrote: true };
       }),
+    changeMasterlist: ({ masterlist, prelude }) =>
+      write({ verb: 'changeMasterlist', masterlist, prelude }, () => {
+        const files = current.sortingRuleFiles;
+        const held = (file: typeof files.masterlist) => (file.kind === 'text' ? file.text : undefined);
+        if (held(files.masterlist) === masterlist && held(files.prelude) === prelude) return { wrote: false };
+        current = {
+          ...current,
+          sortingRuleFiles: {
+            ...files,
+            masterlist: { path: files.masterlist.path, kind: 'text', text: masterlist },
+            prelude: { path: files.prelude.path, kind: 'text', text: prelude },
+          },
+        };
+        return { wrote: true };
+      }),
+    uncommittedMasterlist: () => Promise.resolve(answers.uncommittedMasterlist ?? []),
     selectProfile: (profile) =>
       write({ verb: 'selectProfile', profile }, () => {
         const wrote = profile !== current.profile;
@@ -603,9 +655,10 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     get calls() { return calls; },
     forgetCalls: () => { calls = []; },
     read: (next) => { current = { ...current, ...(next.mods !== undefined && next.modFiles === undefined ? { modFiles: noFilesFor(next.mods) } : {}), ...(next.mods !== undefined && next.modGroups === undefined ? { modGroups: groupModOrder(next.mods) } : {}), ...next }; },
-    changed: () => { for (const listener of [...listeners]) listener(); },
+    changed: (path) => { for (const listener of [...listeners]) listener(path); },
     failReading: (message) => { readingFailure = message; },
     get readings() { return readings; },
+    rereads,
     get subscribers() { return listeners.size; },
   };
 }

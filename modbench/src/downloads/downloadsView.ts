@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
 import type { Instance, InstanceView } from '../instanceLoader/instance';
 import type { DownloadedFileCommands } from '../downloadedFileCommands/downloads';
+import type { Download } from '../downloadedFileCommands/download';
 import type { QueryInfo } from '../downloadedFileCommands/queryInfo';
 import type { Reporter } from '../ports/reporter';
 import type { MoveToTrash } from '../ports/trash';
 import { registerNameFilter, type NameFilter } from '../drivingLib/nameFilter';
 import {
-  registerDownloadsExcludedToggleCommands, registerDownloadsMultiRowCommands, registerDownloadsQueryInfoCommand,
+  registerDownloadsDownloadCommand, registerDownloadsExcludedToggleCommands, registerDownloadsMultiRowCommands, registerDownloadsQueryInfoCommand,
   registerDownloadsSingleRowCommands, registerDownloadsSortCommand,
 } from './DownloadsPanel';
 import { DownloadsProvider, type DownloadsTreeNode } from './DownloadsProvider';
@@ -19,6 +20,7 @@ import type { CopyValueAdapter } from '../drivingLib/copyValue';
 interface DownloadsViewDeps {
   commands: DownloadedFileCommands;
   queryInfo: QueryInfo;
+  download: Download;
   instance: InstanceView & Pick<Instance, 'refresh'>;
   reporterFor: (tag: string) => Reporter;
   trash: MoveToTrash;
@@ -34,7 +36,7 @@ interface DownloadsView extends vscode.Disposable {
 
 /** Rows come from the Instance value alone (ADR-0015). */
 export function createDownloadsView(
-  { commands, queryInfo, instance, reporterFor, trash, channel }: DownloadsViewDeps,
+  { commands, queryInfo, download, instance, reporterFor, trash, channel }: DownloadsViewDeps,
 ): DownloadsView {
   const reporter = reporterFor('downloadedFiles');
   const log = (line: string): void => { channel.warn(`[downloadedFiles] ${line}`); };
@@ -79,6 +81,7 @@ export function createDownloadsView(
     ...registerDownloadsExcludedToggleCommands(provider),
     ...registerDownloadsSingleRowCommands(reporter, () => view.selection),
     registerDownloadsQueryInfoCommand(queryInfo, instance, reporter, () => view.selection),
+    registerDownloadsDownloadCommand(download, instance, reporter),
     ...registerDownloadsMultiRowCommands(commands, instance, reporter, trash, log, () => view.selection),
     nameFilter,
     view,

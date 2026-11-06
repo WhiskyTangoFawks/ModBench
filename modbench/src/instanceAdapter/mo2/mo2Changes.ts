@@ -15,7 +15,8 @@ import { loadOrderTextOf } from './codecs/loadOrderText';
 import { parseDownloadedFileMeta, setHiddenInText, setInstalledInText, setNexusFileInfoInText, setUninstalledInText } from './codecs/downloads';
 import { readSelectedProfile, setSelectedProfileInText } from './codecs/modOrganizerIni';
 import { spliceDownloadedFileMeta, trashDownloadedFileMeta } from './downloadedFileMeta';
-import { ensureDir, exists, putIfChanged, putStreamedIf, remove, withLock, write } from '../files';
+import { ensureDir, exists, get, isRepository, putIfChanged, putStreamedIf, remove, undoAll, type Undo, withLock, write } from '../files';
+import { git } from '../git';
 import { digestOf } from '../fileContents/contentDigest';
 import { entryNotFound, type DownloadedFileMark, InstanceAdapter, PluginOrderChange } from '../instanceAdapter';
 import { downloadedFileMetadataPath, downloadedFilePath, pluginOrderFiles, settingsFile, sortingRuleFilePaths } from './layout';
@@ -25,7 +26,7 @@ import { readPluginsProvided, type ReadingSource } from '../instanceReading';
 
 type Mo2Changes = Pick<InstanceAdapter,
   | 'changePluginOrder' | 'changePluginOrderOverProvided' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'markDownloadedFile' | 'writeNexusFileInfo'
-  | 'putDownloadedFile' | 'copyDownloadedFile' | 'trashDownloadedFile' | 'selectProfile' | 'changeUserlist'>;
+  | 'putDownloadedFile' | 'copyDownloadedFile' | 'trashDownloadedFile' | 'selectProfile' | 'changeUserlist' | 'changeMasterlist' | 'uncommittedMasterlist'>;
 
 async function heldDownloadedFile(context: Mo2Context, name: string): Promise<{ downloadsDir: string; file: string } | undefined> {
   const downloadsDir = await currentDownloadsDir(context);
@@ -74,7 +75,7 @@ async function metaGameOfDomainOrThrow(context: Mo2Context, domain: string): Pro
 const pluginOrderIn = (text: string): PluginEntry[] => firstLines(parsePlugins(text), ({ name }) => pluginKey(name)).kept;
 
 async function putDownloadedFile(
-  context: Mo2Context, name: string, bytes: AsyncIterable<Uint8Array>, { hash, info }: { readonly hash: string; readonly info: NexusFileInfo },
+  context: Mo2Context, name: string, bytes: AsyncIterable<Uint8Array>, { hash, info }: { readonly hash?: string; readonly info: NexusFileInfo },
 ): Promise<{ readonly put: boolean }> {
   if (basename(name) !== name || name === '..') throw new Error(`'${name}' is not a file name`);
   const downloadsDir = await currentDownloadsDir(context);
@@ -83,7 +84,7 @@ async function putDownloadedFile(
   return withLock(file, async () => {
     if (await exists(file)) throw new Error(`'${name}' is already in the downloads folder`);
     await ensureDir(downloadsDir);
-    if (!(await putStreamedIf(file, bytes, async (temp) => (await digestOf(temp)) === hash))) return { put: false };
+    if (!(await putStreamedIf(file, bytes, async (temp) => hash === undefined || (await digestOf(temp)) === hash))) return { put: false };
     try {
       const metadata = downloadedFileMetadataPath(downloadsDir, name);
       await withLock(metadata, () => write(metadata, setNexusFileInfoInText('', info, gameName)));
@@ -197,6 +198,34 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
 
     changeUserlist(additions) {
       return putIfChanged(sortingRuleFilePaths(instanceRoot).userlist, (before) => addLoadAfter(before, additions), { ifMissing: '' });
+    },
+
+    changeMasterlist({ masterlist, prelude }) {
+      const paths = sortingRuleFilePaths(instanceRoot);
+      return withLock(paths.masterlist, () => withLock(paths.prelude, async () => {
+        const undos: Undo[] = [];
+        let wrote = false;
+        try {
+          for (const [path, text] of [[paths.masterlist, masterlist], [paths.prelude, prelude]] as const) {
+            const before = (await exists(path)) ? await get(path) : undefined;
+            if (before === text) continue;
+            await write(path, text);
+            undos.unshift(() => (before === undefined ? remove(path) : write(path, before)));
+            wrote = true;
+          }
+        } catch (err) {
+          throw await undoAll(undos, err);
+        }
+        return { wrote };
+      }));
+    },
+
+    async uncommittedMasterlist() {
+      if (!(await isRepository(instanceRoot))) return [];
+      const paths = sortingRuleFilePaths(instanceRoot);
+      const files = [basename(paths.masterlist), basename(paths.prelude)];
+      const status = await git(instanceRoot, 'status', '--porcelain', '-z', '--no-renames', '--', ...files);
+      return status.split('\0').filter((entry) => entry !== '').map((entry) => entry.slice(3));
     },
 
     selectProfile(profile) {

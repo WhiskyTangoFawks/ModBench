@@ -1,4 +1,4 @@
-// modlist-repository.md, Restore from manifest: each mod's folder made what its manifest says, read and written through the
+// instance-repository.md, Restore from manifest: each mod's folder made what its manifest says, read and written through the
 // Instance adapter; a source mod rebuilt by mEdit from its repository, a submodule at the commit the instance repository pins.
 
 import { basename, join } from 'node:path';
@@ -15,15 +15,15 @@ import type { MoveToTrash } from '../ports/trash';
 import { foldersOf, namesOf, type Folders } from './folders';
 import { archiveVariants, buildSourceMod, whyNotTrashed, type BuildPass } from './buildSourceMod';
 import { namedGameFolder, type NamedGameFolder } from './gameFolderFacts';
-import { setAsideHeldWhole } from './heldWhole';
+import { setAsideHeldWhole } from './setAsideHeldWhole';
 import { inModOrder } from './inModOrder';
 import { namedDownloadedFiles } from './namedDownloadedFiles';
 import type { StepTasks } from './steps';
-import { whyNotIndexed } from './whyNotIndexed';
+import { whyNotIndexed, type LoadOrderSnapshot } from './whyNotIndexed';
 
 type Adapter = Pick<InstanceAdapter,
-  'reading' | 'modOrder' | 'entryKey' | 'sourceRepositories' | 'flaggedHash' | 'keepFlaggedHash' | 'downloadedFile' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash'
-  | 'nexusFileAt' | 'modFolderPath' | 'foldersRefused' | 'otherManifests' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'folderValue' | 'sourceFolderValue' | 'filesIn' | 'originFileHash' | 'writeFilesIn'
+  'reading' | 'modOrder' | 'entryKey' | 'sourceModFolders' | 'flaggedHash' | 'keepFlaggedHash' | 'downloadedFile' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash'
+  | 'nexusFileAt' | 'modFolderPath' | 'foldersRefused' | 'otherManifests' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'folderValue' | 'unheldFolderValue' | 'filesIn' | 'originFileHash' | 'writeFilesIn'
   | 'trashFileIn' | 'trashingReplaced' | 'fileStamp' | 'submodule' | 'unclonedSubmodules' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile'
   | 'repositoryOnDisk' | 'refuseUnpublishedPins' | 'writePathTokens' | 'writeInstalledFrom' | 'foldersHeldWhole'>;
 
@@ -33,6 +33,7 @@ export interface RestoreDeps {
   readonly client: Pick<MEditClient, 'cloneSubmodules' | 'setPluginFileFlags' | 'build' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
   readonly adapter: Adapter;
   readonly nexus: Pick<Nexus, 'download'>;
+  readonly loadOrderSnapshot: LoadOrderSnapshot;
   readonly trash: MoveToTrash;
   readonly tasks: StepTasks;
 }
@@ -60,7 +61,7 @@ export type RestoreStatus =
   | { readonly phase: 'Downloading'; readonly file: string }
   | { readonly phase: 'Restoring'; readonly mod: string; readonly modsDone: number; readonly modsTotal: number };
 
-/** Every other manifest (modlist-repository.md, Every mod, story 1), and each folder the search could not read, or the
+/** Every other manifest (instance-repository.md, Every mod, story 1), and each folder the search could not read, or the
  *  search itself, refused on its own (commands.md, A selection is one gesture, and each item lands on its own). */
 export interface OtherManifests { readonly others: readonly OtherManifest[]; readonly refused: readonly ItemRefusal<string>[] }
 
@@ -132,8 +133,8 @@ async function buildFileHeld(sourceFolder: string): Promise<{ readonly buildFile
 
 /** What restoring one folder from its packages asks of the instance. */
 export type FolderRestoreAdapter = Pick<InstanceAdapter,
-  'gameRelease' | 'flaggedHash' | 'keepFlaggedHash' | 'downloadedFile' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile' | 'gamePlaces' | 'gameFilesTakenBy' | 'sourceFolderValue'
-  | 'folderValue' | 'pathInFolder' | 'filesIn' | 'originFileHash' | 'writeFilesIn' | 'trashFileIn' | 'nexusFileAt' | 'textHash'>;
+  'gameRelease' | 'flaggedHash' | 'keepFlaggedHash' | 'downloadedFile' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile' | 'gamePlaces' | 'gameFilesTakenBy' | 'unheldFolderValue'
+  | 'pathInFolder' | 'filesIn' | 'originFileHash' | 'writeFilesIn' | 'trashFileIn' | 'nexusFileAt' | 'textHash'>;
 
 interface FolderPass {
   readonly deps: {
@@ -171,7 +172,7 @@ type InstallationFilePackage = Extract<ManifestPackage, { kind: 'installationFil
 
 const isInstallationFile = (pkg: ManifestPackage): pkg is InstallationFilePackage => pkg.kind === 'installationFile';
 
-// modlist-repository.md, Restore from manifest, story 4: an installation file the downloads folder lacks is copied from the
+// instance-repository.md, Restore from manifest, story 4: an installation file the downloads folder lacks is copied from the
 // file that holds its bytes, else downloaded.
 async function installationFilesFor(pass: FolderPass, manifest: Manifest): Promise<{ readonly held: readonly InstallationFile[] } | { readonly refusal: string }> {
   const { adapter, nexus } = pass.deps;
@@ -241,16 +242,16 @@ async function bytesFor(pass: FolderPass, manifest: Manifest, folder: string, pa
   }));
 }
 
-// modlist-repository.md, Restore from manifest, story 1: every file whose bytes differ written over the trashed copy, a file
+// instance-repository.md, Restore from manifest, story 1: every file whose bytes differ written over the trashed copy, a file
 // whose exclusion changed moved, and every file the manifest does not name sent to the trash.
 async function restoreFromPackages(
-  pass: FolderPass, mod: string, folder: string, manifest: Manifest, valueOf: (folder: string) => Promise<FolderValue>, through?: ModFolder,
+  pass: FolderPass, mod: string, folder: string, manifest: Manifest, through?: ModFolder,
 ): Promise<Answer> {
   const { adapter, client } = pass.deps;
   if (client === undefined && manifest.flags.size > 0) return { refusal: skipped('its manifest sets flags, which need mEdit') };
   let against: FolderAgainst;
   try {
-    against = folderAgainst(manifest, await valueOf(folder), await flaggedHashesOf(adapter, manifest));
+    against = folderAgainst(manifest, await adapter.unheldFolderValue(folder), await flaggedHashesOf(adapter, manifest));
   } catch (err) {
     return { refusal: skipped(`a file could not be read: ${errorMessage(err)}`) };
   }
@@ -340,7 +341,7 @@ async function sourceFolderRestored(
   const held = await manifestHeld(sourceFolder);
   if (held === undefined) return { written: [], namedByNoLine: [] };
   if ('refusal' in held) return held;
-  const answer = await restoreFromPackages(pass, mod, sourceFolder, held.manifest, (at) => pass.deps.adapter.sourceFolderValue(at), through);
+  const answer = await restoreFromPackages(pass, mod, sourceFolder, held.manifest, through);
   if ('refusal' in answer) return answer;
   const inSource = (paths: readonly string[]): string[] => paths.map((path) => `${basename(sourceFolder)}/${path}`);
   return { written: inSource(answer.landed.written), namedByNoLine: inSource(answer.landed.namedByNoLine) };
@@ -383,7 +384,7 @@ async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: st
   };
 }
 
-// modlist-repository.md, The manifest, story 3: the mod's metadata is written from its packages as install writes it.
+// instance-repository.md, The manifest, story 3: the mod's metadata is written from its packages as install writes it.
 async function metadataRefusal(pass: Pass, folder: string, manifest: Manifest): Promise<{ readonly refusal: string } | undefined> {
   const packages = manifest.packages.filter(isInstallationFile).map(({ name, packageVersion }) => ({ name, ...packageVersion === undefined ? {} : { version: packageVersion } }));
   if (packages.length === 0) return undefined;
@@ -406,7 +407,7 @@ async function restoreMod(pass: Pass, mod: string): Promise<Answer> {
   if (marked !== undefined) return { refusal: skipped(`its manifest names '${marked}', which carries the mod manager's mark for an excluded file`) };
   const repository = repositoryOf(held.manifest);
   if (repository === undefined) {
-    const restored = await restoreFromPackages(pass, mod, folder, held.manifest, (at) => pass.deps.adapter.folderValue(at));
+    const restored = await restoreFromPackages(pass, mod, folder, held.manifest);
     return 'refusal' in restored ? restored : (await metadataRefusal(pass, folder, held.manifest)) ?? restored;
   }
   const sourceFolder = pass.sourceMods.folderOf(mod);
@@ -417,7 +418,7 @@ async function restoreMod(pass: Pass, mod: string): Promise<Answer> {
 
 const notCloned = (why: string): string => `was not cloned: ${why.replace(/\.$/, '')}.`;
 
-// modlist-repository.md, Restore from manifest, story 6: a submodule the source folder lacks is cloned first.
+// instance-repository.md, Restore from manifest, story 6: a submodule the source folder lacks is cloned first.
 async function submodulesCloned({ adapter, client }: RestoreDeps, onProgress?: (status: RestoreStatus) => void): Promise<readonly ItemRefusal<string>[]> {
   const uncloned = await adapter.unclonedSubmodules();
   const refused: ItemRefusal<string>[] = uncloned.flatMap((submodule) => ('lacks' in submodule ? [{ item: submodule.name, reason: notCloned(submodule.lacks) }] : []));
@@ -430,7 +431,7 @@ async function submodulesCloned({ adapter, client }: RestoreDeps, onProgress?: (
   return [...refused, ...cloned.refused.map(({ item, message }) => ({ item: nameOf.get(item) ?? item, reason: notCloned(message) }))];
 }
 
-// modlist-repository.md, The repository, story 5: a hook does not travel with a clone, so restore writes it as git init does.
+// instance-repository.md, The repository, story 5: a hook does not travel with a clone, so restore writes it as git init does.
 async function pushRefusalWrittenOrWhy(adapter: Adapter): Promise<string | undefined> {
   try {
     if (await adapter.repositoryOnDisk()) await adapter.refuseUnpublishedPins();
@@ -440,7 +441,7 @@ async function pushRefusalWrittenOrWhy(adapter: Adapter): Promise<string | undef
   return undefined;
 }
 
-// modlist-repository.md, The repository, story 3: a clone holds a path token where its game path is until restore puts
+// instance-repository.md, The repository, story 3: a clone holds a path token where its game path is until restore puts
 // this machine's path there, so restore writes them before it reads the game folder.
 async function pathTokensWrittenOrWhy(adapter: Adapter): Promise<string | undefined> {
   try {
@@ -461,7 +462,7 @@ export async function restoreFromManifest(
   const pathTokensNotWritten = await pathTokensWrittenOrWhy(adapter);
   const notClonedYet = await submodulesCloned(deps, options.onProgress);
   const order = await adapter.modOrder();
-  const sourceMods = await sourceModsOf(order.modFolders, await adapter.sourceRepositories(), (name) => adapter.entryKey({ kind: 'mod', name }));
+  const sourceMods = await sourceModsOf(order.modFolders, await adapter.sourceModFolders(), (name) => adapter.entryKey({ kind: 'mod', name }));
   const ordered = await inModOrder(adapter, namesOf(asked, others));
   const { folders, refused: refusedFolder, notSearched } = await foldersCompared(adapter, ordered, others, sourceMods);
   const refusedNames = new Set(refusedFolder.map(({ item }) => item));

@@ -1,5 +1,6 @@
-using System.IO.Compression;
 using System.Text;
+using ICSharpCode.SharpZipLib.Zip.Compression;
+using ICSharpCode.SharpZipLib.Zip.Compression.Streams;
 using K4os.Compression.LZ4;
 using K4os.Compression.LZ4.Streams;
 
@@ -150,7 +151,7 @@ internal static class BsaWriter
         }
         else
         {
-            using var zlib = new ZLibStream(output, CompressionLevel.Optimal, leaveOpen: true);
+            using var zlib = new DeflaterOutputStream(output, new Deflater(Deflater.DEFAULT_COMPRESSION)) { IsStreamOwner = false };
             content.CopyTo(zlib);
         }
 

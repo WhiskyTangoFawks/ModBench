@@ -5,6 +5,7 @@ using MEditService.PluginAdapter;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands;
@@ -19,8 +20,9 @@ public sealed class CreatePluginHandler
     private readonly PluginDecompiler _decompiler;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal CreatePluginHandler(IPluginAdapter adapter, LoadOrderHolder holder, ISourceAdapter source, ILogger<CreatePluginHandler> logger) =>
-        (_adapter, _holder, _source, _decompiler) = (adapter, holder, source, new PluginDecompiler(logger, adapter, source));
+    internal CreatePluginHandler(
+        IPluginAdapter adapter, LoadOrderHolder holder, ISourceAdapter source, SchemaReflector schemaReflector, ILogger<CreatePluginHandler> logger) =>
+        (_adapter, _holder, _source, _decompiler) = (adapter, holder, source, new PluginDecompiler(logger, adapter, source, schemaReflector));
 
     private async Task<Answer<PluginAddress, PluginCreateRefused>> LandSourceIfCompiledPlugin(
         LoadOrderSnapshot loadOrder, PluginAddress address, string folder, string? sourceFolder, string written)
@@ -55,9 +57,35 @@ public sealed class CreatePluginHandler
         };
     }
 
-    /// <summary>Refuses with <see cref="PluginCreateRefusal.NoLoadOrder"/>, writing nothing, when no load order
-    /// is held, since the release comes from it. <paramref name="sourceFolder"/> is the mod's, null for Overwrite.</summary>
-    public async Task<Answer<PluginAddress, PluginCreateRefused>> CreatePlugin(PluginAddress plugin, string folder, string? sourceFolder)
+    private static string Spelled(IEnumerable<string> flags) => $"[{string.Join(", ", flags.Select(flag => $"\"{flag}\""))}]";
+
+    private static string SpelledAll(IEnumerable<IReadOnlyList<HeaderFlag>> combinations) =>
+        string.Join(", ", CreatablePluginFlags.Names(combinations).Select(Spelled));
+
+    private static Answer<IReadOnlyCollection<HeaderFlag>, PluginCreateRefused> ChosenFlags(
+        string name, ModKey modKey, GameRelease release, IReadOnlyList<string>? flags)
+    {
+        var offered = CreatablePluginFlags.Of(release, modKey.Type);
+        if (flags is null)
+        {
+            return offered.Count == 1
+                ? offered[0].ToList()
+                : new PluginCreateRefused(PluginCreateRefusal.FlagsNeeded,
+                    $"{name} can take more than one combination of header flags, so flags must be one of: {SpelledAll(offered)}.");
+        }
+
+        var named = CreatablePluginFlags.Parse(flags);
+        var match = named is null ? null : offered.FirstOrDefault(combination => named.SetEquals(combination));
+        return match is null
+            ? new PluginCreateRefused(PluginCreateRefusal.FlagsNotOffered,
+                $"{Spelled(flags)} is not a combination of header flags offered {name}: {SpelledAll(offered)}.")
+            : match.ToList();
+    }
+
+    /// <summary>Refuses, writing nothing, when no load order is held. <paramref name="sourceFolder"/> is the
+    /// mod's, null for Overwrite. <paramref name="flags"/> may be left out where one combination is offered.</summary>
+    public async Task<Answer<PluginAddress, PluginCreateRefused>> CreatePlugin(
+        PluginAddress plugin, string folder, string? sourceFolder, IReadOnlyList<string>? flags = null)
     {
         if (_holder.Held is not { Snapshot: var loadOrder })
             return new PluginCreateRefused(PluginCreateRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
@@ -74,7 +102,9 @@ public sealed class CreatePluginHandler
                 $"{release} has no light plugins, so {plugin.Name} cannot be created.");
         }
 
-        if (!(await _adapter.CreateAndWriteAsync(modKey, folder, release)).Holds(out var created, out var failure))
+        if (!ChosenFlags(plugin.Name, modKey, release, flags).Holds(out var chosenFlags, out var unchosen)) return unchosen;
+
+        if (!(await _adapter.CreateAndWriteAsync(modKey, folder, release, chosenFlags)).Holds(out var created, out var failure))
             return new PluginCreateRefused(PluginCreateRefusal.WriteFailed, $"Could not write {plugin.Name} into {folder}: {failure.Reason}");
 
         return created.Outcome switch

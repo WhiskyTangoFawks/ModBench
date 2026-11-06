@@ -136,7 +136,8 @@ class HttpMEditClient implements MEditClient {
       onReconnected: (listener) => this.notifications.onReconnected(listener),
       start: () => this.lifecycle.start(),
       stop: () => this.lifecycle.stop(),
-      put: (snapshot, signal) => this.putLoadOrder(snapshot, signal),
+      put: (snapshot, signal, answered) => this.putLoadOrder(snapshot, signal, answered),
+      signalChange: (paths) => this.postSignalChange(paths),
     });
     announceAfterReopen(this.loadOrder, this.notifications);
     this.handOver = createUnsavedHandOver({
@@ -183,6 +184,7 @@ class HttpMEditClient implements MEditClient {
 
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> { return this.loadOrder.send(snapshot); }
   latestLoadOrder(): Promise<LoadOrderOutcome | undefined> { return this.loadOrder.latest(); }
+  signalChange(paths: readonly string[]): void { this.loadOrder.signalChange(paths); }
   onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void {
     return this.loadOrder.onResent(listener);
   }
@@ -250,12 +252,14 @@ class HttpMEditClient implements MEditClient {
     return isRefused(answer) ? answer : spec.outcome(answer);
   }
 
-  async createPlugin(plugin: PluginAddress, folder: string, sourceFolder: string | undefined): Promise<PluginAddress | WriteRefused> {
+  async createPlugin(
+    plugin: PluginAddress, folder: string, sourceFolder: string | undefined, flags: readonly string[] | undefined,
+  ): Promise<PluginAddress | WriteRefused> {
     const failMsg = `Could not create "${plugin.name}"`;
     const answer = await this.mutate({
       op: `createPlugin(${plugin.name}, ${plugin.origin})`,
       failMsg,
-      post: () => this.apiClient.POST('/plugins/create', { body: { origin: plugin.origin, name: plugin.name, folder, sourceFolder } }),
+      post: () => this.apiClient.POST('/plugins/create', { body: { origin: plugin.origin, name: plugin.name, folder, sourceFolder, flags: flags === undefined ? undefined : [...flags] } }),
     });
     return answer;
   }
@@ -265,7 +269,7 @@ class HttpMEditClient implements MEditClient {
   ): Promise<RenameSourceChangesOutcome | WriteRefused> {
     return this.mutate<RenameSourceChangesOutcome>({
       op: `getRenameSourceChanges(${plugin.name}, ${plugin.origin})`,
-      failMsg: `Could not rename the source of "${plugin.name}"`,
+      failMsg: `Could not rename "${plugin.name}"`,
       post: () => this.apiClient.POST('/plugins/rename-source-changes', {
         body: { origin: plugin.origin, name: plugin.name, newName },
       }),
@@ -299,9 +303,19 @@ class HttpMEditClient implements MEditClient {
     }
   }
 
+  // ADR-0015. A signal mEdit never heard is told in the log: the next one checks the disk all the same.
+  private async postSignalChange(paths: readonly string[]): Promise<void> {
+    try {
+      const { error, response } = await this.apiClient.POST('/signal-change', { body: { paths: [...paths] } });
+      if (!response.ok) this.log.error(`[HttpMEditClient] signalChange failed (${response.status}): ${errorText(error)}`);
+    } catch (e) {
+      this.log.error(`[HttpMEditClient] signalChange threw: ${errorMessage(e)}`);
+    }
+  }
+
   // `instanceRoot` scopes the backend's index (ADR-0010). The signal aborts the PUT itself rather
   // than leaving it to notice a dead socket.
-  private async putLoadOrder(snapshot: LoadOrderSnapshot, signal: AbortSignal): Promise<LoadOrderOutcome> {
+  private async putLoadOrder(snapshot: LoadOrderSnapshot, signal: AbortSignal, answered: () => void): Promise<LoadOrderOutcome> {
     // The backend publishes its first tick as this PUT lands, so a PUT that outran the stream
     // loses every tick published before it connects — and with them the progressive chevrons.
     await this.notifications.whenConnected();
@@ -329,6 +343,7 @@ class HttpMEditClient implements MEditClient {
     }
 
     const { error, response, data } = result;
+    answered();
     if (!response.ok || !data) {
       unsubscribe();
       const text = errorText(error);
@@ -647,6 +662,10 @@ class HttpMEditClient implements MEditClient {
 
   getCreatablePluginExtensions(): Promise<string[] | ReadFailed> {
     return this.read('getCreatablePluginExtensions', (api, signal) => api.GET('/plugins/creatable-extensions', { signal }), (data) => data ?? [], { timed: true });
+  }
+
+  getCreatablePluginFlags(name: string): Promise<string[][] | ReadFailed> {
+    return this.read('getCreatablePluginFlags', (api, signal) => api.GET('/plugins/creatable-flags', { params: { query: { name } }, signal }), (data) => data ?? [], { timed: true });
   }
 
   getRecords({ name: plugin, origin }: PluginAddress, type: string, offset: number, limit: number): Promise<RecordPage | ReadFailed> {

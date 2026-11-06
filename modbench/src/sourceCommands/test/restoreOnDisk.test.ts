@@ -1,3 +1,4 @@
+import { ORDER_SENT } from '../../test/orderSent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -51,7 +52,7 @@ async function aModFromADownloadedFileAndTheGameFolder() {
   });
   const inTrash: Record<string, string> = {};
   const trash = async (path: string): Promise<void> => { inTrash[relative(join(root, 'mods'), path).replaceAll('\\', '/')] = await readFile(path, 'utf8'); await rm(path); };
-  const deps = { client: new InMemoryMEditClient(), adapter, nexus: nexusAnswering(answeringFrom({})).nexus, trash, tasks: recordingTasks() };
+  const deps = { client: new InMemoryMEditClient(), adapter, nexus: nexusAnswering(answeringFrom({})).nexus, trash, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks() };
   return {
     update: () => updateManifest({ adapter }, ['Mod'], {}, [], false, []),
     restore: () => restoreFromManifest(deps, ['Mod'], {}, false, []),
@@ -70,7 +71,7 @@ describe('restore from manifest over an instance on disk', () => {
     expect([outcome.refused, await stampsBelow(join(root, 'mods')), inTrash]).toEqual([[], before, {}]);
   });
 
-  it('writes each file from its package, asking nothing, and sends my copy of each file it replaces and each file no line names to the trash (modlist-repository.md, Restore from manifest, stories 1 and 2)', async () => {
+  it('writes each file from its package, asking nothing, and sends my copy of each file it replaces and each file no line names to the trash (instance-repository.md, Restore from manifest, stories 1 and 2)', async () => {
     const { update, restore, inTrash } = await aModFromADownloadedFileAndTheGameFolder();
     await update();
     const updated = await textsBelow(join(root, 'mods'));

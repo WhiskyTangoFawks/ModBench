@@ -73,12 +73,12 @@ describe('judge: the game\'s sorting rules held against a plugin order', () => {
     }]);
   });
 
-  it('breaks, at Warning, a plugin with the master flag listed after one without it, naming the first such plugin', () => {
+  it('breaks, at Warning, a plugin the game loads as a master listed after one it does not, naming the first such plugin', () => {
     const facts = factsFrom({ 'A.esp': {}, 'B.esp': {}, 'C.esm': { master: true } });
 
     expect(judge(['A.esp', 'B.esp', 'C.esm'], facts)).toEqual([{
       rule: 'masterFlag', level: 'warning', plugins: [ref('C.esm'), ref('A.esp')],
-      reason: '"C.esm" has the master flag, so the game loads it before "A.esp", which has not.',
+      reason: '"C.esm" loads as a master, by its master flag or its extension, so before "A.esp", which does not.',
     }]);
   });
 
@@ -93,5 +93,30 @@ describe('judge: the game\'s sorting rules held against a plugin order', () => {
     const facts = factsFrom({ 'A.esm': { master: true }, 'B.esp': {} });
 
     expect(judge(['A.esm', 'B.esp'], facts)).toEqual([]);
+  });
+
+  it('judges the order it is given, so a blueprint plugin the game loads with no line, listed before a plugin that is not one, is broken', () => {
+    const facts = factsFrom({ 'Blueprint.esm': { master: true, blueprint: true }, 'Creation.esp': {} });
+    const noLine = new Set(['Blueprint.esm']);
+
+    expect(judge(['Blueprint.esm', 'Creation.esp'], facts, (filename) => noLine.has(filename)).map(({ rule }) => rule)).toEqual(['blueprint']);
+  });
+
+  it('holds a blueprint plugin with the master flag listed after one without it, as the game loads it last', () => {
+    const facts = factsFrom({ 'A.esp': {}, 'B.esm': { master: true, blueprint: true } });
+
+    expect(judge(['A.esp', 'B.esm'], facts)).toEqual([]);
+  });
+
+  it('breaks a plugin the game loads with no line that loads before its master', () => {
+    const facts = factsFrom({ 'Creation.esm': { master: true, masters: ['Mod.esm'] }, 'Mod.esm': { master: true } });
+
+    expect(judge(['Creation.esm', 'Mod.esm'], facts, (filename) => filename === 'Creation.esm').map(({ rule }) => rule)).toEqual(['master']);
+  });
+
+  it('judges no master flag between two plugins the game loads with no line', () => {
+    const facts = factsFrom({ 'A.esp': {}, 'B.esm': { master: true } });
+
+    expect(judge(['A.esp', 'B.esm'], facts, () => true)).toEqual([]);
   });
 });

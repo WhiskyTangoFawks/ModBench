@@ -45,6 +45,18 @@ export interface LootGroup {
   after: { name: string; source: RuleSource }[];
 }
 
+/** LOOT's record that the plugin with this CRC-32 is dirty. */
+export interface CleaningData {
+  crc: number;
+  utility: string;
+  itm: number;
+  udr: number;
+  nav: number;
+  detail?: string;
+  condition?: string;
+  source: RuleSource;
+}
+
 export interface LootEntry {
   name: string;
   group?: { name: string; source: RuleSource };
@@ -54,6 +66,7 @@ export interface LootEntry {
   inc: LootFile[];
   after: LootFile[];
   msg: LootMessage[];
+  dirty: CleaningData[];
 }
 
 /** A sorting rule file that does not read, or a part of it that does not. `line` is zero-based, absent for a whole file. */
@@ -67,6 +80,9 @@ const MESSAGE_LEVELS: Record<string, RuleLevel> = { say: 'info', warn: 'warning'
 
 // LOOT reads a name holding any of these as a regular expression over the whole file name.
 const REGEX_NAME = /[:\\*?|]/;
+
+/** The branch of LOOT's repositories whose metadata format this parser reads. */
+export const METADATA_BRANCH = 'v0.29';
 
 // The largest real masterlist with its prelude resolves 368 aliases; a file that needs far more is an alias bomb.
 const MAX_ALIASES = 4000;
@@ -177,7 +193,7 @@ class FileReader {
     this.entries.push({
       name, matches, exact: !REGEX_NAME.test(name), ...group === undefined ? {} : { group },
       req: this.files(node, plain, 'req'), inc: this.files(node, plain, 'inc'), after: this.files(node, plain, 'after'),
-      msg: this.messages(node, plain),
+      msg: this.messages(node, plain), dirty: this.cleaningData(node, plain),
     });
   }
 
@@ -238,6 +254,25 @@ class FileReader {
       const condition = stringOf(value.condition) ?? stringOf(value.constraint);
       if (condition !== undefined) file.condition = condition;
       return [file];
+    });
+  }
+
+  private cleaningData(entry: unknown, plain: Record<string, unknown>): CleaningData[] {
+    return this.items(entry, plain, 'dirty').flatMap(({ value, line }): CleaningData[] => {
+      const source = this.located(line);
+      if (source === undefined || !isRecord(value)) return [];
+      const utility = stringOf(value.util);
+      if (typeof value.crc !== 'number' || utility === undefined) {
+        this.problem(line, 'Cleaning data has no crc or no util.');
+        return [];
+      }
+      const count = (field: unknown): number => (typeof field === 'number' ? field : 0);
+      const data: CleaningData = { crc: value.crc, utility, itm: count(value.itm), udr: count(value.udr), nav: count(value.nav), source };
+      const detail = contentOf(value.detail, undefined);
+      if (detail !== undefined) data.detail = detail;
+      const condition = stringOf(value.condition);
+      if (condition !== undefined) data.condition = condition;
+      return [data];
     });
   }
 
@@ -362,6 +397,34 @@ export function rulesReader(): (files: SortingRuleFiles) => ReadRules {
     last = { files, ...readRules(files) };
     return last;
   };
+}
+
+/** The text of LOOT's masterlist and of its prelude. */
+export interface MetadataTexts {
+  readonly masterlist: string;
+  readonly prelude: string;
+}
+
+const METADATA_KEYS = ['plugins', 'groups', 'bash_tags', 'globals'];
+
+const textFile = (text: string): SortingRuleFile => ({ path: '', kind: 'text', text });
+
+// A page of HTML parses as YAML too.
+function isMetadata(text: string): boolean {
+  const { contents } = parseDocument(text);
+  return isMap(contents) && contents.items.some(({ key }) => METADATA_KEYS.includes(String(isScalar(key) ? key.value : key)));
+}
+
+/** Why the texts do not read as LOOT's masterlist and prelude, or undefined when they do. */
+export function metadataProblem({ masterlist, prelude }: MetadataTexts): string | undefined {
+  const read = [
+    readRuleFile('prelude', textFile(prelude), undefined),
+    readRuleFile('masterlist', textFile(masterlist), 'masterlist', withPrelude(masterlist, prelude)),
+  ].flatMap((file) => file.problems)[0];
+  if (read !== undefined) return `The ${read.file} does not read: ${read.text}`;
+  if (!isMetadata(masterlist)) return 'The masterlist is not LOOT metadata.';
+  if (!isMetadata(prelude)) return 'The prelude is not LOOT metadata.';
+  return undefined;
 }
 
 export interface LoadAfter {

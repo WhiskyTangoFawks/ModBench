@@ -46,6 +46,8 @@ import type { StatusBar } from './statusBar';
 import { mastersOfPlugins } from './mastersOfPlugins';
 import { modsOfPlugins } from './modsOfPlugins';
 
+import type { FileReads } from '../sortingRules/lootConditions';
+
 export interface PluginsViewDeps {
   /** The tree's only row input: name, origin, line, enabled and winning for every plugin. */
   instance: PluginsInstance & Pick<Instance, 'quiet'>;
@@ -55,7 +57,7 @@ export interface PluginsViewDeps {
   /** Every plugin-keyed fact the tree's badges read, the pushes that re-read them, and the record index
    *  status. */
   client: PluginFactsClient & RenamePluginDeps['client'] & DecompileDeps['client']
-    & RecordCreateDeps['client'] & Pick<MEditClient, 'getActiveFilter' | 'onLoadOrderStatus' | 'onStatusChanged' | 'setFilter' | 'clearFilter' | 'createPlugin'>;
+    & RecordCreateDeps['client'] & Pick<MEditClient, 'getActiveFilter' | 'onLoadOrderStatus' | 'onStatusChanged' | 'setFilter' | 'clearFilter' | 'createPlugin' | 'getCreatablePluginFlags'>;
   statusBar: StatusBar;
   /** Registers the source mods' repositories: a reconcile reached Ready. */
   registerRepositories: () => Promise<void>;
@@ -65,6 +67,8 @@ export interface PluginsViewDeps {
   /** Plugin sync, whose failure the view's message line says. */
   pluginSync: SyncMessage;
   modStatuses: LastModStatuses;
+  /** The Instance adapter's reads of the files LOOT's conditions name. */
+  fileReads: FileReads;
   channel: SyncChannel;
   log: (level: 'info' | 'warn' | 'error', msg: string) => void;
   reporterFor: (tag: string) => Reporter;
@@ -86,6 +90,7 @@ export interface PluginsView extends vscode.Disposable {
   standingLines: () => string[];
   sortingRuleLines: () => string[];
   pluginsShown: PluginsShown;
+  inGameOrder: PluginsTreeProvider['inGameOrder'];
 }
 
 // The one Plugins tree (ADR-0017; target-architecture.d2, Plugins).
@@ -107,6 +112,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     records: recordBrowser,
     client,
     modStatuses: deps.modStatuses,
+    fileReads: deps.fileReads,
     reporter: reporterFor('pluginListTree.drop'),
     // A malformed plugin and one changed outside Modbench still load and play; one that failed to read does not.
     publishDiagnoses: (reports) => publishPluginProblems(loadDiagnostics, pluginFile, reports, vscode.DiagnosticSeverity.Warning,
@@ -188,6 +194,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     sortingRuleLines: () => tree.sortingRuleLines(),
     standingLines: () => [...tree.standingLines(), sync.message(), tree.facts.rows.heldElsewhereMessage()].filter((line) => line !== undefined),
     pluginsShown: tree.facts.rows,
+    inGameOrder: tree.inGameOrder,
     followed: { get selection() { return selected.rows(); }, onDidChangeSelection: view.onDidChangeSelection }, loadOrderPut,
     copyValue: { text: pluginsCopyValueText(selected.rows), reporterTag: 'pluginListTree.copyValue' },
     progress, narrator: indexStatus.narrator,

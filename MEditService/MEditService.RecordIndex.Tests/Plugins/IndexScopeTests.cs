@@ -83,7 +83,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         Assert.Equal(listedBefore, NpcsListed(index).Total);
 
         RenameNpcOnDisk(data, "Plugin.esp", npcKey, editorIdAfter);
-        index.NextSnapshot();
+        index.NextCheck();
 
         var listed = NpcsListed(index);
         Assert.Equal(listedAfter, listed.Total);
@@ -112,7 +112,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
 
             RenameNpcOnDisk(data, "Plugin.esp", npcKey, "NotANumber");
 
-            index.NextSnapshot();
+            index.NextCheck();
 
             Assert.Contains(
                 index.ListedIn(new PluginAddress("Plugin.esp", PluginOrigin.DataDirectory)),

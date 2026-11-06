@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import type {
   DataFolderArchives, DataFolderPlugins, GameFolder, InstanceAdapter, InstanceReading, Mod,
-  OriginFiles, Separator, PublisherTag, ProgramVersions,
+  OriginFiles, Separator, PublisherTag, ProgramVersions, Reread,
 } from '../../instanceAdapter/instanceAdapter';
 import { downloadedFilesOf, fakeInstanceAdapter, fileIn, modFoldersIn, modFoldersOf, readingFixture, repositoriesOf } from '../../test/fakeInstanceAdapter';
 import { leveledLog } from '../../test/leveledLog';
@@ -79,9 +79,15 @@ function pastSequence(instance: Instance, sequence: number): Promise<InstanceVal
   });
 }
 
-const settleClockLeavingSetImmediateReal = (): void => {
-  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+const fakeClockLeavingSetImmediateReal = (): void => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
 };
+
+const SETTLE_MS = 200;
+const QUIET_MS = 1_000;
+const CHECK_CAP_MS = 10_000;
+const CHECK: Reread = { named: [], disk: true };
+const reread = (...named: string[]): Reread => ({ named, disk: false });
 
 const listedRows = (value: InstanceValue) => (value.downloadedFiles.kind === 'listed' ? value.downloadedFiles.rows : []);
 
@@ -129,6 +135,14 @@ describe('Instance — the value', () => {
     expect(value.gameFolder).toEqual(GAME_FOLDER);
     expect(value.programVersions).toEqual({ kind: 'unknownGame' });
     expect(value.gameFolderLinks).toBe(4);
+  });
+
+  it.each([['Starfield', true], ['Fallout4', false]])('carries whether the game loads a blueprint plugin last: %s, %s', async (gameRelease, answer) => {
+    const { instance } = loader({ gameRelease });
+
+    await instance.refresh();
+
+    expect(instance.value.blueprintLoadsLast).toBe(answer);
   });
 
   it('carries whether the instance holds a repository', async () => {
@@ -181,7 +195,7 @@ describe('Instance — the value', () => {
   it('carries each mod a repository builds as a source mod, with that repository as its source folder, and each repository alone as a source mod', async () => {
     const { instance } = loader({
       mods: [mod('Harder VATS'), mod('[NODELETE] Radfall'), mod('Plain')],
-      sourceRepositories: repositoriesOf(
+      sourceModFolders: repositoriesOf(
         { 'Harder VATS': '/source/Harder VATS', '[nodelete] radfall': '/source/Renamed From', 'Cloned And Unlisted': '/source/Cloned And Unlisted' },
       ),
     });
@@ -206,7 +220,7 @@ describe('Instance — the value', () => {
   });
 
   it('carries no source folder for a mod named as a renamed repository\'s folder still is, that repository being the source of the mod its build names', async () => {
-    const { instance } = loader({ mods: [mod('Harder VATS')], sourceRepositories: repositoriesOf({ 'Harder VATS Renamed': '/source/Harder VATS' }) });
+    const { instance } = loader({ mods: [mod('Harder VATS')], sourceModFolders: repositoriesOf({ 'Harder VATS Renamed': '/source/Harder VATS' }) });
 
     await instance.refresh();
 
@@ -295,6 +309,32 @@ describe('Instance — the value', () => {
   });
 });
 
+describe('Instance — redraw', () => {
+  it('tells the views that listen to a redraw, and runs no subscriber of the value and reads nothing', async () => {
+    const { instance, fake } = loader();
+    await instance.landed();
+    const subscriber = vi.fn();
+    const view = vi.fn();
+    instance.subscribe(subscriber);
+    instance.onRedraw(view);
+    const readsBefore = fake.calls.length;
+
+    instance.redraw();
+
+    expect({ view: view.mock.calls.length, subscriber: subscriber.mock.calls.length, reads: fake.calls.length - readsBefore }).toEqual({ view: 1, subscriber: 0, reads: 0 });
+  });
+
+  it('tells a view that stopped listening nothing', () => {
+    const { instance } = loader();
+    const view = vi.fn();
+    instance.onRedraw(view).dispose();
+
+    instance.redraw();
+
+    expect(view).not.toHaveBeenCalled();
+  });
+});
+
 describe('Instance — built by watching', () => {
   it('listens for the adapter\'s signal and the window\'s state from construction, before any read, until disposed', () => {
     const { instance, fake, windowListeners } = loader();
@@ -306,100 +346,323 @@ describe('Instance — built by watching', () => {
     expect([fake.subscribers, windowListeners.size]).toEqual([0, 0]);
   });
 
-  it('recomputes once for a burst of the adapter\'s signals, a per-signal recompute landing five more', async () => {
+  it('reads again what a burst of events names, in one re-read once the burst settles', async () => {
     const { instance, fake } = loader();
     await instance.refresh();
-    const before = instance.sequence;
 
-    settleClockLeavingSetImmediateReal();
+    fakeClockLeavingSetImmediateReal();
     try {
-      for (let i = 0; i < 6; i++) fake.changed();
-      await vi.advanceTimersByTimeAsync(1000);
+      fake.changed('/instance/mods/A/a.esp');
+      await vi.advanceTimersByTimeAsync(SETTLE_MS - 1);
+      fake.changed('/instance/mods/B/meta.ini');
+      fake.changed('/instance/mods/A/a.esp');
+      await vi.advanceTimersByTimeAsync(SETTLE_MS - 1);
+      expect(fake.rereads).toEqual([CHECK]);
+      await vi.advanceTimersByTimeAsync(1);
     } finally {
       vi.useRealTimers();
     }
-    await instance.refresh();
 
-    const oneRecomputeForTheBurstAndOneForThisRefresh = 2;
-    expect(instance.sequence).toBe(before + oneRecomputeForTheBurstAndOneForThisRefresh);
+    expect(fake.rereads).toEqual([CHECK, reread('/instance/mods/A/a.esp', '/instance/mods/B/meta.ini')]);
+    expect(instance.sequence).toBe(2);
   });
 
-  it('recomputes when the window regains focus, and not when it loses it, focus being the one signal no watcher can lose', async () => {
+  it('checks the disk once the events have stopped for a while', async () => {
+    const { instance, fake } = loader();
+    await instance.refresh();
+
+    fakeClockLeavingSetImmediateReal();
+    try {
+      fake.changed('/instance/mods/A/a.esp');
+      await vi.advanceTimersByTimeAsync(QUIET_MS - 1);
+      expect(fake.rereads).toEqual([CHECK, reread('/instance/mods/A/a.esp')]);
+      await vi.advanceTimersByTimeAsync(1);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(fake.rereads).toEqual([CHECK, reread('/instance/mods/A/a.esp'), CHECK]);
+  });
+
+  it('hands each subscriber what the value was read again for: the paths the events named, or the check of the disk', async () => {
+    const { instance, fake } = loader();
+    const landedFor: Reread[] = [];
+    instance.subscribe((_value, _sequence, landed) => { landedFor.push(landed); });
+
+    fakeClockLeavingSetImmediateReal();
+    try {
+      fake.changed('/instance/mods/A/a.esp');
+      await vi.advanceTimersByTimeAsync(QUIET_MS);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(landedFor).toEqual([reread('/instance/mods/A/a.esp'), CHECK]);
+  });
+
+  it('checks the disk within a bounded time of the first event while events keep coming', async () => {
+    const { instance, fake } = loader();
+    await instance.refresh();
+    const checks = (): number => fake.rereads.filter(({ disk }) => disk).length;
+
+    fakeClockLeavingSetImmediateReal();
+    try {
+      fake.changed('/instance/overwrite/first.txt');
+      const stream = setInterval(() => { fake.changed('/instance/overwrite/again.txt'); }, QUIET_MS / 2);
+      await vi.advanceTimersByTimeAsync(CHECK_CAP_MS - 1);
+      expect(checks()).toBe(1);
+      await vi.advanceTimersByTimeAsync(QUIET_MS / 2 - 1);
+      clearInterval(stream);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(checks()).toBe(2);
+  });
+
+  it('checks the disk with no path to read again when the adapter hears a change it cannot name', async () => {
+    const { instance, fake } = loader();
+    await instance.refresh();
+
+    fakeClockLeavingSetImmediateReal();
+    try {
+      fake.changed();
+      await vi.advanceTimersByTimeAsync(SETTLE_MS);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(fake.rereads).toEqual([CHECK, CHECK]);
+  });
+
+  it('may be late from the first event until the check of the disk has landed, and tells the views at each change', async () => {
+    const { instance, fake } = loader();
+    await instance.refresh();
+    const told: boolean[] = [];
+    instance.onMayBeLate(() => { told.push(instance.mayBeLate); });
+    const late: boolean[] = [];
+
+    fakeClockLeavingSetImmediateReal();
+    try {
+      late.push(instance.mayBeLate);
+      fake.changed('/instance/mods/A/a.esp');
+      fake.changed('/instance/mods/A/b.esp');
+      late.push(instance.mayBeLate);
+      await vi.advanceTimersByTimeAsync(SETTLE_MS);
+      late.push(instance.mayBeLate);
+      await vi.advanceTimersByTimeAsync(QUIET_MS);
+      late.push(instance.mayBeLate);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect({ late, told }).toEqual({ late: [false, true, true, false], told: [true, false] });
+  });
+
+  it('may be late still when an event arrives while the check reads', async () => {
+    let release!: () => void;
+    let readHeld: Promise<void> = Promise.resolve();
+    const { instance, fake } = loader({}, (adapter) => ({
+      ...adapter,
+      reading: async (asked) => {
+        await readHeld;
+        return adapter.reading(asked);
+      },
+    }));
+    await instance.refresh();
+
+    fakeClockLeavingSetImmediateReal();
+    try {
+      readHeld = new Promise<void>((resolve) => { release = resolve; });
+      fake.changed('/instance/mods/A/a.esp');
+      await vi.advanceTimersByTimeAsync(QUIET_MS);
+      fake.changed('/instance/mods/A/b.esp');
+      release();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(instance.mayBeLate).toBe(true);
+      await vi.advanceTimersByTimeAsync(QUIET_MS);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(instance.mayBeLate).toBe(false);
+  });
+
+  it('is not late for a check whose read failed, which the message line says', async () => {
+    const { instance, fake } = loader();
+    await instance.refresh();
+    fake.failReading('disk gone');
+
+    fakeClockLeavingSetImmediateReal();
+    try {
+      fake.changed('/instance/mods/A/a.esp');
+      await vi.advanceTimersByTimeAsync(QUIET_MS);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(instance.mayBeLate).toBe(false);
+  });
+
+  it('is not late for a check the window focus asked for', async () => {
     const { instance, windowState } = loader();
     await instance.refresh();
-    const before = instance.sequence;
+    windowState({ focused: false });
+    const told = vi.fn();
+    instance.onMayBeLate(told);
 
-    settleClockLeavingSetImmediateReal();
-    try {
-      windowState({ focused: false });
-      await vi.advanceTimersByTimeAsync(1000);
-      await instance.refresh();
-      expect(instance.sequence).toBe(before + 1);
+    windowState({ focused: true });
+    await pastSequence(instance, 1);
 
-      windowState({ focused: true });
-      await vi.advanceTimersByTimeAsync(1000);
-      await instance.refresh();
-      expect(instance.sequence).toBe(before + 3);
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(told).not.toHaveBeenCalled();
   });
 
-  it('recomputes nothing while the window keeps its focus', async () => {
-    const { instance, windowState } = loader();
+  it('checks the disk at once when the window regains focus, and not when it loses it or keeps it', async () => {
+    const { instance, fake, windowState } = loader();
     await instance.refresh();
-    const before = instance.sequence;
 
-    settleClockLeavingSetImmediateReal();
-    try {
-      windowState({ focused: true });
-      await vi.advanceTimersByTimeAsync(1000);
-      await instance.refresh();
-    } finally {
-      vi.useRealTimers();
-    }
+    windowState({ focused: true });
+    windowState({ focused: false });
+    await instance.refresh();
+    expect(fake.rereads).toEqual([CHECK, CHECK]);
 
-    expect(instance.sequence).toBe(before + 1);
+    windowState({ focused: true });
+    await pastSequence(instance, 2);
+
+    expect(fake.rereads).toEqual([CHECK, CHECK, CHECK]);
   });
 
-  it('settles the window regaining focus with the adapter\'s signals, into one recompute, the focus restarting the settle the signal began', async () => {
+  it('adds no check when the window regains focus while a check already waits for the events to stop', async () => {
     const { instance, fake, windowState } = loader();
     await instance.refresh();
     windowState({ focused: false });
-    const before = instance.sequence;
 
-    const msWhereTheSignalsOwnSettleHasRunOut = 150;
-    settleClockLeavingSetImmediateReal();
+    fakeClockLeavingSetImmediateReal();
     try {
-      fake.changed();
-      await vi.advanceTimersByTimeAsync(msWhereTheSignalsOwnSettleHasRunOut);
+      fake.changed('/instance/mods/A/a.esp');
       windowState({ focused: true });
-      await vi.advanceTimersByTimeAsync(msWhereTheSignalsOwnSettleHasRunOut);
-      await instance.refresh();
+      await vi.advanceTimersByTimeAsync(QUIET_MS);
     } finally {
       vi.useRealTimers();
     }
 
-    expect(instance.sequence).toBe(before + 1);
+    expect(fake.rereads).toEqual([CHECK, reread('/instance/mods/A/a.esp'), CHECK]);
   });
 
-  it('a refresh mid-burst is the burst\'s recompute, not a second one', async () => {
-    const { instance, fake } = loader();
+  it('finishes a re-read in progress, and folds the events heard during it into one more', async () => {
+    let release!: () => void;
+    let readHeld: Promise<void> = Promise.resolve();
+    const { instance, fake } = loader({}, (adapter) => ({
+      ...adapter,
+      reading: async (asked) => {
+        await readHeld;
+        return adapter.reading(asked);
+      },
+    }));
     await instance.refresh();
-    const before = instance.sequence;
+    const landed: number[] = [];
+    instance.subscribe((_value, sequence) => { landed.push(sequence); });
 
-    const msWhereAWaitLeftArmedWouldFire = 1000;
-    vi.useFakeTimers();
+    fakeClockLeavingSetImmediateReal();
     try {
-      fake.changed();
-      await instance.refresh();
-      await vi.advanceTimersByTimeAsync(msWhereAWaitLeftArmedWouldFire);
+      readHeld = new Promise<void>((resolve) => { release = resolve; });
+      fake.changed('/instance/mods/A/a.esp');
+      await vi.advanceTimersByTimeAsync(SETTLE_MS);
+      fake.changed('/instance/mods/A/b.esp');
+      await vi.advanceTimersByTimeAsync(SETTLE_MS);
+      fake.changed('/instance/mods/A/c.esp');
+      await vi.advanceTimersByTimeAsync(SETTLE_MS);
+      fake.changed('/instance/mods/A/d.esp');
+      await vi.advanceTimersByTimeAsync(SETTLE_MS);
+      expect(landed).toEqual([]);
+      release();
+      await vi.advanceTimersByTimeAsync(0);
     } finally {
       vi.useRealTimers();
     }
+
+    expect(landed).toEqual([2, 3]);
+    expect(fake.rereads).toEqual([CHECK, reread('/instance/mods/A/a.esp'), reread('/instance/mods/A/b.esp', '/instance/mods/A/c.esp', '/instance/mods/A/d.esp')]);
+  });
+
+  it('settles a refresh asked during a stream of events once the read in flight and one more have run', async () => {
+    const READ_MS = 1_200;
+    const { instance, fake } = loader({}, (adapter) => ({
+      ...adapter,
+      reading: async (asked) => {
+        await new Promise((resolve) => setTimeout(resolve, READ_MS));
+        return adapter.reading(asked);
+      },
+    }));
+    fakeClockLeavingSetImmediateReal();
+    try {
+      const first = instance.refresh();
+      await vi.advanceTimersByTimeAsync(READ_MS);
+      await first;
+      const stream = setInterval(() => { fake.changed('/instance/overwrite/again.txt'); }, SETTLE_MS * 1.5);
+      await vi.advanceTimersByTimeAsync(3 * READ_MS + SETTLE_MS / 2);
+      const readsBefore = fake.readings;
+      let settled = false;
+      void instance.refresh().then(() => { settled = true; });
+
+      await vi.advanceTimersByTimeAsync(2 * READ_MS);
+      clearInterval(stream);
+
+      expect(readsBefore).toBeGreaterThan(1);
+      expect(settled).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('is the check a burst waits on when refreshed mid-burst, reading what the burst named, and leaves no wait armed', async () => {
+    const { instance, fake } = loader();
     await instance.refresh();
 
-    expect(instance.sequence).toBe(before + 2);
+    fakeClockLeavingSetImmediateReal();
+    try {
+      fake.changed('/instance/mods/A/a.esp');
+      await instance.refresh();
+      await vi.advanceTimersByTimeAsync(CHECK_CAP_MS);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(fake.rereads).toEqual([CHECK, { named: ['/instance/mods/A/a.esp'], disk: true }]);
+  });
+
+  it('tells each change the check after the events found that no event named, and none a refresh found', async () => {
+    const { instance, fake, logs } = loader();
+    await instance.refresh();
+    fake.read({ unheardChanges: ['/instance/mods/A/textures'] });
+    await instance.refresh();
+    expect(logs).toEqual([]);
+
+    fakeClockLeavingSetImmediateReal();
+    try {
+      fake.changed('/instance/mods/A/a.esp');
+      await vi.advanceTimersByTimeAsync(QUIET_MS);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(logs).toEqual(['[instance] The check of the disk found a change no event named: /instance/mods/A/textures']);
+  });
+
+  it('tells each change the check after a change with no path found, as that change named none', async () => {
+    const { instance, fake, logs } = loader();
+    await instance.refresh();
+    fake.read({ unheardChanges: ['/instance/mods/A/textures'] });
+
+    fakeClockLeavingSetImmediateReal();
+    try {
+      fake.changed();
+      await vi.advanceTimersByTimeAsync(SETTLE_MS);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(logs).toEqual(['[instance] The check of the disk found a change no event named: /instance/mods/A/textures']);
   });
 
   it('yields the next value at a higher sequence when the adapter signals a change', async () => {
@@ -512,6 +775,22 @@ describe('Instance — a value that survives a bad read', () => {
     expect(instance.value.mods).toEqual([]);
     expect(instance.value.filesByMod.size).toBe(0);
     expect(instance.sequence).toBe(before + 1);
+  });
+
+  it('keeps the file conflict index across a refresh that changed no listing, and builds it again when a listing changed', async () => {
+    const modFiles = new Map([['A', filesOfMod('A', 'a.dds')]]);
+    const { instance, fake } = loader({ mods: [mod('A')], modFiles });
+    await instance.refresh();
+    const first = instance.value.files;
+
+    fake.read({ modFiles: new Map(modFiles) });
+    await instance.refresh();
+    const unchanged = instance.value.files;
+    fake.read({ modFiles: new Map([['A', filesOfMod('A', 'a.dds')]]) });
+    await instance.refresh();
+
+    expect(unchanged).toBe(first);
+    expect(instance.value.files).not.toBe(first);
   });
 
   it('keeps recomputing after a subscriber throws', async () => {
@@ -654,7 +933,7 @@ describe('Instance — game folder and the archives the game loads', () => {
     await instance.refresh();
     await instance.refresh();
 
-    expect(instance.value.loadOrderSnapshot).toMatchObject({ archives: [{ path: SUPPLIED }] });
+    expect(instance.value.loadOrderSnapshot).toMatchObject({ listedArchives: [{ path: SUPPLIED }] });
     expect(warnings).toEqual([`[instance] ${note}`]);
     expect(logs).toEqual([]);
   });
@@ -747,7 +1026,7 @@ describe('Instance — game folder and the archives the game loads', () => {
   });
 
   it('carries a source folder for each source mod alone, one with no mod folder too, and hands it to the facts', async () => {
-    const { instance } = loader({ mods: [mod('Radfall')], sourceRepositories: repositoriesOf({ Radfall: '/source/Radfall' }) });
+    const { instance } = loader({ mods: [mod('Radfall')], sourceModFolders: repositoriesOf({ Radfall: '/source/Radfall' }) });
 
     await instance.refresh();
 
@@ -811,6 +1090,24 @@ describe('Instance — the mod folders, the game folder\'s plugins and the load 
     expect(warnings).toEqual(['[instance] the game\'s Data folder could not be listed: EACCES']);
   });
 
+  it('tells once while it stands that a folder below the Data folder\'s root could not be listed', async () => {
+    const { instance, warnings } = loader({ gameFolder: GAME_FOLDER, dataFolderFiles: { kind: 'unreadable', reason: 'EACCES' } });
+
+    await instance.refresh();
+    await instance.refresh();
+
+    expect(warnings).toEqual(['[instance] the game\'s Data folder could not be listed whole: EACCES']);
+  });
+
+  it('tells one warning, not two, when the Data folder cannot be listed at all', async () => {
+    const unreadable = { kind: 'unreadable', reason: 'EACCES' } as const;
+    const { instance, warnings } = loader({ gameFolder: GAME_FOLDER, dataFolderPlugins: unreadable, dataFolderFiles: unreadable });
+
+    await instance.refresh();
+
+    expect(warnings).toEqual(['[instance] the game\'s Data folder could not be listed: EACCES']);
+  });
+
   it.each<[string, ProgramVersions, string[]]>([
     ['a game program the game folder lacks', { kind: 'found', game: { kind: 'notFound', program: 'Fallout4.exe' }, extender: { kind: 'read', version: '1' } },
       ['[instance] the game\'s version: Fallout4.exe is not in the game folder']],
@@ -830,7 +1127,7 @@ describe('Instance — the mod folders, the game folder\'s plugins and the load 
 
   it('carries the publisher tags the adapter declares before any read, and the publisher\'s configuration once read', async () => {
     const tag: PublisherTag = { name: 'Include', badge: 'IN', marksPaths: true };
-    const configuration = { kind: 'read', covering: (): readonly PublisherTag[] => [tag], listed: (): readonly PublisherTag[] => [], pathProblems: [] } as const;
+    const configuration = { kind: 'read', covering: (): readonly PublisherTag[] => [tag], listed: (): readonly PublisherTag[] => [], pathProblems: [], unshippable: { file: '', reason: () => undefined } } as const;
     const { instance } = loader({ publisherConfiguration: configuration }, (adapter) => ({ ...adapter, publisherTags: [tag] }));
     const before = { tags: instance.value.publisherTags, configuration: instance.value.publisherConfiguration };
 
@@ -867,7 +1164,7 @@ describe('Instance — the mod folders, the game folder\'s plugins and the load 
     const { instance } = loader({
       ...GAME_FOUND, gameRelease: 'Fallout4', mods: [mod('Consumer')], modFolders: modFoldersOf('Consumer'),
       modFiles: new Map([['Consumer', filesOfMod('Consumer', 'DLCCoast.esm')]]),
-      sourceRepositories: repositoriesOf({ Consumer: '/source/Consumer Source' }),
+      sourceModFolders: repositoriesOf({ Consumer: '/source/Consumer Source' }),
     });
 
     await instance.refresh();

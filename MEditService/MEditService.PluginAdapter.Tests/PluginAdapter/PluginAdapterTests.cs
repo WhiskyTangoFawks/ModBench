@@ -57,7 +57,7 @@ public sealed class PluginAdapterTests
 
         Assert.Equal(
             EmptyPluginWrite.Written,
-            (await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4)).Answered().Outcome);
+            (await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4, [])).Answered().Outcome);
 
         using var reread = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName(PluginName), path), Fallout4Release.Fallout4);
@@ -76,7 +76,7 @@ public sealed class PluginAdapterTests
 
         Assert.Equal(
             EmptyPluginWrite.Written,
-            (await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4)).Answered().Outcome);
+            (await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4, [])).Answered().Outcome);
 
         Assert.False(File.Exists(leftover));
     }
@@ -87,26 +87,28 @@ public sealed class PluginAdapterTests
         using var scratch = new ScratchDirectory("medit-adapter-create-stuck-");
         using var stuck = TempLeftover.Undeletable(scratch);
 
-        Assert.IsType<PluginFailure.Inaccessible>((await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4)).Failure());
+        Assert.IsType<PluginFailure.Inaccessible>((await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4, [])).Failure());
         Assert.False(File.Exists(Path.Combine(scratch, PluginName)));
     }
 
+    private static HashSet<HeaderFlag> Flags(string names) =>
+        [.. CreatablePluginFlags.Parse(names.Split(',', StringSplitOptions.RemoveEmptyEntries)) ?? throw new InvalidOperationException(names)];
+
     [Theory]
-    [InlineData(GameRelease.Fallout4, "Plain.esp", false, false)]
-    [InlineData(GameRelease.Fallout4, "Master.esm", true, false)]
-    [InlineData(GameRelease.Fallout4, "Light.esl", false, true)]
-    [InlineData(GameRelease.SkyrimSE, "Plain.esp", false, false)]
-    [InlineData(GameRelease.SkyrimSE, "Master.esm", true, false)]
-    [InlineData(GameRelease.SkyrimSE, "Light.esl", false, true)]
-    [InlineData(GameRelease.Starfield, "Plain.esp", false, false)]
-    [InlineData(GameRelease.Starfield, "Master.esm", true, false)]
-    [InlineData(GameRelease.Starfield, "Light.esl", false, true)]
-    public async Task CreateAndWriteAsync_WritesTheGamesHeader_FlaggedFromTheExtensionAlone(GameRelease release, string name, bool master, bool light)
+    [InlineData(GameRelease.Fallout4, "Plain.esp", false, false, "")]
+    [InlineData(GameRelease.Fallout4, "Master.esm", true, false, "Master")]
+    [InlineData(GameRelease.Fallout4, "Light.esl", true, true, "Master,Small")]
+    [InlineData(GameRelease.Fallout4, "Small.esp", false, true, "Small")]
+    [InlineData(GameRelease.SkyrimSE, "Both.esp", true, true, "Master,Small")]
+    [InlineData(GameRelease.SkyrimSE, "Plain.esp", false, false, "")]
+    [InlineData(GameRelease.Starfield, "Plain.esp", false, false, "")]
+    [InlineData(GameRelease.Starfield, "Master.esm", true, false, "Master")]
+    public async Task CreateAndWriteAsync_WritesTheGamesHeader_FlaggedAsGiven(GameRelease release, string name, bool master, bool light, string flags)
     {
         using var scratch = new ScratchDirectory("medit-adapter-create-flags-");
         var path = Path.Combine(scratch, name);
 
-        (await Adapter.CreateAndWriteAsync(ModKey.FromFileName(name), scratch, release)).Answered();
+        (await Adapter.CreateAndWriteAsync(ModKey.FromFileName(name), scratch, release, Flags(flags))).Answered();
 
         using var reread = ModFactory.ImportGetter(new ModPath(ModKey.FromFileName(name), path), release);
         Assert.Equal((master, light), (((IModFlagsGetter)reread).IsMaster, ((IModFlagsGetter)reread).IsSmallMaster));
@@ -115,12 +117,23 @@ public sealed class PluginAdapterTests
     }
 
     [Fact]
+    public async Task CreateAndWriteAsync_WithMedium_WritesAMediumHeader()
+    {
+        using var scratch = new ScratchDirectory("medit-adapter-create-medium-");
+
+        (await Adapter.CreateAndWriteAsync(ModKey.FromFileName("Medium.esm"), scratch, GameRelease.Starfield, [HeaderFlag.Master, HeaderFlag.Medium])).Answered();
+
+        using var reread = ModFactory.ImportGetter(new ModPath(ModKey.FromFileName("Medium.esm"), Path.Combine(scratch, "Medium.esm")), GameRelease.Starfield);
+        Assert.True(((IModFlagsGetter)reread).IsMediumMaster);
+    }
+
+    [Fact]
     public async Task CreateAndWriteAsync_IntoAFolderThatHasGone_AnswersFolderGone_AndMakesNoFolder()
     {
         using var scratch = new ScratchDirectory("medit-adapter-create-gone-");
         var gone = Path.Combine(scratch, "GoneMod");
 
-        var written = await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), gone, GameRelease.Fallout4);
+        var written = await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), gone, GameRelease.Fallout4, []);
 
         Assert.Equal(EmptyPluginWrite.FolderGone, written.Answered().Outcome);
         Assert.False(Directory.Exists(gone));
@@ -133,7 +146,7 @@ public sealed class PluginAdapterTests
         var path = Path.Combine(scratch, PluginName);
         File.WriteAllText(path, "another tool's file");
 
-        var written = await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4);
+        var written = await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4, []);
 
         Assert.Equal(EmptyPluginWrite.FileExists, written.Answered().Outcome);
         Assert.Equal("another tool's file", File.ReadAllText(path));
@@ -146,7 +159,7 @@ public sealed class PluginAdapterTests
         using var scratch = new ScratchDirectory("medit-adapter-create-fails-");
         var directoryAtThePluginsOwnNameBlockingTheMoveOnEveryOs = Directory.CreateDirectory(Path.Combine(scratch, PluginName));
 
-        var written = await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4);
+        var written = await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4, []);
 
         Assert.IsType<PluginFailure.Inaccessible>(written.Failure());
 

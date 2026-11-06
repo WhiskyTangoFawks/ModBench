@@ -103,14 +103,17 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     ])('%s', reads);
   });
 
-  describe('rename sees exactly one selected compiled plugin, editable or not', () => {
+  describe('rename sees exactly one selected plugin in a mod, compiled or not', () => {
     it.each<Case>([
-      ['an editable compiled plugin', () => [compilable], { singleCompiledPlugin: true }],
-      ['a read-only compiled plugin', () => [compiledPluginReadOnly], { singleCompiledPlugin: true }],
-      ['a plugin with no source', () => [nonCompiledPlugin], { singleCompiledPlugin: false }],
-      ['two compiled plugins', () => [compilable, compiledPluginReadOnly], { singleCompiledPlugin: false }],
-      ['a record-type group', () => [weapons], { singleCompiledPlugin: false }],
-      ['nothing', () => [], { singleCompiledPlugin: false }],
+      ['a compiled plugin', () => [compiledPluginReadOnly], { singlePluginInMod: true }],
+      ['a plugin with no plugin source in a source mod', () => [nonCompiledPluginInSourceMod], { singlePluginInMod: true }],
+      ['a plugin in a mod that is no source mod', () => [nonCompiledPlugin], { singlePluginInMod: true }],
+      ['a plugin in Overwrite', () => [inOverwrite], { singlePluginInMod: false }],
+      ['a plugin in the game folder', () => [withFlags(pluginRow('Xi.esp', 'Data/'), 'plugin enabled nonCompiledPlugin')], { singlePluginInMod: false }],
+      ['a plugin the game loads with no line', () => [lockedRow('Fallout4.esm')], { singlePluginInMod: false }],
+      ['two plugins in mods', () => [compilable, nonCompiledPlugin], { singlePluginInMod: false }],
+      ['a record-type group', () => [weapons], { singlePluginInMod: false }],
+      ['nothing', () => [], { singlePluginInMod: false }],
     ])('%s', reads);
   });
 

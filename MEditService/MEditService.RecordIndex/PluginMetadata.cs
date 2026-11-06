@@ -22,7 +22,8 @@ internal sealed record PluginMetadata(
     int RecordCount,
     string Origin,
     PluginProvider Provider,
-    IReadOnlyList<string>? MissingStringsFiles = null)
+    IReadOnlyList<string>? MissingStringsFiles = null,
+    string? Description = null)
 {
     public PluginAddress Key => new(Name, Origin);
 
@@ -34,5 +35,5 @@ internal sealed record PluginMetadata(
 
     public Registration Registration => new(LoadOrderIndex);
 
-    public PluginContent Content => new(IsLight, IsMaster, IsBlueprint, Masters, RecordCount, IsMedium, IsLocalized, MissingStringsFiles);
+    public PluginContent Content => new(IsLight, IsMaster, IsBlueprint, Masters, RecordCount, IsMedium, IsLocalized, MissingStringsFiles, Description);
 }

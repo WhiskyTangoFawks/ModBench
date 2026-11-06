@@ -23,7 +23,7 @@ public sealed class RowsChangedNotificationTests
         var formKey = npc.ToString();
         entry.HandEdit(index.DocumentOf(formKey, entry.Key), "\"FixtureNpc\"", "\"EditedName\"");
 
-        index.NextSnapshot();
+        index.NextCheck();
 
         var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
         Assert.Equal(entry.Key, notification.Plugin);
@@ -46,7 +46,7 @@ public sealed class RowsChangedNotificationTests
         var documentDeletedByHandWhereGitCannotNameTheKey = entry.SourceFileOf(index.DocumentOf(formKey, entry.Key));
         File.Delete(documentDeletedByHandWhereGitCannotNameTheKey);
 
-        index.NextSnapshot();
+        index.NextCheck();
 
         var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
         Assert.Equal(entry.Key, notification.Plugin);
@@ -64,7 +64,7 @@ public sealed class RowsChangedNotificationTests
         var gained = GainACopyOfARecordUnderAFormKeyNeitherRefHolds(entry, index, moved.ToString());
         entry.RenameByHand(index.DocumentOf(moved.ToString(), entry.Key), "EditedNpc");
 
-        index.NextSnapshot();
+        index.NextCheck();
 
         var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
         Assert.Equal(entry.Key, notification.Plugin);
@@ -83,12 +83,40 @@ public sealed class RowsChangedNotificationTests
         using var ___ = index;
         var gained = GainACopyOfARecordUnderAFormKeyNeitherRefHolds(entry, index, moved.ToString());
 
-        index.NextSnapshot();
+        index.NextCheck();
 
         var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
         Assert.Equal([gained], notification.Keys);
         Assert.Empty(notifications.Notifications.OfType<PluginChangedNotification>());
         Assert.NotNull(index.CopyIn(gained, entry.Key));
+    }
+
+    [Fact]
+    public void ADocumentSavedAfterTheCheckReadTheStamps_IsNotNamedUntilACheckHoldsItsRow()
+    {
+        var source = new CountingTreeSource(TestAdapters.Source());
+        var notifications = new InMemoryNotificationPublisher();
+        FormKey template = default;
+        using var fixture = new PluginFixtureBuilder("rows-changed-saved-mid-check")
+            .WithPlugin("Fixture.esp", mod => template = mod.Npcs.AddNew("TemplateNpc").FormKey, origin: "FixtureMod")
+            .BuildScattered()
+            .CompiledPlugin();
+        var entry = fixture.Plugins.Single();
+        using var index = Indexes.Reconciled(fixture, notifications: notifications, source: source);
+        var gained = $"000F00:{entry.Name}";
+        var heldWhenNamed = new System.Collections.Concurrent.ConcurrentQueue<bool>();
+        notifications.OnPublish = n =>
+        {
+            if (Announcements.RowsChanged(gained)(n)) heldWhenNamed.Enqueue(index.CopyIn(gained, entry.Key) is not null);
+        };
+        source.BeforeNextGitStatus = () => GainACopyOfARecordUnderAFormKeyNeitherRefHolds(entry, index, template.ToString());
+        entry.Git("commit", "--allow-empty", "--quiet", "-m", "Moves HEAD, so the next check asks git again");
+
+        var asked = source.GitStatusAsked;
+        index.NextCheckUnsettledUntil(() => source.GitStatusAsked > asked, "git asked what the tree changed");
+        index.NextCheckUntil(() => !heldWhenNamed.IsEmpty, "the gained record named");
+
+        Assert.All(heldWhenNamed, Assert.True);
     }
 
     private static (ScatteredFixtureData Fixture, LoadOrderEntry Entry, InMemoryNotificationPublisher Notifications,
@@ -131,7 +159,7 @@ public sealed class RowsChangedNotificationTests
             File.ReadAllText(ownersDocumentHoldingTheChildWithNoFileOfItsOwn).Replace(
                 $"\"{ContainerModPlugin.TemporaryRefEditorId}\"", "\"RenamedByHand\"", StringComparison.Ordinal));
 
-        fixture.Index.NextSnapshot();
+        fixture.Index.NextCheck();
 
         var rowsChanged = notifications.Notifications.OfType<RowsChangedNotification>().Last();
         Assert.Contains(fixture.EmbedCell, rowsChanged.Keys);

@@ -15,7 +15,7 @@ The view's description names each active filter: the name filter's term, and the
 As a user, I want:
 
 1. One row for each name in the active profile's `plugins.txt`, in its order, and one for each plugin the game loads with no line, each plugin once. Cites: MO2
-2. The plugins the game loads with no line at the losing end, before every line. Cites: MO2
+2. Each plugin the game loads with no line where the game loads it: at the losing end, before every line, unless the game loads it later. Cites: MO2; Never silently wrong
 3. An overridden plugin, and a plugin in a disabled mod, not to be a row. Each stays indexed. Cites: MO2; ADR-0012
 4. A disabled plugin to show no expander, because it is not active. Cites: ADR-0012
 5. Beneath a plugin, one group for each record type it holds, named as xEdit names it ("Activator"), sorted by name. Cites: xEdit sorts its navigator by name
@@ -102,7 +102,7 @@ A block and a sub-block take xEdit's labels too. Cites: xEdit
 
 As a user, I want:
 
-1. Losing at the top until I choose otherwise, and a title-bar toggle that flips the plugin rows. The plugins the game loads with no line stay at the losing end. Records have no winning end, so they keep their order. Cites: common, A view, story 7; MO2's priority sort
+1. Losing at the top until I choose otherwise, and a title-bar toggle that flips the plugin rows. The plugins the game loads with no line stay where the game loads them (The tree, story 2). Records have no winning end, so they keep their order. Cites: common, A view, story 7; MO2's priority sort
 2. The name filter to match plugin rows. Cites: common, The name filter
 3. The record filter to narrow the records to the FormKeys a SQL query returns, the groups' counts with them, and to apply again after every change to the record index. Cites: catalog `filter` under Record; Chrome
 4. A plugin with no record left under the record filter hidden while the record filter is active. A later snapshot keeps the rows the record filter hides until the new ones land.
@@ -114,7 +114,7 @@ Modbench judges the plugin order I have against the game's sorting rules and LOO
 | Level | A sorting rule broken, or a LOOT message or cleaning data that applies |
 |---|---|
 | Error | a master loads after a plugin that lists it · a blueprint plugin loads before a plugin that is not one · a master is missing or not active · a requirement is missing · an incompatibility is present · a LOOT error message |
-| Warning | a plugin with the master flag is listed after a plugin without it, so the game loads it earlier than the view shows · a plugin loads before a plugin its sorting rule says it loads after · a LOOT warning message |
+| Warning | a plugin the game loads early, by its master flag or its extension, is listed after a plugin it does not load early, so the game loads it earlier than the view shows · a plugin loads before a plugin its sorting rule says it loads after · a LOOT warning message |
 | Info | a LOOT group loads before a LOOT group it names · LOOT's cleaning data says the plugin is dirty · a LOOT say message |
 
 As a user, I want:
@@ -159,12 +159,12 @@ The menus follow VS Code's groups: open, change, create, source control, copy, t
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. 3: filter records, or clear the record filter while active. 4: create plugin. Collapse All last. |
-| Plugin menu | reveal · enable or disable · apply suggested move (a broken sorting rule a move keeps) · rename… (a compiled plugin) · load after… · create record… · version in git… (a mod that is not a source mod) · decompile (in a source mod) · decompile and repair (a malformed plugin) · copy value |
-| Plugin the game loads with no line | reveal · copy value |
+| Plugin menu | reveal · referenced by · enable or disable · apply suggested move (a broken sorting rule a move keeps) · rename… (a plugin in a mod) · load after… · create record… · version in git… (a mod that is not a source mod) · decompile (in a source mod) · decompile and repair (a malformed plugin) · copy value |
+| Plugin the game loads with no line | reveal · referenced by · copy value |
 | Record-type group menu | create record…, except on a group of a type the game cannot create |
 | Record menu, on every record row, worldspaces, cells and placed references included | open · referenced by · create record… (on a container record, Menus and keys, story 4) · copy… · copy value · delete (Menus and keys, story 4) |
 | Check box | enable or disable |
-| Keys | Space: enable or disable. Enter: open, as a click does. F2: rename a compiled plugin. Delete: delete records. Ctrl+C: copy value. |
+| Keys | Space: enable or disable. Enter: open, as a click does. F2: rename a plugin in a mod. Delete: delete records. Ctrl+C: copy value. |
 
 As a user, I want:
 
@@ -193,17 +193,18 @@ As a user, I want:
 1. A prompt for the name. It refuses an empty name, and a name whose extension the game does not load as a plugin.
 2. Then a pick of where the plugin lives: the enabled mods first, then Overwrite. Cites: catalog `create`, Argument
 3. A place that already holds a plugin of that name left out of the pick. Cites: No dead entries
-4. Esc at either step to create nothing. Cites: Esc changes nothing
+4. Esc at any step to create nothing. Cites: Esc changes nothing
 5. The new plugin to appear at the winning end of the list, disabled. Cites: catalog `plugin sync`
-6. The new plugin empty: a header with no records and no masters, flagged as its extension means.
+6. The new plugin empty: a header with no records and no masters.
 7. A plugin created in a source mod to land with its plugin source, as working-tree changes I can review. Cites: GLOSSARY.md, Source mod
+8. The header flagged with the combination I pick from those xEdit offers a new file of its extension, with no pick when it offers one. Cites: Mutagen's data, the reference's behaviour, VS Code's interaction
 
 ### Version in git
 
 As a user, I want:
 
-1. One pick of where git holds the mod, then one of whether to commit, with not committing first. While it runs, the view's message line names the mod and the phase. Cites: catalog `version in git`; modlist-repository.md, The repository, story 7
-2. Git to track, of a source mod's source folder, the plugin source, the mod's assets, the build file, the manifest and `.gitignore`, and nothing else. The assets are the mod's files that no package yields with their bytes. The build file holds its version and the steps that build the mod folder back as it was, for me to add to. Cites: ADR-0007; ADR-0022
+1. One pick of where git holds the mod, then one of whether to commit, with not committing first. While it runs, the view's message line names the mod and the phase. Cites: catalog `version in git`; instance-repository.md, The repository, story 7
+2. Git to track, of a source mod's source folder, the plugin source, the mod's assets, the build file, the manifest, `.gitignore` and `.gitattributes`, and nothing else. The assets are the mod's files that no package yields with their bytes. The build file holds its version and the steps that build the mod folder back as it was, for me to add to. Cites: ADR-0007; ADR-0022
 3. When I pick it, a commit, `Init <mod>`, of only what version in git put under git.
 4. Each file's line endings kept as written.
 5. Version in git that refuses any plugin to write nothing, naming each refused plugin and why.
@@ -221,7 +222,8 @@ As a user, I want:
 1. A prompt filled with the current name. Esc, an empty name or the same name renames nothing. It refuses what Create plugin, story 1 refuses, and a name another plugin in its place has, compared without case. The extension may change. Cites: Windows and Linux alike; mods.md, Rename mod, story 2
 2. The plugin to keep its place in plugin order and its enabled state in every profile. Its plugin source and what Modbench last wrote follow it. Cites: Never silently wrong
 3. The files in its mod that the game ties to it by name to follow it. Cites: Never silently wrong
-4. The plugin source renamed first, as working-tree changes I can review. Then the file, the files named for it and its lines, in one write. A rename that failed on that write to say so, naming the plugin. Git shows the source rename, and reverting it is the recovery. The file reads as a plugin whose plugin source is unreadable until then.
+4. A plugin source, when the plugin has one, renamed first, as working-tree changes I can review. Then the file, the files named for it and its lines, in one write. A rename that failed on that write to say so, naming the plugin. Git shows the source rename, and reverting it is the recovery. The file reads as a plugin whose plugin source is unreadable until then.
+5. Each reference to it to follow it, so its source mod's next build makes what I renamed. Cites: symbols.md, The features, story 6
 
 ### Move
 

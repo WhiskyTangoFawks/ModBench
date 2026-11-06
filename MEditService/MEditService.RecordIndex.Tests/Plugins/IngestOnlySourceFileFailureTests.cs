@@ -69,7 +69,7 @@ public sealed class IngestOnlySourceFileFailureTests : IDisposable
         var cell = CellFile;
         EditTheCell(TemporaryRef, _fixture.EmbedCell.ToString());
 
-        index.NextSnapshotUntil(() => AProblemIsNamed(index), "the re-read's failure");
+        index.NextCheckUntil(() => AProblemIsNamed(index), "the re-read's failure");
 
         var failure = Assert.Single(index.SourceProblems());
         Assert.Equal((Relative(cell), _fixture.EmbedCell.ToString()), (failure.SourceRelativePath, failure.FormKey));

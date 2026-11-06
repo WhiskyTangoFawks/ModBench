@@ -7,7 +7,7 @@ import {
   dataFolderFile, fileInFolder, type DataFolderArchives, type DataFolderPlugins, type FileRead, type FileStamp, type GameFolder,
   type ModFolders, type OriginFile, type PluginEntry,
 } from '../instanceAdapter/instanceAdapter';
-import { isRootLevel } from '../tables/pluginFile';
+import { isPluginAtRoot, isRootLevel } from '../tables/pluginFile';
 import { modOfOrigin } from './modOfOrigin';
 import { pluginOrderOf } from './pluginOrder';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
@@ -15,7 +15,7 @@ import { pluginCompanionRule } from '../tables/gamePaths';
 import type { InstanceValue } from './instance';
 import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN, exactPluginAddressKey, pluginNameKey, type PluginAddress, type PluginPlace, type StampedFile } from '../wire/pluginAddress';
 
-export type { DataFolderPlugins } from '../instanceAdapter/instanceAdapter';
+export type { DataFolderFiles, DataFolderPlugins } from '../instanceAdapter/instanceAdapter';
 
 /** One plugin file in the snapshot — the boundary object (GLOSSARY.md): a plugin file
  *  at a physical path, the origin that provides it, and the three registration facts. */
@@ -58,8 +58,10 @@ export interface LoadOrderSnapshotValue<F = StampedFile> {
   readonly plugins: SnapshotPlugin<F>[];
   readonly active: PluginAddress[];
   readonly loadedWithNoLine: PluginAddress[];
-  /** In the order the game loads them, each at the path that wins. */
-  readonly archives: F[];
+  /** The archives the INIs list, in their order, each at the path that wins. */
+  readonly listedArchives: F[];
+  /** The archives each active plugin loads with it, each at the path that wins. The game loads them after `listedArchives`, in the order it loads the plugins in. */
+  readonly archivesByPlugin: (PluginAddress & { readonly archives: F[] })[];
   /** The loose strings files the game reads, each at the path that wins. */
   readonly stringsFiles: F[];
   /** Each enabled mod that has a mod folder, then Overwrite: where the plugin create gesture offers to put a plugin. */
@@ -151,6 +153,26 @@ function winningPlugins(files: FileWinners): Map<string, PluginFile> {
   return new Map(winners.map((winner) => [foldPath(winner.name), winner]));
 }
 
+interface RootPlugins {
+  readonly winners: Map<string, PluginFile>;
+  readonly byOrigin: readonly (readonly [string, readonly OriginFile[]])[];
+}
+
+// What the index holds at the game's root is read from every file once per index, which a refresh that
+// changed no listing reuses whole (ADR-0015).
+const rootPluginsOfIndex = new WeakMap<FileConflictIndex, RootPlugins>();
+
+function rootPluginsOf(index: FileConflictIndex): RootPlugins {
+  const held = rootPluginsOfIndex.get(index);
+  if (held !== undefined) return held;
+  const read = {
+    winners: winningPlugins(index.files),
+    byOrigin: [...index.filesByMod].map(([origin, files]) => [origin, files.filter((file) => isPluginAtRoot(file.relativePath))] as const),
+  };
+  rootPluginsOfIndex.set(index, read);
+  return read;
+}
+
 /** A disabled plugins.txt line is still sent (ADR-0013), `enabled: false`. A listed
  *  name no mod or overwrite/ provides takes the Data folder's file, or is line-only when the Data
  *  folder does not hold it. */
@@ -161,7 +183,7 @@ export function buildLoadOrderRows(
   gameFolder: GameFolder,
   inData: DataFolderPlugins,
 ): (LoadOrderPlugin | LoadOrderPluginLine)[] {
-  const winners = winningPlugins(index.files);
+  const { winners, byOrigin } = rootPluginsOf(index);
   // The adapter hands each name once, and the game matches a line to a file without case, so a case
   // difference must not read as "disabled".
   const lineByName = new Map(pluginOrder.map(({ name }, line) => [pluginNameKey(name), line] as const));
@@ -184,7 +206,7 @@ export function buildLoadOrderRows(
     return winner?.name === name && winner.origin === origin;
   };
   const overwriteFiles = runtimeOutput.filter((file) => !file.excluded);
-  const outside = findPluginsOutsideLoadOrder([...index.filesByMod, [OVERWRITE_ORIGIN, overwriteFiles]], listed)
+  const outside = findPluginsOutsideLoadOrder([...byOrigin, [OVERWRITE_ORIGIN, overwriteFiles]], listed)
     .map((plugin) => ({
       ...plugin,
       line: lineByName.get(pluginNameKey(plugin.name)) ?? null,
@@ -211,15 +233,20 @@ function winningFiles(
 // replaces an earlier one's, and loose files replace every archive's.
 function archivesAndStringsOf(
   { gameRelease, listed, inData, files }: ArchiveSources, dataFolder: string, active: readonly PluginAddress[],
-): Pick<LoadOrderSnapshotValue<string>, 'archives' | 'stringsFiles'> {
+): Pick<LoadOrderSnapshotValue<string>, 'listedArchives' | 'archivesByPlugin' | 'stringsFiles'> {
   const rule = pluginCompanionRule(gameRelease);
-  if (rule === undefined || inData.kind !== 'listed') return { archives: [], stringsFiles: [] };
+  if (rule === undefined || inData.kind !== 'listed') return { listedArchives: [], archivesByPlugin: [], stringsFiles: [] };
   const archives = winningFiles(dataFolder, inData.archives, files, rule.isArchive);
-  const pluginArchives = active.flatMap(({ name }) =>
-    [...archives.values()].filter((archive) => rule.isArchiveOf(name, archive.relativePath)).sort(byFoldedPath));
-  const loaded = [...listed.flatMap((name) => archives.get(foldPath(name)) ?? []), ...pluginArchives].map(({ path }) => path);
+  const listedArchives = listed.flatMap((name) => archives.get(foldPath(name)) ?? []).map(({ path }) => path);
+  const archivesByPlugin = active.map(({ name, origin }) => ({
+    name, origin,
+    archives: [...archives.values()].filter((archive) => rule.isArchiveOf(name, archive.relativePath)).sort(byFoldedPath).map(({ path }) => path),
+  }));
   const strings = winningFiles(dataFolder, inData.stringsFiles, files, rule.isStringsFile);
-  return { archives: [...new Set(loaded)], stringsFiles: [...strings.values()].map(({ path }) => path) };
+  return {
+    listedArchives, archivesByPlugin,
+    stringsFiles: [...strings.values()].map(({ path }) => path),
+  };
 }
 
 function stringsBeside(
@@ -242,8 +269,19 @@ function stringsBeside(
 export function listedArchivesNothingHolds({ gameRelease, listed, inData, files }: ArchiveSources): string[] {
   const rule = pluginCompanionRule(gameRelease);
   if (rule === undefined || inData.kind !== 'listed') return [];
-  const held = new Set([...inData.archives, ...[...files].map(({ relativePath }) => relativePath).filter(rule.isArchive)].map(foldPath));
+  const held = new Set([...inData.archives.map(foldPath), ...archivesOfFiles(files, gameRelease, rule.isArchive)]);
   return listed.filter((name) => !held.has(foldPath(name)));
+}
+
+// The archives the files hold are scanned once per index, which a refresh that changed no listing reuses whole (ADR-0015).
+const archivesOfIndex = new WeakMap<FileWinners, { readonly gameRelease: string; readonly archives: ReadonlySet<string> }>();
+
+function archivesOfFiles(files: FileWinners, gameRelease: string, isArchive: (relativePath: string) => boolean): ReadonlySet<string> {
+  const held = archivesOfIndex.get(files);
+  if (held?.gameRelease === gameRelease) return held.archives;
+  const archives = new Set([...files].map(({ relativePath }) => relativePath).filter(isArchive).map(foldPath));
+  archivesOfIndex.set(files, { gameRelease, archives });
+  return archives;
 }
 
 /** ADR-0013's snapshot: none without a listable game folder, a refusal while a mod's plugin has no mod
@@ -324,12 +362,13 @@ export async function stampedSnapshot(
     reads.set(path, read);
     return read;
   }));
-  const [plugins, archives, stringsFiles] = await Promise.all([
+  const [plugins, listedArchives, archivesByPlugin, stringsFiles] = await Promise.all([
     Promise.all(value.plugins.map(async (plugin) => ({ ...plugin, archives: await stamped(plugin.archives), stringsFiles: await stamped(plugin.stringsFiles) }))),
-    stamped(value.archives),
+    stamped(value.listedArchives),
+    Promise.all(value.archivesByPlugin.map(async (plugin) => ({ ...plugin, archives: await stamped(plugin.archives) }))),
     stamped(value.stringsFiles),
   ]);
-  return { ...value, plugins, archives, stringsFiles };
+  return { ...value, plugins, listedArchives, archivesByPlugin, stringsFiles };
 }
 
 const listed = (names: readonly string[]): string =>

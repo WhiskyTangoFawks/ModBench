@@ -11,6 +11,8 @@ public enum PluginCreateRefusal
     LightPluginUnsupported,
     NotAPluginFile,
     OriginNotAMod,
+    FlagsNeeded,
+    FlagsNotOffered,
 
     /// <summary>The file system refused the write (ADR-0003), and the way out is outside Modbench.</summary>
     WriteFailed,

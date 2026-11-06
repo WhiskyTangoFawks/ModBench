@@ -2,9 +2,9 @@ import { join } from 'node:path';
 import { parsePlugins } from '../../loadOrderFileCodec/pluginsText';
 import { creationClubListFile } from '../../tables/gamePaths';
 import { isPluginFile } from '../../tables/pluginFile';
-import { get, readOrAbsent, readOrReason } from '../files';
+import { parsedBy, readOrAbsent, readOrReason } from '../files';
 import { listOwnEntries, type IgnoredLink } from './ownEntries';
-import type { DataFolderPlugins, GameFolder } from '../instanceAdapter';
+import type { DataFolderFiles, DataFolderPlugins, GameFolder } from '../instanceAdapter';
 
 /** The Data folder of a game folder found, undefined when it was not. */
 export function dataFolderOf(gameFolder: GameFolder): string | undefined {
@@ -25,15 +25,33 @@ export async function listDataFolderPlugins(gameFolder: GameFolder, ignoredLink:
   return { kind: 'listed', names: new Set(dirents.answer.filter((d) => d.isFile && isPluginFile(d.name)).map((d) => d.name)) };
 }
 
+async function filesBeneath(folder: string, prefix: string, ignoredLink: IgnoredLink): Promise<string[]> {
+  const entries = await listOwnEntries(folder, ignoredLink);
+  const beneath = await Promise.all(entries.map(async (entry) => {
+    const relativePath = `${prefix}${entry.name}`;
+    if (entry.isFile) return [relativePath];
+    return entry.isDirectory ? filesBeneath(join(folder, entry.name), `${relativePath}/`, ignoredLink) : [];
+  }));
+  return beneath.flat();
+}
+
+export async function listDataFolderFiles(gameFolder: GameFolder, ignoredLink: IgnoredLink): Promise<DataFolderFiles> {
+  const dataFolder = dataFolderOf(gameFolder);
+  if (dataFolder === undefined) return { kind: 'unresolved' };
+  const listing = await readOrReason(() => filesBeneath(dataFolder, '', ignoredLink));
+  return listing.kind === 'read' ? { kind: 'listed', files: new Set(listing.answer.map((file) => file.toLowerCase())) } : listing;
+}
+
 /** The Creation Club list in a game folder found, undefined when it was not or the release has none. */
 export function creationClubFileOf(gameFolder: GameFolder, gameRelease: string | undefined): string | undefined {
   return gameFolder.kind === 'found' ? creationClubListFile(gameFolder.root, gameRelease) : undefined;
 }
 
 // The game writes its Creation Club list in plugins.txt's own line format.
+const creationClubAt = parsedBy((text: string) => parsePlugins(text).map((entry) => entry.name));
+
 export async function readCreationClubList(gameFolder: GameFolder, gameRelease: string | undefined): Promise<string[]> {
   const file = creationClubFileOf(gameFolder, gameRelease);
   if (file === undefined) return [];
-  const text = await readOrAbsent<string | undefined>(() => get(file), undefined);
-  return text === undefined ? [] : parsePlugins(text).map((entry) => entry.name);
+  return readOrAbsent(() => creationClubAt(file), []);
 }

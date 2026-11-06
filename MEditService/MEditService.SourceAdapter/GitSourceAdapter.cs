@@ -32,7 +32,11 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved, TimeProvider time
     public IWriteSession WriteSessionOver(PluginProvider.FromMod provider, GameRelease release, IReadOnlyList<DocumentChange> held) =>
         WriteSession.Over(provider, release, held, _stamps);
 
-    public bool TreeHolds(RegisteredPlugin plugin, string path) => SourceRepository.TreeHolds(plugin, Path.GetFullPath(path));
+    public PathAnswer Touching(LoadOrderSnapshot loadOrder, string path) => SourceRepository.Touching(loadOrder, Path.GetFullPath(path));
+
+    public void SignalChange(IReadOnlyList<PluginAddress>? plugins) => ChangeSignalled?.Invoke(plugins);
+
+    public event Action<IReadOnlyList<PluginAddress>?>? ChangeSignalled;
 
     public RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path) =>
         SourceRepository.RecordOfFile(loadOrder, path, Files(), _stamps);
@@ -48,8 +52,8 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved, TimeProvider time
     public SourceFailure? Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<FileToCopy> assets, bool commit, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest, IReadOnlyList<string> ignored,
-        SourceModIn heldIn) =>
-        SourceFailure.Answer(() => GitInit.Init(sourceFolder, buildFile, plugins, assets, commit, repair, manifest, ignored, heldIn));
+        SourceModIn heldIn, ModFolderManifest? modFolderManifest) =>
+        SourceFailure.Answer(() => GitInit.Init(sourceFolder, buildFile, plugins, assets, commit, repair, manifest, ignored, heldIn, modFolderManifest));
 
     public string FileIn(string sourceFolder, string path) => Path.Combine(sourceFolder, path);
 

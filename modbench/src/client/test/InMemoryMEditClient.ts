@@ -9,7 +9,7 @@ import type { ReadFailed } from '../../wire/readFailed';
 import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 
 type QueryMethod =
-  | 'getPlugins' | 'getDiagnoses' | 'getPluginIndexing' | 'getPluginProblems' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions'
+  | 'getPlugins' | 'getDiagnoses' | 'getPluginIndexing' | 'getPluginProblems' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags'
   | 'getRecords' | 'searchRecords'
   | 'getRecordOwner' | 'getRecordHolders' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getRecordsComparison' | 'getReferences' | 'getReferencesInActiveOrCompiledPlugins'
   | 'getRenderedDocument' | 'getCopyDocument' | 'getRecordOfFile'
@@ -70,6 +70,7 @@ export class InMemoryMEditClient implements MEditClient {
   private readonly handOverListeners = new Set<(failure: ReadFailed | undefined) => void>();
   private _status: BackendStatus = 'starting';
   private putAnswer: LoadOrderWire['put'] = () => Promise.reject(new Error('InMemoryMEditClient: no scripted answer for a put'));
+  private signalAnswer: () => Promise<void> = () => Promise.resolve();
   private startAnswer: () => Promise<void> = () => { this.setStatus('running'); return Promise.resolve(); };
   private stopAnswer: () => void = () => undefined;
   private readonly loadOrderStatusKept = keepLoadOrderStatus({
@@ -89,10 +90,16 @@ export class InMemoryMEditClient implements MEditClient {
       this.setStatus('stopped');
       return Promise.resolve();
     },
-    put: (snapshot, signal) => {
+    put: (snapshot, signal, answered) => {
       this.record('put', [snapshot]);
       this.snapshotsPut.push(snapshot);
-      return this.putAnswer(snapshot, signal);
+      const outcome = this.putAnswer(snapshot, signal, answered);
+      void outcome.then(answered, answered);
+      return outcome;
+    },
+    signalChange: (paths) => {
+      this.record('signalChange', [paths]);
+      return this.signalAnswer();
     },
   });
 
@@ -103,6 +110,11 @@ export class InMemoryMEditClient implements MEditClient {
   /** Answers each PUT of a snapshot, as the backend would, from the snapshot and its abort signal. */
   answerPuts(answer: LoadOrderWire['put']): void {
     this.putAnswer = answer;
+  }
+
+  /** Answers each signal of a change; by default at once. */
+  answerSignals(answer: () => Promise<void>): void {
+    this.signalAnswer = answer;
   }
 
   /** How a launch goes; by default mEdit comes up running. */
@@ -226,6 +238,7 @@ export class InMemoryMEditClient implements MEditClient {
 
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> { return this.sender.send(snapshot); }
   latestLoadOrder(): Promise<LoadOrderOutcome | undefined> { return this.sender.latest(); }
+  signalChange(paths: readonly string[]): void { this.sender.signalChange(paths); }
   onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void {
     return this.sender.onResent(listener);
   }
@@ -351,6 +364,9 @@ export class InMemoryMEditClient implements MEditClient {
   }
   getCreatablePluginExtensions(): ReturnType<MEditClient['getCreatablePluginExtensions']> {
     return this.query('getCreatablePluginExtensions', []);
+  }
+  getCreatablePluginFlags(...args: Parameters<MEditClient['getCreatablePluginFlags']>): ReturnType<MEditClient['getCreatablePluginFlags']> {
+    return this.query('getCreatablePluginFlags', args);
   }
   getRecords(...args: Parameters<MEditClient['getRecords']>): ReturnType<MEditClient['getRecords']> {
     return this.query('getRecords', args);

@@ -80,20 +80,22 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task DecompileAndRepair_InAModWithNoRepository_AskedForTheModlistRepository_CommitsItsSourceFolderThere_AndMakesNoRepositoryOfItsOwn()
+    public async Task DecompileAndRepair_InAModWithNoRepository_AskedForTheInstanceRepository_CommitsItsSourceFolderAndItsModFoldersManifestThere_AndMakesNoRepositoryOfItsOwn()
     {
-        var modlistRepository = Path.Combine(_root, ".git");
-        GitProbe.Run(modlistRepository, _root, "init", "-q", "-b", "main");
-        GitProbe.Run(modlistRepository, _root, "config", "user.name", "Test");
-        GitProbe.Run(modlistRepository, _root, "config", "user.email", "test@localhost");
+        var instanceRepository = Path.Combine(_root, ".git");
+        GitProbe.Run(instanceRepository, _root, "init", "-q", "-b", "main");
+        GitProbe.Run(instanceRepository, _root, "config", "user.name", "Test");
+        GitProbe.Run(instanceRepository, _root, "config", "user.email", "test@localhost");
         var plugin = AddToNewMod(Lossless.Malformed);
         var sourceFolder = Path.Combine(_root, "source", NewModName);
+        var linked = new RootFile($"{NewModName}.manifest.json", "the link"u8.ToArray());
 
-        var result = await Repair(new PluginToRepair(plugin, MadeIn(sourceFolder, SourceModIn.ModlistRepository)));
+        var result = await Repair(new PluginToRepair(plugin, MadeIn(sourceFolder, SourceModIn.InstanceRepository) with { ModFolderManifest = linked, ModFolderManifestInInit = true }));
 
         Assert.Equal([plugin], result.Applied);
         Assert.Equal([$"Repair {Malformed}", $"Init {NewModName}"], Subjects(_root, 3));
         Assert.Contains($"source/{NewModName}/plugin-source/{Malformed}/", Git(_root, "ls-tree", "-r", "--name-only", "HEAD"), StringComparison.Ordinal);
+        Assert.Equal("the link", Git(_root, "show", $"HEAD~1:mods/{NewModName}/{linked.Name}"));
     }
 
     [Fact]

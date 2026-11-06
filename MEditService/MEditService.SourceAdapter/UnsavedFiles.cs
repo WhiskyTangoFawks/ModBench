@@ -1,4 +1,5 @@
 using System.Text;
+using MEditService.RepositoriesLib;
 
 namespace MEditService.SourceAdapter;
 
@@ -31,12 +32,12 @@ internal sealed class UnsavedFiles(IEnumerable<DocumentChange> unsaved) : ISourc
     {
         var full = Path.GetFullPath(path);
         return _unsaved.Select(document => document.Path).Where(held =>
-            string.Equals(held, full, SourceRepositoryLocator.PathComparison) || SourceRepositoryLocator.IsUnder(full, held));
+            string.Equals(held, full, FilePaths.Comparison) || SourceRepositoryLocator.IsUnder(full, held));
     }
 
     private string? UnsavedText(string path)
     {
         var full = Path.GetFullPath(path);
-        return _unsaved.FirstOrDefault(document => string.Equals(document.Path, full, SourceRepositoryLocator.PathComparison))?.Text;
+        return _unsaved.FirstOrDefault(document => string.Equals(document.Path, full, FilePaths.Comparison))?.Text;
     }
 }

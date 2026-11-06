@@ -18,6 +18,10 @@ As a user, I want:
 8. My agent to read every state a view shows me, as data, so what I can see it can check. Cites: story 6; Minimal by default
 9. My agent to understand each reply clearly, so it works effectively.
 10. Each reply to my agent to be concise, so it is token efficient. Cites: Minimal by default; Never silently wrong
+11. My agent to read Nexus itself where Nexus needs no key, and to learn from Modbench how. Cites: story 6
+12. My agent to learn from Modbench that a FOMOD's choices are mine, so it names only choices I made or gave it to make, and otherwise puts them to me. Cites: story 6
+13. My agent to understand that Modbench is modding with software development practice, so that it works as Modbench intends even before I know how Modbench applies that practice. Cites: story 6; Existing tools
+14. My agent to understand what Modbench does to the instance automatically, and what follows a change I make by hand, so that a change it did not make does not surprise it. Cites: story 6; ADR-0003; ADR-0015
 
 ## Names
 
@@ -45,7 +49,7 @@ As a user, I want:
 
 As a user, I want:
 
-1. My agent to read everything the views show me of my instance. Cites: toolbox.md; mods.md; plugins.md; downloads.md; modlist-repository.md, Status
+1. My agent to read everything the views show me of my instance. Cites: toolbox.md; mods.md; plugins.md; downloads.md; instance-repository.md, Status
 2. My agent to read each file order conflict: which mod wins each file, and which files each mod loses, as the Mods view and the conflict table show me. Cites: mods.md, Indicators; mods-conflicts.md
 3. My agent to switch my profile as I do (Gestures, story 1). Cites: Respect the user
 4. My agent to deploy, purge and move to Overwrite as I do (Gestures, story 1). Cites: Respect the user
@@ -60,13 +64,16 @@ As a user, I want:
 3. My agent to refresh the instance as I do (story 1). Cites: Respect the user
 4. Each gesture my agent runs to be a tool of its own, named for the gesture, so I approve each as I approve any of its tools, and my agent learns its Argument and Options, and their types, from Modbench. Cites: Any agent, story 4; ADR-0021
 5. My agent never to log in: logging in hands it my Nexus API key, a secret it never holds. Log out it requests as I do.
-6. My agent's install of a FOMOD to name its choices by step, group and option, as the installer shows them. A request whose choices leave a step I would see unanswered is refused, and the refusal lists that step's groups and options, so my agent answers step by step. The author's defaults are what my picker pre-selects; my agent names its own choices (commands.md, The entry point supplies what it knows). A step that needs no pick is answered with none, and my agent may ask for Manual in place of choices. A FOMOD that names a file missing from what it installs is refused, naming each file, and my agent requests it again with install anyway. Cites: Names, story 2; mods-fomod.md, What Install does, story 2
+6. My agent's install of a FOMOD to name its choices by step, group and option, as the installer shows them. A request whose choices leave a step I would see unanswered, and that does not hand me the installer, is refused. The refusal lists that step's groups, and its options with their descriptions, so my agent can put the step to me, and names the Option that hands me the installer (story 8). Without the installer, the author's defaults answer nothing: my agent names its own choices. A step that needs no pick is answered with none, and my agent may ask for Manual in place of choices. A FOMOD that names a file missing from what it installs is refused, naming each file, and my agent requests it again with install anyway. Cites: Names, story 2; mods-fomod.md, What Install does, story 2
+7. My agent's download that names no file to be refused, listing the mod's files as the pick shows them, each as my agent can name it. Cites: Reporting, story 2; downloads.md, Download, story 2
+8. My agent's install of a FOMOD, when it asks, to open the installer for me. The request waits until I install or cancel, and tells my agent what landed, or that I cancelled. Cites: Any agent, story 12; Reporting, story 3; mods-fomod.md, Groups and options, story 4
 
 ## Reporting
 
 As a user, I want:
 
 1. A request from my agent that fails or is refused, in whole or in part, to give my agent the reason for each item. Cites: common.md, Reporting; ADR-0019
-2. A request from my agent never to open a picker, a prompt or a confirmation. A request that leaves out an Option the gesture needs is refused, and the refusal names the Option. Cites: commands.md, The entry point supplies what it knows
+2. A request from my agent never to open a picker, a prompt or a confirmation, except the installer it asks for (Gestures, story 8). A request that leaves out an Option the gesture needs is refused, and the refusal names the Option. Cites: commands.md, The entry point supplies what it knows
 3. My agent to get each gesture's outcome, so its next step builds on what landed.
 4. A refusal that a gesture clears to name that gesture, such as version in git for a plugin with no plugin source. Cites: Any agent, story 6
+5. My agent's request for a gesture that runs long to tell my agent it is still working, so my agent waits for the outcome rather than giving up. Cites: story 3; Usable first
