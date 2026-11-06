@@ -93,16 +93,44 @@ internal static class ConflictRules
     public static Dictionary<string, IReadOnlyDictionary<string, ConflictThis>> StatesByFocus(
         IReadOnlyDictionary<string, object?> valuesByColumn, Func<object?, object?, bool> valuesEqual)
     {
-        ConflictThis StateOf(string focused, string column) => column == focused ? ConflictThis.Master
-            : ComparedWith(valuesByColumn[focused], valuesByColumn[column], valuesEqual);
+        var classes = new Dictionary<string, int>();
+        var representatives = new List<object?>();
+        foreach (var (column, value) in valuesByColumn)
+        {
+            var at = representatives.FindIndex(representative => valuesEqual(representative, value));
+            if (at < 0) representatives.Add(value);
+            classes[column] = at < 0 ? representatives.Count - 1 : at;
+        }
 
         return valuesByColumn.Keys.ToDictionary(
             focused => focused,
-            focused => (IReadOnlyDictionary<string, ConflictThis>)valuesByColumn.Keys.ToDictionary(column => column, column => StateOf(focused, column)));
+            focused => (IReadOnlyDictionary<string, ConflictThis>)new StatesWithFocusOn(focused, classes));
     }
 
-    private static ConflictThis ComparedWith(object? focused, object? cell, Func<object?, object?, bool> valuesEqual) =>
-        valuesEqual(focused, cell) ? ConflictThis.Override : ConflictThis.ConflictLoses;
+    // The states every column takes with one column focused, read from the classes of equal values rather
+    // than held per cell, as every column is focused in turn.
+    private sealed class StatesWithFocusOn(string focused, Dictionary<string, int> classes) : IReadOnlyDictionary<string, ConflictThis>
+    {
+        public int Count => classes.Count;
+        public IEnumerable<string> Keys => classes.Keys;
+        public IEnumerable<ConflictThis> Values => classes.Keys.Select(column => this[column]);
+        public ConflictThis this[string column] => column == focused ? ConflictThis.Master
+            : StateOfEqual(classes[column] == classes[focused]);
+        public bool ContainsKey(string key) => classes.ContainsKey(key);
+
+        public bool TryGetValue(string key, out ConflictThis value)
+        {
+            value = classes.ContainsKey(key) ? this[key] : default;
+            return classes.ContainsKey(key);
+        }
+
+        public IEnumerator<KeyValuePair<string, ConflictThis>> GetEnumerator() =>
+            classes.Keys.Select(column => KeyValuePair.Create(column, this[column])).GetEnumerator();
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+
+        private static ConflictThis StateOfEqual(bool equal) => equal ? ConflictThis.Override : ConflictThis.ConflictLoses;
+    }
 
     // One column's own state across every row: the most severe cell it holds, Master for the
     // master's own column, and none for a column with no cell.

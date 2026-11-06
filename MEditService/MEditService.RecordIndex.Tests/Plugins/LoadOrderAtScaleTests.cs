@@ -73,12 +73,12 @@ public sealed class LoadOrderAtScaleTests
     [Fact]
     public void TheConflictStackOfARecordWithManyCopies_ComparesWithinTheNavigationBudget()
     {
-        const int copies = 100;
+        const int copies = 200;
         using var scale = new LoadOrderAtScale(copies);
         var stack = scale.PluginsHoldingTheOverriddenRecord.Select(p => new RecordCopy(scale.AnOverriddenRecord, p.Key)).ToList();
         CompareRecordsAnswer? compared = null;
 
-        Budgets.Ran(TimeSpan.FromSeconds(0.1), () => compared = scale.Index.Queries.GetCompareRecords(stack).Value(), "Comparing a record of 100 copies");
+        Budgets.Ran(TimeSpan.FromSeconds(0.1), () => compared = scale.Index.Queries.GetCompareRecords(stack).Value(), "Comparing a record of 200 copies");
         Assert.Equal(copies, compared?.Compare?.Overrides.Count);
     }
 }

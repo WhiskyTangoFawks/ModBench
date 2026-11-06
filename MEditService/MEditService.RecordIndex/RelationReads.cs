@@ -66,19 +66,19 @@ internal sealed class RelationReads(
     }
 
     /// <summary>Each of <paramref name="copies"/>' documents, null where no plugin copy is indexed, read in
-    /// one query with the links of every copy resolved in another.</summary>
-    public List<RecordDocument?> GetDocuments(IReadOnlyList<RecordCopy> copies)
+    /// one query with the links of every copy resolved in another, and the resolver that did it.</summary>
+    public (List<RecordDocument?> Documents, Func<string, RecordLookupEntry?> Resolve) GetDocuments(IReadOnlyList<RecordCopy> copies)
     {
         var formKeys = copies.Select(copy => copy.FormKey).Distinct().ToList();
         using var context = store.OpenRead();
-        var resolve = LinkResolution.ForLinksOf(context, formKeys);
+        var resolve = LinkResolution.ForLinksOf(context, formKeys, Resolve);
         var held = context.Rows($"""
             SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, parse_diagnosis, record_type
             FROM records
             WHERE form_key IN ({string.Join(", ", formKeys.Select((_, i) => $"${i + 1}"))})
             """, reader => ReadDocumentFromBody(context, reader, store.Schemas[reader.GetString(8)], resolve), [.. formKeys])
             .ToLookup(document => document.FormKey, StringComparer.OrdinalIgnoreCase);
-        return [.. copies.Select(copy => held[copy.FormKey].FirstOrDefault(document => PluginAddress.Comparer.Equals(document.Plugin, copy.Plugin)))];
+        return ([.. copies.Select(copy => held[copy.FormKey].FirstOrDefault(document => PluginAddress.Comparer.Equals(document.Plugin, copy.Plugin)))], resolve);
     }
 
     /// <summary>Whether any registered plugin, active or not, holds <paramref name="formKey"/>.</summary>

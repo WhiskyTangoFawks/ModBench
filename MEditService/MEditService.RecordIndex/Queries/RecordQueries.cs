@@ -184,7 +184,7 @@ internal sealed class RecordQueries(
         var reads = _index.RequireWholeSetReads();
         var snapshot = _loadOrder.Require();
 
-        var fromIndex = reads.GetDocuments(copies);
+        var (fromIndex, resolveFormKey) = reads.GetDocuments(copies);
         var documents = new List<RecordDocument>(copies.Count);
         var missing = new List<RecordCopy>();
         for (var i = 0; i < copies.Count; i++)
@@ -203,7 +203,7 @@ internal sealed class RecordQueries(
         // Two copies may come from one plugin, so a column is named by its place as well.
         var columns = records.Select((r, i) => $"{i}#{ColumnKey.Of(r.Plugin, r.Origin)}").ToList();
         var diffs = _conflictClassifier.Align(
-            records, columns, snapshot.GameRelease, reads.LinkResolver([.. copies.Select(copy => copy.FormKey).Distinct()]), LoadIndex.FormIdsOf(snapshot, reads.OpenedPlugins),
+            records, columns, snapshot.GameRelease, resolveFormKey, LoadIndex.FormIdsOf(snapshot, reads.OpenedPlugins),
             indexed: true);
         var overrides = records.Select((r, i) => ToCompareOverride(r, state: null, columns[i], snapshot, reads)).ToList();
 
