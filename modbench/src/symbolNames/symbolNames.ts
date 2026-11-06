@@ -95,18 +95,23 @@ export interface FileChanges {
 export const NO_FILE_CHANGES: FileChanges = { moves: [], deletions: [], documents: [] };
 
 /** An owner's part of a rename, with nothing written: the changes Text documents applies, each reference that cannot
- *  follow, and the owner's own write once every owner's changes are applied. */
+ *  follow, and the owner's own write once every owner's changes are applied, which answers why it failed. */
 export interface RenamePlan {
   readonly changes: FileChanges;
   readonly cannotFollow: readonly string[];
-  commit(): Promise<void>;
+  commit(): Promise<string | undefined>;
 }
+
+/** `text` with each span replaced by what `spelled` makes of the text at its start. */
+export const spliced = (text: string, spans: readonly { readonly start: number; readonly end: number }[], spelled: (start: number) => string): string =>
+  [...spans].sort((a, b) => b.start - a.start).reduce((after, { start, end }) => after.slice(0, start) + spelled(start) + after.slice(end), text);
 
 /** A box that owns files, saying where they name a symbol (ADR-0028). */
 export interface SymbolOwner {
   read(symbol: PluginSymbol, held: HeldTexts): Promise<SymbolReading>;
-  /** Its part of renaming `symbol` to `newName`, or why it refuses the rename. */
-  plan(symbol: PluginSymbol, newName: string, held: HeldTexts): Promise<RenamePlan | { readonly refused: string }>;
+  /** Its part of renaming `symbol` to `newName`, or why it refuses the rename. A name alone names the copy `plugins`,
+   *  the rows of its file name, resolve it to. */
+  plan(symbol: PluginSymbol, newName: string, held: HeldTexts, plugins: readonly ResolvedPlugin[]): Promise<RenamePlan | { readonly refused: string }>;
   /** The plugin one of its files names at `offset` of the file's `text`; undefined where it names none. */
   nameAt(file: string, text: string, offset: number): Promise<PluginName | undefined>;
 }

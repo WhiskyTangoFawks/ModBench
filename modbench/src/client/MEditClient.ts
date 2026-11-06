@@ -106,6 +106,10 @@ export interface DeleteChangesOutcome {
 /** The changes renaming a plugin's source makes, and the name its tree was filed under. */
 export type RenameSourceChangesOutcome = components['schemas']['RenameSourceChanges'];
 
+/** Whether mod order resolves the plugin's file name to the copy renamed, and each file of its source folder a build
+ *  reads by its name, relative to the folder. */
+export type RenameSourceAsked = Pick<components['schemas']['RenameSourceChangesRequest'], 'namedByFileName' | 'sourceFiles'>;
+
 /** The changes creating a record makes to plugin source, and the new record's FormKey. */
 export type CreateChangesOutcome = components['schemas']['CreateRecordChanges'];
 
@@ -233,7 +237,7 @@ export interface MEditClient {
   ): Promise<PluginAddress | WriteRefused>;
   // The changes renaming the plugin source makes over the unsaved documents mEdit holds, and the name its tree is
   // filed under. A WriteRefused is the call failing or mEdit refusing. Nothing is written.
-  getRenameSourceChanges(plugin: PluginAddress, newName: string): Promise<RenameSourceChangesOutcome | WriteRefused>;
+  getRenameSourceChanges(plugin: PluginAddress, newName: string, asked: RenameSourceAsked): Promise<RenameSourceChangesOutcome | WriteRefused>;
   // Moves what Modbench last wrote, filed under `treeName`, to the plugin's new name, once the source rename is applied and saved.
   moveLastWritten(plugin: PluginAddress, treeName: string, newName: string): Promise<{ moved: true } | WriteRefused>;
   rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;

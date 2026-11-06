@@ -53,7 +53,9 @@ function setup(selection: readonly PluginsTreeNode[] = []) {
   client.setCommandResult('moveLastWritten', { moved: true });
   client.setQueryAnswer('getPluginNameReferences', []);
   const instanceAnswers: InstanceAnswers = {};
-  const fake = fakeInstanceAdapter(readingFixture(pluginFilesHeld(held('Patch.esp', 'ModA'), held('Taken.esp', 'ModA'))), instanceAnswers);
+  const fake = fakeInstanceAdapter(readingFixture({
+    ...pluginFilesHeld(held('Patch.esp', 'ModA'), held('Taken.esp', 'ModA')), mods: [{ kind: 'mod', name: 'ModA', enabled: true }],
+  }), instanceAnswers);
   const instance = {
     value: instanceValueFixture(),
     quiet: async <T>(work: () => Promise<T>): Promise<T> => {
@@ -103,7 +105,7 @@ describe('modbench.plugin.rename', () => {
     await run(row());
 
     expect(showInputBox).toHaveBeenCalledWith(expect.objectContaining({ value: 'Patch.esp' }));
-    expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges')).toEqual([{ method: 'getRenameSourceChanges', args: [PLUGIN, 'Renamed.esp'] }]);
+    expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges').map(({ args }) => args.slice(0, 2))).toEqual([[PLUGIN, 'Renamed.esp']]);
     expect(fake.calls).toEqual([{ verb: 'renamePlugin', origin: { kind: 'mod', name: 'ModA' }, from: 'Patch.esp', to: 'Renamed.esp' }]);
     expect(progressSteps).toEqual(['progress opens on modbench.pluginListTree', 'Instance loader: read every file again', 'progress closes']);
     expect(reporter.reports).toEqual([]);
@@ -237,7 +239,7 @@ describe('modbench.plugin.rename', () => {
 
     expect(reporter.reports).toEqual([{
       severity: 'error',
-      message: 'Could not rename "Patch.esp" (ModA): its references were changed, its file and lines were not. Reverting them in git undoes it.',
+      message: 'Could not rename "Patch.esp" (ModA): its references were changed, and its file and lines were not.',
       detail: 'disk full',
     }]);
   });
@@ -251,7 +253,7 @@ describe('modbench.plugin.rename, called by the agent', () => {
 
     const answered = await run(calling('Renamed.esp'));
 
-    expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges')).toEqual([{ method: 'getRenameSourceChanges', args: [PLUGIN, 'Renamed.esp'] }]);
+    expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges').map(({ args }) => args.slice(0, 2))).toEqual([[PLUGIN, 'Renamed.esp']]);
     expect(fake.calls).toEqual([{ verb: 'renamePlugin', origin: { kind: 'mod', name: 'ModA' }, from: 'Patch.esp', to: 'Renamed.esp' }]);
     expect(answered).toEqual({ applied: true, outcome: { landed: [{ name: 'Renamed.esp', origin: 'ModA' }], refused: [] } });
     expect(showInputBox).not.toHaveBeenCalled();
@@ -272,7 +274,7 @@ describe('modbench.plugin.rename, called by the agent', () => {
 
     expect(await run(calling('Renamed.esp'))).toMatchObject({
       applied: false,
-      refusal: 'Could not rename "Patch.esp" (ModA): its references were changed, its file and lines were not. Reverting them in git undoes it.',
+      refusal: 'Could not rename "Patch.esp" (ModA): its references were changed, and its file and lines were not.',
       detail: 'disk full',
     });
     expect(reporter.reports).toEqual([]);

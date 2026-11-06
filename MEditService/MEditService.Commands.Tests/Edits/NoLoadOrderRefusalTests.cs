@@ -23,7 +23,7 @@ public sealed class NoLoadOrderRefusalTests
         { "Delete", async () => (await Handler<DeleteRecordChangesHandler>().DeleteRecords([Record])).WholeSelectionRefusal().Refusal },
         {
             "RenameSource",
-            () => Task.FromResult<object?>(Handler<RenameSourceChangesHandler>().RenameSource(Plugin, "Renamed.esp")
+            () => Task.FromResult<object?>(Handler<RenameSourceChangesHandler>().RenameSource(Plugin, "Renamed.esp", namedByFileName: true, sourceFiles: [])
                 .Match(_ => RenameSourceRefusal.NotAPluginFile, (why, _) => why))
         },
         { "MoveLastWritten", () => Task.FromResult<object?>(Handler<MoveLastWrittenHandler>().MoveLastWritten(Plugin, Plugin.Name, "Renamed.esp").Refusal) },

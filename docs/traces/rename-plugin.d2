@@ -17,8 +17,9 @@ instanceloader.label: Instance loader
 
 plugins."the name"
 plugins -> plugincommands: "the gesture: the plugin, the new name, the unsaved texts" {class: loadorder}
-plugincommands -> client: "plan: the plugin source's changes, each copy in a plugin with none" {class: edit}
-plugincommands -> manifestadapter: "plan: the build file's changes" {class: edit}
+plugincommands -> instanceadapter: "get: mod order, and which copy its file name resolves to" {class: loadorder}
+plugincommands -> manifestadapter: "plan: the build file's changes · the source folder's files its steps read · the flags left behind" {class: edit}
+plugincommands -> client: "plan: the plugin source's changes and those files' moves, each copy in a plugin with none" {class: edit}
 plugincommands -> instanceadapter: "plan: what refuses · the masterlist and prelude names" {class: loadorder}
 plugincommands -> textdocuments: "every owner's changes, one workspace edit" {class: edit}
 plugincommands -> client: "commit: move what Modbench last wrote" {class: edit}

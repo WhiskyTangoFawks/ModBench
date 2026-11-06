@@ -1,4 +1,5 @@
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 
 namespace MEditService.Commands;
@@ -16,9 +17,10 @@ public sealed class RenameSourceChangesHandler
     internal RenameSourceChangesHandler(LoadOrderHolder loadOrder, ISourceAdapter source, UnsavedDocuments unsaved) =>
         (_loadOrder, _source, _unsaved) = (loadOrder, source, unsaved);
 
-    /// <summary>The changes renaming the plugin makes to plugin source over the unsaved documents mEdit holds, which stand
-    /// in for their files, written nowhere (ADR-0001). A plugin source that cannot follow is left behind, saying why.</summary>
-    public RenameSourceResult RenameSource(PluginAddress plugin, string newName)
+    /// <summary>The changes renaming the plugin makes to plugin source over the unsaved documents mEdit holds, and to
+    /// <paramref name="sourceFiles"/>, written nowhere (ADR-0001). Another plugin source follows only when
+    /// <paramref name="namedByFileName"/>, or is left behind.</summary>
+    public RenameSourceResult RenameSource(PluginAddress plugin, string newName, bool namedByFileName, IReadOnlyList<SourceMove> sourceFiles)
     {
         if (_loadOrder.Held is not { Snapshot: var loadOrder })
             return RenameSourceResult.Refused(RenameSourceRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
@@ -39,11 +41,28 @@ public sealed class RenameSourceChangesHandler
         return OwnSource(target, plugin, newName, RepositoryOf).Match(
             landed =>
             {
-                var (followed, leftBehind) = Following(loadOrder, target.Plugin, newName, RepositoryOf);
+                if (!SourceFilesMoved(target, sourceFiles, RepositoryOf).Holds(out var files, out var refusal)) return refusal;
+                var (followed, leftBehind) = namedByFileName ? Following(loadOrder, target.Plugin, newName, RepositoryOf) : (SourceChanges.None, []);
                 return RenameSourceResult.Landed(
-                    new SourceChanges(landed.Moves, landed.Deletions, landed.Documents).Then(followed), landed.TreeName, leftBehind);
+                    new SourceChanges(landed.Moves, landed.Deletions, landed.Documents).Then(files).Then(followed), landed.TreeName, leftBehind);
             },
             RenameSourceResult.Refused);
+    }
+
+    // The files of the source folder a build step reads under the plugin's name, which the caller names.
+    private Answer<SourceChanges, RenameSourceResult> SourceFilesMoved(
+        RenameSourceTarget target, IReadOnlyList<SourceMove> sourceFiles, Func<PluginProvider.FromMod, ISourceRepository> repositoryOf)
+    {
+        if (sourceFiles.Count == 0 || !_source.IsSourceMod(target.Plugin)) return SourceChanges.None;
+        var repository = repositoryOf(target.Mod);
+        if (!repository.ChangesToMoveFiles(sourceFiles).Holds(out var moved, out var failure))
+            return Refused(RenameSourceRefusal.WriteFailed, $"Could not move {target.Plugin.Name}'s files in its source folder: {failure.Reason}");
+        if (moved is null)
+        {
+            return Refused(RenameSourceRefusal.NameTaken,
+                $"{target.Mod.Name}'s source folder already holds one of {string.Join(", ", sourceFiles.Select(file => file.To))}, so {target.Plugin.Name} was not renamed.");
+        }
+        return moved.Under(repository.SourceFolder);
     }
 
     private RenameSourceResult OwnSource(

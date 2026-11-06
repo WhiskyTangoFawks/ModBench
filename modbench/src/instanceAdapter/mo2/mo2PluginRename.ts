@@ -1,13 +1,14 @@
 // MO2's rename of a plugin: its files, its line in every profile's plugins.txt and loadorder.txt, and its names in the
 // userlist, under every plugin order's lock, and put back if a write fails.
 
-import { basename, parse } from 'node:path';
+import { basename } from 'node:path';
 import { stripBom } from '../../loadOrderFileCodec/lineScan';
 import { parsePlugins, pluginKey, renamePluginInText } from '../../loadOrderFileCodec/pluginsText';
 import { errorMessage } from '../../ports/errorMessage';
 import { present } from '../../ports/present';
 import { ruleFilePluginNames } from '../../sortingRules/lootMetadata';
-import { NO_FILE_CHANGES, placeIn, type SymbolOwner } from '../../symbolNames/symbolNames';
+import { namesPlugin, NO_FILE_CHANGES, placeIn, spliced, type SymbolOwner } from '../../symbolNames/symbolNames';
+import { namesIn, ruleFileNames } from './mo2PluginReferences';
 import { pluginCompanionRule, type PluginCompanionRule } from '../../tables/gamePaths';
 import { get, listEntries, readOrAbsent, rename, undoAll, type Undo, withLock, write } from '../files';
 import { fileInFolder, fileOriginOfPlugin, isBareName, type FileOrigin, InstanceAdapter } from '../instanceAdapter';
@@ -71,15 +72,13 @@ const spelledAt = (text: string, start: number, name: string): string => {
   return quote === '\'' ? name.replace(/'/g, '\'\'') : name;
 };
 
-async function userlistRenamed(file: string, from: string, to: string): Promise<RuleFileRename> {
-  const text = await readOrAbsent(() => get(file), undefined);
-  if (text === undefined) return { cannotFollow: [] };
+function userlistRenamedIn(file: string, text: string, from: string, to: string): RuleFileRename {
   const read = stripBom(text);
   const names = ruleFilePluginNames(read);
   if ('refused' in names) return { cannotFollow: [`${file}: ${names.refused}`] };
   const named = names.filter(({ name }) => sameName(name, from));
   if (named.length === 0) return { cannotFollow: [] };
-  const renamed = [...named].reverse().reduce((after, { start, end }) => after.slice(0, start) + spelledAt(after, start, to) + after.slice(end), read);
+  const renamed = spliced(read, named, (start) => spelledAt(read, start, to));
   const reread = ruleFilePluginNames(renamed);
   const expected = names.map(({ name }) => (sameName(name, from) ? to : name));
   if ('refused' in reread || reread.map(({ name }) => name).join('\n') !== expected.join('\n')) {
@@ -88,18 +87,22 @@ async function userlistRenamed(file: string, from: string, to: string): Promise<
   return { after: text.slice(0, text.length - read.length) + renamed, cannotFollow: [] };
 }
 
+async function userlistRenamed(file: string, from: string, to: string): Promise<RuleFileRename> {
+  try {
+    const text = await readOrAbsent(() => get(file), undefined);
+    return text === undefined ? { cannotFollow: [] } : userlistRenamedIn(file, text, from, to);
+  } catch (err) {
+    return { cannotFollow: [`${file}: ${errorMessage(err)}`] };
+  }
+}
+
 // LOOT's metadata update replaces the masterlist and the prelude, so a name there stays as it is.
 async function leftInLootsFiles(files: readonly string[], from: string): Promise<string[]> {
-  const left = await Promise.all(files.map(async (file) => {
-    const text = await readOrAbsent(() => get(file), undefined);
-    if (text === undefined) return [];
-    const read = stripBom(text);
-    const names = ruleFilePluginNames(read);
-    if ('refused' in names) return [`${file}: ${names.refused}`];
-    return names.filter(({ name }) => sameName(name, from))
-      .map(({ start }) => `${file}, line ${String(lineOf(file, read, start))}: LOOT's metadata names ${from}, and its update replaces the file.`);
-  }));
-  return left.flat();
+  const read = await Promise.all(files.map((file) => namesIn(file, ruleFileNames, from)));
+  return read.flatMap(({ references, leftOut }) => [
+    ...references.map(({ place }) => `${place.file}, line ${String(place.start.line + 1)}: LOOT's metadata names ${from}, and its update replaces the file.`),
+    ...leftOut,
+  ]);
 }
 
 // Each move and each file's new text, or, when one fails, none of them.
@@ -129,10 +132,13 @@ export function mo2PluginRename(context: Mo2Context, source: ReadingSource): Pic
   const { instanceRoot } = context;
   const ruleFiles = sortingRuleFilePaths(instanceRoot);
 
-  // Each file of a folder that `named` picks, renamed by `target`. Two files that land on one name
-  // refuse, as does one that lands on a file already there under another name.
-  function movesIn(folder: string, entries: readonly Entry[], named: (name: string) => boolean, target: (name: string) => string): Move[] {
-    const moves = entries.filter((e) => !e.isFolder && named(e.name)).map((e) => ({ name: e.name, newName: target(e.name) }));
+  // Each file of a folder that `target` renames. Two files that land on one name refuse, as does one that
+  // lands on a file already there under another name.
+  function movesIn(folder: string, entries: readonly Entry[], target: (name: string) => string | undefined): Move[] {
+    const moves = entries.flatMap((e) => {
+      const newName = e.isFolder ? undefined : target(e.name);
+      return newName === undefined ? [] : [{ name: e.name, newName }];
+    });
     for (const { name, newName } of moves) {
       const taken = entries.find((e) => sameName(e.name, newName) && !moves.some((m) => m.name === e.name));
       const twin = moves.find((m) => m.name !== name && sameName(m.newName, newName));
@@ -146,14 +152,10 @@ export function mo2PluginRename(context: Mo2Context, source: ReadingSource): Pic
     const stringsFolder = root.find((e) => e.isFolder && sameName(e.name, rule.stringsFolder));
     const stringsPath = stringsFolder === undefined ? undefined : fileInFolder(folder, stringsFolder.name);
     const stringsEntries = stringsPath === undefined ? [] : await entriesIn(stringsPath);
-    const stemLength = parse(from).name.length;
-    const newStem = parse(to).name;
-    const keepingTail = (name: string): string => newStem + name.slice(stemLength);
-    const ownFile = (name: string): boolean => sameName(name, from);
-    if (!root.some((e) => !e.isFolder && ownFile(e.name))) throw notAFileOf(origin, from);
+    if (!root.some((e) => !e.isFolder && sameName(e.name, from))) throw notAFileOf(origin, from);
     return [
-      ...movesIn(folder, root, (name) => ownFile(name) || rule.inRoot(from, name), (name) => (ownFile(name) ? to : keepingTail(name))),
-      ...(stringsPath === undefined ? [] : movesIn(stringsPath, stringsEntries, (name) => rule.inStringsFolder(from, name), keepingTail)),
+      ...movesIn(folder, root, (name) => rule.renamedWith(from, name, to)),
+      ...(stringsPath === undefined ? [] : movesIn(stringsPath, stringsEntries, (name) => rule.renamedWith(from, `${rule.stringsFolder}/${name}`, to)?.split('/')[1])),
     ];
   }
 
@@ -167,12 +169,14 @@ export function mo2PluginRename(context: Mo2Context, source: ReadingSource): Pic
     return { lines: await renamedLines(orders, from, to), files: await moves(origin, folder, from, to, rule) };
   }
 
-  async function renamePlugin(origin: FileOrigin, from: string, to: string): Promise<void> {
+  // A line and the rule files name a plugin by its file name alone, so they follow only the copy it resolves to.
+  async function renamePlugin(origin: FileOrigin, from: string, to: string, namedByFileName: boolean): Promise<void> {
     const orders = await everyPluginOrderFile(instanceRoot);
     await withLocks([...orders, ruleFiles.userlist], async () => {
       const { lines, files } = await plan(orders, origin, from, to);
-      const { after } = await userlistRenamed(ruleFiles.userlist, from, to);
-      await writtenWhole(files, [...lines, ...(after === undefined ? [] : [{ file: ruleFiles.userlist, after }])]);
+      const { after } = namedByFileName ? await userlistRenamed(ruleFiles.userlist, from, to) : {};
+      const texts = namedByFileName ? [...lines, ...(after === undefined ? [] : [{ file: ruleFiles.userlist, after }])] : [];
+      await writtenWhole(files, texts);
     });
   }
 
@@ -182,19 +186,23 @@ export function mo2PluginRename(context: Mo2Context, source: ReadingSource): Pic
       return folder !== undefined && (await entriesIn(folder)).some((entry) => !entry.isFolder && sameName(entry.name, name));
     },
 
-    async planRename({ name, origin }, newName) {
+    async planRename(symbol, newName, _held, plugins) {
+      const { name, origin } = symbol;
       const fileOrigin = fileOriginOfPlugin(origin);
+      const namedByFileName = namesPlugin({ name }, symbol, plugins);
       try {
         await plan(await everyPluginOrderFile(instanceRoot), fileOrigin, name, newName);
-        const userlist = await userlistRenamed(ruleFiles.userlist, name, newName);
-        return {
-          changes: NO_FILE_CHANGES,
-          cannotFollow: [...userlist.cannotFollow, ...await leftInLootsFiles([ruleFiles.masterlist, ruleFiles.prelude], name)],
-          commit: () => renamePlugin(fileOrigin, name, newName),
-        };
       } catch (err) {
         return { refused: errorMessage(err) };
       }
+      const cannotFollow = namedByFileName
+        ? [...(await userlistRenamed(ruleFiles.userlist, name, newName)).cannotFollow, ...await leftInLootsFiles([ruleFiles.masterlist, ruleFiles.prelude], name)]
+        : [];
+      return {
+        changes: NO_FILE_CHANGES,
+        cannotFollow,
+        commit: () => renamePlugin(fileOrigin, name, newName, namedByFileName).then(() => undefined, errorMessage),
+      };
     },
   };
 }

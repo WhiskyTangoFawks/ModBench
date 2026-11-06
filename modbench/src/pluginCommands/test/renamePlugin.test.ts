@@ -10,7 +10,6 @@ import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, pluginFilesHeld, readingFixture } from '../../test/fakeInstanceAdapter';
 import { heldTexts, type FileChanges } from '../../symbolNames/symbolNames';
 import { BUILD_FILE } from '../../wire/sourceMod';
-import type { PluginAddress } from '../../wire/pluginAddress';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const PLUGIN = { name: 'Patch Mod.esp', origin: 'Patch Mod' };
@@ -27,17 +26,21 @@ describe('renamePlugin — every box whose files name the plugin carries the ren
     applied.push(changes);
     return Promise.resolve(undefined);
   });
-  const rename = (newName: string, held: readonly string[] = [], plugin: PluginAddress = PLUGIN) => {
+  const rename = (newName: string, held: readonly string[] = [], winningModsHoldingACopy: readonly string[] = []) => {
     const fake = fakeInstanceAdapter(readingFixture({
       ...pluginFilesHeld(
-        { origin: { kind: 'mod', name: plugin.origin }, name: plugin.name },
-        ...held.map((name) => ({ origin: { kind: 'mod', name: plugin.origin } as const, name })),
+        { origin: { kind: 'mod', name: PLUGIN.origin }, name: PLUGIN.name },
+        ...held.map((name) => ({ origin: { kind: 'mod', name: PLUGIN.origin } as const, name })),
+        ...winningModsHoldingACopy.map((mod) => ({ origin: { kind: 'mod', name: mod } as const, name: PLUGIN.name })),
       ),
+      mods: [...winningModsHoldingACopy, PLUGIN.origin].map((name) => ({ kind: 'mod', name, enabled: true })),
+      pluginOrder: [{ name: PLUGIN.name, enabled: true }],
       sourceModFolders: new Map([[PLUGIN.origin, sourceFolder]]),
     }));
-    const result = pluginCommandsWith(fake.adapter, client).renamePlugin({ held: heldTexts([]), apply }, plugin, newName);
+    const result = pluginCommandsWith(fake.adapter, client).renamePlugin({ held: heldTexts([]), apply }, PLUGIN, newName);
     return { fake, result };
   };
+  const lines = async (fake: ReturnType<typeof rename>['fake']) => (await fake.adapter.reading()).pluginOrder.map(({ name }) => name);
 
   beforeEach(async () => {
     sourceFolder = await mkdtemp(join(tmpdir(), 'renamePlugin-'));
@@ -62,10 +65,19 @@ describe('renamePlugin — every box whose files name the plugin carries the ren
       { moves: [], deletions: [], documents: [{ path: join(sourceFolder, BUILD_FILE), text: '{"version":1,"steps":[{"compile":["Renamed Patch.esp"]}]}' }] },
       { moves: [], deletions: [], documents: [] },
     ]]);
-    expect(client.calls.map((call) => call.method)).toEqual(['getCreatablePluginExtensions', 'getRenameSourceChanges', 'getPluginNameReferences', 'moveLastWritten']);
     expect(fake.calls).toEqual([
       { verb: 'renamePlugin', origin: { kind: 'mod', name: 'Patch Mod' }, from: 'Patch Mod.esp', to: 'Renamed Patch.esp' },
     ]);
+    expect(await lines(fake)).toEqual(['Renamed Patch.esp']);
+  });
+
+  it('carries no reference by its file name alone for a copy mod order resolves that name to another copy of, reading mod order through the Instance adapter', async () => {
+    const { fake, result } = rename('Renamed Patch.esp', [], ['Winning Mod']);
+
+    expect(await result).toEqual({ applied: true, cannotFollow: [] });
+    expect(client.calls.find((call) => call.method === 'getRenameSourceChanges')?.args[2]).toEqual({ namedByFileName: false, sourceFiles: [] });
+    expect(fake.calls).toEqual([{ verb: 'renamePlugin', origin: { kind: 'mod', name: 'Patch Mod' }, from: 'Patch Mod.esp', to: 'Renamed Patch.esp' }]);
+    expect(await lines(fake)).toEqual(['Patch Mod.esp']);
   });
 
   it('refuses a name the origin already holds before any write', async () => {

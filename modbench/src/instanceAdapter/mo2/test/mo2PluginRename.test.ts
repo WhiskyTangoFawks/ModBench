@@ -249,6 +249,29 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     expect(await text(MASTERLIST)).toBe(masterlist);
   });
 
+  it('renames only the files of a copy whose file name resolves to another, each line and rule naming the copy that wins', async () => {
+    const userlist = 'plugins:\n  - name: Patch Mod.esp\n';
+    await put(USERLIST, userlist);
+    await put(MASTERLIST, userlist);
+    const lines = await text(SECONDARY_PLUGINS);
+
+    const plan = await renamePlanOf(adapter, PATCH, 'Renamed Patch.esp', [{ ...PATCH, origin: 'Other Mod', winning: true }, { ...PATCH, winning: false }]);
+    expect(await plan.commit()).toBeUndefined();
+
+    expect(plan.cannotFollow).toEqual([]);
+    expect((await snapshotTree(root)).has(`${MOD}/Renamed Patch.esp`)).toBe(true);
+    expect([await text(SECONDARY_PLUGINS), await text(USERLIST)]).toEqual([lines, userlist]);
+  });
+
+  it('cannot carry the names in LOOT\'s masterlist when it cannot be read, saying why, and renames the plugin', async () => {
+    await mkdir(at(MASTERLIST));
+
+    const plan = await renamePlanOf(adapter, PATCH, 'Renamed Patch.esp');
+
+    expect(plan.cannotFollow).toEqual([expect.stringContaining(at(MASTERLIST))]);
+    expect(await plan.commit()).toBeUndefined();
+  });
+
   it('renames the files and no line when no profile lists the plugin', async () => {
     await put(DEFAULT_PLUGINS, '*Other.esp\r\n');
     await put(SECONDARY_PLUGINS, '*Other.esp\r\n');

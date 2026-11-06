@@ -8,7 +8,7 @@ import {
   CHECK_THE_DISK, entryNotFound, filesWinningFirst, type ChangeListener, type Reread, isBareName, type DecideModOrder, type DownloadedFile, type DownloadedFileQuery, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp,  type GameFile, type GamePlace, type HashedFile, type InstallationFile, type InstallOutcome, type InstalledPackage, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type NexusModFile, type OtherManifest, type UnsearchedFolder, type OriginFile, type FomodAnswer, type PluginOrderChange, type PublisherTag, type PublisherTagChange, type Subscription } from '../instanceAdapter/instanceAdapter';
 import { fileOriginOfPlugin } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
-import { NO_FILE_CHANGES } from '../symbolNames/symbolNames';
+import { namesPlugin, NO_FILE_CHANGES } from '../symbolNames/symbolNames';
 import { modOrderAfter, pluginOrderAfter } from './fakeOrderChanges';
 import { groupModOrder } from '../instanceAdapter/modGroups';
 import { parseNexusPage } from '../instanceAdapter/nexusPage';
@@ -616,8 +616,10 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     pluginReferences: {
       read: () => Promise.resolve({ references: [], leftOut: [] }),
       nameAt: () => Promise.resolve(undefined),
-      plan: ({ name: from, origin: named }, to) => {
+      plan: (symbol, to, _held, plugins) => {
+        const { name: from, origin: named } = symbol;
         const origin = fileOriginOfPlugin(named);
+        const namedByFileName = namesPlugin({ name: from }, symbol, plugins);
         const sameAsFrom = (name: string): boolean => pluginKey(name) === pluginKey(from);
         const ownFile = () => {
           const other = current.pluginOrder.find((plugin) => pluginKey(plugin.name) === pluginKey(to) && !sameAsFrom(plugin.name));
@@ -640,8 +642,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
             const own = ownFile();
             const files = originFilesOf(origin);
             if (files !== undefined) withOriginFiles(origin, { ...files, files: files.files.map((file) => (file === own ? fileIn(files.folder ?? '', to) : file)) });
-            current = { ...current, pluginOrder: current.pluginOrder.map((plugin) => (sameAsFrom(plugin.name) ? { ...plugin, name: to } : plugin)) };
-          }),
+            if (namedByFileName) current = { ...current, pluginOrder: current.pluginOrder.map((plugin) => (sameAsFrom(plugin.name) ? { ...plugin, name: to } : plugin)) };
+          }).then(() => undefined, errorMessage),
         });
       },
     },

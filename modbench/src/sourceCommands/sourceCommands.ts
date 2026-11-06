@@ -2,11 +2,9 @@ import {
   isRefused, type ModToVersionInGit, type VersionInGitOutcome, type VersionInGitProgress, type MEditClient, type SourceModIn, type WriteRefused,
 } from '../client';
 import { isPluginSourcePath, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { basename, dirname } from 'node:path';
 import {
-  buildFileIn, exclusionsOf, isBuildFileName, manifestIn, sourceModsOf, type BuildFile, type SourceMods,
+  buildFileIn, exclusionsOf, isBuildFileOf, manifestIn, sourceModsOf, type BuildFile, type SourceMods,
 } from '../manifestAdapter/manifestAdapter';
-import { samePath } from '../symbolNames/symbolNames';
 import { BUILD_FILE } from '../wire/sourceMod';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
@@ -42,8 +40,7 @@ export type InitializedSourceMod = VersionInGitOutcome & { readonly notes?: read
 const unsavedRefusal = (mod: string, paths: readonly string[]): ItemRefusal<string> =>
   ({ item: mod, reason: `VS Code did not save its source: ${paths.join(', ')}` });
 
-const builtFrom = (sourceFolder: string) => (path: string): boolean =>
-  isPluginSourcePath(path) || (isBuildFileName(basename(path)) && samePath(dirname(path), sourceFolder));
+const builtFrom = (sourceFolder: string) => (path: string): boolean => isPluginSourcePath(path) || isBuildFileOf(sourceFolder, path);
 
 type Adapter = SourceCommandsDeps['adapter'];
 

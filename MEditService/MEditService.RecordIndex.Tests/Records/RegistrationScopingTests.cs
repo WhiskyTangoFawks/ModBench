@@ -295,6 +295,19 @@ public class RegistrationScopingTests
         Assert.Contains(copies, c => c.InPluginSource);
     }
 
+    [Fact]
+    public void ACopyInAPluginWhosePluginSourceDoesNotRead_IsInPluginSource_WhichARenameLeavesBehindItself()
+    {
+        using var fx = Build("plugin-name-references-unreadable-source");
+        var beta = fx.Plugins.Plugins.Single(p => p.Name == BetaKey.Name);
+        SourceMods.Init(beta);
+        Directory.Delete(PluginSourceRoot.In(beta.ModFolderOf(), BetaKey.Name), recursive: true);
+
+        fx.Reconcile(fx.WithBetaDisabled);
+
+        Assert.Contains(NamingAlpha(fx), c => PluginAddress.Comparer.Equals(c.Plugin, BetaKey) && c.InPluginSource);
+    }
+
     [Theory]
     [InlineData(BetaDisabled)]
     [InlineData(BetaAbsent)]

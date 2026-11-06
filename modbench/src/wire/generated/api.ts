@@ -1701,6 +1701,8 @@ export interface components {
             origin: string;
             name: string;
             newName: string;
+            namedByFileName: boolean;
+            sourceFiles?: components["schemas"]["SourceMove"][] | null;
         };
         RenderedDocument: {
             fileName: string;

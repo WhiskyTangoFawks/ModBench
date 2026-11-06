@@ -6,19 +6,20 @@ const PLUGIN = { name: 'Old.esp', origin: 'Mod' };
 
 const edit = (path: string): FileChanges => ({ ...NO_FILE_CHANGES, documents: [{ path, text: 'new' }] });
 
-function owner(name: string, log: string[], planned: Partial<RenamePlan> | { refused: string } | Error = {}): SymbolOwner {
+const failing = (why: string): RenamePlan['commit'] => () => Promise.resolve(why);
+
+function owner(name: string, log: string[], planned: Partial<RenamePlan> | { refused: string } = {}): SymbolOwner {
   return {
     read: () => Promise.resolve({ references: [], leftOut: [] }),
     nameAt: () => Promise.resolve(undefined),
-    plan: (symbol, newName, held) => {
-      log.push(`plan ${name} ${symbol.name}>${newName} ${String(held.byPath.size)}`);
-      if (planned instanceof Error) return Promise.reject(planned);
+    plan: (symbol, newName, held, plugins) => {
+      log.push(`plan ${name} ${symbol.name}>${newName} ${String(held.byPath.size)} ${plugins.map(({ origin }) => origin).join()}`);
       if ('refused' in planned) return Promise.resolve(planned);
       return Promise.resolve({
         changes: NO_FILE_CHANGES, cannotFollow: [], ...planned,
-        commit: async () => {
+        commit: () => {
           log.push(`commit ${name}`);
-          await planned.commit?.();
+          return planned.commit?.() ?? Promise.resolve(undefined);
         },
       });
     },
@@ -29,6 +30,7 @@ function changing(log: string[], owners: { definition: SymbolOwner; references: 
   return {
     owners,
     held: heldTexts([['/unsaved.json', '{}']]),
+    plugins: [{ ...PLUGIN, origin: 'Winning Mod', winning: true }],
     apply: (changes: readonly FileChanges[]) => {
       log.push(`apply ${changes.flatMap(({ documents }) => documents.map(({ path }) => path)).join(',')}`);
       return Promise.resolve(applied);
@@ -37,7 +39,7 @@ function changing(log: string[], owners: { definition: SymbolOwner; references: 
 }
 
 describe('change: a rename that carries every reference', () => {
-  it('plans with every owner over the held texts, applies every change as one edit, then commits each, the definition last', async () => {
+  it('plans with every owner over the held texts and the rows, applies every change as one edit, then commits each, the definition last', async () => {
     const log: string[] = [];
     const owners = {
       definition: owner('definition', log, { changes: edit('/definition') }),
@@ -48,7 +50,9 @@ describe('change: a rename that carries every reference', () => {
 
     expect(result).toEqual({ applied: true, cannotFollow: [] });
     expect(log.slice(3)).toEqual(['apply /source,/build,/definition', 'commit source', 'commit build', 'commit definition']);
-    expect(log.slice(0, 3).sort()).toEqual(['plan build Old.esp>New.esp 1', 'plan definition Old.esp>New.esp 1', 'plan source Old.esp>New.esp 1']);
+    expect(log.slice(0, 3).sort()).toEqual([
+      'plan build Old.esp>New.esp 1 Winning Mod', 'plan definition Old.esp>New.esp 1 Winning Mod', 'plan source Old.esp>New.esp 1 Winning Mod',
+    ]);
   });
 
   it('lands with each reference no owner can carry', async () => {
@@ -58,12 +62,9 @@ describe('change: a rename that carries every reference', () => {
     expect(await change(changing(log, owners), PLUGIN, 'New.esp')).toEqual({ applied: true, cannotFollow: ['b', 'c', 'a'] });
   });
 
-  it.each<[string, { refused: string } | Error]>([
-    ['refuses', { refused: 'name taken' }],
-    ['fails to plan', new Error('name taken')],
-  ])('writes nothing when an owner %s, and says why', async (_case, planned) => {
+  it('writes nothing when an owner refuses, and says why', async () => {
     const log: string[] = [];
-    const owners = { definition: owner('definition', log), references: [owner('source', log, planned)] };
+    const owners = { definition: owner('definition', log), references: [owner('source', log, { refused: 'name taken' })] };
 
     expect(await change(changing(log, owners), PLUGIN, 'New.esp')).toEqual({ applied: false, refusal: 'name taken' });
     expect(log.filter((line) => !line.startsWith('plan'))).toEqual([]);
@@ -78,19 +79,14 @@ describe('change: a rename that carries every reference', () => {
     expect(log.filter((line) => line.startsWith('commit'))).toEqual([]);
   });
 
-  it('stops at a commit that fails, saying whether the changes were applied before it', async () => {
+  it.each<[string, Partial<RenamePlan>, boolean]>([
+    ['were applied', { changes: edit('/source') }, true],
+    ['were none', {}, false],
+  ])('stops at a commit that fails, saying whether changes %s before it', async (_case, planned, edited) => {
     const log: string[] = [];
-    const failing = { commit: () => Promise.reject(new Error('disk full')), changes: edit('/source') };
-    const owners = { definition: owner('definition', log), references: [owner('source', log, failing)] };
+    const owners = { definition: owner('definition', log), references: [owner('source', log, { ...planned, commit: failing('disk full') })] };
 
-    expect(await change(changing(log, owners), PLUGIN, 'New.esp')).toEqual({ applied: false, failed: 'disk full', edited: true });
+    expect(await change(changing(log, owners), PLUGIN, 'New.esp')).toEqual({ applied: false, failed: 'disk full', edited });
     expect(log.filter((line) => line.startsWith('commit'))).toEqual(['commit source']);
-  });
-
-  it('says no change was applied before a failed commit when no owner had one', async () => {
-    const log: string[] = [];
-    const owners = { definition: owner('definition', log, { commit: () => Promise.reject(new Error('disk full')) }), references: [] };
-
-    expect(await change(changing(log, owners), PLUGIN, 'New.esp')).toEqual({ applied: false, failed: 'disk full', edited: false });
   });
 });

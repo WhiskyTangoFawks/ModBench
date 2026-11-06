@@ -45,7 +45,7 @@ const releasingOnCommit = (owner: SymbolOwner, release: () => void): SymbolOwner
   ...owner,
   plan: async (...args) => {
     const plan = await owner.plan(...args);
-    return 'refused' in plan ? plan : { ...plan, commit: async () => { await plan.commit(); release(); } };
+    return 'refused' in plan ? plan : { ...plan, commit: () => plan.commit().finally(release) };
   },
 });
 

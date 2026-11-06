@@ -1,14 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import type { Dirent } from 'node:fs';
 import { access, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import { isManifestPath, MANIFEST_SUFFIX } from '../repositoriesLib/manifestPath';
 import type { PackagesAsked } from '../repositoriesLib/statusValues';
 import { ownTempPrefix, renameOver } from '../repositoriesLib/wholeWrites';
 import { BUILD_FILE, PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
-import { heldTextAt, heldTexts, type HeldTexts } from '../symbolNames/symbolNames';
+import { heldTextAt, heldTexts, samePath, type HeldTexts } from '../symbolNames/symbolNames';
 import type { BuildFileAgainst, BuildFileLack, BuildFileRead, BuildStep } from './buildFile';
 import { readBuildFile } from './buildFileRead';
 import type { Manifest, ManifestRead } from './manifest';
@@ -31,6 +31,9 @@ const fileNamesIn = async (folder: string): Promise<string[]> =>
 
 /** Whether a file's name is the build file's, in any case, so a folder reads alike on Windows and Linux. */
 export const isBuildFileName = (name: string): boolean => name.toLowerCase() === BUILD_FILE.toLowerCase();
+
+/** Whether `path` is the build file at the root of `sourceFolder`. */
+export const isBuildFileOf = (sourceFolder: string, path: string): boolean => samePath(dirname(path), sourceFolder) && isBuildFileName(basename(path));
 
 export const manifestNameOf = (folder: string): string => `${basename(folder)}${MANIFEST_SUFFIX}`;
 

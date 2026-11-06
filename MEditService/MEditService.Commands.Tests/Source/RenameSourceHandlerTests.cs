@@ -95,16 +95,52 @@ public sealed class RenameSourceHandlerTests : IDisposable
     }
 
     [Fact]
+    public void RenameSource_OfACopyItsFileNameDoesNotName_LeavesEveryOtherPluginSourceNamingTheCopyThatWins()
+    {
+        var result = new Read(Changes.RenameSource(Old, "New.esp", namedByFileName: false, sourceFiles: []));
+
+        var changes = result.Changes.Require();
+        Assert.NotEmpty(changes.Moves);
+        Assert.DoesNotContain(changes.Documents, document => document.Path.StartsWith(PluginSourceRoot.In(_sourceMod, Patch.Name), StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void RenameSource_AnotherPluginSourceThatDoesNotRead_IsLeftBehind_NamingWhy_AndTheRenameLands()
     {
         var npc = SourceModTree.DocumentCarrying(_sourceMod, Patch, "PatchNpc");
         SourceModTree.Overwrite(_sourceMod, Patch, npc.Identity, "{ \"FormKey\": ");
 
-        var result = new Read(Changes.RenameSource(Old, "New.esp"));
+        var result = new Read(Changes.RenameSource(Old, "New.esp", namedByFileName: true, sourceFiles: []));
 
+        Assert.Null(result.Refusal);
         var left = Assert.Single(result.Changes.Require().LeftBehind);
         Assert.Equal(Patch, left.Plugin);
         Assert.Contains("PatchNpc", left.Reason, StringComparison.Ordinal);
+        Assert.NotEmpty(result.Changes.Require().Moves);
+    }
+
+    [Fact]
+    public void RenameSource_MovesEachFileOfTheSourceFolderItIsHanded_ThatTheFolderHolds()
+    {
+        File.WriteAllText(Path.Combine(_sourceMod, "Old - Main.ba2"), "archive");
+
+        var result = new Read(Changes.RenameSource(Old, "New.esp", namedByFileName: true,
+            sourceFiles: [new SourceMove("Old - Main.ba2", "New - Main.ba2"), new SourceMove("Old.esp.bak", "New.esp.bak")]));
+
+        Assert.Contains(new SourceMove(Path.Combine(_sourceMod, "Old - Main.ba2"), Path.Combine(_sourceMod, "New - Main.ba2")), result.Changes.Require().Moves);
+        Assert.DoesNotContain(result.Changes.Require().Moves, move => move.From.EndsWith(".bak", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void RenameSource_ToAFileNameTheSourceFolderHolds_RefusesIt_AndWritesNothing()
+    {
+        File.WriteAllText(Path.Combine(_sourceMod, "Old - Main.ba2"), "archive");
+        File.WriteAllText(Path.Combine(_sourceMod, "New - Main.ba2"), "another archive");
+
+        var result = new Read(Changes.RenameSource(Old, "New.esp", namedByFileName: true, sourceFiles: [new SourceMove("Old - Main.ba2", "New - Main.ba2")]));
+
+        Assert.Equal(RenameSourceRefusal.NameTaken, result.Refusal);
+        Assert.Contains("New - Main.ba2", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -201,7 +237,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
         var unsaved = new UnsavedDocuments();
         unsaved.Apply([new DocumentChange(path, npc.Body.Replace("SelfNpc", "Unsaved", StringComparison.Ordinal))]);
 
-        var result = new Read(TestEditService.Over(_holder, unsaved: unsaved).GetRequiredService<RenameSourceChangesHandler>().RenameSource(Old, "New.esp"));
+        var result = new Read(TestEditService.Over(_holder, unsaved: unsaved).GetRequiredService<RenameSourceChangesHandler>().RenameSource(Old, "New.esp", namedByFileName: true, sourceFiles: []));
 
         Assert.Null(result.Refusal);
         Assert.Contains(result.Changes.Require().Documents, document => document.Text.Contains("Unsaved", StringComparison.Ordinal));
@@ -261,7 +297,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
 
     private Read RenameSource(PluginAddress plugin, string newName)
     {
-        var answered = new Read(Changes.RenameSource(plugin, newName));
+        var answered = new Read(Changes.RenameSource(plugin, newName, namedByFileName: true, sourceFiles: []));
         if (answered.Changes is not { } changes) return answered;
 
         EditSaving.Save(

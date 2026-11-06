@@ -20,13 +20,14 @@ type NamesIn = (file: string, text: string) => PlacedName[] | { readonly refused
 const orderFileNames: NamesIn = (file, text) => pluginNamesIn(text).map(({ name, line, start, end }) =>
   ({ place: { file, start: { line, character: start }, end: { line, character: end } }, names: { name } }));
 
-const ruleFileNames: NamesIn = (file, text) => {
+export const ruleFileNames: NamesIn = (file, text) => {
   const read = stripBom(text);
   const names = ruleFilePluginNames(read);
   return 'refused' in names ? names : names.map(({ name, start, end }) => ({ place: placeIn(file, read, start, end), names: { name } }));
 };
 
-async function namesIn(file: string, namesOf: NamesIn, plugin: string): Promise<SymbolReading> {
+/** Each place `file` names `plugin` by its file name, and why the file could not be read. */
+export async function namesIn(file: string, namesOf: NamesIn, plugin: string): Promise<{ readonly references: readonly PlacedName[]; readonly leftOut: SymbolReading['leftOut'] }> {
   try {
     const text = await readOrAbsent(() => get(file), undefined);
     const names = text === undefined ? [] : namesOf(file, text);

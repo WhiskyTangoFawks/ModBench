@@ -661,7 +661,7 @@ export interface InstanceReading extends InstanceGame {
 /** The names an entry may not take: the entries mod order lists and the folders mods are in. `modFolders` is undefined
  *  when there is no folder for mods at all. */
 export interface TakenNames {
-  readonly mods: readonly EntryRef[];
+  readonly mods: readonly ModlistEntry[];
   readonly modFolders: readonly ModFolder[] | undefined;
 }
 

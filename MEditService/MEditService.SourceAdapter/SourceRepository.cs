@@ -385,6 +385,16 @@ internal sealed class SourceRepository : ISourceRepository
     public Answer<SourceChanges, SourceFailure> ChangesToFollowRename(PluginAddress plugin, string renamed, string newName) =>
         SourceFailure.Answer(() => Writes.ChangesToFollowRename(Spelled(plugin).Name, renamed, newName));
 
+    public Answer<SourceChanges?, SourceFailure> ChangesToMoveFiles(IReadOnlyList<SourceMove> moves) =>
+        SourceFailure.Answer<SourceChanges?>(() =>
+        {
+            bool Holds(string path) => Files.FileExists(Path.Combine(_sourceFolder, path));
+            var held = moves.Where(move => Holds(move.From)).ToList();
+            return held.Any(move => Holds(move.To) && !string.Equals(move.From, move.To, StringComparison.OrdinalIgnoreCase))
+                ? null
+                : new SourceChanges(held, [], []);
+        });
+
     public string TreeNameOf(PluginAddress plugin) => Spelled(plugin).Name;
 
     public SourceFailure? MoveLastWrittenTo(string treeName, string newName)

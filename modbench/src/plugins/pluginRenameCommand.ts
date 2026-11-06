@@ -12,6 +12,7 @@ import type { SourceEditing } from '../textDocuments/sourceEditing';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 import type { PluginAddress } from '../wire/pluginAddress';
+import { isPluginAddress } from '../wire/messages';
 import { Refusal } from '../drivingLib/refusal';
 import { holdingTheWrite } from '../drivingLib/writingGesture';
 import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
@@ -33,12 +34,9 @@ interface Rename {
 
 type RenameDeps = Pick<RenamePluginDeps, 'commands' | 'source'>;
 
-const isAddress = (value: unknown): value is PluginAddress =>
-  typeof value === 'object' && value !== null && typeof Reflect.get(value, 'name') === 'string' && typeof Reflect.get(value, 'origin') === 'string';
-
 // Rename Symbol supplies the plugin and the new name (source.md, In the text editor).
 const isSupplied = (option: unknown): option is { readonly plugin: PluginAddress; readonly name: string } =>
-  typeof option === 'object' && option !== null && typeof Reflect.get(option, 'name') === 'string' && isAddress(Reflect.get(option, 'plugin'));
+  typeof option === 'object' && option !== null && typeof Reflect.get(option, 'name') === 'string' && isPluginAddress(Reflect.get(option, 'plugin'));
 
 const refused = (refusal: string, detail?: string): GestureResult<PluginAddress> => ({ applied: false, refusal, detail });
 
@@ -62,7 +60,7 @@ async function renamed({ commands, source }: RenameDeps, plugin: PluginAddress, 
   if ('unapplied' in result) return refused(`${couldNot}: its references may be partly changed. Reverting them in git undoes it.`, result.unapplied);
   if ('refusal' in result) return refused(result.refusal, 'detail' in result ? result.detail : undefined);
   if (!result.edited) return refused(`${couldNot}: its file and lines were not renamed.`, result.failed);
-  return refused(`${couldNot}: its references were changed, its file and lines were not. Reverting them in git undoes it.`, result.failed);
+  return refused(`${couldNot}: its references were changed, and its file and lines were not.`, result.failed);
 }
 
 /** commands.md, `rename` under Plugin. */
