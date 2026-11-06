@@ -409,14 +409,14 @@ describe('update manifest', () => {
       expect([first, second].map(({ landed }) => landed.map(({ manifestWritten, repositoryWritten }) => [manifestWritten, repositoryWritten]))).toEqual([[[true, true]], [[false, true]]]);
     });
 
-    it('is passed over, not refused, though its mod folder is one git holds whole, whether named as a mod or on every mod', async () => {
+    it('is refused when named as a mod, but passed over when every mod is updated, though its folder is one git holds whole', async () => {
       const held = { ...GIT_HOLDS(), heldWholeByGit: new Set([join(modsDir, 'ModB')]) };
       const { update } = await among({ 'extra.nif': HX }, held, SOURCE_FILES);
 
       const named = await update(['ModB']);
       const every = await update(['ModB'], {}, [], true);
 
-      expect([named.refused, every.refused]).toEqual([[], []]);
+      expect([named.refused.map(({ item }) => item), every.refused]).toEqual([['ModB'], []]);
     });
 
     it('has its source folder recorded in a manifest of its own, naming no file git holds, when named as a source folder', async () => {
@@ -455,7 +455,7 @@ describe('update manifest', () => {
       expect([result.landed, result.refused.map(({ item }) => item)]).toEqual([[], ['ModB']]);
     });
 
-    it('still has its submodule entry written when it is all the selection holds', async () => {
+    it('writes no submodule entry, and is refused, when it is all the selection holds', async () => {
       const { update, fake } = await among();
 
       const result = await update(['ModB']);
@@ -463,12 +463,12 @@ describe('update manifest', () => {
       expect([fake.calls[0], result.landed.map(({ mod }) => mod), result.refused]).toEqual([{ verb: 'writeSubmodules', acted: ['ModB'] }, ['ModB'], []]);
     });
 
-    it('still has its submodule entry written, as a mod acted on', async () => {
+    it('has its submodule entry written for the mods that land, not for a source mod named as a mod', async () => {
       const { update, fake } = await among();
 
       await update(['ModA', 'ModB']);
 
-      expect(fake.calls[0]).toEqual({ verb: 'writeSubmodules', acted: ['ModB', 'ModA'] });
+      expect(fake.calls[0]).toEqual({ verb: 'writeSubmodules', acted: ['ModA'] });
     });
   });
 
