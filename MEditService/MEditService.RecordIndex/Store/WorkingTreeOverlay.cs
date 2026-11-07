@@ -12,6 +12,8 @@ namespace MEditService.RecordIndex.Store;
 /// derived rows cannot drift from ingest's.</summary>
 internal sealed class WorkingTreeOverlay
 {
+    private const string AmongKeys = "IN (SELECT unnest($3::VARCHAR[]))";
+
     private readonly DuckDBConnection _connection;
     private readonly ILogger _logger;
     private readonly ContainerDocuments _containers;
@@ -35,6 +37,14 @@ internal sealed class WorkingTreeOverlay
         _schemas = schemas;
     }
 
+    private sealed record Written(string FormKey, string RecordType, string Body, bool Held);
+
+    // Prepared is null for a type with no schema, and for the header, which carries no reference graph and cannot go
+    // through the per-record codec.
+    private sealed record Derived(
+        Written Document, string StoredBody, string Stamp, bool HasSchema, PluginIngest.PreparedRecord? Prepared,
+        List<ContainerDocuments.ChildDocument> Embedded);
+
     /// <summary>Folds re-derived documents into the read model: null Body deletes, byte-equal body
     /// converges. Returns every key whose rows moved.</summary>
     public List<string> ProjectDocuments(PluginAddress key, IReadOnlyList<(string FormKey, string? Body)> deltas)
@@ -42,244 +52,233 @@ internal sealed class WorkingTreeOverlay
         // The deltas' own keys are named whether or not their bytes moved: the caller asked about
         // them, and a subscriber re-reading one it was told about costs one query.
         var movedKeys = new List<string>(deltas.Select(d => d.FormKey));
-        foreach (var (formKey, body) in deltas)
-            ApplyOneWorkingTreeChange(key, formKey, body, movedKeys);
-        return movedKeys;
-    }
+        var held = RecordTypesHeld(key, movedKeys);
 
-    private void ApplyOneWorkingTreeChange(PluginAddress key, string formKey, string? body, ICollection<string> movedKeys)
-    {
-        if (RecordTypeAtEffective(key, formKey) is not { } recordType)
+        List<Written> written = [];
+        List<string> gone = [];
+        foreach (var (formKey, body) in deltas)
         {
+            if (held.TryGetValue(formKey, out var recordType))
+            {
+                if (body == null) gone.Add(formKey);
+                else written.Add(new Written(formKey, recordType, body, Held: true));
+            }
             // A create is its own gesture and there is nothing here to derive its record_type from, so
             // this is a caller mistake: logged, skipped, never thrown (the seam's missing-data rule).
-            if (body != null)
+            else if (body != null)
             {
                 _logger.LogWarning(
                     "Ignoring a working-tree change for {FormKey}, which {Plugin} ({Origin}) does not hold",
                     formKey, key.Name, key.Origin);
             }
-            return;
         }
 
-        if (body == null)
+        var uncarried = Write(key, written, movedKeys);
+        Remove(key, gone, uncarried, movedKeys);
+        return [.. movedKeys.Distinct(StringComparer.Ordinal)];
+    }
+
+    private Dictionary<string, string> RecordTypesHeld(PluginAddress key, List<string> formKeys) =>
+        DuckDbSql.Rows(
+                _connection, $"SELECT form_key, record_type FROM mirror.records WHERE plugin = $1 AND origin = $2 AND form_key {AmongKeys}",
+                reader => (FormKey: reader.GetString(0), RecordType: reader.GetString(1)),
+                key.Name, key.Origin, formKeys)
+            .ToDictionary(row => row.FormKey, row => row.RecordType, StringComparer.Ordinal);
+
+    private List<string> Write(PluginAddress key, List<Written> documents, List<string> movedKeys)
+    {
+        List<string> uncarried = [];
+        while (documents.Count > 0)
         {
-            // A container's file goes with everything under it, so its children go first, each
-            // cascading in turn; a child another container still holds stays.
-            foreach (var child in ChildrenRecorded(key, formKey, embeddedIn: null))
-            {
-                if (RowExistsAtEffective(key, child) && !HeldByAnotherContainer(key, child, formKey))
-                {
-                    movedKeys.Add(child);
-                    ApplyOneWorkingTreeChange(key, child, null, movedKeys);
-                }
-            }
+            // Two documents carrying one FormKey is a disk state ADR-0006 diagnoses (OneDocumentPerFormKey).
+            var level = documents.GroupBy(d => d.FormKey, StringComparer.Ordinal).Select(g => g.Last()).ToList();
+            var derived = PluginIngest.InParallel(level, d => Derive(key, d));
+            var containers = derived.Where(d => d.Prepared != null).ToList();
+            var recordedBefore = EmbeddedChildrenRecorded(key, containers);
 
-            // Gone: document and derived rows alike. Dropping only the document would leave the
-            // record in the reference graph.
-            DuckDbSql.Execute(_connection, "DELETE FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-                formKey, key.Name, key.Origin);
-            DeleteDerivationsForRecord(key, formKey);
-            return;
+            WriteRecords(key, derived);
+            ReplaceReferences(key, [.. derived.Where(d => d.HasSchema)]);
+            ReplaceContainment(key, [.. containers.Select(d => d.Prepared).OfType<PluginIngest.PreparedRecord>()]);
+
+            foreach (var container in containers)
+            {
+                var carried = container.Embedded.Select(c => c.FormKey).ToHashSet(StringComparer.Ordinal);
+                uncarried.AddRange(recordedBefore[container.Document.FormKey].Where(child => !carried.Contains(child)));
+            }
+            documents = EmbeddedChildrenMoved(key, [.. derived.SelectMany(d => d.Embedded)]);
+            movedKeys.AddRange(documents.Select(d => d.FormKey));
+        }
+        return uncarried;
+    }
+
+    // Rebuilt through the same collectors ingest uses, so an edit cannot leave derived answers describing bytes that are gone.
+    private Derived Derive(PluginAddress key, Written document)
+    {
+        if (!_schemas.TryGetValue(document.RecordType, out var schema) || document.RecordType == PluginHeader.RecordType)
+        {
+            return new Derived(
+                document, ContainerDocumentEdits.WithChildSlotsCut(document.Body, document.RecordType, _release), _contentStamp(document.Body),
+                HasSchema: schema != null, Prepared: null, []);
         }
 
-        UpsertEffectiveBody(key, formKey, recordType, body);
-        RederiveIndexRowsForRecord(key, formKey, recordType, body, movedKeys);
+        List<ContainerDocuments.ChildDocument> children = [];
+        var prepared = _ingest.PrepareRecord(new PluginDocument(document.RecordType, document.FormKey, document.Body), key.Name, schema, children);
+        return new Derived(
+            document, prepared.Body, prepared.ContentHash, HasSchema: true, prepared,
+            [.. children.Where(c => _types.IsEmbeddedSlot(document.RecordType, c.SlotName))]);
     }
 
-    private bool RowExistsAtEffective(PluginAddress key, string formKey) => RecordTypeAtEffective(key, formKey) != null;
-
-    private string? RecordTypeAtEffective(PluginAddress key, string formKey) =>
-        DuckDbSql.ScalarString(_connection,
-            "SELECT record_type FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin);
-
-    // A record the record index does not hold, materialized: the shape an embedded child re-derived out of a
-    // container's document arrives in.
-    private void MaterializeRecord(
-        PluginAddress key, string formKey, string recordType, string body, ICollection<string> movedKeys)
+    // Only the children a container's document carries: a worldspace's exterior cells are placed by their own records.
+    private Dictionary<string, List<string>> EmbeddedChildrenRecorded(PluginAddress key, List<Derived> containers)
     {
-        InsertNewWorkingTreeRow(key, formKey, recordType, body);
-        RederiveIndexRowsForRecord(key, formKey, recordType, body, movedKeys);
+        var recorded = containers.ToDictionary(d => d.Document.FormKey, _ => new List<string>(), StringComparer.Ordinal);
+        var typeOf = containers.ToDictionary(d => d.Document.FormKey, d => d.Document.RecordType, StringComparer.Ordinal);
+        foreach (var (parent, child, slot) in HoldingsUnder(key, [.. typeOf.Keys]))
+        {
+            if (_types.IsEmbeddedSlot(typeOf[parent], slot)) recorded[parent].Add(child);
+        }
+        return recorded;
     }
 
-    private void InsertNewWorkingTreeRow(PluginAddress key, string formKey, string recordType, string body)
+    private List<(string Parent, string Child, string Slot)> HoldingsUnder(PluginAddress key, List<string> parents) =>
+        DuckDbSql.Rows(
+            _connection, $"SELECT parent, child, slot FROM mirror.holdings WHERE plugin = $1 AND origin = $2 AND parent {AmongKeys}",
+            reader => (reader.GetString(0), reader.GetString(1), reader.GetString(2)),
+            key.Name, key.Origin, parents);
+
+    // editor_id follows the body, or a renamed record would keep listing under its old EditorID. A held row keeps its
+    // record_type, since a record cannot change type, and its masters where nothing re-derived them.
+    private void WriteRecords(PluginAddress key, List<Derived> derived)
     {
+        var held = derived.Where(d => d.Document.Held).ToList();
+        if (held.Count > 0)
+        {
+            DuckDbSql.Execute(_connection, """
+                UPDATE mirror.records r
+                SET body = m.body, content_hash = m.content_hash, editor_id = json_extract_string(m.body, '$.EditorID'),
+                    masters = coalesce(m.masters, r.masters)
+                FROM (SELECT unnest($3::VARCHAR[]) AS form_key, unnest($4::VARCHAR[]) AS body,
+                             unnest($5::VARCHAR[]) AS content_hash, unnest($6::VARCHAR[][]) AS masters) m
+                WHERE r.form_key = m.form_key AND r.plugin = $1 AND r.origin = $2
+                """, key.Name, key.Origin, Column(held, d => d.Document.FormKey), Column(held, d => d.StoredBody),
+                Column(held, d => d.Stamp), Column(held, d => d.Prepared?.Masters));
+        }
+
+        var materialized = derived.Where(d => !d.Document.Held).ToList();
+        if (materialized.Count == 0) return;
+
         // ADR-0012: no load_order_idx to carry into the row; this check only refuses a
         // plugin the registration doesn't know.
         if (!IsRegisteredPlugin(key))
             throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
-
         DuckDbSql.Execute(_connection, """
-            INSERT INTO mirror.records (form_key, plugin, origin, record_type, editor_id, body, content_hash, form_key_plugin)
-            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), $5, $6, $7)
-            """, formKey, key.Name, key.Origin, recordType, Stored(recordType, body), _contentStamp(body),
-            RecordMasters.PluginNamedBy(formKey));
+            INSERT INTO mirror.records (form_key, plugin, origin, record_type, editor_id, body, content_hash, masters, form_key_plugin)
+            SELECT form_key, $1, $2, record_type, json_extract_string(body, '$.EditorID'), body, content_hash, coalesce(masters, []), form_key_plugin
+            FROM (SELECT unnest($3::VARCHAR[]) AS form_key, unnest($4::VARCHAR[]) AS record_type, unnest($5::VARCHAR[]) AS body,
+                         unnest($6::VARCHAR[]) AS content_hash, unnest($7::VARCHAR[][]) AS masters, unnest($8::VARCHAR[]) AS form_key_plugin)
+            """, key.Name, key.Origin, Column(materialized, d => d.Document.FormKey), Column(materialized, d => d.Document.RecordType),
+            Column(materialized, d => d.StoredBody), Column(materialized, d => d.Stamp), Column(materialized, d => d.Prepared?.Masters),
+            Column(materialized, d => RecordMasters.PluginNamedBy(d.Document.FormKey)));
     }
+
+    private static List<T> Column<T>(List<Derived> rows, Func<Derived, T> value) => [.. rows.Select(value)];
 
     private bool IsRegisteredPlugin(PluginAddress key) =>
         DuckDbSql.ScalarString(_connection,
             $"SELECT plugin FROM {TableDdlBuilder.RegistrationsRelation} WHERE plugin = $1 AND origin = $2", key.Name, key.Origin) != null;
 
-    private void UpsertEffectiveBody(PluginAddress key, string formKey, string recordType, string body)
+    private void ReplaceReferences(PluginAddress key, List<Derived> derived)
     {
-        // editor_id follows the body: it is a projection of the document; otherwise a renamed record
-        // would keep listing under its old EditorID. record_type is not re-derived: a record cannot
-        // change type.
-        DuckDbSql.Execute(_connection, """
-            UPDATE mirror.records
-            SET body = $4, content_hash = $5, editor_id = json_extract_string($4, '$.EditorID')
-            WHERE form_key = $1 AND plugin = $2 AND origin = $3
-            """, formKey, key.Name, key.Origin, Stored(recordType, body), _contentStamp(body));
+        DeleteReferencesFrom(key, [.. derived.Select(d => d.Document.FormKey)]);
+        using var appender = _connection.CreateAppender(TableDdlBuilder.MirrorSchema, "form_references");
+        foreach (var reference in derived.SelectMany(d => d.Prepared?.Refs ?? []))
+            PluginIngest.AppendFormReference(appender, reference, key.Name, key.Origin);
     }
-
-    private string Stored(string recordType, string body) => ContainerDocumentEdits.WithChildSlotsCut(body, recordType, _release);
-
-    // Rebuilt for one record through the same collectors ingest uses, so an edit cannot
-    // leave derived answers describing bytes that are gone.
-    private void RederiveIndexRowsForRecord(
-        PluginAddress key, string formKey, string recordType, string body, ICollection<string> movedKeys)
-    {
-        if (!_schemas.TryGetValue(recordType, out var schema)) return;
-
-        // The header carries no reference graph (masters are a plugin-dependency list, not FormKey
-        // references), and a ModHeader cannot go through the per-record codec below, so this stops
-        // after clearing stale form_references.
-        if (recordType == PluginHeader.RecordType)
-        {
-            DeleteFormReferencesForRecord(key, formKey);
-            return;
-        }
-
-        List<ContainerDocuments.ChildDocument> children = [];
-        var prepared = _ingest.PrepareRecord(new PluginDocument(recordType, formKey, body), key.Name, schema, children);
-        DuckDbSql.Execute(_connection, "UPDATE mirror.records SET masters = $4 WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin, prepared.Masters);
-
-        DeleteFormReferencesForRecord(key, formKey);
-        if (prepared.Refs.Count > 0)
-        {
-            using var refAppender = _connection.CreateAppender("mirror", "form_references");
-            foreach (var r in prepared.Refs)
-                PluginIngest.AppendFormReference(refAppender, r, key.Name, key.Origin);
-        }
-
-        // holdings and cell_location track Effective the same way form_references does, rebuilt
-        // from the child documents this body carries.
-        var recordedBefore = ChildrenRecorded(key, formKey, embeddedIn: recordType);
-        DeriveEmbeddedChildRows(key, recordType, children, movedKeys);
-        RederiveContainmentForRecord(key, prepared);
-
-        // A child absent from the document is gone at Effective, unless another container's document
-        // holds it (a container whose FormID changed re-derives its children under the new identity first).
-        var carriedNow = children
-            .Where(c => _types.IsEmbeddedSlot(recordType, c.SlotName))
-            .Select(c => c.FormKey)
-            .ToHashSet(StringComparer.Ordinal);
-        foreach (var gone in recordedBefore.Where(fk => !carriedNow.Contains(fk)))
-        {
-            if (RowExistsAtEffective(key, gone) && !HeldByAnotherContainer(key, gone, formKey))
-            {
-                movedKeys.Add(gone);
-                ApplyOneWorkingTreeChange(key, gone, null, movedKeys);
-            }
-        }
-    }
-
-    // The children last recorded under this container. embeddedIn names the container's type and
-    // keeps only the children its document carries; null takes every child, the set a deleted
-    // directory held.
-    private List<string> ChildrenRecorded(PluginAddress key, string parentFormKey, string? embeddedIn) =>
-        DuckDbSql.Rows(
-                _connection, "SELECT child, slot FROM mirror.holdings WHERE parent = $1 AND plugin = $2 AND origin = $3",
-                reader => (Child: reader.GetString(0), Slot: reader.GetString(1)), parentFormKey, key.Name, key.Origin)
-            .Where(row => embeddedIn == null || _types.IsEmbeddedSlot(embeddedIn, row.Slot))
-            .Select(row => row.Child)
-            .ToList();
-
-    private bool HeldByAnotherContainer(PluginAddress key, string childFormKey, string thisParentFormKey) =>
-        DuckDbSql.ScalarString(_connection, """
-            SELECT child FROM mirror.holdings
-            WHERE child = $1 AND parent <> $2 AND plugin = $3 AND origin = $4
-            LIMIT 1
-            """, childFormKey, thisParentFormKey, key.Name, key.Origin) != null;
-
-    // An embedded child's own row is a projection of its container's document, like its holdings:
-    // serialized out of the container's graph through the codec ingest uses.
-    private void DeriveEmbeddedChildRows(
-        PluginAddress key, string recordType, IReadOnlyList<ContainerDocuments.ChildDocument> children,
-        ICollection<string> movedKeys)
-    {
-        var embedded = children.Where(child => _types.IsEmbeddedSlot(recordType, child.SlotName)).ToList();
-        var stamps = EffectiveStamps(key, embedded);
-        foreach (var child in embedded)
-        {
-            var childType = child.RecordType ?? throw new InvalidOperationException(
-                $"{child.FormKey} in {key.Name} ({key.Origin}) reached projection untyped, past the read that refuses it.");
-
-            var childBody = _containers.TextOf(child);
-            var existsAtEffective = stamps.TryGetValue(child.FormKey, out var stamp);
-            if (string.Equals(_contentStamp(childBody), stamp, StringComparison.Ordinal)) continue;
-
-            movedKeys.Add(child.FormKey);
-            if (existsAtEffective)
-                ApplyOneWorkingTreeChange(key, child.FormKey, childBody, movedKeys);
-            else
-                MaterializeRecord(key, child.FormKey, childType, childBody, movedKeys);
-        }
-    }
-
-    // One query for every child: a cell carries thousands, and a point query scans the whole load order's rows.
-    private Dictionary<string, string?> EffectiveStamps(PluginAddress key, IReadOnlyList<ContainerDocuments.ChildDocument> children) =>
-        DuckDbSql.Rows(
-                _connection,
-                "SELECT form_key, content_hash FROM mirror.records WHERE plugin = $1 AND origin = $2 AND form_key IN (SELECT unnest($3::VARCHAR[]))",
-                reader => (FormKey: reader.GetString(0), Stamp: reader.GetStringOrNull(1)),
-                key.Name, key.Origin, children.Select(child => child.FormKey).ToList())
-            .ToDictionary(row => row.FormKey, row => row.Stamp, StringComparer.Ordinal);
 
     // A container's child set and slot order live in its document, so delete-then-insert per parent
     // is correct. A worldspace's exterior cells are not in its document: their own records place them.
-    private void RederiveContainmentForRecord(PluginAddress key, PluginIngest.PreparedRecord prepared)
+    private void ReplaceContainment(PluginAddress key, List<PluginIngest.PreparedRecord> prepared)
     {
         DuckDbSql.Execute(_connection,
-            $"DELETE FROM mirror.holdings WHERE parent = $1 AND slot <> {HoldingSlots.Exterior} AND plugin = $2 AND origin = $3",
-            prepared.FormKey, key.Name, key.Origin);
-        if (prepared.Holdings.Count > 0)
+            $"DELETE FROM mirror.holdings WHERE plugin = $1 AND origin = $2 AND slot <> {HoldingSlots.Exterior} AND parent {AmongKeys}",
+            key.Name, key.Origin, prepared.Select(p => p.FormKey).ToList());
+        using (var appender = _connection.CreateAppender(TableDdlBuilder.MirrorSchema, "holdings"))
         {
-            using var appender = _connection.CreateAppender("mirror", "holdings");
-            foreach (var row in prepared.Holdings)
+            foreach (var row in prepared.SelectMany(p => p.Holdings))
                 PluginIngest.AppendHoldingRow(appender, row, key.Name, key.Origin);
         }
 
-        foreach (var row in prepared.CellLocations)
+        var cellLocations = prepared.SelectMany(p => p.CellLocations).ToList();
+        DeleteCellLocationsOf(key, [.. cellLocations.Select(row => row.CellFormKey)]);
+        using (var appender = _connection.CreateAppender(TableDdlBuilder.MirrorSchema, "cell_location"))
         {
-            DuckDbSql.Execute(_connection, "DELETE FROM mirror.cell_location WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3",
-                row.CellFormKey, key.Name, key.Origin);
-            using var appender = _connection.CreateAppender("mirror", "cell_location");
-            PluginIngest.AppendCellLocationRow(appender, row, key.Name, key.Origin);
+            foreach (var row in cellLocations)
+                PluginIngest.AppendCellLocationRow(appender, row, key.Name, key.Origin);
         }
     }
 
-    private void DeleteDerivationsForRecord(PluginAddress key, string formKey)
+    // An embedded child's own row is a projection of its container's document, serialized out of the container's
+    // graph through the codec ingest uses.
+    private List<Written> EmbeddedChildrenMoved(PluginAddress key, List<ContainerDocuments.ChildDocument> children)
     {
-        DeleteFormReferencesForRecord(key, formKey);
-        DeleteContainmentForRecord(key, formKey);
+        if (children.Count == 0) return [];
+        var stored = DuckDbSql.Rows(
+                _connection,
+                $"SELECT form_key, record_type, content_hash FROM mirror.records WHERE plugin = $1 AND origin = $2 AND form_key {AmongKeys}",
+                reader => (FormKey: reader.GetString(0), RecordType: reader.GetString(1), Stamp: reader.GetString(2)),
+                key.Name, key.Origin, children.Select(child => child.FormKey).ToList())
+            .ToDictionary(row => row.FormKey, StringComparer.Ordinal);
+        return [.. PluginIngest.InParallel(children, child =>
+            {
+                var childType = child.RecordType ?? throw new InvalidOperationException(
+                    $"{child.FormKey} in {key.Name} ({key.Origin}) reached projection untyped, past the read that refuses it.");
+                var body = _containers.TextOf(child);
+                if (!stored.TryGetValue(child.FormKey, out var row)) return new Written(child.FormKey, childType, body, Held: false);
+                return string.Equals(_contentStamp(body), row.Stamp, StringComparison.Ordinal)
+                    ? null
+                    : new Written(child.FormKey, row.RecordType, body, Held: true);
+            }).OfType<Written>()];
     }
 
-    private void DeleteFormReferencesForRecord(PluginAddress key, string formKey) =>
+    private void Remove(PluginAddress key, List<string> gone, List<string> maybeGone, List<string> movedKeys)
+    {
+        while (gone.Count + maybeGone.Count > 0)
+        {
+            var unheld = Unheld(key, maybeGone);
+            movedKeys.AddRange(unheld);
+            List<string> level = [.. gone, .. unheld];
+            maybeGone = [.. HoldingsUnder(key, level).Select(row => row.Child)];
+            gone = [];
+
+            // Document and derived rows alike: dropping only the document would leave the record in the reference graph.
+            DuckDbSql.Execute(_connection, $"DELETE FROM mirror.records WHERE plugin = $1 AND origin = $2 AND form_key {AmongKeys}",
+                key.Name, key.Origin, level);
+            DeleteReferencesFrom(key, level);
+            DuckDbSql.Execute(_connection,
+                $"DELETE FROM mirror.holdings WHERE plugin = $1 AND origin = $2 AND (child {AmongKeys} OR parent {AmongKeys})",
+                key.Name, key.Origin, level);
+            DeleteCellLocationsOf(key, level);
+        }
+    }
+
+    private List<string> Unheld(PluginAddress key, List<string> formKeys) =>
+        formKeys.Count == 0
+            ? []
+            : DuckDbSql.Rows(
+                _connection, $"""
+                SELECT form_key FROM mirror.records
+                WHERE plugin = $1 AND origin = $2 AND form_key {AmongKeys}
+                  AND form_key NOT IN (SELECT child FROM mirror.holdings WHERE plugin = $1 AND origin = $2 AND child {AmongKeys})
+                """,
+                reader => reader.GetString(0), key.Name, key.Origin, formKeys);
+
+    private void DeleteReferencesFrom(PluginAddress key, List<string> formKeys) =>
         DuckDbSql.Execute(_connection,
-            "DELETE FROM mirror.form_references WHERE source_form_key = $1 AND source_plugin = $2 AND source_origin = $3",
-            formKey, key.Name, key.Origin);
+            $"DELETE FROM mirror.form_references WHERE source_plugin = $1 AND source_origin = $2 AND source_form_key {AmongKeys}",
+            key.Name, key.Origin, formKeys);
 
-    // Its own facts plus, as a backstop, whatever names it as a parent: DeleteRecord's descendant
-    // cascade already gives every descendant its own null-body delta, so a deleted container's
-    // children lose their rows via their own deletion.
-    private void DeleteContainmentForRecord(PluginAddress key, string formKey)
-    {
-        DuckDbSql.Execute(_connection, "DELETE FROM mirror.holdings WHERE (child = $1 OR parent = $1) AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin);
-        DuckDbSql.Execute(_connection, "DELETE FROM mirror.cell_location WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin);
-    }
+    private void DeleteCellLocationsOf(PluginAddress key, List<string> formKeys) =>
+        DuckDbSql.Execute(_connection,
+            $"DELETE FROM mirror.cell_location WHERE plugin = $1 AND origin = $2 AND cell_form_key {AmongKeys}",
+            key.Name, key.Origin, formKeys);
 }
