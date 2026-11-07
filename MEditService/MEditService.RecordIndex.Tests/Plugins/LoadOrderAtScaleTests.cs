@@ -40,41 +40,42 @@ public sealed class LoadOrderAtScaleTests
     public void AnEditToOneReferenceInABigCell_ReachesReadsWithinOneSecond()
     {
         using var scale = new LoadOrderAtScale();
-        var reference = scale.Index.DocumentOf(scale.AReferenceInTheBigCell, scale.BigCellPlugin.Key);
-        scale.BigCellPlugin.HandEdit(reference, $"\"{reference.EditorId}\"", "\"Edited\"");
+        EditTheReference(scale);
 
         scale.Index.SignalChange();
 
-        Budgets.Reached(
-            OneGesture,
-            () => scale.Index.Queries.GetRenderedDocument(scale.BigCellPlugin.Key, scale.AReferenceInTheBigCell).Value()?.Text
-                ?.Contains("\"Edited\"", StringComparison.Ordinal) == true,
-            "An edit to one reference reaching reads");
+        Budgets.Reached(OneGesture, () => EditReachedReads(scale), "An edit to one reference reaching reads");
     }
 
     [Fact]
-    public void AnEditToOneReference_ReachesReadsInAboutTheSameTimeWithTenTimesThePlugins()
+    public void AnEditToOneReference_ReachesReadsInAboutTheSameTimeWithFifteenTimesThePlugins()
     {
-        var few = TimeToReachReads(plugins: 70);
-        var many = TimeToReachReads(plugins: 700);
+        var few = TimeToReachReads(plugins: 20);
+        var many = TimeToReachReads(plugins: 300);
 
-        Assert.True(many <= few * 1.5, $"An edit took {many.TotalSeconds:F2} s with 700 plugins and {few.TotalSeconds:F2} s with 70.");
+        Assert.True(many <= few * 1.5, $"An edit took {many.TotalSeconds:F2} s with 300 plugins and {few.TotalSeconds:F2} s with 20.");
     }
 
     private static TimeSpan TimeToReachReads(int plugins)
     {
-        using var scale = new LoadOrderAtScale(plugins);
-        var reference = scale.Index.DocumentOf(scale.AReferenceInTheBigCell, scale.BigCellPlugin.Key);
-        scale.BigCellPlugin.HandEdit(reference, $"\"{reference.EditorId}\"", "\"Edited\"");
+        using var scale = new LoadOrderAtScale(plugins, rows: 6_000, referencesInABigCell: 100);
+        EditTheReference(scale);
 
         var took = Stopwatch.StartNew();
         scale.Index.SignalChange();
-        Waits.Reached(
-            () => scale.Index.Queries.GetRenderedDocument(scale.BigCellPlugin.Key, scale.AReferenceInTheBigCell).Value()?.Text
-                ?.Contains("\"Edited\"", StringComparison.Ordinal) == true,
-            "the edit reaching reads");
+        Waits.Reached(() => EditReachedReads(scale), "the edit reaching reads");
         return took.Elapsed;
     }
+
+    private static void EditTheReference(LoadOrderAtScale scale)
+    {
+        var reference = scale.Index.DocumentOf(scale.AReferenceInTheBigCell, scale.BigCellPlugin.Key);
+        scale.BigCellPlugin.HandEdit(reference, $"\"{reference.EditorId}\"", "\"Edited\"");
+    }
+
+    private static bool EditReachedReads(LoadOrderAtScale scale) =>
+        scale.Index.Queries.GetRenderedDocument(scale.BigCellPlugin.Key, scale.AReferenceInTheBigCell).Value()?.Text
+            ?.Contains("\"Edited\"", StringComparison.Ordinal) == true;
 
     [Fact]
     public void ABigCell_OpensWithinOneSecond()
