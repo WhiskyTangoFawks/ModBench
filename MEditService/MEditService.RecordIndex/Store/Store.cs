@@ -388,6 +388,15 @@ internal sealed class Store : IDisposable
             reader => (ResolvedFilePath(reader.GetString(0)), reader.GetString(1)), key.Name, key.Origin) is [var claim] ? claim : null;
     }
 
+    /// <summary>Every plugin's disk claim and derivation, each read in one query, for a check that asks them of many plugins.</summary>
+    internal IndexedStamps IndexedStamps() => new(
+        IndexedFiles().ToDictionary(file => file.Key, file => (file.FilePath, file.ContentHash), PluginAddress.Comparer),
+        DuckDbSql.Rows(
+            Connection, $"SELECT plugin, origin, derived_from FROM {PluginDerivationRelation}",
+            reader => (Key: reader.GetPluginAddress(), Stamp: reader.GetString(2)))
+            .SelectMany(row => Enum.TryParse<DerivedFrom>(row.Stamp, out var derivedFrom) ? [KeyValuePair.Create(row.Key, derivedFrom)] : Array.Empty<KeyValuePair<PluginAddress, DerivedFrom>>())
+            .ToDictionary(PluginAddress.Comparer));
+
     /// <summary>Which truth <paramref name="key"/>'s rows were derived from, or null when the store
     /// holds no rows for it.</summary>
     public DerivedFrom? DerivationOf(PluginAddress key) =>
@@ -1064,4 +1073,14 @@ internal sealed class Store : IDisposable
         return byKey;
     }
 
+}
+
+/// <summary>What the store held of each plugin's rows when it was asked: the file they were built from, and the truth.</summary>
+internal sealed record IndexedStamps(
+    IReadOnlyDictionary<PluginAddress, (string FilePath, string ContentHash)> Files,
+    IReadOnlyDictionary<PluginAddress, DerivedFrom> Derivations)
+{
+    public (string FilePath, string ContentHash)? FileOf(PluginAddress key) => Files.TryGetValue(key, out var file) ? file : null;
+
+    public DerivedFrom? DerivationOf(PluginAddress key) => Derivations.TryGetValue(key, out var derivedFrom) ? derivedFrom : null;
 }

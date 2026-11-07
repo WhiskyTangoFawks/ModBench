@@ -968,7 +968,7 @@ internal sealed class Indexer : IDisposable
 
         try
         {
-            var report = scope.Projector.Validate(plugin.Registered, state);
+            var report = scope.Projector.Validate(plugin.Registered, state, scope.Store.IndexedStamps());
             foreach (var failure in report.Failures)
                 _logger.LogWarning("Validating {Plugin} at load: {Failure}", plugin.Name, failure);
             return !report.NeedsRebuild;
@@ -1148,10 +1148,11 @@ internal sealed class Indexer : IDisposable
         {
             scope.Store.Commit(_ =>
             {
+                var held = scope.Store.IndexedStamps();
                 foreach (var plugin in plugins)
                 {
                     token.ThrowIfCancellationRequested();
-                    if (ValidateOne(scope, plugin, token)) landed.Add(plugin);
+                    if (ValidateOne(scope, plugin, held, token)) landed.Add(plugin);
                 }
             });
         }
@@ -1178,7 +1179,7 @@ internal sealed class Indexer : IDisposable
     // plugins.md, A row, Plugin, "Failed to read": a plugin that cannot be read is flagged, and the
     // rest are still validated. A failed one is read whole again once what it reads from changed.
     // True when read whole.
-    private bool ValidateOne(OpenScope scope, PluginMetadata plugin, CancellationToken token)
+    private bool ValidateOne(OpenScope scope, PluginMetadata plugin, Store.IndexedStamps stamps, CancellationToken token)
     {
         var (held, store) = (scope.Held, scope.Store);
         var key = plugin.Key;
@@ -1188,7 +1189,7 @@ internal sealed class Indexer : IDisposable
         {
             if (!holdsTree && !_adapter.Exists(plugin.Path))
             {
-                if (store.IndexedContentHash(key) is not null) store.Unindex(key);
+                if (stamps.FileOf(key) is not null) store.Unindex(key);
                 return false;
             }
 
@@ -1201,7 +1202,7 @@ internal sealed class Indexer : IDisposable
             var readWhole = false;
             scope.Failed.Read(plugin.Registered, state =>
             {
-                readWhole = MustReadWhole(scope, plugin, holdsTree, state, token);
+                readWhole = MustReadWhole(scope, plugin, holdsTree, state, stamps, token);
                 return ReadOutcome.Read;
             });
             return readWhole && ReindexHeldPlugin(scope, plugin);
@@ -1230,12 +1231,12 @@ internal sealed class Indexer : IDisposable
 
     // When the rows cannot be brought true here. A tree that cannot be read is read whole, which reads
     // the binary in its place and names what stopped it.
-    private bool MustReadWhole(OpenScope scope, PluginMetadata plugin, bool holdsTree, ReadState state, CancellationToken token)
+    private bool MustReadWhole(OpenScope scope, PluginMetadata plugin, bool holdsTree, ReadState state, Store.IndexedStamps stamps, CancellationToken token)
     {
         var key = plugin.Key;
         try
         {
-            var report = scope.Projector.Validate(plugin.Registered, state);
+            var report = scope.Projector.Validate(plugin.Registered, state, stamps);
             foreach (var failure in report.Failures)
                 _logger.LogWarning("Reconciling {Plugin}: {Failure}", key.Name, failure);
 
@@ -1247,7 +1248,7 @@ internal sealed class Indexer : IDisposable
                 return true;
             }
             // A non-compiled plugin's rows went with its file, and the file is back.
-            return report.NeedsRebuild || (!holdsTree && scope.Store.IndexedContentHash(key) is null);
+            return report.NeedsRebuild || (!holdsTree && stamps.FileOf(key) is null);
         }
         catch (Exception ex) when (RetriedByAWholeRead(ex, token))
         {

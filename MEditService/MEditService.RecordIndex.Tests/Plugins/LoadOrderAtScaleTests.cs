@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
@@ -49,6 +50,30 @@ public sealed class LoadOrderAtScaleTests
             () => scale.Index.Queries.GetRenderedDocument(scale.BigCellPlugin.Key, scale.AReferenceInTheBigCell).Value()?.Text
                 ?.Contains("\"Edited\"", StringComparison.Ordinal) == true,
             "An edit to one reference reaching reads");
+    }
+
+    [Fact]
+    public void AnEditToOneReference_ReachesReadsInAboutTheSameTimeWithTenTimesThePlugins()
+    {
+        var few = TimeToReachReads(plugins: 70);
+        var many = TimeToReachReads(plugins: 700);
+
+        Assert.True(many <= few * 1.5, $"An edit took {many.TotalSeconds:F2} s with 700 plugins and {few.TotalSeconds:F2} s with 70.");
+    }
+
+    private static TimeSpan TimeToReachReads(int plugins)
+    {
+        using var scale = new LoadOrderAtScale(plugins);
+        var reference = scale.Index.DocumentOf(scale.AReferenceInTheBigCell, scale.BigCellPlugin.Key);
+        scale.BigCellPlugin.HandEdit(reference, $"\"{reference.EditorId}\"", "\"Edited\"");
+
+        var took = Stopwatch.StartNew();
+        scale.Index.SignalChange();
+        Waits.Reached(
+            () => scale.Index.Queries.GetRenderedDocument(scale.BigCellPlugin.Key, scale.AReferenceInTheBigCell).Value()?.Text
+                ?.Contains("\"Edited\"", StringComparison.Ordinal) == true,
+            "the edit reaching reads");
+        return took.Elapsed;
     }
 
     [Fact]
