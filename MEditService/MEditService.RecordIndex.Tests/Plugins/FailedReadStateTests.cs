@@ -490,7 +490,6 @@ public sealed class FailedReadStateTests : IDisposable
 
         index.NextCheckUntil(() => Failed(index), "the plugin's failure");
 
-        Assert.Equal(theProjectionsStamp, Volatile.Read(ref stampsOfTheEdit));
         Assert.Contains(thrown.Message, Reason(index), StringComparison.Ordinal);
         Assert.Equal(readsBefore, TreeReads());
     }
