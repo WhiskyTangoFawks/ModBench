@@ -861,9 +861,11 @@ internal sealed class Indexer : IDisposable
         // One at a time: opening the whole set first would cost the same total time but make every
         // plugin wait on the slowest before any could be indexed, and bury each open failure.
         var pending = new Queue<RegisteredPlugin>(arriving);
+        // Read in the first landing, for every landing: a queued plugin's rows change only when it lands.
+        var indexed = new Lazy<Store.IndexedStamps>(() => store.IndexedStamps(arriving.Select(plugin => plugin.Key)));
         while (pending.Count > 0)
         {
-            if (LandArrivals(scope, snapshot, pending, token) > 0) firstUsableMs ??= timer.ElapsedMilliseconds;
+            if (LandArrivals(scope, snapshot, pending, indexed, token) > 0) firstUsableMs ??= timer.ElapsedMilliseconds;
         }
 
         // The whole-set sweep, and the moment conflict information becomes correct: a plugin that
@@ -996,7 +998,8 @@ internal sealed class Indexer : IDisposable
     // record index has not read lands alone, so no plugin waits on its read to be listed.
     private static readonly TimeSpan ArrivalsLandTogetherFor = TimeSpan.FromSeconds(0.5);
 
-    private int LandArrivals(OpenScope scope, LoadOrderSnapshot snapshot, Queue<RegisteredPlugin> pending, CancellationToken token)
+    private int LandArrivals(
+        OpenScope scope, LoadOrderSnapshot snapshot, Queue<RegisteredPlugin> pending, Lazy<Store.IndexedStamps> arrivals, CancellationToken token)
     {
         var landed = new List<PluginMetadata>();
         var until = _timeProvider.GetUtcNow() + ArrivalsLandTogetherFor;
@@ -1004,7 +1007,7 @@ internal sealed class Indexer : IDisposable
         {
             scope.Store.Commit(_ =>
             {
-                var indexed = scope.Store.IndexedStamps();
+                var indexed = arrivals.Value;
                 var first = true;
                 while (pending.TryPeek(out var plugin)
                     && (first || indexed.FileOf(plugin.Key) is not null && _timeProvider.GetUtcNow() < until))
@@ -1039,15 +1042,14 @@ internal sealed class Indexer : IDisposable
             if (_logger.IsEnabled(LogLevel.Information))
             {
                 _logger.LogInformation(
-                    "Registering {Plugin} ({RecordCount} records), already indexed and unchanged on disk",
-                    plugin.Name, plugin.RecordCount);
+                    "Registering {Plugin}, already indexed and unchanged on disk", plugin.Name);
             }
             return ReadOutcome.Read;
         }
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
-            _logger.LogInformation("Indexing {Plugin} ({RecordCount} records)", plugin.Name, plugin.RecordCount);
+            _logger.LogInformation("Indexing {Plugin}", plugin.Name);
         }
         var indexTimer = Stopwatch.StartNew();
         var outcome = IndexOnePlugin(scope, plugin, state, token);
@@ -1107,6 +1109,19 @@ internal sealed class Indexer : IDisposable
         var modPath = ModPathOf(plugin.Path);
         // Taken before the read, as the binary's hash is: strings changed during it are then read again.
         var stringsRead = plugin.IsLocalized ? StringsReadBy(scope.LoadOrder, plugin.Registered) : null;
+        if (!_adapter.CountRecords(modPath, scope.LoadOrder).Holds(out var counted, out var countFailure))
+        {
+            _logger.LogWarning(countFailure.Error, "Could not read {Plugin} ({Origin}): {Reason}", plugin.Name, plugin.Origin, countFailure.Reason);
+            return ReadOutcome.Failed(countFailure);
+        }
+        if (counted.Unreachable is { } stoppedWalk)
+        {
+            // The ingest walks the same records per type and reports the one it could not finish,
+            // so this only keeps a readout from becoming a refusal to read the plugin.
+            _logger.LogWarning(stoppedWalk.Error,
+                "Could not walk all of {Plugin}'s records for its count; holding it to the {Count} that were reachable: {Reason}",
+                plugin.Name, counted.Count, stoppedWalk.Reason);
+        }
         if (!_adapter.OpenDocuments(modPath, scope.LoadOrder, scope.Store.Schemas, plugin.Strings).Holds(out var opened, out var failure))
         {
             _logger.LogWarning(failure.Error, "Could not read {Plugin} ({Origin}): {Reason}", plugin.Name, plugin.Origin, failure.Reason);
@@ -1114,7 +1129,7 @@ internal sealed class Indexer : IDisposable
         }
 
         using var documents = opened;
-        if (scope.Store.IndexBinary(documents, plugin, plugin.Path, derivedFrom, stringsRead, _disposal.Token) is not { } refused) return ReadOutcome.Read;
+        if (scope.Store.IndexBinary(documents, plugin, plugin.Path, derivedFrom, stringsRead, counted.Count, _disposal.Token) is not { } refused) return ReadOutcome.Read;
         _logger.LogWarning("Could not read {Plugin} ({Origin}): {Reason}", plugin.Name, plugin.Origin, refused.Reason);
         return ReadOutcome.Failed(refused);
     }
@@ -1149,7 +1164,7 @@ internal sealed class Indexer : IDisposable
         {
             scope.Store.Commit(_ =>
             {
-                var indexed = scope.Store.IndexedStamps();
+                var indexed = scope.Store.IndexedStamps(plugins.Select(plugin => plugin.Key).Where(key => !scope.Projector.Matched(key)));
                 foreach (var plugin in plugins)
                 {
                     token.ThrowIfCancellationRequested();

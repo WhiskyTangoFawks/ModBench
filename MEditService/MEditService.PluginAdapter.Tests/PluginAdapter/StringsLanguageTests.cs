@@ -45,7 +45,7 @@ public sealed class StringsLanguageTests : IDisposable
     [Fact]
     public void ReadContent_TheStringsLanguage_IsTheLanguageWhoseFilesItChecksFor()
     {
-        var (content, _) = Adapter.ReadContent(Mod, LoadOrderIn(Language.French), HandedStrings.Of(_pluginPath)).Answered();
+        var content = Adapter.ReadContent(Mod, LoadOrderIn(Language.French), HandedStrings.Of(_pluginPath)).Answered();
 
         Assert.Equal(["Update_French.STRINGS", "Update_French.ILSTRINGS", "Update_French.DLSTRINGS"], content.MissingStringsFiles);
     }

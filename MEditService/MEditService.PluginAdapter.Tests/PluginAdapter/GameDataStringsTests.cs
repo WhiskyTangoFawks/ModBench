@@ -82,7 +82,7 @@ public sealed class GameDataStringsTests : IDisposable
     }
 
     private bool IsLocalized(string pluginPath) =>
-        Adapter.ReadContent(new ModPath(ModKey.FromFileName(PluginName), pluginPath), LoadOrder, HandedStrings.Of(pluginPath)).Answered().Content.IsLocalized;
+        Adapter.ReadContent(new ModPath(ModKey.FromFileName(PluginName), pluginPath), LoadOrder, HandedStrings.Of(pluginPath)).Answered().IsLocalized;
 
     [Theory]
     [InlineData("1", 1)]
@@ -131,7 +131,7 @@ public sealed class GameDataStringsTests : IDisposable
         var (overridden, loadOrder) = AnOverriddenCopy("The Overridden Door");
         Directory.Delete(LocalizedDoorPlugin.LooseStrings(overridden.Path), recursive: true);
 
-        var (content, _) = Adapter.ReadContent(new ModPath(ModKey.FromFileName(PluginName), overridden.Path), loadOrder, PluginStrings.None).Answered();
+        var content = Adapter.ReadContent(new ModPath(ModKey.FromFileName(PluginName), overridden.Path), loadOrder, PluginStrings.None).Answered();
 
         Assert.Equal(["Update_English.STRINGS", "Update_English.ILSTRINGS", "Update_English.DLSTRINGS"], content.MissingStringsFiles);
     }
@@ -178,9 +178,20 @@ public sealed class GameDataStringsTests : IDisposable
     {
         var handed = new PluginStrings([], [HandedStrings.Stamped(Path.Combine(LocalizedDoorPlugin.LooseStrings(_pluginPath), "Update_English.STRINGS"))]);
 
-        var (content, _) = Adapter.ReadContent(new ModPath(ModKey.FromFileName(PluginName), _pluginPath), LoadOrder, handed).Answered();
+        var content = Adapter.ReadContent(new ModPath(ModKey.FromFileName(PluginName), _pluginPath), LoadOrder, handed).Answered();
 
         Assert.Equal(["Update_English.ILSTRINGS", "Update_English.DLSTRINGS"], content.MissingStringsFiles);
+    }
+
+    [Fact]
+    public void ReadContent_ReadsNoStringsFile_SoOneGoneSinceItWasHandedStopsNothing()
+    {
+        var handed = HandedStrings.Of(_pluginPath);
+        Directory.Delete(LocalizedDoorPlugin.LooseStrings(_pluginPath), recursive: true);
+
+        var content = Adapter.ReadContent(new ModPath(ModKey.FromFileName(PluginName), _pluginPath), LoadOrder, handed).Answered();
+
+        Assert.True(content.IsLocalized);
     }
 
     [Fact]

@@ -28,12 +28,19 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     private readonly PluginFileHashes _hashes = new(timeProvider);
     private readonly RecentPluginMemo<PluginRecordFacts> _facts = new(timeProvider, capacity: 2);
 
-    // The getter looks its strings up as they are read, so the folder it reads them from lives as long as it does.
     internal static ILoadedMod OpenForRead(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null, LoadOrderSnapshot? loadOrder = null,
-        Language language = Language.English)
+        Language language = Language.English) =>
+        Open(modPath, gameRelease, strings is { } named ? LocalizedStrings.ForRead(named, loadOrder, modPath, gameRelease, language) : null, loadOrder);
+
+    // Mutagen reads a string only as a text asks for it, so a read of the header or a count of the records reads no
+    // strings file.
+    private static LoadedMod OpenUnstrung(ModPath modPath, LoadOrderSnapshot loadOrder) =>
+        Open(modPath, loadOrder.GameRelease, LocalizedStrings.Unread(modPath, loadOrder.GameRelease, loadOrder.StringsLanguage), loadOrder);
+
+    // The getter looks its strings up as they are read, so the folder it reads them from lives as long as it does.
+    private static LoadedMod Open(ModPath modPath, GameRelease gameRelease, StringsRead? read, LoadOrderSnapshot? loadOrder)
     {
-        var read = strings is { } named ? LocalizedStrings.ForRead(named, loadOrder, modPath, gameRelease, language) : null;
         try
         {
             var loaded = new LoadedMod(ModFactory.ImportGetter(modPath, gameRelease, ReadParameters(read, MasterStyles.Of(modPath, loadOrder))), read);
@@ -77,16 +84,19 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
                 loaded));
     }
 
-    // The open passes to what its result holds; until it has, a failure disposes it here.
     private static Answer<T, PluginFailure> Opened<T>(
-        ModPath modPath, PluginStrings strings, LoadOrderSnapshot loadOrder, Func<ILoadedMod, T> holding)
+        ModPath modPath, PluginStrings strings, LoadOrderSnapshot loadOrder, Func<ILoadedMod, T> holding) =>
+        Opened(() => OpenForRead(modPath, loadOrder.GameRelease, strings, loadOrder, loadOrder.StringsLanguage), holding);
+
+    // The open passes to what its result holds; until it has, a failure disposes it here.
+    private static Answer<T, PluginFailure> Opened<T>(Func<ILoadedMod> open, Func<ILoadedMod, T> holding)
     {
         ILoadedMod? loaded = null;
         try
         {
             return PluginFailure.Answer(() =>
             {
-                loaded = OpenForRead(modPath, loadOrder.GameRelease, strings, loadOrder, loadOrder.StringsLanguage);
+                loaded = open();
                 var held = holding(loaded);
                 loaded = null;
                 return held;
@@ -111,6 +121,8 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     }
 
     public string? HashOf(string pluginPath) => _hashes.Of(pluginPath);
+
+    public string? StampOf(string pluginPath) => SettledStamp.Of(pluginPath, timeProvider);
 
     public PathAnswer Touching(LoadOrderSnapshot loadOrder, string path)
     {
@@ -183,9 +195,9 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         }
     }
 
-    public Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
+    public Answer<PluginContent, PluginFailure> ReadContent(
         ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
-        Opened(modPath, strings, loadOrder, loaded =>
+        Opened(() => OpenUnstrung(modPath, loadOrder), loaded =>
         {
             using (loaded)
             {
@@ -195,11 +207,21 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
                 var blueprintFlag = GameCodecs.For(loadOrder.GameRelease).BlueprintFlag;
                 var isBlueprint = blueprintFlag != 0
                     && PluginFlagPredicates.IsBlueprint(loaded.Getter, name, ModHeaderFrame.FromPath(modPath, loadOrder.GameRelease).Flags, blueprintFlag);
-                var (content, unreachable) = OpenedPlugins.ContentIn(loaded.Getter, name, isBlueprint);
                 var missing = LocalizedStrings.FindMissingStringsFiles(
                     loaded.Getter, modPath, strings, loadOrder, loadOrder.GameRelease, loadOrder.StringsLanguage);
-                return (content with { MissingStringsFiles = missing, Description = PluginDescription.Of(modPath, loadOrder.GameRelease, loadOrder.StringsLanguage) }, unreachable);
+                return OpenedPlugins.ContentIn(loaded.Getter, name, isBlueprint) with
+                {
+                    MissingStringsFiles = missing,
+                    Description = PluginDescription.Of(modPath, loadOrder.GameRelease, loadOrder.StringsLanguage),
+                };
             }
+        });
+
+    public Answer<(int Count, PluginFailure? Unreachable), PluginFailure> CountRecords(
+        ModPath modPath, LoadOrderSnapshot loadOrder) =>
+        Opened(() => OpenUnstrung(modPath, loadOrder), loaded =>
+        {
+            using (loaded) return OpenedPlugins.ReachableRecordCount(loaded.Getter);
         });
 
     public LinkAnswers LinkTargets(
