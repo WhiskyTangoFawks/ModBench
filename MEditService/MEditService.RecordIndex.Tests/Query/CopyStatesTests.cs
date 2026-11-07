@@ -127,41 +127,16 @@ public sealed class CopyStatesTests : IDisposable
         Assert.Equal(ConflictThis.IdenticalToMaster, states[edited]);
     }
 
-    private static readonly PluginAddress NotLocalizedCopy = new("Copy.esp", PluginOrigin.DataDirectory);
-
-    private static PluginFixtureData ALocalizedMasterCopiedUnchangedIntoAPluginNotLocalized() =>
-        new PluginFixtureBuilder("medit-copy-states-localized")
-            .WithPlugin(First.Name, mod =>
-            {
-                mod.UsingLocalization = true;
-                var master = Named(Item, "Abraxo Cleaner");
-                master.Name = new TranslatedString(
-                    Language.English,
-                    new KeyValuePair<Language, string>(Language.English, "Abraxo Cleaner"),
-                    new KeyValuePair<Language, string>(Language.French, "Nettoyant Abraxo"));
-                mod.MiscItems.Add(master);
-            })
-            .WithPlugin(NotLocalizedCopy.Name, mod => mod.MiscItems.Set(Named(Item, "Abraxo Cleaner")))
-            .Build();
-
-    [Fact]
-    public void ACopyNotLocalized_HoldingTheMastersTextInTheStringsLanguage_IsIdenticalToMaster_AsXEditJudgesIt()
+    [Theory]
+    [InlineData(Language.English)]
+    [InlineData(Language.French)]
+    public void ACopyNotLocalized_HoldingTheMastersTextInTheStringsLanguage_IsIdenticalToMaster_AsXEditJudgesIt(Language stringsLanguage)
     {
-        using var fixture = ALocalizedMasterCopiedUnchangedIntoAPluginNotLocalized();
-        using var index = Indexes.Reconciled(fixture);
+        using var copies = new LocalizedCopies(stringsLanguage);
 
-        Assert.Equal(ConflictThis.IdenticalToMaster, StatesOf(index, Item, NotLocalizedCopy)[NotLocalizedCopy]);
-    }
+        var states = StatesOf(copies.Index, LocalizedCopies.Item, LocalizedCopies.Copy);
 
-    [Fact]
-    public void ACopyNotLocalized_HoldingTheMastersTextInTheStringsLanguage_ShowsNoConflictInTheConflictView()
-    {
-        using var fixture = ALocalizedMasterCopiedUnchangedIntoAPluginNotLocalized();
-        using var index = Indexes.Reconciled(fixture);
-
-        var compare = index.Queries.GetCompare(Item.ToString()).Value().Require();
-
-        Assert.Equal(ConflictThis.IdenticalToMaster, compare.Overrides.Single(o => o.Plugin == NotLocalizedCopy.Name).ConflictThis);
+        Assert.Equal(ConflictThis.IdenticalToMaster, states[LocalizedCopies.Copy]);
     }
 
     [Fact]
