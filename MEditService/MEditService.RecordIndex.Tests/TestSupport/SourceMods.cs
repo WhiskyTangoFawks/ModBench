@@ -72,9 +72,12 @@ internal static class SourceMods
 
     /// <summary>A hand edit no repository write made: the bytes of a document's own file replaced
     /// behind the Index's back (ADR-0003).</summary>
-    internal static void HandEdit(this LoadOrderEntry entry, RecordDetail document, string from, string to)
+    internal static void HandEdit(this LoadOrderEntry entry, RecordDetail document, string from, string to) =>
+        entry.HandEdit(new RecordIdentity(document.FormKey, document.RecordType, document.EditorId), from, to);
+
+    internal static void HandEdit(this LoadOrderEntry entry, RecordIdentity identity, string from, string to)
     {
-        var path = entry.SourceFileOf(document);
+        var path = entry.SourceFileOf(identity);
         File.WriteAllText(path, File.ReadAllText(path).Replace(from, to, StringComparison.Ordinal));
     }
 

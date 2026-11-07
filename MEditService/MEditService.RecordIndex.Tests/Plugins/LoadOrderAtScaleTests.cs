@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using MEditService.Codec.Serialization;
 using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
@@ -54,6 +55,22 @@ public sealed class LoadOrderAtScaleTests
         var many = TimeToReachReads(plugins: 300);
 
         Assert.True(many <= few * 1.5, $"An edit took {many.TotalSeconds:F2} s with 300 plugins and {few.TotalSeconds:F2} s with 20.");
+    }
+
+    [Fact]
+    public void ACheckAfterAThousandSeparateDocumentsChange_ReachesReadsWithinOneSecond()
+    {
+        const int documents = 1_000;
+        using var scale = new LoadOrderAtScale(documentsInASourcePlugin: documents);
+        for (var d = 0; d < documents; d++)
+        {
+            var editorId = $"Document{d:D4}";
+            scale.ManyDocumentsPlugin.HandEdit(new RecordIdentity(scale.TheManyDocuments[d], "KYWD", editorId), $"\"{editorId}\"", "\"Edited\"");
+        }
+
+        scale.Index.SignalChange();
+
+        Budgets.Reached(OneGesture, () => scale.Index.BodyOf(scale.TheManyDocuments[^1], scale.ManyDocumentsPlugin.Key).Contains("\"Edited\"", StringComparison.Ordinal), "A check after 1,000 documents changed reaching reads");
     }
 
     private static TimeSpan TimeToReachReads(int plugins)
