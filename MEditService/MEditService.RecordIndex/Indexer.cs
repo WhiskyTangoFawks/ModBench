@@ -860,17 +860,10 @@ internal sealed class Indexer : IDisposable
 
         // One at a time: opening the whole set first would cost the same total time but make every
         // plugin wait on the slowest before any could be indexed, and bury each open failure.
-        foreach (var plugin in arriving)
+        var pending = new Queue<RegisteredPlugin>(arriving);
+        while (pending.Count > 0)
         {
-            token.ThrowIfCancellationRequested();
-
-            PluginMetadata? metadata = null;
-            ReadOne(scope, plugin, state =>
-                held.Open(plugin, Registration.In(snapshot, plugin.Key), snapshot).Holds(out metadata, out var failure)
-                    ? RegisterOrIndex(scope, metadata, state, token)
-                    : ReadOutcome.Failed(failure), token);
-            if (metadata is null) continue;
-            firstUsableMs ??= timer.ElapsedMilliseconds;
+            if (LandArrivals(scope, snapshot, pending, token) > 0) firstUsableMs ??= timer.ElapsedMilliseconds;
         }
 
         // The whole-set sweep, and the moment conflict information becomes correct: a plugin that
@@ -999,15 +992,41 @@ internal sealed class Indexer : IDisposable
     private void FailRead(OpenScope scope, PluginAddress key, LoadFailure failure) =>
         FailRead(scope, key, ReadFailure(failure.Reason, scope.Store.DerivationOf(key)), failure.IsDiagnosis ? failure.Reason : null);
 
-    // Listed only once its commit has landed: Status promises a plugin listed here is wholly
-    // queryable, the filter's matches in it included, and a registered one is.
-    private ReadOutcome RegisterOrIndex(OpenScope scope, PluginMetadata plugin, ReadState state, CancellationToken token)
+    // A landing reapplies the record filter, so arrivals indexed before land together. A plugin the
+    // record index has not read lands alone, so no plugin waits on its read to be listed.
+    private static readonly TimeSpan ArrivalsLandTogetherFor = TimeSpan.FromSeconds(0.5);
+
+    private int LandArrivals(OpenScope scope, LoadOrderSnapshot snapshot, Queue<RegisteredPlugin> pending, CancellationToken token)
     {
-        var outcome = scope.Store.Commit(_ => RegisterWarmOrIndex(scope, plugin, state, token));
-        if (outcome.Failure is not null) return outcome;
-        lock (_lock) _indexed.Add(plugin.Key);
-        PublishStatus();
-        return outcome;
+        var landed = new List<PluginMetadata>();
+        var until = _timeProvider.GetUtcNow() + ArrivalsLandTogetherFor;
+        try
+        {
+            scope.Store.Commit(_ =>
+            {
+                var first = true;
+                while (pending.TryPeek(out var plugin)
+                    && (first || scope.Store.IndexedContentHash(plugin.Key) is not null && _timeProvider.GetUtcNow() < until))
+                {
+                    token.ThrowIfCancellationRequested();
+                    first = false;
+                    pending.Dequeue();
+                    ReadOne(scope, plugin, state =>
+                    {
+                        if (!scope.Held.Open(plugin, Registration.In(snapshot, plugin.Key), snapshot).Holds(out var metadata, out var failure))
+                            return ReadOutcome.Failed(failure);
+                        var outcome = RegisterWarmOrIndex(scope, metadata, state, token);
+                        if (outcome.Failure is null) landed.Add(metadata);
+                        return outcome;
+                    }, token);
+                }
+            });
+        }
+        finally
+        {
+            ListLanded(landed);
+        }
+        return landed.Count;
     }
 
     // ADR-0010: a plugin the store has seen, still matching the disk, is registered, not
@@ -1142,7 +1161,8 @@ internal sealed class Indexer : IDisposable
         }
     }
 
-    // Listed as RegisterOrIndex lists an arriving plugin, once the commit that read it has landed.
+    // Listed only once the commit that read it has landed: Status promises a plugin listed here is
+    // wholly queryable, the filter's matches in it included.
     private void ListLanded(List<PluginMetadata> landed)
     {
         bool listed;

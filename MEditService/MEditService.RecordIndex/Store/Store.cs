@@ -710,8 +710,9 @@ internal sealed class Store : IDisposable
         first?.Throw();
     }
 
-    // Rows written in bulk bypass the WAL, so DuckDB's own checkpoint never comes due for them, while
-    // a few rows pass through it. FORCE: a plain CHECKPOINT refuses, rather than waits, while a read ends.
+    // Rows written in bulk bypass the WAL, so DuckDB's own checkpoint never comes due, and the record index
+    // nodes they built stay in memory it cannot evict. FORCE: a plain CHECKPOINT refuses, rather
+    // than waits, while a read ends.
     private void Checkpoint()
     {
         lock (_projectionLock)
@@ -859,7 +860,7 @@ internal sealed class Store : IDisposable
             registered.Name, registered.Origin);
         if (held is [var row] && row == (registered.Key, registered.LoadOrderIndex, registered.IsLight)) return;
 
-        Respell(registered.Key, registered.Path);
+        if (held is [var (spelled, _, _)] && spelled != registered.Key) Respell(registered.Key, registered.Path);
         UpsertRegistration(registered);
         BumpSequence();
         tx.Commit();
@@ -869,11 +870,6 @@ internal sealed class Store : IDisposable
     // belong to the plugin; they are renamed to the file's spelling now, with no re-read.
     private void Respell(PluginAddress now, string path)
     {
-        var registered = DuckDbSql.Rows(
-            Connection, $"SELECT plugin, origin FROM {TableDdlBuilder.RegistrationsRelation} WHERE plugin = $1 AND origin = $2",
-            reader => reader.GetPluginAddress(), now.Name, now.Origin);
-        if (registered is not [var spelled] || spelled == now) return;
-
         foreach (var (relation, pluginColumn, originColumn) in TableDdlBuilder.MirroredPluginNames)
         {
             DuckDbSql.Execute(Connection, $"""

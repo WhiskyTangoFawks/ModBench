@@ -36,7 +36,7 @@ public sealed class WarmReconcileTests
     }
 
     [Fact]
-    public void AWarmLoad_AdvancesProgressAsEachPluginIsRegistered()
+    public void AWarmLoadPastTheTimeArrivalsLandTogether_AdvancesProgressAsEachPluginIsRegistered()
     {
         var holder = new LoadOrderHolder();
         using var data = new PluginFixtureBuilder("warm-during")
@@ -46,12 +46,36 @@ public sealed class WarmReconcileTests
 
         var observed = new List<int>();
         var watching = new ProgressWatchingAdapter(observed);
-        using var warm = Indexes.Open(holder, watching);
+        var clock = new LeapingClock();
+        using var warm = Indexes.Open(holder, watching, timeProvider: clock);
         watching.Index = warm;
 
+        clock.StartLeaping();
         warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        clock.StopLeaping();
 
         Assert.Equal([0, 1, 2], observed);
+    }
+
+    [Fact]
+    public void AProfileSwitch_LandsThePluginsIndexedBeforeTogether_WithTheFiltersMatchesInThem()
+    {
+        var holder = new LoadOrderHolder();
+        using var data = new PluginFixtureBuilder("warm-switch")
+            .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
+            .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
+            .WithPlugin("C.esp", mod => mod.Npcs.AddNew("FromC"))
+            .Build();
+        using var index = Indexes.Open(holder);
+        index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        index.Reconcile(holder, data.DataFolder, data.Plugins.Take(1).ToList(), GameRelease.Fallout4, data.InstanceRoot);
+        index.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
+        var switched = index.Sequence;
+
+        index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+
+        Assert.Equal(switched + 2, index.Sequence);
+        Assert.Equal(3, index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value().Total);
     }
 
     [Fact]
