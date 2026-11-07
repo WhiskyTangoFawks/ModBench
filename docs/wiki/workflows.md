@@ -1,10 +1,10 @@
 # Workflows
 
-Modbench keeps two kinds of git repositories. The instance repository in the Mod Manager instance folder, and a mod repository, for each decompiled mod. The instance repository holds the mod manifests, the profiles and Mod Manager Instance configuration. A source mod's repository, in `source/`, holds that mod's plugin source, its assets and its build file. Understanding how to use git effectively as part of a standard software development workflow is key to using Modbench.
+Modbench keeps two kinds of git repositories. The instance repository in the Mod Manager instance folder, and a mod repository for each source mod that Version in Git gives a repository of its own. The instance repository holds the mod manifests, the profiles and Mod Manager Instance configuration. A source mod's source folder, in `source/`, holds that mod's plugin source, its assets and its build file. Understanding how to use git effectively as part of a standard software development workflow is key to using Modbench.
 
 ## The 2 Step Process for Modlists Management in Git
 
-Because a git repo can't hold gigabytes of files, Modbench is setup to commit a mod's manifest, which contains the list of installed files, the package they're installed from, and the host where the package can be retreived. This means we have a 2 step process for managing the modlist: 1- the git action, and 2- the modbench action to restore the mod from the manifest.
+Because a git repo can't hold gigabytes of files, Modbench is setup to commit a mod's manifest, which contains the list of installed files, the package they're installed from, and the host where the package can be retrieved. This means we have a 2 step process for managing the modlist: 1- the git action, and 2- the modbench action to restore the mod from the manifest.
 
 - Before you commit the modlist, run Update Manifests, so the manifests say what your mod folders hold. This is how you track new modlist changes in git.
 - After a checkout, a pull or a merge of the modlist, run Restore from Manifests…, so your mod folders hold what the manifests say.
