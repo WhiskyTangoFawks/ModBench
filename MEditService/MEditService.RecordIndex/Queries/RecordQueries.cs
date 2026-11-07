@@ -203,7 +203,7 @@ internal sealed class RecordQueries(
         // Two copies may come from one plugin, so a column is named by its place as well.
         var columns = records.Select((r, i) => $"{i}#{ColumnKey.Of(r.Plugin, r.Origin)}").ToList();
         var diffs = _conflictClassifier.Align(
-            records, columns, snapshot.GameRelease, resolveFormKey, LoadIndex.FormIdsOf(snapshot, reads.OpenedPlugins),
+            records, columns, snapshot.GameRelease, snapshot.StringsLanguage, resolveFormKey, LoadIndex.FormIdsOf(snapshot, reads.OpenedPlugins),
             indexed: true);
         var overrides = records.Select((r, i) => ToCompareOverride(r, state: null, columns[i], snapshot, reads)).ToList();
 
@@ -228,7 +228,7 @@ internal sealed class RecordQueries(
         {
             var documents = copies[formKey].ToList();
             if (documents.Count == 0) return new RecordCopyStates(formKey, []);
-            var states = _conflictClassifier.StatesOf(documents.ConvertAll(ToRecordDetail), snapshot.GameRelease, formIds);
+            var states = _conflictClassifier.StatesOf(documents.ConvertAll(ToRecordDetail), snapshot.GameRelease, snapshot.StringsLanguage, formIds);
             return new RecordCopyStates(formKey, [.. documents.Select((d, i) => new CopyState(d.Plugin, states[i]))]);
         }).ToList();
     }
@@ -269,16 +269,16 @@ internal sealed class RecordQueries(
         Func<string, uint?> loadOrderFormIds,
         List<RecordDetail> outsideTheComparison)
     {
-        var release = _loadOrder.Require().GameRelease;
+        var snapshot = _loadOrder.Require();
         // With no active copy there is nothing to compare: the copy outside it stands alone.
         var classification = committedOverrides.Count > 0
             ? _conflictClassifier.Classify(
-                committedOverrides, release, resolveFormKey, loadOrderFormIds, Indexed, outsideTheComparison)
+                committedOverrides, snapshot.GameRelease, snapshot.StringsLanguage, resolveFormKey, loadOrderFormIds, Indexed, outsideTheComparison)
             : new ClassifyResult(
                 ConflictAll.NoConflict, new Dictionary<string, ConflictThis>(),
                 _conflictClassifier.Align(
                     outsideTheComparison, [.. (outsideTheComparison).Select(r => ColumnKey.Of(r.Plugin, r.Origin))],
-                    release, resolveFormKey, loadOrderFormIds, Indexed));
+                    snapshot.GameRelease, snapshot.StringsLanguage, resolveFormKey, loadOrderFormIds, Indexed));
         return (classification, classification.ConflictAll);
     }
 

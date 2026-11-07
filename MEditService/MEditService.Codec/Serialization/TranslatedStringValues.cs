@@ -44,9 +44,7 @@ public static class TranslatedStringValues
         var unresolved = new List<string>();
         foreach (var (path, translated) in TranslatedStrings(root, "").ToList())
         {
-            var held = translated["Values"]?.AsArray()
-                .FirstOrDefault(entry => entry?["Language"]?.GetValue<string>() == language.ToString());
-            if (held?["String"] is not { } value)
+            if (EntryIn(translated, language)?["String"] is not { } value)
             {
                 unresolved.Add(path);
                 continue;
@@ -77,7 +75,7 @@ public static class TranslatedStringValues
             return edited;
         }
         var values = edited["Values"] as JsonArray ?? OneLanguageAsValues(edited);
-        if (values.OfType<JsonObject>().FirstOrDefault(entry => entry["Language"]?.GetValue<string>() == language.ToString()) is { } entry)
+        if (EntryIn(edited, language) is { } entry)
             entry["String"] = text;
         else
             values.Add(new JsonObject { ["Language"] = language.ToString(), ["String"] = text });
@@ -102,6 +100,15 @@ public static class TranslatedStringValues
             "", ApiType, false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, Fields: fields);
         return readOnlyReason is null ? shape : shape.WithReadOnlyReason(readOnlyReason);
     }
+
+    internal static string? TextIn(JsonObject translated, Language language) =>
+        translated["Value"] is JsonValue one && one.TryGetValue<string>(out var text)
+            ? text
+            : EntryIn(translated, language)?["String"]?.GetValue<string>();
+
+    private static JsonObject? EntryIn(JsonObject translated, Language language) =>
+        (translated["Values"] as JsonArray)?.OfType<JsonObject>()
+            .FirstOrDefault(entry => entry["Language"]?.GetValue<string>() == language.ToString());
 
     private static Language TargetLanguageOf(JsonObject translated) =>
         Enum.TryParse<Language>(translated["TargetLanguage"]?.GetValue<string>(), out var named) ? named : TranslatedString.DefaultLanguage;
