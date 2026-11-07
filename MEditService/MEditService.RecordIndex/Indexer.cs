@@ -861,9 +861,11 @@ internal sealed class Indexer : IDisposable
         // One at a time: opening the whole set first would cost the same total time but make every
         // plugin wait on the slowest before any could be indexed, and bury each open failure.
         var pending = new Queue<RegisteredPlugin>(arriving);
+        // Read in the first landing, for every landing: a queued plugin's rows change only when it lands.
+        var indexed = new Lazy<Store.IndexedStamps>(() => store.IndexedStamps(arriving.Select(plugin => plugin.Key)));
         while (pending.Count > 0)
         {
-            if (LandArrivals(scope, snapshot, pending, token) > 0) firstUsableMs ??= timer.ElapsedMilliseconds;
+            if (LandArrivals(scope, snapshot, pending, indexed, token) > 0) firstUsableMs ??= timer.ElapsedMilliseconds;
         }
 
         // The whole-set sweep, and the moment conflict information becomes correct: a plugin that
@@ -996,7 +998,8 @@ internal sealed class Indexer : IDisposable
     // record index has not read lands alone, so no plugin waits on its read to be listed.
     private static readonly TimeSpan ArrivalsLandTogetherFor = TimeSpan.FromSeconds(0.5);
 
-    private int LandArrivals(OpenScope scope, LoadOrderSnapshot snapshot, Queue<RegisteredPlugin> pending, CancellationToken token)
+    private int LandArrivals(
+        OpenScope scope, LoadOrderSnapshot snapshot, Queue<RegisteredPlugin> pending, Lazy<Store.IndexedStamps> arrivals, CancellationToken token)
     {
         var landed = new List<PluginMetadata>();
         var until = _timeProvider.GetUtcNow() + ArrivalsLandTogetherFor;
@@ -1004,7 +1007,7 @@ internal sealed class Indexer : IDisposable
         {
             scope.Store.Commit(_ =>
             {
-                var indexed = scope.Store.IndexedStamps(pending.Select(plugin => plugin.Key));
+                var indexed = arrivals.Value;
                 var first = true;
                 while (pending.TryPeek(out var plugin)
                     && (first || indexed.FileOf(plugin.Key) is not null && _timeProvider.GetUtcNow() < until))

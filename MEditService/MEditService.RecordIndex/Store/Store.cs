@@ -364,7 +364,7 @@ internal sealed class Store : IDisposable
         return stale;
     }
 
-    // A claim taken while its file was too recent to stamp is stamped once a hash confirms it, or every launch hashes it.
+    // A hash that confirms a claim under a stamp it does not hold records that stamp, so the next launch reads no byte.
     private void Restamp(PluginAddress key, string filePath, string stamp, string contentHash)
     {
         DuckDbSql.Execute(Connection, $"UPDATE {FilesRelation} SET file_stamp = $3 WHERE plugin = $1 AND origin = $2", key.Name, key.Origin, stamp);
@@ -410,7 +410,7 @@ internal sealed class Store : IDisposable
 
     /// <summary>Every plugin's disk claim and derivation, and the document stamps of those of <paramref name="comparing"/>
     /// derived from their tree, one query each, for a pass that meets the plugins one by one (ADR-0010).</summary>
-    internal IndexedStamps IndexedStamps(IEnumerable<PluginAddress>? comparing = null)
+    internal IndexedStamps IndexedStamps(IEnumerable<PluginAddress> comparing)
     {
         var plugins = new Dictionary<PluginAddress, IndexedPlugin>(PluginAddress.Comparer);
         foreach (var (key, filePath, contentHash, _) in IndexedFiles())
@@ -426,7 +426,7 @@ internal sealed class Store : IDisposable
             }
             plugins[key] = (plugins.TryGetValue(key, out var indexed) ? indexed : new IndexedPlugin(null, null)) with { DerivedFrom = derivedFrom };
         }
-        List<PluginAddress> trees = [.. (comparing ?? []).Where(key => plugins.GetValueOrDefault(key)?.DerivedFrom == DerivedFrom.SourceTree)];
+        List<PluginAddress> trees = [.. comparing.Where(key => plugins.GetValueOrDefault(key)?.DerivedFrom == DerivedFrom.SourceTree)];
         return new IndexedStamps(plugins, trees.Count > 0 ? HeldDocumentStamps(trees) : []);
     }
 
@@ -481,20 +481,21 @@ internal sealed class Store : IDisposable
             INSERT INTO {PluginDerivationRelation} (plugin, origin, derived_from) VALUES ($1, $2, $3)
             """, plugin, origin, derivedFrom.ToString());
         if (filePath == null) return;
-        var stamp = _plugins.StampOf(filePath);
-        if (ClaimOf(filePath) is { } claim) StampFileClaim(plugin, origin, filePath, claim, stamp, stringsRead);
+        if (ClaimOf(filePath) is { } claim) StampFileClaim(plugin, origin, filePath, claim, stringsRead);
     }
 
-    private FileClaim? ClaimOf(string filePath)
+    // The stamp is taken before the claim's read, so a write during it moves the file past the stamp kept.
+    private (FileClaim Claim, string? Stamp)? ClaimOf(string filePath)
     {
-        if (_plugins.ClaimOf(filePath, Release).Holds(out var claim, out var unread)) return claim;
+        var stamp = _plugins.StampOf(filePath);
+        if (_plugins.ClaimOf(filePath, Release).Holds(out var claim, out var unread)) return (claim, stamp);
         _logger.LogWarning(unread.Error, "Could not read {Path} to hash it, so nothing vouches for its rows: {Reason}", filePath, unread.Reason);
         return null;
     }
 
-    // The stamp is taken before the claim's read, so a write during it moves the stamp past the one kept.
-    private void StampFileClaim(string plugin, string origin, string filePath, FileClaim claim, string? stamp, string? stringsRead)
+    private void StampFileClaim(string plugin, string origin, string filePath, (FileClaim Claim, string? Stamp) stamped, string? stringsRead)
     {
+        var (claim, stamp) = stamped;
         DuckDbSql.Execute(Connection, $"""
             INSERT INTO {FilesRelation} (plugin, origin, file_path, content_hash, file_stamp, strings_read)
             VALUES ($1, $2, $3, $4, $5, $6)
@@ -509,13 +510,12 @@ internal sealed class Store : IDisposable
     public void ReclaimTreeBinary(PluginAddress key, string filePath, string? heldContentHash)
     {
         if (heldContentHash is null || FileContentHash(filePath) is not { } now || now == heldContentHash) return;
-        var stamp = _plugins.StampOf(filePath);
         if (ClaimOf(filePath) is not { } claim) return;
 
         using var tx = BeginTransaction();
         DuckDbSql.Execute(Connection, $"DELETE FROM {FilesRelation} WHERE plugin = $1 AND origin = $2", key.Name, key.Origin);
         DuckDbSql.Execute(Connection, $"DELETE FROM {PluginDiagnosisRelation} WHERE plugin = $1 AND origin = $2", key.Name, key.Origin);
-        StampFileClaim(key.Name, key.Origin, filePath, claim, stamp, stringsRead: null);
+        StampFileClaim(key.Name, key.Origin, filePath, claim, stringsRead: null);
         BumpSequence();
         tx.Commit();
     }
@@ -1108,18 +1108,11 @@ internal sealed class Store : IDisposable
     /// from, by the key of the record it files, in one query (ADR-0010).</summary>
     public Dictionary<PluginAddress, Dictionary<string, string>> HeldDocumentStamps(IReadOnlyCollection<PluginAddress> keys)
     {
-        var timer = Stopwatch.StartNew();
-        var byPlugin = keys.ToDictionary(key => key, _ => new Dictionary<string, string>(StringComparer.Ordinal), PluginAddress.Comparer);
-        // A plugin can hold one FormKey twice and the rows carry no key, so the last row speaks.
-        foreach (var (key, formKey, stamp) in DuckDbSql.Rows(
-            Connection, DocumentStamps, reader => (reader.GetPluginAddress(), reader.GetString(2), reader.GetString(3)),
-            keys.Select(key => key.Name).ToList(), keys.Select(key => key.Origin).ToList()))
-        {
-            byPlugin[key][formKey] = stamp;
-        }
-        if (_logger.IsEnabled(LogLevel.Debug))
-            _logger.LogDebug("Read the document stamps of {Count} plugin(s) in {ElapsedMs} ms", keys.Count, timer.ElapsedMilliseconds);
-        return byPlugin;
+        var rows = DuckDbSql.Rows(
+            Connection, DocumentStamps, reader => (Key: reader.GetPluginAddress(), Stamp: KeyValuePair.Create(reader.GetString(2), reader.GetString(3))),
+            keys.Select(key => key.Name).ToList(), keys.Select(key => key.Origin).ToList())
+            .ToLookup(row => row.Key, row => row.Stamp, PluginAddress.Comparer);
+        return keys.ToDictionary(key => key, key => LastWins(rows[key]), PluginAddress.Comparer);
     }
 
     // A plugin can hold one FormKey twice and the rows carry no key, so the last row speaks.

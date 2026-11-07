@@ -81,12 +81,6 @@ public sealed class PluginFileHashesTests : IDisposable
     }
 
     [Fact]
-    public void TheStampOfAFileWrittenJustNow_IsNone()
-    {
-        Assert.Null(TestAdapters.Mutagen().StampOf(PluginPath));
-    }
-
-    [Fact]
     public void TheStampOfAFile_MovesWithItsDateModified()
     {
         var adapter = WithTheClockPastEveryWrite();

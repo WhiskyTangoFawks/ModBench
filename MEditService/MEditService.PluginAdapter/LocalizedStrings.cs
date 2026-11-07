@@ -67,9 +67,11 @@ internal static class LocalizedStrings
         }
     }
 
-    /// <summary>For a read that asks for no text: the parameters name an empty folder, so no game install is looked up.</summary>
-    internal static StringsRead Unread(Language language)
+    /// <summary>For a read that asks for no text: a localized plugin's parameters name an empty folder, so no game
+    /// install is looked up.</summary>
+    internal static StringsRead Unread(ModPath plugin, GameRelease gameRelease, Language language)
     {
+        if (!IsLocalized(plugin, gameRelease)) return new StringsRead(new BinaryReadParameters(), scratch: null);
         var scratch = Directory.CreateTempSubdirectory("medit-strings-").FullName;
         return new StringsRead(ForFolder(scratch, language), scratch);
     }

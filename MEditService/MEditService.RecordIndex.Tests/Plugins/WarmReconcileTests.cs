@@ -119,24 +119,39 @@ public sealed class WarmReconcileTests
     }
 
     [Fact]
-    public void ALaunchWithNothingChanged_ReadsTheDocumentStampsOfItsCompiledPluginsTogether()
+    public void ALaunchLandingItsCompiledPluginsLast_ReadsTheirDocumentStampsOnce()
     {
-        using var data = new PluginFixtureBuilder("warm-trees")
+        using var data = new PluginFixtureBuilder("warm-trees-last")
             .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"), origin: "ModA")
             .WithPlugin("B.esp", m => m.Npcs.AddNew("NpcB"), origin: "ModB")
             .WithPlugin("C.esp", m => m.Npcs.AddNew("NpcC"), origin: "ModC")
-            .BuildScattered()
-            .CompiledPlugin();
-        using (Indexes.Reconciled(data, data.InstanceRoot)) { }
-        var log = new List<LogEntry>();
-        using var loggers = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider(log)));
+            .WithPlugin("D.esp", m => m.Npcs.AddNew("NpcD"), origin: "ModD")
+            .BuildScattered();
+        SourceMods.Init(data.Plugins.Single(p => p.Name == "C.esp"));
+        SourceMods.Init(data.Plugins.Single(p => p.Name == "D.esp"));
+        var trees = TestAdapters.Source(ClockPastEveryWrite);
+        using (Indexes.Reconciled(data, data.InstanceRoot, source: trees)) { }
 
-        using (Indexes.Reconciled(data, data.InstanceRoot, loggerFactory: loggers)) { }
+        var clock = new LeapingClock();
+        var holder = new LoadOrderHolder();
+        using var warm = Indexes.Open(holder, new QueryLoggingAdapter(data.InstanceRoot), timeProvider: clock, source: trees);
+        clock.StartLeaping();
+        warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        clock.StopLeaping();
 
-        List<string> reads;
-        lock (log) reads = [.. log.Select(e => e.Message).Where(m => m.StartsWith("Read the document stamps", StringComparison.Ordinal))];
-        Assert.NotEmpty(reads);
-        Assert.All(reads, read => Assert.StartsWith("Read the document stamps of 3 plugin(s)", read, StringComparison.Ordinal));
+        Assert.Equal(1, IndexFiles.StartedCount(data.InstanceRoot, "AS plugin, unnest($2::VARCHAR[]) AS origin) k"));
+        Assert.Equal(4, warm.Status.IndexedPlugins.Count);
+    }
+
+    private sealed class QueryLoggingAdapter(string instanceRoot) : DelegatingPluginAdapter(TestAdapters.Mutagen())
+    {
+        private int _logging;
+
+        public override bool Exists(string pluginPath)
+        {
+            if (Interlocked.Exchange(ref _logging, 1) == 0) IndexFiles.LogQueries(instanceRoot);
+            return base.Exists(pluginPath);
+        }
     }
 
     private static readonly FakeTimeProvider ClockPastEveryWrite = new(TimeProvider.System.GetUtcNow() + TimeSpan.FromHours(1));

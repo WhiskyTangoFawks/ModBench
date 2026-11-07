@@ -187,7 +187,7 @@ public sealed class GameDataStringsTests : IDisposable
     public void ReadContent_ReadsNoStringsFile_SoOneGoneSinceItWasHandedStopsNothing()
     {
         var handed = HandedStrings.Of(_pluginPath);
-        foreach (var file in handed.StringsFiles) File.Delete(file.Path);
+        Directory.Delete(LocalizedDoorPlugin.LooseStrings(_pluginPath), recursive: true);
 
         var content = Adapter.ReadContent(new ModPath(ModKey.FromFileName(PluginName), _pluginPath), LoadOrder, handed).Answered();
 

@@ -1,11 +1,11 @@
 namespace MEditService.RepositoriesLib;
 
 /// <summary>A file's <see cref="FileStamp"/> as text, to keep beside what a read of its bytes found.</summary>
-public static class FileStamps
+public static class SettledStamp
 {
     /// <summary>Null when the file system cannot answer, or the file changed too recently for a later write to move
     /// its stamp.</summary>
-    public static string? SettledOf(string path, TimeProvider timeProvider) =>
+    public static string? Of(string path, TimeProvider timeProvider) =>
         FileStamp.Of(path) is { } stamp && stamp.SettledAt(timeProvider.GetUtcNow()) ? $"{stamp.Size}:{stamp.Modified}" : null;
 }
 

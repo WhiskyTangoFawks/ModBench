@@ -36,7 +36,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     // Mutagen reads a string only as a text asks for it, so a read of the header or a count of the records reads no
     // strings file.
     private static LoadedMod OpenUnstrung(ModPath modPath, LoadOrderSnapshot loadOrder) =>
-        Open(modPath, loadOrder.GameRelease, LocalizedStrings.Unread(loadOrder.StringsLanguage), loadOrder);
+        Open(modPath, loadOrder.GameRelease, LocalizedStrings.Unread(modPath, loadOrder.GameRelease, loadOrder.StringsLanguage), loadOrder);
 
     // The getter looks its strings up as they are read, so the folder it reads them from lives as long as it does.
     private static LoadedMod Open(ModPath modPath, GameRelease gameRelease, StringsRead? read, LoadOrderSnapshot? loadOrder)
@@ -122,7 +122,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     public string? HashOf(string pluginPath) => _hashes.Of(pluginPath);
 
-    public string? StampOf(string pluginPath) => FileStamps.SettledOf(pluginPath, timeProvider);
+    public string? StampOf(string pluginPath) => SettledStamp.Of(pluginPath, timeProvider);
 
     public PathAnswer Touching(LoadOrderSnapshot loadOrder, string path)
     {
