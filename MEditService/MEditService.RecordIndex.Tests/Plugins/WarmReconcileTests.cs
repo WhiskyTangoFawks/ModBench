@@ -160,6 +160,24 @@ public sealed class WarmReconcileTests
     }
 
     [Fact]
+    public void APluginClaimedJustAfterItWasWritten_IsHashedByTheNextLaunchAlone()
+    {
+        var holder = new LoadOrderHolder();
+        using var data = new PluginFixtureBuilder("warm-restamped")
+            .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
+            .Build();
+        using (var cold = Indexes.Open(holder, TestAdapters.Mutagen())) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+
+        var next = new HashCountingAdapter();
+        using (var launch = Indexes.Open(holder, next)) launch.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        var after = new HashCountingAdapter();
+        using (var launch = Indexes.Open(holder, after)) launch.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+
+        Assert.Equal(["A.esp"], next.Hashed.Distinct());
+        Assert.Empty(after.Hashed);
+    }
+
+    [Fact]
     public void ALaunchAfterAPluginChangedOnDisk_HashesIt_AndReadsItAgain()
     {
         var holder = new LoadOrderHolder();

@@ -337,6 +337,8 @@ internal sealed class Store : IDisposable
                 continue;
             }
 
+            // Taken before the hash, as a claim's is: a write during the hash moves the file past it.
+            var now = _plugins.StampOf(filePath);
             if (FileContentHash(filePath) is not { } observed || observed != contentHash)
             {
                 if (_logger.IsEnabled(LogLevel.Information))
@@ -347,6 +349,10 @@ internal sealed class Store : IDisposable
                 }
                 stale.Add(key);
             }
+            else if (now is not null && now != stamp)
+            {
+                Restamp(key, filePath, now, contentHash);
+            }
         }
 
         if (_logger.IsEnabled(LogLevel.Debug))
@@ -356,6 +362,13 @@ internal sealed class Store : IDisposable
         }
 
         return stale;
+    }
+
+    // A claim taken while its file was too recent to stamp is stamped once a hash confirms it, or every launch hashes it.
+    private void Restamp(PluginAddress key, string filePath, string stamp, string contentHash)
+    {
+        DuckDbSql.Execute(Connection, $"UPDATE {FilesRelation} SET file_stamp = $3 WHERE plugin = $1 AND origin = $2", key.Name, key.Origin, stamp);
+        _claimed[filePath] = (stamp, contentHash);
     }
 
     private List<(PluginAddress Key, string FilePath, string ContentHash, string? Stamp)> IndexedFiles()
