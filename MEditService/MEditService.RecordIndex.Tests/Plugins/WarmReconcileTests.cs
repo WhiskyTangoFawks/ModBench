@@ -4,6 +4,7 @@ using MEditService.Ports;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -51,6 +52,43 @@ public sealed class WarmReconcileTests
         warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         Assert.Equal([0, 1, 2], observed);
+    }
+
+    [Fact]
+    public void ALaunchWithNothingChanged_AdvancesTheSequenceOnlyForTheWinnerSweep()
+    {
+        var holder = new LoadOrderHolder();
+        using var data = new PluginFixtureBuilder("warm-unwritten")
+            .WithPlugin("A.esp").WithPlugin("B.esp").WithPlugin("C.esp")
+            .Build();
+        long launched;
+        using (var cold = Indexes.Open(holder))
+        {
+            cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+            launched = cold.Sequence;
+        }
+
+        using var warm = Indexes.Open(holder);
+        warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+
+        Assert.Equal(launched + 1, warm.Sequence);
+    }
+
+    [Fact]
+    public void ALaunchThatReordersThePlugins_CheckpointsOnceForTheWinnerSweep()
+    {
+        var holder = new LoadOrderHolder();
+        using var data = new PluginFixtureBuilder("warm-reordered")
+            .WithPlugin("A.esp").WithPlugin("B.esp").WithPlugin("C.esp")
+            .Build();
+        using (var cold = Indexes.Open(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        var log = new List<LogEntry>();
+        using var loggers = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider(log)));
+
+        using var warm = Indexes.Open(holder, loggerFactory: loggers);
+        warm.Reconcile(holder, data.DataFolder, [.. data.Plugins.Select((p, at) => p with { Line = data.Plugins.Count - at })], GameRelease.Fallout4, data.InstanceRoot);
+
+        lock (log) Assert.Single(log, e => e.Message.StartsWith("Checkpointed the record index", StringComparison.Ordinal));
     }
 
     private sealed class ProgressWatchingAdapter(List<int> observed) : DelegatingPluginAdapter(TestAdapters.Mutagen())

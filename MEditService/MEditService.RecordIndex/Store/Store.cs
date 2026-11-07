@@ -568,6 +568,15 @@ internal sealed class Store : IDisposable
         lock (_projectionLock) _owedSweep = _owedSweep.Union(owed);
     }
 
+    // Outlives the commit that owed it, as the sweep does: a failed checkpoint stands owed.
+    private bool _checkpointOwed;
+
+    private void OweCheckpoint()
+    {
+        RequireOpenProjection();
+        lock (_projectionLock) _checkpointOwed = true;
+    }
+
     /// <summary>Runs <paramref name="publish"/> after the outermost projection's advance: a
     /// subscriber is never told about rows at a sequence the store has not reached.</summary>
     internal void Announce(Action publish)
@@ -648,7 +657,7 @@ internal sealed class Store : IDisposable
     }
 
     /// <summary>The one way the rows change (ADR-0015). The outermost commit then lands them, thrown
-    /// or not: the sweep they owe, a checkpoint, the filter again, one advance and their
+    /// or not: the sweep and the checkpoint they owe, the filter again, one advance and their
     /// announcements. The first throw reaches the caller.</summary>
     public T Commit<T>(Func<Projection, T> write) => StoreFaults.Translating(() => CommitUntranslated(write));
 
@@ -701,13 +710,17 @@ internal sealed class Store : IDisposable
         first?.Throw();
     }
 
-    // An ingest's rows bypass the WAL, so DuckDB's own checkpoint never comes due, and the record index
-    // nodes they built stay in memory it cannot evict. FORCE: a plain CHECKPOINT refuses, rather
-    // than waits, while a read ends.
+    // Rows written in bulk bypass the WAL, so DuckDB's own checkpoint never comes due for them, while
+    // a few rows pass through it. FORCE: a plain CHECKPOINT refuses, rather than waits, while a read ends.
     private void Checkpoint()
     {
+        lock (_projectionLock)
+        {
+            if (!_checkpointOwed) return;
+        }
         var timer = Stopwatch.StartNew();
         DuckDbSql.Execute(Connection, "FORCE CHECKPOINT");
+        lock (_projectionLock) _checkpointOwed = false;
         if (_logger.IsEnabled(LogLevel.Debug))
             _logger.LogDebug("Checkpointed the record index in {ElapsedMs} ms", timer.ElapsedMilliseconds);
     }
@@ -768,6 +781,7 @@ internal sealed class Store : IDisposable
         var ingested = StoreFaults.Translating(() => Ingest.IndexPlugin(documents, plugin, origin, schemas, token));
         if (derivedFrom != DerivedFrom.SourceTree && BinaryRefused(registered, ingested.Records) is { } refused) return refused;
         BumpSequence();
+        OweCheckpoint();
 
         var commitTimer = Stopwatch.StartNew();
         tx.Commit();
@@ -835,10 +849,16 @@ internal sealed class Store : IDisposable
     }
 
     /// <summary>Upserts the plugin's <c>registrations</c> row: its indexed facts answer with no re-index
-    /// (ADR-0012). Winners stay stale until the next sweep.</summary>
+    /// (ADR-0012). Winners stay stale until the next sweep. A row that already says so is left as it is.</summary>
     public void Register(PluginMetadata registered)
     {
         using var tx = BeginTransaction();
+        var held = DuckDbSql.Rows(
+            Connection, $"SELECT plugin, origin, load_order_idx, is_light FROM {TableDdlBuilder.RegistrationsRelation} WHERE plugin = $1 AND origin = $2",
+            reader => (reader.GetPluginAddress(), reader.IsDBNull(2) ? (int?)null : reader.GetInt32(2), reader.GetBoolean(3)),
+            registered.Name, registered.Origin);
+        if (held is [var row] && row == (registered.Key, registered.LoadOrderIndex, registered.IsLight)) return;
+
         Respell(registered.Key, registered.Path);
         UpsertRegistration(registered);
         BumpSequence();
@@ -935,12 +955,10 @@ internal sealed class Store : IDisposable
     private void ReplaceActive(IReadOnlyList<RegisteredPlugin> active)
     {
         DuckDbSql.Execute(Connection, $"DELETE FROM {TableDdlBuilder.ActiveRelation}");
-        foreach (var (plugin, loadOrderIndex) in active.Select((plugin, index) => (plugin, index)))
-        {
-            DuckDbSql.Execute(
-                Connection, $"INSERT INTO {TableDdlBuilder.ActiveRelation} (plugin, origin, load_order_idx) VALUES ($1, $2, $3)",
-                plugin.Name, plugin.Origin, loadOrderIndex);
-        }
+        DuckDbSql.Execute(Connection, $"""
+            INSERT INTO {TableDdlBuilder.ActiveRelation} (plugin, origin, load_order_idx)
+            SELECT unnest($1::VARCHAR[]), unnest($2::VARCHAR[]), unnest($3::INTEGER[])
+            """, active.Select(p => p.Name).ToList(), active.Select(p => p.Origin).ToList(), Enumerable.Range(0, active.Count).ToList());
     }
 
     private void UpdateWinnersCore(IReadOnlyCollection<string>? formKeys)
@@ -961,6 +979,7 @@ internal sealed class Store : IDisposable
                 PARTITION BY r.form_key
                 ORDER BY p.load_order_idx DESC, r.plugin, r.origin) = 1
             """, keys);
+        OweCheckpoint();
     }
 
     // --- Working-tree changes ---
@@ -976,6 +995,7 @@ internal sealed class Store : IDisposable
         using var tx = BeginTransaction();
         var movedKeys = StoreFaults.Translating(() => Overlay.ProjectDocuments(key, deltas));
         BumpSequence();
+        OweCheckpoint();
         tx.Commit();
         OweWinnerSweep(movedKeys);
         return movedKeys;
