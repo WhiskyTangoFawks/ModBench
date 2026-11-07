@@ -1,12 +1,12 @@
 # The specification
 
-`spec/` holds the chain of authority that root CLAUDE.md ranks, and the files outside it: GLOSSARY.md, `agent-instructions.md` and `agent-workflows.md`. It changes only through `/to-spec`.
+`spec/` holds the chain of authority that root CLAUDE.md ranks, and GLOSSARY.md outside it. It changes only through `/to-spec`.
 
 ## Intent
 
 A sentence earns its place here when it states intent: what must hold, and why. A sentence that another correct implementation would need changed is a tactic. A tactic lives in the code, a test or the commit message. Each folder's CLAUDE.md applies this test to its kind of document.
 
-The Intent test binds the chain's documents. GLOSSARY.md, `agent-instructions.md` and `agent-workflows.md` hold the maintainer's words for their readers.
+The Intent test binds the chain's documents.
 
 Write a sentence for a developer who shares the goal, and leave the how to them. Read a sentence the same way: a case it does not name is decided by its intent. A rule a higher document holds is cited, never restated.
 
@@ -21,11 +21,7 @@ When code work needs a sentence here changed, or a story needs an exception to o
 - `surfaces/`: what a user sees and does. A gesture lands in `surfaces/commands.md`.
 - `formats/`: a file that one machine or version writes and another reads.
 - `GLOSSARY.md`: a word of the maintainer's that a model would misread.
-- `agent-instructions.md`: what Modbench tells the user's agent.
-- `agent-workflows.md`: each workflow Modbench is built for, citing the spec for why.
 - A tactical decision lands in the Notes of the ticket it bears on, as a default the implementer may override with a reason, or nowhere.
-
-`agent-instructions.md` and `agent-workflows.md` serve `surfaces/agent.md`. Where either disagrees with a story, the story wins.
 
 ## GLOSSARY.md
 
