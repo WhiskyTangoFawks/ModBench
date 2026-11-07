@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
 using MEditService.Ports;
@@ -52,15 +51,6 @@ public sealed class LoadOrderAtScaleTests
     }
 
     [Fact]
-    public void AnEditToOneReference_ReachesReadsInAboutTheSameTimeWithFifteenTimesThePlugins()
-    {
-        var few = TimeToReachReads(plugins: 20);
-        var many = TimeToReachReads(plugins: 300);
-
-        Assert.True(many <= few * 1.5, $"An edit took {many.TotalSeconds:F2} s with 300 plugins and {few.TotalSeconds:F2} s with 20.");
-    }
-
-    [Fact]
     public void ACheckAfterAThousandSeparateDocumentsChange_ReachesReadsWithinOneSecond()
     {
         const int documents = 1_000;
@@ -79,17 +69,6 @@ public sealed class LoadOrderAtScaleTests
     private static bool AllEdited(LoadOrderAtScale scale) =>
         scale.Index.Queries.GetRecords(types: null, scale.ManyDocumentsPlugin.Require().Key, search: "Edited", limit: int.MaxValue, offset: 0)
             .Value().Items.Count(row => row.EditorId == "Edited") == scale.TheManyDocuments.Count;
-
-    private static TimeSpan TimeToReachReads(int plugins)
-    {
-        using var scale = new LoadOrderAtScale(plugins, rows: 6_000, referencesInABigCell: 100);
-        EditTheReference(scale);
-
-        var took = Stopwatch.StartNew();
-        scale.Index.SignalChange();
-        Waits.Reached(() => EditReachedReads(scale), "the edit reaching reads");
-        return took.Elapsed;
-    }
 
     private static void EditTheReference(LoadOrderAtScale scale)
     {

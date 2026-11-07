@@ -143,6 +143,29 @@ public sealed class WarmReconcileTests
         Assert.Equal(4, warm.Status.IndexedPlugins.Count);
     }
 
+    [Fact]
+    public void ACheckAfterAnEdit_ReadsStampsInFewerQueriesThanThereArePlugins()
+    {
+        var npc = "";
+        using var data = new PluginFixtureBuilder("check-stamps-once")
+            .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"), origin: "ModA")
+            .WithPlugin("B.esp", m => npc = m.Npcs.AddNew("NpcB").FormKey.ToString(), origin: "ModB")
+            .WithPlugin("C.esp", m => m.Npcs.AddNew("NpcC"), origin: "ModC")
+            .WithPlugin("D.esp", m => m.Npcs.AddNew("NpcD"), origin: "ModD")
+            .BuildScattered();
+        var edited = data.Plugins.Single(p => p.Name == "B.esp");
+        SourceMods.Init(edited);
+        using var index = Indexes.Reconciled(data, data.InstanceRoot);
+        IndexFiles.LogQueries(data.InstanceRoot);
+
+        edited.HandEdit(index.DocumentOf(npc, edited.Key), "\"NpcB\"", "\"EditedB\"");
+        index.SignalChange();
+        Waits.Reached(() => index.DocumentOf(npc, edited.Key).EditorId == "EditedB", "the edit reaching reads");
+        Waits.Reached(() => index.Status.State == LoadOrderState.Ready, "the check ending");
+
+        Assert.True(IndexFiles.StartedCount(data.InstanceRoot, "SELECT plugin, origin, derived_from FROM") < data.Plugins.Count);
+    }
+
     private sealed class QueryLoggingAdapter(string instanceRoot) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         private int _logging;

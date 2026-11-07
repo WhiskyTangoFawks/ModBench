@@ -37,7 +37,7 @@ internal sealed class LoadOrderAtScale : IDisposable
     internal LoadOrderEntry UncommittedPlugin { get; }
     internal string AReferenceInTheUncommittedCell { get; }
 
-    internal LoadOrderAtScale(int plugins = 70, int rows = Rows, int referencesInABigCell = ReferencesInABigCell, int documentsInASourcePlugin = 0)
+    internal LoadOrderAtScale(int plugins = 70, int documentsInASourcePlugin = 0)
     {
         List<string> documents = [];
         string bigCell = "", aReference = "", anUncommittedReference = "", overridden = "";
@@ -46,7 +46,7 @@ internal sealed class LoadOrderAtScale : IDisposable
         for (var p = 0; p < plugins; p++)
             builder.WithPlugin($"Plugin{p:D3}.esp", (mod, masters) =>
             {
-                AddCell(mod, $"Cell{p:D3}", rows / plugins);
+                AddCell(mod, $"Cell{p:D3}", Rows / plugins);
                 if (masters.Count == 0)
                 {
                     var keyword = new Keyword(mod) { EditorID = "SharedKeyword" };
@@ -72,9 +72,9 @@ internal sealed class LoadOrderAtScale : IDisposable
         }, origin: "ManyOverrideMod");
         builder.WithPlugin("BigCell.esp", mod =>
         {
-            var cell = AddCell(mod, "BigCell", referencesInABigCell);
+            var cell = AddCell(mod, "BigCell", ReferencesInABigCell);
             bigCell = cell.FormKey.ToString();
-            aReference = cell.Temporary[referencesInABigCell / 2].FormKey.ToString();
+            aReference = cell.Temporary[ReferencesInABigCell / 2].FormKey.ToString();
         }, origin: "BigCellMod");
         if (documentsInASourcePlugin > 0)
             builder.WithPlugin("ManyDocuments.esp", mod =>
@@ -87,7 +87,7 @@ internal sealed class LoadOrderAtScale : IDisposable
                 }
             }, origin: "ManyDocumentsMod");
         builder.WithPlugin("Uncommitted.esp", mod =>
-            anUncommittedReference = AddCell(mod, "UncommittedCell", referencesInABigCell).Temporary[0].FormKey.ToString(),
+            anUncommittedReference = AddCell(mod, "UncommittedCell", ReferencesInABigCell).Temporary[0].FormKey.ToString(),
             origin: "UncommittedMod");
         _fixture = builder.BuildScattered();
 
