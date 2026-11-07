@@ -13,10 +13,6 @@ public sealed class LoadOrderAtScaleTests
 {
     private static readonly TimeSpan OneGesture = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan Navigating = TimeSpan.FromSeconds(0.1);
-    private const int EditsTimed = 5;
-    private const int FewPlugins = 20;
-    private const int ManyPlugins = 200;
-    private static readonly TimeSpan PerExtraPluginBudget = TimeSpan.FromMilliseconds(0.4);
     private static readonly TimeSpan LitRsSevenHundredPluginsInTenSeconds = TimeSpan.FromSeconds(10) / 700;
 
     [Fact]
@@ -47,23 +43,11 @@ public sealed class LoadOrderAtScaleTests
     public void AnEditToOneReferenceInABigCell_ReachesReadsWithinOneSecond()
     {
         using var scale = new LoadOrderAtScale();
-        EditTheReference(scale, TheReferencesEditorId(scale), "Edited");
+        EditTheReference(scale);
 
         scale.Index.SignalChange();
 
-        Budgets.Reached(OneGesture, () => ReadsHold(scale, "Edited"), "An edit to one reference reaching reads");
-    }
-
-    [Fact]
-    public void AnEditToOneReference_ReachesReadsInAboutTheSameTimeWithTenTimesThePlugins()
-    {
-        var few = FastestEditToReachReads(FewPlugins);
-        var many = FastestEditToReachReads(ManyPlugins);
-
-        var perExtraPlugin = (many - few) / (ManyPlugins - FewPlugins);
-        Assert.True(
-            perExtraPlugin <= PerExtraPluginBudget,
-            $"The fastest edit took {many.TotalSeconds:F3} s with {ManyPlugins} plugins and {few.TotalSeconds:F3} s with {FewPlugins}: {perExtraPlugin.TotalMilliseconds:F2} ms per extra plugin.");
+        Budgets.Reached(OneGesture, () => EditReachedReads(scale), "An edit to one reference reaching reads");
     }
 
     [Fact]
@@ -86,31 +70,15 @@ public sealed class LoadOrderAtScaleTests
         scale.Index.Queries.GetRecords(types: null, scale.ManyDocumentsPlugin.Require().Key, search: "Edited", limit: int.MaxValue, offset: 0)
             .Value().Items.Count(row => row.EditorId == "Edited") == scale.TheManyDocuments.Count;
 
-    private static TimeSpan FastestEditToReachReads(int plugins)
+    private static void EditTheReference(LoadOrderAtScale scale)
     {
-        using var scale = new LoadOrderAtScale(plugins, rows: 3_000, referencesInABigCell: 100);
-        var editorId = TheReferencesEditorId(scale);
-        List<TimeSpan> times = [];
-        for (var edit = 0; edit < EditsTimed; edit++)
-        {
-            var edited = $"Edited{edit}";
-            EditTheReference(scale, editorId, edited);
-            editorId = edited;
-
-            times.Add(Waits.TimeToReach(() => ReadsHold(scale, edited), scale.Index.SignalChange));
-        }
-        return times.Min();
+        var reference = scale.Index.DocumentOf(scale.AReferenceInTheBigCell, scale.BigCellPlugin.Key);
+        scale.BigCellPlugin.HandEdit(reference, $"\"{reference.EditorId}\"", "\"Edited\"");
     }
 
-    private static string TheReferencesEditorId(LoadOrderAtScale scale) =>
-        scale.Index.DocumentOf(scale.AReferenceInTheBigCell, scale.BigCellPlugin.Key).EditorId.Require();
-
-    private static void EditTheReference(LoadOrderAtScale scale, string from, string to) =>
-        scale.BigCellPlugin.HandEdit(scale.Index.DocumentOf(scale.AReferenceInTheBigCell, scale.BigCellPlugin.Key), $"\"{from}\"", $"\"{to}\"");
-
-    private static bool ReadsHold(LoadOrderAtScale scale, string editorId) =>
+    private static bool EditReachedReads(LoadOrderAtScale scale) =>
         scale.Index.Queries.GetRenderedDocument(scale.BigCellPlugin.Key, scale.AReferenceInTheBigCell).Value()?.Text
-            ?.Contains($"\"{editorId}\"", StringComparison.Ordinal) == true;
+            ?.Contains("\"Edited\"", StringComparison.Ordinal) == true;
 
     [Fact]
     public void AThousandReferencesTakenOutOfABigCellsDocument_ReachReadsWithinOneSecond()

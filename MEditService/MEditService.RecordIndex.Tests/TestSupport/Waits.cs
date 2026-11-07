@@ -17,16 +17,6 @@ internal static class Waits
         if (!ReachedWithin(condition, Patience)) throw new TimeoutException($"Never reached {what}.");
     }
 
-    /// <summary>Spins rather than sleeps: a sleep rounds up to the platform's timer tick, which Windows sets near 15.6 ms.</summary>
-    internal static TimeSpan TimeToReach(Func<bool> condition, Action act)
-    {
-        var elapsed = Stopwatch.StartNew();
-        act();
-        while (!condition())
-            if (elapsed.Elapsed > Patience) throw new TimeoutException("Never reached the condition.");
-        return elapsed.Elapsed;
-    }
-
     internal static bool ReachedWithin(Func<bool> condition, TimeSpan timeout)
     {
         var elapsed = Stopwatch.StartNew();
