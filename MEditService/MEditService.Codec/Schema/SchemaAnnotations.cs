@@ -700,9 +700,9 @@ public sealed record SchemaAnnotations(
     }
 }
 
-/// <summary>What the walk did with the rows that claim something about the walk itself. The walk
-/// records from every table's walk at once; <see cref="SchemaAnnotations.ValidateObserved"/> reads,
-/// once the schema is built.</summary>
+/// <summary>What the walk did with the rows that claim something about the walk itself. Every
+/// table's walk records here at once; <see cref="SchemaAnnotations.ValidateObserved"/> reads, once
+/// the schema is built.</summary>
 internal sealed class WalkObservations
 {
     private readonly Lock _recording = new();

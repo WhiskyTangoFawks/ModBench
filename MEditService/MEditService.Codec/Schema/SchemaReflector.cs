@@ -124,11 +124,10 @@ public sealed class SchemaReflector
             new HeldAlpha(logger));
 
         // A table's walk asks the codec about its record type, and the runtime compiles that type's
-        // generated serializers on the first ask: seconds for a whole game on one thread.
+        // generated serializers on the first ask.
         var schemas = discovered.AsParallel().AsOrdered()
             .Select(table => (table.tableName, Schema: BuildSchema(
                 table.tableName, table.getterType, siblingsByTable[table.tableName], game, logger)))
-            .ToArray()
             .ToDictionary(table => table.tableName, table => table.Schema);
 
         ModHeaderSchema.AddHeaderSchema(schemas, category, assembly, game, logger);
