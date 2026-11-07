@@ -1,8 +1,11 @@
 using System.Diagnostics;
+using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
 using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
+using MEditService.TestSupport;
+using Mutagen.Bethesda;
 
 namespace MEditService.RecordIndex.Tests.Plugins;
 
@@ -65,13 +68,17 @@ public sealed class LoadOrderAtScaleTests
         for (var d = 0; d < documents; d++)
         {
             var editorId = $"Document{d:D4}";
-            scale.ManyDocumentsPlugin.HandEdit(new RecordIdentity(scale.TheManyDocuments[d], "KYWD", editorId), $"\"{editorId}\"", "\"Edited\"");
+            scale.ManyDocumentsPlugin.Require().HandEdit(new RecordIdentity(scale.TheManyDocuments[d], "KYWD", editorId), $"\"{editorId}\"", "\"Edited\"");
         }
 
         scale.Index.SignalChange();
 
-        Budgets.Reached(OneGesture, () => scale.Index.BodyOf(scale.TheManyDocuments[^1], scale.ManyDocumentsPlugin.Key).Contains("\"Edited\"", StringComparison.Ordinal), "A check after 1,000 documents changed reaching reads");
+        Budgets.Reached(OneGesture, () => AllEdited(scale), "A check after 1,000 documents changed reaching reads");
     }
+
+    private static bool AllEdited(LoadOrderAtScale scale) =>
+        scale.Index.Queries.GetRecords(types: null, scale.ManyDocumentsPlugin.Require().Key, search: "Edited", limit: int.MaxValue, offset: 0)
+            .Value().Items.Count(row => row.EditorId == "Edited") == scale.TheManyDocuments.Count;
 
     private static TimeSpan TimeToReachReads(int plugins)
     {
@@ -93,6 +100,38 @@ public sealed class LoadOrderAtScaleTests
     private static bool EditReachedReads(LoadOrderAtScale scale) =>
         scale.Index.Queries.GetRenderedDocument(scale.BigCellPlugin.Key, scale.AReferenceInTheBigCell).Value()?.Text
             ?.Contains("\"Edited\"", StringComparison.Ordinal) == true;
+
+    [Fact]
+    public void AThousandReferencesTakenOutOfABigCellsDocument_ReachReadsWithinOneSecond()
+    {
+        using var scale = new LoadOrderAtScale();
+        var path = scale.BigCellPlugin.SourceFileOf(scale.Index.DocumentOf(scale.BigCell, scale.BigCellPlugin.Key));
+        var cell = JsonNode.Parse(File.ReadAllText(path)).Require().AsObject();
+        var temporary = cell["Temporary"].Require().AsArray();
+        for (var r = 0; r < 1_000; r++) temporary.RemoveAt(0);
+        File.WriteAllText(path, RecordTextCodec.RoundTrip(cell.ToJsonString(), GameRelease.Fallout4, "cell"));
+
+        scale.Index.SignalChange();
+
+        Budgets.Reached(OneGesture, () => CheckEnded(scale) && ReferencesListed(scale) == 3_000, "Taking 1,000 references out of a big cell reaching reads");
+    }
+
+    [Fact]
+    public void ABigCellsDocumentDeleted_ReachesReadsWithinOneSecond()
+    {
+        using var scale = new LoadOrderAtScale();
+        File.Delete(scale.BigCellPlugin.SourceFileOf(scale.Index.DocumentOf(scale.BigCell, scale.BigCellPlugin.Key)));
+
+        scale.Index.SignalChange();
+
+        Budgets.Reached(OneGesture, () => CheckEnded(scale) && ReferencesListed(scale) == 0, "Deleting a big cell's document reaching reads");
+        Assert.Null(scale.Index.CopyIn(scale.BigCell, scale.BigCellPlugin.Key));
+    }
+
+    private static bool CheckEnded(LoadOrderAtScale scale) => scale.Index.Status.State != LoadOrderState.Reconciling;
+
+    private static int ReferencesListed(LoadOrderAtScale scale) =>
+        scale.Index.Queries.GetCellChildRecords(scale.BigCellPlugin.Key, scale.BigCell).Value().Temporary.Count;
 
     [Fact]
     public void ABigCell_OpensWithinOneSecond()

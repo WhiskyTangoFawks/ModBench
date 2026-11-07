@@ -173,21 +173,25 @@ internal sealed class PluginIngest
     {
         // Per-document work is CPU-bound and independent, so it runs in parallel; only the appender
         // writes stay sequential.
-        List<PreparedRecord> prepared;
         var batchTimer = Stopwatch.StartNew();
+        var prepared = InParallel(batch, document => PrepareRecord(document, pluginFileName, schemas[document.RecordType]));
+        counters.PrepareMs += batchTimer.ElapsedMilliseconds;
+        return prepared;
+    }
+
+    /// <summary>In order, in parallel, throwing what <paramref name="select"/> threw rather than PLINQ's wrapper, so a
+    /// read that ran out of memory still says so (<see cref="IndexFaultException.RanOutOfMemory"/>).</summary>
+    internal static List<TOut> InParallel<TIn, TOut>(IEnumerable<TIn> items, Func<TIn, TOut> select)
+    {
         try
         {
-            prepared = [.. batch
-                .AsParallel().AsOrdered()
-                .Select(document => PrepareRecord(document, pluginFileName, schemas[document.RecordType]))];
+            return [.. items.AsParallel().AsOrdered().Select(select)];
         }
         catch (AggregateException ex) when (ex.InnerExceptions.Count > 0)
         {
             ExceptionDispatchInfo.Capture(ex.InnerExceptions[0]).Throw();
             throw;
         }
-        counters.PrepareMs += batchTimer.ElapsedMilliseconds;
-        return prepared;
     }
 
     private void Append(List<PreparedRecord> prepared, string plugin, string origin)

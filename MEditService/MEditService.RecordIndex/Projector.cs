@@ -93,9 +93,6 @@ internal sealed class Projector(
             .Where(formKey => !EqualityComparer<T>.Default.Equals(
                 before.GetValueOrDefault(formKey), after.GetValueOrDefault(formKey)));
 
-    // The overlay's per-record statements slow past a few dozen documents in one transaction: 1,000 in one took 21 s, in batches of 50 under 3 s.
-    private const int DocumentsPerProjection = 50;
-
     /// <summary>ADR-0015: re-derives <paramref name="formKeys"/>' rows from the Source repository,
     /// idempotent by content, the whole plugin for a key the record index does not hold. Answers what stopped
     /// the tree.</summary>
@@ -125,7 +122,7 @@ internal sealed class Projector(
             if (!ChangedDocument(repository, key, formKey, stored[formKey]).Holds(out var changed, out var stopped)) return stopped;
             if (changed is { } delta) deltas.Add(delta);
         }
-        var touched = deltas.Chunk(DocumentsPerProjection).SelectMany(batch => index.ProjectDocuments(key, batch)).ToList();
+        var touched = index.ProjectDocuments(key, deltas);
         if (!LearnWorkingTreeStates(plugin).Holds(out var moved, out var unlearned)) return unlearned;
         touched.AddRange(moved);
 

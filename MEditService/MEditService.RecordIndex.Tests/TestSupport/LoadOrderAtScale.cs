@@ -22,7 +22,7 @@ internal sealed class LoadOrderAtScale : IDisposable
     internal string AReferenceInTheBigCell { get; }
 
     /// <summary>A source mod whose records are each a document of their own.</summary>
-    internal LoadOrderEntry ManyDocumentsPlugin { get; }
+    internal LoadOrderEntry? ManyDocumentsPlugin { get; }
     internal IReadOnlyList<string> TheManyDocuments { get; }
 
     /// <summary>A record every ordinary plugin holds a copy of.</summary>
@@ -76,15 +76,16 @@ internal sealed class LoadOrderAtScale : IDisposable
             bigCell = cell.FormKey.ToString();
             aReference = cell.Temporary[referencesInABigCell / 2].FormKey.ToString();
         }, origin: "BigCellMod");
-        builder.WithPlugin("ManyDocuments.esp", mod =>
-        {
-            for (var d = 0; d < documentsInASourcePlugin; d++)
+        if (documentsInASourcePlugin > 0)
+            builder.WithPlugin("ManyDocuments.esp", mod =>
             {
-                var keyword = new Keyword(mod) { EditorID = $"Document{d:D4}" };
-                mod.Keywords.Add(keyword);
-                documents.Add(keyword.FormKey.ToString());
-            }
-        }, origin: "ManyDocumentsMod");
+                for (var d = 0; d < documentsInASourcePlugin; d++)
+                {
+                    var keyword = new Keyword(mod) { EditorID = $"Document{d:D4}" };
+                    mod.Keywords.Add(keyword);
+                    documents.Add(keyword.FormKey.ToString());
+                }
+            }, origin: "ManyDocumentsMod");
         builder.WithPlugin("Uncommitted.esp", mod =>
             anUncommittedReference = AddCell(mod, "UncommittedCell", referencesInABigCell).Temporary[0].FormKey.ToString(),
             origin: "UncommittedMod");
@@ -98,9 +99,12 @@ internal sealed class LoadOrderAtScale : IDisposable
         AReferenceInTheBigCell = aReference;
         SourceMods.Init(BigCellPlugin);
 
-        ManyDocumentsPlugin = _fixture.Plugins.Single(p => p.Name == "ManyDocuments.esp");
         TheManyDocuments = documents;
-        SourceMods.Init(ManyDocumentsPlugin);
+        if (documentsInASourcePlugin > 0)
+        {
+            ManyDocumentsPlugin = _fixture.Plugins.Single(p => p.Name == "ManyDocuments.esp");
+            SourceMods.Init(ManyDocumentsPlugin);
+        }
 
         UncommittedPlugin = _fixture.Plugins.Single(p => p.Name == "Uncommitted.esp");
         AReferenceInTheUncommittedCell = anUncommittedReference;
