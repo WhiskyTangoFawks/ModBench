@@ -45,14 +45,18 @@ internal static class IndexFiles
 
     /// <summary>Whether a query holding <paramref name="fragment"/> has started on the open Index's DuckDB since
     /// <see cref="LogQueries"/>.</summary>
-    internal static bool Started(string instanceRoot, string fragment)
+    internal static bool Started(string instanceRoot, string fragment) => StartedCount(instanceRoot, fragment) > 0;
+
+    /// <summary>How many queries holding <paramref name="fragment"/> have started on the open Index's DuckDB since
+    /// <see cref="LogQueries"/>.</summary>
+    internal static long StartedCount(string instanceRoot, string fragment)
     {
         using var connection = new DuckDBConnection($"DataSource={In(instanceRoot)}");
         connection.Open();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT count(*) FROM duckdb_logs WHERE type = 'QueryLog' AND contains(message, $1)";
         cmd.Parameters.Add(new DuckDBParameter(fragment));
-        return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture) > 0;
+        return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
     /// <summary>Every row <paramref name="sql"/> yields over the public relations, sorted, as text.

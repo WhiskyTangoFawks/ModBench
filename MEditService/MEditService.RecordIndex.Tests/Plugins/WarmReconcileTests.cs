@@ -5,6 +5,7 @@ using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Time.Testing;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -99,6 +100,141 @@ public sealed class WarmReconcileTests
     }
 
     [Fact]
+    public void ALaunchWithNothingChanged_CountsNoPluginsRecords()
+    {
+        var holder = new LoadOrderHolder();
+        using var data = new PluginFixtureBuilder("warm-uncounted")
+            .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
+            .WithPlugin("B.esp", m => m.Npcs.AddNew("NpcB"))
+            .Build();
+        var counts = new RecordCountingAdapter();
+        using (var cold = Indexes.Open(holder, counts)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        Assert.NotEmpty(counts.Counted);
+        counts.Counted.Clear();
+
+        using var warm = Indexes.Open(holder, counts);
+        warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+
+        Assert.Empty(counts.Counted);
+    }
+
+    [Fact]
+    public void ALaunchLandingItsCompiledPluginsLast_ReadsTheirDocumentStampsOnce()
+    {
+        using var data = new PluginFixtureBuilder("warm-trees-last")
+            .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"), origin: "ModA")
+            .WithPlugin("B.esp", m => m.Npcs.AddNew("NpcB"), origin: "ModB")
+            .WithPlugin("C.esp", m => m.Npcs.AddNew("NpcC"), origin: "ModC")
+            .WithPlugin("D.esp", m => m.Npcs.AddNew("NpcD"), origin: "ModD")
+            .BuildScattered();
+        SourceMods.Init(data.Plugins.Single(p => p.Name == "C.esp"));
+        SourceMods.Init(data.Plugins.Single(p => p.Name == "D.esp"));
+        var trees = TestAdapters.Source(ClockPastEveryWrite);
+        using (Indexes.Reconciled(data, data.InstanceRoot, source: trees)) { }
+
+        var clock = new LeapingClock();
+        var holder = new LoadOrderHolder();
+        using var warm = Indexes.Open(holder, new QueryLoggingAdapter(data.InstanceRoot), timeProvider: clock, source: trees);
+        clock.StartLeaping();
+        warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        clock.StopLeaping();
+
+        Assert.Equal(1, IndexFiles.StartedCount(data.InstanceRoot, "AS plugin, unnest($2::VARCHAR[]) AS origin) k"));
+        Assert.Equal(4, warm.Status.IndexedPlugins.Count);
+    }
+
+    private sealed class QueryLoggingAdapter(string instanceRoot) : DelegatingPluginAdapter(TestAdapters.Mutagen())
+    {
+        private int _logging;
+
+        public override bool Exists(string pluginPath)
+        {
+            if (Interlocked.Exchange(ref _logging, 1) == 0) IndexFiles.LogQueries(instanceRoot);
+            return base.Exists(pluginPath);
+        }
+    }
+
+    private static readonly FakeTimeProvider ClockPastEveryWrite = new(TimeProvider.System.GetUtcNow() + TimeSpan.FromHours(1));
+
+    [Fact]
+    public void ALaunchWithNothingChanged_HashesNoPlugin()
+    {
+        var holder = new LoadOrderHolder();
+        using var data = new PluginFixtureBuilder("warm-unhashed")
+            .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
+            .WithPlugin("B.esp", m => m.Npcs.AddNew("NpcB"))
+            .Build();
+        using (var cold = Indexes.Open(holder, new HashCountingAdapter())) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+
+        var hashes = new HashCountingAdapter();
+        using var warm = Indexes.Open(holder, hashes);
+        warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+
+        Assert.Empty(hashes.Hashed);
+        Assert.Equal(["A.esp", "B.esp"], warm.Status.IndexedPlugins.Select(p => p.Name));
+    }
+
+    [Fact]
+    public void APluginClaimedJustAfterItWasWritten_IsHashedByTheNextLaunchAlone()
+    {
+        var holder = new LoadOrderHolder();
+        using var data = new PluginFixtureBuilder("warm-restamped")
+            .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
+            .Build();
+        using (var cold = Indexes.Open(holder, TestAdapters.Mutagen())) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+
+        var next = new HashCountingAdapter();
+        using (var launch = Indexes.Open(holder, next)) launch.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        var after = new HashCountingAdapter();
+        using (var launch = Indexes.Open(holder, after)) launch.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+
+        Assert.Equal(["A.esp"], next.Hashed.Distinct());
+        Assert.Empty(after.Hashed);
+    }
+
+    [Fact]
+    public void ALaunchAfterAPluginChangedOnDisk_HashesIt_AndReadsItAgain()
+    {
+        var holder = new LoadOrderHolder();
+        using var data = new PluginFixtureBuilder("warm-rehashed")
+            .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
+            .WithPlugin("B.esp", m => m.Npcs.AddNew("NpcB"))
+            .Build();
+        using (var cold = Indexes.Open(holder, new HashCountingAdapter())) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        var b = data.Plugins.Single(p => p.Name == "B.esp");
+        PluginBinaries.Rewrite(b.Path, m => m.Npcs.AddNew("NpcBAgain"));
+
+        var hashes = new HashCountingAdapter();
+        using var warm = Indexes.Open(holder, hashes);
+        warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+
+        Assert.Equal(["B.esp"], hashes.Hashed.Distinct());
+        Assert.Equal(["NpcBAgain"], warm.ListedIn(b.Key).Select(r => r.EditorId));
+    }
+
+    private sealed class HashCountingAdapter() : DelegatingPluginAdapter(new MutagenPluginAdapter(ClockPastEveryWrite))
+    {
+        public List<string> Hashed { get; } = [];
+
+        public override string? HashOf(string pluginPath)
+        {
+            lock (Hashed) Hashed.Add(Path.GetFileName(pluginPath));
+            return base.HashOf(pluginPath);
+        }
+    }
+
+    private sealed class RecordCountingAdapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())
+    {
+        public List<string> Counted { get; } = [];
+
+        public override Answer<(int Count, PluginFailure? Unreachable), PluginFailure> CountRecords(ModPath modPath, LoadOrderSnapshot loadOrder)
+        {
+            Counted.Add(modPath.ModKey.FileName.String);
+            return base.CountRecords(modPath, loadOrder);
+        }
+    }
+
+    [Fact]
     public void ALaunchThatReordersThePlugins_CheckpointsOnceForTheWinnerSweep()
     {
         var holder = new LoadOrderHolder();
@@ -119,7 +255,7 @@ public sealed class WarmReconcileTests
     {
         public OpenedIndex? Index { get; set; }
 
-        public override Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
+        public override Answer<PluginContent, PluginFailure> ReadContent(
             ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings)
         {
             var index = Index

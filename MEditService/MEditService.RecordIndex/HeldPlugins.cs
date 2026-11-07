@@ -74,30 +74,19 @@ internal sealed class HeldPlugins
         if (!_adapter.ReadContent(
                 new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder,
                 plugin.Strings)
-            .Holds(out var read, out var failure))
+            .Holds(out var content, out var failure))
         {
             _logger.LogWarning(failure.Error, "Failed to open plugin {FileName} ({Origin}): {Reason}", plugin.Name, plugin.Origin, failure.Reason);
             return failure;
         }
         var readMs = readTimer.ElapsedMilliseconds;
-        var (content, unreachable) = read;
-
-        if (unreachable is { } stoppedWalk)
-        {
-            // The ingest walks the same records per type and reports the one it could not finish,
-            // so this only keeps a readout from becoming a refusal to open the plugin.
-            _logger.LogWarning(stoppedWalk.Error,
-                "Could not walk all of {FileName}'s records for its count; reporting the {Count} that were reachable: {Reason}",
-                plugin.Name, content.RecordCount, stoppedWalk.Reason);
-        }
 
         var metadata = BuildPluginMetadata(content, plugin, registration);
         Hold(metadata);
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
-            _logger.LogInformation("{FileName}: {RecordCount} records, masters: [{Masters}]",
-                plugin.Name, metadata.RecordCount, string.Join(", ", metadata.Masters));
+            _logger.LogInformation("{FileName}: masters: [{Masters}]", plugin.Name, string.Join(", ", metadata.Masters));
         }
         if (_logger.IsEnabled(LogLevel.Debug))
         {
@@ -242,7 +231,6 @@ internal sealed class HeldPlugins
             IsBlueprint: content.IsBlueprint,
             IsLocalized: content.IsLocalized,
             Masters: content.Masters,
-            RecordCount: content.RecordCount,
             Origin: plugin.Origin,
             Provider: plugin.Provider,
             MissingStringsFiles: content.MissingStringsFiles,

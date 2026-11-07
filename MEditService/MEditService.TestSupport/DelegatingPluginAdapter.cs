@@ -22,9 +22,12 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
         RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
         inner.OpenRecordLookup(plugin, loadOrder, schemas);
 
-    public virtual Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
+    public virtual Answer<PluginContent, PluginFailure> ReadContent(
         ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
         inner.ReadContent(modPath, loadOrder, strings);
+
+    public virtual Answer<(int Count, PluginFailure? Unreachable), PluginFailure> CountRecords(ModPath modPath, LoadOrderSnapshot loadOrder) =>
+        inner.CountRecords(modPath, loadOrder);
 
     public virtual bool Exists(string pluginPath) => inner.Exists(pluginPath);
 
@@ -32,6 +35,8 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
         inner.WrittenByCompile(plugin, paths, gameRelease);
 
     public virtual string? HashOf(string pluginPath) => inner.HashOf(pluginPath);
+
+    public virtual string? StampOf(string pluginPath) => inner.StampOf(pluginPath);
 
     public virtual PathAnswer Touching(LoadOrderSnapshot loadOrder, string path) => inner.Touching(loadOrder, path);
 

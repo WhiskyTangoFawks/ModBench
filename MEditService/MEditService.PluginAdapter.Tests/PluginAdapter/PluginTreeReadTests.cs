@@ -116,7 +116,7 @@ public sealed class PluginTreeReadTests
 
         var written = Adapter.ReadContent(
             new ModPath(ModKey.FromFileName("Patch.esp"), recompiledPath), EmptyLoadOrder.Of(GameRelease.Fallout4), PluginStrings.None).Answered();
-        Assert.Equal(reversed, written.Content.Masters);
+        Assert.Equal(reversed, written.Masters);
     }
 
     [Fact]
@@ -140,7 +140,7 @@ public sealed class PluginTreeReadTests
 
         var written = Adapter.ReadContent(
             new ModPath(ModKey.FromFileName("Lower.esp"), recompiledPath), EmptyLoadOrder.Of(GameRelease.Fallout4), PluginStrings.None).Answered();
-        Assert.Equal(["AlphaBase.esm"], written.Content.Masters);
+        Assert.Equal(["AlphaBase.esm"], written.Masters);
     }
 
     [Fact]

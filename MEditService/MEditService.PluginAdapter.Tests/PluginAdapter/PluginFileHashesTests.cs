@@ -79,4 +79,16 @@ public sealed class PluginFileHashesTests : IDisposable
 
         Assert.Null(WithTheClockPastEveryWrite().HashOf(PluginPath));
     }
+
+    [Fact]
+    public void TheStampOfAFile_MovesWithItsDateModified()
+    {
+        var adapter = WithTheClockPastEveryWrite();
+        var before = adapter.StampOf(PluginPath);
+
+        File.SetLastWriteTimeUtc(PluginPath, File.GetLastWriteTimeUtc(PluginPath).AddSeconds(-10));
+
+        Assert.NotNull(before);
+        Assert.NotEqual(before, adapter.StampOf(PluginPath));
+    }
 }

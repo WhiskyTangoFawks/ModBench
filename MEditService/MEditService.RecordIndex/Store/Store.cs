@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Data;
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
@@ -320,9 +321,10 @@ internal sealed class Store : IDisposable
 
         var timer = Stopwatch.StartNew();
         var checkedCount = 0;
-        foreach (var (key, filePath, contentHash) in IndexedFiles())
+        foreach (var (key, filePath, contentHash, stamp) in IndexedFiles())
         {
             checkedCount++;
+            if (stamp is not null) _claimed[filePath] = (stamp, contentHash);
             if (!_plugins.Exists(filePath))
             {
                 if (_logger.IsEnabled(LogLevel.Information))
@@ -335,6 +337,8 @@ internal sealed class Store : IDisposable
                 continue;
             }
 
+            // Taken before the hash, as a claim's is: a write during the hash moves the file past it.
+            var now = _plugins.StampOf(filePath);
             if (FileContentHash(filePath) is not { } observed || observed != contentHash)
             {
                 if (_logger.IsEnabled(LogLevel.Information))
@@ -344,6 +348,10 @@ internal sealed class Store : IDisposable
                         key.Name, key.Origin);
                 }
                 stale.Add(key);
+            }
+            else if (now is not null && now != stamp)
+            {
+                Restamp(key, filePath, now, contentHash);
             }
         }
 
@@ -356,17 +364,29 @@ internal sealed class Store : IDisposable
         return stale;
     }
 
-    private List<(PluginAddress Key, string FilePath, string ContentHash)> IndexedFiles()
+    // A hash that confirms a claim under a stamp it does not hold records that stamp, so the next launch reads no byte.
+    private void Restamp(PluginAddress key, string filePath, string stamp, string contentHash)
+    {
+        DuckDbSql.Execute(Connection, $"UPDATE {FilesRelation} SET file_stamp = $3 WHERE plugin = $1 AND origin = $2", key.Name, key.Origin, stamp);
+        _claimed[filePath] = (stamp, contentHash);
+    }
+
+    private List<(PluginAddress Key, string FilePath, string ContentHash, string? Stamp)> IndexedFiles()
     {
         return DuckDbSql.Rows(
-            Connection, $"SELECT plugin, origin, file_path, content_hash FROM {FilesRelation}",
-            reader => (reader.GetPluginAddress(), ResolvedFilePath(reader.GetString(2)), reader.GetString(3)));
+            Connection, $"SELECT plugin, origin, file_path, content_hash, file_stamp FROM {FilesRelation}",
+            reader => (reader.GetPluginAddress(), ResolvedFilePath(reader.GetString(2)), reader.GetString(3), reader.GetStringOrNull(4)));
     }
+
+    // The hash each claim took of a file, and the stamp the file had then, so a file whose stamp holds is not read
+    // again (ADR-0003).
+    private readonly ConcurrentDictionary<string, (string Stamp, string Hash)> _claimed = new(StringComparer.Ordinal);
 
     // Null when the file cannot be read (mid-write, permissions) counts as a mismatch: an unreadable
     // file is no evidence its rows are still true.
     public string? FileContentHash(string filePath)
     {
+        if (_claimed.TryGetValue(filePath, out var claimed) && _plugins.StampOf(filePath) == claimed.Stamp) return claimed.Hash;
         var hash = _plugins.HashOf(filePath);
         if (hash == null) LogUnreadable(filePath);
         return hash;
@@ -388,12 +408,12 @@ internal sealed class Store : IDisposable
             reader => (ResolvedFilePath(reader.GetString(0)), reader.GetString(1)), key.Name, key.Origin) is [var claim] ? claim : null;
     }
 
-    /// <summary>Every plugin's disk claim and derivation as of now, each table read in one query, for a pass that asks them
-    /// of plugins it meets one by one (ADR-0010).</summary>
-    internal IndexedStamps IndexedStamps()
+    /// <summary>Every plugin's disk claim and derivation, and the document stamps of those of <paramref name="comparing"/>
+    /// derived from their tree, one query each, for a pass that meets the plugins one by one (ADR-0010).</summary>
+    internal IndexedStamps IndexedStamps(IEnumerable<PluginAddress> comparing)
     {
         var plugins = new Dictionary<PluginAddress, IndexedPlugin>(PluginAddress.Comparer);
-        foreach (var (key, filePath, contentHash) in IndexedFiles())
+        foreach (var (key, filePath, contentHash, _) in IndexedFiles())
             plugins[key] = new IndexedPlugin((filePath, contentHash), null);
         foreach (var (key, stamp) in DuckDbSql.Rows(
             Connection, $"SELECT plugin, origin, derived_from FROM {PluginDerivationRelation}",
@@ -406,7 +426,8 @@ internal sealed class Store : IDisposable
             }
             plugins[key] = (plugins.TryGetValue(key, out var indexed) ? indexed : new IndexedPlugin(null, null)) with { DerivedFrom = derivedFrom };
         }
-        return new IndexedStamps(plugins);
+        List<PluginAddress> trees = [.. comparing.Where(key => plugins.GetValueOrDefault(key)?.DerivedFrom == DerivedFrom.SourceTree)];
+        return new IndexedStamps(plugins, trees.Count > 0 ? HeldDocumentStamps(trees) : []);
     }
 
     /// <summary>Which truth <paramref name="key"/>'s rows were derived from, or null when the store
@@ -463,19 +484,24 @@ internal sealed class Store : IDisposable
         if (ClaimOf(filePath) is { } claim) StampFileClaim(plugin, origin, filePath, claim, stringsRead);
     }
 
-    private FileClaim? ClaimOf(string filePath)
+    // The stamp is taken before the claim's read, so a write during it moves the file past the stamp kept.
+    private (FileClaim Claim, string? Stamp)? ClaimOf(string filePath)
     {
-        if (_plugins.ClaimOf(filePath, Release).Holds(out var claim, out var unread)) return claim;
+        var stamp = _plugins.StampOf(filePath);
+        if (_plugins.ClaimOf(filePath, Release).Holds(out var claim, out var unread)) return (claim, stamp);
         _logger.LogWarning(unread.Error, "Could not read {Path} to hash it, so nothing vouches for its rows: {Reason}", filePath, unread.Reason);
         return null;
     }
 
-    private void StampFileClaim(string plugin, string origin, string filePath, FileClaim claim, string? stringsRead)
+    private void StampFileClaim(string plugin, string origin, string filePath, (FileClaim Claim, string? Stamp) stamped, string? stringsRead)
     {
+        var (claim, stamp) = stamped;
         DuckDbSql.Execute(Connection, $"""
-            INSERT INTO {FilesRelation} (plugin, origin, file_path, content_hash, strings_read)
-            VALUES ($1, $2, $3, $4, $5)
-            """, plugin, origin, StoredFilePath(filePath), claim.Hash, stringsRead);
+            INSERT INTO {FilesRelation} (plugin, origin, file_path, content_hash, file_stamp, strings_read)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            """, plugin, origin, StoredFilePath(filePath), claim.Hash, stamp, stringsRead);
+        if (stamp is null) _claimed.TryRemove(filePath, out _);
+        else _claimed[filePath] = (stamp, claim.Hash);
         StampDiagnoses(plugin, origin, claim);
     }
 
@@ -774,17 +800,20 @@ internal sealed class Store : IDisposable
     /// is the plugin's truth however many records its binary holds, and it refuses a FormKey two
     /// documents claim before any is indexed.</summary>
     public void IndexTree(IPluginDocuments documents, PluginMetadata registered, string? filePath, CancellationToken token) =>
-        Index(documents, registered, filePath, DerivedFrom.SourceTree, stringsRead: null, token);
+        Index(documents, registered, filePath, DerivedFrom.SourceTree, stringsRead: null, recordsHeld: null, token);
 
-    /// <summary>A binary whose documents miss a record it holds, or that holds one FormKey in two
-    /// groups, is not indexed, and the failure says which. xEdit refuses a duplicate FormID to load.</summary>
+    /// <summary>A binary whose documents miss one of the <paramref name="recordsHeld"/> records it holds, or that holds one
+    /// FormKey in two groups, is not indexed, and the failure says which. xEdit refuses a duplicate FormID to load.</summary>
     public LoadFailure? IndexBinary(
-        IPluginDocuments documents, PluginMetadata registered, string? filePath, DerivedFrom derivedFrom, string? stringsRead, CancellationToken token) =>
-        Index(documents, registered, filePath, derivedFrom, stringsRead, token);
+        IPluginDocuments documents, PluginMetadata registered, string? filePath, DerivedFrom derivedFrom, string? stringsRead,
+        int recordsHeld, CancellationToken token) =>
+        Index(documents, registered, filePath, derivedFrom, stringsRead, recordsHeld, token);
 
     // Replaces whatever the key held, and stamps the file's hash and diagnosis (ADR-0003); a null
     // path claims no file backs the rows (ADR-0012).
-    private LoadFailure? Index(IPluginDocuments documents, PluginMetadata registered, string? filePath, DerivedFrom derivedFrom, string? stringsRead, CancellationToken token)
+    private LoadFailure? Index(
+        IPluginDocuments documents, PluginMetadata registered, string? filePath, DerivedFrom derivedFrom, string? stringsRead, int? recordsHeld,
+        CancellationToken token)
     {
         var (plugin, origin) = (registered.Name, registered.Origin);
         var schemas = Schemas;
@@ -801,7 +830,7 @@ internal sealed class Store : IDisposable
         StampPluginFacts(plugin, origin, filePath, derivedFrom, stringsRead);
 
         var ingested = StoreFaults.Translating(() => Ingest.IndexPlugin(documents, plugin, origin, schemas, token));
-        if (derivedFrom != DerivedFrom.SourceTree && BinaryRefused(registered, ingested.Records) is { } refused) return refused;
+        if (recordsHeld is { } held && BinaryRefused(registered, ingested.Records, held) is { } refused) return refused;
         BumpSequence();
         OweCheckpoint();
 
@@ -817,7 +846,7 @@ internal sealed class Store : IDisposable
     }
 
     // The duplicate first: it is a defect in the bytes, where a shortfall may be mEdit's own.
-    private LoadFailure? BinaryRefused(PluginMetadata registered, int read)
+    private LoadFailure? BinaryRefused(PluginMetadata registered, int read, int held)
     {
         var heldTwice = Ingest.FormKeysHeldTwice(registered.Name, registered.Origin);
         if (heldTwice.Count > 0)
@@ -825,7 +854,7 @@ internal sealed class Store : IDisposable
             return new LoadFailure("duplicate FormKey " + string.Join("; ", heldTwice.Select(held =>
                 $"{held.FormKey}, in its {Listed([.. held.RecordTypes.Select(Schemas.DisplayNameFor)])} groups")), IsDiagnosis: true);
         }
-        return read < registered.RecordCount ? new LoadFailure($"mEdit read {read} of its {registered.RecordCount} records") : null;
+        return read < held ? new LoadFailure($"mEdit read {read} of its {held} records") : null;
     }
 
     private static string Listed(string[] names) =>
@@ -1065,21 +1094,25 @@ internal sealed class Store : IDisposable
     // One row per source document: every Effective record no document embeds. A worldspace's TopCell
     // is embedded, while an exterior cell has a directory.
     private static readonly string DocumentStamps = $"""
-        SELECT r.form_key, r.content_hash
+        SELECT r.plugin, r.origin, r.form_key, r.content_hash
         FROM mirror.records r
-        WHERE r.plugin = $1 AND r.origin = $2
-          AND NOT EXISTS (
+        JOIN (SELECT unnest($1::VARCHAR[]) AS plugin, unnest($2::VARCHAR[]) AS origin) k
+          ON k.plugin = r.plugin AND k.origin = r.origin
+        WHERE NOT EXISTS (
             SELECT 1 FROM mirror.holdings h
             WHERE h.child = r.form_key AND h.plugin = r.plugin AND h.origin = r.origin
               AND h.slot <> {HoldingSlots.Exterior})
         """;
 
-    /// <summary>The content stamp of each source document the rows were derived from, by the key of
-    /// the record it files.</summary>
-    public Dictionary<string, string> HeldDocumentStamps(PluginAddress key)
+    /// <summary>The content stamp of each source document the rows of each of <paramref name="keys"/> were derived
+    /// from, by the key of the record it files, in one query (ADR-0010).</summary>
+    public Dictionary<PluginAddress, Dictionary<string, string>> HeldDocumentStamps(IReadOnlyCollection<PluginAddress> keys)
     {
-        return LastWins(DuckDbSql.Rows(
-            Connection, DocumentStamps, reader => KeyValuePair.Create(reader.GetString(0), reader.GetString(1)), key.Name, key.Origin));
+        var rows = DuckDbSql.Rows(
+            Connection, DocumentStamps, reader => (Key: reader.GetPluginAddress(), Stamp: KeyValuePair.Create(reader.GetString(2), reader.GetString(3))),
+            keys.Select(key => key.Name).ToList(), keys.Select(key => key.Origin).ToList())
+            .ToLookup(row => row.Key, row => row.Stamp, PluginAddress.Comparer);
+        return keys.ToDictionary(key => key, key => LastWins(rows[key]), PluginAddress.Comparer);
     }
 
     // A plugin can hold one FormKey twice and the rows carry no key, so the last row speaks.
@@ -1095,8 +1128,12 @@ internal sealed class Store : IDisposable
 internal sealed record IndexedPlugin((string FilePath, string ContentHash)? File, DerivedFrom? DerivedFrom);
 
 /// <summary>What the store held of each plugin's rows when it was asked: the file they were built from, and the truth.</summary>
-internal sealed class IndexedStamps(IReadOnlyDictionary<PluginAddress, IndexedPlugin> plugins)
+internal sealed class IndexedStamps(
+    IReadOnlyDictionary<PluginAddress, IndexedPlugin> plugins, IReadOnlyDictionary<PluginAddress, Dictionary<string, string>> documentStamps)
 {
+    /// <summary>Null when the plugin was not among those whose document stamps were read.</summary>
+    public Dictionary<string, string>? DocumentStampsOf(PluginAddress key) => documentStamps.GetValueOrDefault(key);
+
     public (string FilePath, string ContentHash)? FileOf(PluginAddress key) => plugins.TryGetValue(key, out var indexed) ? indexed.File : null;
 
     public DerivedFrom? DerivationOf(PluginAddress key) => plugins.TryGetValue(key, out var indexed) ? indexed.DerivedFrom : null;

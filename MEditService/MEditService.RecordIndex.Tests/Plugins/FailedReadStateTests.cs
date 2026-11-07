@@ -610,7 +610,7 @@ public sealed class FailedReadStateTests : IDisposable
 
         public HeldAtFirstRead() : base(TestAdapters.Mutagen()) { }
 
-        public override Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
+        public override Answer<PluginContent, PluginFailure> ReadContent(
             ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
             Interlocked.Increment(ref _read) == 1
                 ? PluginFailures.Inaccessible()

@@ -1,5 +1,14 @@
 namespace MEditService.RepositoriesLib;
 
+/// <summary>A file's <see cref="FileStamp"/> as text, to keep beside what a read of its bytes found.</summary>
+public static class SettledStamp
+{
+    /// <summary>Null when the file system cannot answer, or the file changed too recently for a later write to move
+    /// its stamp.</summary>
+    public static string? Of(string path, TimeProvider timeProvider) =>
+        FileStamp.Of(path) is { } stamp && stamp.SettledAt(timeProvider.GetUtcNow()) ? $"{stamp.Size}:{stamp.Modified}" : null;
+}
+
 /// <summary>What the file system says of a file without a read of its bytes: its size and date
 /// modified, which a link leaves as it was (ADR-0003). The date is ticks since the Unix epoch.</summary>
 internal readonly record struct FileStamp(long Size, long Modified)
