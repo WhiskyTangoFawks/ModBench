@@ -60,6 +60,26 @@ public sealed class LoadOrderAtScaleTests
         Assert.True(many <= few * 1.5, $"An edit took {many.TotalSeconds:F2} s with 300 plugins and {few.TotalSeconds:F2} s with 20.");
     }
 
+    [Fact]
+    public void ACheckAfterAThousandSeparateDocumentsChange_ReachesReadsWithinOneSecond()
+    {
+        const int documents = 1_000;
+        using var scale = new LoadOrderAtScale(documentsInASourcePlugin: documents);
+        for (var d = 0; d < documents; d++)
+        {
+            var editorId = $"Document{d:D4}";
+            scale.ManyDocumentsPlugin.Require().HandEdit(new RecordIdentity(scale.TheManyDocuments[d], "KYWD", editorId), $"\"{editorId}\"", "\"Edited\"");
+        }
+
+        scale.Index.SignalChange();
+
+        Budgets.Reached(OneGesture, () => AllEdited(scale), "A check after 1,000 documents changed reaching reads");
+    }
+
+    private static bool AllEdited(LoadOrderAtScale scale) =>
+        scale.Index.Queries.GetRecords(types: null, scale.ManyDocumentsPlugin.Require().Key, search: "Edited", limit: int.MaxValue, offset: 0)
+            .Value().Items.Count(row => row.EditorId == "Edited") == scale.TheManyDocuments.Count;
+
     private static TimeSpan TimeToReachReads(int plugins)
     {
         using var scale = new LoadOrderAtScale(plugins, rows: 6_000, referencesInABigCell: 100);

@@ -109,18 +109,20 @@ internal sealed class Projector(
 
         // A key the record index does not hold is a record the tree has gained or got back, and no document
         // says where the tree puts it: a new exterior cell's block is a directory, not a field.
-        if (formKeys.Any(formKey => index.StoredRow(key, formKey) == null))
+        var stored = index.StoredRows(key, formKeys);
+        if (formKeys.Any(formKey => !stored.ContainsKey(formKey)))
             return RederiveWholePluginFromSource(projection, plugin, formKeys);
 
         // One repository for the batch, so its listing memo and embedded-owner map are built once
         // rather than once per key.
         var repository = Over(plugin);
-        var touched = new List<string>();
+        var deltas = new List<(string FormKey, string? Body)>();
         foreach (var formKey in formKeys)
         {
-            if (!RefreshOneKey(repository, key, formKey).Holds(out var refreshed, out var stopped)) return stopped;
-            touched.AddRange(refreshed);
+            if (!ChangedDocument(repository, key, formKey, stored[formKey]).Holds(out var changed, out var stopped)) return stopped;
+            if (changed is { } delta) deltas.Add(delta);
         }
+        var touched = index.ProjectDocuments(key, deltas);
         if (!LearnWorkingTreeStates(plugin).Holds(out var moved, out var unlearned)) return unlearned;
         touched.AddRange(moved);
 
@@ -130,13 +132,11 @@ internal sealed class Projector(
         return null;
     });
 
-    // Re-derives one key's rows. Called again with the same bytes, nothing below fires.
-    private Answer<IReadOnlyList<string>, SourceFailure> RefreshOneKey(ISourceRepositoryReads repository, PluginAddress key, string formKey)
+    // The document to project for one key, or none when the tree holds the bytes the rows came from.
+    private Answer<(string FormKey, string? Body)?, SourceFailure> ChangedDocument(
+        ISourceRepositoryReads repository, PluginAddress key, string formKey,
+        (string RecordType, string? EditorId, string ContentHash) effective)
     {
-        // Gone since the batch was read: another key's projection in this same batch took it (a
-        // container's document carries its children's rows).
-        if (index.StoredRow(key, formKey) is not { } effective) return SourceAnswer.Of<IReadOnlyList<string>>([]);
-
         var identity = new RecordIdentity(formKey, effective.RecordType, effective.EditorId);
         if (!repository.RecordOf(key, identity).Holds(out var workingTree, out var stopped)) return stopped;
         var workingTreeText = workingTree?.Body;
@@ -148,8 +148,8 @@ internal sealed class Projector(
 
         return workingTreeText != null
                && string.Equals(source.ContentStamp(workingTreeText), effective.ContentHash, StringComparison.Ordinal)
-            ? SourceAnswer.Of<IReadOnlyList<string>>([])
-            : SourceAnswer.Of<IReadOnlyList<string>>(index.ProjectDocuments(key, [(formKey, workingTreeText)]));
+            ? SourceAnswer.Of<(string FormKey, string? Body)?>(null)
+            : SourceAnswer.Of<(string FormKey, string? Body)?>((formKey, workingTreeText));
     }
 
     // The whole tree, read as one mod: where a record sits is a fact about the tree, not about one
