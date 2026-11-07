@@ -1,7 +1,11 @@
 using System.Diagnostics;
+using System.Text.Json.Nodes;
+using MEditService.Codec.Serialization;
 using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
+using MEditService.TestSupport;
+using Mutagen.Bethesda;
 
 namespace MEditService.RecordIndex.Tests.Plugins;
 
@@ -76,6 +80,38 @@ public sealed class LoadOrderAtScaleTests
     private static bool EditReachedReads(LoadOrderAtScale scale) =>
         scale.Index.Queries.GetRenderedDocument(scale.BigCellPlugin.Key, scale.AReferenceInTheBigCell).Value()?.Text
             ?.Contains("\"Edited\"", StringComparison.Ordinal) == true;
+
+    [Fact]
+    public void AThousandReferencesTakenOutOfABigCellsDocument_ReachReadsWithinOneSecond()
+    {
+        using var scale = new LoadOrderAtScale();
+        var path = scale.BigCellPlugin.SourceFileOf(scale.Index.DocumentOf(scale.BigCell, scale.BigCellPlugin.Key));
+        var cell = JsonNode.Parse(File.ReadAllText(path)).Require().AsObject();
+        var temporary = cell["Temporary"].Require().AsArray();
+        for (var r = 0; r < 1_000; r++) temporary.RemoveAt(0);
+        File.WriteAllText(path, RecordTextCodec.RoundTrip(cell.ToJsonString(), GameRelease.Fallout4, "cell"));
+
+        scale.Index.SignalChange();
+
+        Budgets.Reached(OneGesture, () => CheckEnded(scale) && ReferencesListed(scale) == 3_000, "Taking 1,000 references out of a big cell reaching reads");
+    }
+
+    [Fact]
+    public void ABigCellsDocumentDeleted_ReachesReadsWithinOneSecond()
+    {
+        using var scale = new LoadOrderAtScale();
+        File.Delete(scale.BigCellPlugin.SourceFileOf(scale.Index.DocumentOf(scale.BigCell, scale.BigCellPlugin.Key)));
+
+        scale.Index.SignalChange();
+
+        Budgets.Reached(OneGesture, () => CheckEnded(scale) && ReferencesListed(scale) == 0, "Deleting a big cell's document reaching reads");
+        Assert.Null(scale.Index.CopyIn(scale.BigCell, scale.BigCellPlugin.Key));
+    }
+
+    private static bool CheckEnded(LoadOrderAtScale scale) => scale.Index.Status.State != LoadOrderState.Reconciling;
+
+    private static int ReferencesListed(LoadOrderAtScale scale) =>
+        scale.Index.Queries.GetCellChildRecords(scale.BigCellPlugin.Key, scale.BigCell).Value().Temporary.Count;
 
     [Fact]
     public void ABigCell_OpensWithinOneSecond()

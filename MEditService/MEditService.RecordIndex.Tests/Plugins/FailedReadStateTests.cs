@@ -24,7 +24,9 @@ public sealed class FailedReadStateTests : IDisposable
     private int _treeReads;
     private readonly HookedSource _source;
 
-    public FailedReadStateTests() => _source = new HookedSource(FireIfArmed);
+    private Action<string> _stamping = _ => { };
+
+    public FailedReadStateTests() => _source = new HookedSource(FireIfArmed, text => _stamping(text));
 
     public void Dispose() => _fixture.Dispose();
 
@@ -470,6 +472,30 @@ public sealed class FailedReadStateTests : IDisposable
     }
 
     [Fact]
+    public void AnEditWhoseProjectionRunsOutOfMemoryAfterTheCheckStampedIt_IsThePluginsFailedToRead_WithoutReadingItWhole()
+    {
+        SourceMods.Init(Plugin);
+        using var index = Reconciled();
+        var document = NpcDocument;
+        File.WriteAllText(document, File.ReadAllText(document).Replace($"\"{NpcEditorId}\"", "\"EditedNpc\"", StringComparison.Ordinal));
+        var thrown = Faults.Of(typeof(OutOfMemoryException));
+        const int theProjectionsStamp = 2;
+        var stampsOfTheEdit = 0;
+        _stamping = text =>
+        {
+            if (text.Contains("\"EditedNpc\"", StringComparison.Ordinal) && Interlocked.Increment(ref stampsOfTheEdit) == theProjectionsStamp)
+                throw thrown;
+        };
+        var readsBefore = TreeReads();
+
+        index.NextCheckUntil(() => Failed(index), "the plugin's failure");
+
+        Assert.Equal(theProjectionsStamp, Volatile.Read(ref stampsOfTheEdit));
+        Assert.Contains(thrown.Message, Reason(index), StringComparison.Ordinal);
+        Assert.Equal(readsBefore, TreeReads());
+    }
+
+    [Fact]
     public void AWarmLoadWhoseValidationRunsOutOfMemory_IsThePluginsFailedToRead_WithoutReadingItWhole()
     {
         SourceMods.Init(Plugin);
@@ -612,8 +638,14 @@ public sealed class FailedReadStateTests : IDisposable
 
     private enum TreeMoment { StampsTaken, ReadBegins, ReadEnds, RecordRead }
 
-    private sealed class HookedSource(Action<TreeMoment, PluginAddress> at) : DelegatingSourceAdapter(TestAdapters.Source())
+    private sealed class HookedSource(Action<TreeMoment, PluginAddress> at, Action<string> stamping) : DelegatingSourceAdapter(TestAdapters.Source())
     {
+        public override string ContentStamp(string text)
+        {
+            stamping(text);
+            return base.ContentStamp(text);
+        }
+
         public override ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release) =>
             base.Over(plugin, release) is { } reads ? new HookedRepository(reads, at) : null;
 

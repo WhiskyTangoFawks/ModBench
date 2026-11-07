@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -78,6 +79,27 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
         var siblingInTheOtherSlot = _fixture.PersistentRef;
         Assert.NotNull(_fixture.Index.CopyIn(siblingInTheOtherSlot, _fixture.Plugin));
         Assert.Equal("persistent", _fixture.Index.PlacementGroupIn(_fixture.Plugin, _fixture.EmbedCell, siblingInTheOtherSlot));
+    }
+
+    [Fact]
+    public void AChildMovedFromOneContainersDocumentToAnothers_IsHeldByTheOther()
+    {
+        var moved = _fixture.TemporaryRef;
+        JsonNode placed = new JsonObject();
+        var leftBody = CellBodyAfterCodecRoundTripThrough(temporary =>
+        {
+            placed = temporary.Single(p => p?["FormKey"]?.GetValue<string>() == moved).Require();
+            Assert.True(temporary.Remove(placed));
+        });
+        var receiving = JsonNode.Parse(_fixture.Entry.SourceTextOf(_fixture.Index.DocumentOf(_fixture.Cell, _fixture.Plugin))).Require().AsObject();
+        receiving["Temporary"] = new JsonArray(placed);
+        var receivingBody = RecordTextCodec.RoundTrip(receiving.ToJsonString(), GameRelease.Fallout4, "cell");
+
+        _fixture.Index.Project(_fixture.Entry, [(_fixture.EmbedCell, leftBody), (_fixture.Cell, receivingBody)]);
+
+        Assert.NotNull(_fixture.Index.CopyIn(moved, _fixture.Plugin));
+        Assert.Equal("temporary", _fixture.Index.PlacementGroupIn(_fixture.Plugin, _fixture.Cell, moved));
+        Assert.Null(_fixture.Index.PlacementGroupIn(_fixture.Plugin, _fixture.EmbedCell, moved));
     }
 
     [Fact]
