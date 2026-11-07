@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { join, basename, sep } from 'node:path';
+import { join, basename, relative, sep } from 'node:path';
 import ts from 'typescript';
-import { pathSegments, plantedTree, productionFiles, sourceFiles, SOURCE_ROOTS, SRC, WEBVIEW_SRC } from './scanSource';
+import { isAgentText, pathSegments, plantedTree, productionFiles, sourceFiles, SOURCE_ROOTS, SRC, WEBVIEW_SRC } from './scanSource';
 
 interface Codec {
   file: string;
@@ -165,7 +165,7 @@ function layoutLeaks(sourceText: string, fileName: string): string[] {
 
 function findLayoutLeaks(roots: readonly string[]): Record<string, string[]> {
   const leaks: Record<string, string[]> = {};
-  for (const path of roots.flatMap((root) => productionFiles(root))) {
+  for (const path of roots.flatMap((root) => productionFiles(root).filter((file) => !isAgentText(relative(root, file))))) {
     const leaked = new Set(layoutLeaks(readFileSync(path, 'utf8'), path));
     const found = Object.entries(LAYOUT)
       .filter(([name, { owners }]) => leaked.has(name) && !owners.some((owner) => path.endsWith(sep + owner)))

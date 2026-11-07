@@ -1,8 +1,11 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  // As esbuild.mjs defines it for the bundle.
+  define: { GLOSSARY: JSON.stringify(readFileSync('../spec/GLOSSARY.md', 'utf8')) },
   test: {
     include: ['src/**/*.test.ts', 'webview/src/**/*.test.tsx', 'webview/src/**/*.test.ts'],
     exclude: ['src/test/integration/**'],

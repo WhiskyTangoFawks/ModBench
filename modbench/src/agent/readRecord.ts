@@ -89,11 +89,6 @@ const standingIn = async (mEdit: RecordReads, value: InstanceValue, formKey: str
 
 export const READ_RECORD = {
   name: 'read_record',
-  description: 'A record in the load order, by its EditorID or FormKey: each active plugin\'s copy, as below, as { plugin: { name, origin }, isWinner, loadIndex, status?, isPartialForm, parseDiagnosis?, conflictThis?, fields, ...copy }, or { plugin, isWinner, reason } for a copy that could not be read, which refuses the read in part. '
-    + 'loadIndex is the plugin\'s load index as the record panel writes it, status is { label, reason } as the record panel\'s column header shows it, and absent for a copy the game uses and I can edit, isPartialForm is a copy the game ignores the fields of, parseDiagnosis is why mEdit could not read the copy, conflictThis is the copy\'s worst cell state, '
-    + 'and fields are the record panel\'s rows, each { field, conflictAll, conflictThis?, children? }: conflictAll is the row across every copy, and conflictThis the cell of this copy. '
-    + 'With plugin { name, origin? } as list_plugins shows it, that plugin\'s copy alone, whether the plugin is active or not, with the same standing when the plugin is compared; only this one, the file asked for, takes the instance\'s word that the game loads it or loads another mod\'s file instead, as the panel gives that to the tab\'s own column alone. '
-    + 'A copy is { kind: \'OwnFile\' | \'ContainersFile\', location } the path of the source file that holds it, or { kind: \'Rendered\', text } the copy\'s text, for a plugin with no source.',
   input: RECORD,
   of: async (
     mEdit: RecordReads,
@@ -126,7 +121,6 @@ export const READ_RECORD = {
 
 export const LIST_REFERENCES = {
   name: 'list_references',
-  description: 'The records that reference a record, by its EditorID or FormKey.',
   input: { name: z.string() },
   of: async (mEdit: Pick<MEditClient, 'resolveNames' | 'getReferences'>, { name }: { name: string }) => {
     const [formKey = ''] = await formKeysNamed(mEdit, [name]);

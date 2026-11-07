@@ -12,13 +12,6 @@ const undecidedIn = ({ notRestored }: AgentValue): { lines: readonly string[]; r
 
 export const LIST_PLUGINS = {
   name: 'list_plugins',
-  description: 'The plugin order, losing first: the plugins the game loads with no line, then each line by its number (where the release loads blueprint plugins last, a blueprint plugin with no line follows the last line of a plugin that is not one), then the plugins outside the order (an overridden copy, a file no line names). '
-    + 'Each plugin has its origin, its line (null when it has none), whether it is enabled and whether it wins its file name. '
-    + 'Each also has what its Plugins view row shows: statuses, each with its words and its tooltip line, '
-    + 'and readOnly, compiled (whether it is a compiled plugin) and masters, each null until mEdit has read the plugin. '
-    + 'The origin of a line whose file is not on disk yet is the mod whose manifest names it. '
-    + 'When it cannot name the plugins the game loads with no line, it refuses in part: noLineMissing is the reason, and the rest is answered. '
-    + 'When it cannot read the manifests, it refuses in part too: notRestoredUndecided names the lines whose origin it could not decide, and why.',
   of: (value: AgentValue, view: PluginsShown) => {
     const { plugins, pluginsLoadedWithNoLine, gameFolder, dataFolderPlugins, blueprintLoadsLast } = value;
     const { loadedWithNoLine, fromLines, others } = pluginOrderOf(

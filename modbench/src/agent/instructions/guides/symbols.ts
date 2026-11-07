@@ -1,0 +1,24 @@
+export const SYMBOLS_GUIDE = `Modbench works like a language server whose symbols are modding concepts, and whose source files are the instance's files.
+
+- A symbol is a modding concept that a file names. A file names each kind of symbol so:
+  - a plugin by its file name, with its origin when two plugins share the file name
+  - a record by its FormKey, or by its EditorID
+  - a mod by its folder's name
+  - a mod separator by its name
+  - a downloaded file by its file name
+  - a profile by its name
+  - a Papyrus script by its name
+  - a file by its path in the Data folder, which names the copy that the game gets
+- A file that names a symbol holds a reference to it. Plugin source, build files, the profiles' mod order and plugin order, and manifests hold references.
+- Resolve a name before you act on it: resolve_names for plugins and records, resolve_instance_names for downloaded files and files in mods. A name that means more than one thing is refused, with each match listed. Name the one that you mean as the list names it.
+- find_definition gives where a symbol is defined:
+  - a plugin: its file, in the mod that holds it
+  - a record: its file in plugin source, or its plugin when it has no plugin source
+  - a mod: its folder
+  - a Papyrus script: its source, or its compiled script when it has no source
+  - a file: the copy that the game gets, inside its archive when it is archived
+  - a mod separator, a downloaded file or a profile has no definition
+- list_references lists each place that a file names a symbol, of every kind.
+- Rename a symbol with its rename tool, such as mod_rename, plugin_rename or separator_rename. The tool carries every reference. In plugin source and build files, the change is a working-tree edit that the user reviews. A rename by hand, with mv or a text edit, leaves every reference on the old name.
+- When a rename cannot carry a reference, such as one in a plugin with no plugin source, the rename lands, and its warning names each reference left behind.
+- list_problems lists each reference that names nothing.`;

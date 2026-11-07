@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import ts from 'typescript';
-import { CONSTRUCTION, IMPLEMENTATIONS, isTestSupport, MANIFEST, plantedTree, sourceFiles, SOURCE_ROOTS, SRC, WALKTHROUGH, WEBVIEW_SRC } from './scanSource';
+import { CONSTRUCTION, IMPLEMENTATIONS, isAgentText, isTestSupport, MANIFEST, plantedTree, sourceFiles, SOURCE_ROOTS, SRC, WALKTHROUGH, WEBVIEW_SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
 
 const ADAPTER = 'instanceAdapter';
@@ -42,7 +42,7 @@ function findOffenders(roots: readonly string[]): Record<string, string[]> {
   for (const root of roots) {
     for (const path of tsFiles(root, { exclude: ['generated'] })) {
       const relPath = relative(root, path);
-      if (isTestSupport(relPath)) continue;
+      if (isTestSupport(relPath) || isAgentText(relPath)) continue;
       const others = IMPLEMENTATIONS.filter((implementation) => !isImplementation(implementation, relPath));
       const inPath = mentions(relPath, others).length > 0 ? ['file name'] : [];
       const text = readFileSync(path, 'utf8');
@@ -65,6 +65,14 @@ describe('no extension file names a mod manager or a publisher outside its imple
 
   it('scans clean outside each implementation', () => {
     expect(findOffenders(SOURCE_ROOTS)).toEqual({});
+  });
+
+  it('skips the agent\'s text folder alone', () => {
+    expect([
+      isAgentText(join('agent', 'instructions', 'guides', 'instance', 'mo2.ts')),
+      isAgentText(join('agent', 'readGuide.ts')),
+      isAgentText(join('agentText', 'instructions', 'guides.ts')),
+    ]).toEqual([true, false, false]);
   });
 
   it('scans package.json and the walkthrough clean', () => {

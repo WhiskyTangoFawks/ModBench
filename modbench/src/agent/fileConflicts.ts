@@ -84,11 +84,6 @@ function conflictsOf(value: InstanceValue, wanted: readonly FileOrigin[], conten
 
 export const FILE_CONFLICTS = {
   name: 'list_file_conflicts',
-  description: 'Each mod\'s file order conflicts: the files it wins and over which mods, and the files it loses and to which winner. '
-    + 'A file in conflict also has its contents: the conflict table\'s state of the mod\'s copy and of the file\'s row, and the copy\'s size and date modified. '
-    + 'Also its indicators and every file it holds: whether the file is excluded, whether the game gets it, and the publisher tags that cover it. '
-    + 'Whether a file differs from its manifest is list_mod_statuses. '
-    + 'With no mods given, every mod; otherwise the mods named, or Overwrite, each as list_mods names it.',
   input: { mods: z.array(CONTAINER_NAME).optional() },
   of: async (value: InstanceValue, reads: CopyReads, { mods }: { mods?: ContainerName[] }): Promise<ModConflicts[]> => {
     const named = mods === undefined ? value.mods.filter(({ kind }) => kind === 'mod') : containersNamed(value, mods);

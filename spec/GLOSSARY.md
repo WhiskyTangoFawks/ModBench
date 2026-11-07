@@ -195,6 +195,9 @@ A mod manager's setup for one game: the mods, profiles and downloaded files it m
 
 Avoid: loadout, workspace, profile (that is one part of it)
 
+# Modlist
+The list of mods that makes up a playable game, as an abstract concept. The instance is its folder on disk, and the instance repository is its history in git.
+
 # Profile
 A named configuration of an instance: which mods are enabled, and in what order. One profile is active at a time.
 

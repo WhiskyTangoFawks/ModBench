@@ -33,6 +33,8 @@ import { SILENT_LOG } from '../../ports/log';
 import { present } from '../../ports/present';
 import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, type PluginAddress } from '../../wire/pluginAddress';
 import type { PluginShown, PluginsShown } from '../../drivingLib/pluginsShown';
+import { TOOL_DESCRIPTIONS } from '../instructions/tools';
+import { INSTANCE_GUIDE_BY_MANAGER } from '../instructions/guides';
 
 const PORT_SETTING = 'modbench.agent.port';
 
@@ -155,16 +157,10 @@ describe('the agent server, given an instance value', () => {
     expect(untyped).toEqual([]);
   });
 
-  it('hands the client its instructions on initialize', async () => {
+  it('hands the client instructions Claude Code shows whole, within 2,048 characters', async () => {
     const { client } = await clientOf(new FakeInstance(VALUE));
 
-    expect(client.getInstructions()).toContain('select_rows says which');
-  });
-
-  it('tells the client how to read Nexus without a key', async () => {
-    const { client } = await clientOf(new FakeInstance(VALUE));
-
-    expect(client.getInstructions()).toContain('https://api.nexusmods.com/v2/graphql');
+    expect(client.getInstructions()?.length).toBeLessThanOrEqual(2048);
   });
 
   it('hands a shell the variables the terminals of its window hold, as they are now', async () => {
@@ -2020,22 +2016,37 @@ describe('the agent server, given an input its tool does not take', () => {
     expect(tools.find((tool) => tool.name === 'mod_build')?.inputSchema).toMatchObject({ additionalProperties: false });
   });
 
-  it('tells the agent select_rows reads only the views, and where their columns are listed', async () => {
+  it('describes each tool within the 2,048 characters Claude Code shows', async () => {
     const { tools } = await (await clientOf(new FakeInstance(VALUE))).client.listTools();
+    const lengths = tools.map(({ description }) => description?.length ?? 0);
 
-    const description = tools.find((tool) => tool.name === 'select_rows')?.description;
-    expect(description).toContain('only the views');
-    expect(description).toContain('is_active');
-    expect(description).toContain('view_columns');
-    expect(description).toContain('narrow by the plugin, its origin and the FormKey before naming body');
+    expect(Math.min(...lengths)).toBeGreaterThan(0);
+    expect(Math.max(...lengths)).toBeLessThanOrEqual(2048);
   });
 
-  it('tells the agent, in what Claude Code shows of mod_install, that a FOMOD\'s choices are the user\'s, and how to hand the user the installer', async () => {
+  it('holds a description for exactly the tools it registers', async () => {
     const { tools } = await (await clientOf(new FakeInstance(VALUE))).client.listTools();
 
-    const shown = tools.find((tool) => tool.name === 'mod_install')?.description?.slice(0, 2048);
-    expect(shown).toContain('a FOMOD\'s choices are the user\'s');
-    expect(shown).toContain('installer?: true');
+    expect(Object.keys(TOOL_DESCRIPTIONS).sort()).toEqual(tools.map(({ name }) => name).sort());
+  });
+
+  it('answers the instance guide of the instance\'s own mod manager, as plain text', async () => {
+    const { client } = await clientOf(new FakeInstance(VALUE));
+
+    expect(await call(client, 'read_guide', { topic: 'instance' })).toEqual({ isError: false, text: INSTANCE_GUIDE_BY_MANAGER.MO2 });
+  });
+
+  it('refuses the instance guide for a mod manager that has none, naming the manager', async () => {
+    const managerNames = { ...VALUE.managerNames, manager: 'Another Manager' };
+    const { client } = await clientOf(new FakeInstance({ ...VALUE, managerNames }));
+
+    expect(await call(client, 'read_guide', { topic: 'instance' })).toEqual({ isError: true, text: 'No instance guide for Another Manager.' });
+  });
+
+  it('answers the vocabulary from the glossary\'s first term, without the opening line that points into spec/', async () => {
+    const { client } = await clientOf(new FakeInstance(VALUE));
+
+    expect((await call(client, 'read_guide', { topic: 'vocabulary' })).text).toMatch(/^# /);
   });
 
   it('advertises the SQL select_rows takes as a required string', async () => {

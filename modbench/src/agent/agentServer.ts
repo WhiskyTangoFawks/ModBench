@@ -31,6 +31,9 @@ import { RESOLVE_NAMES } from './resolveNames';
 import { SCRIPT_ENVIRONMENT, type TerminalEnvironment } from './scriptEnvironment';
 import { SELECT_ROWS } from './selectRows';
 import { PROBLEMS } from './problems';
+import { READ_GUIDE } from './readGuide';
+import { INSTRUCTIONS } from './instructions/instructions';
+import { TOOL_DESCRIPTIONS } from './instructions/tools';
 
 export interface AgentServerOptions {
   port: number;
@@ -64,7 +67,8 @@ const textBlock = (text: string) => ({ type: 'text' as const, text });
 // The standing lines of the sources the tool reads, each beside the answer as a block of its own.
 async function answer(log: Log, standing: () => string[], name: string, work: () => unknown) {
   try {
-    return { content: [textBlock(JSON.stringify(await work())), ...standing().map(textBlock)] };
+    const result = await work();
+    return { content: [textBlock(typeof result === 'string' ? result : JSON.stringify(result)), ...standing().map(textBlock)] };
   } catch (error) {
     const line = `[agent] ${name}: ${errorMessage(error)}`;
     if (error instanceof Refusal) log.warn(line);
@@ -94,18 +98,17 @@ async function stillWorking({ _meta, sendNotification }: RequestHandlerExtra<Ser
 
 interface Tool<Shape extends z.ZodRawShape> {
   readonly name: string;
-  readonly description: string;
   readonly input: Shape;
 }
 
 // The SDK refuses an input its schema rejects before the handler runs, with no Output line
 // (agent.md, Reporting, story 1), so it holds one that takes any object and advertises the tool's.
 function register<Shape extends z.ZodRawShape>(
-  server: McpServer, log: Log, standing: () => string[], { name, description, input }: Tool<Shape>, run: (args: z.output<z.ZodObject<Shape>>) => unknown,
+  server: McpServer, log: Log, standing: () => string[], { name, input }: Tool<Shape>, run: (args: z.output<z.ZodObject<Shape>>) => unknown,
 ): void {
   const schema = z.strictObject(input);
   const anyObject = z.looseObject({}).meta(z.toJSONSchema(schema, { io: 'input', target: 'draft-7' }));
-  server.registerTool(name, { description, inputSchema: anyObject }, (args, extra) => answer(log, standing, name, () =>
+  server.registerTool(name, { description: TOOL_DESCRIPTIONS[name], inputSchema: anyObject }, (args, extra) => answer(log, standing, name, () =>
     stillWorking(extra, () => run(parseOrRefuse(schema, args)))));
 }
 
@@ -115,16 +118,6 @@ const NO_INPUT = {};
 const namesAnOrigin = (args: unknown): boolean =>
   typeof args === 'object' && args !== null
   && Object.entries(args).some(([key, value]) => (key === 'origin' && typeof value === 'string') || namesAnOrigin(value));
-
-const INSTRUCTIONS = `Name objects as Modbench's views do: a plugin by its file name, a mod or a separator by its name, a record by its EditorID or FormKey, a downloaded file by its file name, an archive or a folder outside the downloads by its path, a file in a mod by its path in the mod. A name that means more than one thing is refused with each match listed as you can name it; name the one you mean that way.
-
-A plugin with source is a text file in a repository: edit it with your file tools, and the user reviews the change in Source Control. A plugin with no source is a binary: never edit it. Mod manager files change only through the gesture tools. A gesture runs on the argument and options given, never on the selection, with no picker, prompt or confirmation but the FOMOD installer you ask install for, and answers once Modbench's views show its change: with its outcome, or with what landed and each item refused and why. A change to many records by a rule is a script: write a Python file with import medit and run it in your shell with the variables script_environment returns. help(medit) lists its functions.
-
-A SELECT reads only the views: select_rows says which.
-
-Read Nexus yourself where it needs no key: its GraphQL endpoint, https://api.nexusmods.com/v2/graphql, answers mod search by name, a mod's requirements, its files with their IDs and changelogs, and MD5 lookup. A fetch of a nexusmods.com page is refused with a Cloudflare challenge.
-
-Ask Modbench what the files cannot answer.`;
 
 const RECORD_READS: readonly Source[] = ['instance', 'mEdit', 'plugins', 'sourceLanguage'];
 
@@ -146,6 +139,7 @@ function mcpServerOf({ instance, copyReads, mEdit, terminalEnvironment, statuses
   for (const gesture of GESTURE_TOOLS) register(server, log, reading('instance'), gesture, async (args) => gesture.of(await naming(args), mEdit, args, (line) => { log.warn(`[agent] ${gesture.name}: ${line}`); }));
   register(server, log, reading(), { ...SCRIPT_ENVIRONMENT, input: NO_INPUT }, () => SCRIPT_ENVIRONMENT.of(terminalEnvironment));
   register(server, log, reading('instance', 'sortingRules', 'sourceLanguage'), { ...PROBLEMS, input: NO_INPUT }, PROBLEMS.of);
+  register(server, log, reading('instance'), READ_GUIDE, (args) => READ_GUIDE.of(currentValue(instance), args));
   return server;
 }
 

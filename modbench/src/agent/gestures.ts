@@ -12,8 +12,6 @@ import { formKeysNamed } from './recordNames';
 import { parseOrRefuse } from './refusal';
 
 interface GestureInput {
-  /** The Argument the agent gives, as the tool's description teaches it. */
-  readonly takes: string;
   readonly input: z.ZodRawShape;
   readonly callOf: (value: InstanceValue, given: unknown, mEdit: NameResolver) => AgentCall | Promise<AgentCall>;
 }
@@ -21,10 +19,10 @@ interface GestureInput {
 type NameResolver = Pick<MEditClient, 'resolveNames'>;
 
 function gestureInput<Shape extends z.ZodRawShape>(
-  takes: string, input: z.ZodObject<Shape>,
+  input: z.ZodObject<Shape>,
   callOf: (value: InstanceValue, given: z.output<z.ZodObject<Shape>>, mEdit: NameResolver) => AgentCall | Promise<AgentCall>,
 ): GestureInput {
-  return { takes, input: input.shape, callOf: (value, given, mEdit) => callOf(value, parseOrRefuse(input, given), mEdit) };
+  return { input: input.shape, callOf: (value, given, mEdit) => callOf(value, parseOrRefuse(input, given), mEdit) };
 }
 
 const ENTRY_NAME = z.strictObject({ name: z.string(), kind: z.enum(['mod', 'separator']).optional() });
@@ -43,17 +41,12 @@ const SEPARATOR_NAME = z.strictObject({ name: z.string() });
 const separatorArguments = (value: InstanceValue, argument: readonly z.infer<typeof SEPARATOR_NAME>[]) =>
   entryArguments(value, argument.map(({ name }) => ({ name, kind: 'separator' as const })));
 
-const MODS_TAKES = 'argument: the mods, each { name, kind? } as list_mods names it';
-
 const MODS = gestureInput(
-  MODS_TAKES,
   z.strictObject({ argument: z.array(ENTRY_NAME) }),
   (value, { argument }) => new AgentCall(modArguments(value, argument), {}),
 );
 
 const VERSION_IN_GIT = gestureInput(
-  `${MODS_TAKES}; options: { where: 'NewRepository' for a source mod in a new repository, 'InstanceRepository' for a source mod in the `
-  + `instance repository, 'WholeFolder' for the mod's whole folder in the instance repository; commit: true to commit what it tracks as \`Init <mod>\`, false to leave it uncommitted }`,
   z.strictObject({ argument: z.array(ENTRY_NAME), options: z.strictObject({ where: z.enum(['NewRepository', 'InstanceRepository', 'WholeFolder']), commit: z.boolean() }) }),
   (value, { argument, options }) => new AgentCall(modArguments(value, argument), options),
 );
@@ -67,7 +60,6 @@ const placeNamed = (value: InstanceValue, place: z.infer<typeof MOVE_PLACE>) =>
   ('name' in place ? { kind: place.kind, name: modsNamed(value, [{ name: place.name, kind: place.kind }])[0]?.name ?? place.name } : place);
 
 const MOVE_MODS = gestureInput(
-  `argument: the mods, or the separators, each { name, kind? } as list_mods names it; options: { place: { kind: 'ungrouped' | 'modOrder' } or { kind: 'separator' | 'mod', name: the one it lands in or beside }, end: 'winning' | 'losing' }`,
   z.strictObject({ argument: z.array(ENTRY_NAME), options: z.strictObject({ place: MOVE_PLACE, end: z.enum(['winning', 'losing']) }) }),
   (value, { argument, options: { place, end } }) =>
     new AgentCall(entryArguments(value, argument), { place: placeNamed(value, place), end }),
@@ -76,50 +68,42 @@ const MOVE_MODS = gestureInput(
 const NAME_OPTION = z.strictObject({ options: z.strictObject({ name: z.string() }) });
 
 const RENAME_MOD = gestureInput(
-  'argument: the mod, { name } as list_mods names it; options: { name: its new name }',
   NAME_OPTION.extend({ argument: z.array(ENTRY_NAME) }),
   (value, { argument, options }) => new AgentCall(modArguments(value, argument), options),
 );
 
 const ADD_SEPARATOR = gestureInput(
-  'argument: the mod or separator it lands beside, { name, kind? } as list_mods names it; options: { name: the new separator\'s name }',
   NAME_OPTION.extend({ argument: z.array(ENTRY_NAME) }),
   (value, { argument, options }) => new AgentCall(entryArguments(value, argument), options),
 );
 
 const UNINSTALL = gestureInput(
-  `${MODS_TAKES}; options: { force?: true to uninstall, which is otherwise refused for each mod, listing what it loses }`,
   z.strictObject({ argument: z.array(ENTRY_NAME), options: z.strictObject({ force: z.boolean().optional() }).optional() }),
   (value, { argument, options }) => new AgentCall(modArguments(value, argument), { force: options?.force }),
 );
 
 const RENAME_SEPARATOR = gestureInput(
-  'argument: the separator, { name } as list_mods names it; options: { name: its new name }',
   NAME_OPTION.extend({ argument: z.array(SEPARATOR_NAME) }),
   (value, { argument, options }) => new AgentCall(separatorArguments(value, argument), options),
 );
 
 const DELETE_SEPARATORS = gestureInput(
-  'argument: the separators, each { name } as list_mods names it; options: { force?: true to delete, which is otherwise refused for each separator, naming the separator its mods would join }',
   z.strictObject({ argument: z.array(SEPARATOR_NAME), options: z.strictObject({ force: z.boolean().optional() }).optional() }),
   (value, { argument, options }) => new AgentCall(separatorArguments(value, argument), { force: options?.force }),
 );
 
 const CREATE_EMPTY_MOD = gestureInput(
-  'options: { name: the new mod\'s name }',
   NAME_OPTION,
   (_value, { options }) => new AgentCall([], options),
 );
 
 const FILES = gestureInput(
-  'argument: the files, each { mod: { name, kind? } as list_mods names it, Overwrite included, path: its path in the mod }',
   z.strictObject({ argument: z.array(z.strictObject({ mod: CONTAINER_NAME, path: z.string() })) }),
   (value, { argument }) => new AgentCall(filesNamed(value, argument).map(({ origin, relativePath }) =>
     ({ kind: 'file', origin, relativePath })), {}),
 );
 
 const PUBLISHER_TAG_ROWS = gestureInput(
-  'argument: the mods, each { mod: { name, kind? } as list_mods names it }, or the files and folders in a mod, each { mod, path: its path in the mod }; options: { tag: the publisher tag\'s name }',
   z.strictObject({
     argument: z.array(z.strictObject({ mod: ENTRY_NAME, path: z.string().optional() })),
     options: z.strictObject({ tag: z.string() }),
@@ -133,14 +117,12 @@ const PUBLISHER_TAG_ROWS = gestureInput(
 );
 
 const DOWNLOADED_FILES = gestureInput(
-  'argument: the downloaded files, each { name } as list_downloads names it',
   z.strictObject({ argument: z.array(z.strictObject({ name: z.string() })) }),
   (value, { argument }) => new AgentCall(
     downloadedFilesNamed(value.downloadedFiles, argument.map(({ name }) => name)).map((name) => ({ kind: 'downloadedFile' as const, name })), {}),
 );
 
 const DOWNLOAD = gestureInput(
-  'options: { mod: the Nexus mod, by its ID in the instance\'s game or by the address of its Nexus page, file?: the ID of its file to download, which a page address with a file may name instead; a request that names no file is refused, listing the mod\'s files }',
   z.strictObject({ options: z.strictObject({ mod: z.union([z.string(), z.number()]), file: z.union([z.string(), z.number()]).optional() }) }),
   (_value, { options: { mod, file } }) => new AgentCall([], { mod: String(mod), file: file === undefined ? undefined : String(file) }),
 );
@@ -156,13 +138,6 @@ const FOMOD_CHOICE = z.strictObject({
 });
 
 const INSTALL = gestureInput(
-  'argument: the one source, { kind: \'downloadedFile\', name } as list_downloads names it, or { kind: \'archive\' | \'folder\', path } for one outside the downloads; '
-    + 'options: { name: the new mod\'s name } or { target: the installed mod it upgrades, as list_mods names it }, exactly one of the two; '
-    + 'for a FOMOD, choices?: [{ step, groups: [{ group, options: [option] }] }], each by the name its installer shows, every step it shows answered, a step that needs no pick with none; '
-    + 'a FOMOD\'s choices are the user\'s: name only those the user made or gave you to make, and put the rest to the user, or hand the user the installer with installer?: true, '
-    + 'which opens on your choices and the author\'s defaults elsewhere, and answers once the user installs or cancels; '
-    + 'or manual?: true to install it as a plain copy, which a scripted FOMOD, one whose installer cannot be read and one whose module dependencies do not hold are refused without; '
-    + 'without the installer, a step left unanswered is refused, listing its groups and options with their descriptions, and the author\'s defaults answer nothing; a FOMOD that names files its package does not hold is refused, naming each, unless installAnyway?: true',
   z.strictObject({
     argument: z.array(INSTALL_SOURCE),
     options: z.strictObject({
@@ -178,32 +153,26 @@ const INSTALL = gestureInput(
   ),
 );
 
-const NO_INPUT = gestureInput('', z.strictObject({}), () => new AgentCall([], {}));
+const NO_INPUT = gestureInput(z.strictObject({}), () => new AgentCall([], {}));
 
 const UPDATE_MASTERLIST = gestureInput(
-  'options: { force?: true to replace uncommitted changes to the masterlist, which is otherwise refused, naming the files }',
   z.strictObject({ options: z.strictObject({ force: z.boolean().optional() }).optional() }),
   (_value, { options }) => new AgentCall([], { force: options?.force }),
 );
 
 const SWITCH_PROFILE = gestureInput(
-  'argument: the one profile, { name } as list_profiles names it',
   z.strictObject({ argument: z.array(z.strictObject({ name: z.string() })) }),
   (_value, { argument }) => new AgentCall(argument.map(({ name }) => ({ kind: 'profile', name })), {}),
 );
 
 const MOVE_TO_OVERWRITE = gestureInput(
-  'argument?: the files the deployment folder holds that deploy does not manage, each { path } below the deployment folder, or none for every one',
   z.strictObject({ argument: z.array(z.strictObject({ path: z.string() })).optional() }),
   (_value, { argument }) => new AgentCall((argument ?? []).map(({ path }) => ({ kind: 'deployedFile', path })), {}),
 );
 
-
-const EVERY_MOD_BY_DEFAULT_TAKES = 'argument?: the mods or separators, each { name, kind? } as list_mods names it, or none for every mod';
 const EVERY_MOD_BY_DEFAULT = z.strictObject({ argument: z.array(ENTRY_NAME).optional() });
 
 const MODS_OR_EVERY_MOD = gestureInput(
-  EVERY_MOD_BY_DEFAULT_TAKES,
   EVERY_MOD_BY_DEFAULT,
   (value, { argument }) => new AgentCall(entryArguments(value, argument ?? []), {}),
 );
@@ -211,7 +180,6 @@ const MODS_OR_EVERY_MOD = gestureInput(
 const SOURCE_FOLDER = z.strictObject({ kind: z.literal('folder'), path: z.string() });
 
 const UPDATE_MANIFEST = gestureInput(
-  `${EVERY_MOD_BY_DEFAULT_TAKES}; or a source folder, { kind: 'folder', path: the sourceFolder list_mods gives its mod }`,
   z.strictObject({ argument: z.array(z.discriminatedUnion('kind', [ENTRY_NAME, SOURCE_FOLDER])).optional() }),
   (value, { argument = [] }) => new AgentCall([
     ...entryArguments(value, argument.filter((one): one is z.infer<typeof ENTRY_NAME> => !('path' in one))),
@@ -220,13 +188,11 @@ const UPDATE_MANIFEST = gestureInput(
 );
 
 const BUILD = gestureInput(
-  'argument?: the mods, each { name, kind? } as list_mods names it, or none for every source in the source folder',
   EVERY_MOD_BY_DEFAULT,
   (value, { argument }) => new AgentCall(modArguments(value, argument ?? []), {}),
 );
 
 const PLUGIN_NAME = z.strictObject({ name: z.string(), origin: z.string().optional() });
-const PLUGIN_TAKES = 'each { name, origin? } as list_plugins shows it';
 
 const pluginArguments = (named: typeof pluginsNamed) =>
   (value: InstanceValue, argument: readonly z.infer<typeof PLUGIN_NAME>[]) =>
@@ -236,20 +202,16 @@ const pluginsCall = pluginArguments(pluginsNamed);
 const linesCall = pluginArguments(linesNamed);
 
 const LINES = gestureInput(
-  `argument: the plugins whose lines in plugins.txt it changes, ${PLUGIN_TAKES}`,
   z.strictObject({ argument: z.array(PLUGIN_NAME) }),
   (value, { argument }) => new AgentCall(linesCall(value, argument), {}),
 );
 
 const DECOMPILE = gestureInput(
-  `argument: the plugins, ${PLUGIN_TAKES}; options: { force?: true to replace a plugin source that has working-tree changes, which is otherwise refused }`,
   z.strictObject({ argument: z.array(PLUGIN_NAME), options: z.strictObject({ force: z.boolean().optional() }).optional() }),
   (value, { argument, options }) => new AgentCall(pluginsCall(value, argument), { force: options?.force }),
 );
 
 const DECOMPILE_AND_REPAIR = gestureInput(
-  `argument: the plugins, ${PLUGIN_TAKES}; options: { where?: 'NewRepository' for a source mod in a new repository, 'InstanceRepository' for a source mod in the instance repository, `
-  + `which a request leaves out only when every plugin's mod is a source mod, and is otherwise refused; force?: true to repair a plugin whose plugin source has working-tree changes, which is otherwise refused, listing what it would lose }`,
   z.strictObject({ argument: z.array(PLUGIN_NAME), options: z.strictObject({ where: z.enum(['NewRepository', 'InstanceRepository']).optional(), force: z.boolean().optional() }).optional() }),
   (value, { argument, options }) => new AgentCall(pluginsCall(value, argument), { where: options?.where, force: options?.force }),
 );
@@ -260,25 +222,21 @@ const DROP = z.discriminatedUnion('kind', [
 ]);
 
 const MOVE_PLUGINS = gestureInput(
-  `argument: the plugins, ${PLUGIN_TAKES}; options: { drop: { kind: 'winningEnd' | 'losingEnd' } or { kind: 'before' | 'after', name: the plugin file name it lands beside } }`,
   z.strictObject({ argument: z.array(PLUGIN_NAME), options: z.strictObject({ drop: DROP }) }),
   (value, { argument, options }) => new AgentCall(linesCall(value, argument), options),
 );
 
 const APPLY_SUGGESTED_MOVE = gestureInput(
-  'argument: the plugin to move, { name, origin? } as list_plugins shows it; options: { rule?: the broken rule\'s words, when more than one offers a move }',
   z.strictObject({ argument: PLUGIN_NAME, options: z.strictObject({ rule: z.string().optional() }).optional() }),
   (value, { argument, options }) => new AgentCall(linesCall(value, [argument]), { rule: options?.rule }),
 );
 
 const LOAD_AFTER = gestureInput(
-  `argument: the plugins, ${PLUGIN_TAKES}; options: { after: the plugin file names they load after, [{ name }] }`,
   z.strictObject({ argument: z.array(PLUGIN_NAME), options: z.strictObject({ after: z.array(z.strictObject({ name: z.string() })) }) }),
   (value, { argument, options }) => new AgentCall(linesCall(value, argument), options),
 );
 
 const CREATE_PLUGIN = gestureInput(
-  'argument: the one mod it lands in, or Overwrite, { name, kind? } as list_mods names it; options: { name: the new plugin\'s file name, flags?: the header flags it takes, such as ["Small"], left out only where its extension offers one combination, and the refusal for a request that leaves it out lists them }',
   z.strictObject({ argument: z.array(CONTAINER_NAME), options: z.strictObject({ name: z.string(), flags: z.array(z.string()).optional() }) }),
   (value, { argument, options }) => new AgentCall(
     argument.flatMap((container): Argument[] => (container.kind === 'runtimeOutput'
@@ -289,13 +247,11 @@ const CREATE_PLUGIN = gestureInput(
 );
 
 const RENAME_PLUGIN = gestureInput(
-  'argument: the plugin, { name, origin? } as list_plugins shows it; options: { name: its new file name }',
   z.strictObject({ argument: PLUGIN_NAME, options: z.strictObject({ name: z.string() }) }),
   (value, { argument, options }) => new AgentCall(linesCall(value, [argument]), options),
 );
 
 const OPEN_RECORD = gestureInput(
-  'argument: the records, each { name: its EditorID or FormKey, plugin?: { name, origin? } as list_plugins shows it }, a copy when it names its plugin, else the winning copy; options: { pinned?: true to keep the tab }',
   z.strictObject({
     argument: z.array(z.strictObject({ name: z.string(), plugin: PLUGIN_NAME.optional() })),
     options: z.strictObject({ pinned: z.boolean().optional() }).optional(),
@@ -402,10 +358,9 @@ function namedOwn(value: InstanceValue, outcome: GestureOutcome): GestureOutcome
 const toolName = (command: string): string =>
   command.replace(/^modbench\./, '').replaceAll('.', '_').replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 
-/** Claude Code shows the first 2,048 characters of a tool's description, and sends an input with no JSON type as a string. */
+/** Claude Code sends an input with no JSON type as a string. */
 export const GESTURE_TOOLS = [...AGENT_GESTURES].map(([command, gesture]) => ({
   name: toolName(command),
-  description: `Runs ${command}. ${gesture.takes}`.trim(),
   input: gesture.input,
   of: async (value: InstanceValue, mEdit: NameResolver, given: unknown, warn: (line: string) => void) => {
     const answer = await vscode.commands.executeCommand<GestureOutcome | DeployOutcome>(command, await gesture.callOf(value, given, mEdit));

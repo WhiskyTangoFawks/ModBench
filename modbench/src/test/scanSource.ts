@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, relative } from 'node:path';
+import { basename, dirname, join, relative, sep } from 'node:path';
 import ts from 'typescript';
 import { onTestFinished } from 'vitest';
 import { tsFiles } from './tsFiles';
@@ -17,6 +17,9 @@ export const IMPLEMENTATIONS = [
   { folder: 'mo2', module: join('mo2', 'mo2Instance'), names: [/mo2/i, /modorganizer/i, /\bMod Organizer\b/i] },
   { folder: 'wabbajack', module: join('wabbajack', 'wabbajackPublisher'), names: [/wabbajack/i] },
 ] as const;
+
+/** The maintainer's text for the agent, which names each mod manager and its files in its own words. `relativePath` is relative to SRC. */
+export const isAgentText = (relativePath: string): boolean => relativePath.startsWith(join('agent', 'instructions') + sep);
 
 /** The one file that builds the Instance adapter from its implementations. */
 export const CONSTRUCTION = join('instanceAdapter', 'openInstance.ts');

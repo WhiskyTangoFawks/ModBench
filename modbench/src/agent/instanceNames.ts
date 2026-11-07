@@ -16,8 +16,6 @@ function refusing<T>(refusals: string[], otherwise: T, work: () => T): T {
 
 export const RESOLVE_INSTANCE_NAMES = {
   name: 'resolve_instance_names',
-  description: 'What each name means in the instance: a downloaded file by its file name, and a file in a mod by its path in the mod, '
-    + 'answered in the mod\'s own casing. The mod, or Overwrite, is named as list_mods names it. A name that means nothing or more than one thing is refused, listing each match.',
   input: {
     downloads: z.array(z.string()).optional(),
     files: z.array(z.strictObject({

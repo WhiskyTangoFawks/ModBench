@@ -1,4 +1,4 @@
-import { cpSync, rmSync } from 'node:fs';
+import { cpSync, readFileSync, rmSync } from 'node:fs';
 import * as esbuild from 'esbuild';
 
 rmSync('scripts', { recursive: true, force: true });
@@ -18,6 +18,7 @@ const shared = { bundle: true, format: 'cjs', platform: 'node', sourcemap: true,
 await esbuild.build({
   ...shared,
   entryPoints: ['src/extension.ts'],
+  define: { GLOSSARY: JSON.stringify(readFileSync('../spec/GLOSSARY.md', 'utf8')) },
   outfile: 'out/extension.js',
   external: ['vscode'],   // provided by VS Code at runtime, never bundle
   mainFields: ['module', 'main'],   // jsonc-parser's UMD entry requires its parts at run time, which a bundle lacks

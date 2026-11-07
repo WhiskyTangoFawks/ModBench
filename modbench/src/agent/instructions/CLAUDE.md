@@ -6,4 +6,5 @@ The instructions and guides here are what Modbench tells the user's agent. They 
 
 - A guide gives the agent a map of its workflow. It starts from where the agent is, and orients it to software development in an unfamiliar environment. Most of its words go to what the agent would get wrong. Opening with the software development analogy usually does that best.
 - The text cites nothing.
+- The text names a tool as the agent sees it, such as mod_build, and calls it a tool, never a gesture. A gesture's name appears only where the agent tells the user to run it.
 - Each mod manager has its own `instance` guide, served for an instance it manages. It names the hand edits that break that manager's instance.
