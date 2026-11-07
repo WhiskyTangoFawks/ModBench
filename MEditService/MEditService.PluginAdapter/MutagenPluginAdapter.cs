@@ -209,7 +209,8 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
                     loaded.Getter, modPath, strings, loadOrder, loadOrder.GameRelease, loadOrder.StringsLanguage);
                 return OpenedPlugins.ContentIn(loaded.Getter, name, isBlueprint) with
                 {
-                    MissingStringsFiles = missing, Description = PluginDescription.Of(modPath, loadOrder.GameRelease, loadOrder.StringsLanguage),
+                    MissingStringsFiles = missing,
+                    Description = PluginDescription.Of(modPath, loadOrder.GameRelease, loadOrder.StringsLanguage),
                 };
             }
         });
