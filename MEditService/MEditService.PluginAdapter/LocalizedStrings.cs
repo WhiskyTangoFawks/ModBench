@@ -67,6 +67,13 @@ internal static class LocalizedStrings
         }
     }
 
+    /// <summary>For a read that asks for no text: the parameters name an empty folder, so no game install is looked up.</summary>
+    internal static StringsRead Unread(Language language)
+    {
+        var scratch = Directory.CreateTempSubdirectory("medit-strings-").FullName;
+        return new StringsRead(ForFolder(scratch, language), scratch);
+    }
+
     /// <summary>A missing strings file is refused by name: <c>TranslatedString.TryLookup</c> returns false
     /// silently for one. Asked of the lookup the read uses.</summary>
     internal static string? FindMissingStringsFile(

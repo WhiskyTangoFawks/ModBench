@@ -22,9 +22,12 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
         RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
         inner.OpenRecordLookup(plugin, loadOrder, schemas);
 
-    public virtual Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
+    public virtual Answer<PluginContent, PluginFailure> ReadContent(
         ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
         inner.ReadContent(modPath, loadOrder, strings);
+
+    public virtual Answer<(int Count, PluginFailure? Unreachable), PluginFailure> CountRecords(ModPath modPath, LoadOrderSnapshot loadOrder) =>
+        inner.CountRecords(modPath, loadOrder);
 
     public virtual bool Exists(string pluginPath) => inner.Exists(pluginPath);
 

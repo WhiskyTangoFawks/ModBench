@@ -74,10 +74,14 @@ public interface IPluginAdapter
     /// takes its strings from.</summary>
     Answer<IReadOnlyList<string>, PluginFailure> StringsPlacesOf(ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings);
 
-    /// <summary>What a plugin's own binary says about itself, which is what the Index holds for it.
-    /// <c>Unreachable</c> stopped a full walk: the count is a readout, not a gate.</summary>
-    Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
+    /// <summary>What a plugin's own binary says about itself, which is what the Index holds for it. Read
+    /// from its header, never by a walk of its records.</summary>
+    Answer<PluginContent, PluginFailure> ReadContent(
         ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings);
+
+    /// <summary>Every record the plugin holds, counted by a walk of the whole file. <c>Unreachable</c>
+    /// stopped the walk, and the count is of the records it reached.</summary>
+    Answer<(int Count, PluginFailure? Unreachable), PluginFailure> CountRecords(ModPath modPath, LoadOrderSnapshot loadOrder);
 
     /// <summary>What each of <paramref name="formKeys"/> names in the files the game loads (ADR-0013), or in every
     /// plugin when it does not load <paramref name="compiled"/>, beside the unreadable files (ADR-0005).</summary>

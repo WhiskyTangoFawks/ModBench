@@ -1039,15 +1039,14 @@ internal sealed class Indexer : IDisposable
             if (_logger.IsEnabled(LogLevel.Information))
             {
                 _logger.LogInformation(
-                    "Registering {Plugin} ({RecordCount} records), already indexed and unchanged on disk",
-                    plugin.Name, plugin.RecordCount);
+                    "Registering {Plugin}, already indexed and unchanged on disk", plugin.Name);
             }
             return ReadOutcome.Read;
         }
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
-            _logger.LogInformation("Indexing {Plugin} ({RecordCount} records)", plugin.Name, plugin.RecordCount);
+            _logger.LogInformation("Indexing {Plugin}", plugin.Name);
         }
         var indexTimer = Stopwatch.StartNew();
         var outcome = IndexOnePlugin(scope, plugin, state, token);
@@ -1107,6 +1106,19 @@ internal sealed class Indexer : IDisposable
         var modPath = ModPathOf(plugin.Path);
         // Taken before the read, as the binary's hash is: strings changed during it are then read again.
         var stringsRead = plugin.IsLocalized ? StringsReadBy(scope.LoadOrder, plugin.Registered) : null;
+        if (!_adapter.CountRecords(modPath, scope.LoadOrder).Holds(out var counted, out var countFailure))
+        {
+            _logger.LogWarning(countFailure.Error, "Could not read {Plugin} ({Origin}): {Reason}", plugin.Name, plugin.Origin, countFailure.Reason);
+            return ReadOutcome.Failed(countFailure);
+        }
+        if (counted.Unreachable is { } stoppedWalk)
+        {
+            // The ingest walks the same records per type and reports the one it could not finish,
+            // so this only keeps a readout from becoming a refusal to read the plugin.
+            _logger.LogWarning(stoppedWalk.Error,
+                "Could not walk all of {Plugin}'s records for its count; holding it to the {Count} that were reachable: {Reason}",
+                plugin.Name, counted.Count, stoppedWalk.Reason);
+        }
         if (!_adapter.OpenDocuments(modPath, scope.LoadOrder, scope.Store.Schemas, plugin.Strings).Holds(out var opened, out var failure))
         {
             _logger.LogWarning(failure.Error, "Could not read {Plugin} ({Origin}): {Reason}", plugin.Name, plugin.Origin, failure.Reason);
@@ -1114,7 +1126,7 @@ internal sealed class Indexer : IDisposable
         }
 
         using var documents = opened;
-        if (scope.Store.IndexBinary(documents, plugin, plugin.Path, derivedFrom, stringsRead, _disposal.Token) is not { } refused) return ReadOutcome.Read;
+        if (scope.Store.IndexBinary(documents, plugin, plugin.Path, derivedFrom, stringsRead, counted.Count, _disposal.Token) is not { } refused) return ReadOutcome.Read;
         _logger.LogWarning("Could not read {Plugin} ({Origin}): {Reason}", plugin.Name, plugin.Origin, refused.Reason);
         return ReadOutcome.Failed(refused);
     }

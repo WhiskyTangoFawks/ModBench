@@ -774,17 +774,20 @@ internal sealed class Store : IDisposable
     /// is the plugin's truth however many records its binary holds, and it refuses a FormKey two
     /// documents claim before any is indexed.</summary>
     public void IndexTree(IPluginDocuments documents, PluginMetadata registered, string? filePath, CancellationToken token) =>
-        Index(documents, registered, filePath, DerivedFrom.SourceTree, stringsRead: null, token);
+        Index(documents, registered, filePath, DerivedFrom.SourceTree, stringsRead: null, recordsHeld: null, token);
 
-    /// <summary>A binary whose documents miss a record it holds, or that holds one FormKey in two
-    /// groups, is not indexed, and the failure says which. xEdit refuses a duplicate FormID to load.</summary>
+    /// <summary>A binary whose documents miss one of the <paramref name="recordsHeld"/> records it holds, or that holds one
+    /// FormKey in two groups, is not indexed, and the failure says which. xEdit refuses a duplicate FormID to load.</summary>
     public LoadFailure? IndexBinary(
-        IPluginDocuments documents, PluginMetadata registered, string? filePath, DerivedFrom derivedFrom, string? stringsRead, CancellationToken token) =>
-        Index(documents, registered, filePath, derivedFrom, stringsRead, token);
+        IPluginDocuments documents, PluginMetadata registered, string? filePath, DerivedFrom derivedFrom, string? stringsRead,
+        int recordsHeld, CancellationToken token) =>
+        Index(documents, registered, filePath, derivedFrom, stringsRead, recordsHeld, token);
 
     // Replaces whatever the key held, and stamps the file's hash and diagnosis (ADR-0003); a null
     // path claims no file backs the rows (ADR-0012).
-    private LoadFailure? Index(IPluginDocuments documents, PluginMetadata registered, string? filePath, DerivedFrom derivedFrom, string? stringsRead, CancellationToken token)
+    private LoadFailure? Index(
+        IPluginDocuments documents, PluginMetadata registered, string? filePath, DerivedFrom derivedFrom, string? stringsRead, int? recordsHeld,
+        CancellationToken token)
     {
         var (plugin, origin) = (registered.Name, registered.Origin);
         var schemas = Schemas;
@@ -801,7 +804,7 @@ internal sealed class Store : IDisposable
         StampPluginFacts(plugin, origin, filePath, derivedFrom, stringsRead);
 
         var ingested = StoreFaults.Translating(() => Ingest.IndexPlugin(documents, plugin, origin, schemas, token));
-        if (derivedFrom != DerivedFrom.SourceTree && BinaryRefused(registered, ingested.Records) is { } refused) return refused;
+        if (recordsHeld is { } held && BinaryRefused(registered, ingested.Records, held) is { } refused) return refused;
         BumpSequence();
         OweCheckpoint();
 
@@ -817,7 +820,7 @@ internal sealed class Store : IDisposable
     }
 
     // The duplicate first: it is a defect in the bytes, where a shortfall may be mEdit's own.
-    private LoadFailure? BinaryRefused(PluginMetadata registered, int read)
+    private LoadFailure? BinaryRefused(PluginMetadata registered, int read, int held)
     {
         var heldTwice = Ingest.FormKeysHeldTwice(registered.Name, registered.Origin);
         if (heldTwice.Count > 0)
@@ -825,7 +828,7 @@ internal sealed class Store : IDisposable
             return new LoadFailure("duplicate FormKey " + string.Join("; ", heldTwice.Select(held =>
                 $"{held.FormKey}, in its {Listed([.. held.RecordTypes.Select(Schemas.DisplayNameFor)])} groups")), IsDiagnosis: true);
         }
-        return read < registered.RecordCount ? new LoadFailure($"mEdit read {read} of its {registered.RecordCount} records") : null;
+        return read < held ? new LoadFailure($"mEdit read {read} of its {held} records") : null;
     }
 
     private static string Listed(string[] names) =>

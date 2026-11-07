@@ -99,6 +99,36 @@ public sealed class WarmReconcileTests
     }
 
     [Fact]
+    public void ALaunchWithNothingChanged_CountsNoPluginsRecords()
+    {
+        var holder = new LoadOrderHolder();
+        using var data = new PluginFixtureBuilder("warm-uncounted")
+            .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
+            .WithPlugin("B.esp", m => m.Npcs.AddNew("NpcB"))
+            .Build();
+        var counts = new RecordCountingAdapter();
+        using (var cold = Indexes.Open(holder, counts)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        Assert.NotEmpty(counts.Counted);
+        counts.Counted.Clear();
+
+        using var warm = Indexes.Open(holder, counts);
+        warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+
+        Assert.Empty(counts.Counted);
+    }
+
+    private sealed class RecordCountingAdapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())
+    {
+        public List<string> Counted { get; } = [];
+
+        public override Answer<(int Count, PluginFailure? Unreachable), PluginFailure> CountRecords(ModPath modPath, LoadOrderSnapshot loadOrder)
+        {
+            Counted.Add(modPath.ModKey.FileName.String);
+            return base.CountRecords(modPath, loadOrder);
+        }
+    }
+
+    [Fact]
     public void ALaunchThatReordersThePlugins_CheckpointsOnceForTheWinnerSweep()
     {
         var holder = new LoadOrderHolder();
@@ -119,7 +149,7 @@ public sealed class WarmReconcileTests
     {
         public OpenedIndex? Index { get; set; }
 
-        public override Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
+        public override Answer<PluginContent, PluginFailure> ReadContent(
             ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings)
         {
             var index = Index

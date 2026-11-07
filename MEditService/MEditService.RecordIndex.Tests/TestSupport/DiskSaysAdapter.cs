@@ -42,7 +42,7 @@ internal sealed class DiskSaysAdapter(TimeProvider? clock = null)
             : base.ClaimOf(pluginPath, gameRelease);
     }
 
-    public override Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
+    public override Answer<PluginContent, PluginFailure> ReadContent(
         ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
         IsGone(modPath.Path) ? PluginFailures.Inaccessible() : base.ReadContent(modPath, loadOrder, strings);
 

@@ -21,7 +21,7 @@ public sealed class PluginContentFlagsTests
         var mod = new Fallout4Mod(ModKey.FromFileName(fileName), Fallout4Release.Fallout4);
         shape(mod);
         mod.WriteToBinary(path);
-        return Adapter.ReadContent(new ModPath(mod.ModKey, path), EmptyLoadOrder.Of(GameRelease.Fallout4), PluginStrings.None).Answered().Content;
+        return Adapter.ReadContent(new ModPath(mod.ModKey, path), EmptyLoadOrder.Of(GameRelease.Fallout4), PluginStrings.None).Answered();
     }
 
     private static PluginContent ReadStarfield(string fileName, Action<StarfieldMod> shape)
@@ -31,7 +31,7 @@ public sealed class PluginContentFlagsTests
         var mod = new StarfieldMod(ModKey.FromFileName(fileName), StarfieldRelease.Starfield);
         shape(mod);
         mod.WriteToBinary(path);
-        return Adapter.ReadContent(new ModPath(mod.ModKey, path), EmptyLoadOrder.Of(GameRelease.Starfield), PluginStrings.None).Answered().Content;
+        return Adapter.ReadContent(new ModPath(mod.ModKey, path), EmptyLoadOrder.Of(GameRelease.Starfield), PluginStrings.None).Answered();
     }
 
     [Theory]
@@ -80,7 +80,7 @@ public sealed class PluginContentFlagsTests
         File.WriteAllBytes(path, bytes);
 
         string? ReadIn(Language language) =>
-            Adapter.ReadContent(new ModPath(mod.ModKey, path), EmptyLoadOrder.Of(GameRelease.Fallout4, language), PluginStrings.None).Answered().Content.Description;
+            Adapter.ReadContent(new ModPath(mod.ModKey, path), EmptyLoadOrder.Of(GameRelease.Fallout4, language), PluginStrings.None).Answered().Description;
 
         Assert.Equal("\u041f\u0440\u0438\u0432\u0435\u0442", ReadIn(Language.Russian));
         Assert.NotEqual(ReadIn(Language.Russian), ReadIn(Language.English));
@@ -101,18 +101,21 @@ public sealed class PluginContentFlagsTests
     }
 
     [Fact]
-    public void ReadContent_RecordCount_IsEveryRecordThePluginHolds_ThoseInsideAContainerToo()
+    public void CountRecords_IsEveryRecordThePluginHolds_ThoseInsideAContainerToo()
     {
-        var content = ReadFallout4("Counted.esp", mod =>
-        {
-            mod.Npcs.AddNew("Npc1");
-            mod.Npcs.AddNew("Npc2");
-            var cell = new Mutagen.Bethesda.Fallout4.Cell(mod) { EditorID = "Room" };
-            cell.Temporary.Add(new Mutagen.Bethesda.Fallout4.PlacedObject(mod) { EditorID = "PlacedInRoom" });
-            mod.AddInteriorCells(cell);
-        });
+        using var scratch = new ScratchDirectory("content-count-");
+        var path = Path.Combine(scratch, "Counted.esp");
+        var mod = new Fallout4Mod(ModKey.FromFileName("Counted.esp"), Fallout4Release.Fallout4);
+        mod.Npcs.AddNew("Npc1");
+        mod.Npcs.AddNew("Npc2");
+        var cell = new Mutagen.Bethesda.Fallout4.Cell(mod) { EditorID = "Room" };
+        cell.Temporary.Add(new Mutagen.Bethesda.Fallout4.PlacedObject(mod) { EditorID = "PlacedInRoom" });
+        mod.AddInteriorCells(cell);
+        mod.WriteToBinary(path);
 
-        Assert.Equal(4, content.RecordCount);
+        var counted = Adapter.CountRecords(new ModPath(mod.ModKey, path), EmptyLoadOrder.Of(GameRelease.Fallout4)).Answered();
+
+        Assert.Equal((4, null), counted);
     }
 
     [Fact]
