@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
+using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Codec.Schema;
 
@@ -22,28 +23,29 @@ public static class DocumentNodes
 
     // Two columns spelling one value: the codec's own text, since JsonElement has no Equals(), as a
     // compare reads it; and against an absent side, what the codec omits.
-    public static bool SameNode(object? a, object? b, FieldMetadata shape, bool absentMeansDefault)
+    public static bool SameNode(object? a, object? b, FieldMetadata shape, bool absentMeansDefault, Language stringsLanguage)
     {
         if (a is JsonElement ja && b is JsonElement jb)
-            return ja.GetRawText() == jb.GetRawText() || ComparedText(ja, shape) == ComparedText(jb, shape);
+            return ja.GetRawText() == jb.GetRawText() || ComparedText(ja, shape, stringsLanguage) == ComparedText(jb, shape, stringsLanguage);
         if (a is null && b is null) return true;
         if (a is null || b is null)
-            return absentMeansDefault && (a ?? b) is JsonElement present && IsOmitted(present, shape);
+            return absentMeansDefault && (a ?? b) is JsonElement present && IsOmitted(present, shape, stringsLanguage);
         return Equals(a, b);
     }
 
-    /// <summary>The codec's text with every keyed array in extended-key order and every colour as it
-    /// reads, so one value reads alike whatever order holds its keyed arrays and whatever alpha a
-    /// colour holding none carries.</summary>
-    public static string ComparedText(JsonElement value, FieldMetadata meta) =>
-        Rewrite(JsonNode.Parse(value.GetRawText()), meta, AsCompared)?.ToJsonString() ?? "null";
+    /// <summary>The codec's text with keyed arrays in extended-key order, colours as they read and
+    /// translated strings as their text in the strings language, as xEdit compares them.</summary>
+    public static string ComparedText(JsonElement value, FieldMetadata meta, Language stringsLanguage) =>
+        Rewrite(JsonNode.Parse(value.GetRawText()), meta, (node, shape) => AsCompared(node, shape, stringsLanguage))?.ToJsonString() ?? "null";
 
-    private static JsonNode? AsCompared(JsonNode node, FieldMetadata meta)
+    private static JsonNode? AsCompared(JsonNode node, FieldMetadata meta, Language stringsLanguage)
     {
         switch (node)
         {
             case JsonValue leaf when meta.Type == ColorReading.ApiType && leaf.TryGetValue<string>(out var text):
                 return JsonValue.Create(ColorReading.Of(text, meta.HoldsAlpha));
+            case JsonObject translated when meta.Type == TranslatedStringValues.ApiType:
+                return TranslatedStringValues.TextIn(translated, stringsLanguage) is { } shown ? JsonValue.Create(shown) : translated;
             case JsonArray array when meta.KeyMembers != null:
                 // A stable sort by the extended key, so elements sharing it keep their turn, as they align.
                 var sorted = array.OrderBy(element => ElementKey.SortKeyOf(element, meta), ElementKey.Order).ToList();
@@ -81,9 +83,9 @@ public static class DocumentNodes
 
     // What the codec omits: the declared default where the metadata spells one, else a zero number,
     // false, an empty list or object, and a link to nothing.
-    private static bool IsOmitted(JsonElement value, FieldMetadata meta) => meta.Default is { } declared
+    private static bool IsOmitted(JsonElement value, FieldMetadata meta, Language stringsLanguage) => meta.Default is { } declared
         ? SameValue(value, JsonSerializer.SerializeToElement(declared))
-            || ComparedText(value, meta) == ComparedText(JsonSerializer.SerializeToElement(declared), meta)
+            || ComparedText(value, meta, stringsLanguage) == ComparedText(JsonSerializer.SerializeToElement(declared), meta, stringsLanguage)
         : value.ValueKind switch
         {
             JsonValueKind.Number => value.GetRawText().Trim('-', '0', '.') is "" or "e0",

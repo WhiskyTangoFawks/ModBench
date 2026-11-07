@@ -2,6 +2,7 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Strings;
 
 namespace MEditService.RecordIndex.Queries;
 
@@ -14,6 +15,7 @@ internal sealed class ConflictClassifier(ILogger logger)
     public ClassifyResult Classify(
         IReadOnlyList<RecordDetail> conflictingRecords,
         GameRelease release,
+        Language stringsLanguage,
         Func<string, RecordLookupEntry?> resolveFormKey,
         Func<string, uint?> loadOrderFormIds,
         bool indexed,
@@ -32,7 +34,7 @@ internal sealed class ConflictClassifier(ILogger logger)
         var shownColumns = shown.Select(Column).ToList();
         var partialFormColumns = shown.Where(r => r.IsPartialForm).Select(Column).ToHashSet(StringComparer.Ordinal);
         var ctx = ContextOf(
-            shown, shownColumns, winner, release, resolveFormKey, loadOrderFormIds, indexed,
+            shown, shownColumns, winner, release, stringsLanguage, resolveFormKey, loadOrderFormIds, indexed,
             shadowed: partialFormColumns,
             cellStates: (values, templated, same) => ConflictRules.ComputeCellStates(values, columns[0], OrderOf(conflictingRecords, columns), partialFormColumns, templated, same),
             comparedCount: conflictingRecords.Count);
@@ -61,11 +63,11 @@ internal sealed class ConflictClassifier(ILogger logger)
     // Each copy's state against the first, null where nothing of it was compared; the last copy wins. As xEdit
     // sets it, the last copy identical to the first wins the conflict its record has.
     public IReadOnlyList<ConflictThis?> StatesOf(
-        IReadOnlyList<RecordDetail> stack, GameRelease release, Func<string, uint?> loadOrderFormIds)
+        IReadOnlyList<RecordDetail> stack, GameRelease release, Language stringsLanguage, Func<string, uint?> loadOrderFormIds)
     {
         var last = stack.Count - 1;
         var copies = stack.Select((copy, at) => copy with { IsWinner = at == last }).ToList();
-        var classified = Classify(copies, release, _ => null, loadOrderFormIds, indexed: true);
+        var classified = Classify(copies, release, stringsLanguage, _ => null, loadOrderFormIds, indexed: true);
         var states = copies.ConvertAll(copy => classified.PluginStates.TryGetValue(Column(copy), out var state) ? state : (ConflictThis?)null);
         if (states[last] == ConflictThis.IdenticalToMaster && classified.ConflictAll is ConflictAll.Override or ConflictAll.Conflict)
             states[last] = ConflictThis.IdenticalToMasterWinsConflict;
@@ -78,11 +80,12 @@ internal sealed class ConflictClassifier(ILogger logger)
         IReadOnlyList<RecordDetail> copies,
         IReadOnlyList<string> columns,
         GameRelease release,
+        Language stringsLanguage,
         Func<string, RecordLookupEntry?> resolveFormKey,
         Func<string, uint?> loadOrderFormIds,
         bool indexed) =>
         RecordChildren(copies, ContextOf(
-            copies, columns, 0, release, resolveFormKey, loadOrderFormIds, indexed,
+            copies, columns, 0, release, stringsLanguage, resolveFormKey, loadOrderFormIds, indexed,
             shadowed: new HashSet<string>(), cellStates: null));
 
     private static IReadOnlyList<(string Column, int LoadOrderIndex)> OrderOf(
@@ -90,7 +93,7 @@ internal sealed class ConflictClassifier(ILogger logger)
         [.. records.Select((r, i) => (columns[i], r.LoadOrderIndex))];
 
     private DiffContext ContextOf(
-        IReadOnlyList<RecordDetail> records, IReadOnlyList<string> columns, int winner, GameRelease release,
+        IReadOnlyList<RecordDetail> records, IReadOnlyList<string> columns, int winner, GameRelease release, Language stringsLanguage,
         Func<string, RecordLookupEntry?> resolveFormKey, Func<string, uint?> loadOrderFormIds, bool indexed,
         HashSet<string> shadowed, CellStatesOf? cellStates, int? comparedCount = null) =>
         new(
@@ -111,6 +114,7 @@ internal sealed class ConflictClassifier(ILogger logger)
             ResolveFormKey: resolveFormKey,
             LoadOrderFormIds: loadOrderFormIds,
             Release: release,
+            StringsLanguage: stringsLanguage,
             Indexed: indexed);
 
     private static string Column(RecordDetail record) => ColumnKey.Of(record.Plugin, record.Origin);
@@ -137,6 +141,7 @@ internal sealed class ConflictClassifier(ILogger logger)
         Func<string, RecordLookupEntry?> ResolveFormKey,
         Func<string, uint?> LoadOrderFormIds,
         GameRelease Release,
+        Language StringsLanguage,
         bool Indexed)
     {
         public bool Compares => StatesOf is null;
@@ -189,7 +194,7 @@ internal sealed class ConflictClassifier(ILogger logger)
         var templatedColumns = ctx.TemplatedAt(path);
         var noWinner = !ctx.Compares && templatedColumns.Contains(winnerColumn);
 
-        var same = (object? a, object? b) => DocumentNodes.SameNode(a, b, shape, absentMeansDefault);
+        var same = (object? a, object? b) => DocumentNodes.SameNode(a, b, shape, absentMeansDefault, ctx.StringsLanguage);
         var templatedWithin = ctx.TemplatedWithin(path);
         var compared = templatedWithin.Count == 0
             ? taking
@@ -294,7 +299,7 @@ internal sealed class ConflictClassifier(ILogger logger)
 
         List<ElementRow>? rows = null;
         if (columns.TrueForAll(c => c.Elements.Count <= MaxArrayChildCount))
-            rows = array.KeyMembers is { } keyMembers ? KeyedRows(array, keyMembers, element, columns, ctx.LoadOrderFormIds) : SequenceRows(element, columns);
+            rows = array.KeyMembers is { } keyMembers ? KeyedRows(array, keyMembers, element, columns, ctx.LoadOrderFormIds) : SequenceRows(element, columns, ctx.StringsLanguage);
         if (rows == null || rows.Count > MaxArrayChildCount)
         {
             ctx.Logger.LogWarning(
@@ -341,12 +346,13 @@ internal sealed class ConflictClassifier(ILogger logger)
 
     // xEdit's TfrmMain.InitChildren: each column in load order diffed against the rows before it,
     // with no modified pair, and a row only those rows hold before a row only the column holds.
-    private static List<ElementRow> SequenceRows(FieldMetadata element, List<(string Column, List<JsonElement> Elements)> columns)
+    private static List<ElementRow> SequenceRows(
+        FieldMetadata element, List<(string Column, List<JsonElement> Elements)> columns, Language stringsLanguage)
     {
         var rows = new List<(string Text, Dictionary<string, (JsonElement, int)> Held)>();
         foreach (var (column, elements) in columns)
         {
-            var texts = elements.Select(e => DocumentNodes.ComparedText(e, element)).ToList();
+            var texts = elements.Select(e => DocumentNodes.ComparedText(e, element, stringsLanguage)).ToList();
             var common = new int[rows.Count + 1, texts.Count + 1];
             for (var r = rows.Count - 1; r >= 0; r--)
             {

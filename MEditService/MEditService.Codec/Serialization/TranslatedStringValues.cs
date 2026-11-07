@@ -103,6 +103,14 @@ public static class TranslatedStringValues
         return readOnlyReason is null ? shape : shape.WithReadOnlyReason(readOnlyReason);
     }
 
+    /// <summary>The text a translated string shows: its one <c>Value</c>, else its string in
+    /// <paramref name="language"/>; null where it holds neither.</summary>
+    internal static string? TextIn(JsonObject translated, Language language) =>
+        translated["Value"] is JsonValue one && one.TryGetValue<string>(out var text)
+            ? text
+            : translated["Values"]?.AsArray().OfType<JsonObject>()
+                .FirstOrDefault(entry => entry["Language"]?.GetValue<string>() == language.ToString())?["String"]?.GetValue<string>();
+
     private static Language TargetLanguageOf(JsonObject translated) =>
         Enum.TryParse<Language>(translated["TargetLanguage"]?.GetValue<string>(), out var named) ? named : TranslatedString.DefaultLanguage;
 
