@@ -78,7 +78,7 @@ As a user, I want:
 1. Each folder to become what its manifest says, a source mod's by its build, sending each file restore replaces or removes to the trash. A file that already matches is left alone, so a restore after a checkout costs only what the checkout changed. Cites: ADR-0022; commands.md, Confirm what destroys
 2. Restore to ask nothing, since the trash takes back each file it replaces or removes. Cites: commands.md, Confirm what destroys
 3. A source mod left on its branch when the branch is at the commit the repository pins, so I land on a branch. Cites: ADR-0022; ADR-0003
-4. Each package taken from wherever this machine already holds it with the pinned bytes, and fetched only when it does not: an installation file from Nexus while I am logged in, refused when it is not the pinned file. A clone then restores with no Nexus file fetched by hand. Cites: Minimal by default
+4. Each package taken from wherever this machine already holds it with the pinned bytes, and fetched only when it does not: an installation file from Nexus, downloaded with my Premium account and refused when it is not the pinned file, or without Premium, its file page opened in my browser for me to download. With Premium, a clone then restores with no Nexus file fetched by hand. Cites: Minimal by default
 5. A restore interrupted part way to say so, naming the mods it did not finish. Restoring again is the recovery. Cites: mods.md, What install does, story 5
 6. A source mod's repository cloned when it is absent, and never moved when it is at another commit than the one the modlist pins, since my repository is mine to move. Cites: ADR-0003
 7. A package this machine lacks whose host is an address, named with that address, so I fetch it by hand. Cites: Deferred, item 2
