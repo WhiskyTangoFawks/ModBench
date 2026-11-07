@@ -700,10 +700,12 @@ public sealed record SchemaAnnotations(
     }
 }
 
-/// <summary>What the walk did with the rows that claim something about the walk itself. The walk
-/// records; <see cref="SchemaAnnotations.ValidateObserved"/> reads, once the schema is built.</summary>
+/// <summary>What the walk did with the rows that claim something about the walk itself. Every
+/// table's walk records here at once; <see cref="SchemaAnnotations.ValidateObserved"/> reads, once
+/// the schema is built.</summary>
 internal sealed class WalkObservations
 {
+    private readonly Lock _recording = new();
     private readonly HashSet<string> _appliedTruncations = new(StringComparer.Ordinal);
     private readonly HashSet<string> _emptySubSchemas = new(StringComparer.Ordinal);
     private readonly HashSet<(string TypeName, long Bit)> _namedFlags = [];
@@ -713,7 +715,12 @@ internal sealed class WalkObservations
     internal IReadOnlySet<(string TypeName, long Bit)> NamedFlags => _namedFlags;
 
     /// <summary>The walk stopped at this truncation, or let a loop through because of it.</summary>
-    internal void AppliedTruncation(string getterInterfaceName) => _appliedTruncations.Add(getterInterfaceName);
-    internal void CameOutEmpty(string getterInterfaceName) => _emptySubSchemas.Add(getterInterfaceName);
-    internal void NamedFlag(string getterInterfaceName, long bit) => _namedFlags.Add((getterInterfaceName, bit));
+    internal void AppliedTruncation(string getterInterfaceName) => Record(_appliedTruncations, getterInterfaceName);
+    internal void CameOutEmpty(string getterInterfaceName) => Record(_emptySubSchemas, getterInterfaceName);
+    internal void NamedFlag(string getterInterfaceName, long bit) => Record(_namedFlags, (getterInterfaceName, bit));
+
+    private void Record<T>(HashSet<T> observed, T observation)
+    {
+        lock (_recording) observed.Add(observation);
+    }
 }

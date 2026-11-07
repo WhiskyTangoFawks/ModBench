@@ -123,12 +123,12 @@ public sealed class SchemaReflector
             new DeclaredDefaults(category.DefaultRelease(), logger),
             new HeldAlpha(logger));
 
-        var schemas = new Dictionary<string, RecordTableSchema>();
-        foreach (var (tableName, getterType) in discovered)
-        {
-            schemas[tableName] = BuildSchema(
-                tableName, getterType, siblingsByTable[tableName], game, logger);
-        }
+        // A table's walk asks the codec about its record type, and the runtime compiles that type's
+        // generated serializers on the first ask.
+        var schemas = discovered.AsParallel().AsOrdered()
+            .Select(table => (table.tableName, Schema: BuildSchema(
+                table.tableName, table.getterType, siblingsByTable[table.tableName], game, logger)))
+            .ToDictionary(table => table.tableName, table => table.Schema);
 
         ModHeaderSchema.AddHeaderSchema(schemas, category, assembly, game, logger);
 
