@@ -4,6 +4,7 @@ using MEditService.Ports;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -35,7 +36,7 @@ public sealed class WarmReconcileTests
     }
 
     [Fact]
-    public void AWarmLoad_AdvancesProgressAsEachPluginIsRegistered()
+    public void AWarmLoadPastTheTimeArrivalsLandTogether_AdvancesProgressAsEachPluginIsRegistered()
     {
         var holder = new LoadOrderHolder();
         using var data = new PluginFixtureBuilder("warm-during")
@@ -45,12 +46,73 @@ public sealed class WarmReconcileTests
 
         var observed = new List<int>();
         var watching = new ProgressWatchingAdapter(observed);
-        using var warm = Indexes.Open(holder, watching);
+        var clock = new LeapingClock();
+        using var warm = Indexes.Open(holder, watching, timeProvider: clock);
         watching.Index = warm;
 
+        clock.StartLeaping();
         warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        clock.StopLeaping();
 
         Assert.Equal([0, 1, 2], observed);
+    }
+
+    [Fact]
+    public void AProfileSwitch_LandsThePluginsIndexedBeforeTogether_WithTheFiltersMatchesInThem()
+    {
+        var holder = new LoadOrderHolder();
+        using var data = new PluginFixtureBuilder("warm-switch")
+            .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
+            .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
+            .WithPlugin("C.esp", mod => mod.Npcs.AddNew("FromC"))
+            .Build();
+        using var index = Indexes.Open(holder);
+        index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        index.Reconcile(holder, data.DataFolder, data.Plugins.Take(1).ToList(), GameRelease.Fallout4, data.InstanceRoot);
+        index.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
+        var switched = index.Sequence;
+
+        index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+
+        Assert.Equal(switched + 2, index.Sequence);
+        Assert.Equal(3, index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value().Total);
+    }
+
+    [Fact]
+    public void ALaunchWithNothingChanged_AdvancesTheSequenceOnlyForTheWinnerSweep()
+    {
+        var holder = new LoadOrderHolder();
+        using var data = new PluginFixtureBuilder("warm-unwritten")
+            .WithPlugin("A.esp").WithPlugin("B.esp").WithPlugin("C.esp")
+            .Build();
+        long launched;
+        using (var cold = Indexes.Open(holder))
+        {
+            cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+            launched = cold.Sequence;
+        }
+
+        using var warm = Indexes.Open(holder);
+        warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+
+        Assert.Equal(launched + 1, warm.Sequence);
+    }
+
+    [Fact]
+    public void ALaunchThatReordersThePlugins_CheckpointsOnceForTheWinnerSweep()
+    {
+        var holder = new LoadOrderHolder();
+        using var data = new PluginFixtureBuilder("warm-reordered")
+            .WithPlugin("A.esp").WithPlugin("B.esp").WithPlugin("C.esp")
+            .Build();
+        using (var cold = Indexes.Open(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        var log = new List<LogEntry>();
+        using var loggers = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider(log)));
+
+        using var warm = Indexes.Open(holder, loggerFactory: loggers);
+        warm.Reconcile(holder, data.DataFolder, [.. data.Plugins.Select((p, at) => p with { Line = data.Plugins.Count - at })], GameRelease.Fallout4, data.InstanceRoot);
+
+        lock (log) Assert.Single(log, e => e.Message.StartsWith("Checkpointed the record index", StringComparison.Ordinal));
     }
 
     private sealed class ProgressWatchingAdapter(List<int> observed) : DelegatingPluginAdapter(TestAdapters.Mutagen())
