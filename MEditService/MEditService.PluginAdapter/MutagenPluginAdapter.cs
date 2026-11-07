@@ -122,6 +122,8 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     public string? HashOf(string pluginPath) => _hashes.Of(pluginPath);
 
+    public string? StampOf(string pluginPath) => FileStamps.SettledOf(pluginPath, timeProvider);
+
     public PathAnswer Touching(LoadOrderSnapshot loadOrder, string path)
     {
         var full = Path.GetFullPath(path);

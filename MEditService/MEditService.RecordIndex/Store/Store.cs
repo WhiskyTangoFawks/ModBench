@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Data;
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
@@ -320,9 +321,10 @@ internal sealed class Store : IDisposable
 
         var timer = Stopwatch.StartNew();
         var checkedCount = 0;
-        foreach (var (key, filePath, contentHash) in IndexedFiles())
+        foreach (var (key, filePath, contentHash, stamp) in IndexedFiles())
         {
             checkedCount++;
+            if (stamp is not null) _claimed[filePath] = (stamp, contentHash);
             if (!_plugins.Exists(filePath))
             {
                 if (_logger.IsEnabled(LogLevel.Information))
@@ -356,17 +358,22 @@ internal sealed class Store : IDisposable
         return stale;
     }
 
-    private List<(PluginAddress Key, string FilePath, string ContentHash)> IndexedFiles()
+    private List<(PluginAddress Key, string FilePath, string ContentHash, string? Stamp)> IndexedFiles()
     {
         return DuckDbSql.Rows(
-            Connection, $"SELECT plugin, origin, file_path, content_hash FROM {FilesRelation}",
-            reader => (reader.GetPluginAddress(), ResolvedFilePath(reader.GetString(2)), reader.GetString(3)));
+            Connection, $"SELECT plugin, origin, file_path, content_hash, file_stamp FROM {FilesRelation}",
+            reader => (reader.GetPluginAddress(), ResolvedFilePath(reader.GetString(2)), reader.GetString(3), reader.GetStringOrNull(4)));
     }
+
+    // The hash each claim took of a file, and the stamp the file had then, so a file whose stamp holds is not read
+    // again (ADR-0003).
+    private readonly ConcurrentDictionary<string, (string Stamp, string Hash)> _claimed = new(StringComparer.Ordinal);
 
     // Null when the file cannot be read (mid-write, permissions) counts as a mismatch: an unreadable
     // file is no evidence its rows are still true.
     public string? FileContentHash(string filePath)
     {
+        if (_claimed.TryGetValue(filePath, out var claimed) && _plugins.StampOf(filePath) == claimed.Stamp) return claimed.Hash;
         var hash = _plugins.HashOf(filePath);
         if (hash == null) LogUnreadable(filePath);
         return hash;
@@ -388,13 +395,12 @@ internal sealed class Store : IDisposable
             reader => (ResolvedFilePath(reader.GetString(0)), reader.GetString(1)), key.Name, key.Origin) is [var claim] ? claim : null;
     }
 
-    /// <summary>Every plugin's disk claim and derivation as of now, each table read in one query, for a pass that asks them
-    /// of plugins it meets one by one (ADR-0010). The document stamps of those of <paramref name="comparing"/> derived
-    /// from their tree are read in one more.</summary>
+    /// <summary>Every plugin's disk claim and derivation, and the document stamps of those of <paramref name="comparing"/>
+    /// derived from their tree, one query each, for a pass that meets the plugins one by one (ADR-0010).</summary>
     internal IndexedStamps IndexedStamps(IEnumerable<PluginAddress>? comparing = null)
     {
         var plugins = new Dictionary<PluginAddress, IndexedPlugin>(PluginAddress.Comparer);
-        foreach (var (key, filePath, contentHash) in IndexedFiles())
+        foreach (var (key, filePath, contentHash, _) in IndexedFiles())
             plugins[key] = new IndexedPlugin((filePath, contentHash), null);
         foreach (var (key, stamp) in DuckDbSql.Rows(
             Connection, $"SELECT plugin, origin, derived_from FROM {PluginDerivationRelation}",
@@ -462,7 +468,8 @@ internal sealed class Store : IDisposable
             INSERT INTO {PluginDerivationRelation} (plugin, origin, derived_from) VALUES ($1, $2, $3)
             """, plugin, origin, derivedFrom.ToString());
         if (filePath == null) return;
-        if (ClaimOf(filePath) is { } claim) StampFileClaim(plugin, origin, filePath, claim, stringsRead);
+        var stamp = _plugins.StampOf(filePath);
+        if (ClaimOf(filePath) is { } claim) StampFileClaim(plugin, origin, filePath, claim, stamp, stringsRead);
     }
 
     private FileClaim? ClaimOf(string filePath)
@@ -472,12 +479,15 @@ internal sealed class Store : IDisposable
         return null;
     }
 
-    private void StampFileClaim(string plugin, string origin, string filePath, FileClaim claim, string? stringsRead)
+    // The stamp is taken before the claim's read, so a write during it moves the stamp past the one kept.
+    private void StampFileClaim(string plugin, string origin, string filePath, FileClaim claim, string? stamp, string? stringsRead)
     {
         DuckDbSql.Execute(Connection, $"""
-            INSERT INTO {FilesRelation} (plugin, origin, file_path, content_hash, strings_read)
-            VALUES ($1, $2, $3, $4, $5)
-            """, plugin, origin, StoredFilePath(filePath), claim.Hash, stringsRead);
+            INSERT INTO {FilesRelation} (plugin, origin, file_path, content_hash, file_stamp, strings_read)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            """, plugin, origin, StoredFilePath(filePath), claim.Hash, stamp, stringsRead);
+        if (stamp is null) _claimed.TryRemove(filePath, out _);
+        else _claimed[filePath] = (stamp, claim.Hash);
         StampDiagnoses(plugin, origin, claim);
     }
 
@@ -486,12 +496,13 @@ internal sealed class Store : IDisposable
     public void ReclaimTreeBinary(PluginAddress key, string filePath, string? heldContentHash)
     {
         if (heldContentHash is null || FileContentHash(filePath) is not { } now || now == heldContentHash) return;
+        var stamp = _plugins.StampOf(filePath);
         if (ClaimOf(filePath) is not { } claim) return;
 
         using var tx = BeginTransaction();
         DuckDbSql.Execute(Connection, $"DELETE FROM {FilesRelation} WHERE plugin = $1 AND origin = $2", key.Name, key.Origin);
         DuckDbSql.Execute(Connection, $"DELETE FROM {PluginDiagnosisRelation} WHERE plugin = $1 AND origin = $2", key.Name, key.Origin);
-        StampFileClaim(key.Name, key.Origin, filePath, claim, stringsRead: null);
+        StampFileClaim(key.Name, key.Origin, filePath, claim, stamp, stringsRead: null);
         BumpSequence();
         tx.Commit();
     }

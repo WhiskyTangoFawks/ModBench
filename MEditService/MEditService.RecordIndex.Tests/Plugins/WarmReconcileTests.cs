@@ -5,6 +5,7 @@ using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Time.Testing;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -136,6 +137,57 @@ public sealed class WarmReconcileTests
         lock (log) reads = [.. log.Select(e => e.Message).Where(m => m.StartsWith("Read the document stamps", StringComparison.Ordinal))];
         Assert.NotEmpty(reads);
         Assert.All(reads, read => Assert.StartsWith("Read the document stamps of 3 plugin(s)", read, StringComparison.Ordinal));
+    }
+
+    private static readonly FakeTimeProvider ClockPastEveryWrite = new(TimeProvider.System.GetUtcNow() + TimeSpan.FromHours(1));
+
+    [Fact]
+    public void ALaunchWithNothingChanged_HashesNoPlugin()
+    {
+        var holder = new LoadOrderHolder();
+        using var data = new PluginFixtureBuilder("warm-unhashed")
+            .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
+            .WithPlugin("B.esp", m => m.Npcs.AddNew("NpcB"))
+            .Build();
+        using (var cold = Indexes.Open(holder, new HashCountingAdapter())) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+
+        var hashes = new HashCountingAdapter();
+        using var warm = Indexes.Open(holder, hashes);
+        warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+
+        Assert.Empty(hashes.Hashed);
+        Assert.Equal(["A.esp", "B.esp"], warm.Status.IndexedPlugins.Select(p => p.Name));
+    }
+
+    [Fact]
+    public void ALaunchAfterAPluginChangedOnDisk_HashesIt_AndReadsItAgain()
+    {
+        var holder = new LoadOrderHolder();
+        using var data = new PluginFixtureBuilder("warm-rehashed")
+            .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
+            .WithPlugin("B.esp", m => m.Npcs.AddNew("NpcB"))
+            .Build();
+        using (var cold = Indexes.Open(holder, new HashCountingAdapter())) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        var b = data.Plugins.Single(p => p.Name == "B.esp");
+        PluginBinaries.Rewrite(b.Path, m => m.Npcs.AddNew("NpcBAgain"));
+
+        var hashes = new HashCountingAdapter();
+        using var warm = Indexes.Open(holder, hashes);
+        warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+
+        Assert.Equal(["B.esp"], hashes.Hashed.Distinct());
+        Assert.Equal(["NpcBAgain"], warm.ListedIn(b.Key).Select(r => r.EditorId));
+    }
+
+    private sealed class HashCountingAdapter() : DelegatingPluginAdapter(new MutagenPluginAdapter(ClockPastEveryWrite))
+    {
+        public List<string> Hashed { get; } = [];
+
+        public override string? HashOf(string pluginPath)
+        {
+            lock (Hashed) Hashed.Add(Path.GetFileName(pluginPath));
+            return base.HashOf(pluginPath);
+        }
     }
 
     private sealed class RecordCountingAdapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())

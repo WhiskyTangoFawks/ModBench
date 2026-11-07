@@ -34,6 +34,9 @@ internal sealed class DiskSaysAdapter(TimeProvider? clock = null)
         return _changed.ContainsKey(pluginPath) ? ChangedHash : base.HashOf(pluginPath);
     }
 
+    public override string? StampOf(string pluginPath) =>
+        IsGone(pluginPath) || _changed.ContainsKey(pluginPath) ? null : base.StampOf(pluginPath);
+
     public override Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath, GameRelease gameRelease)
     {
         if (IsGone(pluginPath)) return PluginFailures.Inaccessible();

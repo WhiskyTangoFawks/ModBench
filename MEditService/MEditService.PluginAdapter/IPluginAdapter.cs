@@ -42,6 +42,10 @@ public interface IPluginAdapter
     /// file cannot be read: no evidence either way, so each caller decides.</summary>
     string? HashOf(string pluginPath);
 
+    /// <summary>The plugin file's size and date modified (ADR-0003). Null when the file system cannot answer, or the
+    /// file changed too recently for a later write to move them.</summary>
+    string? StampOf(string pluginPath);
+
     /// <summary>Forgets what is kept of every plugin file but <paramref name="pluginPaths"/>: its hash, and its record facts.</summary>
     void KeepStateOf(IReadOnlySet<string> pluginPaths);
 

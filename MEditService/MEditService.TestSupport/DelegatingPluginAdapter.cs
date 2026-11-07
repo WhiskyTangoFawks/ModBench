@@ -36,6 +36,8 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
 
     public virtual string? HashOf(string pluginPath) => inner.HashOf(pluginPath);
 
+    public virtual string? StampOf(string pluginPath) => inner.StampOf(pluginPath);
+
     public virtual PathAnswer Touching(LoadOrderSnapshot loadOrder, string path) => inner.Touching(loadOrder, path);
 
     public virtual void KeepStateOf(IReadOnlySet<string> pluginPaths) => inner.KeepStateOf(pluginPaths);
