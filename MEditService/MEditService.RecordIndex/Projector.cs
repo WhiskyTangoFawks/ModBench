@@ -225,6 +225,9 @@ internal sealed class Projector(
     // A commit moves what git status says and touches no document, so the repository stamp counts beside the documents'.
     private readonly ConcurrentDictionary<PluginAddress, (RecordStamps Documents, FilesStamp Repository)> _matched = new(PluginAddress.Comparer);
 
+    /// <summary>Whether the plugin's tree last matched its rows, so a validation with its stamps unchanged reads no row.</summary>
+    internal bool Matched(PluginAddress key) => _matched.ContainsKey(key);
+
     // A plugin's rows against the source documents they came from, by content stamp (ADR-0003).
     private ValidationReport ValidateAgainstTree(RegisteredPlugin plugin, RecordStamps stamps, Store.IndexedStamps indexed)
     {
@@ -235,7 +238,7 @@ internal sealed class Projector(
             index.ReclaimTreeBinary(plugin.Key, plugin.Path, indexed.FileOf(plugin.Key)?.ContentHash);
             return ValidationReport.Clean;
         }
-        return Reconcile(plugin, stamps, repository, index.HeldDocumentStamps(plugin.Key));
+        return Reconcile(plugin, stamps, repository, indexed.DocumentStampsOf(plugin.Key) ?? index.HeldDocumentStamps([plugin.Key])[plugin.Key]);
     }
 
     // An embedded child's system of record is its owner's document, so a matching document vouches

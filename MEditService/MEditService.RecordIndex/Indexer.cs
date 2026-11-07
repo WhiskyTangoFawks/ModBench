@@ -1004,7 +1004,7 @@ internal sealed class Indexer : IDisposable
         {
             scope.Store.Commit(_ =>
             {
-                var indexed = scope.Store.IndexedStamps();
+                var indexed = scope.Store.IndexedStamps(pending.Select(plugin => plugin.Key));
                 var first = true;
                 while (pending.TryPeek(out var plugin)
                     && (first || indexed.FileOf(plugin.Key) is not null && _timeProvider.GetUtcNow() < until))
@@ -1161,7 +1161,7 @@ internal sealed class Indexer : IDisposable
         {
             scope.Store.Commit(_ =>
             {
-                var indexed = scope.Store.IndexedStamps();
+                var indexed = scope.Store.IndexedStamps(plugins.Select(plugin => plugin.Key).Where(key => !scope.Projector.Matched(key)));
                 foreach (var plugin in plugins)
                 {
                     token.ThrowIfCancellationRequested();

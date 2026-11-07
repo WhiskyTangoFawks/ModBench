@@ -117,6 +117,27 @@ public sealed class WarmReconcileTests
         Assert.Empty(counts.Counted);
     }
 
+    [Fact]
+    public void ALaunchWithNothingChanged_ReadsTheDocumentStampsOfItsCompiledPluginsTogether()
+    {
+        using var data = new PluginFixtureBuilder("warm-trees")
+            .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"), origin: "ModA")
+            .WithPlugin("B.esp", m => m.Npcs.AddNew("NpcB"), origin: "ModB")
+            .WithPlugin("C.esp", m => m.Npcs.AddNew("NpcC"), origin: "ModC")
+            .BuildScattered()
+            .CompiledPlugin();
+        using (Indexes.Reconciled(data, data.InstanceRoot)) { }
+        var log = new List<LogEntry>();
+        using var loggers = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider(log)));
+
+        using (Indexes.Reconciled(data, data.InstanceRoot, loggerFactory: loggers)) { }
+
+        List<string> reads;
+        lock (log) reads = [.. log.Select(e => e.Message).Where(m => m.StartsWith("Read the document stamps", StringComparison.Ordinal))];
+        Assert.NotEmpty(reads);
+        Assert.All(reads, read => Assert.StartsWith("Read the document stamps of 3 plugin(s)", read, StringComparison.Ordinal));
+    }
+
     private sealed class RecordCountingAdapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public List<string> Counted { get; } = [];

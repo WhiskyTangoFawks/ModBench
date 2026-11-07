@@ -389,8 +389,9 @@ internal sealed class Store : IDisposable
     }
 
     /// <summary>Every plugin's disk claim and derivation as of now, each table read in one query, for a pass that asks them
-    /// of plugins it meets one by one (ADR-0010).</summary>
-    internal IndexedStamps IndexedStamps()
+    /// of plugins it meets one by one (ADR-0010). The document stamps of those of <paramref name="comparing"/> derived
+    /// from their tree are read in one more.</summary>
+    internal IndexedStamps IndexedStamps(IEnumerable<PluginAddress>? comparing = null)
     {
         var plugins = new Dictionary<PluginAddress, IndexedPlugin>(PluginAddress.Comparer);
         foreach (var (key, filePath, contentHash) in IndexedFiles())
@@ -406,7 +407,8 @@ internal sealed class Store : IDisposable
             }
             plugins[key] = (plugins.TryGetValue(key, out var indexed) ? indexed : new IndexedPlugin(null, null)) with { DerivedFrom = derivedFrom };
         }
-        return new IndexedStamps(plugins);
+        List<PluginAddress> trees = [.. (comparing ?? []).Where(key => plugins.GetValueOrDefault(key)?.DerivedFrom == DerivedFrom.SourceTree)];
+        return new IndexedStamps(plugins, trees.Count > 0 ? HeldDocumentStamps(trees) : []);
     }
 
     /// <summary>Which truth <paramref name="key"/>'s rows were derived from, or null when the store
@@ -1068,21 +1070,32 @@ internal sealed class Store : IDisposable
     // One row per source document: every Effective record no document embeds. A worldspace's TopCell
     // is embedded, while an exterior cell has a directory.
     private static readonly string DocumentStamps = $"""
-        SELECT r.form_key, r.content_hash
+        SELECT r.plugin, r.origin, r.form_key, r.content_hash
         FROM mirror.records r
-        WHERE r.plugin = $1 AND r.origin = $2
-          AND NOT EXISTS (
+        JOIN (SELECT unnest($1::VARCHAR[]) AS plugin, unnest($2::VARCHAR[]) AS origin) k
+          ON k.plugin = r.plugin AND k.origin = r.origin
+        WHERE NOT EXISTS (
             SELECT 1 FROM mirror.holdings h
             WHERE h.child = r.form_key AND h.plugin = r.plugin AND h.origin = r.origin
               AND h.slot <> {HoldingSlots.Exterior})
         """;
 
-    /// <summary>The content stamp of each source document the rows were derived from, by the key of
-    /// the record it files.</summary>
-    public Dictionary<string, string> HeldDocumentStamps(PluginAddress key)
+    /// <summary>The content stamp of each source document the rows of each of <paramref name="keys"/> were derived
+    /// from, by the key of the record it files, in one query (ADR-0010).</summary>
+    public Dictionary<PluginAddress, Dictionary<string, string>> HeldDocumentStamps(IReadOnlyCollection<PluginAddress> keys)
     {
-        return LastWins(DuckDbSql.Rows(
-            Connection, DocumentStamps, reader => KeyValuePair.Create(reader.GetString(0), reader.GetString(1)), key.Name, key.Origin));
+        var timer = Stopwatch.StartNew();
+        var byPlugin = keys.ToDictionary(key => key, _ => new Dictionary<string, string>(StringComparer.Ordinal), PluginAddress.Comparer);
+        // A plugin can hold one FormKey twice and the rows carry no key, so the last row speaks.
+        foreach (var (key, formKey, stamp) in DuckDbSql.Rows(
+            Connection, DocumentStamps, reader => (reader.GetPluginAddress(), reader.GetString(2), reader.GetString(3)),
+            keys.Select(key => key.Name).ToList(), keys.Select(key => key.Origin).ToList()))
+        {
+            byPlugin[key][formKey] = stamp;
+        }
+        if (_logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("Read the document stamps of {Count} plugin(s) in {ElapsedMs} ms", keys.Count, timer.ElapsedMilliseconds);
+        return byPlugin;
     }
 
     // A plugin can hold one FormKey twice and the rows carry no key, so the last row speaks.
@@ -1098,8 +1111,12 @@ internal sealed class Store : IDisposable
 internal sealed record IndexedPlugin((string FilePath, string ContentHash)? File, DerivedFrom? DerivedFrom);
 
 /// <summary>What the store held of each plugin's rows when it was asked: the file they were built from, and the truth.</summary>
-internal sealed class IndexedStamps(IReadOnlyDictionary<PluginAddress, IndexedPlugin> plugins)
+internal sealed class IndexedStamps(
+    IReadOnlyDictionary<PluginAddress, IndexedPlugin> plugins, IReadOnlyDictionary<PluginAddress, Dictionary<string, string>> documentStamps)
 {
+    /// <summary>Null when the plugin was not among those whose document stamps were read.</summary>
+    public Dictionary<string, string>? DocumentStampsOf(PluginAddress key) => documentStamps.GetValueOrDefault(key);
+
     public (string FilePath, string ContentHash)? FileOf(PluginAddress key) => plugins.TryGetValue(key, out var indexed) ? indexed.File : null;
 
     public DerivedFrom? DerivationOf(PluginAddress key) => plugins.TryGetValue(key, out var indexed) ? indexed.DerivedFrom : null;
