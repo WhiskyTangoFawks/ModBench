@@ -388,6 +388,27 @@ internal sealed class Store : IDisposable
             reader => (ResolvedFilePath(reader.GetString(0)), reader.GetString(1)), key.Name, key.Origin) is [var claim] ? claim : null;
     }
 
+    /// <summary>Every plugin's disk claim and derivation as of now, each table read in one query, for a pass that asks them
+    /// of plugins it meets one by one (ADR-0010).</summary>
+    internal IndexedStamps IndexedStamps()
+    {
+        var plugins = new Dictionary<PluginAddress, IndexedPlugin>(PluginAddress.Comparer);
+        foreach (var (key, filePath, contentHash) in IndexedFiles())
+            plugins[key] = new IndexedPlugin((filePath, contentHash), null);
+        foreach (var (key, stamp) in DuckDbSql.Rows(
+            Connection, $"SELECT plugin, origin, derived_from FROM {PluginDerivationRelation}",
+            reader => (Key: reader.GetPluginAddress(), Stamp: reader.GetString(2))))
+        {
+            if (!Enum.TryParse<DerivedFrom>(stamp, out var derivedFrom))
+            {
+                _logger.LogWarning("The record index holds an unknown derivation {Derivation} for {Plugin} ({Origin}); treating its rows as derived from none", stamp, key.Name, key.Origin);
+                continue;
+            }
+            plugins[key] = (plugins.TryGetValue(key, out var indexed) ? indexed : new IndexedPlugin(null, null)) with { DerivedFrom = derivedFrom };
+        }
+        return new IndexedStamps(plugins);
+    }
+
     /// <summary>Which truth <paramref name="key"/>'s rows were derived from, or null when the store
     /// holds no rows for it.</summary>
     public DerivedFrom? DerivationOf(PluginAddress key) =>
@@ -460,9 +481,9 @@ internal sealed class Store : IDisposable
 
     /// <summary>Claims the binary now at <paramref name="filePath"/> for rows its tree vouches for: a build rewrites
     /// the binary and moves no row.</summary>
-    public void ReclaimTreeBinary(PluginAddress key, string filePath)
+    public void ReclaimTreeBinary(PluginAddress key, string filePath, string? heldContentHash)
     {
-        if (IndexedFile(key) is not { } held || FileContentHash(filePath) is not { } now || now == held.ContentHash) return;
+        if (heldContentHash is null || FileContentHash(filePath) is not { } now || now == heldContentHash) return;
         if (ClaimOf(filePath) is not { } claim) return;
 
         using var tx = BeginTransaction();
@@ -1064,4 +1085,14 @@ internal sealed class Store : IDisposable
         return byKey;
     }
 
+}
+
+internal sealed record IndexedPlugin((string FilePath, string ContentHash)? File, DerivedFrom? DerivedFrom);
+
+/// <summary>What the store held of each plugin's rows when it was asked: the file they were built from, and the truth.</summary>
+internal sealed class IndexedStamps(IReadOnlyDictionary<PluginAddress, IndexedPlugin> plugins)
+{
+    public (string FilePath, string ContentHash)? FileOf(PluginAddress key) => plugins.TryGetValue(key, out var indexed) ? indexed.File : null;
+
+    public DerivedFrom? DerivationOf(PluginAddress key) => plugins.TryGetValue(key, out var indexed) ? indexed.DerivedFrom : null;
 }

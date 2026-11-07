@@ -33,7 +33,7 @@ internal sealed class LoadOrderAtScale : IDisposable
     internal LoadOrderEntry UncommittedPlugin { get; }
     internal string AReferenceInTheUncommittedCell { get; }
 
-    internal LoadOrderAtScale(int plugins = 70)
+    internal LoadOrderAtScale(int plugins = 70, int rows = Rows, int referencesInABigCell = ReferencesInABigCell)
     {
         string bigCell = "", aReference = "", anUncommittedReference = "", overridden = "";
         List<string> manyOverridden = [];
@@ -41,7 +41,7 @@ internal sealed class LoadOrderAtScale : IDisposable
         for (var p = 0; p < plugins; p++)
             builder.WithPlugin($"Plugin{p:D3}.esp", (mod, masters) =>
             {
-                AddCell(mod, $"Cell{p:D3}", Rows / plugins);
+                AddCell(mod, $"Cell{p:D3}", rows / plugins);
                 if (masters.Count == 0)
                 {
                     var keyword = new Keyword(mod) { EditorID = "SharedKeyword" };
@@ -67,12 +67,12 @@ internal sealed class LoadOrderAtScale : IDisposable
         }, origin: "ManyOverrideMod");
         builder.WithPlugin("BigCell.esp", mod =>
         {
-            var cell = AddCell(mod, "BigCell", ReferencesInABigCell);
+            var cell = AddCell(mod, "BigCell", referencesInABigCell);
             bigCell = cell.FormKey.ToString();
-            aReference = cell.Temporary[ReferencesInABigCell / 2].FormKey.ToString();
+            aReference = cell.Temporary[referencesInABigCell / 2].FormKey.ToString();
         }, origin: "BigCellMod");
         builder.WithPlugin("Uncommitted.esp", mod =>
-            anUncommittedReference = AddCell(mod, "UncommittedCell", ReferencesInABigCell).Temporary[0].FormKey.ToString(),
+            anUncommittedReference = AddCell(mod, "UncommittedCell", referencesInABigCell).Temporary[0].FormKey.ToString(),
             origin: "UncommittedMod");
         _fixture = builder.BuildScattered();
 

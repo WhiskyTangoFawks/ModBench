@@ -188,32 +188,32 @@ internal sealed class Projector(
     /// <summary>ADR-0015: compares <paramref name="plugin"/>'s rows against the system of record they
     /// came from, the tree <paramref name="state"/> stamps or else the binary, and refreshes what
     /// differs.</summary>
-    internal ValidationReport Validate(RegisteredPlugin plugin, ReadState state) =>
+    internal ValidationReport Validate(RegisteredPlugin plugin, ReadState state, Store.IndexedStamps indexed) =>
         state switch
         {
             // Rows from the tree stand over unsaved text that stops it; the read state says why.
-            { Stamps.StoppedOnlyByUnsavedText: true } when index.DerivationOf(plugin.Key) == DerivedFrom.SourceTree =>
+            { Stamps.StoppedOnlyByUnsavedText: true } when indexed.DerivationOf(plugin.Key) == DerivedFrom.SourceTree =>
                 ValidationReport.Clean,
             // The re-derivation is what diagnoses the tree on the plugin, as a first ingest would.
             { Stamps: { } stamps } when stamps.Claimed.Count > 0 || stamps.Unreadable.Count > 0 =>
                 new ValidationReport(
                     [], NeedsRebuild: true,
                     [.. stamps.Unreadable.Select(file => file.Message), .. stamps.Claimed.Select(claim => claim.Message)]),
-            { Stamps: { } stamps } => ValidateAgainstTree(plugin, stamps),
-            _ => ValidateAgainstBinary(plugin),
+            { Stamps: { } stamps } => ValidateAgainstTree(plugin, stamps, indexed),
+            _ => ValidateAgainstBinary(plugin, indexed),
         };
 
     // ADR-0003, asked of one plugin. A binary has no smaller unit, so a mismatch is a
     // rebuild the caller owns.
-    private ValidationReport ValidateAgainstBinary(RegisteredPlugin plugin)
+    private ValidationReport ValidateAgainstBinary(RegisteredPlugin plugin, Store.IndexedStamps indexed)
     {
         // Nothing vouches for these rows (an in-memory mod, or a compiled plugin whose folder went
         // away), so there is nothing to compare them against.
-        if (index.IndexedFile(plugin.Key) is not { } claim) return ValidationReport.Clean;
+        if (indexed.FileOf(plugin.Key) is not { } claim) return ValidationReport.Clean;
 
         // Rows stamped from another truth came from a repository or tree that went away outside
         // Modbench (ADR-0007), or arrived, which the caller re-derives.
-        if (index.DerivationOf(plugin.Key) != TruthOf(plugin))
+        if (indexed.DerivationOf(plugin.Key) != TruthOf(plugin))
             return new ValidationReport([], NeedsRebuild: true, []);
 
         // A file gone hashes as none, so the caller reads the plugin whole from where it is now.
@@ -226,13 +226,13 @@ internal sealed class Projector(
     private readonly ConcurrentDictionary<PluginAddress, (RecordStamps Documents, FilesStamp Repository)> _matched = new(PluginAddress.Comparer);
 
     // A plugin's rows against the source documents they came from, by content stamp (ADR-0003).
-    private ValidationReport ValidateAgainstTree(RegisteredPlugin plugin, RecordStamps stamps)
+    private ValidationReport ValidateAgainstTree(RegisteredPlugin plugin, RecordStamps stamps, Store.IndexedStamps indexed)
     {
         var repository = Over(plugin).RepositoryStamp();
-        if (repository.Vouches && index.DerivationOf(plugin.Key) == DerivedFrom.SourceTree
+        if (repository.Vouches && indexed.DerivationOf(plugin.Key) == DerivedFrom.SourceTree
             && _matched.TryGetValue(plugin.Key, out var last) && last.Documents.Equals(stamps) && last.Repository.Equals(repository))
         {
-            index.ReclaimTreeBinary(plugin.Key, plugin.Path);
+            index.ReclaimTreeBinary(plugin.Key, plugin.Path, indexed.FileOf(plugin.Key)?.ContentHash);
             return ValidationReport.Clean;
         }
         return Reconcile(plugin, stamps, repository, index.HeldDocumentStamps(plugin.Key));
@@ -279,7 +279,7 @@ internal sealed class Projector(
 
         // A tree that stopped the refresh is read whole, which reads the binary in its place and says why.
         if (stopped is not null) return new ValidationReport([], NeedsRebuild: true, [stopped.Reason]);
-        index.ReclaimTreeBinary(key, plugin.Path);
+        index.ReclaimTreeBinary(key, plugin.Path, index.IndexedFile(key)?.ContentHash);
         if (stale.Count == 0 && repository.Vouches) _matched[key] = (stamps, repository);
         return ValidationReport.Clean;
     }
