@@ -50,7 +50,7 @@ public sealed class ReadAfterAWriteSignalledEarlierTests : IDisposable
         await _gate.WaitUntilParkedAsync();
         _index.SignalChange();
         _compiledPlugin.HandEdit(document, "\"CompiledPluginNpc\"", "\"Written\"");
-        _holder.SourceWritten();
+        _holder.SourceWritten(null);
 
         var read = Task.Run(() => _index.Queries.GetRenderedDocument(_compiledPlugin.Key, _npc));
         _gate.Release();

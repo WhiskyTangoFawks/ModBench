@@ -21,11 +21,36 @@ public sealed class LoadOrderHolder
     public event Action<LoadOrderSnapshot, long>? Arrived;
 
     /// <summary>How many times mEdit has written a system of record. A read after a write waits for the record index to
-    /// have checked the disk since (ADR-0015).</summary>
+    /// have read what it wrote (ADR-0015).</summary>
     public long SourceWrites => Interlocked.Read(ref _sourceWrites);
 
-    /// <summary>Marks that mEdit wrote a system of record.</summary>
-    public void SourceWritten() => Interlocked.Increment(ref _sourceWrites);
+    private readonly Lock _writing = new();
+    private readonly Dictionary<PluginAddress, long> _lastWriteOf = new(PluginAddress.Comparer);
+    private long _lastUnnamedWrite;
+
+    /// <summary>Marks that mEdit wrote a system of record, of <paramref name="plugins"/>; null when no plugin names
+    /// what it wrote.</summary>
+    public void SourceWritten(IReadOnlyCollection<PluginAddress>? plugins)
+    {
+        lock (_writing)
+        {
+            var write = Interlocked.Increment(ref _sourceWrites);
+            if (plugins is null) _lastUnnamedWrite = write;
+            else foreach (var plugin in plugins) _lastWriteOf[plugin] = write;
+        }
+    }
+
+    /// <summary>The writes so far, and of those after <paramref name="checkedThrough"/> each plugin's last; null when one
+    /// of them named no plugin, so only a check of the whole disk reads it.</summary>
+    public (long Through, IReadOnlyDictionary<PluginAddress, long>? LastOfEach) WritesAfter(long checkedThrough)
+    {
+        lock (_writing)
+        {
+            var through = SourceWrites;
+            if (_lastUnnamedWrite > checkedThrough) return (through, null);
+            return (through, _lastWriteOf.Where(last => last.Value > checkedThrough).ToDictionary(PluginAddress.Comparer));
+        }
+    }
 
     /// <summary>One higher per Apply that changes the load order, for a caller asking whether the
     /// Index has reconciled it. An equal snapshot answers the current version.</summary>

@@ -11,6 +11,7 @@ namespace MEditService.RecordIndex.Tests.Plugins;
 public sealed class ReadAfterSourceWriteTests : IDisposable
 {
     private const string CompiledPlugin = "CompiledPlugin.esp";
+    private const string OtherPlugin = "Other.esp";
     private static readonly DateTimeOffset Start = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
     private static readonly TimeSpan Generous = TimeSpan.FromSeconds(30);
 
@@ -27,6 +28,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
         string npc = "";
         _fixture = new PluginFixtureBuilder("read-after-source-write")
             .WithPlugin(CompiledPlugin, mod => npc = mod.Npcs.AddNew("CompiledPluginNpc").FormKey.ToString(), origin: "SourceMod")
+            .WithPlugin(OtherPlugin, mod => mod.Npcs.AddNew("OtherNpc"), origin: "OtherMod")
             .BuildScattered();
         _compiledPlugin = _fixture.Plugins.Single(p => p.Name == CompiledPlugin);
         _npc = npc;
@@ -34,7 +36,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
         _index = Indexes.Open(_holder, _gate, timeProvider: _clock);
         _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         _compiledPlugin.HandEdit(_index.DocumentOf(_npc, _compiledPlugin.Key), "\"CompiledPluginNpc\"", "\"Written\"");
-        _holder.SourceWritten();
+        _holder.SourceWritten([_compiledPlugin.Key]);
     }
 
     public void Dispose()
@@ -56,6 +58,29 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
         _index.SignalChange();
 
         Assert.NotSame(read, first);
+        Assert.Contains("\"Written\"", (await read.WaitAsync(Generous)).Value()?.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AReadAfterASourceWrite_AnswersOnceAChangeNamingItsPluginIsReRead_WithNoCheckOfTheDisk()
+    {
+        var read = Read();
+
+        _index.SignalChange([_compiledPlugin.Key]);
+
+        Assert.Contains("\"Written\"", (await read.WaitAsync(Generous)).Value()?.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AReadAfterASourceWrite_WaitsPastAReReadOfAnotherPlugin()
+    {
+        var read = Read();
+
+        _index.SignalChange([_fixture.Plugins.Single(p => p.Name == OtherPlugin).Key]);
+        var first = await Task.WhenAny(read, Task.Delay(TimeSpan.FromMilliseconds(500)));
+
+        Assert.NotSame(read, first);
+        _index.SignalChange();
         Assert.Contains("\"Written\"", (await read.WaitAsync(Generous)).Value()?.Text, StringComparison.Ordinal);
     }
 
