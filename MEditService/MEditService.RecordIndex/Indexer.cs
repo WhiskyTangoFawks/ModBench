@@ -145,6 +145,9 @@ internal sealed class Indexer : IDisposable
     // and pulsed on _reconciled, which a read after a source write waits on.
     private long _writesChecked;
 
+    // The source writes made before each plugin's last re-read began, guarded by _lock and pulsed on _reconciled.
+    private readonly Dictionary<PluginAddress, long> _writesReReadOf = new(PluginAddress.Comparer);
+
     // ADR-0015. Guarded by _lock.
     private bool _openedUnchecked;
     private readonly object _reconciled = new();
@@ -194,13 +197,13 @@ internal sealed class Indexer : IDisposable
     /// the Index has opened no store to read.</summary>
     public RelationReads RequireReads()
     {
-        AwaitTheReconcileAfterTheLastSourceWrite();
+        AwaitTheReadOfTheLastSourceWrite();
         return RequireScope().Store.Reads;
     }
 
     public RelationReads RequireWholeSetReads()
     {
-        AwaitTheReconcileAfterTheLastSourceWrite();
+        AwaitTheReadOfTheLastSourceWrite();
         var status = Status;
         if (status.State == LoadOrderState.Ready) return RequireReads();
         if (_holder.Held is null) throw new NoLoadOrderException();
@@ -427,24 +430,36 @@ internal sealed class Indexer : IDisposable
             _handed.Clear();
             _named.Clear();
             _validatingTurn = true;
-            return () => ValidateAndPublish(paths, named);
+            var written = _holder.SourceWrites;
+            return () => ValidateAndPublish(paths, named, written);
         }
     }
 
-    private void ValidateAndPublish(List<string> paths, HashSet<PluginAddress> named)
+    private void ValidateAndPublish(List<string> paths, HashSet<PluginAddress> named, long writes)
     {
         bool moved;
         _exclusive.Enter();
         try
         {
-            var failure = ValidationFailure(() => ValidateNamed(paths, named), CancellationToken.None, out _);
+            List<PluginMetadata> reRead = [];
+            var failure = ValidationFailure(() => reRead = ValidateNamed(paths, named), CancellationToken.None, out _);
+            if (failure is null) VouchForWritesTo(reRead, writes);
             moved = Swap(standing => standing with { ReReadFailure = failure });
         }
         finally { _exclusive.Exit(); }
         if (moved) PublishStatus();
     }
 
-    private void ValidateNamed(List<string> paths, HashSet<PluginAddress> named)
+    private void VouchForWritesTo(List<PluginMetadata> reRead, long writes)
+    {
+        lock (_lock)
+        {
+            foreach (var key in reRead.Select(plugin => plugin.Key)) _writesReReadOf[key] = Math.Max(_writesReReadOf.GetValueOrDefault(key), writes);
+        }
+        lock (_reconciled) Monitor.PulseAll(_reconciled);
+    }
+
+    private List<PluginMetadata> ValidateNamed(List<string> paths, HashSet<PluginAddress> named)
     {
         var scope = RequireScope();
         named.UnionWith(paths
@@ -454,6 +469,7 @@ internal sealed class Indexer : IDisposable
             .Select(plugin => plugin.Key));
         var holding = scope.Held.Plugins.Where(plugin => named.Contains(plugin.Key)).ToList();
         if (holding.Count > 0 || scope.Store.SweepOwed) Validate(scope, holding, CancellationToken.None);
+        return holding;
     }
 
     // Disposal is read with the exclusive right held, which Dispose takes after setting it, so no
@@ -490,15 +506,15 @@ internal sealed class Indexer : IDisposable
         }
     }
 
-    // ADR-0015, read-your-writes: a source write reaches the record index through the next check of the disk, so a read after
-    // one waits for that check, and refuses rather than answer the rows from before it.
-    private void AwaitTheReconcileAfterTheLastSourceWrite()
+    // ADR-0015, read-your-writes: a read after a source write waits for a re-read of the plugins it names, or else a check
+    // of the disk, and refuses rather than answer the rows from before it.
+    private void AwaitTheReadOfTheLastSourceWrite()
     {
-        var awaited = _holder.SourceWrites;
+        var (awaited, lastOfEach) = _holder.WritesAfter(WritesChecked);
         var deadline = _timeProvider.GetUtcNow() + SourceWriteReadLimit;
         lock (_reconciled)
         {
-            while (WritesChecked < awaited)
+            while (!ReadSince(awaited, lastOfEach))
             {
                 var remaining = deadline - _timeProvider.GetUtcNow();
                 if (remaining <= TimeSpan.Zero)
@@ -510,6 +526,16 @@ internal sealed class Indexer : IDisposable
                 }
                 Monitor.Wait(_reconciled, remaining < SequencePollInterval ? remaining : SequencePollInterval);
             }
+        }
+    }
+
+    private bool ReadSince(long awaited, IReadOnlyDictionary<PluginAddress, long>? lastOfEach)
+    {
+        lock (_lock)
+        {
+            return _writesChecked >= awaited
+                || lastOfEach is not null && lastOfEach.All(last =>
+                    last.Value <= _writesChecked || _writesReReadOf.GetValueOrDefault(last.Key) >= last.Value);
         }
     }
 

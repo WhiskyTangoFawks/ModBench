@@ -84,8 +84,7 @@ const fakeClockLeavingSetImmediateReal = (): void => {
 };
 
 const SETTLE_MS = 200;
-const QUIET_MS = 1_000;
-const CHECK_CAP_MS = 10_000;
+const LONG_QUIET_MS = 60_000;
 const CHECK: Reread = { named: [], disk: true };
 const reread = (...named: string[]): Reread => ({ named, disk: false });
 
@@ -367,21 +366,19 @@ describe('Instance — built by watching', () => {
     expect(instance.sequence).toBe(2);
   });
 
-  it('checks the disk once the events have stopped for a while', async () => {
+  it('checks the disk no more after the re-read of what a change names, however long the events stay quiet', async () => {
     const { instance, fake } = loader();
     await instance.refresh();
 
     fakeClockLeavingSetImmediateReal();
     try {
       fake.changed('/instance/mods/A/a.esp');
-      await vi.advanceTimersByTimeAsync(QUIET_MS - 1);
-      expect(fake.rereads).toEqual([CHECK, reread('/instance/mods/A/a.esp')]);
-      await vi.advanceTimersByTimeAsync(1);
+      await vi.advanceTimersByTimeAsync(LONG_QUIET_MS);
     } finally {
       vi.useRealTimers();
     }
 
-    expect(fake.rereads).toEqual([CHECK, reread('/instance/mods/A/a.esp'), CHECK]);
+    expect(fake.rereads).toEqual([CHECK, reread('/instance/mods/A/a.esp')]);
   });
 
   it('hands each subscriber what the value was read again for: the paths the events named, or the check of the disk', async () => {
@@ -392,32 +389,13 @@ describe('Instance — built by watching', () => {
     fakeClockLeavingSetImmediateReal();
     try {
       fake.changed('/instance/mods/A/a.esp');
-      await vi.advanceTimersByTimeAsync(QUIET_MS);
+      await vi.advanceTimersByTimeAsync(SETTLE_MS);
     } finally {
       vi.useRealTimers();
     }
+    await instance.refresh();
 
     expect(landedFor).toEqual([reread('/instance/mods/A/a.esp'), CHECK]);
-  });
-
-  it('checks the disk within a bounded time of the first event while events keep coming', async () => {
-    const { instance, fake } = loader();
-    await instance.refresh();
-    const checks = (): number => fake.rereads.filter(({ disk }) => disk).length;
-
-    fakeClockLeavingSetImmediateReal();
-    try {
-      fake.changed('/instance/overwrite/first.txt');
-      const stream = setInterval(() => { fake.changed('/instance/overwrite/again.txt'); }, QUIET_MS / 2);
-      await vi.advanceTimersByTimeAsync(CHECK_CAP_MS - 1);
-      expect(checks()).toBe(1);
-      await vi.advanceTimersByTimeAsync(QUIET_MS / 2 - 1);
-      clearInterval(stream);
-    } finally {
-      vi.useRealTimers();
-    }
-
-    expect(checks()).toBe(2);
   });
 
   it('checks the disk with no path to read again when the adapter hears a change it cannot name', async () => {
@@ -435,7 +413,7 @@ describe('Instance — built by watching', () => {
     expect(fake.rereads).toEqual([CHECK, CHECK]);
   });
 
-  it('may be late from the first event until the check of the disk has landed, and tells the views at each change', async () => {
+  it('may be late from the first event until its re-read has landed, and tells the views at each change', async () => {
     const { instance, fake } = loader();
     await instance.refresh();
     const told: boolean[] = [];
@@ -450,16 +428,14 @@ describe('Instance — built by watching', () => {
       late.push(instance.mayBeLate);
       await vi.advanceTimersByTimeAsync(SETTLE_MS);
       late.push(instance.mayBeLate);
-      await vi.advanceTimersByTimeAsync(QUIET_MS);
-      late.push(instance.mayBeLate);
     } finally {
       vi.useRealTimers();
     }
 
-    expect({ late, told }).toEqual({ late: [false, true, true, false], told: [true, false] });
+    expect({ late, told }).toEqual({ late: [false, true, false], told: [true, false] });
   });
 
-  it('may be late still when an event arrives while the check reads', async () => {
+  it('may be late still when an event arrives while a re-read reads', async () => {
     let release!: () => void;
     let readHeld: Promise<void> = Promise.resolve();
     const { instance, fake } = loader({}, (adapter) => ({
@@ -475,12 +451,12 @@ describe('Instance — built by watching', () => {
     try {
       readHeld = new Promise<void>((resolve) => { release = resolve; });
       fake.changed('/instance/mods/A/a.esp');
-      await vi.advanceTimersByTimeAsync(QUIET_MS);
+      await vi.advanceTimersByTimeAsync(SETTLE_MS);
       fake.changed('/instance/mods/A/b.esp');
       release();
       await vi.advanceTimersByTimeAsync(0);
       expect(instance.mayBeLate).toBe(true);
-      await vi.advanceTimersByTimeAsync(QUIET_MS);
+      await vi.advanceTimersByTimeAsync(SETTLE_MS);
     } finally {
       vi.useRealTimers();
     }
@@ -488,7 +464,30 @@ describe('Instance — built by watching', () => {
     expect(instance.mayBeLate).toBe(false);
   });
 
-  it('is not late for a check whose read failed, which the message line says', async () => {
+  it('is not late for a refresh asked while a read runs, as no change was heard', async () => {
+    let release!: () => void;
+    let readHeld: Promise<void> = Promise.resolve();
+    const { instance } = loader({}, (adapter) => ({
+      ...adapter,
+      reading: async (asked) => {
+        await readHeld;
+        return adapter.reading(asked);
+      },
+    }));
+    await instance.refresh();
+    readHeld = new Promise<void>((resolve) => { release = resolve; });
+    const reading = instance.refresh();
+    const waiting = instance.refresh();
+    const told = vi.fn();
+    instance.onMayBeLate(told);
+
+    release();
+    await Promise.all([reading, waiting]);
+
+    expect(told).not.toHaveBeenCalled();
+  });
+
+  it('is not late for a re-read whose read failed, which the message line says', async () => {
     const { instance, fake } = loader();
     await instance.refresh();
     fake.failReading('disk gone');
@@ -496,7 +495,7 @@ describe('Instance — built by watching', () => {
     fakeClockLeavingSetImmediateReal();
     try {
       fake.changed('/instance/mods/A/a.esp');
-      await vi.advanceTimersByTimeAsync(QUIET_MS);
+      await vi.advanceTimersByTimeAsync(SETTLE_MS);
     } finally {
       vi.useRealTimers();
     }
@@ -532,21 +531,27 @@ describe('Instance — built by watching', () => {
     expect(fake.rereads).toEqual([CHECK, CHECK, CHECK]);
   });
 
-  it('adds no check when the window regains focus while a check already waits for the events to stop', async () => {
-    const { instance, fake, windowState } = loader();
+  it('adds no check when the window regains focus while a check already waits', async () => {
+    let release!: () => void;
+    let readHeld: Promise<void> = Promise.resolve();
+    const { instance, fake, windowState } = loader({}, (adapter) => ({
+      ...adapter,
+      reading: async (asked) => {
+        await readHeld;
+        return adapter.reading(asked);
+      },
+    }));
     await instance.refresh();
     windowState({ focused: false });
+    readHeld = new Promise<void>((resolve) => { release = resolve; });
+    const reading = instance.refresh();
+    const waiting = instance.refresh();
 
-    fakeClockLeavingSetImmediateReal();
-    try {
-      fake.changed('/instance/mods/A/a.esp');
-      windowState({ focused: true });
-      await vi.advanceTimersByTimeAsync(QUIET_MS);
-    } finally {
-      vi.useRealTimers();
-    }
+    windowState({ focused: true });
+    release();
+    await Promise.all([reading, waiting]);
 
-    expect(fake.rereads).toEqual([CHECK, reread('/instance/mods/A/a.esp'), CHECK]);
+    expect(fake.rereads).toEqual([CHECK, CHECK, CHECK]);
   });
 
   it('finishes a re-read in progress, and folds the events heard during it into one more', async () => {
@@ -623,7 +628,7 @@ describe('Instance — built by watching', () => {
     try {
       fake.changed('/instance/mods/A/a.esp');
       await instance.refresh();
-      await vi.advanceTimersByTimeAsync(CHECK_CAP_MS);
+      await vi.advanceTimersByTimeAsync(LONG_QUIET_MS);
     } finally {
       vi.useRealTimers();
     }
@@ -631,20 +636,16 @@ describe('Instance — built by watching', () => {
     expect(fake.rereads).toEqual([CHECK, { named: ['/instance/mods/A/a.esp'], disk: true }]);
   });
 
-  it('tells each change the check after the events found that no event named, and none a refresh found', async () => {
-    const { instance, fake, logs } = loader();
+  it('tells each change the check on window focus found that no event named, and none a refresh found', async () => {
+    const { instance, fake, logs, windowState } = loader();
     await instance.refresh();
     fake.read({ unheardChanges: ['/instance/mods/A/textures'] });
     await instance.refresh();
     expect(logs).toEqual([]);
+    windowState({ focused: false });
 
-    fakeClockLeavingSetImmediateReal();
-    try {
-      fake.changed('/instance/mods/A/a.esp');
-      await vi.advanceTimersByTimeAsync(QUIET_MS);
-    } finally {
-      vi.useRealTimers();
-    }
+    windowState({ focused: true });
+    await pastSequence(instance, 2);
 
     expect(logs).toEqual(['[instance] The check of the disk found a change no event named: /instance/mods/A/textures']);
   });

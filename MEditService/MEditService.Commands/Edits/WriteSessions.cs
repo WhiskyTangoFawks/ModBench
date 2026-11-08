@@ -35,8 +35,25 @@ internal sealed class WriteSessions(ISourceAdapter source, IReadOnlyList<Documen
     {
         if (!outcome.Applied || !_byFolder.Values.Any(Changes)) return outcome;
         if (Write() is { } failure) return WriteFailure.Refusal(failure, doing, logger);
-        loadOrder.SourceWritten();
+        loadOrder.SourceWritten(PluginsWritten(loadOrder.Current));
         return outcome;
+    }
+
+    // Null when a path written names no plugin, so only a check of the whole disk reads it.
+    private List<PluginAddress>? PluginsWritten(LoadOrderSnapshot loadOrder)
+    {
+        var made = Made;
+        List<PluginAddress> plugins = [];
+        foreach (var path in made.Moves.SelectMany(move => new[] { move.From, move.To })
+                     .Concat(made.Deletions).Concat(made.Documents.Select(document => document.Path)))
+        {
+            switch (source.Touching(loadOrder, path))
+            {
+                case PathAnswer.Unnamed: return null;
+                case PathAnswer.Touches touches: plugins.AddRange(touches.Plugins.Select(plugin => plugin.Key)); break;
+            }
+        }
+        return plugins;
     }
 
     private static bool Changes(IWriteSession session) =>

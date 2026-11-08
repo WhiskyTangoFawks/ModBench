@@ -1,20 +1,20 @@
 import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
 
-/** Every view's progress bar, from the first change the instance hears until a check of the disk confirms it (ADR-0015). */
+/** Every view's progress bar while the instance may be late (ADR-0015). */
 export function showProgressWhileLate(instance: Pick<Instance, 'mayBeLate' | 'onMayBeLate'>, viewIds: readonly string[]): vscode.Disposable {
-  let confirmed: (() => void) | undefined;
+  let stop: (() => void) | undefined;
   const follow = (): void => {
-    if (instance.mayBeLate === (confirmed !== undefined)) return;
-    if (confirmed !== undefined) {
-      confirmed();
-      confirmed = undefined;
+    if (instance.mayBeLate === (stop !== undefined)) return;
+    if (stop !== undefined) {
+      stop();
+      stop = undefined;
       return;
     }
-    const until = new Promise<void>((resolve) => { confirmed = resolve; });
+    const until = new Promise<void>((resolve) => { stop = resolve; });
     for (const viewId of viewIds) void vscode.window.withProgress({ location: { viewId } }, () => until);
   };
   follow();
   const subscription = instance.onMayBeLate(follow);
-  return { dispose: () => { subscription.dispose(); confirmed?.(); } };
+  return { dispose: () => { subscription.dispose(); stop?.(); } };
 }

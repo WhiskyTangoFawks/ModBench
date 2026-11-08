@@ -95,7 +95,7 @@ function createSendSlot(wire: LoadOrderWire) {
   };
 
   // A signal waits for the snapshots handed before it to be answered, so mEdit checks the load order it was handed,
-  // and a stream of snapshots delays it by a bounded time (ADR-0015).
+  // and a stream of snapshots delays it by a bounded time.
   const pumpSignal = (): void => {
     if (owed === undefined || signalling) return;
     const waited = Date.now() - owed.since;

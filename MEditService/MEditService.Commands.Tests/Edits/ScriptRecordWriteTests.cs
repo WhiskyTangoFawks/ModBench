@@ -101,6 +101,17 @@ public sealed class ScriptRecordWriteTests
     }
 
     [Fact]
+    public void ADelete_MarksItsPluginWritten()
+    {
+        using var mod = SourceEditFixture.CompiledPlugin();
+        var before = mod.Holder.SourceWrites;
+
+        Delete(mod, mod.Npc.ToString());
+
+        Assert.Equal([mod.Plugin], mod.Holder.WritesAfter(before).LastOfEach.Require().Keys);
+    }
+
+    [Fact]
     public void ADeleteOfAFileHeldUnsaved_IsRefusedAsUnsavedChanges_AndWritesNothing()
     {
         using var mod = SourceEditFixture.CompiledPlugin();
