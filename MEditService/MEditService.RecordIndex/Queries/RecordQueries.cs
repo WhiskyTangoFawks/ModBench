@@ -222,15 +222,14 @@ internal sealed class RecordQueries(
         if (plugin is { } judged && !snapshot.Active.Any(active => PluginAddress.Comparer.Equals(active.Key, judged)))
             return new IndexRefused(IndexRefusal.NameRefused, $"{judged.Name} ({judged.Origin}) is not active.");
 
-        var copies = reads.GetStacks(formKeys, plugin);
         var formIds = LoadIndex.FormIdsOf(snapshot, reads.OpenedPlugins);
-        return formKeys.Select(formKey =>
+        var copyStates = new Dictionary<string, IReadOnlyList<CopyState>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (formKey, documents) in reads.GetStacks(formKeys, plugin))
         {
-            var documents = copies[formKey].ToList();
-            if (documents.Count == 0) return new RecordCopyStates(formKey, []);
-            var states = _conflictClassifier.StatesOf(documents.ConvertAll(ToRecordDetail), snapshot.GameRelease, snapshot.StringsLanguage, formIds);
-            return new RecordCopyStates(formKey, [.. documents.Select((d, i) => new CopyState(d.Plugin, states[i]))]);
-        }).ToList();
+            var states = _conflictClassifier.StatesOf([.. documents.Select(ToRecordDetail)], snapshot.GameRelease, snapshot.StringsLanguage, formIds);
+            copyStates[formKey] = [.. documents.Select((d, i) => new CopyState(d.Plugin, states[i]))];
+        }
+        return formKeys.Select(formKey => new RecordCopyStates(formKey, copyStates.GetValueOrDefault(formKey) ?? [])).ToList();
     }
 
     // The text is the document carrying the record. A plugin's source tree says which document that is, as it
