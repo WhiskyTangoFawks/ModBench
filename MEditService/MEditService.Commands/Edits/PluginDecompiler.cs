@@ -132,10 +132,15 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         if (!adapter.DivergenceFrom(pluginName, originalPluginPath, recompiledPath, loadOrder, strings)
                 .Holds(out var divergence, out failure))
         {
-            divergence = failure.Reason;
+            return $"{pluginName} does not round-trip through its own source: {failure.Reason}";
         }
         if (divergence is not null)
-            return $"{pluginName} does not round-trip through its own source: {divergence}";
+        {
+            return $"{pluginName} does not round-trip through its own source: " + (divergence.Causes is { } causes
+                ? $"it is a malformed plugin, and {string.Join("; ", causes.Select(cause => cause.Diagnosis.Describe()))} — " +
+                  $"{divergence.Description}{RepairClause(causes, namesRepair)}"
+                : divergence.Description);
+        }
 
         // An encoding-only difference (ADR-0006) is reported, never a refusal.
         if (logger.IsEnabled(LogLevel.Information))

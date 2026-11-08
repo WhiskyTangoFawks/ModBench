@@ -51,7 +51,7 @@ public sealed class SkyrimModelIdentityTests
     private static string? DivergenceBetween(string original, string recompiled) =>
         TestAdapters.Mutagen().DivergenceFrom(
             "Fixture.esp", original, recompiled, EmptyLoadOrder.Of(GameRelease.SkyrimSE),
-            HandedStrings.Of(original)).Answered();
+            HandedStrings.Of(original)).Answered()?.Description;
 
     private static string WriteWithArchivedStrings(string folder, string german, params Language[] archiveOrder)
     {

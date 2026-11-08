@@ -114,7 +114,7 @@ public interface IPluginAdapter
     /// <summary>How the plugin at <paramref name="recompiledPath"/> differs from the named one as the
     /// codec models them; null when they are model-identical. Both are reparsed, since only written
     /// bytes show what the writer does.</summary>
-    Answer<string?, PluginFailure> DivergenceFrom(
+    Answer<PluginDivergence?, PluginFailure> DivergenceFrom(
         string pluginFileName, string pluginFilePath, string recompiledPath, LoadOrderSnapshot loadOrder, PluginStrings strings);
 
     /// <summary>How the file at <paramref name="recompiledPath"/> differs at the byte level from the one
@@ -168,6 +168,9 @@ public readonly record struct UnverifiedRecord(UnverifiedReason Reason, string R
 public sealed record PluginByteComparison(
     bool Identical, PluginBinaryWalk.SubrecordLoss? Loss = null, IReadOnlyList<RepairPreview>? LossCauses = null, IReadOnlyList<RepairPreview>? DeletedRecordCauses = null,
     UnverifiedRecord? Unverified = null);
+
+/// <summary>The first record that differs after a round trip, with each malformation of that record.</summary>
+public sealed record PluginDivergence(string Description, IReadOnlyList<RepairPreview>? Causes);
 
 /// <summary>What <see cref="IPluginAdapter.CreateAndWriteAsync"/> did, and for a plugin it wrote, the
 /// hash of those bytes, which the take-back is later handed.</summary>
