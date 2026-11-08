@@ -32,15 +32,14 @@ export type { GameFolder, ProgramVersion, Reread } from '../instanceAdapter/inst
 
 // How long another tool's write takes to settle: the wait a burst coalesces into one re-read on.
 const SETTLE_MS = 200;
-// How long the events stay quiet before the disk is checked, and how long a stream of them can put the check off.
-const QUIET_MS = 1_000;
-const CHECK_CAP_MS = 10_000;
 
 interface Run {
   readonly named: Set<string>;
   disk: boolean;
-  /** The check was the watch's, so a change it finds is one no event named; a refresh's finds its caller's own write. */
+  /** The check was the watch's or the window focus's, so a change it finds is one no event named; a refresh's finds its
+   *  caller's own write. */
   tellsUnheard: boolean;
+  fromEvents: boolean;
   readonly settled: Promise<void>;
   land(settled: Promise<void>): void;
 }
@@ -48,7 +47,7 @@ interface Run {
 function nextRun(): Run {
   let land!: (settled: Promise<void>) => void;
   const settled = new Promise<void>((resolve) => { land = resolve; });
-  return { named: new Set(), disk: false, tellsUnheard: false, settled, land };
+  return { named: new Set(), disk: false, tellsUnheard: false, fromEvents: false, settled, land };
 }
 
 type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'dataFolderFiles' | 'gameArchives' | 'archives' | 'watchNotes' | 'listingNotes' | 'managerRunning' | 'publisherConfiguration' | 'programVersions';
@@ -306,10 +305,6 @@ export class Instance implements Subscription {
 
   private heardNoPath = false;
 
-  private checkTimer: ReturnType<typeof setTimeout> | undefined;
-
-  private uncheckedSinceMs: number | undefined;
-
   // Recomputes never overlap, so a slow walk cannot publish over a newer one; what is asked during one folds into the next.
   private reading = false;
 
@@ -332,7 +327,7 @@ export class Instance implements Subscription {
     this.changes = options.adapter.subscribe((path) => { this.hear(path); });
     let focused = options.window.state.focused;
     this.focus = options.window.onDidChangeWindowState((state) => {
-      if (state.focused && !focused && !this.checkWaits()) void this.enqueue({ disk: true, tellsUnheard: true });
+      if (state.focused && !focused) void this.enqueue({ disk: true, tellsUnheard: true });
       focused = state.focused;
     });
   }
@@ -387,7 +382,7 @@ export class Instance implements Subscription {
     return { dispose: () => { this.redrawListeners = this.redrawListeners.filter((l) => l !== listener); } };
   }
 
-  /** Whether a change was heard that no check of the disk has confirmed since (ADR-0015). */
+  /** Whether a change was heard that no read has taken in since (ADR-0015). */
   get mayBeLate(): boolean {
     return this.late;
   }
@@ -442,7 +437,6 @@ export class Instance implements Subscription {
 
   dispose(): void {
     clearTimeout(this.settleTimer);
-    clearTimeout(this.checkTimer);
     this.changes.dispose();
     this.focus.dispose();
     this.subscribers = [];
@@ -498,12 +492,8 @@ export class Instance implements Subscription {
       const disk = this.heardNoPath;
       this.heard.clear();
       this.heardNoPath = false;
-      void this.enqueue({ named, disk, tellsUnheard: disk });
+      void this.enqueue({ named, disk, tellsUnheard: disk, fromEvents: true });
     }, SETTLE_MS);
-    const now = Date.now();
-    this.uncheckedSinceMs ??= now;
-    clearTimeout(this.checkTimer);
-    this.checkTimer = setTimeout(() => void this.enqueue({ disk: true, tellsUnheard: true }), Math.min(QUIET_MS, this.uncheckedSinceMs + CHECK_CAP_MS - now));
   }
 
   private setLate(late: boolean): void {
@@ -512,22 +502,22 @@ export class Instance implements Subscription {
     for (const listener of [...this.lateListeners]) listener();
   }
 
-  private checkWaits(): boolean {
-    return this.checkTimer !== undefined || this.next?.disk === true;
+  private heardSinceRun(): boolean {
+    return this.heard.size > 0 || this.heardNoPath || this.next?.fromEvents === true;
   }
 
-  private enqueue({ named = [], disk, tellsUnheard }: { named?: readonly string[]; disk: boolean; tellsUnheard: boolean }): Promise<void> {
+  private enqueue({ named = [], disk, tellsUnheard, fromEvents = false }: {
+    named?: readonly string[]; disk: boolean; tellsUnheard: boolean; fromEvents?: boolean;
+  }): Promise<void> {
     const next = this.next ?? nextRun();
     this.next = next;
     for (const path of named) next.named.add(path);
+    next.fromEvents ||= fromEvents || (disk && (this.heard.size > 0 || this.heardNoPath));
     if (disk) {
       for (const path of this.heard) next.named.add(path);
       this.heard.clear();
       this.heardNoPath = false;
       clearTimeout(this.settleTimer);
-      clearTimeout(this.checkTimer);
-      this.checkTimer = undefined;
-      this.uncheckedSinceMs = undefined;
     }
     next.disk ||= disk;
     next.tellsUnheard ||= tellsUnheard;
@@ -555,7 +545,7 @@ export class Instance implements Subscription {
       next = await this.read(run);
     } catch (err) {
       if (epoch !== this.quietEpoch || this.quiets > 0) return { settled: Promise.resolve() };
-      if (run.disk) this.setLate(this.uncheckedSinceMs !== undefined);
+      this.setLate(this.heardSinceRun());
       const failure = errorMessage(err);
       this.options.log.error(`[instance] Failed to read the instance: ${failure}`);
       this.failure = failure;
@@ -564,7 +554,7 @@ export class Instance implements Subscription {
     if (epoch !== this.quietEpoch || this.quiets > 0) return { settled: Promise.resolve() };
     this.current = next;
     this.failure = undefined;
-    if (run.disk) this.setLate(this.uncheckedSinceMs !== undefined);
+    this.setLate(this.heardSinceRun());
     this.seq++;
     const reread: Reread = { named: [...run.named], disk: run.disk };
     return { settled: this.notify(this.subscribers, 'value', (subscriber) => subscriber(next, this.seq, reread)) };
