@@ -19,6 +19,9 @@ internal sealed class ReadContext : IDisposable
     public List<T> Rows<T>(string sql, Func<DbDataReader, T> map, params object?[] args) =>
         DuckDbSql.Rows(_connection, sql, map, args);
 
+    /// <summary>Holds every query this context asks to one snapshot of the record index, until the snapshot is disposed.</summary>
+    public StoreTransaction Snapshot() => new(StoreFaults.Translating(_connection.BeginTransaction));
+
     public int Execute(string sql, params object?[] args) => DuckDbSql.Execute(_connection, sql, args);
 
     public string? ScalarString(string sql, params object?[] args) => DuckDbSql.ScalarString(_connection, sql, args);

@@ -226,6 +226,12 @@ internal sealed class Store : IDisposable
     // outgrows memory fails rather than slows.
     private const long MemoryPerThread = 250_000_000;
 
+    // A sort over large documents needs more memory than their size.
+    private const long DocumentBatchesPerMemoryLimit = 32;
+
+    /// <summary>The document bytes a batched read gathers into one query, a record's copies never split between two.</summary>
+    internal long DocumentBatchBytes => _memoryLimit / DocumentBatchesPerMemoryLimit;
+
     private DuckDBConnection OpenFile(string databasePath)
     {
         var connection = Opened($"DataSource={databasePath}");

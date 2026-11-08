@@ -78,9 +78,23 @@ internal sealed class RelationReads(
         return ([.. copies.Select(copy => held[copy.FormKey].FirstOrDefault(document => PluginAddress.Comparer.Equals(document.Plugin, copy.Plugin)))], resolve);
     }
 
-    /// <summary>The active copies of each of <paramref name="formKeys"/>, in load order, in one query. Given
-    /// <paramref name="within"/>, only that plugin and its masters (ADR-0008), followed over the active plugins.</summary>
-    public ILookup<string, RecordDocument> GetStacks(IReadOnlyList<string> formKeys, PluginAddress? within)
+    /// <summary>Each record's active copies in load order; given <paramref name="within"/>, that plugin and its masters alone
+    /// (ADR-0008). Each query reads a batch of whole records' copies (<see cref="Store.Store.DocumentBatchBytes"/>).</summary>
+    public IEnumerable<(string FormKey, IReadOnlyList<RecordDocument> Copies)> GetStacks(IReadOnlyList<string> formKeys, PluginAddress? within)
+    {
+        using var context = store.OpenRead();
+        using var snapshot = context.Snapshot();
+        foreach (var batch in Batches(CopySizes(context, formKeys, within), store.DocumentBatchBytes))
+        {
+            var documents = Documents(context, batch);
+            foreach (var stack in batch)
+                yield return (stack.Key, [.. documents[stack.Key].Where(document => stack.Any(copy => PluginAddress.Comparer.Equals(copy.Plugin, document.Plugin)))]);
+        }
+    }
+
+    private readonly record struct CopySize(PluginAddress Plugin, long Length);
+
+    private static ILookup<string, CopySize> CopySizes(ReadContext context, IReadOnlyList<string> formKeys, PluginAddress? within)
     {
         var values = new List<string>(formKeys);
         var keys = string.Join(", ", formKeys.Select((_, i) => $"${i + 1}"));
@@ -101,10 +115,52 @@ internal sealed class RelationReads(
                       ON r.plugin = s.plugin AND r.origin = s.origin
                     JOIN {TableDdlBuilder.ActiveRelation} a ON a.plugin = r.master)
                 """;
-            narrowedByPlugin = " AND (plugin, origin) IN (SELECT plugin, origin FROM stack)";
+            narrowedByPlugin = "WHERE (c.plugin, c.origin) IN (SELECT plugin, origin FROM stack)";
         }
-        using var context = store.OpenRead();
-        return ActiveCopies(context, $"form_key IN ({keys}){narrowedByPlugin}", _ => null, [.. values], prefix);
+        // The length is taken below the join, which would otherwise carry every body (ADR-0010).
+        return context.Rows($"""
+            {prefix}
+            SELECT c.form_key, c.plugin, c.origin, c.length
+            FROM (SELECT form_key, plugin, origin, strlen(body) AS length
+                  FROM {TableDdlBuilder.MirrorSchema}.records WHERE form_key IN ({keys})) c
+            {TableDdlBuilder.ActiveJoin("c", "plugin", "origin")}
+            {narrowedByPlugin}
+            ORDER BY p.load_order_idx
+            """, reader => (FormKey: reader.GetString(0), Copy: new CopySize(new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.GetInt64(3))), [.. values])
+            .ToLookup(row => row.FormKey, row => row.Copy, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static IEnumerable<List<IGrouping<string, CopySize>>> Batches(IEnumerable<IGrouping<string, CopySize>> stacks, long batchBytes)
+    {
+        var batch = new List<IGrouping<string, CopySize>>();
+        long bytes = 0;
+        foreach (var stack in stacks)
+        {
+            var stackBytes = stack.Sum(copy => copy.Length);
+            if (batch.Count > 0 && bytes + stackBytes > batchBytes)
+            {
+                yield return batch;
+                (batch, bytes) = ([], 0);
+            }
+            batch.Add(stack);
+            bytes += stackBytes;
+        }
+        if (batch.Count > 0) yield return batch;
+    }
+
+    // A filter naming each copy takes over ten times as long as one naming their keys, plugins and origins, so the
+    // copies are matched after the read.
+    private ILookup<string, RecordDocument> Documents(ReadContext context, List<IGrouping<string, CopySize>> batch)
+    {
+        var formKeys = batch.Select(stack => stack.Key).ToList();
+        var copies = batch.SelectMany(stack => stack.Select(copy => copy.Plugin)).ToList();
+        var plugins = copies.Select(plugin => plugin.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var origins = copies.Select(plugin => plugin.Origin).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        string[] values = [.. formKeys, .. plugins, .. origins];
+        static string Parameters(int from, int count) => string.Join(", ", Enumerable.Range(from + 1, count).Select(i => $"${i}"));
+        return ActiveCopies(context,
+            $"form_key IN ({Parameters(0, formKeys.Count)}) AND plugin IN ({Parameters(formKeys.Count, plugins.Count)}) AND origin IN ({Parameters(formKeys.Count + plugins.Count, origins.Count)})",
+            _ => null, values);
     }
 
     private ILookup<string, RecordDocument> ActiveCopies(
