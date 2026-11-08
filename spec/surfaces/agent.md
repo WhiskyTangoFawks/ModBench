@@ -44,6 +44,7 @@ As a user, I want:
 7. My agent to open a record in an editor tab, to show me what it found. Cites: catalog, Record, `open`
 8. My agent to change many records by a rule with a Modbench script, as I do. Cites: scripts.md; ADR-0021
 9. My agent to learn from Modbench which SQL views a SELECT reads, and the columns of each. A SELECT that reads anything else is refused, naming the SQL views. Cites: Any agent, story 6
+10. My agent's SELECT whose rows outgrow what my agent reads in one reply to be refused, naming a Modbench script as the way to read them all. Cites: scripts.md, Reading, story 1; Any agent, story 10
 
 ## Mod management
 

@@ -16,7 +16,7 @@ As a user, I want:
 
 As a user, I want:
 
-1. To select records with one SQL SELECT over the record index, the record filter's query language, and to get back the rows it selects. Cites: catalog, Record, `filter`
+1. To select records with one SQL SELECT over the record index, the record filter's query language. The SELECT gives back every row it selects, however many, or an error naming why. The rows show the record index as it was when the SELECT started. Cites: catalog, Record, `filter`; ADR-0010; Never silently wrong
 2. To read a copy of a record whole, for the fields the record index does not flatten. Cites: Mutagen's data
 3. To find the records that reference a record. Cites: editor-referenced-by.md
 4. To name a plugin and a record as my agent does. Cites: agent.md, Names, stories 1 and 2; ADR-0012

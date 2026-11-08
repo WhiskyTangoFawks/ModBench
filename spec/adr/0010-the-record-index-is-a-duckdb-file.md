@@ -5,7 +5,9 @@ The record index is a DuckDB file that persists across launches. The vanilla mas
 ## Consequences
 
 - The record index is derived state. A file that cannot be opened is rebuilt from the files, at the cost of one cold load. Nothing in it is migrated or repaired.
-- The record index queries the keys it knows together in one query. Columnar storage makes a query of one key costly.
+- The record index queries the keys it knows together. Columnar storage makes a query of one key costly.
+- mEdit bounds the memory of a query it writes by the copies of its largest record, never by how many records the query reads. DuckDB cannot spill a large document that a sort or a join carries.
+- A SELECT that a user or an agent writes can select every document in the record index. The memory mEdit holds for its rows never grows with how many it selects.
 
 ## Alternatives rejected
 
