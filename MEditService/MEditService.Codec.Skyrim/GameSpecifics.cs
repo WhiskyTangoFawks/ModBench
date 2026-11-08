@@ -20,7 +20,7 @@ internal static class GameSpecifics
         .ToDictionary(flag => flag.ToString(), flag => (int)flag);
 
     // Proven over the five masters and every Creation Club plugin: 865 entry-point effects, 276 region
-    // RDATs, 240 races. No Skyrim record has a power-grid counter or a weapon template.
+    // RDATs, 240 races, 574 FURNs. No Skyrim record has a power-grid counter or a weapon template.
     public static CreationKitShapes CreationKitShapes { get; } = new(
         SubrecordSizes: new Dictionary<(string, string), int>
         {
@@ -36,7 +36,8 @@ internal static class GameSpecifics
         EntryPoints: new(
             EpftByFunction: new Dictionary<byte, byte> { [1] = 1, [2] = 1, [3] = 1, [9] = 4, [10] = 5, [11] = 6, [12] = 2, [14] = 2, [15] = 7 },
             FunctionsWithoutParameters: new HashSet<byte> { 7 },
-            FunctionsCarryingEpf3: new HashSet<byte> { 9 }));
+            FunctionsCarryingEpf3: new HashSet<byte> { 9 }),
+        FurnitureFlags: new(FollowingFnam: ["KNAM", "WBDT"], FollowingMnam: ["WBDT"]));
 
     public static IReadOnlyList<string> TransientTypes(IGameModGetter _) => [];
 

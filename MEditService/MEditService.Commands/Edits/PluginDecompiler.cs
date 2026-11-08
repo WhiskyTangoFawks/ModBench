@@ -62,18 +62,21 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         if (scan.AtFailure.Count > 0)
         {
             return $"{plugin.Name} is a malformed plugin and cannot become source: " +
-                   $"{string.Join("; ", scan.AtFailure.Select(malformation => malformation.Diagnosis.Describe()))}.{RepairClause(scan.AtFailure, namesRepair)}";
+                   $"{Described(scan.AtFailure)}.{RepairClause(scan.AtFailure, namesRepair)}";
         }
 
         var elsewhere = scan.Elsewhere.Count == 0
             ? ""
-            : $" It also holds malformed records: {string.Join("; ", scan.Elsewhere.Select(malformation => malformation.Diagnosis.Describe()))}.";
+            : $" It also holds malformed records: {Described(scan.Elsewhere)}.";
         if (unparsed.Diagnosis.Tail is null)
             return NotParsed(plugin, unparsed) + elsewhere;
         return scan.Elsewhere.Count == 0
             ? $"{plugin.Name} is a correct plugin that Mutagen mishandles: {unparsed.Reason}"
             : $"Mutagen mishandles {plugin.Name}: {unparsed.Reason}.{elsewhere}";
     }
+
+    private static string Described(IEnumerable<RepairPreview> malformations) =>
+        string.Join("; ", malformations.Select(malformation => malformation.Diagnosis.Describe()));
 
     private static string RepairClause(IReadOnlyList<RepairPreview> malformations, bool namesRepair) =>
         namesRepair && malformations.All(malformation => malformation.Change is not null) ? " Decompile and repair it." : "";
@@ -106,14 +109,14 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         if (comparison.DeletedRecordCauses is { } deleted)
         {
             return $"{pluginName} does not round-trip through its own source: it is a malformed plugin, and " +
-                   $"{string.Join("; ", deleted.Select(cause => cause.Diagnosis.Describe()))}.{RepairClause(deleted, namesRepair)}";
+                   $"{Described(deleted)}.{RepairClause(deleted, namesRepair)}";
         }
 
         if (comparison.Loss is { } loss)
         {
             // A Kind B diagnosis on the record names the cause ahead of the drop it produced.
             return $"{pluginName} does not round-trip through its own source: " + (comparison.LossCauses is { } causes
-                ? $"it is a malformed plugin, and {string.Join("; ", causes.Select(cause => cause.Diagnosis.Describe()))} — " +
+                ? $"it is a malformed plugin, and {Described(causes)} — " +
                   $"parsing the malformed subrecord dropped {string.Join(", ", loss.Signatures)} before its source was written.{RepairClause(causes, namesRepair)}"
                 : $"{loss.RecordType} {loss.FormKey} is missing {string.Join(", ", loss.Signatures)} " +
                   "present in the original — dropped during parsing, before its source was written.");
@@ -137,7 +140,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         if (divergence is not null)
         {
             return $"{pluginName} does not round-trip through its own source: " + (divergence.Causes is { } causes
-                ? $"it is a malformed plugin, and {string.Join("; ", causes.Select(cause => cause.Diagnosis.Describe()))} — " +
+                ? $"it is a malformed plugin, and {Described(causes)} — " +
                   $"{divergence.Description}{RepairClause(causes, namesRepair)}"
                 : divergence.Description);
         }
