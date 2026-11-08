@@ -50,7 +50,8 @@ internal static class GameSpecifics
                 [17] = 5,
             },
             FunctionsWithoutParameters: new HashSet<byte>(),
-            FunctionsCarryingEpf3: new HashSet<byte> { 9 }));
+            FunctionsCarryingEpf3: new HashSet<byte> { 9 }),
+        FurnitureFlags: null);
 
     public static IReadOnlyList<string> TransientTypes(IGameModGetter plugin) =>
     [

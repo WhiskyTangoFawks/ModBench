@@ -11,7 +11,13 @@ public sealed record CreationKitShapes(
     IReadOnlyDictionary<(string RecordType, string Counter), string> CountedEntries,
     // Record types whose template combinations are written OBTF, FULL, OBTS.
     IReadOnlySet<string> TemplateCombinations,
-    PerkEntryPointShapes EntryPoints);
+    PerkEntryPointShapes EntryPoints,
+    // Null where Mutagen reads a FURN's FNAM and MNAM as two fields, so a record missing both round-trips.
+    FurnitureFlagShapes? FurnitureFlags);
+
+/// <summary>Where a FURN's FNAM and MNAM go: each before the first of the subrecords listed for it, else at
+/// the record's end.</summary>
+public sealed record FurnitureFlagShapes(IReadOnlyList<string> FollowingFnam, IReadOnlyList<string> FollowingMnam);
 
 /// <summary>A perk entry point's parameter block, by its function. A function vanilla never
 /// exercises is in none of these, so it is never diagnosed.</summary>

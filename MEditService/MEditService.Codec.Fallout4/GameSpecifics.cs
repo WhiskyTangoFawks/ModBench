@@ -19,7 +19,7 @@ internal static class GameSpecifics
         .Where(flag => flag != Fallout4ModHeader.HeaderFlag.Localized)
         .ToDictionary(flag => flag.ToString(), flag => (int)flag);
 
-    // Proven over every shipped binary: all 823 entry-point effects, all 1,031 weapon templates.
+    // Proven over every shipped binary: all 823 entry-point effects, all 1,031 weapon templates, all 791 FURNs.
     public static CreationKitShapes CreationKitShapes { get; } = new(
         SubrecordSizes: new Dictionary<(string, string), int>
         {
@@ -38,7 +38,8 @@ internal static class GameSpecifics
         EntryPoints: new(
             EpftByFunction: new Dictionary<byte, byte> { [1] = 1, [2] = 1, [3] = 1, [5] = 8, [9] = 4, [10] = 5, [12] = 8, [13] = 8, [14] = 8 },
             FunctionsWithoutParameters: new HashSet<byte> { 6 },
-            FunctionsCarryingEpf3: new HashSet<byte> { 9 }));
+            FunctionsCarryingEpf3: new HashSet<byte> { 9 }),
+        FurnitureFlags: new(FollowingFnam: ["CITC", "COCT", "WBDT"], FollowingMnam: ["WBDT"]));
 
     public static IReadOnlyList<string> TransientTypes(IGameModGetter plugin) =>
     [

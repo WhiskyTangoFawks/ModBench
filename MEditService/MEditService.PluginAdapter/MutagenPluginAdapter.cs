@@ -260,10 +260,22 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, CancellationToken cancel = default) =>
         PluginTrees.ReadAsync(new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder, plugin.Strings, loadOrder.StringsLanguage, cancel);
 
-    public Answer<string?, PluginFailure> DivergenceFrom(
+    public Answer<PluginDivergence?, PluginFailure> DivergenceFrom(
         string pluginFileName, string pluginFilePath, string recompiledPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
-        PluginFailure.Answer(() => PluginTrees.DivergenceBetween(
-            new ModPath(ModKey.FromFileName(pluginFileName), pluginFilePath), recompiledPath, loadOrder, strings, loadOrder.StringsLanguage)?.Describe());
+        PluginFailure.Answer(() =>
+        {
+            var modPath = new ModPath(ModKey.FromFileName(pluginFileName), pluginFilePath);
+            if (PluginTrees.DivergenceBetween(modPath, recompiledPath, loadOrder, strings, loadOrder.StringsLanguage) is not { } divergence)
+                return null;
+            var masters = PluginBinaryWalk.MastersOf(modPath, loadOrder);
+            IReadOnlyList<RepairPreview> causes =
+            [
+                .. Malformations.In(File.ReadAllBytes(pluginFilePath), loadOrder.GameRelease)
+                    .Where(found => masters.GetFormKey(found.Record.FormID, reference: false) == divergence.FormKey)
+                    .Select(found => found.Preview),
+            ];
+            return new PluginDivergence(divergence.Describe(), causes.Count > 0 ? causes : null);
+        });
 
     public Task<Answer<PluginByteComparison, PluginFailure>> CompareBytesAsync(
         string originalPath, string recompiledPath, LoadOrderSnapshot loadOrder, CancellationToken cancel = default) =>

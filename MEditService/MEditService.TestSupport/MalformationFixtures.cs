@@ -230,6 +230,28 @@ public static class MalformationFixtures
         }
     }
 
+    private static MalformationFixture FurnMissingFnamAndMnam => FurnitureMissingFlags(
+        mod => mod.Furniture.AddNew("CrateTato6"),
+        "inserts 1 zeroed FNAM of 2 bytes before WBDT; inserts 1 zeroed MNAM of 4 bytes before WBDT");
+
+    private static MalformationFixture FurnMissingFnamAndMnamHoldingItems => FurnitureMissingFlags(
+        mod =>
+        {
+            var crate = mod.Furniture.AddNew("CrateTato6");
+            crate.Items = [new ContainerEntry { Item = new ContainerItem { Count = 1 } }];
+            return crate;
+        },
+        "inserts 1 zeroed FNAM of 2 bytes before COCT; inserts 1 zeroed MNAM of 4 bytes before WBDT");
+
+    private static MalformationFixture FurnitureMissingFlags(Func<Fallout4Mod, Furniture> add, string change)
+    {
+        var mod = NewMod();
+        return Malformed(nameof(FurnMissingFnamAndMnam), mod, "FURN", add(mod),
+            subrecords => subrecords.Where(s => s.Signature is not ("FNAM" or "MNAM")),
+            "furn-missing-fnam-and-mnam, repairable (lossless): FNAM and MNAM are missing; vanilla always writes both",
+            change);
+    }
+
     private static MalformationFixture EntryPointParameterOfAnotherType => new(
         nameof(EntryPointParameterOfAnotherType), MisshapedPerkPlugin.Plugin,
         $"{MisshapedPerkPlugin.Anchor} — entry-point-parameter-shape: entry point 1 (function 14, Multiply 1 + Actor Value Mult) has EPFT 2; vanilla writes EPFT 8",

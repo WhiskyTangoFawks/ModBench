@@ -80,7 +80,7 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
         RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, CancellationToken cancel = default) =>
         inner.ReadSourceOfAsync(plugin, loadOrder, cancel);
 
-    public virtual Answer<string?, PluginFailure> DivergenceFrom(
+    public virtual Answer<PluginDivergence?, PluginFailure> DivergenceFrom(
         string pluginFileName, string pluginFilePath, string recompiledPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
         inner.DivergenceFrom(pluginFileName, pluginFilePath, recompiledPath, loadOrder, strings);
 
