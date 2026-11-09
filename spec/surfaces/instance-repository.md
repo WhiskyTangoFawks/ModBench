@@ -68,7 +68,7 @@ As a user, I want:
 2. Update manifest to write only what changed, so an unchanged mod changes nothing and Source Control holds only what I did. Cites: source.md, The tree, story 2
 3. It stages nothing and commits nothing. Cites: Existing tools
 4. Update manifest, while it hashes downloaded files, to show progress and to stop when I cancel, keeping each hash it took. A downloaded file whose hash failed is hashed again after a reload of the window, so a tool I fix takes effect.
-5. A mod refused, and its manifest left as it was, when a package its manifest names is missing from this machine, so a missing downloaded file never reads as files no package holds. Cites: Never silently wrong
+5. A mod refused, and its manifest left as it was, when telling which package holds a file's bytes needs a package missing from this machine, so a missing downloaded file never reads as files no package holds. Cites: Never silently wrong; Update manifest, story 2
 6. Each file of a mod to come from whichever downloaded file holds its bytes, so an installation file the mod manager names that is missing or unreadable never refuses the mod. Cites: Status, story 7
 
 ## Restore from manifest
@@ -82,6 +82,7 @@ As a user, I want:
 5. A restore interrupted part way to say so, naming the mods it did not finish. Restoring again is the recovery. Cites: mods.md, What install does, story 5
 6. A source mod's repository cloned when it is absent, and never moved when it is at another commit than the one the modlist pins, since my repository is mine to move. Cites: ADR-0003
 7. A package this machine lacks whose host is an address, named with that address, so I fetch it by hand. Cites: Deferred, item 2
+8. A flag my manifest sets whose FormID range the plugin's records exceed refused, naming why, while the rest of the restore lands. Cites: source.md, Build, story 8; Never silently wrong
 
 ## Menus and keys
 

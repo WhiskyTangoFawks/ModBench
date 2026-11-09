@@ -14,7 +14,7 @@ The view's description names each active filter: the name filter's term, and the
 
 As a user, I want:
 
-1. One row for each name in the active profile's `plugins.txt`, in its order, and one for each plugin the game loads with no line, each plugin once. Cites: MO2
+1. One row for each name in the active profile's `plugins.txt`, in its order, and one for each plugin the game loads with no line, each plugin once. Cites: MO2; mo2.md, divergence 27
 2. Each plugin the game loads with no line where the game loads it: at the losing end, before every line, unless the game loads it later. Cites: MO2; Never silently wrong
 3. An overridden plugin, and a plugin in a disabled mod, not to be a row. Each stays indexed. Cites: MO2; ADR-0012
 4. A disabled plugin to show no expander, because it is not active. Cites: ADR-0012

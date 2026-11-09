@@ -16,7 +16,7 @@ What MO2 does: [the surface audit](../../docs/research/mo2-surface-audit.md).
 | Metadata chrome | The feature annotates or organizes a mod list inside MO2's UI. Separators already organize the list, and nothing in Modbench consumes the rest. | 15 | Endorse, un-endorse or decline to endorse; Start or stop tracking on Nexus; Change categories |
 | Backups belong to git | Git tracks the history of a mod, the mod list and the plugin list. A backup is a git action. | 5 | Back up or restore the mod list; Back up or restore the plugin lists; Create a backup of a mod |
 | Dead in MO2 | MO2 has it by accident, or it has no working effect there. | 1 | Enable or disable a separator with Space (effect inferred) |
-| Maintainer ruling | The maintainer decided the gesture is unnecessary. The gesture name says why. | 10 | Lock or unlock a plugin's load-order slot (sorting rules will be relative) |
+| Maintainer ruling | The maintainer decided the gesture is unnecessary. The gesture name says why. | 11 | Lock or unlock a plugin's load-order slot (sorting rules will be relative) |
 
 ## Divergences
 
@@ -48,6 +48,7 @@ Gestures Modbench does differently.
 | 24 | Hide and Hidden files | Exclude or include, and show excluded | Hide / Un-Hide, and the Hidden files check box | Ruling: in Modbench, hide acts on the view alone (commands.md, Exclude and hide). |
 | 25 | Where a new mod lands | At the winning end of the mod order ([mods.md](../surfaces/mods.md), What install does, story 2) | At the priority of the row the gesture started from, or inside the separator it started from; Create empty mod and Install mod inside are on the separator menu | Ruling: deferred. |
 | 26 | Archive parsing | Always on, with no setting | An experimental setting, off by default | Principle: Usable first. |
+| 27 | Plugins the game loads with no line | Read from the files the game gets when it runs, a Creation Club list a mod deploys included ([plugins.md](../surfaces/plugins.md), The tree, stories 1 and 2) | Reads the game folder alone, so a list a mod deploys leaves its plugins as ordinary rows | Principle: Never silently wrong. |
 
 ## Omissions by object
 
@@ -157,3 +158,4 @@ Gestures Modbench does not offer. A gesture ruled out is not in [commands.md](..
 | Drag a downloaded file onto the mod list to install (the row menu is the one entry) | Downloads: drag out | Maintainer ruling |
 | Download from an `nxm://` link (a Premium account downloads through the API) | Downloads, the `nxm://` handler | Maintainer ruling |
 | Pause, resume or cancel a download (restore's Cancel stops it) | Downloads | Maintainer ruling |
+| Install from a downloaded file that wraps another (I unpack it myself) | Install: the bundle installer plugin | Maintainer ruling |
