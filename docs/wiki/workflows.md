@@ -18,7 +18,7 @@ With no mod selected, Update Manifests and Restore from Manifests… act on ever
 
 Run Git Init Modlist. It makes the instance folder a repository, with an ignore list that keeps the mods' files out of git. Run Update Manifests, then stage and commit in Source Control.
 
-A manifest can record any folder inside the instance, not only a mod: the folder it sits in. The cleanest setup holds every game file as a mod, puts a manifest in the stock game folder that records only the game's executable, which works once every other game file is in a mod, because restore sends whatever else the folder holds to the trash, and records each MO2 plugin in a manifest in its folder, such as `plugins/rootbuilder` for Root Builder. Git then holds a manifest for every file the game runs. Modbench works with any setup.
+A manifest records a mod's folder or a source mod's source folder. The mod manager, its plugins and the game installation are yours to set up, and stay out of the modlist.
 
 Keep each mod folder to one installation file, as installing makes it, so where each folder comes from stays one fact. When a folder holds files from a second download or the game folder, Update Manifests finds it and names it as a second package, so the folder still restores. Then move the merged folder into a source mod, whose source folder holds the files and whose own manifest restores them.
 

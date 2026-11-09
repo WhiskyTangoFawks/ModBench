@@ -9,7 +9,7 @@ Each story cites what decides it. A story that cites nothing is owned here.
 As a user, I want:
 
 1. The instance folder to be the repository, so a change I make in the mod manager or in Modbench is a working-tree change in Source Control. Cites: ADR-0022
-2. The repository to hold what a clone needs to rebuild my instance. What Modbench writes for this machine alone stays out of it, since no clone has this machine, and that state follows the folders it names as they change. Cites: ADR-0022; ADR-0003
+2. The repository to hold what a clone needs to rebuild my modlist, in a mod manager and a game I set up myself. What Modbench writes for this machine alone stays out of it, since no clone has this machine, and that state follows the folders it names as they change. Cites: ADR-0022; ADR-0003; Minimal by default; Respect the user
 3. A clone that runs with no edit on any machine, Windows or Linux. Modbench makes the paths in the files the repository holds by default portable, with no step of mine. Cites: Windows and Linux alike
 4. Commit, diff, history, branches and merge to be VS Code's. Modbench adds no gesture for them. Cites: Existing tools
 5. A push never to publish a modlist a clone cannot fetch. Cites: Never silently wrong
