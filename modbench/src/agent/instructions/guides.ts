@@ -3,6 +3,7 @@ import { MO2_INSTANCE_GUIDE } from './guides/instance/mo2';
 import { NEXUS_GUIDE } from './guides/nexus';
 import { RECORDS_GUIDE } from './guides/records';
 import { SCRIPTING_AND_QUERIES_GUIDE } from './guides/scriptingAndQueries';
+import { SETUP_GUIDE } from './guides/setup';
 import { SOURCE_MODS_GUIDE } from './guides/sourceMods';
 import { SYMBOLS_GUIDE } from './guides/symbols';
 
@@ -13,6 +14,7 @@ const withoutOpeningLine = (text: string): string => text.slice(text.indexOf('\n
 
 export const GUIDES = {
   vocabulary: withoutOpeningLine(GLOSSARY),
+  setup: SETUP_GUIDE,
   records: RECORDS_GUIDE,
   'source-mods': SOURCE_MODS_GUIDE,
   'instance-repository': INSTANCE_REPOSITORY_GUIDE,
