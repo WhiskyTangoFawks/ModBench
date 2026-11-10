@@ -1711,7 +1711,7 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
 
     const rendered = (await h.tree.getChildren()).map((row) => h.tree.getTreeItem(row).label);
 
-    expect(rendered).toEqual(['A.esp', 'B.esp', 'C.esp']);
+    expect(rendered).toEqual(['0 A.esp', '1 B.esp', '2 C.esp']);
     expect([callCount(h.client, 'getPlugins'), callCount(h.client, 'getDiagnoses')]).toEqual([1, 1]);
   });
 
@@ -1905,6 +1905,22 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
   });
 });
 
+describe('PluginsTreeProvider — the label leads with the line (plugins.md, A row)', () => {
+  const shown = async (tree: PluginsTreeProvider) => (await tree.getChildren()).map((row) => tree.getTreeItem(row).label);
+
+  it('zero-pads each line to the width of the last, so the numbers align', async () => {
+    const { tree } = makeTree([plugin({ name: 'A.esp', line: 3 }), plugin({ name: 'B.esp', line: 10 })]);
+
+    expect(await shown(tree)).toEqual(['03 A.esp', '10 B.esp']);
+  });
+
+  it('leaves a plugin the game loads with no line to its file name', async () => {
+    const { tree } = makeTree([plugin({ name: 'A.esp', line: 0 })], { loadedWithNoLine: ['Base.esm'] });
+
+    expect(await shown(tree)).toEqual(['Base.esm', '0 A.esp']);
+  });
+});
+
 describe('PluginsTreeProvider — the highlight (plugins.md, The highlight)', () => {
   const highlightsOf = async (tree: PluginsTreeProvider) =>
     (await tree.getChildren()).map((row) => {
@@ -1917,7 +1933,7 @@ describe('PluginsTreeProvider — the highlight (plugins.md, The highlight)', ()
 
     tree.highlight([{ name: 'Bee.esp', origin: 'SomeMod' }]);
 
-    expect(await highlightsOf(tree)).toEqual([undefined, [[0, 7]]]);
+    expect(await highlightsOf(tree)).toEqual([undefined, [[0, 9]]]);
   });
 
   it('matches by name and origin, so a plugin of the same name from another origin stays unmarked', async () => {
