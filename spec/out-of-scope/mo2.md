@@ -16,7 +16,7 @@ What MO2 does: [the surface audit](../../docs/research/mo2-surface-audit.md).
 | Metadata chrome | The feature annotates or organizes a mod list inside MO2's UI. Separators already organize the list, and nothing in Modbench consumes the rest. | 15 | Endorse, un-endorse or decline to endorse; Start or stop tracking on Nexus; Change categories |
 | Backups belong to git | Git tracks the history of a mod, the mod list and the plugin list. A backup is a git action. | 5 | Back up or restore the mod list; Back up or restore the plugin lists; Create a backup of a mod |
 | Dead in MO2 | MO2 has it by accident, or it has no working effect there. | 1 | Enable or disable a separator with Space (effect inferred) |
-| Maintainer ruling | The maintainer decided the gesture is unnecessary. The gesture name says why. | 11 | Lock or unlock a plugin's load-order slot (sorting rules will be relative) |
+| Maintainer ruling | The maintainer decided the gesture is unnecessary. The gesture name says why. | 12 | Lock or unlock a plugin's load-order slot (sorting rules will be relative) |
 
 ## Divergences
 
@@ -142,6 +142,7 @@ Gestures Modbench does not offer. A gesture ruled out is not in [commands.md](..
 | Sort the plugin order with LOOT | Plugin list: Sort | An ADR decides it |
 | Edit the priority cell | Plugin list: F2 | VS Code provides it |
 | Restrict reordering to the priority or mod-index sort | Plugin list | VS Code provides it |
+| Show a plugin's flags and mod index (a plugin the game moves shows a Warning) | Plugin list: Flags and Mod Index columns; bold, italic and underlined names | Maintainer ruling |
 
 ### Downloaded file
 

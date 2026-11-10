@@ -1212,6 +1212,16 @@ describe('the agent server, running a gesture', () => {
     expect(reporter.reports).toEqual([]);
   });
 
+  it('answers move to Overwrite with each path it moved, and refuses with each path it did not and why', async () => {
+    const refused = { item: 'Data/gone.esp', reason: 'The deployment folder holds no such file that deploy did not write.' };
+    fired.outcome = { applied: true, outcome: { landed: ['Data/a.esp'], refused: [refused] } };
+    const { client } = await served();
+
+    const answer = await call(client, 'instance_move_to_overwrite', { argument: [{ path: 'Data/a.esp' }, { path: 'Data/gone.esp' }] });
+
+    expect(answer).toEqual({ isError: true, text: JSON.stringify({ landed: ['Data/a.esp'], refused: [refused] }) });
+  });
+
   it('logs a gesture\'s Refusal as a refusal and any other failure as an error', async () => {
     const { client, warned, errored } = await served();
 

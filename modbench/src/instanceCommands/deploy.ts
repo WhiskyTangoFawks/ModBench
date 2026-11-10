@@ -82,8 +82,11 @@ async function unmanaged({ deployment, adapter }: { deployment: Deployment; adap
   }
 }
 
-/** `left` names each file no mod file can land at the path of, which stays in the deployment folder. */
-export type MoveToOverwriteResult = CommandResult<{ wrote: boolean; left: readonly string[] }>;
+/** `landed` names each path moved and `refused` each named path that is not a file deploy did not write. `left` names each file
+ *  no mod file can land at the path of, which stays in the deployment folder. */
+export type MoveToOverwriteResult = CommandResult<{
+  wrote: boolean; landed: readonly string[]; refused: readonly { item: string; reason: string }[]; left: readonly string[];
+}>;
 
 async function moveToOverwrite(
   { adapter, deployment }: { adapter: Adapter; deployment: Deployment }, setting: DeploymentFolderSetting, named: readonly string[] | undefined,
@@ -97,13 +100,19 @@ async function moveToOverwrite(
     }
     const current = await deployment.unmanaged(folder);
     const paths = named === undefined ? current : named.filter((path) => current.includes(path));
+    const refused = (named ?? []).filter((path) => !current.includes(path))
+      .map((item) => ({ item, reason: 'The deployment folder holds no such file that deploy did not write.' }));
     const moves = paths.flatMap((path) => {
       const relativePath = overwritePathOf(path);
       return relativePath === undefined ? [] : [{ from: join(folder, path), relativePath }];
     });
     const refusal = await adapter.moveIntoOverwrite(moves);
     if (refusal !== undefined) return { applied: false, refusal };
-    return { applied: true, wrote: moves.length > 0, left: paths.filter((path) => overwritePathOf(path) === undefined) };
+    return {
+      applied: true, wrote: moves.length > 0, refused,
+      landed: paths.filter((path) => overwritePathOf(path) !== undefined),
+      left: paths.filter((path) => overwritePathOf(path) === undefined),
+    };
   } catch (err) {
     return refuse(err);
   }
