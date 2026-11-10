@@ -17,7 +17,7 @@ function isAddress(value: unknown): value is ArchiveAddress {
 const nameOf = (archive: string): string | undefined => archive.split(/[\\/]/).at(-1);
 
 /** An archive as a folder. Every path below it is a file's path in the archive, so its address says only which archive. */
-export function archiveUri({ gameRelease, archive }: ArchiveAddress): vscode.Uri {
+function archiveUri({ gameRelease, archive }: ArchiveAddress): vscode.Uri {
   return vscode.Uri.from({ scheme: ARCHIVE_SCHEME, path: `/${nameOf(archive)}`, query: JSON.stringify({ gameRelease, archive }) });
 }
 

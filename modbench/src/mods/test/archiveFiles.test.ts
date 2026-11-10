@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Uri } from '../../test/vscodeMock';
 
-const folderUpdates = vi.hoisted(() => [] as [number, number, { uri: { query: string }; name: string }][]);
+const folderUpdates = vi.hoisted(() => [] as [number, number, { uri: ReturnType<typeof Uri.file>; name: string }][]);
 const registered = vi.hoisted(() => new Map<string, (...args: unknown[]) => unknown>());
 const registrations = vi.hoisted(() => new Map<string, { provider: Record<string, (...args: unknown[]) => unknown>; options?: { isReadonly?: boolean } }>());
 
@@ -9,7 +9,7 @@ vi.mock('vscode', () => ({
   window: { showOpenDialog: () => Promise.resolve([{ fsPath: '/games/Fallout4/Data/Chosen.ba2' }]) },
   workspace: {
     workspaceFolders: [{}],
-    updateWorkspaceFolders: (...args: [number, number, { uri: { query: string }; name: string }]) => { folderUpdates.push(args); return true; },
+    updateWorkspaceFolders: (...args: [number, number, { uri: ReturnType<typeof Uri.file>; name: string }]) => { folderUpdates.push(args); return true; },
     registerFileSystemProvider: (scheme: string, provider: Record<string, (...args: unknown[]) => unknown>, options?: { isReadonly?: boolean }) => {
       registrations.set(scheme, { provider, options });
       return { dispose: () => undefined };
@@ -27,11 +27,18 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { archivedFileUri, archiveUri, registerArchiveFiles, registerArchiveOpen } from '../archiveFiles';
+import { archivedFileUri, registerArchiveFiles, registerArchiveOpen } from '../archiveFiles';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const address = { gameRelease: 'Fallout4', archive: '/mods/A/A - Main.ba2', file: 'scripts/a.pex' };
+
+const archiveRoot = async () => {
+  folderUpdates.length = 0;
+  registerArchiveOpen({ gameRelease: () => Promise.resolve(address.gameRelease), reporter: recordingReporter() });
+  await registered.get('modbench.archive.open')?.(Uri.file(address.archive));
+  return folderUpdates[0]?.[2].uri ?? Uri.file('');
+};
 
 const contents = [{ archive: address.archive, files: ['scripts/a.pex', 'scripts/b.pex', 'readme.txt'] }];
 
@@ -84,7 +91,7 @@ describe('the archive file system (mods.md, The tree, story 13)', () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getArchiveContents', contents);
     const { provider } = served(client);
-    const root = archiveUri(address);
+    const root = await archiveRoot();
     const scripts = Uri.from({ scheme: root.scheme, path: '/A - Main.ba2/scripts', query: root.query });
 
     await expect(provider.readDirectory?.(root)).resolves.toEqual([['scripts', 2], ['readme.txt', 1]]);
@@ -97,14 +104,14 @@ describe('the archive file system (mods.md, The tree, story 13)', () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getArchiveContents', [{ archive: address.archive, files: [], unreadable: 'not a BA2' }]);
 
-    await expect(served(client).provider.readDirectory?.(archiveUri(address))).rejects.toThrow('Unavailable not a BA2');
+    await expect(served(client).provider.readDirectory?.(await archiveRoot())).rejects.toThrow('Unavailable not a BA2');
   });
 
   it('has no file at a path the archive does not hold', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getArchiveContents', contents);
 
-    await expect(served(client).provider.stat?.(Uri.from({ scheme: 'modbench-archive', path: '/A - Main.ba2/nothing.txt', query: archiveUri(address).query }))).rejects.toThrow('FileNotFound');
+    await expect(served(client).provider.stat?.(Uri.from({ scheme: 'modbench-archive', path: '/A - Main.ba2/nothing.txt', query: (await archiveRoot()).query }))).rejects.toThrow('FileNotFound');
   });
 
   it.each(['writeFile', 'createDirectory', 'delete', 'rename'])('refuses %s', (verb) => {

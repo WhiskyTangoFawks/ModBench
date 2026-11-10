@@ -937,6 +937,10 @@
     "menus": {
       "commandPalette": [
         {
+          "command": "modbench.archive.open",
+          "when": "modbench.folder == instance"
+        },
+        {
           "command": "modbench.record.collapseNoConflict",
           "when": "isWorkspaceTrusted && activeCustomEditorId == 'modbench.record' && !modbench.record.noConflictCollapsed"
         },
@@ -1380,7 +1384,7 @@
       "explorer/context": [
         {
           "command": "modbench.archive.open",
-          "when": "resourceScheme == file && resourceExtname =~ /^\\.(ba2|bsa)$/i",
+          "when": "modbench.folder == instance && resourceScheme == file && resourceExtname =~ /^\\.(ba2|bsa)$/i",
           "group": "modbench@0"
         },
         {
