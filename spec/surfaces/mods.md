@@ -30,6 +30,7 @@ As a user, I want:
 12. My selection and what I expanded to survive a change on disk. Cites: common, A view, story 2
 13. An archive to open into its files as a folder does. Its files open read-only, and no gesture that changes or marks a file, such as exclude, ignore or a publisher tag, is offered on them, since Modbench never writes inside an archive. Cites: MO2's archive parsing; commands.md, No dead entries
 14. An archive that cannot be read to say so in its row, and why. Cites: Never silently wrong
+15. Consecutive separators whose names share a prefix before " - " to sit under a separator group of that prefix, at every level, so a long list folds into a few headings. A separator group has no gesture, and a drop on it is refused, saying why. Cites: GLOSSARY.md, Separator group; Usable first
 
 ## A row
 
@@ -48,9 +49,16 @@ As a user, I want:
 
 | Part | What it shows | Cites |
 |---|---|---|
-| Label | the separator's name | MO2 |
+| Label | the separator's name, less the prefix of the separator group that holds it | MO2 |
 | Check box, icon | none | MO2 draws a separator as a heading |
 | Description | none | |
+
+### Separator group
+
+| Part | What it shows | Cites |
+|---|---|---|
+| Label | the prefix its separators share, less the prefix of the separator group that holds it | |
+| Check box, icon, description | none | |
 
 ### Overwrite
 
