@@ -64,4 +64,19 @@ public sealed class ArchiveReaderTests : IDisposable
         Assert.Equal("script"u8.ToArray(), ArchiveReader.FileBytes(release, archive, "scripts/a.pex"));
         Assert.Null(ArchiveReader.FileBytes(release, archive, "scripts/missing.pex"));
     }
+
+    private const string TheExtensionsDigestOfScript = "Zm84p1xofs8=";
+
+    [Theory]
+    [MemberData(nameof(Variants))]
+    public void ACopyInAnArchive_IsItsSizeAndTheDigestALooseCopyOfItsBytesHas_AndAFileItLacksIsNone(string format, GameRelease release)
+    {
+        ArchiveFile[] files = [new("scripts/a.pex", () => new MemoryStream(Encoding.ASCII.GetBytes("script")))];
+        Assert.Null(new ArchivePacker(new ModFolderRepository()).Pack(_scratch, $"Mod - Main.{format}", files, VariantNamed(format)));
+        var archive = Path.Combine(_scratch, $"Mod - Main.{format}");
+
+        var copies = ArchiveReader.Copies(release, archive, ["Scripts/A.pex", "scripts/missing.pex"]);
+
+        Assert.Equal([new ArchivedCopy("Scripts/A.pex", 6, TheExtensionsDigestOfScript)], copies);
+    }
 }
