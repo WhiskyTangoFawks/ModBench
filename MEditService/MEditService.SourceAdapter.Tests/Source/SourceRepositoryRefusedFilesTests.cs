@@ -55,6 +55,22 @@ public sealed class SourceRepositoryRefusedFilesTests : IDisposable
     }
 
     [Fact]
+    public void ARecordDocumentInAnotherTypesFolder_IsRefusedByItsFile_WithoutExceptionText()
+    {
+        Repository.Put(Plugin, new SourceDocument("000801:Refused.esp", "misc", "Coin", "{\n  \"FormKey\": \"000801:Refused.esp\",\n  \"EditorID\": \"Coin\",\n  \"Weight\": 2\n}")).Wrote();
+        var held = SourceDocumentPath.Of(_modFolder, PluginName, "misc", "000801:Refused.esp", "Coin", GameRelease.Fallout4);
+        var misfiled = held.Replace("MiscItems", "Globals", StringComparison.Ordinal);
+        Assert.NotEqual(held, misfiled);
+        _ = Directory.CreateDirectory(Path.GetDirectoryName(misfiled) ?? "");
+        File.Move(held, misfiled);
+
+        var refused = Assert.Single(Repository.RefusedFilesOf(Plugin).Value());
+
+        Assert.Equal(Path.GetRelativePath(_modFolder, misfiled), refused.Path);
+        Assert.DoesNotContain("Object reference", refused.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AMalformedHeader_IsRefusedByItsFileAsTheLayoutSpellsIt()
     {
         Rewrite(HeaderPath, "\"Stats\": {", "\"Stats\": {\n      \"Version\": \"x\",");

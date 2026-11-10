@@ -78,6 +78,11 @@ A mod whose folder is a build artifact: the build writes it from its source fold
 
 Avoid: tracked mod (git's tracked is a file in the index)
 
+# Separator group
+A heading in the Mods view over consecutive separators whose names share a prefix before " - ". It is a view of their names, not a mod entry.
+
+Avoid: nested separator, parent separator (it is no separator)
+
 # Git workflow
 How a source mod uses its `main` branch. The user chooses. Two kinds exist: authored and vendored.
 

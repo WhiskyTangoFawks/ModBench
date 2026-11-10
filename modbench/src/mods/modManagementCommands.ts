@@ -457,6 +457,7 @@ function folderOf(
     case 'mod': return { name: node.mod.name, folder: uriOf(modDirs.get(node.mod.name)) };
     case 'folder': return { name: node.folder.relativePath, folder: uriOf(node.folder.path) };
     case 'file': return { name: node.file.relativePath, folder: uriOf(node.file.path) };
+    case 'archivedFile': return { name: `${node.archive.file.relativePath}/${node.path}`, folder: uriOf(node.archive.file.path) };
   }
 }
 
@@ -475,7 +476,7 @@ export function registerViewOnNexusCommand(
   });
 }
 
-const COPY_KINDS = ['mod', 'separator', 'folder', 'file'] as const;
+const COPY_KINDS = ['mod', 'separator', 'folder', 'file', 'archivedFile'] as const;
 
 function copyValueOf(row: RowOf<ModlistNode, typeof COPY_KINDS[number]>): string {
   switch (row.kind) {
@@ -483,6 +484,7 @@ function copyValueOf(row: RowOf<ModlistNode, typeof COPY_KINDS[number]>): string
     case 'separator': return row.separator.name;
     case 'folder': return row.folder.relativePath;
     case 'file': return row.file.relativePath;
+    case 'archivedFile': return `${row.archive.file.relativePath}/${row.path}`;
   }
 }
 

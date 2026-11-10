@@ -6,6 +6,7 @@ import { originLabel, type FileOrderConflict } from '../instanceLoader/fileConfl
 import type { ModlistNode } from './ModListProvider';
 import type { OriginFileMark, OriginFileRef } from '../modCommands/modCommands';
 import { byLevel, byName } from './fileTree';
+import { archivedFileUri } from './archiveFiles';
 
 // Not `file:`: VS Code badges and tints a row whose resourceUri carries a diagnostic or another
 // provider's file decoration, and a file row draws neither. The file icon theme reads the name
@@ -175,22 +176,27 @@ export class ArchivedFolderNode extends vscode.TreeItem {
 
 export class ArchivedFileNode extends vscode.TreeItem {
   readonly kind = 'archivedFile' as const;
-  constructor(public readonly parent: FileNode | ArchivedFolderNode, public readonly archive: FileNode, path: string, name: string) {
+  constructor(
+    public readonly parent: FileNode | ArchivedFolderNode, public readonly archive: FileNode, public readonly path: string, name: string, gameRelease: string | undefined,
+  ) {
     super(name, vscode.TreeItemCollapsibleState.None);
     archivedRow(this, parent, archive, name, path);
     this.contextValue = this.kind;
+    if (gameRelease === undefined) return;
+    const uri = archivedFileUri({ gameRelease, archive: archive.file.sourcePath, file: path });
+    this.command = { command: 'vscode.open', title: 'Open', arguments: [uri, { preview: true }] };
   }
 }
 
 /** The folders, then the files, directly in an archive or a folder in it, each by name. */
-export function archivedIn(parent: FileNode | ArchivedFolderNode, matches: NameMatch): (ArchivedFolderNode | ArchivedFileNode)[] {
+export function archivedIn(parent: FileNode | ArchivedFolderNode, matches: NameMatch, gameRelease: string | undefined): (ArchivedFolderNode | ArchivedFileNode)[] {
   const [archive, prefix, { entries, shown }] = parent instanceof FileNode
     ? [parent, '', parent.archived ?? { entries: [], shown: 'all' as const }]
     : [parent.archive, `${parent.path}/`, parent];
   const { here, below } = byLevel(entries, prefix);
   return [
     ...[...below].sort(byName).map(([name, under]) => new ArchivedFolderNode(parent, archive, `${prefix}${name}`, under, name, shownUnder(shown, matches, name))),
-    ...[...here].sort(byName).map(([name, entry]) => new ArchivedFileNode(parent, archive, entry.relativePath, name)),
+    ...[...here].sort(byName).map(([name, entry]) => new ArchivedFileNode(parent, archive, entry.relativePath, name, gameRelease)),
   ];
 }
 

@@ -692,6 +692,13 @@ class HttpMEditClient implements MEditClient {
     }), noBodyFails, { timed: true });
   }
 
+  getArchiveFile(gameRelease: string, archive: string, file: string): Promise<Uint8Array | ReadFailed> {
+    return this.read(`getArchiveFile(${archive}, ${file})`, async (api, signal) => {
+      const { data, error, response } = await api.POST('/archives/file', { body: { gameRelease, archive, file }, parseAs: 'arrayBuffer', signal });
+      return { data: data === undefined ? undefined : new Uint8Array(data), error, response };
+    }, noBodyFails, { timed: true });
+  }
+
   getRecords({ name: plugin, origin }: PluginAddress, type: string, offset: number, limit: number): Promise<RecordPage | ReadFailed> {
     return this.read(`getRecords(${plugin}, ${type})`, (api, signal) => api.GET('/records', {
       params: { query: { plugin, type: [type], offset, limit, origin } }, signal,

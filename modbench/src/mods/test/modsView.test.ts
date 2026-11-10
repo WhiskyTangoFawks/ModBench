@@ -31,6 +31,7 @@ vi.mock('vscode', () => ({
   workspace: {
     ...fakeVscodeModule().workspace,
     getConfiguration: () => ({ get: () => undefined }),
+    registerFileSystemProvider: () => ({ dispose: () => undefined }),
     onDidChangeConfiguration: () => ({ dispose: () => undefined }),
   },
   Disposable: { from: (...all: { dispose(): unknown }[]) => ({ dispose: () => { for (const d of all) d.dispose(); } }) },
@@ -119,6 +120,7 @@ const otherDeps = () => ({
   focusedView: { id: () => undefined, selection: () => [], selectionOf: () => [], follow: () => ({ dispose: () => undefined }), enter: () => undefined, onDidChange: () => ({ dispose: () => undefined }) },
   statuses: new ModStatuses(foldersHoldingNothing(), () => undefined),
   referencedBy: () => Promise.resolve(),
+  archives: new InMemoryMEditClient(),
   sourceGestures: {
     commands: sourceCommands({ client: new InMemoryMEditClient(), adapter: fakeInstanceAdapter().adapter, saveUnsaved: () => Promise.resolve([]), loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }),
     pluginsView: 'modbench.pluginListTree', say: () => undefined,

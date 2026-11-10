@@ -29,7 +29,7 @@ export const fileRefOf = (argument: Argument): OriginFileRef => {
 
 const isRowOf = kindGuard<ModlistNode>();
 
-const OPEN_FOLDER_KINDS = ['mod', 'runtimeOutput', 'folder', 'file'] as const;
+const OPEN_FOLDER_KINDS = ['mod', 'runtimeOutput', 'folder', 'file', 'archivedFile'] as const;
 
 export const openFolderArgument = (entry: GestureEntry<ModlistNode>) => singularArgument(entry, ...OPEN_FOLDER_KINDS);
 

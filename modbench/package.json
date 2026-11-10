@@ -1763,7 +1763,7 @@
         },
         {
           "command": "modbench.mod.openFolder",
-          "when": "view == modbench.modList && (viewItem =~ /\\bfile\\b/ || viewItem =~ /\\bfolder\\b/)",
+          "when": "view == modbench.modList && (viewItem =~ /\\bfile\\b/ || viewItem =~ /\\bfolder\\b/ || viewItem == archivedFile)",
           "group": "1_open@1"
         },
         {
@@ -1808,7 +1808,7 @@
         },
         {
           "command": "modbench.copyValue",
-          "when": "view == modbench.modList && (viewItem =~ /\\bfile\\b/ || viewItem =~ /\\bfolder\\b/)",
+          "when": "view == modbench.modList && (viewItem =~ /\\bfile\\b/ || viewItem =~ /\\bfolder\\b/ || viewItem == archivedFile)",
           "group": "5_copy@1"
         },
         {
