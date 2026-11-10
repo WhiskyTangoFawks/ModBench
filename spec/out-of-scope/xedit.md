@@ -66,6 +66,7 @@ Gestures Modbench does differently.
 | 42 | Editing a column | Only the file's column edits; a column that is not the file's opens no editor | Edits any column in one window | Ruling: a record tab is its file's editor (ADR-0001). |
 | 43 | Cut in the record panel | Ctrl+X cuts a field's value or an element, in one edit (catalog `cut`) | No cut in the grid | VS Code's interaction: Ctrl+X is cut. |
 | 44 | Undelete and disable references, in the default clean script | Clears the reference's enable parent | Sets the enable parent to the player, with Set Enable State to Opposite of Parent | Ruling: Initially Disabled hides the reference once no enable parent overrides it. The player is a reference the engine hardcodes and no plugin defines. |
+| 45 | Benign navmesh overrides, in the default clean script | Kept | Removes a navmesh override whose only differences its priority table ranks benign | Ruling: a copy's benign state comes from the priority table (divergence 7). |
 
 ## Omissions by object
 
