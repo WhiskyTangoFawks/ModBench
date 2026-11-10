@@ -723,6 +723,17 @@ describe('the MO2 adapter\'s repository', () => {
       expect(runGit('show', 'HEAD:.gitignore')).toBe((await readFile(join(root, '.gitignore'), 'utf8')).replace('mine\n', ''));
     });
 
+    it('is committed with the mod manager\'s metadata file kept out', async () => {
+      const adapter = await committed(whitelistIgnoreList(undefined));
+      const held = await modFolder('Mod [A]');
+      await adapter.writeHeldWholeLines([held], true);
+
+      await adapter.commitFolder(held, 'Init Mod [A]');
+
+      expect(runGit('show', '--name-only', '--format=', 'HEAD').split('\n').filter(Boolean).sort()).toEqual(['.gitignore', 'mods/Mod [A]/Mod [A].esp', 'mods/Mod [A]/textures/a.dds']);
+      expect(shown()).toEqual([]);
+    });
+
     it('is refused, committing nothing, naming the ignore list, when the one HEAD holds has an unpaired marker', async () => {
       const unpaired = (withHeldWholeLines(whitelistIgnoreList(undefined), ['Other'], true) ?? '').trimEnd().split('\n').slice(0, -1).join('\n');
       const adapter = await committed(`${unpaired}\n`);
