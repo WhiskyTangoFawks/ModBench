@@ -868,6 +868,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.archive.open",
+        "title": "Open Archive",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.source.build",
         "title": "Build Mod",
         "category": "Modbench",
@@ -1373,6 +1378,11 @@
         }
       ],
       "explorer/context": [
+        {
+          "command": "modbench.archive.open",
+          "when": "resourceScheme == file && resourceExtname =~ /^\\.(ba2|bsa)$/i",
+          "group": "modbench@0"
+        },
         {
           "command": "modbench.source.build",
           "when": "resource in modbench.source.buildTargets",
