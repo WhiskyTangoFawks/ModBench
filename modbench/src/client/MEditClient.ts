@@ -12,6 +12,7 @@ import type { RecordEditEnvelope } from '../wire/messages';
 import type { PluginAddress, SourceModIn } from '../wire/pluginAddress';
 export type { SourceModIn };
 import type { ReadFailed } from '../wire/readFailed';
+import type { ArchivedCopy } from '../wire/messages';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
 
@@ -92,9 +93,6 @@ export type LaunchOutcome = { outcome: 'running' } | { outcome: 'stopped' } | { 
 
 /** An archive's files, by their paths in it, or none and why it cannot be read. */
 export type ArchiveContents = components['schemas']['ArchiveContents'];
-
-/** A file in an archive: its size, and when asked for, its digest as a loose copy's is written. */
-export type ArchivedCopy = components['schemas']['ArchivedCopy'];
 
 /** A document with changes VS Code holds unsaved, by absolute path. */
 export interface UnsavedDocument { path: string; text: string }

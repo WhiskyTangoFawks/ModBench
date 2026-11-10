@@ -3,13 +3,13 @@
 
 import { foldPath, type ArchivedFileAddress } from '../instanceLoader/fileConflictIndex';
 import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
-import type { components } from '../wire/generated/api';
+import type { ArchivedCopy } from '../wire/messages';
 
 export type FileRead<T> = { readonly kind: 'read'; readonly answer: T } | { readonly kind: 'unreadable'; readonly reason: string };
 export interface FileStamp { readonly size: bigint; readonly modifiedNs: bigint }
 
 export interface ArchiveCopyReader {
-  getArchiveCopies(gameRelease: string, archive: string, files: readonly string[], hashed: boolean): Promise<components['schemas']['ArchivedCopy'][] | ReadFailed>;
+  getArchiveCopies(gameRelease: string, archive: string, files: readonly string[], hashed: boolean): Promise<ArchivedCopy[] | ReadFailed>;
 }
 
 /** The most bytes one read of hashes decompresses, so each read answers well within mEdit's time to answer. */

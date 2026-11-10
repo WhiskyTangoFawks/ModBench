@@ -8,8 +8,8 @@ namespace MEditService.ModFolderAdapter;
 /// <summary>What the archive at <paramref name="Archive"/> holds: each file's forward-slash path, or none and why it could not be read.</summary>
 public sealed record ArchiveContents(string Archive, IReadOnlyList<string> Files, string? Unreadable);
 
-/// <summary>A file in an archive, by the path it was asked for: its size in bytes, as the archive's index records it, and
-/// when asked for, the xxHash64 of its bytes as the extension writes a loose file's, its eight little-endian bytes in base64.</summary>
+/// <summary>A file in an archive, by the path it was asked for: its size, as the archive's index records it, and when asked
+/// for, the xxHash64 of its bytes, written as the extension writes a loose file's.</summary>
 public sealed record ArchivedCopy(string File, long Size, string? Hash);
 
 public static class ArchiveReader
