@@ -475,7 +475,7 @@ export function registerViewOnNexusCommand(
   });
 }
 
-const COPY_KINDS = ['mod', 'separator', 'folder', 'file'] as const;
+const COPY_KINDS = ['mod', 'separator', 'folder', 'file', 'archivedFile'] as const;
 
 function copyValueOf(row: RowOf<ModlistNode, typeof COPY_KINDS[number]>): string {
   switch (row.kind) {
@@ -483,6 +483,7 @@ function copyValueOf(row: RowOf<ModlistNode, typeof COPY_KINDS[number]>): string
     case 'separator': return row.separator.name;
     case 'folder': return row.folder.relativePath;
     case 'file': return row.file.relativePath;
+    case 'archivedFile': return `${row.archive.file.relativePath}/${row.path}`;
   }
 }
 

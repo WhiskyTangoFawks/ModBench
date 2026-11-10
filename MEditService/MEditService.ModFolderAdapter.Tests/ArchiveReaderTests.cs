@@ -48,4 +48,20 @@ public sealed class ArchiveReaderTests : IDisposable
         Assert.Empty(contents.Files);
         Assert.False(string.IsNullOrWhiteSpace(contents.Unreadable));
     }
+
+    [Theory]
+    [MemberData(nameof(Variants))]
+    public void AFileOfAnArchive_IsItsBytes_AndAFileItLacksIsNone(string format, GameRelease release)
+    {
+        ArchiveFile[] files =
+        [
+            new("meshes/actors/a.nif", () => new MemoryStream(Encoding.ASCII.GetBytes("mesh"))),
+            new("scripts/a.pex", () => new MemoryStream(Encoding.ASCII.GetBytes("script"))),
+        ];
+        Assert.Null(new ArchivePacker(new ModFolderRepository()).Pack(_scratch, $"Mod - Main.{format}", files, VariantNamed(format)));
+        var archive = Path.Combine(_scratch, $"Mod - Main.{format}");
+
+        Assert.Equal("script"u8.ToArray(), ArchiveReader.FileBytes(release, archive, "scripts/a.pex"));
+        Assert.Null(ArchiveReader.FileBytes(release, archive, "scripts/missing.pex"));
+    }
 }

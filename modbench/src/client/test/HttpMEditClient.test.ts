@@ -6,6 +6,7 @@ import { createMEditClient } from '../HttpMEditClient';
 import type { MEditClient, RecordEditEnvelope } from '../MEditClient';
 import { PassThrough, Readable } from 'node:stream';
 import { EventEmitter } from 'node:events';
+import { isReadFailed } from '../../wire/readFailed';
 import { answered } from './healthAnswer';
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -760,6 +761,24 @@ describe('HttpMEditClient — sendLoadOrder', () => {
 
     expect(abortedAtKill).toBe(true);
     await expect(sent).resolves.toEqual({ outcome: 'abandoned' });
+  });
+});
+
+describe('HttpMEditClient — getArchiveFile', () => {
+  const asked = { gameRelease: 'Fallout4', archive: '/mods/A/A - Main.ba2', file: 'scripts/a.pex' };
+
+  it('reads the bytes of a file in an archive', async () => {
+    const { result, request } = await exchange((c) => c.getArchiveFile(asked.gameRelease, asked.archive, asked.file),
+      () => Promise.resolve(new Response(new Uint8Array([7, 8]), { status: 200, headers: { 'content-type': 'application/octet-stream' } })));
+
+    expect(result).toEqual(new Uint8Array([7, 8]));
+    expect([request.method, new URL(request.url).pathname, await request.json()]).toEqual(['POST', '/archives/file', asked]);
+  });
+
+  it('fails with a refusal when the archive does not hold the file', async () => {
+    const { result } = await exchange((c) => c.getArchiveFile(asked.gameRelease, asked.archive, asked.file), () => Promise.resolve(new Response(null, { status: 404 })));
+
+    expect(isReadFailed(result)).toBe(true);
   });
 });
 

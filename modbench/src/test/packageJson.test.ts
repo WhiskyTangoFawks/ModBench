@@ -1257,6 +1257,8 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ['file conflict included', [OPEN_FOLDER_ENTRY, GO_TO_MOD_ENTRY, EXCLUDE_FILE_ENTRY, COPY_VALUE_ENTRY]],
     ['file conflict excluded', [OPEN_FOLDER_ENTRY, GO_TO_MOD_ENTRY, INCLUDE_FILE_ENTRY, COPY_VALUE_ENTRY]],
     ['folder', [OPEN_FOLDER_ENTRY, COPY_VALUE_ENTRY]],
+    ['archivedFile', [COPY_VALUE_ENTRY]],
+    ['archivedFolder', []],
   ];
 
   const CHECK_FOR_UPDATES = 'modbench.mod.checkForUpdates';

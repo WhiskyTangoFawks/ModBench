@@ -20,6 +20,10 @@ public static class ArchiveReader
         }
     }
 
+    /// <summary>The bytes of <paramref name="file"/> in the archive, or none when the archive holds no such file. Throws when the archive cannot be read.</summary>
+    public static byte[]? FileBytes(GameRelease release, string archiveAt, string file) =>
+        EntriesOf(release, archiveAt).FirstOrDefault(entry => string.Equals(entry.Path, file, StringComparison.OrdinalIgnoreCase))?.Read();
+
     internal static IEnumerable<ArchiveEntry> EntriesOf(GameRelease release, string archiveAt) =>
         Ba2Archive.IsBa2(archiveAt)
             ? Ba2Archive.Read(archiveAt)

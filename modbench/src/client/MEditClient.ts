@@ -299,6 +299,8 @@ export interface MEditClient {
   getCreatablePluginFlags(name: string): Promise<string[][] | ReadFailed>;
   /** What each archive holds, by its absolute path; the release says which game's format a BSA is read as. */
   getArchiveContents(gameRelease: string, archives: readonly string[]): Promise<ArchiveContents[] | ReadFailed>;
+  /** The bytes of one file in an archive, by its path there. */
+  getArchiveFile(gameRelease: string, archive: string, file: string): Promise<Uint8Array | ReadFailed>;
   getRecords(plugin: PluginAddress, type: string, offset: number, limit: number): Promise<RecordPage | ReadFailed>;
   /** Every active plugin's copies, or one plugin's. */
   searchRecords(query: string, validTypes: string[], plugin?: PluginAddress): Promise<RecordPage | ReadFailed>;

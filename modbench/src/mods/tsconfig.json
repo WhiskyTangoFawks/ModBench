@@ -18,6 +18,7 @@
     { "path": "../ports" },
     { "path": "../sourceCommands" },
     { "path": "../symbolNames" },
+    { "path": "../tables" },
     { "path": "../textDocuments" },
     { "path": "../wire" }
   ],

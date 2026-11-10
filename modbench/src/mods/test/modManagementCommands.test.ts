@@ -35,7 +35,7 @@ import type { NexusModRow } from '../../drivingLib/inFocusedView';
 import { Refusal } from '../../drivingLib/refusal';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { MODS_KEY_ARGS } from '../gestureEntry';
-import { FileNode, FolderNode } from '../modFiles';
+import { ArchivedFileNode, FileNode, FolderNode } from '../modFiles';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -732,6 +732,7 @@ describe('copy value in Mods: one line for each selected row copy value takes', 
   const armourFile = file('mods/Armour', 'textures/armour/a.dds');
   const textures = new FolderNode(armour, { kind: 'mod', name: 'Armour' }, folder('mods/Armour', 'textures'), [armourFile], [], 'textures');
   const leaf = new FileNode(textures, textures.origin, armourFile, 'a.dds');
+  const archiveRow = new FileNode(armour, { kind: 'mod', name: 'Armour' }, file('mods/Armour', 'Armour - Main.ba2'), 'Armour - Main.ba2');
   const noSelection = (): ModlistNode[] => [];
 
   it.each<[string, ModlistNode, string]>([
@@ -739,6 +740,7 @@ describe('copy value in Mods: one line for each selected row copy value takes', 
     ['a separator its own name', groupA, 'Group A'],
     ['a file its path in its mod', leaf, 'textures/armour/a.dds'],
     ['a folder its path in its mod', textures, 'textures'],
+    ['a file in an archive its path in its mod, through the archive', new ArchivedFileNode(archiveRow, archiveRow, 'meshes/a.nif', 'a.nif', 'Fallout4'), 'Armour - Main.ba2/meshes/a.nif'],
   ])('copies for %s right-clicked alone', (_case, clicked, text) => {
     expect(modsCopyValueText(noSelection)(clicked, undefined)).toBe(text);
   });

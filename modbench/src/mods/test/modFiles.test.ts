@@ -3,7 +3,7 @@ import type { FileOrigin, OriginFile, OriginFolder } from '../../instanceLoader/
 import type { ArchiveRead } from '../../instanceLoader/archiveContents';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import {
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, DataTransferItem, DataTransfer, FakeCancellationToken, Uri,
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, DataTransferItem, DataTransfer, FakeCancellationToken, FakeUri, Uri,
 } from '../../test/vscodeMock';
 
 const { executeCommand } = vi.hoisted(() => ({ executeCommand: vi.fn((_id: string, ..._args: unknown[]) => Promise.resolve()) }));
@@ -193,12 +193,26 @@ describe('an archive opens into its files as a folder does (mods.md, The tree, s
     expect(archive.collapsibleState).toBe(None);
   });
 
-  it('a file or folder in it names its own kind as its contextValue, so no gesture of a file or folder in the mod is offered on it, and a click on it only selects', async () => {
+  it('a file or folder in it names its own kind as its contextValue, so no gesture of a file or folder in the mod is offered on it', async () => {
     const { provider, archive } = await archiveRow(holding('meshes/a.nif'));
     const meshes = await childNamed(provider, archive, 'meshes');
     const leaf = await childNamed(provider, meshes, 'a.nif');
 
-    expect([meshes, leaf].map((row) => [row.contextValue, row.command])).toEqual([['archivedFolder', undefined], ['archivedFile', undefined]]);
+    expect([meshes, leaf].map((row) => row.contextValue)).toEqual(['archivedFolder', 'archivedFile']);
+  });
+
+  it('a click on a folder in it only selects, and a click on a file in it opens the file the read-only file system serves', async () => {
+    const { provider, archive } = await archiveRow(holding('meshes/a.nif'));
+    const meshes = await childNamed(provider, archive, 'meshes');
+    const leaf = await childNamed(provider, meshes, 'a.nif');
+
+    expect(meshes.command).toBeUndefined();
+    const [target, options] = present(leaf.command?.arguments, 'the file row\'s command arguments') as unknown[];
+    const uri = expectInstanceOf(target, FakeUri);
+    expect([leaf.command?.command, options]).toEqual(['vscode.open', { preview: true }]);
+    expect([uri.scheme, uri.path, JSON.parse(uri.query)]).toEqual([
+      'modbench-archive', '/Armour - Main.ba2/meshes/a.nif', { gameRelease: 'Fallout4', archive: '/linked/Armour - Main.ba2', file: 'meshes/a.nif' },
+    ]);
   });
 
   it('a file or folder in it is named by the path in its mod, through the archive, for its identity, its tooltip and the file icon theme', async () => {

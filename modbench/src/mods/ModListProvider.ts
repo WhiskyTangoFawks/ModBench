@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { gameReleaseForGame } from '../tables/gamePaths';
 import type { EntryRef, FileOrigin, Mod, OriginFile, OriginFolder, Separator } from '../instanceLoader/instance';
 import { tagsHeldAt } from './tagsHeldAt';
 import { modNameOf } from '../instanceLoader/modName';
@@ -374,7 +375,7 @@ export class ModListProvider
     if (element instanceof FolderNode) {
       return filesIn(element, element.origin, element.files, element.folders, element.folder.relativePath, this.within(element));
     }
-    if (element instanceof FileNode || element instanceof ArchivedFolderNode) return archivedIn(element, this.matches);
+    if (element instanceof FileNode || element instanceof ArchivedFolderNode) return archivedIn(element, this.matches, gameReleaseForGame(this.instanceValue.gameName) ?? '');
     if (element) return [];
     await this.firstRead.settled; // never render before the Instance has actually read once
     if (this.firstRead.failure !== undefined) return [new ErrorNode(this.firstRead.failure)];

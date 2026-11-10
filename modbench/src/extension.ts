@@ -244,6 +244,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     manifestGestures: { commands: instanceRepository, toolboxView: TOOLBOX_VIEW, say: toolbox.say },
     statuses: modStatuses,
     referencedBy: deps.referencedByMod,
+    archives: client,
   }));
   const editing = own(editingFlow({
     client, instanceRoot, ...plugins.editingInPluginsView, log: (line) => outputChannel.error(line),
