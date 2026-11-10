@@ -1,7 +1,7 @@
 // target-architecture.d2's Mod status; the mod-status trace.
 
 import type { EntryRef, InstanceAdapter, ModFolder } from '../instanceAdapter/instanceAdapter';
-import { buildFileAgainst, heldWholeStatus, manifestAt, packagesAskedAt, statusFrom, unreadableStatus, type ModAt, type ModStatus } from '../manifestAdapter/manifestAdapter';
+import { buildFileAgainst, filesAPackageHolds, heldWholeStatus, manifestAt, packagesAskedAt, statusFrom, unreadableStatus, type ModAt, type ModStatus } from '../manifestAdapter/manifestAdapter';
 
 /** What a status is derived from in an instance value. */
 export interface StatusSource {
@@ -16,6 +16,8 @@ export interface StatusSource {
 }
 
 const isGitsOwn = (path: string): boolean => path === '.git' || path.startsWith('.git/');
+
+type Asked = ReturnType<typeof packagesAskedAt>;
 
 type ModAndSourceFolder = ModAt & { readonly sourceFolder?: string; readonly files: readonly string[] };
 
@@ -32,6 +34,15 @@ function modsAt(value: StatusSource): ModAndSourceFolder[] {
   });
 }
 
+// The installation files and game files of both: the packages of a source mod's source folder are read in the one pass over its folder.
+const askedBoth = (own: Asked, other: Asked): Asked => {
+  if (own === undefined || other === undefined) return own ?? other;
+  const gameFiles = own.gameFiles === undefined && other.gameFiles === undefined ? undefined : [...new Set([...own.gameFiles ?? [], ...other.gameFiles ?? []])];
+  return { ...own, installationFiles: [...new Set([...own.installationFiles, ...other.installationFiles])], ...gameFiles === undefined ? {} : { gameFiles } };
+};
+
+const heldSnapshot = (held: ReadonlyMap<string, ReadonlySet<string>>): string => JSON.stringify([...held].map(([mod, paths]) => [mod, [...paths].sort()]));
+
 const listenedBy = (listeners: Set<() => void>, listener: () => void): Listening => {
   listeners.add(listener);
   return { dispose: () => { listeners.delete(listener); } };
@@ -41,6 +52,7 @@ const listenedBy = (listeners: Set<() => void>, listener: () => void): Listening
  *  status keeps the last good one shown, and says why on the message line and once in the Output (common.md, Reporting). */
 export class ModStatuses {
   private derived: ReadonlyMap<string, ModStatus> = new Map();
+  private heldByPackages: ReadonlyMap<string, ReadonlySet<string>> = new Map();
   private readonly shown = new Map<string, ModStatus>();
   private readonly unreadable = new Map<string, string>();
   private gitFailure: string | undefined;
@@ -70,6 +82,12 @@ export class ModStatuses {
     while (this.finished < settledRun) await new Promise<void>((resolve) => { this.finishedRun.push(resolve); });
     if (this.failure !== undefined) throw this.failure;
     return this.derived;
+  }
+
+  /** The files of the mod's folder that one of its packages holds, by bytes or by name, as the latest derivation read them:
+   *  those of its source folder's manifest for a source mod, else of its folder's. */
+  heldByPackage(mod: string): ReadonlySet<string> {
+    return this.heldByPackages.get(mod) ?? new Set();
   }
 
   /** The mod's last good status. */
@@ -123,8 +141,11 @@ export class ModStatuses {
       for (const listener of this.changed) listener();
       return;
     }
-    const statuses = await Promise.all(mods.map((mod) => this.statusOf(mod, held.whole.has(mod.folder), held.files.get(mod.folder) ?? [])));
-    this.hold(new Map(statuses.map((status) => [status.mod, status])));
+    const derived = await Promise.all(mods.map((mod) => this.statusOf(mod, held.whole.has(mod.folder), held.files.get(mod.folder) ?? [])));
+    const heldBefore = heldSnapshot(this.heldByPackages);
+    this.heldByPackages = new Map(derived.map(({ status, packaged }) => [status.mod, packaged]));
+    const heldChanged = heldSnapshot(this.heldByPackages) !== heldBefore;
+    this.hold(new Map(derived.map(({ status }) => [status.mod, status])), heldChanged);
   }
 
   // Git failing leaves the last good statuses shown, and says why once for all of them.
@@ -147,27 +168,35 @@ export class ModStatuses {
     }
   }
 
-  private async statusAgainstManifest(mod: ModAndSourceFolder, heldByGit: readonly string[]): Promise<ModStatus> {
+  private async statusAgainstManifest(mod: ModAndSourceFolder, heldByGit: readonly string[]): Promise<{ status: ModStatus; packaged: ReadonlySet<string> }> {
     const manifest = await manifestAt(mod.folder);
-    const status = statusFrom(mod, manifest, await this.reads.modValue(mod.folder, packagesAskedAt(manifest), heldByGit));
-    if (status.unreadable !== undefined) return status;
+    const named = mod.sourceFolder === undefined ? manifest : await manifestAt(mod.sourceFolder);
+    const values = await this.reads.modValue(mod.folder, askedBoth(packagesAskedAt(manifest), packagesAskedAt(named)), heldByGit);
+    const status = statusFrom(mod, manifest, values);
+    if (status.unreadable !== undefined) return { status, packaged: new Set() };
     const unpackaged = status.noManifest ? mod.files.filter((path) => !isGitsOwn(path)) : status.unpackaged;
-    return { ...status, unpackaged: [...new Set([...unpackaged, ...heldByGit])].sort() };
+    return {
+      status: { ...status, unpackaged: [...new Set([...unpackaged, ...heldByGit])].sort() },
+      packaged: named.read !== undefined && 'manifest' in named.read ? filesAPackageHolds(named.read.manifest, values) : new Set(),
+    };
   }
 
   // The installation file is the mod manager's record, so a folder git holds whole is warned of it too.
-  private async statusOf(mod: ModAndSourceFolder, heldWhole: boolean, heldByGit: readonly string[]): Promise<ModStatus> {
-    const [status, installed, buildFile] = await Promise.all([
-      heldWhole ? heldWholeStatus(mod.name, heldByGit) : this.statusAgainstManifest(mod, heldByGit), this.reads.installationFile(mod.name, mod.folder),
+  private async statusOf(mod: ModAndSourceFolder, heldWhole: boolean, heldByGit: readonly string[]): Promise<{ status: ModStatus; packaged: ReadonlySet<string> }> {
+    const [{ status, packaged }, installed, buildFile] = await Promise.all([
+      heldWhole ? { status: heldWholeStatus(mod.name, heldByGit), packaged: new Set<string>() } : this.statusAgainstManifest(mod, heldByGit), this.reads.installationFile(mod.name, mod.folder),
       mod.sourceFolder === undefined ? undefined : buildFileAgainst(mod.sourceFolder),
     ]);
-    return { ...status, ...installed.kind === 'unreadable' ? { installationFileProblem: installed.reason } : {}, ...buildFile && { buildFile } };
+    return { status: { ...status, ...installed.kind === 'unreadable' ? { installationFileProblem: installed.reason } : {}, ...buildFile && { buildFile } }, packaged };
   }
 
-  private hold(derived: ReadonlyMap<string, ModStatus>): void {
+  private hold(derived: ReadonlyMap<string, ModStatus>, heldChanged: boolean): void {
     const before = JSON.stringify([...this.derived]);
     this.derived = derived;
-    if (JSON.stringify([...derived]) === before) return;
+    if (JSON.stringify([...derived]) === before) {
+      if (heldChanged) for (const listener of this.changed) listener();
+      return;
+    }
     for (const mod of [...this.shown.keys(), ...this.unreadable.keys()].filter((held) => !derived.has(held))) {
       this.shown.delete(mod);
       this.unreadable.delete(mod);

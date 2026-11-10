@@ -16,13 +16,16 @@ const REASON = 'nothing ships it';
 
 const configuration = (shippable: (path: string) => boolean = () => false): PublisherConfiguration => ({
   kind: 'read', covering: () => [], listed: () => [], pathProblems: [],
-  unshippable: { file: SETTINGS, reason: (folder, path, mod) => (shippable(`${folder}/${path}`) ? undefined : `${mod} ${REASON}`) },
+  unshippable: { file: SETTINGS, reason: (folder, path, mod, heldByPackage) => (heldByPackage || shippable(`${folder}/${path}`) ? undefined : `${mod} ${REASON}`) },
 });
 
-function over(initial: readonly ModStatus[], publisherConfiguration: PublisherConfiguration) {
+function over(initial: readonly ModStatus[], publisherConfiguration: PublisherConfiguration, packaged: Record<string, readonly string[]> = {}) {
   let held = new Map(initial.map((one) => [one.mod, one]));
   let changed = (): void => undefined;
-  const statuses = { current: () => Promise.resolve(held), onDidChange: (listener: () => void) => { changed = listener; return { dispose: () => undefined }; } };
+  let heldByPackage = packaged;
+  const statuses = {
+    current: () => Promise.resolve(held), heldByPackage: (mod: string): ReadonlySet<string> => new Set(heldByPackage[mod] ?? []), onDidChange: (listener: () => void) => { changed = listener; return { dispose: () => undefined }; },
+  };
   const instance = new FakeInstance(instanceValueFixture({
     publisherConfiguration, modFolders: [{ kind: 'mod', name: 'ModA', modName: 'ModA', path: FOLDER }, { kind: 'mod', name: 'ModB', modName: 'ModB', path: '/instance/mods/ModB' }],
   }));
@@ -30,7 +33,11 @@ function over(initial: readonly ModStatus[], publisherConfiguration: PublisherCo
   new UnshippableProblems(collection, instance, statuses);
   return {
     collection, instance,
-    becomes: (next: readonly ModStatus[]) => { held = new Map(next.map((one) => [one.mod, one])); changed(); },
+    becomes: (next: readonly ModStatus[], nextPackaged: Record<string, readonly string[]> = heldByPackage) => {
+      held = new Map(next.map((one) => [one.mod, one]));
+      heldByPackage = nextPackaged;
+      changed();
+    },
   };
 }
 
@@ -56,6 +63,15 @@ describe('a mod the published modlist has no way to ship (publishing.md, What sh
     const { collection } = over([status('ModA', { unpackaged: ['a.esp', 'b.esp'] })], configuration((path) => path === `${FOLDER}/a.esp`));
 
     await vi.waitFor(() => { expect(problemsOn(collection).map(([, message]) => message)).toEqual([`1 file of "ModA" has no way to ship: 'b.esp': ModA ${REASON}.`]); });
+  });
+
+  it('names no file one of the mod\'s packages holds, and judges again when the files its packages hold change', async () => {
+    const { collection, becomes } = over([status('ModA', { unpackaged: ['a.esp', 'b.esp'] })], configuration(), { ModA: ['a.esp'] });
+    await vi.waitFor(() => { expect(problemsOn(collection).map(([, message]) => message)).toEqual([`1 file of "ModA" has no way to ship: 'b.esp': ModA ${REASON}.`]); });
+
+    becomes([status('ModA', { unpackaged: ['a.esp', 'b.esp'] })], { ModA: [] });
+
+    await vi.waitFor(() => { expect(problemsOn(collection).map(([, message]) => message)).toEqual([`2 files of "ModA" have no way to ship, such as 'a.esp': ModA ${REASON}.`]); });
   });
 
   it('is one warning for each mod that has such a file, and none for a mod with none', async () => {
