@@ -471,6 +471,17 @@ describe('the agent server, given an instance value', () => {
       expect(await read(client, 'list_mod_statuses')).toEqual([{ mods: ['Big Rocks'], addedLater: ['x.nif'] }]);
     });
 
+    it('answers what a source mod\'s build file lacks, and leaves out a build file that lacks nothing', async () => {
+      const buildFile = { file: '/src/Big Rocks/build.json', lacks: [{ step: 'compile' as const, path: 'Renamed.esp' }], unreadable: [] };
+      statusRead.answer = [
+        { ...status('Big Rocks'), buildFile },
+        { ...status('InAnotherProfile'), buildFile: { file: '/src/Other/build.json', lacks: [], unreadable: [] } },
+      ];
+      const { client } = await clientOf(inRepository);
+
+      expect(await read(client, 'list_mod_statuses')).toEqual([{ mods: ['Big Rocks'], buildFile }, { mods: ['InAnotherProfile'] }]);
+    });
+
     it('refuses an instance that is no repository, which has no manifest to compare', async () => {
       const { client } = await clientOf(new FakeInstance(VALUE));
 
