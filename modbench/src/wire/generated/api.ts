@@ -202,6 +202,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/archives/contents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description What each archive holds, by its absolute path: each file's path in it, with forward slashes, or none and why the archive could not be read. The release says which game's archive format a BSA is read as. */
+        post: operations["GetArchiveContents"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/clone-submodules": {
         parameters: {
             query?: never;
@@ -1056,6 +1073,15 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ArchiveContents: {
+            archive: string;
+            files: string[];
+            unreadable?: string | null;
+        };
+        ArchiveContentsRequest: {
+            gameRelease: string;
+            archives: string[];
+        };
         /** @enum {string} */
         ArchiveRefusal: "None" | "VariantNotWritten" | "FileNotPackable" | "NotWritten" | "ArchiveUnreadable" | "FileNotInArchive" | "EntriesAmbiguous";
         ArchiveRefused: {
@@ -2488,6 +2514,39 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetArchiveContents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveContentsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchiveContents"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

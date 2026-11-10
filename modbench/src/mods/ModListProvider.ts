@@ -9,8 +9,8 @@ import { ErrorNode } from '../drivingLib/errorNode';
 import { messageLine } from '../drivingLib/messageLine';
 import { dropMove, type DraggedRows } from './moveDrop';
 import {
-  anyNamed, expanderOver, filesIn, narrowToMatches, shownUnder, FileNode, FolderNode,
-  type ChildrenShown, type FileIgnore,
+  anyNamed, archivedIn, expanderOver, filesIn, narrowToMatches, shownUnder, ArchivedFileNode, ArchivedFolderNode, FileNode, FolderNode,
+  type ArchivedEntry, type ChildrenShown, type FileIgnore,
 } from './modFiles';
 import type { ModArgument } from '../drivingLib/argument';
 import { modRowUri, overwriteRowUri, separatorRowUri } from './modIndicators';
@@ -152,10 +152,13 @@ export class OverwriteNode extends vscode.TreeItem {
   }
 }
 
-export type ModlistNode = SeparatorNode | ModNode | OverwriteNode | FolderNode | FileNode | ErrorNode;
+export type ModlistNode = SeparatorNode | ModNode | OverwriteNode | FolderNode | FileNode | ArchivedFolderNode | ArchivedFileNode | ErrorNode;
 
 const NO_MODS_MESSAGE =
   'No mods or separators. Install Mod… or Create Empty Mod…, in the title bar\'s overflow menu, adds one.';
+
+// The Instance loader hands an archive's read on unchanged until its stamp changes, so the filter builds its entries once.
+const entriesOfRead = new WeakMap<object, readonly ArchivedEntry[]>();
 
 function isEntryNode(node: ModlistNode): node is ModNode | SeparatorNode {
   return node.kind === 'mod' || node.kind === 'separator';
@@ -371,6 +374,7 @@ export class ModListProvider
     if (element instanceof FolderNode) {
       return filesIn(element, element.origin, element.files, element.folders, element.folder.relativePath, this.within(element));
     }
+    if (element instanceof FileNode || element instanceof ArchivedFolderNode) return archivedIn(element, this.matches);
     if (element) return [];
     await this.firstRead.settled; // never render before the Instance has actually read once
     if (this.firstRead.failure !== undefined) return [new ErrorNode(this.firstRead.failure)];
@@ -419,12 +423,12 @@ export class ModListProvider
   private overwriteNode(): OverwriteNode {
     const { overwriteFiles, managerNames, overwriteFolders } = this.instanceValue;
     if (!this.filterText) return new OverwriteNode(overwriteFiles, managerNames.manager, overwriteFolders);
-    const found = narrowToMatches(overwriteFiles, overwriteFolders, this.matches);
+    const found = narrowToMatches(overwriteFiles, overwriteFolders, this.matches, this.archivedOf);
     return new OverwriteNode(overwriteFiles, managerNames.manager, overwriteFolders, found);
   }
 
   private isFound = (m: Mod): boolean => this.matches(m.name)
-    || anyNamed(this.instanceValue.filesByMod.get(m.name) ?? [], this.instanceValue.foldersByMod.get(m.name) ?? [], this.matches);
+    || anyNamed(this.instanceValue.filesByMod.get(m.name) ?? [], this.instanceValue.foldersByMod.get(m.name) ?? [], this.matches, this.archivedOf);
 
   private matchingModNodes(mods: readonly Mod[]): ModNode[] {
     return mods.filter(this.isFound).map((m) => this.modNode(m, 'matching'));
@@ -434,7 +438,7 @@ export class ModListProvider
     const files = this.instanceValue.filesByMod.get(m.name) ?? [];
     const folders = this.instanceValue.foldersByMod.get(m.name) ?? [];
     const shown = shownUnder(parentShown, this.matches, m.name);
-    const found = shown === 'matching' ? narrowToMatches(files, folders, this.matches) : { files, folders };
+    const found = shown === 'matching' ? narrowToMatches(files, folders, this.matches, this.archivedOf) : { files, folders };
     const sourceMod = this.instanceValue.listedSourceMods.has(m.name);
     return new ModNode(m, {
       holdsPlugin: this.modsHoldingPlugin.has(m.name), sourceMod,
@@ -456,11 +460,19 @@ export class ModListProvider
       return ignoreEntriesOf(status).has(file.includedPath) ? 'entry' : 'under';
     };
     const holdsPublisherTag = (path: string) => tagsHeldAt(this.instanceValue, path).length > 0;
-    return { shown: row.shown, matches: this.matches, conflict, differs, ignored, holdsPublisherTag };
+    return { shown: row.shown, matches: this.matches, conflict, differs, ignored, holdsPublisherTag, archived: this.archivedOf };
   }
 
+  private archivedOf = (file: OriginFile): readonly ArchivedEntry[] => {
+    const read = this.instanceValue.archiveContents.get(file.sourcePath);
+    if (read?.kind !== 'read') return [];
+    const entries = entriesOfRead.get(read) ?? read.answer.map((relativePath) => ({ relativePath }));
+    entriesOfRead.set(read, entries);
+    return entries;
+  };
+
   getParent(element: ModlistNode): ModlistNode | undefined {
-    if (element instanceof FolderNode || element instanceof FileNode) return element.parent;
+    if (element instanceof FolderNode || element instanceof FileNode || element instanceof ArchivedFolderNode || element instanceof ArchivedFileNode) return element.parent;
     const group = element instanceof ModNode ? this.groupHolding(element.mod.name) : undefined;
     return group && this.groupRow(group);
   }

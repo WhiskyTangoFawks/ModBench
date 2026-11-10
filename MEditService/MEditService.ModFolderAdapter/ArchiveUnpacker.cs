@@ -1,5 +1,4 @@
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Archives;
 
 namespace MEditService.ModFolderAdapter;
 
@@ -12,7 +11,7 @@ public static class ArchiveUnpacker
         unpacked = [];
         try
         {
-            var entries = EntriesOf(release, archiveAt).ToLookup(entry => entry.Path, StringComparer.OrdinalIgnoreCase);
+            var entries = ArchiveReader.EntriesOf(release, archiveAt).ToLookup(entry => entry.Path, StringComparer.OrdinalIgnoreCase);
             var missing = files.Where(file => !entries.Contains(file)).ToList();
             if (missing.Count > 0)
                 return new ArchiveStepRefusal(ArchiveRefusal.FileNotInArchive, $"'{archiveAt}' holds no {string.Join(" or ", missing.Select(file => $"'{file}'"))}.");
@@ -29,11 +28,6 @@ public static class ArchiveUnpacker
             return new ArchiveStepRefusal(ArchiveRefusal.ArchiveUnreadable, $"'{archiveAt}' could not be read: {e.Message}");
         }
     }
-
-    private static IEnumerable<ArchiveEntry> EntriesOf(GameRelease release, string archiveAt) =>
-        Ba2Archive.IsBa2(archiveAt)
-            ? Ba2Archive.Read(archiveAt)
-            : Archive.CreateReader(release, archiveAt).Files.Select(entry => new ArchiveEntry(entry.Path.Replace('\\', '/'), entry.GetBytes));
 
     private static Func<Stream> MemoryOf(byte[] bytes) => () => new MemoryStream(bytes);
 }

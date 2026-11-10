@@ -90,6 +90,9 @@ export type LoadOrderOutcome =
  *  own error when it threw. */
 export type LaunchOutcome = { outcome: 'running' } | { outcome: 'stopped' } | { outcome: 'failed'; error?: string };
 
+/** An archive's files, by their paths in it, or none and why it cannot be read. */
+export type ArchiveContents = components['schemas']['ArchiveContents'];
+
 /** A document with changes VS Code holds unsaved, by absolute path. */
 export interface UnsavedDocument { path: string; text: string }
 
@@ -294,6 +297,8 @@ export interface MEditClient {
   getCreatablePluginExtensions(): Promise<string[] | ReadFailed>;
   /** The header flag combinations a new plugin of the file name's extension may take. */
   getCreatablePluginFlags(name: string): Promise<string[][] | ReadFailed>;
+  /** What each archive holds, by its absolute path; the release says which game's format a BSA is read as. */
+  getArchiveContents(gameRelease: string, archives: readonly string[]): Promise<ArchiveContents[] | ReadFailed>;
   getRecords(plugin: PluginAddress, type: string, offset: number, limit: number): Promise<RecordPage | ReadFailed>;
   /** Every active plugin's copies, or one plugin's. */
   searchRecords(query: string, validTypes: string[], plugin?: PluginAddress): Promise<RecordPage | ReadFailed>;

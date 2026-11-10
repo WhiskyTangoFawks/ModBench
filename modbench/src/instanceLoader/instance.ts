@@ -3,7 +3,7 @@
 import type { Log } from '../ports/log';
 import { FileConflictLookup, indexReusing, type FileWinners } from './fileConflictIndex';
 import {
-  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, stampedSnapshot, type ArchiveSources,
+  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, loadsArchiveOf, pluginsLoadedWithNoLineOf, stampedSnapshot, type ArchiveSources,
   type DataFolderFiles, type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine, type LoadOrderSnapshotRefusal,
   type LoadOrderSnapshotValue, type PluginWithNoLine,
 } from './loadOrderSnapshot';
@@ -20,6 +20,8 @@ import { sourceModsOf, type SourceMods } from '../manifestAdapter/manifestAdapte
 import { pluginPlacesOf } from './pluginPlacesOf';
 import { papyrusScriptsOf, type PapyrusScript } from './papyrusScripts';
 import { errorMessage } from '../ports/errorMessage';
+import { ArchiveContentsHeld, archivePathsIn, unreadableArchiveLines, type ArchiveRead, type ArchiveReader } from './archiveContents';
+import { pluginOrderOf, unplaced } from './pluginOrder';
 
 /** The rows this value is made of. A view names a row's shape through the read model that
  *  publishes it, never through the codec that parsed the file behind it. */
@@ -50,7 +52,7 @@ function nextRun(): Run {
   return { named: new Set(), disk: false, tellsUnheard: false, fromEvents: false, settled, land };
 }
 
-type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'dataFolderFiles' | 'gameArchives' | 'archives' | 'watchNotes' | 'listingNotes' | 'managerRunning' | 'publisherConfiguration' | 'programVersions';
+type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'dataFolderFiles' | 'gameArchives' | 'archives' | 'archiveContents' | 'watchNotes' | 'listingNotes' | 'managerRunning' | 'publisherConfiguration' | 'programVersions';
 
 type DownloadedFilesResult =
   | { readonly kind: 'listed'; readonly rows: readonly LocatedDownloadedFileRow[] }
@@ -95,6 +97,10 @@ export interface InstanceValue {
   readonly filesByMod: ReadonlyMap<string, readonly OriginFile[]>;
   /** Each listed mod's folders, a disabled mod's too. */
   readonly foldersByMod: ReadonlyMap<string, readonly OriginFolder[]>;
+  /** What each archive at the root of a listed mod or Overwrite holds, by the path it is read from. */
+  readonly archiveContents: ReadonlyMap<string, ArchiveRead>;
+  /** Whether the game loads the archive of this name at the root of its Data folder. */
+  readonly loadsArchive: (name: string) => boolean;
   /** Each Papyrus script an enabled mod, Overwrite or the Data folder holds (`papyrusScriptsOf`). */
   readonly papyrusScripts: readonly PapyrusScript[];
   /** Every plugin file, with origin, line, enabled and winning. A listed
@@ -217,6 +223,7 @@ interface InstanceOptions {
   gameFolderSettingId: string;
   window: FocusWindow;
   log: Log;
+  medit: ArchiveReader;
 }
 
 // A listed source mod under its name in the mod order, an unlisted one under the name its folder gives it.
@@ -258,6 +265,8 @@ const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey' | 'publi
   files: new FileConflictLookup(),
   filesByMod: new Map(),
   foldersByMod: new Map(),
+  archiveContents: new Map(),
+  loadsArchive: () => false,
   papyrusScripts: [],
   plugins: [],
   downloadedFiles: { kind: 'listed', rows: [] },
@@ -318,6 +327,10 @@ export class Instance implements Subscription {
 
   private readonly focus: Subscription;
 
+  private readonly archives: ArchiveContentsHeld;
+
+  private readonly stopHearingMEditStatus: () => void;
+
   // A note is one Output line until its text changes or it clears.
   private readonly told = new Map<NoteKind, ReadonlySet<string>>();
   private readonly indexOf = indexReusing();
@@ -329,6 +342,10 @@ export class Instance implements Subscription {
     this.focus = options.window.onDidChangeWindowState((state) => {
       if (state.focused && !focused) void this.enqueue({ disk: true, tellsUnheard: true });
       focused = state.focused;
+    });
+    this.archives = new ArchiveContentsHeld(options.medit, (path) => options.adapter.fileStamp(path));
+    this.stopHearingMEditStatus = options.medit.onStatusChanged((status) => {
+      if (status === 'running' && this.archives.anyUnanswered) void this.enqueue({ disk: false, tellsUnheard: false });
     });
   }
 
@@ -439,6 +456,7 @@ export class Instance implements Subscription {
     clearTimeout(this.settleTimer);
     this.changes.dispose();
     this.focus.dispose();
+    this.stopHearingMEditStatus();
     this.subscribers = [];
     this.failureListeners = [];
     this.redrawListeners = [];
@@ -574,6 +592,17 @@ export class Instance implements Subscription {
     }));
   }
 
+  private async archivesIn(
+    { gameRelease, listed, files, filesByOrigin }: ArchiveSources,
+    order: { readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[]; readonly pluginsLoadedWithNoLine: readonly PluginWithNoLine[] },
+  ): Promise<Pick<InstanceValue, 'archiveContents' | 'loadsArchive'>> {
+    const archiveContents = await this.archives.read(gameRelease, archivePathsIn(gameRelease, [...filesByOrigin.values()].flat()));
+    this.tellOnce('archiveContents', unreadableArchiveLines(archiveContents), 'warn');
+    const { loadedWithNoLine, fromLines } = pluginOrderOf(order, unplaced);
+    const loaded = [...loadedWithNoLine, ...fromLines.filter((plugin) => plugin.enabled && plugin.path !== undefined)].map(({ name, origin }) => ({ name, origin }));
+    return { archiveContents, loadsArchive: loadsArchiveOf(gameRelease, listed, loaded, files) };
+  }
+
   private async read({ named, disk, tellsUnheard }: Run): Promise<InstanceValue> {
     const { adapter, log } = this.options;
     const reading = await adapter.reading({ named: [...named], disk });
@@ -601,6 +630,7 @@ export class Instance implements Subscription {
       filesByOrigin: new Map([...index.filesByMod, [OVERWRITE_ORIGIN, runtimeOutput.files]]),
     };
     this.tellArchivesNothingHolds(archiveSources);
+    const archives = await this.archivesIn(archiveSources, { plugins, pluginsLoadedWithNoLine: pluginsLoadedWithNoLine ?? [] });
     const loadOrderSnapshot = loadOrderSnapshotOf({
       plugins, gameFolder, pluginsLoadedWithNoLine, modFolders, sourceDirs: paths.sourceDirs, places: pluginPlacesOf({ mods: entries, paths }), archives: archiveSources,
     });
@@ -617,6 +647,7 @@ export class Instance implements Subscription {
       files: index.files,
       filesByMod: index.filesByMod,
       foldersByMod: index.foldersByMod,
+      ...archives,
       papyrusScripts: papyrusScriptsOf(index.files, dataFolderFiles, gameRelease),
       plugins,
       downloadedFiles: downloadedFilesOutcome.kind === 'unresolved'
