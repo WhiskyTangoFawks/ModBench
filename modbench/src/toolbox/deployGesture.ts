@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
 import type { DeployCommands, DeployResult, PurgeResult } from '../instanceCommands/deploy';
-import { AgentCall, registerWritingCommand, answeredToAgent, deployedPathsOf, isAgentCall, reportPartial, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
+import { AgentCall, registerWritingCommand, answeredToAgent, deployedPathsOf, isAgentCall, reportPartial, type GestureResult, type NoItemsResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
 import { deployFailures, deployWarnings } from '../drivingLib/deployProblems';
@@ -40,7 +40,7 @@ export function registerDeployCommands({ commands, instance, reporterFor }: Depl
     for (const { message, detail } of [...deployFailures(result), ...deployWarnings(result)]) reporter.report('warning', message, detail);
     return result;
   };
-  const purge = async (called: unknown): Promise<GestureResult<never, string> | undefined> => {
+  const purge = async (called: unknown): Promise<NoItemsResult | undefined> => {
     const result = await commands.purge();
     leftOut = [];
     await publishProblems();
@@ -103,7 +103,7 @@ function registerMoveToOverwriteCommand({ commands, instance, reporter }: Omit<D
     const result = await commands.moveToOverwrite(pathsOf(called));
     await publishProblems();
     if (!result.applied) {
-      if (called instanceof AgentCall) return answeredToAgent(result);
+      if (called instanceof AgentCall) return result;
       reporter.report('error', 'Could not move to Overwrite.', result.refusal);
       return undefined;
     }

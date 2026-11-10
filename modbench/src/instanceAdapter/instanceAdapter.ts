@@ -875,7 +875,7 @@ export interface InstanceAdapter extends DataFileReads {
    *  Made when absent; writes nothing for a held rule. Rejects, writing nothing, for a file it cannot read. */
   changeUserlist(additions: readonly LoadAfter[]): Promise<Written>;
   /** Puts the masterlist and the prelude whole, each made when absent and left alone when it already holds the text. */
-  changeMasterlist(files: MetadataTexts): Promise<Written>;
+  changeMasterlist(files: MetadataTexts): Promise<{ readonly written: readonly string[] }>;
   /** The names of the masterlist and the prelude that git holds uncommitted changes of, a file never committed among them. None in an instance that is not a repository. */
   uncommittedMasterlist(): Promise<readonly string[]>;
 

@@ -21,10 +21,14 @@ export const profilesOf = (call: AgentCall): string[] =>
 export const deployedPathsOf = (call: AgentCall): string[] =>
   call.argument.flatMap((given) => (given.kind === 'deployedFile' ? [given.path] : []));
 
-/** What a gesture over no items answers an agent: it landed, or it was refused. */
-export function answeredToAgent(result: { applied: true } | { applied: false; refusal: string }, partial: readonly PartialFailure[] = []): GestureResult<never, string> {
+/** What a gesture over no items answers an agent: it applied, with what it did when that tells the agent its next step,
+ *  or it was refused. It has no lists of items. */
+export type AppliedToNoItems = { applied: true; done?: string; partial?: readonly PartialFailure[] };
+export type NoItemsResult = AppliedToNoItems | { applied: false; refusal: string; detail?: string };
+
+export function answeredToAgent(result: { applied: true } | { applied: false; refusal: string }, partial: readonly PartialFailure[] = [], done?: string): NoItemsResult {
   if (!result.applied) return { applied: false, refusal: result.refusal };
-  return { applied: true, outcome: { landed: [], refused: [] }, ...(partial.length === 0 ? {} : { partial }) };
+  return { applied: true, ...(done === undefined ? {} : { done }), ...(partial.length === 0 ? {} : { partial }) };
 }
 
 /** A part of a landed gesture that failed: a view warns of it, or logs it when its severity is `log`, and an agent

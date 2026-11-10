@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { AgentCall, registerWritingCommand, reportPartial, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
+import { AgentCall, answeredToAgent, registerWritingCommand, reportPartial, type NoItemsResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
@@ -34,9 +34,8 @@ async function gitInit(deps: ModlistGestureDeps): Promise<void> {
   else deps.reporter.report('error', 'Could not git init.', result.refusal);
 }
 
-async function gitInitForAgent(deps: ModlistGestureDeps): Promise<GestureResult<never, string>> {
+async function gitInitForAgent(deps: ModlistGestureDeps): Promise<NoItemsResult> {
   const result = await gitInitInToolbox(deps);
   if (!result.applied) return { applied: false, refusal: result.refusal };
-  const partial = partialOf(result);
-  return { applied: true, outcome: { landed: [], refused: [] }, ...(partial.length === 0 ? {} : { partial }) };
+  return answeredToAgent(result, partialOf(result));
 }

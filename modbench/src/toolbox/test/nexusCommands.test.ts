@@ -218,7 +218,7 @@ describe('Log out, called by an agent', () => {
     await nexus.keep(GOOD_KEY);
 
     expect([await run('modbench.instance.logOut', new AgentCall([], {})), await nexus.loggedIn(), reporter.reports]).toEqual([
-      { applied: true, outcome: { landed: [], refused: [] } }, false, [],
+      { applied: true }, false, [],
     ]);
   });
 
