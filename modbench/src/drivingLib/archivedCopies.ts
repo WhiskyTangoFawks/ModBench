@@ -12,8 +12,8 @@ export interface ArchiveCopyReader {
   getArchiveCopies(gameRelease: string, archive: string, files: readonly string[], hashed: boolean): Promise<ArchivedCopy[] | ReadFailed>;
 }
 
-/** The most bytes one read of hashes decompresses, so each read answers well within mEdit's time to answer. */
-export const HASH_BATCH_BYTES = 64 * 1024 * 1024;
+// The most bytes one read of hashes decompresses, so each read answers well within mEdit's time to answer.
+const HASH_BATCH_BYTES = 64 * 1024 * 1024;
 
 interface Held {
   readonly stamp: string;

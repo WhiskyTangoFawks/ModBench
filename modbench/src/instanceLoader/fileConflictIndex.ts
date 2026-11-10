@@ -39,7 +39,7 @@ export function goToModCandidates(entry: ConflictEntry | undefined, own: FileOri
 }
 
 /** Whether `own` provides the path, and another enabled copy or Overwrite's does too. */
-export function inFileOrderConflict(entry: ConflictEntry | undefined, own: FileOrigin): boolean {
+function inFileOrderConflict(entry: ConflictEntry | undefined, own: FileOrigin): boolean {
   const providers = entry?.providers ?? [];
   return providers.length > 1 && providers.some((provider) => sameOrigin(provider, own));
 }

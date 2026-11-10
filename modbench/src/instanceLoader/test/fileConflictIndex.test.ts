@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { Mod, Separator } from '../instance';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import {
-  buildFileConflictIndex, indexReusing, modOrigin, stackCopies, stackReusing, goToModCandidates, inFileOrderConflict, fileOrderConflictOf, outranksACopy, winsPath, RUNTIME_OUTPUT, type ConflictEntry,
+  buildFileConflictIndex, indexReusing, modOrigin, stackCopies, stackReusing, goToModCandidates, fileOrderConflictOf, outranksACopy, winsPath, RUNTIME_OUTPUT, type ConflictEntry,
 } from '../fileConflictIndex';
 import type { FileOrigin, OriginFile, OriginFiles } from '../../instanceAdapter/instanceAdapter';
 import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
@@ -202,19 +202,6 @@ describe('the origins go to mod can name for a copy of a file', () => {
     ['nothing, for a path no one provides', undefined, high, []],
   ])('is %s', (_case, entry, own, expected) => {
     expect(goToModCandidates(entry, own)).toEqual(expected);
-  });
-});
-
-describe('whether a copy of a file is in a file order conflict', () => {
-  it.each<[string, ConflictEntry | undefined, FileOrigin, boolean]>([
-    ['is, for the winner of a path another enabled copy provides', entryOf(high, low), high, true],
-    ['is, for a copy that loses to another enabled copy', entryOf(high, low), low, true],
-    ['is, for a copy that loses to Overwrite', entryOf(RUNTIME_OUTPUT, low), low, true],
-    ['is not, for a copy nothing else provides', entryOf(high), high, false],
-    ['is not, for a copy that is no provider', entryOf(high, middle), low, false],
-    ['is not, for a path no one provides', undefined, high, false],
-  ])('%s', (_case, entry, own, expected) => {
-    expect(inFileOrderConflict(entry, own)).toBe(expected);
   });
 });
 

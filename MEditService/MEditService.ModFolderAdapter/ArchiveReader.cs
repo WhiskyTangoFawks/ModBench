@@ -9,7 +9,7 @@ namespace MEditService.ModFolderAdapter;
 public sealed record ArchiveContents(string Archive, IReadOnlyList<string> Files, string? Unreadable);
 
 /// <summary>A file in an archive, by the path it was asked for: its size, as the archive's index records it, and when asked
-/// for, the xxHash64 of its bytes, written as the extension writes a loose file's.</summary>
+/// for, the xxHash64 of its bytes, as the extension writes a loose file's.</summary>
 public sealed record ArchivedCopy(string File, long Size, string? Hash);
 
 public static class ArchiveReader

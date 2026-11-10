@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ArchivedCopies, HASH_BATCH_BYTES, type ArchiveCopyReader, type FileRead, type FileStamp } from '../archivedCopies';
+import { ArchivedCopies, type ArchiveCopyReader, type FileRead, type FileStamp } from '../archivedCopies';
 import type { ReadFailed } from '../../wire/readFailed';
 
 type Answer = Awaited<ReturnType<ArchiveCopyReader['getArchiveCopies']>>;
@@ -75,8 +75,8 @@ describe('the stamps of copies in archives', () => {
 });
 
 describe('the hashes of copies in archives', () => {
-  it('reads the bytes of the copies asked for in batches of a bounded size, keeping each batch it read', async () => {
-    const big = HASH_BATCH_BYTES / 2 + 1;
+  it('reads the bytes of the copies asked for in batches of at most 64 MiB, keeping each batch it read', async () => {
+    const big = 32 * 1024 * 1024 + 1;
     const { medit, copies } = reading();
     medit.answerOnce([sized('a.nif', big), sized('b.nif', big), sized('c.nif', 1)]);
     await copies.stamps([at(ARCHIVE, 'a.nif'), at(ARCHIVE, 'b.nif'), at(ARCHIVE, 'c.nif')]);
