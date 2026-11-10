@@ -42,8 +42,7 @@ const winnerAndLoser = () => indexedValueOf([mod('Winner'), mod('Loser')], {
   Loser: { files: [file('Loser', 'x/a.dds')], folders: [folder('Loser', 'x')] },
 });
 
-// The game gets an archive's files when it loads the archive, and the copy of the archive it gets is this one.
-const archiveIn = async (loads: boolean, mods = [mod('A')]): Promise<InstanceValue> => ({
+const eachModHoldingAnArchiveTheGame = async (loads: boolean, mods = [mod('A')]): Promise<InstanceValue> => ({
   ...await indexedValueOf(mods, Object.fromEntries(mods.map(({ name }) => [name, { files: [file(name, 'A - Main.ba2')] }]))),
   archiveContents: new Map(mods.map(({ name }) => [file(name, 'A - Main.ba2').sourcePath, { kind: 'read', answer: ['meshes/a.nif'] }])),
   loadsArchive: (name) => loads && name === 'A - Main.ba2',
@@ -59,11 +58,11 @@ describe('each file of a mod or Overwrite, active or inactive (mods.md, The tree
     ['a disabled mod\'s folder is inactive', () => indexedValueOf([mod('Off', false)], { Off: { files: [file('Off', 'x/a.dds')], folders: [folder('Off', 'x')] } }), modOrigin('Off'), 'x', GREY],
     ['an excluded folder is inactive', () => indexedValueOf([mod('A')], { A: { files: [], folders: [folder('A', 'x', true)] } }), modOrigin('A'), 'x', GREY],
     ['an excluded file in Overwrite is inactive', () => indexedValueOf([], {}, { files: [file('overwrite', 'b.log', true)] }), RUNTIME_OUTPUT, 'b.log', GREY],
-    ['a file in an archive the game loads is active', () => archiveIn(true), modOrigin('A'), 'A - Main.ba2/meshes/a.nif', undefined],
-    ['a file in an archive the game does not load is inactive', () => archiveIn(false), modOrigin('A'), 'A - Main.ba2/meshes/a.nif', GREY],
-    ['a folder in an archive the game does not load is inactive', () => archiveIn(false), modOrigin('A'), 'A - Main.ba2/meshes', GREY],
-    ['a file in an archive the game loads from another mod is inactive', () => archiveIn(true, [mod('B'), mod('A')]), modOrigin('A'), 'A - Main.ba2/meshes/a.nif', GREY],
-    ['a file in an archive of a disabled mod is inactive', () => archiveIn(true, [mod('A', false)]), modOrigin('A'), 'A - Main.ba2/meshes/a.nif', GREY],
+    ['a file in an archive the game loads is active', () => eachModHoldingAnArchiveTheGame(true), modOrigin('A'), 'A - Main.ba2/meshes/a.nif', undefined],
+    ['a file in an archive the game does not load is inactive', () => eachModHoldingAnArchiveTheGame(false), modOrigin('A'), 'A - Main.ba2/meshes/a.nif', GREY],
+    ['a folder in an archive the game does not load is inactive', () => eachModHoldingAnArchiveTheGame(false), modOrigin('A'), 'A - Main.ba2/meshes', GREY],
+    ['a file in an archive the game loads from another mod is inactive', () => eachModHoldingAnArchiveTheGame(true, [mod('B'), mod('A')]), modOrigin('A'), 'A - Main.ba2/meshes/a.nif', GREY],
+    ['a file in an archive of a disabled mod is inactive', () => eachModHoldingAnArchiveTheGame(true, [mod('A', false)]), modOrigin('A'), 'A - Main.ba2/meshes/a.nif', GREY],
   ])('%s', async (_case, value, origin, path, grey) => {
     expect(greyOf(await value(), origin, path)).toEqual(grey);
   });
