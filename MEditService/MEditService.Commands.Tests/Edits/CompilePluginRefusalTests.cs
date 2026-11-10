@@ -35,6 +35,22 @@ public sealed class CompilePluginRefusalTests : IDisposable
     }
 
     [Fact]
+    public async Task Compile_WithADocumentInAnotherTypesFolder_RefusesNamingTheFile_WithoutExceptionText()
+    {
+        var file = TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
+        var misfiled = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(file)) ?? "", "Globals", Path.GetFileName(file));
+        _ = Directory.CreateDirectory(Path.GetDirectoryName(misfiled) ?? "");
+        File.Move(file, misfiled);
+
+        var answer = (await _mod.CompileHandler.CompileAsync([_mod.Plugin])).Value();
+
+        var refused = Assert.Single(answer.Refused);
+        Assert.Equal(CompileRefusal.SourceDoesNotParse, refused.Refusal);
+        Assert.Contains(Path.GetRelativePath(_mod.ModFolder, misfiled), refused.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Object reference", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Compile_WithTwoBrokenFiles_RefusesNamingBothAndTheFieldAtFaultInEach()
     {
         var otherIdentity = new RecordIdentity(_mod.OtherNpc.ToString(), CompileFixture.NpcRecordType, CompileFixture.OtherNpcEditorId);
