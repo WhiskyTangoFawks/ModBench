@@ -474,8 +474,13 @@ export class ModListProvider
       return ignoreEntriesOf(status).has(file.includedPath) ? 'entry' : 'under';
     };
     const holdsPublisherTag = (path: string) => tagsHeldAt(this.instanceValue, path).length > 0;
-    return { shown: row.shown, matches: this.matches, conflict, differs, ignored, holdsPublisherTag, archived: this.archivedOf };
+    return { shown: row.shown, matches: this.matches, conflict, differs, ignored, holdsPublisherTag, archived: this.archivedOf, unreadable: this.unreadableReason };
   }
+
+  private unreadableReason = (file: OriginFile): string | undefined => {
+    const read = this.instanceValue.archiveContents.get(file.sourcePath);
+    return read?.kind === 'unreadable' ? read.reason : undefined;
+  };
 
   private archivedOf = (file: OriginFile): readonly ArchivedEntry[] => {
     const read = this.instanceValue.archiveContents.get(file.sourcePath);
