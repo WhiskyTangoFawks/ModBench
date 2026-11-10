@@ -115,3 +115,4 @@ What I expect to need and choose not to build yet, each with why.
 5. An external tool that needs the load order, such as xEdit, run by a step. It reads a data folder, so it waits for a deploy.
 6. A count in the status bar of the folders that differ from their manifests, each named in its tooltip, so a folder that is not a mod shows that it differs. A mod's row already says so, and no goal yet needs the rest.
 7. Restore as a VS Code task. No chain of mine runs it (commands.md, A task is an entry point for a chain).
+8. A source mod built outside VS Code, for a CI job that publishes it. It needs a host spec/architecture/ does not draw, a load order with no Mod Management to hand it over, and each master's header, which a public runner cannot hold.
