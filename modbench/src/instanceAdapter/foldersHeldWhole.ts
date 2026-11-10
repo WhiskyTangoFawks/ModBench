@@ -52,7 +52,8 @@ export async function foldersInReach(instanceRoot: string, folders: readonly str
   return reachable;
 }
 
-export async function foldersHeldWhole(instanceRoot: string, folders: readonly string[]): Promise<ReadonlySet<string>> {
+/** Each of `folders` that git holds whole, leaving out only the files named `keptOut` at its root. */
+export async function foldersHeldWhole(instanceRoot: string, folders: readonly string[], keptOut: readonly string[]): Promise<ReadonlySet<string>> {
   if (!await isRepository(instanceRoot)) return new Set();
   const reachable = await foldersInReach(instanceRoot, folders);
   if (reachable.length === 0) return new Set();
@@ -65,7 +66,8 @@ export async function foldersHeldWhole(instanceRoot: string, folders: readonly s
   const ignoresNewFile = (folder: string): boolean => probesOf(folder).some((probe) => ignoredProbes.has(probe));
   const holdsIgnoredFile = (folder: string): boolean => {
     const prefix = `${gitPath(instanceRoot, folder)}/`;
-    return ignoredPaths.some((path) => path.startsWith(prefix) || prefix.startsWith(path.endsWith('/') ? path : `${path}/`));
+    const keptOutPaths = new Set(keptOut.map((name) => `${prefix}${name}`));
+    return ignoredPaths.some((path) => !keptOutPaths.has(path) && path.startsWith(prefix) || prefix.startsWith(path.endsWith('/') ? path : `${path}/`));
   };
   return new Set(reachable.filter((folder) => !ignoresNewFile(folder) && !holdsIgnoredFile(folder)));
 }
