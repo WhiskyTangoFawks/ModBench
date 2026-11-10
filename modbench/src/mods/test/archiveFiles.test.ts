@@ -28,6 +28,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { archivedFileUri, archiveUri, registerArchiveFiles, registerArchiveOpen } from '../archiveFiles';
+import { recordingReporter } from '../../test/surfacingDoubles';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const address = { gameRelease: 'Fallout4', archive: '/mods/A/A - Main.ba2', file: 'scripts/a.pex' };
@@ -116,7 +117,7 @@ describe('the archive file system (mods.md, The tree, story 13)', () => {
 describe('open an archive from the Explorer (commands.md, Archive, open)', () => {
   const fileUri = (path: string) => Uri.file(path);
   const open = async (clicked: unknown) => {
-    const reporter = { report: vi.fn() };
+    const reporter = recordingReporter();
     registerArchiveOpen({ gameRelease: () => Promise.resolve('Fallout4'), reporter });
     await registered.get('modbench.archive.open')?.(clicked);
     return reporter;
@@ -140,10 +141,10 @@ describe('open an archive from the Explorer (commands.md, Archive, open)', () =>
   });
 
   it('reports a failure to say which game the archive is read as', async () => {
-    const reporter = { report: vi.fn() };
+    const reporter = recordingReporter();
     registerArchiveOpen({ gameRelease: () => Promise.reject(new Error('no instance')), reporter });
     await registered.get('modbench.archive.open')?.(fileUri(address.archive));
 
-    expect(reporter.report).toHaveBeenCalledWith('error', expect.stringContaining('A - Main.ba2'), 'no instance');
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to open the archive "/mods/A/A - Main.ba2".', detail: 'no instance' }]);
   });
 });
