@@ -49,7 +49,6 @@ interface ModToUpdate {
   readonly folder: string;
   readonly installationFile?: InstallationFile;
   readonly game?: GameHeld;
-  readonly isSourceFolder?: true;
 }
 
 interface UpdateOptions {
@@ -88,7 +87,7 @@ async function readSourceFolder(
 ): Promise<{ read: ModToUpdate; notes: readonly string[] } | { refusal: string }> {
   const taken = await gameFilesOf(adapter, { mod, folder }, { ...game, takes: () => true }, false);
   if ('refusal' in taken) return taken;
-  return { read: { name: mod, folder, isSourceFolder: true, ...withGame(game, taken.gameFiles) }, notes: taken.notes };
+  return { read: { name: mod, folder, ...withGame(game, taken.gameFiles) }, notes: taken.notes };
 }
 
 const withGame = (game: GameToHand, held: Parameters<typeof gameHeld>[1]): { game?: GameHeld } => {
@@ -276,7 +275,7 @@ export async function updateManifest(
     if (signal?.aborted) break;
     onProgress?.({ phase: 'Updating', mod: mod.name, modsDone: at, modsTotal: read.length });
     const answer = await updateMod(adapter, mod, downloadedFiles, only?.get(mod.name));
-    if (!mod.isSourceFolder) acted.push(mod.name);
+    acted.push(mod.name);
     if ('refusal' in answer) { refused.push({ item: mod.name, reason: answer.refusal }); continue; }
     landed.push(answer.landed);
     notes.push(...answer.notes.map((note) => ({ mod: mod.name, note })));

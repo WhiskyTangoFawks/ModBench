@@ -75,6 +75,38 @@ public sealed class SourceRepositoryLayoutTests
             SourceFilesIn(modFolder));
     }
 
+    [Fact]
+    public void AFlatRecordWithALongEditorId_IsPlacedAtTheLayoutsCutName()
+    {
+        using var modFolder = new ScratchDirectory("medit-layout-init-");
+        var editorId = new string('E', 70);
+
+        InitMixed(modFolder,
+            new TreeFile("RecordData.json", [0]),
+            new TreeFile(Path.Combine("npc_", $"{editorId} - 000800_Mixed.ESP.json"), [1]));
+
+        Assert.Equal(
+            Path.Combine("plugin-source", "Mixed.ESP", "npc_", $"{new string('E', 64)} - 000800_Mixed.ESP.json"),
+            SourceFilesIn(modFolder).Single(file => file.Contains("npc_", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void AContainerWithALongEditorId_HasItsDirectoryAndDocumentAtTheLayoutsCutName()
+    {
+        using var modFolder = new ScratchDirectory("medit-layout-init-");
+        var cut = $"{new string('W', 64)} - 000800_Mixed.ESP";
+        var door = Path.Combine("Worldspaces", $"{new string('W', 70)} - 000800_Mixed.ESP");
+
+        InitMixed(modFolder,
+            new TreeFile(Path.Combine(door, "RecordData.json"), [1]),
+            new TreeFile(Path.Combine(door, "0, 0", "GroupRecordData.json"), [2]));
+
+        Assert.Equal(
+            [Path.Combine("plugin-source", "Mixed.ESP", "Worldspaces", cut, "0, 0", "GroupRecordData.json"),
+             Path.Combine("plugin-source", "Mixed.ESP", "Worldspaces", cut, cut + ".json")],
+            SourceFilesIn(modFolder));
+    }
+
     private static void InitMixed(string modFolder, params TreeFile[] tree) =>
         TestAdapters.Source().Init(modFolder, [(tree, PluginBaselines.Decompiled("Mixed.ESP"))]);
 

@@ -429,6 +429,14 @@ describe('update manifest', () => {
       ]);
     });
 
+    it('has its repository entry written when named as a source folder', async () => {
+      const { update, fake } = await among({}, GIT_HOLDS(), SOURCE_FILES);
+
+      await update([], {}, [], false, ['ModB']);
+
+      expect(fake.calls.filter(({ verb }) => verb === 'writeSubmodules')).toEqual([{ verb: 'writeSubmodules', acted: ['ModB'] }]);
+    });
+
     it('has its source folder recorded when every mod is updated', async () => {
       const { update } = await among({}, GIT_HOLDS(), SOURCE_FILES);
 
