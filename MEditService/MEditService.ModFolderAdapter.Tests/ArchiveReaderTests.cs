@@ -69,14 +69,38 @@ public sealed class ArchiveReaderTests : IDisposable
 
     [Theory]
     [MemberData(nameof(Variants))]
-    public void ACopyInAnArchive_IsItsSizeAndTheDigestALooseCopyOfItsBytesHas_AndAFileItLacksIsNone(string format, GameRelease release)
+    public void ACopyInAnArchive_IsItsSize_AndTheDigestALooseCopyOfItsBytesHasWhenAskedFor_AndAFileItLacksIsNone(string format, GameRelease release)
     {
         ArchiveFile[] files = [new("scripts/a.pex", () => new MemoryStream(Encoding.ASCII.GetBytes("script")))];
         Assert.Null(new ArchivePacker(new ModFolderRepository()).Pack(_scratch, $"Mod - Main.{format}", files, VariantNamed(format)));
         var archive = Path.Combine(_scratch, $"Mod - Main.{format}");
 
-        var copies = ArchiveReader.Copies(release, archive, ["Scripts/A.pex", "scripts/missing.pex"]);
+        var sized = ArchiveReader.Copies(release, archive, ["Scripts/A.pex", "scripts/missing.pex"], hashed: false);
+        var hashed = ArchiveReader.Copies(release, archive, ["Scripts/A.pex"], hashed: true);
 
-        Assert.Equal([new ArchivedCopy("Scripts/A.pex", 6, TheExtensionsDigestOfScript)], copies);
+        Assert.Equal([new ArchivedCopy("Scripts/A.pex", 6, null)], sized);
+        Assert.Equal([new ArchivedCopy("Scripts/A.pex", 6, TheExtensionsDigestOfScript)], hashed);
+    }
+
+    public static TheoryData<string, IArchiveVariant, GameRelease> EveryLayout => new()
+    {
+        { "ba2", new Ba2Variant(1, Ba2Contents.General, Compressed: true), GameRelease.Fallout4 },
+        { "ba2", new Ba2Variant(1, Ba2Contents.General, Compressed: false), GameRelease.Fallout4 },
+        { "ba2", new Ba2Variant(1, Ba2Contents.Textures, Compressed: true), GameRelease.Fallout4 },
+        { "bsa", new BsaVariant(105, ArchiveFlags: 0x3, FileFlags: 0x3), GameRelease.SkyrimSE },
+    };
+
+    [Theory]
+    [MemberData(nameof(EveryLayout))]
+    public void ACopysSize_ReadFromTheArchivesIndex_IsTheLengthOfItsBytes(string format, IArchiveVariant variant, GameRelease release)
+    {
+        var file = variant is Ba2Variant { Contents: Ba2Contents.Textures } ? "textures/a_d.dds" : "meshes/a.nif";
+        var bytes = variant is Ba2Variant { Contents: Ba2Contents.Textures } ? Dds.Dxt1(width: 8, height: 8, mips: 2).File : Encoding.ASCII.GetBytes(new string('n', 4000));
+        Assert.Null(new ArchivePacker(new ModFolderRepository()).Pack(_scratch, $"Mod - Main.{format}", [new ArchiveFile(file, () => new MemoryStream(bytes))], variant));
+        var archive = Path.Combine(_scratch, $"Mod - Main.{format}");
+
+        var copy = Assert.Single(ArchiveReader.Copies(release, archive, [file], hashed: false));
+
+        Assert.Equal((long?)ArchiveReader.FileBytes(release, archive, file)?.Length, copy.Size);
     }
 }

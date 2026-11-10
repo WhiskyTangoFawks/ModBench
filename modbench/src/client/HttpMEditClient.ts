@@ -699,9 +699,9 @@ class HttpMEditClient implements MEditClient {
     }, noBodyFails, { timed: true });
   }
 
-  getArchiveCopies(gameRelease: string, archive: string, files: readonly string[]): Promise<ArchivedCopy[] | ReadFailed> {
+  getArchiveCopies(gameRelease: string, archive: string, files: readonly string[], hashed: boolean): Promise<ArchivedCopy[] | ReadFailed> {
     return this.read(`getArchiveCopies(${archive}, ${files.length} files)`, (api, signal) => api.POST('/archives/copies', {
-      body: { gameRelease, archive, files: [...files] }, signal,
+      body: { gameRelease, archive, files: [...files], hashed }, signal,
     }), noBodyFails, { timed: true });
   }
 

@@ -10,9 +10,9 @@ internal static class ArchiveCopiesEndpoints
             .WithName("GetArchiveCopies")
             .WithTags("Mods")
             .WithDescription(
-                "Each of the files an archive holds, by the forward-slash path it was asked for: its size, and the xxHash64 of its " +
-                "bytes, its eight little-endian bytes in base64. A file the archive does not hold is left out. 400 when the archive " +
-                "cannot be read.")
+                "Each of the files an archive holds, by the forward-slash path it was asked for: its size, as the archive's index " +
+                "records it, and with hashed, the xxHash64 of its bytes, its eight little-endian bytes in base64. A file the archive " +
+                "does not hold is left out. 400 when the archive cannot be read.")
             .Produces<IReadOnlyList<ArchivedCopy>>()
             .ProducesProblem(400);
 
@@ -26,7 +26,7 @@ internal static class ArchiveCopiesEndpoints
             return EndpointMapping.BadRequest("An archive and at least one file in it are required.");
         try
         {
-            return Results.Ok(ArchiveReader.Copies(release, req.Archive, req.Files));
+            return Results.Ok(ArchiveReader.Copies(release, req.Archive, req.Files, req.Hashed));
         }
         catch (Exception e) when (e is not (OperationCanceledException or OutOfMemoryException))
         {
@@ -35,6 +35,6 @@ internal static class ArchiveCopiesEndpoints
     }
 }
 
-/// <summary>The archive to read, by absolute path, the forward-slash paths of the files in it, and the release whose
-/// format a BSA is read as.</summary>
-internal sealed record ArchiveCopiesRequest(string GameRelease, string Archive, IReadOnlyList<string> Files);
+/// <summary>The archive to read, by absolute path, the forward-slash paths of the files in it, whether to read their bytes
+/// for a hash, and the release whose format a BSA is read as.</summary>
+internal sealed record ArchiveCopiesRequest(string GameRelease, string Archive, IReadOnlyList<string> Files, bool Hashed);

@@ -14,19 +14,20 @@ public sealed class ArchiveCopiesApiTests(LoadedApiFixture<TestPluginFixture> lo
 
     public void Dispose() => _root.Dispose();
 
+    private const string TheExtensionsDigestOfScript = "Zm84p1xofs8=";
+
     [Fact]
-    public async Task TheCopiesOfAnArchive_AreAnsweredWithTheSizeAndHashOfEachItHolds()
+    public async Task TheCopiesOfAnArchive_AreAnsweredWithTheSizeAndHashOfEach()
     {
         Assert.Null(new ArchivePacker(new ModFolderRepository()).Pack(
-            _root, "Mod - Main.ba2", [new ArchiveFile("scripts/a.pex", () => new MemoryStream([7, 8]))], new Ba2Variant(1, Ba2Contents.General, Compressed: false)));
+            _root, "Mod - Main.ba2", [new ArchiveFile("scripts/a.pex", () => new MemoryStream("script"u8.ToArray()))], new Ba2Variant(1, Ba2Contents.General, Compressed: false)));
         var archive = JsonSerializer.Serialize(Path.Combine(_root, "Mod - Main.ba2"));
 
-        var response = await Client.PostJson("/archives/copies", $$"""{"gameRelease": "Fallout4", "archive": {{archive}}, "files": ["scripts/a.pex", "scripts/b.pex"]}""");
+        var response = await Client.PostJson("/archives/copies", $$"""{"gameRelease": "Fallout4", "archive": {{archive}}, "files": ["scripts/a.pex"], "hashed": true}""");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var copy = Assert.Single((await response.Body()).EnumerateArray());
-        Assert.Equal(("scripts/a.pex", 2L), (copy.GetProperty("file").GetString(), copy.GetProperty("size").GetInt64()));
-        Assert.False(string.IsNullOrEmpty(copy.GetProperty("hash").GetString()));
+        Assert.Equal(("scripts/a.pex", 6L, TheExtensionsDigestOfScript), (copy.GetProperty("file").GetString(), copy.GetProperty("size").GetInt64(), copy.GetProperty("hash").GetString()));
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 import type { FileOrigin } from '../instanceLoader/instance';
-import type { ArchivedFileAddress, StackedCopy, StackedFile } from '../instanceLoader/fileConflictIndex';
-import type { ArchivedCopies, ArchivedCopyRead, FileRead, FileStamp } from './archivedCopies';
+import type { ArchivedFileAddress, CopyAt, StackedCopy, StackedFile } from '../instanceLoader/fileConflictIndex';
+import type { ArchivedCopies, FileRead, FileStamp } from './archivedCopies';
+import { present } from '../ports/present';
 
 /** One provider's copy of a file. Two copies of one file with the same `sameAs` hold the same
  *  bytes. */
@@ -44,39 +45,48 @@ export interface CopyReads {
   originFileHash(path: string): Promise<FileRead<{ readonly hash: string }>>;
 }
 
-async function contentsOf(adapter: CopyReads, path: string, stamp: FileRead<FileStamp>, sizes: readonly bigint[]): Promise<Contents> {
-  if (stamp.kind === 'unreadable') return stamp;
-  const { answer } = stamp;
-  if (sizes.filter((size) => size === answer.size).length === 1) return { kind: 'ownSize' };
-  const hashed = await adapter.originFileHash(path);
-  return hashed.kind === 'read' ? { kind: 'read', answer: hashed.answer.hash } : hashed;
-}
-
 /** A file whose copies are compared. */
 export type FileToCompare = Pick<StackedFile, 'relativePath' | 'copies'>;
 
-type StampedCopy = { readonly origin: FileOrigin } & (
-  | { readonly kind: 'loose'; readonly path: string; readonly stamp: FileRead<FileStamp> }
-  | { readonly kind: 'archived'; readonly stamp: ArchivedCopyRead });
-
-// An archived copy is read with its hash, so only a loose copy is read again for its contents.
-function contentsOfCopy(adapter: CopyReads, copy: StampedCopy, sizes: readonly bigint[]): Promise<Contents> {
-  if (copy.kind === 'loose') return contentsOf(adapter, copy.path, copy.stamp, sizes);
-  return Promise.resolve(copy.stamp.kind === 'read' ? { kind: 'read', answer: copy.stamp.answer.hash } : copy.stamp);
+interface StampedCopy {
+  readonly copy: StackedCopy;
+  readonly stamp: FileRead<FileStamp>;
 }
 
-export async function sameCopies(adapter: CopyReads, archived: Pick<ArchivedCopies, 'read'>, files: readonly FileToCompare[]): Promise<FileCopies[]> {
-  const addresses = files.flatMap(({ copies }) => copies.flatMap(({ at }): ArchivedFileAddress[] => (at.kind === 'archived' ? [at] : [])));
-  const archivedReads = await archived.read(addresses);
-  const archivedRead = new Map(addresses.map((address, index) => [address, archivedReads[index]] as const));
-  const stamped = async ({ origin, at }: StackedCopy): Promise<StampedCopy> => {
-    if (at.kind === 'loose') return { origin, kind: 'loose', path: at.path, stamp: await adapter.fileStamp(at.path) };
-    return { origin, kind: 'archived', stamp: archivedRead.get(at) ?? { kind: 'unreadable', reason: `${at.archive} was not read.` } };
-  };
-  return Promise.all(files.map(async ({ relativePath, copies }) => {
-    const stamps = await Promise.all(copies.map(stamped));
-    const sizes = stamps.flatMap(({ stamp }) => (stamp.kind === 'read' ? [stamp.answer.size] : []));
-    const contents = await Promise.all(stamps.map(async (copy) => ({ origin: copy.origin, stamp: copy.stamp, contents: await contentsOfCopy(adapter, copy, sizes) })));
+const sizesOf = (copies: readonly StampedCopy[]): bigint[] => copies.flatMap(({ stamp }) => (stamp.kind === 'read' ? [stamp.answer.size] : []));
+
+const sharesSize = (stamp: FileRead<FileStamp>, sizes: readonly bigint[]): boolean =>
+  stamp.kind === 'read' && sizes.filter((size) => size === stamp.answer.size).length > 1;
+
+async function readEach<T>(addresses: readonly ArchivedFileAddress[], read: (addresses: readonly ArchivedFileAddress[]) => Promise<FileRead<T>[]>): Promise<Map<ArchivedFileAddress, FileRead<T>>> {
+  const reads = await read(addresses);
+  return new Map(addresses.map((address, index) => [address, present(reads[index], `the read of ${address.file} in ${address.archive}`)]));
+}
+
+async function contentsOf(
+  adapter: CopyReads, { copy: { at }, stamp }: StampedCopy, sizes: readonly bigint[], archivedHashes: ReadonlyMap<ArchivedFileAddress, FileRead<string>>,
+): Promise<Contents> {
+  if (stamp.kind === 'unreadable') return stamp;
+  if (!sharesSize(stamp, sizes)) return { kind: 'ownSize' };
+  if (at.kind === 'archived') return present(archivedHashes.get(at), `the hash of ${at.file} in ${at.archive}`);
+  const hashed = await adapter.originFileHash(at.path);
+  return hashed.kind === 'read' ? { kind: 'read', answer: hashed.answer.hash } : hashed;
+}
+
+export async function sameCopies(adapter: CopyReads, archived: Pick<ArchivedCopies, 'stamps' | 'hashes'>, files: readonly FileToCompare[]): Promise<FileCopies[]> {
+  const archivedIn = (copies: readonly { readonly at: CopyAt }[]): ArchivedFileAddress[] => copies.flatMap(({ at }) => (at.kind === 'archived' ? [at] : []));
+  const archivedStamps = await readEach(files.flatMap(({ copies }) => archivedIn(copies)), (addresses) => archived.stamps(addresses));
+  const stamped = await Promise.all(files.map(async ({ relativePath, copies }) => ({
+    relativePath,
+    copies: await Promise.all(copies.map(async (copy): Promise<StampedCopy> => ({
+      copy, stamp: copy.at.kind === 'loose' ? await adapter.fileStamp(copy.at.path) : present(archivedStamps.get(copy.at), `the stamp of ${copy.at.file} in ${copy.at.archive}`),
+    }))),
+  })));
+  const toHash = stamped.flatMap(({ copies }) => archivedIn(copies.filter(({ stamp }) => sharesSize(stamp, sizesOf(copies))).map(({ copy }) => copy)));
+  const archivedHashes = await readEach(toHash, (addresses) => archived.hashes(addresses));
+  return Promise.all(stamped.map(async ({ relativePath, copies }) => {
+    const sizes = sizesOf(copies);
+    const contents = await Promise.all(copies.map(async (one) => ({ origin: one.copy.origin, stamp: one.stamp, contents: await contentsOf(adapter, one, sizes, archivedHashes) })));
     return { relativePath, copies: numbered(contents) };
   }));
 }

@@ -687,7 +687,7 @@ describe('the agent server, reading file order conflicts', () => {
     ]);
   });
 
-  it('reads an archived copy as the game stacks it, below every loose copy', async () => {
+  it('reads an archived copy as the game stacks it, below every loose copy, with its contents on its loss', async () => {
     const value = instanceValueFixture({
       ...CONFLICTED,
       stackedCopies: stackCopies(CONFLICTED_INDEX, [{ origin: modOrigin('A'), archive: '/m/A.ba2', files: ['readme.txt'] }], 'Fallout4'),
@@ -695,7 +695,7 @@ describe('the agent server, reading file order conflicts', () => {
     const { client } = await clientOf(new FakeInstance(value));
 
     expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'A' }, { name: 'C' }] })).toMatchObject([
-      { mod: 'A', loses: [{ file: 'readme.txt', winner: 'C' }] },
+      { mod: 'A', loses: [{ file: 'readme.txt', winner: 'C', contents: { state: null, unreadable: expect.stringContaining('/m/A.ba2') as unknown } }] },
       { mod: 'C', wins: [{ file: 'readme.txt', over: ['A'] }] },
     ]);
   });

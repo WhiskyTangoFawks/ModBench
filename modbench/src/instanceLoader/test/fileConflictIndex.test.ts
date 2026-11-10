@@ -320,6 +320,14 @@ describe('the copies of each file, stacked as the game stacks them', () => {
     expect(stack.get(FILE)?.copies.map(({ origin }) => origin)).toEqual([modOrigin('A'), modOrigin('B')]);
   });
 
+  it('keeps each loose copy at the path its origin holds it at, whatever the case of the file\'s name', () => {
+    const stack = stacked({ A: ['Textures/Shared.dds'], B: ['textures/shared.DDS'] }, []);
+
+    expect(stack.get('textures/shared.dds')?.copies.map(({ at }) => at)).toEqual([
+      { kind: 'loose', path: modPath('A', 'Textures/Shared.dds') }, { kind: 'loose', path: modPath('B', 'textures/shared.DDS') },
+    ]);
+  });
+
   it('keeps Overwrite\'s copy apart from the copy of a mod named overwrite (ADR-0012)', () => {
     const stack = stackCopies(indexOver([mod('overwrite')], { overwrite: [FILE] }, [fileIn('/overwrite', FILE)]), [], 'Fallout4');
 

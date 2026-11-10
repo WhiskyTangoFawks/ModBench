@@ -245,7 +245,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Each of the files an archive holds, by the forward-slash path it was asked for: its size, and the xxHash64 of its bytes, its eight little-endian bytes in base64. A file the archive does not hold is left out. 400 when the archive cannot be read. */
+        /** @description Each of the files an archive holds, by the forward-slash path it was asked for: its size, as the archive's index records it, and with hashed, the xxHash64 of its bytes, its eight little-endian bytes in base64. A file the archive does not hold is left out. 400 when the archive cannot be read. */
         post: operations["GetArchiveCopies"];
         delete?: never;
         options?: never;
@@ -1120,6 +1120,7 @@ export interface components {
             gameRelease: string;
             archive: string;
             files: string[];
+            hashed: boolean;
         };
         ArchiveFileRequest: {
             gameRelease: string;
@@ -1149,7 +1150,7 @@ export interface components {
             file: string;
             /** Format: int64 */
             size: number;
-            hash: string;
+            hash?: string | null;
         };
         Ba2VariantRequest: {
             /** Format: int32 */

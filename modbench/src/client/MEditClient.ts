@@ -93,7 +93,7 @@ export type LaunchOutcome = { outcome: 'running' } | { outcome: 'stopped' } | { 
 /** An archive's files, by their paths in it, or none and why it cannot be read. */
 export type ArchiveContents = components['schemas']['ArchiveContents'];
 
-/** A file in an archive: its size, and its digest as a loose copy's is written. */
+/** A file in an archive: its size, and when asked for, its digest as a loose copy's is written. */
 export type ArchivedCopy = components['schemas']['ArchivedCopy'];
 
 /** A document with changes VS Code holds unsaved, by absolute path. */
@@ -304,8 +304,8 @@ export interface MEditClient {
   getArchiveContents(gameRelease: string, archives: readonly string[]): Promise<ArchiveContents[] | ReadFailed>;
   /** The bytes of one file in an archive, by its path there. */
   getArchiveFile(gameRelease: string, archive: string, file: string): Promise<Uint8Array | ReadFailed>;
-  /** Each of `files` the archive holds, by its path there; one the archive does not hold is left out. */
-  getArchiveCopies(gameRelease: string, archive: string, files: readonly string[]): Promise<ArchivedCopy[] | ReadFailed>;
+  /** Each of `files` the archive holds, by its path there, with its hash when `hashed`; one the archive does not hold is left out. */
+  getArchiveCopies(gameRelease: string, archive: string, files: readonly string[], hashed: boolean): Promise<ArchivedCopy[] | ReadFailed>;
   getRecords(plugin: PluginAddress, type: string, offset: number, limit: number): Promise<RecordPage | ReadFailed>;
   /** Every active plugin's copies, or one plugin's. */
   searchRecords(query: string, validTypes: string[], plugin?: PluginAddress): Promise<RecordPage | ReadFailed>;

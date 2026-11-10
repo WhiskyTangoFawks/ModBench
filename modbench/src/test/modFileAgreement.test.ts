@@ -24,7 +24,7 @@ import { OpenRows } from '../mods/openRows';
 import { PublisherTagDecorations } from '../mods/publisherTagIndicators';
 import { file, indexedValueOf, mod } from '../mods/test/indexedValue';
 
-const NO_ARCHIVES = { read: () => Promise.resolve([]) };
+const NO_ARCHIVES = { stamps: () => Promise.resolve([]), hashes: () => Promise.resolve([]) };
 
 const NM: PublisherTag = { name: 'NM tag', badge: 'NM', marksPaths: true };
 const AE: PublisherTag = { name: 'AE tag', badge: 'AE', marksPaths: false };

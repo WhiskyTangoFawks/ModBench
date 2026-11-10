@@ -207,8 +207,8 @@ export interface LoadedArchive {
   readonly files: readonly string[];
 }
 
-// GLOSSARY.md, File order conflict: every loose copy wins over every archived one, and of two archives the one the game
-// loads later wins. An origin's own copy that loses to another of its copies takes no part.
+// The reference tool's FileEntry::sortOrigins (fileentry.cpp): every loose copy wins over every archived one, and of two
+// archives the one the game loads later wins.
 function add(stack: FileConflictLookup<StackedFile>, relativePath: string, copy: StackedCopy): void {
   const entry = stack.get(relativePath);
   if (entry === undefined) stack.set({ relativePath, copies: [copy] });
