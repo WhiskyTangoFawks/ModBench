@@ -40,30 +40,37 @@ public sealed class DecompileAndRepairPluginHandler
         if (_loadOrder.Held is not { Snapshot: var loadOrder })
             return new SelectionRefusal<DecompileAndRepairRefusal>(DecompileAndRepairRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
 
-        var selected = plugins.Select(item => item.Plugin).ToHashSet(PluginAddress.Comparer);
+        var targets = plugins.ToDictionary(item => item.Plugin, item => RepairTarget.Of(_repairer, loadOrder, item.Plugin), PluginAddress.Comparer);
+        var repairedHere = targets.Where(target => target.Value is RepairTarget.Diagnosed).Select(target => target.Key).ToHashSet(PluginAddress.Comparer);
         var leftOutOfANewSourceFolder = new HashSet<PluginAddress>(PluginAddress.Comparer);
-        var repaired = await ItemWrite.OverAsync(_source, plugins, SamePlugin.Instance, DecompileAndRepairRefusal.GitUnavailable, async item =>
+        var heldByANewSourceFolder = new HashSet<PluginAddress>(PluginAddress.Comparer);
+        var repaired = await ItemWrite.OverAsync(_source, plugins, SamePlugin.Instance, DecompileAndRepairRefusal.GitUnavailable, item =>
         {
             cancel.ThrowIfCancellationRequested();
-            var answer = await RepairOneAsync(loadOrder, item, selected, leftOutOfANewSourceFolder, force, cancel);
-            return answer is ItemAnswer<DecompileAndRepairRefusal, NoOutcome>.Refusing(var refusal, var message) && leftOutOfANewSourceFolder.Contains(item.Plugin)
-                ? Refused(refusal, $"{message} The source folder made for its mod holds no source for it.")
-                : answer;
+            return RepairOneAsync(loadOrder, item, targets[item.Plugin], repairedHere, (leftOutOfANewSourceFolder, heldByANewSourceFolder), force, cancel);
         });
         return repaired.ToAnswer(
             landed => landed.Item.Plugin,
-            refused => new DecompileAndRepairRefused(refused.Item.Plugin, refused.Refusal, refused.Message),
+            refused => new DecompileAndRepairRefused(refused.Item.Plugin, refused.Refusal, Explained(refused, leftOutOfANewSourceFolder, heldByANewSourceFolder)),
             (applied, refused) => new DecompileAndRepairResult(applied, refused));
+    }
+
+    private static string Explained(
+        ItemRefused<PluginToRepair, DecompileAndRepairRefusal> refused, HashSet<PluginAddress> leftOut, HashSet<PluginAddress> held)
+    {
+        var plugin = refused.Item.Plugin;
+        if (refused.Refusal == DecompileAndRepairRefusal.NotMalformed && held.Contains(plugin))
+            return $"{plugin.Name} is not malformed, so it was decompiled without a repair, with the source folder made for its mod.";
+        return leftOut.Contains(plugin) ? $"{refused.Message} The source folder made for its mod holds no source for it." : refused.Message;
     }
 
     private static ItemAnswer<DecompileAndRepairRefusal, NoOutcome> Refused(DecompileAndRepairRefusal refusal, string message) =>
         ItemAnswer<DecompileAndRepairRefusal, NoOutcome>.Refused(refusal, message);
 
     private async Task<ItemAnswer<DecompileAndRepairRefusal, NoOutcome>> RepairOneAsync(
-        LoadOrderSnapshot loadOrder, PluginToRepair item, IReadOnlySet<PluginAddress> selected, HashSet<PluginAddress> leftOutOfANewSourceFolder,
-        bool force, CancellationToken cancel)
+        LoadOrderSnapshot loadOrder, PluginToRepair item, RepairTarget target, IReadOnlySet<PluginAddress> repairedHere,
+        (HashSet<PluginAddress> LeftOut, HashSet<PluginAddress> Held) newSourceFolder, bool force, CancellationToken cancel)
     {
-        var target = RepairTarget.Of(_repairer, loadOrder, item.Plugin);
         if (target is RepairTarget.Refused(var targetRefusal, var targetMessage)) return Refused(targetRefusal, targetMessage);
         var (plugin, mod) = (RepairTarget.Diagnosed)target;
         var sourceFolder = mod.SourceFolder ?? item.SourceFolder?.Path;
@@ -94,13 +101,14 @@ public sealed class DecompileAndRepairPluginHandler
         {
             if (item.SourceFolder is not { } made)
                 return Refused(DecompileAndRepairRefusal.NoSourceFolder, $"{mod.Name} is not a source mod, and the request hands no source folder to make.");
-            var leftOut = selected.Where(key => !PluginAddress.Comparer.Equals(key, plugin.Key)).ToHashSet(PluginAddress.Comparer);
+            var leftOut = repairedHere.Where(key => !PluginAddress.Comparer.Equals(key, plugin.Key)).ToHashSet(PluginAddress.Comparer);
             var init = await _init.InitAsync(
                 loadOrder, new ModToVersionInGit(mod.Name, mod.Folder, made, Commit: true),
                 leftOut, new RepairedInInit(plugin, baseline, repair.OriginalSha256, repairedCommit), _ => { }, cancel);
             if (init is ItemAnswer<VersionInGitRefusal, IReadOnlyList<PluginAddress>>.Refusing(var initRefusal, var initMessage))
                 return Refused(RefusalOfInit(initRefusal), $"{mod.Name} is not a source mod, and making a source folder for {plugin.Name} was refused: {initMessage}");
-            leftOutOfANewSourceFolder.UnionWith(leftOut);
+            newSourceFolder.LeftOut.UnionWith(leftOut);
+            newSourceFolder.Held.UnionWith(((ItemAnswer<VersionInGitRefusal, IReadOnlyList<PluginAddress>>.Wrote)init).Outcome);
             return ItemAnswer<DecompileAndRepairRefusal, NoOutcome>.Landed(default);
         }
 
