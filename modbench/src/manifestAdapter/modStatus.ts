@@ -151,8 +151,7 @@ function packagesHeld(manifest: Manifest, values: ValuesRead): { lacking: string
 const fileNameOf = (path: string): string => folded(path.slice(path.lastIndexOf('/') + 1));
 
 /** The paths the folder in `values` holds that a package of `manifest` holds, by bytes or by a file of the same file name in
- *  any case, wherever it sits; none while `values` are not read. A package this machine lacks
- *  holds nothing. */
+ *  any case; none while `values` are not read. A package this machine lacks holds nothing. */
 export function filesAPackageHolds(manifest: Manifest, values: StatusValues): ReadonlySet<string> {
   if (values.kind !== 'read') return new Set();
   const { files } = packagesHeld(manifest, values);
