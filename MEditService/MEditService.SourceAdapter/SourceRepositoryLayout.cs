@@ -19,7 +19,7 @@ internal readonly record struct SourcePlacement(string RelativePath);
 
 /// <summary>The source tree's layout: the only type spelling the root folder, the door's file names
 /// and the JSON suffix. The instance places a new document and mints the levels above it.</summary>
-internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease release, SourceRepositoryLocator locator, ISourceFiles files)
+internal sealed partial class SourceRepositoryLayout(string sourceFolder, GameRelease release, SourceRepositoryLocator locator, ISourceFiles files)
 {
     private readonly string _sourceFolder = sourceFolder;
     private readonly GameRelease _release = release;
@@ -144,8 +144,17 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
     internal static TreeFile PlacedFileOf(string pluginFileName, TreeFile doorFile) =>
         new(doorFile.RelativePath == DocumentFileNames.Root
                 ? HeaderDocumentFor(pluginFileName)
-                : Path.Combine(RootFor(pluginFileName), SourceNameOf(doorFile.RelativePath)),
+                : Path.Combine(RootFor(pluginFileName), SourceNameOf(CutToLeafRule(doorFile.RelativePath))),
             doorFile.Content);
+
+    [GeneratedRegex(@"^(?<editorId>.+) - (?<formKey>[0-9A-F]{6}_.*)$")]
+    private static partial Regex DoorLeaf();
+
+    private static string CutToLeafRule(string doorPath) =>
+        Path.Combine(doorPath.Split(Path.DirectorySeparatorChar).Select(segment =>
+            DoorLeaf().Match(segment) is { Success: true } leaf
+                ? LeafWithEditorId(leaf.Groups["editorId"].Value, leaf.Groups["formKey"].Value)
+                : segment).ToArray());
 
     /// <summary>Placed files of <paramref name="pluginFileName"/>'s tree as the whole-mod door names them,
     /// relative to the tree's root.</summary>
@@ -313,9 +322,11 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
 
         if (string.IsNullOrEmpty(editorId)) return $"{filesafe}{extension}";
 
-        var named = editorId.Length > MaxEditorIdInLeaf ? editorId[..MaxEditorIdInLeaf] : editorId;
-        return $"{named} - {filesafe}{extension}";
+        return LeafWithEditorId(editorId, $"{filesafe}{extension}");
     }
+
+    private static string LeafWithEditorId(string editorId, string formKeyPart) =>
+        $"{(editorId.Length > MaxEditorIdInLeaf ? editorId[..MaxEditorIdInLeaf] : editorId)} - {formKeyPart}";
 
     internal static string FileNameFor(FormKey formKey, string? editorId) => LeafNameFor(formKey, editorId, isDirectory: false);
 
