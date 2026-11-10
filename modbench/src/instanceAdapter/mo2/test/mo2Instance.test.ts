@@ -3460,8 +3460,8 @@ describe('the MO2 Instance adapter', () => {
     it('is written whole with the prelude at the instance root, and a second identical write changes nothing', async () => {
       const files = { masterlist: 'plugins: []\n', prelude: 'common: []\n' };
 
-      expect(await adapter.changeMasterlist(files)).toEqual({ wrote: true });
-      expect(await adapter.changeMasterlist(files)).toEqual({ wrote: false });
+      expect(await adapter.changeMasterlist(files)).toEqual({ written: ['masterlist.yaml', 'prelude.yaml'] });
+      expect(await adapter.changeMasterlist(files)).toEqual({ written: [] });
 
       expect([await readFile(join(root, 'masterlist.yaml'), 'utf8'), await readFile(join(root, 'prelude.yaml'), 'utf8')]).toEqual(['plugins: []\n', 'common: []\n']);
     });

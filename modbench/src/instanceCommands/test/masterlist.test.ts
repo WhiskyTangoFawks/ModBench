@@ -16,12 +16,12 @@ describe('update', () => {
     const asked: string[] = [];
     const { fake, commands } = over((release) => {
       asked.push(release);
-      return serving('plugins: []\n', 'common: []\n')(release);
+      return serving('plugins: [new]\n', 'common: []\n')(release);
     });
 
-    expect(await commands.update()).toEqual({ applied: true, wrote: true });
+    expect(await commands.update()).toEqual({ applied: true, written: ['masterlist.yaml', 'prelude.yaml'] });
     expect(asked).toEqual(['Fallout4']);
-    expect(fake.calls).toEqual([{ verb: 'changeMasterlist', masterlist: 'plugins: []\n', prelude: 'common: []\n' }]);
+    expect(fake.calls).toEqual([{ verb: 'changeMasterlist', masterlist: 'plugins: [new]\n', prelude: 'common: []\n' }]);
   });
 
   it('refuses with the reason LOOT gave, writing nothing', async () => {

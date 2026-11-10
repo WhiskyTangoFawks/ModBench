@@ -547,7 +547,11 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       write({ verb: 'changeMasterlist', masterlist, prelude }, () => {
         const files = current.sortingRuleFiles;
         const held = (file: typeof files.masterlist) => (file.kind === 'text' ? file.text : undefined);
-        if (held(files.masterlist) === masterlist && held(files.prelude) === prelude) return { wrote: false };
+        const written = [
+          ...(held(files.masterlist) === masterlist ? [] : [basename(files.masterlist.path)]),
+          ...(held(files.prelude) === prelude ? [] : [basename(files.prelude.path)]),
+        ];
+        if (written.length === 0) return { written };
         current = {
           ...current,
           sortingRuleFiles: {
@@ -556,7 +560,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
             prelude: { path: files.prelude.path, kind: 'text', text: prelude },
           },
         };
-        return { wrote: true };
+        return { written };
       }),
     uncommittedMasterlist: () => Promise.resolve(answers.uncommittedMasterlist ?? []),
     selectProfile: (profile) =>
