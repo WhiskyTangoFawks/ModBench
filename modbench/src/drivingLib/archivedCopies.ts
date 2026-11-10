@@ -30,8 +30,11 @@ const byArchive = (addresses: readonly ArchivedFileAddress[]): Map<string, Archi
   return grouped;
 };
 
-// Each file once, by its spelling first asked.
-const filesOf = (asked: readonly ArchivedFileAddress[]): string[] => [...new Map(asked.map(({ file }) => [foldPath(file), file])).values()];
+function firstSpellingOfEachFile(asked: readonly ArchivedFileAddress[]): string[] {
+  const spellings = new Map<string, string>();
+  for (const { file } of asked) if (!spellings.has(foldPath(file))) spellings.set(foldPath(file), file);
+  return [...spellings.values()];
+}
 
 /** Holds what mEdit answered for each file of an archive while the archive's stamp is the one it had. */
 export class ArchivedCopies {
@@ -42,8 +45,8 @@ export class ArchivedCopies {
   /** Each address's size and its archive's date modified, in the order asked; no file's bytes are read. */
   stamps(addresses: readonly ArchivedFileAddress[]): Promise<FileRead<FileStamp>[]> {
     return this.answer(addresses, async (held, asked) => {
-      const missing = filesOf(asked).filter((file) => !held.sizes.has(foldPath(file)));
-      const failed = missing.length === 0 ? undefined : await this.ask(held, asked, missing, false);
+      const missing = firstSpellingOfEachFile(asked).filter((file) => !held.sizes.has(foldPath(file)));
+      const failed = missing.length === 0 ? undefined : await this.holdOrSayWhyNot(held, asked, missing, false);
       return (file) => {
         const size = held.sizes.get(foldPath(file));
         return size === undefined ? { kind: 'unreadable', reason: failed ?? `${asked[0]?.archive} does not hold ${file}.` } : { kind: 'read', answer: { size, modifiedNs: held.modifiedNs } };
@@ -58,12 +61,12 @@ export class ArchivedCopies {
       let batch: string[] = [];
       let bytes = 0n;
       const flush = async () => {
-        const failed = batch.length === 0 ? undefined : await this.ask(held, asked, batch, true);
+        const failed = batch.length === 0 ? undefined : await this.holdOrSayWhyNot(held, asked, batch, true);
         if (failed !== undefined) for (const file of batch) failures.set(foldPath(file), failed);
         batch = [];
         bytes = 0n;
       };
-      for (const file of filesOf(asked).filter((one) => !held.hashes.has(foldPath(one)))) {
+      for (const file of firstSpellingOfEachFile(asked).filter((one) => !held.hashes.has(foldPath(one)))) {
         const size = held.sizes.get(foldPath(file)) ?? 0n;
         if (batch.length > 0 && bytes + size > BigInt(HASH_BATCH_BYTES)) await flush();
         batch.push(file);
@@ -96,8 +99,7 @@ export class ArchivedCopies {
     return held;
   }
 
-  // Why the files could not be read, or undefined once their answers are held.
-  private async ask(held: Held, asked: readonly ArchivedFileAddress[], files: readonly string[], hashed: boolean): Promise<string | undefined> {
+  private async holdOrSayWhyNot(held: Held, asked: readonly ArchivedFileAddress[], files: readonly string[], hashed: boolean): Promise<string | undefined> {
     const [first] = asked;
     if (first === undefined) return undefined;
     const answered = await this.reader.getArchiveCopies(first.gameRelease, first.archive, files, hashed);
