@@ -592,6 +592,17 @@ export class Instance implements Subscription {
     }));
   }
 
+  private async archivesIn(
+    { gameRelease, listed, files, filesByOrigin }: ArchiveSources,
+    order: { readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[]; readonly pluginsLoadedWithNoLine: readonly PluginWithNoLine[] },
+  ): Promise<Pick<InstanceValue, 'archiveContents' | 'loadsArchive'>> {
+    const archiveContents = await this.archives.read(gameRelease, archivePathsIn(gameRelease, [...filesByOrigin.values()].flat()));
+    this.tellOnce('archiveContents', unreadableArchiveLines(archiveContents), 'warn');
+    const { loadedWithNoLine, fromLines } = pluginOrderOf(order, unplaced);
+    const loaded = [...loadedWithNoLine, ...fromLines.filter((plugin) => plugin.enabled && plugin.path !== undefined)].map(({ name, origin }) => ({ name, origin }));
+    return { archiveContents, loadsArchive: loadsArchiveOf(gameRelease, listed, loaded, files) };
+  }
+
   private async read({ named, disk, tellsUnheard }: Run): Promise<InstanceValue> {
     const { adapter, log } = this.options;
     const reading = await adapter.reading({ named: [...named], disk });
@@ -619,10 +630,7 @@ export class Instance implements Subscription {
       filesByOrigin: new Map([...index.filesByMod, [OVERWRITE_ORIGIN, runtimeOutput.files]]),
     };
     this.tellArchivesNothingHolds(archiveSources);
-    const archiveContents = await this.archives.read(gameRelease, archivePathsIn(gameRelease, [...[...index.filesByMod.values()].flat(), ...runtimeOutput.files]));
-    this.tellOnce('archiveContents', unreadableArchiveLines(archiveContents), 'warn');
-    const { loadedWithNoLine, fromLines } = pluginOrderOf({ plugins, pluginsLoadedWithNoLine: pluginsLoadedWithNoLine ?? [] }, unplaced);
-    const loadedPlugins = [...loadedWithNoLine, ...fromLines.filter((plugin) => plugin.enabled && plugin.path !== undefined)].map(({ name, origin }) => ({ name, origin }));
+    const archives = await this.archivesIn(archiveSources, { plugins, pluginsLoadedWithNoLine: pluginsLoadedWithNoLine ?? [] });
     const loadOrderSnapshot = loadOrderSnapshotOf({
       plugins, gameFolder, pluginsLoadedWithNoLine, modFolders, sourceDirs: paths.sourceDirs, places: pluginPlacesOf({ mods: entries, paths }), archives: archiveSources,
     });
@@ -639,8 +647,7 @@ export class Instance implements Subscription {
       files: index.files,
       filesByMod: index.filesByMod,
       foldersByMod: index.foldersByMod,
-      archiveContents,
-      loadsArchive: loadsArchiveOf(gameRelease, reading.archiveList, loadedPlugins, index.files),
+      ...archives,
       papyrusScripts: papyrusScriptsOf(index.files, dataFolderFiles, gameRelease),
       plugins,
       downloadedFiles: downloadedFilesOutcome.kind === 'unresolved'
