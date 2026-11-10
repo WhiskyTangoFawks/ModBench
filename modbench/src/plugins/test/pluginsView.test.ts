@@ -284,7 +284,7 @@ describe('the Plugins view\'s selection and the highlight (plugins.md, The highl
       const { label } = await provider().getTreeItem(row);
       if (typeof label === 'object' && label.highlights !== undefined) marked.push(label.label);
     }
-    expect(marked).toEqual(['B.esp']);
+    expect(marked).toEqual(['1 B.esp']);
   });
 });
 
