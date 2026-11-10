@@ -235,7 +235,7 @@ export class ModListProvider
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  // Mod order arrives winning-first; MO2's Priority counts from the losing end, a separator included.
+  // Mod order arrives winning-first; a position counts from the losing end, a separator included.
   private positions(): ReadonlyMap<string, string> {
     if (!this.positionsHeld) {
       const { mods } = this.instanceValue;
