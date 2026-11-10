@@ -64,6 +64,7 @@ function feedOver({ shownPlugins = () => [A], activePlugins = () => [], publishD
   const changedOutside = watched<readonly { plugin: string; origin: string }[]>();
   const sourceUnreadable = watched<readonly { plugin: string; origin: string }[]>();
   const sortingErrors = watched<readonly { plugin: string; origin: string; text: string }[]>();
+  const sortingWarnings = watched<readonly { plugin: string; origin: string; text: string }[]>();
   const sortingInfo = watched<readonly { plugin: string; origin: string; text: string }[]>();
   const ruleFiles = watched<readonly { path: string; line: number; level: string; text: string }[]>();
   let calls = 0;
@@ -81,11 +82,11 @@ function feedOver({ shownPlugins = () => [A], activePlugins = () => [], publishD
     publishFailedToRead: () => undefined,
     publishSourceUnreadable: sourceUnreadable.push,
     publishSortingErrors: sortingErrors.push,
-    publishSortingWarnings: () => undefined,
+    publishSortingWarnings: sortingWarnings.push,
   });
   const changes = vi.fn();
   feed.onDidChange(changes);
-  return { feed, client, diagnoses, changedOutside, sourceUnreadable, sortingErrors, sortingInfo, ruleFiles, changes };
+  return { feed, client, diagnoses, changedOutside, sourceUnreadable, sortingErrors, sortingWarnings, sortingInfo, ruleFiles, changes };
 }
 
 async function nextUnhandledRejection(trigger: () => Promise<unknown>): Promise<unknown> {
@@ -230,6 +231,35 @@ describe('PluginFactsFeed', () => {
     await feed.rulesChanged();
 
     expect([beforeReconcile, sortingErrors.items.map((errors) => errors.length)]).toEqual([0, [1, 0]]);
+  });
+
+  describe('judging again as the facts are re-read', () => {
+    const B = { name: 'B.esp', origin: 'SomeMod' };
+    const warned = (warnings: readonly (readonly unknown[])[]) => warnings.map((published) => published.length > 0);
+    const reads = (bIsMaster: boolean) => [held(), held({ name: 'B.esp', isMaster: bIsMaster })];
+
+    it.each([
+      ['raises the warning a re-read master flag causes', false, [false, true]],
+      ['clears the warning a re-read dropped master flag leaves', true, [true, false]],
+    ])('%s', async (_, masterAtReconcile, counts) => {
+      const { feed, client, sortingWarnings } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B] });
+      client.setQueryAnswer('getPlugins', reads(masterAtReconcile));
+      await feed.reconciled([]);
+      client.setQueryAnswer('getPlugins', reads(!masterAtReconcile));
+
+      await feed.refresh();
+
+      expect(warned(sortingWarnings.items)).toEqual(counts);
+    });
+
+    it('judges nothing before the first reconcile', async () => {
+      const { feed, client, sortingWarnings } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B] });
+      client.setQueryAnswer('getPlugins', reads(true));
+
+      await feed.refresh();
+
+      expect(sortingWarnings.items).toEqual([]);
+    });
   });
 
   describe('judging again as the rules change while a judgement is in flight', () => {
