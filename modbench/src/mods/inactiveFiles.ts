@@ -3,7 +3,7 @@
 
 import * as vscode from 'vscode';
 import type { FileOrigin, InstanceValue, InstanceView, OriginFolder } from '../instanceLoader/instance';
-import { modOrigin, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
+import { modOrigin, RUNTIME_OUTPUT, sameOrigin } from '../instanceLoader/fileConflictIndex';
 import { fileRowUri } from './modFiles';
 import { isFileNotGotten, isNotDeployed } from '../drivingLib/modFileStates';
 import { onSettingChange } from '../drivingLib/setting';
@@ -13,7 +13,7 @@ import type { WorkspaceSettings } from './workspaceSettings';
  *  @public Read by packageJson.test, which holds package.json to it. */
 export const GREY_INACTIVE_FILES_SETTING = 'modbench.mods.greyInactiveFiles';
 
-type FilesValue = Pick<InstanceValue, 'mods' | 'files' | 'filesByMod' | 'foldersByMod' | 'overwriteFiles' | 'overwriteFolders' | 'archiveContents' | 'loadsArchive'>;
+type FilesValue = Pick<InstanceValue, 'mods' | 'files' | 'filesByMod' | 'foldersByMod' | 'overwriteFiles' | 'overwriteFolders' | 'archiveContents' | 'loadsArchive' | 'stackedCopies'>;
 
 interface Inactive {
   readonly rows: ReadonlySet<string>;
@@ -42,8 +42,14 @@ function inactiveFiles(value: FilesValue): Inactive {
     for (const file of files) {
       const notGotten = isFileNotGotten(value, origin, enabled, file);
       add(origin, file, notGotten);
-      if (value.archiveContents.has(file.sourcePath) && (notGotten || !value.loadsArchive(file.relativePath))) {
-        archives.add(fileRowUri(origin, file.relativePath).toString());
+      const contents = value.archiveContents.get(file.sourcePath);
+      if (contents === undefined) continue;
+      if (notGotten || !value.loadsArchive(file.relativePath)) archives.add(fileRowUri(origin, file.relativePath).toString());
+      if (contents.kind !== 'read') continue;
+      for (const entry of contents.answer) {
+        const winner = value.stackedCopies.get(entry)?.copies[0];
+        const winsEntry = winner !== undefined && sameOrigin(winner.origin, origin) && winner.at.kind === 'archived' && winner.at.archive === file.sourcePath;
+        if (!winsEntry) inactive.add(fileRowUri(origin, `${file.relativePath}/${entry}`).toString());
       }
     }
   }
