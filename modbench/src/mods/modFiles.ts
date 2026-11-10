@@ -68,9 +68,11 @@ function fileRow(row: vscode.TreeItem, parent: ModlistNode, origin: FileOrigin, 
   row.tooltip = relativePath;
 }
 
+const joined = (parts: readonly (string | boolean | undefined)[]): string => parts.filter((part) => typeof part === 'string').join(' · ');
+
 // instance-repository.md, Status, story 1; The manifest, story 11.
 function sayingWhetherItDiffers<T extends vscode.TreeItem>(row: T, differs: boolean | undefined): T {
-  if (differs === true) row.description = 'differs';
+  if (differs === true) row.description = joined([row.description, 'differs']);
   return row;
 }
 
@@ -139,6 +141,14 @@ export class FileNode extends vscode.TreeItem {
   get ref(): OriginFileRef {
     return { origin: this.origin, relativePath: this.file.relativePath };
   }
+}
+
+// mods.md, The tree, story 14.
+function sayingWhyItCannotBeRead(row: FileNode, reason: string | undefined): FileNode {
+  if (reason === undefined) return row;
+  row.description = joined([row.description, `cannot be read: ${reason}`]);
+  row.tooltip = `${row.file.relativePath}\ncannot be read: ${reason}`;
+  return row;
 }
 
 // mods.md, The tree, story 13.
@@ -210,6 +220,7 @@ export function filesIn(
     ignored: (origin: FileOrigin, file: OriginFile) => FileIgnore;
     holdsPublisherTag: (path: string) => boolean;
     archived: ArchivedOf;
+    unreadable: (file: OriginFile) => string | undefined;
   },
 ): (FolderNode | FileNode)[] {
   const archivedShown = (file: OriginFile, name: string): [readonly ArchivedEntry[], ChildrenShown] => {
@@ -227,9 +238,9 @@ export function filesIn(
       filter ? shownUnder(filter.shown, filter.matches, name) : 'all', filter?.holdsPublisherTag(folder.path),
     ), filter?.differs(origin, folder.relativePath))),
     ...[...ownFiles.here].sort(byName).map(([name, file]) =>
-      sayingWhetherItDiffers(openingIntoItsFiles(
+      sayingWhyItCannotBeRead(sayingWhetherItDiffers(openingIntoItsFiles(
         new FileNode(parent, origin, file, name, filter?.conflict(origin, file), filter?.holdsPublisherTag(file.path), filter?.ignored(origin, file)),
         ...archivedShown(file, name),
-      ), filter?.differs(origin, file.relativePath))),
+      ), filter?.differs(origin, file.relativePath)), filter?.unreadable(file))),
   ];
 }
