@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { Mod, Separator } from '../instance';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import {
-  buildFileConflictIndex, indexReusing, modOrigin, goToModCandidates, inFileOrderConflict, fileOrderConflictOf, outranksACopy, winsPath, RUNTIME_OUTPUT, type ConflictEntry,
+  buildFileConflictIndex, indexReusing, modOrigin, stackCopies, stackReusing, goToModCandidates, inFileOrderConflict, fileOrderConflictOf, outranksACopy, winsPath, RUNTIME_OUTPUT, type ConflictEntry,
 } from '../fileConflictIndex';
 import type { FileOrigin, OriginFile, OriginFiles } from '../../instanceAdapter/instanceAdapter';
 import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
@@ -282,5 +282,53 @@ describe('the index reused while no listing changed', () => {
     change(modFiles);
 
     expect(build(entriesNow(), overwrite, modFiles)).not.toBe(first);
+  });
+});
+
+describe('the copies of each file, stacked as the game stacks them', () => {
+  const FILE = 'meshes/shared.nif';
+  const archive = (name: string, archiveName: string, files: string[]) => ({ origin: modOrigin(name), archive: modPath(name, archiveName), files });
+  const loose = (name: string) => ({ origin: modOrigin(name), at: { kind: 'loose', path: modPath(name, FILE) } });
+  const archived = (name: string, archiveName: string) =>
+    ({ origin: modOrigin(name), at: { kind: 'archived', gameRelease: 'Fallout4', archive: modPath(name, archiveName), file: FILE } });
+  const stacked = (filesByMod: Record<string, string[]>, archives: ReturnType<typeof archive>[]) =>
+    stackCopies(indexOver(Object.keys(filesByMod).map((name) => mod(name)), filesByMod), archives, 'Fallout4');
+
+  it('puts every loose copy above every archived copy, whatever the mod order', () => {
+    const stack = stacked({ A: ['A.ba2'], B: [FILE] }, [archive('A', 'A.ba2', [FILE])]);
+
+    expect(stack.get(FILE)?.copies).toEqual([loose('B'), archived('A', 'A.ba2')]);
+  });
+
+  it('stacks archived copies in the order the game loads their archives, the last loaded winning', () => {
+    const stack = stacked({ A: ['A.ba2'], B: ['B.ba2'] }, [archive('A', 'A.ba2', [FILE]), archive('B', 'B.ba2', [FILE])]);
+
+    expect(stack.get(FILE)?.copies).toEqual([archived('B', 'B.ba2'), archived('A', 'A.ba2')]);
+  });
+
+  it('takes one copy from each origin, the one the game would get of its own', () => {
+    const stack = stacked({ A: [FILE, 'A.ba2', 'A - Extra.ba2'], B: ['B.ba2'] }, [
+      archive('A', 'A.ba2', [FILE]), archive('A', 'A - Extra.ba2', [FILE]), archive('B', 'B.ba2', [FILE]),
+    ]);
+
+    expect(stack.get(FILE)?.copies).toEqual([loose('A'), archived('B', 'B.ba2')]);
+  });
+
+  it('finds an archived copy of a loose file whatever its case', () => {
+    const stack = stacked({ A: [FILE], B: ['B.ba2'] }, [archive('B', 'B.ba2', [FILE.toUpperCase()])]);
+
+    expect(stack.get(FILE)?.copies.map(({ origin }) => origin)).toEqual([modOrigin('A'), modOrigin('B')]);
+  });
+
+  it('answers the stack it built while the index and every archive it read are the same', () => {
+    const build = stackReusing();
+    const index = indexOver([mod('A')], { A: ['A.ba2'] });
+    const files = [FILE];
+    const first = build(index, [archive('A', 'A.ba2', files)], 'Fallout4');
+
+    expect([
+      build(index, [archive('A', 'A.ba2', files)], 'Fallout4'),
+      build(index, [archive('A', 'A.ba2', [FILE])], 'Fallout4'),
+    ].map((stack) => stack === first)).toEqual([true, false]);
   });
 });

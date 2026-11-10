@@ -19,14 +19,14 @@ type Provider = { winner: string; winnerMod: string; providers?: string[] };
 function index(
   files: Record<string, Provider>,
   filesByMod: Record<string, OriginFile[]> = {},
-): FileConflictIndex {
+): Pick<FileConflictIndex, 'files' | 'filesByMod'> {
   const lookup = new FileConflictLookup();
   for (const [relativePath, { winner, winnerMod, providers }] of Object.entries(files)) {
     lookup.set({
       relativePath, winner, winnerOrigin: modOrigin(winnerMod), providers: (providers ?? [winnerMod]).map(modOrigin),
     });
   }
-  return { files: lookup, filesByMod: new Map(Object.entries(filesByMod)), foldersByMod: new Map() };
+  return { files: lookup, filesByMod: new Map(Object.entries(filesByMod)) };
 }
 
 const inDataFolder = (...names: string[]): DataFolderPlugins => ({ kind: 'listed', names: new Set(names) });

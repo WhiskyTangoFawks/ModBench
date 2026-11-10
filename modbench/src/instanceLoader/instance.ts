@@ -1,9 +1,11 @@
 // The instance value (ADR-0015).
 
 import type { Log } from '../ports/log';
-import { FileConflictLookup, indexReusing, type FileWinners } from './fileConflictIndex';
 import {
-  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, loadsArchiveOf, pluginsLoadedWithNoLineOf, stampedSnapshot, type ArchiveSources,
+  FileConflictLookup, foldPath, indexReusing, stackReusing, type FileConflictIndex, type FileWinners, type StackedCopies,
+} from './fileConflictIndex';
+import {
+  archivesGameLoads, buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, stampedSnapshot, type ArchiveSources,
   type DataFolderFiles, type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine, type LoadOrderSnapshotRefusal,
   type LoadOrderSnapshotValue, type PluginWithNoLine,
 } from './loadOrderSnapshot';
@@ -101,6 +103,9 @@ export interface InstanceValue {
   readonly archiveContents: ReadonlyMap<string, ArchiveRead>;
   /** Whether the game loads the archive of this name at the root of its Data folder. */
   readonly loadsArchive: (name: string) => boolean;
+  /** Each file an enabled mod or Overwrite provides, loose or in an archive the game loads, with its copies as the game
+   *  stacks them: what a file order conflict is read from. */
+  readonly stackedCopies: StackedCopies;
   /** Each Papyrus script an enabled mod, Overwrite or the Data folder holds (`papyrusScriptsOf`). */
   readonly papyrusScripts: readonly PapyrusScript[];
   /** Every plugin file, with origin, line, enabled and winning. A listed
@@ -267,6 +272,7 @@ const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey' | 'publi
   foldersByMod: new Map(),
   archiveContents: new Map(),
   loadsArchive: () => false,
+  stackedCopies: new FileConflictLookup(),
   papyrusScripts: [],
   plugins: [],
   downloadedFiles: { kind: 'listed', rows: [] },
@@ -334,6 +340,7 @@ export class Instance implements Subscription {
   // A note is one Output line until its text changes or it clears.
   private readonly told = new Map<NoteKind, ReadonlySet<string>>();
   private readonly indexOf = indexReusing();
+  private readonly stackOf = stackReusing();
 
   constructor(private readonly options: InstanceOptions) {
     this.current = emptyValue(options.adapter, options.gameFolderSettingId);
@@ -593,14 +600,20 @@ export class Instance implements Subscription {
   }
 
   private async archivesIn(
-    { gameRelease, listed, files, filesByOrigin }: ArchiveSources,
+    { gameRelease, listed, files, filesByOrigin }: ArchiveSources, index: FileConflictIndex,
     order: { readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[]; readonly pluginsLoadedWithNoLine: readonly PluginWithNoLine[] },
-  ): Promise<Pick<InstanceValue, 'archiveContents' | 'loadsArchive'>> {
+  ): Promise<Pick<InstanceValue, 'archiveContents' | 'loadsArchive' | 'stackedCopies'>> {
     const archiveContents = await this.archives.read(gameRelease, archivePathsIn(gameRelease, [...filesByOrigin.values()].flat()));
     this.tellOnce('archiveContents', unreadableArchiveLines(archiveContents), 'warn');
     const { loadedWithNoLine, fromLines } = pluginOrderOf(order, unplaced);
-    const loaded = [...loadedWithNoLine, ...fromLines.filter((plugin) => plugin.enabled && plugin.path !== undefined)].map(({ name, origin }) => ({ name, origin }));
-    return { archiveContents, loadsArchive: loadsArchiveOf(gameRelease, listed, loaded, files) };
+    const active = [...loadedWithNoLine, ...fromLines.filter((plugin) => plugin.enabled && plugin.path !== undefined)].map(({ name, origin }) => ({ name, origin }));
+    const loaded = archivesGameLoads(gameRelease, listed, active, files);
+    const names = new Set(loaded.map(({ relativePath }) => foldPath(relativePath)));
+    const read = loaded.flatMap(({ winner, winnerOrigin }) => {
+      const contents = archiveContents.get(winner);
+      return contents?.kind === 'read' ? [{ origin: winnerOrigin, archive: winner, files: contents.answer }] : [];
+    });
+    return { archiveContents, loadsArchive: (name) => names.has(foldPath(name)), stackedCopies: this.stackOf(index, read, gameRelease) };
   }
 
   private async read({ named, disk, tellsUnheard }: Run): Promise<InstanceValue> {
@@ -630,7 +643,7 @@ export class Instance implements Subscription {
       filesByOrigin: new Map([...index.filesByMod, [OVERWRITE_ORIGIN, runtimeOutput.files]]),
     };
     this.tellArchivesNothingHolds(archiveSources);
-    const archives = await this.archivesIn(archiveSources, { plugins, pluginsLoadedWithNoLine: pluginsLoadedWithNoLine ?? [] });
+    const archives = await this.archivesIn(archiveSources, index, { plugins, pluginsLoadedWithNoLine: pluginsLoadedWithNoLine ?? [] });
     const loadOrderSnapshot = loadOrderSnapshotOf({
       plugins, gameFolder, pluginsLoadedWithNoLine, modFolders, sourceDirs: paths.sourceDirs, places: pluginPlacesOf({ mods: entries, paths }), archives: archiveSources,
     });
