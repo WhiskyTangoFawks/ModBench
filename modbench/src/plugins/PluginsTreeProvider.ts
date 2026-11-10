@@ -145,6 +145,7 @@ export class PluginsTreeProvider
       activeInGameOrder(snapshot, (plugin) => this.facts.rows.isBlueprint(plugin), blueprintLoadsLastIn(snapshot.gameRelease)),
     onChange: (listener: () => void) => this.facts.onDidChange(listener),
   };
+  private lines = new Map<string | undefined, string>();
   private lastLockedRowUris: ReadonlySet<string> = new Set();
   private highlighted: ReadonlySet<string> = new Set();
 
@@ -181,7 +182,7 @@ export class PluginsTreeProvider
       const rules = this.readRules(value.sortingRuleFiles);
       if (rules !== this.rules) {
         this.rules = rules;
-        void this.facts.rulesChanged();
+        void this.facts.rejudge();
       }
       this._onDidChangeTreeData.fire(undefined);
     }), options.instance.onReadFailure(() => this.render()), options.instance.onRedraw(() => this.render()));
@@ -435,8 +436,11 @@ export class PluginsTreeProvider
     const lockedRows = loadedWithNoLine.map(({ name, origin }) => new ImplicitMasterNode(name, origin));
     this.lastLockedRowUris = new Set(lockedRows.map((row) => row.resourceUri.toString()));
     this.rowsBlueprints = this.facts.rows.blueprintPlugins();
+    const lineRows = fromLines.map((p) => ({ row: new PluginNode({ name: p.name, enabled: p.enabled }, p.origin), line: p.line }));
+    const width = String(Math.max(0, ...fromLines.map(({ line }) => line))).length;
+    this.lines = new Map(lineRows.map(({ row, line }) => [row.id, String(line).padStart(width, '0')]));
     return inGameOrder<PluginListNode>(
-      lockedRows, fromLines.map((p) => new PluginNode({ name: p.name, enabled: p.enabled }, p.origin)), (row) => this.facts.rows.isBlueprint(addressOfRow(row)), this.instanceValue.blueprintLoadsLast,
+      lockedRows, lineRows.map(({ row }) => row), (row) => this.facts.rows.isBlueprint(addressOfRow(row)), this.instanceValue.blueprintLoadsLast,
     );
   }
 
@@ -469,8 +473,13 @@ export class PluginsTreeProvider
 
   // plugins.md, The highlight: the label is marked whole, as the find marks a match.
   private labelOf(row: PluginListNode): vscode.TreeItemLabel | string {
-    const label = pluginFileOf(row);
+    const label = this.positioned(row);
     return this.highlighted.has(exactPluginAddressKey(addressOfRow(row))) ? { label, highlights: [[0, label.length]] } : label;
+  }
+
+  private positioned(row: PluginListNode): string {
+    const position = this.lines.get(row.id);
+    return position === undefined ? pluginFileOf(row) : `${position} ${pluginFileOf(row)}`;
   }
 
   /** Marks the labels of these plugins' rows, and only theirs. */
