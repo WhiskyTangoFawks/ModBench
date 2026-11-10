@@ -47,6 +47,7 @@ import { registerCheckForUpdatesGestures, type CheckForUpdatesDeps } from './che
 import type { CheckForUpdates } from '../modCommands/checkForUpdates';
 import { registerConflictTable } from './conflictTableEditor';
 import { sameCopies, type CopyReads } from '../drivingLib/sameCopies';
+import { ArchivedCopies } from '../drivingLib/archivedCopies';
 import {
   modsCopyValueText, registerCreateEmptyModCommand, registerFileExclusionCommands, registerFileIgnoreCommands, registerModContextCommands, registerModEnableCommands,
   registerModMoveCommand, registerOpenFolderCommand, registerOpenSourceCommand, registerSeparatorCommands, registerViewOnNexusCommand,
@@ -90,7 +91,7 @@ interface ModsViewDeps {
   /** Lists each place a file names a mod, in VS Code's References view. */
   referencedBy: (mod: string) => Promise<void>;
   /** Serves the files of an archive. */
-  archives: Pick<MEditClient, 'getArchiveFile'>;
+  archives: Pick<MEditClient, 'getArchiveFile' | 'getArchiveCopies'>;
 }
 
 const checkForUpdatesDeps = (
@@ -164,6 +165,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     const walk = ++walks;
     void expandFilteredRows(view, provider, log, () => walk !== walks);
   };
+  const archivedCopies = new ArchivedCopies(deps.archives, (path) => deps.copyReads.fileStamp(path));
   // Disposed in order: what reads the tree and the view goes before them.
   const disposable = vscode.Disposable.from(
     ...owned,
@@ -210,7 +212,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
       reveal: (row) => view.reveal(row, { select: true, focus: true }), reporter: reporterFor('mod.goTo'),
     }, () => view.selection),
     registerCompareFileCommand(instance, reporterFor('mod.compareFile'), () => view.selection),
-    ...registerConflictTable(instance, (files) => sameCopies(deps.copyReads, files), deps.extensionUri, () => view.selection, reporterFor('mod.openConflicts'), vscode.workspace),
+    ...registerConflictTable(instance, (files) => sameCopies(deps.copyReads, archivedCopies, files), deps.extensionUri, () => view.selection, reporterFor('mod.openConflicts'), vscode.workspace),
     ...registerModInstallCommands({
       commands, instance, reporterFor, trash, fomodDialog: (progress) => fomodDialog(deps.extensionUri, ask, progress), downloadedFileInstallReporting,
     }),

@@ -1,7 +1,7 @@
 // ADR-0013's snapshot. A plugins.txt line no mod provides names the Data folder's plugin.
 
 import {
-  foldPath, type FileConflictIndex, type FileWinners,
+  foldPath, type ConflictEntry, type FileConflictIndex, type FileWinners,
 } from './fileConflictIndex';
 import {
   dataFolderFile, fileInFolder, type DataFolderArchives, type DataFolderPlugins, type FileRead, type FileStamp, type GameFolder,
@@ -153,6 +153,8 @@ function winningPlugins(files: FileWinners): Map<string, PluginFile> {
   return new Map(winners.map((winner) => [foldPath(winner.name), winner]));
 }
 
+type RootFiles = Pick<FileConflictIndex, 'files' | 'filesByMod'>;
+
 interface RootPlugins {
   readonly winners: Map<string, PluginFile>;
   readonly byOrigin: readonly (readonly [string, readonly OriginFile[]])[];
@@ -160,9 +162,9 @@ interface RootPlugins {
 
 // What the index holds at the game's root is read from every file once per index, which a refresh that
 // changed no listing reuses whole (ADR-0015).
-const rootPluginsOfIndex = new WeakMap<FileConflictIndex, RootPlugins>();
+const rootPluginsOfIndex = new WeakMap<RootFiles, RootPlugins>();
 
-function rootPluginsOf(index: FileConflictIndex): RootPlugins {
+function rootPluginsOf(index: RootFiles): RootPlugins {
   const held = rootPluginsOfIndex.get(index);
   if (held !== undefined) return held;
   const read = {
@@ -178,7 +180,7 @@ function rootPluginsOf(index: FileConflictIndex): RootPlugins {
  *  folder does not hold it. */
 export function buildLoadOrderRows(
   pluginOrder: readonly PluginEntry[],
-  index: FileConflictIndex,
+  index: RootFiles,
   runtimeOutput: readonly OriginFile[],
   gameFolder: GameFolder,
   inData: DataFolderPlugins,
@@ -242,14 +244,14 @@ function archivesLoaded<A extends { readonly relativePath: string }>(
   };
 }
 
-/** Whether the game loads the archive of a name `files` holds at the root, the INIs listing it or a plugin in `active`. */
-export function loadsArchiveOf(gameRelease: string, listed: readonly string[], active: readonly PluginAddress[], files: FileWinners): (name: string) => boolean {
+/** The archives `files` holds at the root that the game loads, the INIs listing them or a plugin in `active`, in the order
+ *  it loads them. */
+export function archivesGameLoads(gameRelease: string, listed: readonly string[], active: readonly PluginAddress[], files: FileWinners): ConflictEntry[] {
   const rule = pluginCompanionRule(gameRelease);
-  if (rule === undefined) return () => false;
+  if (rule === undefined) return [];
   const archives = new Map([...files].filter(({ relativePath }) => rule.isArchive(relativePath)).map((entry) => [foldPath(entry.relativePath), entry] as const));
   const loaded = archivesLoaded(rule, listed, active, archives);
-  const names = new Set([...loaded.listed, ...loaded.byPlugin.flatMap((plugin) => plugin.archives)].map(({ relativePath }) => foldPath(relativePath)));
-  return (name) => names.has(foldPath(name));
+  return [...new Set([...loaded.listed, ...loaded.byPlugin.flatMap((plugin) => plugin.archives)])];
 }
 
 function archivesAndStringsOf(

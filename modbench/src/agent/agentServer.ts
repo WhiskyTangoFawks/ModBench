@@ -7,6 +7,7 @@ import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/proto
 import type { ServerNotification, ServerRequest } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import type { CopyReads } from '../drivingLib/sameCopies';
+import { ArchivedCopies } from '../drivingLib/archivedCopies';
 import type { PluginsShown } from '../drivingLib/pluginsShown';
 import { instanceMessages, type InstanceView } from '../instanceLoader/instance';
 import type { Log } from '../ports/log';
@@ -39,7 +40,7 @@ export interface AgentServerOptions {
   port: number;
   instance: Pick<InstanceView, 'value' | 'sequence' | 'readFailure'> | undefined;
   copyReads: CopyReads | undefined;
-  mEdit: Pick<MEditClient, 'resolveNames' | 'selectRows' | 'getComparison' | 'getPlugins' | 'getCopyDocument' | 'getRenderedDocument' | 'getReferences'>;
+  mEdit: Pick<MEditClient, 'resolveNames' | 'selectRows' | 'getComparison' | 'getPlugins' | 'getCopyDocument' | 'getRenderedDocument' | 'getReferences' | 'getArchiveCopies'>;
   terminalEnvironment: TerminalEnvironment;
   statuses: Pick<ModStatuses, 'current'> | undefined;
   deployment: DeploymentRead | undefined;
@@ -130,7 +131,8 @@ function mcpServerOf({ instance, copyReads, mEdit, terminalEnvironment, statuses
   register(server, log, reading('instance', 'mEdit', 'plugins', 'sortingRules'), { ...LIST_PLUGINS, input: NO_INPUT }, async () => LIST_PLUGINS.of(await withNotRestored(currentValue(instance), statuses), pluginsShown));
   register(server, log, reading('instance', 'mEdit', 'plugins', 'sortingRules'), { ...LIST_SORTING_RULES, input: NO_INPUT }, () => LIST_SORTING_RULES.of(pluginsShown));
   register(server, log, reading('instance', 'modList'), { ...LIST_MOD_STATUSES, input: NO_INPUT }, () => LIST_MOD_STATUSES.of(currentValue(instance), statuses));
-  register(server, log, reading('instance', 'modList'), FILE_CONFLICTS, (args) => FILE_CONFLICTS.of(currentValue(instance), copyReads, args));
+  const archivedCopies = new ArchivedCopies(mEdit, (path) => copyReads.fileStamp(path));
+  register(server, log, reading('instance', 'modList'), FILE_CONFLICTS, (args) => FILE_CONFLICTS.of(currentValue(instance), copyReads, archivedCopies, args));
   register(server, log, reading('instance', 'modList'), RESOLVE_INSTANCE_NAMES, (args) => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args));
   register(server, log, reading(...RECORD_READS), RESOLVE_NAMES, (args) => RESOLVE_NAMES.of(mEdit, args));
   register(server, log, reading(...RECORD_READS), READ_RECORD, async (args) => READ_RECORD.of(mEdit, await naming(args), args));

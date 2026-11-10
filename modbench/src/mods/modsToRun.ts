@@ -9,7 +9,7 @@ import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { Argument, ArgumentOf } from '../wire/argument';
 
 const NEITHER = 'it is not a mod or a separator';
-const NOT_A_SOURCE_FOLDER = 'it is not a source mod\'s source folder';
+const NOT_A_SOURCE_FOLDER = 'it is not named by the absolute path of a source mod\'s source folder, the sourceFolder that list_mods gives';
 
 export interface ModsToRunDeps {
   /** The Toolbox's id, whose bar a gesture with no Argument runs under. */

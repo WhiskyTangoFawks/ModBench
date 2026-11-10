@@ -61,7 +61,7 @@ internal static class Ba2Archive
         reader.ReadUInt32();
         var chunk = new Chunk(reader.ReadUInt64(), reader.ReadUInt32(), reader.ReadUInt32());
         reader.ReadUInt32();
-        return new ArchiveEntry("", () => Inflated(archiveAt, chunk, codec));
+        return new ArchiveEntry("", chunk.Whole, () => Inflated(archiveAt, chunk, codec));
     }
 
     private static ArchiveEntry ReadTexture(BinaryReader reader, string archiveAt, Ba2Codec codec)
@@ -82,8 +82,9 @@ internal static class Ba2Archive
             reader.ReadBytes(Ba2Format.TextureChunkLength - 16);
             return chunk;
         }).ToList();
-        return new ArchiveEntry("", () =>
-            [.. DdsHeaderWriter.Write(width, height, mips, format, isCubemap), .. chunks.SelectMany(chunk => Inflated(archiveAt, chunk, codec))]);
+        var header = DdsHeaderWriter.Write(width, height, mips, format, isCubemap);
+        return new ArchiveEntry("", header.Length + chunks.Sum(chunk => (long)chunk.Whole), () =>
+            [.. header, .. chunks.SelectMany(chunk => Inflated(archiveAt, chunk, codec))]);
     }
 
     private static byte[] Inflated(string archiveAt, Chunk chunk, Ba2Codec codec)

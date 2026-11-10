@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { Mod, Separator } from '../instance';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import {
-  buildFileConflictIndex, indexReusing, modOrigin, goToModCandidates, inFileOrderConflict, fileOrderConflictOf, outranksACopy, winsPath, RUNTIME_OUTPUT, type ConflictEntry,
+  buildFileConflictIndex, indexReusing, modOrigin, stackCopies, stackReusing, goToModCandidates, fileOrderConflictOf, outranksACopy, winsPath, RUNTIME_OUTPUT, type ConflictEntry,
 } from '../fileConflictIndex';
 import type { FileOrigin, OriginFile, OriginFiles } from '../../instanceAdapter/instanceAdapter';
 import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
@@ -205,19 +205,6 @@ describe('the origins go to mod can name for a copy of a file', () => {
   });
 });
 
-describe('whether a copy of a file is in a file order conflict', () => {
-  it.each<[string, ConflictEntry | undefined, FileOrigin, boolean]>([
-    ['is, for the winner of a path another enabled copy provides', entryOf(high, low), high, true],
-    ['is, for a copy that loses to another enabled copy', entryOf(high, low), low, true],
-    ['is, for a copy that loses to Overwrite', entryOf(RUNTIME_OUTPUT, low), low, true],
-    ['is not, for a copy nothing else provides', entryOf(high), high, false],
-    ['is not, for a copy that is no provider', entryOf(high, middle), low, false],
-    ['is not, for a path no one provides', undefined, high, false],
-  ])('%s', (_case, entry, own, expected) => {
-    expect(inFileOrderConflict(entry, own)).toBe(expected);
-  });
-});
-
 describe('whether a copy of a file wins or loses its file order conflict', () => {
   it.each<[string, ConflictEntry | undefined, FileOrigin, string]>([
     ['wins, for the winner of a path another copy provides', entryOf(high, low), high, 'wins'],
@@ -282,5 +269,69 @@ describe('the index reused while no listing changed', () => {
     change(modFiles);
 
     expect(build(entriesNow(), overwrite, modFiles)).not.toBe(first);
+  });
+});
+
+describe('the copies of each file, stacked as the game stacks them', () => {
+  const FILE = 'meshes/shared.nif';
+  const archive = (name: string, archiveName: string, files: string[]) => ({ origin: modOrigin(name), archive: modPath(name, archiveName), files });
+  const loose = (name: string) => ({ origin: modOrigin(name), at: { kind: 'loose', path: modPath(name, FILE) } });
+  const archived = (name: string, archiveName: string) =>
+    ({ origin: modOrigin(name), at: { kind: 'archived', gameRelease: 'Fallout4', archive: modPath(name, archiveName), file: FILE } });
+  const stacked = (filesByMod: Record<string, string[]>, archives: ReturnType<typeof archive>[]) =>
+    stackCopies(indexOver(Object.keys(filesByMod).map((name) => mod(name)), filesByMod), archives, 'Fallout4');
+
+  it('puts every loose copy above every archived copy, whatever the mod order', () => {
+    const stack = stacked({ A: ['A.ba2'], B: [FILE] }, [archive('A', 'A.ba2', [FILE])]);
+
+    expect(stack.get(FILE)?.copies).toEqual([loose('B'), archived('A', 'A.ba2')]);
+  });
+
+  it('stacks archived copies in the order the game loads their archives, the last loaded winning', () => {
+    const stack = stacked({ A: ['A.ba2'], B: ['B.ba2'] }, [archive('A', 'A.ba2', [FILE]), archive('B', 'B.ba2', [FILE])]);
+
+    expect(stack.get(FILE)?.copies).toEqual([archived('B', 'B.ba2'), archived('A', 'A.ba2')]);
+  });
+
+  it('takes one copy from each origin, the one the game would get of its own', () => {
+    const stack = stacked({ A: [FILE, 'A.ba2', 'A - Extra.ba2'], B: ['B.ba2'] }, [
+      archive('A', 'A.ba2', [FILE]), archive('A', 'A - Extra.ba2', [FILE]), archive('B', 'B.ba2', [FILE]),
+    ]);
+
+    expect(stack.get(FILE)?.copies).toEqual([loose('A'), archived('B', 'B.ba2')]);
+  });
+
+  it('finds an archived copy of a loose file whatever its case', () => {
+    const stack = stacked({ A: [FILE], B: ['B.ba2'] }, [archive('B', 'B.ba2', [FILE.toUpperCase()])]);
+
+    expect(stack.get(FILE)?.copies.map(({ origin }) => origin)).toEqual([modOrigin('A'), modOrigin('B')]);
+  });
+
+  it('keeps each loose copy at the path its origin holds it at, whatever the case of the file\'s name', () => {
+    const stack = stacked({ A: ['Textures/Shared.dds'], B: ['textures/shared.DDS'] }, []);
+
+    expect(stack.get('textures/shared.dds')?.copies.map(({ at }) => at)).toEqual([
+      { kind: 'loose', path: modPath('A', 'Textures/Shared.dds') }, { kind: 'loose', path: modPath('B', 'textures/shared.DDS') },
+    ]);
+  });
+
+  it('keeps Overwrite\'s copy apart from the copy of a mod named overwrite (ADR-0012)', () => {
+    const stack = stackCopies(indexOver([mod('overwrite')], { overwrite: [FILE] }, [fileIn('/overwrite', FILE)]), [], 'Fallout4');
+
+    expect(stack.get(FILE)?.copies.map(({ at }) => at)).toEqual([
+      { kind: 'loose', path: `/overwrite/${FILE}` }, { kind: 'loose', path: modPath('overwrite', FILE) },
+    ]);
+  });
+
+  it('answers the stack it built while the index and every archive it read are the same', () => {
+    const build = stackReusing();
+    const index = indexOver([mod('A')], { A: ['A.ba2'] });
+    const files = [FILE];
+    const first = build(index, [archive('A', 'A.ba2', files)], 'Fallout4');
+
+    expect([
+      build(index, [archive('A', 'A.ba2', files)], 'Fallout4'),
+      build(index, [archive('A', 'A.ba2', [FILE])], 'Fallout4'),
+    ].map((stack) => stack === first)).toEqual([true, false]);
   });
 });

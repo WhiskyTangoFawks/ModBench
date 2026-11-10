@@ -12,6 +12,7 @@ import type { RecordEditEnvelope } from '../wire/messages';
 import type { PluginAddress, SourceModIn } from '../wire/pluginAddress';
 export type { SourceModIn };
 import type { ReadFailed } from '../wire/readFailed';
+import type { ArchivedCopy } from '../wire/messages';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
 
@@ -301,6 +302,8 @@ export interface MEditClient {
   getArchiveContents(gameRelease: string, archives: readonly string[]): Promise<ArchiveContents[] | ReadFailed>;
   /** The bytes of one file in an archive, by its path there. */
   getArchiveFile(gameRelease: string, archive: string, file: string): Promise<Uint8Array | ReadFailed>;
+  /** Each of `files` the archive holds, by its path there, with its hash when `hashed`; one the archive does not hold is left out. */
+  getArchiveCopies(gameRelease: string, archive: string, files: readonly string[], hashed: boolean): Promise<ArchivedCopy[] | ReadFailed>;
   getRecords(plugin: PluginAddress, type: string, offset: number, limit: number): Promise<RecordPage | ReadFailed>;
   /** Every active plugin's copies, or one plugin's. */
   searchRecords(query: string, validTypes: string[], plugin?: PluginAddress): Promise<RecordPage | ReadFailed>;

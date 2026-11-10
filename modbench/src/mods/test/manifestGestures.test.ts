@@ -515,10 +515,11 @@ describe('An agent call', () => {
   it('update manifest records a source folder it is given by its path, and refuses one that is none beside it, by name', async () => {
     const { run } = register({ instance: { value: sourceModValue, ...instanceThatReads } });
 
-    const answer = await run(UPDATE, new AgentCall([{ kind: 'folder', path: '/instance/source/ModA' }, { kind: 'folder', path: '/elsewhere' }], {}));
+    const answer = await run(UPDATE, new AgentCall([{ kind: 'folder', path: '/instance/source/ModA' }, { kind: 'folder', path: '/elsewhere' }, { kind: 'folder', path: 'source/ModA' }], {}));
 
     expect(updateManifest.mock.calls.map(([mods, , , everyMod, sourceMods]) => [mods, everyMod, sourceMods])).toEqual([[[], false, ['ModA']]]);
-    expect(answer).toMatchObject({ outcome: { refused: [{ item: '/elsewhere', reason: 'it is not a source mod\'s source folder' }] } });
+    const reason = 'it is not named by the absolute path of a source mod\'s source folder, the sourceFolder that list_mods gives';
+    expect(answer).toMatchObject({ outcome: { refused: [{ item: '/elsewhere', reason }, { item: 'source/ModA', reason }] } });
   });
 
   it('update manifest answers what landed and what was refused, each file its package does not hold and each note as a part that failed, and reports nothing', async () => {
