@@ -34,7 +34,7 @@ internal sealed class RecordQueries(
 
     private IReadOnlyList<PluginResponse> PluginResponses()
     {
-        var reads = RequireReads();
+        using var reads = RequireReads().InOneSnapshot();
         var opened = reads.OpenedPlugins;
         // The rows and their order are the load order's; the facts reading the file yielded are the
         // Index's. A plugin the Index has not opened has none of the latter and is not a row.
@@ -115,7 +115,7 @@ internal sealed class RecordQueries(
 
     private CompareResult? CompareOf(string formKey, CopyText? text)
     {
-        var reads = RequireReads();
+        using var reads = RequireReads().InOneSnapshot();
         var stack = text?.Alone == true ? null : reads.GetOverrideStack(formKey);
         if (stack == null && text == null) return null;
         var snapshot = _loadOrder.Require();
@@ -181,7 +181,7 @@ internal sealed class RecordQueries(
 
     private CompareRecordsAnswer CompareCopies(IReadOnlyList<RecordCopy> copies)
     {
-        var reads = _index.RequireWholeSetReads();
+        using var reads = _index.RequireWholeSetReads().InOneSnapshot();
         var snapshot = _loadOrder.Require();
 
         var (fromIndex, resolveFormKey) = reads.GetDocuments(copies);
@@ -325,7 +325,7 @@ internal sealed class RecordQueries(
 
     private List<RecordTypeChoice>? ChildRecordTypesOf(PluginAddress plugin, string formKey)
     {
-        var reads = RequireReads();
+        using var reads = RequireReads().InOneSnapshot();
         if (reads.GetDocument(formKey, plugin) is not { Body: { } body } container) return null;
         var schemas = RequireSchemas();
         var place = reads.GetCellLocation(plugin, formKey)?.Place;
@@ -438,7 +438,11 @@ internal sealed class RecordQueries(
         _answer.Of(() => source.RecordOfFile(_loadOrder.Require(), path));
 
     public Answer<IReadOnlyList<WorldspaceSummary>, IndexRefused> GetWorldspaces(PluginAddress plugin) =>
-        _answer.Of(() => WorldspaceTree.WorldspacesOf(RequireReads(), plugin, _loadOrder.Require().GameRelease));
+        _answer.Of(() =>
+        {
+            using var reads = RequireReads().InOneSnapshot();
+            return WorldspaceTree.WorldspacesOf(reads, plugin, _loadOrder.Require().GameRelease);
+        });
 
     public Answer<WorldspaceBlocks, IndexRefused> GetWorldspaceBlocks(PluginAddress plugin, string worldspaceFormKey) =>
         _answer.Of(() => WorldspaceTree.BlocksOf(RequireReads().GetWorldspaceCells(plugin, worldspaceFormKey)));
@@ -470,7 +474,11 @@ internal sealed class RecordQueries(
     // A plugin the record index has not reached holds no record yet, so every link into it would read as a
     // missing record.
     public Answer<IReadOnlyList<PluginProblems>, IndexRefused> GetProblems() =>
-        _answer.Of(() => ProblemsPanel.Of(_index, _index.RequireWholeSetReads(), _loadOrder.Require(), source));
+        _answer.Of(() =>
+        {
+            using var reads = _index.RequireWholeSetReads().InOneSnapshot();
+            return ProblemsPanel.Of(_index, reads, _loadOrder.Require(), source);
+        });
 
     public LoadOrderStatus GetStatus() => _index.Status;
 
@@ -502,7 +510,7 @@ internal sealed class RecordQueries(
     public Answer<IReadOnlyList<NamedObject>, IndexRefused> ResolveNames(IReadOnlyList<NameQuery> names) =>
         _answer.Flat<IReadOnlyList<NamedObject>>(() =>
         {
-            var reads = _index.RequireWholeSetReads();
+            using var reads = _index.RequireWholeSetReads().InOneSnapshot();
             var snapshot = _loadOrder.Require();
             var matches = names.Select(query => (Query: query, Matches: NamedBy(query, snapshot, reads))).ToList();
             var unresolved = matches.Where(m => m.Matches.Count != 1).ToList();

@@ -8,9 +8,21 @@ namespace MEditService.RecordIndex.Store;
 internal sealed class ReadContext : IDisposable
 {
     private readonly DuckDBConnection _connection;
+    private readonly bool _owned;
 
     /// <summary>Takes <paramref name="connection"/>, which holds a transaction open, to dispose.</summary>
-    internal ReadContext(DuckDBConnection connection) => _connection = connection;
+    internal ReadContext(DuckDBConnection connection) : this(connection, owned: true)
+    {
+    }
+
+    private ReadContext(DuckDBConnection connection, bool owned)
+    {
+        _connection = connection;
+        _owned = owned;
+    }
+
+    /// <summary>The same snapshot, which disposing the borrowed context leaves open.</summary>
+    public ReadContext Borrowed() => new(_connection, owned: false);
 
     public List<T> Rows<T>(string sql, Func<DbDataReader, T> map, params object?[] args) =>
         DuckDbSql.Rows(_connection, sql, map, args);
@@ -34,5 +46,8 @@ internal sealed class ReadContext : IDisposable
         });
     }
 
-    public void Dispose() => _connection.Dispose();
+    public void Dispose()
+    {
+        if (_owned) _connection.Dispose();
+    }
 }

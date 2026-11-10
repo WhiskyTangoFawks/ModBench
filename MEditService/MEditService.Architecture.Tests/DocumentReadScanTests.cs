@@ -42,6 +42,21 @@ public sealed class DocumentReadScanTests
         Assert.Contains("MEditService.RecordIndex/Raw.cs", failure.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("SELECT * FROM records")]
+    [InlineData("SELECT r.* FROM records r")]
+    [InlineData("SELECT DISTINCT body FROM records")]
+    [InlineData("SELECT body::VARCHAR FROM records")]
+    [InlineData("SELECT lower(body) FROM records")]
+    [InlineData("UPDATE records SET editor_id = NULL RETURNING form_key, body")]
+    public void TheScan_IsBlindTo_ADocumentSelectedThisWay(string sql)
+    {
+        using var root = new ScratchDirectory("medit-document-read-scan-limits-");
+        ScratchFiles.Plant(root, "MEditService.RecordIndex/Unseen.cs", $"Rows(\"{sql}\");\n");
+
+        Assert.Empty(SelectingOutsideTheBatchedRead(root, SourceTree.CSharpFiles(root).ToList()));
+    }
+
     private static void AssertOnlyTheBatchedReadSelects(string root, IReadOnlyList<string> files)
     {
         var elsewhere = SelectingOutsideTheBatchedRead(root, files);

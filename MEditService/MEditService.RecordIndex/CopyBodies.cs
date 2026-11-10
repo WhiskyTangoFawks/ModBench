@@ -3,10 +3,8 @@ using MEditService.RecordIndex.Store;
 
 namespace MEditService.RecordIndex;
 
-/// <summary>A copy a read has found, and the length of its document.</summary>
 internal readonly record struct CopySize(string FormKey, PluginAddress Plugin, long Length);
 
-/// <summary>A copy as the record index stores it.</summary>
 internal sealed record StoredCopy(
     string FormKey, PluginAddress Plugin, int? LoadOrderIndex, bool IsWinner, string? EditorId, string Body,
     string? ParseDiagnosis, string RecordType, string WorkingTreeState);
@@ -23,7 +21,9 @@ internal static class CopyBodies
         {
             var read = Bodies(context, batch);
             foreach (var record in batch)
-                yield return [.. record.Select(copy => read[copy.FormKey].First(stored => PluginAddress.Comparer.Equals(stored.Plugin, copy.Plugin)))];
+                yield return [.. record.Select(copy => read[copy.FormKey].FirstOrDefault(stored => PluginAddress.Comparer.Equals(stored.Plugin, copy.Plugin))
+                    ?? throw new InvalidOperationException(
+                        $"Expected the batched read to find {copy.FormKey} in {copy.Plugin.Name} ({copy.Plugin.Origin}), which its read located."))];
         }
     }
 
@@ -45,22 +45,24 @@ internal static class CopyBodies
         if (batch.Count > 0) yield return batch;
     }
 
-    // A filter naming each copy takes over ten times as long as one naming their keys, plugins and origins, so the
-    // copies are matched after the read.
+    // An OR naming each copy takes ten times as long as lists of keys, plugins and origins, which narrow the scan.
+    // The list of copies drops a key the batch asked of another plugin. No FormKey or filename holds a '/'.
     private static ILookup<string, StoredCopy> Bodies(ReadContext context, List<IReadOnlyList<CopySize>> batch)
     {
         var copies = batch.SelectMany(record => record).ToList();
         var formKeys = copies.Select(copy => copy.FormKey).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var plugins = copies.Select(copy => copy.Plugin.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var origins = copies.Select(copy => copy.Plugin.Origin).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        string[] values = [.. formKeys, .. plugins, .. origins];
-        static string Parameters(int from, int count) => string.Join(", ", Enumerable.Range(from + 1, count).Select(i => $"${i}"));
+        List<string> named = [.. copies.Select(copy => $"{copy.FormKey}/{copy.Plugin.Name}/{copy.Plugin.Origin}")];
+        object[] values = [named, .. formKeys, .. plugins, .. origins];
+        static string Parameters(int from, int count) => string.Join(", ", Enumerable.Range(from + 2, count).Select(i => $"${i}"));
         return context.Rows($"""
             SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, parse_diagnosis, record_type, working_tree_state
             FROM {TableDdlBuilder.PluginRecordsView}
             WHERE form_key IN ({Parameters(0, formKeys.Count)})
               AND plugin IN ({Parameters(formKeys.Count, plugins.Count)})
               AND origin IN ({Parameters(formKeys.Count + plugins.Count, origins.Count)})
+              AND list_contains($1::VARCHAR[], form_key || '/' || plugin || '/' || origin)
             """, reader => new StoredCopy(
                 reader.GetString(0), new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.IsDBNull(3) ? null : reader.GetInt32(3), reader.GetBoolean(4),
                 reader.GetStringOrNull(5), reader.GetString(6), reader.GetStringOrNull(7), reader.GetString(8), reader.GetString(9)),
