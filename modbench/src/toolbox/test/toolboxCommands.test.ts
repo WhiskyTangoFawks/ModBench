@@ -162,13 +162,13 @@ describe('Switch profile', () => {
 describe('Switch profile, called by an agent', () => {
   const call = (...names: string[]) => new AgentCall(names.map((name) => ({ kind: 'profile' as const, name })), {});
 
-  it('switches to the profile it names, opens no picker, says nothing and answers it landed', async () => {
+  it('switches to the profile it names, opens no picker, says nothing and answers it switched to that profile', async () => {
     const { reporter, run } = register();
 
     const answer = await run('modbench.profile.switch', call('Modding'));
 
     expect([switchProfile.mock.calls, createQuickPick.mock.calls, reporter.reports, answer]).toEqual([
-      [['Modding']], [], [], { applied: true, outcome: { landed: [], refused: [] } },
+      [['Modding']], [], [], { applied: true, done: 'Switched to Modding.' },
     ]);
   });
 
@@ -261,7 +261,7 @@ describe('Refresh', () => {
 
   it('answers an agent call that it landed, and a refusal with its reason, reporting neither', async () => {
     const landed = registerRefresh({ applied: true });
-    expect([await landed.run(new AgentCall([], {})), landed.reporter.reports]).toEqual([{ applied: true, outcome: { landed: [], refused: [] } }, []]);
+    expect([await landed.run(new AgentCall([], {})), landed.reporter.reports]).toEqual([{ applied: true }, []]);
 
     handlers.clear();
     const held = registerRefresh({ applied: false, heldElsewhere: true }, '/instance/FO4');

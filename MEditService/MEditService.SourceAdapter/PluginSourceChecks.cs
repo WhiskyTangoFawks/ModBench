@@ -73,11 +73,15 @@ internal static class PluginSourceChecks
     }
 
     /// <summary>The Codec's reason for refusing the document at <paramref name="relativePath"/>, null when it
-    /// takes it or when nothing names its type, which the tree's read says.</summary>
+    /// takes it.</summary>
     internal static string? WhyRefused(string relativePath, string text, string? recordType, GameRelease gameRelease)
     {
         if (!SourceRepositoryLayout.IsGroupDocument(relativePath))
-            return recordType is null ? null : RecordTextCodec.WhyNotARecord(text, gameRelease, recordType);
+        {
+            return recordType is null
+                ? $"neither its folder nor its text names the record type it holds ({LoquiUnions.UnionTypeDiscriminator} is the member that names it)"
+                : RecordTextCodec.WhyNotARecord(text, gameRelease, recordType);
+        }
         return SourceRepositoryLayout.BlockLevelOf(relativePath, gameRelease) is { } level
             ? RecordTextCodec.WhyNotABlockLevel(text, gameRelease, level)
             : null;

@@ -25,4 +25,40 @@ public sealed class SourceContentProblemTests : IDisposable
         Assert.Contains("NoSuchField", problem.Message, StringComparison.Ordinal);
         Assert.True(index.ReadFromItsPluginSource(_fixture.Plugin));
     }
+
+    [Fact]
+    public void AFileRenamedOutsideModbench_MovesItsProblemToTheNewPath_AtTheNextCheck_AndBackClearsIt()
+    {
+        using var index = Indexes.Reconciled(_fixture.DataFolder, [_fixture.Entry]);
+        Assert.Empty(index.SourceProblems());
+        var file = NpcFile;
+        var renamed = Path.Combine(Path.GetDirectoryName(file) ?? "", "Renamed.json");
+
+        File.Move(file, renamed);
+        index.NextCheckUntil(() => index.SourceProblems().Count > 0, "the problem on the new path");
+
+        Assert.Equal(Relative(renamed), Assert.Single(index.SourceProblems()).SourceRelativePath);
+
+        File.Move(renamed, file);
+        index.NextCheckUntil(() => index.SourceProblems().Count == 0, "the problem cleared");
+
+        Assert.Empty(index.SourceProblems());
+    }
+
+    [Fact]
+    public void AFileMovedOutsideModbenchIntoAnotherTypesFolder_IsAProblemOnItsNewPath_AndMovedBackClearsIt()
+    {
+        using var index = Indexes.Reconciled(_fixture.DataFolder, [_fixture.Entry]);
+        var file = NpcFile;
+        var misfiled = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(file)) ?? "", "Globals", Path.GetFileName(file));
+        _ = Directory.CreateDirectory(Path.GetDirectoryName(misfiled) ?? "");
+
+        File.Move(file, misfiled);
+        index.NextCheckUntil(() => index.SourceProblems().Count > 0, "the problem on the new path");
+
+        Assert.Equal(Relative(misfiled), Assert.Single(index.SourceProblems()).SourceRelativePath);
+
+        File.Move(misfiled, file);
+        index.NextCheckUntil(() => index.SourceProblems().Count == 0, "the problem cleared");
+    }
 }

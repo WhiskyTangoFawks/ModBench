@@ -1,3 +1,6 @@
+using MEditService.LoadOrder;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -32,6 +35,62 @@ public sealed class CompilePluginRefusalTests : IDisposable
 
         var refused = Assert.Single(answer.Refused);
         Assert.Contains(Path.GetRelativePath(_mod.ModFolder, file), refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Compile_WithADocumentInAnotherTypesFolder_RefusesNamingTheFile_WithoutExceptionText()
+    {
+        var file = TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
+        var misfiled = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(file)) ?? "", "Globals", Path.GetFileName(file));
+        _ = Directory.CreateDirectory(Path.GetDirectoryName(misfiled) ?? "");
+        File.Move(file, misfiled);
+
+        var answer = (await _mod.CompileHandler.CompileAsync([_mod.Plugin])).Value();
+
+        var refused = Assert.Single(answer.Refused);
+        Assert.Equal(CompileRefusal.SourceDoesNotParse, refused.Refusal);
+        Assert.Contains(Path.GetRelativePath(_mod.ModFolder, misfiled), refused.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Object reference", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Compile_OfTwoPluginsOneWithADocumentInAnotherTypesFolder_RefusesThatOneAndCompilesTheOther()
+    {
+        using var instance = new TwoModInstance();
+        var file = TreeTampering.FileOf(instance.FolderOf(TwoModInstance.BrokenOrigin), instance.Broken, instance.BrokenNpc);
+        var misfiled = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(file)) ?? "", "Globals", Path.GetFileName(file));
+        _ = Directory.CreateDirectory(Path.GetDirectoryName(misfiled) ?? "");
+        File.Move(file, misfiled);
+
+        var answer = (await instance.CompileHandler.CompileAsync([instance.Broken, instance.Sound])).Value();
+
+        var refused = Assert.Single(answer.Refused);
+        Assert.Contains(Path.GetFileName(misfiled), refused.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Object reference", refused.Message, StringComparison.Ordinal);
+        Assert.Equal(instance.Sound.Name, Assert.Single(answer.Applied).Name);
+    }
+
+    private sealed class TwoModInstance : TestInstance
+    {
+        internal const string BrokenOrigin = "BrokenMod";
+
+        internal PluginAddress Broken { get; }
+        internal PluginAddress Sound { get; }
+        internal RecordIdentity BrokenNpc { get; }
+
+        internal TwoModInstance()
+        {
+            var broken = new Fallout4Mod(ModKey.FromFileName("Broken.esp"), Fallout4Release.Fallout4);
+            var npc = broken.Npcs.AddNew("BrokenNpc");
+            Broken = Add(broken, BrokenOrigin);
+            BrokenNpc = new RecordIdentity(npc.FormKey.ToString(), CompileFixture.NpcRecordType, "BrokenNpc");
+            var sound = new Fallout4Mod(ModKey.FromFileName("Sound.esp"), Fallout4Release.Fallout4);
+            _ = sound.Npcs.AddNew("SoundNpc");
+            Sound = Add(sound, "SoundMod");
+            _ = Seal();
+        }
+
+        internal new string FolderOf(string origin) => base.FolderOf(origin);
     }
 
     [Fact]

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { z } from 'zod';
-import { AgentCall, type GestureResult } from '../drivingLib/agentGesture';
+import { AgentCall, type AppliedToNoItems, type GestureResult } from '../drivingLib/agentGesture';
 import type { InstanceValue } from '../instanceLoader/instance';
 import type { Argument } from '../wire/argument';
 import { CONTAINER_NAME, downloadedFilesNamed, filesAndFoldersNamed, filesNamed, linesNamed, modsNamed, namedByOwnPath, pluginsNamed } from './names';
@@ -316,7 +316,10 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.mod.restoreFromManifest', MODS_OR_EVERY_MOD],
 ]);
 
-type GestureOutcome = GestureResult<unknown>;
+type ItemsOutcome = GestureResult<unknown>;
+type GestureOutcome = ItemsOutcome | AppliedToNoItems | { applied: false; refusal: string; detail?: string };
+type AppliedToItems = Extract<ItemsOutcome, { applied: true }>;
+const overItems = (outcome: GestureOutcome): outcome is AppliedToItems => outcome.applied && 'outcome' in outcome;
 
 type DeployOutcome = ({ applied: true } & Deployed) | { applied: false; refusal: string };
 
@@ -324,7 +327,7 @@ const isDeployed = (answer: GestureOutcome | DeployOutcome): answer is { applied
 
 function deployAnswered(answer: { applied: true } & Deployed): GestureOutcome {
   const partial = [...deployFailures(answer), ...deployWarnings(answer)].map((problem) => ({ ...problem, severity: 'warning' as const }));
-  return { applied: true, outcome: { landed: [], refused: [] }, ...(partial.length === 0 ? {} : { partial }) };
+  return { applied: true, ...(partial.length === 0 ? {} : { partial }) };
 }
 
 const partialsIn = ({ partial = [] }: Extract<GestureOutcome, { applied: true }>): string[] =>
@@ -332,6 +335,7 @@ const partialsIn = ({ partial = [] }: Extract<GestureOutcome, { applied: true }>
 
 function refusalIn(outcome: GestureOutcome): string | undefined {
   if (!outcome.applied) return outcome.detail === undefined ? outcome.refusal : `${outcome.refusal} ${outcome.detail}`;
+  if (!overItems(outcome)) return undefined;
   const { refused, landed } = outcome.outcome;
   if (refused.length === 0) return undefined;
   return [
@@ -341,13 +345,14 @@ function refusalIn(outcome: GestureOutcome): string | undefined {
 }
 
 function answerOf(outcome: GestureOutcome) {
+  if (outcome.applied && !overItems(outcome)) return { applied: true, done: outcome.done, partial: outcome.partial };
   return outcome.applied
     ? { landed: outcome.outcome.landed, refused: outcome.outcome.refused, partial: outcome.partial }
     : { refusal: outcome.refusal, detail: outcome.detail };
 }
 
 function namedOwn(value: InstanceValue, outcome: GestureOutcome): GestureOutcome {
-  if (!outcome.applied) return outcome;
+  if (!overItems(outcome)) return outcome;
   const { landed, refused } = outcome.outcome;
   return {
     ...outcome,

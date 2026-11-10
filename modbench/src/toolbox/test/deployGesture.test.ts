@@ -263,7 +263,7 @@ describe('Purge and Move to Overwrite, called by an agent', () => {
     const { reporter, runPurge } = deployAnswering(NOTHING_DEPLOYED, { purged: { ...NOT_PURGED, unmanaged: ['game.exe'], leftRenamed: ['plugins.txt.r'], unfinished: ['x (EBUSY)'] } });
 
     expect([await runPurge(none), reporter.reports, reporter.shownFailures]).toEqual([{
-      applied: true, outcome: { landed: [], refused: [] }, partial: [
+      applied: true, partial: [
         { message: 'The deployment folder holds files purge did not remove:', detail: 'game.exe', severity: 'warning' },
         { message: 'Purge left each plugins.txt deploy renamed, which is yours to put back:', detail: 'plugins.txt.r', severity: 'warning' },
         { message: 'Purge landed, and could not finish:', detail: 'x (EBUSY)', severity: 'warning' },

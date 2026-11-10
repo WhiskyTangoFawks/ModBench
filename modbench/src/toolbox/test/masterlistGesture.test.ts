@@ -47,7 +47,7 @@ beforeEach(() => {
   handlers.clear();
   progressSteps.length = 0;
   vi.clearAllMocks();
-  update.mockResolvedValue({ applied: true, wrote: true });
+  update.mockResolvedValue({ applied: true, written: ['masterlist.yaml', 'prelude.yaml'] });
   uncommitted.mockResolvedValue({ applied: true, files: [] });
 });
 
@@ -121,6 +121,19 @@ describe('from the palette', () => {
 });
 
 describe('from an agent', () => {
+  it('answers that it applied and names the files it wrote, with no lists of items', async () => {
+    const { run } = register();
+
+    expect(await run(new AgentCall([], {}))).toEqual({ applied: true, done: 'Wrote masterlist.yaml and prelude.yaml.' });
+  });
+
+  it('answers that the masterlist was already current when it wrote nothing', async () => {
+    update.mockResolvedValue({ applied: true, written: [] });
+    const { run } = register();
+
+    expect(await run(new AgentCall([], {}))).toEqual({ applied: true, done: 'The masterlist was already current.' });
+  });
+
   it('refuses over uncommitted changes, naming what it would lose and force, and updates nothing', async () => {
     uncommitted.mockResolvedValue({ applied: true, files: ['masterlist.yaml'] });
     const { run, ask } = register();

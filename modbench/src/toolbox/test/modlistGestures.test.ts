@@ -74,7 +74,7 @@ describe('Git init', () => {
 
     expect([reporter.reports, answer]).toEqual([
       [{ severity: 'warning', message: 'Git init:', detail }],
-      { applied: true, outcome: { landed: [], refused: [] }, partial: [{ message: 'Git init:', detail, severity: 'warning' }] },
+      { applied: true, partial: [{ message: 'Git init:', detail, severity: 'warning' }] },
     ]);
   });
 
@@ -90,7 +90,7 @@ describe('Git init', () => {
   it('answers an agent call with its outcome under the Toolbox\'s progress, reporting nothing', async () => {
     const { reporter, run } = register();
 
-    expect(await run(new AgentCall([], {}))).toEqual({ applied: true, outcome: { landed: [], refused: [] } });
+    expect(await run(new AgentCall([], {}))).toEqual({ applied: true });
     expect([progressSteps[0], reporter.reports, reporter.landings]).toEqual(['progress opens on modbench.toolbox', [], []]);
   });
 

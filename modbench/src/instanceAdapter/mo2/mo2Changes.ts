@@ -212,19 +212,19 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
       const paths = sortingRuleFilePaths(instanceRoot);
       return withLock(paths.masterlist, () => withLock(paths.prelude, async () => {
         const undos: Undo[] = [];
-        let wrote = false;
+        const written: string[] = [];
         try {
           for (const [path, text] of [[paths.masterlist, masterlist], [paths.prelude, prelude]] as const) {
             const before = (await exists(path)) ? await get(path) : undefined;
             if (before === text) continue;
             await write(path, text);
             undos.unshift(() => (before === undefined ? remove(path) : write(path, before)));
-            wrote = true;
+            written.push(basename(path));
           }
         } catch (err) {
           throw await undoAll(undos, err);
         }
-        return { wrote };
+        return { written };
       }));
     },
 

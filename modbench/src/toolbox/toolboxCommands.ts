@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { RefreshResult } from '../instanceCommands/loadOrder';
 import type { Instance } from '../instanceLoader/instance';
 import type { InstanceCommands } from '../instanceCommands/instanceCommands';
-import { AgentCall, answeredToAgent, isAgentCall, registerWritingCommand, profilesOf, type GestureResult } from '../drivingLib/agentGesture';
+import { AgentCall, answeredToAgent, isAgentCall, registerWritingCommand, profilesOf, type NoItemsResult } from '../drivingLib/agentGesture';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { Refusal } from '../drivingLib/refusal';
@@ -32,7 +32,10 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
   const profileReporter = reporterFor('switchProfile');
   return [
     registerWritingCommand('modbench.profile.switch', async (called?: unknown) => {
-      if (isAgentCall(called)) return answeredToAgent(await runWritingGesture('modbench.profile.switch', TOOLBOX_VIEW, instance, () => commands.switchProfile(profileOf(called))));
+      if (isAgentCall(called)) {
+        const profile = profileOf(called);
+        return answeredToAgent(await runWritingGesture('modbench.profile.switch', TOOLBOX_VIEW, instance, () => commands.switchProfile(profile)), [], `Switched to ${profile}.`);
+      }
       const { activeProfile: active, profiles } = instance.value;
       const items = profiles.map((p) => ({ label: p, description: p === active ? 'current' : undefined }));
       const picked = await pickWithMarked(items, items.find((i) => i.label === active), 'Switch profile');
@@ -68,7 +71,7 @@ export function registerRefreshCommand(deps: RefreshGestureDeps): vscode.Disposa
   const refusalOf = (outcome: Extract<RefreshResult, { applied: false }>) => outcome.heldElsewhere
     ? { message: 'This instance is open in another Modbench window. Close it, then refresh.', detail: deps.instanceRoot }
     : { message: 'Could not refresh.', detail: outcome.refusal };
-  const run = async (fromAgent: boolean): Promise<GestureResult<never, string> | undefined> => {
+  const run = async (fromAgent: boolean): Promise<NoItemsResult | undefined> => {
     const refill = deps.nextRefill();
     const outcome = await deps.commands.refresh();
     if (outcome.applied) {
