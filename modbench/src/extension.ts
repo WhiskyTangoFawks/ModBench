@@ -98,7 +98,7 @@ type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
   'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'signalChange' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
-  | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'getPluginNameReferences' | 'getScriptReferences' | 'getCopyDocument' | 'getRecordOwner' | 'moveLastWritten' | 'getSourceFolderMoveChanges' | 'followSourceFolderMove' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'getPluginIndexing'>;
+  | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'getPluginNameReferences' | 'getScriptReferences' | 'getCopyDocument' | 'getRecordOwner' | 'moveLastWritten' | 'getSourceFolderMoveChanges' | 'followSourceFolderMove' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'getPluginIndexing' | 'getArchiveFile'>;
 
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -244,6 +244,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     manifestGestures: { commands: instanceRepository, toolboxView: TOOLBOX_VIEW, say: toolbox.say },
     statuses: modStatuses,
     referencedBy: deps.referencedByMod,
+    archives: client,
   }));
   const editing = own(editingFlow({
     client, instanceRoot, ...plugins.editingInPluginsView, log: (line) => outputChannel.error(line),

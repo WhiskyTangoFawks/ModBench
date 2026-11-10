@@ -219,6 +219,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/archives/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The bytes of one file in an archive, by the file's forward-slash path there. 404 when the archive does not hold it. */
+        post: operations["GetArchiveFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/clone-submodules": {
         parameters: {
             query?: never;
@@ -1081,6 +1098,11 @@ export interface components {
         ArchiveContentsRequest: {
             gameRelease: string;
             archives: string[];
+        };
+        ArchiveFileRequest: {
+            gameRelease: string;
+            archive: string;
+            file: string;
         };
         /** @enum {string} */
         ArchiveRefusal: "None" | "VariantNotWritten" | "FileNotPackable" | "NotWritten" | "ArchiveUnreadable" | "FileNotInArchive" | "EntriesAmbiguous";
@@ -2547,6 +2569,48 @@ export interface operations {
             };
             /** @description Bad Request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetArchiveFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveFileRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
