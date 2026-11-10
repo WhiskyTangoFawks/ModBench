@@ -43,7 +43,7 @@ const subscribers: InstanceSubscriber[] = [];
 
 const inDeployed = (path: string) => ({ path, file: `/deployed/${path}` });
 
-const NOT_MOVED: MoveToOverwriteResult = { applied: true, wrote: false, left: [] };
+const NOT_MOVED: MoveToOverwriteResult = { applied: true, wrote: false, landed: [], refused: [], left: [] };
 
 const NOT_PURGED: PurgeResult = { applied: true, wrote: false, restored: undefined, leftRenamed: [], unmanaged: [], unfinished: [] };
 
@@ -287,9 +287,9 @@ describe('Purge and Move to Overwrite, called by an agent', () => {
   });
 
   it('answers each file it left, and a refusal with its reason, reporting neither', async () => {
-    const left = deployAnswering(NOTHING_DEPLOYED, { moved: { applied: true, wrote: true, left: ['Data/.hidden'] } });
+    const left = deployAnswering(NOTHING_DEPLOYED, { moved: { applied: true, wrote: true, landed: ['Data/a.esp'], refused: [], left: ['Data/.hidden'] } });
     expect([await left.runMove(none), left.reporter.reports]).toEqual([{
-      applied: true, outcome: { landed: [], refused: [] },
+      applied: true, outcome: { landed: ['Data/a.esp'], refused: [] },
       partial: [{ message: 'Left in the deployment folder, because no mod file lands at their path:', detail: 'Data/.hidden', severity: 'warning' }],
     }, []]);
 
@@ -301,7 +301,7 @@ describe('Purge and Move to Overwrite, called by an agent', () => {
 describe('Move to Overwrite', () => {
 
   it('moves the files it is given under the Toolbox\'s progress, and says nothing', async () => {
-    const { reporter, moveToOverwrite, runMove } = deployAnswering(NOTHING_DEPLOYED, { moved: { applied: true, wrote: true, left: [] } });
+    const { reporter, moveToOverwrite, runMove } = deployAnswering(NOTHING_DEPLOYED, { moved: { applied: true, wrote: true, landed: ['Data/a.esp'], refused: [], left: [] } });
 
     await runMove(['Data/a.esp']);
 
@@ -319,11 +319,29 @@ describe('Move to Overwrite', () => {
   });
 
   it('warns of each file it left in the deployment folder', async () => {
-    const { reporter, runMove } = deployAnswering(NOTHING_DEPLOYED, { moved: { applied: true, wrote: true, left: ['Data/.hidden'] } });
+    const { reporter, runMove } = deployAnswering(NOTHING_DEPLOYED, { moved: { applied: true, wrote: true, landed: [], refused: [], left: ['Data/.hidden'] } });
 
     await runMove(['Data/.hidden', 'Data/a.esp']);
 
     expect(reporter.reports).toEqual([{ severity: 'warning', message: 'Left in the deployment folder, because no mod file lands at their path:', detail: 'Data/.hidden' }]);
+  });
+
+  it('answers an agent each path it moved and each it refused with its reason', async () => {
+    const refused = { item: 'Data/gone.esp', reason: 'The deployment folder holds no such file that deploy did not write.' };
+    const { reporter, runMove } = deployAnswering(NOTHING_DEPLOYED, { moved: { applied: true, wrote: true, landed: ['Data/a.esp'], refused: [refused], left: [] } });
+
+    const answer = await runMove(new AgentCall([{ kind: 'deployedFile', path: 'Data/a.esp' }, { kind: 'deployedFile', path: 'Data/gone.esp' }], {}));
+
+    expect([answer, reporter.reports]).toEqual([{ applied: true, outcome: { landed: ['Data/a.esp'], refused: [refused] } }, []]);
+  });
+
+  it('warns of each path it refused, saying why', async () => {
+    const refused = { item: 'Data/gone.esp', reason: 'The deployment folder holds no such file that deploy did not write.' };
+    const { reporter, runMove } = deployAnswering(NOTHING_DEPLOYED, { moved: { applied: true, wrote: true, landed: [], refused: [refused], left: [] } });
+
+    await runMove(['Data/gone.esp']);
+
+    expect(reporter.reports).toEqual([{ severity: 'warning', message: 'Not moved:', detail: `"Data/gone.esp" (${refused.reason})` }]);
   });
 
   it('asks for the files deploy does not manage now when none are named, as from the command palette', async () => {
