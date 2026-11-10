@@ -177,18 +177,19 @@ export class ArchivedFolderNode extends vscode.TreeItem {
 export class ArchivedFileNode extends vscode.TreeItem {
   readonly kind = 'archivedFile' as const;
   constructor(
-    public readonly parent: FileNode | ArchivedFolderNode, public readonly archive: FileNode, public readonly path: string, name: string, gameRelease: string,
+    public readonly parent: FileNode | ArchivedFolderNode, public readonly archive: FileNode, public readonly path: string, name: string, gameRelease: string | undefined,
   ) {
     super(name, vscode.TreeItemCollapsibleState.None);
     archivedRow(this, parent, archive, name, path);
     this.contextValue = this.kind;
+    if (gameRelease === undefined) return;
     const uri = archivedFileUri({ gameRelease, archive: archive.file.sourcePath, file: path });
     this.command = { command: 'vscode.open', title: 'Open', arguments: [uri, { preview: true }] };
   }
 }
 
 /** The folders, then the files, directly in an archive or a folder in it, each by name. */
-export function archivedIn(parent: FileNode | ArchivedFolderNode, matches: NameMatch, gameRelease: string): (ArchivedFolderNode | ArchivedFileNode)[] {
+export function archivedIn(parent: FileNode | ArchivedFolderNode, matches: NameMatch, gameRelease: string | undefined): (ArchivedFolderNode | ArchivedFileNode)[] {
   const [archive, prefix, { entries, shown }] = parent instanceof FileNode
     ? [parent, '', parent.archived ?? { entries: [], shown: 'all' as const }]
     : [parent.archive, `${parent.path}/`, parent];

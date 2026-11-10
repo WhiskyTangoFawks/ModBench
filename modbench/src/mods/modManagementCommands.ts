@@ -457,6 +457,7 @@ function folderOf(
     case 'mod': return { name: node.mod.name, folder: uriOf(modDirs.get(node.mod.name)) };
     case 'folder': return { name: node.folder.relativePath, folder: uriOf(node.folder.path) };
     case 'file': return { name: node.file.relativePath, folder: uriOf(node.file.path) };
+    case 'archivedFile': return { name: `${node.archive.file.relativePath}/${node.path}`, folder: uriOf(node.archive.file.path) };
   }
 }
 

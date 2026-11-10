@@ -48,6 +48,20 @@ describe('the archive file system (mods.md, The tree, story 13)', () => {
     expect(client.calls.filter((call) => call.method === 'getArchiveFile')[0]?.args).toEqual(['Fallout4', '/mods/A/A - Main.ba2', 'scripts/a.pex']);
   });
 
+  it('asks mEdit once for a file that VS Code states and then reads, and again for the next open', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getArchiveFile', new Uint8Array([7]));
+    const { provider } = served(client);
+    const asks = () => client.calls.filter((call) => call.method === 'getArchiveFile').length;
+
+    await provider.stat?.(archivedFileUri(address));
+    await provider.readFile?.(archivedFileUri(address));
+    expect(asks()).toBe(1);
+
+    await provider.readFile?.(archivedFileUri(address));
+    expect(asks()).toBe(2);
+  });
+
   it('says why when mEdit could not serve the file', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryFailure('getArchiveFile', { failed: 'refused', refusal: 'it is no BA2' });

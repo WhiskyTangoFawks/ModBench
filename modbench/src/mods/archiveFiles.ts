@@ -25,14 +25,22 @@ class ArchiveFileSystem implements vscode.FileSystemProvider {
 
   watch(): vscode.Disposable { return new vscode.Disposable(() => undefined); }
 
+  // VS Code states a file and then reads it: the bytes the stat fetched serve that one read.
+  private stated: { readonly key: string; readonly bytes: Uint8Array } | undefined;
+
   async stat(uri: vscode.Uri): Promise<vscode.FileStat> {
-    const bytes = await this.bytesOf(uri);
+    const bytes = await this.fetch(uri);
+    this.stated = { key: uri.toString(), bytes };
     return { type: vscode.FileType.File, ctime: 0, mtime: 0, size: bytes.byteLength };
   }
 
-  readFile(uri: vscode.Uri): Promise<Uint8Array> { return this.bytesOf(uri); }
+  async readFile(uri: vscode.Uri): Promise<Uint8Array> {
+    const { stated } = this;
+    this.stated = undefined;
+    return stated?.key === uri.toString() ? stated.bytes : this.fetch(uri);
+  }
 
-  private async bytesOf(uri: vscode.Uri): Promise<Uint8Array> {
+  private async fetch(uri: vscode.Uri): Promise<Uint8Array> {
     const address: unknown = JSON.parse(uri.query);
     if (!isAddress(address)) throw vscode.FileSystemError.FileNotFound(uri);
     const bytes = await this.client.getArchiveFile(address.gameRelease, address.archive, address.file);

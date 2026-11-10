@@ -595,6 +595,8 @@ describe('open folder: one command for a mod, the Overwrite row, a file and a fo
   const linked: OriginFile = { ...file('mods/My Mod', 'textures/a.dds'), sourcePath: '/elsewhere/a.dds' };
   const textures = new FolderNode(myMod, { kind: 'mod', name: 'My Mod' }, folder('mods/My Mod', 'textures'), [linked], [], 'textures');
   const leaf = new FileNode(textures, textures.origin, linked, 'a.dds');
+  const archive = new FileNode(myMod, { kind: 'mod', name: 'My Mod' }, file('mods/My Mod', 'Main.ba2'), 'Main.ba2');
+  const archived = new ArchivedFileNode(archive, archive, 'meshes/a.nif', 'a.nif', 'Fallout4');
 
   it.each<[string, ModlistNode[], unknown[], string]>([
     ['the clicked mod\'s own folder, as the value names it', [], [myMod], '/instance/mods/My Mod'],
@@ -602,6 +604,7 @@ describe('open folder: one command for a mod, the Overwrite row, a file and a fo
     ['a clicked file where it sits in its mod, a link too', [], [leaf], '/instance/mods/My Mod/textures/a.dds'],
     ['the one selected file from the palette', [leaf], [], '/instance/mods/My Mod/textures/a.dds'],
     ['a clicked folder where the value says it sits', [], [textures], '/instance/mods/My Mod/textures'],
+    ['the archive that holds a clicked archived file', [], [archived], '/instance/mods/My Mod/Main.ba2'],
     ['the one selected folder from the palette', [textures], [], '/instance/mods/My Mod/textures'],
   ])('reveals %s', async (_case, selection, args, path) => {
     registerOpenFolderCommand(instance, recordingReporter(), () => selection);
