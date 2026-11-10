@@ -87,6 +87,41 @@ describe('the tree reads as mod order', () => {
   });
 });
 
+describe('a mod\'s label leads with its position in mod order (mods.md, A row, Mod)', () => {
+  const shown = (provider: ModListProvider, rows: readonly ModlistNode[]) => rows.filter((row) => row instanceof ModNode).map((row) => {
+    const { label } = provider.getTreeItem(row);
+    return typeof label === 'string' ? label : label?.label;
+  });
+
+  it('counts from the losing end at 0, a separator taking a place as MO2 gives it a priority', async () => {
+    const provider = makeProvider(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt());
+    const roots = await provider.getChildren();
+    const held = await provider.getChildren(roots.find((row) => row instanceof SeparatorNode && row.separator.name === 'Early Section'));
+
+    expect([...shown(provider, roots), ...shown(provider, held)]).toEqual(['0 Oldest Mod', '1 Old Mod', '3 Base Patch']);
+  });
+
+  it('zero-pads to the width of the last position, so the numbers align', async () => {
+    const provider = makeProvider(Array.from({ length: 11 }, (_, at) => mod(`M${10 - at}`)));
+
+    expect(shown(provider, await provider.getChildren()).slice(0, 2)).toEqual(['00 M0', '01 M1']);
+  });
+
+  it('does not renumber when the view flips', async () => {
+    const provider = makeProvider([mod('Winner'), mod('Loser')]);
+    provider.setViewDirection('winningAtTop');
+
+    expect(shown(provider, await provider.getChildren())).toEqual(['1 Winner', '0 Loser']);
+  });
+
+  it('does not renumber when a filter hides rows', async () => {
+    const provider = makeProvider([mod('Winner'), mod('Loser')]);
+    provider.setFilter('Winner', false);
+
+    expect(shown(provider, await provider.getChildren())).toEqual(['1 Winner']);
+  });
+});
+
 describe('a row\'s identity is its kind and its name', () => {
   it('a mod and a separator that share a name are two rows', async () => {
     const provider = makeProvider([mod('Armor'), sep('Armor')]);
@@ -228,7 +263,7 @@ describe('the highlight (plugins.md, The highlight, story 3; mods.md, The tree, 
 
     provider.highlight([{ kind: 'mod', name: 'Loose' }, { kind: 'runtimeOutput' }]);
 
-    expect(await allMarked(provider)).toEqual(['Loose', 'Overwrite']);
+    expect(await allMarked(provider)).toEqual(['0 Loose', 'Overwrite']);
   });
 
   it('clears the mark when handed none', async () => {
@@ -245,7 +280,7 @@ describe('the highlight (plugins.md, The highlight, story 3; mods.md, The tree, 
 
     provider.highlight([{ kind: 'mod', name: 'Held' }]);
 
-    expect(await allMarked(provider)).toEqual(['Section', 'Held']);
+    expect(await allMarked(provider)).toEqual(['Section', '3 Held']);
   });
 
   it('leaves an open separator unmarked, and marks it again once it closes', async () => {
@@ -253,9 +288,9 @@ describe('the highlight (plugins.md, The highlight, story 3; mods.md, The tree, 
     provider.highlight([{ kind: 'mod', name: 'Held' }]);
 
     open.expandedRow(separatorRowUri('Section'));
-    expect(await allMarked(provider)).toEqual(['Held']);
+    expect(await allMarked(provider)).toEqual(['3 Held']);
     open.collapsedRow(separatorRowUri('Section'));
-    expect(await allMarked(provider)).toEqual(['Section', 'Held']);
+    expect(await allMarked(provider)).toEqual(['Section', '3 Held']);
   });
 
   it('marks a separator made again under the name of one that was open and removed', async () => {
@@ -266,7 +301,7 @@ describe('the highlight (plugins.md, The highlight, story 3; mods.md, The tree, 
     instance.publish(valueOf([mod('Held'), mod('Other'), mod('Loose')]));
     instance.publish(valueOf(entries()));
 
-    expect(await allMarked(provider)).toEqual(['Section', 'Held']);
+    expect(await allMarked(provider)).toEqual(['Section', '3 Held']);
   });
 
   it('refreshes only the rows whose mark changed', () => {

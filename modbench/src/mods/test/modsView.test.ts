@@ -630,6 +630,6 @@ describe('the Mods view\'s selection and the highlight (plugins.md, The highligh
       const { label } = await treeViews.view('modbench.modList').treeDataProvider.getTreeItem(row);
       if (typeof label === 'object' && label.highlights !== undefined) marked.push(label.label);
     }
-    expect(marked).toEqual(['Beta']);
+    expect(marked).toEqual(['0 Beta']);
   });
 });
