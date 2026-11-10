@@ -2298,6 +2298,16 @@
         }
       },
       {
+        "id": "modbench.conflictWinsText",
+        "description": "The text of a record field cell that is identical to the master and wins a conflict.",
+        "defaults": {
+          "dark": "#FF9800",
+          "light": "#E65100",
+          "highContrast": "#FFB74D",
+          "highContrastLight": "#BF360C"
+        }
+      },
+      {
         "id": "modbench.conflictLoses",
         "description": "A record field cell that disagrees with another copy and loses.",
         "defaults": {
