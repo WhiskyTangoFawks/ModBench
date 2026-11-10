@@ -132,7 +132,7 @@ describe('move to Overwrite', () => {
 
     const result = await commands.moveToOverwrite(['Data/MCM/settings.ini', 'game.exe']);
 
-    expect([result, adapter.calls]).toEqual([{ applied: true, wrote: true, left: [] }, [{ verb: 'moveIntoOverwrite', moves: [
+    expect([result, adapter.calls]).toEqual([{ applied: true, wrote: true, landed: ['Data/MCM/settings.ini', 'game.exe'], refused: [], left: [] }, [{ verb: 'moveIntoOverwrite', moves: [
       { from: join('/deployed/Data/MCM/settings.ini'), relativePath: 'MCM/settings.ini' }, { from: join('/deployed/game.exe'), relativePath: 'Root/game.exe' },
     ] }]]);
   });
@@ -142,7 +142,7 @@ describe('move to Overwrite', () => {
 
     const result = await commands.moveToOverwrite();
 
-    expect([result, adapter.calls]).toEqual([{ applied: true, wrote: true, left: [] }, [{ verb: 'moveIntoOverwrite', moves: [{ from: join('/deployed/Data/current.ini'), relativePath: 'current.ini' }] }]]);
+    expect([result, adapter.calls]).toEqual([{ applied: true, wrote: true, landed: ['Data/current.ini'], refused: [], left: [] }, [{ verb: 'moveIntoOverwrite', moves: [{ from: join('/deployed/Data/current.ini'), relativePath: 'current.ini' }] }]]);
   });
 
   it('leaves in the folder, and names, each file no mod file can land at the path of, and moves the rest', async () => {
@@ -150,15 +150,15 @@ describe('move to Overwrite', () => {
 
     const result = await commands.moveToOverwrite(['Data/.hidden', 'Data/Root/x.ini', 'Data/a.esp']);
 
-    expect([result, adapter.calls]).toEqual([{ applied: true, wrote: true, left: ['Data/.hidden', 'Data/Root/x.ini'] }, [{ verb: 'moveIntoOverwrite', moves: [{ from: join('/deployed/Data/a.esp'), relativePath: 'a.esp' }] }]]);
+    expect([result, adapter.calls]).toEqual([{ applied: true, wrote: true, landed: ['Data/a.esp'], refused: [], left: ['Data/.hidden', 'Data/Root/x.ini'] }, [{ verb: 'moveIntoOverwrite', moves: [{ from: join('/deployed/Data/a.esp'), relativePath: 'a.esp' }] }]]);
   });
 
-  it('moves nothing of a named file that is gone from the deployment folder, and the rest', async () => {
+  it('refuses, with its reason, each named path the deployment folder does not hold as a file deploy did not write, and moves the rest', async () => {
     const { adapter, commands } = moving('/deployed', '/games/Fallout4', ['Data/b.esp']);
 
     const result = await commands.moveToOverwrite(['Data/a.esp', 'Data/b.esp']);
 
-    expect([result, adapter.calls]).toEqual([{ applied: true, wrote: true, left: [] }, [{ verb: 'moveIntoOverwrite', moves: [{ from: join('/deployed/Data/b.esp'), relativePath: 'b.esp' }] }]]);
+    expect([result, adapter.calls]).toEqual([{ applied: true, wrote: true, landed: ['Data/b.esp'], refused: [{ item: 'Data/a.esp', reason: 'The deployment folder holds no such file that deploy did not write.' }], left: [] }, [{ verb: 'moveIntoOverwrite', moves: [{ from: join('/deployed/Data/b.esp'), relativePath: 'b.esp' }] }]]);
   });
 
   it('is refused with the reason Overwrite gives', async () => {

@@ -85,6 +85,9 @@ function purgePartials(result: Extract<PurgeResult, { applied: true }>): Partial
   ];
 }
 
+const refusedWarning = (refused: readonly { item: string; reason: string }[]) =>
+  warning('Not moved:', refused.map(({ item, reason }) => `${JSON.stringify(item)} (${reason})`).join(', '));
+
 const leftWarning = (left: readonly string[]) => warning('Left in the deployment folder, because no mod file lands at their path:', left.join(', '));
 
 function pathsOf(called: unknown): readonly string[] | undefined {
@@ -96,15 +99,17 @@ function pathsOf(called: unknown): readonly string[] | undefined {
 }
 
 function registerMoveToOverwriteCommand({ commands, instance, reporter }: Omit<DeployGestureDeps, 'reporterFor'> & { reporter: Reporter }, publishProblems: () => Promise<void>): vscode.Disposable {
-  const move = async (called: unknown): Promise<GestureResult<never, string> | undefined> => {
+  const move = async (called: unknown): Promise<GestureResult<string> | undefined> => {
     const result = await commands.moveToOverwrite(pathsOf(called));
     await publishProblems();
-    if (called instanceof AgentCall) return answeredToAgent(result, result.applied && result.left.length > 0 ? [leftWarning(result.left)] : []);
     if (!result.applied) {
+      if (called instanceof AgentCall) return answeredToAgent(result);
       reporter.report('error', 'Could not move to Overwrite.', result.refusal);
-    } else if (result.left.length > 0) {
-      reportPartial(reporter, [leftWarning(result.left)]);
+      return undefined;
     }
+    const partial = result.left.length > 0 ? [leftWarning(result.left)] : [];
+    if (called instanceof AgentCall) return { applied: true, outcome: { landed: result.landed, refused: result.refused }, ...(partial.length === 0 ? {} : { partial }) };
+    reportPartial(reporter, result.refused.length > 0 ? [refusedWarning(result.refused), ...partial] : partial);
     return undefined;
   };
   return registerWritingCommand(MOVE_TO_OVERWRITE, (called?: unknown) => runWritingGesture(MOVE_TO_OVERWRITE, TOOLBOX_VIEW, instance, () => move(called)));
