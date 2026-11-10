@@ -12,6 +12,7 @@ import { moduleConfigForEngine } from './moduleConfig';
 import { aboutIn, NO_ABOUT, type About } from './releaseAbout';
 import { keyOf, resolverIn } from './releasePaths';
 import { errorMessage } from '../../ports/errorMessage';
+import type { Log } from '../../ports/log';
 import type { FomodKind } from '../gameFolder/releaseRoot';
 import { withImages, type FomodState, type ReleaseImage } from '../../wire/fomodPage';
 import type { FomodAnswer, FomodGroupChoice, FomodLanded, FomodStepChoice } from '../instanceAdapter';
@@ -20,11 +21,12 @@ import { isReport, type ConditionFacts, type EngineReport, type EngineRequest } 
 export type { ConditionFacts } from './engineProtocol';
 
 /** Where the engine is: the script its process runs, and the folder of its add-on; and how long, in milliseconds, it
- *  may say nothing before it is stopped. */
+ *  may say nothing before it is stopped; and where its stderr goes when it fails. */
 export interface FomodEngine {
   readonly process: string;
   readonly folder: string;
   readonly silence: number;
+  readonly log: Log;
 }
 
 interface FomodInstall {
@@ -311,6 +313,11 @@ const unreadableWhy = (message: string): string => {
 
 const engineFault = (why: string): Error => new Error(`The FOMOD engine could not run: ${why}`);
 
+const FATAL_HEADER = /^.*FATAL ERROR.*$/m;
+
+export const deathWhy = (stderr: string, code: number | null, signal: NodeJS.Signals | null): string =>
+  FATAL_HEADER.exec(stderr)?.[0].trim() ?? (signal === null ? `it stopped with code ${code}` : `it was killed by ${signal}`);
+
 const conditionsRead = (unanswered: ReadonlySet<string>): string => `The FOMOD's conditions read ${[...unanswered].join('; ')}.`;
 
 function runEngine(engine: FomodEngine, install: EngineRequest, driver: Driver): Promise<EngineRun> {
@@ -337,12 +344,25 @@ function runEngine(engine: FomodEngine, install: EngineRequest, driver: Driver):
       clearTimeout(silence);
       settled();
     };
-    const fail = (why: string): void => settle(() => reject(engineFault(why)));
+    let silent: string | undefined;
+    const logStderr = (): void => {
+      if (stderr.trim() !== '') engine.log.error(`The FOMOD engine's stderr:\n${stderr.trim()}`);
+    };
+    const fail = (why: string): void => {
+      if (over) return;
+      logStderr();
+      settle(() => reject(engineFault(why)));
+    };
+    const unreadable = (why: string): void => {
+      if (over) return;
+      logStderr();
+      settle(() => resolve({ kind: 'unreadable', why }));
+    };
     const heard = (): void => {
       clearTimeout(silence);
       silence = setTimeout(() => {
-        child.kill();
-        fail(`it said nothing for ${engine.silence} ms`);
+        silent = `it stopped answering for ${engine.silence} ms`;
+        child.kill('SIGKILL');
       }, engine.silence);
     };
     const send = (request: EngineRequest): void => {
@@ -379,7 +399,7 @@ function runEngine(engine: FomodEngine, install: EngineRequest, driver: Driver):
       }
     });
     child.on('error', (err) => fail(err.message));
-    child.on('close', (code) => fail(stderr.trim().split('\n').pop() || `it stopped with code ${code}`));
+    child.on('close', (code, signal) => unreadable(silent ?? deathWhy(stderr, code, signal)));
     driver.attach(send);
     heard();
     send(install);

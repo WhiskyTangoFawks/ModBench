@@ -2,6 +2,7 @@ import { buildSync } from 'esbuild';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
+import { SILENT_LOG } from '../ports/log';
 import type { FomodEngine } from '../instanceAdapter/fomodInstaller/fomodInstaller';
 
 const bundles = mkdtempSync(join(tmpdir(), 'modbench-fomod-engine-'));
@@ -19,4 +20,5 @@ export const FOMOD_ENGINE: FomodEngine = {
   process: engineProcessFrom(join(__dirname, '..', 'instanceAdapter', 'fomodInstaller', 'engineProcess.ts')),
   folder: join(__dirname, '..', '..', 'node_modules', '@nexusmods', 'fomod-installer-native', 'prebuilds', `${process.platform}-${process.arch}`),
   silence: 60_000,
+  log: SILENT_LOG,
 };

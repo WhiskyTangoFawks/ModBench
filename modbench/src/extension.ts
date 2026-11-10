@@ -41,6 +41,7 @@ import { createPlugins, PLUGINS_KEY_ARGS, type Plugins } from './plugins';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
 import { fileProblemsOver } from './ports/fileProblems';
+import type { Log } from './ports/log';
 import { problemsHostOver } from './problemsHost';
 import { ModStatuses } from './modStatus/modStatuses';
 import { DOWNLOADS_KEY_ARGS } from './downloads/keyContext';
@@ -173,17 +174,18 @@ interface Opened {
 
 // esbuild writes the engine's process and copies its add-on beside the extension. The engine answers a step in
 // milliseconds, so a minute of silence is an engine that hangs.
-const fomodEngineIn = (extensionUri: vscode.Uri) => ({
+const fomodEngineIn = (extensionUri: vscode.Uri, log: Log) => ({
   process: vscode.Uri.joinPath(extensionUri, 'out', 'fomodEngine.js').fsPath,
   folder: vscode.Uri.joinPath(extensionUri, 'out', 'fomodEngine').fsPath,
   silence: 60_000,
+  log,
 });
 
 function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, extensionUri: vscode.Uri, medit: MEditClient): Opened {
   return whenOpened<Opened>(openedFolder(isInstance, (line) => outputChannel.info(line)), {
     instance: (instanceRoot) => {
       const adapter = adapterForInstance({
-        instanceRoot, gameFolderSetting, scriptEnvironmentFileSetting: scriptEnvironmentFileOf(instanceRoot), installationFileReader: downloadedFileReader, fileProblems: fileProblemsOver(problemsHostOver(own(vscode.languages.createDiagnosticCollection('modbench-unhashed'))), outputChannel), fomodEngine: fomodEngineIn(extensionUri), deployedPath,
+        instanceRoot, gameFolderSetting, scriptEnvironmentFileSetting: scriptEnvironmentFileOf(instanceRoot), installationFileReader: downloadedFileReader, fileProblems: fileProblemsOver(problemsHostOver(own(vscode.languages.createDiagnosticCollection('modbench-unhashed'))), outputChannel), fomodEngine: fomodEngineIn(extensionUri, outputChannel), deployedPath,
       });
       const instance = own(new Instance({
         adapter, gameFolderSettingId: gameFolderSetting.id, window: vscode.window, log: outputChannel, medit,
