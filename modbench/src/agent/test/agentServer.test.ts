@@ -2,12 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type Held = [{ scheme: string; fsPath: string }, { severity: number; range: { start: { line: number } }; message: string; source?: string; code?: unknown }[]][];
 const diagnosticsHeld = vi.hoisted(() => ({ held: [] as Held }));
+const pathsHeld = vi.hoisted(() => ({ existing: new Set<string>() }));
 const fired = vi.hoisted((): { calls: unknown[][]; outcome: unknown; failure: Error | undefined } => ({ calls: [], outcome: undefined, failure: undefined }));
 vi.mock('vscode', () => ({
   languages: { getDiagnostics: () => diagnosticsHeld.held },
+  Uri: { file: (fsPath: string) => ({ fsPath }) },
+  workspace: { fs: { stat: ({ fsPath }: { fsPath: string }) => (pathsHeld.existing.has(fsPath) ? Promise.resolve({}) : Promise.reject(new Error('ENOENT'))) } },
   commands: { executeCommand: (...args: unknown[]) => { fired.calls.push(args); return fired.failure ? Promise.reject(fired.failure) : Promise.resolve(fired.outcome); } },
   DiagnosticSeverity: { Error: 0, Warning: 1, Information: 2, Hint: 3, 0: 'Error', 1: 'Warning', 2: 'Information', 3: 'Hint' },
 }));
+import { z } from 'zod';
 import { createServer, request, type OutgoingHttpHeaders, type Server } from 'node:http';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -522,6 +526,43 @@ describe('the agent server, given an instance value', () => {
       { file: '/i/source/Rocks/plugin-source/Rocks.esp.json', severity: 'Error', line: 5, message: 'bad reference' },
       { file: '/i/source/Rocks/plugin-source/Rocks.esp.json', severity: 'Information', line: 10, message: 'odd value', code: 7 },
     ]);
+  });
+
+  describe('list_problems given paths', () => {
+    const problem = (message: string) => ({ severity: 0, range: { start: { line: 0 } }, message, source: 'Modbench' });
+    beforeEach(() => {
+      diagnosticsHeld.held = [
+        [{ scheme: 'file', fsPath: '/i/mods/A/a.esp' }, [problem('in A')]],
+        [{ scheme: 'file', fsPath: '/i/mods/A/sub/b.json' }, [problem('in A sub')]],
+        [{ scheme: 'file', fsPath: '/i/mods/AB/c.esp' }, [problem('in AB')]],
+      ];
+      pathsHeld.existing = new Set(['/i/mods/A', '/i/mods/A/a.esp', '/i/mods/A/sub', '/i/mods/AB']);
+    });
+    const messages = async (paths: string[]) => {
+      const { client } = await clientOf(new FakeInstance(VALUE));
+      const problems = z.array(z.object({ message: z.string() })).parse(await read(client, 'list_problems', { paths }));
+      return problems.map(({ message }) => message);
+    };
+
+    it('lists only the problems of a file named', async () => {
+      expect(await messages(['/i/mods/A/a.esp'])).toEqual(['in A']);
+    });
+
+    it('lists the problems of every file below a folder named, and of no sibling folder sharing its prefix', async () => {
+      expect(await messages(['/i/mods/A'])).toEqual(['in A', 'in A sub']);
+    });
+
+    it('lists each problem once when the paths overlap', async () => {
+      expect(await messages(['/i/mods/A', '/i/mods/A/a.esp', '/i/mods/AB'])).toEqual(['in A', 'in A sub', 'in AB']);
+    });
+
+    it('refuses a path that names no file or folder, naming it', async () => {
+      const { client } = await clientOf(new FakeInstance(VALUE));
+
+      const refusal = await call(client, 'list_problems', { paths: ['/i/mods/A', '/i/mods/Nope'] });
+
+      expect(refusal).toEqual({ isError: true, text: expect.stringContaining('/i/mods/Nope') as unknown });
+    });
   });
 
   it('reads the value as it stands on each request', async () => {
@@ -1993,6 +2034,7 @@ describe('the agent server, running a gesture', () => {
 describe('the agent server, given an input its tool does not take', () => {
   it.each([
     ['list_file_conflicts', { mods: 'A' }, 'mods'],
+    ['list_problems', { paths: '/i/mods/A' }, 'paths'],
     ['resolve_instance_names', { downloads: 'rocks.7z' }, 'downloads'],
     ['resolve_names', {}, 'names'],
     ['select_rows', { sql: 5 }, 'sql'],

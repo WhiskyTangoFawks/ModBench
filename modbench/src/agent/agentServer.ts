@@ -138,7 +138,7 @@ function mcpServerOf({ instance, copyReads, mEdit, terminalEnvironment, statuses
   register(server, log, reading(...RECORD_READS), SELECT_ROWS, (args) => SELECT_ROWS.of(mEdit, args));
   for (const gesture of GESTURE_TOOLS) register(server, log, reading('instance'), gesture, async (args) => gesture.of(await naming(args), mEdit, args, (line) => { log.warn(`[agent] ${gesture.name}: ${line}`); }));
   register(server, log, reading(), { ...SCRIPT_ENVIRONMENT, input: NO_INPUT }, () => SCRIPT_ENVIRONMENT.of(terminalEnvironment));
-  register(server, log, reading('instance', 'sortingRules', 'sourceLanguage'), { ...PROBLEMS, input: NO_INPUT }, PROBLEMS.of);
+  register(server, log, reading('instance', 'sortingRules', 'sourceLanguage'), PROBLEMS, (args) => PROBLEMS.of(args));
   register(server, log, reading('instance'), READ_GUIDE, (args) => READ_GUIDE.of(currentValue(instance), args));
   return server;
 }
