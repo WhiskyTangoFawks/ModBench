@@ -27,7 +27,7 @@ internal static class ListLeaves
         // A form-link element is commonly sparse: a "Null" slot is a tolerated placeholder, not a
         // data error, which the element type cannot say on its own.
         return new("", leaf.ApiType, false, leaf.ValidFormKeyTypes, leaf.EnumMembers,
-            AllowsNull: leaf.ApiType == "formKey", Default: leaf.Default, HoldsAlpha: leaf.HoldsAlpha);
+            AllowsNull: leaf.ApiType == "formKey", Default: leaf.Default, HoldsAlpha: leaf.HoldsAlpha, DataPathOf: leaf.DataPathOf);
     }
 
     internal static FieldMetadata? BuildList(

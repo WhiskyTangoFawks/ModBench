@@ -12,7 +12,9 @@ internal sealed record LeafSpec(
     // See FieldMetadata.HoldsAlpha.
     bool HoldsAlpha = false,
     // See FieldMetadata.IndexWhen.
-    IReadOnlyList<string>? IndexWhen = null)
+    IReadOnlyList<string>? IndexWhen = null,
+    // See FieldMetadata.DataPathOf.
+    Func<string, string>? DataPathOf = null)
 {
     /// <summary>A leaf that names no record type — every leaf but a form link; on a form link, any record type.</summary>
     public static readonly string[] NoFormKeyTypes = [];
