@@ -367,8 +367,8 @@ function heldWholeLinesOf(name: string): string[] {
   return name.endsWith(separatorModName('')) ? [`!${folder}/*`] : [`!${folder}/*`, `${folder}/${MOD_META_FILE_NAME}`];
 }
 
-/** An ignore list that lets in the files of each mod folder of `folderNames` and keeps out the mod manager's metadata file,
- *  or with `held` false leaves them out, every other line kept. Undefined when the markers do not pair. */
+/** An ignore list that lets in the files of each mod folder of `folderNames` less its metadata file, or with `held` false
+ *  leaves them out. Undefined when the markers do not pair. */
 export const withHeldWholeLines = (ignoreList: string, folderNames: readonly string[], held: boolean): string | undefined =>
   withOwnLines(ignoreList, HELD_WHOLE, withLinesOf(ignoreList, HELD_WHOLE.letIn, folderNames.flatMap(heldWholeLinesOf), held));
 

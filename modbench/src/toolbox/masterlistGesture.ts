@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
 import type { MasterlistCommands } from '../instanceCommands/masterlist';
-import { answeredToAgent, isAgentCall, registerWritingCommand, type AgentCall, type GestureResult } from '../drivingLib/agentGesture';
+import { answeredToAgent, isAgentCall, registerWritingCommand, type AgentCall, type NoItemsResult } from '../drivingLib/agentGesture';
 import type { Progress } from '../drivingLib/pausableProgress';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { AskQuestion } from '../ports/dialog';
@@ -21,14 +21,17 @@ interface MasterlistGestureDeps {
   reporter: Reporter;
 }
 
+const wroteOrCurrent = (written: readonly string[]): string =>
+  written.length === 0 ? 'The masterlist was already current.' : `Wrote ${written.join(' and ')}.`;
+
 const forces = (call: AgentCall): boolean => 'force' in call.options && call.options.force === true;
 
 /** `modbench.instance.updateMasterlist` (commands.md): asks first, or refuses an agent without force, only over uncommitted changes. */
 export function registerMasterlistCommand({ commands, instance, pluginsView, say, ask, reporter }: MasterlistGestureDeps): vscode.Disposable {
-  const run = async (called: unknown, progress: Progress): Promise<GestureResult<never, string> | undefined> => {
+  const run = async (called: unknown, progress: Progress): Promise<NoItemsResult | undefined> => {
     const agentCall = isAgentCall(called) ? called : undefined;
-    const finish = (result: { applied: true } | { applied: false; refusal: string }) => {
-      if (agentCall) return answeredToAgent(result);
+    const finish = (result: { applied: true; written?: readonly string[] } | { applied: false; refusal: string }) => {
+      if (agentCall) return answeredToAgent(result, [], result.applied && result.written ? wroteOrCurrent(result.written) : undefined);
       if (!result.applied) reporter.report('error', 'Could not update the masterlist.', result.refusal);
       return undefined;
     };

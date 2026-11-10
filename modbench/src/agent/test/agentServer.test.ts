@@ -1241,9 +1241,18 @@ describe('the agent server, running a gesture', () => {
       ['modbench.profile.switch', new AgentCall([{ kind: 'profile', name: 'Modding' }], {})],
       ['modbench.instance.deploy', new AgentCall([], {})],
     ]);
-    expect(answer).toEqual({ isError: false, text: JSON.stringify({ landed: [], refused: [], partial: [{
+    expect(answer).toEqual({ isError: false, text: JSON.stringify({ applied: true, partial: [{
       message: 'Deploy left out each file whose path holds a file it did not write:', detail: '/m/A/a.esp at Data/a.esp', severity: 'warning',
     }] }) });
+  });
+
+  it('answers a gesture over no items as applied with what it says it did, and no lists', async () => {
+    fired.outcome = { applied: true, done: 'Wrote masterlist.yaml and prelude.yaml.' };
+    const { client } = await served();
+
+    const answer = await call(client, 'instance_update_masterlist', {});
+
+    expect(answer).toEqual({ isError: false, text: JSON.stringify({ applied: true, done: 'Wrote masterlist.yaml and prelude.yaml.' }) });
   });
 
   it('answers a refused deploy with its refusal', async () => {
