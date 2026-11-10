@@ -17,6 +17,7 @@ import { fakeInstanceAdapter, modFoldersOf, readingFixture } from './fakeInstanc
 import { cloneCorpusFixture, DEFAULT_MODLIST } from './mo2/corpusFixture';
 import { adapterOver } from './mo2/adapterOver';
 import { STEADY_WINDOW } from './steadyWindow';
+import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
 
 const MOD = 'Freshly Installed Mod';
 const DATA_FOLDER = '/game/Data';
@@ -46,7 +47,7 @@ async function settledWiredInstance(): Promise<{
   const instance = new Instance({
     gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW,
     adapter: adapterOver(root, { gameFolder: DATA_FOLDER_FOUND }),
-    log: { info: () => {}, warn: () => {}, error: () => {} },
+    log: { info: () => {}, warn: () => {}, error: () => {} }, medit: new InMemoryMEditClient(),
   });
   instances.push(instance);
   const channel = channelDouble();
@@ -84,7 +85,7 @@ describe('mod sync and the Instance, over a real mods/ folder', () => {
 async function settledFakeInstance(overrides: Partial<InstanceReading>) {
   const fake = fakeInstanceAdapter(readingFixture(overrides));
   const instance = new Instance({
-    gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, adapter: fake.adapter, log: { info: () => {}, warn: () => {}, error: () => {} },
+    gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, adapter: fake.adapter, log: { info: () => {}, warn: () => {}, error: () => {} }, medit: new InMemoryMEditClient(),
   });
   instances.push(instance);
   const channel = channelDouble();

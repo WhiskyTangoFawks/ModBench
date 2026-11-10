@@ -9,7 +9,7 @@ import type { ReadFailed } from '../../wire/readFailed';
 import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 
 type QueryMethod =
-  | 'getPlugins' | 'getDiagnoses' | 'getPluginIndexing' | 'getPluginProblems' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags'
+  | 'getPlugins' | 'getDiagnoses' | 'getPluginIndexing' | 'getPluginProblems' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'getArchiveContents'
   | 'getRecords' | 'searchRecords'
   | 'getRecordOwner' | 'getRecordHolders' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getRecordsComparison' | 'getReferences' | 'getReferencesInActiveOrCompiledPlugins' | 'getPluginNameReferences' | 'getScriptReferences'
   | 'getRenderedDocument' | 'getCopyDocument' | 'getRecordOfFile'
@@ -373,6 +373,9 @@ export class InMemoryMEditClient implements MEditClient {
   }
   getCreatablePluginFlags(...args: Parameters<MEditClient['getCreatablePluginFlags']>): ReturnType<MEditClient['getCreatablePluginFlags']> {
     return this.query('getCreatablePluginFlags', args);
+  }
+  getArchiveContents(...args: Parameters<MEditClient['getArchiveContents']>): ReturnType<MEditClient['getArchiveContents']> {
+    return this.query('getArchiveContents', args);
   }
   getRecords(...args: Parameters<MEditClient['getRecords']>): ReturnType<MEditClient['getRecords']> {
     return this.query('getRecords', args);

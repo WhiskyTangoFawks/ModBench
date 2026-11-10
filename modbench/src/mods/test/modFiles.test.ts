@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { FileOrigin, OriginFile, OriginFolder } from '../../instanceLoader/instance';
+import type { ArchiveRead } from '../../instanceLoader/archiveContents';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, DataTransferItem, DataTransfer, FakeCancellationToken, Uri,
@@ -44,9 +45,10 @@ function foldersHoldingFiles(files: readonly OriginFile[]): OriginFolder[] {
 function providerOver(
   mods: ModlistEntry[], filesByMod: Record<string, OriginFile[]>, overwriteFiles: OriginFile[] = [],
   folders: { byMod?: Record<string, OriginFolder[]>; overwrite?: OriginFolder[] } = {},
+  archiveContents: ReadonlyMap<string, ArchiveRead> = new Map(),
 ): ModListProvider {
   const value = instanceValueFixture({
-    mods, filesByMod: new Map(Object.entries(filesByMod)), overwriteFiles,
+    mods, filesByMod: new Map(Object.entries(filesByMod)), overwriteFiles, archiveContents,
     foldersByMod: new Map(Object.entries(filesByMod).map(([name, files]) => [name, folders.byMod?.[name] ?? foldersHoldingFiles(files)])),
     overwriteFolders: folders.overwrite ?? foldersHoldingFiles(overwriteFiles),
   });
@@ -151,6 +153,71 @@ describe('a mod opens into its files as a folder tree (mods.md, The tree, story 
 
     expect(row.collapsibleState).toBe(Collapsed);
     expect(shown(await provider.getChildren(row))).toEqual(['file Armour.esp']);
+  });
+});
+
+describe('an archive opens into its files as a folder does (mods.md, The tree, story 13)', () => {
+  const ARCHIVE = file('Armour - Main.ba2', '/instance/mods/Armour/Armour - Main.ba2', '/linked/Armour - Main.ba2');
+  const holding = (...files: string[]) => new Map<string, ArchiveRead>([[ARCHIVE.sourcePath, { kind: 'read', answer: files }]]);
+  const archiveRow = async (archiveContents: ReadonlyMap<string, ArchiveRead>, origin: 'mod' | 'overwrite' = 'mod') => {
+    const provider = origin === 'mod'
+      ? providerOver([mod('Armour')], { Armour: [ARCHIVE] }, [], {}, archiveContents)
+      : providerOver([], {}, [ARCHIVE], {}, archiveContents);
+    const root = origin === 'mod' ? await rootOf(provider, ModNode, 'Armour') : await rootOf(provider, OverwriteNode, 'Overwrite');
+    return { provider, archive: await childNamed(provider, root, 'Armour - Main.ba2') };
+  };
+
+  it.each([['a mod', 'mod'], ['Overwrite', 'overwrite']] as const)('in %s: folders first, then files, each by name, and a folder in it opens into its own', async (_where, origin) => {
+    const { provider, archive } = await archiveRow(holding('textures/b.dds', 'meshes/a.nif', 'Zed.txt', 'textures/sub/c.dds', 'A.txt'), origin);
+    const textures = await childNamed(provider, archive, 'textures');
+
+    expect(shown(await provider.getChildren(archive))).toEqual(['archivedFolder meshes', 'archivedFolder textures', 'archivedFile A.txt', 'archivedFile Zed.txt']);
+    expect(shown(await provider.getChildren(textures))).toEqual(['archivedFolder sub', 'archivedFile b.dds']);
+  });
+
+  it('starts collapsed, as each folder in it does, and a click on it only selects', async () => {
+    const { provider, archive } = await archiveRow(holding('meshes/a.nif', 'A.txt'));
+
+    expect([archive.collapsibleState, archive.command]).toEqual([Collapsed, undefined]);
+    expect((await provider.getChildren(archive)).map((row) => [labelOf(row), row.collapsibleState])).toEqual([['meshes', Collapsed], ['A.txt', None]]);
+  });
+
+  it.each([
+    ['mEdit could not read', new Map<string, ArchiveRead>([['/linked/Armour - Main.ba2', { kind: 'unreadable', reason: 'it is no BA2' }]])],
+    ['mEdit has not read', new Map<string, ArchiveRead>()],
+    ['mEdit has not answered for', new Map<string, ArchiveRead>([['/linked/Armour - Main.ba2', { kind: 'unanswered' }]])],
+    ['that holds no file', holding()],
+  ])('an archive %s has no expander', async (_case, archiveContents) => {
+    const { archive } = await archiveRow(archiveContents);
+
+    expect(archive.collapsibleState).toBe(None);
+  });
+
+  it('a file or folder in it names its own kind as its contextValue, so no gesture of a file or folder in the mod is offered on it, and a click on it only selects', async () => {
+    const { provider, archive } = await archiveRow(holding('meshes/a.nif'));
+    const meshes = await childNamed(provider, archive, 'meshes');
+    const leaf = await childNamed(provider, meshes, 'a.nif');
+
+    expect([meshes, leaf].map((row) => [row.contextValue, row.command])).toEqual([['archivedFolder', undefined], ['archivedFile', undefined]]);
+  });
+
+  it('a file or folder in it is named by the path in its mod, through the archive, for its identity, its tooltip and the file icon theme', async () => {
+    const { provider, archive } = await archiveRow(holding('meshes/a.nif'));
+    const meshes = await childNamed(provider, archive, 'meshes');
+    const leaf = await childNamed(provider, meshes, 'a.nif');
+
+    expect([meshes, leaf].map((row) => [row.id, row.resourceUri?.path, row.tooltip])).toEqual([
+      [`${archive.id}/meshes`, '/mod/Armour/Armour - Main.ba2/meshes', 'Armour - Main.ba2/meshes'],
+      [`${archive.id}/meshes/a.nif`, '/mod/Armour/Armour - Main.ba2/meshes/a.nif', 'Armour - Main.ba2/meshes/a.nif'],
+    ]);
+  });
+
+  it('a file in it has the folder that holds it as its parent, then the archive', async () => {
+    const { provider, archive } = await archiveRow(holding('meshes/a.nif'));
+    const meshes = await childNamed(provider, archive, 'meshes');
+
+    expect(provider.getParent(await childNamed(provider, meshes, 'a.nif'))).toBe(meshes);
+    expect(provider.getParent(meshes)).toBe(archive);
   });
 });
 
@@ -377,10 +444,13 @@ describe('the name filter finds a file at every level (mods.md, Order and view s
 
   function filtered(
     term: string, grouping = true,
-    over: { mods?: ModlistEntry[]; files?: Record<string, OriginFile[]>; overwrite?: OriginFile[]; folders?: Record<string, OriginFolder[]> } = {},
+    over: {
+      mods?: ModlistEntry[]; files?: Record<string, OriginFile[]>; overwrite?: OriginFile[]; folders?: Record<string, OriginFolder[]>;
+      archives?: ReadonlyMap<string, ArchiveRead>;
+    } = {},
   ) {
     const provider = providerOver(
-      over.mods ?? gear, over.files ?? { Armour: armour, Boots: [file('boots.esp')] }, over.overwrite, { byMod: over.folders },
+      over.mods ?? gear, over.files ?? { Armour: armour, Boots: [file('boots.esp')] }, over.overwrite, { byMod: over.folders }, over.archives,
     );
     provider.setFilter(term, grouping);
     return provider;
@@ -398,6 +468,35 @@ describe('the name filter finds a file at every level (mods.md, Order and view s
     expect(textures.collapsibleState).toBe(Expanded);
     expect(shown(await provider.getChildren(textures))).toEqual(['folder armour']);
     expect(shown(await provider.getChildren(await childNamed(provider, textures, 'armour')))).toEqual(['file b.dds']);
+  });
+
+  describe('in an archive (mods.md, The tree, story 13)', () => {
+    const archive = file('Armour - Main.ba2');
+    const holdingMeshes = {
+      files: { Armour: [archive, file('readme.txt')], Boots: [file('boots.esp')] },
+      archives: new Map<string, ArchiveRead>([[archive.sourcePath, { kind: 'read', answer: ['meshes/c.nif', 'textures/x.dds'] }]]),
+    };
+
+    it('a mod and an archive whose names do not match are shown for a file in it that does, open, and a folder in it for the files below it', async () => {
+      const provider = filtered('c.nif', true, holdingMeshes);
+      const row = expectInstanceOf((await provider.getChildren(await rootOf(provider, SeparatorNode, 'Gear')))[0], ModNode);
+      const archiveRow = await childNamed(provider, row, 'Armour - Main.ba2');
+      const meshes = await childNamed(provider, archiveRow, 'meshes');
+
+      expect(shown(await provider.getChildren(row))).toEqual(['file Armour - Main.ba2']);
+      expect([archiveRow.collapsibleState, meshes.collapsibleState]).toEqual([Expanded, Expanded]);
+      expect(shown(await provider.getChildren(archiveRow))).toEqual(['archivedFolder meshes']);
+      expect(shown(await provider.getChildren(meshes))).toEqual(['archivedFile c.nif']);
+    });
+
+    it('an archive whose name matches shows all its files, collapsed', async () => {
+      const provider = filtered('main.ba2', true, holdingMeshes);
+      const row = expectInstanceOf((await provider.getChildren(await rootOf(provider, SeparatorNode, 'Gear')))[0], ModNode);
+      const archiveRow = await childNamed(provider, row, 'Armour - Main.ba2');
+
+      expect(archiveRow.collapsibleState).toBe(Collapsed);
+      expect(shown(await provider.getChildren(archiveRow))).toEqual(['archivedFolder meshes', 'archivedFolder textures']);
+    });
   });
 
   it('a separator is shown for a file it holds, open', async () => {

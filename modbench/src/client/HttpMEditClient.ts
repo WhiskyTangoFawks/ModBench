@@ -14,7 +14,7 @@ import { announceAfterReopen, createLoadOrderSender, type LoadOrderSender } from
 import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
-  type BackendStatus, type CellChildRecords, type BuildFacts, type BuildMod, type BuildOutcome,
+  type ArchiveContents, type BackendStatus, type CellChildRecords, type BuildFacts, type BuildMod, type BuildOutcome,
   type Submodule, type SubmodulesCloned, type PluginFilesFlagged, type PluginFileToFlag,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
@@ -684,6 +684,12 @@ class HttpMEditClient implements MEditClient {
 
   getCreatablePluginFlags(name: string): Promise<string[][] | ReadFailed> {
     return this.read('getCreatablePluginFlags', (api, signal) => api.GET('/plugins/creatable-flags', { params: { query: { name } }, signal }), (data) => data ?? [], { timed: true });
+  }
+
+  getArchiveContents(gameRelease: string, archives: readonly string[]): Promise<ArchiveContents[] | ReadFailed> {
+    return this.read(`getArchiveContents(${archives.length} archives)`, (api, signal) => api.POST('/archives/contents', {
+      body: { gameRelease, archives: [...archives] }, signal,
+    }), noBodyFails, { timed: true });
   }
 
   getRecords({ name: plugin, origin }: PluginAddress, type: string, offset: number, limit: number): Promise<RecordPage | ReadFailed> {

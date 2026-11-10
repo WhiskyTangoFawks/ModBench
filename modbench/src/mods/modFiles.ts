@@ -26,14 +26,25 @@ export const shownUnder = (parent: ChildrenShown, matches: NameMatch, name: stri
 
 const pathNamed = (relativePath: string, matches: NameMatch): boolean => relativePath.split('/').some(matches);
 
-export function anyNamed(files: readonly OriginFile[], folders: readonly OriginFolder[], matches: NameMatch): boolean {
-  return files.some((file) => pathNamed(file.relativePath, matches)) || folders.some((folder) => pathNamed(folder.relativePath, matches));
+/** A file in an archive, by its path there. */
+export interface ArchivedEntry {
+  readonly relativePath: string;
+}
+
+/** What an archive holds; none for a file that is no archive mEdit read. */
+export type ArchivedOf = (file: OriginFile) => readonly ArchivedEntry[];
+
+const named = (archivedOf: ArchivedOf, matches: NameMatch) => (file: OriginFile): boolean =>
+  pathNamed(file.relativePath, matches) || archivedOf(file).some((entry) => pathNamed(entry.relativePath, matches));
+
+export function anyNamed(files: readonly OriginFile[], folders: readonly OriginFolder[], matches: NameMatch, archivedOf: ArchivedOf): boolean {
+  return files.some(named(archivedOf, matches)) || folders.some((folder) => pathNamed(folder.relativePath, matches));
 }
 
 export function narrowToMatches(
-  files: readonly OriginFile[], folders: readonly OriginFolder[], matches: NameMatch,
+  files: readonly OriginFile[], folders: readonly OriginFolder[], matches: NameMatch, archivedOf: ArchivedOf,
 ): { files: OriginFile[]; folders: OriginFolder[] } {
-  const foundFiles = files.filter((file) => pathNamed(file.relativePath, matches));
+  const foundFiles = files.filter(named(archivedOf, matches));
   const foundFolders = folders.filter((folder) => pathNamed(folder.relativePath, matches));
   const above = new Set<string>();
   for (const { relativePath } of [...foundFiles, ...foundFolders]) {
@@ -105,6 +116,7 @@ export class FileNode extends vscode.TreeItem {
   readonly kind = 'file' as const;
   readonly exclusion: FileExclusion;
   readonly ignoring: FileIgnore;
+  archived: { readonly entries: readonly ArchivedEntry[]; readonly shown: ChildrenShown } | undefined;
   constructor(
     public readonly parent: ModlistNode,
     public readonly origin: FileOrigin,
@@ -128,6 +140,60 @@ export class FileNode extends vscode.TreeItem {
   }
 }
 
+// mods.md, The tree, story 13.
+function openingIntoItsFiles(row: FileNode, entries: readonly ArchivedEntry[], shown: ChildrenShown): FileNode {
+  if (entries.length === 0) return row;
+  row.archived = { entries, shown };
+  row.collapsibleState = expanderOver(entries, shown);
+  row.command = undefined;
+  return row;
+}
+
+function archivedRow(row: vscode.TreeItem, parent: ModlistNode, archive: FileNode, name: string, path: string): void {
+  const inMod = `${archive.file.relativePath}/${path}`;
+  row.id = `${parent.id}/${name}`;
+  row.resourceUri = fileRowUri(archive.origin, inMod);
+  row.tooltip = inMod;
+}
+
+/** A folder in an archive, and the files below it. */
+export class ArchivedFolderNode extends vscode.TreeItem {
+  readonly kind = 'archivedFolder' as const;
+  constructor(
+    public readonly parent: FileNode | ArchivedFolderNode,
+    public readonly archive: FileNode,
+    public readonly path: string,
+    public readonly entries: readonly ArchivedEntry[],
+    name: string,
+    public readonly shown: ChildrenShown,
+  ) {
+    super(name, expanderOver(entries, shown));
+    archivedRow(this, parent, archive, name, path);
+    this.contextValue = this.kind;
+  }
+}
+
+export class ArchivedFileNode extends vscode.TreeItem {
+  readonly kind = 'archivedFile' as const;
+  constructor(public readonly parent: FileNode | ArchivedFolderNode, public readonly archive: FileNode, path: string, name: string) {
+    super(name, vscode.TreeItemCollapsibleState.None);
+    archivedRow(this, parent, archive, name, path);
+    this.contextValue = this.kind;
+  }
+}
+
+/** The folders, then the files, directly in an archive or a folder in it, each by name. */
+export function archivedIn(parent: FileNode | ArchivedFolderNode, matches: NameMatch): (ArchivedFolderNode | ArchivedFileNode)[] {
+  const [archive, prefix, { entries, shown }] = parent instanceof FileNode
+    ? [parent, '', parent.archived ?? { entries: [], shown: 'all' as const }]
+    : [parent.archive, `${parent.path}/`, parent];
+  const { here, below } = byLevel(entries, prefix);
+  return [
+    ...[...below].sort(byName).map(([name, under]) => new ArchivedFolderNode(parent, archive, `${prefix}${name}`, under, name, shownUnder(shown, matches, name))),
+    ...[...here].sort(byName).map(([name, entry]) => new ArchivedFileNode(parent, archive, entry.relativePath, name)),
+  ];
+}
+
 /** The folders, then the files, directly in `parent`, each by name. `files` and `folders` are
  *  those under it, and `path` is its own path in its mod, none for the mod or Overwrite itself. */
 export function filesIn(
@@ -137,8 +203,15 @@ export function filesIn(
     differs: (origin: FileOrigin, relativePath: string) => boolean;
     ignored: (origin: FileOrigin, file: OriginFile) => FileIgnore;
     holdsPublisherTag: (path: string) => boolean;
+    archived: ArchivedOf;
   },
 ): (FolderNode | FileNode)[] {
+  const archivedShown = (file: OriginFile, name: string): [readonly ArchivedEntry[], ChildrenShown] => {
+    if (filter === undefined) return [[], 'all'];
+    const shown = shownUnder(filter.shown, filter.matches, name);
+    const entries = filter.archived(file);
+    return [shown === 'matching' ? entries.filter((entry) => pathNamed(entry.relativePath, filter.matches)) : entries, shown];
+  };
   const prefix = path === undefined ? '' : `${path}/`;
   const ownFiles = byLevel(files, prefix);
   const ownFolders = byLevel(folders, prefix);
@@ -148,6 +221,9 @@ export function filesIn(
       filter ? shownUnder(filter.shown, filter.matches, name) : 'all', filter?.holdsPublisherTag(folder.path),
     ), filter?.differs(origin, folder.relativePath))),
     ...[...ownFiles.here].sort(byName).map(([name, file]) =>
-      sayingWhetherItDiffers(new FileNode(parent, origin, file, name, filter?.conflict(origin, file), filter?.holdsPublisherTag(file.path), filter?.ignored(origin, file)), filter?.differs(origin, file.relativePath))),
+      sayingWhetherItDiffers(openingIntoItsFiles(
+        new FileNode(parent, origin, file, name, filter?.conflict(origin, file), filter?.holdsPublisherTag(file.path), filter?.ignored(origin, file)),
+        ...archivedShown(file, name),
+      ), filter?.differs(origin, file.relativePath))),
   ];
 }
