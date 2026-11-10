@@ -28,8 +28,7 @@ internal sealed class RelationReads(
     public RecordDocument? GetDocument(string formKey)
     {
         using var context = store.OpenRead();
-        var tableName = FindRecordType(context, formKey);
-        return tableName == null ? null : ReadDocument(context, tableName, formKey, plugin: null, origin: null, winnerOnly: true);
+        return OneDocument(context, Located(context, "records", "form_key = $1 AND is_winner", formKey));
     }
 
     /// <summary>One specific plugin's copy of <paramref name="formKey"/>, winner or not. Null if
@@ -37,9 +36,24 @@ internal sealed class RelationReads(
     public RecordDocument? GetDocument(string formKey, PluginAddress plugin)
     {
         using var context = store.OpenRead();
-        var tableName = FindRecordType(context, formKey);
-        return tableName == null ? null : ReadDocument(context, tableName, formKey, plugin.Name, plugin.Origin, winnerOnly: false);
+        return OneDocument(context, Located(context, "records", "form_key = $1 AND plugin = $2 AND origin = $3", formKey, plugin.Name, plugin.Origin));
     }
+
+    private RecordDocument? OneDocument(ReadContext context, List<CopySize> located) =>
+        located is [var copy]
+            ? ReadDocumentFromBody(context, Stored(context, [located]).Single().Single(), LinkResolution.ForLinksOf(context, [copy.FormKey]))
+            : null;
+
+    // Each caller names a record or a few copies, so the length taken above the view's joins carries few documents.
+    private static List<CopySize> Located(ReadContext context, string view, string where, params object?[] values) =>
+        context.Rows($"SELECT form_key, plugin, origin, strlen(body) FROM {view} WHERE {where} ORDER BY load_order_idx",
+            CopySizeOf, values);
+
+    private static CopySize CopySizeOf(DbDataReader reader) =>
+        new(reader.GetString(0), new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.GetInt64(3));
+
+    private IEnumerable<List<StoredCopy>> Stored(ReadContext context, IEnumerable<IReadOnlyList<CopySize>> records) =>
+        CopyBodies.Read(context, records, store.DocumentBatchBytes);
 
     /// <summary>The copy <paramref name="plugin"/> would hold were its document <paramref name="text"/>,
     /// active or not. Null if no plugin indexes the FormKey. Text that is no record document gives
@@ -60,39 +74,37 @@ internal sealed class RelationReads(
     public (RecordIdentity Identity, string Body)? GetCopyText(string formKey, PluginAddress plugin)
     {
         using var context = store.OpenRead();
-        return context.Rows($"SELECT record_type, editor_id, body FROM {TableDdlBuilder.PluginRecordsView} WHERE form_key = $1 AND plugin = $2 AND origin = $3 LIMIT 1",
-            reader => (new RecordIdentity(formKey, reader.GetString(0), reader.GetStringOrNull(1)), reader.GetString(2)),
-            formKey, plugin.Name, plugin.Origin) is [var copy] ? copy : null;
+        var located = Located(context, TableDdlBuilder.PluginRecordsView, "form_key = $1 AND plugin = $2 AND origin = $3", formKey, plugin.Name, plugin.Origin);
+        if (located.Count == 0) return null;
+        var copy = Stored(context, [located]).Single().Single();
+        return (new RecordIdentity(formKey, copy.RecordType, copy.EditorId), copy.Body);
     }
 
     /// <summary>Each of <paramref name="copies"/>' documents, null where that copy's plugin holds no indexed
-    /// copy, read in one query that names the copies, and the resolver for the links of their records.</summary>
+    /// copy, and the resolver for the links of their records.</summary>
     public (List<RecordDocument?> Documents, Func<string, RecordLookupEntry?> Resolve) GetDocuments(IReadOnlyList<RecordCopy> copies)
     {
         var formKeys = copies.Select(copy => copy.FormKey).Distinct().ToList();
         var named = copies.Select((_, i) => $"(form_key = ${3 * i + 1} AND plugin = ${3 * i + 2} AND origin = ${3 * i + 3})");
         using var context = store.OpenRead();
         var resolve = LinkResolution.ForLinksOf(context, formKeys, Resolve);
-        var held = ActiveCopies(context, string.Join(" OR ", named), resolve,
+        var located = Located(context, "records", string.Join(" OR ", named),
             [.. copies.SelectMany(copy => new[] { copy.FormKey, copy.Plugin.Name, copy.Plugin.Origin })]);
+        var held = Stored(context, located.GroupBy(copy => copy.FormKey, StringComparer.OrdinalIgnoreCase).Select(record => record.ToList()))
+            .SelectMany(record => record)
+            .Select(copy => ReadDocumentFromBody(context, copy, resolve))
+            .ToLookup(document => document.FormKey, StringComparer.OrdinalIgnoreCase);
         return ([.. copies.Select(copy => held[copy.FormKey].FirstOrDefault(document => PluginAddress.Comparer.Equals(document.Plugin, copy.Plugin)))], resolve);
     }
 
     /// <summary>Each record's active copies in load order; given <paramref name="within"/>, that plugin and its masters alone
-    /// (ADR-0008). Each query reads a batch of whole records' copies (<see cref="Store.Store.DocumentBatchBytes"/>).</summary>
+    /// (ADR-0008).</summary>
     public IEnumerable<(string FormKey, IReadOnlyList<RecordDocument> Copies)> GetStacks(IReadOnlyList<string> formKeys, PluginAddress? within)
     {
         using var context = store.OpenRead();
-        using var snapshot = context.Snapshot();
-        foreach (var batch in Batches(CopySizes(context, formKeys, within), store.DocumentBatchBytes))
-        {
-            var documents = Documents(context, batch);
-            foreach (var stack in batch)
-                yield return (stack.Key, [.. documents[stack.Key].Where(document => stack.Any(copy => PluginAddress.Comparer.Equals(copy.Plugin, document.Plugin)))]);
-        }
+        foreach (var stack in Stored(context, CopySizes(context, formKeys, within).Select(record => record.ToList())))
+            yield return (stack[0].FormKey, [.. stack.Select(copy => ReadDocumentFromBody(context, copy, _ => null))]);
     }
-
-    private readonly record struct CopySize(PluginAddress Plugin, long Length);
 
     private static ILookup<string, CopySize> CopySizes(ReadContext context, IReadOnlyList<string> formKeys, PluginAddress? within)
     {
@@ -126,53 +138,9 @@ internal sealed class RelationReads(
             {TableDdlBuilder.ActiveJoin("c", "plugin", "origin")}
             {narrowedByPlugin}
             ORDER BY p.load_order_idx
-            """, reader => (FormKey: reader.GetString(0), Copy: new CopySize(new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.GetInt64(3))), [.. values])
-            .ToLookup(row => row.FormKey, row => row.Copy, StringComparer.OrdinalIgnoreCase);
+            """, CopySizeOf, [.. values])
+            .ToLookup(copy => copy.FormKey, StringComparer.OrdinalIgnoreCase);
     }
-
-    private static IEnumerable<List<IGrouping<string, CopySize>>> Batches(IEnumerable<IGrouping<string, CopySize>> stacks, long batchBytes)
-    {
-        var batch = new List<IGrouping<string, CopySize>>();
-        long bytes = 0;
-        foreach (var stack in stacks)
-        {
-            var stackBytes = stack.Sum(copy => copy.Length);
-            if (batch.Count > 0 && bytes + stackBytes > batchBytes)
-            {
-                yield return batch;
-                (batch, bytes) = ([], 0);
-            }
-            batch.Add(stack);
-            bytes += stackBytes;
-        }
-        if (batch.Count > 0) yield return batch;
-    }
-
-    // A filter naming each copy takes over ten times as long as one naming their keys, plugins and origins, so the
-    // copies are matched after the read.
-    private ILookup<string, RecordDocument> Documents(ReadContext context, List<IGrouping<string, CopySize>> batch)
-    {
-        var formKeys = batch.Select(stack => stack.Key).ToList();
-        var copies = batch.SelectMany(stack => stack.Select(copy => copy.Plugin)).ToList();
-        var plugins = copies.Select(plugin => plugin.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        var origins = copies.Select(plugin => plugin.Origin).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        string[] values = [.. formKeys, .. plugins, .. origins];
-        static string Parameters(int from, int count) => string.Join(", ", Enumerable.Range(from + 1, count).Select(i => $"${i}"));
-        return ActiveCopies(context,
-            $"form_key IN ({Parameters(0, formKeys.Count)}) AND plugin IN ({Parameters(formKeys.Count, plugins.Count)}) AND origin IN ({Parameters(formKeys.Count + plugins.Count, origins.Count)})",
-            _ => null, values);
-    }
-
-    private ILookup<string, RecordDocument> ActiveCopies(
-        ReadContext context, string where, Func<string, RecordLookupEntry?> resolve, string[] values, string prefix = "") =>
-        context.Rows($"""
-            {prefix}
-            SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, parse_diagnosis, record_type
-            FROM records
-            WHERE {where}
-            ORDER BY load_order_idx
-            """, reader => ReadDocumentFromBody(context, reader, store.Schemas[reader.GetString(8)], resolve), values)
-            .ToLookup(document => document.FormKey, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Whether any registered plugin, active or not, holds <paramref name="formKey"/>.</summary>
     public bool IsHeldByAnyPlugin(string formKey)
@@ -203,23 +171,18 @@ internal sealed class RelationReads(
     public OverrideStack? GetOverrideStack(string formKey)
     {
         using var context = store.OpenRead();
-        var tableName = FindRecordType(context, formKey);
-        if (tableName == null) return null;
-        var schema = store.Schemas[tableName];
+        var located = Located(context, "records",
+            "form_key = $1 AND record_type = (SELECT record_type FROM records WHERE form_key = $1 LIMIT 1)", formKey);
+        if (located.Count == 0) return null;
         var resolve = LinkResolution.ForLinksOf(context, [formKey]);
-        var entries = context.Rows("""
-            SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, parse_diagnosis, working_tree_state
-            FROM records
-            WHERE form_key = $1 AND record_type = $2
-            ORDER BY load_order_idx
-            """, reader =>
+        var copies = Stored(context, [located]).Single();
+        var entries = copies.ConvertAll(copy =>
         {
-            var doc = ReadDocumentFromBody(context, reader, schema, resolve);
-            var isDirty = WorkingTreeStates.FromStored(reader.GetString(8)) != WorkingTreeState.None;
+            var doc = ReadDocumentFromBody(context, copy, resolve);
+            var isDirty = WorkingTreeStates.FromStored(copy.WorkingTreeState) != WorkingTreeState.None;
             return new OverrideStackEntry(doc.Plugin, doc.LoadOrderIndex, doc.IsWinner, doc, isDirty);
-        }, formKey, NormalizeRecordType(tableName));
-
-        return entries.Count == 0 ? null : new OverrideStack(formKey, tableName, entries);
+        });
+        return new OverrideStack(formKey, copies[0].RecordType, entries);
     }
 
     public PagedResult<RecordSummary> Search(RecordQuery query)
@@ -530,20 +493,22 @@ internal sealed class RelationReads(
     }
 
     /// <summary>Each copy in an active or compiled plugin whose document holds <paramref name="text"/> in any case.</summary>
-    public IReadOnlyList<CopyHoldingText> GetCopiesHoldingText(string text)
+    public IEnumerable<CopyHoldingText> GetCopiesHoldingText(string text)
     {
         using var context = store.OpenRead();
-        return context.Rows($"""
-            SELECT r.form_key, r.plugin, r.origin, r.record_type, r.body, d.derived_from <> '{DerivedFrom.Binary}'
-            FROM {TableDdlBuilder.MirrorSchema}.records r
+        // The length is taken below the join, which would otherwise carry every document holding the text (ADR-0010).
+        var located = context.Rows($"""
+            SELECT r.form_key, r.plugin, r.origin, r.length, {InPluginSource}
+            FROM (SELECT form_key, plugin, origin, strlen(body) AS length
+                  FROM {TableDdlBuilder.MirrorSchema}.records WHERE contains(lower(body), lower($1))) r
             {TableDdlBuilder.RegisteredJoin("r", "plugin", "origin")}
             JOIN {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} d
               ON d.plugin = r.plugin AND d.origin = r.origin
-            WHERE contains(lower(r.body), lower($1))
-              AND (p.load_order_idx IS NOT NULL OR d.derived_from <> '{DerivedFrom.Binary}')
+            WHERE {ActiveOrCompiled}
             ORDER BY r.plugin, r.origin, r.form_key
-            """, reader => new CopyHoldingText(
-                reader.GetString(0), new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.GetString(3), reader.GetString(4), reader.GetBoolean(5)), text);
+            """, reader => (Copy: CopySizeOf(reader), InPluginSource: reader.GetBoolean(4)), text);
+        foreach (var (found, stored) in located.Zip(Stored(context, located.Select(found => new[] { found.Copy }))))
+            yield return new CopyHoldingText(found.Copy.FormKey, found.Copy.Plugin, stored[0].RecordType, stored[0].Body, found.InPluginSource);
     }
 
     /// <summary>Every plugin at least one filtered record matches, restricted to
@@ -824,11 +789,6 @@ internal sealed class RelationReads(
     private static string? FindRecordTypeInAnyPlugin(ReadContext context, string formKey) =>
         context.ScalarString($"SELECT record_type FROM {TableDdlBuilder.MirrorSchema}.records WHERE form_key = $1 LIMIT 1", formKey);
 
-    // Private: table-name dispatch is rejected from the seam; GetDocument and GetOverrideStack
-    // resolve a FormKey's type themselves rather than being told it.
-    private static string? FindRecordType(ReadContext context, string formKey) =>
-        context.ScalarString("SELECT record_type FROM records WHERE form_key = $1 LIMIT 1", formKey);
-
     private static List<ReferenceRow> GetReferences(ReadContext context, string referrers, string restriction, string targetFormKey)
     {
         // WorkingTreeOverlay keeps form_references rewritten as the working tree changes, so this
@@ -874,34 +834,10 @@ internal sealed class RelationReads(
             parentFormKey, plugin, origin);
     }
 
-    private RecordDocument? ReadDocument(ReadContext context, string tableName, string formKey, string? plugin, string? origin, bool winnerOnly)
-    {
-        var schema = store.Schemas[tableName];
-        var conditions = new List<string> { "form_key = $1" };
-        var values = new List<string> { formKey };
-
-        if (winnerOnly) conditions.Add("is_winner = true");
-        if (plugin != null) { conditions.Add($"plugin = ${values.Count + 1}"); values.Add(plugin); }
-        if (origin != null) { conditions.Add($"origin = ${values.Count + 1}"); values.Add(origin); }
-
-        conditions.Add($"record_type = ${values.Count + 1}");
-        values.Add(NormalizeRecordType(tableName));
-
-        var resolve = LinkResolution.ForLinksOf(context, [formKey]);
-        return context.Rows($"""
-            SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, parse_diagnosis
-            FROM records WHERE {string.Join(" AND ", conditions)}
-            LIMIT 1
-            """, reader => ReadDocumentFromBody(context, reader, schema, resolve), [.. values]) is [var document] ? document : null;
-    }
-
-    private RecordDocument ReadDocumentFromBody(
-        ReadContext context, DbDataReader reader, RecordTableSchema schema,
-        Func<string, RecordLookupEntry?> resolveFormKey) =>
+    private RecordDocument ReadDocumentFromBody(ReadContext context, StoredCopy copy, Func<string, RecordLookupEntry?> resolveFormKey) =>
         DocumentFromBody(
-            context, reader.GetString(0), reader.GetString(1), reader.GetString(2), NullableInt(reader, 3) ?? int.MaxValue,
-            reader.GetBoolean(4), reader.GetStringOrNull(5),
-            reader.GetString(6), schema, resolveFormKey, reader.GetStringOrNull(7));
+            context, copy.FormKey, copy.Plugin.Name, copy.Plugin.Origin, copy.LoadOrderIndex ?? int.MaxValue, copy.IsWinner, copy.EditorId,
+            copy.Body, store.Schemas[copy.RecordType], resolveFormKey, copy.ParseDiagnosis);
 
     // The construction half of ReadDocumentFromBody. The fields are the document's own nodes (ADR-0005), except a
     // header's masters, which no document holds (ADR-0008).
