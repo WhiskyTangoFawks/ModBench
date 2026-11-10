@@ -37,10 +37,13 @@ const reads: Parameters<typeof modValueOver>[0] = {
   fileStamp: () => Promise.resolve({ kind: 'unreadable', reason: 'ENOENT' }),
   originFileHash: async (path): ReturnType<typeof reads.originFileHash> => {
     hashed.push(path);
-    return hashingContents ? { kind: 'read', answer: { hash: await readFile(path, 'utf8') } } : { kind: 'unreadable', reason: 'unhashed' };
+    return hashingContents ? { kind: 'read', answer: { hash: await readFile(path, 'utf8'), size: 0 } } : { kind: 'unreadable', reason: 'unhashed' };
   },
   exclusionMark: '.mohidden',
-  downloadedFile: (name) => Promise.resolve({ kind: 'read', answer: downloads.get(name) }),
+  downloadedFile: (name) => {
+    const download = downloads.get(name);
+    return Promise.resolve({ kind: 'read', answer: download && { ...download, path: name, size: 1 } });
+  },
   gamePlaces: () => Promise.resolve([]),
   flaggedHash: () => Promise.resolve(undefined),
   gameFilesTakenBy: () => Promise.resolve({ kind: 'read', answer: { gameFiles: [], notes: [] } }),

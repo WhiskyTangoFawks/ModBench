@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { modbenchDiagnostic } from '../drivingLib/modbenchDiagnostic';
 import type { InstanceView } from '../instanceLoader/instance';
+import type { UnshippableReason } from '../instanceAdapter/instanceAdapter';
 import type { ModStatus } from '../manifestAdapter/manifestAdapter';
 import type { ModStatuses } from '../modStatus/modStatuses';
 
@@ -14,20 +15,19 @@ const wording = (mod: string, [first, ...rest]: readonly [Unshippable, ...Unship
     ? `1 file of "${mod}" has no way to ship: '${first.path}': ${first.reason}.`
     : `${rest.length + 1} files of "${mod}" have no way to ship, such as '${first.path}': ${first.reason}.`;
 
-type ReasonFor = (folder: string, pathInFolder: string, mod: string) => string | undefined;
-
-function messageOf(status: ModStatus, folder: string, reasonFor: ReasonFor): string | undefined {
+function messageOf(status: ModStatus, folder: string, heldByPackage: ReadonlySet<string>, reasonFor: UnshippableReason): string | undefined {
   const [first, ...rest] = status.unpackaged.flatMap((path) => {
-    const reason = reasonFor(folder, path, status.mod);
+    const reason = reasonFor(folder, path, status.mod, heldByPackage.has(path));
     return reason === undefined ? [] : [{ path, reason }];
   });
   return first === undefined ? undefined : wording(status.mod, [first, ...rest]);
 }
 
 interface Judged {
-  readonly reasonFor: ReasonFor;
+  readonly reasonFor: UnshippableReason;
   readonly folder: string;
   readonly unpackaged: readonly string[];
+  readonly packaged: readonly string[];
   readonly message: string | undefined;
 }
 
@@ -42,7 +42,7 @@ export class UnshippableProblems {
   constructor(
     private readonly collection: vscode.DiagnosticCollection,
     private readonly instance: Pick<InstanceView, 'value' | 'subscribe'>,
-    private readonly statuses: Pick<ModStatuses, 'current' | 'onDidChange'>,
+    private readonly statuses: Pick<ModStatuses, 'current' | 'heldByPackage' | 'onDidChange'>,
   ) {
     this.following = [instance.subscribe(() => { void this.show(); }), statuses.onDidChange(() => { void this.show(); })];
     void this.show();
@@ -65,8 +65,10 @@ export class UnshippableProblems {
       const folder = folders.get(status.mod);
       if (folder === undefined) continue;
       const before = this.judged.get(status.mod);
-      const kept = before !== undefined && before.reasonFor === reason && before.folder === folder && sameFiles(before.unpackaged, status.unpackaged);
-      judged.set(status.mod, kept ? before : { reasonFor: reason, folder, unpackaged: status.unpackaged, message: messageOf(status, folder, reason) });
+      const heldByPackage = this.statuses.heldByPackage(status.mod);
+      const packaged = status.unpackaged.filter((path) => heldByPackage.has(path));
+      const kept = before !== undefined && before.reasonFor === reason && before.folder === folder && sameFiles(before.unpackaged, status.unpackaged) && sameFiles(before.packaged, packaged);
+      judged.set(status.mod, kept ? before : { reasonFor: reason, folder, unpackaged: status.unpackaged, packaged, message: messageOf(status, folder, heldByPackage, reason) });
     }
     this.judged = judged;
     const messages = [...judged.values()].flatMap(({ message }) => (message === undefined ? [] : [message]));

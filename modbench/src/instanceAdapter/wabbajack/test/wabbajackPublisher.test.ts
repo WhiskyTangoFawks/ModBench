@@ -165,9 +165,9 @@ describe('a folder Wabbajack\'s compiler never ships, as the mod manager names i
   });
 });
 
-describe('a file the compiler has no way to ship, once no package holds its bytes (publishing.md, What ships, story 2)', () => {
+describe('a file the compiler has no way to ship, once no package holds its bytes or a file of its name (publishing.md, What ships, story 2)', () => {
   const COMPILE_PROFILES = { Profile: 'Main' };
-  const REASON = 'no package holds its bytes, and no Include or No Match Include publisher tag covers it';
+  const REASON = 'no package holds its bytes or a file of its name, and no Include or No Match Include publisher tag covers it';
 
   async function unshippable(mod: string, pathInMod: string, folder: readonly string[] = ['mods', mod], heldByPackage = false): Promise<string | undefined> {
     const { unshippable: judged } = expectKind(await publisherOver().configuration(), 'read');
