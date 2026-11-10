@@ -34,6 +34,7 @@ As a user, I want:
 |---|---|---|---|
 | Master, OnlyOne | none | default | the record's master, or the only copy |
 | IdenticalToMaster | grey | default | the copy has the field as the master has it, or neither has it |
+| IdenticalToMasterWinsConflict | grey | orange | the copy has the field as the master has it, and wins over a copy that disagrees |
 | Override | green | default | changed from the master, and no other copy disagrees |
 | ConflictWins | orange | default | disagrees with another copy, and wins |
 | ConflictLoses | red | red | disagrees with another copy, and loses |
