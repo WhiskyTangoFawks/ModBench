@@ -17,7 +17,7 @@ vi.mock('vscode', () => ({
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
 import { OpenRows } from '../openRows';
 import { NO_MOD_STATUSES } from '../../test/noModStatuses';
-import { ArchivedFileNode, FolderNode } from '../modFiles';
+import { ArchivedFileNode, FileNode, FolderNode } from '../modFiles';
 import { FileConflictLookup, RUNTIME_OUTPUT, modOrigin } from '../../instanceLoader/fileConflictIndex';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -228,6 +228,7 @@ describe('an archive opens into its files as a folder does (mods.md, The tree, s
 
   it('a file in an archive of a game the tables do not know has no command, since no release says how to read the archive', async () => {
     const { archive } = await archiveRow(holding('meshes/a.nif'));
+    if (!(archive instanceof FileNode)) throw new Error('the archive row is a file');
 
     expect(new ArchivedFileNode(archive, archive, 'meshes/a.nif', 'a.nif', undefined).command).toBeUndefined();
   });
