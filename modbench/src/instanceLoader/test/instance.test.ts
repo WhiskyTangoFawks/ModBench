@@ -12,6 +12,7 @@ import { leveledLog } from '../../test/leveledLog';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { Instance, instanceMessages, type InstanceValue } from '../instance';
 import { factsOf } from '../instanceFacts';
+import { modOrigin } from '../fileConflictIndex';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const instances: Instance[] = [];
@@ -1307,5 +1308,46 @@ describe('Instance — what each archive holds', () => {
     await instance.refresh();
 
     expect(instance.value.loadsArchive(archive)).toBe(loads);
+  });
+
+  describe('the copies of each file, stacked as the game stacks them', () => {
+    const FILE = 'meshes/x.nif';
+    const archived = (name: string, archive: string) =>
+      ({ origin: modOrigin(name), at: { kind: 'archived', gameRelease: 'Fallout4', archive: `/instance/mods/${name}/${archive}`, file: FILE } });
+    const stackOf = async (reading: Partial<InstanceReading>, answers: ReturnType<typeof holding>[]) => {
+      const { instance, medit } = loader(
+        { pluginOrder: [{ name: 'A.esp', enabled: true }, { name: 'Off.esp', enabled: false }], ...reading },
+        (adapter) => ({ ...adapter, fileStamp: () => Promise.resolve({ kind: 'read', answer: { size: 1n, modifiedNs: 1n } }) }),
+      );
+      medit.setQueryAnswer('getArchiveContents', answers);
+      await instance.refresh();
+      return instance.value.stackedCopies.get(FILE)?.copies;
+    };
+
+    it('stacks the INIs\' archives below each active plugin\'s, whatever the mod order', async () => {
+      const copies = await stackOf({
+        mods: [mod('B'), mod('A')], archiveList: ['Listed.ba2'],
+        modFiles: new Map([['A', filesOfMod('A', 'A.esp', 'A - Main.ba2')], ['B', filesOfMod('B', 'Listed.ba2')]]),
+      }, [holding('/instance/mods/A/A - Main.ba2', FILE), holding('/instance/mods/B/Listed.ba2', FILE)]);
+
+      expect(copies).toEqual([archived('A', 'A - Main.ba2'), archived('B', 'Listed.ba2')]);
+    });
+
+    it('takes no copy from an archive the game does not load', async () => {
+      const copies = await stackOf({
+        mods: [mod('A')], modFiles: new Map([['A', filesOfMod('A', 'A.esp', 'Off.esp', 'Off - Main.ba2')]]),
+      }, [holding('/instance/mods/A/Off - Main.ba2', FILE)]);
+
+      expect(copies).toBeUndefined();
+    });
+
+    it('takes the copies of an archive from the mod whose archive of that name wins', async () => {
+      const copies = await stackOf({
+        mods: [mod('A'), mod('B')], archiveList: ['Listed.ba2'],
+        modFiles: new Map([['A', filesOfMod('A', 'Listed.ba2')], ['B', filesOfMod('B', 'Listed.ba2')]]),
+      }, [holding('/instance/mods/A/Listed.ba2', FILE), holding('/instance/mods/B/Listed.ba2', FILE)]);
+
+      expect(copies).toEqual([archived('A', 'Listed.ba2')]);
+    });
   });
 });

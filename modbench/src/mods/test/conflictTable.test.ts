@@ -1,6 +1,7 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { conflictTable } from '../conflictTable';
 import { file, indexedValueOf, mod } from './indexedValue';
+import { modOrigin } from '../../instanceLoader/fileConflictIndex';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import type { ConflictCellValue, ConflictRow, ConflictTable } from '../../wire/conflictTable';
 import type { Copy, FileCopies } from '../../drivingLib/sameCopies';
@@ -41,6 +42,32 @@ describe('the conflict table\'s columns, over a mod order listed winning-first',
       { name: 'Middle', origin: { kind: 'mod', name: 'Middle' }, opened: true },
       { name: 'High', origin: { kind: 'mod', name: 'High' }, opened: false },
     ]);
+  });
+});
+
+describe('the conflict table over archived copies', () => {
+  const archiveOf = (name: string, ...files: string[]) => ({ origin: modOrigin(name), archive: `/instance/${name}/${name}.ba2`, files });
+
+  it('keeps the columns in mod order and marks the winning copy where the game stacks it: a loose copy over an archived one', async () => {
+    const value = await indexedValueOf([mod('Archived'), mod('Loose')], {
+      Archived: { files: [file('Archived', 'Archived.ba2')] },
+      Loose: { files: [file('Loose', 'a.dds')] },
+    }, undefined, [archiveOf('Archived', 'a.dds')]);
+
+    const table = conflictTable(read(value), 'Archived', [], 'size');
+
+    expect([table.kind === 'table' && table.columns.map(({ name }) => name), winningCells(table, 'a.dds')]).toEqual([['Loose', 'Archived'], [[true, false]]]);
+  });
+
+  it('has a row for a file the mod holds only in an archive the game loads', async () => {
+    const value = await indexedValueOf([mod('Other'), mod('Opened')], {
+      Other: { files: [file('Other', 'a.dds')] },
+      Opened: { files: [file('Opened', 'Opened.ba2')] },
+    }, undefined, [archiveOf('Opened', 'a.dds')]);
+
+    const table = conflictTable(read(value), 'Opened', [], 'size');
+
+    expect(table.kind === 'table' && shape(table.rows)).toEqual([{ file: 'a.dds', cells: [true, true] }]);
   });
 });
 
@@ -179,7 +206,7 @@ describe('the conflict table\'s states', () => {
       Opened: { files: [file('Opened', 'a.dds')] },
     });
 
-    expect(conflictTable(read(value), 'Opened', [], 'size')).toEqual({ kind: 'message', text: 'Disabled: its files take no part in mod order.' });
+    expect(conflictTable(read(value), 'Opened', [], 'size')).toEqual({ kind: 'message', text: 'Disabled: its files take part in no conflict.' });
   });
 
   it('says a mod gone from the mod list is gone, naming it', async () => {

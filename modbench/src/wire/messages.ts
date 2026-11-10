@@ -54,6 +54,8 @@ export const WEBVIEW_TO_EXTENSION = {
 
 /** Why a compiled plugin's source does not read, and whether decompile gets past it. */
 export type UnreadableSource = components['schemas']['UnreadableSource'];
+/** A file in an archive: its size, and when asked for, its digest as a loose copy's is written. */
+export type ArchivedCopy = components['schemas']['ArchivedCopy'];
 /** A column header's status: the label under the file name, and the reason in its tooltip (editor.md, A column's header). */
 export interface ColumnStatus { readonly label: string; readonly reason: string }
 export type CompareResult = components['schemas']['CompareResult'];

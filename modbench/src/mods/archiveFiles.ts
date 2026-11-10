@@ -1,10 +1,9 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import { failureReason, isReadFailed } from '../wire/readFailed';
+import type { ArchivedFileAddress } from '../instanceLoader/fileConflictIndex';
 
 const ARCHIVE_SCHEME = 'modbench-archive';
-
-interface ArchivedFileAddress { gameRelease: string; archive: string; file: string }
 
 function isAddress(value: unknown): value is ArchivedFileAddress {
   if (typeof value !== 'object' || value === null) return false;
@@ -12,9 +11,9 @@ function isAddress(value: unknown): value is ArchivedFileAddress {
 }
 
 /** A file in an archive. The address rides in the query, so a restored tab can read its file again; the path ends in the file's name. */
-export function archivedFileUri(address: ArchivedFileAddress): vscode.Uri {
-  const archiveName = address.archive.split(/[\\/]/).at(-1);
-  return vscode.Uri.from({ scheme: ARCHIVE_SCHEME, path: `/${archiveName}/${address.file}`, query: JSON.stringify(address) });
+export function archivedFileUri({ gameRelease, archive, file }: ArchivedFileAddress): vscode.Uri {
+  const archiveName = archive.split(/[\\/]/).at(-1);
+  return vscode.Uri.from({ scheme: ARCHIVE_SCHEME, path: `/${archiveName}/${file}`, query: JSON.stringify({ gameRelease, archive, file }) });
 }
 
 // mods.md, The tree, story 13: Modbench never writes inside an archive.

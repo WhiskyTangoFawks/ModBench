@@ -200,7 +200,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
     const { adapter } = fakeInstanceAdapter(readingFixture(), {
       stamps: new Map([['/instance/High/a.dds', stamp(2048n)], ['/instance/Low/a.dds', stamp(512n)]]),
     });
-    const panel = openTable(new FakeInstance(await shared()), 'High', recordingReporter(), (files) => sameCopies(adapter, files));
+    const panel = openTable(new FakeInstance(await shared()), 'High', recordingReporter(), (files) => sameCopies(adapter, { stamps: () => Promise.resolve([]), hashes: () => Promise.resolve([]) }, files));
     panel.webview.receive?.(ready);
     await posted(panel, 1);
 

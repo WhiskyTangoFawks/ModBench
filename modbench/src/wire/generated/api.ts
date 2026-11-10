@@ -236,6 +236,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/archives/copies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Each of the files an archive holds, by the forward-slash path it was asked for: its size, as the archive's index records it, and with hashed, the xxHash64 of its bytes, its eight little-endian bytes in base64. A file the archive does not hold is left out. 400 when the archive cannot be read. */
+        post: operations["GetArchiveCopies"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/clone-submodules": {
         parameters: {
             query?: never;
@@ -1099,6 +1116,12 @@ export interface components {
             gameRelease: string;
             archives: string[];
         };
+        ArchiveCopiesRequest: {
+            gameRelease: string;
+            archive: string;
+            files: string[];
+            hashed: boolean;
+        };
         ArchiveFileRequest: {
             gameRelease: string;
             archive: string;
@@ -1122,6 +1145,12 @@ export interface components {
         ArchiveVariantsRequest: {
             general: components["schemas"]["ArchiveVariantRequest"];
             textures: components["schemas"]["ArchiveVariantRequest"];
+        };
+        ArchivedCopy: {
+            file: string;
+            /** Format: int64 */
+            size: number;
+            hash?: string | null;
         };
         Ba2VariantRequest: {
             /** Format: int32 */
@@ -2611,6 +2640,39 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetArchiveCopies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveCopiesRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchivedCopy"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -24,6 +24,8 @@ import { OpenRows } from '../mods/openRows';
 import { PublisherTagDecorations } from '../mods/publisherTagIndicators';
 import { file, indexedValueOf, mod } from '../mods/test/indexedValue';
 
+const NO_ARCHIVES = { stamps: () => Promise.resolve([]), hashes: () => Promise.resolve([]) };
+
 const NM: PublisherTag = { name: 'NM tag', badge: 'NM', marksPaths: true };
 const AE: PublisherTag = { name: 'AE tag', badge: 'AE', marksPaths: false };
 const COVERED: Record<string, readonly PublisherTag[]> = {
@@ -71,7 +73,7 @@ describe('what the Mods view shows of a mod\'s files, and what the agent reads (
         };
       }).sort((a, b) => (a.file < b.file ? -1 : 1)),
     }));
-    const read = await FILE_CONFLICTS.of(value, fakeInstanceAdapter().adapter, { mods: shown.map(({ mod: name }) => ({ name })) }) as AgentMod[];
+    const read = await FILE_CONFLICTS.of(value, fakeInstanceAdapter().adapter, NO_ARCHIVES, { mods: shown.map(({ mod: name }) => ({ name })) }) as AgentMod[];
 
     expect(read.map(({ mod: name, indicators: held, files }) => ({
       mod: name, indicators: held, files: files.map(({ file: path, gotten, publisherTags }) => ({ file: path, gotten, publisherTags })),
@@ -104,7 +106,7 @@ describe('what the conflict table shows of a file\'s contents, and what the agen
 
     const shown = await Promise.all(NAMES.map(async (name) => {
       const view = { value, sequence: 1 };
-      const table = conflictTable(view, name, await sameCopies(adapter, copiesToRead(value, conflictPaths(view, name))), 'size');
+      const table = conflictTable(view, name, await sameCopies(adapter, NO_ARCHIVES, copiesToRead(value, conflictPaths(view, name))), 'size');
       const column = table.kind === 'table' ? table.columns.findIndex(({ origin }) => origin.kind === 'mod' && origin.name === name) : -1;
       return {
         mod: name,
@@ -116,7 +118,7 @@ describe('what the conflict table shows of a file\'s contents, and what the agen
         }) : [],
       };
     }));
-    const read = await FILE_CONFLICTS.of(value, adapter, { mods: NAMES.map((name) => ({ name })) }) as AgentMod[];
+    const read = await FILE_CONFLICTS.of(value, adapter, NO_ARCHIVES, { mods: NAMES.map((name) => ({ name })) }) as AgentMod[];
 
     const plain = (entries: [string, Contents][]) => entries.map(([path, held]) => [path, held] as const)
       .sort(([a], [b]) => (a < b ? -1 : 1));

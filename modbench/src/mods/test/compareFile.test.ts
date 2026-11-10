@@ -23,13 +23,15 @@ import { file, indexedValueOf, mod } from './indexedValue';
 
 const PATH = 'textures/a.dds';
 
+const ARCHIVE = '/instance/Alone/Alone.ba2';
+
 async function setup(overwrite = false) {
   const value = await indexedValueOf([mod('High'), mod('Middle'), mod('Low'), mod('Alone')], {
     High: { files: [file('High', PATH)] },
     Middle: { files: [file('Middle', PATH)] },
     Low: { files: [file('Low', PATH), file('Low', 'b.dds')] },
-    Alone: { files: [file('Alone', 'c.dds')] },
-  }, overwrite ? { files: [file('overwrite', PATH)] } : undefined);
+    Alone: { files: [file('Alone', 'c.dds'), file('Alone', 'Alone.ba2')] },
+  }, overwrite ? { files: [file('overwrite', PATH)] } : undefined, [{ origin: modOrigin('Alone'), archive: ARCHIVE, files: [PATH] }]);
   const reporter = recordingReporter();
   let selection: FileNode[] = [];
   registerCompareFileCommand({ value }, reporter, () => selection);
@@ -41,7 +43,7 @@ async function setup(overwrite = false) {
     selection = [node];
     return node;
   };
-  const paths = (uri: unknown) => (uri instanceof Object && 'fsPath' in uri ? uri.fsPath : undefined);
+  const paths = (uri: unknown) => (uri instanceof Object && 'scheme' in uri && 'fsPath' in uri ? `${String(uri.scheme)}:${String(uri.fsPath)}` : undefined);
   const diffs = () => executeCommand.mock.calls.filter(([id]) => id === 'vscode.diff')
     .map(([, left, right, title]) => [paths(left), paths(right), title]);
   return { invoke, cell, row, diffs, reporter };
@@ -54,11 +56,13 @@ describe('the compare file command', () => {
 
   it.each<[string, boolean, (h: Harness) => unknown, [string, string, string]]>([
     ['a cell\'s copy and the winning copy, titled with the file and both mods', false, (h) => h.cell('Low'),
-      ['/instance/Low/textures/a.dds', '/instance/High/textures/a.dds', 'textures/a.dds: Low ↔ High']],
+      ['file:/instance/Low/textures/a.dds', 'file:/instance/High/textures/a.dds', 'textures/a.dds: Low ↔ High']],
     ['a cell\'s copy and Overwrite\'s when Overwrite wins', true, (h) => h.cell('Middle'),
-      ['/instance/Middle/textures/a.dds', '/instance/overwrite/textures/a.dds', 'textures/a.dds: Middle ↔ Overwrite']],
+      ['file:/instance/Middle/textures/a.dds', 'file:/instance/overwrite/textures/a.dds', 'textures/a.dds: Middle ↔ Overwrite']],
     ['the Mods file row\'s copy as it takes a cell\'s', false, (h) => h.row('Middle', file('Middle', PATH)),
-      ['/instance/Middle/textures/a.dds', '/instance/High/textures/a.dds', 'textures/a.dds: Middle ↔ High']],
+      ['file:/instance/Middle/textures/a.dds', 'file:/instance/High/textures/a.dds', 'textures/a.dds: Middle ↔ High']],
+    ['an archived copy, read from its archive', false, (h) => h.cell('Alone'),
+      ['modbench-archive:/Alone.ba2/textures/a.dds', 'file:/instance/High/textures/a.dds', 'textures/a.dds: Alone ↔ High']],
   ])('opens the diff editor on %s', async (_case, overwrite, argument, diff) => {
     const h = await setup(overwrite);
 
@@ -69,7 +73,7 @@ describe('the compare file command', () => {
 
   it.each([
     ['the winning copy', 'High', PATH, '"High" holds the winning copy.'],
-    ['a mod with no copy of the file', 'Alone', PATH, '"Alone" has no copy of it.'],
+    ['a mod with no copy of the file', 'Alone', 'b.dds', '"Alone" has no copy of it.'],
     ['a file no other copy shares', 'Low', 'b.dds', '"Low" holds the winning copy.'],
   ])('refuses %s, saying so', async (_case, modName, path, detail) => {
     const { invoke, cell, diffs, reporter } = await setup();

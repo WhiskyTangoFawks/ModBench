@@ -120,6 +120,7 @@ try
     app.MapPluginEndpoints();
     app.MapModEndpoints();
     app.MapArchiveEndpoints();
+    app.MapArchiveCopiesEndpoints();
     app.MapRecordEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapWorldspaceEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapContainerChildEndpoints(app.Services.GetRequiredService<ILoggerFactory>());

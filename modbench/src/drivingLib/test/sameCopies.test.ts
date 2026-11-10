@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import type { FileOrigin } from '../../instanceLoader/instance';
 import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
-import { sameCopies, type FileToCompare } from '../sameCopies';
+import { sameCopies } from '../sameCopies';
+import type { StackedFile } from '../../instanceLoader/fileConflictIndex';
+import type { FileRead, FileStamp } from '../archivedCopies';
 
 const NS = 1_577_836_800_000_000_000n;
 const SHARED = 'textures/shared.dds';
@@ -19,9 +21,11 @@ function over(copies: readonly (readonly [FileOrigin, { size: number; hash?: str
     stamps: new Map(entries.map(([path, { size }]) => [path, stampOf(size)])),
     hashes: new Map(entries.flatMap(([path, { size, hash }]) => (hash === undefined ? [] : [[path, { size, hash }] as const]))),
   });
-  const file: FileToCompare = { relativePath: SHARED, providers: [runtimeOutput, NONO, PATCH].map((origin) => ({ origin, path: pathOf(origin) })) };
-  return { fake, ask: () => sameCopies(fake.adapter, [file]) };
+  const file: StackedFile = { relativePath: SHARED, copies: [runtimeOutput, NONO, PATCH].map((origin) => ({ origin, at: { kind: 'loose', path: pathOf(origin) } })) };
+  return { fake, ask: () => sameCopies(fake.adapter, NO_ARCHIVES, [file]) };
 }
+
+const NO_ARCHIVES = { stamps: () => Promise.resolve([]), hashes: () => Promise.resolve([]) };
 
 describe('which copies of a file are the same', () => {
   it('tells copies holding the same bytes from copies of the same size holding other bytes', async () => {
@@ -68,5 +72,55 @@ describe('which copies of a file are the same', () => {
     expect(overwrite).toEqual({ origin: runtimeOutput, kind: 'read', sameAs: 0, size: 4n, modifiedNs: NS });
     expect(removed).toMatchObject({ origin: NONO, kind: 'unreadable', reason: expect.stringContaining(pathOf(NONO)) as unknown });
     expect(locked).toMatchObject({ origin: PATCH, kind: 'unreadable', reason: expect.stringContaining(pathOf(PATCH)) as unknown });
+  });
+});
+
+describe('which copies of a file are the same, archived copies among them', () => {
+  const ARCHIVED_NS = 7n;
+  const archivedAt = { kind: 'archived', gameRelease: 'Fallout4', archive: '/Unofficial Fallout 4 Patch/Patch - Main.ba2', file: SHARED } as const;
+  const ask = (archived: { stamp: FileRead<FileStamp>; hash?: string }, loose: readonly (readonly [FileOrigin, { size: number; hash?: string }])[]) => {
+    const fake = fakeInstanceAdapter(readingFixture(), {
+      stamps: new Map(loose.map(([origin, { size }]) => [pathOf(origin), stampOf(size)])),
+      hashes: new Map(loose.flatMap(([origin, { size, hash }]) => (hash === undefined ? [] : [[pathOf(origin), { size, hash }] as const]))),
+    });
+    const file: StackedFile = {
+      relativePath: SHARED,
+      copies: [...loose.map(([origin]) => ({ origin, at: { kind: 'loose', path: pathOf(origin) } as const })), { origin: PATCH, at: archivedAt }],
+    };
+    const hashed: unknown[] = [];
+    const reads = {
+      stamps: () => Promise.resolve([archived.stamp]),
+      hashes: (addresses: readonly unknown[]) => {
+        hashed.push(...addresses);
+        return Promise.resolve(addresses.map((): FileRead<string> => ({ kind: 'read', answer: archived.hash ?? '' })));
+      },
+    };
+    return { hashed, answer: sameCopies(fake.adapter, reads, [file]) };
+  };
+
+  it('reads an archived copy at its size and its archive\'s date, the same as a loose copy of the same bytes', async () => {
+    const { answer } = ask(
+      { stamp: { kind: 'read', answer: { size: 4n, modifiedNs: ARCHIVED_NS } }, hash: 'a' },
+      [[runtimeOutput, { size: 4, hash: 'b' }], [NONO, { size: 4, hash: 'a' }]],
+    );
+
+    expect((await answer)[0]?.copies).toEqual([
+      { origin: runtimeOutput, kind: 'read', sameAs: 0, size: 4n, modifiedNs: NS },
+      { origin: NONO, kind: 'read', sameAs: 1, size: 4n, modifiedNs: NS },
+      { origin: PATCH, kind: 'read', sameAs: 1, size: 4n, modifiedNs: ARCHIVED_NS },
+    ]);
+  });
+
+  it('reads an archived copy\'s bytes only when another copy shares its size', async () => {
+    const { answer, hashed } = ask({ stamp: { kind: 'read', answer: { size: 5n, modifiedNs: ARCHIVED_NS } } }, [[NONO, { size: 4 }]]);
+
+    expect((await answer)[0]?.copies.at(-1)).toEqual({ origin: PATCH, kind: 'read', sameAs: 1, size: 5n, modifiedNs: ARCHIVED_NS });
+    expect(hashed).toEqual([]);
+  });
+
+  it('answers an archived copy that cannot be read with the reason', async () => {
+    const { answer } = ask({ stamp: { kind: 'unreadable', reason: 'it is no BA2' } }, [[NONO, { size: 4 }]]);
+
+    expect((await answer)[0]?.copies.at(-1)).toEqual({ origin: PATCH, kind: 'unreadable', reason: 'it is no BA2' });
   });
 });
