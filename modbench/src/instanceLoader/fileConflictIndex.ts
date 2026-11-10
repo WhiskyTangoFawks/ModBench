@@ -38,7 +38,6 @@ export function goToModCandidates(entry: ConflictEntry | undefined, own: FileOri
   return at === 0 ? providers.slice(1) : providers.slice(0, 1);
 }
 
-/** Whether `own` provides the path, and another enabled copy or Overwrite's does too. */
 function inFileOrderConflict(entry: ConflictEntry | undefined, own: FileOrigin): boolean {
   const providers = entry?.providers ?? [];
   return providers.length > 1 && providers.some((provider) => sameOrigin(provider, own));
