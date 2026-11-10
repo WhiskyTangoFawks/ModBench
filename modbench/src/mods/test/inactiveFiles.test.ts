@@ -42,10 +42,38 @@ const winnerAndLoser = () => indexedValueOf([mod('Winner'), mod('Loser')], {
   Loser: { files: [file('Loser', 'x/a.dds')], folders: [folder('Loser', 'x')] },
 });
 
-const archiveInEachMod = async (loads: boolean, mods = [mod('A')]): Promise<InstanceValue> => ({
-  ...await indexedValueOf(mods, Object.fromEntries(mods.map(({ name }) => [name, { files: [file(name, 'A - Main.ba2')] }]))),
-  archiveContents: new Map(mods.map(({ name }) => [file(name, 'A - Main.ba2').sourcePath, { kind: 'read', answer: ['meshes/a.nif'] }])),
-  loadsArchive: (name) => loads && name === 'A - Main.ba2',
+const archiveInEachMod = async (loads: boolean, mods = [mod('A')]): Promise<InstanceValue> => {
+  const archive = (name: string) => file(name, 'A - Main.ba2');
+  const winner = mods.find(({ enabled }) => enabled);
+  const loaded = loads && winner !== undefined ? [{ origin: modOrigin(winner.name), archive: archive(winner.name).sourcePath, files: ['meshes/a.nif'] }] : [];
+  return {
+    ...await indexedValueOf(mods, Object.fromEntries(mods.map(({ name }) => [name, { files: [archive(name)] }])), { files: [] }, loaded),
+    archiveContents: new Map(mods.map(({ name }) => [archive(name).sourcePath, { kind: 'read', answer: ['meshes/a.nif'] }])),
+    loadsArchive: (name) => loads && name === 'A - Main.ba2',
+  };
+};
+
+const archivedCopies = async (loose: string[], archives: string[], loadedArchives: string[]): Promise<InstanceValue> => {
+  const names = [...new Set([...loose, ...archives])];
+  const archiveOf = (name: string) => file(name, `${name}.ba2`);
+  const value = await indexedValueOf(names.map((name) => mod(name)), Object.fromEntries(names.map((name) => [name, {
+    files: [...(loose.includes(name) ? [file(name, 'meshes/a.nif')] : []), ...(archives.includes(name) ? [archiveOf(name)] : [])],
+  }])), { files: [] }, loadedArchives.map((name) => ({ origin: modOrigin(name), archive: archiveOf(name).sourcePath, files: ['meshes/a.nif'] })));
+  return {
+    ...value, loadsArchive: (archive) => loadedArchives.some((name) => archiveOf(name).relativePath === archive),
+    archiveContents: new Map(archives.map((name) => [archiveOf(name).sourcePath, { kind: 'read', answer: ['meshes/a.nif'] }])),
+  };
+};
+
+describe('an archived file the game does not get (mods.md, The tree, story 8)', () => {
+  it.each<[string, () => Promise<InstanceValue>, string, typeof GREY | undefined]>([
+    ['a loose copy beats it', () => archivedCopies(['L'], ['A'], ['A']), 'A', GREY],
+    ['a later-loaded archive beats it', () => archivedCopies([], ['A', 'B'], ['A', 'B']), 'A', GREY],
+    ['it beats an earlier-loaded archive: it is the copy the game gets', () => archivedCopies([], ['A', 'B'], ['A', 'B']), 'B', undefined],
+    ['it alone is the copy the game gets', () => archivedCopies([], ['A'], ['A']), 'A', undefined],
+  ])('%s', async (_case, value, owner, grey) => {
+    expect(greyOf(await value(), modOrigin(owner), `${owner}.ba2/meshes/a.nif`)).toEqual(grey);
+  });
 });
 
 describe('each file of a mod or Overwrite, active or inactive (mods.md, The tree, story 8)', () => {
