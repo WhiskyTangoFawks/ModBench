@@ -1,10 +1,10 @@
-using MEditService.LoadOrder;
-using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
 
