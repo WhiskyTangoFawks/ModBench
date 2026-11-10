@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
 import { modbenchDiagnostic } from '../drivingLib/modbenchDiagnostic';
 import type { InstanceView } from '../instanceLoader/instance';
-import type { UnshippableReason } from '../instanceAdapter/instanceAdapter';
 import type { ModStatus } from '../manifestAdapter/manifestAdapter';
 import type { ModStatuses } from '../modStatus/modStatuses';
+
+type UnshippableReason = (folder: string, pathInFolder: string, mod: string, heldByPackage: boolean) => string | undefined;
 
 interface Unshippable {
   readonly path: string;
