@@ -12,6 +12,9 @@ const HELD_AT_FOLDER_PATHS = new Set<string>(['differing', 'namedByNoLine'] sati
 const isHeld = (member: unknown): boolean =>
   member === true || ((typeof member === 'string' || Array.isArray(member)) && member.length > 0);
 
+const isHeldBuildFile = (member: unknown): boolean =>
+  typeof member === 'object' && member !== null && 'lacks' in member && 'unreadable' in member && (isHeld(member.lacks) || isHeld(member.unreadable));
+
 export const LIST_MOD_STATUSES = {
   name: 'list_mod_statuses',
   of: async (value: InstanceValue, statuses: Pick<ModStatuses, 'current'>) => {
@@ -26,7 +29,7 @@ export const LIST_MOD_STATUSES = {
       const named = (member: string, held: unknown) =>
         (HELD_AT_FOLDER_PATHS.has(member) && Array.isArray(held) ? held.map((path: string) => ownPaths.get(path) ?? path) : held);
       const present = Object.fromEntries(Object.entries<unknown>({ ...read })
-        .filter(([member, held]) => !LEFT_OUT.has(member) && isHeld(held)).map(([member, held]) => [member, named(member, held)]));
+        .filter(([member, held]) => !LEFT_OUT.has(member) && (member === 'buildFile' ? isHeldBuildFile(held) : isHeld(held))).map(([member, held]) => [member, named(member, held)]));
       const key = JSON.stringify(present);
       const group = groups.get(key) ?? { mods: [], ...present };
       group.mods.push(name);
