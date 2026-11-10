@@ -20,7 +20,7 @@ function contributedColours(): { id: string; defaults: Record<string, unknown> }
 }
 
 const CONFLICT_ALL: ConflictAll[] = ['OnlyOne', 'NoConflict', 'Override', 'Conflict', 'ConflictBenign'];
-const CONFLICT_THIS: ConflictThis[] = ['OnlyOne', 'Master', 'IdenticalToMaster', 'Override', 'ConflictWins', 'ConflictLoses'];
+const CONFLICT_THIS: ConflictThis[] = ['OnlyOne', 'Master', 'IdenticalToMaster', 'IdenticalToMasterWinsConflict', 'Override', 'ConflictWins', 'ConflictLoses'];
 
 describe('conflict theme colours', () => {
   const ids = contributedColours().map(({ id }) => id);
