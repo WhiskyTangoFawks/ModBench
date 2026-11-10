@@ -21,6 +21,8 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     files: new FileConflictLookup(),
     filesByMod: new Map(),
     foldersByMod: new Map(),
+    archiveContents: new Map(),
+    loadsArchive: () => false,
     papyrusScripts: [],
     plugins: [],
     downloadedFiles: { kind: 'listed', rows: [] },

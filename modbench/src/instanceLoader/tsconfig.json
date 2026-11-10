@@ -5,6 +5,7 @@
     "outDir": "../../out/projects/instanceLoader"
   },
   "references": [
+    { "path": "../client" },
     { "path": "../instanceAdapter" },
     { "path": "../manifestAdapter" },
     { "path": "../ports" },
