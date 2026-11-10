@@ -71,7 +71,7 @@ describe('a rename while a recompute is reading', () => {
       },
     };
     instance = new Instance({
-      gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, log: { info: () => {}, warn: () => {}, error: () => {} },
+      gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, log: { info: () => {}, warn: () => {}, error: () => {} }, medit: new InMemoryMEditClient(),
       adapter: { ...writer, reading: async () => ({ ...await readInstance(holdingSource), publisherConfiguration: NO_PUBLISHER }) },
     });
     const { modSync } = modSyncOn({

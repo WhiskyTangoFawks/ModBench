@@ -128,6 +128,63 @@ export class FileNode extends vscode.TreeItem {
   }
 }
 
+/** A file in an archive, by its path there. */
+export interface ArchivedEntry {
+  readonly relativePath: string;
+}
+
+// mods.md, The tree, story 13: an archive that holds files opens into them as a folder does, rather than in an editor.
+function openingIntoItsFiles(row: FileNode, archived: readonly ArchivedEntry[]): FileNode {
+  if (archived.length === 0) return row;
+  row.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+  row.command = undefined;
+  return row;
+}
+
+// Modbench never writes inside an archive, so a row in one carries no gesture of a file or
+// folder in a mod.
+function archivedRow(row: vscode.TreeItem, parent: ModlistNode, archive: FileNode, name: string, path: string): void {
+  const inMod = `${archive.file.relativePath}/${path}`;
+  row.id = `${parent.id}/${name}`;
+  row.resourceUri = fileRowUri(archive.origin, inMod);
+  row.tooltip = inMod;
+}
+
+/** A folder in an archive, and the files below it. */
+export class ArchivedFolderNode extends vscode.TreeItem {
+  readonly kind = 'archivedFolder' as const;
+  constructor(
+    public readonly parent: FileNode | ArchivedFolderNode,
+    public readonly archive: FileNode,
+    public readonly path: string,
+    public readonly entries: readonly ArchivedEntry[],
+    name: string,
+  ) {
+    super(name, expanderOver(entries));
+    archivedRow(this, parent, archive, name, path);
+    this.contextValue = this.kind;
+  }
+}
+
+export class ArchivedFileNode extends vscode.TreeItem {
+  readonly kind = 'archivedFile' as const;
+  constructor(public readonly parent: FileNode | ArchivedFolderNode, public readonly archive: FileNode, path: string, name: string) {
+    super(name, vscode.TreeItemCollapsibleState.None);
+    archivedRow(this, parent, archive, name, path);
+    this.contextValue = this.kind;
+  }
+}
+
+/** The folders, then the files, directly in an archive or a folder in it, each by name. `entries` are those under it. */
+export function archivedIn(parent: FileNode | ArchivedFolderNode, entries: readonly ArchivedEntry[]): (ArchivedFolderNode | ArchivedFileNode)[] {
+  const [archive, prefix] = parent instanceof FileNode ? [parent, ''] : [parent.archive, `${parent.path}/`];
+  const { here, below } = byLevel(entries, prefix);
+  return [
+    ...[...below].sort(byName).map(([name, under]) => new ArchivedFolderNode(parent, archive, `${prefix}${name}`, under, name)),
+    ...[...here].sort(byName).map(([name, entry]) => new ArchivedFileNode(parent, archive, entry.relativePath, name)),
+  ];
+}
+
 /** The folders, then the files, directly in `parent`, each by name. `files` and `folders` are
  *  those under it, and `path` is its own path in its mod, none for the mod or Overwrite itself. */
 export function filesIn(
@@ -137,6 +194,7 @@ export function filesIn(
     differs: (origin: FileOrigin, relativePath: string) => boolean;
     ignored: (origin: FileOrigin, file: OriginFile) => FileIgnore;
     holdsPublisherTag: (path: string) => boolean;
+    archived: (file: OriginFile) => readonly ArchivedEntry[];
   },
 ): (FolderNode | FileNode)[] {
   const prefix = path === undefined ? '' : `${path}/`;
@@ -148,6 +206,9 @@ export function filesIn(
       filter ? shownUnder(filter.shown, filter.matches, name) : 'all', filter?.holdsPublisherTag(folder.path),
     ), filter?.differs(origin, folder.relativePath))),
     ...[...ownFiles.here].sort(byName).map(([name, file]) =>
-      sayingWhetherItDiffers(new FileNode(parent, origin, file, name, filter?.conflict(origin, file), filter?.holdsPublisherTag(file.path), filter?.ignored(origin, file)), filter?.differs(origin, file.relativePath))),
+      sayingWhetherItDiffers(openingIntoItsFiles(
+        new FileNode(parent, origin, file, name, filter?.conflict(origin, file), filter?.holdsPublisherTag(file.path), filter?.ignored(origin, file)),
+        filter?.archived(file) ?? [],
+      ), filter?.differs(origin, file.relativePath))),
   ];
 }

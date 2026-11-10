@@ -25,6 +25,7 @@ import { modSyncOver } from '../modCommands/modCommands';
 import { modSyncOn } from '../mods/modSync';
 import { manifestedIn } from './modStatusFixture';
 import { NO_DEPLOYMENT_FOLDER } from './noDeploymentFolder';
+import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
 
 
 const PROFILE = 'Default';
@@ -67,7 +68,7 @@ async function wiredInstance(): Promise<{
   await writeFile(join(root, 'mods', 'Provider', 'Base.esp'), 'plugin');
 
   const adapter = adapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } });
-  const instance = new Instance({ gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, adapter, log: { info: () => {}, warn: () => {}, error: () => {} } });
+  const instance = new Instance({ gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, adapter, log: { info: () => {}, warn: () => {}, error: () => {} }, medit: new InMemoryMEditClient() });
   instances.push(instance);
 
   const syncs: ReturnType<PluginSyncRun>[] = [];
@@ -140,7 +141,7 @@ describe('a clone opened before its mods are restored (plugins.md, The tree, sto
     const pluginFiles = () => Promise.all(['plugins.txt', 'loadorder.txt'].map((file) => readFile(join(profile, file), 'utf8')));
     const committed = await pluginFiles();
     const adapter = adapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } });
-    const instance = new Instance({ gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, adapter, log: { info: () => {}, warn: () => {}, error: () => {} } });
+    const instance = new Instance({ gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, adapter, log: { info: () => {}, warn: () => {}, error: () => {} }, medit: new InMemoryMEditClient() });
     instances.push(instance);
     const { pluginSync } = pluginSyncOn({
       instance, channel: { error: () => {}, info: () => {} }, syncPlugins: pluginSyncOver(adapter),
@@ -172,7 +173,7 @@ describe('the game folder not found, across the whole instance', () => {
     const output: string[] = [];
     const write = (line: string): void => { output.push(line); };
     const channel = { error: write, warn: write, info: write };
-    const instance = new Instance({ gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, adapter: fake.adapter, log: channel });
+    const instance = new Instance({ gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, adapter: fake.adapter, log: channel, medit: new InMemoryMEditClient() });
     instances.push(instance);
     toolboxes.push(new ToolboxProvider({ instance, channel, deploymentFolder: NO_DEPLOYMENT_FOLDER, pluginsTxtPlace: () => Promise.resolve({ why: 'none' }) }));
     const { modSync } = modSyncOn({ instance, channel, syncMods: modSyncOver(fake.adapter) });

@@ -179,14 +179,14 @@ const fomodEngineIn = (extensionUri: vscode.Uri) => ({
   silence: 60_000,
 });
 
-function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, extensionUri: vscode.Uri): Opened {
+function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, extensionUri: vscode.Uri, medit: MEditClient): Opened {
   return whenOpened<Opened>(openedFolder(isInstance, (line) => outputChannel.info(line)), {
     instance: (instanceRoot) => {
       const adapter = adapterForInstance({
         instanceRoot, gameFolderSetting, scriptEnvironmentFileSetting: scriptEnvironmentFileOf(instanceRoot), installationFileReader: downloadedFileReader, fileProblems: fileProblemsOver(problemsHostOver(own(vscode.languages.createDiagnosticCollection('modbench-unhashed'))), outputChannel), fomodEngine: fomodEngineIn(extensionUri), deployedPath,
       });
       const instance = own(new Instance({
-        adapter, gameFolderSettingId: gameFolderSetting.id, window: vscode.window, log: outputChannel,
+        adapter, gameFolderSettingId: gameFolderSetting.id, window: vscode.window, log: outputChannel, medit,
       }));
       const owners = [adapter.pluginReferences, manifestFileReferences({
         sourceFolders: () => instance.value.paths.sourceDirs,
@@ -335,7 +335,7 @@ function start(context: vscode.ExtensionContext): void {
   const focusedView = createFocusedView();
 
   const ownedByViews = ownership();
-  const opened = openFolderAsInstance(outputChannel, ownedByViews.own, context.extensionUri);
+  const opened = openFolderAsInstance(outputChannel, ownedByViews.own, context.extensionUri, meditClient);
   const sourceModRepositories = sourceModRepositoriesOver({ client: meditClient, outputChannel, ...opened.facts });
   const sourceEditing: SourceEditing = {
     applyWorkspaceChanges: (items) => applyWorkspaceChanges(items),

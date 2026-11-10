@@ -12,6 +12,7 @@ import { leveledLog } from '../../test/leveledLog';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { Instance, instanceMessages, type InstanceValue } from '../instance';
 import { factsOf } from '../instanceFacts';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const instances: Instance[] = [];
 
@@ -39,6 +40,7 @@ const GAME_FOUND: Partial<InstanceReading> = {
 
 function loader(overrides: Partial<InstanceReading> = {}, wrap: (adapter: InstanceAdapter) => InstanceAdapter = (adapter) => adapter) {
   const fake = fakeInstanceAdapter(readingFixture(overrides));
+  const medit = new InMemoryMEditClient();
   const log = leveledLog();
   const windowListeners = new Set<(state: WindowState) => void>();
   const window = {
@@ -53,10 +55,11 @@ function loader(overrides: Partial<InstanceReading> = {}, wrap: (adapter: Instan
     gameFolderSettingId: GAME_FOLDER_SETTING_ID,
     window,
     log,
+    medit,
   });
   instances.push(instance);
   return {
-    instance, fake, logs: log.lines.info, warnings: log.lines.warn, errorLines: log.lines.error, windowListeners,
+    instance, fake, medit, logs: log.lines.info, warnings: log.lines.warn, errorLines: log.lines.error, windowListeners,
     windowState: (state: WindowState) => {
       window.state = state;
       for (const listener of [...windowListeners]) listener(state);
@@ -1202,5 +1205,92 @@ describe('Instance — the mod folders, the game folder\'s plugins and the load 
     await instance.refresh();
 
     expect(instance.hasLoadOrderToHand).toBe(true);
+  });
+});
+
+describe('Instance — what each archive holds', () => {
+  const MOD_ARCHIVE = '/instance/mods/A/A - Main.ba2';
+  const OVERWRITE_ARCHIVE = '/overwrite/B.ba2';
+  const ARCHIVES_HELD: Partial<InstanceReading> = {
+    mods: [mod('A')],
+    modFiles: new Map([['A', filesOfMod('A', 'A.esp', 'A - Main.ba2', 'meshes/Not At The Root.ba2')]]),
+    runtimeOutput: { origin: 'overwrite', folder: '/overwrite', files: [fileIn('/overwrite', 'B.ba2')], folders: [], notes: [] },
+  };
+  const holding = (archive: string, ...files: string[]) => ({ archive, files, unreadable: null });
+  const asked = (medit: InMemoryMEditClient) => medit.calls.filter((call) => call.method === 'getArchiveContents').map((call) => call.args);
+
+  it('carries what mEdit says each archive at the root of a mod or Overwrite holds, by the path it is read from', async () => {
+    const { instance, medit } = loader(ARCHIVES_HELD, (adapter) => ({ ...adapter, fileStamp: () => Promise.resolve({ kind: 'read', answer: { size: 1n, modifiedNs: 1n } }) }));
+    medit.setQueryAnswer('getArchiveContents', [holding(MOD_ARCHIVE, 'meshes/a.nif'), { archive: OVERWRITE_ARCHIVE, files: [], unreadable: 'it is no BA2' }]);
+
+    await instance.refresh();
+
+    expect(asked(medit)).toEqual([['Fallout4', [MOD_ARCHIVE, OVERWRITE_ARCHIVE]]]);
+    expect(instance.value.archiveContents).toEqual(new Map([
+      [MOD_ARCHIVE, { kind: 'read', answer: ['meshes/a.nif'] }],
+      [OVERWRITE_ARCHIVE, { kind: 'unreadable', reason: 'it is no BA2' }],
+    ]));
+  });
+
+  it('asks mEdit again only for an archive whose stamp changed since it answered', async () => {
+    let overwriteStamp = 1n;
+    const { instance, medit } = loader(ARCHIVES_HELD, (adapter) => ({
+      ...adapter, fileStamp: (path) => Promise.resolve({ kind: 'read', answer: { size: 1n, modifiedNs: path === OVERWRITE_ARCHIVE ? overwriteStamp : 1n } }),
+    }));
+    medit.setQueryAnswerOnce('getArchiveContents', [holding(MOD_ARCHIVE, 'meshes/a.nif'), holding(OVERWRITE_ARCHIVE, 'old.nif')]);
+    medit.setQueryAnswerOnce('getArchiveContents', [holding(OVERWRITE_ARCHIVE, 'new.nif')]);
+    await instance.refresh();
+
+    overwriteStamp = 2n;
+    await instance.refresh();
+
+    expect(asked(medit)).toEqual([['Fallout4', [MOD_ARCHIVE, OVERWRITE_ARCHIVE]], ['Fallout4', [OVERWRITE_ARCHIVE]]]);
+    expect(instance.value.archiveContents).toEqual(new Map([
+      [MOD_ARCHIVE, { kind: 'read', answer: ['meshes/a.nif'] }],
+      [OVERWRITE_ARCHIVE, { kind: 'read', answer: ['new.nif'] }],
+    ]));
+  });
+
+  it('says why an archive is not read while mEdit cannot be reached, and asks again once mEdit runs', async () => {
+    const { instance, medit } = loader(ARCHIVES_HELD, (adapter) => ({ ...adapter, fileStamp: () => Promise.resolve({ kind: 'read', answer: { size: 1n, modifiedNs: 1n } }) }));
+    medit.setQueryFailureOnce('getArchiveContents', { failed: 'unreachable' });
+    medit.setQueryAnswerOnce('getArchiveContents', [holding(MOD_ARCHIVE, 'meshes/a.nif'), holding(OVERWRITE_ARCHIVE)]);
+    await instance.refresh();
+    const unreached = instance.value.archiveContents.get(MOD_ARCHIVE);
+
+    medit.setStatus('running');
+    const reached = (await pastSequence(instance, 1)).archiveContents.get(MOD_ARCHIVE);
+
+    expect([unreached, reached]).toEqual([{ kind: 'unreadable', reason: 'mEdit could not be reached.' }, { kind: 'read', answer: ['meshes/a.nif'] }]);
+  });
+
+  it('says why an archive is not read when its stamp cannot be read, and asks mEdit nothing for it', async () => {
+    const { instance, medit } = loader(ARCHIVES_HELD, (adapter) => ({
+      ...adapter, fileStamp: (path) => Promise.resolve(path === MOD_ARCHIVE ? { kind: 'unreadable', reason: 'gone' } : { kind: 'read', answer: { size: 1n, modifiedNs: 1n } }),
+    }));
+    medit.setQueryAnswer('getArchiveContents', [holding(OVERWRITE_ARCHIVE)]);
+
+    await instance.refresh();
+
+    expect(asked(medit)).toEqual([['Fallout4', [OVERWRITE_ARCHIVE]]]);
+    expect(instance.value.archiveContents.get(MOD_ARCHIVE)).toEqual({ kind: 'unreadable', reason: 'gone' });
+  });
+
+  it.each([
+    ['an archive the INIs list', 'Listed.ba2', true],
+    ['an archive named for an active plugin', 'A - Main.ba2', true],
+    ['an archive named for a disabled plugin', 'Off - Main.ba2', false],
+    ['an archive named for no plugin', 'Other.ba2', false],
+  ])('carries whether the game loads %s', async (_case, archive, loads) => {
+    const { instance } = loader({
+      mods: [mod('A')],
+      modFiles: new Map([['A', filesOfMod('A', 'A.esp', 'Off.esp')]]),
+      pluginOrder: [{ name: 'A.esp', enabled: true }, { name: 'Off.esp', enabled: false }],
+      archiveList: ['Listed.ba2'],
+    });
+
+    await instance.refresh();
+
+    expect(instance.value.loadsArchive(archive)).toBe(loads);
   });
 });

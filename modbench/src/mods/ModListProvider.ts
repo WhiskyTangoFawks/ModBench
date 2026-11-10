@@ -9,8 +9,8 @@ import { ErrorNode } from '../drivingLib/errorNode';
 import { messageLine } from '../drivingLib/messageLine';
 import { dropMove, type DraggedRows } from './moveDrop';
 import {
-  anyNamed, expanderOver, filesIn, narrowToMatches, shownUnder, FileNode, FolderNode,
-  type ChildrenShown, type FileIgnore,
+  anyNamed, archivedIn, expanderOver, filesIn, narrowToMatches, shownUnder, ArchivedFileNode, ArchivedFolderNode, FileNode, FolderNode,
+  type ArchivedEntry, type ChildrenShown, type FileIgnore,
 } from './modFiles';
 import type { ModArgument } from '../drivingLib/argument';
 import { modRowUri, overwriteRowUri, separatorRowUri } from './modIndicators';
@@ -152,7 +152,7 @@ export class OverwriteNode extends vscode.TreeItem {
   }
 }
 
-export type ModlistNode = SeparatorNode | ModNode | OverwriteNode | FolderNode | FileNode | ErrorNode;
+export type ModlistNode = SeparatorNode | ModNode | OverwriteNode | FolderNode | FileNode | ArchivedFolderNode | ArchivedFileNode | ErrorNode;
 
 const NO_MODS_MESSAGE =
   'No mods or separators. Install Mod… or Create Empty Mod…, in the title bar\'s overflow menu, adds one.';
@@ -371,6 +371,8 @@ export class ModListProvider
     if (element instanceof FolderNode) {
       return filesIn(element, element.origin, element.files, element.folders, element.folder.relativePath, this.within(element));
     }
+    if (element instanceof FileNode) return archivedIn(element, this.archivedOf(element.file));
+    if (element instanceof ArchivedFolderNode) return archivedIn(element, element.entries);
     if (element) return [];
     await this.firstRead.settled; // never render before the Instance has actually read once
     if (this.firstRead.failure !== undefined) return [new ErrorNode(this.firstRead.failure)];
@@ -456,11 +458,16 @@ export class ModListProvider
       return ignoreEntriesOf(status).has(file.includedPath) ? 'entry' : 'under';
     };
     const holdsPublisherTag = (path: string) => tagsHeldAt(this.instanceValue, path).length > 0;
-    return { shown: row.shown, matches: this.matches, conflict, differs, ignored, holdsPublisherTag };
+    return { shown: row.shown, matches: this.matches, conflict, differs, ignored, holdsPublisherTag, archived: this.archivedOf };
   }
 
+  private archivedOf = (file: OriginFile): ArchivedEntry[] => {
+    const read = this.instanceValue.archiveContents.get(file.sourcePath);
+    return read?.kind === 'read' ? read.answer.map((relativePath) => ({ relativePath })) : [];
+  };
+
   getParent(element: ModlistNode): ModlistNode | undefined {
-    if (element instanceof FolderNode || element instanceof FileNode) return element.parent;
+    if (element instanceof FolderNode || element instanceof FileNode || element instanceof ArchivedFolderNode || element instanceof ArchivedFileNode) return element.parent;
     const group = element instanceof ModNode ? this.groupHolding(element.mod.name) : undefined;
     return group && this.groupRow(group);
   }
