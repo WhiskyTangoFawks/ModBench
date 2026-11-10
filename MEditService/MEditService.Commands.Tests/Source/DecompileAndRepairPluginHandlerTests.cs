@@ -114,6 +114,41 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
             Subjects(_newMod, 5));
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DecompileAndRepair_OfAMalformedAndAHealthyPluginOfAModWithNoRepository_GivesBothSource_WhicheverIsNamedFirst(bool healthyFirst)
+    {
+        var malformed = AddToNewMod(Lossless.Malformed);
+        WriteCleanPlugin(_newMod, "Clean.esp");
+        var clean = new PluginAddress("Clean.esp", NewModName);
+        Load(Entry(_newMod, Malformed), Entry(_newMod, "Clean.esp"));
+        var named = healthyFirst ? new[] { ToRepair(clean), ToRepair(malformed) } : [ToRepair(malformed), ToRepair(clean)];
+
+        var result = await Repair(named);
+
+        Assert.Equal([malformed], result.Applied);
+        var healthy = Assert.Single(result.Refused);
+        Assert.Equal(clean, healthy.Item);
+        Assert.DoesNotContain("Decompile it instead", healthy.Message, StringComparison.Ordinal);
+        var tree = Git(_newMod, "ls-tree", "-r", "--name-only", "HEAD");
+        Assert.Contains($"plugin-source/{Malformed}/", tree, StringComparison.Ordinal);
+        Assert.Contains("plugin-source/Clean.esp/", tree, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DecompileAndRepair_OfAMalformedPluginRefusedBeforeTheInit_SaysTheSourceFolderMadeHoldsNoSourceForIt()
+    {
+        var refusedFirst = AddToNewMod(NoRepairFixture.Malformed with { FileName = "NoRepair.esp" });
+        var second = AddToNewMod(Lossless.Malformed);
+        Load(Entry(_newMod, "NoRepair.esp"), Entry(_newMod, Malformed));
+
+        var result = await Repair([ToRepair(refusedFirst), ToRepair(second)]);
+
+        Assert.Equal([second], result.Applied);
+        Assert.EndsWith("The source folder made for its mod holds no source for it.", Assert.Single(result.Refused).Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task DecompileAndRepair_OfTwoPluginsOfAModWithNoRepository_TheSecondRefused_SaysTheSourceFolderMadeHoldsNoSourceForIt()
     {
