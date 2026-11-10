@@ -28,7 +28,7 @@ As a user, I want:
 
 As a user, I want:
 
-1. To create a plugin at the winning end of plugin order, and in it to copy a record as an override or as new, create a record, edit a field and delete a record. Cites: xEdit; catalog, Plugin and Record
+1. To create a plugin, and in it to copy a record as an override or as new, create a record, edit a field and delete a record. Cites: xEdit; catalog, Plugin and Record; plugins.md, Sorting rules, story 9
 2. Each write to be a working-tree change in the plugin's source. Cites: ADR-0007
 3. A Modbench script never to write a plugin with no plugin source, and never to build, reorder plugins, or version in git. Those are my gestures. Cites: ADR-0007; ADR-0021
 4. A query to see every write the Modbench script made before it. Cites: Never silently wrong; ADR-0015

@@ -109,12 +109,12 @@ As a user, I want:
 
 ## Sorting rules
 
-Modbench judges the plugin order I have against the game's sorting rules and LOOT's ([ADR-0026](../adr/0026-modbench-checks-the-plugin-order-against-loots-metadata-and-never-sorts-it.md)). LOOT's come from the instance's masterlist and userlist. Each kind of sorting rule has a level, and so does each LOOT message and LOOT's cleaning data:
+Modbench judges what the game loads from the plugin order I have against the game's sorting rules and LOOT's ([ADR-0026](../adr/0026-modbench-checks-the-plugin-order-against-loots-metadata-and-never-sorts-it.md)). LOOT's come from the instance's masterlist and userlist. Each kind of sorting rule has a level, and so does each LOOT message and LOOT's cleaning data:
 
 | Level | A sorting rule broken, or a LOOT message or cleaning data that applies |
 |---|---|
-| Error | a master loads after a plugin that lists it · a blueprint plugin loads before a plugin that is not one · a master is missing or not active · a requirement is missing · an incompatibility is present · a LOOT error message |
-| Warning | a plugin the game loads early, by its master flag or its extension, is listed after a plugin it does not load early, so the game loads it earlier than the view shows · a plugin loads before a plugin its sorting rule says it loads after · a LOOT warning message |
+| Error | a master loads after a plugin that lists it · a master is missing or not active · a requirement is missing · an incompatibility is present · a LOOT error message |
+| Warning | the game moves a plugin from where `plugins.txt` lists it · a plugin loads before a plugin its sorting rule says it loads after · a LOOT warning message |
 | Info | a LOOT group loads before a LOOT group it names · LOOT's cleaning data says the plugin is dirty · a LOOT say message |
 
 As a user, I want:
@@ -123,10 +123,11 @@ As a user, I want:
 2. The game's sorting rules always to apply. Cites: ADR-0026
 3. A requirement and an incompatibility to count a plugin present as LOOT does. Cites: LOOT; ADR-0026
 4. Each in the Problems panel, on the plugin file, at its level, in LOOT's words. One the userlist states is also on its line in the userlist. Info sets no row icon. Cites: common.md, Reporting
-5. Apply suggested move offered for a broken rule a move keeps, when that move breaks no other rule at Error: on the plugin row, and as a code action on its line in the userlist. Modbench moves a plugin only for a gesture I start. Cites: ADR-0026; No dead entries
+5. Apply suggested move offered for a broken rule a move keeps, when a drop there would land (Drag and drop, story 3): on the plugin row, and as a code action on its line in the userlist. Modbench moves a plugin only for a gesture I start. Cites: ADR-0026; No dead entries
 6. To disagree with a masterlist rule by editing the masterlist in the instance. Git shows my edit, and update masterlist shows it undone in its diff. Cites: ADR-0026
 7. The userlist and the masterlist to open as text in VS Code, as any file in the instance. Cites: loot.md, divergence 5
 8. A sorting rule file that does not read named in the view's message line, and in the Problems panel on its line. The rules that read still apply. A condition Modbench cannot evaluate is a Warning on its line, never skipped. Cites: Never silently wrong
+9. A line Modbench adds to `plugins.txt` to land at the winning-most place the game would load its plugin. Cites: MO2; Never silently wrong
 
 ## The highlight
 
@@ -180,7 +181,7 @@ As a user, I want:
 
 1. To drag plugin rows, one or several. They move as one block in their `plugins.txt` order.
 2. A drop on a plugin row to place the block directly above it, as shown; on a plugin the game loads with no line, at the losing end of `plugins.txt`; below the last row, at the bottom of the view, as shown.
-3. A drop that would newly break a sorting rule at Error refused, naming the rule and its plugins. Any other drop lands, and each rule it breaks shows as broken once mEdit reads the plugin. Cites: ADR-0026; xedit.md, divergence 28
+3. A drop that would newly break a sorting rule at Error, or newly make the game move a plugin from where `plugins.txt` lists it, refused, naming the rule and its plugins. Any other drop lands, and each rule it breaks shows as broken once mEdit reads the plugin. Cites: ADR-0026; xedit.md, divergence 28; mo2.md, divergence 22
 4. A drop where the block cannot go to be refused, saying why: on a record, a group, or a row being dragged. Cites: Refuse, do not repair; mods.md, Drag and drop, story 5
 5. Records, groups and the rows of plugins the game loads with no line not to drag, and nothing from outside the view to drop here. Cites: xedit.md: Drag a record onto a reference field
 
@@ -194,7 +195,7 @@ As a user, I want:
 2. Then a pick of where the plugin lives: the enabled mods first, then Overwrite. Cites: catalog `create`, Argument
 3. A place that already holds a plugin of that name left out of the pick. Cites: No dead entries
 4. Esc at any step to create nothing. Cites: Esc changes nothing
-5. The new plugin to appear at the winning end of the list, disabled. Cites: catalog `plugin sync`
+5. The new plugin to appear disabled. Cites: catalog `plugin sync`; Sorting rules, story 9
 6. The new plugin empty: a header with no records and no masters.
 7. A plugin created in a source mod to land with its plugin source, as working-tree changes I can review. Cites: GLOSSARY.md, Source mod
 8. The header flagged with the combination I pick from those xEdit offers a new file of its extension, with no pick when it offers one. Cites: Mutagen's data, the reference's behaviour, VS Code's interaction
