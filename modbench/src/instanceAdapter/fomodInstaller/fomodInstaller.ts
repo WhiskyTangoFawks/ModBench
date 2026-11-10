@@ -16,6 +16,7 @@ import type { Log } from '../../ports/log';
 import type { FomodKind } from '../gameFolder/releaseRoot';
 import { withImages, type FomodState, type ReleaseImage } from '../../wire/fomodPage';
 import type { FomodAnswer, FomodGroupChoice, FomodLanded, FomodStepChoice } from '../instanceAdapter';
+import { deathWhy } from './engineDeath';
 import { isReport, type ConditionFacts, type EngineReport, type EngineRequest } from './engineProtocol';
 
 export type { ConditionFacts } from './engineProtocol';
@@ -312,11 +313,6 @@ const unreadableWhy = (message: string): string => {
 };
 
 const engineFault = (why: string): Error => new Error(`The FOMOD engine could not run: ${why}`);
-
-const FATAL_HEADER = /^.*FATAL ERROR.*$/m;
-
-export const deathWhy = (stderr: string, code: number | null, signal: NodeJS.Signals | null): string =>
-  FATAL_HEADER.exec(stderr)?.[0].trim() ?? (signal === null ? `it stopped with code ${code}` : `it was killed by ${signal}`);
 
 const conditionsRead = (unanswered: ReadonlySet<string>): string => `The FOMOD's conditions read ${[...unanswered].join('; ')}.`;
 
