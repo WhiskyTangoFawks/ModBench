@@ -61,7 +61,7 @@ export class PluginFactsFeed implements vscode.Disposable {
   private generation = 0;
   // `refresh`' own order, apart from `generation` so a fact re-read never discards a hand-off.
   private refreshes = 0;
-  // The order of `rulesChanged`, so only the newest judgement of an order publishes.
+  // The order of `rejudge`, so only the newest judgement of an order publishes.
   private rejudgements = 0;
 
   readonly rows: PluginRowFacts = this.facts;
@@ -149,7 +149,7 @@ export class PluginFactsFeed implements vscode.Disposable {
   }
 
   /** LOOT's rules or the plugins' facts changed: the order the last reconcile judged is judged again. Before that reconcile there is nothing to judge. */
-  async rulesChanged(): Promise<void> {
+  async rejudge(): Promise<void> {
     const judged = this.facts.judgedOrder();
     if (judged === undefined) return;
     const rejudgement = ++this.rejudgements;
@@ -171,7 +171,7 @@ export class PluginFactsFeed implements vscode.Disposable {
     this.facts.refreshed(plugins);
     this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);
     if (this.facts.judgedOrder() === undefined) this.changed.fire();
-    else await this.rulesChanged();
+    else await this.rejudge();
   }
 
   /** The record filter changed, so the last answer belongs to another filter. */

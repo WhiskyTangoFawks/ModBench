@@ -223,12 +223,12 @@ describe('PluginFactsFeed', () => {
     const { feed, client, sortingErrors } = feedOver({ activePlugins: () => [A], rules: () => rules });
     client.setQueryAnswer('getPlugins', [held()]);
     rules = rulesOf(filesWith('plugins:\n  - name: A.esp\n    req: [Missing.esp]\n'));
-    await feed.rulesChanged();
+    await feed.rejudge();
     const beforeReconcile = sortingErrors.items.length;
 
     await feed.reconciled([]);
     rules = NO_RULES;
-    await feed.rulesChanged();
+    await feed.rejudge();
 
     expect([beforeReconcile, sortingErrors.items.map((errors) => errors.length)]).toEqual([0, [1, 0]]);
   });
@@ -273,9 +273,9 @@ describe('PluginFactsFeed', () => {
       client.setQueryAnswer('getPlugins', [held()]);
       await feed.reconciled([]);
       rules = MISSING;
-      const first = feed.rulesChanged();
+      const first = feed.rejudge();
       rules = NO_RULES;
-      await feed.rulesChanged();
+      await feed.rejudge();
 
       older.resolve(undefined);
       await first;
@@ -289,7 +289,7 @@ describe('PluginFactsFeed', () => {
       const { feed, client, sortingErrors } = feedOver({ activePlugins: () => [A], rules: () => rules, gates: [Promise.resolve(undefined), slow.promise] });
       client.setQueryAnswer('getPlugins', [held()]);
       await feed.reconciled([]);
-      const stale = feed.rulesChanged();
+      const stale = feed.rejudge();
       rules = NO_RULES;
       await feed.reconciled([]);
 
