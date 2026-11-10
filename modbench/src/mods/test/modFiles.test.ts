@@ -198,7 +198,7 @@ describe('an archive opens into its files as a folder does (mods.md, The tree, s
 
     const unreadable = await row({ kind: 'unreadable', reason: 'it is no BA2' });
 
-    expect([unreadable.description, unreadable.tooltip]).toEqual(['cannot be read: it is no BA2', 'Armour - Main.ba2: cannot be read: it is no BA2']);
+    expect([unreadable.description, unreadable.tooltip]).toEqual(['cannot be read: it is no BA2', 'Armour - Main.ba2\ncannot be read: it is no BA2']);
     expect((await row({ kind: 'read', answer: ['a.nif'] })).description).toBeUndefined();
     expect((await row({ kind: 'unanswered' })).description).toBeUndefined();
   });

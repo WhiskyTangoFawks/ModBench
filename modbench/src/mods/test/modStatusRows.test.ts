@@ -156,3 +156,17 @@ describe('the view\'s badge counts the mods that differ or have no manifest (mod
     expect(providerOver(statuses, holdsRepository).provider.badge()).toBeUndefined();
   });
 });
+
+describe('an unreadable archive keeps what its row says of the manifest, and adds why (mods.md, The tree, story 14)', () => {
+  it.each([
+    ['ignored', status('ModA', { ignored: ['readme.txt'], ignoreEntries: ['readme.txt'] }), 'ignored'],
+    ['differs', status('ModA', { namedByNoLine: ['readme.txt'] }), 'differs'],
+  ])('says %s, then why it cannot be read, and keeps its path in the tooltip', async (_case, held, saying) => {
+    const readme = file('mods/ModA', 'readme.txt');
+    const { provider } = providerOver([held], true, { archiveContents: new Map([[readme.sourcePath, { kind: 'unreadable', reason: 'it is no BA2' }]]) });
+
+    const archive = await row(provider, 'readme.txt', await row(provider, 'ModA'));
+
+    expect([archive.description, archive.tooltip]).toEqual([`${saying} · cannot be read: it is no BA2`, 'readme.txt\ncannot be read: it is no BA2']);
+  });
+});

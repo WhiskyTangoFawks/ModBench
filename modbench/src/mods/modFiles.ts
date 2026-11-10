@@ -68,9 +68,11 @@ function fileRow(row: vscode.TreeItem, parent: ModlistNode, origin: FileOrigin, 
   row.tooltip = relativePath;
 }
 
+const joined = (parts: readonly (string | boolean | undefined)[]): string => parts.filter((part) => typeof part === 'string').join(' · ');
+
 // instance-repository.md, Status, story 1; The manifest, story 11.
 function sayingWhetherItDiffers<T extends vscode.TreeItem>(row: T, differs: boolean | undefined): T {
-  if (differs === true) row.description = 'differs';
+  if (differs === true) row.description = joined([row.description, 'differs']);
   return row;
 }
 
@@ -144,8 +146,8 @@ export class FileNode extends vscode.TreeItem {
 // mods.md, The tree, story 14.
 function sayingWhyItCannotBeRead(row: FileNode, reason: string | undefined): FileNode {
   if (reason === undefined) return row;
-  row.description = `cannot be read: ${reason}`;
-  row.tooltip = `${row.file.relativePath}: ${row.description}`;
+  row.description = joined([row.description, `cannot be read: ${reason}`]);
+  row.tooltip = `${row.file.relativePath}\ncannot be read: ${reason}`;
   return row;
 }
 
