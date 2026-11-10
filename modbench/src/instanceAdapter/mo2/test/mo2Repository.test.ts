@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { chmod, link, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, link, mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
 import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
@@ -671,8 +671,22 @@ describe('the MO2 adapter\'s repository', () => {
       await adapter.writeHeldWholeLines([held], false);
 
       expect([whole, heldByGit, shown()]).toEqual([
-        ['mods/Mod [A]/Mod [A].esp', 'mods/Mod [A]/meta.ini', 'mods/Mod [A]/textures/a.dds'].sort(), [held], [],
+        ['mods/Mod [A]/Mod [A].esp', 'mods/Mod [A]/textures/a.dds'].sort(), [held], [],
       ]);
+    });
+
+    it('keeps the mod manager\'s metadata file out under the name it is renamed to, and holds a separator\'s whole', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await put('.gitignore', whitelistIgnoreList(undefined));
+      const held = await modFolder('Mod [A]');
+      const separator = await modFolder('Group_separator');
+      await adapter.writeHeldWholeLines([held, separator], true);
+
+      await adapter.followFoldersInRepository([{ from: held, to: join(root, 'mods', 'Renamed') }]);
+      await rename(held, join(root, 'mods', 'Renamed'));
+
+      expect(shown()).toEqual(['mods/Group_separator/Group_separator.esp', 'mods/Group_separator/meta.ini', 'mods/Group_separator/textures/a.dds', 'mods/Renamed/Mod [A].esp', 'mods/Renamed/textures/a.dds'].sort());
     });
 
     it('holds a renamed folder whole by its new name alone', async () => {
@@ -707,6 +721,17 @@ describe('the MO2 adapter\'s repository', () => {
       await adapter.commitFolder(held, 'Init Mod [A]');
 
       expect(runGit('show', 'HEAD:.gitignore')).toBe((await readFile(join(root, '.gitignore'), 'utf8')).replace('mine\n', ''));
+    });
+
+    it('is committed with the mod manager\'s metadata file kept out', async () => {
+      const adapter = await committed(whitelistIgnoreList(undefined));
+      const held = await modFolder('Mod [A]');
+      await adapter.writeHeldWholeLines([held], true);
+
+      await adapter.commitFolder(held, 'Init Mod [A]');
+
+      expect(runGit('show', '--name-only', '--format=', 'HEAD').split('\n').filter(Boolean).sort()).toEqual(['.gitignore', 'mods/Mod [A]/Mod [A].esp', 'mods/Mod [A]/textures/a.dds']);
+      expect(shown()).toEqual([]);
     });
 
     it('is refused, committing nothing, naming the ignore list, when the one HEAD holds has an unpaired marker', async () => {
