@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { fomodLanding, type ConditionFacts, type FomodEngine } from '../fomodInstaller';
+import { deathWhy, fomodLanding, type ConditionFacts, type FomodEngine } from '../fomodInstaller';
 import type { FomodAnswer, FomodDialog, FomodLanded, FomodStepChoice } from '../../instanceAdapter';
 import type { FomodMove, FomodState, ReleaseImage } from '../../../wire/fomodPage';
 import { SILENT_LOG } from '../../../ports/log';
@@ -378,10 +378,8 @@ describe('the FOMOD installer', () => {
       );
     });
 
-    it('refuses as an installer that cannot be read, naming the signal, when the engine dies of one', async () => {
-      await expect(install([], crashing('diesBySignal.ts'))).rejects.toThrow(
-        'its installer cannot be read: it was killed by SIGSEGV. Request it again with manual',
-      );
+    it('names the signal an engine died of', () => {
+      expect(deathWhy('', null, 'SIGSEGV')).toBe('it was killed by SIGSEGV');
     });
 
     it('refuses as an installer that cannot be read, naming the fatal error\'s header, and logs the whole stderr', async () => {

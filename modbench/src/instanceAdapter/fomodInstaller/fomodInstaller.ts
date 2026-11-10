@@ -315,7 +315,7 @@ const engineFault = (why: string): Error => new Error(`The FOMOD engine could no
 
 const FATAL_HEADER = /^.*FATAL ERROR.*$/m;
 
-const deathWhy = (stderr: string, code: number | null, signal: NodeJS.Signals | null): string =>
+export const deathWhy = (stderr: string, code: number | null, signal: NodeJS.Signals | null): string =>
   FATAL_HEADER.exec(stderr)?.[0].trim() ?? (signal === null ? `it stopped with code ${code}` : `it was killed by ${signal}`);
 
 const conditionsRead = (unanswered: ReadonlySet<string>): string => `The FOMOD's conditions read ${[...unanswered].join('; ')}.`;
@@ -344,17 +344,25 @@ function runEngine(engine: FomodEngine, install: EngineRequest, driver: Driver):
       clearTimeout(silence);
       settled();
     };
-    const fail = (why: string): void => settle(() => reject(engineFault(why)));
+    let silent: string | undefined;
+    const logStderr = (): void => {
+      if (stderr.trim() !== '') engine.log.error(`The FOMOD engine's stderr:\n${stderr.trim()}`);
+    };
+    const fail = (why: string): void => {
+      if (over) return;
+      logStderr();
+      settle(() => reject(engineFault(why)));
+    };
     const unreadable = (why: string): void => {
       if (over) return;
-      if (stderr.trim() !== '') engine.log.error(`The FOMOD engine's stderr:\n${stderr.trim()}`);
+      logStderr();
       settle(() => resolve({ kind: 'unreadable', why }));
     };
     const heard = (): void => {
       clearTimeout(silence);
       silence = setTimeout(() => {
-        child.kill();
-        unreadable(`it stopped answering for ${engine.silence} ms`);
+        silent = `it stopped answering for ${engine.silence} ms`;
+        child.kill('SIGKILL');
       }, engine.silence);
     };
     const send = (request: EngineRequest): void => {
@@ -391,7 +399,7 @@ function runEngine(engine: FomodEngine, install: EngineRequest, driver: Driver):
       }
     });
     child.on('error', (err) => fail(err.message));
-    child.on('close', (code, signal) => unreadable(deathWhy(stderr, code, signal)));
+    child.on('close', (code, signal) => unreadable(silent ?? deathWhy(stderr, code, signal)));
     driver.attach(send);
     heard();
     send(install);
