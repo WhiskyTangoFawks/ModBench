@@ -37,7 +37,7 @@ As a user, I want:
 
 | Part | What it shows | Cites |
 |---|---|---|
-| Label | the mod's name | MO2 |
+| Label | its position in the mod order, zero-padded so every row's number aligns, then the mod's name | MO2 |
 | Check box | checked when the mod is enabled | MO2 |
 | Description | the version in the mod's metadata, then the mod's status against its manifest ([instance-repository.md](instance-repository.md), Status) | MO2 |
 | Icon | one for a mod, and another for a source mod | |
