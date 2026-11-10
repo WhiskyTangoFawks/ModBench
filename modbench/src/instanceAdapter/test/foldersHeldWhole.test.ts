@@ -41,13 +41,13 @@ describe('the folders git holds whole', () => {
     await instanceIgnoring(`${WHITELIST}${ignoreList}`, FILES);
     if (git.length > 0) execFileSync('git', git, { cwd: root });
 
-    expect([...await foldersHeldWhole(root, [join(root, folder)])]).toEqual(held ? [join(root, folder)] : []);
+    expect([...await foldersHeldWhole(root, [join(root, folder)], [])]).toEqual(held ? [join(root, folder)] : []);
   });
 
   it('answers each folder of a batch by itself', async () => {
     await instanceIgnoring(`${WHITELIST}${LETS_IN_HELD}`, FILES);
 
-    expect([...await foldersHeldWhole(root, [join(root, 'mods/Held'), join(root, 'mods/Kept')])]).toEqual([join(root, 'mods/Held')]);
+    expect([...await foldersHeldWhole(root, [join(root, 'mods/Held'), join(root, 'mods/Kept')], [])]).toEqual([join(root, 'mods/Held')]);
   });
 
   it.each([
@@ -59,17 +59,17 @@ describe('the folders git holds whole', () => {
     await mkdir(join(target, 'Held'), { recursive: true });
     await symlink(target, join(root, linked.startsWith('mods/') ? linked : 'linked-mods'));
 
-    expect([...await foldersHeldWhole(root, [join(root, linked), join(root, 'mods/Held')])]).toEqual([join(root, 'mods/Held')]);
+    expect([...await foldersHeldWhole(root, [join(root, linked), join(root, 'mods/Held')], [])]).toEqual([join(root, 'mods/Held')]);
   });
 
   it('holds none while the instance holds no repository',async () => {
     root = await mkdtemp(join(tmpdir(), 'modbench-held-whole-'));
-    expect([...await foldersHeldWhole(root, [join(root, 'mods/Held')])]).toEqual([]);
+    expect([...await foldersHeldWhole(root, [join(root, 'mods/Held')], [])]).toEqual([]);
   });
 
   it('rejects when git cannot list the instance', async () => {
     root = await mkdtemp(join(tmpdir(), 'modbench-held-whole-'));
     await mkdir(join(root, '.git'));
-    await expect(foldersHeldWhole(root, [join(root, 'mods/Held')])).rejects.toThrow();
+    await expect(foldersHeldWhole(root, [join(root, 'mods/Held')], [])).rejects.toThrow();
   });
 });

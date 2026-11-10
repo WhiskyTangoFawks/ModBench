@@ -37,6 +37,7 @@ import { hashIndex } from '../fileContents/hashIndex';
 import { dataFileReads } from '../gameFolder/dataFileReads';
 import { textHash } from '../fileContents/contentDigest';
 import { hashIndexDir, modlistFile, modsDir, profilesDir, settingsFile } from './layout';
+import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { parseModlist } from './codecs/modlistText';
 import { get } from '../files';
 import { trashingReplaced } from '../trashingReplaced';
@@ -102,7 +103,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
     textHash,
     filesIn: async (folder) => (await filesBelow(folder)).files.map(({ relativePath }) => relativePath),
     folderValue: (folder) => folderValueOver(adapter, folder),
-    foldersHeldWhole: (folders) => foldersHeldWhole(instanceRoot, folders),
+    foldersHeldWhole: (folders) => foldersHeldWhole(instanceRoot, folders, [MOD_META_FILE_NAME]),
     foldersInReach: (folders) => foldersInReach(instanceRoot, folders),
     filesHeldByGit: (folders) => filesHeldByGit(instanceRoot, folders),
     unheldFolderValue: async (folder) => unheldFolderValueOver(adapter, (await filesHeldByGit(instanceRoot, [folder])).get(folder) ?? [], folder),

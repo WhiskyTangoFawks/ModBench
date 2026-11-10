@@ -220,7 +220,8 @@ const heldInEachFolderOf = (folder: string, files: readonly string[]): string[] 
 
 const escapedForIgnoreList = (name: string): string => name.replace(/[\\*?[]/g, String.raw`\$&`);
 
-/** The whitelist (instance-repository.md, The repository, story 2): each mod's metadata stays out. */
+/** The whitelist: each mod's metadata stays out (target-architecture.md: "The mod manager and the publisher own every other
+ *  file in the instance."; instance-repository.md, The manifest, story 2). */
 export const whitelistIgnoreList = (publisherFileName: string | undefined): string => `${[
   '/*', `!/${IGNORE_LIST_FILE}`, `!/${SUBMODULES_FILE}`, `!/${SETTINGS_FILE_NAME}`,
   ...Object.values(SORTING_RULE_FILES).map((file) => `!/${file}`),
@@ -295,7 +296,8 @@ function withOwnLines(ignoreList: string, kind: OwnLines, own: readonly string[]
   const lineEnding = ignoreList.includes('\r\n') ? '\r\n' : '\n';
   const lines = ignoreList.split(/\r?\n/);
   if (lines.at(-1) === '') lines.pop();
-  const letIn = own.filter((line) => line.startsWith('!'));
+  const leaves = kind.leftOut !== undefined;
+  const letIn = leaves ? own.filter((line) => line.startsWith('!')) : own;
   const leftOut = own.filter((line) => !line.startsWith('!'));
   return (kind.leftOut === undefined || placed(lines, 'leftOut', kind.leftOut, leftOut)) && placed(lines, 'letIn', kind.letIn, letIn) ? `${lines.join(lineEnding)}${lineEnding}` : undefined;
 }
@@ -358,10 +360,17 @@ export function submoduleNames(gitmodules: string): EntryInText[] {
   return names;
 }
 
-/** An ignore list that lets in the files of each mod folder of `folderNames`, or with `held` false leaves them out, every
- *  other line kept. Undefined when the markers do not pair. */
+// A mod folder's files let in, then its metadata file left out, which git's last matching line makes the rule. A separator
+// is its folder, so its metadata file stays.
+function heldWholeLinesOf(name: string): string[] {
+  const folder = `/${MODS}/${escapedForIgnoreList(name)}`;
+  return name.endsWith(separatorModName('')) ? [`!${folder}/*`] : [`!${folder}/*`, `${folder}/${MOD_META_FILE_NAME}`];
+}
+
+/** An ignore list that lets in the files of each mod folder of `folderNames` and keeps out the mod manager's metadata file,
+ *  or with `held` false leaves them out, every other line kept. Undefined when the markers do not pair. */
 export const withHeldWholeLines = (ignoreList: string, folderNames: readonly string[], held: boolean): string | undefined =>
-  withOwnLines(ignoreList, HELD_WHOLE, withLinesOf(ignoreList, HELD_WHOLE.letIn,folderNames.map((name) => `!/${MODS}/${escapedForIgnoreList(name)}/*`), held));
+  withOwnLines(ignoreList, HELD_WHOLE, withLinesOf(ignoreList, HELD_WHOLE.letIn, folderNames.flatMap(heldWholeLinesOf), held));
 
 /** An ignore list whose line holding the mod folder `from` whole holds `to` instead. Undefined when the markers do not pair. */
 export function withHeldWholeFollowed(ignoreList: string, from: string, to: string): string | undefined {
