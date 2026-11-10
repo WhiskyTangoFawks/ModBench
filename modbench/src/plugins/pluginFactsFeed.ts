@@ -61,7 +61,7 @@ export class PluginFactsFeed implements vscode.Disposable {
   private generation = 0;
   // `refresh`' own order, apart from `generation` so a fact re-read never discards a hand-off.
   private refreshes = 0;
-  // The order of `rulesChanged`, so only the newest judgement of an order publishes.
+  // The order of `rejudge`, so only the newest judgement of an order publishes.
   private rejudgements = 0;
 
   readonly rows: PluginRowFacts = this.facts;
@@ -148,8 +148,8 @@ export class PluginFactsFeed implements vscode.Disposable {
     }
   }
 
-  /** LOOT's rules changed: the order the last reconcile judged is judged again. Before that reconcile there is nothing to judge. */
-  async rulesChanged(): Promise<void> {
+  /** Judges the order the last reconcile judged again. Before that reconcile there is nothing to judge. */
+  async rejudge(): Promise<void> {
     const judged = this.facts.judgedOrder();
     if (judged === undefined) return;
     const rejudgement = ++this.rejudgements;
@@ -160,8 +160,8 @@ export class PluginFactsFeed implements vscode.Disposable {
     this.changed.fire();
   }
 
-  /** Re-reads the facts alone, leaving the held load order as it is. A later re-read wins, and
-   *  none supersedes a reconcile's hand-off. */
+  /** Re-reads the facts alone and judges again against them, leaving the held load order as it is.
+   *  A later re-read wins, and none supersedes a reconcile's hand-off. */
   async refresh(): Promise<void> {
     const generation = this.generation;
     const refresh = ++this.refreshes;
@@ -170,7 +170,8 @@ export class PluginFactsFeed implements vscode.Disposable {
     if ('failure' in plugins) return this.factsFailed(plugins.failure);
     this.facts.refreshed(plugins);
     this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);
-    this.changed.fire();
+    if (this.facts.judgedOrder() === undefined) this.changed.fire();
+    else await this.rejudge();
   }
 
   /** The record filter changed, so the last answer belongs to another filter. */

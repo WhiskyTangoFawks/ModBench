@@ -181,7 +181,7 @@ export class PluginsTreeProvider
       const rules = this.readRules(value.sortingRuleFiles);
       if (rules !== this.rules) {
         this.rules = rules;
-        void this.facts.rulesChanged();
+        void this.facts.rejudge();
       }
       this._onDidChangeTreeData.fire(undefined);
     }), options.instance.onReadFailure(() => this.render()), options.instance.onRedraw(() => this.render()));
