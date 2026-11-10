@@ -39,6 +39,8 @@ public sealed class ReadMeetsWriteTests : IDisposable
 
     private PluginAddress ComparedPlugin => _fixture.Plugins.Single(plugin => plugin.Name == Compared).Key;
 
+    private PluginAddress ArrivingPlugin => _fixture.Plugins.Single(plugin => plugin.Name == Arriving).Key;
+
     [Fact]
     public async Task AReadOfSeveralQueries_AnswersFromTheIndexAsItsFirstQuerySawIt_ThoughAPluginArrivesBeforeItsLast()
     {
@@ -46,10 +48,13 @@ public sealed class ReadMeetsWriteTests : IDisposable
         var read = Task.Run(() => _index.Queries.GetCompareRecords(
             [new RecordCopy(_comparedNpc, ComparedPlugin, DocumentText: "{}"), new RecordCopy(_arrivingNpc, ComparedPlugin)]));
         await _source.WaitUntilParkedAsync();
-        _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+        var arrival = Task.Run(() => _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot));
+        Waits.Reached(() => _index.Queries.GetRenderedDocument(ArrivingPlugin, _arrivingNpc).Holds(out var held, out _) && held is not null,
+            "the arriving plugin's record, read on its own");
 
         _source.Release();
 
         Assert.Equal(CopyMissingReason.RecordGone, Assert.Single((await read).Value().Missing).Reason);
+        await arrival;
     }
 }
