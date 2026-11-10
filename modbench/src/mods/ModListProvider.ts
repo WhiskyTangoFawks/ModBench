@@ -183,6 +183,7 @@ export class ModListProvider
   private groupingOn = true;
   private direction: SortDirection = 'losingAtTop';
   private highlighted: readonly FileOrigin[] = [];
+  private positionsHeld: ReadonlyMap<string, string> | undefined;
   private marks: ReadonlySet<string> | undefined;
   private readonly instance: InstanceView;
   private instanceValue: InstanceValue;
@@ -229,8 +230,20 @@ export class ModListProvider
   invalidate(): void {
     this.instanceValue = this.instance.value;
     this.modGroups = undefined;
+    this.positionsHeld = undefined;
     this.marks = undefined;
     this._onDidChangeTreeData.fire(undefined);
+  }
+
+  // Mod order arrives winning-first; MO2's Priority counts from the losing end, a separator included.
+  private positions(): ReadonlyMap<string, string> {
+    if (!this.positionsHeld) {
+      const { mods } = this.instanceValue;
+      const width = String(Math.max(0, mods.length - 1)).length;
+      this.positionsHeld = new Map(mods.flatMap((entry, at) =>
+        entry.kind === 'mod' ? [[entry.name, String(mods.length - 1 - at).padStart(width, '0')] as const] : []));
+    }
+    return this.positionsHeld;
   }
 
   private render(): void {
@@ -316,7 +329,7 @@ export class ModListProvider
 
   getTreeItem(element: ModlistNode): vscode.TreeItem {
     if (element instanceof ModNode || element instanceof SeparatorNode || element instanceof OverwriteNode) {
-      const label = element instanceof ModNode ? element.mod.name : element instanceof SeparatorNode ? element.separator.name : OVERWRITE_LABEL;
+      const label = element instanceof ModNode ? `${this.positions().get(element.mod.name) ?? ''} ${element.mod.name}`.trimStart() : element instanceof SeparatorNode ? element.separator.name : OVERWRITE_LABEL;
       element.label = this.marked().has(element.id ?? '') ? { label, highlights: [[0, label.length]] } : label;
     }
     return element;
