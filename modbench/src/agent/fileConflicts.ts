@@ -1,11 +1,12 @@
 import { z } from 'zod';
 import type { FileOrigin } from '../instanceAdapter/instanceAdapter';
-import { fileOrderConflictOf, foldPath, inFileOrderConflict, sameOrigin, goToModCandidates, originKey, originLabel } from '../instanceLoader/fileConflictIndex';
+import { copyInConflict, foldPath, sameOrigin, originKey, originLabel } from '../instanceLoader/fileConflictIndex';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { indicatorsOf, isFileNotGotten, pathTagsOf, type ModIndicator } from '../drivingLib/modFileStates';
 import { fileStates } from '../drivingLib/conflictStates';
 import { copiesToRead, filesOfOrigin } from '../drivingLib/copiesToRead';
 import { modifiedMs, sameCopies, type CopyReads } from '../drivingLib/sameCopies';
+import type { ArchivedCopies } from '../drivingLib/archivedCopies';
 import { Refusal } from '../drivingLib/refusal';
 import type { ConflictCellState, ConflictRowState } from '../wire/conflictTable';
 import { CONTAINER_NAME, containersNamed, originOf, type ContainerName } from './names';
@@ -49,10 +50,12 @@ function rowOf(value: InstanceValue, origin: FileOrigin, contents: ReadonlyMap<s
 
 const contentsOf = (contents: Contents | undefined) => (contents === undefined ? {} : { contents });
 
-async function contentsIn(value: InstanceValue, reads: CopyReads, wanted: readonly FileOrigin[]): Promise<Map<string, Contents>> {
-  const conflicting = wanted.map((origin) => [origin, filesOfOrigin(value, origin).filter((file) => inFileOrderConflict(value.files.get(file.relativePath), origin))] as const);
+type ArchivedReads = Pick<ArchivedCopies, 'read'>;
+
+async function contentsIn(value: InstanceValue, reads: CopyReads, archived: ArchivedReads, wanted: readonly FileOrigin[]): Promise<Map<string, Contents>> {
+  const conflicting = wanted.map((origin) => [origin, filesOfOrigin(value, origin).filter((file) => copyInConflict(value.stackedCopies.get(file.relativePath), origin))] as const);
   const paths = [...new Set(conflicting.flatMap(([, files]) => files.map(({ relativePath }) => relativePath)))];
-  const copiesByPath = new Map((await sameCopies(reads, copiesToRead(value, paths))).map(({ relativePath, copies }) => [relativePath, copies]));
+  const copiesByPath = new Map((await sameCopies(reads, archived, copiesToRead(value, paths))).map(({ relativePath, copies }) => [relativePath, copies]));
   return new Map(conflicting.flatMap(([origin, files]) => files.map((file): [string, Contents] => {
     const copies = copiesByPath.get(file.relativePath) ?? [];
     const states = fileStates(copies);
@@ -66,17 +69,11 @@ async function contentsIn(value: InstanceValue, reads: CopyReads, wanted: readon
 function conflictsOf(value: InstanceValue, wanted: readonly FileOrigin[], contents: ReadonlyMap<string, Contents>): ModConflicts[] {
   const rows = new Map(wanted.map((origin): [string, ModConflicts] => [originKey(origin), rowOf(value, origin, contents)]));
   const ownPaths = new Map(wanted.map((origin) => [originKey(origin), new Map(filesOfOrigin(value, origin).map(({ relativePath }) => [foldPath(relativePath), relativePath]))]));
-  for (const entry of value.files) {
-    for (const provider of entry.providers) {
-      const row = rows.get(originKey(provider));
-      if (row === undefined) continue;
-      const conflict = fileOrderConflictOf(entry, provider);
-      if (conflict === 'none') continue;
-      if (conflict === 'wins') {
-        row.wins.push({ file: entry.relativePath, over: goToModCandidates(entry, provider).map(originLabel) });
-      } else {
-        row.loses.push({ file: ownPaths.get(originKey(provider))?.get(foldPath(entry.relativePath)) ?? entry.relativePath, winner: originLabel(entry.winnerOrigin) });
-      }
+  for (const { relativePath, copies: [winner, ...losers] } of value.stackedCopies) {
+    if (winner === undefined || losers.length === 0) continue;
+    rows.get(originKey(winner.origin))?.wins.push({ file: relativePath, over: losers.map(({ origin }) => originLabel(origin)) });
+    for (const { origin } of losers) {
+      rows.get(originKey(origin))?.loses.push({ file: ownPaths.get(originKey(origin))?.get(foldPath(relativePath)) ?? relativePath, winner: originLabel(winner.origin) });
     }
   }
   return [...rows.values()].map((row) => ({ ...row, wins: row.wins.sort(byFile), loses: row.loses.sort(byFile) }));
@@ -85,11 +82,11 @@ function conflictsOf(value: InstanceValue, wanted: readonly FileOrigin[], conten
 export const FILE_CONFLICTS = {
   name: 'list_file_conflicts',
   input: { mods: z.array(CONTAINER_NAME).optional() },
-  of: async (value: InstanceValue, reads: CopyReads, { mods }: { mods?: ContainerName[] }): Promise<ModConflicts[]> => {
+  of: async (value: InstanceValue, reads: CopyReads, archived: ArchivedReads, { mods }: { mods?: ContainerName[] }): Promise<ModConflicts[]> => {
     const named = mods === undefined ? value.mods.filter(({ kind }) => kind === 'mod') : containersNamed(value, mods);
     const separator = named.find(({ kind }) => kind === 'separator');
     if (separator !== undefined) throw new Refusal(`"${separator.name}" is a separator; it has no files.`);
     const wanted = named.map(originOf);
-    return conflictsOf(value, wanted, await contentsIn(value, reads, wanted));
+    return conflictsOf(value, wanted, await contentsIn(value, reads, archived, wanted));
   },
 };

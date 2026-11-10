@@ -320,6 +320,14 @@ describe('the copies of each file, stacked as the game stacks them', () => {
     expect(stack.get(FILE)?.copies.map(({ origin }) => origin)).toEqual([modOrigin('A'), modOrigin('B')]);
   });
 
+  it('keeps Overwrite\'s copy apart from the copy of a mod named overwrite (ADR-0012)', () => {
+    const stack = stackCopies(indexOver([mod('overwrite')], { overwrite: [FILE] }, [fileIn('/overwrite', FILE)]), [], 'Fallout4');
+
+    expect(stack.get(FILE)?.copies.map(({ at }) => at)).toEqual([
+      { kind: 'loose', path: `/overwrite/${FILE}` }, { kind: 'loose', path: modPath('overwrite', FILE) },
+    ]);
+  });
+
   it('answers the stack it built while the index and every archive it read are the same', () => {
     const build = stackReusing();
     const index = indexOver([mod('A')], { A: ['A.ba2'] });

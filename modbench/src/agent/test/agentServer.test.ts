@@ -21,9 +21,12 @@ import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { serveAgent, type AgentServer, type AgentServerOptions } from '../agentServer';
 import type { Argument } from '../../wire/argument';
 import type { InstanceValue } from '../../instanceLoader/instance';
+import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
-import { FileConflictLookup, modOrigin, RUNTIME_OUTPUT, type ConflictEntry } from '../../instanceLoader/fileConflictIndex';
+import {
+  buildFileConflictIndex, FileConflictLookup, modOrigin, RUNTIME_OUTPUT, stackCopies, type ConflictEntry,
+} from '../../instanceLoader/fileConflictIndex';
 import type { MEditClient } from '../../client/MEditClient';
 import type { ModStatus } from '../../manifestAdapter/manifestAdapter';
 import { status } from '../../test/modStatusFixture';
@@ -647,36 +650,30 @@ describe('the agent server, given an instance value', () => {
 
 const providing = (relativePath: string, ...providers: ConflictEntry['providers']): ConflictEntry =>
   ({ relativePath, winner: `/m/${relativePath}`, winnerOrigin: providers[0] ?? RUNTIME_OUTPUT, providers });
-const A = modOrigin('A');
-const B = modOrigin('B');
-const C = modOrigin('C');
 const asLookup = (...entries: ConflictEntry[]) => {
   const files = new FileConflictLookup();
   entries.forEach((entry) => { files.set(entry); });
   return files;
 };
+const CONFLICTED_MODS: ModlistEntry[] = [
+  { kind: 'mod', name: 'A', enabled: true },
+  { kind: 'separator', name: 'Textures', enabled: true },
+  { kind: 'mod', name: 'Textures', enabled: true },
+  { kind: 'mod', name: 'B', enabled: true },
+  { kind: 'mod', name: 'C', enabled: true },
+  { kind: 'mod', name: 'D', enabled: false },
+];
+const CONFLICTED_OVERWRITE = [fileIn('/o', 'F.esp')];
+const CONFLICTED_INDEX = buildFileConflictIndex(CONFLICTED_MODS, CONFLICTED_OVERWRITE, new Map(Object.entries({
+  A: ['textures/rock.dds'], Textures: [], B: ['Textures/Rock.DDS', 'meshes/x.nif'], C: ['MESHES/x.nif', 'F.esp', 'readme.txt'],
+  D: ['textures/rock.dds', 'Docs/a.txt', 'docs/A.TXT'],
+}).map(([name, paths]) => [name, { origin: name, folder: '/m', files: paths.map((path) => fileIn('/m', path)), folders: [], notes: [] }])));
 const CONFLICTED = instanceValueFixture({
-  mods: [
-    { kind: 'mod', name: 'A', enabled: true },
-    { kind: 'separator', name: 'Textures', enabled: true },
-    { kind: 'mod', name: 'Textures', enabled: true },
-    { kind: 'mod', name: 'B', enabled: true },
-    { kind: 'mod', name: 'C', enabled: true },
-    { kind: 'mod', name: 'D', enabled: false },
-  ],
-  overwriteFiles: [fileIn('/o', 'F.esp')],
-  filesByMod: new Map([
-    ['A', [fileIn('/m', 'textures/rock.dds')]],
-    ['B', [fileIn('/m', 'Textures/Rock.DDS'), fileIn('/m', 'meshes/x.nif')]],
-    ['C', [fileIn('/m', 'MESHES/x.nif'), fileIn('/m', 'F.esp'), fileIn('/m', 'readme.txt')]],
-    ['D', [fileIn('/m', 'textures/rock.dds'), fileIn('/m', 'Docs/a.txt'), fileIn('/m', 'docs/A.TXT')]],
-  ]),
-  files: asLookup(
-    providing('textures/rock.dds', A, B),
-    providing('meshes/x.nif', B, C),
-    providing('f.esp', RUNTIME_OUTPUT, C),
-    providing('readme.txt', C),
-  ),
+  mods: CONFLICTED_MODS,
+  overwriteFiles: CONFLICTED_OVERWRITE,
+  filesByMod: CONFLICTED_INDEX.filesByMod,
+  files: CONFLICTED_INDEX.files,
+  stackedCopies: stackCopies(CONFLICTED_INDEX, [], 'Fallout4'),
 });
 
 describe('the agent server, reading file order conflicts', () => {
@@ -690,11 +687,24 @@ describe('the agent server, reading file order conflicts', () => {
     ]);
   });
 
+  it('reads an archived copy as the game stacks it, below every loose copy', async () => {
+    const value = instanceValueFixture({
+      ...CONFLICTED,
+      stackedCopies: stackCopies(CONFLICTED_INDEX, [{ origin: modOrigin('A'), archive: '/m/A.ba2', files: ['readme.txt'] }], 'Fallout4'),
+    });
+    const { client } = await clientOf(new FakeInstance(value));
+
+    expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'A' }, { name: 'C' }] })).toMatchObject([
+      { mod: 'A', loses: [{ file: 'readme.txt', winner: 'C' }] },
+      { mod: 'C', wins: [{ file: 'readme.txt', over: ['A'] }] },
+    ]);
+  });
+
   it('reads Overwrite as list_mods names it, as the winner of the files it holds', async () => {
     const { client } = await clientOf(new FakeInstance(CONFLICTED));
 
     expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'Overwrite', kind: 'runtimeOutput' }] })).toMatchObject([
-      { mod: 'Overwrite', enabled: true, wins: [{ file: 'f.esp', over: ['C'] }], loses: [], files: [{ file: 'F.esp', excluded: false, gotten: true }] },
+      { mod: 'Overwrite', enabled: true, wins: [{ file: 'F.esp', over: ['C'] }], loses: [], files: [{ file: 'F.esp', excluded: false, gotten: true }] },
     ]);
   });
 
@@ -708,7 +718,7 @@ describe('the agent server, reading file order conflicts', () => {
       const { client } = await clientOf(withOverwriteMod);
 
       expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'Overwrite', kind: 'runtimeOutput' }, { name: 'Overwrite', kind: 'mod' }] })).toMatchObject([
-        { kind: 'runtimeOutput', mod: 'Overwrite', wins: [{ file: 'f.esp', over: ['C'] }], files: [{ file: 'F.esp' }] },
+        { kind: 'runtimeOutput', mod: 'Overwrite', wins: [{ file: 'F.esp', over: ['C'] }], files: [{ file: 'F.esp' }] },
         { kind: 'mod', mod: 'Overwrite', wins: [], files: [{ file: 'own.txt' }] },
       ]);
     });

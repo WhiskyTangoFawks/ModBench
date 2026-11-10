@@ -1,8 +1,8 @@
 // mods-conflicts.md: one mod's file order conflicts, as a table.
 
-import type { FileOrigin, InstanceValue, InstanceView, Mod, OriginFile } from '../instanceLoader/instance';
+import type { FileOrigin, InstanceValue, InstanceView, Mod } from '../instanceLoader/instance';
 import { modifiedMs, type Copy, type FileCopies } from '../drivingLib/sameCopies';
-import { inFileOrderConflict, modOrigin, originLabel, sameOrigin } from '../instanceLoader/fileConflictIndex';
+import { copyInConflict, modOrigin, originLabel, sameOrigin, type StackedFile } from '../instanceLoader/fileConflictIndex';
 import type { ConflictCell, ConflictCellValue, ConflictColumn, ConflictRow, ConflictTable } from '../wire/conflictTable';
 import { byLevel, byName } from './fileTree';
 import { fileStates, worstCell, worstRow } from '../drivingLib/conflictStates';
@@ -47,10 +47,9 @@ function valueOf(copy: ReadCopy, cellValue: ConflictCellValue, letters: Readonly
 
 const message = (text: string): ConflictTable => ({ kind: 'message', text });
 
-function filesInConflict(value: Pick<InstanceValue, 'files' | 'filesByMod'>, name: string): OriginFile[] {
+function filesInConflict(value: Pick<InstanceValue, 'stackedCopies'>, name: string): StackedFile[] {
   const own = modOrigin(name);
-  return (value.filesByMod.get(name) ?? [])
-    .filter((file) => inFileOrderConflict(value.files.get(file.relativePath), own));
+  return [...value.stackedCopies].filter((file) => copyInConflict(file, own));
 }
 
 // Overwrite wins over every mod.
@@ -58,13 +57,9 @@ function winningRank(value: InstanceValue, origin: FileOrigin): number {
   return origin.kind === 'mod' ? value.mods.findIndex((entry) => entry.kind === 'mod' && entry.name === origin.name) : -1;
 }
 
-function providersOf(value: InstanceValue, file: OriginFile): readonly FileOrigin[] {
-  return value.files.get(file.relativePath)?.providers ?? [];
-}
-
 type FileRow = Extract<ConflictRow, { kind: 'file' }>;
 
-function rowsIn(files: readonly OriginFile[], prefix: string, fileRow: (file: OriginFile, name: string) => FileRow): ConflictRow[] {
+function rowsIn(files: readonly StackedFile[], prefix: string, fileRow: (file: StackedFile, name: string) => FileRow): ConflictRow[] {
   const { here, below } = byLevel(files, prefix);
   return [
     ...[...below].sort(byName).map(([name, under]): ConflictRow => {
@@ -78,13 +73,13 @@ function rowsIn(files: readonly OriginFile[], prefix: string, fileRow: (file: Or
 const fileRowsIn = (rows: readonly ConflictRow[]): FileRow[] =>
   rows.flatMap((row) => (row.kind === 'folder' ? fileRowsIn(row.rows) : [row]));
 
-type Scope = { readonly shown: ConflictTable } | { readonly files: OriginFile[] };
+type Scope = { readonly shown: ConflictTable } | { readonly files: StackedFile[] };
 
 function scopeOf({ value, sequence }: Pick<InstanceView, 'value' | 'sequence'>, name: string): Scope {
   if (sequence === 0) return { shown: { kind: 'table', columns: [], rows: [] } };
   const listed = value.mods.find((entry): entry is Mod => entry.kind === 'mod' && entry.name === name);
   if (listed === undefined) return { shown: message(`"${name}" is gone from the mod list.`) };
-  if (!listed.enabled) return { shown: message('Disabled: its files take no part in mod order.') };
+  if (!listed.enabled) return { shown: message('Disabled: its files take part in no conflict.') };
   const files = filesInConflict(value, name);
   return files.length === 0 ? { shown: message('No file order conflicts.') } : { files };
 }
@@ -97,18 +92,18 @@ export function conflictTable(view: Pick<InstanceView, 'value' | 'sequence'>, na
   const { files } = scope;
 
   const origins: FileOrigin[] = [];
-  for (const provider of files.flatMap((file) => providersOf(value, file))) {
+  for (const { origin: provider } of files.flatMap(({ copies }) => copies)) {
     if (!origins.some((origin) => sameOrigin(origin, provider))) origins.push(provider);
   }
   origins.sort((a, b) => winningRank(value, b) - winningRank(value, a));
   const copiesByPath = new Map(copies.map((entry) => [entry.relativePath, entry.copies]));
-  const fileRow = (file: OriginFile, rowName: string): FileRow => {
+  const fileRow = (file: StackedFile, rowName: string): FileRow => {
     const fileCopies = copiesByPath.get(file.relativePath) ?? [];
     const states = fileStates(fileCopies);
     const letters = contentLetters(fileCopies);
-    const winner = value.files.get(file.relativePath)?.winnerOrigin;
+    const winner = file.copies[0]?.origin;
     const cells = origins.map((origin): ConflictCell | null => {
-      if (!providersOf(value, file).some((provider) => sameOrigin(provider, origin))) return null;
+      if (!file.copies.some((copy) => sameOrigin(copy.origin, origin))) return null;
       const winning = winner !== undefined && sameOrigin(winner, origin) ? { winning: true as const } : {};
       const index = fileCopies.findIndex((copy) => sameOrigin(copy.origin, origin));
       const copy = fileCopies[index];

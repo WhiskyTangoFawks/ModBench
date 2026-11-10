@@ -196,6 +196,10 @@ export interface StackedFile {
 
 export type StackedCopies = Omit<FileConflictLookup<StackedFile>, 'set'>;
 
+/** Whether `own` has a copy of the file, and another origin has one too. */
+export const copyInConflict = (file: StackedFile | undefined, own: FileOrigin): boolean =>
+  file !== undefined && file.copies.length > 1 && file.copies.some(({ origin }) => sameOrigin(origin, own));
+
 /** An archive the game loads, at the path that wins its name, and what it holds. */
 export interface LoadedArchive {
   readonly origin: FileOrigin;

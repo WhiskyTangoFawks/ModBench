@@ -14,7 +14,7 @@ import { announceAfterReopen, createLoadOrderSender, type LoadOrderSender } from
 import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
-  type ArchiveContents, type BackendStatus, type CellChildRecords, type BuildFacts, type BuildMod, type BuildOutcome,
+  type ArchiveContents, type ArchivedCopy, type BackendStatus, type CellChildRecords, type BuildFacts, type BuildMod, type BuildOutcome,
   type Submodule, type SubmodulesCloned, type PluginFilesFlagged, type PluginFileToFlag,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
@@ -697,6 +697,12 @@ class HttpMEditClient implements MEditClient {
       const { data, error, response } = await api.POST('/archives/file', { body: { gameRelease, archive, file }, parseAs: 'arrayBuffer', signal });
       return { data: data === undefined ? undefined : new Uint8Array(data), error, response };
     }, noBodyFails, { timed: true });
+  }
+
+  getArchiveCopies(gameRelease: string, archive: string, files: readonly string[]): Promise<ArchivedCopy[] | ReadFailed> {
+    return this.read(`getArchiveCopies(${archive}, ${files.length} files)`, (api, signal) => api.POST('/archives/copies', {
+      body: { gameRelease, archive, files: [...files] }, signal,
+    }), noBodyFails, { timed: true });
   }
 
   getRecords({ name: plugin, origin }: PluginAddress, type: string, offset: number, limit: number): Promise<RecordPage | ReadFailed> {
