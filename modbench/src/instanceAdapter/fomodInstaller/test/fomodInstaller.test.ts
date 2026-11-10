@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { fomodLanding, type ConditionFacts, type FomodEngine } from '../fomodInstaller';
 import type { FomodAnswer, FomodDialog, FomodLanded, FomodStepChoice } from '../../instanceAdapter';
 import type { FomodMove, FomodState, ReleaseImage } from '../../../wire/fomodPage';
+import { SILENT_LOG } from '../../../ports/log';
 import { present } from '../../../ports/present';
 import { engineProcessFrom, FOMOD_ENGINE } from '../../../test/fomodEngine';
 import { FOMOD_PAGE, refusingPage } from '../../../test/fomodDialogDouble';
@@ -368,10 +369,29 @@ describe('the FOMOD installer', () => {
       );
     });
 
-    it('refuses when the engine says nothing, and stops it', async () => {
-      const silent = { ...FOMOD_ENGINE, process: engineProcessFrom(join(__dirname, '..', '..', '..', 'test', 'fomodEngines', 'silent.ts')), silence: 0 };
+    const crashing = (name: string, extra: Partial<FomodEngine> = {}): FomodEngine =>
+      ({ ...FOMOD_ENGINE, process: engineProcessFrom(join(__dirname, '..', '..', '..', 'test', 'fomodEngines', name)), ...extra });
 
-      await expect(install([], silent)).rejects.toThrow('The FOMOD engine could not run: it said nothing for 0 ms');
+    it('refuses as an installer that cannot be read when the engine says nothing, and stops it', async () => {
+      await expect(install([], crashing('silent.ts', { silence: 0 }))).rejects.toThrow(
+        'its installer cannot be read: it stopped answering for 0 ms. Request it again with manual',
+      );
+    });
+
+    it('refuses as an installer that cannot be read, naming the signal, when the engine dies of one', async () => {
+      await expect(install([], crashing('diesBySignal.ts'))).rejects.toThrow(
+        'its installer cannot be read: it was killed by SIGSEGV. Request it again with manual',
+      );
+    });
+
+    it('refuses as an installer that cannot be read, naming the fatal error\'s header, and logs the whole stderr', async () => {
+      const lines: string[] = [];
+      const log = { ...SILENT_LOG, error: (line: string) => lines.push(line) };
+
+      await expect(install([], crashing('fatalError.ts', { log }))).rejects.toThrow(
+        /its installer cannot be read: FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory\. Request it again/,
+      );
+      expect(lines.join('\n')).toContain('5: processTicksAndRejections');
     });
 
     it('refuses as the engine\'s fault, and lands no plain copy, when its add-on will not load', async () => {
