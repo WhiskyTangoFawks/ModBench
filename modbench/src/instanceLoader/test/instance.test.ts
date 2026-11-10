@@ -1251,7 +1251,7 @@ describe('Instance — what each archive holds', () => {
     ]));
   });
 
-  it('says why an archive is not read while mEdit cannot be reached, and asks again once mEdit runs', async () => {
+  it('holds an archive unanswered while mEdit cannot be reached, never unreadable, and asks again once mEdit runs', async () => {
     const { instance, medit } = loader(ARCHIVES_HELD, (adapter) => ({ ...adapter, fileStamp: () => Promise.resolve({ kind: 'read', answer: { size: 1n, modifiedNs: 1n } }) }));
     medit.setQueryFailureOnce('getArchiveContents', { failed: 'unreachable' });
     medit.setQueryAnswerOnce('getArchiveContents', [holding(MOD_ARCHIVE, 'meshes/a.nif'), holding(OVERWRITE_ARCHIVE)]);
@@ -1261,7 +1261,22 @@ describe('Instance — what each archive holds', () => {
     medit.setStatus('running');
     const reached = (await pastSequence(instance, 1)).archiveContents.get(MOD_ARCHIVE);
 
-    expect([unreached, reached]).toEqual([{ kind: 'unreadable', reason: 'mEdit could not be reached.' }, { kind: 'read', answer: ['meshes/a.nif'] }]);
+    expect([unreached, reached]).toEqual([{ kind: 'unanswered' }, { kind: 'read', answer: ['meshes/a.nif'] }]);
+  });
+
+  it('tells the Output once, until it changes, each archive that cannot be read, and why', async () => {
+    const { instance, medit, warnings } = loader(ARCHIVES_HELD, (adapter) => ({
+      ...adapter, fileStamp: (path) => Promise.resolve(path === OVERWRITE_ARCHIVE ? { kind: 'unreadable', reason: 'gone' } : { kind: 'read', answer: { size: 1n, modifiedNs: 1n } }),
+    }));
+    medit.setQueryAnswer('getArchiveContents', [{ archive: MOD_ARCHIVE, files: [], unreadable: 'it is no BA2' }]);
+
+    await instance.refresh();
+    await instance.refresh();
+
+    expect(warnings).toEqual([
+      `[instance] The archive ${MOD_ARCHIVE} cannot be read: it is no BA2`,
+      `[instance] The archive ${OVERWRITE_ARCHIVE} cannot be read: gone`,
+    ]);
   });
 
   it('says why an archive is not read when its stamp cannot be read, and asks mEdit nothing for it', async () => {
@@ -1284,7 +1299,7 @@ describe('Instance — what each archive holds', () => {
   ])('carries whether the game loads %s', async (_case, archive, loads) => {
     const { instance } = loader({
       mods: [mod('A')],
-      modFiles: new Map([['A', filesOfMod('A', 'A.esp', 'Off.esp')]]),
+      modFiles: new Map([['A', filesOfMod('A', 'A.esp', 'Off.esp', archive)]]),
       pluginOrder: [{ name: 'A.esp', enabled: true }, { name: 'Off.esp', enabled: false }],
       archiveList: ['Listed.ba2'],
     });

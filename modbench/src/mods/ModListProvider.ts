@@ -157,6 +157,9 @@ export type ModlistNode = SeparatorNode | ModNode | OverwriteNode | FolderNode |
 const NO_MODS_MESSAGE =
   'No mods or separators. Install Mod… or Create Empty Mod…, in the title bar\'s overflow menu, adds one.';
 
+// The Instance loader hands an archive's read on unchanged until its stamp changes, so the filter builds its entries once.
+const entriesOfRead = new WeakMap<object, readonly ArchivedEntry[]>();
+
 function isEntryNode(node: ModlistNode): node is ModNode | SeparatorNode {
   return node.kind === 'mod' || node.kind === 'separator';
 }
@@ -371,8 +374,7 @@ export class ModListProvider
     if (element instanceof FolderNode) {
       return filesIn(element, element.origin, element.files, element.folders, element.folder.relativePath, this.within(element));
     }
-    if (element instanceof FileNode) return archivedIn(element, this.archivedOf(element.file));
-    if (element instanceof ArchivedFolderNode) return archivedIn(element, element.entries);
+    if (element instanceof FileNode || element instanceof ArchivedFolderNode) return archivedIn(element, this.matches);
     if (element) return [];
     await this.firstRead.settled; // never render before the Instance has actually read once
     if (this.firstRead.failure !== undefined) return [new ErrorNode(this.firstRead.failure)];
@@ -421,12 +423,12 @@ export class ModListProvider
   private overwriteNode(): OverwriteNode {
     const { overwriteFiles, managerNames, overwriteFolders } = this.instanceValue;
     if (!this.filterText) return new OverwriteNode(overwriteFiles, managerNames.manager, overwriteFolders);
-    const found = narrowToMatches(overwriteFiles, overwriteFolders, this.matches);
+    const found = narrowToMatches(overwriteFiles, overwriteFolders, this.matches, this.archivedOf);
     return new OverwriteNode(overwriteFiles, managerNames.manager, overwriteFolders, found);
   }
 
   private isFound = (m: Mod): boolean => this.matches(m.name)
-    || anyNamed(this.instanceValue.filesByMod.get(m.name) ?? [], this.instanceValue.foldersByMod.get(m.name) ?? [], this.matches);
+    || anyNamed(this.instanceValue.filesByMod.get(m.name) ?? [], this.instanceValue.foldersByMod.get(m.name) ?? [], this.matches, this.archivedOf);
 
   private matchingModNodes(mods: readonly Mod[]): ModNode[] {
     return mods.filter(this.isFound).map((m) => this.modNode(m, 'matching'));
@@ -436,7 +438,7 @@ export class ModListProvider
     const files = this.instanceValue.filesByMod.get(m.name) ?? [];
     const folders = this.instanceValue.foldersByMod.get(m.name) ?? [];
     const shown = shownUnder(parentShown, this.matches, m.name);
-    const found = shown === 'matching' ? narrowToMatches(files, folders, this.matches) : { files, folders };
+    const found = shown === 'matching' ? narrowToMatches(files, folders, this.matches, this.archivedOf) : { files, folders };
     const sourceMod = this.instanceValue.listedSourceMods.has(m.name);
     return new ModNode(m, {
       holdsPlugin: this.modsHoldingPlugin.has(m.name), sourceMod,
@@ -461,9 +463,12 @@ export class ModListProvider
     return { shown: row.shown, matches: this.matches, conflict, differs, ignored, holdsPublisherTag, archived: this.archivedOf };
   }
 
-  private archivedOf = (file: OriginFile): ArchivedEntry[] => {
+  private archivedOf = (file: OriginFile): readonly ArchivedEntry[] => {
     const read = this.instanceValue.archiveContents.get(file.sourcePath);
-    return read?.kind === 'read' ? read.answer.map((relativePath) => ({ relativePath })) : [];
+    if (read?.kind !== 'read') return [];
+    const entries = entriesOfRead.get(read) ?? read.answer.map((relativePath) => ({ relativePath }));
+    entriesOfRead.set(read, entries);
+    return entries;
   };
 
   getParent(element: ModlistNode): ModlistNode | undefined {

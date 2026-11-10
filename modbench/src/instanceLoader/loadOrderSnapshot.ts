@@ -11,7 +11,7 @@ import { isPluginAtRoot, isRootLevel } from '../tables/pluginFile';
 import { modOfOrigin } from './modOfOrigin';
 import { pluginOrderOf } from './pluginOrder';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
-import { pluginCompanionRule } from '../tables/gamePaths';
+import { pluginCompanionRule, type PluginCompanionRule } from '../tables/gamePaths';
 import type { InstanceValue } from './instance';
 import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN, exactPluginAddressKey, pluginNameKey, type PluginAddress, type PluginPlace, type StampedFile } from '../wire/pluginAddress';
 
@@ -231,17 +231,35 @@ function winningFiles(
 
 // The INIs' archives load first, then each plugin's as the plugin loads. A later archive's file
 // replaces an earlier one's, and loose files replace every archive's.
+function archivesLoaded<A extends { readonly relativePath: string }>(
+  rule: PluginCompanionRule, listed: readonly string[], active: readonly PluginAddress[], archives: ReadonlyMap<string, A>,
+): { readonly listed: A[]; readonly byPlugin: (PluginAddress & { readonly archives: A[] })[] } {
+  return {
+    listed: listed.flatMap((name) => archives.get(foldPath(name)) ?? []),
+    byPlugin: active.map(({ name, origin }) => ({
+      name, origin, archives: [...archives.values()].filter((archive) => rule.isArchiveOf(name, archive.relativePath)).sort(byFoldedPath),
+    })),
+  };
+}
+
+/** Whether the game loads the archive of a name `files` holds at the root, the INIs listing it or a plugin in `active`. */
+export function loadsArchiveOf(gameRelease: string, listed: readonly string[], active: readonly PluginAddress[], files: FileWinners): (name: string) => boolean {
+  const rule = pluginCompanionRule(gameRelease);
+  if (rule === undefined) return () => false;
+  const archives = new Map([...files].filter(({ relativePath }) => rule.isArchive(relativePath)).map((entry) => [foldPath(entry.relativePath), entry] as const));
+  const loaded = archivesLoaded(rule, listed, active, archives);
+  const names = new Set([...loaded.listed, ...loaded.byPlugin.flatMap((plugin) => plugin.archives)].map(({ relativePath }) => foldPath(relativePath)));
+  return (name) => names.has(foldPath(name));
+}
+
 function archivesAndStringsOf(
   { gameRelease, listed, inData, files }: ArchiveSources, dataFolder: string, active: readonly PluginAddress[],
 ): Pick<LoadOrderSnapshotValue<string>, 'listedArchives' | 'archivesByPlugin' | 'stringsFiles'> {
   const rule = pluginCompanionRule(gameRelease);
   if (rule === undefined || inData.kind !== 'listed') return { listedArchives: [], archivesByPlugin: [], stringsFiles: [] };
-  const archives = winningFiles(dataFolder, inData.archives, files, rule.isArchive);
-  const listedArchives = listed.flatMap((name) => archives.get(foldPath(name)) ?? []).map(({ path }) => path);
-  const archivesByPlugin = active.map(({ name, origin }) => ({
-    name, origin,
-    archives: [...archives.values()].filter((archive) => rule.isArchiveOf(name, archive.relativePath)).sort(byFoldedPath).map(({ path }) => path),
-  }));
+  const loaded = archivesLoaded(rule, listed, active, winningFiles(dataFolder, inData.archives, files, rule.isArchive));
+  const listedArchives = loaded.listed.map(({ path }) => path);
+  const archivesByPlugin = loaded.byPlugin.map(({ name, origin, archives }) => ({ name, origin, archives: archives.map(({ path }) => path) }));
   const strings = winningFiles(dataFolder, inData.stringsFiles, files, rule.isStringsFile);
   return {
     listedArchives, archivesByPlugin,
