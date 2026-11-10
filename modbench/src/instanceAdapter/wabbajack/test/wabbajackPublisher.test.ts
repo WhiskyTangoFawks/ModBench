@@ -169,9 +169,9 @@ describe('a file the compiler has no way to ship, once no package holds its byte
   const COMPILE_PROFILES = { Profile: 'Main' };
   const REASON = 'no package holds its bytes, and no Include or No Match Include publisher tag covers it';
 
-  async function unshippable(mod: string, pathInMod: string, folder: readonly string[] = ['mods', mod]): Promise<string | undefined> {
+  async function unshippable(mod: string, pathInMod: string, folder: readonly string[] = ['mods', mod], heldByPackage = false): Promise<string | undefined> {
     const { unshippable: judged } = expectKind(await publisherOver().configuration(), 'read');
-    return judged.reason(join(root, ...folder), pathInMod, mod);
+    return judged.reason(join(root, ...folder), pathInMod, mod, heldByPackage);
   }
 
   describe('hands back the same judgement while what it judges by is unchanged', () => {
@@ -243,6 +243,12 @@ describe('a file the compiler has no way to ship, once no package holds its byte
     await writeSettings({ ...COMPILE_PROFILES, AlwaysEnabled: ['mods\\Disabled'] });
 
     expect(await unshippable('Disabled', 'x.esp')).toBe(REASON);
+  });
+
+  it('judges a file one of its mod\'s packages holds shippable, though no publisher tag covers it', async () => {
+    await writeSettings(COMPILE_PROFILES);
+
+    expect(await unshippable('Enabled', 'x.esp', ['mods', 'Enabled'], true)).toBeUndefined();
   });
 
   it('judges a file outside the instance shippable', async () => {

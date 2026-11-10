@@ -1,7 +1,7 @@
 // target-architecture.d2's Mod status; the mod-status trace.
 
 import type { EntryRef, InstanceAdapter, ModFolder } from '../instanceAdapter/instanceAdapter';
-import { buildFileAgainst, heldWholeStatus, manifestAt, packagesAskedAt, statusFrom, unreadableStatus, type ModAt, type ModStatus } from '../manifestAdapter/manifestAdapter';
+import { buildFileAgainst, filesAPackageHolds, heldWholeStatus, manifestAt, packagesAskedAt, statusFrom, unreadableStatus, type ModAt, type ModStatus } from '../manifestAdapter/manifestAdapter';
 
 /** What a status is derived from in an instance value. */
 export interface StatusSource {
@@ -16,6 +16,9 @@ export interface StatusSource {
 }
 
 const isGitsOwn = (path: string): boolean => path === '.git' || path.startsWith('.git/');
+
+type ManifestAt = Awaited<ReturnType<typeof manifestAt>>;
+type StatusValues = Awaited<ReturnType<InstanceAdapter['modValue']>>;
 
 type ModAndSourceFolder = ModAt & { readonly sourceFolder?: string; readonly files: readonly string[] };
 
@@ -41,6 +44,7 @@ const listenedBy = (listeners: Set<() => void>, listener: () => void): Listening
  *  status keeps the last good one shown, and says why on the message line and once in the Output (common.md, Reporting). */
 export class ModStatuses {
   private derived: ReadonlyMap<string, ModStatus> = new Map();
+  private heldByPackages: ReadonlyMap<string, ReadonlySet<string>> = new Map();
   private readonly shown = new Map<string, ModStatus>();
   private readonly unreadable = new Map<string, string>();
   private gitFailure: string | undefined;
@@ -70,6 +74,12 @@ export class ModStatuses {
     while (this.finished < settledRun) await new Promise<void>((resolve) => { this.finishedRun.push(resolve); });
     if (this.failure !== undefined) throw this.failure;
     return this.derived;
+  }
+
+  /** The files of the mod's folder that one of its packages holds, by bytes or by name, as the latest derivation read them:
+   *  those of its source folder's manifest for a source mod, else of its folder's. */
+  heldByPackage(mod: string): ReadonlySet<string> {
+    return this.heldByPackages.get(mod) ?? new Set();
   }
 
   /** The mod's last good status. */
@@ -123,8 +133,9 @@ export class ModStatuses {
       for (const listener of this.changed) listener();
       return;
     }
-    const statuses = await Promise.all(mods.map((mod) => this.statusOf(mod, held.whole.has(mod.folder), held.files.get(mod.folder) ?? [])));
-    this.hold(new Map(statuses.map((status) => [status.mod, status])));
+    const derived = await Promise.all(mods.map((mod) => this.statusOf(mod, held.whole.has(mod.folder), held.files.get(mod.folder) ?? [])));
+    this.heldByPackages = new Map(derived.map(({ status, packaged }) => [status.mod, packaged]));
+    this.hold(new Map(derived.map(({ status }) => [status.mod, status])));
   }
 
   // Git failing leaves the last good statuses shown, and says why once for all of them.
@@ -147,21 +158,29 @@ export class ModStatuses {
     }
   }
 
-  private async statusAgainstManifest(mod: ModAndSourceFolder, heldByGit: readonly string[]): Promise<ModStatus> {
+  private async statusAgainstManifest(mod: ModAndSourceFolder, heldByGit: readonly string[]): Promise<{ status: ModStatus; packaged: ReadonlySet<string> }> {
     const manifest = await manifestAt(mod.folder);
-    const status = statusFrom(mod, manifest, await this.reads.modValue(mod.folder, packagesAskedAt(manifest), heldByGit));
-    if (status.unreadable !== undefined) return status;
+    const values = await this.reads.modValue(mod.folder, packagesAskedAt(manifest), heldByGit);
+    const status = statusFrom(mod, manifest, values);
+    if (status.unreadable !== undefined) return { status, packaged: new Set() };
     const unpackaged = status.noManifest ? mod.files.filter((path) => !isGitsOwn(path)) : status.unpackaged;
-    return { ...status, unpackaged: [...new Set([...unpackaged, ...heldByGit])].sort() };
+    return { status: { ...status, unpackaged: [...new Set([...unpackaged, ...heldByGit])].sort() }, packaged: await this.heldByPackageOf(mod, manifest, values, heldByGit) };
+  }
+
+  private async heldByPackageOf(mod: ModAndSourceFolder, own: ManifestAt, ownValues: StatusValues, heldByGit: readonly string[]): Promise<ReadonlySet<string>> {
+    const named = mod.sourceFolder === undefined ? own : await manifestAt(mod.sourceFolder);
+    if (named.read === undefined || !('manifest' in named.read)) return new Set();
+    const values = mod.sourceFolder === undefined ? ownValues : await this.reads.modValue(mod.folder, packagesAskedAt(named), heldByGit);
+    return filesAPackageHolds(named.read.manifest, values);
   }
 
   // The installation file is the mod manager's record, so a folder git holds whole is warned of it too.
-  private async statusOf(mod: ModAndSourceFolder, heldWhole: boolean, heldByGit: readonly string[]): Promise<ModStatus> {
-    const [status, installed, buildFile] = await Promise.all([
-      heldWhole ? heldWholeStatus(mod.name, heldByGit) : this.statusAgainstManifest(mod, heldByGit), this.reads.installationFile(mod.name, mod.folder),
+  private async statusOf(mod: ModAndSourceFolder, heldWhole: boolean, heldByGit: readonly string[]): Promise<{ status: ModStatus; packaged: ReadonlySet<string> }> {
+    const [{ status, packaged }, installed, buildFile] = await Promise.all([
+      heldWhole ? { status: heldWholeStatus(mod.name, heldByGit), packaged: new Set<string>() } : this.statusAgainstManifest(mod, heldByGit), this.reads.installationFile(mod.name, mod.folder),
       mod.sourceFolder === undefined ? undefined : buildFileAgainst(mod.sourceFolder),
     ]);
-    return { ...status, ...installed.kind === 'unreadable' ? { installationFileProblem: installed.reason } : {}, ...buildFile && { buildFile } };
+    return { status: { ...status, ...installed.kind === 'unreadable' ? { installationFileProblem: installed.reason } : {}, ...buildFile && { buildFile } }, packaged };
   }
 
   private hold(derived: ReadonlyMap<string, ModStatus>): void {

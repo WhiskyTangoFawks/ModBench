@@ -227,7 +227,8 @@ const coveringIn = (compiled: ReturnType<typeof compiledIn>): Covering => (path,
 
 const UNSHIPPABLE = 'no package holds its bytes, and no Include or No Match Include publisher tag covers it';
 
-const unshippableIn = (compiled: ReturnType<typeof compiledIn>): UnshippableReason => (folder, pathInFolder, mod) => {
+const unshippableIn = (compiled: ReturnType<typeof compiledIn>): UnshippableReason => (folder, pathInFolder, mod, heldByPackage) => {
+  if (heldByPackage) return undefined;
   const judged = compiled(join(folder, pathInFolder), mod);
   return judged?.reached === true && !judged.covers.some(({ shipsUnmatched }) => shipsUnmatched) ? UNSHIPPABLE : undefined;
 };

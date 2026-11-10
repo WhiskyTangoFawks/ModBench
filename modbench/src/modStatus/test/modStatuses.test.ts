@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import type { EntryRef, InstanceAdapter, ModFolder } from '../../instanceAdapter/instanceAdapter';
@@ -25,6 +25,8 @@ beforeEach(async () => {
   listings = 0;
   whileListing = () => undefined;
   failingInstallationReads = 0;
+  hashingContents = false;
+  downloads = new Map();
 });
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
@@ -33,12 +35,12 @@ afterEach(async () => {
 const reads: Parameters<typeof modValueOver>[0] = {
   filesIn: async (folder) => (await readdir(folder).catch(() => [])).filter((name) => !name.endsWith('.manifest.json')),
   fileStamp: () => Promise.resolve({ kind: 'unreadable', reason: 'ENOENT' }),
-  originFileHash: (path) => {
+  originFileHash: async (path): ReturnType<typeof reads.originFileHash> => {
     hashed.push(path);
-    return Promise.resolve({ kind: 'unreadable', reason: 'unhashed' });
+    return hashingContents ? { kind: 'read', answer: { hash: await readFile(path, 'utf8') } } : { kind: 'unreadable', reason: 'unhashed' };
   },
   exclusionMark: '.mohidden',
-  downloadedFile: () => Promise.resolve({ kind: 'read', answer: undefined }),
+  downloadedFile: (name) => Promise.resolve({ kind: 'read', answer: downloads.get(name) }),
   gamePlaces: () => Promise.resolve([]),
   flaggedHash: () => Promise.resolve(undefined),
   gameFilesTakenBy: () => Promise.resolve({ kind: 'read', answer: { gameFiles: [], notes: [] } }),
@@ -67,6 +69,8 @@ let heldByGit: ReadonlyMap<string, readonly string[]>;
 let listings: number;
 let whileListing: () => void;
 let failingInstallationReads: number;
+let hashingContents: boolean;
+let downloads: ReadonlyMap<string, { hash: string; entries: { path: string; hash: string }[] }>;
 let installationFiles: ReadonlyMap<string, Awaited<ReturnType<InstanceAdapter['installationFile']>>>;
 
 const instance: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole' | 'filesHeldByGit'> = {
@@ -178,6 +182,53 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
     await statuses.current();
 
     expect(hashed).toEqual([]);
+  });
+
+  describe('the files a package holds, by bytes or by name (publishing.md, What ships, story 2)', () => {
+    const PACKAGE = file('S.7z');
+
+    beforeEach(() => {
+      hashingContents = true;
+      downloads = new Map([['S.7z', { hash: PACKAGE.hash, entries: [{ path: 'copied.json', hash: 'same' }, { path: 'Plugin.esp', hash: 'author' }] }]]);
+    });
+
+    it('holds the files of a source mod that its source folder\'s package holds by bytes or by name, and not the rest', async () => {
+      const mod = await folderOf('ModA', { 'copied.json': 'same', 'plugin.esp': 'built', 'made.dds': 'built' });
+      await writeManifestIn(mod, EMPTY);
+      const source = join(root, 'source', 'ModA');
+      await mkdir(source, { recursive: true });
+      await writeManifestIn(source, { ...EMPTY, packages: [PACKAGE] });
+      const statuses = statusesLogging();
+
+      statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], { paths: { sourceDirs: new Map([['ModA', source]]) } }));
+      await statuses.current();
+
+      expect([...statuses.heldByPackage('ModA')].sort()).toEqual(['copied.json', 'plugin.esp']);
+    });
+
+    it('holds the files of another mod that its own folder\'s package holds by name, though the bytes differ', async () => {
+      const mod = await folderOf('ModA', { 'copied.json': 'edited', 'made.dds': 'built' });
+      await writeManifestIn(mod, { ...EMPTY, packages: [PACKAGE] });
+      const statuses = statusesLogging();
+
+      statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)]));
+      await statuses.current();
+
+      expect([...statuses.heldByPackage('ModA')]).toEqual(['copied.json']);
+    });
+
+    it('holds nothing of a mod whose package this machine lacks, or that names none', async () => {
+      downloads = new Map();
+      const [lacking, bare] = [await folderOf('ModA', { 'copied.json': 'same' }), await folderOf('ModB', { 'copied.json': 'same' })];
+      await writeManifestIn(lacking, { ...EMPTY, packages: [PACKAGE] });
+      await writeManifestIn(bare, EMPTY);
+      const statuses = statusesLogging();
+
+      statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }, { kind: 'mod', name: 'ModB' }], [folder('mod', 'ModA', lacking), folder('mod', 'ModB', bare)]));
+      await statuses.current();
+
+      expect([statuses.heldByPackage('ModA').size, statuses.heldByPackage('ModB').size]).toEqual([0, 0]);
+    });
   });
 
   describe('the files no package holds (publishing.md, What ships, story 2)', () => {

@@ -148,6 +148,17 @@ function packagesHeld(manifest: Manifest, values: ValuesRead): { lacking: string
   return { lacking, files };
 }
 
+/** The paths the folder in `values` holds that a package of `manifest` holds, by bytes or by a file of the same name in any
+ *  case (GLOSSARY); none while `values` are not read. A package this machine lacks holds nothing. */
+export function filesAPackageHolds(manifest: Manifest, values: StatusValues): ReadonlySet<string> {
+  if (values.kind !== 'read') return new Set();
+  const { files } = packagesHeld(manifest, values);
+  const hashes = new Set(files.map(({ hash }) => hash));
+  const names = new Set(files.map(({ path }) => folded(path)));
+  return new Set([...values.folder.files].flatMap(([pathInFolder, { path, read }]) =>
+    (!isManifestPath(pathInFolder) && (names.has(folded(path)) || (read.kind === 'read' && hashes.has(read.answer.hash))) ? [pathInFolder] : [])));
+}
+
 /** The mod's folder against its manifest (instance-repository.md, Status). Which files no package holds waits for every
  *  package to be on this machine. */
 export function statusFrom(mod: ModAt, { read, file }: ManifestAt, values: StatusValues): ModStatus {
