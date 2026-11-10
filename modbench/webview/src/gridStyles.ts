@@ -53,7 +53,7 @@ export const toggleBtnStyle: React.CSSProperties = {
 // editor-conflicts.md, The colours: each is a theme colour the extension manifest contributes.
 type ColourName =
   | 'conflictRowOverride' | 'conflictRowConflict' | 'conflictIdenticalToMaster' | 'conflictOverride' | 'conflictWins'
-  | 'conflictLoses' | 'conflictLosesText';
+  | 'conflictLoses' | 'conflictLosesText' | 'conflictWinsText';
 
 const themeColour = (name: ColourName): string => `var(--vscode-modbench-${name})`;
 
@@ -69,6 +69,7 @@ export const rowBackground = (conflictAll: ConflictAll): string | undefined => R
 
 const CELL_BG: Partial<Record<ConflictThis, string>> = {
   IdenticalToMaster: themeColour('conflictIdenticalToMaster'),
+  IdenticalToMasterWinsConflict: themeColour('conflictIdenticalToMaster'),
   Override: themeColour('conflictOverride'),
   ConflictWins: themeColour('conflictWins'),
   ConflictLoses: themeColour('conflictLoses'),
@@ -79,6 +80,9 @@ export function getCellStyle(cellState: ConflictThis | undefined): React.CSSProp
   if (!backgroundColor) return {};
   if (cellState === 'ConflictLoses') {
     return { backgroundColor, color: themeColour('conflictLosesText') };
+  }
+  if (cellState === 'IdenticalToMasterWinsConflict') {
+    return { backgroundColor, color: themeColour('conflictWinsText') };
   }
   return { backgroundColor };
 }

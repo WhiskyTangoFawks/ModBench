@@ -22,6 +22,7 @@ describe('the colour a cell paints for its state', () => {
     ['ConflictWins', { backgroundColor: colour('conflictWins') }],
     ['ConflictLoses', { backgroundColor: colour('conflictLoses'), color: colour('conflictLosesText') }],
     ['IdenticalToMaster', { backgroundColor: colour('conflictIdenticalToMaster') }],
+    ['IdenticalToMasterWinsConflict', { backgroundColor: colour('conflictIdenticalToMaster'), color: colour('conflictWinsText') }],
     ['Master', {}],
     ['OnlyOne', {}],
   ])('%s paints %j', (state, expected) => {
@@ -39,6 +40,7 @@ describe('the name a cell state tooltip reads, in xEdit\'s words', () => {
     ['Master', 'Master'],
     ['OnlyOne', 'Single Record'],
     ['IdenticalToMaster', 'Identical to Master'],
+    ['IdenticalToMasterWinsConflict', 'Identical to Master, wins conflict'],
     ['Override', 'Override without conflict'],
     ['ConflictWins', 'Conflict winner'],
     ['ConflictLoses', 'Conflict loser'],
