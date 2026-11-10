@@ -2302,9 +2302,9 @@
         "description": "The text of a record field cell that is identical to the master and wins a conflict.",
         "defaults": {
           "dark": "#FF9800",
-          "light": "#E65100",
+          "light": "#B34700",
           "highContrast": "#FFB74D",
-          "highContrastLight": "#BF360C"
+          "highContrastLight": "#8C3600"
         }
       },
       {
