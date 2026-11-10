@@ -193,6 +193,16 @@ describe('an archive opens into its files as a folder does (mods.md, The tree, s
     expect(archive.collapsibleState).toBe(None);
   });
 
+  it('an archive mEdit could not read says so in its row, and why; one read or unanswered says nothing', async () => {
+    const row = async (read: ArchiveRead) => (await archiveRow(new Map([[ARCHIVE.sourcePath, read]]))).archive;
+
+    const unreadable = await row({ kind: 'unreadable', reason: 'it is no BA2' });
+
+    expect([unreadable.description, unreadable.tooltip]).toEqual(['cannot be read: it is no BA2', 'Armour - Main.ba2: cannot be read: it is no BA2']);
+    expect((await row({ kind: 'read', answer: ['a.nif'] })).description).toBeUndefined();
+    expect((await row({ kind: 'unanswered' })).description).toBeUndefined();
+  });
+
   it('a file or folder in it names its own kind as its contextValue, so no gesture of a file or folder in the mod is offered on it', async () => {
     const { provider, archive } = await archiveRow(holding('meshes/a.nif'));
     const meshes = await childNamed(provider, archive, 'meshes');
