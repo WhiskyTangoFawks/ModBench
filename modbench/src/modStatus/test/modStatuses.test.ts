@@ -192,11 +192,11 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
 
     beforeEach(() => {
       hashingContents = true;
-      downloads = new Map([['S.7z', { hash: PACKAGE.hash, entries: [{ path: 'copied.json', hash: 'same' }, { path: 'Plugin.esp', hash: 'author' }] }]]);
+      downloads = new Map([['S.7z', { hash: PACKAGE.hash, entries: [{ path: 'copied.json', hash: 'same' }, { path: 'Data/Plugin.esp', hash: 'author' }] }]]);
     });
 
-    it('holds the files of a source mod that its source folder\'s package holds by bytes or by name, and not the rest', async () => {
-      const mod = await folderOf('ModA', { 'copied.json': 'same', 'plugin.esp': 'built', 'made.dds': 'built' });
+    it('holds the files of a source mod that its source folder\'s package holds by bytes or by file name, and not the rest, such as an archive the build packed', async () => {
+      const mod = await folderOf('ModA', { 'copied.json': 'same', 'plugin.esp': 'built', 'made.dds': 'built', 'Packed - Main.ba2': 'built' });
       await writeManifestIn(mod, EMPTY);
       const source = join(root, 'source', 'ModA');
       await mkdir(source, { recursive: true });
@@ -207,6 +207,42 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
       await statuses.current();
 
       expect([...statuses.heldByPackage('ModA')].sort()).toEqual(['copied.json', 'plugin.esp']);
+    });
+
+    it('says it changed when only its source folder\'s package arrives, which changes no status', async () => {
+      const mod = await folderOf('ModA', { 'copied.json': 'same' });
+      await writeManifestIn(mod, EMPTY);
+      const source = join(root, 'source', 'ModA');
+      await mkdir(source, { recursive: true });
+      await writeManifestIn(source, { ...EMPTY, packages: [PACKAGE] });
+      const value = valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], { paths: { sourceDirs: new Map([['ModA', source]]) } });
+      const delivered = downloads;
+      downloads = new Map();
+      const statuses = statusesLogging();
+      statuses.derive(value);
+      await statuses.current();
+      const heard = vi.fn();
+      statuses.onDidChange(heard);
+
+      downloads = delivered;
+      statuses.derive(value);
+      await statuses.current();
+
+      expect([heard.mock.calls.length, [...statuses.heldByPackage('ModA')]]).toEqual([1, ['copied.json']]);
+    });
+
+    it('reads a source mod\'s folder once for its own manifest\'s packages and its source folder\'s', async () => {
+      const mod = await folderOf('ModA', { 'copied.json': 'same' });
+      await writeManifestIn(mod, EMPTY);
+      const source = join(root, 'source', 'ModA');
+      await mkdir(source, { recursive: true });
+      await writeManifestIn(source, { ...EMPTY, packages: [PACKAGE] });
+      const statuses = statusesLogging();
+
+      statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], { paths: { sourceDirs: new Map([['ModA', source]]) } }));
+      await statuses.current();
+
+      expect(asked).toEqual(['ModA']);
     });
 
     it('holds the files of another mod that its own folder\'s package holds by name, though the bytes differ', async () => {
