@@ -91,7 +91,7 @@ interface ModsViewDeps {
   /** Lists each place a file names a mod, in VS Code's References view. */
   referencedBy: (mod: string) => Promise<void>;
   /** Serves the files of an archive. */
-  archives: Pick<MEditClient, 'getArchiveFile' | 'getArchiveCopies'>;
+  archives: Pick<MEditClient, 'getArchiveFile' | 'getArchiveContents' | 'getArchiveCopies'>;
 }
 
 const checkForUpdatesDeps = (

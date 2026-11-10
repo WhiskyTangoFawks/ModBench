@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Uri } from '../../test/vscodeMock';
 
-const folderUpdates = vi.hoisted(() => [] as unknown[][]);
+const folderUpdates = vi.hoisted(() => [] as [number, number, { uri: { query: string }; name: string }][]);
 const registered = vi.hoisted(() => new Map<string, (...args: unknown[]) => unknown>());
 const registrations = vi.hoisted(() => new Map<string, { provider: Record<string, (...args: unknown[]) => unknown>; options?: { isReadonly?: boolean } }>());
 
@@ -9,7 +9,7 @@ vi.mock('vscode', () => ({
   window: { showOpenDialog: () => Promise.resolve([{ fsPath: '/games/Fallout4/Data/Chosen.ba2' }]) },
   workspace: {
     workspaceFolders: [{}],
-    updateWorkspaceFolders: (...args: unknown[]) => { folderUpdates.push(args); return true; },
+    updateWorkspaceFolders: (...args: [number, number, { uri: { query: string }; name: string }]) => { folderUpdates.push(args); return true; },
     registerFileSystemProvider: (scheme: string, provider: Record<string, (...args: unknown[]) => unknown>, options?: { isReadonly?: boolean }) => {
       registrations.set(scheme, { provider, options });
       return { dispose: () => undefined };
@@ -129,7 +129,7 @@ describe('open an archive from the Explorer (commands.md, Archive, open)', () =>
     expect(folderUpdates).toHaveLength(1);
     expect(folderUpdates[0]?.slice(0, 2)).toEqual([1, 0]);
     expect(folderUpdates[0]?.[2]).toMatchObject({ name: 'A - Main.ba2' });
-    expect(JSON.parse((folderUpdates[0]?.[2] as { uri: { query: string } }).uri.query)).toEqual({ gameRelease: 'Fallout4', archive: address.archive });
+    expect(JSON.parse(folderUpdates[0]?.[2].uri.query ?? '')).toEqual({ gameRelease: 'Fallout4', archive: address.archive });
   });
 
   it('asks for an archive when the palette runs it with none', async () => {
