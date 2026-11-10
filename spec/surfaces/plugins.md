@@ -32,7 +32,7 @@ As a user, I want:
 
 | Part | What it shows | Cites |
 |---|---|---|
-| Label | the plugin's file name | MO2 |
+| Label | its line's position in `plugins.txt`, zero-padded so every row's number aligns, then the plugin's file name | MO2 |
 | Check box | checked when its line is enabled | MO2 |
 | Description | the status words below, left out when the plugin has none | common, A view, story 3 |
 | Icon | the status below; none when the plugin has no status | common, A view, story 3 |

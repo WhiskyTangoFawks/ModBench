@@ -471,6 +471,17 @@ describe('the agent server, given an instance value', () => {
       expect(await read(client, 'list_mod_statuses')).toEqual([{ mods: ['Big Rocks'], addedLater: ['x.nif'] }]);
     });
 
+    it('answers what a source mod\'s build file lacks, and leaves out a build file that lacks nothing', async () => {
+      const buildFile = { file: '/src/Big Rocks/build.json', lacks: [{ step: 'compile' as const, path: 'Renamed.esp' }], unreadable: [] };
+      statusRead.answer = [
+        { ...status('Big Rocks'), buildFile },
+        { ...status('InAnotherProfile'), buildFile: { file: '/src/Other/build.json', lacks: [], unreadable: [] } },
+      ];
+      const { client } = await clientOf(inRepository);
+
+      expect(await read(client, 'list_mod_statuses')).toEqual([{ mods: ['Big Rocks'], buildFile }, { mods: ['InAnotherProfile'] }]);
+    });
+
     it('refuses an instance that is no repository, which has no manifest to compare', async () => {
       const { client } = await clientOf(new FakeInstance(VALUE));
 
@@ -1210,6 +1221,16 @@ describe('the agent server, running a gesture', () => {
     expect(answer).toEqual({ isError: true, text: JSON.stringify({ landed: ['A'], refused: [{ item: 'B', reason: 'Mod not found in modlist: B' }] }) });
     expect(lines.join('\n')).toContain('"B" (Mod not found in modlist: B)');
     expect(reporter.reports).toEqual([]);
+  });
+
+  it('answers move to Overwrite with each path it moved, and refuses with each path it did not and why', async () => {
+    const refused = { item: 'Data/gone.esp', reason: 'The deployment folder holds no such file that deploy did not write.' };
+    fired.outcome = { applied: true, outcome: { landed: ['Data/a.esp'], refused: [refused] } };
+    const { client } = await served();
+
+    const answer = await call(client, 'instance_move_to_overwrite', { argument: [{ path: 'Data/a.esp' }, { path: 'Data/gone.esp' }] });
+
+    expect(answer).toEqual({ isError: true, text: JSON.stringify({ landed: ['Data/a.esp'], refused: [refused] }) });
   });
 
   it('logs a gesture\'s Refusal as a refusal and any other failure as an error', async () => {
