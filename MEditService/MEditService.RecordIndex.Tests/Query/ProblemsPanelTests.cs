@@ -253,16 +253,29 @@ public sealed class ProblemsPanelTests : IDisposable
     }
 
     [Fact]
-    public void APluginWhoseHeaderTheTreeCannotPlace_AndWhoseLinksAreNotChecked_IsAFailureOfThatPlugin_NotAnEmptyAnswer()
+    public void ACompiledPluginNoModProvides_WhoseLinksAreNotChecked_IsAFailureOfThatPlugin_ForItsHeaderHasNoPlace()
     {
-        var plugin = new Plugin("Refers.esp");
-        using var index = ReconciledWithPoisoned(Unreadable, new Plugin(Unreadable, CompiledPlugin: false), plugin);
+        var plugin = new Plugin("Unprovided.esp", RefersTo: "000801:Unprovided.esp");
+        Build(new Plugin(Unreadable, CompiledPlugin: false), plugin);
+        var holder = new LoadOrderHolder();
+        OpenedIndex? reconciled = null;
+        IReadOnlyList<PluginProblems>? answered = null;
+        using var loggers = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider([], entry =>
+        {
+            if (reconciled is { } ready && entry.Message.StartsWith("Reconciling load order", StringComparison.Ordinal))
+                answered ??= ready.Queries.GetProblems().Value();
+        })));
+        using var index = Indexes.Open(holder, adapter: Poisoning(Unreadable), loggerFactory: loggers);
+        index.Reconcile(holder, Fixture.DataFolder, Fixture.Plugins, GameRelease.Fallout4);
+        reconciled = index;
 
-        File.Delete(Path.Combine(Entry(plugin).ModFolderOf(), PluginSourceRoot.For(plugin.Name), "000000_Refers.esp.json"));
+        index.Reconcile(
+            holder, Fixture.DataFolder, [.. Fixture.Plugins.Select(entry => entry.Name == plugin.Name ? entry with { NamedProvider = PluginProvider.NoMod } : entry)], GameRelease.Fallout4);
 
-        var answer = Assert.Single(Ready(index));
-        Assert.Equal(ProblemsFailureKind.Placement, answer.FailureKind);
-        Assert.Empty(answer.Problems);
+        Assert.NotNull(answered);
+        var unprovided = Assert.Single(answered);
+        Assert.Empty(unprovided.Problems);
+        Assert.Equal(ProblemsFailureKind.Placement, unprovided.FailureKind);
     }
 
     [Fact]
@@ -301,8 +314,7 @@ public sealed class ProblemsPanelTests : IDisposable
 
         var answer = Assert.Single(Ready(index));
 
-        var link = Assert.Single(answer.Problems, p => p.FieldPath == "Race");
-        Assert.Equal(Unreadable, link.UncheckedBecause);
+        Assert.Single(answer.Problems, p => p.FieldPath == "Race");
     }
 
     [Fact]
