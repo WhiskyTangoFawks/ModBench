@@ -123,6 +123,14 @@ async function hashedFilesOf(adapter: Adapter, folder: string, ignore: readonly 
   return { files: [...files].map(([path, hash]) => ({ path, hash })), exclude: exclusionsOfFiles(value.exclude, files.keys()), value };
 }
 
+// On a case-blind folder a manifest line names its file in whatever case the disk gives it.
+function namedAsOnDisk(held: Manifest | undefined, files: readonly HashedModFile[], ignoresCase: boolean): Manifest | undefined {
+  if (held === undefined || !ignoresCase) return held;
+  const onDisk = new Map(files.map(({ path }) => [path.toLowerCase(), path]));
+  const rekeyed = <V>(lines: ReadonlyMap<string, V>): Map<string, V> => new Map([...lines].map(([path, value]) => [onDisk.get(path.toLowerCase()) ?? path, value]));
+  return { ...held, files: rekeyed(held.files), flags: rekeyed(held.flags) };
+}
+
 const packageKey = (pkg: ManifestPackage): string => (pkg.kind === 'installationFile' ? `installationFile:${pkg.name}` : pkg.kind);
 
 // The lines `added` records, laid over those `held` keeps: every held package stays, and `added` brings those it lacks.
@@ -165,8 +173,9 @@ const unaccounted = (paths: readonly string[]): string => {
 async function updateMod(
   { adapter, client }: UpdateManifestDeps, mod: ModToUpdate, downloadedFiles: readonly DownloadedFile[], only?: readonly string[],
 ): Promise<Answer> {
-  const held = await heldManifestIn(mod.folder);
-  if (held !== undefined && 'why' in held) return refusal(held.why);
+  const heldAsRead = await heldManifestIn(mod.folder);
+  if (heldAsRead !== undefined && 'why' in heldAsRead) return refusal(heldAsRead.why);
+  let held: Manifest | undefined = heldAsRead;
   const holds = (name: string): boolean => name === (mod.installationFile === undefined ? undefined : basename(mod.installationFile.path)) || downloadedFiles.some(({ package: pkg }) => pkg.name === name);
   if (mod.game === undefined && held?.packages.some((pkg) => pkg.kind === 'gameFolder')) {
     return refusal('its manifest names the game folder, and the game folder was not found.');
@@ -182,6 +191,7 @@ async function updateMod(
     hashed = { unreadable: `a file could not be read: ${errorMessage(err)}` };
   }
   if ('unreadable' in hashed) return refusal(hashed.unreadable);
+  held = namedAsOnDisk(held, hashed.files, hashed.value.ignoresCase);
 
   const own = mod.installationFile;
   const installationFile = own === undefined ? undefined
@@ -189,8 +199,8 @@ async function updateMod(
   const files = only === undefined ? hashed.files : hashed.files.filter(({ path }) => isUnderAny(only, path));
   const packageHolds = (hash: string): boolean => [...downloadedFiles.map(({ file }) => file), ...mod.installationFile === undefined ? [] : [mod.installationFile]]
     .some(({ entries }) => entries.some((entry) => entry.hash === hash)) || (mod.game?.places ?? []).some((place) => place.files.some((one) => one.hash === hash));
-  const possible = held === undefined || only !== undefined ? new Map<string, readonly string[]>()
-    : await flaggedHashesIn(held, hashed.value, mod.folder, client === undefined ? undefined : possibleHashesOf(client, adapter));
+  const possible = held === undefined ? new Map<string, readonly string[]>()
+    : await flaggedHashesIn(held, hashed.value, mod.folder, client === undefined ? undefined : possibleHashesOf(client, adapter), only);
   if ('cannotTell' in possible) return refusal(`${possible.cannotTell}.`);
   const copies = packageCopiesOf(held, files, possible, packageHolds);
   if ('unknown' in copies) return refusal(unaccounted(copies.unknown));

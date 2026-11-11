@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import type { FlaggedPluginFile, FlaggedPluginHashes } from '../wire/messages';
 import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
 import type { FolderValue, Read } from '../repositoriesLib/statusValues';
+import { isUnderAny } from './folderPaths';
 import type { Manifest } from './manifest';
 import { folderAgainst, type FlaggedHashes } from './modStatus';
 
@@ -41,11 +42,11 @@ export function flaggedHashesFrom(
 }
 
 /** The hashes each flagged plugin that `folder`, at `at`, holds could have had before its flags, as `possible` says, by its
- *  manifest path; none when `possible` is absent or cannot answer, with why. */
+ *  manifest path, those under `only` when given; none when `possible` is absent or cannot answer, with why. */
 export async function flaggedHashesIn(
-  manifest: Manifest, folder: FolderValue, at: string, possible: PossibleHashes | undefined,
+  manifest: Manifest, folder: FolderValue, at: string, possible: PossibleHashes | undefined, only?: readonly string[],
 ): Promise<FlaggedHashes | { readonly cannotTell: string }> {
-  const files = flaggedFilesIn(manifest, folder, at);
+  const files = flaggedFilesIn(manifest, folder, at).filter(({ manifestPath }) => only === undefined || isUnderAny(only, manifestPath));
   if (files.length === 0) return new Map();
   if (possible === undefined) return { cannotTell: 'its manifest sets flags, which need mEdit' };
   const answered = await possible(files.map(({ file }) => file));

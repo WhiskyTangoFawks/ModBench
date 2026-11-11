@@ -31,9 +31,9 @@ export async function flaggedPluginsIn(
 }
 
 /** Keeps what mEdit answered for each plugin file with its stamp and the flags asked, so a file is asked again only once
- *  either changes, or while no answer came. */
+ *  either changes, or while no answer came or mEdit could not read it. */
 export class FlaggedHashesHeld {
-  private held = new Map<string, { readonly key: string; readonly read: FlaggedRead }>();
+  private held = new Map<string, { readonly key: string; readonly read: Extract<FlaggedRead, { readonly kind: 'read' }> }>();
   private unanswered = false;
 
   constructor(private readonly reader: Pick<MEditClient, 'getFlaggedPluginHashes'>, private readonly stampOf: (path: string) => Promise<FileRead<FileStamp>>) {}
@@ -50,13 +50,13 @@ export class FlaggedHashesHeld {
     const changed = keyed.flatMap(({ file, key }) => (key !== undefined && this.held.get(file.path)?.key !== key ? [file] : []));
     const answered = changed.length === 0 ? [] : await this.reader.getFlaggedPluginHashes(gameRelease, changed);
     const answers = new Map(isReadFailed(answered) ? [] : answered.map(({ path, hashes, unreadable }): [string, FlaggedRead] => [path, typeof unreadable === 'string' ? { kind: 'unreadable', reason: unreadable } : { kind: 'read', answer: hashes }]));
-    const held = new Map<string, { readonly key: string; readonly read: FlaggedRead }>();
+    const held = new Map<string, { readonly key: string; readonly read: Extract<FlaggedRead, { readonly kind: 'read' }> }>();
     const reads = new Map(keyed.map(({ file, stamp, key }): [string, FlaggedRead] => {
       if (stamp.kind === 'unreadable') return [file.path, stamp];
       const kept = this.held.get(file.path);
       const read = answers.get(file.path) ?? (kept !== undefined && kept.key === key ? kept.read : undefined);
       if (read === undefined || key === undefined) return [file.path, UNANSWERED];
-      held.set(file.path, { key, read });
+      if (read.kind === 'read') held.set(file.path, { key, read });
       return [file.path, read];
     }));
     this.held = held;

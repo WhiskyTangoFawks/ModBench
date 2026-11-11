@@ -1253,6 +1253,18 @@ describe('Instance — what each flagged plugin could have held before its flags
     expect(instance.value.flaggedHashes.get(plugin)).toEqual({ kind: 'unreadable', reason: 'EACCES' });
   });
 
+  it('asks again for a file mEdit could not read, and holds the answer once it can, its stamp unchanged', async () => {
+    const { instance, medit, plugin } = await flaggedLoader();
+    medit.setQueryAnswerOnce('getFlaggedPluginHashes', [{ path: plugin, hashes: [], unreadable: 'EACCES' }]);
+    medit.setQueryAnswerOnce('getFlaggedPluginHashes', [{ path: plugin, hashes: [COPY] }]);
+    await instance.refresh();
+    const locked = instance.value.flaggedHashes.get(plugin);
+
+    await instance.refresh();
+
+    expect([locked, instance.value.flaggedHashes.get(plugin)]).toEqual([{ kind: 'unreadable', reason: 'EACCES' }, { kind: 'read', answer: [COPY] }]);
+  });
+
   it('asks mEdit again only for a file whose stamp changed since it answered', async () => {
     const { instance, medit, plugin, touch } = await flaggedLoader();
     medit.setQueryAnswerOnce('getFlaggedPluginHashes', [{ path: plugin, hashes: ['old'] }]);
@@ -1332,6 +1344,18 @@ describe('Instance — what each archive holds', () => {
       [MOD_ARCHIVE, { kind: 'read', answer: ['meshes/a.nif'] }],
       [OVERWRITE_ARCHIVE, { kind: 'read', answer: ['new.nif'] }],
     ]));
+  });
+
+  it('asks again for an archive mEdit could not read, and holds the answer once it can, its stamp unchanged', async () => {
+    const { instance, medit } = loader(ARCHIVES_HELD, (adapter) => ({ ...adapter, fileStamp: () => Promise.resolve({ kind: 'read', answer: { size: 1n, modifiedNs: 1n } }) }));
+    medit.setQueryAnswerOnce('getArchiveContents', [{ archive: MOD_ARCHIVE, files: [], unreadable: 'EBUSY' }, holding(OVERWRITE_ARCHIVE)]);
+    medit.setQueryAnswerOnce('getArchiveContents', [holding(MOD_ARCHIVE, 'meshes/a.nif')]);
+    await instance.refresh();
+    const locked = instance.value.archiveContents.get(MOD_ARCHIVE);
+
+    await instance.refresh();
+
+    expect([locked, instance.value.archiveContents.get(MOD_ARCHIVE)]).toEqual([{ kind: 'unreadable', reason: 'EBUSY' }, { kind: 'read', answer: ['meshes/a.nif'] }]);
   });
 
   it('holds an archive unanswered while mEdit cannot be reached, never unreadable, and asks again once mEdit runs', async () => {
