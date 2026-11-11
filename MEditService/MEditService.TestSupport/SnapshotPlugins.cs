@@ -42,6 +42,7 @@ public static class SnapshotPlugins
             ["active"] = Active(list),
             ["loadedWithNoLine"] = LoadedWithNoLine(list),
             ["archives"] = Array.Empty<string>(),
+            ["listedArchives"] = Array.Empty<string>(),
             ["stringsFiles"] = Array.Empty<string>(),
             ["places"] = places ?? Array.Empty<object>(),
             ["gameRelease"] = gameRelease,
