@@ -113,5 +113,6 @@ public class SelectTests(TestPluginFixture fixture)
         Assert.Contains("is_active", columns);
         Assert.DoesNotContain("masters", columns);
         Assert.Equal(IndexRefusal.SelectRejected, refused.Refusal);
+        Assert.Contains("masters", refused.Message, StringComparison.Ordinal);
     }
 }

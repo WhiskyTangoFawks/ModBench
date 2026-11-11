@@ -34,13 +34,13 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     // active plugins answer, or of a plugin's own facts, which every registered plugin answers.
     // `registrations` and `mirror.files` have no view.
     private readonly record struct PublicView(
-        string Table, string PluginColumn, string OriginColumn, bool HoldsRecords, bool DerivesLoadOrder, bool DerivesWinner);
+        string Table, string PluginColumn, string OriginColumn, bool HoldsRecords, bool DerivesLoadOrder, bool DerivesWinner, string Columns = "t.*");
 
     // ADR-0012: the views derive `load_order_idx` and `is_winner` by joining
     // `registrations` and `winners`.
     private static readonly PublicView[] PublicViews =
     [
-        new("records", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: true, DerivesWinner: true),
+        new("records", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: true, DerivesWinner: true, Columns: "t.* EXCLUDE (masters)"),
         new("form_references", "source_plugin", "source_origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
         new("holdings", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
         new("cell_location", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
@@ -172,11 +172,9 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
 
         // form_key -> (record type, EditorID): the lookup exposes records' identity columns, not its
         // document.
-        const string lookupColumns = "t.form_key, t.plugin, t.origin, t.record_type, t.editor_id";
-        CreatePublicView(
-            connection, ActiveSchema, "form_lookup", records, ActiveJoin("t", records.PluginColumn, records.OriginColumn), lookupColumns);
-        CreatePublicView(
-            connection, IndexedSchema, "form_lookup", records, RegisteredJoin("t", records.PluginColumn, records.OriginColumn), lookupColumns);
+        var lookup = records with { Columns = "t.form_key, t.plugin, t.origin, t.record_type, t.editor_id" };
+        CreatePublicView(connection, ActiveSchema, "form_lookup", lookup, ActiveJoin("t", records.PluginColumn, records.OriginColumn));
+        CreatePublicView(connection, IndexedSchema, "form_lookup", lookup, RegisteredJoin("t", records.PluginColumn, records.OriginColumn));
 
         DuckDbSql.Execute(connection, $"""
             CREATE OR REPLACE VIEW {IndexedSchema}.{ViewColumnsView} AS
@@ -188,9 +186,8 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     }
 
     private static void CreatePublicView(
-        DuckDBConnection connection, string schema, string view, PublicView relation, string scope, string? columns = null)
+        DuckDBConnection connection, string schema, string view, PublicView relation, string scope)
     {
-        columns ??= relation.Table == "records" ? "t.* EXCLUDE (masters)" : "t.*";
         var loadOrderColumn = relation.DerivesLoadOrder ? ", p.load_order_idx" : "";
         var winnerColumn = "";
         var winnerJoin = "";
@@ -210,7 +207,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         var activeColumn = schema == IndexedSchema ? ", (p.load_order_idx IS NOT NULL) AS is_active" : "";
         DuckDbSql.Execute(connection, $"""
             CREATE OR REPLACE VIEW {schema}."{view}" AS
-            SELECT {columns}{loadOrderColumn}{winnerColumn}{activeColumn}
+            SELECT {relation.Columns}{loadOrderColumn}{winnerColumn}{activeColumn}
             FROM {MirrorSchema}."{relation.Table}" t
             {winnerJoin}
             {scope}
