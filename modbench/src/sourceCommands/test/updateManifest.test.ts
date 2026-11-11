@@ -754,14 +754,13 @@ describe('update manifest', () => {
       expect([result.refused, (await manifestHeld('ModA')).files]).toEqual([[{ item: 'ModA', reason: 'was not updated: mEdit is gone.' }], holding({ 'Mod.esp': HX })]);
     });
 
-    it('asks mEdit nothing, and is refused nothing for it, when it records only the files it is given', async () => {
-      const { update, manifestHeld, client } = await flagged(HX, [], HX);
+    it('leaves a flagged plugin outside the files it is given as it was, and is refused nothing for it', async () => {
+      const { update, manifestHeld } = await flagged(HX, [], HX);
       await writeFile(join(modsDir, 'ModA', 'b.nif'), 'b');
-      client.setQueryFailure('getFlaggedPluginHashes', { failed: 'refused', refusal: 'mEdit is gone' });
 
       const result = await update(['ModA'], { only: new Map([['ModA', ['b.nif']]]) });
 
-      expect([result.refused, (await manifestHeld('ModA')).files.get('Mod.esp'), client.calls]).toEqual([[], HX, []]);
+      expect([result.refused, (await manifestHeld('ModA')).files.get('Mod.esp')]).toEqual([[], HX]);
     });
 
     it('records the package copy, never the flagged bytes, for a flagged plugin it is asked to record alone', async () => {
@@ -770,6 +769,20 @@ describe('update manifest', () => {
       const result = await update(['ModA'], { only: new Map([['ModA', ['Mod.esp']]]) });
 
       expect([result.refused, (await manifestHeld('ModA')).files.get('Mod.esp')]).toEqual([[], HA]);
+    });
+
+    it('keeps the flag and records the package copy for a flagged plugin that sits on a case-blind disk in another case', async () => {
+      const { update, manifestHeld, client } = await over({
+        files: { ModA: { 'mod.esp': HX } }, answers: { installations: new Map([['ModA', read({ ...INSTALLED, entries: [{ path: 'Mod.esp', hash: HA }] })]]) },
+        adapterOver: { unheldFolderValue: () => Promise.resolve({ files: new Map([['mod.esp', { path: 'mod.esp', excluded: false, read: { kind: 'read' as const, answer: { size: 1, hash: HX } } }]]), exclude: [], ignoresCase: true }) },
+      });
+      client.setQueryAnswer('getFlaggedPluginHashes', [{ path: join(modsDir, 'ModA', 'mod.esp'), hashes: [HA, HX] }]);
+      await writeManifestIn(join(modsDir, 'ModA'), { ...MANIFEST, files: holding({ 'Mod.esp': HX }) });
+
+      const result = await update(['ModA']);
+
+      const held = await manifestHeld('ModA');
+      expect([result.refused, held.flags, held.files]).toEqual([[], new Map([['mod.esp', FLAGS]]), holding({ 'mod.esp': HA })]);
     });
 
     it('drops the flags of a plugin that is gone from the folder, as its manifest names no file it lacks, asking mEdit nothing', async () => {

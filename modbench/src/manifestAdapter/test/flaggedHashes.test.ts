@@ -29,6 +29,21 @@ describe('the hashes a folder\'s flagged plugins could have had before their fla
     expect([asked, answer]).toEqual([[[{ path: '/mods/Mod/Mod.esp', flags: { Small: true } }]], new Map([['Mod.esp', ['AAAAAAAAAAA=']]])]);
   });
 
+  it.each([
+    ['is asked about a flagged plugin under it', ['Mod.esp'], ['/mods/Mod/Mod.esp']],
+    ['is not asked about a flagged plugin outside it', ['a.nif'], []],
+  ])('limited to the paths it is given, %s', async (_what, only, askedPaths) => {
+    const asked: string[] = [];
+    const possible: PossibleHashes = (files) => {
+      asked.push(...files.map(({ path }) => path));
+      return Promise.resolve(files.map(({ path }) => ({ path, hashes: [] })));
+    };
+
+    await flaggedHashesIn(manifest, folder, '/mods/Mod', possible, only);
+
+    expect(asked).toEqual(askedPaths);
+  });
+
   it('asks nothing when the folder holds no flagged plugin', async () => {
     const possible: PossibleHashes = () => Promise.reject(new Error('asked'));
 

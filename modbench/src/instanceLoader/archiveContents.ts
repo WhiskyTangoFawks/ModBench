@@ -24,7 +24,7 @@ export function archivePathsIn(gameRelease: string, files: readonly OriginFile[]
 /** Keeps what mEdit read of each archive with its stamp, so an archive is asked again once its stamp changes. One
  *  mEdit gave no answer for, or could not read, is asked again at the next read. */
 export class ArchiveContentsHeld {
-  private held = new Map<string, { readonly stamp: string; readonly read: ArchiveRead }>();
+  private held = new Map<string, { readonly stamp: string; readonly read: Extract<ArchiveRead, { readonly kind: 'read' }> }>();
   private unanswered = false;
 
   constructor(private readonly reader: ArchiveReader, private readonly stampOf: (path: string) => Promise<FileRead<FileStamp>>) {}
@@ -41,7 +41,7 @@ export class ArchiveContentsHeld {
     const answers = new Map(isReadFailed(answered) ? [] : answered.map(({ archive, files, unreadable }): [string, ArchiveRead] => [
       archive, typeof unreadable === 'string' ? { kind: 'unreadable', reason: unreadable } : { kind: 'read', answer: files },
     ]));
-    const held = new Map<string, { readonly stamp: string; readonly read: ArchiveRead }>();
+    const held = new Map<string, { readonly stamp: string; readonly read: Extract<ArchiveRead, { readonly kind: 'read' }> }>();
     const reads = new Map(stamps.map(({ path, stamp }): [string, ArchiveRead] => {
       if (stamp.kind === 'unreadable') return [path, stamp];
       const key = stampKey(stamp.answer);
