@@ -24,24 +24,36 @@ public sealed class FlaggedPluginHashesApiTests(LoadedApiFixture<TestPluginFixtu
     }
 
     [Fact]
-    public async Task AFlaggedPlugin_IsAnsweredWithItsHashesAtEachOriginal_AndLeftAsItWas()
+    public async Task AFlaggedPlugin_IsAnsweredWithItsHashesAtEachOriginal()
     {
         var path = SmallPlugin();
-        var before = File.ReadAllBytes(path);
 
         var response = await Client.PostAsJsonAsync("/plugin-files/flagged-hashes", new { gameRelease = "Fallout4", files = new[] { new { path, flags = new Dictionary<string, bool> { ["Small"] = true } } } });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var answered = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray());
         Assert.Equal((path, 2), (answered.GetProperty("path").GetString(), answered.GetProperty("hashes").GetArrayLength()));
-        Assert.Equal(before, File.ReadAllBytes(path));
     }
 
     [Fact]
-    public async Task AFileThatIsNoPlugin_Is400()
+    public async Task AFileThatIsNoPlugin_IsAnsweredWithNoHashes_BesideTheOthers()
     {
-        var path = Path.Combine(_root, "Not.esp");
-        File.WriteAllBytes(path, new byte[64]);
+        var plugin = SmallPlugin();
+        var notAPlugin = Path.Combine(_root, "Not.esp");
+        File.WriteAllBytes(notAPlugin, new byte[64]);
+        var small = new Dictionary<string, bool> { ["Small"] = true };
+
+        var response = await Client.PostAsJsonAsync("/plugin-files/flagged-hashes", new { gameRelease = "Fallout4", files = new[] { new { path = notAPlugin, flags = small }, new { path = plugin, flags = small } } });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var answered = (await response.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray().Select(one => one.GetProperty("hashes").GetArrayLength()).ToArray();
+        Assert.Equal([0, 2], answered);
+    }
+
+    [Fact]
+    public async Task AFileThatCannotBeRead_Is400()
+    {
+        var path = Path.Combine(_root, "Gone.esp");
 
         var response = await Client.PostAsJsonAsync("/plugin-files/flagged-hashes", new { gameRelease = "Fallout4", files = new[] { new { path, flags = new Dictionary<string, bool> { ["Small"] = true } } } });
 

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { FolderFile, FolderValue } from '../../repositoriesLib/statusValues';
 import type { Manifest } from '../manifest';
-import { flaggedHashesIn, type PossibleHashes } from '../flaggedHashes';
+import { flaggedFilesIn, flaggedHashesFrom, flaggedHashesIn, type PossibleHashes } from '../flaggedHashes';
 import { localFailure } from '../../wire/readFailed';
 
 const manifest: Manifest = {
@@ -49,5 +49,23 @@ describe('the hashes a folder\'s flagged plugins could have had before their fla
     const answer = await flaggedHashesIn(manifest, folder, '/mods/Mod', () => Promise.resolve([]));
 
     expect('cannotTell' in answer && answer.cannotTell).toContain('Mod.esp');
+  });
+
+  describe('what a held answer says of the flagged plugins a folder holds', () => {
+    const files = flaggedFilesIn(manifest, folder, '/mods/Mod');
+
+    it('names the hashes of each, by manifest path', () => {
+      expect(flaggedHashesFrom(files, () => ({ kind: 'read', answer: ['AAAAAAAAAAA='] }))).toEqual(new Map([['Mod.esp', ['AAAAAAAAAAA=']]]));
+    });
+
+    it.each([
+      ['a file mEdit could not read', { kind: 'unreadable' as const, reason: 'EACCES' }, 'could not be read: EACCES'],
+      ['a file mEdit has not answered for', { kind: 'unanswered' as const }, 'has not said'],
+      ['a file nothing was asked of', undefined, 'has not said'],
+    ])('cannot tell for %s', (_what, read, why) => {
+      const answer = flaggedHashesFrom(files, () => read);
+
+      expect('cannotTell' in answer && answer.cannotTell).toContain(why);
+    });
   });
 });

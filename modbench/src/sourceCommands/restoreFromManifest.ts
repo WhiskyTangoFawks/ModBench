@@ -13,6 +13,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import { foldersOf, namesOf, type Folders } from './folders';
+import { possibleHashesOf } from './possibleHashes';
 import { archiveVariants, buildSourceMod, whyNotTrashed, type BuildPass } from './buildSourceMod';
 import { namedGameFolder, type NamedGameFolder } from './gameFolderFacts';
 import { setAsideHeldWhole } from './setAsideHeldWhole';
@@ -254,7 +255,7 @@ async function restoreFromPackages(
     const held = await adapter.unheldFolderValue(folder);
     const flagged = client === undefined
       ? new Map<string, readonly string[]>()
-      : await flaggedHashesIn(manifest, held, folder, async (files) => client.getFlaggedPluginHashes(await adapter.gameRelease(), files));
+      : await flaggedHashesIn(manifest, held, folder, possibleHashesOf(client, adapter));
     if ('cannotTell' in flagged) return { refusal: skipped(flagged.cannotTell) };
     against = folderAgainst(manifest, held, flagged);
   } catch (err) {

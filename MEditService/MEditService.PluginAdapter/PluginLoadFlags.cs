@@ -46,14 +46,15 @@ internal static class PluginLoadFlags
     }
 
     /// <summary>The hash of the plugin with each named flag at each combination of original values; none unless the plugin
-    /// holds each named flag as <paramref name="flags"/> sets it.</summary>
+    /// holds each named flag as <paramref name="flags"/> sets it, as a file that is no plugin could not have held a package's copy.</summary>
     internal static IReadOnlyList<string> OriginalHashes(string path, IReadOnlyDictionary<string, bool> flags, GameRelease gameRelease)
     {
         var load = GameCodecs.For(gameRelease).LoadFlags;
         var bytes = File.ReadAllBytes(path);
-        var header = new ModHeader(GameConstants.Get(gameRelease), bytes);
-        if (header.RecordType.Type != "TES4")
-            throw new InvalidDataException($"It does not start with a plugin header: it starts with {header.RecordType}.");
+        var constants = GameConstants.Get(gameRelease);
+        if (bytes.Length < constants.ModHeaderLength) return [];
+        var header = new ModHeader(constants, bytes);
+        if (header.RecordType.Type != "TES4") return [];
 
         if (flags.Any(flag => (header.Flags & load[flag.Key]) == load[flag.Key] != flag.Value)) return [];
 

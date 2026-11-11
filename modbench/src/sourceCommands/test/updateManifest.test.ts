@@ -717,7 +717,7 @@ describe('update manifest', () => {
       const result = await update(['ModA', 'ModB']);
 
       expect([result.refused, result.landed.map(({ mod }) => mod), (await manifestHeld('ModA')).files]).toEqual([
-        [{ item: 'ModA', reason: "was not updated: 'Mod.esp' is flagged, and its bytes are neither a package's copy nor a package's copy with its flags set, and restore replaces it with its package's copy, flagged." }],
+        [{ item: 'ModA', reason: "was not updated: 'Mod.esp' is flagged, and its bytes are neither a package's copy nor a package's copy with its flags set, and restore replaces it with its package's copy, flagged. Drop its entry from the manifest's flags, or let git hold the file, to keep its bytes." }],
         ['ModB'], holding({ 'Mod.esp': HA }),
       ]);
     });
@@ -733,7 +733,7 @@ describe('update manifest', () => {
       const result = await update(['ModA']);
 
       expect(result.refused).toEqual([
-        { item: 'ModA', reason: "was not updated: 'A.esp', 'B.esp' are flagged, and their bytes are neither a package's copy nor a package's copy with its flags set, and restore replaces them with their packages' copies, flagged." },
+        { item: 'ModA', reason: "was not updated: 'A.esp', 'B.esp' are flagged, and their bytes are neither a package's copy nor a package's copy with its flags set, and restore replaces them with their packages' copies, flagged. Drop their entries from the manifest's flags, or let git hold the files, to keep their bytes." },
       ]);
     });
 
@@ -752,6 +752,16 @@ describe('update manifest', () => {
       const result = await update(['ModA']);
 
       expect([result.refused, (await manifestHeld('ModA')).files]).toEqual([[{ item: 'ModA', reason: 'was not updated: mEdit is gone.' }], holding({ 'Mod.esp': HX })]);
+    });
+
+    it('asks mEdit nothing, and is refused nothing for it, when it records only the files it is given', async () => {
+      const { update, manifestHeld, client } = await flagged(HX, [], HX);
+      await writeFile(join(modsDir, 'ModA', 'b.nif'), 'b');
+      client.setQueryFailure('getFlaggedPluginHashes', { failed: 'refused', refusal: 'mEdit is gone' });
+
+      const result = await update(['ModA'], { only: new Map([['ModA', ['b.nif']]]) });
+
+      expect([result.refused, (await manifestHeld('ModA')).files.get('Mod.esp'), client.calls]).toEqual([[], HX, []]);
     });
 
     it('drops the flags of a plugin that is gone from the folder, as its manifest names no file it lacks, asking mEdit nothing', async () => {

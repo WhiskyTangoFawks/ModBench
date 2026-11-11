@@ -5,5 +5,5 @@ import { manifestAt, packagesAskedAt, statusFrom, type ModAt, type ModStatus } f
 export async function statusNow(adapter: Pick<InstanceAdapter, 'modValue' | 'filesHeldByGit'>, mod: ModAt): Promise<ModStatus> {
   const manifest = await manifestAt(mod.folder);
   const held = (await adapter.filesHeldByGit([mod.folder])).get(mod.folder) ?? [];
-  return statusFrom(mod, manifest, await adapter.modValue(mod.folder, packagesAskedAt(manifest), held));
+  return statusFrom(mod, manifest, await adapter.modValue(mod.folder, packagesAskedAt(manifest), held), new Map());
 }

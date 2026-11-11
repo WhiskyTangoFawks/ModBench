@@ -76,12 +76,18 @@ public sealed class PluginOriginalHashesTests : IDisposable
         Assert.Equal(["Small.esp"], Directory.GetFiles(_scratch).Select(Path.GetFileName));
     }
 
-    [Fact]
-    public void AFileThatIsNoPlugin_IsAFailure()
+    [Theory]
+    [InlineData(64)]
+    [InlineData(3)]
+    public void AFileThatIsNoPlugin_HasNoOriginalHash_AsItCouldNotHaveHeldACopyOfOne(int length)
     {
         var path = Path.Combine(_scratch, "Not.esp");
-        File.WriteAllBytes(path, new byte[64]);
+        File.WriteAllBytes(path, new byte[length]);
 
-        Assert.IsType<PluginFailure.Unparsed>(PluginOriginalHashes.Of(path, SmallSet, GameRelease.Fallout4).Failure());
+        Assert.Empty(Of(path, SmallSet));
     }
+
+    [Fact]
+    public void AFileThatCannotBeRead_IsAFailure() =>
+        Assert.IsType<PluginFailure.Inaccessible>(PluginOriginalHashes.Of(Path.Combine(_scratch, "Gone.esp"), SmallSet, GameRelease.Fallout4).Failure());
 }

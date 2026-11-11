@@ -15,7 +15,7 @@ import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
   type ArchiveContents, type BackendStatus, type CellChildRecords, type BuildFacts, type BuildMod, type BuildOutcome,
-  type Submodule, type SubmodulesCloned, type PluginFilesFlagged, type PluginFileToFlag, type FlaggedPluginHashes,
+  type Submodule, type SubmodulesCloned, type PluginFilesFlagged, type PluginFileToFlag, type FlaggedPluginHashes, type FlaggedPluginFile,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginIndexedState, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
@@ -706,7 +706,7 @@ class HttpMEditClient implements MEditClient {
     }), noBodyFails, { timed: true });
   }
 
-  getFlaggedPluginHashes(gameRelease: string, files: readonly PluginFileToFlag[]): Promise<FlaggedPluginHashes[] | ReadFailed> {
+  getFlaggedPluginHashes(gameRelease: string, files: readonly FlaggedPluginFile[]): Promise<FlaggedPluginHashes[] | ReadFailed> {
     return this.read(`getFlaggedPluginHashes(${files.length})`, (api, signal) => api.POST('/plugin-files/flagged-hashes', {
       body: { gameRelease, files: [...files] }, signal,
     }), noBodyFails, { timed: true });

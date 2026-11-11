@@ -7,6 +7,7 @@ import {
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import { heldManifestIn } from './heldManifest';
+import { possibleHashesOf } from './possibleHashes';
 import { setAsideHeldWhole } from './setAsideHeldWhole';
 import { foldersOf, namesOf, type Folders } from './folders';
 import { gameFilesOf, gameHeld, gameToHand, type GameToHand } from './gameFolderFacts';
@@ -18,7 +19,6 @@ type Adapter = Pick<InstanceAdapter,
 
 export interface UpdateManifestDeps {
   readonly adapter: Adapter;
-  /** Absent for a manifest that sets no flags. */
   readonly client?: Pick<MEditClient, 'getFlaggedPluginHashes'>;
 }
 
@@ -138,7 +138,7 @@ function laidOver(held: Manifest | undefined, added: Manifest): Manifest {
   };
 }
 
-// A flagged plugin is recorded by the package copy its bytes, before the flags the manifest sets, are, as restore flags the copy it writes.
+// Restore writes a package's copy and flags it, so a flagged plugin is recorded by the package copy it could have held before its flags.
 function packageCopiesOf(
   held: Manifest | undefined, files: readonly HashedModFile[], possible: FlaggedHashes, packageHolds: (hash: string) => boolean,
 ): { readonly files: HashedModFile[] } | { readonly unknown: readonly string[] } {
@@ -158,8 +158,8 @@ function packageCopiesOf(
 const unaccounted = (paths: readonly string[]): string => {
   const named = paths.map((path) => `'${path}'`).join(', ');
   return paths.length === 1
-    ? `${named} is flagged, and its bytes are neither a package's copy nor a package's copy with its flags set, and restore replaces it with its package's copy, flagged.`
-    : `${named} are flagged, and their bytes are neither a package's copy nor a package's copy with its flags set, and restore replaces them with their packages' copies, flagged.`;
+    ? `${named} is flagged, and its bytes are neither a package's copy nor a package's copy with its flags set, and restore replaces it with its package's copy, flagged. Drop its entry from the manifest's flags, or let git hold the file, to keep its bytes.`
+    : `${named} are flagged, and their bytes are neither a package's copy nor a package's copy with its flags set, and restore replaces them with their packages' copies, flagged. Drop their entries from the manifest's flags, or let git hold the files, to keep their bytes.`;
 };
 
 async function updateMod(
@@ -189,8 +189,8 @@ async function updateMod(
   const files = only === undefined ? hashed.files : hashed.files.filter(({ path }) => isUnderAny(only, path));
   const packageHolds = (hash: string): boolean => [...downloadedFiles.map(({ file }) => file), ...mod.installationFile === undefined ? [] : [mod.installationFile]]
     .some(({ entries }) => entries.some((entry) => entry.hash === hash)) || (mod.game?.places ?? []).some((place) => place.files.some((one) => one.hash === hash));
-  const possible = held === undefined ? new Map<string, readonly string[]>() : await flaggedHashesIn(held, hashed.value, mod.folder, client === undefined
-    ? undefined : async (asked) => client.getFlaggedPluginHashes(await adapter.gameRelease(), asked));
+  const possible = held === undefined || only !== undefined ? new Map<string, readonly string[]>()
+    : await flaggedHashesIn(held, hashed.value, mod.folder, client === undefined ? undefined : possibleHashesOf(client, adapter));
   if ('cannotTell' in possible) return refusal(`${possible.cannotTell}.`);
   const copies = packageCopiesOf(held, files, possible, packageHolds);
   if ('unknown' in copies) return refusal(unaccounted(copies.unknown));

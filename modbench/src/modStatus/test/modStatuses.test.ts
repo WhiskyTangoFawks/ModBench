@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import type { EntryRef, InstanceAdapter, ModFolder } from '../../instanceAdapter/instanceAdapter';
 import { modValueOver } from '../../instanceAdapter/modValue';
-import type { Manifest, ModStatus, PossibleHashes } from '../../manifestAdapter/manifestAdapter';
+import type { FlaggedRead, Manifest, ModStatus } from '../../manifestAdapter/manifestAdapter';
 import { writeManifestIn } from '../../manifestAdapter/manifestAdapter';
 import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
 import { ModStatuses, type StatusSource } from '../modStatuses';
@@ -64,7 +64,7 @@ const file = (name: string) => ({ kind: 'installationFile' as const, name, size:
 const folder = (kind: EntryRef['kind'], name: string, path: string, modName = name): ModFolder => ({ kind, name, path, modName });
 
 const valueOf = (mods: EntryRef[], modFolders: ModFolder[], over: Partial<StatusSource> = {}): StatusSource =>
-  ({ holdsRepository: true, mods, modFolders, entryKey: ({ name }) => name.toLowerCase(), paths: { sourceDirs: new Map() }, filesByMod: new Map(), ...over });
+  ({ holdsRepository: true, flaggedHashes: new Map(), mods, modFolders, entryKey: ({ name }) => name.toLowerCase(), paths: { sourceDirs: new Map() }, filesByMod: new Map(), ...over });
 
 let heldWhole: ReadonlySet<string>;
 let heldByGit: ReadonlyMap<string, readonly string[]>;
@@ -535,31 +535,30 @@ describe('a plugin its manifest flags (Status, story 8)', () => {
     downloads = new Map([['S.7z', { hash: PACKAGE.hash, entries: [{ path: 'Mod.esp', hash: COPY }] }]]);
   });
 
-  async function statusWith(possible: PossibleHashes): Promise<ModStatus | undefined> {
+  async function statusWith(flagged: (plugin: string) => FlaggedRead): Promise<ModStatus | undefined> {
     const mod = await folderOf('ModA', { 'Mod.esp': 'flagged bytes' });
     await writeManifestIn(mod, { ...EMPTY, packages: [PACKAGE], flags: new Map([['Mod.esp', FLAGS]]), files: new Map([['Mod.esp', COPY]]) });
-    const statuses = new ModStatuses(instance, (line) => { logged.push(line); }, possible);
-    statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)]));
+    const statuses = statusesLogging();
+    statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], { flaggedHashes: new Map([[join(mod, 'Mod.esp'), flagged(join(mod, 'Mod.esp'))]]) }));
     return (await statuses.current()).get('ModA');
   }
 
-  const answering = (hashes: string[]): PossibleHashes => (files) => Promise.resolve(files.map(({ path }) => ({ path, hashes })));
+  it('holds its bytes when mEdit says it could have held the manifest\'s hash before its flags', async () => {
+    const status = await statusWith(() => ({ kind: 'read', answer: [OTHER, COPY] }));
 
-  it('holds its bytes when mEdit says it could have held the manifest\'s hash before its flags, as the file mEdit was asked about', async () => {
-    const asked: Parameters<PossibleHashes>[0][] = [];
-
-    const status = await statusWith((files) => { asked.push(files); return answering([OTHER, COPY])(files); });
-
-    expect([status?.differing, status?.unreadable, asked]).toEqual([[], undefined, [[{ path: join(root, 'mods', 'ModA', 'Mod.esp'), flags: FLAGS }]]]);
+    expect([status?.differing, status?.unreadable]).toEqual([[], undefined]);
   });
 
   it('differs when mEdit says it could not have held the manifest\'s hash', async () => {
-    expect((await statusWith(answering([OTHER])))?.differing).toEqual(['Mod.esp']);
+    expect((await statusWith(() => ({ kind: 'read', answer: [OTHER] })))?.differing).toEqual(['Mod.esp']);
   });
 
-  it('is unreadable, saying why, and never differing, when mEdit cannot say', async () => {
-    const status = await statusWith(() => Promise.resolve({ failed: 'local', cause: 'mEdit is not running' }));
+  it.each([
+    ['mEdit has not answered', { kind: 'unanswered' as const }, 'has not said'],
+    ['mEdit could not read the file', { kind: 'unreadable' as const, reason: 'EACCES' }, 'EACCES'],
+  ])('is unreadable, saying why, and never differing, while %s', async (_what, read, why) => {
+    const status = await statusWith(() => read);
 
-    expect([status?.differing, status?.unreadable?.includes('mEdit is not running')]).toEqual([[], true]);
+    expect([status?.differing, status?.unreadable?.includes(why)]).toEqual([[], true]);
   });
 });

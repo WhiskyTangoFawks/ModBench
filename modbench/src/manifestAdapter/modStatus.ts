@@ -96,7 +96,7 @@ export interface FolderAgainst {
 /** The folder's files against `manifest`'s, a path matched in its case, else in any case where the file system does.
  *  Of two files at one own path, the one the exclusion fits is its. Ignored files are out. */
 export function folderAgainst(
-  manifest: Pick<Manifest, 'files' | 'exclude' | 'ignore' | 'flags'>, folder: FolderValue, flaggedHashes: FlaggedHashes = new Map(),
+  manifest: Pick<Manifest, 'files' | 'exclude' | 'ignore' | 'flags'>, folder: FolderValue, flaggedHashes: FlaggedHashes,
 ): FolderAgainst {
   const present = [...folder.files].filter(([pathInFolder]) => !isManifestPath(pathInFolder));
   const ignored = present.filter(([, file]) => isUnderAny(manifest.ignore, file.path));
@@ -167,7 +167,7 @@ export function filesAPackageHolds(manifest: Manifest, values: StatusValues): Re
 
 /** The mod's folder against its manifest (instance-repository.md, Status). Which files no package holds waits for every
  *  package to be on this machine. */
-export function statusFrom(mod: ModAt, { read, file }: ManifestAt, values: StatusValues, flaggedHashes: FlaggedHashes = new Map()): ModStatus {
+export function statusFrom(mod: ModAt, { read, file }: ManifestAt, values: StatusValues, flaggedHashes: FlaggedHashes): ModStatus {
   if (read === undefined) return nothing(mod.name, { noManifest: true });
   if ('refused' in read) return nothing(mod.name, { unreadable: read.refused, manifestFile: file });
   if (values.kind === 'notAsked') throw new Error('a manifest is judged against its folder');

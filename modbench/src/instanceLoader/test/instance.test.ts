@@ -14,6 +14,7 @@ import { Instance, instanceMessages, type InstanceValue } from '../instance';
 import { factsOf } from '../instanceFacts';
 import { modOrigin } from '../fileConflictIndex';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { writeManifestIn } from '../../manifestAdapter/manifestAdapter';
 
 const instances: Instance[] = [];
 
@@ -1206,6 +1207,78 @@ describe('Instance — the mod folders, the game folder\'s plugins and the load 
     await instance.refresh();
 
     expect(instance.hasLoadOrderToHand).toBe(true);
+  });
+});
+
+describe('Instance — what each flagged plugin could have held before its flags', () => {
+  const FLAGS = { Small: true };
+  const COPY = 'AAAAAAAAAAA=';
+  const dirs: string[] = [];
+  afterEach(async () => {
+    await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+  });
+
+  async function flaggedLoader(flagsOf: Record<string, typeof FLAGS> = { 'Mod.esp': FLAGS }, holdsRepository = true) {
+    const mods = await mkdtemp(join(tmpdir(), 'loader-flagged-'));
+    dirs.push(mods);
+    const folder = join(mods, 'A');
+    await mkdir(folder);
+    await writeManifestIn(folder, { packages: [], exclude: [], ignore: [], flags: new Map(Object.entries(flagsOf)), files: new Map(Object.keys(flagsOf).map((path) => [path, COPY])) });
+    let stamp = 1n;
+    const made = loader(
+      { mods: [mod('A')], modFolders: modFoldersIn(mods, 'A'), modFiles: new Map([['A', { origin: 'A', folder, files: [fileIn(folder, 'Mod.esp'), fileIn(folder, 'Other.esp')], folders: [], notes: [] }]]), holdsRepository },
+      (adapter) => ({ ...adapter, fileStamp: () => Promise.resolve({ kind: 'read', answer: { size: 1n, modifiedNs: stamp } }) }),
+    );
+    return { ...made, plugin: join(folder, 'Mod.esp'), touch: () => { stamp += 1n; } };
+  }
+
+  const asked = (medit: InMemoryMEditClient) => medit.calls.filter((call) => call.method === 'getFlaggedPluginHashes').map((call) => call.args);
+
+  it('carries what mEdit says each plugin file its mod\'s manifest flags could have held, by the path it is read from', async () => {
+    const { instance, medit, plugin } = await flaggedLoader();
+    medit.setQueryAnswer('getFlaggedPluginHashes', [{ path: plugin, hashes: [COPY, 'BBBBBBBBBBA='] }]);
+
+    await instance.refresh();
+
+    expect(asked(medit)).toEqual([['Fallout4', [{ path: plugin, flags: FLAGS }]]]);
+    expect(instance.value.flaggedHashes).toEqual(new Map([[plugin, { kind: 'read', answer: [COPY, 'BBBBBBBBBBA='] }]]));
+  });
+
+  it('asks mEdit again only for a file whose stamp changed since it answered', async () => {
+    const { instance, medit, plugin, touch } = await flaggedLoader();
+    medit.setQueryAnswerOnce('getFlaggedPluginHashes', [{ path: plugin, hashes: ['old'] }]);
+    medit.setQueryAnswerOnce('getFlaggedPluginHashes', [{ path: plugin, hashes: ['new'] }]);
+    await instance.refresh();
+    await instance.refresh();
+    touch();
+    await instance.refresh();
+
+    expect(asked(medit)).toHaveLength(2);
+    expect(instance.value.flaggedHashes.get(plugin)).toEqual({ kind: 'read', answer: ['new'] });
+  });
+
+  it('holds a file unanswered while mEdit cannot be reached, and asks again once mEdit runs', async () => {
+    const { instance, medit, plugin } = await flaggedLoader();
+    medit.setQueryFailureOnce('getFlaggedPluginHashes', { failed: 'unreachable' });
+    medit.setQueryAnswerOnce('getFlaggedPluginHashes', [{ path: plugin, hashes: [COPY] }]);
+    await instance.refresh();
+    const unreached = instance.value.flaggedHashes.get(plugin);
+
+    medit.setStatus('running');
+    const reached = (await pastSequence(instance, 1)).flaggedHashes.get(plugin);
+
+    expect([unreached, reached]).toEqual([{ kind: 'unanswered' }, { kind: 'read', answer: [COPY] }]);
+  });
+
+  it.each([
+    ['a mod whose manifest flags no plugin it holds', { 'Gone.esp': FLAGS }, true],
+    ['an instance that holds no repository', { 'Mod.esp': FLAGS }, false],
+  ])('asks mEdit nothing for %s', async (_what, flagsOf, holdsRepository) => {
+    const { instance, medit } = await flaggedLoader(flagsOf, holdsRepository);
+
+    await instance.refresh();
+
+    expect([asked(medit), instance.value.flaggedHashes.size]).toEqual([[], 0]);
   });
 });
 

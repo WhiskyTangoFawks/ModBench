@@ -13,7 +13,8 @@ internal static class FlaggedPluginHashesEndpoints
             .WithDescription(
                 "Each plugin file's hashes, by its absolute path, as a manifest carries them, with each named load flag at each " +
                 "combination of its possible original values; none when the file does not hold a named flag as the request sets it. " +
-                "Writes nothing. 400 when a file is no plugin or a name is no load flag of the game.")
+                "A file that is no plugin could not have held a package's copy, so its hashes are none. Writes nothing. 400 when a file cannot " +
+                "be read or a name is no load flag of the game.")
             .Produces<IReadOnlyList<FlaggedPluginHashes>>()
             .ProducesProblem(400);
 
