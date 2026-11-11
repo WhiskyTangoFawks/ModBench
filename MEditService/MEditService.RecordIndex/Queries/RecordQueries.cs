@@ -116,17 +116,18 @@ internal sealed class RecordQueries(
     private CompareResult? CompareOf(string formKey, CopyText? text)
     {
         using var reads = RequireReads().InOneSnapshot();
+        var recordText = text is null ? (RecordText?)null : TextOfRecord(formKey, text.Plugin, text.DocumentText);
         var stack = text?.Alone == true ? null : reads.GetOverrideStack(formKey);
         if (stack == null && text == null) return null;
         var snapshot = _loadOrder.Require();
 
         var active = stack?.Entries.Select(e => e.Effective).ToList() ?? [];
         var outside = new List<RecordDocument>();
-        if (text is not null)
+        if (text is not null && recordText is { } read)
         {
             var at = active.FindIndex(c => PluginAddress.Comparer.Equals(c.Plugin, text.Plugin));
             var loadOrderIndex = at >= 0 ? active[at].LoadOrderIndex : snapshot.LoadOrderIndex(text.Plugin) ?? NotInLoadOrder;
-            var fromText = CopyFromText(reads, formKey, text.Plugin, loadOrderIndex, text.DocumentText);
+            var fromText = CopyFromText(reads, formKey, text.Plugin, loadOrderIndex, read);
             if (fromText is null) return null;
             if (at >= 0) active[at] = fromText with { IsWinner = active[at].IsWinner };
             else outside.Add(fromText);
@@ -183,6 +184,7 @@ internal sealed class RecordQueries(
     {
         using var reads = _index.RequireWholeSetReads().InOneSnapshot();
         var snapshot = _loadOrder.Require();
+        List<RecordText?> texts = [.. copies.Select(copy => copy.DocumentText is { } text ? TextOfRecord(copy.FormKey, copy.Plugin, text) : (RecordText?)null)];
 
         var (fromIndex, resolveFormKey) = reads.GetDocuments(copies);
         var documents = new List<RecordDocument>(copies.Count);
@@ -190,7 +192,7 @@ internal sealed class RecordQueries(
         for (var i = 0; i < copies.Count; i++)
         {
             var copy = copies[i];
-            var document = copy.DocumentText is { } text
+            var document = texts[i] is { } text
                 ? CopyFromText(reads, copy.FormKey, copy.Plugin, snapshot.LoadOrderIndex(copy.Plugin) ?? NotInLoadOrder, text)
                 : fromIndex[i];
             if (document == null) missing.Add(copy);
@@ -232,26 +234,30 @@ internal sealed class RecordQueries(
         return formKeys.Select(formKey => new RecordCopyStates(formKey, copyStates.GetValueOrDefault(formKey) ?? [])).ToList();
     }
 
+    private readonly record struct RecordText(string Text, string? WhyUnread);
+
     // The text is the document carrying the record. A plugin's source tree says which document that is, as it
-    // does for an edit; a plugin with no tree has only the record's own.
-    private RecordDocument? CopyFromText(
-        RelationReads reads, string formKey, PluginAddress plugin, int loadOrderIndex, string text)
+    // does for an edit; a plugin with no tree has only the record's own. Read before any snapshot opens.
+    private RecordText TextOfRecord(string formKey, PluginAddress plugin, string text)
     {
-        if (TreeOf(plugin) is not { } tree)
-            return reads.DocumentFromText(formKey, plugin, loadOrderIndex, text);
+        if (TreeOf(plugin) is not { } tree) return new(text, null);
 
         if (!tree.RecordFromText(plugin, formKey, text).Holds(out var record, out var refused))
         {
             _logger.LogWarning("{FormKey} in {Plugin} cannot be read from its source tree: {Cause}", formKey, plugin.Name, refused.Reason);
-            return Unread(reads, formKey, plugin, loadOrderIndex, refused.Reason);
+            return new(CallerText.NoBody, refused.Reason);
         }
         return record is not null
-            ? reads.DocumentFromText(formKey, plugin, loadOrderIndex, record.Body)
-            : Unread(reads, formKey, plugin, loadOrderIndex, $"No document in {plugin.Name}'s source tree carries {formKey}.");
+            ? new(record.Body, null)
+            : new(CallerText.NoBody, $"No document in {plugin.Name}'s source tree carries {formKey}.");
     }
 
-    private static RecordDocument? Unread(RelationReads reads, string formKey, PluginAddress plugin, int loadOrderIndex, string why) =>
-        reads.DocumentFromText(formKey, plugin, loadOrderIndex, CallerText.NoBody) is { } unread ? unread with { ParseDiagnosis = why } : null;
+    private static RecordDocument? CopyFromText(
+        RelationReads reads, string formKey, PluginAddress plugin, int loadOrderIndex, RecordText text)
+    {
+        var document = reads.DocumentFromText(formKey, plugin, loadOrderIndex, text.Text);
+        return text.WhyUnread is { } why && document is not null ? document with { ParseDiagnosis = why } : document;
+    }
 
     private static CompareOverride ToCompareOverride(
         RecordDetail o, ConflictThis? state, string? column, LoadOrderSnapshot snapshot, RelationReads reads) =>
@@ -454,7 +460,11 @@ internal sealed class RecordQueries(
         _answer.Of(() => WorldspaceTree.InteriorBlocksOf(RequireReads().GetInteriorCells(plugin)));
 
     public Answer<IReadOnlyList<ContainerChildSummary>, IndexRefused> GetContainerChildren(PluginAddress plugin, string parentFormKey) =>
-        _answer.Of(() => ContainerChildren.Of(RequireReads(), plugin, parentFormKey, _loadOrder.Require().GameRelease));
+        _answer.Of(() =>
+        {
+            using var reads = RequireReads().InOneSnapshot();
+            return ContainerChildren.Of(reads, plugin, parentFormKey, _loadOrder.Require().GameRelease);
+        });
 
     // A plugin the record index has not reached holds no rows yet and would read clean.
     public Answer<IReadOnlyList<PluginDiagnosisReport>, IndexRefused> GetLoadOrderDiagnoses() =>
