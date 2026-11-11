@@ -40,6 +40,7 @@ import { showProgressWhileLate } from './drivingLib/lateProgress';
 import { createPlugins, PLUGINS_KEY_ARGS, type Plugins } from './plugins';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
+import type { ReferencedBy } from './mods/modSymbolCommands';
 import { registerArchiveFiles, registerArchiveOpen } from './mods/archiveFiles';
 import { fileProblemsOver } from './ports/fileProblems';
 import type { Log } from './ports/log';
@@ -119,7 +120,7 @@ interface ViewsDeps {
   focusedView: FocusedView;
   editor: Pick<Editor, 'copyValue'>;
   sourceEditing: SourceEditing;
-  referencedBy: { mod: (mod: string) => Promise<void>; file: (path: string) => Promise<void> };
+  referencedBy: ReferencedBy;
 }
 
 interface InstanceSide {

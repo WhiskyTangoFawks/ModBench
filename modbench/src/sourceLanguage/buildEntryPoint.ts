@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import { BUILD_FILE } from '../wire/sourceMod';
+import { isUri } from '../drivingLib/argument';
 
 const BUILD_TARGETS_KEY = 'modbench.source.buildTargets';
 
@@ -16,9 +17,6 @@ function modsByBuildTarget(sourceDirs: ReadonlyMap<string, string>): ReadonlyMap
     return [[uri.toString(), mod], [vscode.Uri.joinPath(uri, BUILD_FILE).toString(), mod]] as const;
   }));
 }
-
-export const isUri = (value: unknown): value is vscode.Uri =>
-  typeof value === 'object' && value !== null && 'fsPath' in value && 'scheme' in value;
 
 /** The Explorer menu and the run button of a source mod's source folder or build file (source.md, Menus and keys): an
  *  internal entry point that fires `build` with the mods those resources stand for. */

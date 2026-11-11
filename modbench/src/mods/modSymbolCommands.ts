@@ -1,12 +1,11 @@
 import * as vscode from 'vscode';
-import { modArgumentOf } from '../drivingLib/argument';
+import { isUri, modArgumentOf } from '../drivingLib/argument';
 import { goToRowOrFile } from '../drivingLib/goToRow';
 import type { InstanceValue } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import { samePath } from '../symbolNames/symbolNames';
 import type { ModlistNode, ModNode } from './ModListProvider';
 import { ArchivedFileNode, FileNode } from './modFiles';
-import { hasFsPath } from './archiveFiles';
 
 const onlyModRow = (selection: readonly ModlistNode[]): ModNode | undefined => {
   const [only, ...rest] = selection;
@@ -38,16 +37,18 @@ export function registerGoToModRowCommand(
 
 type FilesHeld = Pick<InstanceValue, 'filesByMod' | 'dataFolderFiles'>;
 
-interface ReferencedByDeps {
-  /** Lists each place a file names the mod. */
+/** Lists, in VS Code's References view, each place a file names the mod, or each record that names the file at its path in
+ *  the Data folder. */
+export interface ReferencedBy {
   mod: (mod: string) => Promise<void>;
-  /** Lists each record that names the file at its path in the Data folder. */
   file: (path: string) => Promise<void>;
+}
+
+interface ReferencedByDeps extends ReferencedBy {
   value: () => FilesHeld;
   reporter: Pick<Reporter, 'report'>;
 }
 
-// A file the Explorer shows, by its path in the Data folder: in a mod, or in the game's Data folder.
 function dataPathOf({ filesByMod, dataFolderFiles }: FilesHeld, file: string): string | undefined {
   const inData = dataFolderFiles.kind === 'listed' ? [...dataFolderFiles.files.values()] : [];
   return [...[...filesByMod.values()].flat(), ...inData].find(({ path }) => samePath(path, file))?.relativePath;
@@ -58,7 +59,7 @@ export function registerModReferencedByCommand(deps: ReferencedByDeps, viewSelec
   return vscode.commands.registerCommand('modbench.mod.referencedBy', async (clicked?: unknown) => {
     if (clicked instanceof FileNode) return deps.file(clicked.file.relativePath);
     if (clicked instanceof ArchivedFileNode) return deps.file(clicked.path);
-    if (hasFsPath(clicked)) {
+    if (isUri(clicked)) {
       const path = dataPathOf(deps.value(), clicked.fsPath);
       if (path !== undefined) return deps.file(path);
       deps.reporter.report('error', `Could not list where files name ${clicked.fsPath}.`, 'No mod holds it, and it is not in the game\'s Data folder.');

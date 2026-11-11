@@ -31,7 +31,7 @@ import { registerModInstallCommands } from './installCommands';
 import { fomodDialog } from './fomodDialog';
 import { registerCompareFileCommand } from './compareFile';
 import { registerGoToModCommand } from './goToMod';
-import { registerGoToModRowCommand, registerModReferencedByCommand } from './modSymbolCommands';
+import { registerGoToModRowCommand, registerModReferencedByCommand, type ReferencedBy } from './modSymbolCommands';
 import { registerBuildCommand } from './buildCommand';
 import { registerBuildTask } from './buildTask';
 import { ModProblems } from './modProblems';
@@ -85,9 +85,7 @@ interface ModsViewDeps {
   checkForUpdates: CheckForUpdates;
   /** Each mod's status, as mEdit last answered it. */
   statuses: ModStatuses;
-  /** Lists each place a file names a mod, or each record that names a file at its path in the Data folder, in VS Code's
-   *  References view. */
-  referencedBy: { mod: (mod: string) => Promise<void>; file: (path: string) => Promise<void> };
+  referencedBy: ReferencedBy;
   /** Reads the copies of files in archives. */
   archives: Pick<MEditClient, 'getArchiveCopies'>;
 }

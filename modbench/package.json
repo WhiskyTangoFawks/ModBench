@@ -663,7 +663,7 @@
       },
       {
         "command": "modbench.mod.referencedBy",
-        "title": "Referenced By Mod",
+        "title": "Referenced By",
         "category": "Modbench"
       },
       {

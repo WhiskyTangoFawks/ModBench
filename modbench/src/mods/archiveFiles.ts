@@ -4,6 +4,7 @@ import { failureReason, isReadFailed } from '../wire/readFailed';
 import type { ArchivedFileAddress } from '../instanceLoader/fileConflictIndex';
 import type { Reporter } from '../ports/reporter';
 import { reportFailure } from '../drivingLib/reportFailure';
+import { isUri } from '../drivingLib/argument';
 
 const ARCHIVE_SCHEME = 'modbench-archive';
 
@@ -113,9 +114,6 @@ export function registerArchiveFiles(client: Pick<MEditClient, 'getArchiveFile' 
   return vscode.workspace.registerFileSystemProvider(ARCHIVE_SCHEME, new ArchiveFileSystem(client), { isReadonly: true });
 }
 
-export const hasFsPath = (value: unknown): value is { fsPath: string } =>
-  typeof value === 'object' && value !== null && 'fsPath' in value && typeof value.fsPath === 'string';
-
 interface ArchiveOpenDeps {
   gameRelease: () => Promise<string>;
   reporter: Reporter;
@@ -124,7 +122,7 @@ interface ArchiveOpenDeps {
 /** commands.md, Archive, open: the archive joins the workspace as a read-only folder, and the Explorer lists what mEdit reads in it. */
 export function registerArchiveOpen({ gameRelease, reporter }: ArchiveOpenDeps): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.archive.open', async (clicked?: unknown) => {
-    const fsPath = hasFsPath(clicked) ? clicked.fsPath : (await vscode.window.showOpenDialog({ filters: { Archives: ['ba2', 'bsa'] } }))?.[0]?.fsPath;
+    const fsPath = isUri(clicked) ? clicked.fsPath : (await vscode.window.showOpenDialog({ filters: { Archives: ['ba2', 'bsa'] } }))?.[0]?.fsPath;
     if (fsPath === undefined) return;
     await reportFailure(reporter, `Failed to open the archive "${fsPath}".`, async () => {
       const uri = archiveUri({ gameRelease: await gameRelease(), archive: fsPath });
