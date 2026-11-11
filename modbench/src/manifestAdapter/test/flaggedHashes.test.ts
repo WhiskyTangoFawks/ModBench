@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import type { FolderFile, FolderValue } from '../../repositoriesLib/statusValues';
 import type { Manifest } from '../manifest';
@@ -26,11 +27,11 @@ describe('the hashes a folder\'s flagged plugins could have had before their fla
 
     const answer = await flaggedHashesIn(manifest, folder, '/mods/Mod', possible);
 
-    expect([asked, answer]).toEqual([[[{ path: '/mods/Mod/Mod.esp', flags: { Small: true } }]], new Map([['Mod.esp', ['AAAAAAAAAAA=']]])]);
+    expect([asked, answer]).toEqual([[[{ path: join('/mods/Mod', 'Mod.esp'), flags: { Small: true } }]], new Map([['Mod.esp', ['AAAAAAAAAAA=']]])]);
   });
 
   it.each([
-    ['is asked about a flagged plugin under it', ['Mod.esp'], ['/mods/Mod/Mod.esp']],
+    ['is asked about a flagged plugin under it', ['Mod.esp'], [join('/mods/Mod', 'Mod.esp')]],
     ['is not asked about a flagged plugin outside it', ['a.nif'], []],
   ])('limited to the paths it is given, %s', async (_what, only, askedPaths) => {
     const asked: string[] = [];
