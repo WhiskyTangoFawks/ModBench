@@ -50,7 +50,7 @@ describe('a folder\'s files git does not hold as a value', () => {
 });
 
 describe('a mod as a value', () => {
-  const PLACE = { root: '/game', holdsDataFiles: true, depots: [], depotProblems: [] };
+  const PLACE = { root: '/game', depots: [], depotProblems: [] };
   const modReads = {
     ...reads(['a.esp']),
     downloadedFile: () => Promise.resolve({ kind: 'read' as const, answer: undefined }),

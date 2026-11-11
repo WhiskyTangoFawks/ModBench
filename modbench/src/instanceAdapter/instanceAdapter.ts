@@ -74,8 +74,8 @@ interface PlaceDepots {
 /** The game's install in Steam's library. */
 export type SteamInstall = FoundGameFolder & PlaceDepots;
 
-/** A place of the game. It holds no Data file when its Data folder is another place's. */
-export type GamePlace = PlaceDepots & { readonly root: string; readonly holdsDataFiles: boolean };
+/** A place of the game. */
+export type GamePlace = PlaceDepots & { readonly root: string };
 
 /** Where deploy puts a mod's file in the game folder, none for a file it does not deploy. */
 export type DeployedPath = (pathInMod: string) => string | undefined;

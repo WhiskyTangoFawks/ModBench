@@ -27,8 +27,7 @@ const DOWNLOADED: InstallationFile = {
 };
 const REPOSITORY: ManifestPackage = { kind: 'repository', name: 'ModA' };
 const FOUND: FoundGameFolder = { kind: 'found', root: '/game', dataFolder: '/game/Data' };
-const GAME_PLACE: GamePlace = { root: '/game', holdsDataFiles: true, depots: [], depotProblems: [] };
-const STEAM_PLACE: GamePlace = { root: '/steam', holdsDataFiles: true, depots: [], depotProblems: [] };
+const GAME_PLACE: GamePlace = { root: '/game', depots: [], depotProblems: [] };
 const NOT_FINISHED = 'was not finished: the restore was cancelled. Restoring it again finishes it.';
 
 const holding = (files: Record<string, string | null>): Manifest['files'] => new Map(Object.entries(files));
@@ -224,16 +223,6 @@ describe('restore from manifest', () => {
       expect(writes(fake.calls)).toEqual([
         { verb: 'writeFilesIn', folder: folderOf('ModA'), files: [{ path: 'a.nif', from: { kind: 'gameFile', root: '/game', path: 'Data/A.nif' } }] },
       ]);
-    });
-
-    it('takes it from another place of the game when the game folder holds it with other bytes', async () => {
-      const { restore, fake } = await takingFromTheGame({
-        places: [{ ...GAME_PLACE, gameFilesTaken: takenFromTheGame(['Data/a.nif', EDITED, 'a.nif']) }, { ...STEAM_PLACE, gameFilesTaken: takenFromTheGame(['Data/a.nif', HA, 'a.nif']) }],
-      });
-
-      await restore(['ModA']);
-
-      expect(writes(fake.calls)[0]).toMatchObject({ files: [{ from: { root: '/steam' } }] });
     });
   });
 

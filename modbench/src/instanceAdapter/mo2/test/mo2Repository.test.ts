@@ -29,7 +29,7 @@ async function instance() {
 const everySourceModNamedForItsRepository = async (adapter: Awaited<ReturnType<typeof instance>>): ReturnType<typeof adapter.writeSubmodules> =>
   adapter.writeSubmodules('every', await adapter.sourceModFolders());
 
-const gamePlace = (): GamePlace => ({ root: join(root, 'game'), holdsDataFiles: true, depots: [], depotProblems: [] });
+const gamePlace = (): GamePlace => ({ root: join(root, 'game'), depots: [], depotProblems: [] });
 
 async function put(path: string, text = 'x'): Promise<void> {
   await mkdir(dirname(join(root, path)), { recursive: true });
@@ -1604,18 +1604,6 @@ describe('the MO2 adapter\'s game files', () => {
     } finally {
       await rm(linked, { force: true });
     }
-  });
-
-  it('hands no game file below the Data folder of a place whose Data folder is another place\'s', async () => {
-    const adapter = await instance();
-    await put('game/Data/a.nif', 'aaaa');
-    await put('game/Fallout4.exe', 'bbbb');
-    await put('mods/Mod/a.nif', 'aaaa');
-    await put('mods/Mod/Root/Fallout4.exe', 'bbbb');
-
-    const taken = await adapter.gameFilesTakenBy({ ...gamePlace(), holdsDataFiles: false }, join(root, 'mods', 'Mod'));
-
-    expect(taken).toEqual({ kind: 'read', answer: { gameFiles: [{ path: 'Fallout4.exe', hash: HASH_OF_BBBB, pathInFolder: 'Root/Fallout4.exe' }], notes: [] } });
   });
 });
 
