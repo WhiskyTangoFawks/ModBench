@@ -1,4 +1,4 @@
-import type { RowsOutgrew } from './MEditClient';
+import type { RowsRead } from './MEditClient';
 import type { ReadFailed } from '../wire/readFailed';
 
 const STOPPED_SHORT = "mEdit's rows stopped before their last line, so they may not be every row the SELECT selects.";
@@ -17,21 +17,21 @@ async function* linesOf(body: ReadableStream<Uint8Array>): AsyncGenerator<string
  *  It stops reading once the rows' text passes `atMostChars`. */
 export async function rowsOf(
   body: ReadableStream<Uint8Array>, atMostChars: number, stopped: (reason: string) => void,
-): Promise<unknown[] | RowsOutgrew | ReadFailed> {
+): Promise<RowsRead | ReadFailed> {
   const rows: unknown[] = [];
   let chars = 0;
   for await (const line of linesOf(body)) {
     const sent: unknown = JSON.parse(line);
     if (typeof sent !== 'object' || sent === null) throw new SyntaxError(`mEdit sent a line that is not an object: ${line}`);
-    if ('end' in sent) return rows;
+    if ('end' in sent) return { rows, more: false };
     if (!('row' in sent)) {
       const refusal = 'detail' in sent && typeof sent.detail === 'string' ? sent.detail : STOPPED_SHORT;
       stopped(refusal);
       return { failed: 'refused', refusal };
     }
-    chars += line.length;
-    if (chars > atMostChars) return { outgrew: true };
     rows.push(sent.row);
+    chars += line.length;
+    if (chars > atMostChars) return { rows, more: true };
   }
   stopped(STOPPED_SHORT);
   return { failed: 'unreadable', cause: STOPPED_SHORT };

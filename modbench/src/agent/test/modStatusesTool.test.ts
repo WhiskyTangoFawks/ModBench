@@ -22,6 +22,6 @@ describe('list_mod_statuses while git cannot say which folders it holds', () => 
     const statuses = new ModStatuses(gitGone, () => undefined);
     statuses.derive({ holdsRepository: true, flaggedHashes: new Map(), mods: value.mods, modFolders: value.modFolders, entryKey: ({ name }) => name, paths: value.paths, filesByMod: value.filesByMod });
 
-    expect(await LIST_MOD_STATUSES.of(value, statuses)).toEqual([{ mods: ['ModA', 'ModB'], unreadable: 'git could not say which folders it holds: git is gone' }]);
+    expect(await LIST_MOD_STATUSES.of(value, statuses, {})).toEqual([{ mods: ['ModA', 'ModB'], unreadable: 'git could not say which folders it holds: git is gone' }]);
   });
 });

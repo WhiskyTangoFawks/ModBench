@@ -10,6 +10,7 @@ import type { ArchivedCopies } from '../drivingLib/archivedCopies';
 import { Refusal } from '../drivingLib/refusal';
 import type { ConflictCellState, ConflictRowState } from '../wire/conflictTable';
 import { CONTAINER_NAME, containersNamed, originOf, type ContainerName } from './names';
+import { FILTER, fitting, holding } from './tooLarge';
 
 interface Contents {
   state: ConflictCellState | null;
@@ -82,14 +83,35 @@ function conflictsOf(value: InstanceValue, wanted: readonly FileOrigin[], conten
   return [...rows.values()].map((row) => ({ ...row, wins: row.wins.sort(byFile), loses: row.loses.sort(byFile) }));
 }
 
+// mods.md, Order and view state, story 2.
+function holdingFiles(row: ModConflicts, held: (name: string) => boolean, keptWhole: ReadonlySet<string>): ModConflicts {
+  if (held(row.mod) || (row.kind === 'mod' && keptWhole.has(row.mod))) return row;
+  const pathHeld = ({ file }: { file: string }) => file.split(/[\\/]/).some(held);
+  return { ...row, wins: row.wins.filter(pathHeld), loses: row.loses.filter(pathHeld), files: row.files.filter(pathHeld) };
+}
+
+const modsUnderSeparatorsHolding = ({ modGroups }: InstanceValue, held: (name: string) => boolean): Set<string> =>
+  new Set(modGroups.groups.filter(({ separator }) => held(separator.name)).flatMap(({ mods }) => mods.map(({ name }) => name)));
+
+const MODS_NARROW = 'mods narrows the read to the mods you name.';
+const FILTER_NARROWS = 'filter keeps the files whose path holds it in a folder or file name, in any case, and every file of a mod whose name, or whose separator\'s name, holds it.';
+
 export const FILE_CONFLICTS = {
   name: 'list_file_conflicts',
-  input: { mods: z.array(CONTAINER_NAME).optional() },
-  of: async (value: InstanceValue, reads: CopyReads, archived: ArchivedReads, { mods }: { mods?: ContainerName[] }): Promise<ModConflicts[]> => {
+  input: { mods: z.array(CONTAINER_NAME).optional(), ...FILTER },
+  of: async (value: InstanceValue, reads: CopyReads, archived: ArchivedReads, { mods, filter }: { mods?: ContainerName[]; filter?: string }): Promise<ModConflicts[]> => {
     const named = mods === undefined ? value.mods.filter(({ kind }) => kind === 'mod') : containersNamed(value, mods);
     const separator = named.find(({ kind }) => kind === 'separator');
     if (separator !== undefined) throw new Refusal(`"${separator.name}" is a separator; it has no files.`);
     const wanted = named.map(originOf);
-    return conflictsOf(value, wanted, await contentsIn(value, reads, archived, wanted));
+    const held = holding(filter);
+    const keptWhole = modsUnderSeparatorsHolding(value, held);
+    const rows = conflictsOf(value, wanted, await contentsIn(value, reads, archived, wanted)).map((row) => holdingFiles(row, held, keptWhole));
+    return fitting(rows, (all) => ({
+      ...mods === undefined
+        ? { mods: all.length }
+        : { byMod: all.map(({ kind, mod, wins, loses, files }) => ({ kind, mod, wins: wins.length, loses: loses.length, files: files.length })) },
+      narrow: all.length > 1 ? `${MODS_NARROW} ${FILTER_NARROWS}` : FILTER_NARROWS,
+    }));
   },
 };
