@@ -54,7 +54,7 @@ describe('a mod as a value', () => {
   const modReads = {
     ...reads(['a.esp']),
     downloadedFile: () => Promise.resolve({ kind: 'read' as const, answer: undefined }),
-    gamePlaces: () => Promise.resolve([]),
+    gamePlace: () => Promise.resolve(undefined),
     gameFilesTakenBy: () => Promise.resolve({ kind: 'read' as const, answer: { gameFiles: [], notes: [] } }),
     submodule: (name: string) => Promise.resolve(name === 'Hosted' ? { folder: '/source/Hosted', pin: 'abc' } : name === 'Unpinned' ? { lacks: 'no pin', unpinned: true as const } : { lacks: 'no submodule' }),
     sourceFolderTracked: (name: string) => Promise.resolve(name === 'Tracked'),
@@ -87,7 +87,7 @@ describe('a mod as a value', () => {
   });
 
   it('is unreadable, saying why, when the game files cannot be read', async () => {
-    const reading = { ...modReads, gamePlaces: () => Promise.resolve([PLACE]), gameFilesTakenBy: () => Promise.resolve({ kind: 'unreadable' as const, reason: 'EACCES' }) };
+    const reading = { ...modReads, gamePlace: () => Promise.resolve(PLACE), gameFilesTakenBy: () => Promise.resolve({ kind: 'unreadable' as const, reason: 'EACCES' }) };
 
     expect(await modValueOver(reading, '/mods/Mod', { installationFiles: [], gameFiles: ['a.esp'] }, [])).toEqual({ kind: 'unreadable', reason: 'EACCES' });
   });

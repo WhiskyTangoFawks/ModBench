@@ -123,21 +123,21 @@ describe('the MO2 Instance adapter', () => {
         }
       });
 
-      it('answers the game folder alone, with no depots, when a Steam install is elsewhere', async () => {
+      it('answers the game folder with no depots when a Steam install is elsewhere', async () => {
         const game = await mkdtemp(join(tmpdir(), 'mo2-instance-gamefolder-'));
         try {
           await mkdir(join(game, 'Data'));
           const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }) };
 
-          expect(await managerOver(root, { gameFolderSettingValue: game, detectors }).gamePlaces()).toEqual([
-            { root: game, depots: [], depotProblems: [] },
-          ]);
+          expect(await managerOver(root, { gameFolderSettingValue: game, detectors }).gamePlace()).toEqual({
+            root: game, depots: [], depotProblems: [],
+          });
         } finally {
           await rm(game, { recursive: true, force: true });
         }
       });
 
-      it('answers a Steam install reached through a link to the game folder as one place, with its depots', async () => {
+      it('answers a Steam install reached through a link to the game folder with its depots', async () => {
         const library = await mkdtemp(join(tmpdir(), 'mo2-instance-steamlib-'));
         const linked = `${library}-link`;
         try {
@@ -147,16 +147,16 @@ describe('the MO2 Instance adapter', () => {
           await symlink(library, linked);
           const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: join(linked, 'steamapps', 'common', 'Fallout 4', 'Data') }) };
 
-          expect(await managerOver(root, { gameFolderSettingValue: game, detectors }).gamePlaces()).toEqual([
-            { root: game, steamApp: 377160, depots: [INSTALLED_DEPOT], depotProblems: [] },
-          ]);
+          expect(await managerOver(root, { gameFolderSettingValue: game, detectors }).gamePlace()).toEqual({
+            root: game, steamApp: 377160, depots: [INSTALLED_DEPOT], depotProblems: [],
+          });
         } finally {
           await rm(linked, { force: true });
           await rm(library, { recursive: true, force: true });
         }
       });
 
-      it('answers a game folder whose Data folder links to the Steam install\'s as the game folder alone, with no depots', async () => {
+      it('answers a game folder whose Data folder links to the Steam install\'s with no depots', async () => {
         const library = await mkdtemp(join(tmpdir(), 'mo2-instance-steamlib-'));
         const game = await mkdtemp(join(tmpdir(), 'mo2-instance-gamefolder-'));
         try {
@@ -166,28 +166,28 @@ describe('the MO2 Instance adapter', () => {
           await symlink(join(steam, 'Data'), join(game, 'Data'));
           const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: join(steam, 'Data') }) };
 
-          expect(await managerOver(root, { gameFolderSettingValue: game, detectors }).gamePlaces()).toEqual([
-            { root: game, depots: [], depotProblems: [] },
-          ]);
+          expect(await managerOver(root, { gameFolderSettingValue: game, detectors }).gamePlace()).toEqual({
+            root: game, depots: [], depotProblems: [],
+          });
         } finally {
           await rm(game, { recursive: true, force: true });
           await rm(library, { recursive: true, force: true });
         }
       });
 
-      it('answers the game folder alone, with no depots, when Steam holds no such game', async () => {
+      it('answers the game folder with no depots when Steam holds no such game', async () => {
         const game = await mkdtemp(join(tmpdir(), 'mo2-instance-gamefolder-'));
         try {
           await mkdir(join(game, 'Data'));
 
-          expect(await managerOver(root, { gameFolderSettingValue: game }).gamePlaces()).toEqual([{ root: game, depots: [], depotProblems: [] }]);
+          expect(await managerOver(root, { gameFolderSettingValue: game }).gamePlace()).toEqual({ root: game, depots: [], depotProblems: [] });
         } finally {
           await rm(game, { recursive: true, force: true });
         }
       });
 
       it('answers no place when the game folder is not found', async () => {
-        expect(await managerOver(root, {}).gamePlaces()).toEqual([]);
+        expect(await managerOver(root, {}).gamePlace()).toBeUndefined();
       });
 
       it('answers the active profile\'s mod order, and the folders the mods are in with the separators\'', async () => {

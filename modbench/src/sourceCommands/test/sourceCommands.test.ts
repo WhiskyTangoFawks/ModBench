@@ -758,7 +758,7 @@ describe('sourceCommands versionInGit', () => {
     const file = { path: 'Data/textures/a.dds', hash: hashOf('G'), pathInFolder: 'textures/a.dds' };
     const adapter = modsAt({
       ...hashed({ 'textures/a.dds': 'G', 'scripts/b.pex': 'B' }, '/instance/mods/ModC'),
-      places: [{ root: '/game', depots: [], depotProblems: [], gameFilesTaken: new Map([['ModC', { kind: 'read', answer: { gameFiles: [file], notes: [] } }]]) }],
+      place: { root: '/game', depots: [], depotProblems: [], gameFilesTaken: new Map([['ModC', { kind: 'read', answer: { gameFiles: [file], notes: [] } }]]) },
     });
 
     await sourceCommands({ client, adapter, saveUnsaved: savedAll, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModC'], { where: 'NewRepository', commit: true });
@@ -771,7 +771,7 @@ describe('sourceCommands versionInGit', () => {
     ['come with a note', { kind: 'read', answer: { gameFiles: [], notes: ['a game file differs in case'] } }, 'a game file differs in case'],
   ])('refuses a mod whose game files %s, naming why, and commits the rest', async (_case, taken, reason) => {
     const { client, handed } = committing();
-    const adapter = modsAt({ places: [{ root: '/game', depots: [], depotProblems: [], gameFilesTaken: new Map([['ModC', taken]]) }] });
+    const adapter = modsAt({ place: { root: '/game', depots: [], depotProblems: [], gameFilesTaken: new Map([['ModC', taken]]) } });
 
     const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModC', 'ModF'], { where: 'NewRepository', commit: true });
 

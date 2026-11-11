@@ -216,7 +216,7 @@ describe('restore from manifest', () => {
       over({ manifests: { ModA: { ...EMPTY, packages: [{ kind: 'gameFolder' }], files: holding({ 'a.nif': HA }) } }, answers });
 
     it('writes the game file the folder\'s file may be, with the bytes its manifest records', async () => {
-      const { restore, fake } = await takingFromTheGame({ places: [{ ...GAME_PLACE, gameFilesTaken: takenFromTheGame(['Data/A.nif', HA, 'a.nif']) }] });
+      const { restore, fake } = await takingFromTheGame({ place: { ...GAME_PLACE, gameFilesTaken: takenFromTheGame(['Data/A.nif', HA, 'a.nif']) } });
 
       await restore(['ModA']);
 
@@ -511,7 +511,7 @@ describe('restore from manifest', () => {
 
       it('writes a game file its manifest names at the layout\'s path from the game folder, as the mod folder holds it', async () => {
         const named = { manifest: { packages: [{ kind: 'gameFolder' } as const], exclude: [], ignore: [], flags: new Map(), files: holding({ 'assets/x.nif': HA }) }, files: {}, heldByGit: [], modFiles: { 'x.nif': HA } };
-        const { restore, fake } = await sourceMod({ places: [{ ...GAME_PLACE, gameFilesTaken: takenFromTheGame(['Data/x.nif', HA, 'x.nif']) }] }, [], named);
+        const { restore, fake } = await sourceMod({ place: { ...GAME_PLACE, gameFilesTaken: takenFromTheGame(['Data/x.nif', HA, 'x.nif']) } }, [], named);
 
         await restore(['ModA']);
 

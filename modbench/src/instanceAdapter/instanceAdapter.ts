@@ -685,8 +685,8 @@ export interface InstanceAdapter extends DataFileReads {
   gameRelease(): Promise<string>;
   /** Where the game is now. */
   gameFolder(): Promise<GameFolder>;
-  /** Every place the game's files are in, the game folder first; none when the game folder is not found. */
-  gamePlaces(): Promise<readonly GamePlace[]>;
+  /** The game folder Modbench points at, with the Steam app and depots when it is the Steam install; none when not found. */
+  gamePlace(): Promise<GamePlace | undefined>;
   /** The game folder's root when `folder` is, holds or sits inside it, links resolved. */
   gameFolderOverlapping(folder: string): Promise<string | undefined>;
   /** The Proton prefix of the non-Steam game in Steam that runs a program in `folder`, or why there is none. */

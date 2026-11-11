@@ -33,19 +33,15 @@ export async function unheldFolderValueOver(reads: FolderReads, heldByGit: reado
   return folderValueOver({ ...reads, filesIn }, folder);
 }
 
-type ModReads = FolderReads & Pick<InstanceAdapter, 'downloadedFile' | 'gamePlaces' | 'gameFilesTakenBy' | 'submodule' | 'sourceFolderTracked'>;
+type ModReads = FolderReads & Pick<InstanceAdapter, 'downloadedFile' | 'gamePlace' | 'gameFilesTakenBy' | 'submodule' | 'sourceFolderTracked'>;
 
 // None when the game folder is not found.
 async function gameFilesOver(reads: ModReads, folder: string, paths: readonly string[]): Promise<FileRead<HashedPath[] | undefined>> {
-  const places = await reads.gamePlaces();
-  if (places.length === 0) return { kind: 'read', answer: undefined };
-  const files: HashedPath[] = [];
-  for (const place of places) {
-    const taken = await reads.gameFilesTakenBy(place, folder, paths);
-    if (taken.kind === 'unreadable') return taken;
-    files.push(...taken.answer.gameFiles.map(({ pathInFolder, hash }) => ({ path: pathInFolder, hash })));
-  }
-  return { kind: 'read', answer: files };
+  const place = await reads.gamePlace();
+  if (place === undefined) return { kind: 'read', answer: undefined };
+  const taken = await reads.gameFilesTakenBy(place, folder, paths);
+  if (taken.kind === 'unreadable') return taken;
+  return { kind: 'read', answer: taken.answer.gameFiles.map(({ pathInFolder, hash }) => ({ path: pathInFolder, hash })) };
 }
 
 async function pinOf(reads: ModReads, repository: string): Promise<RepositoryPin> {

@@ -41,7 +41,7 @@ import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { parseModlist } from './codecs/modlistText';
 import { get } from '../files';
 import { trashingReplaced } from '../trashingReplaced';
-import { gamePlacesOf } from '../gameFolder/gamePlaces';
+import { gamePlaceOf } from '../gameFolder/gamePlace';
 import { overlappedGameRoot } from '../gameFolder/pathWithin';
 
 export { overwriteDir } from './layout';
@@ -93,7 +93,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
     gameFolder,
     gameFolderOverlapping: async (folder) => overlappedGameRoot(await gameFolder(), folder),
     nonSteamPrefix: (folder) => nonSteamPrefixRunning(steamRootOn(process.platform), folder),
-    gamePlaces: async () => gamePlacesOf(await gameFolder(), await context.resolveSteamInstall((await source.settings()).gameRelease)),
+    gamePlace: async () => gamePlaceOf(await gameFolder(), await context.resolveSteamInstall((await source.settings()).gameRelease)),
     ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), originHoldsFile, ...mo2PluginReferences(context, planRename), ...mo2EntryReferences(context, source), ...mo2RenamedSymbol(context), ...mo2Landing(context, installationFileReader, source, fomodEngine), ...mo2Repository(context, publisherFile), ...mo2GameFiles(context, hashes, deployedPath), ...mo2Submodules(context), ...mo2PathTokens(context, gameFolder, publisherFile),
     ...packageFilesWriter(hashIndexDir(instanceRoot), installationFileReader),
     ...dataFileReads(gameFolder),
