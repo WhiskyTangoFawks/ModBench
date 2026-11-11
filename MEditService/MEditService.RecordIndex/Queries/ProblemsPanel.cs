@@ -70,9 +70,9 @@ internal static class ProblemsPanel
         if (repository is null) return new([], $"{plugin.Name} is a compiled plugin but no mod folder provides it.");
 
         var header = PluginHeader.IdentityOf(plugin.Name);
-        if (!repository.RelativePathOf(plugin.Key, header).Holds(out var path, out var failure))
-            return new([], $"{plugin.Name}'s source could not place its header: {failure.Reason}");
-        if (path is null) return new([], $"{plugin.Name}'s source holds no file for its header.");
+        var path = repository.RelativePathOf(plugin.Key, header).Holds(out var placed, out var failure) && placed is not null
+            ? placed
+            : throw new InvalidOperationException($"Expected {plugin.Name}'s tree to place its header: {failure?.Reason ?? "it holds none"}");
 
         return new([.. others.Select(file => new SourceProblem(header.FormKey, null, null, path, UncheckedLinks.NoLinkInto(file.Key, file.Value)))], null);
     }

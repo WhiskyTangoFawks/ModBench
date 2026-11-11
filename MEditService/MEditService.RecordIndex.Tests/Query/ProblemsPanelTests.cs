@@ -302,11 +302,11 @@ public sealed class ProblemsPanelTests : IDisposable
     }
 
     [Fact]
-    public void TwoCopiesOfAPluginThatCannotBeRead_DoNotFailTheAnswer()
+    public void TwoCopiesOfAPluginThatCannotBeRead_AreAnsweredByTheActiveOne()
     {
         var builder = new PluginFixtureBuilder("plugin-problems");
-        builder.WithPlugin(Unreadable, mod => mod.Npcs.AddNew("Other"), enabled: true, origin: "ActiveCopy");
         builder.WithPlugin(Unreadable, mod => mod.Npcs.AddNew("Other"), enabled: false, origin: "InactiveCopy");
+        builder.WithPlugin(Unreadable, mod => mod.Npcs.AddNew("Other"), enabled: true, origin: "ActiveCopy");
         builder.WithPlugin("Refers.esp", mod => mod.Npcs.AddNew("Referrer").Race.SetTo(FormKey.Factory($"000800:{Unreadable}")), origin: "RefersMod");
         _fixture = builder.BuildScattered();
         SourceMods.Init(Fixture.Plugins.Single(entry => entry.Name == "Refers.esp"));
@@ -314,7 +314,8 @@ public sealed class ProblemsPanelTests : IDisposable
 
         var answer = Assert.Single(Ready(index));
 
-        Assert.Single(answer.Problems, p => p.FieldPath == "Race");
+        var link = Assert.Single(answer.Problems, p => p.FieldPath == "Race");
+        Assert.Equal(Unreadable, link.UncheckedBecause);
     }
 
     [Fact]
