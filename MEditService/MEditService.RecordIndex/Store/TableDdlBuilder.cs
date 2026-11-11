@@ -188,8 +188,9 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     }
 
     private static void CreatePublicView(
-        DuckDBConnection connection, string schema, string view, PublicView relation, string scope, string columns = "t.*")
+        DuckDBConnection connection, string schema, string view, PublicView relation, string scope, string? columns = null)
     {
+        columns ??= relation.Table == "records" ? "t.* EXCLUDE (masters)" : "t.*";
         var loadOrderColumn = relation.DerivesLoadOrder ? ", p.load_order_idx" : "";
         var winnerColumn = "";
         var winnerJoin = "";
