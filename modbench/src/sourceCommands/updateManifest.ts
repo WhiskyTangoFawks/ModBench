@@ -6,7 +6,6 @@ import {
 } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
-import { gestureName, phrase, type Message } from '../ports/phrase';
 import { heldManifestIn } from './heldManifest';
 import { possibleHashesOf } from './possibleHashes';
 import { setAsideHeldWhole } from './setAsideHeldWhole';
@@ -39,7 +38,7 @@ interface ModUpdated {
 export interface UpdateManifestResult {
   readonly cancelled?: true;
   readonly landed: readonly ModUpdated[];
-  readonly refused: readonly ItemRefusal<string, Message>[];
+  readonly refused: readonly ItemRefusal<string>[];
   readonly notes: readonly ModNote[];
   readonly repositoryNotes: readonly string[];
 }
@@ -255,7 +254,7 @@ export async function updateManifest(
   const sourceMods = await sourceModsOf(order.modFolders, await adapter.sourceModFolders(), (name) => adapter.entryKey({ kind: 'mod', name }));
   const game = await gameToHand(adapter, sourceMods);
   const folders = foldersOf(adapter, others);
-  const refused: ItemRefusal<string, Message>[] = [];
+  const refused: ItemRefusal<string>[] = [];
   const notes: ModNote[] = [];
   const read: ModToUpdate[] = [];
   const record = async (mod: string, readOf: () => ReturnType<typeof readMod>): Promise<void> => {
@@ -273,7 +272,7 @@ export async function updateManifest(
     if (signal?.aborted) break;
     const sourceFolder = folders.isMod(mod) ? sourceMods.folderOf(mod) : undefined;
     if (sourceFolder === undefined) await record(mod, () => readMod(adapter, mod, folders, game));
-    else if (!everyMod) refused.push({ item: mod, reason: phrase`its build records its folder: run ${gestureName('modbench.mod.build', 'build')} on it, or name its source folder ${sourceFolder}` });
+    else if (!everyMod) refused.push({ item: mod, reason: `its build records its folder: run build on it, or name its source folder ${sourceFolder}` });
   }
   for (const mod of new Set(everyMod ? sourceMods.folders.keys() : sourceModsToRecord)) {
     if (signal?.aborted) break;

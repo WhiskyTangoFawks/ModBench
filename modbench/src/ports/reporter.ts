@@ -1,4 +1,3 @@
-import type { Message } from './phrase';
 import type { SelectionOutcome } from './selectionOutcome';
 
 /** A failure's severity (target-architecture.d2, Ports), the one type every caller names. */
@@ -21,13 +20,13 @@ export interface Reporter {
   shownOnSurface: (severity: Severity, message: string, detail?: string) => void;
   /** A gesture over a selection: one error naming each refused item and why, and nothing for the
    *  items that landed, so a fully landed outcome says nothing. */
-  selectionOutcome: <T>(message: string, outcome: SelectionOutcome<T, Message>, nameOf: (item: T) => string, action?: ReportAction) => void;
+  selectionOutcome: <T>(message: string, outcome: SelectionOutcome<T>, nameOf: (item: T) => string, action?: ReportAction) => void;
 }
 
 // Shared by every Reporter, so a test double surfaces a selection's outcome as production does.
 export function reportSelectionOutcome<T>(
-  report: Reporter['report'], message: string, outcome: SelectionOutcome<T, Message>, nameOf: (item: T) => string, action?: ReportAction,
+  report: Reporter['report'], message: string, outcome: SelectionOutcome<T>, nameOf: (item: T) => string, action?: ReportAction,
 ): void {
   if (outcome.refused.length === 0) return;
-  report('error', message, outcome.refused.map((r) => `"${nameOf(r.item)}" (${String(r.reason)})`).join(', '), action);
+  report('error', message, outcome.refused.map((r) => `"${nameOf(r.item)}" (${r.reason})`).join(', '), action);
 }
