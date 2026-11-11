@@ -1,8 +1,9 @@
 export type * from './manifest';
 export * from './buildFile';
 export {
-  filesAPackageHolds, filesNoPackageHolds, folderAgainst, heldWholeStatus, statusFrom, unreadableStatus, type FolderAgainst, type ModAt, type ModStatus,
+  filesAPackageHolds, filesNoPackageHolds, folderAgainst, heldWholeStatus, statusFrom, unreadableStatus, type FlaggedHashes, type FolderAgainst, type ModAt, type ModStatus,
 } from './modStatus';
+export { flaggedHashesIn, type PossibleHashes } from './flaggedHashes';
 export { manifestText, ordinal } from './manifestText';
 export { buildFileAgainst, buildFileIn, isBuildFileOf, manifestAt, manifestFileFor, manifestIn, manifestNameOf, manifestsIn, packagesAskedAt, writeManifestIn } from './manifestFiles';
 export { exclusionsOf, exclusionsOfFiles, isUnderAny, ownFilesOf } from './folderPaths';

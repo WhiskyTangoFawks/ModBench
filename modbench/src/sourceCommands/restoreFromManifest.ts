@@ -5,7 +5,7 @@ import { basename, join } from 'node:path';
 import { isRefused, type MEditClient } from '../client';
 import type { InstallationFile, InstanceAdapter, OtherManifest, PackageFile, Submodule } from '../instanceAdapter/instanceAdapter';
 import {
-  buildFileIn, exclusionsOf, folderAgainst, installationFileLack, manifestIn, repositoryOf, sourceModsOf, type BuildFile, type FolderAgainst, type Manifest,
+  buildFileIn, exclusionsOf, flaggedHashesIn, folderAgainst, installationFileLack, manifestIn, repositoryOf, sourceModsOf, type BuildFile, type FolderAgainst, type Manifest,
   type ManifestPackage, type SourceMods,
 } from '../manifestAdapter/manifestAdapter';
 import type { Nexus } from '../nexus/nexus';
@@ -22,7 +22,7 @@ import type { StepTasks } from './steps';
 import { whyNotIndexed, type LoadOrderSnapshot } from './whyNotIndexed';
 
 type Adapter = Pick<InstanceAdapter,
-  'reading' | 'modOrder' | 'entryKey' | 'sourceModFolders' | 'flaggedHash' | 'keepFlaggedHash' | 'downloadedFile' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash'
+  'reading' | 'modOrder' | 'entryKey' | 'sourceModFolders' | 'downloadedFile' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash'
   | 'nexusFileAt' | 'modFolderPath' | 'foldersRefused' | 'otherManifests' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'folderValue' | 'unheldFolderValue' | 'filesIn' | 'originFileHash' | 'writeFilesIn'
   | 'trashFileIn' | 'trashingReplaced' | 'fileStamp' | 'submodule' | 'unclonedSubmodules' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile'
   | 'repositoryOnDisk' | 'refuseUnpublishedPins' | 'writePathTokens' | 'writeInstalledFrom' | 'foldersHeldWhole'>;
@@ -30,7 +30,7 @@ type Adapter = Pick<InstanceAdapter,
 type FolderValue = Awaited<ReturnType<InstanceAdapter['folderValue']>>;
 
 export interface RestoreDeps {
-  readonly client: Pick<MEditClient, 'cloneSubmodules' | 'setPluginFileFlags' | 'build' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
+  readonly client: Pick<MEditClient, 'cloneSubmodules' | 'setPluginFileFlags' | 'getFlaggedPluginHashes' | 'build' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
   readonly adapter: Adapter;
   readonly nexus: Pick<Nexus, 'download'>;
   readonly loadOrderSnapshot: LoadOrderSnapshot;
@@ -133,14 +133,14 @@ async function buildFileHeld(sourceFolder: string): Promise<{ readonly buildFile
 
 /** What restoring one folder from its packages asks of the instance. */
 export type FolderRestoreAdapter = Pick<InstanceAdapter,
-  'gameRelease' | 'flaggedHash' | 'keepFlaggedHash' | 'downloadedFile' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile' | 'gamePlaces' | 'gameFilesTakenBy' | 'unheldFolderValue'
+  'gameRelease' | 'downloadedFile' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile' | 'gamePlaces' | 'gameFilesTakenBy' | 'unheldFolderValue'
   | 'pathInFolder' | 'filesIn' | 'originFileHash' | 'writeFilesIn' | 'trashFileIn' | 'nexusFileAt' | 'textHash'>;
 
 interface FolderPass {
   readonly deps: {
     readonly adapter: FolderRestoreAdapter;
     /** Absent for a manifest that sets no flags. */
-    readonly client?: Pick<MEditClient, 'setPluginFileFlags'>;
+    readonly client?: Pick<MEditClient, 'setPluginFileFlags' | 'getFlaggedPluginHashes'>;
     readonly nexus: RestoreDeps['nexus'];
     readonly trash: MoveToTrash;
   };
@@ -251,7 +251,12 @@ async function restoreFromPackages(
   if (client === undefined && manifest.flags.size > 0) return { refusal: skipped('its manifest sets flags, which need mEdit') };
   let against: FolderAgainst;
   try {
-    against = folderAgainst(manifest, await adapter.unheldFolderValue(folder), await flaggedHashesOf(adapter, manifest));
+    const held = await adapter.unheldFolderValue(folder);
+    const flagged = client === undefined
+      ? new Map<string, readonly string[]>()
+      : await flaggedHashesIn(manifest, held, folder, async (files) => client.getFlaggedPluginHashes(await adapter.gameRelease(), files));
+    if ('cannotTell' in flagged) return { refusal: skipped(flagged.cannotTell) };
+    against = folderAgainst(manifest, held, flagged);
   } catch (err) {
     return { refusal: skipped(`a file could not be read: ${errorMessage(err)}`) };
   }
@@ -276,31 +281,18 @@ async function restoreFromPackages(
   return { landed: { mod, written: writes.map(({ path }) => path), namedByNoLine: against.namedByNoLine } };
 }
 
-// ADR-0022: the hash restore kept for each flagged plugin whose package copy it flagged.
-async function flaggedHashesOf(adapter: Pick<FolderRestoreAdapter, 'flaggedHash'>, manifest: Manifest): Promise<ReadonlyMap<string, string>> {
-  const kept = await Promise.all([...manifest.flags].map(async ([path, flags]) => {
-    const copy = manifest.files.get(path);
-    return typeof copy === 'string' ? [path, await adapter.flaggedHash(copy, flags)] as const : [path, undefined] as const;
-  }));
-  return new Map(kept.flatMap(([path, hash]) => (hash === undefined ? [] : [[path, hash] as const])));
-}
-
-// formats/manifest.md, `flags`: a plugin written from its package is the copy with the manifest's flags set in it, whose hash is kept.
+// formats/manifest.md, `flags`: a plugin written from its package is the copy with the manifest's flags set in it.
 async function flagsSet(
   pass: { readonly adapter: FolderRestoreAdapter; readonly client: NonNullable<FolderPass['deps']['client']> }, manifest: Manifest, folder: string, written: readonly string[],
 ): Promise<string | undefined> {
   const flagged = written.flatMap((pathInFolder) => {
     const path = [...manifest.flags.keys()].find((one) => pass.adapter.pathInFolder(one, manifest.exclude) === pathInFolder);
     const copy = path === undefined ? undefined : manifest.files.get(path);
-    return path === undefined || typeof copy !== 'string' ? [] : [{ path: join(folder, pathInFolder), copy, flags: manifest.flags.get(path) ?? {} }];
+    return path === undefined || typeof copy !== 'string' ? [] : [{ path: join(folder, pathInFolder), flags: manifest.flags.get(path) ?? {} }];
   });
   if (flagged.length === 0) return undefined;
-  const answer = await pass.client.setPluginFileFlags(await pass.adapter.gameRelease(), flagged.map(({ path, flags }) => ({ path, flags })));
+  const answer = await pass.client.setPluginFileFlags(await pass.adapter.gameRelease(), flagged);
   if (isRefused(answer)) return answer.message;
-  for (const { path, copy, flags } of flagged) {
-    const set = answer.applied.find((one) => one.path === path);
-    if (set !== undefined) await pass.adapter.keepFlaggedHash(copy, flags, set.hash);
-  }
   return answer.refused.length === 0 ? undefined : answer.refused.map(({ item, message }) => `${item}: ${message}`).join('; ');
 }
 

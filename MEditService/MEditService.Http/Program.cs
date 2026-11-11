@@ -126,6 +126,7 @@ try
     app.MapContainerChildEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapSubmoduleEndpoints();
     app.MapPluginFileEndpoints();
+    app.MapFlaggedPluginHashesEndpoints();
     app.MapNotificationEndpoints();
     app.MapIndexEndpoints();
     app.MapUnsavedDocumentEndpoints();

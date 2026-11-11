@@ -287,6 +287,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugin-files/flagged-hashes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Each plugin file's hashes, by its absolute path, as a manifest carries them, with each named load flag at each combination of its possible original values; none when the file does not hold a named flag as the request sets it. Writes nothing. 400 when a file is no plugin or a name is no load flag of the game. */
+        post: operations["GetFlaggedPluginHashes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/notifications/stream": {
         parameters: {
             query?: never;
@@ -1508,6 +1525,20 @@ export interface components {
             metadata: components["schemas"]["FieldMetadata"];
             value?: unknown;
             checkError?: string | null;
+        };
+        FlaggedPluginFile: {
+            path: string;
+            flags: {
+                [key: string]: boolean;
+            };
+        };
+        FlaggedPluginHashes: {
+            path: string;
+            hashes: string[];
+        };
+        FlaggedPluginHashesRequest: {
+            gameRelease: string;
+            files: components["schemas"]["FlaggedPluginFile"][];
         };
         FormKeyResolution: {
             state: components["schemas"]["FormKeyResolutionState"];
@@ -2735,6 +2766,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SetPluginFileFlagsResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetFlaggedPluginHashes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FlaggedPluginHashesRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FlaggedPluginHashes"][];
                 };
             };
             /** @description Bad Request */

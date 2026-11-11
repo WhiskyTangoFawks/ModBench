@@ -1,7 +1,10 @@
 // target-architecture.d2's Mod status; the mod-status trace.
 
 import type { EntryRef, InstanceAdapter, ModFolder } from '../instanceAdapter/instanceAdapter';
-import { buildFileAgainst, filesAPackageHolds, heldWholeStatus, manifestAt, packagesAskedAt, statusFrom, unreadableStatus, type ModAt, type ModStatus } from '../manifestAdapter/manifestAdapter';
+import {
+  buildFileAgainst, filesAPackageHolds, flaggedHashesIn, heldWholeStatus, manifestAt, packagesAskedAt, statusFrom, unreadableStatus, type ModAt, type ModStatus, type PossibleHashes,
+} from '../manifestAdapter/manifestAdapter';
+import { localFailure } from '../wire/readFailed';
 
 /** What a status is derived from in an instance value. */
 export interface StatusSource {
@@ -65,7 +68,11 @@ export class ModStatuses {
   private readonly changed = new Set<() => void>();
   private readonly messageChanged = new Set<() => void>();
 
-  constructor(private readonly reads: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole' | 'filesHeldByGit'>, private readonly log: (line: string) => void) {}
+  constructor(
+    private readonly reads: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole' | 'filesHeldByGit'>,
+    private readonly log: (line: string) => void,
+    private readonly possibleHashes: PossibleHashes = () => Promise.resolve(localFailure('mEdit was not asked')),
+  ) {}
 
   /** Derives every status again from `value`; of the values handed while one derives, the latest alone derives next. */
   derive(value: StatusSource): void {
@@ -172,7 +179,12 @@ export class ModStatuses {
     const manifest = await manifestAt(mod.folder);
     const named = mod.sourceFolder === undefined ? manifest : await manifestAt(mod.sourceFolder);
     const values = await this.reads.modValue(mod.folder, askedBoth(packagesAskedAt(manifest), packagesAskedAt(named)), heldByGit);
-    const status = statusFrom(mod, manifest, values);
+    const flagged = manifest.read !== undefined && 'manifest' in manifest.read && values.kind === 'read'
+      ? await flaggedHashesIn(manifest.read.manifest, values.folder, mod.folder, this.possibleHashes) : undefined;
+    if (flagged !== undefined && 'cannotTell' in flagged) {
+      return { status: unreadableStatus(mod.name, `mEdit could not say what its flagged plugins held before their flags: ${flagged.cannotTell}`), packaged: new Set() };
+    }
+    const status = statusFrom(mod, manifest, values, flagged);
     if (status.unreadable !== undefined) return { status, packaged: new Set() };
     const unpackaged = status.noManifest ? mod.files.filter((path) => !isGitsOwn(path)) : status.unpackaged;
     return {

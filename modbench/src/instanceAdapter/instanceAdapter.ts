@@ -816,11 +816,6 @@ export interface InstanceAdapter extends DataFileReads {
   /** An origin file's size and hash at the path it is read from, kept in the hash index (ADR-0013). Two files with one
    *  hash hold the same bytes. */
   originFileHash(path: string): Promise<FileRead<HashedFile>>;
-  /** The hash of a plugin whose package copy hashes `hash`, once restore set `flags` in it; none when restore has not, kept in the
-   *  hash index. */
-  flaggedHash(hash: string, flags: PluginFlags): Promise<string | undefined>;
-  /** Keeps `flaggedHash` as the hash of the plugin whose package copy hashes `hash`, once restore set `flags` in it. */
-  keepFlaggedHash(hash: string, flags: PluginFlags, flaggedHash: string): Promise<void>;
   /** Each file below `folder`, a mod's or any folder a manifest builds, by forward-slash path, listed as a mod's files
    *  are; none when the folder is not there. */
   filesIn(folder: string): Promise<readonly string[]>;

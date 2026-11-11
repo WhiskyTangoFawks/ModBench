@@ -31,8 +31,6 @@ export interface PackagesAsked {
   readonly installationFiles: readonly string[];
   readonly gameFiles?: readonly string[];
   readonly repository?: string;
-  /** The plugins the manifest flags, each by its path, with the hash of its package's copy. */
-  readonly flagged?: readonly { readonly path: string; readonly hash: string; readonly flags: PluginFlags }[];
 }
 
 /** What a clone gets of the repository asked for: `pinned`, a submodule at a commit the instance repository pins or a source folder it
@@ -49,8 +47,6 @@ export type StatusValues =
     readonly downloadedFiles: ReadonlyMap<string, Read<{ readonly hash: string; readonly entries: readonly HashedPath[] } | undefined>>;
     /** The game files the folder's files may be, by their paths in the folder; none when the game folder was not found. */
     readonly gameFiles: readonly HashedPath[] | undefined;
-    /** The hash of each plugin `flagged` asks for once restore set its flags, by its path; none for a plugin restore has not. */
-    readonly flaggedHashes: ReadonlyMap<string, string>;
     readonly repositoryPin: RepositoryPin;
   }
   | { readonly kind: 'unreadable'; readonly reason: string }

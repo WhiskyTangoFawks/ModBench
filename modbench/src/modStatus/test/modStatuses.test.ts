@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import type { EntryRef, InstanceAdapter, ModFolder } from '../../instanceAdapter/instanceAdapter';
 import { modValueOver } from '../../instanceAdapter/modValue';
-import type { Manifest } from '../../manifestAdapter/manifestAdapter';
+import type { Manifest, ModStatus, PossibleHashes } from '../../manifestAdapter/manifestAdapter';
+import { localFailure } from '../../wire/readFailed';
 import { writeManifestIn } from '../../manifestAdapter/manifestAdapter';
 import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
 import { ModStatuses, type StatusSource } from '../modStatuses';
@@ -45,7 +46,6 @@ const reads: Parameters<typeof modValueOver>[0] = {
     return Promise.resolve({ kind: 'read', answer: download && { ...download, path: name, size: 1 } });
   },
   gamePlaces: () => Promise.resolve([]),
-  flaggedHash: () => Promise.resolve(undefined),
   gameFilesTakenBy: () => Promise.resolve({ kind: 'read', answer: { gameFiles: [], notes: [] } }),
   submodule: () => Promise.resolve({ lacks: 'no submodule' }),
   sourceFolderTracked: () => Promise.resolve(false),
@@ -522,5 +522,45 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
       WHY, true, `Showing the last good read: the status of "ModA" could not be read: ${WHY}.`,
       undefined, false, [`[modList] The status of "ModA" could not be read: ${WHY}`],
     ]);
+  });
+});
+
+describe('a plugin its manifest flags (Status, story 8)', () => {
+  const PACKAGE = file('S.7z');
+  const FLAGS = { Small: true };
+  const COPY = 'AAAAAAAAAAA=';
+  const OTHER = 'BBBBBBBBBBA=';
+
+  beforeEach(() => {
+    hashingContents = true;
+    downloads = new Map([['S.7z', { hash: PACKAGE.hash, entries: [{ path: 'Mod.esp', hash: COPY }] }]]);
+  });
+
+  async function statusWith(possible: PossibleHashes): Promise<ModStatus | undefined> {
+    const mod = await folderOf('ModA', { 'Mod.esp': 'flagged bytes' });
+    await writeManifestIn(mod, { ...EMPTY, packages: [PACKAGE], flags: new Map([['Mod.esp', FLAGS]]), files: new Map([['Mod.esp', COPY]]) });
+    const statuses = new ModStatuses(instance, (line) => { logged.push(line); }, possible);
+    statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)]));
+    return (await statuses.current()).get('ModA');
+  }
+
+  const answering = (hashes: string[]): PossibleHashes => (files) => Promise.resolve(files.map(({ path }) => ({ path, hashes })));
+
+  it('holds its bytes when mEdit says it could have held the manifest\'s hash before its flags, as the file mEdit was asked about', async () => {
+    const asked: Parameters<PossibleHashes>[0][] = [];
+
+    const status = await statusWith((files) => { asked.push(files); return answering([OTHER, COPY])(files); });
+
+    expect([status?.differing, status?.unreadable, asked]).toEqual([[], undefined, [[{ path: join(root, 'mods', 'ModA', 'Mod.esp'), flags: FLAGS }]]]);
+  });
+
+  it('differs when mEdit says it could not have held the manifest\'s hash', async () => {
+    expect((await statusWith(answering([OTHER])))?.differing).toEqual(['Mod.esp']);
+  });
+
+  it('is unreadable, saying why, and never differing, when mEdit cannot say', async () => {
+    const status = await statusWith(() => Promise.resolve(localFailure('mEdit is not running')));
+
+    expect([status?.differing, status?.unreadable]).toEqual([[], expect.stringContaining('mEdit is not running') as string]);
   });
 });

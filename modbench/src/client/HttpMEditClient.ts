@@ -15,7 +15,7 @@ import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
   type ArchiveContents, type BackendStatus, type CellChildRecords, type BuildFacts, type BuildMod, type BuildOutcome,
-  type Submodule, type SubmodulesCloned, type PluginFilesFlagged, type PluginFileToFlag,
+  type Submodule, type SubmodulesCloned, type PluginFilesFlagged, type PluginFileToFlag, type FlaggedPluginHashes,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginIndexedState, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
@@ -703,6 +703,12 @@ class HttpMEditClient implements MEditClient {
   getArchiveCopies(gameRelease: string, archive: string, files: readonly string[], hashed: boolean): Promise<ArchivedCopy[] | ReadFailed> {
     return this.read(`getArchiveCopies(${archive}, ${files.length} files)`, (api, signal) => api.POST('/archives/copies', {
       body: { gameRelease, archive, files: [...files], hashed }, signal,
+    }), noBodyFails, { timed: true });
+  }
+
+  getFlaggedPluginHashes(gameRelease: string, files: readonly PluginFileToFlag[]): Promise<FlaggedPluginHashes[] | ReadFailed> {
+    return this.read(`getFlaggedPluginHashes(${files.length})`, (api, signal) => api.POST('/plugin-files/flagged-hashes', {
+      body: { gameRelease, files: [...files] }, signal,
     }), noBodyFails, { timed: true });
   }
 

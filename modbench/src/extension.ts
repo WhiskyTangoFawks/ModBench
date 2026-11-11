@@ -99,7 +99,7 @@ type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
   'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'signalChange' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
-  | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'getPluginNameReferences' | 'getScriptReferences' | 'getCopyDocument' | 'getRecordOwner' | 'moveLastWritten' | 'getSourceFolderMoveChanges' | 'followSourceFolderMove' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'getPluginIndexing' | 'getArchiveFile' | 'getArchiveCopies'>;
+  | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'getPluginNameReferences' | 'getScriptReferences' | 'getCopyDocument' | 'getRecordOwner' | 'moveLastWritten' | 'getSourceFolderMoveChanges' | 'followSourceFolderMove' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'getFlaggedPluginHashes' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'getPluginIndexing' | 'getArchiveFile' | 'getArchiveCopies'>;
 
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -210,7 +210,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const commands = instanceCommands({ adapter, client, instanceRoot });
   const tasks = stepTasks(hostTasks, scriptHostIn(deps.extensionUri));
   const instanceRepository = instanceRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash, tasks, loadOrderSnapshot: () => instance.value.loadOrderSnapshot });
-  const modStatuses = own(new ModStatuses(adapter, (line) => outputChannel.warn(line)));
+  const modStatuses = own(new ModStatuses(adapter, (line) => outputChannel.warn(line), async (files) => client.getFlaggedPluginHashes(await adapter.gameRelease(), files)));
   own(instance.subscribe(async (value) => {
     modStatuses.derive(value);
     await modStatuses.current();

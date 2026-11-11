@@ -1,7 +1,12 @@
 import { basename } from 'node:path';
+import type { MEditClient } from '../client';
 import type { InstallationFile, InstanceAdapter, OtherManifest } from '../instanceAdapter/instanceAdapter';
-import { exclusionsOfFiles, isUnderAny, ownFilesOf, sourceModsOf, writeManifestIn, type Manifest, type ManifestPackage } from '../manifestAdapter/manifestAdapter';
+import {
+  exclusionsOfFiles, flaggedHashesIn, isUnderAny, ownFilesOf, sourceModsOf, writeManifestIn, type FlaggedHashes, type Manifest, type ManifestPackage,
+} from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
+import type { FolderValue } from '../repositoriesLib/statusValues';
+import { localFailure } from '../wire/readFailed';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import { heldManifestIn } from './heldManifest';
 import { setAsideHeldWhole } from './setAsideHeldWhole';
@@ -11,10 +16,12 @@ import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, descri
 
 type Adapter = Pick<InstanceAdapter,
   'sourceModFolders' | 'foldersHeldWhole' | 'entryKey' | 'modOrder' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'modFolderPath' | 'installationFile'
-  | 'downloadedFilesHashed' | 'unheldFolderValue' | 'fileStamp' | 'nexusFileAt' | 'flaggedHash' | 'writeSubmodules' | 'writeOtherManifestLines'>;
+  | 'downloadedFilesHashed' | 'unheldFolderValue' | 'fileStamp' | 'nexusFileAt' | 'writeSubmodules' | 'writeOtherManifestLines'>;
 
 export interface UpdateManifestDeps {
   readonly adapter: Adapter;
+  /** Absent for a manifest that sets no flags. */
+  readonly client?: Pick<MEditClient, 'getFlaggedPluginHashes'>;
 }
 
 /** What update manifest could not read of a mod, which a person or an agent reads by the mod's label. */
@@ -109,13 +116,13 @@ async function folderMissing(adapter: Adapter, folder: string): Promise<boolean>
   return stamp.kind === 'unreadable' && stamp.reason.includes('ENOENT');
 }
 
-type Hashed = { readonly files: readonly HashedModFile[]; readonly exclude: readonly string[] } | { readonly unreadable: string };
+type Hashed = { readonly files: readonly HashedModFile[]; readonly exclude: readonly string[]; readonly value: FolderValue } | { readonly unreadable: string };
 
 async function hashedFilesOf(adapter: Adapter, folder: string, ignore: readonly string[]): Promise<Hashed> {
   const value = await adapter.unheldFolderValue(folder);
   const files = ownFilesOf(value, ignore);
   if ('why' in files) return { unreadable: files.why };
-  return { files: [...files].map(([path, hash]) => ({ path, hash })), exclude: exclusionsOfFiles(value.exclude, files.keys()) };
+  return { files: [...files].map(([path, hash]) => ({ path, hash })), exclude: exclusionsOfFiles(value.exclude, files.keys()), value };
 }
 
 const packageKey = (pkg: ManifestPackage): string => (pkg.kind === 'installationFile' ? `installationFile:${pkg.name}` : pkg.kind);
@@ -133,19 +140,19 @@ function laidOver(held: Manifest | undefined, added: Manifest): Manifest {
   };
 }
 
-// ADR-0022: restore flags a plugin, so the file holds its copy with them, whose hash the index kept. Without it, only a package's bytes are known.
-async function packageCopiesOf(
-  adapter: Adapter, held: Manifest | undefined, files: readonly HashedModFile[], packageHolds: (hash: string) => boolean,
-): Promise<{ readonly files: HashedModFile[] } | { readonly unknown: readonly string[] }> {
+// A flagged plugin is recorded by the package copy its bytes, before the flags the manifest sets, are, as restore flags the copy it writes.
+function packageCopiesOf(
+  held: Manifest | undefined, files: readonly HashedModFile[], possible: FlaggedHashes, packageHolds: (hash: string) => boolean,
+): { readonly files: HashedModFile[] } | { readonly unknown: readonly string[] } {
   const copies: HashedModFile[] = [];
   const unknown: string[] = [];
   for (const file of files) {
-    const flags = held?.flags.get(file.path);
-    const copy = held?.files.get(file.path);
-    if (flags === undefined || typeof copy !== 'string') { copies.push(file); continue; }
-    const flagged = await adapter.flaggedHash(copy, flags);
-    if (flagged === undefined && !packageHolds(file.hash)) unknown.push(file.path);
-    copies.push(flagged === file.hash ? { ...file, hash: copy } : file);
+    const before = held?.flags.has(file.path) ? possible.get(file.path) : undefined;
+    if (before === undefined) { copies.push(file); continue; }
+    const copy = before.find(packageHolds);
+    if (copy !== undefined) copies.push({ ...file, hash: copy });
+    else if (packageHolds(file.hash)) copies.push(file);
+    else unknown.push(file.path);
   }
   return unknown.length === 0 ? { files: copies } : { unknown };
 }
@@ -153,12 +160,12 @@ async function packageCopiesOf(
 const unaccounted = (paths: readonly string[]): string => {
   const named = paths.map((path) => `'${path}'`).join(', ');
   return paths.length === 1
-    ? `${named} is flagged, and its bytes are neither a package's copy nor those restore recorded for its flags, and restore replaces it with its package's copy, flagged.`
-    : `${named} are flagged, and their bytes are neither a package's copy nor those restore recorded for their flags, and restore replaces them with their packages' copies, flagged.`;
+    ? `${named} is flagged, and its bytes are neither a package's copy nor a package's copy with its flags set, and restore replaces it with its package's copy, flagged.`
+    : `${named} are flagged, and their bytes are neither a package's copy nor a package's copy with its flags set, and restore replaces them with their packages' copies, flagged.`;
 };
 
 async function updateMod(
-  adapter: Adapter, mod: ModToUpdate, downloadedFiles: readonly DownloadedFile[], only?: readonly string[],
+  { adapter, client }: UpdateManifestDeps, mod: ModToUpdate, downloadedFiles: readonly DownloadedFile[], only?: readonly string[],
 ): Promise<Answer> {
   const held = await heldManifestIn(mod.folder);
   if (held !== undefined && 'why' in held) return refusal(held.why);
@@ -184,7 +191,10 @@ async function updateMod(
   const files = only === undefined ? hashed.files : hashed.files.filter(({ path }) => isUnderAny(only, path));
   const packageHolds = (hash: string): boolean => [...downloadedFiles.map(({ file }) => file), ...mod.installationFile === undefined ? [] : [mod.installationFile]]
     .some(({ entries }) => entries.some((entry) => entry.hash === hash)) || (mod.game?.places ?? []).some((place) => place.files.some((one) => one.hash === hash));
-  const copies = await packageCopiesOf(adapter, held, files, packageHolds);
+  const possible = held === undefined ? new Map<string, readonly string[]>() : await flaggedHashesIn(held, hashed.value, mod.folder, async (asked) =>
+    (client === undefined ? localFailure('its manifest sets flags, which need mEdit') : client.getFlaggedPluginHashes(await adapter.gameRelease(), asked)));
+  if ('cannotTell' in possible) return refusal(`${possible.cannotTell}.`);
+  const copies = packageCopiesOf(held, files, possible, packageHolds);
   if ('unknown' in copies) return refusal(unaccounted(copies.unknown));
   const built = buildManifest(
     { downloadedFiles, ...mod.game === undefined ? {} : { game: mod.game }, ...installationFile === undefined ? {} : { installationFile } },
@@ -274,7 +284,7 @@ export async function updateManifest(
   for (const [at, mod] of read.entries()) {
     if (signal?.aborted) break;
     onProgress?.({ phase: 'Updating', mod: mod.name, modsDone: at, modsTotal: read.length });
-    const answer = await updateMod(adapter, mod, downloadedFiles, only?.get(mod.name));
+    const answer = await updateMod(deps, mod, downloadedFiles, only?.get(mod.name));
     acted.push(mod.name);
     if ('refusal' in answer) { refused.push({ item: mod.name, reason: answer.refusal }); continue; }
     landed.push(answer.landed);

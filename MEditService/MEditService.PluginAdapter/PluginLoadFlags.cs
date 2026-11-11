@@ -42,6 +42,38 @@ internal static class PluginLoadFlags
             File.Delete(temp);
         }
 
+        return HashOf(bytes);
+    }
+
+    /// <summary>The hash of the plugin with each named flag at each combination of original values; none unless the plugin
+    /// holds each named flag as <paramref name="flags"/> sets it.</summary>
+    internal static IReadOnlyList<string> OriginalHashes(string path, IReadOnlyDictionary<string, bool> flags, GameRelease gameRelease)
+    {
+        var load = GameCodecs.For(gameRelease).LoadFlags;
+        var bytes = File.ReadAllBytes(path);
+        var header = new ModHeader(GameConstants.Get(gameRelease), bytes);
+        if (header.RecordType.Type != "TES4")
+            throw new InvalidDataException($"It does not start with a plugin header: it starts with {header.RecordType}.");
+
+        if (flags.Any(flag => (header.Flags & load[flag.Key]) == load[flag.Key] != flag.Value)) return [];
+
+        var named = flags.Keys.Select(name => load[name]).ToArray();
+        var cleared = named.Aggregate(header.Flags, (set, mask) => set & ~mask);
+        var hashes = new HashSet<string>();
+        for (var combination = 0; combination < 1 << named.Length; combination++)
+        {
+            var original = cleared;
+            for (var i = 0; i < named.Length; i++)
+                if ((combination & (1 << i)) != 0) original |= named[i];
+            BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(FlagsAt, FlagsLength), original);
+            hashes.Add(HashOf(bytes));
+        }
+
+        return [.. hashes];
+    }
+
+    private static string HashOf(byte[] bytes)
+    {
         Span<byte> digest = stackalloc byte[sizeof(ulong)];
         BinaryPrimitives.WriteUInt64LittleEndian(digest, XxHash64.HashToUInt64(bytes));
         return Convert.ToBase64String(digest);

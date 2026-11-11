@@ -213,6 +213,9 @@ export type PluginFilesFlagged = components['schemas']['SetPluginFileFlagsResult
 /** A plugin file, by its absolute path, with each load flag to set (true) or clear (false). */
 export type PluginFileToFlag = components['schemas']['PluginFileFlagsToSet'];
 
+/** A plugin file's hashes with the flags its manifest sets at each combination of their original values; none when the file does not hold them. */
+export type FlaggedPluginHashes = components['schemas']['FlaggedPluginHashes'];
+
 export type GridPosition = components['schemas']['GridPosition'];
 /** A record and the plugin holding it (ADR-0012). */
 export type RecordAt = components['schemas']['RecordAt'];
@@ -304,6 +307,8 @@ export interface MEditClient {
   getArchiveFile(gameRelease: string, archive: string, file: string): Promise<Uint8Array | ReadFailed>;
   /** Each of `files` the archive holds, by its path there, with its hash when `hashed`; one the archive does not hold is left out. */
   getArchiveCopies(gameRelease: string, archive: string, files: readonly string[], hashed: boolean): Promise<ArchivedCopy[] | ReadFailed>;
+  /** Each plugin file's hashes with its flags at each combination of their original values, as a manifest carries them; writes nothing. */
+  getFlaggedPluginHashes(gameRelease: string, files: readonly PluginFileToFlag[]): Promise<FlaggedPluginHashes[] | ReadFailed>;
   getRecords(plugin: PluginAddress, type: string, offset: number, limit: number): Promise<RecordPage | ReadFailed>;
   /** Every active plugin's copies, or one plugin's. */
   searchRecords(query: string, validTypes: string[], plugin?: PluginAddress): Promise<RecordPage | ReadFailed>;
