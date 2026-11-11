@@ -87,15 +87,15 @@ export function getCellStyle(cellState: ConflictThis | undefined): React.CSSProp
   return { backgroundColor };
 }
 
-export const headerBackground = (cellState: ConflictThis | null | undefined): string | undefined =>
-  getCellStyle(cellState ?? undefined).backgroundColor;
+export const headerStyle = (cellState: ConflictThis | null | undefined): React.CSSProperties =>
+  getCellStyle(cellState ?? undefined);
 
 // xEdit's own words for each state.
 const STATE_NAME: Record<ConflictThis, string> = {
   Master: 'Master',
   OnlyOne: 'Single Record',
   IdenticalToMaster: 'Identical to Master',
-  IdenticalToMasterWinsConflict: 'Identical to Master, wins conflict',
+  IdenticalToMasterWinsConflict: 'Identical to Master but conflict winner',
   Override: 'Override without conflict',
   ConflictWins: 'Conflict winner',
   ConflictLoses: 'Conflict loser',

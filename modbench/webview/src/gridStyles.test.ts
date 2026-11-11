@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { conflictStateName, getCellStyle, headerBackground, rowBackground } from './gridStyles';
+import { conflictStateName, getCellStyle, headerStyle, rowBackground } from './gridStyles';
 import type { ConflictAll, ConflictThis } from './types';
 
 const colour = (name: string) => `var(--vscode-modbench-${name})`;
@@ -29,9 +29,14 @@ describe('the colour a cell paints for its state', () => {
     expect(getCellStyle(state)).toEqual(expected);
   });
 
-  it('a header paints its background as its cells do, and none for no state', () => {
-    expect([headerBackground('ConflictWins'), headerBackground(null), headerBackground(undefined)])
-      .toEqual([colour('conflictWins'), undefined, undefined]);
+  it('a header paints as its cells do, and none for no state', () => {
+    expect([headerStyle('ConflictWins'), headerStyle('IdenticalToMasterWinsConflict'), headerStyle(null), headerStyle(undefined)])
+      .toEqual([
+        { backgroundColor: colour('conflictWins') },
+        { backgroundColor: colour('conflictIdenticalToMaster'), color: colour('conflictWinsText') },
+        {},
+        {},
+      ]);
   });
 });
 
@@ -40,7 +45,7 @@ describe('the name a cell state tooltip reads, in xEdit\'s words', () => {
     ['Master', 'Master'],
     ['OnlyOne', 'Single Record'],
     ['IdenticalToMaster', 'Identical to Master'],
-    ['IdenticalToMasterWinsConflict', 'Identical to Master, wins conflict'],
+    ['IdenticalToMasterWinsConflict', 'Identical to Master but conflict winner'],
     ['Override', 'Override without conflict'],
     ['ConflictWins', 'Conflict winner'],
     ['ConflictLoses', 'Conflict loser'],
