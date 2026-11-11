@@ -1347,9 +1347,12 @@ internal sealed class Indexer : IDisposable
         try
         {
             outcome = scope.Store.Commit(_ => scope.Failed.Read(plugin.Registered, state =>
-                !readsBinary || scope.Held.Open(plugin.Registered, Registration.In(scope.LoadOrder, key), scope.LoadOrder).Holds(out plugin, out var failure)
-                    ? ReadWhole(scope, plugin, state)
-                    : ReadOutcome.Failed(failure)));
+            {
+                if (!readsBinary) return ReadWhole(scope, plugin, state);
+                return scope.Held.Open(plugin.Registered, Registration.In(scope.LoadOrder, key), scope.LoadOrder).Holds(out var reopened, out var failure)
+                    ? ReadWhole(scope, reopened, state)
+                    : ReadOutcome.Failed(failure);
+            }));
         }
         catch (Exception ex)
         {
