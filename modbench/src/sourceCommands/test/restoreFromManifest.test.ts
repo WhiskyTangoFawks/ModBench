@@ -244,7 +244,7 @@ describe('restore from manifest', () => {
     ['it names no package',
       { manifests: { ModA: { ...EMPTY, files: holding({ 'mine.txt': HA }) } } },
       "was skipped: no package it names holds the bytes of 'mine.txt'."],
-    ['the game folder holds no game file with its bytes, naming its package's depots',
+    ['the game folder holds no game file with its bytes, naming the depots of its package',
       { manifests: { ModA: { ...EMPTY, packages: [{ kind: 'gameFolder', host: { steam: { app: 377160, depots: { 377162: '2222' } } } }], files: holding({ 'a.nif': HA }) } } },
       "was skipped: no package it names holds the bytes of 'a.nif'; its game folder package names depot 377162 at version 2222."],
     ['the game folder was not found',
