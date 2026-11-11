@@ -13,11 +13,11 @@ public sealed class LoadOrderTests
             line is { } place ? new PluginLine(place, lineNamesIt) : null, PluginStrings.None);
 
     private static LoadOrderSnapshot Order(RegisteredPlugin[] plugins, params RegisteredPlugin[] active) =>
-        new(Data, Instance, GameRelease.Fallout4, plugins, [.. active.Select(p => p.Key)], [], [], [], [], Language.English);
+        new(Data, Instance, GameRelease.Fallout4, plugins, [.. active.Select(p => p.Key)], [], [], [], [], [], Language.English);
 
     private static LoadOrderSnapshot OrderLoadingWithNoLine(
         RegisteredPlugin[] plugins, RegisteredPlugin[] loadedWithNoLine, params RegisteredPlugin[] active) =>
-        new(Data, Instance, GameRelease.Fallout4, plugins, [.. active.Select(p => p.Key)], [.. loadedWithNoLine.Select(p => p.Key)], [], [], [], Language.English);
+        new(Data, Instance, GameRelease.Fallout4, plugins, [.. active.Select(p => p.Key)], [.. loadedWithNoLine.Select(p => p.Key)], [], [], [], [], Language.English);
 
     private static readonly RegisteredPlugin A = Registered("A.esp", "ModA");
 
@@ -25,7 +25,7 @@ public sealed class LoadOrderTests
 
     private static LoadOrderSnapshot OfA(
         PluginAddress[]? loadedWithNoLine = null, StampedFile[]? archives = null, StampedFile[]? stringsFiles = null, Language language = Language.English) =>
-        new(Data, Instance, GameRelease.Fallout4, [A], [A.Key], loadedWithNoLine ?? [], archives ?? [], stringsFiles ?? [AStrings], [], language);
+        new(Data, Instance, GameRelease.Fallout4, [A], [A.Key], loadedWithNoLine ?? [], archives ?? [], [], stringsFiles ?? [AStrings], [], language);
 
     public static TheoryData<string, LoadOrderSnapshot> DifferingInOneField => new()
     {
@@ -232,7 +232,7 @@ public sealed class LoadOrderTests
     {
         var plugin = Registered("A.esp", "ModA");
         var lower = new LoadOrderSnapshot(
-            Data.ToLowerInvariant(), Instance.ToLowerInvariant(), GameRelease.Fallout4, [plugin], [plugin.Key], [], [], [], [], Language.English);
+            Data.ToLowerInvariant(), Instance.ToLowerInvariant(), GameRelease.Fallout4, [plugin], [plugin.Key], [], [], [], [], [], Language.English);
 
         Assert.Equal(Order([plugin], plugin), lower);
         Assert.Equal(Order([plugin], plugin).GetHashCode(), lower.GetHashCode());
@@ -245,7 +245,7 @@ public sealed class LoadOrderTests
         var b = Registered("B.esp", "ModB");
         var plugins = new List<RegisteredPlugin> { a, b };
         var active = new List<PluginAddress> { a.Key };
-        var order = new LoadOrderSnapshot(Data, Instance, GameRelease.Fallout4, plugins, active, [], [], [], [], Language.English);
+        var order = new LoadOrderSnapshot(Data, Instance, GameRelease.Fallout4, plugins, active, [], [], [], [], [], Language.English);
 
         plugins.Add(Registered("C.esp", "ModC"));
         active.Add(b.Key);

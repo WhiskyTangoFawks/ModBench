@@ -135,6 +135,7 @@ def snapshot(instance: pathlib.Path, game: pathlib.Path) -> JsonRecord:
         'active': [plugin._asdict() for plugin in PLUGINS],
         'loadedWithNoLine': [],
         'archives': [],
+        'listedArchives': [],
         'stringsFiles': [],
         'places': places(instance),
         'mods': [],
