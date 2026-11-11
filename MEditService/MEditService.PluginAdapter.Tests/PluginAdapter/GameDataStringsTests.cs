@@ -36,8 +36,10 @@ public sealed class GameDataStringsTests : IDisposable
 
     private string[] _stringsFilesTheGameReads = [];
 
+    private RegisteredPlugin[] _otherModsPlugins = [];
+
     private LoadOrderSnapshot LoadOrder =>
-        new(_dataFolder, null, GameRelease.SkyrimSE, [Plugin, GameCopy], [], [GameCopy.Key], [.. _archivesTheGameLoads.Select(HandedStrings.Stamped)],
+        new(_dataFolder, null, GameRelease.SkyrimSE, [Plugin, GameCopy, .. _otherModsPlugins], [], [GameCopy.Key], [.. _archivesTheGameLoads.Select(HandedStrings.Stamped)],
             [.. _stringsFilesTheGameReads.Select(HandedStrings.Stamped)], [], Language.English);
 
     private RegisteredPlugin Plugin => new(
@@ -108,7 +110,7 @@ public sealed class GameDataStringsTests : IDisposable
     }
 
     private LoadOrderSnapshot TheGameLoadingOnly(StampedFile archive) =>
-        new(_dataFolder, null, GameRelease.SkyrimSE, [Plugin, GameCopy], [], [GameCopy.Key], [archive], [], [], Language.English);
+        new(_dataFolder, null, GameRelease.SkyrimSE, [Plugin, GameCopy, .. _otherModsPlugins], [], [GameCopy.Key], [archive], [], [], Language.English);
 
     private IReadOnlyList<string> StringsPlacesOf(RegisteredPlugin plugin) => StringsPlacesOf(plugin, LoadOrder);
 
@@ -384,6 +386,36 @@ public sealed class GameDataStringsTests : IDisposable
 
         Assert.False(OpenDocuments(_pluginPath).Holds(out _, out var failure));
         Assert.StartsWith($"its strings archive '{Path.Combine(_dataFolder, "Update.bsa")}' could not be read", failure.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OpenDocuments_ACorruptArchiveNamedForAnotherModsPlugin_DoesNotFailThisPlugin()
+    {
+        var otherFolder = Directory.CreateDirectory(Path.Combine(_root, "mods", "Other Mod")).FullName;
+        var otherPath = Path.Combine(otherFolder, "Other.esp");
+        _otherModsPlugins =
+        [
+            new RegisteredPlugin(
+                "Other.esp", "Other Mod", otherPath, new PluginProvider.FromMod("Other Mod", otherFolder, null), new PluginLine(1, NamesIt: true),
+                PluginStrings.None),
+        ];
+        File.WriteAllText(Path.Combine(_dataFolder, "Other - Main.bsa"), "not an archive");
+        TheGameLoads("Other - Main.bsa");
+
+        using var documents = OpenDocuments(_pluginPath).Answered();
+
+        Assert.Contains(DoorName, documents.Records.Single().Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OpenDocuments_ACorruptArchiveNamedForNoPlugin_FailsNamingTheArchive()
+    {
+        Directory.Delete(LocalizedDoorPlugin.LooseStrings(_pluginPath), recursive: true);
+        File.WriteAllText(Path.Combine(_dataFolder, "Skyrim - Misc.bsa"), "not an archive");
+        TheGameLoads("Skyrim - Misc.bsa");
+
+        Assert.False(OpenDocuments(_pluginPath).Holds(out _, out var failure));
+        Assert.StartsWith($"its strings archive '{Path.Combine(_dataFolder, "Skyrim - Misc.bsa")}' could not be read", failure.Reason, StringComparison.Ordinal);
     }
 
     [Fact]

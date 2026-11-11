@@ -154,8 +154,15 @@ internal static class LocalizedStrings
         LoadOrderSnapshot loadOrder, ModKey plugin, GameRelease gameRelease, StringsLanguageFormat languageFormat)
     {
         yield return [.. Loose(loadOrder.StringsFiles.Select(file => file.Path), plugin, languageFormat)];
-        foreach (var archive in loadOrder.Archives.Reverse()) yield return [.. InArchive(archive, plugin, gameRelease, languageFormat)];
+        var othersOfMods = loadOrder.Plugins.Where(p => p.Provider is PluginProvider.FromMod).Select(p => ModKey.FromFileName(p.Name)).Where(key => key != plugin).Distinct().ToArray();
+        foreach (var archive in loadOrder.Archives.Reverse().Where(archive => !NamedForAnother(archive.Path, othersOfMods, gameRelease)))
+            yield return [.. InArchive(archive, plugin, gameRelease, languageFormat)];
     }
+
+    // The game loads an archive named for a mod's plugin as that plugin's own, as Mutagen's applicability rule holds it:
+    // it cannot supply the strings of another, so an unreadable one never fails them.
+    private static bool NamedForAnother(string archive, IEnumerable<ModKey> others, GameRelease gameRelease) =>
+        others.Any(other => Archive.IsApplicable(gameRelease, other, Path.GetFileName(archive)));
 
     // Never mixed with the game's places, whose string IDs may differ.
     private static IEnumerable<IReadOnlyList<StringsFile>> OwnPlaces(
