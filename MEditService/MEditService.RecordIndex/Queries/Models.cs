@@ -346,7 +346,7 @@ public record WorkingTreeStatesBeneath(
 
 /// <summary>What is wrong in a plugin's source, on its file: a link at <paramref name="FieldPath"/> to
 /// <paramref name="TargetFormKey"/> no active plugin holds, or a file the read stopped at.
-/// <paramref name="UncheckedBecause"/> names the unreadable plugin that left a link unchecked.</summary>
+/// <paramref name="UncheckedBecause"/>: the unreadable plugin.</summary>
 public sealed record SourceProblem(
     string? FormKey, string? TargetFormKey, string? FieldPath, string SourceRelativePath, string Message, string? UncheckedBecause = null)
 {

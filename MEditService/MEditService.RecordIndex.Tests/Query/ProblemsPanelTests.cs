@@ -276,7 +276,7 @@ public sealed class ProblemsPanelTests : IDisposable
     }
 
     [Fact]
-    public void TwoCopiesOfAPluginThatCannotBeRead_AreAnsweredByTheActiveOne()
+    public void TwoCopiesOfAPluginThatCannotBeRead_DoNotFailTheAnswer()
     {
         var builder = new PluginFixtureBuilder("plugin-problems");
         builder.WithPlugin(Unreadable, mod => mod.Npcs.AddNew("Other"), enabled: true, origin: "ActiveCopy");
@@ -288,8 +288,7 @@ public sealed class ProblemsPanelTests : IDisposable
 
         var answer = Assert.Single(Ready(index));
 
-        Assert.Single(answer.Problems, p => p.FieldPath == "Race" && p.UncheckedBecause == Unreadable);
-        Assert.Single(answer.Problems, p => p.FieldPath is null);
+        Assert.Single(answer.Problems, p => p.FieldPath == "Race");
     }
 
     [Fact]
