@@ -16,12 +16,13 @@ const SENT_PLUGINS = [MASTER, PLUGIN];
 const SENT_ACTIVE = [{ name: 'Master.esm', origin: 'Base Mod' }, { name: PLUGIN.name, origin: PLUGIN.origin }];
 const SENT_LOADED_WITH_NO_LINE = [{ name: 'Master.esm', origin: 'Base Mod' }];
 const SENT_ARCHIVES = [{ path: '/game/Data/Master - Main.ba2', stamp: '1/2/3' }];
+const SENT_LISTED = [{ path: '/game/Data/Fallout4 - Interface.ba2', stamp: '7/8/9' }];
 const SENT_STRINGS_FILES = [{ path: '/instance/mods/TestMod/Strings/TestMod_en.STRINGS', stamp: '4/5/6' }];
 const SENT_PLACES = [{ name: 'TestMod', folder: '/instance/mods/TestMod' }];
 
 const SOURCE: LoadOrderSource = {
   plugins: SENT_PLUGINS, active: SENT_ACTIVE, loadedWithNoLine: SENT_LOADED_WITH_NO_LINE, stringsFiles: SENT_STRINGS_FILES,
-  listedArchives: [], archivesByPlugin: [{ name: 'Master.esm', origin: 'Base Mod', archives: SENT_ARCHIVES }],
+  listedArchives: SENT_LISTED, archivesByPlugin: [{ name: 'Master.esm', origin: 'Base Mod', archives: SENT_ARCHIVES }],
   places: SENT_PLACES, dataFolder: '/game/Data', gameRelease: 'Fallout4',
 };
 
@@ -39,13 +40,13 @@ describe('put load order', () => {
     const result = await putLoadOrder(client, '/instance', SOURCE, 'French', AS_LOADED, CHANGED);
 
     expect(client.puts()).toEqual([{
-      plugins: SENT_PLUGINS, active: SENT_ACTIVE, loadedWithNoLine: SENT_LOADED_WITH_NO_LINE, archives: SENT_ARCHIVES, stringsFiles: SENT_STRINGS_FILES,
+      plugins: SENT_PLUGINS, active: SENT_ACTIVE, loadedWithNoLine: SENT_LOADED_WITH_NO_LINE, archives: [...SENT_LISTED, ...SENT_ARCHIVES], listedArchives: SENT_LISTED.map(({ path }) => path), stringsFiles: SENT_STRINGS_FILES,
       places: SENT_PLACES, dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'French',
     }]);
     expect(result).toEqual({
       sent: true,
       snapshot: {
-        plugins: SENT_PLUGINS, active: SENT_ACTIVE, loadedWithNoLine: SENT_LOADED_WITH_NO_LINE, archives: SENT_ARCHIVES, stringsFiles: SENT_STRINGS_FILES,
+        plugins: SENT_PLUGINS, active: SENT_ACTIVE, loadedWithNoLine: SENT_LOADED_WITH_NO_LINE, archives: [...SENT_LISTED, ...SENT_ARCHIVES], listedArchives: SENT_LISTED.map(({ path }) => path), stringsFiles: SENT_STRINGS_FILES,
         places: SENT_PLACES, dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'French',
       },
       outcome: APPLIED,

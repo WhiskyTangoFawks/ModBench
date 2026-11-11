@@ -149,12 +149,14 @@ internal static class LocalizedStrings
         return found;
     }
 
-    // Loose files beat every archive, and a later archive's file replaces an earlier one's.
+    // Loose files beat every archive, and a later archive's file replaces an earlier one's. An unreadable archive
+    // fails a plugin only where Mutagen's lookup applies it: an INI lists it, or its name is the plugin's.
     private static IEnumerable<IReadOnlyList<StringsFile>> TheGamesPlaces(
         LoadOrderSnapshot loadOrder, ModKey plugin, GameRelease gameRelease, StringsLanguageFormat languageFormat)
     {
         yield return [.. Loose(loadOrder.StringsFiles.Select(file => file.Path), plugin, languageFormat)];
-        foreach (var archive in loadOrder.Archives.Reverse()) yield return [.. InArchive(archive, plugin, gameRelease, languageFormat)];
+        foreach (var archive in loadOrder.Archives.Reverse())
+            yield return [.. InArchive(archive, plugin, gameRelease, languageFormat, failsPlugin: IsListed(loadOrder, archive) || AppliesTo(archive, plugin, gameRelease))];
     }
 
     // Never mixed with the game's places, whose string IDs may differ.
@@ -162,28 +164,42 @@ internal static class LocalizedStrings
         PluginStrings strings, ModKey plugin, GameRelease gameRelease, StringsLanguageFormat languageFormat)
     {
         yield return [.. Loose(strings.StringsFiles.Select(file => file.Path), plugin, languageFormat)];
-        foreach (var archive in strings.Archives) yield return [.. InArchive(archive, plugin, gameRelease, languageFormat)];
+        foreach (var archive in strings.Archives) yield return [.. InArchive(archive, plugin, gameRelease, languageFormat, failsPlugin: true)];
     }
 
     private static IEnumerable<StringsFile> Loose(IEnumerable<string> paths, ModKey plugin, StringsLanguageFormat languageFormat) =>
         paths.Select(path => StringsFile.Named(Path.GetFileName(path), plugin, languageFormat, path, () => File.ReadAllBytes(path))).OfType<StringsFile>();
 
-    private static IEnumerable<StringsFile> InArchive(StampedFile handed, ModKey plugin, GameRelease gameRelease, StringsLanguageFormat languageFormat)
+    private static bool IsListed(LoadOrderSnapshot loadOrder, StampedFile archive) =>
+        loadOrder.ListedArchives.Contains(archive.Path, StringComparer.OrdinalIgnoreCase);
+
+    private static bool AppliesTo(StampedFile archive, ModKey plugin, GameRelease gameRelease) =>
+        Archive.IsApplicable(gameRelease, plugin, Path.GetFileName(archive.Path));
+
+    private static IEnumerable<StringsFile> InArchive(
+        StampedFile handed, ModKey plugin, GameRelease gameRelease, StringsLanguageFormat languageFormat, bool failsPlugin)
     {
         var archive = handed.Path;
-        return StringsPathsOf(handed, gameRelease)
+        return StringsPathsOf(handed, gameRelease, failsPlugin)
             .Select(path => StringsFile.Named(
                 Path.GetFileName(path.Replace('\\', '/')), plugin, languageFormat, archive,
                 () => Reading(archive, () => StringsIn(archive, gameRelease).First(entry => entry.Path == path).GetBytes())))
             .OfType<StringsFile>();
     }
 
-    private static string[] StringsPathsOf(StampedFile archive, GameRelease gameRelease)
+    private static string[] StringsPathsOf(StampedFile archive, GameRelease gameRelease, bool failsPlugin)
     {
         if (StringsPathsIn.TryGetValue(archive.Path, out var known) && known.Stamp == archive.Stamp) return known.Paths;
-        var paths = Reading(archive.Path, () => StringsIn(archive.Path, gameRelease).Select(entry => entry.Path).ToArray());
-        StringsPathsIn[archive.Path] = (archive.Stamp, paths);
-        return paths;
+        try
+        {
+            var paths = Reading(archive.Path, () => StringsIn(archive.Path, gameRelease).Select(entry => entry.Path).ToArray());
+            StringsPathsIn[archive.Path] = (archive.Stamp, paths);
+            return paths;
+        }
+        catch (PluginFailureException) when (!failsPlugin)
+        {
+            return [];
+        }
     }
 
     private static IEnumerable<IArchiveFile> StringsIn(string archive, GameRelease gameRelease) =>

@@ -12,7 +12,7 @@ const STATUS = {
   totalPlugins: 1, activePlugins: 1, version: 7, indexedPlugins: [], conflictsComputed: true, holdsNone: false, validating: false, failures: [],
 };
 const SNAPSHOT: Sent['snapshot'] = {
-  plugins: [], active: [], loadedWithNoLine: [], archives: [], stringsFiles: [], places: [],
+  plugins: [], active: [], loadedWithNoLine: [], archives: [], listedArchives: [], stringsFiles: [], places: [],
   dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'English',
 };
 

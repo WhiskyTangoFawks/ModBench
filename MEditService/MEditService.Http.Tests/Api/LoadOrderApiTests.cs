@@ -21,6 +21,7 @@ public sealed class LoadOrderApiTests : HostedTests
     [InlineData("active")]
     [InlineData("loadedWithNoLine")]
     [InlineData("archives")]
+    [InlineData("listedArchives")]
     [InlineData("stringsFiles")]
     [InlineData("places")]
     [InlineData("stringsLanguage")]

@@ -30,7 +30,7 @@ public sealed class StringsLanguageTests : IDisposable
     {
         var plugin = new RegisteredPlugin(
             PluginName, PluginOrigin.DataDirectory, _pluginPath, PluginProvider.Game, Line: null, HandedStrings.Of(_pluginPath));
-        return new LoadOrderSnapshot(_root, null, GameRelease.SkyrimSE, [plugin], [], [plugin.Key], [], [], [], language);
+        return new LoadOrderSnapshot(_root, null, GameRelease.SkyrimSE, [plugin], [], [plugin.Key], [], [], [], [], language);
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public sealed class StringsLanguageTests : IDisposable
         LocalizedDoorPlugin.WriteNamedIn(germanOnly, (Language.German, "Das Grosse Tor"));
         var plugin = new RegisteredPlugin(
             PluginName, PluginOrigin.DataDirectory, germanOnly, PluginProvider.Game, Line: null, HandedStrings.Of(germanOnly));
-        var loadOrder = new LoadOrderSnapshot(_root, null, GameRelease.SkyrimSE, [plugin], [], [plugin.Key], [], [], [], Language.German);
+        var loadOrder = new LoadOrderSnapshot(_root, null, GameRelease.SkyrimSE, [plugin], [], [plugin.Key], [], [], [], [], Language.German);
         var adapter = Adapter;
         var source = (await adapter.ReadSourceOfAsync(plugin, loadOrder)).Answered();
         var tree = (await adapter.ReadTreeAsync(source.Files, loadOrder)).Answered();
@@ -84,7 +84,7 @@ public sealed class StringsLanguageTests : IDisposable
         LocalizedDoorPlugin.WriteNameInPlugin(plainPath, "Plain Door");
         var plain = new RegisteredPlugin(
             "Plain.esp", PluginOrigin.DataDirectory, plainPath, PluginProvider.Game, Line: null, HandedStrings.Of(plainPath));
-        var loadOrder = new LoadOrderSnapshot(_root, null, GameRelease.SkyrimSE, [plain], [], [plain.Key], [], [], [], Language.German);
+        var loadOrder = new LoadOrderSnapshot(_root, null, GameRelease.SkyrimSE, [plain], [], [plain.Key], [], [], [], [], Language.German);
 
         using var documents = Adapter.OpenDocuments(
             new ModPath(ModKey.FromFileName("Plain.esp"), plainPath), loadOrder,
