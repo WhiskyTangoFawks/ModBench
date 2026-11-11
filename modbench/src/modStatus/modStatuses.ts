@@ -2,7 +2,7 @@
 
 import type { EntryRef, InstanceAdapter, ModFolder } from '../instanceAdapter/instanceAdapter';
 import {
-  buildFileAgainst, filesAPackageHolds, flaggedFilesIn, flaggedHashesFrom, heldWholeStatus, manifestAt, packagesAskedAt, statusFrom, unreadableStatus, type FlaggedRead, type ModAt, type ModStatus,
+  buildFileAgainst, filesAPackageHolds, flaggedFilesIn, flaggedHashesFrom, heldWholeStatus, isManifestPath, manifestAt, packagesAskedAt, statusFrom, unreadableStatus, type FlaggedRead, type ModAt, type ModStatus,
 } from '../manifestAdapter/manifestAdapter';
 
 /** What a status is derived from in an instance value. */
@@ -154,7 +154,7 @@ export class ModStatuses {
       for (const listener of this.changed) listener();
       return;
     }
-    const derived = await Promise.all(mods.map((mod) => this.statusOf(mod, held.whole.has(mod.folder), held.files.get(mod.folder) ?? [], value.flaggedHashes)));
+    const derived = await Promise.all(mods.map((mod) => this.statusOf(mod, held.whole.has(mod.folder), (held.files.get(mod.folder) ?? []).filter((path) => !isManifestPath(path)), value.flaggedHashes)));
     const heldBefore = heldSnapshot(this.heldByPackages);
     this.heldByPackages = new Map(derived.map(({ status, packaged }) => [status.mod, packaged]));
     const heldChanged = heldSnapshot(this.heldByPackages) !== heldBefore;
