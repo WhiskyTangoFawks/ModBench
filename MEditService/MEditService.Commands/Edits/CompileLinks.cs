@@ -21,7 +21,7 @@ internal sealed class CompileLinks(IPluginAdapter adapter, ILogger logger)
     internal List<CompileDiagnostic> Report(
         LinkCheckScope compiled, IReadOnlyList<SourceRecord> records, IReadOnlyCollection<string> links)
     {
-        var (plugin, _, _, repository) = compiled;
+        var plugin = compiled.Address;
         try
         {
             return LinkDiagnostics(compiled, records, links);
@@ -29,8 +29,7 @@ internal sealed class CompileLinks(IPluginAdapter adapter, ILogger logger)
         catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
         {
             logger.LogWarning(ex, "{Plugin} compiled, but its link check did not run", plugin.Name);
-            return [PluginDiagnostic(
-                plugin, repository, $"{plugin.Name} compiled, but its links could not be checked: {ex.Message}")];
+            return [CompileDiagnostic.OfTheBuild($"{plugin.Name} compiled, but its links could not be checked: {ex.Message}")];
         }
     }
 

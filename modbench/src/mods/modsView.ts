@@ -5,7 +5,6 @@ import type { EntryRenameCommands } from '../modCommands/renameEntry';
 import type { SourceEditing } from '../textDocuments/sourceEditing';
 import { registerEntryRenameCommands } from './entryRenameCommands';
 import type { SourceCommands } from '../sourceCommands/sourceCommands';
-import { sourceFiles } from '../instanceLoader/loadOrderSnapshot';
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -35,7 +34,6 @@ import { registerGoToModCommand } from './goToMod';
 import { registerGoToModRowCommand, registerModReferencedByCommand } from './modSymbolCommands';
 import { registerBuildCommand } from './buildCommand';
 import { registerBuildTask } from './buildTask';
-import { BuildProblems } from './buildProblems';
 import { ModProblems } from './modProblems';
 import { PublisherProblems } from './publisherProblems';
 import { UnshippableProblems } from './unshippableProblems';
@@ -238,7 +236,6 @@ function registerSourceGestures(
 ): vscode.Disposable[] {
   const showAnySource = () => { void vscode.commands.executeCommand('setContext', 'modbench.mod.anySource', instance.value.sourceMods.size > 0); };
   showAnySource();
-  const problems = new BuildProblems(vscode.languages.createDiagnosticCollection('modbench-build'), instance);
   const { commands, pluginsView, say, registerRepositories } = sourceGestures;
   const owner = (origin: string) => modOfOrigin(instance.value, origin)?.name;
   return [
@@ -247,13 +244,11 @@ function registerSourceGestures(
       modOfOrigin: owner, pluginsView,
     }, rows),
     registerBuildCommand({
-      commands, instance, reporter: reporterFor('mod.build'), problems,
-      sourceFiles: (origin) => sourceFiles(instance.value, origin),
+      commands, instance, reporter: reporterFor('mod.build'),
       modOfOrigin: owner, sourceModNames: () => instance.value.paths.sourceDirs.keys(), pluginsView,
     }, rows),
     registerBuildTask(reporterFor('mod.build')),
     provider.onDidChangeTreeData(showAnySource),
-    problems,
   ];
 }
 

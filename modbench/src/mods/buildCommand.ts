@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { isRefused } from '../client';
-import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
@@ -8,19 +7,15 @@ import { isClickedRow } from '../drivingLib/gestureEntry';
 import type { ReportAction, Reporter } from '../ports/reporter';
 import type { SourceBuildOutcome as BuildOutcome } from '../sourceCommands/buildSourceMod';
 import type { SourceCommands } from '../sourceCommands/sourceCommands';
-import type { BuildProblems } from './buildProblems';
 import { pluginRowName } from '../wire/pluginAddress';
 import { givenByAgent, targetsOf, viewOf, type ModsGiven } from './sourceGestureTargets';
 import { MODS_KEY_ARGS } from './gestureEntry';
 
-/** What build needs: the build itself, the Instance loader's refresh, where the diagnostics go, and
- *  how the user is told. */
+/** What build needs: the build itself, the Instance loader's refresh, and how the user is told. */
 export interface BuildDeps {
   commands: Pick<SourceCommands, 'build'>;
   instance: Pick<Instance, 'refresh'>;
   reporter: Reporter;
-  problems: BuildProblems;
-  sourceFiles: SourceFilesOf;
   modOfOrigin: (origin: string) => string | undefined;
   sourceModNames: () => Iterable<string>;
   /** The Plugins view's id, whose bar a gesture from a plugin row runs under. */
@@ -63,9 +58,6 @@ async function buildMods(deps: BuildDeps, { mods, refusedRows, invokedFrom, ever
   return runWritingGesture('modbench.mod.build', invokedFrom, instance, async (): Promise<Built> => {
     const outcome = await commands.build(mods, everySource);
     if (isRefused(outcome)) return { applied: false, refusal: outcome.message };
-    for (const { compiled } of outcome.landed) {
-      for (const plugin of compiled) deps.problems.publish(plugin, deps.sourceFiles(plugin.origin), plugin.diagnostics);
-    }
     return {
       applied: true,
       outcome: { landed: outcome.landed, refused: [...refusedRows, ...outcome.refused] },
@@ -97,7 +89,7 @@ function reportBuilt(reporter: Reporter, outcome: BuildOutcome, action: ReportAc
   const refusedPlugins = outcome.landed.flatMap((built) => built.refused);
   const refusedArchives = outcome.landed.flatMap(({ mod, archivesRefused }) =>
     archivesRefused.map(({ item, reason }) => ({ item: inMod(item, mod), reason })));
-  const diagnostics = compiled.reduce((sum, plugin) => sum + plugin.diagnostics.length, 0);
+  const diagnostics = compiled.reduce((sum, plugin) => sum + plugin.diagnostics.filter(onAFile).length, 0);
   if (outcome.refused.length + refusedPlugins.length + refusedArchives.length > 0) {
     const counts = [
       ...(outcome.refused.length > 0 ? [`${outcome.refused.length} of ${outcome.landed.length + outcome.refused.length} mods`] : []),
@@ -126,7 +118,15 @@ export const buildFailures = (outcome: BuildOutcome): PartialFailure[] => [...pa
 
 /** What a landed build says and the build still succeeded. */
 export const buildWarnings = (outcome: BuildOutcome): PartialFailure[] =>
-  [...builtUncommitted(outcome), ...builtUnpushed(outcome), ...builtOverIgnored(outcome)];
+  [...builtUncommitted(outcome), ...builtUnpushed(outcome), ...builtOverIgnored(outcome), ...builtWithFaults(outcome)];
+
+// A diagnostic of the build, not of a file's content, is on no file: the Problems panel holds states of files (common.md, Reporting).
+const onAFile = ({ sourceRelativePath }: { sourceRelativePath: string }) => sourceRelativePath !== '';
+
+function builtWithFaults(outcome: BuildOutcome): PartialFailure[] {
+  return outcome.landed.flatMap(({ compiled }) => compiled.flatMap(({ diagnostics }) =>
+    diagnostics.filter((diagnostic) => !onAFile(diagnostic)).map(({ message }) => ({ message, severity: 'warning' as const }))));
+}
 
 // common.md, Reporting: a mod whose build stopped after it began writing landed, and the part that failed is named.
 function partlyBuilt(outcome: BuildOutcome): PartialFailure[] {

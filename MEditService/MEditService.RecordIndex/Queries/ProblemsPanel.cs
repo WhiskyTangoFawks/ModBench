@@ -15,6 +15,7 @@ internal static class ProblemsPanel
         var derivations = reads.GetDerivations();
         var stopped = index.SourceFileFailures.ToLookup(failure => failure.Plugin, PluginAddress.Comparer);
         var found = index.FileProblems.ToLookup(problem => problem.Plugin, PluginAddress.Comparer);
+        var unreadable = index.UnreadableBinaries.ToDictionary(file => file.Plugin.Name, file => file.Reason, StringComparer.OrdinalIgnoreCase);
         var held = snapshot.Plugins.ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);
         var missing = reads
             .GetReferencesToMissingRecordsOnFiles(plugin => held.GetValueOrDefault(plugin) is { } registered
@@ -27,8 +28,10 @@ internal static class ProblemsPanel
                 .Where(plugin => derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom.IsSourceMod() || stopped.Contains(plugin.Key))
                 .Select(plugin => ProblemsOf(
                     plugin.Key, snapshot.GameRelease, index.LaterReadFailure(plugin.Key),
-                    [.. stopped[plugin.Key].Select(SourceProblem.StoppedAt), .. Found(found[plugin.Key].Select(held => held.Problem), stopped[plugin.Key])],
-                    [.. missing[plugin.Key]])),
+                    [.. stopped[plugin.Key].Select(SourceProblem.StoppedAt), .. Found(found[plugin.Key].Select(held => held.Problem), stopped[plugin.Key]),
+                     .. UncheckedLinks(plugin, unreadable, held.GetValueOrDefault(plugin.Key) is { } registered ? source.Over(registered, snapshot.GameRelease) : null)],
+                    [.. missing[plugin.Key]],
+                    unreadable)),
         ];
     }
 
@@ -40,17 +43,38 @@ internal static class ProblemsPanel
 
     private static PluginProblems ProblemsOf(
         PluginAddress plugin, GameRelease release, IReadOnlyList<SourceFileFailure>? laterReadFailure, List<SourceProblem> stoppedAt,
-        List<MissingReferenceOnFile> rows) =>
+        List<MissingReferenceOnFile> rows, IReadOnlyDictionary<string, string> unreadable) =>
         FailureOf(laterReadFailure, rows) is var (failure, kind) && failure is not null
             ? new(plugin, stoppedAt, failure, kind)
-            : new(plugin, [.. stoppedAt, .. rows.Select(row => Problem(row, release))]);
+            : new(plugin, [.. stoppedAt, .. rows.Select(row => Problem(row, release, unreadable))]);
 
-    private static SourceProblem Problem(MissingReferenceOnFile row, GameRelease release) =>
-        new(row.Reference.FormKey,
-            row.Reference.TargetFormKey,
+    // Compile's words (ADR-0019): a file nothing could be read from answers nothing about the links into it.
+    private static IEnumerable<SourceProblem> UncheckedLinks(
+        RegisteredPlugin plugin, IReadOnlyDictionary<string, string> unreadable, ISourceRepositoryReads? repository)
+    {
+        if (repository is null) yield break;
+        var header = PluginHeader.IdentityOf(plugin.Name);
+        if (!repository.RelativePathOf(plugin.Key, header).Holds(out var path, out _) || path is null) yield break;
+        foreach (var (name, reason) in unreadable.Where(file => !file.Key.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)))
+        {
+            yield return new SourceProblem(
+                header.FormKey, null, null, path,
+                $"{name} is in the load order but could not be read, so no link into it was checked: {reason}");
+        }
+    }
+
+    private static SourceProblem Problem(MissingReferenceOnFile row, GameRelease release, IReadOnlyDictionary<string, string> unreadable)
+    {
+        var target = row.Reference.TargetFormKey;
+        var notChecked = RecordMasters.PluginNamedBy(target) is { } owner && unreadable.TryGetValue(owner, out var reason)
+            ? $"{owner} could not be read, so this link was not checked: {reason}"
+            : null;
+        return new(row.Reference.FormKey,
+            target,
             row.Reference.FieldPath,
             row.SourceRelativePath ?? throw new InvalidOperationException($"Expected {row.Reference.FormKey} to be placed."),
-            $"{row.Reference.FieldPath}: {Unresolved(row.Reference.TargetFormKey, release)}");
+            $"{row.Reference.FieldPath}: {notChecked ?? Unresolved(target, release)}");
+    }
 
     private static (string? Failure, ProblemsFailureKind? Kind) FailureOf(IReadOnlyList<SourceFileFailure>? laterReadFailure, List<MissingReferenceOnFile> rows)
     {

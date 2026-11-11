@@ -198,6 +198,39 @@ public sealed class ProblemsPanelTests : IDisposable
     }
 
     [Fact]
+    public void ALinkIntoAPluginThatCannotBeRead_IsAProblemOnTheReferrersFile_SayingItWasNotChecked_NotThatItIsMissing()
+    {
+        var unreadable = new Plugin("Unreadable.esp", CompiledPlugin: false);
+        var plugin = new Plugin("Refers.esp", RefersTo: "000800:Unreadable.esp");
+        Build(unreadable, plugin);
+        using var poisoned = new GatedPluginAdapter(poisonPlugin: unreadable.Name);
+        using var index = Indexes.Reconciled(Fixture, adapter: poisoned);
+
+        var answer = Assert.Single(Ready(index));
+
+        var link = Assert.Single(answer.Problems, p => p.FieldPath == "Race");
+        Assert.StartsWith("Race: Unreadable.esp could not be read, so this link was not checked: ", link.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Could not be resolved", link.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void APluginThatCannotBeRead_IsAProblemOnTheHeaderFileOfEveryCompiledPlugin_SayingNoLinkIntoItWasChecked()
+    {
+        var unreadable = new Plugin("Unreadable.esp", CompiledPlugin: false);
+        var plugin = new Plugin("Clean.esp", RefersTo: null);
+        Build(unreadable, plugin);
+        using var poisoned = new GatedPluginAdapter(poisonPlugin: unreadable.Name);
+        using var index = Indexes.Reconciled(Fixture, adapter: poisoned);
+
+        var answer = Assert.Single(Ready(index));
+
+        var problem = Assert.Single(answer.Problems);
+        Assert.StartsWith("Unreadable.esp is in the load order but could not be read, so no link into it was checked: ", problem.Message, StringComparison.Ordinal);
+        Assert.True(File.Exists(Path.Combine(Entry(plugin).ModFolderOf(), problem.SourceRelativePath)));
+        Assert.Null(problem.TargetFormKey);
+    }
+
+    [Fact]
     public void APluginWhoseReferrerTheTreeCannotPlace_IsAFailureOfThatPluginAlone_NotOfTheAnswer()
     {
         var gone = new Plugin("Gone.esp");

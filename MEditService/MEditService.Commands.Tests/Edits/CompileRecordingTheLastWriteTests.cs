@@ -45,7 +45,8 @@ public sealed class CompileRecordingTheLastWriteTests : IDisposable
         Assert.Empty(answer.Refused);
         var diagnostics = Assert.Single(answer.Applied).Diagnostics;
         Assert.NotEqual(before, File.ReadAllBytes(pluginPath));
-        Assert.Single(diagnostics, d => d.Message.Contains("could not be finished", StringComparison.Ordinal));
+        var unfinished = Assert.Single(diagnostics, d => d.Message.Contains("could not be finished", StringComparison.Ordinal));
+        Assert.Equal(CompileDiagnostic.NoFile, unfinished.SourceRelativePath);
     }
 
     [Fact]

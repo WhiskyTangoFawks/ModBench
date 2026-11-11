@@ -12,7 +12,7 @@ internal sealed class FailedReads(Store.Store index, ISourceAdapter source, ILog
     // RowsStand: unsaved text alone stopped the read, so the rows are the last good read's (common.md,
     // States, story 6), and the next good read clears it.
     private sealed record Failure(
-        ReadState? ReadFrom, bool Stands, IReadOnlyList<SourceFileFailure> Files, UnreadableSource? Why, bool RowsStand = false);
+        ReadState? ReadFrom, bool Stands, IReadOnlyList<SourceFileFailure> Files, UnreadableSource? Why, bool RowsStand = false, string? BinaryReason = null);
 
     private readonly Lock _lock = new();
     private readonly Dictionary<PluginAddress, Failure> _failed = new(PluginAddress.Comparer);
@@ -27,6 +27,13 @@ internal sealed class FailedReads(Store.Store index, ISourceAdapter source, ILog
     public IReadOnlyList<PluginAddress> Keys
     {
         get { lock (_lock) return [.. _failed.Keys]; }
+    }
+
+    /// <summary>Each plugin whose own file the last read could not take, and why: the files no link into them is checked
+    /// against (ADR-0019).</summary>
+    public IReadOnlyList<(PluginAddress Plugin, string Reason)> UnreadableBinaries
+    {
+        get { lock (_lock) return [.. _failed.Select(held => (held.Key, held.Value.BinaryReason)).Where(held => held.BinaryReason is not null).Select(held => (held.Key, Reason: held.BinaryReason ?? ""))]; }
     }
 
     public IReadOnlyList<SourceFileFailure> SourceFileFailures
@@ -89,7 +96,7 @@ internal sealed class FailedReads(Store.Store index, ISourceAdapter source, ILog
 
     private static Failure? FailureAfter(PluginAddress key, ReadState state, ReadOutcome outcome)
     {
-        if (!outcome.Served) return FailureOf(key, state, StandsOn(state, outcome), outcome.TreeStopped, WhyStopped(outcome));
+        if (!outcome.Served) return FailureOf(key, state, StandsOn(state, outcome), outcome.TreeStopped, WhyStopped(outcome), BinaryReasonOf(outcome));
         return state.Stamps is { StoppedOnlyByUnsavedText: true } ? RowsStandOver(key, state) : null;
     }
 
@@ -102,6 +109,9 @@ internal sealed class FailedReads(Store.Store index, ISourceAdapter source, ILog
     // failure of git, or not of the plugin's bytes, is read again at the next reconcile.
     private static bool StateObserves(ReadOutcome outcome) =>
         outcome is { Failure: null or { OfItsBytes: true }, StoppedBy: null, TreeStopped: null or SourceFailure.Unreadable or SourceFailure.Ambiguous };
+
+    private static string? BinaryReasonOf(ReadOutcome outcome) =>
+        outcome is { Failure: { } failure, StoppedBy: null, TreeStopped: null } ? failure.Reason : null;
 
     private static UnreadableSource? WhyStopped(ReadOutcome outcome)
     {
@@ -160,8 +170,9 @@ internal sealed class FailedReads(Store.Store index, ISourceAdapter source, ILog
     private static Failure RowsStandOver(PluginAddress key, ReadState state) =>
         new(state, Stands: false, FilesOf(key, state, treeStopped: null), Why: null, RowsStand: true);
 
-    private static Failure FailureOf(PluginAddress key, ReadState? state, bool stands, SourceFailure? treeStopped, UnreadableSource? why) =>
-        new(state, stands, FilesOf(key, state, treeStopped), why);
+    private static Failure FailureOf(
+        PluginAddress key, ReadState? state, bool stands, SourceFailure? treeStopped, UnreadableSource? why, string? binaryReason = null) =>
+        new(state, stands, FilesOf(key, state, treeStopped), why, BinaryReason: binaryReason);
 
     private static IReadOnlyList<SourceFileFailure> FilesOf(PluginAddress key, ReadState? state, SourceFailure? treeStopped) =>
     [
