@@ -18,17 +18,31 @@ internal sealed class StreamedRows(ReadContext read, DuckDBCommand command, IRea
     /// <summary>The next row's JSON object, or null after the last row.</summary>
     public string? Next()
     {
-        _reader ??= StoreFaults.Translating(command.ExecuteReader);
-        if (!StoreFaults.Translating(_reader.Read)) return null;
+        var reader = _reader ??= StoreFaults.Translating(command.ExecuteReader);
+        if (!StoreFaults.Translating(() => Read(reader))) return null;
         var row = new StringBuilder("{");
         for (var i = 0; i < columns.Count; i++)
         {
             if (i > 0) row.Append(',');
             row.Append(_names[i]).Append(':');
-            if (_reader.IsDBNull(i)) row.Append("null");
-            else row.Append(columns[i].IsText ? Encoded(_reader.GetString(i)) : _reader.GetString(i));
+            if (reader.IsDBNull(i)) row.Append("null");
+            else row.Append(columns[i].IsText ? Encoded(reader.GetString(i)) : reader.GetString(i));
         }
         return row.Append('}').ToString();
+    }
+
+    // DuckDB.NET throws a bare OperationCanceledException for a streamed result that DuckDB interrupted, and mEdit
+    // interrupts no read.
+    private static bool Read(DuckDBDataReader reader)
+    {
+        try
+        {
+            return reader.Read();
+        }
+        catch (OperationCanceledException ex)
+        {
+            throw new IndexFaultException("DuckDB interrupted the SELECT partway, and gave no reason.", ex) { Fault = IndexFault.Refused };
+        }
     }
 
     private static string Encoded(string text) => $"\"{JsonEncodedText.Encode(text, JavaScriptEncoder.UnsafeRelaxedJsonEscaping)}\"";
