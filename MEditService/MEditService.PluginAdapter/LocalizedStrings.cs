@@ -169,8 +169,8 @@ internal static class LocalizedStrings
     private static IEnumerable<StringsFile> Loose(IEnumerable<string> paths, ModKey plugin, StringsLanguageFormat languageFormat) =>
         paths.Select(path => StringsFile.Named(Path.GetFileName(path), plugin, languageFormat, path, () => File.ReadAllBytes(path))).OfType<StringsFile>();
 
-    // Mutagen reads an archive for a plugin when a game INI lists it or its name is the plugin's. Every loaded archive is
-    // still read for strings, as the game mounts them all, but only one Mutagen applies fails the plugin when unreadable.
+    // Every loaded archive is read for strings, as the game mounts them all. An unreadable one fails a plugin only
+    // where Mutagen's lookup applies it: a game INI lists it, or its name is the plugin's.
     private static bool IsListed(LoadOrderSnapshot loadOrder, StampedFile archive) =>
         loadOrder.ListedArchives.Contains(archive.Path, StringComparer.OrdinalIgnoreCase);
 
