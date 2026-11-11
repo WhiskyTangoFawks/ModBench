@@ -722,7 +722,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description The path in the Data folder that a value names in the member at a field path of a record type, as Mutagen's asset type places it, the folder it keeps the files of its kind in included, with forward slashes. Needs no index. 400 when the record type or the member is unknown or the member holds no path to a file. */
+        /** @description The path in the Data folder that a value names in the member at a field path of a record type, as Mutagen's asset type places it, the folder it keeps the files of its kind in included, with forward slashes. Needs no index. 400 when the record type or the member is unknown, or the member holds no path to a file, or its asset type cannot hold the path. */
         post: operations["ResolveFilePath"];
         delete?: never;
         options?: never;
