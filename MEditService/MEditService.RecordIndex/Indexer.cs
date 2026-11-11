@@ -1338,8 +1338,7 @@ internal sealed class Indexer : IDisposable
     }
 
     // ADR-0007: the read a first index runs, so a re-read produces the same rows by construction. A
-    // failed read is recorded with what it read from and rethrown, so it is not read again until that
-    // changes. The plugin is opened again, so what its header says is read with its rows.
+    // failed read is recorded with what it read from and rethrown. Opened again, so its header is read too.
     private bool ReindexHeldPlugin(OpenScope scope, PluginMetadata plugin)
     {
         var key = plugin.Key;
