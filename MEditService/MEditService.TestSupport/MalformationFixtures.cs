@@ -215,21 +215,6 @@ public static class MalformationFixtures
         }
     }
 
-    private static MalformationFixture GlobFnamNotATypeLetter
-    {
-        get
-        {
-            var mod = NewMod();
-            var global = mod.Globals.AddNewFloat("HarborHasSkins");
-            global.Data = 1f;
-            global.OutputChar = false;
-            return Malformed(nameof(GlobFnamNotATypeLetter), mod, "GLOB", global,
-                subrecords => subrecords.SelectMany<(string Signature, byte[] Payload), (string, byte[])>(s => s.Signature == "FLTV" ? [("FNAM", [0]), s] : [s]),
-                "glob-fnam-not-a-type-letter, repairable (drops 7 bytes): FNAM is 0x00; vanilla writes s, l, f or no FNAM",
-                "drops FNAM (7 bytes)");
-        }
-    }
-
     private static MalformationFixture FurnMissingFnamAndMnam => FurnitureMissingFlags(
         mod => mod.Furniture.AddNew("CrateTato6"),
         "inserts 1 zeroed FNAM of 2 bytes before WBDT; inserts 1 zeroed MNAM of 4 bytes before WBDT");

@@ -17,7 +17,7 @@
     <DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
     <InvariantGlobalization>true</InvariantGlobalization>
     <PredefinedCulturesOnly>false</PredefinedCulturesOnly>
-    <MutagenVersion>0.55.0-alpha.67</MutagenVersion>
+    <MutagenVersion>0.55.0-modbench-dev.1</MutagenVersion>
   </PropertyGroup>
 
   <!-- Every production box, by the same naming rule the architecture gates read the solution

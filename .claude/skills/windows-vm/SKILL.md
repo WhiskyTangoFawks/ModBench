@@ -20,7 +20,7 @@ The gates need the VM up. Start it with `vm.sh up` when it is down, and stop it 
 
 `gates.sh` runs root CLAUDE.md's Tools commands natively in the VM, in PowerShell, against this worktree with its uncommitted files. It prints `All Windows gates passed` or the gates that failed, and exits non-zero on a failure. The comment and diagram gates stay on Linux: they read text, the same on every platform.
 
-`vm.sh sync` copies the worktree to `C:\work\modbench` alone, for a narrower run: `vm.sh ssh 'cd C:\work\modbench\MEditService; dotnet test <project> --filter <name>'`. Dependencies and build output stay in the VM between syncs.
+`vm.sh sync` copies the worktree to `C:\work\modbench` and the Mutagen feed to `C:\work\mutagen-feed`, for a narrower run: `vm.sh ssh 'cd C:\work\modbench\MEditService; dotnet test <project> --filter <name>'`. Dependencies and build output stay in the VM between syncs.
 
 A command over SSH runs in session 0, which has no desktop. The VM signs `modbench` in to the console, session 1.
 
