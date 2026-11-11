@@ -3,6 +3,7 @@ using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
+using Fo4 = Mutagen.Bethesda.Fallout4;
 using Tes5 = Mutagen.Bethesda.Skyrim;
 
 namespace MEditService.Codec.Tests.Schema;
@@ -32,6 +33,25 @@ public class AssetPathsTests
         record.Model = new Tes5.Model { File = @"meshes\Architecture\Wall.nif" };
 
         Assert.Equal([Path.Combine("meshes", "Architecture", "Wall.nif")], Collected(record).Select(path => path.DataPath));
+    }
+
+    [Fact]
+    public void AFallout4Path_IsTheFileInTheDataFolder_UnderItsAssetTypesFolder()
+    {
+        var record = new Fo4.Fallout4Mod(ModKey.FromFileName("Assets.esp"), Fo4.Fallout4Release.Fallout4).TextureSets.AddNew("Holder");
+        record.Diffuse = @"Decals\Stain_d.dds";
+        record.Material = @"Decals\Stain.bgsm";
+
+        var collected = AssetPaths.Collect(
+            Document.Parse(RecordTextCodec.SerializeToText(record, GameRelease.Fallout4)),
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["txst"].RecordColumns);
+
+        Assert.Equal(
+            [
+                new AssetPath(Path.Combine("Textures", "Decals", "Stain_d.dds"), "Diffuse"),
+                new AssetPath(Path.Combine("Materials", "Decals", "Stain.bgsm"), "Material"),
+            ],
+            collected);
     }
 
     [Fact]
