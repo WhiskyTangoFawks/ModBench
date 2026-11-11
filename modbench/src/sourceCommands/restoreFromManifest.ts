@@ -192,7 +192,7 @@ async function installationFilesFor(pass: FolderPass, manifest: Manifest): Promi
 
 const depotsNamed = (manifest: Manifest): string[] => manifest.packages.flatMap((pkg) => {
   const depots = pkg.kind === 'gameFolder' ? Object.entries(pkg.host?.steam.depots ?? {}) : [];
-  return depots.length === 0 ? [] : [`the game folder is ${depots.map(([id, version]) => `depot ${id} at version ${version}`).join(' and ')}`];
+  return depots.length === 0 ? [] : [`its game folder package names ${depots.map(([id, version]) => `depot ${id} at version ${version}`).join(' and ')}`];
 });
 
 /** The mod folder whose files, by hash, stand for a source folder's. */
@@ -234,11 +234,7 @@ async function bytesFor(pass: FolderPass, manifest: Manifest, folder: string, pa
   }
   const sourceOf = (path: string): PackageFile | undefined => fromTheGame.get(path) ?? byHash.get(manifest.files.get(path) ?? '');
   const lacked = paths.filter((path) => sourceOf(path) === undefined);
-  if (lacked.length > 0) {
-    const listed = new Set(held.held.flatMap((file) => file.entries.map(({ path }) => path.toLowerCase())));
-    const gameFolderFiles = lacked.filter((path) => !listed.has(path.toLowerCase()));
-    return { refusal: skipped([...lacked.map((path) => `no package it names holds the bytes of '${path}'`), ...gameFolderFiles.length === 0 ? [] : depotsNamed(manifest)].join('; ')) };
-  }
+  if (lacked.length > 0) return { refusal: skipped([...lacked.map((path) => `no package it names holds the bytes of '${path}'`), ...depotsNamed(manifest)].join('; ')) };
   return new Map(paths.flatMap((path) => {
     const from = sourceOf(path);
     return from === undefined ? [] : [[path, from] as const];
