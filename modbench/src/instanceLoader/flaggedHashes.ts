@@ -31,7 +31,7 @@ export async function flaggedPluginsIn(
 }
 
 /** Keeps what mEdit answered for each plugin file with its stamp and the flags asked, so a file is asked again only once
- *  either changes, or while no answer came. */
+ *  either changes, or while no answer came or mEdit could not read it. */
 export class FlaggedHashesHeld {
   private held = new Map<string, { readonly key: string; readonly read: FlaggedRead }>();
   private unanswered = false;
@@ -56,7 +56,7 @@ export class FlaggedHashesHeld {
       const kept = this.held.get(file.path);
       const read = answers.get(file.path) ?? (kept !== undefined && kept.key === key ? kept.read : undefined);
       if (read === undefined || key === undefined) return [file.path, UNANSWERED];
-      held.set(file.path, { key, read });
+      if (read.kind === 'read') held.set(file.path, { key, read });
       return [file.path, read];
     }));
     this.held = held;

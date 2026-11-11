@@ -22,7 +22,7 @@ export function archivePathsIn(gameRelease: string, files: readonly OriginFile[]
 }
 
 /** Keeps what mEdit answered for each archive with the stamp it had, so an archive is asked again only once its stamp
- *  changes. An archive mEdit gave no answer for is asked again at the next read. */
+ *  changes. An archive mEdit gave no answer for, or could not read, is asked again at the next read. */
 export class ArchiveContentsHeld {
   private held = new Map<string, { readonly stamp: string; readonly read: ArchiveRead }>();
   private unanswered = false;
@@ -48,7 +48,7 @@ export class ArchiveContentsHeld {
       const kept = this.held.get(path);
       const read = answers.get(path) ?? (kept?.stamp === key ? kept.read : undefined);
       if (read === undefined) return [path, UNANSWERED];
-      held.set(path, { stamp: key, read });
+      if (read.kind === 'read') held.set(path, { stamp: key, read });
       return [path, read];
     }));
     this.held = held;

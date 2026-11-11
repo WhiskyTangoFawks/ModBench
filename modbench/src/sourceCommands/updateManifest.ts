@@ -189,8 +189,8 @@ async function updateMod(
   const files = only === undefined ? hashed.files : hashed.files.filter(({ path }) => isUnderAny(only, path));
   const packageHolds = (hash: string): boolean => [...downloadedFiles.map(({ file }) => file), ...mod.installationFile === undefined ? [] : [mod.installationFile]]
     .some(({ entries }) => entries.some((entry) => entry.hash === hash)) || (mod.game?.places ?? []).some((place) => place.files.some((one) => one.hash === hash));
-  const possible = held === undefined || only !== undefined ? new Map<string, readonly string[]>()
-    : await flaggedHashesIn(held, hashed.value, mod.folder, client === undefined ? undefined : possibleHashesOf(client, adapter));
+  const possible = held === undefined ? new Map<string, readonly string[]>()
+    : await flaggedHashesIn(held, hashed.value, mod.folder, client === undefined ? undefined : possibleHashesOf(client, adapter), only);
   if ('cannotTell' in possible) return refusal(`${possible.cannotTell}.`);
   const copies = packageCopiesOf(held, files, possible, packageHolds);
   if ('unknown' in copies) return refusal(unaccounted(copies.unknown));

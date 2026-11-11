@@ -764,6 +764,14 @@ describe('update manifest', () => {
       expect([result.refused, (await manifestHeld('ModA')).files.get('Mod.esp'), client.calls]).toEqual([[], HX, []]);
     });
 
+    it('records the package copy, never the flagged bytes, for a flagged plugin it is asked to record alone', async () => {
+      const { update, manifestHeld } = await flagged(HX, [HA, HX], HA);
+
+      const result = await update(['ModA'], { only: new Map([['ModA', ['Mod.esp']]]) });
+
+      expect([result.refused, (await manifestHeld('ModA')).files.get('Mod.esp')]).toEqual([[], HA]);
+    });
+
     it('drops the flags of a plugin that is gone from the folder, as its manifest names no file it lacks, asking mEdit nothing', async () => {
       const { update, manifestHeld, client } = await flagged(HX, [HA, HX], HX);
       await writeManifestIn(join(modsDir, 'ModA'), { ...MANIFEST, flags: new Map([['Gone.esp', FLAGS]]), files: holding({ 'Gone.esp': HA }) });
