@@ -203,13 +203,14 @@ export function mo2Repository(context: Mo2Context, publisherFile: ConfigurationF
         const folder = join(modsDir(instanceRoot), mod);
         return (await listEntries(folder, ignoreSkippedLink)).map(({ name }) => join(folder, name)).filter((path) => isManifestPath(instanceRoot, path));
       }));
+      const fixed = [
+        join(instanceRoot, GIT_DIR), ignoreListFile(instanceRoot), submodulesFile(instanceRoot), recordIndexDir(instanceRoot),
+        hashIndexDir(instanceRoot), sourceRootDir(instanceRoot), ...Object.values(sortingRuleFilePaths(instanceRoot)),
+      ];
+      const held = (await Promise.all(fixed.map(async (path) => (await exists(path) ? [path] : [])))).flat();
       return {
-        present: [
-          join(instanceRoot, GIT_DIR), ignoreListFile(instanceRoot), submodulesFile(instanceRoot), recordIndexDir(instanceRoot),
-          hashIndexDir(instanceRoot), sourceRootDir(instanceRoot), ...Object.values(sortingRuleFilePaths(instanceRoot)), ...inFolders.flat(),
-          ...search.found.map(({ segments }) => join(instanceRoot, ...segments)),
-        ],
-        owns: (path) => isManifestPath(instanceRoot, path) || search.owns(path),
+        present: [...held, ...inFolders.flat(), ...search.found.map(({ segments }) => join(instanceRoot, ...segments))],
+        owns: (path) => fixed.includes(path) || isManifestPath(instanceRoot, path) || search.owns(path),
       };
     },
 
