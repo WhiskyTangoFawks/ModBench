@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { columnStatuses, copyStatus, copyStatusMessage, type Standing } from '../columnStatus';
+import { columnStatuses, copyStatusMessage, type Standing } from '../columnStatus';
 import { forAgent } from '../../ports/phrase';
 
 const NO_STANDING: Standing = { overriddenBy: null, notActive: false };
@@ -17,8 +17,10 @@ interface Facts {
   standing?: Partial<Standing>;
 }
 
-const statusOf = ({ copy, plugin, standing }: Facts = {}) =>
-  copyStatus({ ...COPY, ...copy }, { ...COMPILED, ...plugin }, { ...NO_STANDING, ...standing });
+const statusOf = ({ copy, plugin, standing }: Facts = {}) => {
+  const status = copyStatusMessage({ ...COPY, ...copy }, { ...COMPILED, ...plugin }, { ...NO_STANDING, ...standing });
+  return status === null ? null : { ...status, reason: String(status.reason) };
+};
 
 describe('a column\'s status', () => {
   it.each<[string, Facts, string, string]>([
@@ -66,7 +68,7 @@ describe('a column\'s status', () => {
   });
 
   it('reads a plugin the instance does not list as one nothing edits', () => {
-    expect(copyStatus(COPY, undefined, NO_STANDING)?.label).toBe('(read-only)');
+    expect(copyStatusMessage(COPY, undefined, NO_STANDING)?.label).toBe('(read-only)');
   });
 
   it('gives the standing to the tab\'s own file column alone, matching a plugin by origin as well as name', () => {

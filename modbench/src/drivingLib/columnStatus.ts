@@ -63,8 +63,7 @@ export function copyStatusMessage(copy: CopyFacts, plugin: PluginFacts | undefin
   return null;
 }
 
-/** editor.md, A column's header: the status a view shows, its reason as text. */
-export function copyStatus(copy: CopyFacts, plugin: PluginFacts | undefined, standing: Standing): ColumnStatus | null {
+function copyStatus(copy: CopyFacts, plugin: PluginFacts | undefined, standing: Standing): ColumnStatus | null {
   const status = copyStatusMessage(copy, plugin, standing);
   return status === null ? null : { ...status, reason: String(status.reason) };
 }
