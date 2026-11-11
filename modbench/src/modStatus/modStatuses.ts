@@ -16,14 +16,14 @@ export interface StatusSource {
   /** Each source mod's source folder, by its entry's name. */
   readonly paths: { readonly sourceDirs: ReadonlyMap<string, string> };
   /** Each listed mod's own files, by its entry's name: what the reading already holds. */
-  readonly filesByMod: ReadonlyMap<string, readonly { readonly relativePath: string }[]>;
+  readonly filesByMod: ReadonlyMap<string, readonly { readonly relativePath: string; readonly sourcePath: string }[]>;
 }
 
 const isGitsOwn = (path: string): boolean => path === '.git' || path.startsWith('.git/');
 
 type Asked = ReturnType<typeof packagesAskedAt>;
 
-type ModAndSourceFolder = ModAt & { readonly sourceFolder?: string; readonly files: readonly string[] };
+type ModAndSourceFolder = ModAt & { readonly sourceFolder?: string; readonly files: readonly string[]; readonly sourcePaths: ReadonlyMap<string, string> };
 
 interface Listening {
   dispose(): void;
@@ -34,7 +34,7 @@ function modsAt(value: StatusSource): ModAndSourceFolder[] {
   const folders = new Map((value.modFolders ?? []).map((folder) => [keyOf(folder), folder]));
   return value.mods.filter(({ kind }) => kind === 'mod').flatMap((entry) => {
     const folder = folders.get(keyOf(entry));
-    return folder === undefined ? [] : [{ name: folder.modName, folder: folder.path, sourceFolder: value.paths.sourceDirs.get(entry.name), files: (value.filesByMod.get(entry.name) ?? []).map(({ relativePath }) => relativePath) }];
+    return folder === undefined ? [] : [{ name: folder.modName, folder: folder.path, sourceFolder: value.paths.sourceDirs.get(entry.name), files: (value.filesByMod.get(entry.name) ?? []).map(({ relativePath }) => relativePath), sourcePaths: new Map((value.filesByMod.get(entry.name) ?? []).map(({ relativePath, sourcePath }) => [relativePath, sourcePath])) }];
   });
 }
 
@@ -48,9 +48,9 @@ const askedBoth = (own: Asked, other: Asked): Asked => {
 type ManifestRead = Awaited<ReturnType<typeof manifestAt>>;
 type Values = Awaited<ReturnType<InstanceAdapter['modValue']>>;
 
-function judged(mod: ModAt, manifest: ManifestRead, values: Values, flagged: StatusSource['flaggedHashes']): ModStatus {
+function judged(mod: ModAt, manifest: ManifestRead, values: Values, flagged: StatusSource['flaggedHashes'], sourcePaths: ReadonlyMap<string, string>): ModStatus {
   if (manifest.read === undefined || !('manifest' in manifest.read) || values.kind !== 'read') return statusFrom(mod, manifest, values, new Map());
-  const hashes = flaggedHashesFrom(flaggedFilesIn(manifest.read.manifest, values.folder, mod.folder), (path) => flagged.get(path));
+  const hashes = flaggedHashesFrom(flaggedFilesIn(manifest.read.manifest, values.folder, mod.folder), ({ pathInFolder, file }) => flagged.get(sourcePaths.get(pathInFolder) ?? file.path));
   return 'cannotTell' in hashes ? unreadableStatus(mod.name, `mEdit could not say what its flagged plugins held before their flags: ${hashes.cannotTell}`) : statusFrom(mod, manifest, values, hashes);
 }
 
@@ -185,7 +185,7 @@ export class ModStatuses {
     const manifest = await manifestAt(mod.folder);
     const named = mod.sourceFolder === undefined ? manifest : await manifestAt(mod.sourceFolder);
     const values = await this.reads.modValue(mod.folder, askedBoth(packagesAskedAt(manifest), packagesAskedAt(named)), heldByGit);
-    const status = judged(mod, manifest, values, flagged);
+    const status = judged(mod, manifest, values, flagged, mod.sourcePaths);
     if (status.unreadable !== undefined) return { status, packaged: new Set() };
     const unpackaged = status.noManifest ? mod.files.filter((path) => !isGitsOwn(path)) : status.unpackaged;
     return {

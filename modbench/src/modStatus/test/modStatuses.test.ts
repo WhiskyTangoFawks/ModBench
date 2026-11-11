@@ -272,7 +272,7 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
   describe('the files no package holds (publishing.md, What ships, story 2)', () => {
     it('lists every file the reading holds of a mod whose folder holds no manifest, but git\'s own', async () => {
       const mod = await folderOf('ModA');
-      const held = ['mine.txt', 'other.txt', '.git/HEAD'].map((relativePath) => ({ relativePath }));
+      const held = ['mine.txt', 'other.txt', '.git/HEAD'].map((relativePath) => ({ relativePath, sourcePath: relativePath }));
       const statuses = statusesLogging();
 
       statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], { filesByMod: new Map([['ModA', held]]) }));
@@ -529,17 +529,20 @@ describe('a plugin its manifest flags (Status, story 8)', () => {
   const FLAGS = { Small: true };
   const COPY = 'AAAAAAAAAAA=';
   const OTHER = 'BBBBBBBBBBA=';
+  const LINKED = '/where/it/is/read/Mod.esp';
 
   beforeEach(() => {
     hashingContents = true;
     downloads = new Map([['S.7z', { hash: PACKAGE.hash, entries: [{ path: 'Mod.esp', hash: COPY }] }]]);
   });
 
-  async function statusWith(flagged: (plugin: string) => FlaggedRead): Promise<ModStatus | undefined> {
+  async function statusWith(flagged: () => FlaggedRead): Promise<ModStatus | undefined> {
     const mod = await folderOf('ModA', { 'Mod.esp': 'flagged bytes' });
     await writeManifestIn(mod, { ...EMPTY, packages: [PACKAGE], flags: new Map([['Mod.esp', FLAGS]]), files: new Map([['Mod.esp', COPY]]) });
     const statuses = statusesLogging();
-    statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], { flaggedHashes: new Map([[join(mod, 'Mod.esp'), flagged(join(mod, 'Mod.esp'))]]) }));
+    statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], {
+      filesByMod: new Map([['ModA', [{ relativePath: 'Mod.esp', sourcePath: LINKED }]]]), flaggedHashes: new Map([[LINKED, flagged()]]),
+    }));
     return (await statuses.current()).get('ModA');
   }
 

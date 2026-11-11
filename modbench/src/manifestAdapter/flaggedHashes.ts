@@ -1,38 +1,38 @@
 import { join } from 'node:path';
-import type { components } from '../wire/generated/api';
+import type { FlaggedPluginFile, FlaggedPluginHashes } from '../wire/messages';
 import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
 import type { FolderValue, Read } from '../repositoriesLib/statusValues';
 import type { Manifest } from './manifest';
 import { folderAgainst, type FlaggedHashes } from './modStatus';
 
-type FlaggedPluginFile = components['schemas']['FlaggedPluginFile'];
-
 /** What mEdit says a flagged plugin could have held before the manifest's flags; `unanswered` while it has not said. */
 export type FlaggedRead = Read<readonly string[]> | { readonly kind: 'unanswered' };
 
 /** What asks mEdit what each plugin file could have held before its flags. */
-export type PossibleHashes = (files: readonly FlaggedPluginFile[]) => Promise<readonly components['schemas']['FlaggedPluginHashes'][] | ReadFailed>;
+export type PossibleHashes = (files: readonly FlaggedPluginFile[]) => Promise<readonly FlaggedPluginHashes[] | ReadFailed>;
 
 /** A plugin the manifest flags and the folder holds, by its manifest path, and the file to ask mEdit about. */
 export interface FlaggedFile {
   readonly manifestPath: string;
+  readonly pathInFolder: string;
   readonly file: FlaggedPluginFile;
 }
 
 export function flaggedFilesIn(manifest: Manifest, folder: FolderValue, at: string): FlaggedFile[] {
   return folderAgainst(manifest, folder, new Map()).files.flatMap(({ path, hash, pathInFolder }) => {
     const flags = manifest.flags.get(path);
-    return flags === undefined || pathInFolder === undefined || typeof hash !== 'string' ? [] : [{ manifestPath: path, file: { path: join(at, pathInFolder), flags } }];
+    return flags === undefined || pathInFolder === undefined || typeof hash !== 'string' ? [] : [{ manifestPath: path, pathInFolder, file: { path: join(at, pathInFolder), flags } }];
   });
 }
 
 /** What `held` says of each file, by manifest path; none, with why, when it says of one that it cannot tell. */
 export function flaggedHashesFrom(
-  files: readonly FlaggedFile[], held: (path: string) => FlaggedRead | undefined,
+  files: readonly FlaggedFile[], held: (file: FlaggedFile) => FlaggedRead | undefined,
 ): FlaggedHashes | { readonly cannotTell: string } {
   const hashes = new Map<string, readonly string[]>();
-  for (const { manifestPath, file } of files) {
-    const read = held(file.path);
+  for (const flagged of files) {
+    const { manifestPath } = flagged;
+    const read = held(flagged);
     if (read?.kind === 'unreadable') return { cannotTell: `'${manifestPath}' could not be read: ${read.reason}` };
     if (read?.kind !== 'read') return { cannotTell: `mEdit has not said what '${manifestPath}' could have held before its flags` };
     hashes.set(manifestPath, read.answer);
@@ -51,8 +51,8 @@ export async function flaggedHashesIn(
   const answered = await possible(files.map(({ file }) => file));
   if (isReadFailed(answered)) return { cannotTell: failureReason(answered) };
   const byPath = new Map(answered.map(({ path, hashes }) => [path, hashes]));
-  return flaggedHashesFrom(files, (path) => {
-    const hashes = byPath.get(path);
+  return flaggedHashesFrom(files, ({ file }) => {
+    const hashes = byPath.get(file.path);
     return hashes === undefined ? undefined : { kind: 'read', answer: hashes };
   });
 }

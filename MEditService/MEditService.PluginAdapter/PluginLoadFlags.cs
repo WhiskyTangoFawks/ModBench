@@ -46,7 +46,7 @@ internal static class PluginLoadFlags
     }
 
     /// <summary>The hash of the plugin with each named flag at each combination of original values; none unless the plugin
-    /// holds each named flag as <paramref name="flags"/> sets it, as a file that is no plugin could not have held a package's copy.</summary>
+    /// holds each named flag as <paramref name="flags"/> sets it, and none for a file that is no plugin.</summary>
     internal static IReadOnlyList<string> OriginalHashes(string path, IReadOnlyDictionary<string, bool> flags, GameRelease gameRelease)
     {
         var load = GameCodecs.For(gameRelease).LoadFlags;

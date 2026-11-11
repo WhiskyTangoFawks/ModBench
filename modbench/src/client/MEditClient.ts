@@ -12,7 +12,7 @@ import type { RecordEditEnvelope } from '../wire/messages';
 import type { PluginAddress, SourceModIn } from '../wire/pluginAddress';
 export type { SourceModIn };
 import type { ReadFailed } from '../wire/readFailed';
-import type { ArchivedCopy } from '../wire/messages';
+import type { ArchivedCopy, FlaggedPluginFile, FlaggedPluginHashes } from '../wire/messages';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
 
@@ -213,11 +213,6 @@ export type PluginFilesFlagged = components['schemas']['SetPluginFileFlagsResult
 /** A plugin file, by its absolute path, with each load flag to set (true) or clear (false). */
 export type PluginFileToFlag = components['schemas']['PluginFileFlagsToSet'];
 
-/** A plugin file, by its absolute path, with the flags its manifest sets in it. */
-export type FlaggedPluginFile = components['schemas']['FlaggedPluginFile'];
-
-/** A plugin file's hashes with the flags its manifest sets at each combination of their original values; none when the file does not hold them. */
-export type FlaggedPluginHashes = components['schemas']['FlaggedPluginHashes'];
 
 export type GridPosition = components['schemas']['GridPosition'];
 /** A record and the plugin holding it (ADR-0012). */
