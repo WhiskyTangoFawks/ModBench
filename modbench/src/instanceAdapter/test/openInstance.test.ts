@@ -90,6 +90,7 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
 
   it('lists the files the mod manager\'s side keeps in the publisher\'s ignore list at a reading', async () => {
     await writeFile(join(root, SETTINGS_FILE), JSON.stringify({ Ignore: ['mine'] }));
+    await Promise.all([mkdir(join(root, 'modbench'), { recursive: true }), mkdir(join(root, 'source'), { recursive: true }), writeFile(join(root, '.gitignore'), '')]);
 
     await adapterOver(root).reading();
 
@@ -118,6 +119,7 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
 
   it('lists the files after a change to a publisher tag', async () => {
     await writeFile(join(root, SETTINGS_FILE), '{}');
+    await Promise.all([mkdir(join(root, 'modbench'), { recursive: true }), writeFile(join(root, '.gitignore'), '')]);
 
     await adapterOver(root).changePublisherTag('add', 'Include', [join(root, 'mods', 'Harder VATS')]);
 

@@ -292,6 +292,19 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
 
       expect([derived.get('ModA')?.unpackaged, derived.get('ModB')?.unpackaged]).toEqual([['a.esp'], ['b.ini']]);
     });
+
+    it('leaves a mod\'s own manifest out of the files git holds, whole folder or not', async () => {
+      const [whole, manifested] = [await folderOf('ModA', { 'a.esp': '' }), await folderOf('ModB', { 'b.ini': '' })];
+      await writeManifestIn(manifested, EMPTY);
+      heldWhole = new Set([whole]);
+      heldByGit = new Map([[whole, ['a.esp', 'ModA.manifest.json']], [manifested, ['b.ini', 'ModB.manifest.json']]]);
+      const statuses = statusesLogging();
+
+      statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }, { kind: 'mod', name: 'ModB' }], [folder('mod', 'ModA', whole), folder('mod', 'ModB', manifested)]));
+      const derived = await statuses.current();
+
+      expect([derived.get('ModA')?.unpackaged, derived.get('ModB')?.unpackaged]).toEqual([['a.esp'], ['b.ini']]);
+    });
   });
 
   it('reads a folder git holds whole as git\'s, with no manifest to judge it by and no file of it hashed (Status, story 1)', async () => {

@@ -179,11 +179,23 @@ describe('the MO2 adapter\'s repository', () => {
 
       await put('plugins/rootbuilder/rootbuilder.manifest.json');
       await put('plugins/rootbuilder/rootbuilder.py');
+      for (const name of ['.git', '.gitignore', '.gitmodules', 'hash-index', 'masterlist.yaml', 'modbench', 'prelude.yaml', 'source', 'userlist.yaml']) await put(name);
 
       expect((await adapter.filesKept()).present.map((path) => relative(root, path).replaceAll('\\', '/')).sort()).toEqual([
         '.git', '.gitignore', '.gitmodules', 'hash-index', 'masterlist.yaml', 'modbench', 'mods/A/A.manifest.json', 'mods/B/Renamed.manifest.json',
         'plugins/rootbuilder/rootbuilder.manifest.json', 'prelude.yaml', 'source', 'userlist.yaml',
       ].sort());
+    });
+
+    it('lists a fixed path only while the instance holds it, and owns it there or not', async () => {
+      const adapter = await instance();
+      await put('ModOrganizer.ini', SETTINGS_NAMING_DOWNLOADS);
+      await put('userlist.yaml');
+      const { present, owns } = await adapter.filesKept();
+      const relatives = present.map((path) => relative(root, path).replaceAll('\\', '/'));
+
+      expect(relatives).toEqual(['userlist.yaml']);
+      expect(['userlist.yaml', '.gitmodules', 'source', 'masterlist.yaml', 'prelude.yaml', 'hash-index', 'modbench'].map((name) => owns(join(root, name)))).toEqual(Array(7).fill(true));
     });
   });
 
