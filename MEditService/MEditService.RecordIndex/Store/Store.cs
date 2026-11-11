@@ -138,7 +138,16 @@ internal sealed class Store : IDisposable
 
     // DuckDB.NET duplicates in-memory connections only; a file opened again on the same path shares
     // this process's database instance. Either way the read gets its own snapshot.
-    public ReadContext OpenRead()
+    public ReadContext OpenRead() => OpenedRead(streamed: false);
+
+    /// <summary>A read its caller holds open at its own pace, as a script takes a SELECT's rows. No checkpoint waits on
+    /// it.</summary>
+    public ReadContext OpenStreamedRead()
+    {
+        lock (_checkpointGate) return OpenedRead(streamed: true);
+    }
+
+    private ReadContext OpenedRead(bool streamed)
     {
         lock (_readsGate)
         {
@@ -146,9 +155,17 @@ internal sealed class Store : IDisposable
             var connection = _databasePath == null ? OpenedInOneSnapshot(Connection.Duplicate()) : OpenedInOneSnapshot($"DataSource={_databasePath}");
             _readsInFlight++;
             connection.Disposed += (_, _) => { lock (_readsGate) { _readsInFlight--; Monitor.PulseAll(_readsGate); } };
+            if (streamed)
+            {
+                Interlocked.Increment(ref _streamedReadsOpen);
+                connection.Disposed += (_, _) => Interlocked.Decrement(ref _streamedReadsOpen);
+            }
             return new ReadContext(connection);
         }
     }
+
+    private readonly Lock _checkpointGate = new();
+    private int _streamedReadsOpen;
 
     private readonly object _readsGate = new();
     private int _readsInFlight;
@@ -791,7 +808,16 @@ internal sealed class Store : IDisposable
             if (!_checkpointOwed) return;
         }
         var timer = Stopwatch.StartNew();
-        DuckDbSql.Execute(Connection, "FORCE CHECKPOINT");
+        lock (_checkpointGate)
+        {
+            // After a delete, a checkpoint waits for every read older than it.
+            if (Volatile.Read(ref _streamedReadsOpen) > 0)
+            {
+                _logger.LogDebug("The record index's checkpoint stays owed while a SELECT's rows are read");
+                return;
+            }
+            DuckDbSql.Execute(Connection, "FORCE CHECKPOINT");
+        }
         lock (_projectionLock) _checkpointOwed = false;
         if (_logger.IsEnabled(LogLevel.Debug))
             _logger.LogDebug("Checkpointed the record index in {ElapsedMs} ms", timer.ElapsedMilliseconds);

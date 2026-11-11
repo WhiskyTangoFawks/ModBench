@@ -12,11 +12,16 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
     private static IReadOnlyDictionary<string, RecordTableSchema> Schemas =>
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
-    private JsonElement[] Selected(string sql) => fixture.Index.Queries.SelectRows(sql).Value().Rows;
+    private JsonElement[] Selected(string sql) => fixture.Index.Queries.Selected(sql);
 
     private int Matching(string sql) => Selected(sql).Length;
 
-    private bool Binds(string sql) => fixture.Index.Queries.SelectRows(sql).Holds(out _, out _);
+    private bool Binds(string sql)
+    {
+        if (!fixture.Index.Queries.SelectRows(sql).Holds(out var rows, out _)) return false;
+        rows.Dispose();
+        return true;
+    }
 
     private string[] ViewColumnTypes(string table, string column) =>
         [.. Selected($"SELECT data_type FROM view_columns WHERE view_name = '{table}' AND column_name = '{column}'")

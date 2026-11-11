@@ -191,13 +191,22 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         DuckDBConnection connection, string schema, string view, PublicView relation, string scope, string columns = "t.*")
     {
         var loadOrderColumn = relation.DerivesLoadOrder ? ", p.load_order_idx" : "";
-        var winnerColumn = relation.DerivesWinner ? ", (w.form_key IS NOT NULL) AS is_winner" : "";
+        var winnerColumn = "";
+        var winnerJoin = "";
+        if (relation.DerivesWinner && schema == IndexedSchema)
+        {
+            // A SELECT's filter can leave the records costed smaller than winners, and a join hashes that side, bodies
+            // too. A mark always hashes winners' keys, copied from records, so the row compares them exactly.
+            winnerColumn = $", (t.form_key, t.{relation.PluginColumn}, t.{relation.OriginColumn}) IN (SELECT (form_key, plugin, origin) FROM {ActiveSchema}.{WinnersRelation}) AS is_winner";
+        }
+        else if (relation.DerivesWinner)
+        {
+            // mEdit's own reads take bodies by key, and a point read through the mark ran three times its budget.
+            // Winners joins the bare table, never the scope's join, which the engine would cost above a lone table.
+            winnerColumn = ", (w.form_key IS NOT NULL) AS is_winner";
+            winnerJoin = WinnerJoin("t", relation.PluginColumn, relation.OriginColumn);
+        }
         var activeColumn = schema == IndexedSchema ? ", (p.load_order_idx IS NOT NULL) AS is_active" : "";
-        var winnerJoin = relation.DerivesWinner
-            ? WinnerJoin("t", relation.PluginColumn, relation.OriginColumn)
-            : "";
-        // Winners joins the bare table, never the scope's join: the engine hashes the side it costs smaller, costs
-        // `body` as a few bytes, and costs a lone table above a join, so it would hash every body read.
         DuckDbSql.Execute(connection, $"""
             CREATE OR REPLACE VIEW {schema}."{view}" AS
             SELECT {columns}{loadOrderColumn}{winnerColumn}{activeColumn}

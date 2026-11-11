@@ -17,7 +17,7 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture)
         GameRelease.Fallout4);
 
     private int DocumentsOf(string where) =>
-        fixture.Index.Queries.SelectRows($"SELECT form_key FROM records WHERE {where}").Value().Rows.Length;
+        fixture.Index.Queries.Selected($"SELECT form_key FROM records WHERE {where}").Length;
 
     [Fact]
     public void EveryIndexedRecordHasOneDocument()

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.RecordIndex.Queries;
 using MEditService.RepositoriesLib;
 
@@ -10,6 +11,13 @@ internal static class IndexAnswers
         answer.Holds(out var value, out var refused)
             ? value
             : throw new InvalidOperationException($"Expected the Index to answer here: {refused.Refusal}: {refused.Message}");
+
+    /// <summary>Every row the SELECT selects, read to its end; a refusal here is a broken fixture.</summary>
+    internal static JsonElement[] Selected(this IQueries queries, string sql)
+    {
+        using var rows = queries.SelectRows(sql).Value();
+        return [.. rows.Rows().Select(row => JsonDocument.Parse(row.Value()).RootElement.Clone())];
+    }
 
     /// <summary>The refusal the Index answered, which the test asked for.</summary>
     internal static IndexRefused Refused<T>(this Answer<T, IndexRefused> answer) =>

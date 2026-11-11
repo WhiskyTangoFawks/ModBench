@@ -511,11 +511,7 @@ internal sealed class RecordQueries(
 
     public void ClearFilter() => filter.Clear(_index);
 
-    public Answer<SelectedRows, IndexRefused> SelectRows(string sql) => _answer.Flat<SelectedRows>(() =>
-    {
-        if (SqlDoor.Select(_index, sql).Holds(out var rows, out var rejection)) return new SelectedRows(rows);
-        return new IndexRefused(IndexRefusal.SelectRejected, rejection);
-    });
+    public Answer<SelectedRows, IndexRefused> SelectRows(string sql) => SelectedRows.Selected(_index, sql, _answer);
 
     public Answer<IReadOnlyList<NamedObject>, IndexRefused> ResolveNames(IReadOnlyList<NameQuery> names) =>
         _answer.Flat<IReadOnlyList<NamedObject>>(() =>

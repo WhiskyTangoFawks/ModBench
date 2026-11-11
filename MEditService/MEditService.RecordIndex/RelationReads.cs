@@ -1,5 +1,4 @@
 using System.Data.Common;
-using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -259,23 +258,23 @@ internal sealed class RelationReads(
         return conditions.Count == 0 ? "" : "WHERE " + string.Join(" AND ", conditions);
     }
 
-    /// <summary>The rows of one SELECT over the views of every plugin the record index holds, each a JSON object of its
-    /// columns; or why the SQL cannot be one. The filter in force does not narrow it.</summary>
-    public Answer<JsonElement[], string> Select(string statement)
+    /// <summary>The rows of one SELECT over the views of every plugin the record index holds, read from one snapshot as
+    /// they are taken; or why the SQL cannot be one. The filter in force does not narrow it.</summary>
+    public Answer<StreamedRows, string> Select(string statement)
     {
         var sql = statement.TrimEnd().TrimEnd(';');
-        using var context = OpenRead();
-        if (SqlDoor.RefusalOf(context, sql, TableDdlBuilder.IndexedSchema) is { } refusal) return refusal;
+        ReadContext? context = store.OpenStreamedRead();
         try
         {
+            if (SqlDoor.RefusalOf(context, sql, TableDdlBuilder.IndexedSchema) is { } refusal) return refusal;
             context.Execute($"SET search_path = '{TableDdlBuilder.IndexedSchema}'");
-            // The newline keeps a trailing line comment in the SQL from swallowing the wrapper.
-            return context.Rows($"SELECT to_json(__row) FROM ({sql}\n) __row",
-                reader => JsonDocument.Parse(reader.GetString(0)).RootElement.Clone()).ToArray();
+            var rows = context.Streamed(sql);
+            context = null;
+            return rows;
         }
-        catch (IndexFaultException ex) when (ex.Fault is IndexFault.Refused or IndexFault.RowValue)
+        finally
         {
-            return ex.Message;
+            context?.Dispose();
         }
     }
 

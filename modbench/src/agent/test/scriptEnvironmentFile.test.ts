@@ -152,7 +152,7 @@ describe('the file the Python tooling reads to reach mEdit', () => {
 
   describe('a Python process given the variables the file holds', () => {
     it('imports medit and reaches the mEdit on the port the file names', async () => {
-      const mEdit = createServer((_, response) => { response.setHeader('Content-Type', 'application/json'); response.end('{"rows":[{"answer":42}]}'); });
+      const mEdit = createServer((_, response) => { response.setHeader('Content-Type', 'application/x-ndjson'); response.end('{"row":{"answer":42}}\n{"end":true}\n'); });
       await new Promise<void>((listening) => mEdit.listen(0, '127.0.0.1', listening));
       const elsewhere = await mkdtemp(join(tmpdir(), 'script-env-'));
       try {
@@ -163,7 +163,7 @@ describe('the file the Python tooling reads to reach mEdit', () => {
 
         const { stdout } = await promisify(execFile)(
           process.platform === 'win32' ? 'python' : 'python3',
-          ['-c', "import medit; print(medit.select('SELECT 1')[0]['answer'])"],
+          ['-c', "import medit; print(list(medit.select('SELECT 1'))[0]['answer'])"],
           { cwd: elsewhere, env: { ...process.env, ...variables } },
         );
 

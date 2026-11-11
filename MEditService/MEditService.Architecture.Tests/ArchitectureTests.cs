@@ -159,7 +159,7 @@ public sealed class ArchitectureTests
     }
 
     [Fact]
-    public void TheRecordIndex_ExportsOneFace_ItsAnswers_AndItsRegistration()
+    public void TheRecordIndex_ExportsOneFace_ItsAnswers_ItsStreamedRows_AndItsRegistration()
     {
         var exported = typeof(IQueries).Assembly.GetExportedTypes();
 
@@ -168,7 +168,7 @@ public sealed class ArchitectureTests
             .Select(type => type.FullName)
             .Order(StringComparer.Ordinal);
 
-        Assert.Equal([typeof(IQueries).FullName, typeof(RecordIndexServices).FullName], notAnAnswer);
+        Assert.Equal([typeof(IQueries).FullName, typeof(SelectedRows).FullName, typeof(RecordIndexServices).FullName], notAnAnswer);
         Assert.All(exported.Where(type => type != typeof(RecordIndexServices)),
             type => Assert.Equal(typeof(IQueries).Namespace, type.Namespace));
     }
