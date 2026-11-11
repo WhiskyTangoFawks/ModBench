@@ -191,16 +191,27 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         DuckDBConnection connection, string schema, string view, PublicView relation, string scope, string columns = "t.*")
     {
         var loadOrderColumn = relation.DerivesLoadOrder ? ", p.load_order_idx" : "";
-        // A join's engine hashes the side it costs smaller and costs `body` as a few bytes, so a filter would have it hash
-        // the bodies; a mark always hashes winners. Winners copies records' keys, so the row compares them exactly.
-        var winnerColumn = relation.DerivesWinner
-            ? $", (t.form_key, t.{relation.PluginColumn}, t.{relation.OriginColumn}) IN (SELECT (form_key, plugin, origin) FROM {ActiveSchema}.{WinnersRelation}) AS is_winner"
-            : "";
+        var winnerColumn = "";
+        var winnerJoin = "";
+        if (relation.DerivesWinner && schema == IndexedSchema)
+        {
+            // A SELECT's filter can leave the records costed smaller than winners, and a join hashes that side, bodies
+            // too. A mark always hashes winners' keys, copied from records, so the row compares them exactly.
+            winnerColumn = $", (t.form_key, t.{relation.PluginColumn}, t.{relation.OriginColumn}) IN (SELECT (form_key, plugin, origin) FROM {ActiveSchema}.{WinnersRelation}) AS is_winner";
+        }
+        else if (relation.DerivesWinner)
+        {
+            // mEdit's own reads take bodies by key, and a point read through the mark ran three times its budget.
+            // Winners joins the bare table, never the scope's join, which the engine would cost above a lone table.
+            winnerColumn = ", (w.form_key IS NOT NULL) AS is_winner";
+            winnerJoin = WinnerJoin("t", relation.PluginColumn, relation.OriginColumn);
+        }
         var activeColumn = schema == IndexedSchema ? ", (p.load_order_idx IS NOT NULL) AS is_active" : "";
         DuckDbSql.Execute(connection, $"""
             CREATE OR REPLACE VIEW {schema}."{view}" AS
             SELECT {columns}{loadOrderColumn}{winnerColumn}{activeColumn}
             FROM {MirrorSchema}."{relation.Table}" t
+            {winnerJoin}
             {scope}
             """);
     }
