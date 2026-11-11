@@ -1,12 +1,11 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import { COMMITTED, heldTextAt, sameName, spliced, type EntryOwner, type ScriptSymbol } from '../symbolNames/symbolNames';
-import { heldText } from '../textDocuments/heldText';
 import { CONTAINER_SCHEMES, type RecordDocumentClient } from '../textDocuments/recordDocument';
 import { pluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
-import { failureReason, isReadFailed } from '../wire/readFailed';
-import { locateCopies, locationOf } from './recordLocation';
-import { formKeyValue, stringsAt, type TextSpan } from './sourceText';
+import { copiesNamingAtMembers, membersNaming } from './memberReferences';
+import { locateCopies } from './recordLocation';
+import { stringsAt, type TextSpan } from './sourceText';
 
 export type ScriptReferencesClient = Pick<MEditClient, 'getScriptReferences'> & RecordDocumentClient;
 
@@ -22,10 +21,7 @@ const copyNamed = ({ formKey, plugin }: { formKey: string; plugin: { name: strin
 /** The records that attach a Papyrus script, which mEdit answers, at the member of each that names it (ADR-0028): what
  *  Find All References lists, and plugin source's part of a rename. */
 export function scriptReferences({ client, open, readText }: ScriptReferencesDeps) {
-  const copiesAttaching = async (name: string) => {
-    const answer = await client.getScriptReferences(name);
-    return isReadFailed(answer) ? { copies: [], unread: [`the plugins mEdit reads: ${failureReason(answer)}`] } : answer;
-  };
+  const copiesAttaching = async (name: string) => copiesNamingAtMembers(await client.getScriptReferences(name));
 
   // The native Source Control panel misses a working-tree change on its own.
   const owner = (refreshSourceControlFor: (plugin: PluginAddress) => void): EntryOwner<ScriptSymbol> => ({
@@ -56,15 +52,7 @@ export function scriptReferences({ client, open, readText }: ScriptReferencesDep
     /** Plugin source's part of a rename. */
     owner,
     /** Each member of a record that names `name`, at its document, and why each copy that may name it went unread. */
-    async read(name: string): Promise<{ found: vscode.Location[]; unread: string[] }> {
-      const { copies, unread } = await copiesAttaching(name);
-      const { found, leftOut } = await locateCopies(client, copies, async (copy, uri) => {
-        const document = await open(uri);
-        const text = heldText(document);
-        const spans = stringsAt(text, copy.formKey, copy.fieldPaths);
-        return (spans.length > 0 ? spans : [formKeyValue(text, copy.formKey) ?? { start: 0, end: 0 }]).map((span) => locationOf({ uri, document, ...span }));
-      });
-      return { found: found.flat(), unread: [...unread, ...leftOut] };
-    },
+    read: async (name: string): Promise<{ found: vscode.Location[]; unread: string[] }> =>
+      membersNaming(client, open, await client.getScriptReferences(name)),
   };
 }

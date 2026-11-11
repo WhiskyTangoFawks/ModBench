@@ -100,7 +100,7 @@ type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
   'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'signalChange' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
-  | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'getPluginNameReferences' | 'getScriptReferences' | 'getCopyDocument' | 'getRecordOwner' | 'moveLastWritten' | 'getSourceFolderMoveChanges' | 'followSourceFolderMove' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'getFlaggedPluginHashes' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'getPluginIndexing' | 'getArchiveCopies'>;
+  | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'getPluginNameReferences' | 'getScriptReferences' | 'getFileReferences' | 'getCopyDocument' | 'getRecordOwner' | 'moveLastWritten' | 'getSourceFolderMoveChanges' | 'followSourceFolderMove' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'getFlaggedPluginHashes' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'getPluginIndexing' | 'getArchiveCopies'>;
 
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -119,7 +119,7 @@ interface ViewsDeps {
   focusedView: FocusedView;
   editor: Pick<Editor, 'copyValue'>;
   sourceEditing: SourceEditing;
-  referencedByMod: (mod: string) => Promise<void>;
+  referencedBy: { mod: (mod: string) => Promise<void>; file: (path: string) => Promise<void> };
 }
 
 interface InstanceSide {
@@ -246,7 +246,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     checkForUpdates: checkForUpdatesOver(adapter, deps.nexus),
     manifestGestures: { commands: instanceRepository, toolboxView: TOOLBOX_VIEW, say: toolbox.say },
     statuses: modStatuses,
-    referencedBy: deps.referencedByMod,
+    referencedBy: deps.referencedBy,
     archives: client,
   }));
   own(registerArchiveOpen({ gameRelease: () => adapter.gameRelease(), reporter: reporterFor('archive.open') }));
@@ -383,7 +383,7 @@ function start(context: vscode.ExtensionContext): void {
     focusedView,
     editor,
     sourceEditing,
-    referencedByMod: (mod) => sourceLanguage.referencedByMod(mod),
+    referencedBy: { mod: (mod) => sourceLanguage.referencedByMod(mod), file: (path) => sourceLanguage.referencedByFile(path) },
   });
   const scriptEnvironmentFailures = toastOncePerFailure(reporterFor('scriptEnvironment'));
   const scriptsPath = vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath;

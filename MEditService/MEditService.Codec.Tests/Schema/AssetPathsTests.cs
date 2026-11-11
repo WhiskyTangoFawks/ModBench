@@ -14,8 +14,8 @@ public class AssetPathsTests
 
     private static List<AssetPath> Collected(Tes5.Static record) =>
         AssetPaths.Collect(
-            Document.Parse(RecordTextCodec.SerializeToText(record, GameRelease.SkyrimSE)),
-            SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["stat"].RecordColumns);
+            RecordTextCodec.SerializeToText(record, GameRelease.SkyrimSE),
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["stat"].RecordColumns, GameRelease.SkyrimSE, "stat");
 
     [Fact]
     public void APathARecordNames_IsTheFileInTheDataFolder_UnderItsAssetTypesFolder()
@@ -43,8 +43,8 @@ public class AssetPathsTests
         record.Material = @"Decals\Stain.bgsm";
 
         var collected = AssetPaths.Collect(
-            Document.Parse(RecordTextCodec.SerializeToText(record, GameRelease.Fallout4)),
-            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["txst"].RecordColumns);
+            RecordTextCodec.SerializeToText(record, GameRelease.Fallout4),
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["txst"].RecordColumns, GameRelease.Fallout4, "txst");
 
         Assert.Equal(
             [

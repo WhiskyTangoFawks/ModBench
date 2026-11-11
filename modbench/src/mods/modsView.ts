@@ -85,8 +85,9 @@ interface ModsViewDeps {
   checkForUpdates: CheckForUpdates;
   /** Each mod's status, as mEdit last answered it. */
   statuses: ModStatuses;
-  /** Lists each place a file names a mod, in VS Code's References view. */
-  referencedBy: (mod: string) => Promise<void>;
+  /** Lists each place a file names a mod, or each record that names a file at its path in the Data folder, in VS Code's
+   *  References view. */
+  referencedBy: { mod: (mod: string) => Promise<void>; file: (path: string) => Promise<void> };
   /** Reads the copies of files in archives. */
   archives: Pick<MEditClient, 'getArchiveCopies'>;
 }
@@ -202,7 +203,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
       rowFor: (origin) => provider.rowFor(origin),
       reveal: (row) => view.reveal(row, { select: true, focus: true }),
     }),
-    registerModReferencedByCommand(deps.referencedBy, () => view.selection),
+    registerModReferencedByCommand({ ...deps.referencedBy, value: () => instance.value, reporter: reporterFor('mod.referencedBy') }, () => view.selection),
     registerGoToModRowCommand({
       rowOf: (mod) => provider.entryRow({ kind: 'mod', name: mod }),
       folderOf: (mod) => instance.value.paths.modDirs.get(mod),

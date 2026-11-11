@@ -113,7 +113,7 @@ export function registerArchiveFiles(client: Pick<MEditClient, 'getArchiveFile' 
   return vscode.workspace.registerFileSystemProvider(ARCHIVE_SCHEME, new ArchiveFileSystem(client), { isReadonly: true });
 }
 
-const hasFsPath = (value: unknown): value is { fsPath: string } =>
+export const hasFsPath = (value: unknown): value is { fsPath: string } =>
   typeof value === 'object' && value !== null && 'fsPath' in value && typeof value.fsPath === 'string';
 
 interface ArchiveOpenDeps {
