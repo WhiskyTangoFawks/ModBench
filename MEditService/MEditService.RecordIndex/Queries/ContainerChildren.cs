@@ -41,9 +41,8 @@ internal static class ContainerChildren
         var result = new List<ContainerChildSummary>(rows.Count);
         foreach (var row in rows)
         {
-            // The two reads are two snapshots: a child a commit took between them is gone, and that
-            // commit's announcement asks for this listing again.
-            if (!byFormKey.TryGetValue(row.Child, out var record)) continue;
+            var record = byFormKey.GetValueOrDefault(row.Child) ?? throw new InvalidOperationException(
+                $"Expected {row.Child}, which {parentFormKey} holds in {plugin.Name} ({plugin.Origin}), among its plugin's {SlotRecordTypes[row.Slot]} records.");
             result.Add(new ContainerChildSummary(
                 record.FormKey, record.EditorId, record.Plugin, record.Origin,
                 record.LoadOrderIndex, record.IsWinner, record.WorkingTreeState, SlotRecordTypes[row.Slot],

@@ -1,13 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Uri } from '../../test/vscodeMock';
 
-const { registerCommand, executeCommand } = vi.hoisted(() => ({
+const { registerCommand, executeCommand, served } = vi.hoisted(() => ({
+  served: new Map<string, { readFile(uri: unknown): Promise<Uint8Array> }>(),
   registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
   executeCommand: vi.fn((..._args: unknown[]) => Promise.resolve()),
 }));
 
 vi.mock('vscode', () => ({
   commands: { registerCommand, executeCommand },
+  workspace: { registerFileSystemProvider: (scheme: string, provider: { readFile(uri: unknown): Promise<Uint8Array> }) => { served.set(scheme, provider); return { dispose: () => undefined }; } },
+  Disposable: class { constructor(public dispose: () => void) {} },
+  FileType: { File: 1, Directory: 2 },
+  FileSystemError: { FileNotFound: (what: { path: string }) => new Error(`FileNotFound ${what.path}`) },
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
   Uri,
 }));
@@ -20,6 +25,8 @@ import type { OriginFile } from '../../instanceLoader/instance';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import { file, indexedValueOf, mod } from './indexedValue';
+import { registerArchiveFiles } from '../archiveFiles';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const PATH = 'textures/a.dds';
 
@@ -69,6 +76,19 @@ describe('the compare file command', () => {
     await h.invoke(argument(h));
 
     expect(h.diffs()).toEqual([diff]);
+  });
+
+  it('opens an archived copy at a URI the archive file system reads from the archive', async () => {
+    const h = await setup();
+    await h.invoke(h.cell('Alone'));
+    const archived = executeCommand.mock.calls.find(([id]) => id === 'vscode.diff')?.[1];
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getArchiveFile', new Uint8Array([1]));
+    registerArchiveFiles(client);
+
+    await present(served.get('modbench-archive'), 'the archive file system').readFile(archived);
+
+    expect(client.calls.filter((call) => call.method === 'getArchiveFile').map((call) => call.args)).toEqual([['Fallout4', ARCHIVE, PATH]]);
   });
 
   it.each([

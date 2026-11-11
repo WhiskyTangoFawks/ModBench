@@ -36,9 +36,9 @@ public sealed class ReadMeetsSwapTests : IDisposable
     [Fact]
     public async Task ARead_WhoseStoreIsRebuiltBeforeItOpensAConnection_IsNotReady()
     {
-        var copy = new RecordCopy("000800:Swapped.esp", _fixture.Plugins.Single().Key, DocumentText: "{}");
+        var text = new CopyText(_fixture.Plugins.Single().Key, "{}", Alone: true);
         _source.ParkNextTreeLookup();
-        var read = Task.Run(() => _index.Queries.GetCompareRecords([copy]));
+        var read = Task.Run(() => _index.Queries.GetCompare("000800:Swapped.esp", text));
         await _source.WaitUntilParkedAsync();
         Assert.Null(_index.Queries.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot));
 

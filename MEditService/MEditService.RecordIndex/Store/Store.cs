@@ -137,16 +137,16 @@ internal sealed class Store : IDisposable
         || ex.Message.Contains("is already open in", StringComparison.OrdinalIgnoreCase);
 
     // DuckDB.NET duplicates in-memory connections only; a file opened again on the same path shares
-    // this process's database instance. Either way the read gets its own transaction context.
+    // this process's database instance. Either way the read gets its own snapshot.
     public ReadContext OpenRead()
     {
         lock (_readsGate)
         {
             if (_closedToReads) throw new IndexNotReadyException("mEdit's record index is closed to new reads while it is replaced.");
-            var connection = _databasePath == null ? Opened(Connection.Duplicate()) : Opened($"DataSource={_databasePath}");
+            var connection = _databasePath == null ? OpenedInOneSnapshot(Connection.Duplicate()) : OpenedInOneSnapshot($"DataSource={_databasePath}");
             _readsInFlight++;
             connection.Disposed += (_, _) => { lock (_readsGate) { _readsInFlight--; Monitor.PulseAll(_readsGate); } };
-            return new ReadContext(connection, owned: true);
+            return new ReadContext(connection);
         }
     }
 
@@ -176,6 +176,24 @@ internal sealed class Store : IDisposable
     internal bool SharesFileWith(string? instanceRoot) =>
         _databasePath is { } path && instanceRoot is not null
         && string.Equals(path, IndexFile.For(instanceRoot), StringComparison.OrdinalIgnoreCase);
+
+    private static DuckDBConnection OpenedInOneSnapshot(string connectionString) => OpenedInOneSnapshot(new DuckDBConnection(connectionString));
+
+    // Closing the connection rolls the transaction back.
+    private static DuckDBConnection OpenedInOneSnapshot(DuckDBConnection connection)
+    {
+        try
+        {
+            StoreFaults.Translating(connection.Open);
+            DuckDbSql.Execute(connection, "BEGIN TRANSACTION");
+            return connection;
+        }
+        catch
+        {
+            connection.Dispose();
+            throw;
+        }
+    }
 
     private static DuckDBConnection Opened(string connectionString) => Opened(new DuckDBConnection(connectionString));
 
