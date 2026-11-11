@@ -10,7 +10,7 @@ import { ErrorNode } from '../drivingLib/errorNode';
 import { messageLine } from '../drivingLib/messageLine';
 import { dropMove, type DraggedRows } from './moveDrop';
 import {
-  anyNamed, archivedIn, expanderOver, filesIn, narrowToMatches, shownUnder, ArchivedFileNode, ArchivedFolderNode, FileNode, FolderNode,
+  anyNamed, archivedIn, gameFolderFileOver, expanderOver, filesIn, narrowToMatches, shownUnder, ArchivedFileNode, ArchivedFolderNode, FileNode, FolderNode,
   type ArchivedEntry, type ChildrenShown, type FileIgnore,
 } from './modFiles';
 import type { ModArgument } from '../drivingLib/argument';
@@ -388,7 +388,7 @@ export class ModListProvider
     if (element instanceof FolderNode) {
       return filesIn(element, element.origin, element.files, element.folders, element.folder.relativePath, this.within(element));
     }
-    if (element instanceof FileNode || element instanceof ArchivedFolderNode) return archivedIn(element, this.matches, gameReleaseForGame(this.instanceValue.gameName));
+    if (element instanceof FileNode || element instanceof ArchivedFolderNode) return archivedIn(element, this.matches, gameReleaseForGame(this.instanceValue.gameName), (entry) => gameFolderFileOver(this.instanceValue, entry));
     if (element) return [];
     await this.firstRead.settled; // never render before the Instance has actually read once
     if (this.firstRead.failure !== undefined) return [new ErrorNode(this.firstRead.failure)];
