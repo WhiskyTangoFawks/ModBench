@@ -70,6 +70,12 @@ public abstract class LocalizedSourceCopyScenario : TestInstance
     protected CopyRecordResult CopyCellThenDoor() =>
         CopyHandler.CopySync([new RecordAt(_source, _cell.ToString()), new RecordAt(_source, _door.ToString())], CopyMode.Override, [_destination], replace: false);
 
+    protected CopyRecordResult CopyDoorWhoseSourceLostItsStringsFiles()
+    {
+        Directory.Delete(Path.Combine(ModFolderOf(_source), "Strings"), recursive: true);
+        return CopyHandler.CopySync([new RecordAt(_source, _door.ToString())], CopyMode.Override, [_destination], replace: false);
+    }
+
     protected CopyRecordResult CopyPlacedObject() =>
         CopyHandler.CopySync([new RecordAt(_source, _placedObject.ToString())], CopyMode.Override, [_destination], replace: false);
 
@@ -152,5 +158,30 @@ public sealed class CopyAsOverrideIntoLocalizedTests() : LocalizedSourceCopyScen
 
         Assert.Contains(FrenchName, body, StringComparison.Ordinal);
         Assert.Contains(EnglishName, body, StringComparison.Ordinal);
+    }
+}
+
+public sealed class CopyAsOverrideFromASourceMissingItsStringsFilesTests() : LocalizedSourceCopyScenario(destinationLocalized: false)
+{
+    [Fact]
+    public void CopyRecordAsOverride_IntoAPluginThatIsNotLocalized_RefusesNamingTheMissingFileAndWritesNothing()
+    {
+        var refused = Assert.Single(CopyDoorWhoseSourceLostItsStringsFiles().Refused);
+
+        Assert.Contains("Localized.esm", refused.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("strings file", refused.Message, StringComparison.Ordinal);
+        Assert.Null(DoorInDestination());
+    }
+}
+
+public sealed class CopyAsOverrideIntoLocalizedFromASourceMissingItsStringsFilesTests() : LocalizedSourceCopyScenario(destinationLocalized: true)
+{
+    [Fact]
+    public void CopyRecordAsOverride_IntoALocalizedPlugin_RefusesNamingTheMissingFileAndWritesNothing()
+    {
+        var refused = Assert.Single(CopyDoorWhoseSourceLostItsStringsFiles().Refused);
+
+        Assert.Contains("strings file", refused.Message, StringComparison.Ordinal);
+        Assert.Null(DoorInDestination());
     }
 }
