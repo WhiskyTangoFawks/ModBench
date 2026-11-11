@@ -102,8 +102,7 @@ public static class TranslatedStringValues
         return readOnlyReason is null ? shape : shape.WithReadOnlyReason(readOnlyReason);
     }
 
-    /// <summary>A string no language gives text, which Mutagen writes as one with no strings entry.</summary>
-    internal static bool HoldsNoText(JsonObject translated) =>
+    private static bool HoldsNoText(JsonObject translated) =>
         translated["Value"] is null && translated["Values"] is not JsonArray { Count: > 0 };
 
     internal static string? TextIn(JsonObject translated, Language language) =>
