@@ -19,7 +19,7 @@ import { AGENT_PORT_SETTING } from './agentPort';
 import { FILE_CONFLICTS } from './fileConflicts';
 import { GESTURE_TOOLS } from './gestures';
 import { RESOLVE_INSTANCE_NAMES } from './instanceNames';
-import { INSTANCE_READS, type DeploymentRead } from './instanceReads';
+import { INSTANCE_LISTS, LIST_PROFILES, type DeploymentRead } from './instanceReads';
 import { LIST_PLUGINS } from './listPlugins';
 import { LIST_SORTING_RULES } from './listSortingRules';
 import { withNotRestored } from './notRestored';
@@ -126,11 +126,12 @@ function mcpServerOf({ instance, copyReads, mEdit, terminalEnvironment, statuses
   const server = new McpServer({ name: 'modbench', version: '0' }, { instructions: INSTRUCTIONS });
   const sources: Record<Source, () => readonly string[]> = { ...standingSources, instance: () => instanceMessages(instance).filter((line) => line !== undefined) };
   const reading = (...read: Source[]) => () => [...new Set(read.flatMap((source) => sources[source]()))];
-  for (const read of INSTANCE_READS) register(server, log, reading(...read.reads), { ...read, input: NO_INPUT }, () => read.of(currentValue(instance), deployment));
+  register(server, log, reading('instance'), { ...LIST_PROFILES, input: NO_INPUT }, () => LIST_PROFILES.of(currentValue(instance), deployment));
+  for (const list of INSTANCE_LISTS) register(server, log, reading(...list.reads), list, (args) => list.of(currentValue(instance), args));
   const naming = (args?: unknown) => (namesAnOrigin(args) ? withNotRestored(currentValue(instance), statuses) : Promise.resolve(currentValue(instance)));
-  register(server, log, reading('instance', 'mEdit', 'plugins', 'sortingRules'), { ...LIST_PLUGINS, input: NO_INPUT }, async () => LIST_PLUGINS.of(await withNotRestored(currentValue(instance), statuses), pluginsShown));
-  register(server, log, reading('instance', 'mEdit', 'plugins', 'sortingRules'), { ...LIST_SORTING_RULES, input: NO_INPUT }, () => LIST_SORTING_RULES.of(pluginsShown));
-  register(server, log, reading('instance', 'modList'), { ...LIST_MOD_STATUSES, input: NO_INPUT }, () => LIST_MOD_STATUSES.of(currentValue(instance), statuses));
+  register(server, log, reading('instance', 'mEdit', 'plugins', 'sortingRules'), LIST_PLUGINS, async (args) => LIST_PLUGINS.of(await withNotRestored(currentValue(instance), statuses), pluginsShown, args));
+  register(server, log, reading('instance', 'mEdit', 'plugins', 'sortingRules'), LIST_SORTING_RULES, (args) => LIST_SORTING_RULES.of(pluginsShown, args));
+  register(server, log, reading('instance', 'modList'), LIST_MOD_STATUSES, (args) => LIST_MOD_STATUSES.of(currentValue(instance), statuses, args));
   const archivedCopies = new ArchivedCopies(mEdit, (path) => copyReads.fileStamp(path));
   register(server, log, reading('instance', 'modList'), FILE_CONFLICTS, (args) => FILE_CONFLICTS.of(currentValue(instance), copyReads, archivedCopies, args));
   register(server, log, reading('instance', 'modList'), RESOLVE_INSTANCE_NAMES, (args) => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args));
@@ -140,7 +141,11 @@ function mcpServerOf({ instance, copyReads, mEdit, terminalEnvironment, statuses
   register(server, log, reading(...RECORD_READS), SELECT_ROWS, (args) => SELECT_ROWS.of(mEdit, args));
   for (const gesture of GESTURE_TOOLS) register(server, log, reading('instance'), gesture, async (args) => gesture.of(await naming(args), mEdit, args, (line) => { log.warn(`[agent] ${gesture.name}: ${line}`); }));
   register(server, log, reading(), { ...SCRIPT_ENVIRONMENT, input: NO_INPUT }, () => SCRIPT_ENVIRONMENT.of(terminalEnvironment));
-  register(server, log, reading('instance', 'sortingRules', 'sourceLanguage'), PROBLEMS, (args) => PROBLEMS.of(args));
+  const problemFolders = () => {
+    const { modDirs, sourceDirs, overwriteDir } = currentValue(instance).paths;
+    return [...modDirs.values(), ...sourceDirs.values(), overwriteDir, deployment.folder()].filter((folder) => folder !== undefined);
+  };
+  register(server, log, reading('instance', 'sortingRules', 'sourceLanguage'), PROBLEMS, (args) => PROBLEMS.of(args, problemFolders));
   register(server, log, reading('instance'), READ_GUIDE, (args) => READ_GUIDE.of(currentValue(instance), args));
   return server;
 }

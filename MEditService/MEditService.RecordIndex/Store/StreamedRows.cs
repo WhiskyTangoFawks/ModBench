@@ -18,38 +18,34 @@ internal sealed class StreamedRows(ReadContext read, DuckDBCommand command, IRea
     /// <summary>The next row's JSON object, or null after the last row.</summary>
     public string? Next()
     {
-        _reader ??= StoreFaults.Translating(command.ExecuteReader);
-        if (!StoreFaults.Translating(_reader.Read))
-        {
-            RequireEveryRowRead();
-            return null;
-        }
+        var reader = _reader ??= StoreFaults.Translating(command.ExecuteReader);
+        if (!StoreFaults.Translating(() => Read(reader))) return null;
         var row = new StringBuilder("{");
         for (var i = 0; i < columns.Count; i++)
         {
             if (i > 0) row.Append(',');
             row.Append(_names[i]).Append(':');
-            if (_reader.IsDBNull(i)) row.Append("null");
-            else row.Append(columns[i].IsText ? Encoded(_reader.GetString(i)) : _reader.GetString(i));
+            if (reader.IsDBNull(i)) row.Append("null");
+            else row.Append(columns[i].IsText ? Encoded(reader.GetString(i)) : reader.GetString(i));
         }
         return row.Append('}').ToString();
     }
 
-    private static string Encoded(string text) => $"\"{JsonEncodedText.Encode(text, JavaScriptEncoder.UnsafeRelaxedJsonEscaping)}\"";
-
-    // DuckDB.NET's reader ends a streamed result at a chunk DuckDB failed to produce as though its rows had ended, and
-    // keeps the reason to itself. The failure aborted the read's transaction, which the next query shows.
-    private void RequireEveryRowRead()
+    // DuckDB interrupts a query's other workers when one fails, and the interrupt can reach the stream in place of
+    // the failure. DuckDB.NET throws it as a bare OperationCanceledException.
+    private static bool Read(DuckDBDataReader reader)
     {
         try
         {
-            read.Scalar<int>("SELECT 1");
+            return reader.Read();
         }
-        catch (IndexFaultException ex) when (ex.Fault != IndexFault.Invalidated)
+        catch (OperationCanceledException ex)
         {
-            throw new IndexFaultException("DuckDB stopped the SELECT partway, and its .NET driver does not say why.", ex) { Fault = IndexFault.Refused };
+            throw new IndexFaultException("DuckDB interrupted the SELECT partway, and gave no reason.", ex) { Fault = IndexFault.Refused };
         }
     }
+
+    private static string Encoded(string text) => $"\"{JsonEncodedText.Encode(text, JavaScriptEncoder.UnsafeRelaxedJsonEscaping)}\"";
 
     public void Dispose()
     {

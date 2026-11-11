@@ -75,7 +75,7 @@ public sealed class StreamedSelectTests : IDisposable
     }
 
     [Fact]
-    public void AFaultAfterTheFirstRow_EndsTheRowsWithItsRefusal()
+    public void AFaultAfterTheFirstRow_EndsTheRowsWithDuckDBsReason()
     {
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, Records))));
 
@@ -86,6 +86,6 @@ public sealed class StreamedSelectTests : IDisposable
         Assert.InRange(read.Count - 1, 1, 999_999);
         var refused = read[^1].Refused();
         Assert.Equal(IndexRefusal.SelectRejected, refused.Refusal);
-        Assert.Equal("DuckDB stopped the SELECT partway, and its .NET driver does not say why.", refused.Message);
+        Assert.Contains("Could not convert string 'x'", refused.Message, StringComparison.Ordinal);
     }
 }
