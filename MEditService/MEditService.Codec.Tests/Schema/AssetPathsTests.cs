@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
@@ -12,10 +13,10 @@ public class AssetPathsTests
 {
     private static Tes5.SkyrimMod NewMod() => new(ModKey.FromFileName("Assets.esp"), Tes5.SkyrimRelease.SkyrimSE);
 
-    private static List<AssetPath> Collected(Tes5.Static record) =>
+    private static IReadOnlyList<AssetPath> Collected(Tes5.Static record) =>
         AssetPaths.Collect(
             RecordTextCodec.SerializeToText(record, GameRelease.SkyrimSE),
-            SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["stat"].RecordColumns);
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["stat"].RecordColumns).Files;
 
     [Fact]
     public void APathARecordNames_IsTheFileInTheDataFolder_UnderItsAssetTypesFolder()
@@ -35,7 +36,7 @@ public class AssetPathsTests
 
         var collected = AssetPaths.Collect(
             RecordTextCodec.SerializeToText(record, GameRelease.Fallout4),
-            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["txst"].RecordColumns);
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["txst"].RecordColumns).Files;
 
         Assert.Equal(
             [
@@ -53,30 +54,25 @@ public class AssetPathsTests
         Assert.Empty(Collected(record));
     }
 
-    private static string? DataPathAt(string fieldPath, string given) =>
-        AssetPaths.DataPathAt(SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["stat"].RecordColumns, fieldPath, given);
-
-    [Fact]
-    public void ThePathAFieldHolds_IsTheFileInTheDataFolder_UnderItsAssetTypesFolder()
-    {
-        Assert.Equal(Path.Combine("Meshes", "Architecture", "Wall.nif"), DataPathAt("Model.File", @"Architecture\Wall.nif"));
-    }
+    private static NamedFiles CollectedFrom(string given) =>
+        AssetPaths.Collect(
+            JsonSerializer.Serialize(new { Model = new { File = given } }),
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["stat"].RecordColumns);
 
     [Fact]
     public void APathThatAlreadyNamesItsAssetTypesFolder_IsNotPrefixedTwice()
     {
-        Assert.Equal(Path.Combine("Meshes", "Architecture", "Wall.nif"), DataPathAt("Model.File", @"Meshes\Architecture\Wall.nif"));
+        Assert.Equal([new AssetPath(Path.Combine("Meshes", "Architecture", "Wall.nif"), "Model.File")], CollectedFrom(@"Meshes\Architecture\Wall.nif").Files);
     }
 
     [Fact]
-    public void AFieldThatIsNoAssetLink_HasNoDataPath()
+    public void APathItsAssetTypeCannotHold_IsARefusalWithMutagensReason_AndNoFile()
     {
-        Assert.Null(DataPathAt("EditorID", "Holder"));
-    }
+        var named = CollectedFrom("Data/Wall.nif");
 
-    [Fact]
-    public void AMemberThatIsNoField_HasNoDataPath()
-    {
-        Assert.Null(DataPathAt("Model.Nope", @"Architecture\Wall.nif"));
+        Assert.Empty(named.Files);
+        var refusal = Assert.Single(named.Refusals);
+        Assert.Equal("Model.File", refusal.FieldPath);
+        Assert.Contains("Wall.nif", refusal.Reason);
     }
 }

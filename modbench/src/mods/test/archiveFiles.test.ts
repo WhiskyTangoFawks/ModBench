@@ -2,7 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { Uri } from '../../test/vscodeMock';
 
 const folderUpdates = vi.hoisted(() => [] as [number, number, { uri: ReturnType<typeof Uri.file>; name: string }][]);
-const workspaceState = vi.hoisted(() => ({ folders: [{ uri: { toString: () => 'file:///workspace' } }] as { uri: { toString(): string } }[], listeners: [] as (() => void)[] }));
+const heldFolders = vi.hoisted(() => [{ uri: { scheme: 'file', query: '' } }]);
+const workspaceState = vi.hoisted(() => ({ folders: [...heldFolders] as { uri: unknown }[], takes: true, listeners: [] as (() => void)[], disposed: 0 }));
 const executed = vi.hoisted(() => [] as unknown[][]);
 const archiveStamp = vi.hoisted(() => ({ size: 100, mtime: 1 }));
 const registered = vi.hoisted(() => new Map<string, (...args: unknown[]) => unknown>());
@@ -13,11 +14,10 @@ vi.mock('vscode', () => ({
   workspace: {
     fs: { stat: () => Promise.resolve({ ...archiveStamp }) },
     get workspaceFolders() { return workspaceState.folders; },
-    onDidChangeWorkspaceFolders: (listener: () => void) => { workspaceState.listeners.push(listener); return { dispose: () => undefined }; },
+    onDidChangeWorkspaceFolders: (listener: () => void) => { workspaceState.listeners.push(listener); return { dispose: () => { workspaceState.disposed += 1; } }; },
     updateWorkspaceFolders: (...args: [number, number, { uri: ReturnType<typeof Uri.file>; name: string }]) => {
       folderUpdates.push(args);
-      queueMicrotask(() => { workspaceState.listeners.splice(0).forEach((listener) => { listener(); }); });
-      return true;
+      return workspaceState.takes;
     },
     registerFileSystemProvider: (scheme: string, provider: Record<string, (...args: unknown[]) => unknown>, options?: { isReadonly?: boolean }) => {
       registrations.set(scheme, { provider, options });
@@ -184,22 +184,54 @@ describe('open an archive from the Explorer (commands.md, Archive, open)', () =>
 });
 
 describe('show an archived file in the Explorer (symbols.md, The symbols, File)', () => {
-  it('joins the archive to the workspace, then shows the file once the Explorer lists the archive', async () => {
+  const revealed = [['revealInExplorer', archivedFileUri(address)]];
+  const begin = () => {
     folderUpdates.length = 0;
     executed.length = 0;
-    await revealArchivedFile(address);
+    workspaceState.folders = [...heldFolders];
+    workspaceState.takes = true;
+    workspaceState.disposed = 0;
+    workspaceState.listeners.length = 0;
+  };
+  const explorerListsArchive = () => { workspaceState.listeners.splice(0).forEach((listener) => { listener(); }); };
 
-    expect([folderUpdates.length, executed]).toEqual([1, [['revealInExplorer', archivedFileUri(address)]]]);
+  it('joins the archive to the workspace and shows the file only once the Explorer lists the archive', async () => {
+    begin();
+    const shown = revealArchivedFile(address);
+    await Promise.resolve();
+
+    expect([folderUpdates.length, executed]).toEqual([1, []]);
+    explorerListsArchive();
+    await shown;
+    expect([executed, workspaceState.disposed]).toEqual([revealed, 1]);
   });
 
-  it('shows the file as it stands when the archive is already a folder of the workspace', async () => {
-    const root = await archiveRoot();
-    workspaceState.folders = [{ uri: root }];
-    folderUpdates.length = 0;
-    executed.length = 0;
-    await revealArchivedFile(address);
-    workspaceState.folders = [{ uri: { toString: () => 'file:///workspace' } }];
+  it('shows the file as it stands when the archive is already a folder, however its drive letter is spelled', async () => {
+    begin();
+    const query = JSON.stringify({ gameRelease: address.gameRelease, archive: 'c:/mods/A/A - Main.ba2' });
+    workspaceState.folders = [{ uri: Uri.from({ scheme: 'modbench-archive', path: '/A - Main.ba2', query }) }];
+    const onDrive = { ...address, archive: 'C:/mods/A/A - Main.ba2' };
+    await revealArchivedFile(onDrive);
 
-    expect([folderUpdates.length, executed]).toEqual([0, [['revealInExplorer', archivedFileUri(address)]]]);
+    expect([folderUpdates.length, executed]).toEqual([0, [['revealInExplorer', archivedFileUri(onDrive)]]]);
+  });
+
+  it('refuses, saying so, when the workspace does not take the archive', async () => {
+    begin();
+    workspaceState.takes = false;
+
+    await expect(revealArchivedFile(address)).rejects.toThrow('The workspace did not take A - Main.ba2 as a folder.');
+    expect([workspaceState.listeners.length, executed]).toEqual([0, []]);
+  });
+
+  it('refuses, saying so, when the Explorer never lists the archive, and drops its listener', async () => {
+    begin();
+    vi.useFakeTimers();
+    const shown = expect(revealArchivedFile(address)).rejects.toThrow('The Explorer did not list A - Main.ba2 within 5 seconds.');
+    await vi.advanceTimersByTimeAsync(5000);
+    vi.useRealTimers();
+
+    await shown;
+    expect([workspaceState.disposed, executed]).toEqual([1, []]);
   });
 });

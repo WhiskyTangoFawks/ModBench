@@ -1,15 +1,21 @@
 import * as vscode from 'vscode';
-import { foldPath, type CopyAt } from '../instanceLoader/fileConflictIndex';
+import type { CopyAt } from '../instanceLoader/fileConflictIndex';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { revealArchivedFile } from './archiveFiles';
+import { gameFolderFile, gameFolderFileOver } from './modFiles';
 
-/** The copy of the file at `path` that the game gets: a mod's or Overwrite's, else the game folder's own; a loose game
- *  folder file beats an archived copy, as `gameFolderFileOver` has it. */
-export function copyTheGameGets(value: Pick<InstanceValue, 'stackedCopies' | 'dataFolderFiles'>, path: string): CopyAt | undefined {
+/** The copy of the file at `path` that the game gets, or what searching for it found: an enabled mod or Overwrite, else a
+ *  loose file in the game folder, which beats an archived copy. The game folder's own archives are not read. */
+export function copyTheGameGets(value: Pick<InstanceValue, 'stackedCopies' | 'dataFolderFiles'>, path: string): CopyAt | { none: string } {
   const stacked = value.stackedCopies.get(path)?.copies[0]?.at;
-  const inGameFolder = value.dataFolderFiles.kind === 'listed' ? value.dataFolderFiles.files.get(foldPath(path))?.path : undefined;
-  if (stacked?.kind === 'loose' || inGameFolder === undefined) return stacked;
-  return { kind: 'loose', path: inGameFolder };
+  const loose = stacked === undefined ? gameFolderFile(value, path) : gameFolderFileOver(value, path);
+  if (loose !== undefined) return { kind: 'loose', path: loose };
+  if (stacked !== undefined) return stacked;
+  return {
+    none: value.dataFolderFiles.kind === 'listed'
+      ? `No enabled mod, Overwrite or loose file in the Data folder holds ${path}.`
+      : `No enabled mod or Overwrite holds ${path}, and the Data folder's files could not be listed.`,
+  };
 }
 
 export async function revealCopy(copy: CopyAt): Promise<void> {

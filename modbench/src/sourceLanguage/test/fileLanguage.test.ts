@@ -13,6 +13,7 @@ vi.mock('vscode', () => ({
 import { fileLanguage, type FileClient } from '../fileLanguage';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { comparisonOf, fieldOf } from '../../test/comparison';
+import { localFailure } from '../../wire/readFailed';
 import type { CopyAt } from '../../instanceLoader/fileConflictIndex';
 
 const HOLDER = '000801:Mod.esp';
@@ -25,19 +26,28 @@ const diffuse = fieldOf({ name: 'Diffuse', type: 'string', isAssetLink: true });
 const editorId = fieldOf({ name: 'EditorID', type: 'string' });
 const LOOSE: CopyAt = { kind: 'loose', path: '/instance/mods/Mod/Textures/Decals/Stain_d.dds' };
 
-function language(answer: Awaited<ReturnType<FileClient['getFileReferences']>>, copy: CopyAt | null = LOOSE) {
+const NO_COPY = { none: `No enabled mod, Overwrite or loose file in the Data folder holds ${FILE}.` };
+
+interface Doubles {
+  copy?: CopyAt | { none: string };
+  resolve?: () => ReturnType<FileClient['resolveFilePath']>;
+  compare?: FileClient['getComparison'];
+  reveal?: () => Promise<void>;
+}
+
+function language(answer: Awaited<ReturnType<FileClient['getFileReferences']>>, { copy = LOOSE, resolve = () => Promise.resolve(FILE), compare, reveal: revealing = () => Promise.resolve() }: Doubles = {}) {
   const reporter = recordingReporter();
   const getFileReferences = vi.fn(() => Promise.resolve(answer));
-  const resolveFilePath = vi.fn(() => Promise.resolve(FILE));
-  const reveal = vi.fn(() => Promise.resolve());
+  const resolveFilePath = vi.fn(resolve);
+  const reveal = vi.fn(revealing);
   const client: FileClient = {
     getFileReferences,
     resolveFilePath,
-    getComparison: () => Promise.resolve(comparisonOf(HOLDER, [{ plugin: 'Mod.esp', isWinner: true, fields: [diffuse, editorId] }])),
+    getComparison: compare ?? (() => Promise.resolve(comparisonOf(HOLDER, [{ plugin: 'Mod.esp', recordType: 'txst', isWinner: true, fields: [diffuse, editorId] }]))),
     getRecordOwner: () => Promise.resolve(undefined),
     getCopyDocument: () => Promise.resolve({ kind: 'OwnFile' as const, location: SOURCE }),
   };
-  const copyOf = vi.fn((path: string) => path === FILE ? copy ?? undefined : undefined);
+  const copyOf = vi.fn((path: string) => path === FILE ? copy : NO_COPY);
   return { reporter, getFileReferences, resolveFilePath, reveal, ...fileLanguage({ reporter, client, gameRelease: () => Promise.resolve('Fallout4'), copyOf, reveal }) };
 }
 
@@ -76,25 +86,46 @@ describe('Go to Definition on a path in plugin source (symbols.md, The symbols, 
     const { definitionAt, reveal, resolveFilePath } = language(NONE);
 
     expect(await definitionAt(document(), NAMED + 2)).toEqual({ ...SPAN, resolved: true });
-    expect([resolveFilePath.mock.calls, reveal.mock.calls]).toEqual([[['Fallout4', 'weap', 'Diffuse', 'Decals\\Stain_d.dds']], [[LOOSE]]]);
+    expect([resolveFilePath.mock.calls, reveal.mock.calls]).toEqual([[['Fallout4', 'txst', JSON.stringify(JSON.parse(TEXT)), 'Diffuse']], [[LOOSE]]]);
   });
 
   it('shows a copy in an archive as it is, for the archive file system to read', async () => {
     const archived: CopyAt = { kind: 'archived', gameRelease: 'Fallout4', archive: '/instance/mods/Mod/Mod - Textures.ba2', file: FILE };
-    const { definitionAt, reveal } = language(NONE, archived);
+    const { definitionAt, reveal } = language(NONE, { copy: archived });
 
     await definitionAt(document(), NAMED + 2);
 
     expect(reveal.mock.calls).toEqual([[archived]]);
   });
 
-  it('says that no mod or Data folder holds a path no copy exists for, and leaves the editor where it is', async () => {
-    const { definitionAt, reveal, reporter } = language(NONE, null);
+  it('says what was searched when no copy exists, and leaves the editor where it is', async () => {
+    const { definitionAt, reveal, reporter } = language(NONE, { copy: NO_COPY });
 
     expect(await definitionAt(document(), NAMED + 2)).toEqual({ ...SPAN, resolved: false });
-    expect([reveal.mock.calls, reporter.shownFailures]).toEqual([[], [{
-      severity: 'warning', message: `Go to Definition cannot go to ${FILE}.`, detail: `No enabled mod, Overwrite or the Data folder holds ${FILE}.`,
-    }]]);
+    expect([reveal.mock.calls, reporter.shownFailures]).toEqual([[], [{ severity: 'warning', message: `Go to Definition cannot go to ${FILE}.`, detail: NO_COPY.none }]]);
+  });
+
+  it('says why mEdit could not tell which file the path names', async () => {
+    const { definitionAt, reveal, reporter } = language(NONE, { resolve: () => Promise.resolve(localFailure('Data/Stain_d.dds is no path its asset type holds')) });
+
+    expect(await definitionAt(document(), NAMED + 2)).toEqual({ ...SPAN, resolved: false });
+    expect([reveal.mock.calls, reporter.shownFailures.map(({ severity, message, detail }) => [severity, message, detail])]).toEqual([
+      [], [['warning', 'Go to Definition cannot go to Decals\\Stain_d.dds.', 'Data/Stain_d.dds is no path its asset type holds']],
+    ]);
+  });
+
+  it('says why the Explorer could not show the copy', async () => {
+    const { definitionAt, reporter } = language(NONE, { reveal: () => Promise.reject(new Error('The workspace did not take Mod - Textures.ba2 as a folder.')) });
+
+    expect(await definitionAt(document(), NAMED + 2)).toEqual({ ...SPAN, resolved: false });
+    expect(reporter.shownFailures).toEqual([{ severity: 'warning', message: `Go to Definition cannot show ${FILE}.`, detail: 'The workspace did not take Mod - Textures.ba2 as a folder.' }]);
+  });
+
+  it('says why it cannot tell whether the field is a path, when mEdit cannot answer for the record', async () => {
+    const { definitionAt, resolveFilePath, reporter } = language(NONE, { compare: () => Promise.reject(new Error('mEdit is down')) });
+
+    expect(await definitionAt(document(), NAMED + 2)).toBeUndefined();
+    expect([resolveFilePath.mock.calls, reporter.shownFailures]).toEqual([[], [{ severity: 'error', message: `Cannot tell whether ${HOLDER} names a file here.`, detail: 'mEdit is down' }]]);
   });
 
   it.each([

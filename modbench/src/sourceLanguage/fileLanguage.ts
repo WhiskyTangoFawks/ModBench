@@ -19,7 +19,7 @@ export type FileClient = Pick<MEditClient, 'getFileReferences' | 'getComparison'
 export interface FileCopies {
   gameRelease: () => Promise<string>;
   /** The copy of the file at its path in the Data folder that the game gets. */
-  copyOf: (path: string) => CopyAt | undefined;
+  copyOf: (path: string) => CopyAt | { none: string };
   reveal: (copy: CopyAt) => Promise<void>;
 }
 
@@ -27,6 +27,8 @@ interface FileLanguageDeps extends FileCopies {
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
   client: FileClient;
 }
+
+const holdsCopy = (found: CopyAt | { none: string }): found is CopyAt => !('none' in found);
 
 /** A file as a symbol, named by its path in the Data folder: the records that name it, which mEdit answers (symbols.md,
  *  The symbols). */
@@ -36,7 +38,7 @@ export function fileLanguage({ reporter, client, gameRelease, copyOf, reveal }: 
     return { locations: found, unread: unread.length };
   };
 
-  const pathAt = async (document: AskedIn, offset: number): Promise<{ start: number; end: number; given: string; field: string; recordType: string; release: string } | undefined> => {
+  const pathAt = async (document: AskedIn, offset: number): Promise<{ start: number; end: number; given: string; field: string; recordType: string; release: string; record: string } | undefined> => {
     if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
     const text = heldText(document);
     const found = fieldAt(text, offset);
@@ -45,7 +47,7 @@ export function fileLanguage({ reporter, client, gameRelease, copyOf, reveal }: 
       const recordType = await recordTypeOfPathField(client, found);
       const given: unknown = JSON.parse(text.slice(found.start, found.end));
       return recordType === undefined || typeof given !== 'string' ? undefined : {
-        start: found.start + 1, end: found.end - 1, given, field: fieldPathOf(found.path), recordType, release: await gameRelease(),
+        start: found.start + 1, end: found.end - 1, given, field: fieldPathOf(found.path), recordType, release: await gameRelease(), record: JSON.stringify(found.record),
       };
     } catch (error) {
       reporter.shownOnSurface('error', `Cannot tell whether ${found.recordFormKey} names a file here.`, errorMessage(error));
@@ -55,22 +57,27 @@ export function fileLanguage({ reporter, client, gameRelease, copyOf, reveal }: 
 
   return {
     /** Go to Definition on the path at `offset`: the copy of its file the game gets, shown in the Explorer. Undefined where no
-     *  path is; `resolved` is false where no copy exists. */
+     *  path is; `resolved` is false where it could not go, and says why. */
     definitionAt: async (document: AskedIn, offset: number): Promise<{ start: number; end: number; resolved: boolean } | undefined> => {
       const found = await pathAt(document, offset);
       if (found === undefined) return undefined;
       const { start, end } = found;
-      const file = await client.resolveFilePath(found.release, found.recordType, found.field, found.given);
+      const file = await client.resolveFilePath(found.release, found.recordType, found.record, found.field);
       if (isReadFailed(file)) {
         reporter.shownOnSurface('warning', `Go to Definition cannot go to ${found.given}.`, failureReason(file));
         return { start, end, resolved: false };
       }
       const copy = copyOf(file);
-      if (copy === undefined) {
-        reporter.shownOnSurface('warning', `Go to Definition cannot go to ${file}.`, `No enabled mod, Overwrite or the Data folder holds ${file}.`);
+      if (!holdsCopy(copy)) {
+        reporter.shownOnSurface('warning', `Go to Definition cannot go to ${file}.`, copy.none);
         return { start, end, resolved: false };
       }
-      await reveal(copy);
+      try {
+        await reveal(copy);
+      } catch (error) {
+        reporter.shownOnSurface('warning', `Go to Definition cannot show ${file}.`, errorMessage(error));
+        return { start, end, resolved: false };
+      }
       return { start, end, resolved: true };
     },
     /** Lists each record that names the file at `path` in the Data folder, in VS Code's References view, anchored at the

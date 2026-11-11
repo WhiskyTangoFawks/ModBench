@@ -5,6 +5,7 @@ import type { ArchivedFileAddress } from '../instanceLoader/fileConflictIndex';
 import type { Reporter } from '../ports/reporter';
 import { reportFailure } from '../drivingLib/reportFailure';
 import { isUri } from '../drivingLib/argument';
+import { samePath } from '../symbolNames/symbolNames';
 
 const ARCHIVE_SCHEME = 'modbench-archive';
 
@@ -114,16 +115,25 @@ export function registerArchiveFiles(client: Pick<MEditClient, 'getArchiveFile' 
   return vscode.workspace.registerFileSystemProvider(ARCHIVE_SCHEME, new ArchiveFileSystem(client), { isReadonly: true });
 }
 
+const FOLDER_LISTING_MS = 5000;
+
+const foldersChanged = (timeoutMs: number): Promise<boolean> => new Promise((resolve) => {
+  const timer = setTimeout(() => { subscription.dispose(); resolve(false); }, timeoutMs);
+  const subscription = vscode.workspace.onDidChangeWorkspaceFolders(() => { clearTimeout(timer); subscription.dispose(); resolve(true); });
+});
+
+const joinedArchive = ({ archive }: ArchiveAddress): boolean => (vscode.workspace.workspaceFolders ?? []).some(({ uri }) => {
+  const held: unknown = uri.scheme === ARCHIVE_SCHEME ? JSON.parse(uri.query) : undefined;
+  return isAddress(held) && samePath(held.archive, archive);
+});
+
 /** symbols.md, The symbols, File: the archive joins the workspace as `modbench.archive.open` joins it, unless it is one, and
- *  the Explorer shows the file in it. */
+ *  the Explorer shows the file in it. Rejects, saying why, when the workspace does not take the archive. */
 export async function revealArchivedFile(address: ArchivedFileAddress): Promise<void> {
-  const root = archiveUri(address);
-  if (!vscode.workspace.workspaceFolders?.some(({ uri }) => uri.toString() === root.toString())) {
-    const listed = new Promise<void>((resolve) => {
-      const subscription = vscode.workspace.onDidChangeWorkspaceFolders(() => { subscription.dispose(); resolve(); });
-    });
-    vscode.workspace.updateWorkspaceFolders(vscode.workspace.workspaceFolders?.length ?? 0, 0, { uri: root, name: nameOf(address.archive) });
-    await listed;
+  if (!joinedArchive(address)) {
+    const added = vscode.workspace.updateWorkspaceFolders(vscode.workspace.workspaceFolders?.length ?? 0, 0, { uri: archiveUri(address), name: nameOf(address.archive) });
+    if (!added) throw new Error(`The workspace did not take ${nameOf(address.archive)} as a folder.`);
+    if (!(await foldersChanged(FOLDER_LISTING_MS))) throw new Error(`The Explorer did not list ${nameOf(address.archive)} within ${FOLDER_LISTING_MS / 1000} seconds.`);
   }
   await vscode.commands.executeCommand('revealInExplorer', archivedFileUri(address));
 }

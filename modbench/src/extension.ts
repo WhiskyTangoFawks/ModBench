@@ -155,7 +155,7 @@ function buildBareSide(own: Own): InstanceSide {
     entryTooltip: () => undefined,
     downloadedFileTooltip: () => undefined,
     modOrderFileOf: () => undefined,
-    fileCopies: { gameRelease: () => Promise.reject(new Error('No instance is open.')), copyOf: () => undefined, reveal: revealCopy },
+    fileCopies: { gameRelease: () => Promise.reject(new Error('No instance is open.')), copyOf: (path) => ({ none: `No instance is open to hold ${path}.` }), reveal: revealCopy },
     sourceFiles: NO_SOURCE_FILES,
     copyValue: [],
   };

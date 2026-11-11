@@ -722,7 +722,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description The path in the Data folder that a value names in the member at a field path of a record type, as Mutagen's asset type places it, the folder it keeps the files of its kind in included, with forward slashes. Needs no index. 400 when the record type or the member is unknown, or the member holds no path to a file, or its asset type cannot hold the path. */
+        /** @description The path in the Data folder that the member at a field path of a record names, as Mutagen's asset type places it, the folder it keeps the files of its kind in included, with forward slashes. The record is the text the caller holds, and the answer needs no index. 400 when the record type is unknown, the text is no JSON, the member holds no path to a file, or its asset type cannot hold the path. */
         post: operations["ResolveFilePath"];
         delete?: never;
         options?: never;
@@ -1552,7 +1552,6 @@ export interface components {
             holdsAlpha: boolean;
             isPlacedRotation: boolean;
             isScriptName: boolean;
-            isAssetLink: boolean;
             indexWhen?: string[] | null;
             unheldWhen?: string[] | null;
         };
@@ -1964,8 +1963,8 @@ export interface components {
         ResolveFilePathRequest: {
             gameRelease: string;
             recordType: string;
+            text: string;
             fieldPath: string;
-            value: string;
         };
         ResolveNamesRequest: {
             names: components["schemas"]["NameQuery"][];
