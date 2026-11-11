@@ -17,7 +17,8 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onFileSystem:modbench-archive"
   ],
   "capabilities": {
     "untrustedWorkspaces": {

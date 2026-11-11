@@ -2,12 +2,14 @@ import { describe, it, expect, vi } from 'vitest';
 import { Uri } from '../../test/vscodeMock';
 
 const folderUpdates = vi.hoisted(() => [] as [number, number, { uri: ReturnType<typeof Uri.file>; name: string }][]);
+const archiveStamp = vi.hoisted(() => ({ size: 100, mtime: 1 }));
 const registered = vi.hoisted(() => new Map<string, (...args: unknown[]) => unknown>());
 const registrations = vi.hoisted(() => new Map<string, { provider: Record<string, (...args: unknown[]) => unknown>; options?: { isReadonly?: boolean } }>());
 
 vi.mock('vscode', () => ({
   window: { showOpenDialog: () => Promise.resolve([{ fsPath: '/games/Fallout4/Data/Chosen.ba2' }]) },
   workspace: {
+    fs: { stat: () => Promise.resolve({ ...archiveStamp }) },
     workspaceFolders: [{}],
     updateWorkspaceFolders: (...args: [number, number, { uri: ReturnType<typeof Uri.file>; name: string }]) => { folderUpdates.push(args); return true; },
     registerFileSystemProvider: (scheme: string, provider: Record<string, (...args: unknown[]) => unknown>, options?: { isReadonly?: boolean }) => {
@@ -54,30 +56,48 @@ describe('the archive file system (mods.md, The tree, story 13)', () => {
     expect(served(new InMemoryMEditClient()).options).toEqual({ isReadonly: true });
   });
 
-  it('serves a file of an archive from mEdit, and states its size', async () => {
+  it('serves the bytes of a file from mEdit', async () => {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getArchiveContents', contents);
     client.setQueryAnswer('getArchiveFile', new Uint8Array([7, 8, 9]));
     const { provider } = served(client);
 
     await expect(provider.readFile?.(archivedFileUri(address))).resolves.toEqual(new Uint8Array([7, 8, 9]));
-    await expect(provider.stat?.(archivedFileUri(address))).resolves.toMatchObject({ size: 3 });
     expect(client.calls.filter((call) => call.method === 'getArchiveFile')[0]?.args).toEqual(['Fallout4', '/mods/A/A - Main.ba2', 'scripts/a.pex']);
   });
 
-  it('asks mEdit once for a file that VS Code states and then reads, and again for the next open', async () => {
+  it("states a file's size from the unhashed copy mEdit reads, without reading its bytes", async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getArchiveContents', contents);
-    client.setQueryAnswer('getArchiveFile', new Uint8Array([7]));
+    client.setQueryAnswer('getArchiveCopies', [{ file: 'scripts/a.pex', size: 42 }]);
     const { provider } = served(client);
-    const asks = () => client.calls.filter((call) => call.method === 'getArchiveFile').length;
 
-    await provider.stat?.(archivedFileUri(address));
-    await provider.readFile?.(archivedFileUri(address));
-    expect(asks()).toBe(1);
+    await expect(provider.stat?.(archivedFileUri(address))).resolves.toMatchObject({ size: 42 });
+    expect(client.calls.filter((call) => call.method === 'getArchiveCopies')[0]?.args).toEqual(['Fallout4', '/mods/A/A - Main.ba2', ['scripts/a.pex'], false]);
+    expect(client.calls.filter((call) => call.method === 'getArchiveFile')).toEqual([]);
+  });
 
-    await provider.readFile?.(archivedFileUri(address));
-    expect(asks()).toBe(2);
+  it('lists an archive once while its size and modified time stand, and again once either changes', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getArchiveContents', contents);
+    const { provider } = served(client);
+    const root = await archiveRoot();
+    const listings = () => client.calls.filter((call) => call.method === 'getArchiveContents').length;
+
+    await provider.readDirectory?.(root);
+    await provider.stat?.(root);
+    expect(listings()).toBe(1);
+
+    archiveStamp.mtime = 2;
+    await provider.readDirectory?.(root);
+    expect(listings()).toBe(2);
+    archiveStamp.mtime = 1;
+  });
+
+  it("says why when mEdit's answer lacks the archive", async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getArchiveContents', []);
+
+    await expect(served(client).provider.readDirectory?.(await archiveRoot())).rejects.toThrow('Unavailable mEdit did not list the archive.');
   });
 
   it('says why when mEdit could not serve the file', async () => {

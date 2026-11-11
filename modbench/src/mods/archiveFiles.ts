@@ -25,34 +25,39 @@ export function archivedFileUri({ gameRelease, archive, file }: ArchivedFileAddr
   return vscode.Uri.from({ scheme: ARCHIVE_SCHEME, path: `/${nameOf(archive)}/${file}`, query: JSON.stringify({ gameRelease, archive, file }) });
 }
 
+interface Listing {
+  readonly stamp: string;
+  readonly files: readonly string[];
+  readonly fileSet: ReadonlySet<string>;
+  readonly folders: ReadonlySet<string>;
+}
+
+const foldersOf = (files: readonly string[]): Set<string> =>
+  new Set(files.flatMap((file) => file.split('/').slice(0, -1).map((_, depth, names) => names.slice(0, depth + 1).join('/'))));
+
 // mods.md, The tree, story 13: Modbench never writes inside an archive.
 class ArchiveFileSystem implements vscode.FileSystemProvider {
   readonly onDidChangeFile = new vscode.EventEmitter<vscode.FileChangeEvent[]>().event;
 
-  constructor(private readonly client: Pick<MEditClient, 'getArchiveFile' | 'getArchiveContents'>) {}
+  private readonly listings = new Map<string, Listing>();
+
+  constructor(private readonly client: Pick<MEditClient, 'getArchiveFile' | 'getArchiveContents' | 'getArchiveCopies'>) {}
 
   watch(): vscode.Disposable { return new vscode.Disposable(() => undefined); }
 
-  // VS Code states a file and then reads it: the bytes the stat fetched serve that one read.
-  private stated: { readonly key: string; readonly bytes: Uint8Array } | undefined;
-
   async stat(uri: vscode.Uri): Promise<vscode.FileStat> {
     const { address, path } = this.addressed(uri);
-    const files = await this.contents(address, uri);
-    if (path === '') return directoryStat();
-    if (!files.includes(path)) {
-      if (files.some((file) => file.startsWith(`${path}/`))) return directoryStat();
-      throw vscode.FileSystemError.FileNotFound(uri);
-    }
-    const bytes = await this.fetch(address, path);
-    this.stated = { key: uri.toString(), bytes };
-    return { type: vscode.FileType.File, ctime: 0, mtime: 0, size: bytes.byteLength };
+    const { fileSet, folders } = await this.listing(address);
+    if (path === '' || folders.has(path)) return directoryStat();
+    if (!fileSet.has(path)) throw vscode.FileSystemError.FileNotFound(uri);
+    const copies = await this.client.getArchiveCopies(address.gameRelease, address.archive, [path], false);
+    if (isReadFailed(copies)) throw vscode.FileSystemError.Unavailable(failureReason(copies));
+    const copy = copies.find((held) => held.file === path);
+    if (copy === undefined) throw vscode.FileSystemError.FileNotFound(uri);
+    return { type: vscode.FileType.File, ctime: 0, mtime: 0, size: copy.size };
   }
 
-  async readFile(uri: vscode.Uri): Promise<Uint8Array> {
-    const { stated } = this;
-    this.stated = undefined;
-    if (stated?.key === uri.toString()) return stated.bytes;
+  readFile(uri: vscode.Uri): Promise<Uint8Array> {
     const { address, path } = this.addressed(uri);
     return this.fetch(address, path);
   }
@@ -60,11 +65,11 @@ class ArchiveFileSystem implements vscode.FileSystemProvider {
   async readDirectory(uri: vscode.Uri): Promise<[string, vscode.FileType][]> {
     const { address, path } = this.addressed(uri);
     const prefix = path === '' ? '' : `${path}/`;
-    const below = (await this.contents(address, uri)).filter((file) => file.startsWith(prefix)).map((file) => file.slice(prefix.length).split('/'));
-    const folders = new Set(below.filter((names) => names.length > 1).map(([name]) => name));
+    const { files, folders } = await this.listing(address);
+    const inside = (entry: string): boolean => entry.startsWith(prefix) && !entry.slice(prefix.length).includes('/');
     return [
-      ...[...folders].map((name): [string, vscode.FileType] => [name ?? '', vscode.FileType.Directory]),
-      ...below.filter((names) => names.length === 1).map(([name]): [string, vscode.FileType] => [name ?? '', vscode.FileType.File]),
+      ...[...folders].filter(inside).map((folder): [string, vscode.FileType] => [folder.slice(prefix.length), vscode.FileType.Directory]),
+      ...files.filter(inside).map((file): [string, vscode.FileType] => [file.slice(prefix.length), vscode.FileType.File]),
     ];
   }
 
@@ -74,13 +79,20 @@ class ArchiveFileSystem implements vscode.FileSystemProvider {
     return { address, path: uri.path.split('/').slice(2).join('/') };
   }
 
-  private async contents({ gameRelease, archive }: ArchiveAddress, uri: vscode.Uri): Promise<readonly string[]> {
+  // The listing is held while the archive keeps its size and modified time; a changed archive is read again (ADR-0003).
+  private async listing({ gameRelease, archive }: ArchiveAddress): Promise<Listing> {
+    const { size, mtime } = await vscode.workspace.fs.stat(vscode.Uri.file(archive));
+    const stamp = `${size}/${mtime}`;
+    const held = this.listings.get(archive);
+    if (held?.stamp === stamp) return held;
     const answered = await this.client.getArchiveContents(gameRelease, [archive]);
     if (isReadFailed(answered)) throw vscode.FileSystemError.Unavailable(failureReason(answered));
-    const held = answered.find((contents) => contents.archive === archive);
-    if (held === undefined) throw vscode.FileSystemError.FileNotFound(uri);
-    if (typeof held.unreadable === 'string') throw vscode.FileSystemError.Unavailable(held.unreadable);
-    return held.files;
+    const contents = answered.find((entry) => entry.archive === archive);
+    if (contents === undefined) throw vscode.FileSystemError.Unavailable('mEdit did not list the archive.');
+    if (typeof contents.unreadable === 'string') throw vscode.FileSystemError.Unavailable(contents.unreadable);
+    const listing = { stamp, files: contents.files, fileSet: new Set(contents.files), folders: foldersOf(contents.files) };
+    this.listings.set(archive, listing);
+    return listing;
   }
 
   private async fetch({ gameRelease, archive }: ArchiveAddress, file: string): Promise<Uint8Array> {
@@ -97,7 +109,7 @@ class ArchiveFileSystem implements vscode.FileSystemProvider {
 
 const directoryStat = (): vscode.FileStat => ({ type: vscode.FileType.Directory, ctime: 0, mtime: 0, size: 0 });
 
-export function registerArchiveFiles(client: Pick<MEditClient, 'getArchiveFile' | 'getArchiveContents'>): vscode.Disposable {
+export function registerArchiveFiles(client: Pick<MEditClient, 'getArchiveFile' | 'getArchiveContents' | 'getArchiveCopies'>): vscode.Disposable {
   return vscode.workspace.registerFileSystemProvider(ARCHIVE_SCHEME, new ArchiveFileSystem(client), { isReadonly: true });
 }
 
