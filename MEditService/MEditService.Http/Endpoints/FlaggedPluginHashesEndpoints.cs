@@ -13,8 +13,8 @@ internal static class FlaggedPluginHashesEndpoints
             .WithDescription(
                 "Each plugin file's hashes, by its absolute path, as a manifest carries them, with each named load flag at each " +
                 "combination of its possible original values; none when the file does not hold a named flag as the request sets it. " +
-                "A file that is no plugin could not have held a package's copy, so its hashes are none. Writes nothing. 400 when a file cannot " +
-                "be read or a name is no load flag of the game.")
+                "A file that is no plugin could not have held a package's copy, so its hashes are none; a file that cannot be read is named with " +
+                "why, beside the others. Writes nothing. 400 when a name is no load flag of the game.")
             .Produces<IReadOnlyList<FlaggedPluginHashes>>()
             .ProducesProblem(400);
 
@@ -33,9 +33,9 @@ internal static class FlaggedPluginHashesEndpoints
         {
             if (file.Flags.Keys.FirstOrDefault(name => !known.ContainsKey(name)) is { } unknown)
                 return EndpointMapping.BadRequest($"'{unknown}' is no load flag of {release}");
-            if (!PluginOriginalHashes.Of(file.Path, file.Flags, release).Holds(out var hashes, out var failure))
-                return EndpointMapping.BadRequest($"{file.Path}: {failure.Reason}");
-            answered.Add(new FlaggedPluginHashes(file.Path, hashes));
+            answered.Add(PluginOriginalHashes.Of(file.Path, file.Flags, release).Holds(out var hashes, out var failure)
+                ? new FlaggedPluginHashes(file.Path, hashes, null)
+                : new FlaggedPluginHashes(file.Path, [], failure.Reason));
         }
 
         return Results.Ok(answered);
@@ -48,5 +48,5 @@ internal sealed record FlaggedPluginHashesRequest(string GameRelease, IReadOnlyL
 
 internal sealed record FlaggedPluginFile(string Path, IReadOnlyDictionary<string, bool> Flags);
 
-/// <summary>A plugin file's hashes with its flags at their possible original values.</summary>
-internal sealed record FlaggedPluginHashes(string Path, IReadOnlyList<string> Hashes);
+/// <summary>A plugin file's hashes with its flags at their possible original values, or why the file could not be read.</summary>
+internal sealed record FlaggedPluginHashes(string Path, IReadOnlyList<string> Hashes, string? Unreadable);

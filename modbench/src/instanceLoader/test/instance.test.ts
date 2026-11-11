@@ -1244,6 +1244,15 @@ describe('Instance — what each flagged plugin could have held before its flags
     expect(instance.value.flaggedHashes).toEqual(new Map([[plugin, { kind: 'read', answer: [COPY, 'BBBBBBBBBBA='] }]]));
   });
 
+  it('holds a file mEdit could not read unreadable, with why', async () => {
+    const { instance, medit, plugin } = await flaggedLoader();
+    medit.setQueryAnswer('getFlaggedPluginHashes', [{ path: plugin, hashes: [], unreadable: 'EACCES' }]);
+
+    await instance.refresh();
+
+    expect(instance.value.flaggedHashes.get(plugin)).toEqual({ kind: 'unreadable', reason: 'EACCES' });
+  });
+
   it('asks mEdit again only for a file whose stamp changed since it answered', async () => {
     const { instance, medit, plugin, touch } = await flaggedLoader();
     medit.setQueryAnswerOnce('getFlaggedPluginHashes', [{ path: plugin, hashes: ['old'] }]);

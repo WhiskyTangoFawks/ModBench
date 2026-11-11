@@ -45,6 +45,12 @@ describe('the hashes a folder\'s flagged plugins could have had before their fla
     expect(await flaggedHashesIn(manifest, folder, '/mods/Mod', undefined)).toEqual({ cannotTell: 'its manifest sets flags, which need mEdit' });
   });
 
+  it('cannot tell, naming the plugin and why, when mEdit could not read it', async () => {
+    const answer = await flaggedHashesIn(manifest, folder, '/mods/Mod', (files) => Promise.resolve(files.map(({ path }) => ({ path, hashes: [], unreadable: 'EACCES' }))));
+
+    expect('cannotTell' in answer && answer.cannotTell).toContain("'Mod.esp' could not be read: EACCES");
+  });
+
   it('cannot tell when mEdit leaves a plugin it was asked about unanswered', async () => {
     const answer = await flaggedHashesIn(manifest, folder, '/mods/Mod', () => Promise.resolve([]));
 

@@ -49,7 +49,7 @@ export class FlaggedHashesHeld {
     }));
     const changed = keyed.flatMap(({ file, key }) => (key !== undefined && this.held.get(file.path)?.key !== key ? [file] : []));
     const answered = changed.length === 0 ? [] : await this.reader.getFlaggedPluginHashes(gameRelease, changed);
-    const answers = new Map(isReadFailed(answered) ? [] : answered.map(({ path, hashes }): [string, FlaggedRead] => [path, { kind: 'read', answer: hashes }]));
+    const answers = new Map(isReadFailed(answered) ? [] : answered.map(({ path, hashes, unreadable }): [string, FlaggedRead] => [path, typeof unreadable === 'string' ? { kind: 'unreadable', reason: unreadable } : { kind: 'read', answer: hashes }]));
     const held = new Map<string, { readonly key: string; readonly read: FlaggedRead }>();
     const reads = new Map(keyed.map(({ file, stamp, key }): [string, FlaggedRead] => {
       if (stamp.kind === 'unreadable') return [file.path, stamp];

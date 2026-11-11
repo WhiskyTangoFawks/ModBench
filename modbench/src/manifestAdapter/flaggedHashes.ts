@@ -50,9 +50,6 @@ export async function flaggedHashesIn(
   if (possible === undefined) return { cannotTell: 'its manifest sets flags, which need mEdit' };
   const answered = await possible(files.map(({ file }) => file));
   if (isReadFailed(answered)) return { cannotTell: failureReason(answered) };
-  const byPath = new Map(answered.map(({ path, hashes }) => [path, hashes]));
-  return flaggedHashesFrom(files, ({ file }) => {
-    const hashes = byPath.get(file.path);
-    return hashes === undefined ? undefined : { kind: 'read', answer: hashes };
-  });
+  const byPath = new Map(answered.map((one): [string, FlaggedRead] => [one.path, typeof one.unreadable === 'string' ? { kind: 'unreadable', reason: one.unreadable } : { kind: 'read', answer: one.hashes }]));
+  return flaggedHashesFrom(files, ({ file }) => byPath.get(file.path));
 }

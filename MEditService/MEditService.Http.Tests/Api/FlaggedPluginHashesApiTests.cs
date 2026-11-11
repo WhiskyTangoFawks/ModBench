@@ -51,13 +51,18 @@ public sealed class FlaggedPluginHashesApiTests(LoadedApiFixture<TestPluginFixtu
     }
 
     [Fact]
-    public async Task AFileThatCannotBeRead_Is400()
+    public async Task AFileThatCannotBeRead_IsNamedWithWhy_BesideTheOthersAnswered()
     {
-        var path = Path.Combine(_root, "Gone.esp");
+        var gone = Path.Combine(_root, "Gone.esp");
+        var plugin = SmallPlugin();
+        var small = new Dictionary<string, bool> { ["Small"] = true };
 
-        var response = await Client.PostAsJsonAsync("/plugin-files/flagged-hashes", new { gameRelease = "Fallout4", files = new[] { new { path, flags = new Dictionary<string, bool> { ["Small"] = true } } } });
+        var response = await Client.PostAsJsonAsync("/plugin-files/flagged-hashes", new { gameRelease = "Fallout4", files = new[] { new { path = gone, flags = small }, new { path = plugin, flags = small } } });
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var answered = (await response.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray().ToArray();
+        Assert.Equal((gone, 0, true), (answered[0].GetProperty("path").GetString(), answered[0].GetProperty("hashes").GetArrayLength(), answered[0].GetProperty("unreadable").ValueKind == JsonValueKind.String));
+        Assert.Equal((2, JsonValueKind.Null), (answered[1].GetProperty("hashes").GetArrayLength(), answered[1].GetProperty("unreadable").ValueKind));
     }
 
     [Theory]
