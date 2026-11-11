@@ -334,7 +334,9 @@ export interface MEditClient {
   getReferencesInActiveOrCompiledPlugins(formKey: string): Promise<ReferenceResult[] | ReadFailed>;
   /** Each copy whose text names the plugin file `name`, and the Plugin Header of each plugin with no plugin source that lists it as a master. */
   getPluginNameReferences(name: string): Promise<components['schemas']['CopyNaming'][] | ReadFailed>;
-  getScriptReferences(name: string): Promise<components['schemas']['ScriptReferences'] | ReadFailed>;
+  getScriptReferences(name: string): Promise<components['schemas']['MemberReferences'] | ReadFailed>;
+  /** Each copy that names the file at `path` in the Data folder. */
+  getFileReferences(path: string): Promise<components['schemas']['MemberReferences'] | ReadFailed>;
   /** Null: the plugin holds no such record. */
   getRenderedDocument(plugin: PluginAddress, formKey: string): Promise<RenderedDocument | null | ReadFailed>;
   /** Null: the plugin holds no such record. `location` is the path of the copy's own file, of the file of the

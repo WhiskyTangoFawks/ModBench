@@ -188,7 +188,17 @@ internal static class RecordEndpoints
             "Each copy, in an active plugin or one with plugin source, that attaches the Papyrus script of that name in any " +
             "case, with the member paths that name it. Answers only once the record index is ready. Each says whether its " +
             "plugin has plugin source, which a rename changes, and why each copy that may attach it went unread.")
-        .Produces<ScriptReferences>()
+        .Produces<MemberReferences>()
+        .ProducesProblem(503);
+
+        app.MapGet("/file-paths/references", (string path, IQueries svc) => EndpointMapping.Ok(svc.GetFileReferences(path)))
+        .WithName("GetFileReferences")
+        .WithTags("Records")
+        .WithDescription(
+            "Each copy, in an active plugin or one with plugin source, that names the file at that path in the Data folder, " +
+            "in any case, with the member paths that name it. Answers only once the record index is ready. Each says whether " +
+            "its plugin has plugin source, and why each copy that may name it went unread.")
+        .Produces<MemberReferences>()
         .ProducesProblem(503);
 
         // ADR-0001: the document is the caller's to change and save.

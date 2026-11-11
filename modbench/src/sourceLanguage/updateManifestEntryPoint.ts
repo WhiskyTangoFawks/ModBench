@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
-import { isUri } from './buildEntryPoint';
+import { isUri } from '../drivingLib/argument';
 
 const SOURCE_FOLDERS_KEY = 'modbench.source.sourceFolders';
 

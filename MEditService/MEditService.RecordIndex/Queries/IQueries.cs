@@ -35,7 +35,10 @@ public interface IQueries
     /// <summary>Each copy, in an active plugin with no plugin source, that names the record the copy <paramref name="plugin"/>
     /// holds: a copy of it, or one that links it.</summary>
     Answer<IReadOnlyList<RecordAt>, IndexRefused> GetCopiesWithNoPluginSourceNaming(PluginAddress plugin, string formKey);
-    Answer<ScriptReferences, IndexRefused> GetScriptReferences(string name);
+    Answer<MemberReferences, IndexRefused> GetScriptReferences(string name);
+    /// <summary>Each copy, in an active or compiled plugin, that names the file at <paramref name="dataPath"/> in the Data
+    /// folder, as Mutagen places the path each asset link holds.</summary>
+    Answer<MemberReferences, IndexRefused> GetFileReferences(string dataPath);
     // Null when the plugin holds no such record; a source stop when its source tree cannot say.
     Answer<RenderedDocument?, IndexRefused> GetRenderedDocument(PluginAddress plugin, string formKey);
     // Null when the plugin holds no such record; a source stop when its source tree cannot say.

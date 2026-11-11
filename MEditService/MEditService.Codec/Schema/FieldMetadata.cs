@@ -89,6 +89,9 @@ public record FieldMetadata(
     // The name of a Papyrus script the record attaches (symbols.md, The symbols).
     bool IsScriptName = false,
 
+    // A path to a file in the Data folder, which Mutagen models as an asset link (symbols.md, The symbols, File).
+    [property: JsonIgnore] bool IsAssetLink = false,
+
     // A reference Mutagen holds as an index instead while one of these boolean siblings is set (an
     // alias or package-data parameter), when DocumentNodes.VariantFor shapes it an integer.
     IReadOnlyList<string>? IndexWhen = null,

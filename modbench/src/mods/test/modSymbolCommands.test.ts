@@ -17,6 +17,8 @@ vi.mock('vscode', () => ({
 
 import { registerGoToModRowCommand, registerModReferencedByCommand } from '../modSymbolCommands';
 import { ModNode, type ModlistNode } from '../ModListProvider';
+import { ArchivedFileNode, FileNode } from '../modFiles';
+import { file } from './indexedValue';
 import { present } from '../../ports/present';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
@@ -53,21 +55,62 @@ describe('the mod go to command (commands.md, `go to` under Mod)', () => {
 describe('the mod referenced by command (commands.md, `referenced by` under Mod)', () => {
   beforeEach(() => { handlers.clear(); });
 
+  const WALL = file('mods/Walls', 'meshes/architecture/wall.nif');
+  const GAME_WALL = { relativePath: 'meshes/architecture/gamewall.nif', path: '/game/Data/meshes/architecture/gamewall.nif' };
+
+  function setup() {
+    const mod = vi.fn((_mod: string) => Promise.resolve());
+    const files = vi.fn((_path: string) => Promise.resolve());
+    const reporter = recordingReporter();
+    const value = {
+      filesByMod: new Map([['Walls', [WALL]]]),
+      dataFolderFiles: { kind: 'listed' as const, files: new Map([[GAME_WALL.relativePath, GAME_WALL]]) },
+    };
+    registerModReferencedByCommand({ mod, file: files, value: () => value, reporter }, () => []);
+    return { mod, files, reporter, run: present(handlers.get('modbench.mod.referencedBy'), 'the referenced by command') };
+  }
+
   it('lists the places that name the mod the row stands for', async () => {
-    const referencedBy = vi.fn(() => Promise.resolve());
-    registerModReferencedByCommand(referencedBy, () => []);
+    const { mod, run } = setup();
 
-    await present(handlers.get('modbench.mod.referencedBy'), 'the referenced by command')(asked);
+    await run(asked);
 
-    expect(referencedBy.mock.calls).toEqual([['Base Mod']]);
+    expect(mod.mock.calls).toEqual([['Base Mod']]);
   });
 
   it('lists nothing for a row that is no mod', async () => {
-    const referencedBy = vi.fn(() => Promise.resolve());
-    registerModReferencedByCommand(referencedBy, () => []);
+    const { mod, files, run } = setup();
 
-    await present(handlers.get('modbench.mod.referencedBy'), 'the referenced by command')({ argument: { kind: 'separator', name: 'Gear' } });
+    await run({ argument: { kind: 'separator', name: 'Gear' } });
 
-    expect(referencedBy).not.toHaveBeenCalled();
+    expect([mod.mock.calls, files.mock.calls]).toEqual([[], []]);
+  });
+
+  it('lists the records that name a file row\'s path in the Data folder, a loose file\'s or one in an archive', async () => {
+    const { files, run } = setup();
+    const wall = new FileNode(aRow, { kind: 'mod', name: 'Base Mod' }, WALL, 'wall.nif');
+    const archive = new FileNode(aRow, { kind: 'mod', name: 'Base Mod' }, file('mods/Walls', 'Walls - Main.ba2'), 'Walls - Main.ba2');
+
+    await run(wall);
+    await run(new ArchivedFileNode(archive, archive, 'meshes/architecture/door.nif', 'door.nif', undefined));
+
+    expect(files.mock.calls).toEqual([['meshes/architecture/wall.nif'], ['meshes/architecture/door.nif']]);
+  });
+
+  it('lists the records that name a file the Explorer shows, in a mod or the game\'s Data folder, by its path in the Data folder', async () => {
+    const { files, run } = setup();
+
+    await run(Uri.file(WALL.path));
+    await run(Uri.file(GAME_WALL.path));
+
+    expect(files.mock.calls).toEqual([[WALL.relativePath], [GAME_WALL.relativePath]]);
+  });
+
+  it('refuses a file the Explorer shows in no mod and outside the game\'s Data folder', async () => {
+    const { files, reporter, run } = setup();
+
+    await run(Uri.file('/instance/profiles/Default/modlist.txt'));
+
+    expect([files.mock.calls, reporter.reports.map(({ severity }) => severity)]).toEqual([[], ['error']]);
   });
 });

@@ -145,12 +145,12 @@ public sealed record CopyState(PluginAddress Plugin, ConflictThis? ConflictThis)
 /// <summary>A copy whose text names a plugin, and whether its plugin has plugin source, which a rename can change.</summary>
 public sealed record CopyNaming(string FormKey, PluginAddress Plugin, bool InPluginSource);
 
-/// <summary>A copy that attaches a Papyrus script, the member paths that name it, and whether its plugin has plugin source,
-/// which a rename can change.</summary>
-public sealed record CopyAttaching(string FormKey, PluginAddress Plugin, bool InPluginSource, IReadOnlyList<string> FieldPaths);
+/// <summary>A copy that names a symbol, such as a Papyrus script or a file, the member paths that name it, and whether its
+/// plugin has plugin source, which a rename can change.</summary>
+public sealed record CopyNamingAtMembers(string FormKey, PluginAddress Plugin, bool InPluginSource, IReadOnlyList<string> FieldPaths);
 
-/// <summary>The copies that attach a Papyrus script, and why each copy that may attach it went unread.</summary>
-public sealed record ScriptReferences(IReadOnlyList<CopyAttaching> Copies, IReadOnlyList<string> Unread);
+/// <summary>The copies that name a symbol, and why each copy that may name it went unread.</summary>
+public sealed record MemberReferences(IReadOnlyList<CopyNamingAtMembers> Copies, IReadOnlyList<string> Unread);
 
 /// <summary>The document carrying the record, its own or its container's, that a comparison reads
 /// <paramref name="Plugin"/>'s copy from in place of the record index's copy. <paramref name="Alone"/>
