@@ -141,11 +141,11 @@ function mcpServerOf({ instance, copyReads, mEdit, terminalEnvironment, statuses
   register(server, log, reading(...RECORD_READS), SELECT_ROWS, (args) => SELECT_ROWS.of(mEdit, args));
   for (const gesture of GESTURE_TOOLS) register(server, log, reading('instance'), gesture, async (args) => gesture.of(await naming(args), mEdit, args, (line) => { log.warn(`[agent] ${gesture.name}: ${line}`); }));
   register(server, log, reading(), { ...SCRIPT_ENVIRONMENT, input: NO_INPUT }, () => SCRIPT_ENVIRONMENT.of(terminalEnvironment));
-  const modFolders = () => {
-    const { modDirs, sourceDirs, overwriteDir } = instance.value.paths;
-    return [...modDirs.values(), ...sourceDirs.values(), ...overwriteDir === undefined ? [] : [overwriteDir]];
+  const problemFolders = () => {
+    const { modDirs, sourceDirs, overwriteDir } = currentValue(instance).paths;
+    return [...modDirs.values(), ...sourceDirs.values(), overwriteDir, deployment.folder()].filter((folder) => folder !== undefined);
   };
-  register(server, log, reading('instance', 'sortingRules', 'sourceLanguage'), PROBLEMS, (args) => PROBLEMS.of(args, modFolders));
+  register(server, log, reading('instance', 'sortingRules', 'sourceLanguage'), PROBLEMS, (args) => PROBLEMS.of(args, problemFolders));
   register(server, log, reading('instance'), READ_GUIDE, (args) => READ_GUIDE.of(currentValue(instance), args));
   return server;
 }

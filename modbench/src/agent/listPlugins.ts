@@ -21,8 +21,9 @@ export const LIST_PLUGINS = {
       unplaced,
     );
     const shownOrder = [...inGameOrder(loadedWithNoLine, fromLines, (plugin) => view.isBlueprint(plugin), blueprintLoadsLast), ...others];
+    const held = holding(filter);
     const answer = fitting({
-      plugins: shownOrder.filter(({ name }) => holding(filter)(name)).map((plugin) => ({
+      plugins: shownOrder.filter(({ name }) => held(name)).map((plugin) => ({
         name: plugin.name, origin: originShown(value, plugin), line: plugin.line, enabled: plugin.enabled, winning: plugin.winning, ...view.shown(plugin),
       })),
     }, (all) => filterNarrows({ plugins: all.plugins.length }, 'the plugins whose name holds it'));

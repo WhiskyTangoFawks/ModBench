@@ -10,6 +10,7 @@ import type { Deployed } from '../deployment/deployment';
 import { Refusal } from '../drivingLib/refusal';
 import { formKeysNamed } from './recordNames';
 import { parseOrRefuse } from './refusal';
+import { countsOf, fitting } from './tooLarge';
 
 interface GestureInput {
   readonly input: z.ZodRawShape;
@@ -363,6 +364,39 @@ function namedOwn(value: InstanceValue, outcome: GestureOutcome): GestureOutcome
 const toolName = (command: string): string =>
   command.replace(/^modbench\./, '').replaceAll('.', '_').replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 
+const READ_BY_OBJECT: Readonly<Record<string, string>> = {
+  mod: 'list_mods', separator: 'list_mods', downloadedFile: 'list_downloads', plugin: 'list_plugins', record: 'read_record',
+  modlist: 'list_profiles', profile: 'list_profiles', instance: 'list_problems',
+};
+
+const READ_BY_GESTURE: Readonly<Record<string, string>> = {
+  'modbench.mod.versionInGit': 'list_mod_statuses',
+  'modbench.mod.updateManifest': 'list_mod_statuses',
+  'modbench.mod.restoreFromManifest': 'list_mod_statuses',
+  'modbench.mod.excludeFile': 'list_file_conflicts',
+  'modbench.mod.includeFile': 'list_file_conflicts',
+  'modbench.mod.ignoreFile': 'list_mod_statuses',
+  'modbench.mod.unignoreFile': 'list_mod_statuses',
+  'modbench.mod.addPublisherTag': 'list_file_conflicts',
+  'modbench.mod.removePublisherTag': 'list_file_conflicts',
+  'modbench.instance.moveToOverwrite': 'list_file_conflicts',
+  'modbench.instance.updateMasterlist': 'list_sorting_rules',
+  'modbench.instance.refresh': 'list_plugins',
+};
+
+const readOf = (command: string): string => READ_BY_GESTURE[command] ?? READ_BY_OBJECT[command.split('.')[1] ?? ''] ?? 'list_profiles';
+
+// agent.md, Reporting, stories 1 and 3.
+function countedOf(outcome: GestureOutcome, read: string): Record<string, unknown> {
+  const counted = outcome.applied
+    ? {
+      ...overItems(outcome) && { landed: outcome.outcome.landed.length, refused: countsOf(outcome.outcome.refused.map(({ reason }) => reason), 'reason') },
+      partial: countsOf((outcome.partial ?? []).map(({ message }) => message), 'message'),
+    }
+    : { refusal: outcome.refusal };
+  return { ...counted, read: `${read} reads the result.` };
+}
+
 /** Claude Code sends an input with no JSON type as a string. */
 export const GESTURE_TOOLS = [...AGENT_GESTURES].map(([command, gesture]) => ({
   name: toolName(command),
@@ -371,8 +405,9 @@ export const GESTURE_TOOLS = [...AGENT_GESTURES].map(([command, gesture]) => ({
     const answer = await vscode.commands.executeCommand<GestureOutcome | DeployOutcome>(command, await gesture.callOf(value, given, mEdit));
     const outcome = namedOwn(value, isDeployed(answer) ? deployAnswered(answer) : answer);
     const refusal = refusalIn(outcome);
-    if (refusal !== undefined) throw new Refusal(refusal, answerOf(outcome));
-    if (outcome.applied) partialsIn(outcome).forEach(warn);
-    return answerOf(outcome);
+    if (refusal === undefined && outcome.applied) partialsIn(outcome).forEach(warn);
+    const answered = fitting(answerOf(outcome), () => countedOf(outcome, readOf(command)));
+    if (refusal !== undefined) throw new Refusal(refusal, answered);
+    return answered;
   },
 }));

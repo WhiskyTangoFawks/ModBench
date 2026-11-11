@@ -412,13 +412,20 @@ describe('the agent server, given an instance value', () => {
       modFolders: ['Big Rocks', 'Other'].map((name) => ({ kind: 'mod' as const, name, path: `/i/mods/${name}`, modName: name })),
     };
 
+    const mod = (name: string) => ({ kind: 'mod' as const, name, enabled: true });
+    const separator = (name: string) => ({ kind: 'separator' as const, name, enabled: true });
+    const grouped = instanceValueFixture({ mods: [mod('Pebbles'), separator('Rocks'), mod('Big Rocks'), mod('Moss'), separator('Plants'), mod('Rock Garden')] });
+    const overwrite = { kind: 'runtimeOutput', name: 'Overwrite', fileCount: 0 };
+
     it.each([
-      ['list_mods', VALUE, 'ROCK', [{ kind: 'mod', name: 'Big Rocks', enabled: false }]],
-      ['list_plugins', { ...VALUE, pluginsLoadedWithNoLine: [] }, 'b.', { plugins: [{ name: 'B.esp', origin: 'Big Rocks', line: 1, enabled: false, winning: true, ...NOT_READ }] }],
-      ['list_downloads', VALUE, 'ROCKS.7', [expect.objectContaining({ name: 'rocks.7z' }) as unknown]],
-      ['list_mod_statuses', inRepository, 'rock', [{ mods: ['Big Rocks'], noManifest: true }]],
-      ['list_sorting_rules', VALUE, 'a.esp', { rules: [{ rule: 'A.esp is dirty.', level: 'info', plugins: [{ name: 'A.esp', origin: 'Big Rocks' }] }] }],
-    ])('%s keeps what holds the filter, in any case', async (tool, value, filter, kept) => {
+      ['list_mods', 'ROCK', grouped, [overwrite, mod('Pebbles'), separator('Rocks'), mod('Big Rocks'), separator('Plants'), mod('Rock Garden')]],
+      ['list_mods', 'nothing', grouped, [overwrite]],
+      ['list_plugins', 'b.', { ...VALUE, pluginsLoadedWithNoLine: [] }, { plugins: [{ name: 'B.esp', origin: 'Big Rocks', line: 1, enabled: false, winning: true, ...NOT_READ }] }],
+      ['list_downloads', 'ROC', VALUE, [expect.objectContaining({ name: 'rocks.7z' }) as unknown]],
+      ['list_downloads', '.7z', VALUE, []],
+      ['list_mod_statuses', 'rock', inRepository, [{ mods: ['Big Rocks'], noManifest: true }]],
+      ['list_sorting_rules', 'a.esp', VALUE, { rules: [{ rule: 'A.esp is dirty.', level: 'info', plugins: [{ name: 'A.esp', origin: 'Big Rocks' }] }] }],
+    ])('%s keeps what holds the filter "%s", in any case, as its view does', async (tool, filter, value, kept) => {
       statusRead.answer = [status('Big Rocks', { noManifest: true }), status('Other', { noManifest: true })];
       sortingRead.rules = [rule('A.esp'), rule('B.esp')];
       const { client } = await clientOf(new FakeInstance(value));
@@ -427,12 +434,12 @@ describe('the agent server, given an instance value', () => {
     });
 
     it.each([
-      ['list_mods', 'mods', 'the mods and separators whose name holds it'],
-      ['list_plugins', 'plugins', 'the plugins whose name holds it'],
-      ['list_downloads', 'downloads', 'the downloaded files whose name or displayName holds it'],
-      ['list_mod_statuses', 'mods', 'the mods whose name holds it'],
-      ['list_sorting_rules', 'rules', 'the rules that name a plugin whose name holds it'],
-    ])('%s too large for one reply says how many %s it holds, and which of them filter keeps', async (tool, what, keeps) => {
+      ['list_mods', 'mods', 501, 'Overwrite, each separator whose name holds it with all its mods, and each mod whose name holds it with its separator'],
+      ['list_plugins', 'plugins', 500, 'the plugins whose name holds it'],
+      ['list_downloads', 'downloads', 500, 'the downloaded files whose displayName holds it'],
+      ['list_mod_statuses', 'mods', 500, 'the mods whose name holds it'],
+      ['list_sorting_rules', 'rules', 500, 'the rules that name a plugin whose name holds it'],
+    ])('%s too large for one reply says how many %s it holds, and which of them filter keeps', async (tool, what, count, keeps) => {
       const names = Array.from({ length: 500 }, (_, n) => `${'Long Name '.repeat(10)}${n}`);
       const mods = names.map((name) => ({ kind: 'mod' as const, name, enabled: true }));
       const download = present(VALUE.downloadedFiles.kind === 'listed' ? VALUE.downloadedFiles.rows[0] : undefined, 'a downloaded file');
@@ -451,7 +458,7 @@ describe('the agent server, given an instance value', () => {
       expect(isError).toBe(true);
       expect(JSON.parse(text)).toEqual({
         tooLarge: `The reply passes the ${REPLY_CHARS} characters that one reply holds.`,
-        [what]: tool === 'list_mods' ? 501 : 500,
+        [what]: count,
         narrow: `filter keeps ${keeps}, in any case.`,
       });
     });
@@ -621,24 +628,30 @@ describe('the agent server, given an instance value', () => {
     });
   });
 
-  it('answers problems too large for one reply with their counts by mod or folder, and that paths narrows the read', async () => {
+  it('answers problems too large for one reply with their counts by mod, source, Overwrite or deployment folder, the rest under the folder that holds them all, and that paths narrows the read', async () => {
     const problem = { severity: 0, range: { start: { line: 0 } }, message: 'x'.repeat(200), source: 'Modbench' };
     diagnosticsHeld.held = [
       [{ scheme: 'file', fsPath: '/i/mods/A/a.esp' }, Array.from({ length: 100 }, () => problem)],
+      [{ scheme: 'file', fsPath: '/elsewhere/one/x.json' }, [problem]],
       [{ scheme: 'file', fsPath: '/i/mods/A/sub/b.json' }, Array.from({ length: 50 }, () => problem)],
       [{ scheme: 'file', fsPath: '/s/Rocks/plugin-source/r.json' }, Array.from({ length: 70 }, () => problem)],
-      [{ scheme: 'file', fsPath: '/d/Data/stray.esp' }, [problem]],
+      [{ scheme: 'file', fsPath: '/i/overwrite/o.esp' }, [problem]],
+      [{ scheme: 'file', fsPath: '/deploy/meshes/stray.nif' }, [problem, problem]],
+      [{ scheme: 'file', fsPath: '/elsewhere/two/deep/y.json' }, [problem]],
     ];
     const paths = { overwriteDir: '/i/overwrite', downloadsDir: undefined, modDirs: new Map([['A', '/i/mods/A']]), sourceDirs: new Map([['Rocks', '/s/Rocks']]) };
-    const { client } = await clientOf(new FakeInstance(instanceValueFixture({ paths })));
+    const { client } = await clientOf(new FakeInstance(instanceValueFixture({ paths })), undefined, undefined, { ...NO_DEPLOYMENT, folder: () => '/deploy' });
 
     const { isError, text } = await call(client, 'list_problems');
 
     expect(isError).toBe(true);
     expect(JSON.parse(text)).toEqual({
       tooLarge: `The reply passes the ${REPLY_CHARS} characters that one reply holds.`,
-      problems: 221,
-      byFolder: [{ path: '/i/mods/A', problems: 150 }, { path: '/s/Rocks', problems: 70 }, { path: '/d/Data', problems: 1 }],
+      problems: 225,
+      byFolder: [
+        { path: '/i/mods/A', count: 150 }, { path: '/elsewhere', count: 2 }, { path: '/s/Rocks', count: 70 },
+        { path: '/i/overwrite', count: 1 }, { path: '/deploy', count: 2 },
+      ],
       narrow: 'paths narrows the read to the files and folders you name.',
     });
   });
@@ -758,21 +771,38 @@ describe('the agent server, reading file order conflicts', () => {
       Big: Array.from({ length: 1000 }, (_, n) => `meshes/${'deep/'.repeat(10)}${n}.nif`), A: ['a.esp'],
     }).map(([name, paths]) => [name, { origin: name, folder: '/m', files: paths.map((path) => fileIn('/m', path)), folders: [], notes: [] }])));
     const value = instanceValueFixture({ mods, filesByMod: index.filesByMod, files: index.files, stackedCopies: stackCopies(index, [], 'Fallout4') });
-    const narrow = 'mods narrows the read to the mods you name.';
+    const filtering = 'filter keeps the files whose path holds it in a folder or file name, in any case, and every file of a mod whose name holds it.';
+    const narrow = `mods narrows the read to the mods you name. ${filtering}`;
+    const big = { kind: 'mod', mod: 'Big', wins: 0, loses: 0, files: 1000 };
 
     it.each([
-      ['every mod, with how many mods', undefined, { mods: 2, narrow }],
-      ['the mods named, with each one\'s counts', [{ name: 'Big' }, { name: 'A' }], {
-        byMod: [{ kind: 'mod', mod: 'Big', wins: 0, loses: 0, files: 1000 }, { kind: 'mod', mod: 'A', wins: 0, loses: 0, files: 1 }], narrow,
+      ['every mod, with how many mods, and that mods and filter narrow it', {}, { mods: 2, narrow }],
+      ['the mods named, with each one\'s counts, and that mods and filter narrow it', { mods: [{ name: 'Big' }, { name: 'A' }] }, {
+        byMod: [big, { kind: 'mod', mod: 'A', wins: 0, loses: 0, files: 1 }], narrow,
       }],
-    ])('answers a read of %s, and that mods narrows the read', async (_case, named, correction) => {
+      ['one mod named, with its counts, and that filter narrows it', { mods: [{ name: 'Big' }] }, { byMod: [big], narrow: filtering }],
+    ])('answers a read of %s', async (_case, args, correction) => {
       const { client } = await clientOf(new FakeInstance(value));
 
-      const { isError, text } = await call(client, 'list_file_conflicts', named === undefined ? {} : { mods: named });
+      const { isError, text } = await call(client, 'list_file_conflicts', args);
 
       expect(isError).toBe(true);
       expect(JSON.parse(text)).toEqual({ tooLarge: `The reply passes the ${REPLY_CHARS} characters that one reply holds.`, ...correction });
     });
+
+  });
+
+  it.each([
+    ['a file whose folder name holds it', 'TEXT', [], ['Textures/Rock.DDS'], ['Textures/Rock.DDS']],
+    ['a file whose file name holds it', 'X.NIF', ['meshes/x.nif'], [], ['meshes/x.nif']],
+    ['every file of a mod whose name holds it', 'b', ['meshes/x.nif'], ['Textures/Rock.DDS'], ['Textures/Rock.DDS', 'meshes/x.nif']],
+    ['no file whose path holds it only across a separator', 'es/x', [], [], []],
+  ])('keeps, under the filter, %s', async (_case, filter, wins, loses, files) => {
+    const { client } = await clientOf(new FakeInstance(CONFLICTED));
+
+    expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'B' }], filter })).toMatchObject([{
+      mod: 'B', wins: wins.map((file) => ({ file })), loses: loses.map((file) => ({ file })), files: files.map((file) => ({ file })),
+    }]);
   });
 
   it('reads, for each mod, the files it wins over which mods and the files it loses to which winner', async () => {
@@ -1152,14 +1182,36 @@ describe('the agent server, reading a record through mEdit', () => {
     const { isError, text } = await call(client, 'read_record', { name: 'SharedNpc' });
 
     expect(isError).toBe(true);
-    const size = expect.any(Number) as unknown;
-    expect(JSON.parse(text)).toEqual({
+    const answer: unknown = JSON.parse(text);
+    const { copies: [loser, winner] } = z.object({ copies: z.tuple([z.object({ chars: z.number() }), z.object({ chars: z.number() })]) }).parse(answer);
+    expect(answer).toEqual({
       tooLarge: `The reply passes the ${REPLY_CHARS} characters that one reply holds.`,
       copies: [
-        { plugin: { name: 'A.esp', origin: 'Big Rocks' }, isWinner: false, chars: size },
-        { plugin: { name: 'B.esp', origin: 'Big Rocks' }, isWinner: true, chars: size },
+        { plugin: { name: 'A.esp', origin: 'Big Rocks' }, isWinner: false, chars: loser.chars },
+        { plugin: { name: 'B.esp', origin: 'Big Rocks' }, isWinner: true, chars: winner.chars },
       ],
       narrow: 'plugin narrows the read to one copy.',
+    });
+    expect(winner.chars - loser.chars).toBe(500 * ',"conflictThis":"Override"'.length + 'true'.length - 'false'.length);
+  });
+
+  it('answers one copy too large for one reply with its size, and the SQL that reads parts of its body', async () => {
+    const mEdit = new InMemoryMEditClient();
+    mEdit.setQueryAnswer('resolveNames', NPC);
+    mEdit.setQueryAnswer('getPlugins', PLUGINS);
+    mEdit.setQueryAnswer('getCopyDocument', { kind: 'Rendered', location: 'SharedNpc.txt' });
+    const rendered = 'x'.repeat(60_000);
+    mEdit.setQueryAnswer('getRenderedDocument', { fileName: 'SharedNpc.txt', text: rendered });
+    mEdit.setQueryAnswer('getComparison', COPIES);
+    const { client } = await clientOf(new FakeInstance(ENABLED), mEdit);
+
+    const { isError, text } = await call(client, 'read_record', { name: 'SharedNpc', plugin: { name: 'A.esp' } });
+
+    expect(isError).toBe(true);
+    expect(JSON.parse(text)).toEqual({
+      tooLarge: `The reply passes the ${REPLY_CHARS} characters that one reply holds.`,
+      chars: JSON.stringify({ ...STANDING, kind: 'Rendered', text: rendered }).length,
+      narrow: 'select_rows reads parts of the copy\'s body, such as one field or one child record, from the records view WHERE form_key = \'000800:A.esp\' AND plugin = \'A.esp\' AND origin = \'Big Rocks\'.',
     });
   });
 
@@ -1398,6 +1450,35 @@ describe('the agent server, running a gesture', () => {
 
     expect(fired.calls).toEqual([['modbench.mod.disable', new AgentCall([{ kind: 'mod', name: 'A' }, { kind: 'mod', name: 'Textures' }], {})]]);
     expect(answer).toEqual({ isError: false, text: JSON.stringify({ landed: ['A', 'Textures'], refused: [] }) });
+  });
+
+  describe('an outcome too large for one reply', () => {
+    const many = (count: number, prefix: string) => Array.from({ length: count }, (_, n) => ({ kind: 'mod', name: `${prefix} ${'x'.repeat(100)} ${n}` }));
+    const tooLargeLine = `The reply passes the ${REPLY_CHARS} characters that one reply holds.`;
+
+    it.each([
+      ['a landed one, with how many landed, its partials by message, and the read that shows the result', 'mod_check_for_updates', {
+        applied: true, outcome: { landed: many(400, 'landed'), refused: [] },
+        partial: [{ message: 'Nexus is slow.', detail: 'a', severity: 'warning' }, { message: 'Nexus is slow.', detail: 'b', severity: 'warning' }],
+      }, { landed: 400, refused: [], partial: [{ message: 'Nexus is slow.', count: 2 }], read: 'list_mods reads the result.' }],
+      ['a refused one, with its refused items by reason', 'mod_restore_from_manifest', {
+        applied: true, outcome: {
+          landed: many(1, 'landed'),
+          refused: [...many(300, 'gone').map((item) => ({ item, reason: 'No package.' })), ...many(100, 'odd').map((item) => ({ item, reason: 'Unreadable.' }))],
+        },
+      }, { landed: 1, refused: [{ reason: 'No package.', count: 300 }, { reason: 'Unreadable.', count: 100 }], partial: [], read: 'list_mod_statuses reads the result.' }],
+      ['a deploy whose partial names every file it left out, with its partials by message', 'instance_deploy', {
+        applied: true, wrote: true, unmanaged: [], lost: [], leftAside: [], pluginsTxt: { kind: 'unchanged', renamed: [] },
+        leftOut: Array.from({ length: 600 }, (_, n) => ({ path: `Data/meshes/${'deep/'.repeat(10)}${n}.nif`, winner: `/m/A/meshes/${'deep/'.repeat(10)}${n}.nif` })),
+      }, { partial: [{ message: 'Deploy left out each file whose path holds a file it did not write:', count: 1 }], read: 'list_problems reads the result.' }],
+    ])('answers %s', async (_case, tool, outcome, counted) => {
+      fired.outcome = outcome;
+      const { client } = await served();
+
+      const answer = await call(client, tool, {});
+
+      expect({ isError: answer.isError, answer: JSON.parse(answer.text) as unknown }).toEqual({ isError: true, answer: { tooLarge: tooLargeLine, ...counted } });
+    });
   });
 
   it('fires switch with the profile named, deploy with none, and answers a deploy that left a file out as a landed one with that warning', async () => {

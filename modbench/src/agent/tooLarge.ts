@@ -7,7 +7,6 @@ export const REPLY_CHARS = 50_000;
 
 const TOO_LARGE = `The reply passes the ${REPLY_CHARS} characters that one reply holds.`;
 
-/** What an agent gets in place of a reply too large to be useful: that it is, and what corrects the request. */
 export const tooLarge = (correction: Record<string, unknown>): Refusal => new Refusal(TOO_LARGE, { tooLarge: TOO_LARGE, ...correction });
 
 /** The reply, or, past `REPLY_CHARS`, a refusal that gives `correction` of it in its place. */
@@ -16,11 +15,19 @@ export function fitting<Reply>(reply: Reply, correction: (reply: Reply) => Recor
   return reply;
 }
 
+/** Each distinct value once, as `key`, with how many times it occurs, in order of first occurrence. */
+export function countsOf(values: readonly string[], key: string): Record<string, string | number>[] {
+  const counts = new Map<string, number>();
+  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+  return [...counts].map(([value, count]) => ({ [key]: value, count }));
+}
+
 export const FILTER = { filter: z.string().optional() };
 
-/** Whether a name holds the filter, in any case, as a view's name filter matches. */
-export const holding = (filter: string | undefined) => (name: string): boolean =>
-  filter === undefined || name.toLowerCase().includes(filter.toLowerCase());
+export const holding = (filter: string | undefined) => {
+  const term = filter?.toLowerCase();
+  return (name: string): boolean => term === undefined || name.toLowerCase().includes(term);
+};
 
 /** The correction of a list that the filter narrows: how many it holds, and which of them filter keeps. */
 export const filterNarrows = (count: Record<string, number>, keeps: string): Record<string, unknown> =>

@@ -88,6 +88,8 @@ const standingIn = async (mEdit: RecordReads, value: InstanceValue, formKey: str
   return status === null ? {} : { status };
 };
 
+const sqlText = (text: string): string => `'${text.replaceAll("'", "''")}'`;
+
 export const READ_RECORD = {
   name: 'read_record',
   input: RECORD,
@@ -101,7 +103,10 @@ export const READ_RECORD = {
     if (address !== undefined) {
       const copy = await copyOf(mEdit, { formKey, plugin: address });
       if ('refused' in copy) throw new Refusal(copy.refused);
-      return { ...(await standingIn(mEdit, value, formKey, address)), ...copy };
+      return fitting({ ...(await standingIn(mEdit, value, formKey, address)), ...copy }, (whole) => ({
+        chars: JSON.stringify(whole).length,
+        narrow: `select_rows reads parts of the copy's body, such as one field or one child record, from the records view WHERE form_key = ${sqlText(formKey)} AND plugin = ${sqlText(address.name)} AND origin = ${sqlText(address.origin)}.`,
+      }));
     }
     const compared = await mEdit.getComparison(formKey);
     if (isReadFailed(compared)) throw new Refusal(failureReason(compared));
