@@ -149,9 +149,8 @@ internal static class LocalizedStrings
         return found;
     }
 
-    // Loose files beat every archive, and a later archive's file replaces an earlier one's.
-    // Every loaded archive is read for strings, as the game mounts them all. An unreadable one fails a plugin only
-    // where Mutagen's lookup applies it: a game INI lists it, or its name is the plugin's.
+    // Loose files beat every archive, and a later archive's file replaces an earlier one's. An unreadable archive
+    // fails a plugin only where Mutagen's lookup applies it: a game INI lists it, or its name is the plugin's.
     private static IEnumerable<IReadOnlyList<StringsFile>> TheGamesPlaces(
         LoadOrderSnapshot loadOrder, ModKey plugin, GameRelease gameRelease, StringsLanguageFormat languageFormat)
     {

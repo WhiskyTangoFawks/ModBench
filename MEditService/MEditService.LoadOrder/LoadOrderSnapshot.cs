@@ -59,7 +59,7 @@ public readonly record struct PluginLine(int Place, bool NamesIt);
 public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
 {
     /// <summary>No snapshot has arrived.</summary>
-    internal static readonly LoadOrderSnapshot Empty = new(string.Empty, null, default, [], [], [], [], [], [], Language.English);
+    internal static readonly LoadOrderSnapshot Empty = new(string.Empty, null, default, [], [], [], [], [], [], [], Language.English);
 
     private readonly Dictionary<PluginAddress, int> _loadOrderIndex;
 
