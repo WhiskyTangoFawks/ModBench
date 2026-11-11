@@ -30,10 +30,21 @@ export function metadataAt(fields: Field[], record: unknown, path: Segment[]): F
   return current;
 }
 
+async function winningCopy(client: Pick<MEditClient, 'getComparison'>, formKey: string) {
+  const comparison = answerOf(await client.getComparison(formKey));
+  return comparison?.overrides.find((candidate) => candidate.isWinner);
+}
+
 /** The metadata of the field `found` sits in, from mEdit's answer for its record's winning copy; rejects when mEdit
  *  cannot answer. */
 export async function fieldOfRecord(client: Pick<MEditClient, 'getComparison'>, found: FieldAtOffset): Promise<FieldMetadata | undefined> {
-  const comparison = answerOf(await client.getComparison(found.recordFormKey));
-  const copy = comparison?.overrides.find((candidate) => candidate.isWinner);
+  const copy = await winningCopy(client, found.recordFormKey);
   return copy && metadataAt(copy.fields, found.record, found.path);
+}
+
+/** The record type of the winning copy, when the field `found` sits in holds a path to a file; rejects when mEdit cannot
+ *  answer. */
+export async function recordTypeOfPathField(client: Pick<MEditClient, 'getComparison'>, found: FieldAtOffset): Promise<string | undefined> {
+  const copy = await winningCopy(client, found.recordFormKey);
+  return copy && metadataAt(copy.fields, found.record, found.path)?.isAssetLink ? copy.recordType : undefined;
 }

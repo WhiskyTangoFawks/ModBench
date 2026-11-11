@@ -337,6 +337,8 @@ export interface MEditClient {
   getScriptReferences(name: string): Promise<components['schemas']['MemberReferences'] | ReadFailed>;
   /** Each copy that names the file at `path` in the Data folder. */
   getFileReferences(path: string): Promise<components['schemas']['MemberReferences'] | ReadFailed>;
+  /** The path in the Data folder that `value` names in the member at `fieldPath` of a record type, as Mutagen places it. */
+  resolveFilePath(gameRelease: string, recordType: string, fieldPath: string, value: string): Promise<string | ReadFailed>;
   /** Null: the plugin holds no such record. */
   getRenderedDocument(plugin: PluginAddress, formKey: string): Promise<RenderedDocument | null | ReadFailed>;
   /** Null: the plugin holds no such record. `location` is the path of the copy's own file, of the file of the

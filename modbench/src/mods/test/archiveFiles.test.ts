@@ -2,6 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { Uri } from '../../test/vscodeMock';
 
 const folderUpdates = vi.hoisted(() => [] as [number, number, { uri: ReturnType<typeof Uri.file>; name: string }][]);
+const workspaceState = vi.hoisted(() => ({ folders: [{ uri: { toString: () => 'file:///workspace' } }] as { uri: { toString(): string } }[], listeners: [] as (() => void)[] }));
+const executed = vi.hoisted(() => [] as unknown[][]);
 const archiveStamp = vi.hoisted(() => ({ size: 100, mtime: 1 }));
 const registered = vi.hoisted(() => new Map<string, (...args: unknown[]) => unknown>());
 const registrations = vi.hoisted(() => new Map<string, { provider: Record<string, (...args: unknown[]) => unknown>; options?: { isReadonly?: boolean } }>());
@@ -10,8 +12,13 @@ vi.mock('vscode', () => ({
   window: { showOpenDialog: () => Promise.resolve([{ fsPath: '/games/Fallout4/Data/Chosen.ba2' }]) },
   workspace: {
     fs: { stat: () => Promise.resolve({ ...archiveStamp }) },
-    workspaceFolders: [{}],
-    updateWorkspaceFolders: (...args: [number, number, { uri: ReturnType<typeof Uri.file>; name: string }]) => { folderUpdates.push(args); return true; },
+    get workspaceFolders() { return workspaceState.folders; },
+    onDidChangeWorkspaceFolders: (listener: () => void) => { workspaceState.listeners.push(listener); return { dispose: () => undefined }; },
+    updateWorkspaceFolders: (...args: [number, number, { uri: ReturnType<typeof Uri.file>; name: string }]) => {
+      folderUpdates.push(args);
+      queueMicrotask(() => { workspaceState.listeners.splice(0).forEach((listener) => { listener(); }); });
+      return true;
+    },
     registerFileSystemProvider: (scheme: string, provider: Record<string, (...args: unknown[]) => unknown>, options?: { isReadonly?: boolean }) => {
       registrations.set(scheme, { provider, options });
       return { dispose: () => undefined };
@@ -21,7 +28,7 @@ vi.mock('vscode', () => ({
   EventEmitter: class { event = () => ({ dispose: () => undefined }); },
   Disposable: class { constructor(public dispose: () => void) {} },
   FileType: { File: 1, Directory: 2 },
-  commands: { registerCommand: (id: string, handler: (...args: unknown[]) => unknown) => { registered.set(id, handler); return { dispose: () => undefined }; }, executeCommand: () => Promise.resolve() },
+  commands: { registerCommand: (id: string, handler: (...args: unknown[]) => unknown) => { registered.set(id, handler); return { dispose: () => undefined }; }, executeCommand: (...args: unknown[]) => { executed.push(args); return Promise.resolve(); } },
   FileSystemError: {
     NoPermissions: (uri: { path: string }) => new Error(`NoPermissions ${uri.path}`),
     FileNotFound: (what: { path: string }) => new Error(`FileNotFound ${what.path}`),
@@ -29,7 +36,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { archivedFileUri, registerArchiveFiles, registerArchiveOpen } from '../archiveFiles';
+import { archivedFileUri, registerArchiveFiles, registerArchiveOpen, revealArchivedFile } from '../archiveFiles';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
@@ -173,5 +180,26 @@ describe('open an archive from the Explorer (commands.md, Archive, open)', () =>
     await registered.get('modbench.archive.open')?.(fileUri(address.archive));
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to open the archive "/mods/A/A - Main.ba2".', detail: 'no instance' }]);
+  });
+});
+
+describe('show an archived file in the Explorer (symbols.md, The symbols, File)', () => {
+  it('joins the archive to the workspace, then shows the file once the Explorer lists the archive', async () => {
+    folderUpdates.length = 0;
+    executed.length = 0;
+    await revealArchivedFile(address);
+
+    expect([folderUpdates.length, executed]).toEqual([1, [['revealInExplorer', archivedFileUri(address)]]]);
+  });
+
+  it('shows the file as it stands when the archive is already a folder of the workspace', async () => {
+    const root = await archiveRoot();
+    workspaceState.folders = [{ uri: root }];
+    folderUpdates.length = 0;
+    executed.length = 0;
+    await revealArchivedFile(address);
+    workspaceState.folders = [{ uri: { toString: () => 'file:///workspace' } }];
+
+    expect([folderUpdates.length, executed]).toEqual([0, [['revealInExplorer', archivedFileUri(address)]]]);
   });
 });

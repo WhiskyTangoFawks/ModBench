@@ -1,6 +1,4 @@
 using System.Text.Json;
-using MEditService.Codec.Serialization;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Assets;
 
 namespace MEditService.Codec.Schema;
@@ -8,15 +6,12 @@ namespace MEditService.Codec.Schema;
 /// <summary>One file a document names: its path in the Data folder, and the member path that names it.</summary>
 public readonly record struct AssetPath(string DataPath, string FieldPath);
 
-/// <summary>Which files in the Data folder a document names: Mutagen places each path the record's asset links hold, and
-/// the schema for its record type says which member holds it.</summary>
+/// <summary>Which files in the Data folder a document names: the schema for its record type says which member holds a
+/// path, and Mutagen's asset type says where in the Data folder it lies.</summary>
 public static class AssetPaths
 {
-    public static List<AssetPath> Collect(string text, IReadOnlyList<ColumnSpec> columns, GameRelease gameRelease, string recordType)
+    public static List<AssetPath> Collect(string text, IReadOnlyList<ColumnSpec> columns)
     {
-        var placed = ((IAssetLinkContainerGetter)RecordTextCodec.Deserialize(text, gameRelease, recordType))
-            .EnumerateAssetLinks(AssetLinkQuery.Listed)
-            .ToLookup(link => link.GivenPath, link => link.DataRelativePath.Path, StringComparer.Ordinal);
         using var document = JsonDocument.Parse(text);
         var root = document.RootElement;
         var named = new List<AssetPath>();
@@ -24,13 +19,36 @@ public static class AssetPaths
         {
             FormReferences.WalkLeaves(DocumentNodes.VariantFor(col.Field, root), DocumentNodes.At(root, col.PropertyName), col.Name,
                 leaf => leaf.IsAssetLink,
-                (_, path, value) =>
+                (leaf, path, value) =>
                 {
-                    if (FormReferences.ExtractString(value) is not { Length: > 0 } given) return;
-                    if (!placed.Contains(given)) throw new InvalidOperationException($"Mutagen lists no asset link that holds {given} at {path}.");
-                    named.AddRange(placed[given].Distinct(StringComparer.Ordinal).Select(dataPath => new AssetPath(dataPath, path)));
+                    if (leaf.AssetLinkType is { } linkType && FormReferences.ExtractString(value) is { Length: > 0 } given)
+                        named.Add(new(DataPathOf(linkType, given), path));
                 });
         }
         return named;
+    }
+
+    /// <summary>The path in the Data folder that <paramref name="given"/> names at the member <paramref name="fieldPath"/>
+    /// (as <see cref="Collect"/> spells it), or null where that member is no path to a file.</summary>
+    public static string? DataPathAt(IReadOnlyList<ColumnSpec> columns, string fieldPath, string given)
+    {
+        var hops = fieldPath.Split('.').Select(hop => hop.Split('[')[0]).ToList();
+        var leaf = columns.FirstOrDefault(col => col.Name == hops[0])?.Field;
+        foreach (var hop in hops.Skip(1)) leaf = MemberOf(ElementOf(leaf), hop);
+        return leaf?.AssetLinkType is { } linkType ? DataPathOf(linkType, given) : null;
+    }
+
+    private static FieldMetadata? ElementOf(FieldMetadata? owner) => owner?.ElementType ?? owner;
+
+    private static FieldMetadata? MemberOf(FieldMetadata? owner, string name) =>
+        owner?.Fields?.FirstOrDefault(member => member.Name == name)
+        ?? owner?.Fields?.SelectMany(member => member.Variants?.Values ?? []).Select(variant => MemberOf(variant, name)).FirstOrDefault(found => found is not null);
+
+    private static string DataPathOf(Type assetLinkType, string given)
+    {
+        var assetType = assetLinkType.GetInterfaces().Single(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IAssetLinkGetter<>)).GenericTypeArguments[0];
+        return Activator.CreateInstance(typeof(AssetLinkGetter<>).MakeGenericType(assetType), given) is IAssetLinkGetter link
+            ? link.DataRelativePath.Path
+            : throw new InvalidOperationException($"Mutagen holds no asset link of {assetType.Name}.");
     }
 }

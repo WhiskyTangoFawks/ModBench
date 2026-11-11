@@ -24,13 +24,14 @@ import type { PluginsShown } from '../drivingLib/pluginsShown';
 import { pluginLanguage } from './pluginLanguage';
 import { entryLanguage } from './entryLanguage';
 import { scriptLanguage, type ScriptClient } from './scriptLanguage';
-import { fileLanguage, type FileClient } from './fileLanguage';
+import { fileLanguage, type FileClient, type FileCopies } from './fileLanguage';
 import { renameSymbol } from './renameSymbol';
 
 interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'sourceFiles'> {
   instance: Pick<Instance, 'value' | 'subscribe'> | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
   client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlugins' | 'handUnsavedDocuments' | 'getRecordOfFile'> & RecordDocumentClient & ScriptClient & FileClient & SourceProblemsDeps['client'];
+  fileCopies: FileCopies;
   /** Each box that owns files, saying where they name a symbol (ADR-0028). */
   owners: readonly SymbolOwner[];
   /** Each box that owns files, saying where they name a symbol its name alone names. */
@@ -143,6 +144,7 @@ export function formKeyLocation(client: RecordDocumentClient) {
 type PluginLanguage = ReturnType<typeof pluginLanguage>;
 type EntryLanguage = ReturnType<typeof entryLanguage>;
 type ScriptLanguage = ReturnType<typeof scriptLanguage>;
+type FileLanguage = ReturnType<typeof fileLanguage>;
 type Spanned = { readonly start: number; readonly end: number };
 
 const rangeIn = (document: vscode.TextDocument, { start, end }: Spanned): vscode.Range =>
@@ -212,7 +214,7 @@ function registerCompletion(deps: SourceLanguageDeps, plugin: PluginLanguage, en
 
 // A plugin's `go to` selects a row and the editor stays put, so the definition is the name asked about: VS Code stays
 // where it is and says nothing.
-function registerDefinition(deps: SourceLanguageDeps, plugin: PluginLanguage, entry: EntryLanguage, script: ScriptLanguage): vscode.Disposable {
+function registerDefinition(deps: SourceLanguageDeps, plugin: PluginLanguage, entry: EntryLanguage, script: ScriptLanguage, file: FileLanguage): vscode.Disposable {
   const definitionAt = definitionsOf({ client: deps.client, reporter: deps.reporter, open: openPluginSourceDocument });
   return vscode.languages.registerDefinitionProvider(ownedFiles, {
     async provideDefinition(document, position) {
@@ -223,6 +225,8 @@ function registerDefinition(deps: SourceLanguageDeps, plugin: PluginLanguage, en
       if (ofMod !== undefined) return ofMod.resolved ? new vscode.Location(document.uri, rangeIn(document, ofMod)) : undefined;
       const ofScript = await script.definitionAt(document, offset);
       if (ofScript !== undefined) return ofScript.file === undefined ? undefined : new vscode.Location(vscode.Uri.file(ofScript.file), new vscode.Position(0, 0));
+      const ofFile = await file.definitionAt(document, offset);
+      if (ofFile !== undefined) return ofFile.resolved ? new vscode.Location(document.uri, rangeIn(document, ofFile)) : undefined;
       if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
       const found = await definitionAt(heldText(document), offset);
       return found && locationOf(found);
@@ -298,11 +302,12 @@ export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
   const { instance, reporter, entryOwners: owners, entryTooltip, downloadedFileTooltip, modOrderFileOf } = deps;
   const entry = entryLanguage({ instance, reporter, owners, goTo: goToMod, entryTooltip, downloadedFileTooltip, modOrderFileOf });
   const script = scriptLanguage({ instance, reporter, client: deps.client });
+  const file = fileLanguage({ reporter, client: deps.client, ...deps.fileCopies });
   const problems = sourceProblems(deps);
   const entryPoints = deps.instance ? [registerBuildEntryPoint({ instance: deps.instance, reporter: deps.reporter }), registerUpdateManifestEntryPoint({ instance: deps.instance, reporter: deps.reporter })] : [];
   const disposable = vscode.Disposable.from(
     handUnsavedPluginSource(deps.client, isPluginSourcePath),
-    registerHover(deps, plugin, entry, script), registerCompletion(deps, plugin, entry, script), registerDefinition(deps, plugin, entry, script), registerRename(deps, plugin),
+    registerHover(deps, plugin, entry, script), registerCompletion(deps, plugin, entry, script), registerDefinition(deps, plugin, entry, script, file), registerRename(deps, plugin),
     registerReferences(deps, plugin, entry, script), registerSymbols(deps, plugin, entry, script),
     problems, ...entryPoints,
   );
@@ -311,6 +316,6 @@ export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
     messages: () => problems.messages(),
     referencedBy: plugin.referencedBy,
     referencedByMod: entry.referencedBy,
-    referencedByFile: fileLanguage({ reporter: deps.reporter, client: deps.client }).referencedBy,
+    referencedByFile: file.referencedBy,
   };
 }

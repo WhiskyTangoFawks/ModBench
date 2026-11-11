@@ -14,6 +14,7 @@ import { highlightFollowingFocus } from './drivingLib/highlightFollowsFocus';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, loadOrderComing, sourceModRepositoriesOver, type Editor } from './editor';
 import { quickFixes } from './drivingLib/quickFixes';
+import type { FileCopies } from './sourceLanguage/fileLanguage';
 import { createSourceLanguage, followRenames, formKeyLocation, registerFollowRename, scriptReferences } from './sourceLanguage';
 import { saveUnsavedUnder } from './textDocuments/saveUnsavedUnder';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
@@ -41,6 +42,7 @@ import { createPlugins, PLUGINS_KEY_ARGS, type Plugins } from './plugins';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
 import type { ReferencedBy } from './mods/modSymbolCommands';
+import { copyTheGameGets, revealCopy } from './mods/fileCopy';
 import { registerArchiveFiles, registerArchiveOpen } from './mods/archiveFiles';
 import { fileProblemsOver } from './ports/fileProblems';
 import type { Log } from './ports/log';
@@ -135,6 +137,7 @@ interface InstanceSide {
   entryTooltip: (entry: EntryRef) => string | undefined;
   downloadedFileTooltip: (name: string) => string | undefined;
   modOrderFileOf: (profile: string) => string | undefined;
+  fileCopies: FileCopies;
   sourceFiles: SourceFilesOf;
   copyValue: CopyValueAdapter[];
 }
@@ -152,6 +155,7 @@ function buildBareSide(own: Own): InstanceSide {
     entryTooltip: () => undefined,
     downloadedFileTooltip: () => undefined,
     modOrderFileOf: () => undefined,
+    fileCopies: { gameRelease: () => Promise.reject(new Error('No instance is open.')), copyOf: () => undefined, reveal: revealCopy },
     sourceFiles: NO_SOURCE_FILES,
     copyValue: [],
   };
@@ -293,6 +297,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     entryTooltip: (entry) => mods.tooltipOf(entry),
     downloadedFileTooltip: (name) => downloads.tooltipOf(name),
     modOrderFileOf: (profile) => adapter.modOrderFileOf(profile),
+    fileCopies: { gameRelease: () => adapter.gameRelease(), copyOf: (path) => copyTheGameGets(instance.value, path), reveal: revealCopy },
     deployment: { folder: () => deploymentFolderOf(deploymentFolderSetting), pluginsTxtPlace: placeForGame },
     sourceFiles: (origin) => sourceFiles(instance.value, origin),
     copyValue: [mods.copyValue, plugins.copyValue, downloads.copyValue],
@@ -391,6 +396,7 @@ function start(context: vscode.ExtensionContext): void {
   const sourceLanguage = createSourceLanguage({
     client: meditClient, instance: views.instance, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
     pluginsShown: views.pluginsShown,
+    fileCopies: views.fileCopies,
     entryTooltip: views.entryTooltip,
     downloadedFileTooltip: views.downloadedFileTooltip,
     modOrderFileOf: views.modOrderFileOf,

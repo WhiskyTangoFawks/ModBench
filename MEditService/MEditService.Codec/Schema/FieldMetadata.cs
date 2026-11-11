@@ -89,8 +89,8 @@ public record FieldMetadata(
     // The name of a Papyrus script the record attaches (symbols.md, The symbols).
     bool IsScriptName = false,
 
-    // A path to a file in the Data folder, which Mutagen models as an asset link (symbols.md, The symbols, File).
-    [property: JsonIgnore] bool IsAssetLink = false,
+    // The asset link Mutagen models a path to a file in the Data folder as (symbols.md, The symbols, File).
+    [property: JsonIgnore] Type? AssetLinkType = null,
 
     // A reference Mutagen holds as an index instead while one of these boolean siblings is set (an
     // alias or package-data parameter), when DocumentNodes.VariantFor shapes it an integer.
@@ -104,6 +104,9 @@ public record FieldMetadata(
     // pairs with the nth in every other column. The compare reads it; the webview never does.
     [property: JsonIgnore] IReadOnlyList<string>? ExtendedKeyMembers = null)
 {
+    /// <summary>The member holds a path to a file in the Data folder.</summary>
+    public bool IsAssetLink => AssetLinkType is not null;
+
     /// <summary>A read-only member has no writable members of its own, so its reason reaches every
     /// member below it, except one that already names its own.</summary>
     internal FieldMetadata WithReadOnlyReason(string reason) => this with

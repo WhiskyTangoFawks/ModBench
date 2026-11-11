@@ -114,6 +114,20 @@ export function registerArchiveFiles(client: Pick<MEditClient, 'getArchiveFile' 
   return vscode.workspace.registerFileSystemProvider(ARCHIVE_SCHEME, new ArchiveFileSystem(client), { isReadonly: true });
 }
 
+/** symbols.md, The symbols, File: the archive joins the workspace as `modbench.archive.open` joins it, unless it is one, and
+ *  the Explorer shows the file in it. */
+export async function revealArchivedFile(address: ArchivedFileAddress): Promise<void> {
+  const root = archiveUri(address);
+  if (!vscode.workspace.workspaceFolders?.some(({ uri }) => uri.toString() === root.toString())) {
+    const listed = new Promise<void>((resolve) => {
+      const subscription = vscode.workspace.onDidChangeWorkspaceFolders(() => { subscription.dispose(); resolve(); });
+    });
+    vscode.workspace.updateWorkspaceFolders(vscode.workspace.workspaceFolders?.length ?? 0, 0, { uri: root, name: nameOf(address.archive) });
+    await listed;
+  }
+  await vscode.commands.executeCommand('revealInExplorer', archivedFileUri(address));
+}
+
 interface ArchiveOpenDeps {
   gameRelease: () => Promise<string>;
   reporter: Reporter;

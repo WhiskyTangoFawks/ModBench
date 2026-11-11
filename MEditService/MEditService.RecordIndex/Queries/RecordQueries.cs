@@ -374,9 +374,8 @@ internal sealed class RecordQueries(
     public Answer<MemberReferences, IndexRefused> GetFileReferences(string dataPath) => _answer.Of(() =>
     {
         var file = new DataRelativePath(dataPath);
-        var release = _loadOrder.Require().GameRelease;
         var name = dataPath[(dataPath.LastIndexOfAny(PathSeparators) + 1)..];
-        return CopiesNamingAtMembers(name, (copy, columns) => AssetPaths.Collect(copy.Body, columns, release, copy.RecordType)
+        return CopiesNamingAtMembers(name, (copy, columns) => AssetPaths.Collect(copy.Body, columns)
             .Where(named => new DataRelativePath(named.DataPath) == file).Select(named => named.FieldPath));
     });
 

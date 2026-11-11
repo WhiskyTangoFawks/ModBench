@@ -15,7 +15,7 @@ public class AssetPathsTests
     private static List<AssetPath> Collected(Tes5.Static record) =>
         AssetPaths.Collect(
             RecordTextCodec.SerializeToText(record, GameRelease.SkyrimSE),
-            SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["stat"].RecordColumns, GameRelease.SkyrimSE, "stat");
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["stat"].RecordColumns);
 
     [Fact]
     public void APathARecordNames_IsTheFileInTheDataFolder_UnderItsAssetTypesFolder()
@@ -35,7 +35,7 @@ public class AssetPathsTests
 
         var collected = AssetPaths.Collect(
             RecordTextCodec.SerializeToText(record, GameRelease.Fallout4),
-            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["txst"].RecordColumns, GameRelease.Fallout4, "txst");
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["txst"].RecordColumns);
 
         Assert.Equal(
             [
@@ -51,5 +51,32 @@ public class AssetPathsTests
         var record = NewMod().Statics.AddNew("Holder");
 
         Assert.Empty(Collected(record));
+    }
+
+    private static string? DataPathAt(string fieldPath, string given) =>
+        AssetPaths.DataPathAt(SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["stat"].RecordColumns, fieldPath, given);
+
+    [Fact]
+    public void ThePathAFieldHolds_IsTheFileInTheDataFolder_UnderItsAssetTypesFolder()
+    {
+        Assert.Equal(Path.Combine("Meshes", "Architecture", "Wall.nif"), DataPathAt("Model.File", @"Architecture\Wall.nif"));
+    }
+
+    [Fact]
+    public void APathThatAlreadyNamesItsAssetTypesFolder_IsNotPrefixedTwice()
+    {
+        Assert.Equal(Path.Combine("Meshes", "Architecture", "Wall.nif"), DataPathAt("Model.File", @"Meshes\Architecture\Wall.nif"));
+    }
+
+    [Fact]
+    public void AFieldThatIsNoAssetLink_HasNoDataPath()
+    {
+        Assert.Null(DataPathAt("EditorID", "Holder"));
+    }
+
+    [Fact]
+    public void AMemberThatIsNoField_HasNoDataPath()
+    {
+        Assert.Null(DataPathAt("Model.Nope", @"Architecture\Wall.nif"));
     }
 }
