@@ -32,8 +32,6 @@ internal static class ConflictRules
             ? taking.MaxBy(p => p.LoadOrderIndex).Plugin
             : null;
 
-    // The winner is ConflictWins if another non-master plugin disagrees with both the master and
-    // the winner, else Override; the rest are IdenticalToMaster, ConflictLoses or Override.
     public static Dictionary<string, ConflictThis> ComputeCellStates(
         IReadOnlyDictionary<string, object?> valuesByPlugin,
         string masterPlugin,
@@ -66,7 +64,10 @@ internal static class ConflictRules
 
     private static ConflictThis ClassifyCell(string plugin, object? pluginValue, CellContext ctx)
     {
-        if (ctx.ValuesEqual(pluginValue, ctx.MasterValue)) return ConflictThis.IdenticalToMaster;
+        if (ctx.ValuesEqual(pluginValue, ctx.MasterValue))
+            return plugin == ctx.WinnerPlugin && ctx.PluginOrder.Any(p => p.Plugin != ctx.MasterPlugin && !ctx.ValuesEqual(ctx.ValuesByPlugin.GetValueOrDefault(p.Plugin), ctx.MasterValue))
+                ? ConflictThis.IdenticalToMasterWinsConflict
+                : ConflictThis.IdenticalToMaster;
 
         if (plugin == ctx.WinnerPlugin)
         {
@@ -160,6 +161,7 @@ internal static class ConflictRules
             { Count: 0 } => null,
             _ when states.Contains(ConflictThis.ConflictLoses) => ConflictThis.ConflictLoses,
             _ when states.Contains(ConflictThis.ConflictWins) => ConflictThis.ConflictWins,
+            _ when states.Contains(ConflictThis.IdenticalToMasterWinsConflict) => ConflictThis.IdenticalToMasterWinsConflict,
             _ when states.Contains(ConflictThis.Override) => ConflictThis.Override,
             _ => ConflictThis.IdenticalToMaster,
         };

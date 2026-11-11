@@ -60,18 +60,13 @@ internal sealed class ConflictClassifier(ILogger logger)
         return new ClassifyResult(conflictAll, pluginConflictThis, diffs);
     }
 
-    // Each copy's state against the first, null where nothing of it was compared; the last copy wins. As xEdit
-    // sets it, the last copy identical to the first wins the conflict its record has.
     public IReadOnlyList<ConflictThis?> StatesOf(
         IReadOnlyList<RecordDetail> stack, GameRelease release, Language stringsLanguage, Func<string, uint?> loadOrderFormIds)
     {
         var last = stack.Count - 1;
         var copies = stack.Select((copy, at) => copy with { IsWinner = at == last }).ToList();
         var classified = Classify(copies, release, stringsLanguage, _ => null, loadOrderFormIds, indexed: true);
-        var states = copies.ConvertAll(copy => classified.PluginStates.TryGetValue(Column(copy), out var state) ? state : (ConflictThis?)null);
-        if (states[last] == ConflictThis.IdenticalToMaster && classified.ConflictAll is ConflictAll.Override or ConflictAll.Conflict)
-            states[last] = ConflictThis.IdenticalToMasterWinsConflict;
-        return states;
+        return copies.ConvertAll(copy => classified.PluginStates.TryGetValue(Column(copy), out var state) ? state : (ConflictThis?)null);
     }
 
     // The rows of copies compared with each other, one column named for each: a row is NoConflict
