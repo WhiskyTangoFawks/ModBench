@@ -1337,8 +1337,8 @@ internal sealed class Indexer : IDisposable
         }
     }
 
-    // ADR-0007: the read a first index runs, so a re-read produces the same rows by construction. A failed
-    // read is recorded and rethrown, so it is not read again until that changes. A binary is opened again for its header.
+    // ADR-0007: the read a first index runs, so a re-read gives the same rows. A failed read is recorded and
+    // rethrown, so it is not read again until that changes. A binary is reopened for its header.
     private bool ReindexHeldPlugin(OpenScope scope, PluginMetadata plugin)
     {
         var key = plugin.Key;
