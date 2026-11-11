@@ -1582,6 +1582,7 @@ export interface components {
             active: components["schemas"]["PluginAddress"][];
             loadedWithNoLine: components["schemas"]["PluginAddress"][];
             archives: components["schemas"]["StampedFile"][];
+            listedArchives: string[];
             stringsFiles: components["schemas"]["StampedFile"][];
             places: components["schemas"]["PluginPlace"][];
             dataFolder: string;

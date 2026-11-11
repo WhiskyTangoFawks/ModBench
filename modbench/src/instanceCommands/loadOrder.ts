@@ -38,7 +38,8 @@ export async function putLoadOrder(
   const active = inGameOrder(source);
   const archives = archivesOfPlugins(source, active);
   const snapshot: LoadOrderSnapshot = {
-    plugins, active, loadedWithNoLine, archives, stringsFiles, places, dataFolder, instanceRoot, gameRelease, stringsLanguage,
+    plugins, active, loadedWithNoLine, archives, listedArchives: source.listedArchives.map(({ path }) => path), stringsFiles, places, dataFolder,
+    instanceRoot, gameRelease, stringsLanguage,
   };
   if (!changed(snapshot)) return { sent: false };
   return { sent: true, snapshot, outcome: await client.sendLoadOrder(snapshot) };

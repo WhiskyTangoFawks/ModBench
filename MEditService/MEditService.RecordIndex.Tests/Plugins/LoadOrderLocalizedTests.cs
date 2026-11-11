@@ -326,7 +326,7 @@ public sealed class LoadOrderLocalizedTests
         PluginFixtureData data, IReadOnlyList<LoadOrderEntry> plugins, string[] gameReads, string[]? gameArchives = null, string? instanceRoot = null,
         Language language = Language.English) =>
         new(data.DataFolder, instanceRoot, GameRelease.Fallout4, SnapshotPlugins.Of(plugins), SnapshotPlugins.Active(plugins),
-            SnapshotPlugins.LoadedWithNoLine(plugins), [.. (gameArchives ?? []).Select(HandedStrings.Stamped)], [.. gameReads.Select(HandedStrings.Stamped)], [], language);
+            SnapshotPlugins.LoadedWithNoLine(plugins), [.. (gameArchives ?? []).Select(HandedStrings.Stamped)], [], [.. gameReads.Select(HandedStrings.Stamped)], [], language);
 
     private static (bool NamesMissing, bool ReadsTheDoor) NameAfter(
         OpenedIndex index, LoadOrderHolder holder, PluginFixtureData data, IReadOnlyList<LoadOrderEntry> plugins, string[] gameReads,
