@@ -760,11 +760,11 @@ export interface InstanceAdapter extends DataFileReads {
   writeModMetadata(mod: string, metadata: ModMetadata, trash: MoveToTrash): Promise<void>;
   /** The files in every mod's folder where the mod manager keeps its metadata, by path in it, which no build makes. */
   readonly metadataFilesInModFolder: readonly string[];
-  /** The game files of the game folder `place` at the given paths, named as the game folder names them, with their hashes. A path that
+  /** The game files of `place`, the game folder, at the given paths, named as the game folder names them, with their hashes. A path that
    *  could not be read is `unreadable` as asked, with why: neither found nor absent. */
   gameFiles(place: GamePlace, paths: readonly string[]): Promise<GameFilesRead>;
-  /** The game files of the game folder `place` that the files below `folder` may be: a mod's file where deploy puts it, another folder's
-   *  at its own path. `paths`: the files asked for; else every file the folder holds. */
+  /** The game files of `place` that the files below `folder` may be: a mod's file where deploy puts it, any other at its own path.
+   *  `paths`: the files asked for; else every file the folder holds. */
   gameFilesTakenBy(place: GamePlace, folder: string, paths?: readonly string[]): Promise<FileRead<GameFilesTaken>>;
   /** Writes the instance repository's ignore list: a whitelist of what the repository holds, after the lines of an ignore
    *  list already there. Answers the call that takes back what it wrote. */
