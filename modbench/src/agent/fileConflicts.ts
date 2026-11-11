@@ -84,14 +84,17 @@ function conflictsOf(value: InstanceValue, wanted: readonly FileOrigin[], conten
 }
 
 // mods.md, Order and view state, story 2.
-function holdingFiles(row: ModConflicts, held: (name: string) => boolean): ModConflicts {
-  if (held(row.mod)) return row;
+function holdingFiles(row: ModConflicts, held: (name: string) => boolean, keptWhole: ReadonlySet<string>): ModConflicts {
+  if (held(row.mod) || (row.kind === 'mod' && keptWhole.has(row.mod))) return row;
   const pathHeld = ({ file }: { file: string }) => file.split(/[\\/]/).some(held);
   return { ...row, wins: row.wins.filter(pathHeld), loses: row.loses.filter(pathHeld), files: row.files.filter(pathHeld) };
 }
 
+const modsUnderSeparatorsHolding = ({ modGroups }: InstanceValue, held: (name: string) => boolean): Set<string> =>
+  new Set(modGroups.groups.filter(({ separator }) => held(separator.name)).flatMap(({ mods }) => mods.map(({ name }) => name)));
+
 const MODS_NARROW = 'mods narrows the read to the mods you name.';
-const FILTER_NARROWS = 'filter keeps the files whose path holds it in a folder or file name, in any case, and every file of a mod whose name holds it.';
+const FILTER_NARROWS = 'filter keeps the files whose path holds it in a folder or file name, in any case, and every file of a mod whose name, or whose separator\'s name, holds it.';
 
 export const FILE_CONFLICTS = {
   name: 'list_file_conflicts',
@@ -102,7 +105,8 @@ export const FILE_CONFLICTS = {
     if (separator !== undefined) throw new Refusal(`"${separator.name}" is a separator; it has no files.`);
     const wanted = named.map(originOf);
     const held = holding(filter);
-    const rows = conflictsOf(value, wanted, await contentsIn(value, reads, archived, wanted)).map((row) => holdingFiles(row, held));
+    const keptWhole = modsUnderSeparatorsHolding(value, held);
+    const rows = conflictsOf(value, wanted, await contentsIn(value, reads, archived, wanted)).map((row) => holdingFiles(row, held, keptWhole));
     return fitting(rows, (all) => ({
       ...mods === undefined
         ? { mods: all.length }

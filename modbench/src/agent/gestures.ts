@@ -268,53 +268,56 @@ const OPEN_RECORD = gestureInput(
   },
 );
 
+type ReadTool = 'list_profiles' | 'list_mods' | 'list_downloads' | 'list_mod_statuses' | 'list_file_conflicts' | 'list_plugins'
+  | 'list_sorting_rules' | 'list_problems' | 'read_record' | null;
+
 /** agent.md, Gestures, story 1: the catalog's `writes` gestures, less those it keeps from the agent, plus those it gives.
  *  @public Read by agentGestures.test, which holds it to commands.md. */
-export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
-  ['modbench.mod.enable', MODS],
-  ['modbench.mod.disable', MODS],
-  ['modbench.mod.move', MOVE_MODS],
-  ['modbench.mod.uninstall', UNINSTALL],
-  ['modbench.mod.versionInGit', VERSION_IN_GIT],
-  ['modbench.mod.build', BUILD],
-  ['modbench.mod.rename', RENAME_MOD],
-  ['modbench.mod.createEmpty', CREATE_EMPTY_MOD],
-  ['modbench.mod.excludeFile', FILES],
-  ['modbench.mod.includeFile', FILES],
-  ['modbench.mod.ignoreFile', FILES],
-  ['modbench.mod.unignoreFile', FILES],
-  ['modbench.mod.addPublisherTag', PUBLISHER_TAG_ROWS],
-  ['modbench.mod.removePublisherTag', PUBLISHER_TAG_ROWS],
-  ['modbench.mod.install', INSTALL],
-  ['modbench.downloadedFile.queryInfo', DOWNLOADED_FILES],
-  ['modbench.downloadedFile.download', DOWNLOAD],
-  ['modbench.downloadedFile.exclude', DOWNLOADED_FILES],
-  ['modbench.downloadedFile.include', DOWNLOADED_FILES],
-  ['modbench.downloadedFile.delete', DOWNLOADED_FILES],
-  ['modbench.separator.add', ADD_SEPARATOR],
-  ['modbench.separator.rename', RENAME_SEPARATOR],
-  ['modbench.separator.delete', DELETE_SEPARATORS],
-  ['modbench.plugin.enable', LINES],
-  ['modbench.plugin.disable', LINES],
-  ['modbench.plugin.decompile', DECOMPILE],
-  ['modbench.plugin.decompileAndRepair', DECOMPILE_AND_REPAIR],
-  ['modbench.plugin.move', MOVE_PLUGINS],
-  ['modbench.plugin.applySuggestedMove', APPLY_SUGGESTED_MOVE],
-  ['modbench.plugin.loadAfter', LOAD_AFTER],
-  ['modbench.plugin.create', CREATE_PLUGIN],
-  ['modbench.plugin.rename', RENAME_PLUGIN],
-  ['modbench.record.open', OPEN_RECORD],
-  ['modbench.modlist.gitInit', NO_INPUT],
-  ['modbench.profile.switch', SWITCH_PROFILE],
-  ['modbench.instance.refresh', NO_INPUT],
-  ['modbench.instance.deploy', NO_INPUT],
-  ['modbench.instance.purge', NO_INPUT],
-  ['modbench.instance.moveToOverwrite', MOVE_TO_OVERWRITE],
-  ['modbench.instance.updateMasterlist', UPDATE_MASTERLIST],
-  ['modbench.instance.logOut', NO_INPUT],
-  ['modbench.mod.updateManifest', UPDATE_MANIFEST],
-  ['modbench.mod.checkForUpdates', MODS_OR_EVERY_MOD],
-  ['modbench.mod.restoreFromManifest', MODS_OR_EVERY_MOD],
+export const AGENT_GESTURES: ReadonlyMap<string, readonly [GestureInput, ReadTool]> = new Map<string, readonly [GestureInput, ReadTool]>([
+  ['modbench.mod.enable', [MODS, 'list_mods']],
+  ['modbench.mod.disable', [MODS, 'list_mods']],
+  ['modbench.mod.move', [MOVE_MODS, 'list_mods']],
+  ['modbench.mod.uninstall', [UNINSTALL, 'list_mods']],
+  ['modbench.mod.versionInGit', [VERSION_IN_GIT, 'list_mod_statuses']],
+  ['modbench.mod.build', [BUILD, 'list_mod_statuses']],
+  ['modbench.mod.rename', [RENAME_MOD, 'list_mods']],
+  ['modbench.mod.createEmpty', [CREATE_EMPTY_MOD, 'list_mods']],
+  ['modbench.mod.excludeFile', [FILES, 'list_file_conflicts']],
+  ['modbench.mod.includeFile', [FILES, 'list_file_conflicts']],
+  ['modbench.mod.ignoreFile', [FILES, 'list_mod_statuses']],
+  ['modbench.mod.unignoreFile', [FILES, 'list_mod_statuses']],
+  ['modbench.mod.addPublisherTag', [PUBLISHER_TAG_ROWS, 'list_file_conflicts']],
+  ['modbench.mod.removePublisherTag', [PUBLISHER_TAG_ROWS, 'list_file_conflicts']],
+  ['modbench.mod.install', [INSTALL, 'list_mods']],
+  ['modbench.downloadedFile.queryInfo', [DOWNLOADED_FILES, 'list_downloads']],
+  ['modbench.downloadedFile.download', [DOWNLOAD, 'list_downloads']],
+  ['modbench.downloadedFile.exclude', [DOWNLOADED_FILES, 'list_downloads']],
+  ['modbench.downloadedFile.include', [DOWNLOADED_FILES, 'list_downloads']],
+  ['modbench.downloadedFile.delete', [DOWNLOADED_FILES, 'list_downloads']],
+  ['modbench.separator.add', [ADD_SEPARATOR, 'list_mods']],
+  ['modbench.separator.rename', [RENAME_SEPARATOR, 'list_mods']],
+  ['modbench.separator.delete', [DELETE_SEPARATORS, 'list_mods']],
+  ['modbench.plugin.enable', [LINES, 'list_plugins']],
+  ['modbench.plugin.disable', [LINES, 'list_plugins']],
+  ['modbench.plugin.decompile', [DECOMPILE, 'list_plugins']],
+  ['modbench.plugin.decompileAndRepair', [DECOMPILE_AND_REPAIR, 'list_problems']],
+  ['modbench.plugin.move', [MOVE_PLUGINS, 'list_plugins']],
+  ['modbench.plugin.applySuggestedMove', [APPLY_SUGGESTED_MOVE, 'list_sorting_rules']],
+  ['modbench.plugin.loadAfter', [LOAD_AFTER, 'list_sorting_rules']],
+  ['modbench.plugin.create', [CREATE_PLUGIN, 'list_plugins']],
+  ['modbench.plugin.rename', [RENAME_PLUGIN, 'list_plugins']],
+  ['modbench.record.open', [OPEN_RECORD, 'read_record']],
+  ['modbench.modlist.gitInit', [NO_INPUT, 'list_profiles']],
+  ['modbench.profile.switch', [SWITCH_PROFILE, 'list_profiles']],
+  ['modbench.instance.refresh', [NO_INPUT, 'list_plugins']],
+  ['modbench.instance.deploy', [NO_INPUT, 'list_problems']],
+  ['modbench.instance.purge', [NO_INPUT, 'list_problems']],
+  ['modbench.instance.moveToOverwrite', [MOVE_TO_OVERWRITE, 'list_file_conflicts']],
+  ['modbench.instance.updateMasterlist', [UPDATE_MASTERLIST, 'list_sorting_rules']],
+  ['modbench.instance.logOut', [NO_INPUT, null]],
+  ['modbench.mod.updateManifest', [UPDATE_MANIFEST, 'list_mod_statuses']],
+  ['modbench.mod.checkForUpdates', [MODS_OR_EVERY_MOD, 'list_mods']],
+  ['modbench.mod.restoreFromManifest', [MODS_OR_EVERY_MOD, 'list_mod_statuses']],
 ]);
 
 type ItemsOutcome = GestureResult<unknown>;
@@ -364,41 +367,19 @@ function namedOwn(value: InstanceValue, outcome: GestureOutcome): GestureOutcome
 const toolName = (command: string): string =>
   command.replace(/^modbench\./, '').replaceAll('.', '_').replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 
-const READ_BY_OBJECT: Readonly<Record<string, string>> = {
-  mod: 'list_mods', separator: 'list_mods', downloadedFile: 'list_downloads', plugin: 'list_plugins', record: 'read_record',
-  modlist: 'list_profiles', profile: 'list_profiles', instance: 'list_problems',
-};
-
-const READ_BY_GESTURE: Readonly<Record<string, string>> = {
-  'modbench.mod.versionInGit': 'list_mod_statuses',
-  'modbench.mod.updateManifest': 'list_mod_statuses',
-  'modbench.mod.restoreFromManifest': 'list_mod_statuses',
-  'modbench.mod.excludeFile': 'list_file_conflicts',
-  'modbench.mod.includeFile': 'list_file_conflicts',
-  'modbench.mod.ignoreFile': 'list_mod_statuses',
-  'modbench.mod.unignoreFile': 'list_mod_statuses',
-  'modbench.mod.addPublisherTag': 'list_file_conflicts',
-  'modbench.mod.removePublisherTag': 'list_file_conflicts',
-  'modbench.instance.moveToOverwrite': 'list_file_conflicts',
-  'modbench.instance.updateMasterlist': 'list_sorting_rules',
-  'modbench.instance.refresh': 'list_plugins',
-};
-
-const readOf = (command: string): string => READ_BY_GESTURE[command] ?? READ_BY_OBJECT[command.split('.')[1] ?? ''] ?? 'list_profiles';
-
 // agent.md, Reporting, stories 1 and 3.
-function countedOf(outcome: GestureOutcome, read: string): Record<string, unknown> {
+function countedOf(outcome: GestureOutcome, read: ReadTool): Record<string, unknown> {
   const counted = outcome.applied
     ? {
       ...overItems(outcome) && { landed: outcome.outcome.landed.length, refused: countsOf(outcome.outcome.refused.map(({ reason }) => reason), 'reason') },
       partial: countsOf((outcome.partial ?? []).map(({ message }) => message), 'message'),
     }
     : { refusal: outcome.refusal };
-  return { ...counted, read: `${read} reads the result.` };
+  return { ...counted, ...read !== null && { read: `${read} reads the result.` } };
 }
 
 /** Claude Code sends an input with no JSON type as a string. */
-export const GESTURE_TOOLS = [...AGENT_GESTURES].map(([command, gesture]) => ({
+export const GESTURE_TOOLS = [...AGENT_GESTURES].map(([command, [gesture, read]]) => ({
   name: toolName(command),
   input: gesture.input,
   of: async (value: InstanceValue, mEdit: NameResolver, given: unknown, warn: (line: string) => void) => {
@@ -406,7 +387,7 @@ export const GESTURE_TOOLS = [...AGENT_GESTURES].map(([command, gesture]) => ({
     const outcome = namedOwn(value, isDeployed(answer) ? deployAnswered(answer) : answer);
     const refusal = refusalIn(outcome);
     if (refusal === undefined && outcome.applied) partialsIn(outcome).forEach(warn);
-    const answered = fitting(answerOf(outcome), () => countedOf(outcome, readOf(command)));
+    const answered = fitting(answerOf(outcome), () => countedOf(outcome, read));
     if (refusal !== undefined) throw new Refusal(refusal, answered);
     return answered;
   },

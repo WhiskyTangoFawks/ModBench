@@ -649,8 +649,8 @@ describe('the agent server, given an instance value', () => {
       tooLarge: `The reply passes the ${REPLY_CHARS} characters that one reply holds.`,
       problems: 225,
       byFolder: [
-        { path: '/i/mods/A', count: 150 }, { path: '/elsewhere', count: 2 }, { path: '/s/Rocks', count: 70 },
-        { path: '/i/overwrite', count: 1 }, { path: '/deploy', count: 2 },
+        { path: '/i/mods/A', count: 150 }, { path: '/s/Rocks', count: 70 }, { path: '/elsewhere', count: 2 },
+        { path: '/deploy', count: 2 }, { path: '/i/overwrite', count: 1 },
       ],
       narrow: 'paths narrows the read to the files and folders you name.',
     });
@@ -771,7 +771,7 @@ describe('the agent server, reading file order conflicts', () => {
       Big: Array.from({ length: 1000 }, (_, n) => `meshes/${'deep/'.repeat(10)}${n}.nif`), A: ['a.esp'],
     }).map(([name, paths]) => [name, { origin: name, folder: '/m', files: paths.map((path) => fileIn('/m', path)), folders: [], notes: [] }])));
     const value = instanceValueFixture({ mods, filesByMod: index.filesByMod, files: index.files, stackedCopies: stackCopies(index, [], 'Fallout4') });
-    const filtering = 'filter keeps the files whose path holds it in a folder or file name, in any case, and every file of a mod whose name holds it.';
+    const filtering = 'filter keeps the files whose path holds it in a folder or file name, in any case, and every file of a mod whose name, or whose separator\'s name, holds it.';
     const narrow = `mods narrows the read to the mods you name. ${filtering}`;
     const big = { kind: 'mod', mod: 'Big', wins: 0, loses: 0, files: 1000 };
 
@@ -803,6 +803,14 @@ describe('the agent server, reading file order conflicts', () => {
     expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'B' }], filter })).toMatchObject([{
       mod: 'B', wins: wins.map((file) => ({ file })), loses: loses.map((file) => ({ file })), files: files.map((file) => ({ file })),
     }]);
+  });
+
+  it('keeps, under the filter, every file of a mod whose separator\'s name holds it', async () => {
+    const mods: ModlistEntry[] = [{ kind: 'mod', name: 'Pebbles', enabled: true }, { kind: 'separator', name: 'Rocks', enabled: true }];
+    const index = buildFileConflictIndex(mods, [], new Map([['Pebbles', { origin: 'Pebbles', folder: '/m', files: [fileIn('/m', 'meshes/p.nif')], folders: [], notes: [] }]]));
+    const { client } = await clientOf(new FakeInstance(instanceValueFixture({ mods, filesByMod: index.filesByMod, files: index.files, stackedCopies: stackCopies(index, [], 'Fallout4') })));
+
+    expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'Pebbles' }], filter: 'ROCK' })).toMatchObject([{ mod: 'Pebbles', files: [{ file: 'meshes/p.nif' }] }]);
   });
 
   it('reads, for each mod, the files it wins over which mods and the files it loses to which winner', async () => {
@@ -1467,6 +1475,12 @@ describe('the agent server, running a gesture', () => {
           refused: [...many(300, 'gone').map((item) => ({ item, reason: 'No package.' })), ...many(100, 'odd').map((item) => ({ item, reason: 'Unreadable.' }))],
         },
       }, { landed: 1, refused: [{ reason: 'No package.', count: 300 }, { reason: 'Unreadable.', count: 100 }], partial: [], read: 'list_mod_statuses reads the result.' }],
+      ['a refused one whose reasons each name their item, with the ten largest reasons and how many others', 'mod_check_for_updates', {
+        applied: true, outcome: { landed: [], refused: many(400, 'kept').map((item) => ({ item, reason: `${item.name} would lose its files.` })) },
+      }, {
+        landed: 0, partial: [], read: 'list_mods reads the result.',
+        refused: [...many(10, 'kept').map(({ name }) => ({ reason: `${name} would lose its files.`, count: 1 })), { others: 390, count: 390 }],
+      }],
       ['a deploy whose partial names every file it left out, with its partials by message', 'instance_deploy', {
         applied: true, wrote: true, unmanaged: [], lost: [], leftAside: [], pluginsTxt: { kind: 'unchanged', renamed: [] },
         leftOut: Array.from({ length: 600 }, (_, n) => ({ path: `Data/meshes/${'deep/'.repeat(10)}${n}.nif`, winner: `/m/A/meshes/${'deep/'.repeat(10)}${n}.nif` })),

@@ -15,11 +15,19 @@ export function fitting<Reply>(reply: Reply, correction: (reply: Reply) => Recor
   return reply;
 }
 
-/** Each distinct value once, as `key`, with how many times it occurs, in order of first occurrence. */
+const FEW = 10;
+
+/** The few values that occur most, each as `key` with how many times it occurs, then how many other values there are
+ *  and how many times they occur. */
 export function countsOf(values: readonly string[], key: string): Record<string, string | number>[] {
   const counts = new Map<string, number>();
   for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
-  return [...counts].map(([value, count]) => ({ [key]: value, count }));
+  const largest = [...counts].sort(([, a], [, b]) => b - a);
+  const others = largest.slice(FEW);
+  return [
+    ...largest.slice(0, FEW).map(([value, count]) => ({ [key]: value, count })),
+    ...others.length === 0 ? [] : [{ others: others.length, count: others.reduce((sum, [, count]) => sum + count, 0) }],
+  ];
 }
 
 export const FILTER = { filter: z.string().optional() };

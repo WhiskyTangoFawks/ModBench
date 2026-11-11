@@ -31,8 +31,8 @@ internal sealed class StreamedRows(ReadContext read, DuckDBCommand command, IRea
         return row.Append('}').ToString();
     }
 
-    // DuckDB.NET throws a bare OperationCanceledException for a streamed result that DuckDB interrupted, and mEdit
-    // interrupts no read.
+    // DuckDB interrupts a query's other workers when one fails, and the interrupt can reach the stream in place of
+    // the failure. DuckDB.NET throws it as a bare OperationCanceledException.
     private static bool Read(DuckDBDataReader reader)
     {
         try
