@@ -1,25 +1,29 @@
 // target-architecture.d2's Mod status; the mod-status trace.
 
 import type { EntryRef, InstanceAdapter, ModFolder } from '../instanceAdapter/instanceAdapter';
-import { buildFileAgainst, filesAPackageHolds, heldWholeStatus, manifestAt, packagesAskedAt, statusFrom, unreadableStatus, type ModAt, type ModStatus } from '../manifestAdapter/manifestAdapter';
+import {
+  buildFileAgainst, filesAPackageHolds, flaggedFilesIn, flaggedHashesFrom, heldWholeStatus, manifestAt, packagesAskedAt, statusFrom, unreadableStatus, type FlaggedRead, type ModAt, type ModStatus,
+} from '../manifestAdapter/manifestAdapter';
 
 /** What a status is derived from in an instance value. */
 export interface StatusSource {
   readonly holdsRepository: boolean;
+  /** What mEdit says each flagged plugin could have held before its flags, by the path it is read from. */
+  readonly flaggedHashes: ReadonlyMap<string, FlaggedRead>;
   readonly mods: readonly EntryRef[];
   readonly modFolders: readonly ModFolder[] | undefined;
   readonly entryKey: (entry: EntryRef) => string;
   /** Each source mod's source folder, by its entry's name. */
   readonly paths: { readonly sourceDirs: ReadonlyMap<string, string> };
   /** Each listed mod's own files, by its entry's name: what the reading already holds. */
-  readonly filesByMod: ReadonlyMap<string, readonly { readonly relativePath: string }[]>;
+  readonly filesByMod: ReadonlyMap<string, readonly { readonly relativePath: string; readonly sourcePath: string }[]>;
 }
 
 const isGitsOwn = (path: string): boolean => path === '.git' || path.startsWith('.git/');
 
 type Asked = ReturnType<typeof packagesAskedAt>;
 
-type ModAndSourceFolder = ModAt & { readonly sourceFolder?: string; readonly files: readonly string[] };
+type ModAndSourceFolder = ModAt & { readonly sourceFolder?: string; readonly files: readonly string[]; readonly sourcePaths: ReadonlyMap<string, string> };
 
 interface Listening {
   dispose(): void;
@@ -30,7 +34,7 @@ function modsAt(value: StatusSource): ModAndSourceFolder[] {
   const folders = new Map((value.modFolders ?? []).map((folder) => [keyOf(folder), folder]));
   return value.mods.filter(({ kind }) => kind === 'mod').flatMap((entry) => {
     const folder = folders.get(keyOf(entry));
-    return folder === undefined ? [] : [{ name: folder.modName, folder: folder.path, sourceFolder: value.paths.sourceDirs.get(entry.name), files: (value.filesByMod.get(entry.name) ?? []).map(({ relativePath }) => relativePath) }];
+    return folder === undefined ? [] : [{ name: folder.modName, folder: folder.path, sourceFolder: value.paths.sourceDirs.get(entry.name), files: (value.filesByMod.get(entry.name) ?? []).map(({ relativePath }) => relativePath), sourcePaths: new Map((value.filesByMod.get(entry.name) ?? []).map(({ relativePath, sourcePath }) => [relativePath, sourcePath])) }];
   });
 }
 
@@ -40,6 +44,15 @@ const askedBoth = (own: Asked, other: Asked): Asked => {
   const gameFiles = own.gameFiles === undefined && other.gameFiles === undefined ? undefined : [...new Set([...own.gameFiles ?? [], ...other.gameFiles ?? []])];
   return { ...own, installationFiles: [...new Set([...own.installationFiles, ...other.installationFiles])], ...gameFiles === undefined ? {} : { gameFiles } };
 };
+
+type ManifestRead = Awaited<ReturnType<typeof manifestAt>>;
+type Values = Awaited<ReturnType<InstanceAdapter['modValue']>>;
+
+function judged(mod: ModAt, manifest: ManifestRead, values: Values, flagged: StatusSource['flaggedHashes'], sourcePaths: ReadonlyMap<string, string>): ModStatus {
+  if (manifest.read === undefined || !('manifest' in manifest.read) || values.kind !== 'read') return statusFrom(mod, manifest, values, new Map());
+  const hashes = flaggedHashesFrom(flaggedFilesIn(manifest.read.manifest, values.folder, mod.folder), ({ pathInFolder, file }) => flagged.get(sourcePaths.get(pathInFolder) ?? file.path));
+  return 'cannotTell' in hashes ? unreadableStatus(mod.name, `mEdit could not say what its flagged plugins held before their flags: ${hashes.cannotTell}`) : statusFrom(mod, manifest, values, hashes);
+}
 
 const heldSnapshot = (held: ReadonlyMap<string, ReadonlySet<string>>): string => JSON.stringify([...held].map(([mod, paths]) => [mod, [...paths].sort()]));
 
@@ -141,7 +154,7 @@ export class ModStatuses {
       for (const listener of this.changed) listener();
       return;
     }
-    const derived = await Promise.all(mods.map((mod) => this.statusOf(mod, held.whole.has(mod.folder), held.files.get(mod.folder) ?? [])));
+    const derived = await Promise.all(mods.map((mod) => this.statusOf(mod, held.whole.has(mod.folder), held.files.get(mod.folder) ?? [], value.flaggedHashes)));
     const heldBefore = heldSnapshot(this.heldByPackages);
     this.heldByPackages = new Map(derived.map(({ status, packaged }) => [status.mod, packaged]));
     const heldChanged = heldSnapshot(this.heldByPackages) !== heldBefore;
@@ -168,11 +181,11 @@ export class ModStatuses {
     }
   }
 
-  private async statusAgainstManifest(mod: ModAndSourceFolder, heldByGit: readonly string[]): Promise<{ status: ModStatus; packaged: ReadonlySet<string> }> {
+  private async statusAgainstManifest(mod: ModAndSourceFolder, heldByGit: readonly string[], flagged: StatusSource['flaggedHashes']): Promise<{ status: ModStatus; packaged: ReadonlySet<string> }> {
     const manifest = await manifestAt(mod.folder);
     const named = mod.sourceFolder === undefined ? manifest : await manifestAt(mod.sourceFolder);
     const values = await this.reads.modValue(mod.folder, askedBoth(packagesAskedAt(manifest), packagesAskedAt(named)), heldByGit);
-    const status = statusFrom(mod, manifest, values);
+    const status = judged(mod, manifest, values, flagged, mod.sourcePaths);
     if (status.unreadable !== undefined) return { status, packaged: new Set() };
     const unpackaged = status.noManifest ? mod.files.filter((path) => !isGitsOwn(path)) : status.unpackaged;
     return {
@@ -182,9 +195,9 @@ export class ModStatuses {
   }
 
   // The installation file is the mod manager's record, so a folder git holds whole is warned of it too.
-  private async statusOf(mod: ModAndSourceFolder, heldWhole: boolean, heldByGit: readonly string[]): Promise<{ status: ModStatus; packaged: ReadonlySet<string> }> {
+  private async statusOf(mod: ModAndSourceFolder, heldWhole: boolean, heldByGit: readonly string[], flagged: StatusSource['flaggedHashes']): Promise<{ status: ModStatus; packaged: ReadonlySet<string> }> {
     const [{ status, packaged }, installed, buildFile] = await Promise.all([
-      heldWhole ? { status: heldWholeStatus(mod.name, heldByGit), packaged: new Set<string>() } : this.statusAgainstManifest(mod, heldByGit), this.reads.installationFile(mod.name, mod.folder),
+      heldWhole ? { status: heldWholeStatus(mod.name, heldByGit), packaged: new Set<string>() } : this.statusAgainstManifest(mod, heldByGit, flagged), this.reads.installationFile(mod.name, mod.folder),
       mod.sourceFolder === undefined ? undefined : buildFileAgainst(mod.sourceFolder),
     ]);
     return { status: { ...status, ...installed.kind === 'unreadable' ? { installationFileProblem: installed.reason } : {}, ...buildFile && { buildFile } }, packaged };

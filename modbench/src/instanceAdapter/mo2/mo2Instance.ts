@@ -98,8 +98,6 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
     ...packageFilesWriter(hashIndexDir(instanceRoot), installationFileReader),
     ...dataFileReads(gameFolder),
     originFileHash: hashes.originFileHash,
-    flaggedHash: hashes.flaggedHash,
-    keepFlaggedHash: hashes.keepFlaggedHash,
     textHash,
     filesIn: async (folder) => (await filesBelow(folder)).files.map(({ relativePath }) => relativePath),
     folderValue: (folder) => folderValueOver(adapter, folder),

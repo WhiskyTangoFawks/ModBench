@@ -19,7 +19,7 @@ let downloadedHash: Map<string, string>;
 let gameFiles: HashedPath[] | undefined;
 let repositoryPin: ReadValues['repositoryPin'];
 let exclude: string[];
-let flaggedHashes: Map<string, string>;
+let flaggedHashes: Map<string, readonly string[]>;
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'modbench-mod-status-'));
@@ -54,7 +54,7 @@ async function valuesHashingEachFileAsItsText(manifest: ManifestAt, ignoresCase:
     downloadedFiles: new Map(asked.installationFiles.map((name) => [name, {
       kind: 'read' as const, answer: notDownloaded.has(name) ? undefined : { hash: downloadedHash.get(name) ?? PACK, entries },
     }])),
-    gameFiles, flaggedHashes, repositoryPin,
+    gameFiles, repositoryPin,
   };
 }
 
@@ -72,7 +72,7 @@ const manifested = (held: Manifest): Promise<void> => write('mod.manifest.json',
 
 async function statusWith(values: (read: ReadValues) => StatusValues = (read) => read, fileSystemIgnoresCase = false): Promise<ModStatus> {
   const manifest = await manifestAt(folder);
-  return statusFrom({ name: 'mod', folder }, manifest, values(await valuesHashingEachFileAsItsText(manifest, fileSystemIgnoresCase)));
+  return statusFrom({ name: 'mod', folder }, manifest, values(await valuesHashingEachFileAsItsText(manifest, fileSystemIgnoresCase)), flaggedHashes);
 }
 
 const status = (fileSystemIgnoresCase = false): Promise<ModStatus> => statusWith((read) => read, fileSystemIgnoresCase);
@@ -340,16 +340,22 @@ describe('a mod\'s status against its manifest', () => {
     const flagged = manifest({ 'Mod.esp': HELLO }, { flags: new Map([['Mod.esp', { Small: true }]]) });
 
     it.each([
-      ['the hash restore recorded for the copy and the flags', new Map([['Mod.esp', EDITED]]), EDITED, []],
-      ['the package\'s own bytes, which carry no flags', new Map([['Mod.esp', EDITED]]), HELLO, ['Mod.esp']],
-      ['other bytes than restore recorded', new Map([['Mod.esp', EDITED]]), PACK, ['Mod.esp']],
-      ['any bytes while restore has recorded none', new Map<string, string>(), EDITED, ['Mod.esp']],
-    ])('holds its bytes with %s, so differs as %j', async (_what, recorded, onDisk, differing) => {
+      ['the manifest\'s hash among those it could have had before its flags', [EDITED, HELLO], []],
+      ['no hash it could have had equal to the manifest\'s', [EDITED], ['Mod.esp']],
+      ['none, as its flags are not those the manifest sets', [], ['Mod.esp']],
+    ])('holds its bytes with %s, so differs as %j', async (_what, possible, differing) => {
       await manifested(flagged);
-      await write('Mod.esp', onDisk);
-      flaggedHashes = recorded;
+      await write('Mod.esp', 'any bytes');
+      flaggedHashes = new Map([['Mod.esp', possible]]);
 
       expect((await status()).differing).toEqual(differing);
+    });
+
+    it('is judged neither way while its possible hashes were not asked', async () => {
+      await manifested(flagged);
+      await write('Mod.esp', HELLO);
+
+      expect((await status()).differing).toEqual([]);
     });
   });
 });

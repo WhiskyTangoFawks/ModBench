@@ -18,10 +18,11 @@ import {
   type ProgramVersion, type ProgramVersions, type EntryRef, type ManagerNames, type ManagerRunning, type ModGroups, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type PublisherConfiguration,
   type PublisherTag, type Reread, type SortingRuleFiles, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
-import { sourceModsOf, type SourceMods } from '../manifestAdapter/manifestAdapter';
+import { sourceModsOf, type FlaggedRead, type SourceMods } from '../manifestAdapter/manifestAdapter';
 import { pluginPlacesOf } from './pluginPlacesOf';
 import { papyrusScriptsOf, type PapyrusScript } from './papyrusScripts';
 import { errorMessage } from '../ports/errorMessage';
+import { FlaggedHashesHeld, flaggedPluginsIn, type FlaggedReader } from './flaggedHashes';
 import { ArchiveContentsHeld, archivePathsIn, unreadableArchiveLines, type ArchiveRead, type ArchiveReader } from './archiveContents';
 import { pluginOrderOf, unplaced } from './pluginOrder';
 
@@ -101,6 +102,8 @@ export interface InstanceValue {
   readonly foldersByMod: ReadonlyMap<string, readonly OriginFolder[]>;
   /** What each archive at the root of a listed mod or Overwrite holds, by the path it is read from. */
   readonly archiveContents: ReadonlyMap<string, ArchiveRead>;
+  /** What mEdit says each plugin file a listed mod's manifest flags could have held before the flags, by the path it is read from. */
+  readonly flaggedHashes: ReadonlyMap<string, FlaggedRead>;
   /** Whether the game loads the archive of this name at the root of its Data folder. */
   readonly loadsArchive: (name: string) => boolean;
   /** Each file an enabled mod or Overwrite provides, loose or in an archive the game loads, with its copies as the game
@@ -228,7 +231,7 @@ interface InstanceOptions {
   gameFolderSettingId: string;
   window: FocusWindow;
   log: Log;
-  medit: ArchiveReader;
+  medit: ArchiveReader & FlaggedReader;
 }
 
 // A listed source mod under its name in the mod order, an unlisted one under the name its folder gives it.
@@ -271,6 +274,7 @@ const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey' | 'publi
   filesByMod: new Map(),
   foldersByMod: new Map(),
   archiveContents: new Map(),
+  flaggedHashes: new Map(),
   loadsArchive: () => false,
   stackedCopies: new FileConflictLookup(),
   papyrusScripts: [],
@@ -335,6 +339,8 @@ export class Instance implements Subscription {
 
   private readonly archives: ArchiveContentsHeld;
 
+  private readonly flagged: FlaggedHashesHeld;
+
   private readonly stopHearingMEditStatus: () => void;
 
   // A note is one Output line until its text changes or it clears.
@@ -351,8 +357,9 @@ export class Instance implements Subscription {
       focused = state.focused;
     });
     this.archives = new ArchiveContentsHeld(options.medit, (path) => options.adapter.fileStamp(path));
+    this.flagged = new FlaggedHashesHeld(options.medit, (path) => options.adapter.fileStamp(path));
     this.stopHearingMEditStatus = options.medit.onStatusChanged((status) => {
-      if (status === 'running' && this.archives.anyUnanswered) void this.enqueue({ disk: false, tellsUnheard: false });
+      if (status === 'running' && (this.archives.anyUnanswered || this.flagged.anyUnanswered)) void this.enqueue({ disk: false, tellsUnheard: false });
     });
   }
 
@@ -616,6 +623,17 @@ export class Instance implements Subscription {
     return { archiveContents, loadsArchive: (name) => names.has(foldPath(name)), stackedCopies: this.stackOf(index, read, gameRelease) };
   }
 
+  private async flaggedHashesIn(
+    { gameRelease, holdsRepository }: Pick<InstanceReading, 'gameRelease' | 'holdsRepository'>, entries: readonly ModlistEntry[], modFolders: ModFolders | undefined,
+    filesByMod: ReadonlyMap<string, readonly OriginFile[]>,
+  ): Promise<ReadonlyMap<string, FlaggedRead>> {
+    const mods = holdsRepository ? entries.flatMap((entry) => {
+      const folder = entry.kind === 'mod' ? modFolders?.holding(entry)?.path : undefined;
+      return folder === undefined ? [] : [{ folder, files: filesByMod.get(entry.name) ?? [] }];
+    }) : [];
+    return this.flagged.read(gameRelease, await flaggedPluginsIn(mods, (path) => this.options.adapter.ownPath(path)));
+  }
+
   private async read({ named, disk, tellsUnheard }: Run): Promise<InstanceValue> {
     const { adapter, log } = this.options;
     const reading = await adapter.reading({ named: [...named], disk });
@@ -644,6 +662,7 @@ export class Instance implements Subscription {
     };
     this.tellArchivesNothingHolds(archiveSources);
     const archives = await this.archivesIn(archiveSources, index, { plugins, pluginsLoadedWithNoLine: pluginsLoadedWithNoLine ?? [] });
+    const flaggedHashes = await this.flaggedHashesIn(reading, entries, modFolders, index.filesByMod);
     const loadOrderSnapshot = loadOrderSnapshotOf({
       plugins, gameFolder, pluginsLoadedWithNoLine, modFolders, sourceDirs: paths.sourceDirs, places: pluginPlacesOf({ mods: entries, paths }), archives: archiveSources,
     });
@@ -661,6 +680,7 @@ export class Instance implements Subscription {
       filesByMod: index.filesByMod,
       foldersByMod: index.foldersByMod,
       ...archives,
+      flaggedHashes,
       papyrusScripts: papyrusScriptsOf(index.files, dataFolderFiles, gameRelease),
       plugins,
       downloadedFiles: downloadedFilesOutcome.kind === 'unresolved'

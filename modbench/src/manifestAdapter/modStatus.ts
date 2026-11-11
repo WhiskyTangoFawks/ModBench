@@ -82,6 +82,9 @@ interface FileAgainstFolder {
   readonly holdsItsBytes?: boolean;
 }
 
+/** The hashes each flagged plugin of a manifest could have had before its flags, by its manifest path; a plugin absent is not judged. */
+export type FlaggedHashes = ReadonlyMap<string, readonly string[]>;
+
 /** A folder against its manifest: each file the manifest names, and by the path the folder holds it at each file it does not. */
 export interface FolderAgainst {
   readonly files: readonly FileAgainstFolder[];
@@ -93,7 +96,7 @@ export interface FolderAgainst {
 /** The folder's files against `manifest`'s, a path matched in its case, else in any case where the file system does.
  *  Of two files at one own path, the one the exclusion fits is its. Ignored files are out. */
 export function folderAgainst(
-  manifest: Pick<Manifest, 'files' | 'exclude' | 'ignore' | 'flags'>, folder: FolderValue, flaggedHashes: ReadonlyMap<string, string> = new Map(),
+  manifest: Pick<Manifest, 'files' | 'exclude' | 'ignore' | 'flags'>, folder: FolderValue, flaggedHashes: FlaggedHashes,
 ): FolderAgainst {
   const present = [...folder.files].filter(([pathInFolder]) => !isManifestPath(pathInFolder));
   const ignored = present.filter(([, file]) => isUnderAny(manifest.ignore, file.path));
@@ -108,8 +111,9 @@ export function folderAgainst(
     if (pathInFolder === undefined || file === undefined) return { path, hash };
     claimed.add(pathInFolder);
     if (hash === null) return { path, hash, pathInFolder };
-    const expected = manifest.flags.has(path) ? flaggedHashes.get(path) : hash;
-    return { path, hash, pathInFolder, holdsItsBytes: file.excluded === excluded && file.read.kind === 'read' && file.read.answer.hash === expected };
+    if (!manifest.flags.has(path)) return { path, hash, pathInFolder, holdsItsBytes: file.excluded === excluded && file.read.kind === 'read' && file.read.answer.hash === hash };
+    const possible = flaggedHashes.get(path);
+    return possible === undefined ? { path, hash, pathInFolder } : { path, hash, pathInFolder, holdsItsBytes: file.excluded === excluded && file.read.kind === 'read' && possible.includes(hash) };
   });
   return {
     files, namedByNoLine: ordered(held.flatMap(([pathInFolder]) => (claimed.has(pathInFolder) ? [] : [pathInFolder]))),
@@ -163,13 +167,13 @@ export function filesAPackageHolds(manifest: Manifest, values: StatusValues): Re
 
 /** The mod's folder against its manifest (instance-repository.md, Status). Which files no package holds waits for every
  *  package to be on this machine. */
-export function statusFrom(mod: ModAt, { read, file }: ManifestAt, values: StatusValues): ModStatus {
+export function statusFrom(mod: ModAt, { read, file }: ManifestAt, values: StatusValues, flaggedHashes: FlaggedHashes): ModStatus {
   if (read === undefined) return nothing(mod.name, { noManifest: true });
   if ('refused' in read) return nothing(mod.name, { unreadable: read.refused, manifestFile: file });
   if (values.kind === 'notAsked') throw new Error('a manifest is judged against its folder');
   if (values.kind === 'unreadable') return nothing(mod.name, { unreadable: `a file could not be read: ${values.reason}` });
   const { manifest } = read;
-  const { files, namedByNoLine, ignored } = folderAgainst(manifest, values.folder, values.flaggedHashes);
+  const { files, namedByNoLine, ignored } = folderAgainst(manifest, values.folder, flaggedHashes);
   const held = packagesHeld(manifest, values);
   const unheld = held.lacking.length === 0 ? filesNoPackageHolds(manifest, held.files) : undefined;
   const unheldPaths = new Set([...unheld?.notInPackage ?? [], ...unheld?.otherBytes ?? []].map(folded));
