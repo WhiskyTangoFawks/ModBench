@@ -13,11 +13,11 @@ public sealed class LoadOrderTests
             line is { } place ? new PluginLine(place, lineNamesIt) : null, PluginStrings.None);
 
     private static LoadOrderSnapshot Order(RegisteredPlugin[] plugins, params RegisteredPlugin[] active) =>
-        new(Data, Instance, GameRelease.Fallout4, plugins, [.. active.Select(p => p.Key)], [], [], [], [], Language.English);
+        new(Data, Instance, GameRelease.Fallout4, plugins, [.. active.Select(p => p.Key)], [], [], [], [], [], Language.English);
 
     private static LoadOrderSnapshot OrderLoadingWithNoLine(
         RegisteredPlugin[] plugins, RegisteredPlugin[] loadedWithNoLine, params RegisteredPlugin[] active) =>
-        new(Data, Instance, GameRelease.Fallout4, plugins, [.. active.Select(p => p.Key)], [.. loadedWithNoLine.Select(p => p.Key)], [], [], [], Language.English);
+        new(Data, Instance, GameRelease.Fallout4, plugins, [.. active.Select(p => p.Key)], [.. loadedWithNoLine.Select(p => p.Key)], [], [], [], [], Language.English);
 
     private static readonly RegisteredPlugin A = Registered("A.esp", "ModA");
 

@@ -8,5 +8,5 @@ namespace MEditService.TestSupport;
 public static class EmptyLoadOrder
 {
     public static LoadOrderSnapshot Of(GameRelease release, Language language = Language.English) =>
-        new(string.Empty, null, release, [], [], [], [], [], [], language);
+        new(string.Empty, null, release, [], [], [], [], [], [], [], language);
 }
