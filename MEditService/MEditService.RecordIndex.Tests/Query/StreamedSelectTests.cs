@@ -3,6 +3,7 @@ using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
 namespace MEditService.RecordIndex.Tests.Query;
@@ -43,15 +44,34 @@ public sealed class StreamedSelectTests : IDisposable
         Assert.Equal(Records, read);
     }
 
-    [Fact]
-    public void ASelectWhoseRowsTogetherOutgrowTheMemoryLimit_AnswersEveryRow()
+    [Theory]
+    [InlineData("SELECT body FROM records")]
+    [InlineData("SELECT body FROM records WHERE record_type = 'misc'")]
+    public void ASelectWhoseRowsTogetherOutgrowTheMemoryLimit_AnswersEveryRow(string sql)
     {
         const int many = 64_000;
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, many, nameLength: 2_000))), memoryLimit: 64_000_000);
 
-        using var rows = index.Queries.SelectRows("SELECT body FROM records").Value();
+        using var rows = index.Queries.SelectRows(sql).Value();
 
         Assert.Equal(many, rows.Rows().Count(row => row.Value().Length > 2_000));
+    }
+
+    [Fact]
+    public void ASelectRefusedAtItsFirstRow_LeavesNoReadThatHoldsBackTheCheckpoint()
+    {
+        var log = new List<LogEntry>();
+        using var loggers = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider(log)));
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(
+            holder, new MadeUpAdapter((Master, () => Items(Master, Records)), (Later, () => Items(Later, Records))), loggerFactory: loggers);
+        index.Reconcile(holder, _fixture.DataFolder, [_fixture.Plugins[0]], GameRelease.Fallout4, _fixture.InstanceRoot);
+
+        Assert.Equal(IndexRefusal.SelectRejected, index.Queries.SelectRows("SELECT CAST(editor_id AS INTEGER) AS v FROM records WHERE record_type = 'misc'").Refused().Refusal);
+        lock (log) log.Clear();
+        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+
+        lock (log) Assert.Contains(log, e => e.Message.StartsWith("Checkpointed the record index", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -64,6 +84,8 @@ public sealed class StreamedSelectTests : IDisposable
         var read = rows.Rows().ToList();
         Assert.All(read[..^1], row => row.Value());
         Assert.InRange(read.Count - 1, 1, 999_999);
-        Assert.Equal(IndexRefusal.SelectRejected, read[^1].Refused().Refusal);
+        var refused = read[^1].Refused();
+        Assert.Equal(IndexRefusal.SelectRejected, refused.Refusal);
+        Assert.Equal("DuckDB stopped the SELECT partway, and its .NET driver does not say why.", refused.Message);
     }
 }

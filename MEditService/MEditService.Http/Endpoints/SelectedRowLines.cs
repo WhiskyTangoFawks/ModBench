@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using MEditService.RecordIndex.Queries;
+using Microsoft.AspNetCore.Server.Kestrel.Core.Features;
 
 namespace MEditService.Http.Endpoints;
 
@@ -17,6 +18,8 @@ internal sealed class SelectedRowLines(SelectedRows rows) : IResult
     {
         using (rows)
         {
+            // A script takes its rows at its own pace, and a pause of minutes is no reason to cut them.
+            if (httpContext.Features.Get<IHttpMinResponseDataRateFeature>() is { } rate) rate.MinDataRate = null;
             var aborted = httpContext.RequestAborted;
             var writer = httpContext.Response.BodyWriter;
             httpContext.Response.ContentType = ContentType;

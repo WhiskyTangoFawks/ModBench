@@ -272,10 +272,6 @@ internal sealed class RelationReads(
             context = null;
             return rows;
         }
-        catch (IndexFaultException ex) when (ex.Fault is IndexFault.Refused or IndexFault.RowValue)
-        {
-            return ex.Message;
-        }
         finally
         {
             context?.Dispose();

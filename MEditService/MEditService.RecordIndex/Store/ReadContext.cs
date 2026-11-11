@@ -27,13 +27,16 @@ internal sealed class ReadContext : IDisposable
     public List<T> Rows<T>(string sql, Func<DbDataReader, T> map, params object?[] args) =>
         DuckDbSql.Rows(_connection, sql, map, args);
 
+    // DESCRIBE's name for plain text, which JSON, a text type of its own, is not.
+    private const string TextType = "VARCHAR";
+
     /// <summary>Each row of <paramref name="sql"/> as the JSON text of an object of its columns, read as it is taken.
     /// The rows take this context, which disposing them ends.</summary>
     public StreamedRows Streamed(string sql)
     {
         // The newline keeps a trailing line comment in the SQL from swallowing the wrapper.
         var columns = Rows($"SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM ({sql}\n) __row)",
-            reader => new StreamedColumn(reader.GetString(0), reader.GetString(1) == "VARCHAR"));
+            reader => new StreamedColumn(reader.GetString(0), reader.GetString(1) == TextType));
         // DuckDB's to_json of an FSST-compressed column holds every string it returns until the scan ends, so a
         // SELECT of body would hold every body. Text is encoded as it is read instead.
         var values = string.Join(", ", columns.Select((column, i) => column.IsText ? $"c{i}" : $"to_json(c{i})"));
