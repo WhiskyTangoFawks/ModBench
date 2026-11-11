@@ -16,7 +16,8 @@ internal static class GameAnnotations
             ExcludedMembers:
             [
                 .. PlumbingMembers,
-                ("IGlobalGetter", "TypeChar"),  // GLOB's derived subclass discriminant char
+                // GLOB's derived subclass discriminant char
+                ("IGlobalGetter", "TypeChar"),
                 ("IGlobalUnknownGetter", "TypeChar"),
                 // Reserved padding Mutagen names Unused; wbUnused(3)/wbUnused(2) in wbDefinitionsFO4.pas's wbObjectModProperties
                 ("IObjectModStringPropertyGetter`1", "Unused"),
