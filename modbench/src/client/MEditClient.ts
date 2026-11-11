@@ -11,8 +11,8 @@ import {
 import type { RecordEditEnvelope } from '../wire/messages';
 import type { PluginAddress, SourceModIn } from '../wire/pluginAddress';
 
-/** A SELECT whose rows passed the length its reader asked for, so the reader stopped reading them. */
-export interface RowsOutgrew { readonly outgrew: true }
+/** The rows of a SELECT that its reader read. `more` says it stopped reading, at the length it asked for, before the last. */
+export interface RowsRead { readonly rows: unknown[]; readonly more: boolean }
 
 export type { SourceModIn };
 import type { ReadFailed } from '../wire/readFailed';
@@ -327,9 +327,9 @@ export interface MEditClient {
   /** What each name means, in order, or why one cannot be: mEdit's refusal names every name it could not resolve, with each
    *  match of an ambiguous one. A name with an origin names a plugin. */
   resolveNames(names: readonly NameQuery[]): Promise<NamedObject[] | ReadFailed>;
-  /** The rows one SQL SELECT over the record index selects, or `outgrew` once their JSON text passes `atMostChars`, where
-   *  the read stops. A statement that is not a SELECT, or cannot run, fails with the database's reason. */
-  selectRows(sql: string, atMostChars: number): Promise<unknown[] | RowsOutgrew | ReadFailed>;
+  /** The rows one SQL SELECT over the record index selects, read until their JSON text passes `atMostChars`. A statement
+   *  that is not a SELECT, or cannot run, fails with the database's reason. */
+  selectRows(sql: string, atMostChars: number): Promise<RowsRead | ReadFailed>;
   getReferences(formKey: string): Promise<ReferenceResult[] | ReadFailed>;
   /** The referrers of the active plugins and of the inactive compiled ones. */
   getReferencesInActiveOrCompiledPlugins(formKey: string): Promise<ReferenceResult[] | ReadFailed>;

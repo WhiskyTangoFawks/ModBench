@@ -562,18 +562,18 @@ describe('HttpMEditClient — selectRows reads the rows as mEdit streams them', 
 
     const { result, request } = await exchange((c) => c.selectRows('SELECT 1', 1000), respond);
 
-    expect(result).toEqual([{ n: 1 }, { editor_id: 'a\nb' }]);
+    expect(result).toEqual({ rows: [{ n: 1 }, { editor_id: 'a\nb' }], more: false });
     expect(new URL(request.url).pathname).toBe('/records/select');
     expect(await request.json()).toEqual({ sql: 'SELECT 1' });
   });
 
-  it('stops reading, and says the rows outgrew it, once their text passes the length asked for', async () => {
+  it('stops reading once the rows\' text passes the length asked for, and answers the rows read before it, with more', async () => {
     const row = { row: { body: 'x'.repeat(40) } };
     const { respond, cancelled } = streaming(lines(row, row, row, { end: true }));
 
     const { result } = await exchange((c) => c.selectRows('SELECT body FROM records', 100), respond);
 
-    expect(result).toEqual({ outgrew: true });
+    expect(result).toEqual({ rows: [row.row, row.row], more: true });
     expect(cancelled).toHaveBeenCalledOnce();
   });
 
