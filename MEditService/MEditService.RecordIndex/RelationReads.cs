@@ -16,8 +16,24 @@ namespace MEditService.RecordIndex;
 /// <summary>Every read the record index answers, over the Store's relations (ADR-0010). A record read sees
 /// only the active plugins (ADR-0012), unless it names one plugin and returns that plugin's copy.</summary>
 internal sealed class RelationReads(
-    Store.Store store, Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, Func<bool> indexed)
+    Store.Store store, Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, Func<bool> indexed,
+    bool inOneSnapshot = false) : IDisposable
 {
+    private ReadContext? _snapshot;
+
+    /// <summary>These reads, every one on the snapshot the first of them takes, until disposed: a read made of
+    /// several of them.</summary>
+    public RelationReads InOneSnapshot() => new(store, openedPlugins, indexed, inOneSnapshot: true);
+
+    public void Dispose() => _snapshot?.Dispose();
+
+    private ReadContext OpenRead()
+    {
+        if (!inOneSnapshot) return store.OpenRead();
+        _snapshot ??= store.OpenRead();
+        return _snapshot.Borrowed();
+    }
+
     /// <summary>What the Index read out of each plugin it has open, keyed by identity. A plugin it has
     /// not reached, or could not open, is absent, so this is also "which plugins are open?".
     /// </summary>
@@ -27,72 +43,84 @@ internal sealed class RelationReads(
     /// plugin. Null if the FormKey isn't indexed.</summary>
     public RecordDocument? GetDocument(string formKey)
     {
-        using var context = store.OpenRead();
-        var tableName = FindRecordType(context, formKey);
-        return tableName == null ? null : ReadDocument(context, tableName, formKey, plugin: null, origin: null, winnerOnly: true);
+        using var context = OpenRead();
+        return OneDocument(context, Located(context, "records", "form_key = $1 AND is_winner", formKey));
     }
 
     /// <summary>One specific plugin's copy of <paramref name="formKey"/>, winner or not. Null if
     /// that plugin never indexed this FormKey.</summary>
     public RecordDocument? GetDocument(string formKey, PluginAddress plugin)
     {
-        using var context = store.OpenRead();
-        var tableName = FindRecordType(context, formKey);
-        return tableName == null ? null : ReadDocument(context, tableName, formKey, plugin.Name, plugin.Origin, winnerOnly: false);
+        using var context = OpenRead();
+        return OneDocument(context, Located(context, "records", "form_key = $1 AND plugin = $2 AND origin = $3", formKey, plugin.Name, plugin.Origin));
     }
+
+    private RecordDocument? OneDocument(ReadContext context, List<CopySize> located) =>
+        located is [var copy]
+            ? ReadDocumentFromBody(context, Stored(context, [located]).Single().Single(), LinkResolution.ForLinksOf(context, [copy.FormKey]))
+            : null;
+
+    // Each caller names a record or a few copies, so the length taken above the view's joins carries few documents.
+    private static List<CopySize> Located(ReadContext context, string view, string where, params object?[] values) =>
+        context.Rows($"SELECT form_key, plugin, origin, strlen(body) FROM {view} WHERE {where} ORDER BY load_order_idx",
+            CopySizeOf, values);
+
+    private static CopySize CopySizeOf(DbDataReader reader) =>
+        new(reader.GetString(0), new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.GetInt64(3));
+
+    private IEnumerable<List<StoredCopy>> Stored(ReadContext context, IEnumerable<IReadOnlyList<CopySize>> records) =>
+        CopyBodies.Read(context, records, store.DocumentBatchBytes);
 
     /// <summary>The copy <paramref name="plugin"/> would hold were its document <paramref name="text"/>,
     /// active or not. Null if no plugin indexes the FormKey. Text that is no record document gives
     /// a copy with a <c>ParseDiagnosis</c>.</summary>
     public RecordDocument? DocumentFromText(string formKey, PluginAddress plugin, int loadOrderIndex, string text)
     {
-        using var context = store.OpenRead();
+        using var context = OpenRead();
         var tableName = FindRecordTypeInAnyPlugin(context, formKey);
         if (tableName == null) return null;
         var (body, editorId, parseDiagnosis) = CallerText.Read(text);
         return DocumentFromBody(
             context, formKey, plugin.Name, plugin.Origin, loadOrderIndex, isWinner: false, editorId, body,
-            store.Schemas[tableName], LinkResolution.ForLinksOf(context, [formKey], Resolve), parseDiagnosis);
+            store.Schemas[tableName], LinkResolution.ForLinksOf(context, [formKey]), parseDiagnosis);
     }
 
     /// <summary>What <paramref name="plugin"/> holds <paramref name="formKey"/> as, and its document as
     /// the record index stores it, active or not. Null if that plugin never indexed it.</summary>
     public (RecordIdentity Identity, string Body)? GetCopyText(string formKey, PluginAddress plugin)
     {
-        using var context = store.OpenRead();
-        return context.Rows($"SELECT record_type, editor_id, body FROM {TableDdlBuilder.PluginRecordsView} WHERE form_key = $1 AND plugin = $2 AND origin = $3 LIMIT 1",
-            reader => (new RecordIdentity(formKey, reader.GetString(0), reader.GetStringOrNull(1)), reader.GetString(2)),
-            formKey, plugin.Name, plugin.Origin) is [var copy] ? copy : null;
+        using var context = OpenRead();
+        var located = Located(context, TableDdlBuilder.PluginRecordsView, "form_key = $1 AND plugin = $2 AND origin = $3", formKey, plugin.Name, plugin.Origin);
+        if (located.Count == 0) return null;
+        var copy = Stored(context, [located]).Single().Single();
+        return (new RecordIdentity(formKey, copy.RecordType, copy.EditorId), copy.Body);
     }
 
     /// <summary>Each of <paramref name="copies"/>' documents, null where that copy's plugin holds no indexed
-    /// copy, read in one query that names the copies, and the resolver for the links of their records.</summary>
+    /// copy, and the resolver for the links of their records.</summary>
     public (List<RecordDocument?> Documents, Func<string, RecordLookupEntry?> Resolve) GetDocuments(IReadOnlyList<RecordCopy> copies)
     {
         var formKeys = copies.Select(copy => copy.FormKey).Distinct().ToList();
         var named = copies.Select((_, i) => $"(form_key = ${3 * i + 1} AND plugin = ${3 * i + 2} AND origin = ${3 * i + 3})");
-        using var context = store.OpenRead();
+        using var context = OpenRead();
         var resolve = LinkResolution.ForLinksOf(context, formKeys, Resolve);
-        var held = ActiveCopies(context, string.Join(" OR ", named), resolve,
+        var located = Located(context, "records", string.Join(" OR ", named),
             [.. copies.SelectMany(copy => new[] { copy.FormKey, copy.Plugin.Name, copy.Plugin.Origin })]);
+        var held = Stored(context, located.GroupBy(copy => copy.FormKey, StringComparer.OrdinalIgnoreCase).Select(record => record.ToList()))
+            .SelectMany(record => record)
+            .Select(copy => ReadDocumentFromBody(context, copy, resolve))
+            .ToLookup(document => document.FormKey, StringComparer.OrdinalIgnoreCase);
         return ([.. copies.Select(copy => held[copy.FormKey].FirstOrDefault(document => PluginAddress.Comparer.Equals(document.Plugin, copy.Plugin)))], resolve);
     }
 
     /// <summary>Each record's active copies in load order; given <paramref name="within"/>, that plugin and its masters alone
-    /// (ADR-0008). Each query reads a batch of whole records' copies (<see cref="Store.Store.DocumentBatchBytes"/>).</summary>
+    /// (ADR-0008).</summary>
     public IEnumerable<(string FormKey, IReadOnlyList<RecordDocument> Copies)> GetStacks(IReadOnlyList<string> formKeys, PluginAddress? within)
     {
-        using var context = store.OpenRead();
-        using var snapshot = context.Snapshot();
-        foreach (var batch in Batches(CopySizes(context, formKeys, within), store.DocumentBatchBytes))
-        {
-            var documents = Documents(context, batch);
-            foreach (var stack in batch)
-                yield return (stack.Key, [.. documents[stack.Key].Where(document => stack.Any(copy => PluginAddress.Comparer.Equals(copy.Plugin, document.Plugin)))]);
-        }
+        using var context = OpenRead();
+        foreach (var stack in Stored(context, CopySizes(context, formKeys, within).Select(record => record.ToList())))
+            yield return (stack[0].FormKey, [.. stack.Select(copy => ReadDocumentFromBody(context, copy, _ => null))]);
     }
-
-    private readonly record struct CopySize(PluginAddress Plugin, long Length);
 
     private static ILookup<string, CopySize> CopySizes(ReadContext context, IReadOnlyList<string> formKeys, PluginAddress? within)
     {
@@ -126,58 +154,14 @@ internal sealed class RelationReads(
             {TableDdlBuilder.ActiveJoin("c", "plugin", "origin")}
             {narrowedByPlugin}
             ORDER BY p.load_order_idx
-            """, reader => (FormKey: reader.GetString(0), Copy: new CopySize(new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.GetInt64(3))), [.. values])
-            .ToLookup(row => row.FormKey, row => row.Copy, StringComparer.OrdinalIgnoreCase);
+            """, CopySizeOf, [.. values])
+            .ToLookup(copy => copy.FormKey, StringComparer.OrdinalIgnoreCase);
     }
-
-    private static IEnumerable<List<IGrouping<string, CopySize>>> Batches(IEnumerable<IGrouping<string, CopySize>> stacks, long batchBytes)
-    {
-        var batch = new List<IGrouping<string, CopySize>>();
-        long bytes = 0;
-        foreach (var stack in stacks)
-        {
-            var stackBytes = stack.Sum(copy => copy.Length);
-            if (batch.Count > 0 && bytes + stackBytes > batchBytes)
-            {
-                yield return batch;
-                (batch, bytes) = ([], 0);
-            }
-            batch.Add(stack);
-            bytes += stackBytes;
-        }
-        if (batch.Count > 0) yield return batch;
-    }
-
-    // A filter naming each copy takes over ten times as long as one naming their keys, plugins and origins, so the
-    // copies are matched after the read.
-    private ILookup<string, RecordDocument> Documents(ReadContext context, List<IGrouping<string, CopySize>> batch)
-    {
-        var formKeys = batch.Select(stack => stack.Key).ToList();
-        var copies = batch.SelectMany(stack => stack.Select(copy => copy.Plugin)).ToList();
-        var plugins = copies.Select(plugin => plugin.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        var origins = copies.Select(plugin => plugin.Origin).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        string[] values = [.. formKeys, .. plugins, .. origins];
-        static string Parameters(int from, int count) => string.Join(", ", Enumerable.Range(from + 1, count).Select(i => $"${i}"));
-        return ActiveCopies(context,
-            $"form_key IN ({Parameters(0, formKeys.Count)}) AND plugin IN ({Parameters(formKeys.Count, plugins.Count)}) AND origin IN ({Parameters(formKeys.Count + plugins.Count, origins.Count)})",
-            _ => null, values);
-    }
-
-    private ILookup<string, RecordDocument> ActiveCopies(
-        ReadContext context, string where, Func<string, RecordLookupEntry?> resolve, string[] values, string prefix = "") =>
-        context.Rows($"""
-            {prefix}
-            SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, parse_diagnosis, record_type
-            FROM records
-            WHERE {where}
-            ORDER BY load_order_idx
-            """, reader => ReadDocumentFromBody(context, reader, store.Schemas[reader.GetString(8)], resolve), values)
-            .ToLookup(document => document.FormKey, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Whether any registered plugin, active or not, holds <paramref name="formKey"/>.</summary>
     public bool IsHeldByAnyPlugin(string formKey)
     {
-        using var context = store.OpenRead();
+        using var context = OpenRead();
         return context.Scalar<bool>($"SELECT EXISTS (SELECT 1 FROM {TableDdlBuilder.PluginRecordsView} WHERE form_key = $1)", formKey);
     }
 
@@ -185,7 +169,7 @@ internal sealed class RelationReads(
     /// EditorID it is, whatever the case. A record no active plugin holds is read from its first copy.</summary>
     public IReadOnlyList<(string FormKey, string? EditorId)> RecordsNamed(string name)
     {
-        using var context = store.OpenRead();
+        using var context = OpenRead();
         var formKey = CanonicalFormKey.Of(name);
         return context.Rows($"""
             SELECT form_key, editor_id FROM (
@@ -202,29 +186,24 @@ internal sealed class RelationReads(
     /// FormKey isn't indexed anywhere.</summary>
     public OverrideStack? GetOverrideStack(string formKey)
     {
-        using var context = store.OpenRead();
-        var tableName = FindRecordType(context, formKey);
-        if (tableName == null) return null;
-        var schema = store.Schemas[tableName];
+        using var context = OpenRead();
+        var located = Located(context, "records",
+            "form_key = $1 AND record_type = (SELECT record_type FROM records WHERE form_key = $1 LIMIT 1)", formKey);
+        if (located.Count == 0) return null;
         var resolve = LinkResolution.ForLinksOf(context, [formKey]);
-        var entries = context.Rows("""
-            SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, parse_diagnosis, working_tree_state
-            FROM records
-            WHERE form_key = $1 AND record_type = $2
-            ORDER BY load_order_idx
-            """, reader =>
+        var copies = Stored(context, [located]).Single();
+        var entries = copies.ConvertAll(copy =>
         {
-            var doc = ReadDocumentFromBody(context, reader, schema, resolve);
-            var isDirty = WorkingTreeStates.FromStored(reader.GetString(8)) != WorkingTreeState.None;
+            var doc = ReadDocumentFromBody(context, copy, resolve);
+            var isDirty = WorkingTreeStates.FromStored(copy.WorkingTreeState) != WorkingTreeState.None;
             return new OverrideStackEntry(doc.Plugin, doc.LoadOrderIndex, doc.IsWinner, doc, isDirty);
-        }, formKey, NormalizeRecordType(tableName));
-
-        return entries.Count == 0 ? null : new OverrideStack(formKey, tableName, entries);
+        });
+        return new OverrideStack(formKey, copies[0].RecordType, entries);
     }
 
     public PagedResult<RecordSummary> Search(RecordQuery query)
     {
-        using var context = store.OpenRead();
+        using var context = OpenRead();
         var filter = query.Scope == RecordQueryScope.Navigator ? store.Filter : null;
         var scope = query is { Scope: RecordQueryScope.Search, Plugin: not null } ? RecordScope.EveryRegisteredPlugin : RecordScope.Active;
         var (where, paramValues) = BuildWhere(
@@ -285,7 +264,7 @@ internal sealed class RelationReads(
     public Answer<JsonElement[], string> Select(string statement)
     {
         var sql = statement.TrimEnd().TrimEnd(';');
-        using var context = store.OpenRead();
+        using var context = OpenRead();
         if (SqlDoor.RefusalOf(context, sql, TableDdlBuilder.IndexedSchema) is { } refusal) return refusal;
         try
         {
@@ -304,7 +283,7 @@ internal sealed class RelationReads(
     /// (SetFilter never affects a point read).</summary>
     public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginAddress plugin)
     {
-        using var context = store.OpenRead();
+        using var context = OpenRead();
         var (where, paramValues) = BuildWhere(
             plugin.Name, null, store.Filter.Listing, plugin.Origin);
         var holdings = HoldingsOf(plugin.Name, plugin.Origin, paramValues);
@@ -356,7 +335,7 @@ internal sealed class RelationReads(
     public WorkingTreeStatesBeneath GetWorkingTreeStatesBeneath(PluginAddress plugin)
     {
         var scope = RecordScope.Active;
-        using var context = store.OpenRead();
+        using var context = OpenRead();
         var states = context.Rows($"""
             WITH RECURSIVE {NavigatorSql.AboveAChange(scope, "WHERE h.plugin = $1 AND h.origin = $2", store.Filter.AlsoKeeps("f"))}
             SELECT FALSE AS is_group, form_key AS row_key, fact AS state FROM above_change
@@ -385,7 +364,7 @@ internal sealed class RelationReads(
 
     private RecordLookupEntry? Resolve(string formKey)
     {
-        using var context = store.OpenRead();
+        using var context = OpenRead();
         return LinkResolution.Resolve(context, formKey);
     }
 
@@ -394,13 +373,13 @@ internal sealed class RelationReads(
     /// links its copies carry in one query up front.</summary>
     public Func<string, RecordLookupEntry?> LinkResolver(List<string> formKeys)
     {
-        using var context = store.OpenRead();
+        using var context = OpenRead();
         return LinkResolution.ForLinksOf(context, formKeys, Resolve);
     }
 
     private List<MissingReference> GetReferencesToMissingRecords()
     {
-        using var context = store.OpenRead();
+        using var context = OpenRead();
         var release = store.Release;
         return context.Rows($"""
             SELECT fr.source_plugin, fr.source_origin, fr.source_form_key, fr.record_type, fr.editor_id,
@@ -446,7 +425,7 @@ internal sealed class RelationReads(
 
     public IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey)
     {
-        using var context = store.OpenRead();
+        using var context = OpenRead();
         return GetReferences(context, "form_references fr", "", targetFormKey);
     }
 
@@ -474,7 +453,7 @@ internal sealed class RelationReads(
     /// <summary>The same read over the active plugins and the inactive compiled ones (ADR-0012).</summary>
     public IReadOnlyList<ReferenceRow> GetReferencedByInActiveOrCompiledPlugins(string targetFormKey)
     {
-        using var context = store.OpenRead();
+        using var context = OpenRead();
         return GetReferences(context, ActiveOrCompiledPluginReferrers, $"AND {ActiveOrCompiled}", targetFormKey);
     }
 
@@ -485,7 +464,7 @@ internal sealed class RelationReads(
     /// FormKey or a link, and the Plugin Header of each such plugin read from its binary that lists it.</summary>
     public IReadOnlyList<CopyNaming> GetCopiesNaming(string name)
     {
-        using var context = store.OpenRead();
+        using var context = OpenRead();
         var copies = context.Rows($"""
             SELECT r.form_key, r.plugin, r.origin, {InPluginSource}
             FROM {Copies}
@@ -515,7 +494,7 @@ internal sealed class RelationReads(
     /// each copy there that links it.</summary>
     public IReadOnlyList<RecordAt> GetCopiesWithNoPluginSourceNaming(string formKey)
     {
-        using var context = store.OpenRead();
+        using var context = OpenRead();
         var activeWithNoPluginSource = $"p.load_order_idx IS NOT NULL AND NOT {InPluginSource}";
         return [.. context.Rows($"""
             SELECT r.form_key, r.plugin, r.origin
@@ -530,20 +509,22 @@ internal sealed class RelationReads(
     }
 
     /// <summary>Each copy in an active or compiled plugin whose document holds <paramref name="text"/> in any case.</summary>
-    public IReadOnlyList<CopyHoldingText> GetCopiesHoldingText(string text)
+    public IEnumerable<CopyHoldingText> GetCopiesHoldingText(string text)
     {
-        using var context = store.OpenRead();
-        return context.Rows($"""
-            SELECT r.form_key, r.plugin, r.origin, r.record_type, r.body, d.derived_from <> '{DerivedFrom.Binary}'
-            FROM {TableDdlBuilder.MirrorSchema}.records r
+        using var context = OpenRead();
+        // The length is taken below the join, which would otherwise carry every document holding the text (ADR-0010).
+        var located = context.Rows($"""
+            SELECT r.form_key, r.plugin, r.origin, r.length, {InPluginSource}
+            FROM (SELECT form_key, plugin, origin, strlen(body) AS length
+                  FROM {TableDdlBuilder.MirrorSchema}.records WHERE contains(lower(body), lower($1))) r
             {TableDdlBuilder.RegisteredJoin("r", "plugin", "origin")}
             JOIN {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} d
               ON d.plugin = r.plugin AND d.origin = r.origin
-            WHERE contains(lower(r.body), lower($1))
-              AND (p.load_order_idx IS NOT NULL OR d.derived_from <> '{DerivedFrom.Binary}')
+            WHERE {ActiveOrCompiled}
             ORDER BY r.plugin, r.origin, r.form_key
-            """, reader => new CopyHoldingText(
-                reader.GetString(0), new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.GetString(3), reader.GetString(4), reader.GetBoolean(5)), text);
+            """, reader => (Copy: CopySizeOf(reader), InPluginSource: reader.GetBoolean(4)), text);
+        foreach (var (found, stored) in located.Zip(Stored(context, located.Select(found => new[] { found.Copy }))))
+            yield return new CopyHoldingText(found.Copy.FormKey, found.Copy.Plugin, stored[0].RecordType, stored[0].Body, found.InPluginSource);
     }
 
     /// <summary>Every plugin at least one filtered record matches, restricted to
@@ -555,7 +536,7 @@ internal sealed class RelationReads(
         if (types.Count == 0 || !store.Filter.Active)
             return new HashSet<PluginAddress>(PluginAddress.Comparer);
 
-        using var context = store.OpenRead();
+        using var context = OpenRead();
 
         var (where, paramValues) = BuildWhere(
             null, null, FilterMatches.Matching, origin: null, recordTypes: types);
@@ -570,7 +551,7 @@ internal sealed class RelationReads(
     /// binary was hashed and gone with its rows: the malformed-plugin read.</summary>
     public IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses()
     {
-        using var context = store.OpenRead();
+        using var context = OpenRead();
         return context.Rows($"""
             SELECT plugin, origin, anchor, defect_class, tail, message
             FROM {TableDdlBuilder.PluginDiagnosisTable}
@@ -584,7 +565,7 @@ internal sealed class RelationReads(
     /// <summary>What each plugin's rows took their strings from: a localized plugin read from its binary.</summary>
     public IReadOnlyDictionary<PluginAddress, string> GetStringsReads()
     {
-        using var context = store.OpenRead();
+        using var context = OpenRead();
         var rows = context.Rows($"SELECT plugin, origin, strings_read FROM {Store.Store.FilesRelation} WHERE strings_read IS NOT NULL",
             reader => KeyValuePair.Create(reader.GetPluginAddress(), reader.GetString(2)));
         return new Dictionary<PluginAddress, string>(rows, PluginAddress.Comparer);
@@ -593,7 +574,7 @@ internal sealed class RelationReads(
     /// <summary>What each registered plugin's rows were derived from. A plugin with no rows is absent.</summary>
     public IReadOnlyDictionary<PluginAddress, DerivedFrom> GetDerivations()
     {
-        using var context = store.OpenRead();
+        using var context = OpenRead();
         var rows = context.Rows($"SELECT plugin, origin, derived_from FROM {TableDdlBuilder.PluginDerivationTable}",
             reader => KeyValuePair.Create(
                 reader.GetPluginAddress(), Enum.Parse<DerivedFrom>(reader.GetString(2))));
@@ -604,7 +585,7 @@ internal sealed class RelationReads(
     /// enumeration did: the tree's "has a failure below it" for a plugin row.</summary>
     public IReadOnlySet<PluginAddress> GetPluginsWithParseFailures()
     {
-        using var context = store.OpenRead();
+        using var context = OpenRead();
         return new HashSet<PluginAddress>(
             context.Rows($"""
                 SELECT DISTINCT r.plugin, r.origin FROM {TableDdlBuilder.MirrorSchema}.records r
@@ -632,7 +613,7 @@ internal sealed class RelationReads(
     private List<CellLocationSummary> CellLocations(
         PluginAddress plugin, string where, string blockOrder, IEnumerable<string> parameters)
     {
-        using var context = store.OpenRead();
+        using var context = OpenRead();
         return context.Rows($"""
             WITH RECURSIVE {NavigatorSql.AboveAFailure(RecordScope.Active, "WHERE h.plugin = $1 AND h.origin = $2")}
             SELECT cl.cell_form_key, c.editor_id, cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y,
@@ -667,7 +648,7 @@ internal sealed class RelationReads(
 
     public IReadOnlySet<string> GetWorldspacesHoldingCells(PluginAddress plugin)
     {
-        using var context = store.OpenRead();
+        using var context = OpenRead();
         var parents = context.Rows($"""
             SELECT DISTINCT h.parent FROM holdings h
             JOIN cell_location cl ON cl.cell_form_key = h.child AND cl.plugin = h.plugin AND cl.origin = h.origin
@@ -678,7 +659,7 @@ internal sealed class RelationReads(
 
     public CellChildRecords GetCellChildRecords(PluginAddress plugin, string cellFormKey)
     {
-        using var context = store.OpenRead();
+        using var context = OpenRead();
 
         // ADR-0005: the placed ref's base form comes out of the document rather than a
         // `base` column; json_extract_string unquotes the stored FormLink text, and a placed ref
@@ -729,7 +710,7 @@ internal sealed class RelationReads(
     /// indexed. Ref-invariant: no gesture moves a cell.</summary>
     public CellStructure? GetCellLocation(PluginAddress plugin, string cellFormKey)
     {
-        using var context = store.OpenRead();
+        using var context = OpenRead();
         return GetCellLocation(context, cellFormKey, plugin.Name, plugin.Origin);
     }
 
@@ -737,7 +718,7 @@ internal sealed class RelationReads(
     /// included, in FormID order; empty when it holds nothing. Ref-invariant by construction.</summary>
     public IReadOnlyList<HoldingRow> GetHoldings(PluginAddress plugin, string parentFormKey)
     {
-        using var context = store.OpenRead();
+        using var context = OpenRead();
         return GetHoldings(
             context, plugin.Name, plugin.Origin, parentFormKey, store.Filter.AlsoKeeps("cc", "child"), NavigatorSql.FormIdOrder("r.form_key_plugin", "cc.child"));
     }
@@ -746,7 +727,7 @@ internal sealed class RelationReads(
     /// place in it.</summary>
     public IReadOnlyList<HoldingRow> GetEveryHolding(PluginAddress plugin, string parentFormKey)
     {
-        using var context = store.OpenRead();
+        using var context = OpenRead();
         return GetHoldings(context, plugin.Name, plugin.Origin, parentFormKey, inFilter: "", "cc.slot, cc.slot_index");
     }
 
@@ -824,11 +805,6 @@ internal sealed class RelationReads(
     private static string? FindRecordTypeInAnyPlugin(ReadContext context, string formKey) =>
         context.ScalarString($"SELECT record_type FROM {TableDdlBuilder.MirrorSchema}.records WHERE form_key = $1 LIMIT 1", formKey);
 
-    // Private: table-name dispatch is rejected from the seam; GetDocument and GetOverrideStack
-    // resolve a FormKey's type themselves rather than being told it.
-    private static string? FindRecordType(ReadContext context, string formKey) =>
-        context.ScalarString("SELECT record_type FROM records WHERE form_key = $1 LIMIT 1", formKey);
-
     private static List<ReferenceRow> GetReferences(ReadContext context, string referrers, string restriction, string targetFormKey)
     {
         // WorkingTreeOverlay keeps form_references rewritten as the working tree changes, so this
@@ -874,34 +850,10 @@ internal sealed class RelationReads(
             parentFormKey, plugin, origin);
     }
 
-    private RecordDocument? ReadDocument(ReadContext context, string tableName, string formKey, string? plugin, string? origin, bool winnerOnly)
-    {
-        var schema = store.Schemas[tableName];
-        var conditions = new List<string> { "form_key = $1" };
-        var values = new List<string> { formKey };
-
-        if (winnerOnly) conditions.Add("is_winner = true");
-        if (plugin != null) { conditions.Add($"plugin = ${values.Count + 1}"); values.Add(plugin); }
-        if (origin != null) { conditions.Add($"origin = ${values.Count + 1}"); values.Add(origin); }
-
-        conditions.Add($"record_type = ${values.Count + 1}");
-        values.Add(NormalizeRecordType(tableName));
-
-        var resolve = LinkResolution.ForLinksOf(context, [formKey]);
-        return context.Rows($"""
-            SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, parse_diagnosis
-            FROM records WHERE {string.Join(" AND ", conditions)}
-            LIMIT 1
-            """, reader => ReadDocumentFromBody(context, reader, schema, resolve), [.. values]) is [var document] ? document : null;
-    }
-
-    private RecordDocument ReadDocumentFromBody(
-        ReadContext context, DbDataReader reader, RecordTableSchema schema,
-        Func<string, RecordLookupEntry?> resolveFormKey) =>
+    private RecordDocument ReadDocumentFromBody(ReadContext context, StoredCopy copy, Func<string, RecordLookupEntry?> resolveFormKey) =>
         DocumentFromBody(
-            context, reader.GetString(0), reader.GetString(1), reader.GetString(2), NullableInt(reader, 3) ?? int.MaxValue,
-            reader.GetBoolean(4), reader.GetStringOrNull(5),
-            reader.GetString(6), schema, resolveFormKey, reader.GetStringOrNull(7));
+            context, copy.FormKey, copy.Plugin.Name, copy.Plugin.Origin, copy.LoadOrderIndex ?? int.MaxValue, copy.IsWinner, copy.EditorId,
+            copy.Body, store.Schemas[copy.RecordType], resolveFormKey, copy.ParseDiagnosis);
 
     // The construction half of ReadDocumentFromBody. The fields are the document's own nodes (ADR-0005), except a
     // header's masters, which no document holds (ADR-0008).

@@ -3,24 +3,29 @@ using DuckDB.NET.Data;
 
 namespace MEditService.RecordIndex.Store;
 
-/// <summary>One transaction context over the record index: the queries a read asks, with the engine's client types
-/// kept inside the Store. A context from <see cref="Store.OpenRead"/> is the reader's to dispose.</summary>
+/// <summary>One snapshot of the record index: every query a read asks sees one state, whatever a write commits
+/// meanwhile. A context from <see cref="Store.OpenRead"/> is the reader's to dispose.</summary>
 internal sealed class ReadContext : IDisposable
 {
     private readonly DuckDBConnection _connection;
     private readonly bool _owned;
 
-    internal ReadContext(DuckDBConnection connection, bool owned)
+    /// <summary>Takes <paramref name="connection"/>, which holds a transaction open, to dispose.</summary>
+    internal ReadContext(DuckDBConnection connection) : this(connection, owned: true)
+    {
+    }
+
+    private ReadContext(DuckDBConnection connection, bool owned)
     {
         _connection = connection;
         _owned = owned;
     }
 
+    /// <summary>The same snapshot, which disposing the borrowed context leaves open.</summary>
+    public ReadContext Borrowed() => new(_connection, owned: false);
+
     public List<T> Rows<T>(string sql, Func<DbDataReader, T> map, params object?[] args) =>
         DuckDbSql.Rows(_connection, sql, map, args);
-
-    /// <summary>Holds every query this context asks to one snapshot of the record index, until the snapshot is disposed.</summary>
-    public StoreTransaction Snapshot() => new(StoreFaults.Translating(_connection.BeginTransaction));
 
     public int Execute(string sql, params object?[] args) => DuckDbSql.Execute(_connection, sql, args);
 
