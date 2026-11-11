@@ -8,7 +8,6 @@ import { handlers, showQuickPick, PluginRowStandIn } from './sourceGestureHarnes
 import * as vscode from 'vscode';
 import { registerBuildCommand } from '../buildCommand';
 import { ModNode } from '../ModListProvider';
-import { sourceFiles } from '../../instanceLoader/loadOrderSnapshot';
 import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
 import { type PluginAddress } from '../../client';
 import { AgentCall } from '../../drivingLib/agentGesture';
