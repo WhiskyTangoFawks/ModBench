@@ -24,7 +24,6 @@ import { MODS_KEY_ARGS, modsKeyContext } from './gestureEntry';
 import { publisherKeyContext, registerPublisherTagCommands } from './publisherTagCommands';
 import { onModCheckboxChanged } from './modCheckboxHandler';
 import type { MEditClient } from '../client';
-import { registerArchiveFiles } from './archiveFiles';
 import { ModListProvider, OverwriteNode, type ModlistNode } from './ModListProvider';
 import type { ModStatuses } from '../modStatus/modStatuses';
 import { registerModDecorations } from './modDecorations';
@@ -90,8 +89,8 @@ interface ModsViewDeps {
   statuses: ModStatuses;
   /** Lists each place a file names a mod, in VS Code's References view. */
   referencedBy: (mod: string) => Promise<void>;
-  /** Serves the files of an archive. */
-  archives: Pick<MEditClient, 'getArchiveFile' | 'getArchiveCopies'>;
+  /** Reads the copies of files in archives. */
+  archives: Pick<MEditClient, 'getArchiveCopies'>;
 }
 
 const checkForUpdatesDeps = (
@@ -222,7 +221,6 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     view,
     provider,
     open,
-    registerArchiveFiles(deps.archives),
   );
   return {
     view, nameFilter, copyValue: { text: modsCopyValueText(() => view.selection), reporterTag: 'mod.copyValue' },

@@ -6,10 +6,17 @@ import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, DataTransferItem, DataTransfer, FakeCancellationToken, FakeUri, Uri,
 } from '../../test/vscodeMock';
 
-const { executeCommand } = vi.hoisted(() => ({ executeCommand: vi.fn((_id: string, ..._args: unknown[]) => Promise.resolve()) }));
+const { executeCommand, served } = vi.hoisted(() => ({
+  executeCommand: vi.fn((_id: string, ..._args: unknown[]) => Promise.resolve()),
+  served: new Map<string, { readFile(uri: unknown): Promise<Uint8Array> }>(),
+}));
 
 vi.mock('vscode', () => ({
   commands: { executeCommand },
+  workspace: { registerFileSystemProvider: (scheme: string, provider: { readFile(uri: unknown): Promise<Uint8Array> }) => { served.set(scheme, provider); return { dispose: () => undefined }; } },
+  Disposable: class { constructor(public dispose: () => void) {} },
+  FileType: { File: 1, Directory: 2 },
+  FileSystemError: { FileNotFound: (what: { path: string }) => new Error(`FileNotFound ${what.path}`) },
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
   Uri, DataTransferItem, DataTransfer,
 }));
@@ -25,6 +32,8 @@ import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { present } from '../../ports/present';
 import { mod, indexedValueOf } from './indexedValue';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { registerArchiveFiles } from '../archiveFiles';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const providerAt = (instance: FakeInstance) => new ModListProvider({ reporter: recordingReporter(), statuses: NO_MOD_STATUSES, instance, open: new OpenRows(instance) });
 
@@ -221,8 +230,14 @@ describe('an archive opens into its files as a folder does (mods.md, The tree, s
     const uri = expectInstanceOf(target, FakeUri);
     expect([leaf.command?.command, options]).toEqual(['vscode.open', { preview: true }]);
     expect([uri.scheme, uri.path, JSON.parse(uri.query)]).toEqual([
-      'modbench-archive', '/Armour - Main.ba2/meshes/a.nif', { gameRelease: 'Fallout4', archive: '/linked/Armour - Main.ba2', file: 'meshes/a.nif' },
+      'modbench-archive', '/Armour - Main.ba2/meshes/a.nif', { gameRelease: 'Fallout4', archive: '/linked/Armour - Main.ba2' },
     ]);
+
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getArchiveFile', new Uint8Array([1]));
+    registerArchiveFiles(client);
+    await present(served.get('modbench-archive'), 'the archive file system').readFile(uri);
+    expect(client.calls.filter((call) => call.method === 'getArchiveFile').map((call) => call.args)).toEqual([['Fallout4', '/linked/Armour - Main.ba2', 'meshes/a.nif']]);
   });
 
   it('a file or folder in it is named by the path in its mod, through the archive, for its identity, its tooltip and the file icon theme', async () => {
