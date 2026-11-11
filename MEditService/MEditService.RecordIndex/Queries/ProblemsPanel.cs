@@ -39,7 +39,7 @@ internal static class ProblemsPanel
     }
 
     // Only the load order's active plugins answer a link, and it holds one per file name (ADR-0012).
-    private static IReadOnlyDictionary<string, string> UnreadableActive(Indexer index, LoadOrderSnapshot snapshot)
+    private static Dictionary<string, string> UnreadableActive(Indexer index, LoadOrderSnapshot snapshot)
     {
         var active = snapshot.Active.Select(plugin => plugin.Key).ToHashSet(PluginAddress.Comparer);
         return index.UnreadableBinaries
