@@ -44,7 +44,7 @@ As a user, I want:
 7. My agent to open a record in an editor tab, to show me what it found. Cites: catalog, Record, `open`
 8. My agent to change many records by a rule with a Modbench script, as I do. Cites: scripts.md; ADR-0021
 9. My agent to learn from Modbench which SQL views a SELECT reads, and the columns of each. A SELECT that reads anything else is refused, naming the SQL views. Cites: Any agent, story 6
-10. My agent's SELECT whose rows outgrow what my agent reads in one reply to be refused, naming a Modbench script as the way to read them all. Cites: scripts.md, Reading, story 1; Any agent, story 10
+10. My agent's SELECT whose rows are too large to be useful to be answered as Reporting, story 6 says, naming a Modbench script as the way to read them all. Cites: Reporting, story 6; scripts.md, Reading, story 1
 
 ## Mod management
 
@@ -78,3 +78,4 @@ As a user, I want:
 3. My agent to get each gesture's outcome, so its next step builds on what landed.
 4. A refusal that a gesture clears to name the tool that runs it, as my agent sees it. Cites: Any agent, story 6
 5. My agent's request for a gesture that runs long to tell my agent it is still working, so my agent waits for the outcome rather than giving up. Cites: story 3; Usable first
+6. A reply too large to be useful to my agent to say so, and to give in its place what my agent needs to correct its request, so my agent corrects it without filling its context. Cites: Any agent, story 10; Never silently wrong
