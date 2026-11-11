@@ -13,7 +13,7 @@ import { OVERWRITE_ORIGIN, type PluginAddress } from '../wire/pluginAddress';
 import type { FomodMove, FomodState, ReleaseImage } from '../wire/fomodPage';
 import type { FolderRefusal } from './foldersRefused';
 import type { FileStamp } from '../repositoriesLib/stampedReads';
-import type { FolderValue, PackagesAsked, PluginFlags, Read, StatusValues } from '../repositoriesLib/statusValues';
+import type { FolderValue, PackagesAsked, Read, StatusValues } from '../repositoriesLib/statusValues';
 import type { DataFileReads } from './gameFolder/dataFileReads';
 import type { ProgramVersions } from './gameFolder/programVersions';
 import type { NonSteamPrefix } from './gameFolder/steamPrefix';

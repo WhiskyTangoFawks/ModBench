@@ -4,7 +4,6 @@ import type { EntryRef, InstanceAdapter, ModFolder } from '../instanceAdapter/in
 import {
   buildFileAgainst, filesAPackageHolds, flaggedHashesIn, heldWholeStatus, manifestAt, packagesAskedAt, statusFrom, unreadableStatus, type ModAt, type ModStatus, type PossibleHashes,
 } from '../manifestAdapter/manifestAdapter';
-import { localFailure } from '../wire/readFailed';
 
 /** What a status is derived from in an instance value. */
 export interface StatusSource {
@@ -71,7 +70,7 @@ export class ModStatuses {
   constructor(
     private readonly reads: Pick<InstanceAdapter, 'modValue' | 'installationFile' | 'foldersHeldWhole' | 'filesHeldByGit'>,
     private readonly log: (line: string) => void,
-    private readonly possibleHashes: PossibleHashes = () => Promise.resolve(localFailure('mEdit was not asked')),
+    private readonly possibleHashes?: PossibleHashes,
   ) {}
 
   /** Derives every status again from `value`; of the values handed while one derives, the latest alone derives next. */
@@ -179,18 +178,23 @@ export class ModStatuses {
     const manifest = await manifestAt(mod.folder);
     const named = mod.sourceFolder === undefined ? manifest : await manifestAt(mod.sourceFolder);
     const values = await this.reads.modValue(mod.folder, askedBoth(packagesAskedAt(manifest), packagesAskedAt(named)), heldByGit);
-    const flagged = manifest.read !== undefined && 'manifest' in manifest.read && values.kind === 'read'
-      ? await flaggedHashesIn(manifest.read.manifest, values.folder, mod.folder, this.possibleHashes) : undefined;
-    if (flagged !== undefined && 'cannotTell' in flagged) {
-      return { status: unreadableStatus(mod.name, `mEdit could not say what its flagged plugins held before their flags: ${flagged.cannotTell}`), packaged: new Set() };
-    }
-    const status = statusFrom(mod, manifest, values, flagged);
+    const status = await this.judged(mod, manifest, values);
     if (status.unreadable !== undefined) return { status, packaged: new Set() };
     const unpackaged = status.noManifest ? mod.files.filter((path) => !isGitsOwn(path)) : status.unpackaged;
     return {
       status: { ...status, unpackaged: [...new Set([...unpackaged, ...heldByGit])].sort() },
       packaged: named.read !== undefined && 'manifest' in named.read ? filesAPackageHolds(named.read.manifest, values) : new Set(),
     };
+  }
+
+  // A flagged plugin is judged by what mEdit says it could have held before its flags, and a status that cannot be judged says so.
+  private async judged(mod: ModAt, manifest: Awaited<ReturnType<typeof manifestAt>>, values: Awaited<ReturnType<InstanceAdapter['modValue']>>): Promise<ModStatus> {
+    const flagged = manifest.read !== undefined && 'manifest' in manifest.read && values.kind === 'read'
+      ? await flaggedHashesIn(manifest.read.manifest, values.folder, mod.folder, this.possibleHashes) : undefined;
+    if (flagged !== undefined && 'cannotTell' in flagged) {
+      return unreadableStatus(mod.name, `mEdit could not say what its flagged plugins held before their flags: ${flagged.cannotTell}`);
+    }
+    return statusFrom(mod, manifest, values, flagged);
   }
 
   // The installation file is the mod manager's record, so a folder git holds whole is warned of it too.

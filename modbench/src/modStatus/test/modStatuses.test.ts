@@ -5,7 +5,6 @@ import { basename, join } from 'node:path';
 import type { EntryRef, InstanceAdapter, ModFolder } from '../../instanceAdapter/instanceAdapter';
 import { modValueOver } from '../../instanceAdapter/modValue';
 import type { Manifest, ModStatus, PossibleHashes } from '../../manifestAdapter/manifestAdapter';
-import { localFailure } from '../../wire/readFailed';
 import { writeManifestIn } from '../../manifestAdapter/manifestAdapter';
 import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
 import { ModStatuses, type StatusSource } from '../modStatuses';
@@ -559,8 +558,8 @@ describe('a plugin its manifest flags (Status, story 8)', () => {
   });
 
   it('is unreadable, saying why, and never differing, when mEdit cannot say', async () => {
-    const status = await statusWith(() => Promise.resolve(localFailure('mEdit is not running')));
+    const status = await statusWith(() => Promise.resolve({ failed: 'local', cause: 'mEdit is not running' }));
 
-    expect([status?.differing, status?.unreadable]).toEqual([[], expect.stringContaining('mEdit is not running') as string]);
+    expect([status?.differing, status?.unreadable?.includes('mEdit is not running')]).toEqual([[], true]);
   });
 });

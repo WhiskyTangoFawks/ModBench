@@ -6,7 +6,6 @@ import {
 } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { FolderValue } from '../repositoriesLib/statusValues';
-import { localFailure } from '../wire/readFailed';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import { heldManifestIn } from './heldManifest';
 import { setAsideHeldWhole } from './setAsideHeldWhole';
@@ -191,8 +190,8 @@ async function updateMod(
   const files = only === undefined ? hashed.files : hashed.files.filter(({ path }) => isUnderAny(only, path));
   const packageHolds = (hash: string): boolean => [...downloadedFiles.map(({ file }) => file), ...mod.installationFile === undefined ? [] : [mod.installationFile]]
     .some(({ entries }) => entries.some((entry) => entry.hash === hash)) || (mod.game?.places ?? []).some((place) => place.files.some((one) => one.hash === hash));
-  const possible = held === undefined ? new Map<string, readonly string[]>() : await flaggedHashesIn(held, hashed.value, mod.folder, async (asked) =>
-    (client === undefined ? localFailure('its manifest sets flags, which need mEdit') : client.getFlaggedPluginHashes(await adapter.gameRelease(), asked)));
+  const possible = held === undefined ? new Map<string, readonly string[]>() : await flaggedHashesIn(held, hashed.value, mod.folder, client === undefined
+    ? undefined : async (asked) => client.getFlaggedPluginHashes(await adapter.gameRelease(), asked));
   if ('cannotTell' in possible) return refusal(`${possible.cannotTell}.`);
   const copies = packageCopiesOf(held, files, possible, packageHolds);
   if ('unknown' in copies) return refusal(unaccounted(copies.unknown));

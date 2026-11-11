@@ -38,12 +38,16 @@ describe('the hashes a folder\'s flagged plugins could have had before their fla
   it('cannot tell, saying why, when mEdit cannot answer', async () => {
     const answer = await flaggedHashesIn(manifest, folder, '/mods/Mod', () => Promise.resolve(localFailure('mEdit is not running')));
 
-    expect(answer).toEqual({ cannotTell: expect.stringContaining('mEdit is not running') as string });
+    expect('cannotTell' in answer && answer.cannotTell).toContain('mEdit is not running');
+  });
+
+  it('cannot tell when it has no way to ask mEdit', async () => {
+    expect(await flaggedHashesIn(manifest, folder, '/mods/Mod', undefined)).toEqual({ cannotTell: 'its manifest sets flags, which need mEdit' });
   });
 
   it('cannot tell when mEdit leaves a plugin it was asked about unanswered', async () => {
     const answer = await flaggedHashesIn(manifest, folder, '/mods/Mod', () => Promise.resolve([]));
 
-    expect(answer).toEqual({ cannotTell: expect.stringContaining('Mod.esp') as string });
+    expect('cannotTell' in answer && answer.cannotTell).toContain('Mod.esp');
   });
 });

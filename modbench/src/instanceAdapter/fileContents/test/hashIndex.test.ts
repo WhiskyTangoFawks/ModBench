@@ -19,7 +19,6 @@ vi.mock('../../files', async (importOriginal) => {
 });
 
 const HASH_OF_AAAA = 'Mr+EvxoNp0I=';
-const HASH_OF_BBBB = 'M5WSec/sW34=';
 const ENTRIES = ['a.esp', 'textures/b.dds'];
 
 let root: string;
