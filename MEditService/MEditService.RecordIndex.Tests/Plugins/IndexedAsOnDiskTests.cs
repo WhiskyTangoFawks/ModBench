@@ -5,6 +5,7 @@ using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.RecordIndex.Tests.Plugins;
@@ -27,6 +28,23 @@ public sealed class IndexedAsOnDiskTests
 
         Assert.Contains(Patch, index.Status.IndexedPlugins);
         Assert.Equal(PluginIndexing.NotYet, index.Queries.GetPluginIndexedAsOnDisk(Patch).Value().State);
+    }
+
+    [Fact]
+    public void APluginWhoseMasterFlagWasSetOnDisk_IsAMasterToGetPlugins_OnceTheNextCheckValidatesIt()
+    {
+        var holder = new LoadOrderHolder();
+        using var data = new PluginFixtureBuilder("master-flag-on-disk").WithPlugin("Patch.esp", m => m.Npcs.AddNew("Npc")).Build();
+        using var index = Indexes.Open(holder);
+        index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        Assert.False(index.Queries.GetPlugins().Value().Single().IsMaster);
+
+        var path = Path.Combine(data.DataFolder, "Patch.esp");
+        var onDisk = Fallout4Mod.CreateFromBinary(new ModPath(ModKey.FromFileName("Patch.esp"), path), Fallout4Release.Fallout4);
+        onDisk.IsMaster = true;
+        onDisk.WriteToBinary(path);
+
+        index.NextCheckUntil(() => index.Queries.GetPlugins().Value().Single().IsMaster, "the master flag read from the rewritten header");
     }
 
     [Fact]
