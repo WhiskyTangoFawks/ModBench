@@ -422,6 +422,19 @@ internal sealed class RelationReads(
         ];
     }
 
+    /// <summary>Each plugin read from its source tree that holds at least one link.</summary>
+    public IReadOnlySet<PluginAddress> GetSourcePluginsHoldingLinks()
+    {
+        using var context = OpenRead();
+        return context.Rows($"""
+            SELECT DISTINCT fr.source_plugin, fr.source_origin
+            FROM {TableDdlBuilder.MirrorSchema}.form_references fr
+            {TableDdlBuilder.RegisteredJoin("fr", "source_plugin", "source_origin")}
+            JOIN {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} d
+              ON d.plugin = fr.source_plugin AND d.origin = fr.source_origin AND d.derived_from = '{DerivedFrom.SourceTree}'
+            """, reader => reader.GetPluginAddress()).ToHashSet(PluginAddress.Comparer);
+    }
+
     public IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey)
     {
         using var context = OpenRead();

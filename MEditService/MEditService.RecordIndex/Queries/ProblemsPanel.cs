@@ -15,7 +15,8 @@ internal static class ProblemsPanel
         var derivations = reads.GetDerivations();
         var stopped = index.SourceFileFailures.ToLookup(failure => failure.Plugin, PluginAddress.Comparer);
         var found = index.FileProblems.ToLookup(problem => problem.Plugin, PluginAddress.Comparer);
-        var unreadable = index.UnreadableBinaries.ToDictionary(file => file.Plugin.Name, file => file.Reason, StringComparer.OrdinalIgnoreCase);
+        var unreadable = UnreadableActive(index, snapshot);
+        var holdingLinks = reads.GetSourcePluginsHoldingLinks();
         var held = snapshot.Plugins.ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);
         var missing = reads
             .GetReferencesToMissingRecordsOnFiles(plugin => held.GetValueOrDefault(plugin) is { } registered
@@ -26,13 +27,24 @@ internal static class ProblemsPanel
         [
             .. snapshot.Plugins
                 .Where(plugin => derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom.IsSourceMod() || stopped.Contains(plugin.Key))
-                .Select(plugin => ProblemsOf(
-                    plugin.Key, snapshot.GameRelease, index.LaterReadFailure(plugin.Key),
-                    [.. stopped[plugin.Key].Select(SourceProblem.StoppedAt), .. Found(found[plugin.Key].Select(held => held.Problem), stopped[plugin.Key]),
-                     .. UncheckedLinks(plugin, unreadable, held.GetValueOrDefault(plugin.Key) is { } registered ? source.Over(registered, snapshot.GameRelease) : null)],
-                    [.. missing[plugin.Key]],
-                    unreadable)),
+                .Select(plugin =>
+                {
+                    var headerProblems = holdingLinks.Contains(plugin.Key) ? NoLinkChecked(plugin, unreadable, source.Over(plugin, snapshot.GameRelease)) : new HeaderProblems([], null);
+                    return ProblemsOf(
+                        plugin.Key, snapshot.GameRelease, index.LaterReadFailure(plugin.Key),
+                        [.. stopped[plugin.Key].Select(SourceProblem.StoppedAt), .. Found(found[plugin.Key].Select(held => held.Problem), stopped[plugin.Key]), .. headerProblems.Problems],
+                        [.. missing[plugin.Key]], unreadable, headerProblems.PlacementFailure);
+                }),
         ];
+    }
+
+    // Only the load order's active plugins answer a link, and it holds one per file name (ADR-0012).
+    private static IReadOnlyDictionary<string, string> UnreadableActive(Indexer index, LoadOrderSnapshot snapshot)
+    {
+        var active = snapshot.Active.Select(plugin => plugin.Key).ToHashSet(PluginAddress.Comparer);
+        return index.UnreadableBinaries
+            .Where(file => active.Contains(file.Plugin))
+            .ToDictionary(file => file.Plugin.Name, file => file.Reason, StringComparer.OrdinalIgnoreCase);
     }
 
     // A file the read stopped at is already told by what stopped it.
@@ -43,43 +55,45 @@ internal static class ProblemsPanel
 
     private static PluginProblems ProblemsOf(
         PluginAddress plugin, GameRelease release, IReadOnlyList<SourceFileFailure>? laterReadFailure, List<SourceProblem> stoppedAt,
-        List<MissingReferenceOnFile> rows, IReadOnlyDictionary<string, string> unreadable) =>
-        FailureOf(laterReadFailure, rows) is var (failure, kind) && failure is not null
+        List<MissingReferenceOnFile> rows, IReadOnlyDictionary<string, string> unreadable, string? headerPlacementFailure) =>
+        FailureOf(laterReadFailure, rows, headerPlacementFailure) is var (failure, kind) && failure is not null
             ? new(plugin, stoppedAt, failure, kind)
             : new(plugin, [.. stoppedAt, .. rows.Select(row => Problem(row, release, unreadable))]);
 
-    // Compile's words (ADR-0019): a file nothing could be read from answers nothing about the links into it.
-    private static IEnumerable<SourceProblem> UncheckedLinks(
-        RegisteredPlugin plugin, IReadOnlyDictionary<string, string> unreadable, ISourceRepositoryReads? repository)
+    private sealed record HeaderProblems(IReadOnlyList<SourceProblem> Problems, string? PlacementFailure);
+
+    // Compile checks links against the active plugins, and says which it could not read, only when the plugin holds a link.
+    private static HeaderProblems NoLinkChecked(RegisteredPlugin plugin, IReadOnlyDictionary<string, string> unreadable, ISourceRepositoryReads? repository)
     {
-        if (repository is null) yield break;
+        var others = unreadable.Where(file => !file.Key.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (others.Count == 0) return new([], null);
+        if (repository is null) return new([], $"{plugin.Name} is a compiled plugin but no mod folder provides it.");
+
         var header = PluginHeader.IdentityOf(plugin.Name);
-        if (!repository.RelativePathOf(plugin.Key, header).Holds(out var path, out _) || path is null) yield break;
-        foreach (var (name, reason) in unreadable.Where(file => !file.Key.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)))
-        {
-            yield return new SourceProblem(
-                header.FormKey, null, null, path,
-                $"{name} is in the load order but could not be read, so no link into it was checked: {reason}");
-        }
+        if (!repository.RelativePathOf(plugin.Key, header).Holds(out var path, out var failure))
+            return new([], $"{plugin.Name}'s source could not place its header: {failure.Reason}");
+        if (path is null) return new([], $"{plugin.Name}'s source holds no file for its header.");
+
+        return new([.. others.Select(file => new SourceProblem(header.FormKey, null, null, path, UncheckedLinks.NoLinkInto(file.Key, file.Value)))], null);
     }
 
     private static SourceProblem Problem(MissingReferenceOnFile row, GameRelease release, IReadOnlyDictionary<string, string> unreadable)
     {
         var target = row.Reference.TargetFormKey;
-        var notChecked = RecordMasters.PluginNamedBy(target) is { } owner && unreadable.TryGetValue(owner, out var reason)
-            ? $"{owner} could not be read, so this link was not checked: {reason}"
-            : null;
+        var notChecked = UncheckedLinks.Of(target, unreadable);
         return new(row.Reference.FormKey,
             target,
             row.Reference.FieldPath,
             row.SourceRelativePath ?? throw new InvalidOperationException($"Expected {row.Reference.FormKey} to be placed."),
-            $"{row.Reference.FieldPath}: {notChecked ?? Unresolved(target, release)}");
+            $"{row.Reference.FieldPath}: {notChecked?.Message ?? Unresolved(target, release)}",
+            notChecked?.Plugin);
     }
 
-    private static (string? Failure, ProblemsFailureKind? Kind) FailureOf(IReadOnlyList<SourceFileFailure>? laterReadFailure, List<MissingReferenceOnFile> rows)
+    private static (string? Failure, ProblemsFailureKind? Kind) FailureOf(
+        IReadOnlyList<SourceFileFailure>? laterReadFailure, List<MissingReferenceOnFile> rows, string? headerPlacementFailure)
     {
         if (laterReadFailure is { } files) return (string.Join(" ", files.Select(file => file.Message)), ProblemsFailureKind.LaterRead);
-        var placement = rows.FirstOrDefault(row => row.Failure is not null)?.Failure;
+        var placement = rows.FirstOrDefault(row => row.Failure is not null)?.Failure ?? headerPlacementFailure;
         return (placement, placement is null ? null : ProblemsFailureKind.Placement);
     }
 

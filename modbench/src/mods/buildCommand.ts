@@ -121,7 +121,7 @@ export const buildWarnings = (outcome: BuildOutcome): PartialFailure[] =>
   [...builtUncommitted(outcome), ...builtUnpushed(outcome), ...builtOverIgnored(outcome), ...builtWithFaults(outcome)];
 
 // A diagnostic of the build, not of a file's content, is on no file: the Problems panel holds states of files (common.md, Reporting).
-const onAFile = ({ sourceRelativePath }: { sourceRelativePath: string }) => sourceRelativePath !== '';
+const onAFile = ({ sourceRelativePath }: { sourceRelativePath?: string | null }) => sourceRelativePath != null;
 
 function builtWithFaults(outcome: BuildOutcome): PartialFailure[] {
   return outcome.landed.flatMap(({ compiled }) => compiled.flatMap(({ diagnostics }) =>

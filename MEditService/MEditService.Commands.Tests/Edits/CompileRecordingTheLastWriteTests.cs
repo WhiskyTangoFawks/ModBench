@@ -1,4 +1,3 @@
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda.Fallout4;
@@ -47,7 +46,7 @@ public sealed class CompileRecordingTheLastWriteTests : IDisposable
         var diagnostics = Assert.Single(answer.Applied).Diagnostics;
         Assert.NotEqual(before, File.ReadAllBytes(pluginPath));
         var unfinished = Assert.Single(diagnostics, d => d.Message.Contains("could not be finished", StringComparison.Ordinal));
-        Assert.Equal(CompileDiagnostic.NoFile, unfinished.SourceRelativePath);
+        Assert.Null(unfinished.SourceRelativePath);
     }
 
     [Fact]

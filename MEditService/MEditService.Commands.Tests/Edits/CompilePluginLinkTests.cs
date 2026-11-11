@@ -1,5 +1,4 @@
 using MEditService.Codec.Serialization;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -119,7 +118,7 @@ public sealed class CompilePluginLinkTests : TestInstance
         Assert.Empty(answer.Refused);
         var diagnostics = Assert.Single(answer.Applied).Diagnostics;
         var diagnostic = Assert.Single(diagnostics);
-        Assert.Equal(CompileDiagnostic.NoFile, diagnostic.SourceRelativePath);
+        Assert.Null(diagnostic.SourceRelativePath);
         Assert.Contains("links could not be checked", diagnostic.Message, StringComparison.Ordinal);
         Assert.Contains(FaultyLinkAdapter.Fault, diagnostic.Message, StringComparison.Ordinal);
         Assert.Equal([_targetKeyword], KeywordsInTheBinary());

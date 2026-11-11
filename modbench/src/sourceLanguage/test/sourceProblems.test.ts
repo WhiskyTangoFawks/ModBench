@@ -72,6 +72,14 @@ describe('feedSourceProblems (source.md, In the text editor, story 6)', () => {
     expect(shown.get('/source/ReferringMod/Refers.esp/Npc.json')?.map(({ clearing }) => clearing)).toEqual([undefined]);
   });
 
+  it('carries no clearing edit on a link that was not checked, for it is not known to be missing', async () => {
+    const { answered } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': '{}' });
+
+    const shown = await answered([{ plugin: PLUGIN, problems: [problem({ fieldPath: 'Race', uncheckedBecause: 'Unreadable.esp' })] }]);
+
+    expect(shown.get('/source/ReferringMod/Refers.esp/Npc.json')?.map(({ clearing }) => clearing)).toEqual([undefined]);
+  });
+
   it('puts a reference to a missing record on its file, spanning the FormKey no active plugin holds', async () => {
     const text = `{\n  "FormKey": "${REFERRER}",\n  "Race": "${MISSING}"\n}`;
     const { answered } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': text });

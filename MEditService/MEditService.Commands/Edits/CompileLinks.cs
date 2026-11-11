@@ -47,16 +47,11 @@ internal sealed class CompileLinks(IPluginAdapter adapter, ILogger logger)
         // it is unchecked with that reason, never broken (ADR-0019).
         var unread = answers.UnreadableFiles.ToDictionary(
             file => file.FileName, file => file.Reason, StringComparer.OrdinalIgnoreCase);
-        string? WhyUnchecked(string formKey) =>
-            RecordMasters.PluginNamedBy(formKey) is { } owner && unread.TryGetValue(owner, out var reason)
-                ? $"{owner} could not be read, so this link was not checked: {reason}"
-                : null;
+        string? WhyUnchecked(string formKey) => UncheckedLinks.Of(formKey, unread)?.Message;
 
         var diagnostics = answers.UnreadableFiles
             .Select(file => PluginDiagnostic(
-                plugin, repository,
-                $"{file.FileName} is in the load order but could not be read, so no link into it was " +
-                $"checked: {file.Reason}"))
+                plugin, repository, UncheckedLinks.NoLinkInto(file.FileName, file.Reason)))
             .ToList();
         foreach (var record in records)
         {

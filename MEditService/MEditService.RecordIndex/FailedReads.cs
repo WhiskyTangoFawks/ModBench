@@ -33,7 +33,18 @@ internal sealed class FailedReads(Store.Store index, ISourceAdapter source, ILog
     /// against (ADR-0019).</summary>
     public IReadOnlyList<(PluginAddress Plugin, string Reason)> UnreadableBinaries
     {
-        get { lock (_lock) return [.. _failed.Select(held => (held.Key, held.Value.BinaryReason)).Where(held => held.BinaryReason is not null).Select(held => (held.Key, Reason: held.BinaryReason ?? ""))]; }
+        get
+        {
+            lock (_lock)
+            {
+                var unreadable = new List<(PluginAddress Plugin, string Reason)>();
+                foreach (var (key, failure) in _failed)
+                {
+                    if (failure.BinaryReason is { } reason) unreadable.Add((key, reason));
+                }
+                return unreadable;
+            }
+        }
     }
 
     public IReadOnlyList<SourceFileFailure> SourceFileFailures

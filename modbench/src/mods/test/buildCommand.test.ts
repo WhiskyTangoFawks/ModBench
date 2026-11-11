@@ -149,7 +149,7 @@ describe('modbench.mod.build', () => {
         mod: 'ModA', refused: [], archivesRefused: [],
         compiled: [compiledPluginFixture({
           plugin: PATCH,
-          diagnostics: [{ formKey: '', sourceRelativePath: '', message: 'MyPatch.esp compiled, but its links could not be checked: no cache' }],
+          diagnostics: [{ message: 'MyPatch.esp compiled, but its links could not be checked: no cache' }],
         })],
       }],
       refused: [],
