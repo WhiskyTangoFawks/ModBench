@@ -158,7 +158,9 @@ describe('modbench.mod.build', () => {
     await handler(modRow('ModA'));
 
     expect(reporter.landings).toEqual(['Built "ModA".']);
-    expect(reporter.reports).toEqual([{ severity: 'warning', message: 'MyPatch.esp compiled, but its links could not be checked: no cache' }]);
+    expect(reporter.reports).toEqual([{
+      severity: 'warning', message: 'A plugin compiled with a fault of the build.', detail: 'MyPatch.esp compiled, but its links could not be checked: no cache',
+    }]);
   });
 
   it('points at the Problems panel from the refusal notification when the plugins that compiled left diagnostics', async () => {

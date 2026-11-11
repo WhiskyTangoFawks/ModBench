@@ -125,7 +125,7 @@ const onAFile = ({ sourceRelativePath }: { sourceRelativePath: string }) => sour
 
 function builtWithFaults(outcome: BuildOutcome): PartialFailure[] {
   return outcome.landed.flatMap(({ compiled }) => compiled.flatMap(({ diagnostics }) =>
-    diagnostics.filter((diagnostic) => !onAFile(diagnostic)).map(({ message }) => ({ message, severity: 'warning' as const }))));
+    diagnostics.filter((diagnostic) => !onAFile(diagnostic)).map(({ message }) => ({ message: 'A plugin compiled with a fault of the build.', detail: message, severity: 'warning' as const }))));
 }
 
 // common.md, Reporting: a mod whose build stopped after it began writing landed, and the part that failed is named.
