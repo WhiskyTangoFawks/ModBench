@@ -1,3 +1,4 @@
+import type * as vscode from 'vscode';
 import type { LocatedDownloadedFileRow, InstanceValue } from '../instanceLoader/instance';
 import { Refusal } from './refusal';
 import type { ArgumentOf } from '../wire/argument';
@@ -13,6 +14,10 @@ export function carriedArgument(carrier: unknown): object | undefined {
   const argument: unknown = Reflect.get(carrier, 'argument');
   return typeof argument === 'object' && argument !== null ? argument : undefined;
 }
+
+/** What the Explorer passes a menu item: the resource it was opened on. */
+export const isUri = (value: unknown): value is vscode.Uri =>
+  typeof value === 'object' && value !== null && 'fsPath' in value && 'scheme' in value;
 
 export function pluginArgumentOf(carrier: unknown): PluginArgument | undefined {
   const argument = carriedArgument(carrier);

@@ -7,6 +7,7 @@ using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Assets;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.RecordIndex.Queries;
@@ -363,24 +364,47 @@ internal sealed class RecordQueries(
             .Where(copy => snapshot.NamesRecordsOf(plugin, copy.Plugin))];
     });
 
-    public Answer<ScriptReferences, IndexRefused> GetScriptReferences(string name) => _answer.Of(() =>
+    public Answer<MemberReferences, IndexRefused> GetScriptReferences(string name) => _answer.Of(() =>
+        CopiesNamingAtMembers(name, (copy, columns) => ScriptAttachments.Collect(copy.Body, columns)
+            .Where(attached => attached.Name.Equals(name, StringComparison.OrdinalIgnoreCase)).Select(attached => attached.FieldPath)));
+
+    private static readonly char[] PathSeparators = ['/', '\\'];
+
+    // Every path that names the file holds its name.
+    public Answer<MemberReferences, IndexRefused> GetFileReferences(string dataPath) => _answer.Of(() =>
+    {
+        var file = new DataRelativePath(dataPath);
+        var release = _loadOrder.Require().GameRelease;
+        var name = dataPath[(dataPath.LastIndexOfAny(PathSeparators) + 1)..];
+        return CopiesNamingAtMembers(name, (copy, columns) => AssetPaths.Collect(copy.Body, columns, release, copy.RecordType)
+            .Where(named => new DataRelativePath(named.DataPath) == file).Select(named => named.FieldPath));
+    });
+
+    private MemberReferences CopiesNamingAtMembers(string text, Func<CopyHoldingText, IReadOnlyList<ColumnSpec>, IEnumerable<string>> namingPaths)
     {
         var schemas = RequireSchemas();
-        var copies = new List<CopyAttaching>();
+        var copies = new List<CopyNamingAtMembers>();
         var unread = new List<string>();
-        foreach (var copy in _index.RequireWholeSetReads().GetCopiesHoldingText(name))
+        foreach (var copy in _index.RequireWholeSetReads().GetCopiesHoldingText(text))
         {
+            var named = $"{copy.FormKey} in {copy.Plugin.Name} ({copy.Plugin.Origin})";
             if (!schemas.TryGetValue(copy.RecordType, out var schema))
             {
-                unread.Add($"{copy.FormKey} in {copy.Plugin.Name} ({copy.Plugin.Origin}): mEdit has no schema for its record type {copy.RecordType}");
+                unread.Add($"{named}: mEdit has no schema for its record type {copy.RecordType}");
                 continue;
             }
-            var paths = ScriptAttachments.Collect(copy.Body, schema.RecordColumns)
-                .Where(attached => attached.Name.Equals(name, StringComparison.OrdinalIgnoreCase)).Select(attached => attached.FieldPath).ToList();
-            if (paths.Count > 0) copies.Add(new CopyAttaching(copy.FormKey, copy.Plugin, copy.InPluginSource, paths));
+            try
+            {
+                var paths = namingPaths(copy, schema.RecordColumns).ToList();
+                if (paths.Count > 0) copies.Add(new CopyNamingAtMembers(copy.FormKey, copy.Plugin, copy.InPluginSource, paths));
+            }
+            catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
+            {
+                unread.Add($"{named}: {ex.Message}");
+            }
         }
-        return new ScriptReferences(copies, unread);
-    });
+        return new MemberReferences(copies, unread);
+    }
 
     private IReadOnlyList<ReferenceResult> Referrers(IReadOnlyList<ReferenceRow> rows)
     {

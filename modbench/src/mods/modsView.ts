@@ -31,7 +31,7 @@ import { registerModInstallCommands } from './installCommands';
 import { fomodDialog } from './fomodDialog';
 import { registerCompareFileCommand } from './compareFile';
 import { registerGoToModCommand } from './goToMod';
-import { registerGoToModRowCommand, registerModReferencedByCommand } from './modSymbolCommands';
+import { registerGoToModRowCommand, registerModReferencedByCommand, type ReferencedBy } from './modSymbolCommands';
 import { registerBuildCommand } from './buildCommand';
 import { registerBuildTask } from './buildTask';
 import { ModProblems } from './modProblems';
@@ -85,8 +85,7 @@ interface ModsViewDeps {
   checkForUpdates: CheckForUpdates;
   /** Each mod's status, as mEdit last answered it. */
   statuses: ModStatuses;
-  /** Lists each place a file names a mod, in VS Code's References view. */
-  referencedBy: (mod: string) => Promise<void>;
+  referencedBy: ReferencedBy;
   /** Reads the copies of files in archives. */
   archives: Pick<MEditClient, 'getArchiveCopies'>;
 }
@@ -202,7 +201,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
       rowFor: (origin) => provider.rowFor(origin),
       reveal: (row) => view.reveal(row, { select: true, focus: true }),
     }),
-    registerModReferencedByCommand(deps.referencedBy, () => view.selection),
+    registerModReferencedByCommand({ ...deps.referencedBy, value: () => instance.value, reporter: reporterFor('mod.referencedBy') }, () => view.selection),
     registerGoToModRowCommand({
       rowOf: (mod) => provider.entryRow({ kind: 'mod', name: mod }),
       folderOf: (mod) => instance.value.paths.modDirs.get(mod),

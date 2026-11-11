@@ -24,12 +24,13 @@ import type { PluginsShown } from '../drivingLib/pluginsShown';
 import { pluginLanguage } from './pluginLanguage';
 import { entryLanguage } from './entryLanguage';
 import { scriptLanguage, type ScriptClient } from './scriptLanguage';
+import { fileLanguage, type FileClient } from './fileLanguage';
 import { renameSymbol } from './renameSymbol';
 
 interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'sourceFiles'> {
   instance: Pick<Instance, 'value' | 'subscribe'> | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
-  client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlugins' | 'handUnsavedDocuments' | 'getRecordOfFile'> & RecordDocumentClient & ScriptClient & SourceProblemsDeps['client'];
+  client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlugins' | 'handUnsavedDocuments' | 'getRecordOfFile'> & RecordDocumentClient & ScriptClient & FileClient & SourceProblemsDeps['client'];
   /** Each box that owns files, saying where they name a symbol (ADR-0028). */
   owners: readonly SymbolOwner[];
   /** Each box that owns files, saying where they name a symbol its name alone names. */
@@ -109,6 +110,8 @@ interface SourceLanguage extends vscode.Disposable {
   referencedBy(plugin: PluginSymbol): Promise<void>;
   /** Lists each place a file names the mod, in VS Code's References view. */
   referencedByMod(mod: string): Promise<void>;
+  /** Lists each record that names the file at its path in the Data folder, in VS Code's References view. */
+  referencedByFile(path: string): Promise<void>;
 }
 
 function sourceProblems(deps: SourceLanguageDeps): Pick<SourceLanguage, 'dispose' | 'messages'> {
@@ -308,5 +311,6 @@ export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
     messages: () => problems.messages(),
     referencedBy: plugin.referencedBy,
     referencedByMod: entry.referencedBy,
+    referencedByFile: fileLanguage({ reporter: deps.reporter, client: deps.client }).referencedBy,
   };
 }

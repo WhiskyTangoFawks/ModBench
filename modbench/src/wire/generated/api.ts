@@ -903,6 +903,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/file-paths/references": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Each copy, in an active plugin or one with plugin source, that names the file at that path in the Data folder, in any case, with the member paths that name it. Answers only once the record index is ready. Each says whether its plugin has plugin source, and why each copy that may name it went unread. */
+        get: operations["GetFileReferences"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/records/{formKey}/edit-changes": {
         parameters: {
             query?: never;
@@ -1331,12 +1348,6 @@ export interface components {
             fullName?: string | null;
             isContainer: boolean;
         };
-        CopyAttaching: {
-            formKey: string;
-            plugin: components["schemas"]["PluginAddress"];
-            inPluginSource: boolean;
-            fieldPaths: string[];
-        };
         CopyDocument: {
             kind: components["schemas"]["CopyDocumentKind"];
             location: string;
@@ -1361,6 +1372,12 @@ export interface components {
             formKey: string;
             plugin: components["schemas"]["PluginAddress"];
             inPluginSource: boolean;
+        };
+        CopyNamingAtMembers: {
+            formKey: string;
+            plugin: components["schemas"]["PluginAddress"];
+            inPluginSource: boolean;
+            fieldPaths: string[];
         };
         CopyRecordRefused: {
             item: components["schemas"]["CopyItem"];
@@ -1609,6 +1626,10 @@ export interface components {
         MadeFile: {
             path: string;
             vouchedFor: boolean;
+        };
+        MemberReferences: {
+            copies: components["schemas"]["CopyNamingAtMembers"][];
+            unread: string[];
         };
         ModBuilt: {
             mod: string;
@@ -1930,10 +1951,6 @@ export interface components {
             mode: components["schemas"]["CopyMode"];
             destination: components["schemas"]["PluginAddress"];
             replace: boolean;
-        };
-        ScriptReferences: {
-            copies: components["schemas"]["CopyAttaching"][];
-            unread: string[];
         };
         SelectRequest: {
             sql: string;
@@ -4494,7 +4511,38 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ScriptReferences"];
+                    "application/json": components["schemas"]["MemberReferences"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetFileReferences: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberReferences"];
                 };
             };
             /** @description Service Unavailable */
