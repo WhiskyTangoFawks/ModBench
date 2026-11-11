@@ -103,7 +103,7 @@ public static class TranslatedStringValues
     }
 
     /// <summary>A string no language gives text, which Mutagen writes as one with no strings entry.</summary>
-    private static bool HoldsNoText(JsonObject translated) =>
+    internal static bool HoldsNoText(JsonObject translated) =>
         translated["Value"] is null && translated["Values"] is not JsonArray { Count: > 0 };
 
     internal static string? TextIn(JsonObject translated, Language language) =>
