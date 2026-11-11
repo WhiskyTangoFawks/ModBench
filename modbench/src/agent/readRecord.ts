@@ -3,8 +3,8 @@ import type { CopyDocument, MEditClient } from '../client/MEditClient';
 import { pluginAddressOf, samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 import { copyColumnKey } from '../wire/columnKey';
 import { fileStanding } from '../drivingLib/fileStanding';
-import { copyStatus as viewStatus, NO_STANDING, pluginOf, type Standing } from '../drivingLib/columnStatus';
-import { toolsNamed } from './toolNames';
+import { copyStatusMessage, NO_STANDING, pluginOf, type Standing } from '../drivingLib/columnStatus';
+import { toolNamed } from './toolNames';
 import { withMasterCellStates } from '../drivingLib/masterCellStates';
 import { pluginStanding } from '../instanceLoader/pluginStanding';
 import type { CompareResult } from '../client';
@@ -52,15 +52,15 @@ const rowsOf = (diffs: readonly FieldDiff[], column: string): ConflictRow[] => d
   ...(diff.children != null && diff.children.length > 0 && { children: rowsOf(diff.children, column) }),
 }));
 
-const copyStatus = (...given: Parameters<typeof viewStatus>) => {
-  const status = viewStatus(...given);
-  return status === null ? null : { ...status, reason: toolsNamed(status.reason) };
+const statusForAgent = (...given: Parameters<typeof copyStatusMessage>) => {
+  const status = copyStatusMessage(...given);
+  return status === null ? null : { ...status, reason: toolNamed(status.reason) };
 };
 
 type Plugins = Extract<Awaited<ReturnType<RecordReads['getPlugins']>>, readonly unknown[]>;
 
 const standingOf = (plugins: Plugins, comparison: CompareResult, copy: CompareOverride, standing: Standing) => {
-  const status = copyStatus(copy, pluginOf(plugins, copy), standing);
+  const status = statusForAgent(copy, pluginOf(plugins, copy), standing);
   return {
     loadIndex: copy.loadIndex,
     ...(status !== null && { status }),
@@ -89,7 +89,7 @@ const standingIn = async (mEdit: RecordReads, value: InstanceValue, formKey: str
   const compared = comparison?.overrides.find((o) => samePluginAddress(pluginAddressOf(o), address));
   if (comparison !== null && compared !== undefined) return standingOf(plugins, withMasterCellStates(comparison), compared, standing);
   const status = standing.overriddenBy !== null || standing.notActive
-    ? copyStatus({ plugin: address.name, origin: address.origin, isPartialForm: false, isInOverwrite: false }, undefined, standing)
+    ? statusForAgent({ plugin: address.name, origin: address.origin, isPartialForm: false, isInOverwrite: false }, undefined, standing)
     : null;
   return status === null ? {} : { status };
 };

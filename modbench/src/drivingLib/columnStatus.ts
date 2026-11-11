@@ -1,7 +1,7 @@
 import { copyColumnKey } from '../wire/columnKey';
-import { gestureWord } from '../wire/gestureWords';
 import type { ColumnStatus, UnreadableSource } from '../wire/messages';
 import { samePluginAddress } from '../wire/pluginAddress';
+import { gestureName, phrase, viewOnly, type Message } from '../ports/phrase';
 
 interface CopyFacts {
   readonly plugin: string;
@@ -26,11 +26,14 @@ export interface Standing {
   readonly notActive: boolean;
 }
 
+const versionInGit = gestureName('modbench.mod.versionInGit', '“Version in Git”');
+const decompile = gestureName('modbench.plugin.decompile', '“Decompile Plugin”');
+
 export const NO_STANDING: Standing = { overriddenBy: null, notActive: false };
 
 /** editor.md, A column's header, the Status table: the first row that applies. No plugin facts read as a plugin that is
  *  not compiled, so the copy reads as one nothing edits. */
-export function copyStatus(copy: CopyFacts, plugin: PluginFacts | undefined, { overriddenBy, notActive }: Standing): ColumnStatus | null {
+export function copyStatusMessage(copy: CopyFacts, plugin: PluginFacts | undefined, { overriddenBy, notActive }: Standing): { readonly label: string; readonly reason: Message } | null {
   if (copy.parseDiagnosis != null) return { label: '(parse failure)', reason: copy.parseDiagnosis };
   if (overriddenBy !== null) return { label: '(overridden)', reason: `The game loads ${overriddenBy}’s file instead.` };
   if (notActive) return { label: '(not active)', reason: 'The game does not load it, so no other copy is compared.' };
@@ -39,24 +42,31 @@ export function copyStatus(copy: CopyFacts, plugin: PluginFacts | undefined, { o
   if (copy.isInOverwrite) {
     return {
       label: '(read-only)',
-      reason: 'Overwrite is not a mod; move the plugin into a mod and version in git that mod.',
+      reason: phrase`Overwrite is not a mod; move the plugin into a mod and ${gestureName('modbench.mod.versionInGit', 'version in git')} that mod.`,
     };
   }
   if (plugin?.isCompiledPlugin !== true) {
     return {
       label: '(read-only)',
-      reason: `${gestureWord('modbench.mod.versionInGit')}, or ${gestureWord('modbench.plugin.decompile')} in a source mod, makes it editable.`,
+      reason: phrase`${versionInGit}, or ${decompile} in a source mod,${viewOnly(' in this header’s menu,')} makes it editable.`,
     };
   }
   const unreadable = plugin.pluginSourceUnreadable;
   if (unreadable != null) {
     return {
       label: '(read-only)',
-      reason: `${unreadable.reason} Its records are its plugin file’s.`
-        + (unreadable.decompileRepairs ? ` ${gestureWord('modbench.plugin.decompile')} makes it editable.` : ''),
+      reason: unreadable.decompileRepairs
+        ? phrase`${unreadable.reason} Its records are its plugin file’s. ${decompile}${viewOnly(', in this header’s menu,')} makes it editable.`
+        : `${unreadable.reason} Its records are its plugin file’s.`,
     };
   }
   return null;
+}
+
+/** editor.md, A column's header: the status a view shows, its reason as text. */
+export function copyStatus(copy: CopyFacts, plugin: PluginFacts | undefined, standing: Standing): ColumnStatus | null {
+  const status = copyStatusMessage(copy, plugin, standing);
+  return status === null ? null : { ...status, reason: String(status.reason) };
 }
 
 export const pluginOf = (plugins: readonly PluginFacts[] | null, copy: CopyFacts): PluginFacts | undefined =>

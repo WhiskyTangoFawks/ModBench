@@ -8,7 +8,7 @@ import type { MEditClient } from '../client/MEditClient';
 import { deployFailures, deployWarnings } from '../drivingLib/deployProblems';
 import type { Deployed } from '../deployment/deployment';
 import { Refusal } from '../drivingLib/refusal';
-import { toolName, toolsNamed } from './toolNames';
+import { toolName, toolNamed } from './toolNames';
 import { formKeysNamed } from './recordNames';
 import { parseOrRefuse } from './refusal';
 import { countsOf, fitting } from './tooLarge';
@@ -356,19 +356,13 @@ function answerOf(outcome: GestureOutcome) {
     : { refusal: outcome.refusal, detail: outcome.detail };
 }
 
-function toolsNamedIn(outcome: GestureOutcome): GestureOutcome {
-  if (!outcome.applied) return { ...outcome, refusal: toolsNamed(outcome.refusal), ...outcome.detail !== undefined && { detail: toolsNamed(outcome.detail) } };
-  if (!overItems(outcome)) return outcome;
-  const { landed, refused } = outcome.outcome;
-  return { ...outcome, outcome: { landed, refused: refused.map((one) => ({ ...one, reason: toolsNamed(one.reason) })) } };
-}
-
-function namedOwn(value: InstanceValue, outcome: GestureOutcome): GestureOutcome {
+/** agent.md, Reporting, story 4: an item as the mod's own path names it, and a refusal's reason naming the tool that runs a gesture. */
+function namedForAgent(value: InstanceValue, outcome: GestureOutcome): GestureOutcome {
   if (!overItems(outcome)) return outcome;
   const { landed, refused } = outcome.outcome;
   return {
     ...outcome,
-    outcome: { landed: landed.map((item) => namedByOwnPath(value, item)), refused: refused.map((one) => ({ ...one, item: namedByOwnPath(value, one.item) })) },
+    outcome: { landed: landed.map((item) => namedByOwnPath(value, item)), refused: refused.map((one) => ({ item: namedByOwnPath(value, one.item), reason: toolNamed(one.reason) })) },
   };
 }
 
@@ -389,7 +383,7 @@ export const GESTURE_TOOLS = [...AGENT_GESTURES].map(([command, [gesture, read]]
   input: gesture.input,
   of: async (value: InstanceValue, mEdit: NameResolver, given: unknown, warn: (line: string) => void) => {
     const answer = await vscode.commands.executeCommand<GestureOutcome | DeployOutcome>(command, await gesture.callOf(value, given, mEdit));
-    const outcome = toolsNamedIn(namedOwn(value, isDeployed(answer) ? deployAnswered(answer) : answer));
+    const outcome = namedForAgent(value, isDeployed(answer) ? deployAnswered(answer) : answer);
     const refusal = refusalIn(outcome);
     if (refusal === undefined && outcome.applied) partialsIn(outcome).forEach(warn);
     const answered = fitting(answerOf(outcome), () => countedOf(outcome, read));

@@ -479,7 +479,7 @@ describe('sourceCommands versionInGit', () => {
 
       const outcome = await sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], inInstanceRepository);
 
-      expect([handed, ignoreListWrites(fake.calls), outcome]).toEqual([[], [], { refused: true, message: 'The instance holds no repository to put a mod in: “git init” makes one.' }]);
+      expect([handed, ignoreListWrites(fake.calls), outcome]).toEqual([[], [], { refused: true, message: 'The instance holds no repository to put a mod in: git init makes one.' }]);
     });
   });
 
@@ -577,7 +577,7 @@ describe('sourceCommands versionInGit', () => {
 
       const outcome = await versioned(committing().client, fake, ['ModC']);
 
-      expect([verbs(fake.calls), outcome]).toEqual([[], { refused: true, message: 'The instance holds no repository to put a mod in: “git init” makes one.' }]);
+      expect([verbs(fake.calls), outcome]).toEqual([[], { refused: true, message: 'The instance holds no repository to put a mod in: git init makes one.' }]);
     });
 
     it('refuses each mod when the ignore list cannot let its folder in', async () => {

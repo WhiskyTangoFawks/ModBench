@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { columnStatuses, copyStatus, type Standing } from '../columnStatus';
+import { columnStatuses, copyStatus, copyStatusMessage, type Standing } from '../columnStatus';
+import { forAgent } from '../../ports/phrase';
 
 const NO_STANDING: Standing = { overriddenBy: null, notActive: false };
 
@@ -28,14 +29,24 @@ describe('a column\'s status', () => {
     ['a plugin in Overwrite', { copy: { isInOverwrite: true }, plugin: { isCompiledPlugin: false } }, '(read-only)',
       'Overwrite is not a mod; move the plugin into a mod and version in git that mod.'],
     ['a plugin that is not a compiled plugin', { plugin: { isCompiledPlugin: false } }, '(read-only)',
-      '“Version in Git”, or “Decompile Plugin” in a source mod, makes it editable.'],
+      '“Version in Git”, or “Decompile Plugin” in a source mod, in this header’s menu, makes it editable.'],
     ['a compiled plugin whose plugin source is unreadable', { plugin: { pluginSourceUnreadable: WHY } }, '(read-only)',
-      `${WHY.reason} Its records are its plugin file’s. “Decompile Plugin” makes it editable.`],
+      `${WHY.reason} Its records are its plugin file’s. “Decompile Plugin”, in this header’s menu, makes it editable.`],
     ['a compiled plugin whose plugin source decompile does not repair', { plugin: { pluginSourceUnreadable: TWINS } }, '(read-only)',
       `${TWINS.reason} Its records are its plugin file’s.`],
     ['a Partial Form copy', { copy: { isPartialForm: true } }, '(Partial Form)', 'The game ignores this copy’s own fields.'],
   ])('for %s, is its label and reason', (_case, facts, label, reason) => {
     expect(statusOf(facts)).toEqual({ label, reason });
+  });
+
+  it.each<[string, Facts, string]>([
+    ['a plugin in Overwrite', { copy: { isInOverwrite: true }, plugin: { isCompiledPlugin: false } }, 'Overwrite is not a mod; move the plugin into a mod and <modbench.mod.versionInGit> that mod.'],
+    ['a plugin that is not a compiled plugin', { plugin: { isCompiledPlugin: false } }, '<modbench.mod.versionInGit>, or <modbench.plugin.decompile> in a source mod, makes it editable.'],
+    ['a compiled plugin whose plugin source decompile repairs', { plugin: { pluginSourceUnreadable: WHY } }, `${WHY.reason} Its records are its plugin file’s. <modbench.plugin.decompile> makes it editable.`],
+  ])('gives an agent the tool of each gesture its reason names, for %s', (_case, { copy, plugin }, reason) => {
+    const status = copyStatusMessage({ ...COPY, ...copy }, { ...COMPILED, ...plugin }, NO_STANDING);
+
+    expect(forAgent(status?.reason ?? '', (command) => `<${command}>`)).toBe(reason);
   });
 
   it.each<[string, Facts, string]>([

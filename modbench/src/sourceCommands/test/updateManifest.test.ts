@@ -397,8 +397,8 @@ describe('update manifest', () => {
 
       const result = await update(['ModA', 'ModB']);
 
-      expect([result.landed.map(({ mod }) => mod), result.refused, await manifestOf('ModB'), fake.calls[0]]).toEqual([
-        ['ModA'], [{ item: 'ModB', reason: `its build records its folder: run “build” on it, or name its source folder ${SOURCE()}` }], undefined,
+      expect([result.landed.map(({ mod }) => mod), result.refused.map(({ item, reason }) => ({ item, reason: String(reason) })), await manifestOf('ModB'), fake.calls[0]]).toEqual([
+        ['ModA'], [{ item: 'ModB', reason: `its build records its folder: run build on it, or name its source folder ${SOURCE()}` }], undefined,
         { verb: 'writeSubmodules', acted: ['ModA'] },
       ]);
     });
