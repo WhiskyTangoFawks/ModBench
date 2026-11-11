@@ -25,7 +25,7 @@ public sealed class LoadOrderTests
 
     private static LoadOrderSnapshot OfA(
         PluginAddress[]? loadedWithNoLine = null, StampedFile[]? archives = null, StampedFile[]? stringsFiles = null, Language language = Language.English) =>
-        new(Data, Instance, GameRelease.Fallout4, [A], [A.Key], loadedWithNoLine ?? [], archives ?? [], stringsFiles ?? [AStrings], [], language);
+        new(Data, Instance, GameRelease.Fallout4, [A], [A.Key], loadedWithNoLine ?? [], archives ?? [], [], stringsFiles ?? [AStrings], [], language);
 
     public static TheoryData<string, LoadOrderSnapshot> DifferingInOneField => new()
     {
