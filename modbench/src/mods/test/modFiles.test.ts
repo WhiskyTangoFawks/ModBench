@@ -23,7 +23,7 @@ import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { present } from '../../ports/present';
-import { mod } from './indexedValue';
+import { mod, indexedValueOf } from './indexedValue';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
 const providerAt = (instance: FakeInstance) => new ModListProvider({ reporter: recordingReporter(), statuses: NO_MOD_STATUSES, instance, open: new OpenRows(instance) });
@@ -670,5 +670,32 @@ describe('a file row\'s context, which the File menu\'s exclude or include reads
     ['a file its own name excludes inside an excluded folder', 'excluded', ['Textures.mohidden', 'b.dds.mohidden']],
   ])('flags %s as %s', async (_case, flag, path) => {
     expect(flags(await rowAt(path))).toEqual(['file', flag]);
+  });
+});
+
+describe('an archived file\'s tooltip names the game folder\'s file that wins over it (mods.md, File and folder, Tooltip)', () => {
+  const ARCHIVE = file('Armour - Main.ba2', '/instance/mods/Armour/Armour - Main.ba2');
+  const tooltipOf = async (gameFolderFiles: string[], loose: OriginFile[] = []) => {
+    const value = await indexedValueOf([mod('Armour')], { Armour: { files: [ARCHIVE, ...loose] } }, { files: [] }, [{ origin: modOrigin('Armour'), archive: ARCHIVE.sourcePath, files: ['meshes/a.nif'] }]);
+    const provider = providerAt(new FakeInstance({
+      ...value,
+      archiveContents: new Map<string, ArchiveRead>([[ARCHIVE.sourcePath, { kind: 'read', answer: ['meshes/a.nif'] }]]),
+      dataFolderFiles: { kind: 'listed', files: new Map(gameFolderFiles.map((relativePath) => [relativePath.toLowerCase(), { relativePath, path: `/game/Data/${relativePath}` }])) },
+    }));
+    const archive = await childNamed(provider, await rootOf(provider, ModNode, 'Armour'), 'Armour - Main.ba2');
+    const meshes = await childNamed(provider, archive, 'meshes');
+    return (await childNamed(provider, meshes, 'a.nif')).tooltip;
+  };
+
+  it('is the path in its mod, then the game folder\'s loose file at that path', async () => {
+    expect(await tooltipOf(['Meshes/A.nif'])).toBe('Armour - Main.ba2/meshes/a.nif\nwon by the game folder: /game/Data/Meshes/A.nif');
+  });
+
+  it('is the path alone when the game folder holds no file at it', async () => {
+    expect(await tooltipOf(['meshes/b.nif'])).toBe('Armour - Main.ba2/meshes/a.nif');
+  });
+
+  it('is the path alone when a mod\'s loose file covers the game folder\'s', async () => {
+    expect(await tooltipOf(['meshes/a.nif'], [file('meshes/a.nif')])).toBe('Armour - Main.ba2/meshes/a.nif');
   });
 });

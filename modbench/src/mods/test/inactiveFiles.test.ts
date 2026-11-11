@@ -65,12 +65,19 @@ const archivedCopies = async (loose: string[], archives: string[], loadedArchive
   };
 };
 
+const inGameFolder = async (value: Promise<InstanceValue>, ...relativePaths: string[]): Promise<InstanceValue> => ({
+  ...await value,
+  dataFolderFiles: { kind: 'listed', files: new Map(relativePaths.map((relativePath) => [relativePath, { relativePath, path: `/game/Data/${relativePath}` }])) },
+});
+
 describe('an archived file the game does not get (mods.md, The tree, story 8)', () => {
   it.each<[string, () => Promise<InstanceValue>, string, typeof GREY | undefined]>([
     ['a loose copy beats it', () => archivedCopies(['L'], ['A'], ['A']), 'A', GREY],
     ['a later-loaded archive beats it', () => archivedCopies([], ['A', 'B'], ['A', 'B']), 'A', GREY],
     ['it beats an earlier-loaded archive: it is the copy the game gets', () => archivedCopies([], ['A', 'B'], ['A', 'B']), 'B', undefined],
     ['it alone is the copy the game gets', () => archivedCopies([], ['A'], ['A']), 'A', undefined],
+    ['a loose copy in the game folder beats it', () => inGameFolder(archivedCopies([], ['A'], ['A']), 'meshes/a.nif'), 'A', GREY],
+    ['a loose copy in the game folder at another path leaves it', () => inGameFolder(archivedCopies([], ['A'], ['A']), 'meshes/b.nif'), 'A', undefined],
   ])('%s', async (_case, value, owner, grey) => {
     expect(greyOf(await value(), modOrigin(owner), `${owner}.ba2/meshes/a.nif`)).toEqual(grey);
   });
