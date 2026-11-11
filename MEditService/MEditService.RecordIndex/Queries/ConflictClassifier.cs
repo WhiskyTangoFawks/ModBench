@@ -68,10 +68,7 @@ internal sealed class ConflictClassifier(ILogger logger)
         var last = stack.Count - 1;
         var copies = stack.Select((copy, at) => copy with { IsWinner = at == last }).ToList();
         var classified = Classify(copies, release, stringsLanguage, _ => null, loadOrderFormIds, indexed: true);
-        var states = copies.ConvertAll(copy => classified.PluginStates.TryGetValue(Column(copy), out var state) ? state : (ConflictThis?)null);
-        if (states[last] == ConflictThis.IdenticalToMaster && classified.ConflictAll is ConflictAll.Override or ConflictAll.Conflict)
-            states[last] = ConflictThis.IdenticalToMasterWinsConflict;
-        return states;
+        return copies.ConvertAll(copy => classified.PluginStates.TryGetValue(Column(copy), out var state) ? state : (ConflictThis?)null);
     }
 
     // The rows of copies compared with each other, one column named for each: a row is NoConflict

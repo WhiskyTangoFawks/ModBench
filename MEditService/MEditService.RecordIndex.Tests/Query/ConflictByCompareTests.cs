@@ -130,7 +130,7 @@ public class ConflictByCompareTests
     [InlineData(new[] { "Alice", "Bob" }, ConflictAll.Override, "Master,Override", "-,Override")]
     [InlineData(new[] { "Alice", "Bob", "Charlie" }, ConflictAll.Conflict, "Master,ConflictLoses,ConflictWins", "-,ConflictLoses,ConflictWins")]
     [InlineData(new[] { "Alice", "Bob", "Alice", "Charlie" }, ConflictAll.Conflict, "Master,ConflictLoses,IdenticalToMaster,ConflictWins", "-,ConflictLoses,IdenticalToMaster,ConflictWins")]
-    [InlineData(new[] { "Alice", null, "Alice" }, ConflictAll.Conflict, "Master,ConflictLoses,IdenticalToMaster", "-,ConflictLoses,IdenticalToMaster")]
+    [InlineData(new[] { "Alice", null, "Alice" }, ConflictAll.Conflict, "Master,ConflictLoses,IdenticalToMasterWinsConflict", "-,ConflictLoses,IdenticalToMasterWinsConflict")]
     [InlineData(new[] { "Alice", "Bob", null }, ConflictAll.Conflict, "Master,ConflictLoses,ConflictWins", "-,ConflictLoses,ConflictWins")]
     [InlineData(new[] { "Alice", "Bob", "Bob" }, ConflictAll.Override, "Master,Override,Override", "-,Override,Override")]
     [InlineData(new[] { "Alice", null, "Charlie" }, ConflictAll.Conflict, "Master,ConflictLoses,ConflictWins", "-,ConflictLoses,ConflictWins")]

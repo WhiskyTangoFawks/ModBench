@@ -66,7 +66,10 @@ internal static class ConflictRules
 
     private static ConflictThis ClassifyCell(string plugin, object? pluginValue, CellContext ctx)
     {
-        if (ctx.ValuesEqual(pluginValue, ctx.MasterValue)) return ConflictThis.IdenticalToMaster;
+        if (ctx.ValuesEqual(pluginValue, ctx.MasterValue))
+            return plugin == ctx.WinnerPlugin && ctx.PluginOrder.Any(p => p.Plugin != ctx.MasterPlugin && !ctx.ValuesEqual(ctx.ValuesByPlugin.GetValueOrDefault(p.Plugin), ctx.MasterValue))
+                ? ConflictThis.IdenticalToMasterWinsConflict
+                : ConflictThis.IdenticalToMaster;
 
         if (plugin == ctx.WinnerPlugin)
         {
@@ -161,6 +164,7 @@ internal static class ConflictRules
             _ when states.Contains(ConflictThis.ConflictLoses) => ConflictThis.ConflictLoses,
             _ when states.Contains(ConflictThis.ConflictWins) => ConflictThis.ConflictWins,
             _ when states.Contains(ConflictThis.Override) => ConflictThis.Override,
+            _ when states.Contains(ConflictThis.IdenticalToMasterWinsConflict) => ConflictThis.IdenticalToMasterWinsConflict,
             _ => ConflictThis.IdenticalToMaster,
         };
     }

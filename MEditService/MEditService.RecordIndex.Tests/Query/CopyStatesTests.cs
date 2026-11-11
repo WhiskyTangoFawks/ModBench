@@ -73,6 +73,16 @@ public sealed class CopyStatesTests : IDisposable
     }
 
     [Fact]
+    public void TheComparisonsWinningCell_IdenticalToTheMaster_OverACellThatDisagrees_IsIdenticalToMasterWinsConflict()
+    {
+        var compare = _index.Queries.GetCompare(Item.ToString()).Value() ?? throw new InvalidOperationException("Expected the record to compare.");
+
+        var cells = compare.Diffs.Single(d => d.FieldName == "Name").CellStates;
+
+        Assert.Equal(ConflictThis.IdenticalToMasterWinsConflict, cells[Third.Name]);
+    }
+
+    [Fact]
     public void AGivenPlugin_IsJudgedWithItsMastersAlone()
     {
         var states = StatesOf(_index, Item, Second);
