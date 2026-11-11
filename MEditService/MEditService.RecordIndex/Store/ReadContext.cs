@@ -27,12 +27,19 @@ internal sealed class ReadContext : IDisposable
     public List<T> Rows<T>(string sql, Func<DbDataReader, T> map, params object?[] args) =>
         DuckDbSql.Rows(_connection, sql, map, args);
 
-    /// <summary>The rows of <paramref name="sql"/>, whose columns are <paramref name="columns"/>, read as they are taken.
-    /// They take this context, which disposing them ends.</summary>
-    public StreamedRows Streamed(string sql, IReadOnlyList<StreamedColumn> columns)
+    /// <summary>Each row of <paramref name="sql"/> as the JSON text of an object of its columns, read as it is taken.
+    /// The rows take this context, which disposing them ends.</summary>
+    public StreamedRows Streamed(string sql)
     {
+        // The newline keeps a trailing line comment in the SQL from swallowing the wrapper.
+        var columns = Rows($"SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM ({sql}\n) __row)",
+            reader => new StreamedColumn(reader.GetString(0), reader.GetString(1) == "VARCHAR"));
+        // DuckDB's to_json of an FSST-compressed column holds every string it returns until the scan ends, so a
+        // SELECT of body would hold every body. Text is encoded as it is read instead.
+        var values = string.Join(", ", columns.Select((column, i) => column.IsText ? $"c{i}" : $"to_json(c{i})"));
+        var aliases = string.Join(", ", columns.Select((_, i) => $"c{i}"));
         var command = _connection.CreateCommand();
-        command.CommandText = sql;
+        command.CommandText = $"SELECT {values} FROM ({sql}\n) __row({aliases})";
         command.UseStreamingMode = true;
         return new StreamedRows(this, command, columns);
     }

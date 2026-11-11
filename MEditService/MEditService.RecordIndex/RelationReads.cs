@@ -268,14 +268,7 @@ internal sealed class RelationReads(
         {
             if (SqlDoor.RefusalOf(context, sql, TableDdlBuilder.IndexedSchema) is { } refusal) return refusal;
             context.Execute($"SET search_path = '{TableDdlBuilder.IndexedSchema}'");
-            // The newline keeps a trailing line comment in the SQL from swallowing the wrapper.
-            var columns = context.Rows($"SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM ({sql}\n) __row)",
-                reader => new StreamedColumn(reader.GetString(0), reader.GetString(1) == "VARCHAR"));
-            // DuckDB's to_json of an FSST-compressed column holds every string it returns until the scan ends, so a
-            // SELECT of body would hold every body. Text is encoded as it is read instead.
-            var values = string.Join(", ", columns.Select((column, i) => column.IsText ? $"c{i}" : $"to_json(c{i})"));
-            var aliases = string.Join(", ", columns.Select((_, i) => $"c{i}"));
-            var rows = context.Streamed($"SELECT {values} FROM ({sql}\n) __row({aliases})", columns);
+            var rows = context.Streamed(sql);
             context = null;
             return rows;
         }
