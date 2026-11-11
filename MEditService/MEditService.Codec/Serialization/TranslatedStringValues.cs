@@ -36,7 +36,7 @@ public static class TranslatedStringValues
     public readonly record struct InLanguageResult(string Text, IReadOnlyList<string> Unresolved);
 
     /// <summary>Each translated string as its <paramref name="language"/> text alone, as xEdit writes it into a
-    /// plugin that is not localized.</summary>
+    /// plugin that is not localized. A string holding no text is the empty text, which is what Mutagen writes for it.</summary>
     public static InLanguageResult InLanguage(string text, Language language, GameRelease release, string recordType)
     {
         var root = JsonNode.Parse(text) ?? throw new InvalidOperationException("Expected a record document.");
@@ -44,7 +44,8 @@ public static class TranslatedStringValues
         var unresolved = new List<string>();
         foreach (var (path, translated) in TranslatedStrings(root, "").ToList())
         {
-            if (EntryIn(translated, language)?["String"] is not { } value)
+            JsonNode? value = translated["Values"] is null ? JsonValue.Create("") : EntryIn(translated, language)?["String"];
+            if (value is null)
             {
                 unresolved.Add(path);
                 continue;
@@ -128,7 +129,7 @@ public static class TranslatedStringValues
         switch (node)
         {
             case JsonObject obj:
-                if (obj.ContainsKey("TargetLanguage") && obj["Values"] is JsonArray) yield return (path, obj);
+                if (obj.ContainsKey("TargetLanguage") && (obj["Values"] is JsonArray || !obj.ContainsKey("Value"))) yield return (path, obj);
                 foreach (var (name, child) in obj)
                 {
                     if (child is null) continue;

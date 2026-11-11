@@ -282,6 +282,20 @@ public class RecordTextCodecTests
     }
 
     [Fact]
+    public void AStringHoldingNoText_CollapsesToTheEmptyText_ThatANonLocalizedPluginWritesForIt()
+    {
+        var weapon = MakeWeapon();
+        weapon.Name = new TranslatedString(Language.English);
+        var text = RecordTextCodec.SerializeToText(weapon, GameRelease.Fallout4);
+
+        var collapsed = TranslatedStringValues.InLanguage(text, Language.English, GameRelease.Fallout4, "WEAP");
+
+        Assert.Empty(collapsed.Unresolved);
+        using var doc = JsonDocument.Parse(collapsed.Text);
+        Assert.Equal("", doc.RootElement.GetProperty("Name").GetProperty("Value").GetString());
+    }
+
+    [Fact]
     public void ATranslatedStringsLanguages_AreWrittenInLanguageOrder_WhateverOrderTheModelHoldsThem()
     {
         var weapon = MakeWeapon();
