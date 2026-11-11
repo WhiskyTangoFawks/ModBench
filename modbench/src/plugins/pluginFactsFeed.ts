@@ -59,9 +59,8 @@ export class PluginFactsFeed implements vscode.Disposable {
   // Bumped by each reconcile step (a tick, a refusal, unreachable, the hand-off), so a slow read
   // answering after a newer step cannot resurrect a stale answer.
   private generation = 0;
-  // The order the plugin reads were asked in, apart from `generation` so a fact re-read never discards a
-  // hand-off. Only the newest read's answer lands, so a stale answer never overwrites a newer one.
-  private reads = 0;
+  // `refresh`' own order, apart from `generation` so a fact re-read never discards a hand-off.
+  private refreshes = 0;
   // The order of `rejudge`, so only the newest judgement of an order publishes.
   private rejudgements = 0;
 
@@ -113,19 +112,12 @@ export class PluginFactsFeed implements vscode.Disposable {
    *  the read failed or a newer step superseded it. */
   async reconciled(failures: readonly PluginLoadFailure[]): Promise<number | undefined> {
     const generation = ++this.generation;
-    for (;;) {
-      const read = ++this.reads;
-      const plugins = await this.readPlugins();
-      if (generation !== this.generation) return undefined;
-      if ('failure' in plugins) return this.factsFailed(plugins.failure);
-      const active = this.deps.activePlugins();
-      const loot = await this.lootRules(active);
-      if (generation !== this.generation) return undefined;
-      if (read === this.reads) return this.handedOff(plugins, failures, active, loot, generation);
-    }
-  }
-
-  private handedOff(plugins: PluginMetadata[], failures: readonly PluginLoadFailure[], active: readonly PluginAddress[], loot: LootInput, generation: number): number {
+    const plugins = await this.readPlugins();
+    if (generation !== this.generation) return undefined;
+    if ('failure' in plugins) return this.factsFailed(plugins.failure);
+    const active = this.deps.activePlugins();
+    const loot = await this.lootRules(active);
+    if (generation !== this.generation) return undefined;
     this.facts.reconciled(plugins, failures, active, this.deps.lines(), loot, this.deps.blueprintLoadsLast());
     this.deps.publishFailedToRead(this.facts.problems().failedToRead);
     this.publishSorting();
@@ -172,9 +164,9 @@ export class PluginFactsFeed implements vscode.Disposable {
    *  A later re-read wins, and none supersedes a reconcile's hand-off. */
   async refresh(): Promise<void> {
     const generation = this.generation;
-    const read = ++this.reads;
+    const refresh = ++this.refreshes;
     const plugins = await this.readPlugins();
-    if (generation !== this.generation || read !== this.reads) return;
+    if (generation !== this.generation || refresh !== this.refreshes) return;
     if ('failure' in plugins) return this.factsFailed(plugins.failure);
     this.facts.refreshed(plugins);
     this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);

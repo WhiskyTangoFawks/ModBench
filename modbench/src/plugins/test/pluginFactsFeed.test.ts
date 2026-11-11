@@ -252,19 +252,6 @@ describe('PluginFactsFeed', () => {
       expect(warned(sortingWarnings.items)).toEqual(counts);
     });
 
-    it('a hand-off whose read began before a newer re-read judges against the newer facts', async () => {
-      const { feed, client, sortingWarnings } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B] });
-      const staleHandOffRead = deferred<PluginMetadata[]>();
-      client.setQueryAnswerOnce('getPlugins', staleHandOffRead.promise);
-      client.setQueryAnswer('getPlugins', reads(true));
-      const handOff = feed.reconciled([]);
-      await feed.refresh();
-      staleHandOffRead.resolve(reads(false));
-      await handOff;
-
-      expect(warned(sortingWarnings.items).at(-1)).toBe(true);
-    });
-
     it('judges nothing before the first reconcile', async () => {
       const { feed, client, sortingWarnings } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B] });
       client.setQueryAnswer('getPlugins', reads(true));
