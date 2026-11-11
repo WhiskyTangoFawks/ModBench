@@ -44,7 +44,7 @@ const reads: Parameters<typeof modValueOver>[0] = {
     const download = downloads.get(name);
     return Promise.resolve({ kind: 'read', answer: download && { ...download, path: name, size: 1 } });
   },
-  gamePlaces: () => Promise.resolve([]),
+  gamePlace: () => Promise.resolve(undefined),
   gameFilesTakenBy: () => Promise.resolve({ kind: 'read', answer: { gameFiles: [], notes: [] } }),
   submodule: () => Promise.resolve({ lacks: 'no submodule' }),
   sourceFolderTracked: () => Promise.resolve(false),

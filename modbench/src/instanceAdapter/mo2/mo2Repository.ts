@@ -124,7 +124,7 @@ async function folderLinesWritten(
 const lowerCased =(names: readonly ResolvedEntry[]): Map<string, ResolvedEntry> => new Map(names.map((entry) => [entry.name.toLowerCase(), entry]));
 
 // The game's folder is as case-sensitive as its file system, and a mod's paths are the game's, which ignores case.
-function caseBlindFinder({ root, holdsDataFiles }: GamePlace) {
+function caseBlindFinder({ root }: GamePlace) {
   const listings = new Map<string, Promise<FileRead<Map<string, ResolvedEntry>>>>();
   const listingOf = (folder: string): Promise<FileRead<Map<string, ResolvedEntry>>> => {
     const kept = listings.get(folder) ?? listOwnEntries(folder, ignoreLink).then(
@@ -150,7 +150,6 @@ function caseBlindFinder({ root, holdsDataFiles }: GamePlace) {
   return async (path: string): Promise<FileRead<string[] | undefined>> => {
     const [first = '', ...below] = path.split('/');
     if (below.length === 0 || first.toLowerCase() !== DATA_FOLDER.toLowerCase()) return walk(root, path.split('/'));
-    if (!holdsDataFiles) return { kind: 'read', answer: undefined };
     const found = await walk(join(root, DATA_FOLDER), below);
     return found.kind === 'read' && found.answer !== undefined ? { kind: 'read', answer: [DATA_FOLDER, ...found.answer] } : found;
   };

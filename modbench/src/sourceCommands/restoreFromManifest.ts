@@ -23,7 +23,7 @@ import type { StepTasks } from './steps';
 import { whyNotIndexed, type LoadOrderSnapshot } from './whyNotIndexed';
 
 type Adapter = Pick<InstanceAdapter,
-  'reading' | 'modOrder' | 'entryKey' | 'sourceModFolders' | 'downloadedFile' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash'
+  'reading' | 'modOrder' | 'entryKey' | 'sourceModFolders' | 'downloadedFile' | 'gamePlace' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash'
   | 'nexusFileAt' | 'modFolderPath' | 'foldersRefused' | 'otherManifests' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'folderValue' | 'unheldFolderValue' | 'filesIn' | 'originFileHash' | 'writeFilesIn'
   | 'trashFileIn' | 'trashingReplaced' | 'fileStamp' | 'submodule' | 'unclonedSubmodules' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile'
   | 'repositoryOnDisk' | 'refuseUnpublishedPins' | 'writePathTokens' | 'writeInstalledFrom' | 'foldersHeldWhole'>;
@@ -134,7 +134,7 @@ async function buildFileHeld(sourceFolder: string): Promise<{ readonly buildFile
 
 /** What restoring one folder from its packages asks of the instance. */
 export type FolderRestoreAdapter = Pick<InstanceAdapter,
-  'gameRelease' | 'downloadedFile' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile' | 'gamePlaces' | 'gameFilesTakenBy' | 'unheldFolderValue'
+  'gameRelease' | 'downloadedFile' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile' | 'gamePlace' | 'gameFilesTakenBy' | 'unheldFolderValue'
   | 'pathInFolder' | 'filesIn' | 'originFileHash' | 'writeFilesIn' | 'trashFileIn' | 'nexusFileAt' | 'textHash'>;
 
 interface FolderPass {
@@ -192,7 +192,7 @@ async function installationFilesFor(pass: FolderPass, manifest: Manifest): Promi
 
 const depotsNamed = (manifest: Manifest): string[] => manifest.packages.flatMap((pkg) => {
   const depots = pkg.kind === 'gameFolder' ? Object.entries(pkg.host?.steam.depots ?? {}) : [];
-  return depots.length === 0 ? [] : [`the game folder is ${depots.map(([id, version]) => `depot ${id} at version ${version}`).join(' and ')}`];
+  return depots.length === 0 ? [] : [`its game folder package names ${depots.map(([id, version]) => `depot ${id} at version ${version}`).join(' and ')}`];
 });
 
 /** The mod folder whose files, by hash, stand for a source folder's. */
@@ -205,16 +205,14 @@ async function gameFilesFor(
   if (typeof pass.game === 'string') return { lack: pass.game };
   const wanted = new Set(paths.map((path) => manifest.files.get(path)));
   const asking = through === undefined ? { folder, paths } : { folder: through.folder, paths: [...through.manifest.files].filter(([, hash]) => wanted.has(hash ?? undefined)).map(([path]) => path) };
-  const files: { path: string; hash: string; from: PackageFile }[] = [];
-  for (const place of pass.game.places) {
-    const taken = await pass.deps.adapter.gameFilesTakenBy(place, asking.folder, asking.paths);
-    if (taken.kind === 'unreadable') return { lack: `the game files could not be read: ${taken.reason}` };
-    for (const file of taken.answer.gameFiles) {
-      const from = { kind: 'gameFile' as const, root: place.root, path: file.path };
-      const ownPaths = through === undefined ? [file.pathInFolder] : paths.filter((path) => manifest.files.get(path) === file.hash);
-      files.push(...ownPaths.map((path) => ({ path, hash: file.hash, from })));
-    }
-  }
+  const { place } = pass.game;
+  const taken = await pass.deps.adapter.gameFilesTakenBy(place, asking.folder, asking.paths);
+  if (taken.kind === 'unreadable') return { lack: `the game files could not be read: ${taken.reason}` };
+  const files = taken.answer.gameFiles.flatMap((file) => {
+    const from = { kind: 'gameFile' as const, root: place.root, path: file.path };
+    const ownPaths = through === undefined ? [file.pathInFolder] : paths.filter((path) => manifest.files.get(path) === file.hash);
+    return ownPaths.map((path) => ({ path, hash: file.hash, from }));
+  });
   return { files };
 }
 

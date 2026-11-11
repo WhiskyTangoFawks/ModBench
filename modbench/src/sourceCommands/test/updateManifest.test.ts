@@ -488,9 +488,9 @@ describe('update manifest', () => {
       ]);
     });
 
-    it('names Steam as the game folder\'s host, with the depots of the places it takes from, and notes why a place gave fewer depots than it holds', async () => {
-      const place: GamePlace = { root: '/game', holdsDataFiles: true, steamApp: 377160, depots: [{ id: '1', version: '11' }], depotProblems: ['appmanifest_377160.acf records no installed depot'] };
-      const { update, manifestHeld } = await over({ files: { ModA: { 'a.nif': HA } }, answers: { places: [{ ...place, gameFilesTaken: taken('a.nif', HA) }] } });
+    it('names Steam as the game folder\'s host, with its depots, and notes why the install gave fewer depots than it holds', async () => {
+      const place: GamePlace = { root: '/game', steamApp: 377160, depots: [{ id: '1', version: '11' }], depotProblems: ['appmanifest_377160.acf records no installed depot'] };
+      const { update, manifestHeld } = await over({ files: { ModA: { 'a.nif': HA } }, answers: { place, gameFilesTaken: taken('a.nif', HA) } });
 
       const result = await update(['ModA']);
 
@@ -500,8 +500,8 @@ describe('update manifest', () => {
     });
 
     it('notes no depot problem when no mod of the update takes a file from the game', async () => {
-      const place: GamePlace = { root: '/game', holdsDataFiles: true, depots: [], depotProblems: ['appmanifest_377160.acf records no installed depot'] };
-      const { update } = await over({ answers: { places: [place] } });
+      const place: GamePlace = { root: '/game', depots: [], depotProblems: ['appmanifest_377160.acf records no installed depot'] };
+      const { update } = await over({ answers: { place } });
 
       expect((await update(['ModA'])).repositoryNotes).toEqual([]);
     });

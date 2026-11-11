@@ -8,16 +8,11 @@ export interface HashedModFile {
   readonly hash: string;
 }
 
-/** A place of the game: the game files a mod's files may be, and the Steam app and depots it records as installed. */
-export interface GamePlaceHeld {
+/** The game folder: the game files a mod's files may be, and the Steam app and depots it records as installed. */
+export interface GameHeld {
   readonly files: readonly (Omit<GameFileTaken, 'pathInFolder'> & { readonly pathInFolder?: string })[];
   readonly steamApp?: number;
   readonly depots: readonly Depot[];
-}
-
-/** The game's places, the game folder first. */
-export interface GameHeld {
-  readonly places: readonly [GamePlaceHeld, ...GamePlaceHeld[]];
 }
 
 // Where a package holds a file's bytes: the installation file by its name, or the game folder, the path in it, and the hash.
@@ -84,34 +79,22 @@ export interface Recorded {
 const entryHolding = (entries: readonly { readonly path: string; readonly hash: string }[], file: HashedModFile): string | undefined =>
   (entries.find((entry) => entry.hash === file.hash && sameIgnoringCase(entry.path, file.path)) ?? entries.find((entry) => entry.hash === file.hash))?.path;
 
-const gameFileHolding = (place: GamePlaceHeld, file: HashedModFile): string | undefined =>
-  (place.files.find((held) => held.hash === file.hash && sameIgnoringCase(held.pathInFolder ?? held.path, file.path))
-    ?? place.files.find((held) => held.hash === file.hash))?.path;
+const gameFileHolding = (game: GameHeld, file: HashedModFile): string | undefined =>
+  (game.files.find((held) => held.hash === file.hash && sameIgnoringCase(held.pathInFolder ?? held.path, file.path))
+    ?? game.files.find((held) => held.hash === file.hash))?.path;
 
-const depotsOf = (places: readonly GamePlaceHeld[]): Record<string, string> | undefined => {
-  const depots = places.flatMap((place) => place.depots);
-  return depots.length === 0 ? undefined : Object.fromEntries(depots.map(({ id, version }) => [id, version]));
-};
-
-// The store of the places the files come from; the held manifest's while the files it takes from the game keep their bytes.
-function gameFolderPackage(places: readonly GamePlaceHeld[], taken: readonly HashedModFile[], held: Manifest | undefined): ManifestPackage {
+// The store the game folder is installed from, none unless it is a Steam install; the held manifest's host while the files it takes from the game keep their bytes.
+function gameFolderPackage(game: GameHeld, taken: readonly HashedModFile[], held: Manifest | undefined): ManifestPackage {
+  if (game.steamApp === undefined) return { kind: 'gameFolder' };
   const kept = held?.packages.find((pkg) => pkg.kind === 'gameFolder');
   const sameFiles = taken.every(({ path, hash }) => held?.files.get(path) === hash);
   if (kept?.kind === 'gameFolder' && kept.host !== undefined && sameFiles) return kept;
-  const app = places.find((place) => place.steamApp !== undefined)?.steamApp;
-  const depots = depotsOf(places);
-  if (app === undefined) return kept ?? { kind: 'gameFolder' };
-  return { kind: 'gameFolder', host: { steam: { app, ...depots === undefined ? {} : { depots } } } };
+  const depots = game.depots.length === 0 ? undefined : Object.fromEntries(game.depots.map(({ id, version }) => [id, version]));
+  return { kind: 'gameFolder', host: { steam: { app: game.steamApp, ...depots === undefined ? {} : { depots } } } };
 }
 
-// The place that holds the most of the files first, then one a store installed, as a link makes two places hold one file.
-const rankedPlaces = (game: GameHeld | undefined, files: readonly HashedModFile[]): GamePlaceHeld[] => (game?.places ?? [])
-  .map((place, at) => ({ place, at, count: files.filter((file) => gameFileHolding(place, file) !== undefined).length }))
-  .sort((a, b) => b.count - a.count || Number(b.place.steamApp !== undefined) - Number(a.place.steamApp !== undefined) || a.at - b.at)
-  .map(({ place }) => place);
-
 /** A folder's manifest from its files, `exclude` naming the paths it excludes: each file's bytes taken from its installation
- *  file, then the game's places, then another downloaded file. */
+ *  file, then the game folder, then another downloaded file. */
 export function buildManifest(
   { installationFile, game, downloadedFiles }: ManifestSources, files: readonly HashedModFile[], exclude: readonly string[], held: Manifest | undefined,
 ): Recorded {
@@ -119,16 +102,13 @@ export function buildManifest(
   const used: DownloadedFile[] = installationFile === undefined ? [] : [installationFile];
   const others = downloadedFiles.filter((other) => other.package.name !== installationFile?.package.name);
   const takenFromTheGame: HashedModFile[] = [];
-  const placesTaken = new Set<GamePlaceHeld>();
-  const places = rankedPlaces(game, files);
   for (const file of files) {
     const own = installationFile === undefined ? undefined : entryHolding(installationFile.file.entries, file);
     if (own !== undefined && installationFile !== undefined) { sources.set(file.path, { installationFile: installationFile.package.name, packagePath: own, hash: file.hash }); continue; }
-    const fromGame = places.map((place) => ({ place, path: gameFileHolding(place, file) })).find(({ path }) => path !== undefined);
-    if (fromGame?.path !== undefined) {
-      sources.set(file.path, { packagePath: fromGame.path, hash: file.hash });
+    const fromGame = game === undefined ? undefined : gameFileHolding(game, file);
+    if (fromGame !== undefined) {
+      sources.set(file.path, { packagePath: fromGame, hash: file.hash });
       takenFromTheGame.push(file);
-      placesTaken.add(fromGame.place);
       continue;
     }
     const other = [...used, ...others.filter((one) => !used.includes(one))].map((one) => ({ one, path: entryHolding(one.file.entries, file) }))
@@ -140,7 +120,7 @@ export function buildManifest(
   const manifest: Manifest = {
     packages: [
       ...used.map(({ package: pkg }) => pkg),
-      ...takenFromTheGame.length === 0 || game === undefined ? [] : [gameFolderPackage(game.places.filter((place) => placesTaken.has(place)), takenFromTheGame, held)],
+      ...takenFromTheGame.length === 0 || game === undefined ? [] : [gameFolderPackage(game, takenFromTheGame, held)],
     ],
     exclude,
     ignore: held?.ignore ?? [],
@@ -149,7 +129,7 @@ export function buildManifest(
   };
   const packageFiles = [
     ...used.flatMap(({ file }) => file.entries),
-    ...game === undefined || takenFromTheGame.length === 0 ? [] : game.places.flatMap((place) => place.files.map((one) => ({ path: one.pathInFolder ?? one.path, hash: one.hash }))),
+    ...game === undefined || takenFromTheGame.length === 0 ? [] : game.files.map((one) => ({ path: one.pathInFolder ?? one.path, hash: one.hash })),
   ];
   const notes = used.flatMap(({ file }) => file.pageUnreadable === undefined ? [] : [`the page of ${basename(file.path)} could not be read, so its manifest names no host: ${file.pageUnreadable}`]);
   return { manifest, sources, notes, ...filesNoPackageHolds(manifest, packageFiles) };

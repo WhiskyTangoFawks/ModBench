@@ -14,7 +14,7 @@ import { gameFilesOf, gameHeld, gameToHand, type GameToHand } from './gameFolder
 import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, describedBy, type DownloadedFile, type GameHeld, type HashedModFile } from './manifestBuilder';
 
 type Adapter = Pick<InstanceAdapter,
-  'sourceModFolders' | 'foldersHeldWhole' | 'entryKey' | 'modOrder' | 'gamePlaces' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'modFolderPath' | 'installationFile'
+  'sourceModFolders' | 'foldersHeldWhole' | 'entryKey' | 'modOrder' | 'gamePlace' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'modFolderPath' | 'installationFile'
   | 'downloadedFilesHashed' | 'unheldFolderValue' | 'fileStamp' | 'nexusFileAt' | 'writeSubmodules' | 'writeOtherManifestLines'>;
 
 export interface UpdateManifestDeps {
@@ -96,14 +96,14 @@ async function readSourceFolder(
 }
 
 const withGame = (game: GameToHand, held: Parameters<typeof gameHeld>[1]): { game?: GameHeld } => {
-  const places = gameHeld(game.folder, held);
-  return places === undefined ? {} : { game: places };
+  const heldFromGame = gameHeld(game.folder, held);
+  return heldFromGame === undefined ? {} : { game: heldFromGame };
 };
 
-const takesFromTheGame = (mod: Pick<ModToUpdate, 'game'>): boolean => mod.game?.places.some((place) => place.files.length > 0) === true;
+const takesFromTheGame = (mod: Pick<ModToUpdate, 'game'>): boolean => (mod.game?.files.length ?? 0) > 0;
 
 const depotProblemsOf = (game: GameToHand, mods: readonly ModToUpdate[]): readonly string[] =>
-  (typeof game.folder === 'string' || !mods.some(takesFromTheGame) ? [] : game.folder.places.flatMap((place) => place.depotProblems));
+  (typeof game.folder === 'string' || !mods.some(takesFromTheGame) ? [] : game.folder.place.depotProblems);
 
 type Answer = { readonly refusal: string } | { readonly landed: ModUpdated; readonly notes: readonly string[] };
 
@@ -198,7 +198,7 @@ async function updateMod(
     : downloadedFileOf(describedBy(own, downloadedFiles.find(({ package: pkg }) => pkg.name === basename(own.path))?.file), nexusFileOf(adapter));
   const files = only === undefined ? hashed.files : hashed.files.filter(({ path }) => isUnderAny(only, path));
   const packageHolds = (hash: string): boolean => [...downloadedFiles.map(({ file }) => file), ...mod.installationFile === undefined ? [] : [mod.installationFile]]
-    .some(({ entries }) => entries.some((entry) => entry.hash === hash)) || (mod.game?.places ?? []).some((place) => place.files.some((one) => one.hash === hash));
+    .some(({ entries }) => entries.some((entry) => entry.hash === hash)) || (mod.game?.files ?? []).some((one) => one.hash === hash);
   const possible = held === undefined ? new Map<string, readonly string[]>()
     : await flaggedHashesIn(held, hashed.value, mod.folder, client === undefined ? undefined : possibleHashesOf(client, adapter), only);
   if ('cannotTell' in possible) return refusal(`${possible.cannotTell}.`);
