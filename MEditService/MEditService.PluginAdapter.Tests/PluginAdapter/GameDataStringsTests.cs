@@ -39,8 +39,8 @@ public sealed class GameDataStringsTests : IDisposable
     private string[] _archivesAnIniLists = [];
 
     private LoadOrderSnapshot LoadOrder =>
-        new(_dataFolder, null, GameRelease.SkyrimSE, [Plugin, GameCopy], [], [GameCopy.Key], [.. _archivesTheGameLoads.Select(HandedStrings.Stamped)],
-            [.. _stringsFilesTheGameReads.Select(HandedStrings.Stamped)], [], Language.English, _archivesAnIniLists);
+        new(_dataFolder, null, GameRelease.SkyrimSE, [Plugin, GameCopy], [], [GameCopy.Key], [.. _archivesTheGameLoads.Select(HandedStrings.Stamped)], _archivesAnIniLists,
+            [.. _stringsFilesTheGameReads.Select(HandedStrings.Stamped)], [], Language.English);
 
     private RegisteredPlugin Plugin => new(
         PluginName, ModName, _pluginPath, new PluginProvider.FromMod(ModName, _modFolder, _modFolder), new PluginLine(0, NamesIt: true),
@@ -110,7 +110,7 @@ public sealed class GameDataStringsTests : IDisposable
     }
 
     private LoadOrderSnapshot TheGameLoadingOnly(StampedFile archive) =>
-        new(_dataFolder, null, GameRelease.SkyrimSE, [Plugin, GameCopy], [], [GameCopy.Key], [archive], [], [], Language.English);
+        new(_dataFolder, null, GameRelease.SkyrimSE, [Plugin, GameCopy], [], [GameCopy.Key], [archive], [], [], [], Language.English);
 
     private IReadOnlyList<string> StringsPlacesOf(RegisteredPlugin plugin) => StringsPlacesOf(plugin, LoadOrder);
 
@@ -145,7 +145,7 @@ public sealed class GameDataStringsTests : IDisposable
         LocalizedDoorPlugin.Write(path, doorName);
         var overridden = new RegisteredPlugin(
             PluginName, "Overridden", path, new PluginProvider.FromMod("Overridden", folder, folder), new PluginLine(0, NamesIt: false), HandedStrings.Of(path));
-        return (overridden, new LoadOrderSnapshot(_dataFolder, null, GameRelease.SkyrimSE, [Plugin, overridden], [Plugin.Key], [], [], Plugin.Strings.StringsFiles, [], Language.English));
+        return (overridden, new LoadOrderSnapshot(_dataFolder, null, GameRelease.SkyrimSE, [Plugin, overridden], [Plugin.Key], [], [], [], Plugin.Strings.StringsFiles, [], Language.English));
     }
 
     private static string DoorOf(RegisteredPlugin copy, LoadOrderSnapshot loadOrder)
@@ -378,28 +378,35 @@ public sealed class GameDataStringsTests : IDisposable
     }
 
     [Theory]
-    [InlineData("Update.bsa", false, true)]
-    [InlineData("Update - Textures.bsa", false, true)]
-    [InlineData("Skyrim - Misc.bsa", true, true)]
-    [InlineData("Skyrim - Misc.bsa", false, false)]
-    [InlineData("Other - Main.bsa", false, false)]
-    public void OpenDocuments_ACorruptArchiveTheGameLoads_FailsThePluginOnlyWhenAnIniListsItOrItsNameIsThePlugins(string archiveName, bool anIniListsIt, bool fails)
+    [InlineData("Update.bsa", false)]
+    [InlineData("Update - Textures.bsa", false)]
+    [InlineData("Skyrim - Misc.bsa", true)]
+    public void OpenDocuments_ACorruptArchiveAnIniListsOrNamedForThePlugin_FailsNamingTheArchive(string archiveName, bool anIniListsIt)
+    {
+        var archive = TheGameLoadsACorruptArchive(archiveName, anIniListsIt);
+
+        Assert.False(OpenDocuments(_pluginPath).Holds(out _, out var failure));
+        Assert.StartsWith($"its strings archive '{archive}' could not be read", failure.Reason, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Skyrim - Misc.bsa")]
+    [InlineData("Other - Main.bsa")]
+    public void OpenDocuments_ACorruptArchiveNamedForAnotherPluginAndListedByNoIni_IsSkipped(string archiveName)
+    {
+        TheGameLoadsACorruptArchive(archiveName, anIniListsIt: false);
+
+        OpenDocuments(_pluginPath).Answered().Dispose();
+    }
+
+    private string TheGameLoadsACorruptArchive(string archiveName, bool anIniListsIt)
     {
         Directory.Delete(LocalizedDoorPlugin.LooseStrings(_pluginPath), recursive: true);
         var archive = Path.Combine(_dataFolder, archiveName);
         File.WriteAllText(archive, "not an archive");
         TheGameLoads(archiveName);
         if (anIniListsIt) _archivesAnIniLists = [archive];
-
-        if (fails)
-        {
-            Assert.False(OpenDocuments(_pluginPath).Holds(out _, out var failure));
-            Assert.StartsWith($"its strings archive '{archive}' could not be read", failure.Reason, StringComparison.Ordinal);
-        }
-        else
-        {
-            OpenDocuments(_pluginPath).Answered().Dispose();
-        }
+        return archive;
     }
 
     [Fact]
@@ -464,7 +471,7 @@ public sealed class GameDataStringsTests : IDisposable
 
         using var documents = Adapter.OpenDocuments(
             new ModPath(ModKey.FromFileName(master), masterPath),
-            new LoadOrderSnapshot(_dataFolder, null, GameRelease.Fallout4, [copy], [copy.Key], [copy.Key], [HandedStrings.Stamped(Path.Combine(_dataFolder, "Fallout4 - Interface.ba2"))], [], [], Language.English),
+            new LoadOrderSnapshot(_dataFolder, null, GameRelease.Fallout4, [copy], [copy.Key], [copy.Key], [HandedStrings.Stamped(Path.Combine(_dataFolder, "Fallout4 - Interface.ba2"))], [], [], [], Language.English),
             SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4), copy.Strings).Answered();
 
         Assert.Contains(DoorName, documents.Records.Single().Text, StringComparison.Ordinal);

@@ -232,7 +232,7 @@ public sealed class LoadOrderTests
     {
         var plugin = Registered("A.esp", "ModA");
         var lower = new LoadOrderSnapshot(
-            Data.ToLowerInvariant(), Instance.ToLowerInvariant(), GameRelease.Fallout4, [plugin], [plugin.Key], [], [], [], [], Language.English);
+            Data.ToLowerInvariant(), Instance.ToLowerInvariant(), GameRelease.Fallout4, [plugin], [plugin.Key], [], [], [], [], [], Language.English);
 
         Assert.Equal(Order([plugin], plugin), lower);
         Assert.Equal(Order([plugin], plugin).GetHashCode(), lower.GetHashCode());
@@ -245,7 +245,7 @@ public sealed class LoadOrderTests
         var b = Registered("B.esp", "ModB");
         var plugins = new List<RegisteredPlugin> { a, b };
         var active = new List<PluginAddress> { a.Key };
-        var order = new LoadOrderSnapshot(Data, Instance, GameRelease.Fallout4, plugins, active, [], [], [], [], Language.English);
+        var order = new LoadOrderSnapshot(Data, Instance, GameRelease.Fallout4, plugins, active, [], [], [], [], [], Language.English);
 
         plugins.Add(Registered("C.esp", "ModC"));
         active.Add(b.Key);

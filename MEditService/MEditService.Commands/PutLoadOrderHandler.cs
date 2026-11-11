@@ -42,7 +42,7 @@ public sealed class PutLoadOrderHandler
         if (LoadOrderSnapshot.RefusalOf(plugins, active, loadedWithNoLine) is { } invalid)
             return new PutLoadOrderRefused(PutLoadOrderRefusal.InvalidSnapshot, invalid);
 
-        var snapshot = new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, plugins, active, loadedWithNoLine, archives, stringsFiles, places, stringsLanguage, listedArchives);
+        var snapshot = new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, plugins, active, loadedWithNoLine, archives, listedArchives, stringsFiles, places, stringsLanguage);
         return new PutLoadOrderApplied(_holder.Apply(snapshot));
     }
 }

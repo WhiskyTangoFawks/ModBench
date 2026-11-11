@@ -126,8 +126,7 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     public LoadOrderSnapshot(
         string dataFolderPath, string? instanceRoot, GameRelease gameRelease, IReadOnlyList<RegisteredPlugin> plugins,
         IReadOnlyList<PluginAddress> active, IReadOnlyList<PluginAddress> loadedWithNoLine, IReadOnlyList<StampedFile> archives,
-        IReadOnlyList<StampedFile> stringsFiles, IReadOnlyList<PluginPlace> places, Language stringsLanguage,
-        IReadOnlyList<string>? listedArchives = null)
+        IReadOnlyList<string> listedArchives, IReadOnlyList<StampedFile> stringsFiles, IReadOnlyList<PluginPlace> places, Language stringsLanguage)
     {
         if (RefusalOf(plugins, active, loadedWithNoLine) is { } refusal) throw new ArgumentException(refusal);
         DataFolderPath = dataFolderPath;
@@ -147,7 +146,7 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
         LoadedWithNoLine = [.. loadedWithNoLine.Where(a => !colliding.Contains(a)).Select(PluginRefusalOfVouchesFor)];
         _places = PlacesOf(Plugins, Active, LoadedWithNoLine);
         Archives = [.. archives];
-        ListedArchives = [.. listedArchives ?? []];
+        ListedArchives = [.. listedArchives];
         StringsFiles = [.. stringsFiles];
         Places = [.. places];
         StringsLanguage = stringsLanguage;

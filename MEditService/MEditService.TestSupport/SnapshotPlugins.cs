@@ -25,7 +25,7 @@ public static class SnapshotPlugins
         IReadOnlyList<PluginPlace>? places = null, Language stringsLanguage = Language.English)
     {
         var list = entries.ToList();
-        return new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, Of(list), Active(list), LoadedWithNoLine(list), [], [], places ?? [], stringsLanguage);
+        return new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, Of(list), Active(list), LoadedWithNoLine(list), [], [], [], places ?? [], stringsLanguage);
     }
 
     /// <summary>The PUT /load-order body.</summary>
