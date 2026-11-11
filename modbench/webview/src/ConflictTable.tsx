@@ -5,7 +5,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { conflictTableHost } from './vscode';
 import { navigate, type NavRow } from './gridNavigation';
 import { ExpandArrow } from './ExpandArrow';
-import { baseCell, conflictStateName, focusedRowStyle, getCellStyle, headerBackground, headerCell, rowBackground } from './gridStyles';
+import { baseCell, conflictStateName, focusedRowStyle, getCellStyle, headerCell, headerStyle, rowBackground } from './gridStyles';
 import {
   CONFLICT_TABLE_READY, parseConflictTableShown,
   type ConflictCell, type ConflictCellContext, type ConflictColumn, type ConflictColumnContext, type ConflictRow, type ConflictTable, type ConflictTableShown,
@@ -112,7 +112,7 @@ export function ConflictTableView() {
             <tr ref={headerRow}>
               <th style={headerCell} />
               {table.columns.map((column) => (
-                <th key={columnKey(column)} style={{ ...headerCell, ...columnStyle(column), backgroundColor: headerBackground(column.state) }} data-vscode-context={headerContext(column)}>
+                <th key={columnKey(column)} style={{ ...headerCell, ...columnStyle(column), ...headerStyle(column.state) }} data-vscode-context={headerContext(column)}>
                   {column.name}
                 </th>
               ))}

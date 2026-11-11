@@ -3,7 +3,7 @@ import { PluginHeader } from './PluginHeader';
 import { ColumnEdge } from './ColumnEdge';
 import { DiffRow } from './DiffRow';
 import { buildColumns, headerCellContext, recordLabel } from './recordUtils';
-import { mono, fg, headerCell, headerBackground, DIMMED_OPACITY, columnWidthStyle } from './gridStyles';
+import { mono, fg, headerCell, headerStyle, DIMMED_OPACITY, columnWidthStyle } from './gridStyles';
 import type {
   ColumnKey, CompareOverride, CompareResult, PathHop, PluginLoadFailure, RecordEditEnvelope,
 } from './types';
@@ -418,7 +418,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                     collapsed={collapsedColumns.has(col.key)}
                     onToggleCollapse={() => toggleColumnCollapse(col.key)}
                     onResize={width => resizeColumn(col.key, width)}
-                    style={{ backgroundColor: headerBackground(col.override.conflictThis), ...columnStyle(col.key) }}
+                    style={{ ...headerStyle(col.override.conflictThis), ...columnStyle(col.key) }}
                     // Copy… is offered on every column: copying from a read-only plugin is the
                     // ordinary case.
                     vscodeContext={JSON.stringify(headerCellContext(
