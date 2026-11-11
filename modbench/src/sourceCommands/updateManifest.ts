@@ -5,7 +5,6 @@ import {
   exclusionsOfFiles, flaggedHashesIn, isUnderAny, ownFilesOf, sourceModsOf, writeManifestIn, type FlaggedHashes, type Manifest, type ManifestPackage,
 } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
-import type { FolderValue } from '../repositoriesLib/statusValues';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import { heldManifestIn } from './heldManifest';
 import { setAsideHeldWhole } from './setAsideHeldWhole';
@@ -115,7 +114,7 @@ async function folderMissing(adapter: Adapter, folder: string): Promise<boolean>
   return stamp.kind === 'unreadable' && stamp.reason.includes('ENOENT');
 }
 
-type Hashed = { readonly files: readonly HashedModFile[]; readonly exclude: readonly string[]; readonly value: FolderValue } | { readonly unreadable: string };
+type Hashed = { readonly files: readonly HashedModFile[]; readonly exclude: readonly string[]; readonly value: Awaited<ReturnType<Adapter['unheldFolderValue']>> } | { readonly unreadable: string };
 
 async function hashedFilesOf(adapter: Adapter, folder: string, ignore: readonly string[]): Promise<Hashed> {
   const value = await adapter.unheldFolderValue(folder);
