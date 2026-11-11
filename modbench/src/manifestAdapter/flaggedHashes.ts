@@ -42,7 +42,7 @@ export function flaggedHashesFrom(
 }
 
 /** The hashes each flagged plugin that `folder`, at `at`, holds could have had before its flags, as `possible` says, by its
- *  manifest path, limited to those under `only` when it is given; none when `possible` is absent or cannot answer, with why. */
+ *  manifest path, those under `only` when given; none when `possible` is absent or cannot answer, with why. */
 export async function flaggedHashesIn(
   manifest: Manifest, folder: FolderValue, at: string, possible: PossibleHashes | undefined, only?: readonly string[],
 ): Promise<FlaggedHashes | { readonly cannotTell: string }> {

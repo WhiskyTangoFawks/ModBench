@@ -21,8 +21,8 @@ export function archivePathsIn(gameRelease: string, files: readonly OriginFile[]
   return rule === undefined ? [] : files.filter((file) => rule.isArchive(file.relativePath)).map((file) => file.sourcePath);
 }
 
-/** Keeps what mEdit answered for each archive with the stamp it had, so an archive is asked again only once its stamp
- *  changes. An archive mEdit gave no answer for, or could not read, is asked again at the next read. */
+/** Keeps what mEdit read of each archive with its stamp, so an archive is asked again once its stamp changes. One
+ *  mEdit gave no answer for, or could not read, is asked again at the next read. */
 export class ArchiveContentsHeld {
   private held = new Map<string, { readonly stamp: string; readonly read: ArchiveRead }>();
   private unanswered = false;
