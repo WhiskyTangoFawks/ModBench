@@ -73,11 +73,11 @@ What works today:
 - Version control: the instance repository, Version in Git for any mod, source mods and build, and decompile and repair for a malformed plugin.
 - Deploy and purge: hardlinks into a deployment folder.
 - Language features: Go to Definition, Find All References, hover, completion and rename across the modlist.
+- Archives: a BA2 or BSA opened into its files, read-only, from Mods and the Explorer, and archived files in the file conflicts.
 - Publishing: Wabbajack's publisher tags on mods, folders and files, and none of Modbench's own files in what it ships.
 
 Planned:
 
-- Archives: a BA2 opened into its files, and archived files in the file conflicts.
 - Compatibility with Vortex instances.
 - Creating a new instance. Today Modbench only opens an existing one.
 - Deltas, as Wabbajack has them: a file you changed by hand, recorded as a binary diff from its package's copy. Today a clone restores each mod from its manifest, and a change ships as a patch.

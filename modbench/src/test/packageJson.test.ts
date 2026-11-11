@@ -199,6 +199,10 @@ describe('package.json activation', () => {
   it('auto-activates on startup so the Activity Bar icon is never stuck hidden', () => {
     expect(pkg.activationEvents).toContain('onStartupFinished');
   });
+
+  it('activates to read an archive folder a restart restored, before anything else opens it', () => {
+    expect(pkg.activationEvents).toContain('onFileSystem:modbench-archive');
+  });
 });
 
 describe('package.json getting started (user-docs.md, The walkthrough)', () => {
