@@ -74,8 +74,8 @@ interface PlaceDepots {
 /** The game's install in Steam's library. */
 export type SteamInstall = FoundGameFolder & PlaceDepots;
 
-/** A place of the game. It holds no Data file when its Data folder is another place's. */
-export type GamePlace = PlaceDepots & { readonly root: string; readonly holdsDataFiles: boolean };
+/** The game folder Modbench points at, with the depots of the Steam install it is. */
+export type GamePlace = PlaceDepots & { readonly root: string };
 
 /** Where deploy puts a mod's file in the game folder, none for a file it does not deploy. */
 export type DeployedPath = (pathInMod: string) => string | undefined;
@@ -478,7 +478,7 @@ interface GameFilesTaken {
 }
 
 /** Where a package holds a file's bytes: an entry, by its path inside a downloaded file, or a game file, by its path under a
- *  place's root. */
+ *  game folder's root. */
 export type PackageFile =
   | { readonly kind: 'entry'; readonly downloadedFile: string; readonly entry: string }
   | { readonly kind: 'gameFile'; readonly root: string; readonly path: string };
@@ -685,8 +685,8 @@ export interface InstanceAdapter extends DataFileReads {
   gameRelease(): Promise<string>;
   /** Where the game is now. */
   gameFolder(): Promise<GameFolder>;
-  /** Every place the game's files are in, the game folder first; none when the game folder is not found. */
-  gamePlaces(): Promise<readonly GamePlace[]>;
+  /** The game folder Modbench points at, with the Steam app and depots when it is the Steam install; none when not found. */
+  gamePlace(): Promise<GamePlace | undefined>;
   /** The game folder's root when `folder` is, holds or sits inside it, links resolved. */
   gameFolderOverlapping(folder: string): Promise<string | undefined>;
   /** The Proton prefix of the non-Steam game in Steam that runs a program in `folder`, or why there is none. */
@@ -760,11 +760,11 @@ export interface InstanceAdapter extends DataFileReads {
   writeModMetadata(mod: string, metadata: ModMetadata, trash: MoveToTrash): Promise<void>;
   /** The files in every mod's folder where the mod manager keeps its metadata, by path in it, which no build makes. */
   readonly metadataFilesInModFolder: readonly string[];
-  /** The game files of `place` at the given paths, named as the game folder names them, with their hashes. A path that
+  /** The game files of `place`, the game folder, at the given paths, named as the game folder names them, with their hashes. A path that
    *  could not be read is `unreadable` as asked, with why: neither found nor absent. */
   gameFiles(place: GamePlace, paths: readonly string[]): Promise<GameFilesRead>;
-  /** The game files of `place` that the files below `folder` may be: a mod's file where deploy puts it, another folder's
-   *  at its own path. `paths`: the files asked for; else every file the folder holds. */
+  /** The game files of `place` that the files below `folder` may be: a mod's file where deploy puts it, any other at its own path.
+   *  `paths`: the files asked for; else every file the folder holds. */
   gameFilesTakenBy(place: GamePlace, folder: string, paths?: readonly string[]): Promise<FileRead<GameFilesTaken>>;
   /** Writes the instance repository's ignore list: a whitelist of what the repository holds, after the lines of an ignore
    *  list already there. Answers the call that takes back what it wrote. */

@@ -19,7 +19,7 @@ import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, descri
 
 type Adapter = Pick<InstanceAdapter,
   'sourceFolder' | 'installationFile' | 'downloadedFile' | 'downloadedFilesHashed' | 'modFolderPath' | 'metadataFilesInModFolder' | 'filesIn' | 'originFileHash' | 'textHash' | 'nexusFileAt'
-  | 'gameRelease' | 'gamePlaces' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceModFolders' | 'entryKey' | 'folderValue' | 'foldersInReach' | 'repositoryOnDisk' | 'writeSourceModLines'>
+  | 'gameRelease' | 'gamePlace' | 'modOrder' | 'gameFiles' | 'gameFilesTakenBy' | 'sourceModFolders' | 'entryKey' | 'folderValue' | 'foldersInReach' | 'repositoryOnDisk' | 'writeSourceModLines'>
   & FolderRestoreAdapter;
 
 /** The source folder version in git makes for a mod, the repository that holds it, and the manifest that links the mod

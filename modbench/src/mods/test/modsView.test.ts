@@ -97,7 +97,7 @@ const foldersHoldingNothing = (listing: () => Promise<readonly string[]> = () =>
   originFileHash: () => Promise.resolve({ kind: 'unreadable', reason: 'ENOENT' }),
   exclusionMark: '.mohidden',
   downloadedFile: () => Promise.resolve({ kind: 'read', answer: undefined }),
-  gamePlaces: () => Promise.resolve([]),
+  gamePlace: () => Promise.resolve(undefined),
   gameFilesTakenBy: () => Promise.resolve({ kind: 'read', answer: { gameFiles: [], notes: [] } }),
   submodule: () => Promise.resolve({ lacks: 'no submodule' }),
   sourceFolderTracked: () => Promise.resolve(false),

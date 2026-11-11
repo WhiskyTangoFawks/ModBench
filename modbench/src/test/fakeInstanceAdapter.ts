@@ -148,8 +148,8 @@ export interface InstanceAnswers {
   /** The game files the game folder holds, by their lower-cased path; a path not there has none. */
   gameFiles?: ReadonlyMap<string, GameFile>;
   unreadableGameFiles?: ReadonlyMap<string, string>;
-  /** The places of the game, the game folder first, each holding the three answers above of its own; the game folder alone, holding them, when not said. */
-  places?: readonly (GamePlace & Pick<InstanceAnswers, 'gameFiles' | 'unreadableGameFiles' | 'gameFilesTaken'>)[];
+  /** The game folder with its depots; the game folder found, with none, when not said. */
+  place?: GamePlace;
   /** Why each mod's metadata cannot be read, by mod name. */
   unreadableMetadata?: ReadonlyMap<string, string>;
   /** Why each mod's metadata cannot hold the metadata a manifest says, by mod name. */
@@ -338,9 +338,6 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
   const answer = <T>(found: T | undefined, path: string): Promise<FileRead<T>> =>
     Promise.resolve(found === undefined ? { kind: 'unreadable', reason: `no answer fixed for ${path}` } : { kind: 'read', answer: found });
 
-  const placeAnswers = (root: string): Pick<InstanceAnswers, 'gameFiles' | 'unreadableGameFiles' | 'gameFilesTaken'> =>
-    answers.places === undefined ? answers : answers.places.find((place) => place.root === root) ?? {};
-
   const adapter: InstanceAdapter = {
     reading: (reread = CHECK_THE_DISK) => {
       readings++;
@@ -351,7 +348,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     gameRelease: () => Promise.resolve(current.gameRelease),
     gameFolder: () => Promise.resolve(current.gameFolder),
     gameFolderOverlapping: (folder) => overlappedGameRoot(current.gameFolder, folder),
-    gamePlaces: () => Promise.resolve(answers.places ?? (current.gameFolder.kind === 'found' ? [{ root: current.gameFolder.root, holdsDataFiles: true, depots: [], depotProblems: [] }] : [])),
+    gamePlace: () => Promise.resolve(answers.place ?? (current.gameFolder.kind === 'found' ? { root: current.gameFolder.root, depots: [], depotProblems: [] } : undefined)),
     nonSteamPrefix: () => Promise.resolve({ why: 'no Steam' }),
     profiles: () => unreadable('profiles', current.profiles),
     modOrder: () => unreadable('modOrder', { mods: current.mods, modFolders: current.modFolders?.all }),
@@ -396,8 +393,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       if (reason !== undefined) return Promise.resolve({ kind: 'unreadable', reason });
       return Promise.resolve({ kind: 'read', answer: downloadedFileNamed(name) === undefined ? undefined : { games: ['fallout4'], md5: md5Of(name), ...answers.queries?.get(name) } });
     },
-    gameFiles: ({ root }, paths) => {
-      const held = placeAnswers(root);
+    gameFiles: (_place, paths) => {
+      const held = answers;
       return Promise.resolve({
         files: paths.flatMap((path) => held.gameFiles?.get(path.toLowerCase()) ?? []),
         unreadable: Object.fromEntries(paths.flatMap((path) => {
@@ -406,8 +403,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         })),
       });
     },
-    gameFilesTakenBy: ({ root }, folder, paths) => {
-      const taken = placeAnswers(root).gameFilesTaken?.get(basename(folder)) ?? { kind: 'read', answer: { gameFiles: [], notes: [] } };
+    gameFilesTakenBy: (_place, folder, paths) => {
+      const taken = answers.gameFilesTaken?.get(basename(folder)) ?? { kind: 'read', answer: { gameFiles: [], notes: [] } };
       const asked = paths === undefined ? undefined : new Set(paths.map((path) => path.toLowerCase()));
       return Promise.resolve(taken.kind === 'read' && asked !== undefined
         ? { kind: 'read', answer: { ...taken.answer, gameFiles: taken.answer.gameFiles.filter(({ pathInFolder }) => asked.has(pathInFolder.toLowerCase())) } }
