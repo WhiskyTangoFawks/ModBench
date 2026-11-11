@@ -109,6 +109,10 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     /// (ADR-0013). A later archive's file replaces an earlier one's.</summary>
     public IReadOnlyList<StampedFile> Archives { get; }
 
+    /// <summary>The paths among <see cref="Archives"/> a game INI lists: they apply to every plugin, where another
+    /// archive applies to the plugins its name says.</summary>
+    public IReadOnlyList<string> ListedArchives { get; }
+
     /// <summary>The loose strings files the game reads, each at the path that wins (ADR-0013). One beats
     /// every archive's copy.</summary>
     public IReadOnlyList<StampedFile> StringsFiles { get; }
@@ -122,7 +126,8 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     public LoadOrderSnapshot(
         string dataFolderPath, string? instanceRoot, GameRelease gameRelease, IReadOnlyList<RegisteredPlugin> plugins,
         IReadOnlyList<PluginAddress> active, IReadOnlyList<PluginAddress> loadedWithNoLine, IReadOnlyList<StampedFile> archives,
-        IReadOnlyList<StampedFile> stringsFiles, IReadOnlyList<PluginPlace> places, Language stringsLanguage)
+        IReadOnlyList<StampedFile> stringsFiles, IReadOnlyList<PluginPlace> places, Language stringsLanguage,
+        IReadOnlyList<string>? listedArchives = null)
     {
         if (RefusalOf(plugins, active, loadedWithNoLine) is { } refusal) throw new ArgumentException(refusal);
         DataFolderPath = dataFolderPath;
@@ -142,6 +147,7 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
         LoadedWithNoLine = [.. loadedWithNoLine.Where(a => !colliding.Contains(a)).Select(PluginRefusalOfVouchesFor)];
         _places = PlacesOf(Plugins, Active, LoadedWithNoLine);
         Archives = [.. archives];
+        ListedArchives = [.. listedArchives ?? []];
         StringsFiles = [.. stringsFiles];
         Places = [.. places];
         StringsLanguage = stringsLanguage;
@@ -240,6 +246,7 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
         && Active.SequenceEqual(other.Active)
         && LoadedWithNoLine.SequenceEqual(other.LoadedWithNoLine)
         && Archives.SequenceEqual(other.Archives)
+        && ListedArchives.SequenceEqual(other.ListedArchives, StringComparer.OrdinalIgnoreCase)
         && StringsFiles.SequenceEqual(other.StringsFiles)
         && Places.SequenceEqual(other.Places)
         && StringsLanguage == other.StringsLanguage;

@@ -23,7 +23,7 @@ public sealed class PutLoadOrderHandler
         string dataFolder, string? instanceRoot, GameRelease gameRelease,
         IReadOnlyList<RegisteredPlugin> plugins, IReadOnlyList<PluginAddress> active, IReadOnlyList<PluginAddress> loadedWithNoLine,
         IReadOnlyList<StampedFile> archives, IReadOnlyList<StampedFile> stringsFiles, IReadOnlyList<PluginPlace> places,
-        Language stringsLanguage)
+        Language stringsLanguage, IReadOnlyList<string> listedArchives)
     {
         if (!_modFolders.DataFolderExists(dataFolder))
             return new PutLoadOrderRefused(PutLoadOrderRefusal.DataFolderNotFound, $"Data folder not found: {dataFolder}");
@@ -42,7 +42,7 @@ public sealed class PutLoadOrderHandler
         if (LoadOrderSnapshot.RefusalOf(plugins, active, loadedWithNoLine) is { } invalid)
             return new PutLoadOrderRefused(PutLoadOrderRefusal.InvalidSnapshot, invalid);
 
-        var snapshot = new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, plugins, active, loadedWithNoLine, archives, stringsFiles, places, stringsLanguage);
+        var snapshot = new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, plugins, active, loadedWithNoLine, archives, stringsFiles, places, stringsLanguage, listedArchives);
         return new PutLoadOrderApplied(_holder.Apply(snapshot));
     }
 }

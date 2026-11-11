@@ -16,7 +16,7 @@ function snapshot(name: string): LoadOrderSnapshot {
     plugins: [{ name, path: `/game/Data/${name}`, origin: DATA_DIRECTORY_ORIGIN, provider: { kind: 'Game' }, line: null, lineNamesIt: false, archives: [], stringsFiles: [] }],
     active: [{ name, origin: DATA_DIRECTORY_ORIGIN }],
     loadedWithNoLine: [],
-    archives: [],
+    archives: [], listedArchives: [],
     stringsFiles: [],
     places: [],
     dataFolder: '/game/Data',

@@ -48,15 +48,15 @@ internal static class LoadOrderEndpoints
         }
         // Never defaulted here (ADR-0013).
         if (req.Active is not { } active || req.LoadedWithNoLine is not { } loadedWithNoLine
-            || req.Archives is not { } archives || req.StringsFiles is not { } stringsFiles || !AllStamped(archives, stringsFiles)
+            || req.Archives is not { } archives || req.ListedArchives is not { } listedArchives || req.StringsFiles is not { } stringsFiles || !AllStamped(archives, stringsFiles)
             || req.Places is not { } places || places.Any(place => string.IsNullOrEmpty(place?.Name) || string.IsNullOrEmpty(place.Folder)))
         {
-            return EndpointMapping.BadRequest("The snapshot must state its active plugins, those loaded with no line, its archives, its strings files and its places.");
+            return EndpointMapping.BadRequest("The snapshot must state its active plugins, those loaded with no line, its archives, the archives a game INI lists, its strings files and its places.");
         }
 
         var result = handler.Put(
             req.DataFolder, req.InstanceRoot, gameRelease,
-            registered, active, loadedWithNoLine, archives, stringsFiles, places, stringsLanguage);
+            registered, active, loadedWithNoLine, archives, stringsFiles, places, stringsLanguage, listedArchives);
         return EndpointMapping.Answered("Put load order", logger, result);
     }
 
@@ -85,8 +85,8 @@ internal static class LoadOrderEndpoints
 // Mod Management's snapshot (ADR-0013). InstanceRoot: one index file per instance, inside the instance root (ADR-0010).
 internal sealed record LoadOrderRequest(
     IReadOnlyList<LoadOrderPlugin> Plugins, IReadOnlyList<PluginAddress> Active,
-    IReadOnlyList<PluginAddress> LoadedWithNoLine, IReadOnlyList<StampedFile> Archives, IReadOnlyList<StampedFile> StringsFiles,
-    IReadOnlyList<PluginPlace> Places, string DataFolder, string InstanceRoot, string GameRelease, string StringsLanguage);
+    IReadOnlyList<PluginAddress> LoadedWithNoLine, IReadOnlyList<StampedFile> Archives, IReadOnlyList<string> ListedArchives,
+    IReadOnlyList<StampedFile> StringsFiles, IReadOnlyList<PluginPlace> Places, string DataFolder, string InstanceRoot, string GameRelease, string StringsLanguage);
 
 internal sealed record LoadOrderPlugin(
     string Name, string Path, string Origin, PluginProviderRequest Provider, int? Line, bool LineNamesIt, IReadOnlyList<StampedFile> Archives,
