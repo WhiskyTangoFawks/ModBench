@@ -31,7 +31,12 @@ describe('the colour a cell paints for its state', () => {
 
   it('a header paints as its cells do, and none for no state', () => {
     expect([headerStyle('ConflictWins'), headerStyle('IdenticalToMasterWinsConflict'), headerStyle(null), headerStyle(undefined)])
-      .toEqual([getCellStyle('ConflictWins'), getCellStyle('IdenticalToMasterWinsConflict'), {}, {}]);
+      .toEqual([
+        { backgroundColor: colour('conflictWins') },
+        { backgroundColor: colour('conflictIdenticalToMaster'), color: colour('conflictWinsText') },
+        {},
+        {},
+      ]);
   });
 });
 
