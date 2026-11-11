@@ -1,4 +1,5 @@
 import { copyColumnKey } from '../wire/columnKey';
+import { gestureWord } from '../wire/gestureWords';
 import type { ColumnStatus, UnreadableSource } from '../wire/messages';
 import { samePluginAddress } from '../wire/pluginAddress';
 
@@ -44,8 +45,7 @@ export function copyStatus(copy: CopyFacts, plugin: PluginFacts | undefined, { o
   if (plugin?.isCompiledPlugin !== true) {
     return {
       label: '(read-only)',
-      reason: '“Version in Git”, or “Decompile Plugin” in a source mod, in this header’s menu, '
-        + 'makes it editable.',
+      reason: `${gestureWord('modbench.mod.versionInGit')}, or ${gestureWord('modbench.plugin.decompile')} in a source mod, makes it editable.`,
     };
   }
   const unreadable = plugin.pluginSourceUnreadable;
@@ -53,7 +53,7 @@ export function copyStatus(copy: CopyFacts, plugin: PluginFacts | undefined, { o
     return {
       label: '(read-only)',
       reason: `${unreadable.reason} Its records are its plugin file’s.`
-        + (unreadable.decompileRepairs ? ' “Decompile Plugin”, in this header’s menu, makes it editable.' : ''),
+        + (unreadable.decompileRepairs ? ` ${gestureWord('modbench.plugin.decompile')} makes it editable.` : ''),
     };
   }
   return null;

@@ -3,6 +3,8 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 import { PROBLEM_SOURCE } from '../drivingLib/modbenchDiagnostic';
 import { Refusal } from '../drivingLib/refusal';
+import { AGENT_GESTURES } from './gestures';
+import { toolName, toolsNamed } from './toolNames';
 import { countsOf, fitting } from './tooLarge';
 
 const keyOf = (path: string): string => {
@@ -32,6 +34,10 @@ function countsByFolder(files: readonly string[], known: readonly string[]): Rec
   return countsOf(placed.map(({ folder }) => folder ?? common), 'path');
 }
 
+/** A quick fix's label, or the tool that runs it where an agent has one. */
+const clearedBy = ({ value, target }: { value: string | number; target: vscode.Uri }): string | number =>
+  (AGENT_GESTURES.has(target.path) ? toolName(target.path) : value);
+
 export const PROBLEMS = {
   name: 'list_problems',
   input: { paths: z.array(z.string()).optional() },
@@ -43,8 +49,8 @@ export const PROBLEMS = {
     const problems = vscode.languages.getDiagnostics()
       .filter(([uri]) => uri.scheme === 'file' && (wanted === undefined || wanted.some((folder) => isAt(keyOf(uri.fsPath), folder))))
       .flatMap(([uri, diagnostics]) => diagnostics.filter(({ source }) => source === PROBLEM_SOURCE).map(({ severity, range, message, code }) => ({
-        file: uri.fsPath, severity: vscode.DiagnosticSeverity[severity], line: range.start.line + 1, message,
-        ...code === undefined ? {} : { code: typeof code === 'object' ? code.value : code },
+        file: uri.fsPath, severity: vscode.DiagnosticSeverity[severity], line: range.start.line + 1, message: toolsNamed(message),
+        ...code === undefined ? {} : { code: typeof code === 'object' ? clearedBy(code) : code },
       })));
     return fitting(problems, (all) => ({
       problems: all.length,

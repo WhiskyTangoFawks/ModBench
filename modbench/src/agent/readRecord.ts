@@ -3,7 +3,8 @@ import type { CopyDocument, MEditClient } from '../client/MEditClient';
 import { pluginAddressOf, samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 import { copyColumnKey } from '../wire/columnKey';
 import { fileStanding } from '../drivingLib/fileStanding';
-import { copyStatus, NO_STANDING, pluginOf, type Standing } from '../drivingLib/columnStatus';
+import { copyStatus as viewStatus, NO_STANDING, pluginOf, type Standing } from '../drivingLib/columnStatus';
+import { toolsNamed } from './toolNames';
 import { withMasterCellStates } from '../drivingLib/masterCellStates';
 import { pluginStanding } from '../instanceLoader/pluginStanding';
 import type { CompareResult } from '../client';
@@ -50,6 +51,11 @@ const rowsOf = (diffs: readonly FieldDiff[], column: string): ConflictRow[] => d
   ...(diff.cellStates[column] !== undefined && { conflictThis: diff.cellStates[column] }),
   ...(diff.children != null && diff.children.length > 0 && { children: rowsOf(diff.children, column) }),
 }));
+
+const copyStatus = (...given: Parameters<typeof viewStatus>) => {
+  const status = viewStatus(...given);
+  return status === null ? null : { ...status, reason: toolsNamed(status.reason) };
+};
 
 type Plugins = Extract<Awaited<ReturnType<RecordReads['getPlugins']>>, readonly unknown[]>;
 

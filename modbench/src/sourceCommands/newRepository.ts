@@ -2,6 +2,7 @@
 // files no package yields with their bytes (ADR-0016).
 
 import { basename, join } from 'node:path';
+import { gestureWord } from '../wire/gestureWords';
 import { isRefused, type SourceFolderRequest, type SourceModIn, type WriteRefused } from '../client';
 import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import {
@@ -185,7 +186,7 @@ async function foldersUnfinished(
   return unfinished;
 }
 
-export const NO_INSTANCE_REPOSITORY = 'The instance holds no repository to put a mod in: git init makes one.';
+export const NO_INSTANCE_REPOSITORY = `The instance holds no repository to put a mod in: ${gestureWord('modbench.modlist.gitInit')} makes one.`;
 
 /** What placing mods did, each answer by the mod it concerns: no source folder made or held, or a landed mod left
  *  unfinished. `notes` is what a downloaded file could not give. */

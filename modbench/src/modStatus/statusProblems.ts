@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { gestureWord } from '../wire/gestureWords';
 import { repositoryOf, type BuildFileLack, type ModStatus } from '../manifestAdapter/manifestAdapter';
 import type { ManifestPackage } from '../manifestAdapter/manifest';
 
@@ -52,6 +53,6 @@ export function severalPackagesNote(status: ModStatus, holdsPlugin: boolean): St
   if (packages.length < 2 || manifestFile === undefined) return undefined;
   const isSourceMod = repositoryOf(status) !== undefined;
   const upgrade = `An upgrade replaces the files of every one of the ${packages.length} packages: ${packages.map(packageNoun).join(', ')}.`;
-  const decompile = holdsPlugin && !isSourceMod ? ' To keep edits to its plugin, run Version in Git.' : '';
+  const decompile = holdsPlugin && !isSourceMod ? ` To keep edits to its plugin, run ${gestureWord('modbench.mod.versionInGit')}.` : '';
   return { file: manifestFile, message: `Made from several packages. ${upgrade}${decompile}` };
 }

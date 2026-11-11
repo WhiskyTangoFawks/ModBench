@@ -2,6 +2,7 @@ import type { InstanceAdapter, FileOrigin } from '../instanceAdapter/instanceAda
 import { exclusionsOfFiles, isUnderAny, sourceModsOf, writeManifestIn, type Manifest } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
+import { gestureWord } from '../wire/gestureWords';
 import { heldManifestIn } from './heldManifest';
 import { updateManifest, type UpdateManifestDeps } from './updateManifest';
 
@@ -45,7 +46,7 @@ async function changedFor(
   const folder = await adapter.modFolderPath(mod);
   if (folder === undefined) return refuseAll(`'${mod}' is gone from the disk`);
   const held = await heldManifestIn(folder);
-  if (held === undefined) return refuseAll('its mod has no manifest, so update manifest comes first');
+  if (held === undefined) return refuseAll(`its mod has no manifest, so ${gestureWord('modbench.mod.updateManifest')} comes first`);
   if ('why' in held) return refuseAll(held.why);
   const refused = ofMod.flatMap(({ file, path }) => {
     const reason = ignore ? undefined : whyNotUnignored(held, path);

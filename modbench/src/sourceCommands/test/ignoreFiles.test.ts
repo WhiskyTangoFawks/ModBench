@@ -59,7 +59,7 @@ describe('ignore file', () => {
 
     const outcome = await run([fileOf('ModA', MEM)], true);
 
-    expect([outcome.refused.map(({ reason }) => reason), await manifest()]).toEqual([['its mod has no manifest, so update manifest comes first'], undefined]);
+    expect([outcome.refused.map(({ reason }) => reason), await manifest()]).toEqual([['its mod has no manifest, so “update manifest” comes first'], undefined]);
   });
 
   it('refuses a file of Overwrite, naming why, and writes nothing', async () => {

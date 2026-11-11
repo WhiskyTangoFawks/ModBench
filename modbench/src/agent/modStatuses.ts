@@ -20,7 +20,7 @@ export const LIST_MOD_STATUSES = {
   name: 'list_mod_statuses',
   input: FILTER,
   of: async (value: InstanceValue, statuses: Pick<ModStatuses, 'current'>, { filter }: { filter?: string }) => {
-    if (!value.holdsRepository) throw new Refusal('The instance is not a repository, so no mod has a manifest to compare. Request git init first.');
+    if (!value.holdsRepository) throw new Refusal('The instance is not a repository, so no mod has a manifest to compare. Request modlist_git_init first.');
     const derived = await statuses.current();
     const nameOf = new Map((value.modFolders ?? []).filter(({ kind }) => kind === 'mod').map(({ modName, name }) => [modName, name]));
     const held = holding(filter);

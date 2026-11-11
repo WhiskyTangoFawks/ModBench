@@ -101,7 +101,7 @@ describe('decompileAndRepair', () => {
   });
 
   it('refuses the whole gesture, repairing nothing, when placing the mods does', async () => {
-    placing.whole = 'The instance holds no repository to put a mod in: git init makes one.';
+    placing.whole = 'The instance holds no repository to put a mod in: “git init” makes one.';
 
     expect(await repairIn({}, true)).toEqual({ applied: false, refusal: placing.whole });
     expect(sent()).toEqual([]);

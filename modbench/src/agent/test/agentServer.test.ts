@@ -555,7 +555,7 @@ describe('the agent server, given an instance value', () => {
       const refusal = await call(client, 'list_mod_statuses');
 
       expect(refusal.isError).toBe(true);
-      expect(refusal.text).toContain('repository');
+      expect(refusal.text).toContain('Request modlist_git_init first');
       expect(statusRead.asked).toBe(0);
     });
   });
@@ -576,7 +576,8 @@ describe('the agent server, given an instance value', () => {
       ({ severity, range: { start: { line } }, message, source, code });
     diagnosticsHeld.held = [
       [{ scheme: 'file', fsPath: '/i/Rocks.esp' }, [
-        problem(1, 0, 'malformed', 'Modbench', { value: 'decompile and repair', target: {} }),
+        problem(1, 0, 'malformed', 'Modbench', { value: 'decompile and repair', target: { path: 'modbench.plugin.decompileAndRepair' } }),
+        problem(1, 0, 'To keep edits, run “Version in Git”.', 'Modbench', { value: 'clear reference', target: { path: 'modbench.sourceLanguage.clearReference' } }),
         problem(1, 0, 'not ours', 'ESLint'),
         problem(1, 0, 'no source'),
       ]],
@@ -585,7 +586,8 @@ describe('the agent server, given an instance value', () => {
     ];
 
     expect(await read(client, 'list_problems')).toEqual([
-      { file: '/i/Rocks.esp', severity: 'Warning', line: 1, message: 'malformed', code: 'decompile and repair' },
+      { file: '/i/Rocks.esp', severity: 'Warning', line: 1, message: 'malformed', code: 'plugin_decompile_and_repair' },
+      { file: '/i/Rocks.esp', severity: 'Warning', line: 1, message: 'To keep edits, run mod_version_in_git.', code: 'clear reference' },
       { file: '/i/source/Rocks/plugin-source/Rocks.esp.json', severity: 'Error', line: 5, message: 'bad reference' },
       { file: '/i/source/Rocks/plugin-source/Rocks.esp.json', severity: 'Information', line: 10, message: 'odd value', code: 7 },
     ]);
@@ -1234,7 +1236,7 @@ describe('the agent server, reading a record through mEdit', () => {
     const answered = await read(client, 'read_record', { name: 'SharedNpc' });
 
     expect(answered).toMatchObject([
-      { status: { label: '(read-only)', reason: expect.stringContaining('Version in Git') as unknown } },
+      { status: { label: '(read-only)', reason: 'mod_version_in_git, or plugin_decompile in a source mod, makes it editable.' } },
       { status: { label: '(read-only)', reason: 'The game’s plugins are not edited.' } },
     ]);
   });
@@ -2144,6 +2146,15 @@ describe('the agent server, running a gesture', () => {
 
       expect(answer).toEqual({ isError: true, text: JSON.stringify({ refusal: 'Could not move plugins.', detail: 'A.esp is a master.' }) });
       expect(lines.join('\n')).toContain('Could not move plugins. A.esp is a master.');
+    });
+
+    it('names the tool, not the gesture, in a refusal and its detail', async () => {
+      fired.outcome = { applied: false, refusal: 'The instance holds no repository: “git init” makes one.', detail: 'Run “build” on it.' };
+      const { client } = await served(PLUGGED);
+
+      const answer = await call(client, 'plugin_decompile', { argument: [{ name: 'Solo.esp' }] });
+
+      expect(answer.text).toBe(JSON.stringify({ refusal: 'The instance holds no repository: modlist_git_init makes one.', detail: 'Run mod_build on it.' }));
     });
 
     it('refuses a load after that names an origin, which LOOT does not key a rule by, firing nothing', async () => {
