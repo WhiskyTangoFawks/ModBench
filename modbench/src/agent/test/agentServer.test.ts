@@ -958,8 +958,19 @@ describe('the agent server, selecting records through mEdit', () => {
 
     const answered = await read(client, 'select_rows', { sql: 'SELECT editorId FROM records' });
 
-    expect(mEdit.calls).toContainEqual({ method: 'selectRows', args: ['SELECT editorId FROM records'] });
+    expect(mEdit.calls).toContainEqual({ method: 'selectRows', args: ['SELECT editorId FROM records', expect.any(Number)] });
     expect(answered).toEqual(rows);
+  });
+
+  it('refuses rows that outgrow one reply, naming a Modbench script as the way to read them all', async () => {
+    const mEdit = new InMemoryMEditClient();
+    mEdit.setQueryAnswer('selectRows', { outgrew: true });
+    const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
+
+    const { isError, text } = await call(client, 'select_rows', { sql: 'SELECT body FROM records' });
+
+    expect(isError).toBe(true);
+    expect(text).toContain('Modbench script');
   });
 
   it('refuses with the database\'s reason', async () => {

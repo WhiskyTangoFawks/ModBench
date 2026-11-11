@@ -513,7 +513,7 @@ internal sealed class RecordQueries(
 
     public Answer<SelectedRows, IndexRefused> SelectRows(string sql) => _answer.Flat<SelectedRows>(() =>
     {
-        if (SqlDoor.Select(_index, sql).Holds(out var rows, out var rejection)) return new SelectedRows(rows);
+        if (SqlDoor.Select(_index, sql).Holds(out var rows, out var rejection)) return SelectedRows.Started(rows, _answer);
         return new IndexRefused(IndexRefusal.SelectRejected, rejection);
     });
 

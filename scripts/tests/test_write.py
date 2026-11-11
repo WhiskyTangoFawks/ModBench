@@ -36,7 +36,7 @@ class WriteAgainstTheFixtureInstance(unittest.TestCase):
 
     def select_after_the_watcher(self, sql: str) -> list[medit.JsonRecord]:
         watcher_sees_a_change(self.fixture)
-        return medit.select(sql)
+        return list(medit.select(sql))
 
     def test_creates_a_record_in_the_plugins_source_and_returns_its_form_key(self) -> None:
         form_key = medit.create_record(CONDITIONS.name, 'npc_')

@@ -1905,9 +1905,6 @@ export interface components {
         SelectRequest: {
             sql: string;
         };
-        SelectedRows: {
-            rows: unknown[];
-        };
         SequenceAwaitResponse: {
             reached: boolean;
             /** Format: int64 */
@@ -3995,7 +3992,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SelectedRows"];
+                    "application/x-ndjson": string;
                 };
             };
             /** @description Bad Request */

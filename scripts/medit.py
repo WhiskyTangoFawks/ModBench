@@ -1,9 +1,11 @@
+import http.client
 import json
 import os
 import re
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any, Literal, NamedTuple
 
@@ -61,9 +63,45 @@ class Referrer:
     editor_id: str | None
 
 
-def select(sql: str) -> list[JsonRecord]:
-    """The rows of one SQL SELECT over the views of every plugin the index holds; view_columns lists them."""
-    return _call('POST', '/records/select', {'sql': sql})['rows']
+_STOPPED_SHORT = "mEdit's rows stopped before their last line, so they may not be every row the SELECT selects."
+
+
+class Rows:
+    """The rows of one SELECT, each a dict of its columns, read once as mEdit sends them. list() keeps them."""
+
+    def __init__(self, response: http.client.HTTPResponse) -> None:
+        self._response = response
+        self._taken = False
+
+    def __iter__(self) -> Iterator[JsonRecord]:
+        if self._taken:
+            raise MEditError('These rows were read once already: call list() on select() to read them again.')
+        self._taken = True
+        return self._read()
+
+    def __bool__(self) -> bool:
+        raise MEditError('Rows arrive as they are read, so they are neither empty nor not until then: call list() on select() first.')
+
+    def _read(self) -> Iterator[JsonRecord]:
+        with self._response as response:
+            try:
+                for line in response:
+                    sent = json.loads(line)
+                    if 'row' in sent:
+                        yield sent['row']
+                    elif 'end' in sent:
+                        return
+                    else:
+                        raise MEditError(sent['detail'])
+            except (http.client.IncompleteRead, ConnectionError) as cut:
+                raise MEditError(_STOPPED_SHORT) from cut
+        raise MEditError(_STOPPED_SHORT)
+
+
+def select(sql: str) -> Rows:
+    """The rows of one SQL SELECT over the views of every plugin the index holds, each a dict of its columns, read once
+    as they arrive: list() keeps them. view_columns lists the views."""
+    return Rows(_open('POST', '/records/select', {'sql': sql}))
 
 
 def resolve(*names: Name) -> list[Plugin | RecordName]:
@@ -188,6 +226,12 @@ def _quoted(segment: str) -> str:
 
 
 def _call(method: str, path: str, body: JsonRecord | None = None) -> Any:
+    with _open(method, path, body) as response:
+        answer = response.read()
+    return json.loads(answer) if answer else None
+
+
+def _open(method: str, path: str, body: JsonRecord | None) -> http.client.HTTPResponse:
     port = os.environ.get('MEDIT_PORT')
     if port is None:
         raise MEditError('This script has no mEdit to reach: run it in a terminal, a notebook or a Run and Debug launch of a Modbench window.')
@@ -195,9 +239,7 @@ def _call(method: str, path: str, body: JsonRecord | None = None) -> Any:
         f'http://localhost:{port}{path}', method=method, data=None if body is None else json.dumps(body).encode(),
         headers={'Content-Type': 'application/json'})
     try:
-        with urllib.request.urlopen(request) as response:
-            answer = response.read()
-        return json.loads(answer) if answer else None
+        return urllib.request.urlopen(request)
     except urllib.error.HTTPError as refused:
         raise MEditError(_detail(refused) or f'mEdit answered {refused.code}.') from None
     except urllib.error.URLError as unreachable:

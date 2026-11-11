@@ -6,6 +6,7 @@ import {
   toLoadOrderStatus, type ApiClient, type LoadOrderStatus, type CompareResult, type CompareRecordsAnswer, type CopyText,
 } from './apiClient';
 import { createUnlimitedFetch } from './unlimitedFetch';
+import { rowsOf } from './selectedRows';
 import { bundledBackendPath, spawnPiped } from './bundledBackend';
 import { backendLogLevelArgs, makeBackendLogForwarder, type BackendLogChannel } from './backendLog';
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
@@ -22,7 +23,7 @@ import {
   type RebuildIndexOutcome, type CopyChangesOutcome, type CopyMode,
   type GridPosition, type RecordAt, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument, type RenameSourceChangesOutcome, type RenameSourceAsked,
   type SourceChanges, type SourceMove, type RecordFilter, type ReferenceResult, type NameQuery, type NamedObject, type PluginAddress, type PluginToRepair, type ModToVersionInGit, type VersionInGitOutcome, type VersionInGitProgress,
-  type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
+  type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, type RowsOutgrew, isRefused,
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
 import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
@@ -737,9 +738,16 @@ class HttpMEditClient implements MEditClient {
     return this.read('resolveNames', (api, signal) => api.POST('/names/resolve', { body: { names: [...names] }, signal }), noBodyFails);
   }
 
-  selectRows(sql: string): Promise<unknown[] | ReadFailed> {
-    return this.read('selectRows', (api, signal) => api.POST('/records/select', { body: { sql }, signal }),
-      (data) => (data ? data.rows : NO_ANSWER));
+  async selectRows(sql: string, atMostChars: number): Promise<unknown[] | RowsOutgrew | ReadFailed> {
+    const body = await this.read('selectRows', (api, signal) => api.POST('/records/select', { body: { sql }, parseAs: 'stream', signal }),
+      (data) => data ?? NO_ANSWER);
+    if (isReadFailed(body)) return body;
+    try {
+      return await rowsOf(body, atMostChars, (reason) => { this.log.error(`[HttpMEditClient] selectRows stopped: ${reason}`); });
+    } catch (e) {
+      this.log.error(`[HttpMEditClient] selectRows threw: ${errorMessage(e)}`);
+      return e instanceof SyntaxError ? { failed: 'unreadable' } : UNREACHABLE;
+    }
   }
 
   getComparison(formKey: string, text?: CopyText): Promise<CompareResult | null | ReadFailed> {

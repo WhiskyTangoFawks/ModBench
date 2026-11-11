@@ -36,7 +36,7 @@ public sealed class SqlDoorSealTests(SqlDoorFixture fixture) : IClassFixture<Sql
     [Fact]
     public void ASelectEndingInASemicolon_IsAnswered()
     {
-        Assert.Single(fixture.Index.Queries.SelectRows("SELECT 1 AS n;").Value().Rows);
+        Assert.Single(fixture.Index.Queries.Selected("SELECT 1 AS n;"));
     }
 
     [Theory]

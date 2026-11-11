@@ -27,6 +27,16 @@ internal sealed class ReadContext : IDisposable
     public List<T> Rows<T>(string sql, Func<DbDataReader, T> map, params object?[] args) =>
         DuckDbSql.Rows(_connection, sql, map, args);
 
+    /// <summary>The rows of <paramref name="sql"/>, whose columns are <paramref name="columns"/>, read as they are taken.
+    /// They take this context, which disposing them ends.</summary>
+    public StreamedRows Streamed(string sql, IReadOnlyList<StreamedColumn> columns)
+    {
+        var command = _connection.CreateCommand();
+        command.CommandText = sql;
+        command.UseStreamingMode = true;
+        return new StreamedRows(this, command, columns);
+    }
+
     public int Execute(string sql, params object?[] args) => DuckDbSql.Execute(_connection, sql, args);
 
     public string? ScalarString(string sql, params object?[] args) => DuckDbSql.ScalarString(_connection, sql, args);

@@ -3,7 +3,6 @@ using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
-using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -47,21 +46,27 @@ public sealed class ReadOutlivesTheDrainTests : IDisposable
 
     private PluginAddress Key => _fixture.Plugins.Single().Key;
 
-    private async Task<Task<Answer<SelectedRows, IndexRefused>>> AReadOutlivingEveryDrain(OpenedIndex index, string instanceRoot)
+    private static bool AnswersEveryRow(OpenedIndex index, string sql)
     {
-        index.Queries.SelectRows("SELECT 1 AS n").Value();
+        if (!index.Queries.SelectRows(sql).Holds(out var rows, out _)) return false;
+        using (rows) return rows.Rows().All(row => row.Holds(out _, out _));
+    }
+
+    private async Task<Task<bool>> AReadOutlivingEveryDrain(OpenedIndex index, string instanceRoot)
+    {
+        index.Queries.Selected("SELECT 1 AS n");
         IndexFiles.LogQueries(instanceRoot);
-        var read = Task.Run(() => index.Queries.SelectRows(SecondsLongReadOnOneCore));
+        var read = Task.Run(() => AnswersEveryRow(index, SecondsLongReadOnOneCore));
         Assert.True(await Waits.Until(() => read.IsCompleted || IndexFiles.Started(instanceRoot, SlowReadsOwnText)), "The slow read never started.");
         Assert.False(read.IsCompleted, "The slow read ended before the drain it is meant to outlive.");
         _clock.StartLeaping();
         return read;
     }
 
-    private async Task ReadEnds(Task<Answer<SelectedRows, IndexRefused>> read)
+    private async Task ReadEnds(Task<bool> read)
     {
         _clock.StopLeaping();
-        Assert.True((await read.WaitAsync(Waits.Patience)).Holds(out _, out _), "The slow read was refused.");
+        Assert.True(await read.WaitAsync(Waits.Patience), "The slow read was refused.");
     }
 
     private void AwaitNotReopened() =>

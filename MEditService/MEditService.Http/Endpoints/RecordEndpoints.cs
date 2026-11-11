@@ -48,11 +48,11 @@ internal static class RecordEndpoints
             {
                 logger.LogInformation("Received SelectRecords with {Sql}", request.Sql);
             }
-            return EndpointMapping.Ok(svc.SelectRows(request.Sql));
+            return EndpointMapping.Answered(svc.SelectRows(request.Sql), rows => new SelectedRowLines(rows));
         })
         .WithName("SelectRecords")
         .WithTags("Records")
-        .Produces<SelectedRows>()
+        .Produces<string>(StatusCodes.Status200OK, SelectedRowLines.ContentType)
         .ProducesProblem(400)
         .ProducesProblem(503);
 

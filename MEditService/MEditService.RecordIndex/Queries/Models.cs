@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
@@ -319,9 +318,6 @@ public record IndexRefused(IndexRefusal Refusal, string Message);
 /// <summary>A name as a person gives it: a plugin's file name, a record's EditorID or FormKey. An origin
 /// names a plugin and picks among those that share a file name.</summary>
 public sealed record NameQuery(string Name, string? Origin = null);
-
-/// <summary>Each row of a SELECT, a JSON object of its columns.</summary>
-public sealed record SelectedRows(JsonElement[] Rows);
 
 /// <summary>What one name means: a plugin, or a record by its FormKey.</summary>
 public sealed record NamedObject(PluginAddress? Plugin, string? FormKey, string? EditorId);
