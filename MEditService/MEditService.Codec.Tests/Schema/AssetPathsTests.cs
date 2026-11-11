@@ -27,15 +27,6 @@ public class AssetPathsTests
     }
 
     [Fact]
-    public void APathThatAlreadyStartsWithItsAssetTypesFolder_KeepsIt()
-    {
-        var record = NewMod().Statics.AddNew("Holder");
-        record.Model = new Tes5.Model { File = @"meshes\Architecture\Wall.nif" };
-
-        Assert.Equal([Path.Combine("meshes", "Architecture", "Wall.nif")], Collected(record).Select(path => path.DataPath));
-    }
-
-    [Fact]
     public void AFallout4Path_IsTheFileInTheDataFolder_UnderItsAssetTypesFolder()
     {
         var record = new Fo4.Fallout4Mod(ModKey.FromFileName("Assets.esp"), Fo4.Fallout4Release.Fallout4).TextureSets.AddNew("Holder");

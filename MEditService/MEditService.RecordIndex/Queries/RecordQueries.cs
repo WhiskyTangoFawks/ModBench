@@ -380,7 +380,6 @@ internal sealed class RecordQueries(
             .Where(named => new DataRelativePath(named.DataPath) == file).Select(named => named.FieldPath));
     });
 
-    // Each copy whose document holds `text`, at the member paths `namingPaths` finds in it.
     private MemberReferences CopiesNamingAtMembers(string text, Func<CopyHoldingText, IReadOnlyList<ColumnSpec>, IEnumerable<string>> namingPaths)
     {
         var schemas = RequireSchemas();
@@ -388,13 +387,21 @@ internal sealed class RecordQueries(
         var unread = new List<string>();
         foreach (var copy in _index.RequireWholeSetReads().GetCopiesHoldingText(text))
         {
+            var named = $"{copy.FormKey} in {copy.Plugin.Name} ({copy.Plugin.Origin})";
             if (!schemas.TryGetValue(copy.RecordType, out var schema))
             {
-                unread.Add($"{copy.FormKey} in {copy.Plugin.Name} ({copy.Plugin.Origin}): mEdit has no schema for its record type {copy.RecordType}");
+                unread.Add($"{named}: mEdit has no schema for its record type {copy.RecordType}");
                 continue;
             }
-            var paths = namingPaths(copy, schema.RecordColumns).ToList();
-            if (paths.Count > 0) copies.Add(new CopyNamingAtMembers(copy.FormKey, copy.Plugin, copy.InPluginSource, paths));
+            try
+            {
+                var paths = namingPaths(copy, schema.RecordColumns).ToList();
+                if (paths.Count > 0) copies.Add(new CopyNamingAtMembers(copy.FormKey, copy.Plugin, copy.InPluginSource, paths));
+            }
+            catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
+            {
+                unread.Add($"{named}: {ex.Message}");
+            }
         }
         return new MemberReferences(copies, unread);
     }

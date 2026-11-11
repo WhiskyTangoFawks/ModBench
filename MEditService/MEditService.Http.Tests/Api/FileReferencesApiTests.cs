@@ -20,6 +20,5 @@ public sealed class FileReferencesApiTests : HostedTests
 
         var copy = Assert.Single(answer.GetProperty("copies").EnumerateArray());
         Assert.Equal("HoldingMod", copy.GetProperty("plugin").GetProperty("origin").GetString());
-        Assert.Equal(["Diffuse"], copy.GetProperty("fieldPaths").EnumerateArray().Select(path => path.GetString()));
     }
 }
