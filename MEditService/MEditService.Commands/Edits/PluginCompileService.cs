@@ -137,8 +137,8 @@ internal sealed class PluginCompileService(
         diagnostics.AddRange(comparison.Misplaced.Select(MisplacedDiagnostic));
         if (!recorded)
         {
-            diagnostics.Add(CompileLinks.PluginDiagnostic(
-                plugin, repository,
+            logger.LogWarning("{Plugin} compiled, but the record of the binary Modbench last wrote could not be finished", plugin.Name);
+            diagnostics.Add(CompileDiagnostic.OfTheBuild(
                 $"{plugin.Name} compiled, but the record of the binary Modbench last wrote could not be finished. " +
                 "Compile it again to update the record."));
         }

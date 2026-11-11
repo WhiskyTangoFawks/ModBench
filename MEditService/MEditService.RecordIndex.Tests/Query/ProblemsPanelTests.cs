@@ -21,10 +21,12 @@ public sealed class ProblemsPanelTests : IDisposable
 
     private ScatteredFixtureData? _fixture;
     private readonly GatedPluginAdapter _brokensBinaryUnreadable = new(poisonPlugin: Broken.Name);
+    private readonly List<GatedPluginAdapter> _poisoned = [];
 
     public void Dispose()
     {
         _brokensBinaryUnreadable.Dispose();
+        _poisoned.ForEach(adapter => adapter.Dispose());
         _fixture?.Dispose();
     }
 
@@ -195,6 +197,125 @@ public sealed class ProblemsPanelTests : IDisposable
              "Race: [000ABC:Absent.esp] <Error: Could not be resolved>"),
             (problem.FormKey, problem.TargetFormKey, problem.FieldPath, problem.SourceRelativePath, problem.Message));
         Assert.Null(answer.Failure);
+    }
+
+    private const string Unreadable = "Unreadable.esp";
+
+    private GatedPluginAdapter Poisoning(string plugin)
+    {
+        var adapter = new GatedPluginAdapter(poisonPlugin: plugin);
+        _poisoned.Add(adapter);
+        return adapter;
+    }
+
+    private OpenedIndex ReconciledWithPoisoned(string poisoned, params Plugin[] plugins)
+    {
+        Build(plugins);
+        return Indexes.Reconciled(Fixture, adapter: Poisoning(poisoned));
+    }
+
+    [Fact]
+    public void ALinkIntoAnActivePluginThatCannotBeRead_IsAProblemOnTheReferrersFile_SayingItWasNotChecked_NotThatItIsMissing()
+    {
+        using var index = ReconciledWithPoisoned(
+            Unreadable, new Plugin(Unreadable, CompiledPlugin: false), new Plugin("Refers.esp", RefersTo: $"000800:{Unreadable}"));
+
+        var answer = Assert.Single(Ready(index));
+
+        var link = Assert.Single(answer.Problems, p => p.FieldPath == "Race");
+        Assert.StartsWith($"Race: {Unreadable} could not be read, so this link was not checked: ", link.Message, StringComparison.Ordinal);
+        Assert.Equal(Unreadable, link.UncheckedBecause);
+    }
+
+    [Fact]
+    public void AMissingLink_IsNotAskedAboutAnUnreadablePlugin_ItDoesNotName()
+    {
+        using var index = ReconciledWithPoisoned(Unreadable, new Plugin(Unreadable, CompiledPlugin: false), new Plugin("Refers.esp"));
+
+        var answer = Assert.Single(Ready(index));
+
+        var link = Assert.Single(answer.Problems, p => p.FieldPath == "Race");
+        Assert.Contains("Could not be resolved", link.Message, StringComparison.Ordinal);
+        Assert.Null(link.UncheckedBecause);
+    }
+
+    [Fact]
+    public void AnActivePluginThatCannotBeRead_IsAProblemOnTheHeaderFileOfACompiledPluginHoldingALink()
+    {
+        var plugin = new Plugin("Refers.esp");
+        using var index = ReconciledWithPoisoned(Unreadable, new Plugin(Unreadable, CompiledPlugin: false), plugin);
+
+        var answer = Assert.Single(Ready(index));
+
+        var problem = Assert.Single(answer.Problems, p => p.FieldPath is null);
+        Assert.StartsWith($"{Unreadable} is in the load order but could not be read, so no link into it was checked: ", problem.Message, StringComparison.Ordinal);
+        Assert.Equal(Path.Combine(PluginSourceRoot.For(plugin.Name), "000000_Refers.esp.json"), problem.SourceRelativePath);
+    }
+
+    [Fact]
+    public void ACompiledPluginNoModProvides_WhoseLinksAreNotChecked_IsAFailureOfThatPlugin_ForItsHeaderHasNoPlace()
+    {
+        var plugin = new Plugin("Unprovided.esp", RefersTo: "000801:Unprovided.esp");
+        Build(new Plugin(Unreadable, CompiledPlugin: false), plugin);
+        var holder = new LoadOrderHolder();
+        OpenedIndex? reconciled = null;
+        IReadOnlyList<PluginProblems>? answered = null;
+        using var loggers = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider([], entry =>
+        {
+            if (reconciled is { } ready && entry.Message.StartsWith("Reconciling load order", StringComparison.Ordinal))
+                answered ??= ready.Queries.GetProblems().Value();
+        })));
+        using var index = Indexes.Open(holder, adapter: Poisoning(Unreadable), loggerFactory: loggers);
+        index.Reconcile(holder, Fixture.DataFolder, Fixture.Plugins, GameRelease.Fallout4);
+        reconciled = index;
+
+        index.Reconcile(
+            holder, Fixture.DataFolder, [.. Fixture.Plugins.Select(entry => entry.Name == plugin.Name ? entry with { NamedProvider = PluginProvider.NoMod } : entry)], GameRelease.Fallout4);
+
+        Assert.NotNull(answered);
+        var unprovided = Assert.Single(answered);
+        Assert.Empty(unprovided.Problems);
+        Assert.Equal(ProblemsFailureKind.Placement, unprovided.FailureKind);
+    }
+
+    [Fact]
+    public void AnActivePluginThatCannotBeRead_IsNoProblemOnACompiledPluginHoldingNoLink()
+    {
+        using var index = ReconciledWithPoisoned(Unreadable, new Plugin(Unreadable, CompiledPlugin: false), new Plugin("Clean.esp", RefersTo: null));
+
+        var answer = Assert.Single(Ready(index));
+
+        Assert.Empty(answer.Problems);
+    }
+
+    [Fact]
+    public void AnInactivePluginThatCannotBeRead_IsNoProblemOnAnyFile_AndLeavesAMissingLinkMissing()
+    {
+        using var index = ReconciledWithPoisoned(
+            Unreadable, new Plugin(Unreadable, Enabled: false, CompiledPlugin: false), new Plugin("Refers.esp", RefersTo: $"000800:{Unreadable}"));
+
+        var answer = Assert.Single(Ready(index));
+
+        var link = Assert.Single(answer.Problems);
+        Assert.Contains("Could not be resolved", link.Message, StringComparison.Ordinal);
+        Assert.Null(link.UncheckedBecause);
+    }
+
+    [Fact]
+    public void TwoCopiesOfAPluginThatCannotBeRead_AreAnsweredByTheActiveOne()
+    {
+        var builder = new PluginFixtureBuilder("plugin-problems");
+        builder.WithPlugin(Unreadable, mod => mod.Npcs.AddNew("Other"), enabled: false, origin: "InactiveCopy");
+        builder.WithPlugin(Unreadable, mod => mod.Npcs.AddNew("Other"), enabled: true, origin: "ActiveCopy");
+        builder.WithPlugin("Refers.esp", mod => mod.Npcs.AddNew("Referrer").Race.SetTo(FormKey.Factory($"000800:{Unreadable}")), origin: "RefersMod");
+        _fixture = builder.BuildScattered();
+        SourceMods.Init(Fixture.Plugins.Single(entry => entry.Name == "Refers.esp"));
+        using var index = Indexes.Reconciled(Fixture, adapter: Poisoning(Unreadable));
+
+        var answer = Assert.Single(Ready(index));
+
+        var link = Assert.Single(answer.Problems, p => p.FieldPath == "Race");
+        Assert.Equal(Unreadable, link.UncheckedBecause);
     }
 
     [Fact]

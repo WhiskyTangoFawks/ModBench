@@ -242,6 +242,11 @@ internal sealed class Indexer : IDisposable
         get { lock (_lock) return _scope?.Failed.SourceFileFailures ?? []; }
     }
 
+    public IReadOnlyList<(PluginAddress Plugin, string Reason)> UnreadableBinaries
+    {
+        get { lock (_lock) return _scope?.Failed.UnreadableBinaries ?? []; }
+    }
+
     public IReadOnlyList<(PluginAddress Plugin, FileProblem Problem)> FileProblems
     {
         get { lock (_lock) return _scope?.Failed.FileProblems ?? []; }

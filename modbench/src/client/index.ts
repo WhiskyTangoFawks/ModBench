@@ -5,7 +5,7 @@ export type {
   CopyMode, CopyItem, ReferenceResult, RecordFilter,
   PluginToRepair, ModToVersionInGit, VersionInGitOutcome, SourceFolderRequest, SourceModIn, BuildFacts, BuildMod, BuildOutcome, VersionInGitProgress, PluginMetadata, PluginDiagnosisReport, RecordSummary,
   WorldspaceSummary, WorldspaceBlock, WorldspaceSubBlock, CellChildRecords, CellSummary,
-  ChildRecordSummary, ContainerChildSummary, CompileDiagnostic,
+  ChildRecordSummary, ContainerChildSummary,
   LoadOrderRefusal, PluginLoadFailure, CompareResult, CompareRecordsAnswer, RecordTypeChoice, GridPosition, WorkingTreeStatesBeneath,
 } from './MEditClient';
 export type { RecordEditChangesOutcome, RecordEditEnvelope, SourceChanges, WriteRefused } from './MEditClient';

@@ -24,7 +24,6 @@ export type CompareRecordsAnswer = Schemas['CompareRecordsAnswer'];
 export type CopyText = Schemas['CopyText'];
 
 export type ChangedPlugin = Schemas['ChangedPlugin'];
-export type CompileDiagnostic = Schemas['CompileDiagnostic'];
 
 /** ADR-0012. */
 export type PluginLoadFailure = Schemas['PluginLoadFailure'];

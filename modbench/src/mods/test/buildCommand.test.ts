@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { normalize } from 'node:path';
 
 vi.mock('vscode', async () => (await import('./sourceGestureHarness')).vscodeModule());
 
@@ -8,15 +7,11 @@ import { handlers, showQuickPick, PluginRowStandIn } from './sourceGestureHarnes
 
 import * as vscode from 'vscode';
 import { registerBuildCommand } from '../buildCommand';
-import { BuildProblems } from '../buildProblems';
 import { ModNode } from '../ModListProvider';
-import { sourceFiles } from '../../instanceLoader/loadOrderSnapshot';
 import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
-import { valueWithSourceDirs } from './sourceDirsFixture';
 import { type PluginAddress } from '../../client';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { recordingReporter } from '../../test/surfacingDoubles';
-import { FakeDiagnosticCollection } from '../../test/vscodeMock';
 import { compiledPluginFixture } from '../../client/test/fixtures';
 import { present } from '../../ports/present';
 
@@ -35,7 +30,6 @@ describe('modbench.mod.build', () => {
   const LOOSE = { name: 'Loose.esp', origin: 'Overwrite' };
   const MOD_DIRS = new Map([['ModA', '/mods/ModA'], ['ModB', '/mods/ModB'], ['ModC', '/mods/ModC']]);
   const SOURCE_MODS = ['ModA', 'ModB', 'ModS'];
-  const FILES = valueWithSourceDirs(new Map(['ModA', 'ModB', 'ModS'].map((mod) => [mod, normalize(`/instance/source/${mod}`)])));
   const built = (mod: string, plugins: PluginAddress[] = [], refused: { item: PluginAddress; reason: string }[] = []) =>
     ({ mod, compiled: plugins.map((plugin) => compiledPluginFixture({ plugin })), refused, archivesRefused: [] });
   const builds: (readonly string[] | 'every source')[] = [];
@@ -46,7 +40,6 @@ describe('modbench.mod.build', () => {
 
   function registered(outcome: BuildAnswer, options: { selection?: readonly unknown[] } = {}) {
     const reporter = recordingReporter();
-    const diagnostics = new FakeDiagnosticCollection();
     registerBuildCommand({
       commands: {
         build: (mods, everySource) => {
@@ -56,13 +49,12 @@ describe('modbench.mod.build', () => {
         },
       },
       instance: instanceThatReads,
-      reporter, problems: new BuildProblems(diagnostics, { subscribe: () => ({ dispose: () => undefined }) }),
+      reporter,
       modOfOrigin: modOfOriginIn(...MOD_DIRS.keys()), sourceModNames: () => SOURCE_MODS, pluginsView: 'modbench.pluginListTree',
-      sourceFiles: (origin) => sourceFiles(FILES, origin),
     }, () => options.selection ?? []);
     return {
       handler: present(handlers.get('modbench.mod.build'), 'the build command registerBuildCommand registers'),
-      reporter, diagnostics,
+      reporter,
     };
   }
 
@@ -134,8 +126,8 @@ describe('modbench.mod.build', () => {
     expect(reporter.reports.map((r) => r.detail)).toEqual(['"Loose.esp (Overwrite)" (it is not in a mod), "ModC" (no repository in the source folder builds it)']);
   });
 
-  it('points at the Problems panel when the build left diagnostics, and puts them on the source files', async () => {
-    const { handler, reporter, diagnostics } = registered({
+  it('points at the Problems panel when the build left diagnostics on files', async () => {
+    const { handler, reporter } = registered({
       landed: [{
         mod: 'ModA', refused: [], archivesRefused: [],
         compiled: [compiledPluginFixture({
@@ -149,9 +141,26 @@ describe('modbench.mod.build', () => {
     await handler(modRow('ModA'));
 
     expect(reporter.landings).toEqual(['Built "ModA" with 1 diagnostic. See the Problems panel.']);
-    expect([...diagnostics].map(([uri, list]) => [uri.fsPath, list.map((d) => d.message)])).toEqual([
-      [normalize('/instance/source/ModA/Source/A.json'), ['Race: points at nothing']],
-    ]);
+  });
+
+  it('names a diagnostic that is of the build and on no file itself, and does not point the Problems panel at it', async () => {
+    const { handler, reporter } = registered({
+      landed: [{
+        mod: 'ModA', refused: [], archivesRefused: [],
+        compiled: [compiledPluginFixture({
+          plugin: PATCH,
+          diagnostics: [{ message: 'MyPatch.esp compiled, but its links could not be checked: no cache' }],
+        })],
+      }],
+      refused: [],
+    });
+
+    await handler(modRow('ModA'));
+
+    expect(reporter.landings).toEqual(['Built "ModA".']);
+    expect(reporter.reports).toEqual([{
+      severity: 'warning', message: 'A plugin compiled with a fault of the build.', detail: 'MyPatch.esp compiled, but its links could not be checked: no cache',
+    }]);
   });
 
   it('points at the Problems panel from the refusal notification when the plugins that compiled left diagnostics', async () => {
@@ -259,7 +268,7 @@ describe('modbench.mod.build', () => {
 
     it('builds the mods given, never the selection, asking and reporting nothing, and answers the outcome', async () => {
       const outcome = { landed: [built('ModA', [PATCH])], refused: [] };
-      const { handler, reporter, diagnostics } = registered(outcome, { selection: [row(OTHER)] });
+      const { handler, reporter } = registered(outcome, { selection: [row(OTHER)] });
 
       const answered = await handler(calling('ModA'));
 
@@ -269,7 +278,6 @@ describe('modbench.mod.build', () => {
       expect(showQuickPick).not.toHaveBeenCalled();
       expect(reporter.reports).toEqual([]);
       expect(reporter.landings).toEqual([]);
-      expect([...diagnostics]).toEqual([]);
     });
 
     it('with no mods named, asks source commands for every source, read when it builds, without the pick', async () => {

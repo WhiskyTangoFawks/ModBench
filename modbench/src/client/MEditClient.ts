@@ -1,6 +1,5 @@
 import type { components } from '../wire/generated/api';
 import {
-  type CompileDiagnostic,
   type ChangedPlugin,
   type PluginMetadata, type PluginDiagnosisReport,
   type WorldspaceSummary, type WorldspaceBlocks, type WorldspaceBlock, type WorldspaceSubBlock,
@@ -410,6 +409,6 @@ export interface MEditClient {
 export type {
   PluginMetadata, PluginDiagnosisReport,
   RecordSummary, WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock,
-  CellChildRecords, CellSummary, ChildRecordSummary, ContainerChildSummary, CompileDiagnostic,
+  CellChildRecords, CellSummary, ChildRecordSummary, ContainerChildSummary,
   LoadOrderRefusal, PluginLoadFailure, CompareResult, CompareRecordsAnswer,
 };

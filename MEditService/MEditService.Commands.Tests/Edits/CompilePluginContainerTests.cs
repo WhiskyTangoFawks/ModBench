@@ -153,6 +153,7 @@ public sealed class CompilePluginContainerTests : TestInstance
         var diagnostic = Assert.Single(diagnostics, d => d.FormKey == _cellATemporaryRef.ToString());
 
         var cell = SourceModTree.DocumentCarrying(ModFolderOf(_plugin), _plugin, "CellA");
+        Assert.NotNull(diagnostic.SourceRelativePath);
         Assert.Equal(
             TreeTampering.FileOf(ModFolderOf(_plugin), _plugin, new RecordIdentity(cell.FormKey, cell.RecordType, cell.EditorId)),
             Path.Combine(ModFolderOf(_plugin), diagnostic.SourceRelativePath));

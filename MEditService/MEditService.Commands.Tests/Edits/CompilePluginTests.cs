@@ -48,6 +48,7 @@ public sealed class CompilePluginTests : IDisposable
         var diagnostics = Assert.Single(answer.Applied).Diagnostics;
         var diagnostic = Assert.Single(diagnostics, d => d.FormKey == _mod.Npc.ToString());
         var npc = _mod.Document(_mod.Npc.ToString()).Require();
+        Assert.NotNull(diagnostic.SourceRelativePath);
         Assert.Equal(
             TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, new RecordIdentity(npc.FormKey, npc.RecordType, npc.EditorId)),
             Path.Combine(_mod.ModFolder, diagnostic.SourceRelativePath));

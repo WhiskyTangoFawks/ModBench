@@ -1288,8 +1288,8 @@ export interface components {
             stringsLanguage: string;
         };
         CompileDiagnostic: {
-            formKey: string;
-            sourceRelativePath: string;
+            formKey?: string | null;
+            sourceRelativePath?: string | null;
             message: string;
         };
         /** @enum {string} */
@@ -1996,6 +1996,7 @@ export interface components {
             fieldPath?: string | null;
             sourceRelativePath: string;
             message: string;
+            uncheckedBecause?: string | null;
         };
         StampedFile: {
             path: string;

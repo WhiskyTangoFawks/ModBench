@@ -38,7 +38,7 @@ const hopOf = (segment: Segment): PathHop => typeof segment === 'number' ? { kin
 
 // A list element is removed, since mEdit refuses a null element; any other field is set to null.
 function clearingGesture({ plugin, problem }: { plugin: PluginAddress; problem: SourceProblem }): ClearingGesture | undefined {
-  if (!problem.formKey || !problem.fieldPath) return undefined;
+  if (!problem.formKey || !problem.fieldPath || problem.uncheckedBecause) return undefined;
   const path = locationOf(problem.fieldPath).map(hopOf);
   const record = { formKey: problem.formKey, plugin: plugin.name, origin: plugin.origin };
   return path.at(-1)?.kind === 'index'

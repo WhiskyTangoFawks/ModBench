@@ -21,7 +21,7 @@ internal sealed class CompileLinks(IPluginAdapter adapter, ILogger logger)
     internal List<CompileDiagnostic> Report(
         LinkCheckScope compiled, IReadOnlyList<SourceRecord> records, IReadOnlyCollection<string> links)
     {
-        var (plugin, _, _, repository) = compiled;
+        var plugin = compiled.Address;
         try
         {
             return LinkDiagnostics(compiled, records, links);
@@ -29,8 +29,7 @@ internal sealed class CompileLinks(IPluginAdapter adapter, ILogger logger)
         catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
         {
             logger.LogWarning(ex, "{Plugin} compiled, but its link check did not run", plugin.Name);
-            return [PluginDiagnostic(
-                plugin, repository, $"{plugin.Name} compiled, but its links could not be checked: {ex.Message}")];
+            return [CompileDiagnostic.OfTheBuild($"{plugin.Name} compiled, but its links could not be checked: {ex.Message}")];
         }
     }
 
@@ -48,16 +47,11 @@ internal sealed class CompileLinks(IPluginAdapter adapter, ILogger logger)
         // it is unchecked with that reason, never broken (ADR-0019).
         var unread = answers.UnreadableFiles.ToDictionary(
             file => file.FileName, file => file.Reason, StringComparer.OrdinalIgnoreCase);
-        string? WhyUnchecked(string formKey) =>
-            RecordMasters.PluginNamedBy(formKey) is { } owner && unread.TryGetValue(owner, out var reason)
-                ? $"{owner} could not be read, so this link was not checked: {reason}"
-                : null;
+        string? WhyUnchecked(string formKey) => UncheckedLinks.Of(formKey, unread)?.Message;
 
         var diagnostics = answers.UnreadableFiles
             .Select(file => PluginDiagnostic(
-                plugin, repository,
-                $"{file.FileName} is in the load order but could not be read, so no link into it was " +
-                $"checked: {file.Reason}"))
+                plugin, repository, UncheckedLinks.NoLinkInto(file.FileName, file.Reason)))
             .ToList();
         foreach (var record in records)
         {
