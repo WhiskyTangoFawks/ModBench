@@ -1552,9 +1552,9 @@ export interface components {
             holdsAlpha: boolean;
             isPlacedRotation: boolean;
             isScriptName: boolean;
+            isAssetLink: boolean;
             indexWhen?: string[] | null;
             unheldWhen?: string[] | null;
-            readonly isAssetLink?: boolean;
         };
         FieldValue: {
             metadata: components["schemas"]["FieldMetadata"];
