@@ -20,9 +20,9 @@ function archiveUri({ gameRelease, archive }: ArchiveAddress): vscode.Uri {
   return vscode.Uri.from({ scheme: ARCHIVE_SCHEME, path: `/${nameOf(archive)}`, query: JSON.stringify({ gameRelease, archive }) });
 }
 
-/** A file in an archive. The address rides in the query, so a restored tab can read its file again; the path ends in the file's name. */
+/** A file in an archive. The archive rides in the query, so a restored tab can read its file again; the file is the path after the archive's name. */
 export function archivedFileUri({ gameRelease, archive, file }: ArchivedFileAddress): vscode.Uri {
-  return vscode.Uri.from({ scheme: ARCHIVE_SCHEME, path: `/${nameOf(archive)}/${file}`, query: JSON.stringify({ gameRelease, archive, file }) });
+  return vscode.Uri.from({ scheme: ARCHIVE_SCHEME, path: `/${nameOf(archive)}/${file}`, query: JSON.stringify({ gameRelease, archive }) });
 }
 
 interface Listing {
