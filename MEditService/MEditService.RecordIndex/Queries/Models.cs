@@ -345,9 +345,8 @@ public record WorkingTreeStatesBeneath(
     IReadOnlyDictionary<string, IReadOnlyList<WorkingTreeState>> Records);
 
 /// <summary>What is wrong in a plugin's source, on its file: a link at <paramref name="FieldPath"/> to
-/// <paramref name="TargetFormKey"/>, which neither it nor an active plugin holds, or a file the read stopped at.
-/// <paramref name="UncheckedBecause"/> names the plugin that could not be read when the link was not checked, so it is
-/// not known to be missing.</summary>
+/// <paramref name="TargetFormKey"/> no active plugin holds, or a file the read stopped at.
+/// <paramref name="UncheckedBecause"/> names the unreadable plugin that left a link unchecked.</summary>
 public sealed record SourceProblem(
     string? FormKey, string? TargetFormKey, string? FieldPath, string SourceRelativePath, string Message, string? UncheckedBecause = null)
 {
