@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import type { FileRead, FoundGameFolder, GameFolder, GamePlace, HashedFile, InstallationFile, InstanceReading } from '../../instanceAdapter/instanceAdapter';
+import type { FileRead, FoundGameFolder, GameFolder, HashedFile, InstallationFile, InstanceReading } from '../../instanceAdapter/instanceAdapter';
 import { writeManifestIn, type Manifest, type ManifestPackage } from '../../manifestAdapter/manifestAdapter';
 import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
 import type { Nexus } from '../../nexus/nexus';
@@ -27,7 +27,6 @@ const DOWNLOADED: InstallationFile = {
 };
 const REPOSITORY: ManifestPackage = { kind: 'repository', name: 'ModA' };
 const FOUND: FoundGameFolder = { kind: 'found', root: '/game', dataFolder: '/game/Data' };
-const GAME_PLACE: GamePlace = { root: '/game', depots: [], depotProblems: [] };
 const NOT_FINISHED = 'was not finished: the restore was cancelled. Restoring it again finishes it.';
 
 const holding = (files: Record<string, string | null>): Manifest['files'] => new Map(Object.entries(files));
@@ -216,7 +215,7 @@ describe('restore from manifest', () => {
       over({ manifests: { ModA: { ...EMPTY, packages: [{ kind: 'gameFolder' }], files: holding({ 'a.nif': HA }) } }, answers });
 
     it('writes the game file the folder\'s file may be, with the bytes its manifest records', async () => {
-      const { restore, fake } = await takingFromTheGame({ place: { ...GAME_PLACE, gameFilesTaken: takenFromTheGame(['Data/A.nif', HA, 'a.nif']) } });
+      const { restore, fake } = await takingFromTheGame({ gameFilesTaken: takenFromTheGame(['Data/A.nif', HA, 'a.nif']) });
 
       await restore(['ModA']);
 
@@ -242,10 +241,13 @@ describe('restore from manifest', () => {
     ['no package it names holds the bytes of a file',
       { manifests: { ModA: fromTheZip({ 'z.nif': EDITED }) }, answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]) } },
       "was skipped: no package it names holds the bytes of 'z.nif'."],
+    ['no package holds a file its installation file lists, though the manifest names a game folder with depots',
+      { manifests: { ModA: fromTheZip({ 'a.nif': EDITED }, { packages: [MOD_7Z, { kind: 'gameFolder', host: { steam: { app: 377160, depots: { 377162: '2222' } } } }] }) }, answers: { downloadedFiles: new Map([['ModA.7z', read(DOWNLOADED)]]) } },
+      "was skipped: no package it names holds the bytes of 'a.nif'."],
     ['it names no package',
       { manifests: { ModA: { ...EMPTY, files: holding({ 'mine.txt': HA }) } } },
       "was skipped: no package it names holds the bytes of 'mine.txt'."],
-    ['no place of the game holds a game file with its bytes, naming the depots that hold it',
+    ['the game folder holds no game file with its bytes, naming the depots that hold it',
       { manifests: { ModA: { ...EMPTY, packages: [{ kind: 'gameFolder', host: { steam: { app: 377160, depots: { 377162: '2222' } } } }], files: holding({ 'a.nif': HA }) } } },
       "was skipped: no package it names holds the bytes of 'a.nif'; the game folder is depot 377162 at version 2222."],
     ['the game folder was not found',
@@ -511,7 +513,7 @@ describe('restore from manifest', () => {
 
       it('writes a game file its manifest names at the layout\'s path from the game folder, as the mod folder holds it', async () => {
         const named = { manifest: { packages: [{ kind: 'gameFolder' } as const], exclude: [], ignore: [], flags: new Map(), files: holding({ 'assets/x.nif': HA }) }, files: {}, heldByGit: [], modFiles: { 'x.nif': HA } };
-        const { restore, fake } = await sourceMod({ place: { ...GAME_PLACE, gameFilesTaken: takenFromTheGame(['Data/x.nif', HA, 'x.nif']) } }, [], named);
+        const { restore, fake } = await sourceMod({ gameFilesTaken: takenFromTheGame(['Data/x.nif', HA, 'x.nif']) }, [], named);
 
         await restore(['ModA']);
 

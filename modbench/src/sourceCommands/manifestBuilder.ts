@@ -83,12 +83,12 @@ const gameFileHolding = (game: GameHeld, file: HashedModFile): string | undefine
   (game.files.find((held) => held.hash === file.hash && sameIgnoringCase(held.pathInFolder ?? held.path, file.path))
     ?? game.files.find((held) => held.hash === file.hash))?.path;
 
-// The store the game folder is installed from; the held manifest's while the files it takes from the game keep their bytes.
+// The store the game folder is installed from, none unless it is a Steam install; the held manifest's host while the files it takes from the game keep their bytes.
 function gameFolderPackage(game: GameHeld, taken: readonly HashedModFile[], held: Manifest | undefined): ManifestPackage {
+  if (game.steamApp === undefined) return { kind: 'gameFolder' };
   const kept = held?.packages.find((pkg) => pkg.kind === 'gameFolder');
   const sameFiles = taken.every(({ path, hash }) => held?.files.get(path) === hash);
   if (kept?.kind === 'gameFolder' && kept.host !== undefined && sameFiles) return kept;
-  if (game.steamApp === undefined) return kept ?? { kind: 'gameFolder' };
   const depots = game.depots.length === 0 ? undefined : Object.fromEntries(game.depots.map(({ id, version }) => [id, version]));
   return { kind: 'gameFolder', host: { steam: { app: game.steamApp, ...depots === undefined ? {} : { depots } } } };
 }

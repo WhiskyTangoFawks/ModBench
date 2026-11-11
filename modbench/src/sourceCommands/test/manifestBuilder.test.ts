@@ -170,23 +170,24 @@ describe('a mod\'s files that the game folder holds', () => {
     expect(manifest.packages).toEqual([{ kind: 'gameFolder', host: { steam: { app: 377160, depots: { 1: 'a' } } } }]);
   });
 
-  describe('when the held manifest names the game folder\'s host', () => {
+  describe('when the held manifest names a host for the game folder', () => {
     const heldHost = { steam: { app: 377160, depots: { 1: 'v' } } };
     const heldGame = (files: Record<string, string>): Manifest => ({ packages: [{ kind: 'gameFolder', host: heldHost }], exclude: [], ignore: [], flags: new Map(), files: new Map(Object.entries(files)) });
 
-    it('keeps it while the files taken keep their bytes, though the places record other depots', () => {
+    it('keeps it while the files taken keep their bytes, though the Steam install records other depots', () => {
       const { manifest } = built({ 'a.nif': 'HA' }, { game: place({ 'a.nif': 'HA' }, { steamApp: 377160, depots: [{ id: '1', version: 'w' }] }) }, heldGame({ 'a.nif': 'HA' }));
 
       expect(manifest.packages).toEqual([{ kind: 'gameFolder', host: heldHost }]);
     });
 
-    it('keeps it when no place records a store, as a copy of the game does, though the files taken changed', () => {
-      const { manifest } = built({ 'a.nif': 'HA' }, { game: place({ 'a.nif': 'HA' }) }, heldGame({ 'a.nif': 'HX' }));
+    it('drops it when the game folder is no Steam install, whether or not the files taken changed', () => {
+      const { manifest: unchanged } = built({ 'a.nif': 'HA' }, { game: place({ 'a.nif': 'HA' }) }, heldGame({ 'a.nif': 'HA' }));
+      const { manifest: changed } = built({ 'a.nif': 'HA' }, { game: place({ 'a.nif': 'HA' }) }, heldGame({ 'a.nif': 'HX' }));
 
-      expect(manifest.packages).toEqual([{ kind: 'gameFolder', host: heldHost }]);
+      expect([unchanged.packages, changed.packages]).toEqual([[{ kind: 'gameFolder' }], [{ kind: 'gameFolder' }]]);
     });
 
-    it('takes the store the places record when the files taken changed', () => {
+    it('takes the store of the Steam install when the files taken changed', () => {
       const { manifest } = built({ 'a.nif': 'HA' }, { game: place({ 'a.nif': 'HA' }, { steamApp: 377160, depots: [{ id: '2', version: 'w' }] }) }, heldGame({ 'a.nif': 'HX' }));
 
       expect(manifest.packages).toEqual([{ kind: 'gameFolder', host: { steam: { app: 377160, depots: { 2: 'w' } } } }]);

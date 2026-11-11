@@ -74,7 +74,7 @@ interface PlaceDepots {
 /** The game's install in Steam's library. */
 export type SteamInstall = FoundGameFolder & PlaceDepots;
 
-/** A place of the game. */
+/** The game folder Modbench points at, with the depots of the Steam install it is. */
 export type GamePlace = PlaceDepots & { readonly root: string };
 
 /** Where deploy puts a mod's file in the game folder, none for a file it does not deploy. */
@@ -478,7 +478,7 @@ interface GameFilesTaken {
 }
 
 /** Where a package holds a file's bytes: an entry, by its path inside a downloaded file, or a game file, by its path under a
- *  place's root. */
+ *  game folder's root. */
 export type PackageFile =
   | { readonly kind: 'entry'; readonly downloadedFile: string; readonly entry: string }
   | { readonly kind: 'gameFile'; readonly root: string; readonly path: string };
@@ -760,10 +760,10 @@ export interface InstanceAdapter extends DataFileReads {
   writeModMetadata(mod: string, metadata: ModMetadata, trash: MoveToTrash): Promise<void>;
   /** The files in every mod's folder where the mod manager keeps its metadata, by path in it, which no build makes. */
   readonly metadataFilesInModFolder: readonly string[];
-  /** The game files of `place` at the given paths, named as the game folder names them, with their hashes. A path that
+  /** The game files of the game folder `place` at the given paths, named as the game folder names them, with their hashes. A path that
    *  could not be read is `unreadable` as asked, with why: neither found nor absent. */
   gameFiles(place: GamePlace, paths: readonly string[]): Promise<GameFilesRead>;
-  /** The game files of `place` that the files below `folder` may be: a mod's file where deploy puts it, another folder's
+  /** The game files of the game folder `place` that the files below `folder` may be: a mod's file where deploy puts it, another folder's
    *  at its own path. `paths`: the files asked for; else every file the folder holds. */
   gameFilesTakenBy(place: GamePlace, folder: string, paths?: readonly string[]): Promise<FileRead<GameFilesTaken>>;
   /** Writes the instance repository's ignore list: a whitelist of what the repository holds, after the lines of an ignore

@@ -96,8 +96,8 @@ async function readSourceFolder(
 }
 
 const withGame = (game: GameToHand, held: Parameters<typeof gameHeld>[1]): { game?: GameHeld } => {
-  const gameFolder = gameHeld(game.folder, held);
-  return gameFolder === undefined ? {} : { game: gameFolder };
+  const heldFromGame = gameHeld(game.folder, held);
+  return heldFromGame === undefined ? {} : { game: heldFromGame };
 };
 
 const takesFromTheGame = (mod: Pick<ModToUpdate, 'game'>): boolean => (mod.game?.files.length ?? 0) > 0;

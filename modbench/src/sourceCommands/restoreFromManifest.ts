@@ -234,7 +234,11 @@ async function bytesFor(pass: FolderPass, manifest: Manifest, folder: string, pa
   }
   const sourceOf = (path: string): PackageFile | undefined => fromTheGame.get(path) ?? byHash.get(manifest.files.get(path) ?? '');
   const lacked = paths.filter((path) => sourceOf(path) === undefined);
-  if (lacked.length > 0) return { refusal: skipped([...lacked.map((path) => `no package it names holds the bytes of '${path}'`), ...depotsNamed(manifest)].join('; ')) };
+  if (lacked.length > 0) {
+    const listed = new Set(held.held.flatMap((file) => file.entries.map(({ path }) => path.toLowerCase())));
+    const gameFolderFiles = lacked.filter((path) => !listed.has(path.toLowerCase()));
+    return { refusal: skipped([...lacked.map((path) => `no package it names holds the bytes of '${path}'`), ...gameFolderFiles.length === 0 ? [] : depotsNamed(manifest)].join('; ')) };
+  }
   return new Map(paths.flatMap((path) => {
     const from = sourceOf(path);
     return from === undefined ? [] : [[path, from] as const];

@@ -148,8 +148,8 @@ export interface InstanceAnswers {
   /** The game files the game folder holds, by their lower-cased path; a path not there has none. */
   gameFiles?: ReadonlyMap<string, GameFile>;
   unreadableGameFiles?: ReadonlyMap<string, string>;
-  /** The game folder, holding the three answers above of its own; the game folder found, holding them, when not said. */
-  place?: GamePlace & Pick<InstanceAnswers, 'gameFiles' | 'unreadableGameFiles' | 'gameFilesTaken'>;
+  /** The game folder with its depots; the game folder found, with none, when not said. */
+  place?: GamePlace;
   /** Why each mod's metadata cannot be read, by mod name. */
   unreadableMetadata?: ReadonlyMap<string, string>;
   /** Why each mod's metadata cannot hold the metadata a manifest says, by mod name. */
@@ -338,9 +338,6 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
   const answer = <T>(found: T | undefined, path: string): Promise<FileRead<T>> =>
     Promise.resolve(found === undefined ? { kind: 'unreadable', reason: `no answer fixed for ${path}` } : { kind: 'read', answer: found });
 
-  const placeAnswers = (): Pick<InstanceAnswers, 'gameFiles' | 'unreadableGameFiles' | 'gameFilesTaken'> =>
-    answers.place ?? answers;
-
   const adapter: InstanceAdapter = {
     reading: (reread = CHECK_THE_DISK) => {
       readings++;
@@ -397,7 +394,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       return Promise.resolve({ kind: 'read', answer: downloadedFileNamed(name) === undefined ? undefined : { games: ['fallout4'], md5: md5Of(name), ...answers.queries?.get(name) } });
     },
     gameFiles: (_place, paths) => {
-      const held = placeAnswers();
+      const held = answers;
       return Promise.resolve({
         files: paths.flatMap((path) => held.gameFiles?.get(path.toLowerCase()) ?? []),
         unreadable: Object.fromEntries(paths.flatMap((path) => {
@@ -407,7 +404,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       });
     },
     gameFilesTakenBy: (_place, folder, paths) => {
-      const taken = placeAnswers().gameFilesTaken?.get(basename(folder)) ?? { kind: 'read', answer: { gameFiles: [], notes: [] } };
+      const taken = answers.gameFilesTaken?.get(basename(folder)) ?? { kind: 'read', answer: { gameFiles: [], notes: [] } };
       const asked = paths === undefined ? undefined : new Set(paths.map((path) => path.toLowerCase()));
       return Promise.resolve(taken.kind === 'read' && asked !== undefined
         ? { kind: 'read', answer: { ...taken.answer, gameFiles: taken.answer.gameFiles.filter(({ pathInFolder }) => asked.has(pathInFolder.toLowerCase())) } }
