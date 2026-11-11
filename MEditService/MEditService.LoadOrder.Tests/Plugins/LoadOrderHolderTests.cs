@@ -99,7 +99,7 @@ public sealed class LoadOrderHolderTests
         var holder = new LoadOrderHolder();
         var active = Registered("A.esp") with { Line = new PluginLine(0, NamesIt: true) };
         LoadOrderSnapshot DisabledLineAt(int line) => new(
-            @"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, [active, Registered("B.esp") with { Line = new PluginLine(line, NamesIt: true) }], [active.Key], [], [], [], [], Language.English);
+            @"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, [active, Registered("B.esp") with { Line = new PluginLine(line, NamesIt: true) }], [active.Key], [], [], [], [], [], Language.English);
         holder.Apply(DisabledLineAt(1));
         var moved = DisabledLineAt(2);
 
@@ -124,5 +124,5 @@ public sealed class LoadOrderHolderTests
 
     private static LoadOrderSnapshot SnapshotActivatingInTheOrderGiven(string? instanceRoot, params string[] active) =>
         new(@"C:\Games\Fallout4\Data", instanceRoot, GameRelease.Fallout4,
-            [.. active.Order(StringComparer.Ordinal).Select(Registered)], [.. active.Select(name => Registered(name).Key)], [], [], [], [], Language.English);
+            [.. active.Order(StringComparer.Ordinal).Select(Registered)], [.. active.Select(name => Registered(name).Key)], [], [], [], [], [], Language.English);
 }

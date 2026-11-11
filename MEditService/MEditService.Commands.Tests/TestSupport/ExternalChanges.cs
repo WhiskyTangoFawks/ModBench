@@ -22,5 +22,5 @@ internal static class ExternalChanges
         Assert.True(handler.Put(
             loadOrder.DataFolderPath, loadOrder.InstanceRoot, loadOrder.GameRelease,
             loadOrder.Plugins, [.. loadOrder.Active.Select(p => p.Key)], [.. loadOrder.LoadedWithNoLine.Select(p => p.Key)], loadOrder.Archives, loadOrder.StringsFiles,
-            loadOrder.Places, loadOrder.StringsLanguage).Holds(out _, out _));
+            loadOrder.Places, loadOrder.StringsLanguage, loadOrder.ListedArchives).Holds(out _, out _));
 }

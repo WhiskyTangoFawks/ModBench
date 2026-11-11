@@ -26,7 +26,7 @@ public sealed class ChangedPathTests
             ];
             return new LoadOrderSnapshot(
                 DataFolder, ModFolder, GameRelease.Fallout4, SnapshotPlugins.Of(plugins), SnapshotPlugins.Active(plugins), [],
-                [new StampedFile(Path.Combine(DataFolder, "Fallout4 - Interface.ba2"), "1"), new StampedFile(TranslationsArchive, "1")],
+                [new StampedFile(Path.Combine(DataFolder, "Fallout4 - Interface.ba2"), "1"), new StampedFile(TranslationsArchive, "1")], [],
                 [new StampedFile(Path.Combine(DataFolder, "Strings", "Fallout4_English.STRINGS"), "1")], [], Language.English);
         }
     }
