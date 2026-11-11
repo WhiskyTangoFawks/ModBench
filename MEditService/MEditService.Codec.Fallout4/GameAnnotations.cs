@@ -16,7 +16,9 @@ internal static class GameAnnotations
             ExcludedMembers:
             [
                 .. PlumbingMembers,
-                ("IGlobalGetter", "TypeChar"),  // GLOB's derived subclass discriminant char
+                // GLOB's derived subclass discriminant char
+                ("IGlobalGetter", "TypeChar"),
+                ("IGlobalUnknownGetter", "TypeChar"),
                 // Reserved padding Mutagen names Unused; wbUnused(3)/wbUnused(2) in wbDefinitionsFO4.pas's wbObjectModProperties
                 ("IObjectModStringPropertyGetter`1", "Unused"),
                 ("IObjectModEnumPropertyGetter`1", "Unused"),
@@ -73,13 +75,7 @@ internal static class GameAnnotations
                 .. RecordHeaderMembersInEveryGame,
                 new(MajorRecordGetterName, "Version2", IgnoredInConflicts: true),
             ],
-            // Quest's MajorFlag names it; wbDefinitionsFO4.pas gives CELL, DIAL and WRLD bit 14 too.
-            RecordFlagNames:
-            [
-                ("ICellGetter", PartialFormFlag.Bit, PartialFormName),
-                ("IDialogTopicGetter", PartialFormFlag.Bit, PartialFormName),
-                ("IWorldspaceGetter", PartialFormFlag.Bit, PartialFormName),
-            ],
+            RecordFlagNames: [],
             // Static.xml spells its majorFlag attribute majorFlags, so no member carries Static.MajorFlag.
             RecordFlagEnums: [.. PlacedObjectRecordFlagEnums, ("IStaticGetter", "MajorFlag")],
             // Mutagen's Fallout 4 worldspace bounds divide by it.
