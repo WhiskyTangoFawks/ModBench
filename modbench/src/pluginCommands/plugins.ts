@@ -177,7 +177,7 @@ async function askedManifests(adapter: InstanceAdapter): Promise<ManifestsRead> 
     if (folder === undefined) return [];
     const manifest = await manifestAt(folder);
     // A plugin is gone only when its file is absent, whether git holds it or not.
-    return [statusFrom({ name, folder }, manifest, await adapter.modValue(folder, packagesAskedAt(manifest), []))];
+    return [statusFrom({ name, folder }, manifest, await adapter.modValue(folder, packagesAskedAt(manifest), []), new Map())];
   }));
   const statusOf = new Map(statuses.flat().map((status) => [status.mod, status]));
   return {

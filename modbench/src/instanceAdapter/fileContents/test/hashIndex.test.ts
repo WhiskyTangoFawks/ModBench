@@ -19,7 +19,6 @@ vi.mock('../../files', async (importOriginal) => {
 });
 
 const HASH_OF_AAAA = 'Mr+EvxoNp0I=';
-const HASH_OF_BBBB = 'M5WSec/sW34=';
 const ENTRIES = ['a.esp', 'textures/b.dds'];
 
 let root: string;
@@ -347,27 +346,5 @@ describe('the sizes and hashes of the record index', () => {
       expect(answer).toEqual({ files: [], notes: [] });
       expect([...fileProblems.held.keys()]).toEqual([notAnInstallationFile]);
     });
-  });
-});
-
-describe('the hash a plugin has once flags are set in its package copy', () => {
-  const flagged = { Small: true, Master: false };
-
-  it('is kept under the copy\'s hash and the flags, whatever order the flags are named in, and kept across a restart', async () => {
-    const index = hashIndex(folder, fakeInstallationFileReader([]));
-    await index.keepFlaggedHash(HASH_OF_AAAA, flagged, HASH_OF_BBBB);
-
-    const restarted = hashIndex(folder, fakeInstallationFileReader([]));
-
-    expect([
-      await index.flaggedHash(HASH_OF_AAAA, { Master: false, Small: true }), await restarted.flaggedHash(HASH_OF_AAAA, { Master: false, Small: true }),
-    ]).toEqual([HASH_OF_BBBB, HASH_OF_BBBB]);
-  });
-
-  it('is none for other flags or another copy', async () => {
-    const index = hashIndex(folder, fakeInstallationFileReader([]));
-    await index.keepFlaggedHash(HASH_OF_AAAA, flagged, HASH_OF_BBBB);
-
-    expect([await index.flaggedHash(HASH_OF_AAAA, { Small: false, Master: false }), await index.flaggedHash(HASH_OF_BBBB, flagged)]).toEqual([undefined, undefined]);
   });
 });

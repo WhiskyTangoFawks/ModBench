@@ -27,7 +27,7 @@ import {
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
 import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
-import type { ArchivedCopy } from '../wire/messages';
+import type { ArchivedCopy, FlaggedPluginFile, FlaggedPluginHashes } from '../wire/messages';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
 // 30s is an ordinary HTTP-client default. A slow call and a hung one look the same to the tree,
@@ -704,6 +704,12 @@ class HttpMEditClient implements MEditClient {
   getArchiveCopies(gameRelease: string, archive: string, files: readonly string[], hashed: boolean): Promise<ArchivedCopy[] | ReadFailed> {
     return this.read(`getArchiveCopies(${archive}, ${files.length} files)`, (api, signal) => api.POST('/archives/copies', {
       body: { gameRelease, archive, files: [...files], hashed }, signal,
+    }), noBodyFails, { timed: true });
+  }
+
+  getFlaggedPluginHashes(gameRelease: string, files: readonly FlaggedPluginFile[]): Promise<FlaggedPluginHashes[] | ReadFailed> {
+    return this.read(`getFlaggedPluginHashes(${files.length})`, (api, signal) => api.POST('/plugin-files/flagged-hashes', {
+      body: { gameRelease, files: [...files] }, signal,
     }), noBodyFails, { timed: true });
   }
 

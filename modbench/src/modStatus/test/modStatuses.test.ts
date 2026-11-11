@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import type { EntryRef, InstanceAdapter, ModFolder } from '../../instanceAdapter/instanceAdapter';
 import { modValueOver } from '../../instanceAdapter/modValue';
-import type { Manifest } from '../../manifestAdapter/manifestAdapter';
+import type { FlaggedRead, Manifest, ModStatus } from '../../manifestAdapter/manifestAdapter';
 import { writeManifestIn } from '../../manifestAdapter/manifestAdapter';
 import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
 import { ModStatuses, type StatusSource } from '../modStatuses';
@@ -45,7 +45,6 @@ const reads: Parameters<typeof modValueOver>[0] = {
     return Promise.resolve({ kind: 'read', answer: download && { ...download, path: name, size: 1 } });
   },
   gamePlaces: () => Promise.resolve([]),
-  flaggedHash: () => Promise.resolve(undefined),
   gameFilesTakenBy: () => Promise.resolve({ kind: 'read', answer: { gameFiles: [], notes: [] } }),
   submodule: () => Promise.resolve({ lacks: 'no submodule' }),
   sourceFolderTracked: () => Promise.resolve(false),
@@ -65,7 +64,7 @@ const file = (name: string) => ({ kind: 'installationFile' as const, name, size:
 const folder = (kind: EntryRef['kind'], name: string, path: string, modName = name): ModFolder => ({ kind, name, path, modName });
 
 const valueOf = (mods: EntryRef[], modFolders: ModFolder[], over: Partial<StatusSource> = {}): StatusSource =>
-  ({ holdsRepository: true, mods, modFolders, entryKey: ({ name }) => name.toLowerCase(), paths: { sourceDirs: new Map() }, filesByMod: new Map(), ...over });
+  ({ holdsRepository: true, flaggedHashes: new Map(), mods, modFolders, entryKey: ({ name }) => name.toLowerCase(), paths: { sourceDirs: new Map() }, filesByMod: new Map(), ...over });
 
 let heldWhole: ReadonlySet<string>;
 let heldByGit: ReadonlyMap<string, readonly string[]>;
@@ -273,7 +272,7 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
   describe('the files no package holds (publishing.md, What ships, story 2)', () => {
     it('lists every file the reading holds of a mod whose folder holds no manifest, but git\'s own', async () => {
       const mod = await folderOf('ModA');
-      const held = ['mine.txt', 'other.txt', '.git/HEAD'].map((relativePath) => ({ relativePath }));
+      const held = ['mine.txt', 'other.txt', '.git/HEAD'].map((relativePath) => ({ relativePath, sourcePath: relativePath }));
       const statuses = statusesLogging();
 
       statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], { filesByMod: new Map([['ModA', held]]) }));
@@ -522,5 +521,47 @@ describe('Mod status, derived from each instance value (mod-status trace)', () =
       WHY, true, `Showing the last good read: the status of "ModA" could not be read: ${WHY}.`,
       undefined, false, [`[modList] The status of "ModA" could not be read: ${WHY}`],
     ]);
+  });
+});
+
+describe('a plugin its manifest flags (Status, story 8)', () => {
+  const PACKAGE = file('S.7z');
+  const FLAGS = { Small: true };
+  const COPY = 'AAAAAAAAAAA=';
+  const OTHER = 'BBBBBBBBBBA=';
+  const LINKED = '/where/it/is/read/Mod.esp';
+
+  beforeEach(() => {
+    hashingContents = true;
+    downloads = new Map([['S.7z', { hash: PACKAGE.hash, entries: [{ path: 'Mod.esp', hash: COPY }] }]]);
+  });
+
+  async function statusWith(flagged: () => FlaggedRead): Promise<ModStatus | undefined> {
+    const mod = await folderOf('ModA', { 'Mod.esp': 'flagged bytes' });
+    await writeManifestIn(mod, { ...EMPTY, packages: [PACKAGE], flags: new Map([['Mod.esp', FLAGS]]), files: new Map([['Mod.esp', COPY]]) });
+    const statuses = statusesLogging();
+    statuses.derive(valueOf([{ kind: 'mod', name: 'ModA' }], [folder('mod', 'ModA', mod)], {
+      filesByMod: new Map([['ModA', [{ relativePath: 'Mod.esp', sourcePath: LINKED }]]]), flaggedHashes: new Map([[LINKED, flagged()]]),
+    }));
+    return (await statuses.current()).get('ModA');
+  }
+
+  it('holds its bytes when mEdit says it could have held the manifest\'s hash before its flags', async () => {
+    const status = await statusWith(() => ({ kind: 'read', answer: [OTHER, COPY] }));
+
+    expect([status?.differing, status?.unreadable]).toEqual([[], undefined]);
+  });
+
+  it('differs when mEdit says it could not have held the manifest\'s hash', async () => {
+    expect((await statusWith(() => ({ kind: 'read', answer: [OTHER] })))?.differing).toEqual(['Mod.esp']);
+  });
+
+  it.each([
+    ['mEdit has not answered', { kind: 'unanswered' as const }, 'has not said'],
+    ['mEdit could not read the file', { kind: 'unreadable' as const, reason: 'EACCES' }, 'EACCES'],
+  ])('is unreadable, saying why, and never differing, while %s', async (_what, read, why) => {
+    const status = await statusWith(() => read);
+
+    expect([status?.differing, status?.unreadable?.includes(why)]).toEqual([[], true]);
   });
 });

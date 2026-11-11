@@ -56,6 +56,10 @@ export const WEBVIEW_TO_EXTENSION = {
 export type UnreadableSource = components['schemas']['UnreadableSource'];
 /** A file in an archive: its size, and when asked for, its digest as a loose copy's is written. */
 export type ArchivedCopy = components['schemas']['ArchivedCopy'];
+/** A plugin file, by its absolute path, with the load flags its manifest sets in it. */
+export type FlaggedPluginFile = components['schemas']['FlaggedPluginFile'];
+/** A plugin file's hashes with its flags at each combination of their original values. */
+export type FlaggedPluginHashes = components['schemas']['FlaggedPluginHashes'];
 /** A column header's status: the label under the file name, and the reason in its tooltip (editor.md, A column's header). */
 export interface ColumnStatus { readonly label: string; readonly reason: string }
 export type CompareResult = components['schemas']['CompareResult'];

@@ -836,6 +836,25 @@ describe('HttpMEditClient — getArchiveFile', () => {
   });
 });
 
+describe('HttpMEditClient — getFlaggedPluginHashes', () => {
+  const files = [{ path: '/mods/A/A.esp', flags: { Small: true } }];
+
+  it('posts each plugin file with the flags its manifest sets, and reads the hashes it answers', async () => {
+    const answered = [{ path: '/mods/A/A.esp', hashes: ['AAAAAAAAAAA=', 'BBBBBBBBBBA='] }];
+
+    const { result, request } = await exchange((c) => c.getFlaggedPluginHashes('Fallout4', files), answers(200, answered));
+
+    expect(result).toEqual(answered);
+    expect([request.method, new URL(request.url).pathname, await request.json()]).toEqual(['POST', '/plugin-files/flagged-hashes', { gameRelease: 'Fallout4', files }]);
+  });
+
+  it('fails with mEdit\'s reason when it cannot answer', async () => {
+    const { result } = await exchange((c) => c.getFlaggedPluginHashes('Fallout4', files), answers(400, { detail: '/mods/A/A.esp: not a plugin' }));
+
+    expect(result).toEqual({ failed: 'refused', refusal: '/mods/A/A.esp: not a plugin' });
+  });
+});
+
 describe('HttpMEditClient — a read the request never reaches mEdit with', () => {
   it('fails as unreachable, and files the fetch error in the log alone', async () => {
     const log = leveledLog();

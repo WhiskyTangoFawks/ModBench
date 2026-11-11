@@ -30,9 +30,5 @@ export function packagesAsked(manifest: Manifest): PackagesAsked {
     installationFiles: manifest.packages.flatMap((pkg) => (pkg.kind === 'installationFile' ? [pkg.name] : [])),
     ...manifest.packages.some(({ kind }) => kind === 'gameFolder') ? { gameFiles: [...manifest.files.keys()] } : {},
     ...repository === undefined ? {} : { repository },
-    ...manifest.flags.size === 0 ? {} : { flagged: [...manifest.flags].flatMap(([path, flags]) => {
-      const hash = manifest.files.get(path);
-      return typeof hash === 'string' ? [{ path, hash, flags }] : [];
-    }) },
   };
 }
