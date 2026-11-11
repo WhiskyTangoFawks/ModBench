@@ -64,18 +64,13 @@ describe('feedSourceProblems (source.md, In the text editor, story 6)', () => {
     expect(shown.get('/source/ReferringMod/Refers.esp/Npc.json')?.map(({ clearing }) => clearing)).toEqual([gesture]);
   });
 
-  it('carries no clearing edit on a problem that names no field', async () => {
+  it.each([
+    ['names no field', { fieldPath: null }],
+    ['is a link that was not checked, for it is not known to be missing', { fieldPath: 'Race', uncheckedBecause: 'Unreadable.esp' }],
+  ])('carries no clearing edit on a problem that %s', async (_label, given) => {
     const { answered } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': '{}' });
 
-    const shown = await answered([{ plugin: PLUGIN, problems: [problem({ fieldPath: null })] }]);
-
-    expect(shown.get('/source/ReferringMod/Refers.esp/Npc.json')?.map(({ clearing }) => clearing)).toEqual([undefined]);
-  });
-
-  it('carries no clearing edit on a link that was not checked, for it is not known to be missing', async () => {
-    const { answered } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': '{}' });
-
-    const shown = await answered([{ plugin: PLUGIN, problems: [problem({ fieldPath: 'Race', uncheckedBecause: 'Unreadable.esp' })] }]);
+    const shown = await answered([{ plugin: PLUGIN, problems: [problem(given)] }]);
 
     expect(shown.get('/source/ReferringMod/Refers.esp/Npc.json')?.map(({ clearing }) => clearing)).toEqual([undefined]);
   });

@@ -253,6 +253,19 @@ public sealed class ProblemsPanelTests : IDisposable
     }
 
     [Fact]
+    public void APluginWhoseHeaderTheTreeCannotPlace_AndWhoseLinksAreNotChecked_IsAFailureOfThatPlugin_NotAnEmptyAnswer()
+    {
+        var plugin = new Plugin("Refers.esp");
+        using var index = ReconciledWithPoisoned(Unreadable, new Plugin(Unreadable, CompiledPlugin: false), plugin);
+
+        File.Delete(Path.Combine(Entry(plugin).ModFolderOf(), PluginSourceRoot.For(plugin.Name), "000000_Refers.esp.json"));
+
+        var answer = Assert.Single(Ready(index));
+        Assert.Equal(ProblemsFailureKind.Placement, answer.FailureKind);
+        Assert.Empty(answer.Problems);
+    }
+
+    [Fact]
     public void AnActivePluginThatCannotBeRead_IsNoProblemOnACompiledPluginHoldingNoLink()
     {
         using var index = ReconciledWithPoisoned(Unreadable, new Plugin(Unreadable, CompiledPlugin: false), new Plugin("Clean.esp", RefersTo: null));
@@ -288,7 +301,8 @@ public sealed class ProblemsPanelTests : IDisposable
 
         var answer = Assert.Single(Ready(index));
 
-        Assert.Single(answer.Problems, p => p.FieldPath == "Race");
+        var link = Assert.Single(answer.Problems, p => p.FieldPath == "Race");
+        Assert.Equal(Unreadable, link.UncheckedBecause);
     }
 
     [Fact]
