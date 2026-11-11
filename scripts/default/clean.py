@@ -100,8 +100,8 @@ def _same_plugin(a: medit.Plugin, b: medit.Plugin) -> bool:
 
 
 def _identical_to_master(plugin: medit.Plugin) -> set[str]:
-    overrides = medit.select(
-        f'SELECT form_key FROM records WHERE {_in_plugin(plugin)} AND lower(form_key_plugin) <> lower(plugin)')
+    overrides = list(medit.select(
+        f'SELECT form_key FROM records WHERE {_in_plugin(plugin)} AND lower(form_key_plugin) <> lower(plugin)'))
     if not overrides:
         return set()
     stacks = medit.compare([row['form_key'] for row in overrides], plugin)
@@ -125,7 +125,7 @@ def _removed_with_their_references(plugin: medit.Plugin, identical: set[str]) ->
 
 
 def clean(plugin: medit.Plugin) -> Cleaned:
-    if not medit.select(f"SELECT 1 FROM records WHERE {_in_plugin(plugin)} AND record_type = 'header' AND is_active"):
+    if not list(medit.select(f"SELECT 1 FROM records WHERE {_in_plugin(plugin)} AND record_type = 'header' AND is_active")):
         raise medit.MEditError(f'{plugin.name} is not active, so no record of it has a master to compare with.')
     _warn_of_deleted_navmeshes(plugin)
     undeleted = _undelete_and_disable(plugin)

@@ -28,7 +28,7 @@ public class ParallelPrepareParityTests
         using var index = Indexes.Reconciled(fixture);
         using var mod = Fallout4Mod.CreateFromBinaryOverlay(entry.Path, Fallout4Release.Fallout4);
 
-        var stored = index.Queries.SelectRows($"SELECT form_key, body FROM records WHERE record_type <> '{PluginHeader.RecordType}'").Value().Rows
+        var stored = index.Queries.Selected($"SELECT form_key, body FROM records WHERE record_type <> '{PluginHeader.RecordType}'")
             .ToDictionary(row => row.GetProperty("form_key").GetString().Require(), row => row.GetProperty("body").GetString());
         var expected = mod.EnumerateMajorRecords().ToDictionary(
             record => record.FormKey.ToString(),

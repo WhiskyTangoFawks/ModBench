@@ -61,7 +61,7 @@ public sealed class PersistentIndexTests : IDisposable
 
         using var launched = Launched([alpha]);
 
-        var setting = Assert.Single(launched.Index.Queries.SelectRows("SELECT current_setting('memory_limit') AS memory_limit").Value().Rows);
+        var setting = Assert.Single(launched.Index.Queries.Selected("SELECT current_setting('memory_limit') AS memory_limit"));
         Assert.Equal("953.6 MiB", setting.GetProperty("memory_limit").GetString());
     }
 

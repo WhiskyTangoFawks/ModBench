@@ -293,8 +293,6 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     { name: 'resolveNames', verb: (c) => c.resolveNames([{ name: 'Shared.esp', origin: 'ModA' }, { name: 'SharedNpc' }]),
       ...same([{ plugin: shared }, { formKey: sharedKey, editorId: 'SharedNpc' }]),
       path: '/names/resolve', body: { names: [{ name: 'Shared.esp', origin: 'ModA' }, { name: 'SharedNpc' }] } },
-    { name: 'selectRows', verb: (c) => c.selectRows('SELECT 1'), answer: { rows: [{ n: 1 }] }, reads: [{ n: 1 }],
-      path: '/records/select', body: { sql: 'SELECT 1' } },
   ];
 
   it.each(posts)('$name posts $path once and reads the answer', async ({ verb, answer, reads, path, body }) => {
@@ -446,7 +444,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       { what: 'getComparison(000801:Broken.esp)', verb: (c) => c.getComparison('000801:Broken.esp'), status: 500, detail: 'boom' },
       { what: 'getRecordsComparison', verb: (c) => c.getRecordsComparison([]), status: 400, detail: 'No records.' },
       { what: 'resolveNames', verb: (c) => c.resolveNames([{ name: 'Gone' }]), status: 400, detail: 'Nothing is named "Gone".' },
-      { what: 'selectRows', verb: (c) => c.selectRows('DROP TABLE x'), status: 400, detail: 'Only a SELECT runs.' },
+      { what: 'selectRows', verb: (c) => c.selectRows('DROP TABLE x', 1000), status: 400, detail: 'Only a SELECT runs.' },
       { what: 'getCreatableRecordTypes', verb: (c) => c.getCreatableRecordTypes(), status: 503, detail: cannotAnswer, refusal: 'NoLoadOrder', failed: 'no-load-order' },
       { what: 'getChildRecordTypes(Shared.esp, 000800:Shared.esp)', verb: (c) => c.getChildRecordTypes(shared, sharedKey), status: 503, detail: cannotAnswer, refusal: 'NoLoadOrder', failed: 'no-load-order' },
       { what: 'getRenderedDocument(Shared.esp, 000800:Shared.esp)', verb: (c) => c.getRenderedDocument(shared, sharedKey), status: 503, detail: cannotAnswer, refusal: 'NoLoadOrder', failed: 'no-load-order' },
@@ -541,6 +539,62 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   });
 });
 
+
+describe('HttpMEditClient — selectRows reads the rows as mEdit streams them', () => {
+  const encoded = (text: string) => new TextEncoder().encode(text);
+  const lines = (...sent: unknown[]) => sent.map((line) => `${JSON.stringify(line)}\n`).join('');
+
+  function streaming(text: string, chunkLength = 7) {
+    const cancelled = vi.fn();
+    let at = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull: (controller) => {
+        if (at >= text.length) controller.close();
+        else controller.enqueue(encoded(text.slice(at, at += chunkLength)));
+      },
+      cancel: cancelled,
+    });
+    return { respond: () => Promise.resolve(new Response(body, { status: 200, headers: { 'content-type': 'application/x-ndjson' } })), cancelled };
+  }
+
+  it('posts the statement once and reads each row, split across chunks, to the line that ends them', async () => {
+    const { respond } = streaming(lines({ row: { n: 1 } }, { row: { editor_id: 'a\nb' } }, { end: true }));
+
+    const { result, request } = await exchange((c) => c.selectRows('SELECT 1', 1000), respond);
+
+    expect(result).toEqual([{ n: 1 }, { editor_id: 'a\nb' }]);
+    expect(new URL(request.url).pathname).toBe('/records/select');
+    expect(await request.json()).toEqual({ sql: 'SELECT 1' });
+  });
+
+  it('stops reading, and says the rows outgrew it, once their text passes the length asked for', async () => {
+    const row = { row: { body: 'x'.repeat(40) } };
+    const { respond, cancelled } = streaming(lines(row, row, row, { end: true }));
+
+    const { result } = await exchange((c) => c.selectRows('SELECT body FROM records', 100), respond);
+
+    expect(result).toEqual({ outgrew: true });
+    expect(cancelled).toHaveBeenCalledOnce();
+  });
+
+  it('fails with mEdit\'s reason when a refusal is the last line', async () => {
+    const detail = "mEdit's record index ran out of memory for this read.";
+    const { respond } = streaming(lines({ row: { n: 1 } }, { refusal: 'OutOfMemory', detail }));
+
+    const { result, log } = await exchange((c) => c.selectRows('SELECT 1', 1000), respond);
+
+    expect(result).toEqual({ failed: 'refused', refusal: detail });
+    expect(log.lines.error).toEqual([`[HttpMEditClient] selectRows stopped: ${detail}`]);
+  });
+
+  it('fails when the rows stop before their last line, so part of them never passes for all', async () => {
+    const { respond } = streaming(lines({ row: { n: 1 } }));
+
+    const { result } = await exchange((c) => c.selectRows('SELECT 1', 1000), respond);
+
+    expect(result).toEqual({ failed: 'unreadable', cause: "mEdit's rows stopped before their last line, so they may not be every row the SELECT selects." });
+  });
+});
 
 describe('HttpMEditClient — the record filter', () => {
   it('POSTs the SQL with its source', async () => {

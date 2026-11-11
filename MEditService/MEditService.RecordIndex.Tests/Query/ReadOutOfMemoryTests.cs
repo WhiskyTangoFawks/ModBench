@@ -27,7 +27,7 @@ public sealed class ReadOutOfMemoryTests : IDisposable
     private const string MoreThanAMegabyte = "SELECT n AS form_key FROM range(20000000) t(n) ORDER BY random()";
 
     [Fact]
-    public void ASelectDuckDbRunsOutOfMemoryFor_IsRefusedSayingSo_NotAnsweredAsBadSql()
+    public void ASelectDuckDbRunsOutOfMemoryFor_IsRefusedSayingSo_AndHowToSelectBodies_NotAnsweredAsBadSql()
     {
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
         IndexFiles.Execute(_fixture.InstanceRoot, "SET GLOBAL memory_limit = '1MB'");
@@ -35,6 +35,7 @@ public sealed class ReadOutOfMemoryTests : IDisposable
         var refused = index.Queries.SelectRows(MoreThanAMegabyte).Refused();
 
         Assert.Equal(IndexRefusal.OutOfMemory, refused.Refusal);
+        Assert.EndsWith(" A sort or a join that carries body holds all of it in memory: find the keys on narrow columns, then select body for those keys.", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]

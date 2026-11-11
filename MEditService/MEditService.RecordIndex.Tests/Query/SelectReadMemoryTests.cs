@@ -35,10 +35,10 @@ public sealed class SelectReadMemoryTests : IDisposable
             (Master, () => Items(MasterRecords)),
             (Copies, () => Items(CopiedRecords))), memoryLimit: MemoryLimit);
 
-        var rows = index.Queries.SelectRows($"""
+        var rows = index.Queries.Selected($"""
             SELECT c.form_key FROM records c JOIN records m ON m.form_key = c.form_key AND m.plugin = c.form_key_plugin
             WHERE c.plugin = '{Copies}' AND c.form_key_plugin <> c.plugin AND c.body = m.body
-            """).Value().Rows;
+            """);
 
         Assert.Equal(CopiedRecords, rows.Length);
     }
@@ -50,7 +50,7 @@ public sealed class SelectReadMemoryTests : IDisposable
         using var index = Indexes.Open(holder, new MadeUpAdapter((Master, () => Items(SpillingRecords))), memoryLimit: SpillingLimit);
         index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
 
-        var rows = index.Queries.SelectRows("SELECT count(*) AS n FROM records a JOIN records b ON b.form_key = a.form_key AND b.body = a.body WHERE a.record_type = 'misc'").Value().Rows;
+        var rows = index.Queries.Selected("SELECT count(*) AS n FROM records a JOIN records b ON b.form_key = a.form_key AND b.body = a.body WHERE a.record_type = 'misc'");
 
         Assert.Equal(SpillingRecords, rows.Single().GetProperty("n").GetInt32());
     }

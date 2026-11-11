@@ -405,14 +405,14 @@ public class RegistrationScopingTests
         using var fx = Build("registration-select-inactive");
         fx.Reconcile(fx.WithBetaDisabled);
 
-        var rows = fx.Index.Queries.SelectRows(
-            $"SELECT plugin, is_active FROM npc_ WHERE form_key = '{fx.BetaNpcFk}'").Value().Rows;
+        var rows = fx.Index.Queries.Selected(
+            $"SELECT plugin, is_active FROM npc_ WHERE form_key = '{fx.BetaNpcFk}'");
 
         var row = Assert.Single(rows);
         Assert.Equal(BetaKey.Name, row.GetProperty("plugin").GetString());
         Assert.False(row.GetProperty("is_active").GetBoolean());
-        Assert.True(fx.Index.Queries.SelectRows(
-            $"SELECT is_active FROM records WHERE form_key = '{fx.SharedNpcFk}' AND plugin = '{AlphaKey.Name}'").Value().Rows.Single()
+        Assert.True(fx.Index.Queries.Selected(
+            $"SELECT is_active FROM records WHERE form_key = '{fx.SharedNpcFk}' AND plugin = '{AlphaKey.Name}'").Single()
             .GetProperty("is_active").GetBoolean());
     }
 
@@ -421,7 +421,7 @@ public class RegistrationScopingTests
     {
         using var fx = Build("registration-select-then-filter");
         fx.Reconcile(fx.WithBetaDisabled);
-        fx.Index.Queries.SelectRows("SELECT form_key FROM records").Value();
+        fx.Index.Queries.Selected("SELECT form_key FROM records");
 
         Assert.Equal(0, fx.Index.Matching($"SELECT form_key FROM records WHERE plugin = '{BetaKey.Name}'"));
     }

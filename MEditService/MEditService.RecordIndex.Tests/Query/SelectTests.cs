@@ -14,7 +14,7 @@ public class SelectTests(TestPluginFixture fixture)
     {
         using var index = LoadedIndex();
 
-        var rows = index.Queries.SelectRows("SELECT form_key, editor_id FROM npc_ WHERE editor_id = 'TestNPC01'").Value().Rows;
+        var rows = index.Queries.Selected("SELECT form_key, editor_id FROM npc_ WHERE editor_id = 'TestNPC01'");
 
         var row = Assert.Single(rows);
         Assert.Equal("TestNPC01", row.GetProperty("editor_id").GetString());
@@ -26,7 +26,7 @@ public class SelectTests(TestPluginFixture fixture)
     {
         using var index = LoadedIndex();
 
-        Assert.Equal(TestPluginFixture.RecordCount, index.Queries.SelectRows("SELECT form_key FROM npc_").Value().Rows.Length);
+        Assert.Equal(TestPluginFixture.RecordCount, index.Queries.Selected("SELECT form_key FROM npc_").Length);
     }
 
     [Fact]
@@ -34,7 +34,7 @@ public class SelectTests(TestPluginFixture fixture)
     {
         using var index = LoadedIndex();
 
-        Assert.Equal(TestPluginFixture.RecordCount, index.Queries.SelectRows("SELECT count(*) AS n FROM npc_").Value().Rows.Single().GetProperty("n").GetInt32());
+        Assert.Equal(TestPluginFixture.RecordCount, index.Queries.Selected("SELECT count(*) AS n FROM npc_").Single().GetProperty("n").GetInt32());
     }
 
     [Fact]
@@ -43,7 +43,7 @@ public class SelectTests(TestPluginFixture fixture)
         using var index = LoadedIndex();
         index.SetFilter("SELECT 'NonExistentFormKey:000000' AS form_key", "filter.sql");
 
-        Assert.Equal(TestPluginFixture.RecordCount, index.Queries.SelectRows("SELECT form_key FROM npc_").Value().Rows.Length);
+        Assert.Equal(TestPluginFixture.RecordCount, index.Queries.Selected("SELECT form_key FROM npc_").Length);
     }
 
     [Fact]
@@ -52,7 +52,7 @@ public class SelectTests(TestPluginFixture fixture)
         using var index = LoadedIndex();
         index.SetFilter("SELECT 'NonExistentFormKey:000000' AS form_key", "kept.sql");
 
-        index.Queries.SelectRows("SELECT form_key FROM npc_").Value();
+        index.Queries.Selected("SELECT form_key FROM npc_");
 
         Assert.Equal("kept.sql", index.Queries.GetFilter().Value()?.Source);
     }
@@ -93,7 +93,7 @@ public class SelectTests(TestPluginFixture fixture)
     {
         using var index = LoadedIndex();
 
-        var columns = index.Queries.SelectRows("SELECT view_name, column_name FROM view_columns").Value().Rows
+        var columns = index.Queries.Selected("SELECT view_name, column_name FROM view_columns")
             .Select(row => (row.GetProperty("view_name").GetString(), row.GetProperty("column_name").GetString())).ToList();
 
         Assert.Contains(("records", "is_active"), columns);
