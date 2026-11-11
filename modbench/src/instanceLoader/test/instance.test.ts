@@ -1225,11 +1225,12 @@ describe('Instance — what each flagged plugin could have held before its flags
     await mkdir(folder);
     await writeManifestIn(folder, { packages: [], exclude: [], ignore: [], flags: new Map(Object.entries(flagsOf)), files: new Map(Object.keys(flagsOf).map((path) => [path, COPY])) });
     let stamp = 1n;
+    const modPlugin = fileIn(folder, 'Mod.esp');
     const made = loader(
-      { mods: [mod('A')], modFolders: modFoldersIn(mods, 'A'), modFiles: new Map([['A', { origin: 'A', folder, files: [fileIn(folder, 'Mod.esp'), fileIn(folder, 'Other.esp')], folders: [], notes: [] }]]), holdsRepository },
+      { mods: [mod('A')], modFolders: modFoldersIn(mods, 'A'), modFiles: new Map([['A', { origin: 'A', folder, files: [modPlugin, fileIn(folder, 'Other.esp')], folders: [], notes: [] }]]), holdsRepository },
       (adapter) => ({ ...adapter, fileStamp: () => Promise.resolve({ kind: 'read', answer: { size: 1n, modifiedNs: stamp } }) }),
     );
-    return { ...made, plugin: join(folder, 'Mod.esp'), touch: () => { stamp += 1n; } };
+    return { ...made, plugin: modPlugin.sourcePath, touch: () => { stamp += 1n; } };
   }
 
   const asked = (medit: InMemoryMEditClient) => medit.calls.filter((call) => call.method === 'getFlaggedPluginHashes').map((call) => call.args);
