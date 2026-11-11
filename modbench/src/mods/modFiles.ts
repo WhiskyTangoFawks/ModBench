@@ -1,7 +1,7 @@
 // mods.md, A row, File and folder: a mod's or Overwrite's files, as a folder tree.
 
 import * as vscode from 'vscode';
-import type { FileOrigin, OriginFile, OriginFolder } from '../instanceLoader/instance';
+import type { FileOrigin, InstanceValue, OriginFile, OriginFolder } from '../instanceLoader/instance';
 import { originLabel, type FileOrderConflict } from '../instanceLoader/fileConflictIndex';
 import type { ModlistNode } from './ModListProvider';
 import type { OriginFileMark, OriginFileRef } from '../modCommands/modCommands';
@@ -160,11 +160,18 @@ function openingIntoItsFiles(row: FileNode, entries: readonly ArchivedEntry[], s
   return row;
 }
 
-function archivedRow(row: vscode.TreeItem, parent: ModlistNode, archive: FileNode, name: string, path: string): void {
+/** The path of the loose file in the game folder that wins over every archived copy of `entry`: a mod's loose copy
+ *  overlays the game folder's, so there is none while one exists. */
+export function gameFolderFileOver(value: Pick<InstanceValue, 'dataFolderFiles' | 'stackedCopies'>, entry: string): string | undefined {
+  if (value.dataFolderFiles.kind !== 'listed' || value.stackedCopies.get(entry)?.copies[0]?.at.kind !== 'archived') return undefined;
+  return value.dataFolderFiles.files.get(entry.toLowerCase())?.path;
+}
+
+function archivedRow(row: vscode.TreeItem, parent: ModlistNode, archive: FileNode, name: string, path: string, gameFolderFile?: string): void {
   const inMod = `${archive.file.relativePath}/${path}`;
   row.id = `${parent.id}/${name}`;
   row.resourceUri = fileRowUri(archive.origin, inMod);
-  row.tooltip = inMod;
+  row.tooltip = gameFolderFile === undefined ? inMod : `${inMod}\nwon by the game folder: ${gameFolderFile}`;
 }
 
 /** A folder in an archive, and the files below it. */
@@ -188,9 +195,10 @@ export class ArchivedFileNode extends vscode.TreeItem {
   readonly kind = 'archivedFile' as const;
   constructor(
     public readonly parent: FileNode | ArchivedFolderNode, public readonly archive: FileNode, public readonly path: string, name: string, gameRelease: string | undefined,
+    gameFolderFile?: string,
   ) {
     super(name, vscode.TreeItemCollapsibleState.None);
-    archivedRow(this, parent, archive, name, path);
+    archivedRow(this, parent, archive, name, path, gameFolderFile);
     this.contextValue = this.kind;
     if (gameRelease === undefined) return;
     const uri = archivedFileUri({ gameRelease, archive: archive.file.sourcePath, file: path });
@@ -199,14 +207,14 @@ export class ArchivedFileNode extends vscode.TreeItem {
 }
 
 /** The folders, then the files, directly in an archive or a folder in it, each by name. */
-export function archivedIn(parent: FileNode | ArchivedFolderNode, matches: NameMatch, gameRelease: string | undefined): (ArchivedFolderNode | ArchivedFileNode)[] {
+export function archivedIn(parent: FileNode | ArchivedFolderNode, matches: NameMatch, gameRelease: string | undefined, gameFolderFileOf: (entry: string) => string | undefined): (ArchivedFolderNode | ArchivedFileNode)[] {
   const [archive, prefix, { entries, shown }] = parent instanceof FileNode
     ? [parent, '', parent.archived ?? { entries: [], shown: 'all' as const }]
     : [parent.archive, `${parent.path}/`, parent];
   const { here, below } = byLevel(entries, prefix);
   return [
     ...[...below].sort(byName).map(([name, under]) => new ArchivedFolderNode(parent, archive, `${prefix}${name}`, under, name, shownUnder(shown, matches, name))),
-    ...[...here].sort(byName).map(([name, entry]) => new ArchivedFileNode(parent, archive, entry.relativePath, name, gameRelease)),
+    ...[...here].sort(byName).map(([name, entry]) => new ArchivedFileNode(parent, archive, entry.relativePath, name, gameRelease, gameFolderFileOf(entry.relativePath))),
   ];
 }
 
