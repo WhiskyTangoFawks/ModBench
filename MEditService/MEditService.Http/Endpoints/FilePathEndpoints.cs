@@ -12,7 +12,7 @@ internal static class FilePathEndpoints
             .WithDescription(
                 "The path in the Data folder that a value names in the member at a field path of a record type, as Mutagen's asset " +
                 "type places it, the folder it keeps the files of its kind in included, with forward slashes. Needs no index. 400 when the record type " +
-                "or the member is unknown or the member holds no path to a file.")
+                "or the member is unknown, or the member holds no path to a file, or its asset type cannot hold the path.")
             .Produces<ResolvedFilePath>()
             .ProducesProblem(400);
 
@@ -24,9 +24,16 @@ internal static class FilePathEndpoints
         if (EndpointMapping.ParseGameRelease(req.GameRelease, out var release) is { } releaseErr) return releaseErr;
         if (!schemas.GetSchemas(release).TryGetValue(req.RecordType, out var schema))
             return EndpointMapping.BadRequest($"{release} has no record type '{req.RecordType}'.");
-        return AssetPaths.DataPathAt(schema.RecordColumns, req.FieldPath, req.Value) is { } dataPath
-            ? Results.Ok(new ResolvedFilePath(dataPath.Replace('\\', '/')))
-            : EndpointMapping.BadRequest($"'{req.FieldPath}' of '{req.RecordType}' holds no path to a file.");
+        try
+        {
+            return AssetPaths.DataPathAt(schema.RecordColumns, req.FieldPath, req.Value) is { } dataPath
+                ? Results.Ok(new ResolvedFilePath(dataPath.Replace('\\', '/')))
+                : EndpointMapping.BadRequest($"'{req.FieldPath}' of '{req.RecordType}' holds no path to a file.");
+        }
+        catch (Exception e) when (e is not (OperationCanceledException or OutOfMemoryException))
+        {
+            return EndpointMapping.BadRequest(e.Message);
+        }
     }
 }
 

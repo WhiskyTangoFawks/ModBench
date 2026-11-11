@@ -18,6 +18,14 @@ public sealed class FilePathResolveApiTests(LoadedApiFixture<TestPluginFixture> 
         Assert.Equal("Textures/Decals/Stain_d.dds", (await response.Body()).GetProperty("dataPath").GetString());
     }
 
+    [Fact]
+    public async Task APathItsAssetTypeCannotHold_Is400()
+    {
+        var response = await Resolve("txst", "Diffuse", "Data/Stain_d.dds");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     [Theory]
     [InlineData("txst", "EditorID")]
     [InlineData("txst", "Nope")]

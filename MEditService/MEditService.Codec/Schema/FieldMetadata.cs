@@ -104,8 +104,8 @@ public record FieldMetadata(
     // pairs with the nth in every other column. The compare reads it; the webview never does.
     [property: JsonIgnore] IReadOnlyList<string>? ExtendedKeyMembers = null)
 {
-    /// <summary>The folder in the Data folder that an asset link keeps its files in, on a member that is one.</summary>
-    internal string? AssetFolder { get; init; }
+    /// <summary>The Mutagen asset link type, on a member that is one.</summary>
+    internal Type? AssetLinkType { get; init; }
 
     /// <summary>A read-only member has no writable members of its own, so its reason reaches every
     /// member below it, except one that already names its own.</summary>
