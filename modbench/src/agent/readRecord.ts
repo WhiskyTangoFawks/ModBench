@@ -14,6 +14,7 @@ import { Refusal } from '../drivingLib/refusal';
 import { renderedCopy } from '../drivingLib/renderedCopy';
 import { pluginsNamed } from './names';
 import { formKeysNamed } from './recordNames';
+import { fitting } from './tooLarge';
 
 const RECORD = {
   name: z.string(),
@@ -113,9 +114,13 @@ export const READ_RECORD = {
       const copy = await copyOf(mEdit, { formKey, plugin: copyAddress });
       return 'refused' in copy ? { plugin: copyAddress, isWinner, reason: copy.refused } : { plugin: copyAddress, isWinner, ...standingOf(plugins, comparison, copied, NO_STANDING), ...copy };
     }));
-    const reasons = entries.flatMap((entry) => ('reason' in entry ? [entry.reason] : []));
-    if (reasons.length > 0) throw new Refusal(reasons.join(' '), entries);
-    return entries;
+    const fitted = fitting(entries, (copies) => ({
+      copies: copies.map((entry) => ({ plugin: entry.plugin, isWinner: entry.isWinner, chars: JSON.stringify(entry).length })),
+      narrow: 'plugin narrows the read to one copy.',
+    }));
+    const reasons = fitted.flatMap((entry) => ('reason' in entry ? [entry.reason] : []));
+    if (reasons.length > 0) throw new Refusal(reasons.join(' '), fitted);
+    return fitted;
   },
 };
 
@@ -126,6 +131,9 @@ export const LIST_REFERENCES = {
     const [formKey = ''] = await formKeysNamed(mEdit, [name]);
     const referrers = await mEdit.getReferences(formKey);
     if (isReadFailed(referrers)) throw new Refusal(failureReason(referrers));
-    return referrers;
+    return fitting(referrers, (all) => ({
+      references: all.length,
+      narrow: `select_rows reads them as the rows of the form_references view whose target_form_key is ${formKey}, which its WHERE narrows further.`,
+    }));
   },
 };

@@ -42,6 +42,7 @@ import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, type PluginAddress } from
 import type { PluginShown, PluginsShown } from '../../drivingLib/pluginsShown';
 import { TOOL_DESCRIPTIONS } from '../instructions/tools';
 import { INSTANCE_GUIDE_BY_MANAGER } from '../instructions/guides';
+import { REPLY_CHARS } from '../tooLarge';
 
 const PORT_SETTING = 'modbench.agent.port';
 
@@ -404,6 +405,58 @@ describe('the agent server, given an instance value', () => {
     });
   });
 
+  describe('a list the filter narrows', () => {
+    const rule = (filename: string): (typeof sortingRead.rules)[number] => ({ level: 'info', reason: `${filename} is dirty.`, plugins: [{ origin: 'Big Rocks', filename }] });
+    const inRepository = {
+      ...VALUE, holdsRepository: true,
+      modFolders: ['Big Rocks', 'Other'].map((name) => ({ kind: 'mod' as const, name, path: `/i/mods/${name}`, modName: name })),
+    };
+
+    it.each([
+      ['list_mods', VALUE, 'ROCK', [{ kind: 'mod', name: 'Big Rocks', enabled: false }]],
+      ['list_plugins', { ...VALUE, pluginsLoadedWithNoLine: [] }, 'b.', { plugins: [{ name: 'B.esp', origin: 'Big Rocks', line: 1, enabled: false, winning: true, ...NOT_READ }] }],
+      ['list_downloads', VALUE, 'ROCKS.7', [expect.objectContaining({ name: 'rocks.7z' }) as unknown]],
+      ['list_mod_statuses', inRepository, 'rock', [{ mods: ['Big Rocks'], noManifest: true }]],
+      ['list_sorting_rules', VALUE, 'a.esp', { rules: [{ rule: 'A.esp is dirty.', level: 'info', plugins: [{ name: 'A.esp', origin: 'Big Rocks' }] }] }],
+    ])('%s keeps what holds the filter, in any case', async (tool, value, filter, kept) => {
+      statusRead.answer = [status('Big Rocks', { noManifest: true }), status('Other', { noManifest: true })];
+      sortingRead.rules = [rule('A.esp'), rule('B.esp')];
+      const { client } = await clientOf(new FakeInstance(value));
+
+      expect(await read(client, tool, { filter })).toEqual(kept);
+    });
+
+    it.each([
+      ['list_mods', 'mods', 'the mods and separators whose name holds it'],
+      ['list_plugins', 'plugins', 'the plugins whose name holds it'],
+      ['list_downloads', 'downloads', 'the downloaded files whose name or displayName holds it'],
+      ['list_mod_statuses', 'mods', 'the mods whose name holds it'],
+      ['list_sorting_rules', 'rules', 'the rules that name a plugin whose name holds it'],
+    ])('%s too large for one reply says how many %s it holds, and which of them filter keeps', async (tool, what, keeps) => {
+      const names = Array.from({ length: 500 }, (_, n) => `${'Long Name '.repeat(10)}${n}`);
+      const mods = names.map((name) => ({ kind: 'mod' as const, name, enabled: true }));
+      const download = present(VALUE.downloadedFiles.kind === 'listed' ? VALUE.downloadedFiles.rows[0] : undefined, 'a downloaded file');
+      const value = instanceValueFixture({
+        mods, holdsRepository: true, pluginsLoadedWithNoLine: [],
+        modFolders: names.map((name) => ({ kind: 'mod', name, path: `/i/mods/${name}`, modName: name })),
+        plugins: names.map((name, line) => ({ name: `${name}.esp`, path: `/m/${name}.esp`, origin: name, line, enabled: true, winning: true })),
+        downloadedFiles: { kind: 'listed', rows: names.map((name) => ({ ...download, name: `${name}.7z` })) },
+      });
+      statusRead.answer = names.map((name) => status(name, { noManifest: true }));
+      sortingRead.rules = names.map((name) => rule(`${name}.esp`));
+      const { client } = await clientOf(new FakeInstance(value));
+
+      const { isError, text } = await call(client, tool);
+
+      expect(isError).toBe(true);
+      expect(JSON.parse(text)).toEqual({
+        tooLarge: `The reply passes the ${REPLY_CHARS} characters that one reply holds.`,
+        [what]: tool === 'list_mods' ? 501 : 500,
+        narrow: `filter keeps ${keeps}, in any case.`,
+      });
+    });
+  });
+
   describe('reading each mod\'s status against its manifest', () => {
     const inRepository = new FakeInstance({
       ...VALUE, holdsRepository: true,
@@ -568,6 +621,28 @@ describe('the agent server, given an instance value', () => {
     });
   });
 
+  it('answers problems too large for one reply with their counts by mod or folder, and that paths narrows the read', async () => {
+    const problem = { severity: 0, range: { start: { line: 0 } }, message: 'x'.repeat(200), source: 'Modbench' };
+    diagnosticsHeld.held = [
+      [{ scheme: 'file', fsPath: '/i/mods/A/a.esp' }, Array.from({ length: 100 }, () => problem)],
+      [{ scheme: 'file', fsPath: '/i/mods/A/sub/b.json' }, Array.from({ length: 50 }, () => problem)],
+      [{ scheme: 'file', fsPath: '/s/Rocks/plugin-source/r.json' }, Array.from({ length: 70 }, () => problem)],
+      [{ scheme: 'file', fsPath: '/d/Data/stray.esp' }, [problem]],
+    ];
+    const paths = { overwriteDir: '/i/overwrite', downloadsDir: undefined, modDirs: new Map([['A', '/i/mods/A']]), sourceDirs: new Map([['Rocks', '/s/Rocks']]) };
+    const { client } = await clientOf(new FakeInstance(instanceValueFixture({ paths })));
+
+    const { isError, text } = await call(client, 'list_problems');
+
+    expect(isError).toBe(true);
+    expect(JSON.parse(text)).toEqual({
+      tooLarge: `The reply passes the ${REPLY_CHARS} characters that one reply holds.`,
+      problems: 221,
+      byFolder: [{ path: '/i/mods/A', problems: 150 }, { path: '/s/Rocks', problems: 70 }, { path: '/d/Data', problems: 1 }],
+      narrow: 'paths narrows the read to the files and folders you name.',
+    });
+  });
+
   it('reads the value as it stands on each request', async () => {
     const instance = new FakeInstance(VALUE);
     const { client } = await clientOf(instance);
@@ -677,6 +752,29 @@ const CONFLICTED = instanceValueFixture({
 });
 
 describe('the agent server, reading file order conflicts', () => {
+  describe('too large for one reply', () => {
+    const mods: ModlistEntry[] = [{ kind: 'mod', name: 'Big', enabled: true }, { kind: 'mod', name: 'A', enabled: true }];
+    const index = buildFileConflictIndex(mods, [], new Map(Object.entries({
+      Big: Array.from({ length: 1000 }, (_, n) => `meshes/${'deep/'.repeat(10)}${n}.nif`), A: ['a.esp'],
+    }).map(([name, paths]) => [name, { origin: name, folder: '/m', files: paths.map((path) => fileIn('/m', path)), folders: [], notes: [] }])));
+    const value = instanceValueFixture({ mods, filesByMod: index.filesByMod, files: index.files, stackedCopies: stackCopies(index, [], 'Fallout4') });
+    const narrow = 'mods narrows the read to the mods you name.';
+
+    it.each([
+      ['every mod, with how many mods', undefined, { mods: 2, narrow }],
+      ['the mods named, with each one\'s counts', [{ name: 'Big' }, { name: 'A' }], {
+        byMod: [{ kind: 'mod', mod: 'Big', wins: 0, loses: 0, files: 1000 }, { kind: 'mod', mod: 'A', wins: 0, loses: 0, files: 1 }], narrow,
+      }],
+    ])('answers a read of %s, and that mods narrows the read', async (_case, named, correction) => {
+      const { client } = await clientOf(new FakeInstance(value));
+
+      const { isError, text } = await call(client, 'list_file_conflicts', named === undefined ? {} : { mods: named });
+
+      expect(isError).toBe(true);
+      expect(JSON.parse(text)).toEqual({ tooLarge: `The reply passes the ${REPLY_CHARS} characters that one reply holds.`, ...correction });
+    });
+  });
+
   it('reads, for each mod, the files it wins over which mods and the files it loses to which winner', async () => {
     const { client } = await clientOf(new FakeInstance(CONFLICTED));
 
@@ -953,24 +1051,32 @@ describe('the agent server, selecting records through mEdit', () => {
   it('hands mEdit the statement as given and answers the rows it selects', async () => {
     const mEdit = new InMemoryMEditClient();
     const rows = [{ editorId: 'SharedNpc' }];
-    mEdit.setQueryAnswer('selectRows', rows);
+    mEdit.setQueryAnswer('selectRows', { rows, more: false });
     const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
 
     const answered = await read(client, 'select_rows', { sql: 'SELECT editorId FROM records' });
 
-    expect(mEdit.calls).toContainEqual({ method: 'selectRows', args: ['SELECT editorId FROM records', expect.any(Number)] });
+    expect(mEdit.calls).toContainEqual({ method: 'selectRows', args: ['SELECT editorId FROM records', REPLY_CHARS] });
     expect(answered).toEqual(rows);
   });
 
-  it('refuses rows that outgrow one reply, naming a Modbench script as the way to read them all', async () => {
+  it('answers rows too large for one reply with how many it read, each column\'s average size, the first rows cut, and a Modbench script', async () => {
     const mEdit = new InMemoryMEditClient();
-    mEdit.setQueryAnswer('selectRows', { outgrew: true });
+    const rows = [1, 2, 3, 4].map((n) => ({ editor_id: `Npc${n}`, body: 'x'.repeat(300 * n) }));
+    mEdit.setQueryAnswer('selectRows', { rows, more: true });
     const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
 
-    const { isError, text } = await call(client, 'select_rows', { sql: 'SELECT body FROM records' });
+    const { isError, text } = await call(client, 'select_rows', { sql: 'SELECT editor_id, body FROM records' });
 
     expect(isError).toBe(true);
-    expect(text).toContain('Modbench script');
+    const cut = `${'x'.repeat(100)}…`;
+    expect(JSON.parse(text)).toEqual({
+      tooLarge: `The reply passes the ${REPLY_CHARS} characters that one reply holds.`,
+      read: 4, more: true,
+      averageChars: { editor_id: 4, body: 750 },
+      first: [{ editor_id: 'Npc1', body: cut }, { editor_id: 'Npc2', body: cut }, { editor_id: 'Npc3', body: cut }],
+      script: 'A Modbench script reads every row through medit.select.',
+    });
   });
 
   it('refuses with the database\'s reason', async () => {
@@ -1028,6 +1134,33 @@ describe('the agent server, reading a record through mEdit', () => {
       { plugin: { name: 'A.esp' }, fields: [{ field: 'Name', conflictAll: 'Conflict', conflictThis: 'ConflictLoses' }, { field: 'Weight', conflictThis: 'Master' }] },
       { plugin: { name: 'B.esp' }, fields: [{ field: 'Name', conflictAll: 'Conflict', conflictThis: 'ConflictWins', children: [{ field: 'Full', conflictAll: 'Override', conflictThis: 'Override' }] }, { field: 'Weight', conflictAll: 'Override', conflictThis: 'Override' }] },
     ]);
+  });
+
+  it('answers copies too large for one reply with each copy\'s plugin and size, and that plugin narrows the read to one copy', async () => {
+    const mEdit = new InMemoryMEditClient();
+    mEdit.setQueryAnswer('resolveNames', NPC);
+    mEdit.setQueryAnswer('getPlugins', PLUGINS);
+    mEdit.setQueryAnswer('getComparison', {
+      ...COPIES,
+      diffs: Array.from({ length: 500 }, (_, n) => ({
+        fieldName: `${'Field'.repeat(10)}${n}`, values: {}, winnerColumn: '', noWinner: false, conflictAll: 'Override', cellStates: { 'B.esp|Big Rocks': 'Override' },
+      })),
+    });
+    mEdit.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/s/x.json' });
+    const { client } = await clientOf(new FakeInstance(ENABLED), mEdit);
+
+    const { isError, text } = await call(client, 'read_record', { name: 'SharedNpc' });
+
+    expect(isError).toBe(true);
+    const size = expect.any(Number) as unknown;
+    expect(JSON.parse(text)).toEqual({
+      tooLarge: `The reply passes the ${REPLY_CHARS} characters that one reply holds.`,
+      copies: [
+        { plugin: { name: 'A.esp', origin: 'Big Rocks' }, isWinner: false, chars: size },
+        { plugin: { name: 'B.esp', origin: 'Big Rocks' }, isWinner: true, chars: size },
+      ],
+      narrow: 'plugin narrows the read to one copy.',
+    });
   });
 
   it('answers the status the record panel\'s column header shows, from the plugin mEdit lists and where the instance stands on it', async () => {
@@ -1186,6 +1319,23 @@ describe('the agent server, reading a record through mEdit', () => {
     const { client } = await clientOf(new FakeInstance(ENABLED), mEdit);
 
     expect(await call(client, 'read_record', { name: 'SharedNpc', plugin: { name: 'A.esp' } })).toEqual({ isError: true, text: 'A.esp (Big Rocks) holds no 000800:A.esp.' });
+  });
+
+  it('answers references too large for one reply with how many there are, and the SQL view select_rows narrows them in', async () => {
+    const mEdit = new InMemoryMEditClient();
+    mEdit.setQueryAnswer('resolveNames', NPC);
+    mEdit.setQueryAnswer('getReferences', Array.from({ length: 600 }, (_, n) => (
+      { formKey: `${(0x900 + n).toString(16)}:B.esp`, plugin: 'B.esp', origin: 'Big Rocks', fieldPath: 'Items\\Item\\Reference', recordType: 'LVLI', recordTypeName: 'Leveled Item' })));
+    const { client } = await clientOf(new FakeInstance(ENABLED), mEdit);
+
+    const { isError, text } = await call(client, 'list_references', { name: 'SharedNpc' });
+
+    expect(isError).toBe(true);
+    expect(JSON.parse(text)).toEqual({
+      tooLarge: `The reply passes the ${REPLY_CHARS} characters that one reply holds.`,
+      references: 600,
+      narrow: 'select_rows reads them as the rows of the form_references view whose target_form_key is 000800:A.esp, which its WHERE narrows further.',
+    });
   });
 
   it('refuses a name that is not a record', async () => {

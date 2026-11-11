@@ -10,6 +10,7 @@ import type { ArchivedCopies } from '../drivingLib/archivedCopies';
 import { Refusal } from '../drivingLib/refusal';
 import type { ConflictCellState, ConflictRowState } from '../wire/conflictTable';
 import { CONTAINER_NAME, containersNamed, originOf, type ContainerName } from './names';
+import { fitting } from './tooLarge';
 
 interface Contents {
   state: ConflictCellState | null;
@@ -90,6 +91,11 @@ export const FILE_CONFLICTS = {
     const separator = named.find(({ kind }) => kind === 'separator');
     if (separator !== undefined) throw new Refusal(`"${separator.name}" is a separator; it has no files.`);
     const wanted = named.map(originOf);
-    return conflictsOf(value, wanted, await contentsIn(value, reads, archived, wanted));
+    return fitting(conflictsOf(value, wanted, await contentsIn(value, reads, archived, wanted)), (rows) => ({
+      ...mods === undefined
+        ? { mods: rows.length }
+        : { byMod: rows.map(({ kind, mod, wins, loses, files }) => ({ kind, mod, wins: wins.length, loses: loses.length, files: files.length })) },
+      narrow: 'mods narrows the read to the mods you name.',
+    }));
   },
 };

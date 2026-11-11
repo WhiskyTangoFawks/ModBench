@@ -19,11 +19,7 @@ internal sealed class StreamedRows(ReadContext read, DuckDBCommand command, IRea
     public string? Next()
     {
         _reader ??= StoreFaults.Translating(command.ExecuteReader);
-        if (!StoreFaults.Translating(_reader.Read))
-        {
-            RequireEveryRowRead();
-            return null;
-        }
+        if (!StoreFaults.Translating(_reader.Read)) return null;
         var row = new StringBuilder("{");
         for (var i = 0; i < columns.Count; i++)
         {
@@ -36,20 +32,6 @@ internal sealed class StreamedRows(ReadContext read, DuckDBCommand command, IRea
     }
 
     private static string Encoded(string text) => $"\"{JsonEncodedText.Encode(text, JavaScriptEncoder.UnsafeRelaxedJsonEscaping)}\"";
-
-    // DuckDB.NET's reader ends a streamed result at a chunk DuckDB failed to produce as though its rows had ended, and
-    // keeps the reason to itself. The failure aborted the read's transaction, which the next query shows.
-    private void RequireEveryRowRead()
-    {
-        try
-        {
-            read.Scalar<int>("SELECT 1");
-        }
-        catch (IndexFaultException ex) when (ex.Fault != IndexFault.Invalidated)
-        {
-            throw new IndexFaultException("DuckDB stopped the SELECT partway, and its .NET driver does not say why.", ex) { Fault = IndexFault.Refused };
-        }
-    }
 
     public void Dispose()
     {
