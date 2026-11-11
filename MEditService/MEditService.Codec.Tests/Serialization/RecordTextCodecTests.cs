@@ -281,12 +281,15 @@ public class RecordTextCodecTests
         Assert.Contains("Modele", collapsed.Text, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void AStringHoldingNoText_CollapsesToTheEmptyText_ThatANonLocalizedPluginWritesForIt()
+    [Theory]
+    [InlineData("")]
+    [InlineData(",\"Values\":[]")]
+    public void AStringHoldingNoTextInAnyLanguage_CollapsesToTheEmptyText_ThatANonLocalizedPluginWritesForIt(string emptyValues)
     {
         var weapon = MakeWeapon();
         weapon.Name = new TranslatedString(Language.English);
-        var text = RecordTextCodec.SerializeToText(weapon, GameRelease.Fallout4);
+        var text = RecordTextCodec.SerializeToText(weapon, GameRelease.Fallout4)
+            .Replace("\"TargetLanguage\": \"English\"", "\"TargetLanguage\": \"English\"" + emptyValues, StringComparison.Ordinal);
 
         var collapsed = TranslatedStringValues.InLanguage(text, Language.English, GameRelease.Fallout4, "WEAP");
 

@@ -73,15 +73,24 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         var modPath = new ModPath(plugin.Path);
-        return Opened<IPluginRecords>(modPath, plugin.Strings, loadOrder, loaded =>
-            new ModRecordLookup(
+        return Opened<Answer<IPluginRecords, PluginFailure>>(modPath, plugin.Strings, loadOrder, loaded =>
+        {
+            // A read of a string whose file is missing answers no text, so a copy of it would land the loss.
+            if (LocalizedStrings.FindMissingStringsFile(
+                    loaded.Getter, modPath, plugin.Strings, loadOrder, loadOrder.GameRelease, loadOrder.StringsLanguage) is { } missing)
+            {
+                loaded.Dispose();
+                return new PluginFailure.MissingStrings(missing);
+            }
+            return new ModRecordLookup(
                 loaded.Getter, new PluginRecordBytes(modPath, loadOrder), schemas,
                 () => _facts.Of(plugin.Path, MasterStyles.Fingerprint(modPath, loadOrder), () =>
                 {
                     using var own = OpenForRead(modPath, loadOrder.GameRelease, plugin.Strings, loadOrder, loadOrder.StringsLanguage);
                     return PluginRecordFacts.Of(own.Getter, new PluginRecordBytes(modPath, loadOrder));
                 }),
-                loaded));
+                loaded);
+        }).Then(opened => opened);
     }
 
     private static Answer<T, PluginFailure> Opened<T>(

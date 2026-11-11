@@ -44,7 +44,7 @@ public static class TranslatedStringValues
         var unresolved = new List<string>();
         foreach (var (path, translated) in TranslatedStrings(root, "").ToList())
         {
-            JsonNode? value = translated["Values"] is null ? JsonValue.Create("") : EntryIn(translated, language)?["String"];
+            JsonNode? value = HoldsNoText(translated) ? JsonValue.Create("") : EntryIn(translated, language)?["String"];
             if (value is null)
             {
                 unresolved.Add(path);
@@ -102,6 +102,10 @@ public static class TranslatedStringValues
         return readOnlyReason is null ? shape : shape.WithReadOnlyReason(readOnlyReason);
     }
 
+    /// <summary>A string no language gives text, which Mutagen writes as one with no strings entry.</summary>
+    private static bool HoldsNoText(JsonObject translated) =>
+        translated["Value"] is null && translated["Values"] is not JsonArray { Count: > 0 };
+
     internal static string? TextIn(JsonObject translated, Language language) =>
         translated["Value"] is JsonValue one && one.TryGetValue<string>(out var text)
             ? text
@@ -129,7 +133,7 @@ public static class TranslatedStringValues
         switch (node)
         {
             case JsonObject obj:
-                if (obj.ContainsKey("TargetLanguage") && (obj["Values"] is JsonArray || !obj.ContainsKey("Value"))) yield return (path, obj);
+                if (obj.ContainsKey("TargetLanguage") && (obj["Values"] is JsonArray || HoldsNoText(obj))) yield return (path, obj);
                 foreach (var (name, child) in obj)
                 {
                     if (child is null) continue;
