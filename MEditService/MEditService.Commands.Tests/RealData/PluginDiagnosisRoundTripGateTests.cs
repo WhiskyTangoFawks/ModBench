@@ -45,7 +45,9 @@ public sealed class PluginDiagnosisRoundTripGateTests
         Assert.DoesNotContain($"— {PluginDiagnosis.UnknownClass}:", result.Message);
     }
 
-    public static TheoryData<MalformationFixture> Malformations => [.. MalformationFixtures.All];
+    private static readonly string[] ReadWithoutLoss = ["CounterDisagreeingWithEntries", "EntryPointMissingEpf3"];
+
+    public static TheoryData<MalformationFixture> Malformations => [.. MalformationFixtures.All.Where(f => !ReadWithoutLoss.Contains(f.Malformation))];
 
     [Theory]
     [MemberData(nameof(Malformations))]

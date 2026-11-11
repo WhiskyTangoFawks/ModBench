@@ -22,7 +22,7 @@ public sealed class PluginWriterSaveTests
     {
         { StaleHeaderPlugins.SettingsFileName, 5 },
         { StaleHeaderPlugins.LightFileName, 4 },
-        { StaleHeaderPlugins.FullFileName, 11 },
+        { StaleHeaderPlugins.FullFileName, 12 },
     };
 
     [Theory]

@@ -33,6 +33,10 @@ case "${1:-}" in
       > "${2:-/tmp/modbench-windows.png}"
     ;;
   sync)
+    # MEditService/nuget.config reads the feed at ../../mutagen-feed, which in the VM is C:\work\mutagen-feed.
+    feed="$(readlink -f "$HERE/../../../../mutagen-feed")"
+    (cd "$feed" && tar -cf - ./*-modbench-dev.*.nupkg) \
+      | "$HERE/vm.sh" ssh "New-Item -ItemType Directory -Force C:\work\mutagen-feed | Out-Null; tar -xf - -C C:\work\mutagen-feed"
     root="$(git -C "$HERE" rev-parse --show-toplevel)"
     (cd "$root" && git ls-files -z -co --exclude-standard | while IFS= read -r -d '' f; do if [[ -f $f ]]; then printf '%s\0' "$f"; fi; done | tar --format=pax --null -cf - -T -) \
       | "$HERE/vm.sh" ssh "Remove-Item -Recurse -Force $STAGE -ErrorAction SilentlyContinue; New-Item -ItemType Directory $STAGE | Out-Null; tar -xf - -C $STAGE"

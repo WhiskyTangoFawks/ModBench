@@ -27,6 +27,8 @@ Set-ExecutionPolicy RemoteSigned -Scope CurrentUser   # npm runs in PowerShell o
 
 Install the extension's dependencies once with `npm ci` in `modbench/`. [CLAUDE.md](CLAUDE.md) § Tools has the commands to build and test.
 
+MEditService restores Mutagen from a `mutagen-feed` folder beside the repository. A worktree under `.claude/worktrees/` also needs a `.claude/worktrees/mutagen-feed` symlink to it.
+
 ## Launch the extension
 
 ```bash
