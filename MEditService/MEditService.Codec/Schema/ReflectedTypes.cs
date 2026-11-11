@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Reflection;
 using Loqui;
+using Mutagen.Bethesda.Assets;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Assets;
 using Mutagen.Bethesda.Strings;
@@ -52,6 +53,14 @@ internal static class ReflectedTypes
 
     internal static bool IsAssetLink(Type type) =>
         typeof(IAssetLinkGetter).IsAssignableFrom(type);
+
+    /// <summary>The folder of the Data folder that an asset link's asset type keeps its files in.</summary>
+    internal static string AssetFolderOf(Type linkType) =>
+        linkType.GetInterfaces().Prepend(linkType)
+            .Single(candidate => candidate.IsGenericType && candidate.GetGenericTypeDefinition() == typeof(IAssetLinkGetter<>)).GenericTypeArguments[0]
+            .GetProperty(nameof(IAssetType.Instance), BindingFlags.Public | BindingFlags.Static)?.GetValue(null) is IAssetType instance
+            ? instance.BaseFolder
+            : throw new InvalidOperationException($"{linkType.Name} has no asset type instance.");
 
     /// <summary>The member a dotted path reaches from <paramref name="owner"/>, or null.</summary>
     internal static PropertyInfo? PropertyAt(Type owner, string dottedPath)

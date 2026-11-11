@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Mutagen.Bethesda.Plugins.Assets;
+using Mutagen.Bethesda.Assets;
 
 namespace MEditService.Codec.Schema;
 
@@ -21,8 +21,8 @@ public static class AssetPaths
                 leaf => leaf.IsAssetLink,
                 (leaf, path, value) =>
                 {
-                    if (leaf.AssetLinkType is { } linkType && FormReferences.ExtractString(value) is { Length: > 0 } given)
-                        named.Add(new(DataPathOf(linkType, given), path));
+                    if (leaf.AssetFolder is { } folder && FormReferences.ExtractString(value) is { Length: > 0 } given)
+                        named.Add(new(DataPathOf(folder, given), path));
                 });
         }
         return named;
@@ -35,7 +35,7 @@ public static class AssetPaths
         var hops = fieldPath.Split('.').Select(hop => hop.Split('[')[0]).ToList();
         var leaf = columns.FirstOrDefault(col => col.Name == hops[0])?.Field;
         foreach (var hop in hops.Skip(1)) leaf = MemberOf(ElementOf(leaf), hop);
-        return leaf?.AssetLinkType is { } linkType ? DataPathOf(linkType, given) : null;
+        return leaf?.AssetFolder is { } folder ? DataPathOf(folder, given) : null;
     }
 
     private static FieldMetadata? ElementOf(FieldMetadata? owner) => owner?.ElementType ?? owner;
@@ -44,11 +44,6 @@ public static class AssetPaths
         owner?.Fields?.FirstOrDefault(member => member.Name == name)
         ?? owner?.Fields?.SelectMany(member => member.Variants?.Values ?? []).Select(variant => MemberOf(variant, name)).FirstOrDefault(found => found is not null);
 
-    private static string DataPathOf(Type assetLinkType, string given)
-    {
-        var assetType = assetLinkType.GetInterfaces().Single(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IAssetLinkGetter<>)).GenericTypeArguments[0];
-        return Activator.CreateInstance(typeof(AssetLinkGetter<>).MakeGenericType(assetType), given) is IAssetLinkGetter link
-            ? link.DataRelativePath.Path
-            : throw new InvalidOperationException($"Mutagen holds no asset link of {assetType.Name}.");
-    }
+    private static string DataPathOf(string folder, string given) =>
+        new DataRelativePath(given.StartsWith(folder, DataRelativePath.PathComparison) ? given : Path.Combine(folder, given)).Path;
 }

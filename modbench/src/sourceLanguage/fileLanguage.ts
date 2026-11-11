@@ -43,8 +43,9 @@ export function fileLanguage({ reporter, client, gameRelease, copyOf, reveal }: 
     if (found === undefined || formKeyAt(text, offset) !== undefined) return undefined;
     try {
       const recordType = await recordTypeOfPathField(client, found);
-      return recordType === undefined ? undefined : {
-        start: found.start + 1, end: found.end - 1, given: JSON.parse(text.slice(found.start, found.end)) as string, field: fieldPathOf(found.path), recordType, release: await gameRelease(),
+      const given: unknown = JSON.parse(text.slice(found.start, found.end));
+      return recordType === undefined || typeof given !== 'string' ? undefined : {
+        start: found.start + 1, end: found.end - 1, given, field: fieldPathOf(found.path), recordType, release: await gameRelease(),
       };
     } catch (error) {
       reporter.shownOnSurface('error', `Cannot tell whether ${found.recordFormKey} names a file here.`, errorMessage(error));

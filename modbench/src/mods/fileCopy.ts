@@ -3,8 +3,8 @@ import { foldPath, type CopyAt } from '../instanceLoader/fileConflictIndex';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { revealArchivedFile } from './archiveFiles';
 
-/** The copy of the file at `path` in the Data folder that the game gets: a mod's or Overwrite's, else the game folder's own.
- *  A loose file in the game folder wins over an archived copy of a mod, as `gameFolderFileOver` has it. */
+/** The copy of the file at `path` that the game gets: a mod's or Overwrite's, else the game folder's own; a loose game
+ *  folder file beats an archived copy, as `gameFolderFileOver` has it. */
 export function copyTheGameGets(value: Pick<InstanceValue, 'stackedCopies' | 'dataFolderFiles'>, path: string): CopyAt | undefined {
   const stacked = value.stackedCopies.get(path)?.copies[0]?.at;
   const inGameFolder = value.dataFolderFiles.kind === 'listed' ? value.dataFolderFiles.files.get(foldPath(path))?.path : undefined;
