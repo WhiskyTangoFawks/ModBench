@@ -47,7 +47,7 @@ internal static class FilePathsPanel
             if (files.Count == 0) continue;
             if (!SourceFilePlacement.Places(plugin.Key, new RecordIdentity(copy.FormKey, copy.RecordType, copy.EditorId), repository, out var file, out var failure))
                 return Failed(plugin, failure, ProblemsFailureKind.Placement);
-            paths.AddRange(files.Select(path => new NamedFilePath(copy.FormKey, path.FieldPath, file, path.DataPath.Replace('\\', '/'))));
+            paths.AddRange(files.Select(path => new NamedFilePath(copy.FormKey, path.FieldPath, file, path.DataPath)));
         }
         return new(plugin.Key, paths, unread);
     }

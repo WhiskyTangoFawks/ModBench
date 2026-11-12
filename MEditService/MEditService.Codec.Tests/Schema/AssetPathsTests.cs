@@ -24,7 +24,7 @@ public class AssetPathsTests
         var record = NewMod().Statics.AddNew("Holder");
         record.Model = new Tes5.Model { File = @"Architecture\Wall.nif" };
 
-        Assert.Equal([new AssetPath(Path.Combine("Meshes", "Architecture", "Wall.nif"), "Model.File")], Collected(record));
+        Assert.Equal([new AssetPath("Meshes/Architecture/Wall.nif", "Model.File")], Collected(record));
     }
 
     [Fact]
@@ -40,8 +40,8 @@ public class AssetPathsTests
 
         Assert.Equal(
             [
-                new AssetPath(Path.Combine("Textures", "Decals", "Stain_d.dds"), "Diffuse"),
-                new AssetPath(Path.Combine("Materials", "Decals", "Stain.bgsm"), "Material"),
+                new AssetPath("Textures/Decals/Stain_d.dds", "Diffuse"),
+                new AssetPath("Materials/Decals/Stain.bgsm", "Material"),
             ],
             collected);
     }
@@ -62,7 +62,7 @@ public class AssetPathsTests
     [Fact]
     public void APathThatAlreadyNamesItsAssetTypesFolder_IsNotPrefixedTwice()
     {
-        Assert.Equal([new AssetPath(Path.Combine("Meshes", "Architecture", "Wall.nif"), "Model.File")], CollectedFrom(@"Meshes\Architecture\Wall.nif").Files);
+        Assert.Equal([new AssetPath("Meshes/Architecture/Wall.nif", "Model.File")], CollectedFrom(@"Meshes\Architecture\Wall.nif").Files);
     }
 
     [Fact]

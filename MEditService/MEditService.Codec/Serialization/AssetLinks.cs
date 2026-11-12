@@ -17,7 +17,7 @@ internal static class AssetLinks
         try
         {
             return Activator.CreateInstance(typeof(AssetLinkGetter<>).MakeGenericType(assetType), given) is IAssetLinkGetter link
-                ? new(link.DataRelativePath.Path, null)
+                ? new(link.DataRelativePath.Path.Replace('\\', '/'), null)
                 : throw new InvalidOperationException($"Mutagen holds no asset link of {assetType.Name}.");
         }
         catch (TargetInvocationException e) when (e.InnerException is AssetPathMisalignedException misaligned)

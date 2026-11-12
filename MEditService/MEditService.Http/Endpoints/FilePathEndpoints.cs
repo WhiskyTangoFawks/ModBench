@@ -36,7 +36,7 @@ internal static class FilePathEndpoints
             return EndpointMapping.BadRequest($"The record text is no JSON: {e.Message}");
         }
         if (named.Files.FirstOrDefault(file => file.FieldPath == req.FieldPath) is { DataPath: { } dataPath })
-            return Results.Ok(new ResolvedFilePath(dataPath.Replace('\\', '/')));
+            return Results.Ok(new ResolvedFilePath(dataPath));
         return EndpointMapping.BadRequest(named.Refusals.FirstOrDefault(refusal => refusal.FieldPath == req.FieldPath) is { Reason: { } reason }
             ? reason
             : $"'{req.FieldPath}' of '{req.RecordType}' holds no path to a file.");
