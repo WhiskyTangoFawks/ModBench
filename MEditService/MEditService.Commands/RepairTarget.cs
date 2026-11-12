@@ -27,16 +27,19 @@ internal abstract record RepairTarget
             return new Refused(DecompileAndRepairRefusal.Unreadable, $"{plugin.Name} could not be read: {unread.Reason}");
         if (!inSourceMod(mod))
         {
-            var unnamedMalformed = loadOrder.Plugins.FirstOrDefault(other =>
-                other.Provider is PluginProvider.FromMod otherMod
-                && string.Equals(otherMod.Name, mod.Name, StringComparison.OrdinalIgnoreCase)
-                && !named.Contains(other.Key)
-                && repairer.Diagnose(loadOrder, other).Holds(out var otherDiagnoses, out _)
-                && otherDiagnoses.Count > 0);
-            if (unnamedMalformed is not null)
+            var unnamedMalformed = loadOrder.Plugins
+                .Where(other => other.Provider is PluginProvider.FromMod otherMod
+                    && string.Equals(otherMod.Name, mod.Name, StringComparison.OrdinalIgnoreCase)
+                    && !named.Contains(other.Key))
+                .Select(other => (Plugin: other, Diagnosed: repairer.Diagnose(loadOrder, other)))
+                .Where(other => other.Diagnosed.Holds(out var otherDiagnoses, out _) && otherDiagnoses.Count > 0)
+                .ToList();
+            if (unnamedMalformed.Count > 0)
             {
-                return new Refused(DecompileAndRepairRefusal.OtherPluginRepairable,
-                    $"{mod.Name} is not a source mod, and its plugin {unnamedMalformed.Name}, which the request did not name, is malformed.");
+                var repairable = unnamedMalformed.All(other => other.Diagnosed.Holds(out var otherDiagnoses, out _)
+                    && otherDiagnoses.All(diagnosis => diagnosis.Change is not null));
+                return new Refused(repairable ? DecompileAndRepairRefusal.OtherPluginRepairable : DecompileAndRepairRefusal.OtherPluginRefused,
+                    $"{mod.Name} is not a source mod, and its plugin {unnamedMalformed[0].Plugin.Name}, which the request did not name, is malformed, so it cannot become source to make its source folder with.");
             }
         }
         return diagnoses.Count == 0

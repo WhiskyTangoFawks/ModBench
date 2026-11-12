@@ -190,6 +190,19 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task DecompileAndRepair_OfAHealthyPluginOfAModWithNoRepositoryWhoseOtherPluginIsMalformedBeyondRepair_IsRefusedAsOtherPluginRefused()
+    {
+        AddToNewMod(NoRepairFixture.Malformed with { FileName = "NoRepair.esp" });
+        WriteCleanPlugin(_newMod, "Clean.esp");
+        var clean = new PluginAddress("Clean.esp", NewModName);
+        Load(Entry(_newMod, "NoRepair.esp"), Entry(_newMod, "Clean.esp"));
+
+        var refused = Assert.Single((await Repair([ToRepair(clean)])).Refused);
+
+        Assert.Equal((clean, DecompileAndRepairRefusal.OtherPluginRefused), (refused.Item, refused.Refusal));
+    }
+
+    [Fact]
     public async Task DecompileAndRepair_OfAHealthyPluginOfASourceModWhoseOtherPluginIsMalformed_IsRefusedAsNotMalformed()
     {
         AddToSourceMod(Lossless.Malformed);
