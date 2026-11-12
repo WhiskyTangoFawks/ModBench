@@ -131,44 +131,29 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
     expect(facts.tooltipLines(late)).toContain(line);
   });
 
-  it('judges the order the game loads in, where a blueprint plugin it loads with no line comes after the plugins that are not one, and before a blueprint line', () => {
-    const facts = new PluginFacts();
-    const blueprint = { name: 'Blueprint.esm', origin: 'SomeMod' };
-    const ship = { name: 'Ship.esm', origin: 'SomeMod' };
-    facts.reconciled(
-      [held(), held({ ...blueprint, isMaster: true, isBlueprint: true }), held({ ...ship, isMaster: true, isBlueprint: true, masters: [blueprint.name] })],
-      [], [blueprint, A, ship], [A, ship], undefined, true,
-    );
-
-    expect(facts.brokenRules()).toEqual([]);
-  });
-
   it('warns, on a blueprint line listed before a plugin that is not one, that the game moves it, and on no blueprint plugin with no line', () => {
     const facts = new PluginFacts();
     const blueprint = { name: 'Blueprint.esm', origin: 'SomeMod' };
     const ship = { name: 'Ship.esm', origin: 'SomeMod' };
     facts.reconciled(
       [held(), held({ ...blueprint, isMaster: true, isBlueprint: true }), held({ ...ship, isMaster: true, isBlueprint: true })],
-      [], [blueprint, ship, A], [ship, A], undefined, true,
+      [], [blueprint, ship, A], [ship, A],
     );
 
     expect(facts.brokenRules().map(({ rule, plugins }) => [rule, plugins.map(({ filename }) => filename)])).toEqual([['gameMoves', ['Ship.esm']]]);
   });
 
-  it('moves no blueprint line in a release that does not load blueprint plugins last', () => {
+  it('offers a move judged on the order the game loads, where a plugin it loads with no line hoists the master the move passes', () => {
     const facts = new PluginFacts();
-    const ship = { name: 'Ship.esm', origin: 'SomeMod' };
-    facts.reconciled([held(), held({ ...ship, isMaster: true, isBlueprint: true })], [], [ship, A], [ship, A]);
+    const creation = { name: 'Creation.esm', origin: 'SomeMod' };
+    const q = { name: 'Q.esp', origin: 'SomeMod' };
+    const m = { name: 'M.esp', origin: 'SomeMod' };
+    facts.reconciled(
+      [held({ masters: ['M.esp'] }), held(q), held({ ...m, masters: ['Q.esp'] }), held({ ...creation, isMaster: true, masters: ['Q.esp'] })],
+      [], [creation, A, q, m], [A, q, m],
+    );
 
-    expect(facts.brokenRules()).toEqual([]);
-  });
-
-  it('judges the order the game loads, so a master the game hoists above a master that lists it is moved, and loads before it', () => {
-    const facts = new PluginFacts();
-    const late = { name: 'Late.esm', origin: 'SomeMod' };
-    facts.reconciled([held({ isMaster: true, masters: ['Late.esm'] }), held({ ...late, isMaster: true })], [], [A, late], [A, late]);
-
-    expect(facts.brokenRules().map(({ rule, plugins }) => [rule, plugins.map(({ filename }) => filename)])).toEqual([['gameMoves', ['Late.esm']]]);
+    expect(facts.suggestedMoves().map(({ mover, drop }) => [mover.name, drop])).toEqual([['M.esp', { kind: 'before', name: 'A.esp' }]]);
   });
 
   it('judges LOOT\'s rules on the order the game loads, so a plugin listed before one it loads after keeps the rule where the game moves that one', () => {

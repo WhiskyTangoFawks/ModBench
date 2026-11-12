@@ -4,7 +4,6 @@ import type { RuleLevel, RuleSource } from './lootMetadata';
 interface PluginFacts {
   origin: string;
   masters: readonly string[];
-  /** Whether it is a blueprint plugin, in a release that loads a blueprint master after every plugin that is not one. */
   blueprint: boolean;
   /** Whether the game loads it as a master, by its master flag or its extension. */
   master: boolean;
@@ -42,48 +41,43 @@ const isBlueprintMaster = (facts: PluginFacts | undefined): boolean => facts?.ma
 
 const lists = (facts: PluginFacts | undefined, master: string): boolean => facts?.masters.some((name) => fold(name) === fold(master)) === true;
 
-// Why the game loads a line away from where plugins.txt lists it.
-type Move = { kind: 'early' } | { kind: 'hoisted'; by: string } | { kind: 'blueprint' };
-
-// libloadorder's read of plugins.txt: each line is inserted where the game loads it among those before it, then masters are
-// hoisted. A plugin mEdit has not read loads as one that is no master.
-function gameOrder(loadedWithNoLine: readonly string[], lines: readonly string[], factsOf: PluginFactsOf): { order: string[]; moves: Map<string, Move> } {
-  const order = [...loadedWithNoLine.filter((name) => !isBlueprintMaster(factsOf(name))), ...loadedWithNoLine.filter((name) => isBlueprintMaster(factsOf(name)))];
-  const moves = new Map<string, Move>();
-  for (const line of lines) {
-    const facts = factsOf(line);
-    const { index, hoistedBy } = insertion(order, line, factsOf);
-    for (const jumped of order.slice(index)) {
-      if (isBlueprintMaster(factsOf(jumped)) && !isBlueprintMaster(facts)) moves.set(jumped, { kind: 'blueprint' });
-      else moves.set(line, hoistedBy === undefined ? { kind: 'early' } : { kind: 'hoisted', by: hoistedBy });
-    }
-    order.splice(index, 0, line);
-  }
-  for (const [hoisted, by] of hoistMasters(order, factsOf)) moves.set(hoisted, { kind: 'hoisted', by });
-  for (const name of loadedWithNoLine) moves.delete(name);
-  return { order, moves };
+interface Reading {
+  factsOf: PluginFactsOf;
+  /** Whether the game loads it: a line that is not active is judged where it would load, and moves no other plugin. */
+  loads: (filename: string) => boolean;
 }
 
-function insertion(order: readonly string[], plugin: string, factsOf: PluginFactsOf): { index: number; hoistedBy?: string } {
+// libloadorder's read of plugins.txt (load_order/mutable.rs). A plugin mEdit has not read loads as one that is no master.
+function gameOrder(loadedWithNoLine: readonly string[], lines: readonly string[], { factsOf, loads }: Reading): { order: string[]; hoistedBy: Map<string, string> } {
+  const order = [...loadedWithNoLine.filter((name) => !isBlueprintMaster(factsOf(name))), ...loadedWithNoLine.filter((name) => isBlueprintMaster(factsOf(name)))];
+  const hoistedBy = new Map<string, string>();
+  for (const line of lines) {
+    const canHoist = isBlueprintMaster(factsOf(line)) ? isBlueprintMaster : isMasterFile;
+    const at = order.findIndex((other) => loads(other) && canHoist(factsOf(other)) && lists(factsOf(other), line));
+    const by = order[at];
+    if (by !== undefined) hoistedBy.set(line, by);
+    order.splice(by === undefined ? insertionIndex(order, line, factsOf) : at, 0, line);
+  }
+  for (const [hoisted, by] of hoistMasters(order, { factsOf, loads })) hoistedBy.set(hoisted, by);
+  return { order, hoistedBy };
+}
+
+function insertionIndex(order: readonly string[], plugin: string, factsOf: PluginFactsOf): number {
   const facts = factsOf(plugin);
-  const canHoist = isBlueprintMaster(facts) ? isBlueprintMaster : isMasterFile;
-  const hoisting = order.findIndex((other) => canHoist(factsOf(other)) && lists(factsOf(other), plugin));
-  if (hoisting !== -1) return { index: hoisting, hoistedBy: order[hoisting] };
-  const first = (where: (other: PluginFacts | undefined) => boolean): { index: number } => {
+  const first = (where: (other: PluginFacts | undefined) => boolean): number => {
     const index = order.findIndex((other) => where(factsOf(other)));
-    return { index: index === -1 ? order.length : index };
+    return index === -1 ? order.length : index;
   };
-  if (isBlueprintMaster(facts)) return { index: order.length };
+  if (isBlueprintMaster(facts)) return order.length;
   if (isMasterFile(facts)) return first((other) => !isMasterFile(other) || isBlueprintMaster(other));
   return first(isBlueprintMaster);
 }
 
-// libloadorder's hoist_masters: a master listed after a master that lists it loads directly before the first such.
-function hoistMasters(order: string[], factsOf: PluginFactsOf): [hoisted: string, by: string][] {
+function hoistMasters(order: string[], { factsOf, loads }: Reading): [hoisted: string, by: string][] {
   const moves = new Map<number, { to: number; by: string }>();
   order.forEach((plugin, index) => {
     const facts = factsOf(plugin);
-    if (!isMasterFile(facts)) return;
+    if (!loads(plugin) || !isMasterFile(facts)) return;
     for (const master of facts?.masters ?? []) {
       const at = order.findIndex((other) => fold(other) === fold(master) && (isBlueprintMaster(facts) || !isBlueprintMaster(factsOf(other))));
       if (at > index && !moves.has(at)) moves.set(at, { to: index, by: plugin });
@@ -99,41 +93,41 @@ function hoistMasters(order: string[], factsOf: PluginFactsOf): [hoisted: string
   });
 }
 
-function reasonOf(plugin: string, move: Move, anchor: string): string {
-  const where = 'not where plugins.txt lists it.';
-  switch (move.kind) {
-    case 'early': return `"${plugin}" loads as a master, by its master flag or its extension, so the game loads it before "${anchor}", ${where}`;
-    case 'hoisted': return `"${plugin}" is a master of "${move.by}", which loads as a master, so the game loads it before "${anchor}", ${where}`;
-    case 'blueprint': return `"${plugin}" is a blueprint plugin, so the game loads it after "${anchor}", ${where}`;
-  }
-}
+const NOT_LISTED_THERE = 'not where plugins.txt lists it.';
 
-// On the plugin the game moves, beside the farthest plugin it passes that mEdit has read.
-function movedPlugins(listed: readonly string[], order: readonly string[], moves: ReadonlyMap<string, Move>, factsOf: PluginFactsOf): BrokenRule[] {
+// A plugin that is not a blueprint master passes a blueprint master only as that blueprint master moves to load last.
+function brokenGameMoves(
+  loadedWithNoLine: readonly string[], lines: readonly string[], { order, hoistedBy }: ReturnType<typeof gameOrder>, { factsOf, loads }: Reading,
+): BrokenRule[] {
+  const listed = [...loadedWithNoLine, ...lines];
   const loadedAt = new Map(order.map((name, index) => [name, index] as const));
   const loadsBefore = (a: string, b: string): boolean => (loadedAt.get(a) ?? -1) < (loadedAt.get(b) ?? -1);
-  return listed.flatMap((plugin, at): BrokenRule[] => {
-    const move = moves.get(plugin);
+  const passable = (other: string): boolean => loads(other) && factsOf(other) !== undefined;
+  return lines.flatMap((plugin, index): BrokenRule[] => {
     const facts = factsOf(plugin);
-    if (move === undefined || facts === undefined) return [];
-    const later = move.kind === 'blueprint';
-    const passed = later
-      ? listed.slice(at + 1).filter((other) => loadsBefore(other, plugin))
-      : listed.slice(0, at).filter((other) => loadsBefore(plugin, other));
-    const read = passed.filter((other) => factsOf(other) !== undefined);
-    const anchor = later ? read.at(-1) : read[0];
+    if (facts === undefined) return [];
+    const at = loadedWithNoLine.length + index;
+    const blueprint = isBlueprintMaster(facts);
+    const anchorBefore = listed.slice(0, at)
+      .find((other) => passable(other) && loadsBefore(plugin, other) && (blueprint || !isBlueprintMaster(factsOf(other))));
+    const anchorAfter = blueprint ? listed.slice(at + 1).findLast((other) => passable(other) && loadsBefore(other, plugin) && !isBlueprintMaster(factsOf(other))) : undefined;
+    const anchor = anchorBefore ?? anchorAfter;
     const anchorFacts = anchor === undefined ? undefined : factsOf(anchor);
     if (anchor === undefined || anchorFacts === undefined) return [];
+    const by = hoistedBy.get(plugin);
+    const reason = anchorBefore === undefined ? `"${plugin}" is a blueprint plugin, so the game loads it after "${anchor}", ${NOT_LISTED_THERE}`
+      : by === undefined ? `"${plugin}" loads as a master, by its master flag or its extension, so the game loads it before "${anchor}", ${NOT_LISTED_THERE}`
+        : `"${plugin}" is a master of "${by}", which loads as a master, so the game loads it before "${anchor}", ${NOT_LISTED_THERE}`;
     return [{
-      rule: 'gameMoves', level: 'warning', plugins: [refOf(plugin, facts)], placement: { side: later ? 'after' : 'before', anchor: refOf(anchor, anchorFacts) },
-      reason: reasonOf(plugin, move, anchor),
+      rule: 'gameMoves', level: 'warning', plugins: [refOf(plugin, facts)],
+      placement: { side: anchorBefore === undefined ? 'after' : 'before', anchor: refOf(anchor, anchorFacts) }, reason,
     }];
   });
 }
 
 // A plugin that is not a blueprint master holds no master rule against a blueprint master, which the game loads last.
-function brokenMasters(order: readonly string[], factsOf: PluginFactsOf): BrokenRule[] {
-  const at = new Map(order.map((filename, index) => [fold(filename), index] as const));
+function brokenMasters(order: readonly string[], { factsOf, loads }: Reading): BrokenRule[] {
+  const at = new Map(order.flatMap((filename, index) => (loads(filename) ? [[fold(filename), index] as const] : [])));
   return order.flatMap((plugin, index): BrokenRule[] => {
     const facts = factsOf(plugin);
     if (facts === undefined) return [];
@@ -149,6 +143,8 @@ function brokenMasters(order: readonly string[], factsOf: PluginFactsOf): Broken
       const masterFacts = factsOf(master);
       if (masterFacts === undefined || masterAt < index) return [];
       if (isBlueprintMaster(masterFacts) && !isBlueprintMaster(facts)) return [];
+      // Were it active, the game would hoist its masters above a master that is not.
+      if (!loads(plugin) && isMasterFile(facts)) return [];
       return [{
         rule: 'master', level: 'error', plugins: [refOf(master, masterFacts), refOf(plugin, facts)],
         reason: `"${master}" is a master of "${plugin}", so it must load before it.`,
@@ -158,8 +154,12 @@ function brokenMasters(order: readonly string[], factsOf: PluginFactsOf): Broken
 }
 
 /** The order the game loads the plugins it loads with no line, then plugins.txt's `lines`, in, and the game's sorting rules
- *  that order breaks. */
-export function judge(loadedWithNoLine: readonly string[], lines: readonly string[], factsOf: PluginFactsOf): { order: string[]; broken: BrokenRule[] } {
-  const { order, moves } = gameOrder(loadedWithNoLine, lines, factsOf);
-  return { order, broken: [...brokenMasters(order, factsOf), ...movedPlugins([...loadedWithNoLine, ...lines], order, moves, factsOf)] };
+ *  that order breaks. The game loads a line only while it is active. */
+export function judge(
+  loadedWithNoLine: readonly string[], lines: readonly string[], factsOf: PluginFactsOf, isActive: (filename: string) => boolean = () => true,
+): { order: string[]; broken: BrokenRule[] } {
+  const noLine = new Set(loadedWithNoLine);
+  const reading: Reading = { factsOf, loads: (filename) => noLine.has(filename) || isActive(filename) };
+  const game = gameOrder(loadedWithNoLine, lines, reading);
+  return { order: game.order, broken: [...brokenMasters(game.order, reading), ...brokenGameMoves(loadedWithNoLine, lines, game, reading)] };
 }

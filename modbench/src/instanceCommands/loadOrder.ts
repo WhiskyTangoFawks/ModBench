@@ -18,7 +18,7 @@ interface ArchivesByPlugin {
 
 /** The snapshot's active plugins in the Plugins view's order, which the loader cannot know: it takes
  *  a blueprint plugin's place from the header facts Editing supplies (ADR-0013). */
-export type ViewOrder =(snapshot: Pick<LoadOrderSnapshot, 'active' | 'loadedWithNoLine' | 'gameRelease'>) => PluginAddress[];
+export type ViewOrder = (snapshot: Pick<LoadOrderSnapshot, 'active' | 'loadedWithNoLine' | 'gameRelease'>) => PluginAddress[];
 
 /** Nothing is sent without a game folder found: there is no Data folder to key the load order on.
  *  A refusal is the loader's, to tell once: a partial snapshot would unregister what it left out. */

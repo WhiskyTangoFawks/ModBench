@@ -116,9 +116,12 @@ async function reorderPlugins(
   // cannot land the block at a stale index.
   const outcome = await changeDeciding(overProvided(adapter), (order, provided) => {
     const names = order.map((p) => p.name);
-    const noLine = new Set(provided.kind === 'listed' ? provided.loadedWithNoLine.map(pluginKey) : []);
+    const loadedWithNoLine = provided.kind === 'listed' ? provided.loadedWithNoLine.flatMap((name) => provided.plugins.get(pluginKey(name)) ?? []) : [];
+    const noLine = new Set(loadedWithNoLine.map(pluginKey));
+    const enabled = new Set(order.filter((p) => p.enabled).map((p) => pluginKey(p.name)));
     // A line for a plugin the game loads with no line does not place it.
-    const refusal = moveOrderRefusal(names.filter((name) => !noLine.has(pluginKey(name))), pluginNames, drop, factsOf);
+    const lines = names.filter((name) => !noLine.has(pluginKey(name)));
+    const refusal = moveOrderRefusal({ loadedWithNoLine, lines, isActive: (name) => enabled.has(pluginKey(name)) }, pluginNames, drop, factsOf);
     if (refusal !== undefined) throw new Error(refusal);
     return { changes: [{ kind: 'move', plugins: pluginNames, toIndex: dropIndexIn(names, pluginNames, drop) }], decided: {} };
   });

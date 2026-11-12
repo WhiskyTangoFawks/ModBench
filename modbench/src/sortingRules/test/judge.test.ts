@@ -58,28 +58,39 @@ describe('judge: the game\'s sorting rules held against the order the game loads
     });
   });
 
-  it('hoists a plugin that is not a master above a master that lists it', () => {
-    const facts = factsFrom({ 'D.esm': { master: true, masters: ['M.esp'] }, 'M.esp': {} });
-
-    expect(judge([], ['D.esm', 'M.esp'], facts)).toMatchObject({ order: ['M.esp', 'D.esm'], broken: [{ rule: 'gameMoves', plugins: [ref('M.esp')] }] });
-  });
-
-  it('hoists the masters of a hoisted master above it in turn', () => {
-    const facts = factsFrom({ 'D.esm': { master: true, masters: ['M.esm'] }, 'M.esm': { master: true, masters: ['N.esm'] }, 'N.esm': MASTER });
-
-    expect(judge([], ['D.esm', 'M.esm', 'N.esm'], facts).order).toEqual(['N.esm', 'M.esm', 'D.esm']);
-  });
-
-  it('hoists a plugin two masters list above the first of them', () => {
-    const facts = factsFrom({ 'A.esm': { master: true, masters: ['N.esp'] }, 'B.esm': { master: true, masters: ['N.esp'] }, 'N.esp': {} });
-
-    expect(judge([], ['A.esm', 'B.esm', 'N.esp'], facts).order).toEqual(['N.esp', 'A.esm', 'B.esm']);
+  it.each<[string, Record<string, Partial<PluginFacts>>, string[], string[]]>([
+    ['a plugin that is not a master above a master that lists it', { 'D.esm': { master: true, masters: ['M.esp'] }, 'M.esp': {} }, ['D.esm', 'M.esp'], ['M.esp', 'D.esm']],
+    ['the masters of a hoisted master above it in turn',
+      { 'D.esm': { master: true, masters: ['M.esm'] }, 'M.esm': { master: true, masters: ['N.esm'] }, 'N.esm': MASTER }, ['D.esm', 'M.esm', 'N.esm'], ['N.esm', 'M.esm', 'D.esm']],
+    ['a plugin two masters list above the first of them',
+      { 'A.esm': { master: true, masters: ['N.esp'] }, 'B.esm': { master: true, masters: ['N.esp'] }, 'N.esp': {} }, ['A.esm', 'B.esm', 'N.esp'], ['N.esp', 'A.esm', 'B.esm']],
+    ['each plugin above the master that lists it, as an earlier hoist shifts where a later one lands',
+      { 'P.esp': {}, 'Q.esp': {}, 'A.esm': { master: true, masters: ['P.esp'] }, 'B.esm': { master: true, masters: ['Q.esp'] } }, ['P.esp', 'Q.esp', 'A.esm', 'B.esm'],
+      ['P.esp', 'A.esm', 'Q.esp', 'B.esm']],
+  ])('hoists %s', (_, table, lines, order) => {
+    expect(judge([], lines, factsFrom(table)).order).toEqual(order);
   });
 
   it('warns of nothing where the game\'s moves land every plugin where plugins.txt lists it', () => {
     const facts = factsFrom({ 'N.esp': {}, 'A.esm': { master: true, masters: ['N.esp'] }, 'B.esm': { master: true, masters: ['N.esp'] } });
 
     expect(judge([], ['N.esp', 'A.esm', 'B.esm'], facts)).toEqual({ order: ['N.esp', 'A.esm', 'B.esm'], broken: [] });
+  });
+
+  it('hoists nothing above a line that is not active, as the game does not load it, and holds that line to no master it would hoist', () => {
+    const facts = factsFrom({ 'M.esm': { master: true, masters: ['Q.esp'] }, 'Q.esp': {}, 'P.esp': { masters: ['Q.esp'] } });
+
+    expect(judge([], ['M.esm', 'P.esp', 'Q.esp'], facts, (name) => name !== 'M.esm').broken.map(({ rule, plugins }) => [rule, plugins.map(({ filename }) => filename)]))
+      .toEqual([['master', ['Q.esp', 'P.esp']]]);
+  });
+
+  it('judges a line that is not active where the game would load it, and holds it to masters the game loads', () => {
+    const facts = factsFrom({ 'D.esp': { masters: ['M.esp', 'Off.esp'] }, 'M.esp': {}, 'Off.esp': {} });
+
+    expect(judge([], ['Off.esp', 'D.esp', 'M.esp'], facts, (name) => name === 'M.esp').broken.map(({ rule, reason }) => [rule, reason])).toEqual([
+      ['master', '"M.esp" is a master of "D.esp", so it must load before it.'],
+      ['missingMaster', '"Off.esp" is a master of "D.esp", and is missing or not active.'],
+    ]);
   });
 
   it('moves a blueprint plugin below the plugins listed after it that are not one, beside the last of them', () => {

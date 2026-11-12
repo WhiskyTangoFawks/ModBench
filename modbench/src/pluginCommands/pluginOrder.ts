@@ -2,6 +2,14 @@ import { addressOfRef, judge, type BrokenRule, type PluginFactsOf } from '../sor
 import { suggestedMove } from '../sortingRules/suggestedMove';
 import { dropIndexIn, type Drop } from './dropIndex';
 
+/** What the game reads that a move is judged over: the plugins it loads with no line, every plugins.txt line, and which
+ *  lines are active. */
+export interface ListedPlugins {
+  readonly loadedWithNoLine: readonly string[];
+  readonly lines: readonly string[];
+  readonly isActive: (name: string) => boolean;
+}
+
 function movedOrder(order: readonly string[], moved: readonly string[], drop: Drop): string[] {
   const movedSet = new Set(moved);
   const block = order.filter((name) => movedSet.has(name));
@@ -16,11 +24,11 @@ const identity = (broken: { rule: string; plugins: readonly { origin: string; fi
 /** Why moving `moved` to `drop` breaks a sorting rule at Error, naming the plugins. Only a rule the move
  *  breaks is refused: an order already broken is not the move's doing. */
 export function moveOrderRefusal(
-  order: readonly string[], moved: readonly string[], drop: Drop, factsOf: PluginFactsOf,
+  { loadedWithNoLine, lines, isActive }: ListedPlugins, moved: readonly string[], drop: Drop, factsOf: PluginFactsOf,
 ): string | undefined {
-  const already = new Set(judge([], order, factsOf).broken.map(identity));
-  return judge([], movedOrder(order, moved, drop), factsOf).broken
-    .find((broken) => broken.level === 'error' && !already.has(identity(broken)))?.reason;
+  const brokenIn = (order: readonly string[]) => judge(loadedWithNoLine, order, factsOf, isActive).broken;
+  const already = new Set(brokenIn(lines).map(identity));
+  return brokenIn(movedOrder(lines, moved, drop)).find((broken) => broken.level === 'error' && !already.has(identity(broken)))?.reason;
 }
 
 /** A broken rule and the move of `mover` to `drop` that keeps it. */
@@ -30,14 +38,14 @@ export interface OfferedMove {
   drop: Extract<Drop, { name: string }>;
 }
 
-/** The moves that keep a rule `broken` without breaking another at Error, over `lines`, the plugins.txt order the move is
- *  written into. A plugin with no line in it cannot move or be moved beside. */
-export function offeredMoves(lines: readonly string[], broken: readonly BrokenRule[], factsOf: PluginFactsOf): OfferedMove[] {
-  const listed = new Set(lines.map((name) => name.toLowerCase()));
+/** The moves that keep a rule `broken` without breaking another at Error. A plugin with no line cannot move or be moved
+ *  beside. */
+export function offeredMoves(listed: ListedPlugins, broken: readonly BrokenRule[], factsOf: PluginFactsOf): OfferedMove[] {
+  const lined = new Set(listed.lines.map((name) => name.toLowerCase()));
   return broken.flatMap((rule): OfferedMove[] => {
     const move = suggestedMove(rule);
-    if (move === undefined || !listed.has(move.mover.filename.toLowerCase()) || !listed.has(move.anchor.filename.toLowerCase())) return [];
+    if (move === undefined || !lined.has(move.mover.filename.toLowerCase()) || !lined.has(move.anchor.filename.toLowerCase())) return [];
     const drop = { kind: move.side, name: move.anchor.filename };
-    return moveOrderRefusal(lines, [move.mover.filename], drop, factsOf) === undefined ? [{ rule, mover: addressOfRef(move.mover), drop }] : [];
+    return moveOrderRefusal(listed, [move.mover.filename], drop, factsOf) === undefined ? [{ rule, mover: addressOfRef(move.mover), drop }] : [];
   });
 }

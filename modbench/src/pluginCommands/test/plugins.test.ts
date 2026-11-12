@@ -72,9 +72,10 @@ describe('reorderPlugins hands the adapter a move decided against the order it h
     const AB = plain(THREE, { 'B.esp': { masters: ['A.esp'] } });
     const masterOf = (master: string, dependant: string) => `"${master}" is a master of "${dependant}", so it must load before it.`;
 
-    interface Move { order: readonly string[]; facts: Fact[]; moved: string; drop: PluginsDrop; withNoLine?: string[] }
-    const run = async ({ order, facts, moved, drop, withNoLine = [] }: Move) => {
-      const fake = fakeInstanceAdapter(readingFixture({ pluginOrder: lines(...order), dataFolderPlugins: { kind: 'listed', names: new Set(withNoLine) } }));
+    interface Move { order: readonly string[]; facts: Fact[]; moved: string; drop: PluginsDrop; withNoLine?: string[]; disabled?: string[] }
+    const run = async ({ order, facts, moved, drop, withNoLine = [], disabled = [] }: Move) => {
+      const pluginOrder = order.map((name) => ({ name, enabled: !disabled.includes(name) }));
+      const fake = fakeInstanceAdapter(readingFixture({ pluginOrder, dataFolderPlugins: { kind: 'listed', names: new Set(withNoLine) } }));
       const result = await pluginCommandsWith(fake.adapter, knowing(...facts)).reorderPlugins(moving(moved), drop);
       return { fake, result };
     };
@@ -88,6 +89,11 @@ describe('reorderPlugins hands the adapter a move decided against the order it h
         masterOf('A.esp', 'B.esp')],
       ['a disabled plugin held once, which is not in the load order',
         { order: THREE, facts: plain(THREE, { 'B.esp': { masters: ['A.esp'], inLoadOrder: false } }), moved: 'A.esp', drop: { kind: 'winningEnd' } }, masterOf('A.esp', 'B.esp')],
+      ['a master dropped below a disabled line that lists it, judged where the game would load that line',
+        { order: THREE, facts: AB, moved: 'A.esp', drop: { kind: 'winningEnd' }, disabled: ['B.esp'] }, masterOf('A.esp', 'B.esp')],
+      ['a master dropped below its dependant past a disabled master that lists it, which hoists nothing the game does not load',
+        { order: ['M.esm', 'Q.esp', 'P.esp'], facts: [{ name: 'M.esm', isMaster: true, masters: ['Q.esp'] }, { name: 'Q.esp' }, { name: 'P.esp', masters: ['Q.esp'] }], moved: 'Q.esp', drop: { kind: 'winningEnd' }, disabled: ['M.esm'] },
+        masterOf('Q.esp', 'P.esp')],
     ])('refuses %s, and hands the adapter no change', async (_, move, refusal) => {
       const { fake, result } = await run(move);
 
@@ -98,12 +104,14 @@ describe('reorderPlugins hands the adapter a move decided against the order it h
     it.each<[string, Move]>([
       ['a dependant dropped directly after its master', { order: THREE, facts: AB, moved: 'B.esp', drop: { kind: 'after', name: 'A.esp' } }],
       ['a plugin whose masters mEdit does not list', { order: THREE, facts: [{ name: 'A.esp' }], moved: 'A.esp', drop: { kind: 'winningEnd' } }],
-      ['a plugin that is not a blueprint before its blueprint master, which only holds master order within one class',
+      ['a plugin that is not a blueprint before its blueprint master, which the game loads last',
         { order: FIVE, facts: plain(FIVE, { 'B.esp': { isBlueprint: true, isMaster: true }, 'D.esp': { masters: ['B.esp'] } }), moved: 'D.esp', drop: { kind: 'before', name: 'B.esp' } }],
       ['a drop that leaves an order as it found it',
         { order: FIVE, facts: plain(FIVE, { 'A.esp': { masters: ['B.esp'] } }), moved: 'D.esp', drop: { kind: 'before', name: 'C.esp' } }],
       ['a plugin to the losing end past a master the game loads with no line',
         { order: ['DLCRobot.esm', 'A.esp', 'X.esp'], facts: plain(['DLCRobot.esm', 'A.esp', 'X.esp'], { 'X.esp': { masters: ['Fallout4.esm', 'DLCRobot.esm'] } }), moved: 'X.esp', drop: { kind: 'losingEnd' }, withNoLine: ['DLCRobot.esm'] }],
+      ['a master dropped below its dependant, where a plugin the game loads with no line hoists it above both',
+        { order: ['Q.esp', 'P.esp'], facts: [{ name: 'DLCRobot.esm', isMaster: true, masters: ['Q.esp'] }, { name: 'Q.esp' }, { name: 'P.esp', masters: ['Q.esp'] }], moved: 'Q.esp', drop: { kind: 'winningEnd' }, withNoLine: ['DLCRobot.esm'] }],
       ['a name two origins hold when neither is in the load order',
         { order: THREE, facts: [{ name: 'A.esp' }, { name: 'B.esp', origin: 'Other', inLoadOrder: false }, { name: 'B.esp', masters: ['A.esp'], inLoadOrder: false }, { name: 'C.esp' }], moved: 'A.esp', drop: { kind: 'winningEnd' } }],
     ])('lets %s land', async (_, move) => {

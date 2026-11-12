@@ -1622,12 +1622,12 @@ describe('PluginsTreeProvider — sorting-error decoration', () => {
       expect(await flagged(h)).toEqual([['B.esp', false], ['A.esp', true]]);
     });
 
-    it('flags no move that a disabled plugins.txt line makes break another rule at Error', async () => {
+    it('flags a move past a disabled plugins.txt line, which the game does not load', async () => {
       const h = makeTree([plugin({ name: 'D.esp', line: 0 }), plugin({ name: 'X.esp', line: 1, enabled: false }), plugin({ name: 'M.esp', line: 2 })]);
 
       await reconcile(h, [held('D.esp', { masters: ['M.esp'] }), held('X.esp'), held('M.esp', { masters: ['X.esp'] })]);
 
-      expect(await flagged(h)).toEqual([['D.esp', false], ['X.esp', false], ['M.esp', false]]);
+      expect(await flagged(h)).toEqual([['D.esp', false], ['X.esp', false], ['M.esp', true]]);
     });
 
     it('flags a master-flagged plugin that loads after a plugin without the flag', async () => {

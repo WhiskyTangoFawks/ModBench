@@ -157,7 +157,6 @@ export class PluginsTreeProvider
       client: options.client,
       shownPlugins: () => this.builtRows().map(addressOfRow),
       activePlugins: () => this.builtRows().filter((row) => row.kind === 'implicitMaster' || row.plugin.enabled).map(addressOfRow),
-      blueprintLoadsLast: () => this.instanceValue.blueprintLoadsLast,
       lines: () => this.builtRows().flatMap((row) => (row.kind === 'plugin' ? [addressOfRow(row)] : [])),
       publishDiagnoses: options.publishDiagnoses,
       publishChangedOutside: options.publishChangedOutside,

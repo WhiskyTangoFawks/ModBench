@@ -122,7 +122,6 @@ export class PluginFacts {
   private held = new ByPluginAddress<true>();
   private reads = new ByPluginAddress<PluginRead>();
   private blueprints = '';
-  private blueprintLoadsLast = false;
   private readsByFilename = new Map<string, PluginRead[]>();
   // Every broken sorting rule on each plugin it names, as the last completed reconcile judged the order.
   private sorting = new ByPluginAddress<BrokenRule[]>();
@@ -177,7 +176,7 @@ export class PluginFacts {
 
   /** The completed reconcile's hand-off: which plugins mEdit holds, their facts, each failure, the active plugins as
    *  the view lists them, which the sorting rules judge as the game loads them, and every plugins.txt line. */
-  reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[], activeOrder: readonly PluginAddress[], lines: readonly PluginAddress[], loot: LootInput = NO_LOOT_RULES, blueprintLoadsLast = false): void {
+  reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[], activeOrder: readonly PluginAddress[], lines: readonly PluginAddress[], loot: LootInput = NO_LOOT_RULES): void {
     this.held = heldSet(plugins);
     this.loadFailures = indexLoadFailures(failures);
     this.reachableFailures = this.loadFailures;
@@ -185,7 +184,6 @@ export class PluginFacts {
     this.refreshed(plugins);
     this.judgedActiveOrder = activeOrder;
     this.lineOrder = lines;
-    this.blueprintLoadsLast = blueprintLoadsLast;
     this.judgeSorting(activeOrder, loot);
   }
 
@@ -247,7 +245,7 @@ export class PluginFacts {
     return (filename) => {
       const address = addressOf.get(filename.toLowerCase());
       const read = address && this.reads.get(address);
-      return address && read && { origin: address.origin, masters: read.masters, blueprint: read.blueprint && this.blueprintLoadsLast, master: read.master };
+      return address && read && { origin: address.origin, masters: read.masters, blueprint: read.blueprint, master: read.master };
     };
   }
 
@@ -256,7 +254,8 @@ export class PluginFacts {
     const lined = new Set(this.lineOrder.map(({ name }) => name.toLowerCase()));
     const loadedWithNoLine = (filename: string): boolean => !lined.has(filename.toLowerCase());
     const names = treeOrder.map(({ name }) => name);
-    const game = judge(names.filter(loadedWithNoLine), names.filter((name) => !loadedWithNoLine(name)), this.factsOver(treeOrder));
+    const noLine = names.filter(loadedWithNoLine);
+    const game = judge(noLine, names.filter((name) => !loadedWithNoLine(name)), this.factsOver(treeOrder));
     const treeAddressOf = new Map(treeOrder.map((address) => [address.name, address] as const));
     const activeOrder = game.order.flatMap((name) => treeAddressOf.get(name) ?? []);
     const addressOf = new Map(activeOrder.map((address) => [address.name.toLowerCase(), address] as const));
@@ -269,7 +268,9 @@ export class PluginFacts {
       }, loadedWithNoLine),
     ];
     this.broken = broken;
-    this.offered = offeredMoves(this.lineOrder.map(({ name }) => name), broken, this.factsOver(this.lineOrder));
+    const active = new Set(names);
+    const listed = { loadedWithNoLine: noLine, lines: this.lineOrder.map(({ name }) => name), isActive: (name: string) => active.has(name) };
+    this.offered = offeredMoves(listed, broken, this.factsOver([...treeOrder, ...this.lineOrder]));
     this.sorting = new ByPluginAddress<BrokenRule[]>();
     this.sortingNames = [];
     for (const rule of broken) {
