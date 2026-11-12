@@ -68,20 +68,9 @@ internal sealed class HeldPlugins
                 plugin.Name, plugin.Origin, registration.LoadOrderIndex);
         }
 
-        // The binary path (ADR-0007) needs the same explicit strings parameters
-        // init does, or a Localized non-compiled plugin fails instead of opening.
         var readTimer = Stopwatch.StartNew();
-        if (!_adapter.ReadContent(
-                new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder,
-                plugin.Strings)
-            .Holds(out var content, out var failure))
-        {
-            _logger.LogWarning(failure.Error, "Failed to open plugin {FileName} ({Origin}): {Reason}", plugin.Name, plugin.Origin, failure.Reason);
-            return failure;
-        }
+        if (!Read(plugin, registration, loadOrder).Holds(out var metadata, out var failure)) return failure;
         var readMs = readTimer.ElapsedMilliseconds;
-
-        var metadata = BuildPluginMetadata(content, plugin, registration);
         Hold(metadata);
 
         if (_logger.IsEnabled(LogLevel.Information))
@@ -95,17 +84,38 @@ internal sealed class HeldPlugins
         return PluginAnswer.Of(metadata);
     }
 
+    /// <summary>The header read again and held in place of the one held. A standing failure stays: only the
+    /// plugin's own re-read clears it. A file that cannot be read leaves the header last read.</summary>
+    public Answer<PluginMetadata, PluginFailure> Reopen(RegisteredPlugin plugin, Registration registration, LoadOrderSnapshot loadOrder)
+    {
+        if (!Read(plugin, registration, loadOrder).Holds(out var metadata, out var failure)) return failure;
+        Hold(metadata, clearFailure: false);
+        return PluginAnswer.Of(metadata);
+    }
+
+    // The binary path (ADR-0007) needs the same explicit strings parameters
+    // init does, or a Localized non-compiled plugin fails instead of opening.
+    private Answer<PluginMetadata, PluginFailure> Read(RegisteredPlugin plugin, Registration registration, LoadOrderSnapshot loadOrder)
+    {
+        if (!_adapter.ReadContent(new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder, plugin.Strings).Holds(out var content, out var failure))
+        {
+            _logger.LogWarning(failure.Error, "Failed to open plugin {FileName} ({Origin}): {Reason}", plugin.Name, plugin.Origin, failure.Reason);
+            return failure;
+        }
+        return PluginAnswer.Of(BuildPluginMetadata(content, plugin, registration));
+    }
+
     // Republishes the snapshot readers see, so a plugin is never half-held from a reader's point of
     // view. Replaces any plugin already held under the same key: two PluginMetadata under one
     // (origin, filename) would make every keyed lookup ambiguous.
-    private void Hold(PluginMetadata metadata)
+    private void Hold(PluginMetadata metadata, bool clearFailure = true)
     {
         lock (_mutation)
         {
             _plugins.RemoveAll(p => PluginAddress.Comparer.Equals(p.Key, metadata.Key));
             _plugins.Add(metadata);
             PublishPlugins();
-            _loadFailures.Remove(metadata.Key);
+            if (!clearFailure || !_loadFailures.Remove(metadata.Key)) return;
             Volatile.Write(ref _loadFailuresSnapshot, [.. _loadFailures.Values]);
         }
     }

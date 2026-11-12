@@ -22,6 +22,27 @@ public sealed class CompilePluginHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task ACompile_MarksItsPluginWritten_ForTheReadsAfterIt()
+    {
+        var before = _mod.Holder.SourceWrites;
+
+        (await _mod.CompileHandler.CompileAsync([_mod.Plugin])).Value();
+
+        Assert.Equal([_mod.Plugin], _mod.Holder.WritesAfter(before).LastOfEach.Require().Keys);
+    }
+
+    [Fact]
+    public async Task ARefusedCompile_MarksNothingWritten()
+    {
+        var before = _mod.Holder.SourceWrites;
+        Directory.Delete(PluginSourceRoot.In(_mod.ModFolder, CompileFixture.PluginName), recursive: true);
+
+        (await _mod.CompileHandler.CompileAsync([_mod.Plugin])).Value();
+
+        Assert.Equal(before, _mod.Holder.SourceWrites);
+    }
+
+    [Fact]
     public async Task APluginTheLoadOrderDoesNotHold_IsRefusedByType_AndTheOthersCompile()
     {
         var stranger = new PluginAddress("Stranger.esp", CompileFixture.Origin);

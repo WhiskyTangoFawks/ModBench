@@ -26,7 +26,7 @@ The instance stays MO2's, in MO2's own format, so you can switch between MO2 and
 
 ### A plugin is its source
 
-A plugin is a binary file: git cannot diff it, and VS Code cannot edit it. Modbench shows any plugin's records in a record panel familiar to xEdit users, but to edit a plugin, you decompile it first. Modbench uses Mutagen to decompile a mod's plugins into JSON for editing (similar to Spriggit), in the `source/` folder, alongside `mods/`. The source sits in a git repository of the mod's own, or in the instance repository. Each record edit is then a change to one file, which you review in VS Code's Source Control. A source mod with a git remote becomes a submodule of the instance repository, and restoring the modlist clones it.
+A plugin is a binary file: git cannot diff it, and VS Code cannot edit it. Modbench shows any plugin's records in a record panel familiar to xEdit users, but to edit a plugin, you decompile it first. Modbench uses Mutagen to decompile a mod's plugins into JSON for editing (similar to Spriggit), in the `source/` folder, alongside `mods/`. The source sits in a git repository of the mod's own, or in the instance repository. Each record edit is then a change to one file, which you review in VS Code's Source Control. A mod source with a git remote becomes a submodule of the instance repository, and restoring the modlist clones it.
 
 A build reconstructs the binary plugin from its source on demand, and places it in the mod's folder in `mods/` as a build artifact.
 
@@ -70,7 +70,7 @@ What works today:
 - Nexus: log in with your API key, query info and check for updates. A Premium account also downloads a file, and restore downloads each file it misses. This does mean giving Modbench your API key- which Nexus recommends against for anything other than in-development work. It's a temporary workaround, I will be pursuing proper access in the near future, but in the meantime ModBench is open source- you're welcome to see exactly what and how it's handled, and decide for yourself.
 - Plugins: plugin order and checkboxes, and each active plugin's records in a tree. The plugin order is checked against the game's sorting rules and LOOT's, with a suggested move. Modbench doesn't supply "autosort" functionality, it relies on the user to maintain their own load order, and just gives suggestions.
 - Records: an xEdit-style record panel across the active plugins, with conflict colours, field editing, copy as override, new record, and Referenced By.
-- Version control: the instance repository, Version in Git for any mod, source mods and build, and decompile and repair for a malformed plugin.
+- Version control: the instance repository, Version in Git for any mod, mod sources and build, and decompile and repair for a malformed plugin.
 - Deploy and purge: hardlinks into a deployment folder.
 - Language features: Go to Definition, Find All References, hover, completion and rename across the modlist.
 - Archives: a BA2 or BSA opened into its files, read-only, from Mods and the Explorer, and archived files in the file conflicts.
