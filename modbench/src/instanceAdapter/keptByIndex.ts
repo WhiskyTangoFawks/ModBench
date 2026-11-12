@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { errnoCode } from '../ports/errno';
 import { sameStamp, settledBefore, type FileStamp } from '../repositoriesLib/stampedReads';
-import { GIT_DIR, stampOf } from './files';
+import { GIT_DIR, isAbsent, stampOf } from './files';
 
 type MaybeStamped = FileStamp | undefined;
 
@@ -20,7 +20,7 @@ async function gitDirOf(repository: string): Promise<string> {
 
 const stampedIfThere = (path: string): Promise<MaybeStamped> =>
   stampOf(path).catch((err: unknown) => {
-    if (errnoCode(err) === 'ENOENT' || errnoCode(err) === 'ENOTDIR') return undefined;
+    if (isAbsent(err)) return undefined;
     throw err;
   });
 

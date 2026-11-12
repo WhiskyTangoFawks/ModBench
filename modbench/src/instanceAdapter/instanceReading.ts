@@ -13,6 +13,7 @@ import { groupModOrder } from './modGroups';
 import type { ManagerReading } from './publisher';
 import { pluginsProvidedOf } from './pluginsProvided';
 import { loadedWithNoLineOf } from '../tables/gamePaths';
+import { originsWinningFirst } from '../symbolNames/symbolNames';
 import { ignoreLink, type IgnoredLink } from './gameFolder/ownEntries';
 import { programVersions } from './gameFolder/programVersions';
 
@@ -50,9 +51,12 @@ export interface ReadingSource extends ArchiveReads {
   pluginOrder(profile: string): Promise<PluginEntry[]>;
   gameFolderPlugins(gameFolder: GameFolder, ignoredLink: IgnoredLink): Promise<DataFolderPlugins>;
   gameFolderFiles(gameFolder: GameFolder, ignoredLink: IgnoredLink): Promise<DataFolderFiles>;
-  /** The plugins the game folder's Creation Club list names, in its order; none when the release
-   *  has no Creation Club, the game folder is not found, or it holds no list. */
-  creationClubList(gameFolder: GameFolder, gameRelease: string | undefined): Promise<string[]>;
+  /** The plugins the Creation Club list the game gets names, in its order: the copy the first of `origins` deploys, else
+   *  the game folder's own; none when the release has no Creation Club or no game folder is found. */
+  creationClubList(
+    gameFolder: GameFolder, gameRelease: string | undefined, origins: readonly FileOrigin[], folders: ModFolders | undefined,
+    ignoredLink: IgnoredLink, skippedLink: SkippedLink,
+  ): Promise<string[]>;
   /** Undefined when there is no folder for mods at all. A link that cannot be followed is no
    *  folder, and is handed to `skippedLink`. */
   modFolders(skippedLink: SkippedLink): Promise<ModFolders | undefined>;
@@ -130,7 +134,7 @@ async function readWhole(source: ReadingSource): Promise<Omit<ManagerReading, 'u
       gameFolder,
       programVersions: await programVersions(gameFolder, gameRelease),
       dataFolderPlugins: await source.gameFolderPlugins(gameFolder, ignoreGameLink),
-      creationClubList: await source.creationClubList(gameFolder, gameRelease),
+      creationClubList: await source.creationClubList(gameFolder, gameRelease, originsWinningFirst(await modsKept), await modFoldersRead, ignoreGameLink, skipLink),
       archiveList: await source.archiveList(profile, gameFolder, gameRelease, ignoreGameLink),
       dataFolderArchives: await source.gameFolderArchives(gameFolder, gameRelease, ignoreGameLink),
       dataFolderFiles: await source.gameFolderFiles(gameFolder, ignoreGameLink),
@@ -173,7 +177,7 @@ export async function readPluginsProvided(source: ReadingSource, profile: string
     Promise.all(filesWinningFirst(mods, [], () => []).flatMap(({ origin }) => (origin.kind === 'mod' ? [origin] : []))
       .map(async (origin) => [origin.name, (await source.originRootFiles(origin, modFolders)).files] as const)).then((listed) => new Map(listed)),
     source.gameFolderPlugins(gameFolder, ignoreLink),
-    source.creationClubList(gameFolder, settings.gameRelease),
+    source.creationClubList(gameFolder, settings.gameRelease, originsWinningFirst(mods), modFolders, ignoreLink, ignoreSkippedLink),
   ]);
   return pluginsProvidedOf(
     filesWinningFirst(mods, runtimeOutput.files, (mod) => modFiles.get(mod) ?? []), dataFolderPlugins,
