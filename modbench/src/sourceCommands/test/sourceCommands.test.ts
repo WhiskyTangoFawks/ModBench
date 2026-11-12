@@ -306,11 +306,11 @@ describe('sourceCommands build, in mod order', () => {
     };
 
     it('tells the view to decompile it', async () => {
-      expect(String(await refusedBuild())).toBe(`${FACT} Run decompile on it.`);
+      expect(String(await refusedBuild())).toBe(`${FACT} Run decompile on the plugin to regenerate the source.`);
     });
 
     it('names the gesture as data for the agent, which reads the tool that runs it', async () => {
-      expect(await refusedBuild()).toEqual(phrase`${FACT} Run ${gestureName('modbench.plugin.decompile', 'decompile')} on it.`);
+      expect(await refusedBuild()).toEqual(phrase`${FACT} Run ${gestureName('modbench.plugin.decompile', 'decompile')} on the plugin to regenerate the source.`);
     });
   });
 

@@ -210,7 +210,7 @@ async function whyAsideNotTrashed(deps: BuildDeps, mod: SourceModToBuild, { repl
 }
 
 const refusedPlugin = withRemedy<PluginAddress, StepBuilt['refused'][number]['refusal']>({
-  SourceRegenerable: () => phrase`Run ${gestureName('modbench.plugin.decompile', 'decompile')} on it.`,
+  SourceRegenerable: () => phrase`Run ${gestureName('modbench.plugin.decompile', 'decompile')} on the plugin to regenerate the source.`,
 });
 
 const joined = (outcome: ModBuilt, { compiled, refused, archivesRefused, ignored, uncommitted, unpushed }: StepBuilt, unpacking: boolean): ModBuilt => ({

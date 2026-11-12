@@ -59,7 +59,7 @@ function firstLandedOf(landed: readonly PluginAddress[], unfinished: ReadonlyMap
 
 const repairReason = withRemedy<PluginAddress, DecompileAndRepairOutcome['refused'][number]['refusal']>({
   NotMalformed: () => phrase`Run ${gestureName('modbench.plugin.decompile', 'decompile')} instead.`,
-  OtherPluginRepairable: () => phrase`Run ${gestureName('modbench.plugin.decompileAndRepair', 'decompile and repair')} on its plugins.`,
+  OtherPluginRepairable: () => phrase`Run ${gestureName('modbench.plugin.decompileAndRepair', 'decompile and repair')} on the mod's malformed plugins.`,
 });
 
 const repairOutcome = (answer: DecompileAndRepairOutcome | WriteRefused): SelectionOutcome<PluginAddress, Message> | WriteRefused =>

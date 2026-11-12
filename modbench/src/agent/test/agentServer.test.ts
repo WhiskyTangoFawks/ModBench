@@ -2157,7 +2157,7 @@ describe('the agent server, running a gesture', () => {
     });
 
     it('names the tool, not the gesture, in a refusal a landed item holds and in a partial failure', async () => {
-      const reason = phrase`could not be compiled. Run ${gestureName('modbench.plugin.decompile', 'decompile')} on it.`;
+      const reason = phrase`could not be compiled. Run ${gestureName('modbench.plugin.decompile', 'decompile')} on the plugin to regenerate the source.`;
       fired.outcome = {
         applied: true,
         outcome: { landed: [{ mod: 'ModA', refused: [{ item: { name: 'A.esp', origin: 'ModA' }, reason }] }], refused: [] },
@@ -2168,7 +2168,7 @@ describe('the agent server, running a gesture', () => {
       const answer = await call(client, 'plugin_decompile', { argument: [{ name: 'Solo.esp' }] });
 
       expect(answer.text).not.toContain('parts');
-      expect(answer.text.match(/Run plugin_decompile on it\./g)).toHaveLength(2);
+      expect(answer.text.match(/Run plugin_decompile on the plugin to regenerate the source\./g)).toHaveLength(2);
     });
 
     it('names the tool, not the gesture, in a refusal of the whole selection', async () => {
