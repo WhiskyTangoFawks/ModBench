@@ -365,8 +365,8 @@ internal sealed class RecordQueries(
     });
 
     public Answer<MemberReferences, IndexRefused> GetScriptReferences(string name) => _answer.Of(() =>
-        CopiesNamingAtMembers(name, (copy, columns) => ScriptAttachments.Collect(copy.Body, columns)
-            .Where(attached => attached.Name.Equals(name, StringComparison.OrdinalIgnoreCase)).Select(attached => attached.FieldPath)));
+        CopiesNamingAtMembers(name, (copy, columns) => ([.. ScriptAttachments.Collect(copy.Body, columns)
+            .Where(attached => attached.Name.Equals(name, StringComparison.OrdinalIgnoreCase)).Select(attached => attached.FieldPath)], null)));
 
     private static readonly char[] PathSeparators = ['/', '\\'];
 
@@ -374,13 +374,16 @@ internal sealed class RecordQueries(
     public Answer<MemberReferences, IndexRefused> GetFileReferences(string dataPath) => _answer.Of(() =>
     {
         var file = new DataRelativePath(dataPath);
-        var release = _loadOrder.Require().GameRelease;
         var name = dataPath[(dataPath.LastIndexOfAny(PathSeparators) + 1)..];
-        return CopiesNamingAtMembers(name, (copy, columns) => AssetPaths.Collect(copy.Body, columns, release, copy.RecordType)
-            .Where(named => new DataRelativePath(named.DataPath) == file).Select(named => named.FieldPath));
+        return CopiesNamingAtMembers(name, (copy, columns) =>
+        {
+            var named = AssetPaths.Collect(copy.Body, columns);
+            return ([.. named.Files.Where(path => new DataRelativePath(path.DataPath) == file).Select(path => path.FieldPath)],
+                named.Refusals is [var refused, ..] ? $"{refused.FieldPath}: {refused.Reason}" : null);
+        });
     });
 
-    private MemberReferences CopiesNamingAtMembers(string text, Func<CopyHoldingText, IReadOnlyList<ColumnSpec>, IEnumerable<string>> namingPaths)
+    private MemberReferences CopiesNamingAtMembers(string text, Func<CopyHoldingText, IReadOnlyList<ColumnSpec>, (IReadOnlyList<string> Paths, string? Unread)> namingPaths)
     {
         var schemas = RequireSchemas();
         var copies = new List<CopyNamingAtMembers>();
@@ -395,7 +398,12 @@ internal sealed class RecordQueries(
             }
             try
             {
-                var paths = namingPaths(copy, schema.RecordColumns).ToList();
+                var (paths, unreadReason) = namingPaths(copy, schema.RecordColumns);
+                if (unreadReason is not null)
+                {
+                    unread.Add($"{named}: {unreadReason}");
+                    continue;
+                }
                 if (paths.Count > 0) copies.Add(new CopyNamingAtMembers(copy.FormKey, copy.Plugin, copy.InPluginSource, paths));
             }
             catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)

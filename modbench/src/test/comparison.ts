@@ -5,13 +5,13 @@ type Override = CompareResult['overrides'][number];
 export type Field = Override['fields'][number];
 type FieldMetadata = Field['metadata'];
 
-export interface Copy { plugin: string; origin?: string; isWinner: boolean; editorId?: string | null; fields?: Field[] }
+export interface Copy { plugin: string; origin?: string; recordType?: string; isWinner: boolean; editorId?: string | null; fields?: Field[] }
 
 /** A field of the given shape; `value` is what the record holds there. */
 export const fieldOf = (shape: Partial<FieldMetadata> & Pick<FieldMetadata, 'name' | 'type'>, value?: unknown): Field => ({
   metadata: {
     isArray: false, validFormKeyTypes: [], enumMembers: [], allowsNull: false, isDiscriminator: false, isRecordHeaderMember: false,
-    isRecordFormKey: false, ignoredInConflicts: false, isVersionControlInfo1: false, isEditorId: false, holdsAlpha: false, isPlacedRotation: false, isScriptName: false, ...shape,
+    isRecordFormKey: false, ignoredInConflicts: false, isVersionControlInfo1: false, isEditorId: false, holdsAlpha: false, isPlacedRotation: false, isScriptName: false, isAssetLink: false, ...shape,
   },
   value,
 });

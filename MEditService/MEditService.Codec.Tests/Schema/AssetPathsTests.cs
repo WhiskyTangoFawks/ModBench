@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
@@ -12,10 +13,10 @@ public class AssetPathsTests
 {
     private static Tes5.SkyrimMod NewMod() => new(ModKey.FromFileName("Assets.esp"), Tes5.SkyrimRelease.SkyrimSE);
 
-    private static List<AssetPath> Collected(Tes5.Static record) =>
+    private static IReadOnlyList<AssetPath> Collected(Tes5.Static record) =>
         AssetPaths.Collect(
             RecordTextCodec.SerializeToText(record, GameRelease.SkyrimSE),
-            SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["stat"].RecordColumns, GameRelease.SkyrimSE, "stat");
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["stat"].RecordColumns).Files;
 
     [Fact]
     public void APathARecordNames_IsTheFileInTheDataFolder_UnderItsAssetTypesFolder()
@@ -35,7 +36,7 @@ public class AssetPathsTests
 
         var collected = AssetPaths.Collect(
             RecordTextCodec.SerializeToText(record, GameRelease.Fallout4),
-            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["txst"].RecordColumns, GameRelease.Fallout4, "txst");
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["txst"].RecordColumns).Files;
 
         Assert.Equal(
             [
@@ -51,5 +52,27 @@ public class AssetPathsTests
         var record = NewMod().Statics.AddNew("Holder");
 
         Assert.Empty(Collected(record));
+    }
+
+    private static NamedFiles CollectedFrom(string given) =>
+        AssetPaths.Collect(
+            JsonSerializer.Serialize(new { Model = new { File = given } }),
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["stat"].RecordColumns);
+
+    [Fact]
+    public void APathThatAlreadyNamesItsAssetTypesFolder_IsNotPrefixedTwice()
+    {
+        Assert.Equal([new AssetPath(Path.Combine("Meshes", "Architecture", "Wall.nif"), "Model.File")], CollectedFrom(@"Meshes\Architecture\Wall.nif").Files);
+    }
+
+    [Fact]
+    public void APathItsAssetTypeCannotHold_IsARefusalWithMutagensReason_AndNoFile()
+    {
+        var named = CollectedFrom("Data/Wall.nif");
+
+        Assert.Empty(named.Files);
+        var refusal = Assert.Single(named.Refusals);
+        Assert.Equal("Model.File", refusal.FieldPath);
+        Assert.Contains("Wall.nif", refusal.Reason);
     }
 }

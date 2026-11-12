@@ -90,7 +90,7 @@ internal static class LeafClassification
             return TextLeaf("vector", declared == null ? null : ReflectedTypes.VectorText(declared));
 
         if (ReflectedTypes.IsAssetLink(core))
-            return new("string", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, IsAssetLink: true);
+            return new("string", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, AssetLinkType: core);
 
         if (ReflectedTypes.IsModKey(core) || ReflectedTypes.IsFormKey(core) || core == typeof(Guid))
             return new("string", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers);

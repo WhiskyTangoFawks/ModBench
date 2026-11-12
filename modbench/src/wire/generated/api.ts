@@ -713,6 +713,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/file-paths/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The path in the Data folder that the member at a field path of a record names, as Mutagen's asset type places it, the folder it keeps the files of its kind in included, with forward slashes. The record is the text the caller holds, and the answer needs no index. 400 when the record type is unknown, the text is no JSON, the member holds no path to a file, or its asset type cannot hold the path. */
+        post: operations["ResolveFilePath"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/records": {
         parameters: {
             query?: never;
@@ -1535,6 +1552,7 @@ export interface components {
             holdsAlpha: boolean;
             isPlacedRotation: boolean;
             isScriptName: boolean;
+            isAssetLink: boolean;
             indexWhen?: string[] | null;
             unheldWhen?: string[] | null;
         };
@@ -1943,8 +1961,17 @@ export interface components {
             aside: string;
             path: string;
         };
+        ResolveFilePathRequest: {
+            gameRelease: string;
+            recordType: string;
+            text: string;
+            fieldPath: string;
+        };
         ResolveNamesRequest: {
             names: components["schemas"]["NameQuery"][];
+        };
+        ResolvedFilePath: {
+            dataPath: string;
         };
         ScriptCopyRequest: {
             record: components["schemas"]["RecordAt"];
@@ -4003,6 +4030,39 @@ export interface operations {
             };
             /** @description Service Unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ResolveFilePath: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveFilePathRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolvedFilePath"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
