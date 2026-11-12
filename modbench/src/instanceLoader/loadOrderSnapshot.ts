@@ -254,6 +254,15 @@ export function archivesGameLoads(gameRelease: string, listed: readonly string[]
   return [...new Set([...loaded.listed, ...loaded.byPlugin.flatMap((plugin) => plugin.archives)])];
 }
 
+/** Every archive the game loads from the Data folder, a mod's and the game folder's, by the path it is read from, in the order
+ *  it loads them. */
+export function archivesInLoadOrder({ gameRelease, listed, inData, files }: ArchiveSources, dataFolder: string, active: readonly PluginAddress[]): string[] {
+  const rule = pluginCompanionRule(gameRelease);
+  if (rule === undefined || inData.kind !== 'listed') return [];
+  const loaded = archivesLoaded(rule, listed, active, winningFiles(dataFolder, inData.archives, files, rule.isArchive));
+  return [...new Set([...loaded.listed, ...loaded.byPlugin.flatMap((plugin) => plugin.archives)].map(({ path }) => path))];
+}
+
 function archivesAndStringsOf(
   { gameRelease, listed, inData, files }: ArchiveSources, dataFolder: string, active: readonly PluginAddress[],
 ): Pick<LoadOrderSnapshotValue<string>, 'listedArchives' | 'archivesByPlugin' | 'stringsFiles'> {

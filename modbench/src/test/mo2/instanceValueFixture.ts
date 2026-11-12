@@ -1,4 +1,4 @@
-import { FileConflictLookup } from '../../instanceLoader/fileConflictIndex';
+import { FileConflictLookup, NO_GAME_FOLDER_ARCHIVED } from '../../instanceLoader/fileConflictIndex';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import { READ_SORTING_RULE_FILES } from '../readSortingRuleFiles';
 import { groupModOrder } from '../../instanceAdapter/modGroups';
@@ -25,6 +25,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     flaggedHashes: new Map(),
     loadsArchive: () => false,
     stackedCopies: new FileConflictLookup(),
+    gameFolderArchived: NO_GAME_FOLDER_ARCHIVED,
     papyrusScripts: [],
     plugins: [],
     downloadedFiles: { kind: 'listed', rows: [] },

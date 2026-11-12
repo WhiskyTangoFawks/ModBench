@@ -285,6 +285,26 @@ export function stackCopies(index: Pick<FileConflictIndex, 'winningFirst'>, load
   return stack;
 }
 
+/** The game folder's archived copies by lower-case path, each from the archive that loads last of the game folder's, and
+ *  where the game loads each archive in the Data folder, a mod's included. For symbol resolution only: the stack holds
+ *  no game folder copy (mods-conflicts.md, story 5). */
+export interface GameFolderArchived {
+  readonly copies: ReadonlyMap<string, ArchivedFileAddress>;
+  readonly loadRank: ReadonlyMap<string, number>;
+}
+
+export const NO_GAME_FOLDER_ARCHIVED: GameFolderArchived = { copies: new Map(), loadRank: new Map() };
+
+/** `loaded` is every archive the game loads from the Data folder in load order, with what it holds when it is one of the
+ *  game folder's and mEdit read it. */
+export function gameFolderArchivedOf(loaded: readonly { readonly archive: string; readonly gameFolderFiles?: readonly string[] }[], gameRelease: string): GameFolderArchived {
+  const copies = new Map<string, ArchivedFileAddress>();
+  for (const { archive, gameFolderFiles = [] } of loaded) {
+    for (const file of gameFolderFiles) copies.set(file.toLowerCase(), { gameRelease, archive, file });
+  }
+  return { copies, loadRank: new Map(loaded.map(({ archive }, rank) => [archive, rank])) };
+}
+
 const sameLoaded = (a: readonly LoadedArchive[], b: readonly LoadedArchive[]): boolean =>
   a.length === b.length && a.every((one, at) => {
     const other = b.at(at);

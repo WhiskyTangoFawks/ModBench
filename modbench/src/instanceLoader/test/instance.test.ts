@@ -40,7 +40,7 @@ const GAME_FOUND: Partial<InstanceReading> = {
   dataFolderArchives: { kind: 'listed', archives: [], stringsFiles: [] } satisfies DataFolderArchives,
 };
 
-function loader(overrides: Partial<InstanceReading> = {}, wrap: (adapter: InstanceAdapter) => InstanceAdapter = (adapter) => adapter) {
+function loader(overrides: Partial<InstanceReading> = {}, wrap: (adapter: InstanceAdapter) => InstanceAdapter = (adapter) => adapter, gameFolderInWorkspace: (dataFolder: string) => boolean = () => true) {
   const fake = fakeInstanceAdapter(readingFixture(overrides));
   const medit = new InMemoryMEditClient();
   const log = leveledLog();
@@ -58,6 +58,7 @@ function loader(overrides: Partial<InstanceReading> = {}, wrap: (adapter: Instan
     window,
     log,
     medit,
+    gameFolderInWorkspace,
   });
   instances.push(instance);
   return {
@@ -934,7 +935,7 @@ describe('Instance — game folder and the archives the game loads', () => {
       archiveList: ['Fallout4 - Interface.ba2'],
       archiveListNotes: [note],
       dataFolderArchives: { kind: 'listed', archives: ['Fallout4 - Interface.ba2'], stringsFiles: [] },
-    });
+    }, (adapter) => adapter, () => false);
 
     await instance.refresh();
     await instance.refresh();
@@ -1415,6 +1416,45 @@ describe('Instance — what each archive holds', () => {
     await instance.refresh();
 
     expect(instance.value.loadsArchive(archive)).toBe(loads);
+  });
+
+  describe('the game folder\'s archived copies, for symbol resolution only', () => {
+    const FILE = 'meshes/x.nif';
+    const GAME_ARCHIVE = '/game/Data/Fallout4 - Meshes.ba2';
+    const MOD_ARCHIVE_LATER = '/instance/mods/A/A - Main.ba2';
+    const reading: Partial<InstanceReading> = {
+      ...GAME_FOUND, mods: [mod('A')], archiveList: ['Fallout4 - Meshes.ba2'],
+      dataFolderArchives: { kind: 'listed', archives: ['Fallout4 - Meshes.ba2'], stringsFiles: [] },
+      modFiles: new Map([['A', filesOfMod('A', 'A.esp', 'A - Main.ba2')]]),
+      pluginOrder: [{ name: 'A.esp', enabled: true }],
+    };
+    const read = async (inWorkspace: boolean) => {
+      const { instance, medit } = loader(reading, (adapter) => ({ ...adapter, fileStamp: () => Promise.resolve({ kind: 'read', answer: { size: 1n, modifiedNs: 1n } }) }), () => inWorkspace);
+      medit.setQueryAnswer('getArchiveContents', [holding(GAME_ARCHIVE, FILE), holding(MOD_ARCHIVE_LATER, FILE)]);
+      await instance.refresh();
+      return { value: instance.value, medit };
+    };
+
+    it('carries the copy in a game folder archive, and no copy of it in the stack', async () => {
+      const { value } = await read(true);
+
+      expect([value.gameFolderArchived.copies.get(FILE), value.stackedCopies.get(FILE)?.copies.map(({ at }) => at)]).toEqual([
+        { gameRelease: 'Fallout4', archive: GAME_ARCHIVE, file: FILE },
+        [{ kind: 'archived', gameRelease: 'Fallout4', archive: MOD_ARCHIVE_LATER, file: FILE }],
+      ]);
+    });
+
+    it('ranks each archive by where the game loads it, a mod\'s with the game folder\'s', async () => {
+      const { value } = await read(true);
+
+      expect([...value.gameFolderArchived.loadRank]).toEqual([[GAME_ARCHIVE, 0], [MOD_ARCHIVE_LATER, 1]]);
+    });
+
+    it('reads no game folder archive while the game folder is outside the workspace', async () => {
+      const { value, medit } = await read(false);
+
+      expect([value.gameFolderArchived.copies.size, asked(medit)]).toEqual([0, [['Fallout4', [MOD_ARCHIVE_LATER]]]]);
+    });
   });
 
   describe('the copies of each file, stacked as the game stacks them', () => {

@@ -6,8 +6,7 @@ import { attachPortOf, createMEditClient, recordIndexReferences, stopMEditClient
 import { manifestFileReferences, manifestEntryNames } from './manifestAdapter/manifestAdapter';
 import type { EntryNames, SymbolOwner } from './symbolNames/symbolNames';
 import { makeReporter } from './drivingLib/reporter';
-import { isInsideAny } from './drivingLib/insideFolders';
-import { workspaceRoots } from './drivingLib/workspaceRoots';
+import { inWorkspace, refreshWhenGameFolderEntersOrLeavesWorkspace } from './drivingLib/workspaceRoots';
 import { commandTitles } from './drivingLib/commandTitles';
 import { surfaceRefusedWrites } from './drivingLib/writingGesture';
 import { askQuestion } from './dialog';
@@ -150,8 +149,6 @@ const ownAll = (own: Own, disposables: vscode.Disposable[]): void => {
   own(vscode.Disposable.from(...disposables));
 };
 
-const inWorkspace = (path: string): boolean => isInsideAny(workspaceRoots(), path);
-
 function buildBareSide(own: Own): InstanceSide {
   return {
     toolbox: own(createToolboxView({ instance: undefined })),
@@ -198,8 +195,9 @@ function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, 
         instanceRoot, gameFolderSetting, scriptEnvironmentFileSetting: scriptEnvironmentFileOf(instanceRoot), installationFileReader: downloadedFileReader, fileProblems: fileProblemsOver(problemsHostOver(own(vscode.languages.createDiagnosticCollection('modbench-unhashed'))), outputChannel), fomodEngine: fomodEngineIn(extensionUri, outputChannel), deployedPath,
       });
       const instance = own(new Instance({
-        adapter, gameFolderSettingId: gameFolderSetting.id, window: vscode.window, log: outputChannel, medit,
+        adapter, gameFolderSettingId: gameFolderSetting.id, window: vscode.window, log: outputChannel, medit, gameFolderInWorkspace: inWorkspace,
       }));
+      refreshWhenGameFolderEntersOrLeavesWorkspace(own, instance);
       const owners = [adapter.pluginReferences, manifestFileReferences({
         sourceFolders: () => instance.value.paths.sourceDirs,
         modFolderOf: (mod) => adapter.modFolderPath(mod),

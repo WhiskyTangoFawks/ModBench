@@ -3,18 +3,18 @@ import { TreeItem, TreeItemCollapsibleState, Uri } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({ Uri, TreeItem, TreeItemCollapsibleState, commands: { executeCommand: () => Promise.resolve() } }));
 
-import { FileConflictLookup, modOrigin, type CopyAt, type StackedFile } from '../../instanceLoader/fileConflictIndex';
+import { FileConflictLookup, modOrigin, NO_GAME_FOLDER_ARCHIVED, type CopyAt, type GameFolderArchived, type StackedFile } from '../../instanceLoader/fileConflictIndex';
 import { copyTheGameGets } from '../fileCopy';
 
 const PATH = 'textures/decals/stain_d.dds';
 const LOOSE: CopyAt = { kind: 'loose', path: '/instance/mods/Mod/Textures/Decals/Stain_d.dds' };
 const ARCHIVED: CopyAt = { kind: 'archived', gameRelease: 'Fallout4', archive: '/instance/mods/Mod/Mod - Textures.ba2', file: PATH };
 
-function held(winner: CopyAt | undefined, inGameFolder = false, listed = true) {
+function held(winner: CopyAt | undefined, inGameFolder = false, listed = true, gameFolderArchived: GameFolderArchived = NO_GAME_FOLDER_ARCHIVED) {
   const stackedCopies = new FileConflictLookup<StackedFile>();
   if (winner) stackedCopies.set({ relativePath: PATH, copies: [{ origin: modOrigin('Mod'), at: winner }] });
   const files = new Map(inGameFolder ? [[PATH, { relativePath: PATH, path: '/game/Data/Textures/Decals/Stain_d.dds' }]] : []);
-  return { stackedCopies, dataFolderFiles: listed ? { kind: 'listed' as const, files } : { kind: 'unresolved' as const } };
+  return { stackedCopies, gameFolderArchived, dataFolderFiles: listed ? { kind: 'listed' as const, files } : { kind: 'unresolved' as const } };
 }
 
 const INSIDE = () => true;
@@ -58,5 +58,33 @@ describe('a game folder outside the workspace (ADR-0001)', () => {
     const asked: string[] = [];
     copyTheGameGets(held(undefined, true), PATH, (path) => { asked.push(path); return true; });
     expect(asked).toEqual(['/game/Data/Textures/Decals/Stain_d.dds']);
+  });
+});
+
+describe('the game folder\'s archived copy, ranked as the game loads archives', () => {
+  const GAME_COPY = { gameRelease: 'Fallout4', archive: '/game/Data/Fallout4 - Textures.ba2', file: PATH };
+  const archivedInGame = (modLoadsAfter: boolean): GameFolderArchived => ({
+    copies: new Map([[PATH, GAME_COPY]]),
+    loadRank: new Map([[GAME_COPY.archive, modLoadsAfter ? 0 : 1], [ARCHIVED.kind === 'archived' ? ARCHIVED.archive : '', modLoadsAfter ? 1 : 0]]),
+  });
+
+  it('is the copy when no mod holds one', () => {
+    expect(copyTheGameGets(held(undefined, false, true, archivedInGame(true)), PATH, INSIDE)).toEqual({ kind: 'archived', ...GAME_COPY });
+  });
+
+  it('loses to a mod\'s archive that loads after it', () => {
+    expect(copyTheGameGets(held(ARCHIVED, false, true, archivedInGame(true)), PATH, INSIDE)).toEqual(ARCHIVED);
+  });
+
+  it('wins over a mod\'s archive that loads before it', () => {
+    expect(copyTheGameGets(held(ARCHIVED, false, true, archivedInGame(false)), PATH, INSIDE)).toEqual({ kind: 'archived', ...GAME_COPY });
+  });
+
+  it('loses to a loose copy in a mod, whatever the load order', () => {
+    expect(copyTheGameGets(held(LOOSE, false, true, archivedInGame(false)), PATH, INSIDE)).toEqual(LOOSE);
+  });
+
+  it('loses to a loose file in the game folder', () => {
+    expect(copyTheGameGets(held(undefined, true, true, archivedInGame(false)), PATH, INSIDE)).toEqual({ kind: 'loose', path: '/game/Data/Textures/Decals/Stain_d.dds' });
   });
 });
