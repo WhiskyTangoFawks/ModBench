@@ -1491,7 +1491,7 @@ describe('the MO2 adapter\'s game files', () => {
     await put('game/Fallout4.exe', 'cccc');
     await put('steam/Data/Meshes/A.nif', 'aaaa');
     await put('steam/Data/b.dds', 'bbbb');
-    await put('game/Data/b.dds', 'zzzz');
+    await put('game/Data/b.dds', 'cccc');
     const place = { ...gamePlace(), steamRoot: join(root, 'steam') };
 
     const found = await adapter.gameFiles(place, ['Data/meshes/a.nif', 'Data/b.dds', 'Fallout4.exe']);
@@ -1501,8 +1501,26 @@ describe('the MO2 adapter\'s game files', () => {
     expect(found.files).toEqual(expect.arrayContaining([
       { root: join(root, 'steam'), path: 'Data/Meshes/A.nif', hash: HASH_OF_AAAA },
       { root: join(root, 'steam'), path: 'Data/b.dds', hash: HASH_OF_BBBB },
+      { root: join(root, 'game'), path: 'Data/b.dds', hash: HASH_OF_CCCC },
       { root: join(root, 'game'), path: 'Fallout4.exe', hash: HASH_OF_CCCC },
     ]));
+  });
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every folder) hands no file of a path the Steam install cannot read, though the game folder holds it', async () => {
+    const adapter = await instance();
+    await put('game/Data/Meshes/a.nif', 'aaaa');
+    await put('game/Data/b.dds', 'bbbb');
+    await put('steam/Data/Meshes/a.nif', 'aaaa');
+    const meshes = join(root, 'steam', 'Data', 'Meshes');
+    await chmod(meshes, 0o000);
+
+    try {
+      const found = await adapter.gameFiles({ ...gamePlace(), steamRoot: join(root, 'steam') }, ['Data/meshes/a.nif', 'Data/b.dds']);
+
+      expect(found).toEqual({ files: [{ root: join(root, 'game'), path: 'Data/b.dds', hash: HASH_OF_BBBB }], unreadable: { 'Data/meshes/a.nif': expect.stringMatching(/EACCES/) as unknown } });
+    } finally {
+      await chmod(meshes, 0o755);
+    }
   });
 
   it.skipIf(process.platform === 'win32')('(a link needs no privilege on POSIX) hands no game file for a path through or to a symlink in the Data folder', async () => {

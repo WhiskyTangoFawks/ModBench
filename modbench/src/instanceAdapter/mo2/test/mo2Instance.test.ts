@@ -123,56 +123,43 @@ describe('the MO2 Instance adapter', () => {
         }
       });
 
-      it.each<[string, (game: string, library: string) => Promise<GameDetectors>]>([
-        ['Steam holds no such game', () => Promise.resolve(NO_DETECTORS)],
-      ])('answers the game folder with no depots when %s', async (_case, arrange) => {
-        const library = await mkdtemp(join(tmpdir(), 'mo2-instance-steamlib-'));
+      it('answers the game folder with no depots when Steam holds no such game', async () => {
         const game = await mkdtemp(join(tmpdir(), 'mo2-instance-gamefolder-'));
         try {
-          const detectors = await arrange(game, library);
-          await mkdir(join(game, 'Data'), { recursive: true });
+          await mkdir(join(game, 'Data'));
 
-          expect(await managerOver(root, { gameFolderSettingValue: game, detectors }).gamePlace()).toEqual({ root: game, depots: [], depotProblems: [] });
+          expect(await managerOver(root, { gameFolderSettingValue: game, detectors: NO_DETECTORS }).gamePlace()).toEqual({ root: game, depots: [], depotProblems: [] });
         } finally {
           await rm(game, { recursive: true, force: true });
-          await rm(library, { recursive: true, force: true });
         }
       });
 
-      it('answers a Steam install that is not the game folder beside it, with its depots', async () => {
+      it.each<[string, (library: string, steam: string) => Promise<{ game: string; reached: string; expected: object }>]>([
+        ['a Steam install that is not the game folder, beside it', async (library, steam) => {
+          const game = `${library}-stock`;
+          await mkdir(join(game, 'Data'), { recursive: true });
+          return { game, reached: steam, expected: { root: game, steamRoot: steam } };
+        }],
+        ['a Steam install reached through a link to the game folder, as the game folder', async (library, steam) => {
+          const linked = `${library}-link`;
+          await symlink(library, linked);
+          return { game: steam, reached: join(linked, 'steamapps', 'common', 'Fallout 4'), expected: { root: steam } };
+        }],
+      ])('answers %s, with its depots', async (_case, arrange) => {
         const library = await mkdtemp(join(tmpdir(), 'mo2-instance-steamlib-'));
-        const game = await mkdtemp(join(tmpdir(), 'mo2-instance-gamefolder-'));
         try {
           const steam = join(library, 'steamapps', 'common', 'Fallout 4');
           await mkdir(join(steam, 'Data'), { recursive: true });
-          await mkdir(join(game, 'Data'));
           await writeAppManifestOfDepot(library);
-          const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: join(steam, 'Data') }) };
+          const { game, reached, expected } = await arrange(library, steam);
+          const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: join(reached, 'Data') }) };
 
           expect(await managerOver(root, { gameFolderSettingValue: game, detectors }).gamePlace()).toEqual({
-            root: game, steamRoot: steam, steamApp: 377160, depots: [INSTALLED_DEPOT], depotProblems: [],
+            ...expected, steamApp: 377160, depots: [INSTALLED_DEPOT], depotProblems: [],
           });
         } finally {
-          await rm(game, { recursive: true, force: true });
-          await rm(library, { recursive: true, force: true });
-        }
-      });
-
-      it('answers a Steam install reached through a link to the game folder with its depots', async () => {
-        const library = await mkdtemp(join(tmpdir(), 'mo2-instance-steamlib-'));
-        const linked = `${library}-link`;
-        try {
-          const game = join(library, 'steamapps', 'common', 'Fallout 4');
-          await mkdir(join(game, 'Data'), { recursive: true });
-          await writeAppManifestOfDepot(library);
-          await symlink(library, linked);
-          const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: join(linked, 'steamapps', 'common', 'Fallout 4', 'Data') }) };
-
-          expect(await managerOver(root, { gameFolderSettingValue: game, detectors }).gamePlace()).toEqual({
-            root: game, steamApp: 377160, depots: [INSTALLED_DEPOT], depotProblems: [],
-          });
-        } finally {
-          await rm(linked, { force: true });
+          await rm(`${library}-link`, { force: true });
+          await rm(`${library}-stock`, { recursive: true, force: true });
           await rm(library, { recursive: true, force: true });
         }
       });
