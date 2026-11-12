@@ -12,12 +12,13 @@ const SIDE: Partial<Record<BrokenRule['rule'], SuggestedMove['side']>> = {
   masterFlag: 'before',
   blueprint: 'after',
   loadAfter: 'after',
-  group: 'after',
 };
 
-/** The nearest place a broken rule's first plugin keeps it: beside the rule's second plugin. A rule about one plugin has none. */
-export function suggestedMove({ rule, plugins }: BrokenRule): SuggestedMove | undefined {
+/** The nearest place a broken rule's first plugin keeps it: its placement, else beside the rule's second plugin. */
+export function suggestedMove({ rule, plugins, placement }: BrokenRule): SuggestedMove | undefined {
+  const [mover] = plugins;
+  if (placement) return mover && { mover, ...placement };
   const side = SIDE[rule];
-  const [mover, anchor] = plugins;
+  const anchor = plugins[1];
   return side && mover && anchor && { mover, side, anchor };
 }
