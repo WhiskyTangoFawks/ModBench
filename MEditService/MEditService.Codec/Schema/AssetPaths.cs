@@ -25,7 +25,7 @@ public static class AssetPaths
         foreach (var col in columns)
         {
             FormReferences.WalkLeaves(DocumentNodes.VariantFor(col.Field, root), DocumentNodes.At(root, col.PropertyName), col.Name,
-                leaf => leaf.IsAssetLink,
+                leaf => leaf.AssetLinkType is not null,
                 (leaf, path, value) =>
                 {
                     if (leaf.AssetLinkType is not { } linkType || FormReferences.ExtractString(value) is not { Length: > 0 } given) return;

@@ -1552,6 +1552,7 @@ export interface components {
             holdsAlpha: boolean;
             isPlacedRotation: boolean;
             isScriptName: boolean;
+            isAssetLink: boolean;
             indexWhen?: string[] | null;
             unheldWhen?: string[] | null;
         };

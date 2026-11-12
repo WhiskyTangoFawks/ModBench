@@ -4,8 +4,8 @@ import type { InstanceValue } from '../instanceLoader/instance';
 import { revealArchivedFile } from './archiveFiles';
 import { gameFolderFile, gameFolderFileOver } from './modFiles';
 
-/** The copy of the file at `path` that the game gets, or what searching for it found: an enabled mod or Overwrite, else a
- *  loose file in the game folder, which beats an archived copy. The game folder's own archives are not read. */
+/** The copy of `path` that the game gets, or what searching found: a mod's or Overwrite's, else a loose game folder file,
+ *  which beats an archived copy. The game folder's archives are not read. */
 export function copyTheGameGets(value: Pick<InstanceValue, 'stackedCopies' | 'dataFolderFiles'>, path: string): CopyAt | { none: string } {
   const stacked = value.stackedCopies.get(path)?.copies[0]?.at;
   const loose = stacked === undefined ? gameFolderFile(value, path) : gameFolderFileOver(value, path);
