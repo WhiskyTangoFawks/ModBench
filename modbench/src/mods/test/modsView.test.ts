@@ -127,7 +127,7 @@ const otherDeps = () => ({
   },
   checkForUpdates: vi.fn(),
   manifestGestures: {
-    toolboxView: 'modbench.toolbox', commands: { updateManifest: vi.fn(), restoreFromManifest: vi.fn(), otherManifests: vi.fn(), ignoreFiles: vi.fn() }, say: () => undefined,
+    toolboxView: 'modbench.toolbox', commands: { updateManifest: vi.fn(), restoreFromManifest: vi.fn(), ignoreFiles: vi.fn() }, say: () => undefined,
   },
 });
 

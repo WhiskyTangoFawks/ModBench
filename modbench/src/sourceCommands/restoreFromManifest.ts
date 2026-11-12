@@ -3,7 +3,7 @@
 
 import { basename, join } from 'node:path';
 import { isRefused, type MEditClient } from '../client';
-import type { InstallationFile, InstanceAdapter, OtherManifest, PackageFile, Submodule } from '../instanceAdapter/instanceAdapter';
+import type { InstallationFile, InstanceAdapter, PackageFile, Submodule } from '../instanceAdapter/instanceAdapter';
 import {
   buildFileIn, exclusionsOf, flaggedHashesIn, folderAgainst, installationFileLack, manifestIn, repositoryOf, sourceModsOf, type BuildFile, type FolderAgainst, type Manifest,
   type ManifestPackage, type SourceMods,
@@ -12,7 +12,6 @@ import type { Nexus } from '../nexus/nexus';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
-import { foldersOf, namesOf, type Folders } from './folders';
 import { possibleHashesOf } from './possibleHashes';
 import { archiveVariants, buildSourceMod, whyNotTrashed, type BuildPass } from './buildSourceMod';
 import { namedGameFolder, type NamedGameFolder } from './gameFolderFacts';
@@ -24,9 +23,11 @@ import { whyNotIndexed, type LoadOrderSnapshot } from './whyNotIndexed';
 
 type Adapter = Pick<InstanceAdapter,
   'reading' | 'modOrder' | 'entryKey' | 'sourceModFolders' | 'downloadedFile' | 'gamePlace' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash'
-  | 'nexusFileAt' | 'modFolderPath' | 'foldersRefused' | 'otherManifests' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'folderValue' | 'unheldFolderValue' | 'filesIn' | 'originFileHash' | 'writeFilesIn'
+  | 'nexusFileAt' | 'modFolderPath' | 'foldersRefused' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'folderValue' | 'unheldFolderValue' | 'filesIn' | 'originFileHash' | 'writeFilesIn'
   | 'trashFileIn' | 'trashingReplaced' | 'fileStamp' | 'submodule' | 'unclonedSubmodules' | 'downloadedFileHolding' | 'copyDownloadedFile' | 'putDownloadedFile'
   | 'repositoryOnDisk' | 'refuseUnpublishedPins' | 'writePathTokens' | 'writeInstalledFrom' | 'foldersHeldWhole'>;
+
+type FolderOf = (name: string) => Promise<string | undefined>;
 
 type FolderValue = Awaited<ReturnType<InstanceAdapter['folderValue']>>;
 
@@ -62,10 +63,6 @@ export type RestoreStatus =
   | { readonly phase: 'Downloading'; readonly file: string }
   | { readonly phase: 'Restoring'; readonly mod: string; readonly modsDone: number; readonly modsTotal: number };
 
-/** Every other manifest (instance-repository.md, Every mod, story 1), and each folder the search could not read, or the
- *  search itself, refused on its own (commands.md, A selection is one gesture, and each item lands on its own). */
-export interface OtherManifests { readonly others: readonly OtherManifest[]; readonly refused: readonly ItemRefusal<string>[] }
-
 interface Options {
   readonly onProgress?: (status: RestoreStatus) => void;
   readonly signal?: AbortSignal;
@@ -75,38 +72,23 @@ const sentence = (reason: string): string => ` ${reason.charAt(0).toUpperCase()}
 const skipped = (why: string): string => `was skipped: ${why.replace(/\.$/, '')}.`;
 const notFinished = (why: string): string => `was not finished: ${why.replace(/\.$/, '')}. Restoring it again finishes it.`;
 
-export async function otherManifestsOf(adapter: Pick<InstanceAdapter, 'otherManifests'>): Promise<OtherManifests> {
-  try {
-    const { manifests, unsearched, nested } = await adapter.otherManifests();
-    return {
-      others: manifests,
-      refused: [...unsearched.map(({ name, reason }) => ({ item: name, reason: `was not searched for a manifest: ${reason}` })), ...nested.map(({ name, reason }) => ({ item: name, reason }))],
-    };
-  } catch (err) {
-    return { others: [], refused: [{ item: 'every other manifest', reason: `was not searched for: ${errorMessage(err)}` }] };
-  }
-}
-
 // ADR-0022: a folder is compared with every manifest's, not only the selection's.
 async function foldersCompared(
-  adapter: Adapter, names: readonly string[], others: readonly OtherManifest[], sourceMods: SourceMods,
-): Promise<{ folders: Folders; refused: ItemRefusal<string>[]; notSearched: readonly ItemRefusal<string>[] }> {
-  const search = await otherManifestsOf(adapter);
-  const every = [...others, ...search.others.filter(({ name }) => !others.some((asked) => asked.name === name))];
+  adapter: Adapter, names: readonly string[], sourceMods: SourceMods,
+): Promise<{ folderOf: FolderOf; refused: ItemRefusal<string>[] }> {
   const { mods, modFolders } = await adapter.modOrder();
-  const folders = foldersOf(adapter, every, modFolders);
-  const otherNames = new Set(every.map(({ name }) => name));
+  const folderOf: FolderOf = (name) => adapter.modFolderPath(name, modFolders);
   const byKey = new Map<string, string>();
-  for (const name of [...names, ...mods.flatMap((entry) => (entry.kind === 'mod' ? [entry.name] : [])), ...sourceMods.folders.keys(), ...otherNames]) {
-    const key = otherNames.has(name) ? name : adapter.entryKey({ kind: 'mod', name });
+  for (const name of [...names, ...mods.flatMap((entry) => (entry.kind === 'mod' ? [entry.name] : [])), ...sourceMods.folders.keys()]) {
+    const key = adapter.entryKey({ kind: 'mod', name });
     if (!byKey.has(key)) byKey.set(key, name);
   }
-  const folderOf = new Map<string, string>();
+  const foldersByName = new Map<string, string>();
   await Promise.all([...byKey.values()].map(async (name) => {
-    const folder = await folders.of(name);
-    if (folder !== undefined) folderOf.set(name, folder);
+    const folder = await folderOf(name);
+    if (folder !== undefined) foldersByName.set(name, folder);
   }));
-  return { folders, refused: [...await adapter.foldersRefused(folderOf, names)], notSearched: search.refused };
+  return { folderOf, refused: [...await adapter.foldersRefused(foldersByName, names)] };
 }
 
 type Held = { readonly manifest: Manifest } | { readonly refusal: string } | undefined;
@@ -151,18 +133,18 @@ interface FolderPass {
 
 interface Pass extends FolderPass {
   readonly deps: RestoreDeps;
-  readonly folders: Folders;
+  readonly folderOf: FolderOf;
   readonly sourceMods: SourceMods;
   readonly build: BuildPass;
   readonly options: Options;
 }
 
-async function passOver(deps: RestoreDeps, folders: Folders, sourceMods: SourceMods, options: Options): Promise<Pass> {
+async function passOver(deps: RestoreDeps, folderOf: FolderOf, sourceMods: SourceMods, options: Options): Promise<Pass> {
   const { adapter } = deps;
   const gameRelease = await adapter.gameRelease();
   const tasks = await deps.tasks.labels();
   return {
-    deps, folders, sourceMods, options, game: await namedGameFolder(adapter, gameRelease),
+    deps, folderOf, sourceMods, options, game: await namedGameFolder(adapter, gameRelease),
     build: { facts: { exclusionMark: adapter.exclusionMark, archives: archiveVariants(gameRelease) }, tasks: new Set(tasks) },
   };
 }
@@ -388,7 +370,7 @@ async function metadataRefusal(pass: Pass, folder: string, manifest: Manifest): 
 }
 
 async function restoreMod(pass: Pass, mod: string): Promise<Answer> {
-  const folder = await pass.folders.of(mod);
+  const folder = await pass.folderOf(mod);
   if (folder === undefined) return { refusal: 'its name gives it no folder' };
   const held = await manifestHeld(folder);
   if (held === undefined) return { refusal: skipped('it has no manifest') };
@@ -444,27 +426,26 @@ async function pathTokensWrittenOrWhy(adapter: Adapter): Promise<string | undefi
 
 const CANCELLED = notFinished('the restore was cancelled');
 
-/** Each mod's folder made what its manifest says, from the losing end of mod order; `everyManifest`: the mods are every mod,
- *  so a folder that could not be searched for a manifest refuses nothing of them. */
+/** Each mod's folder made what its manifest says, from the losing end of mod order; `everyManifest`: the mods are every mod. */
 export async function restoreFromManifest(
-  deps: RestoreDeps, asked: readonly string[], options: Options, everyManifest: boolean, others: readonly OtherManifest[],
+  deps: RestoreDeps, asked: readonly string[], options: Options, everyManifest: boolean,
 ): Promise<RestoreResult> {
   const { adapter } = deps;
   const pathTokensNotWritten = await pathTokensWrittenOrWhy(adapter);
   const notClonedYet = await submodulesCloned(deps, options.onProgress);
   const order = await adapter.modOrder();
   const sourceMods = await sourceModsOf(order.modFolders, await adapter.sourceModFolders(), (name) => adapter.entryKey({ kind: 'mod', name }));
-  const ordered = await inModOrder(adapter, namesOf(asked, others));
-  const { folders, refused: refusedFolder, notSearched } = await foldersCompared(adapter, ordered, others, sourceMods);
+  const ordered = await inModOrder(adapter, asked);
+  const { folderOf, refused: refusedFolder } = await foldersCompared(adapter, ordered, sourceMods);
   const refusedNames = new Set(refusedFolder.map(({ item }) => item));
   const heldWhole = await setAsideHeldWhole(adapter, ordered.filter((mod) => !refusedNames.has(mod)), order.modFolders, {
-    takes: (mod) => folders.isMod(mod) && sourceMods.folderOf(mod) === undefined, everyMod: everyManifest, reason: skipped('git holds its whole folder'),
+    takes: (mod) => sourceMods.folderOf(mod) === undefined, everyMod: everyManifest, reason: skipped('git holds its whole folder'),
   });
   const mods = heldWhole.rest;
-  const pass = await passOver(deps, folders, sourceMods, options);
+  const pass = await passOver(deps, folderOf, sourceMods, options);
 
   const landed: ModRestored[] = [];
-  const refused: ItemRefusal<string>[] = [...notClonedYet, ...refusedFolder, ...heldWhole.refused, ...everyManifest ? [] : notSearched];
+  const refused: ItemRefusal<string>[] = [...notClonedYet, ...refusedFolder, ...heldWhole.refused];
   const pending: string[] = [];
   const notIndexed = new Map<string, string>();
   for (const [at, mod] of mods.entries()) {

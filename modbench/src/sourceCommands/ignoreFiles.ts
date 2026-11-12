@@ -86,7 +86,7 @@ export async function ignoreFiles(
   const toRecord = ignore ? [] : [...written].filter(([mod]) => sourceMods.folderOf(mod) === undefined);
   const recorded = toRecord.length === 0
     ? undefined
-    : await updateManifest(deps, toRecord.map(([mod]) => mod), { only: new Map(toRecord.map(([mod, ofMod]) => [mod, ofMod.map(({ path }) => path)])) }, [], false, []);
+    : await updateManifest(deps, toRecord.map(([mod]) => mod), { only: new Map(toRecord.map(([mod, ofMod]) => [mod, ofMod.map(({ path }) => path)])) }, false, []);
   const notRecorded = new Map(recorded?.refused.map(({ item, reason }) => [item, reason]));
   for (const [mod, ofMod] of written) {
     const reason = notRecorded.get(mod);
