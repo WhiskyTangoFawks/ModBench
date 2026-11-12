@@ -1242,8 +1242,14 @@ internal sealed class Indexer : IDisposable
                 return false;
             }
 
+            var failedBefore = held.IsHeldWithAFailure(key) || scope.Failed.Holds(key);
+            // The tree's rows say nothing of the header its compiled file now holds. A compiled file that
+            // cannot be read leaves the header last read, as the tree does not need it.
+            if (holdsTree && !failedBefore && held.Open(plugin.Registered, Registration.In(scope.LoadOrder, key), scope.LoadOrder).Holds(out var reopened, out _))
+                plugin = reopened;
+
             // Rows a failed read left say nothing of what the plugin now reads from.
-            if (held.IsHeldWithAFailure(key) || scope.Failed.Holds(key))
+            if (failedBefore)
             {
                 return !scope.Failed.StillFailing(plugin.Registered) && ReindexHeldPlugin(scope, plugin);
             }
@@ -1345,7 +1351,7 @@ internal sealed class Indexer : IDisposable
     }
 
     // ADR-0007: the read a first index runs, so a re-read gives the same rows. A failed read is recorded and
-    // rethrown, so it is not read again until that changes. A binary is reopened for its header.
+    // rethrown, so it is not read again until that changes. The header is reopened from the compiled file, and a tree does without it.
     private bool ReindexHeldPlugin(OpenScope scope, PluginMetadata plugin)
     {
         var key = plugin.Key;
@@ -1355,10 +1361,9 @@ internal sealed class Indexer : IDisposable
         {
             outcome = scope.Store.Commit(_ => scope.Failed.Read(plugin.Registered, state =>
             {
-                if (!readsBinary) return ReadWhole(scope, plugin, state);
-                return scope.Held.Open(plugin.Registered, Registration.In(scope.LoadOrder, key), scope.LoadOrder).Holds(out var reopened, out var failure)
-                    ? ReadWhole(scope, reopened, state)
-                    : ReadOutcome.Failed(failure);
+                var reopens = scope.Held.Open(plugin.Registered, Registration.In(scope.LoadOrder, key), scope.LoadOrder);
+                if (reopens.Holds(out var reopened, out var failure)) return ReadWhole(scope, reopened, state);
+                return readsBinary ? ReadOutcome.Failed(failure) : ReadWhole(scope, plugin, state);
             }));
         }
         catch (Exception ex)
