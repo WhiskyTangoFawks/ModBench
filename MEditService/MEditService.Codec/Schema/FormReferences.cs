@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
-using Mutagen.Bethesda.Plugins;
 using MEditService.Codec.Serialization;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Codec.Schema;
 
