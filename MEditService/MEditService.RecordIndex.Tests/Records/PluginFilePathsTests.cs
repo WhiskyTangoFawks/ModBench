@@ -145,6 +145,33 @@ public sealed class PluginFilePathsTests : IDisposable
         Assert.Equal((why.Reason, ProblemsFailureKind.Placement), (answered.Failure, answered.FailureKind));
     }
 
+    [Theory]
+    [InlineData("body = 'not a document'")]
+    [InlineData("record_type = 'ZZZZ'")]
+    public void ACopyThatCannotBeRead_IsUnreadNamingItsPlugin_AndTheCopiesBesideItStillAnswer(string damage)
+    {
+        FormKey broken = default, sibling = default;
+        using var fixture = new PluginFixtureBuilder("plugin-file-paths-throws")
+            .WithPlugin(Compiled.Name, mod =>
+            {
+                var first = mod.TextureSets.AddNew("First");
+                first.Diffuse = StainPath;
+                var second = mod.TextureSets.AddNew("Second");
+                second.Diffuse = StainPath;
+                (broken, sibling) = (first.FormKey, second.FormKey);
+            }, origin: Compiled.Origin)
+            .BuildScattered()
+            .CompiledPlugin();
+        using var index = Indexes.Reconciled(fixture, fixture.InstanceRoot);
+        IndexFiles.Execute(fixture.InstanceRoot, $"UPDATE mirror.records SET {damage} WHERE form_key = '{broken}'");
+
+        var answered = Assert.Single(index.Queries.GetFilePaths(null).Value());
+
+        Assert.Equal([sibling.ToString()], answered.Paths.Select(path => path.FormKey));
+        Assert.StartsWith($"{broken} in {Compiled.Name} ({Compiled.Origin}): ", Assert.Single(answered.Unread));
+        Assert.Null(answered.Failure);
+    }
+
     [Fact]
     public void AFileTheReadStoppedAt_IsUnread_AndThePathsOfTheRestStillAnswer()
     {
