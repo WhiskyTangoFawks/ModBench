@@ -11,7 +11,7 @@ import { heldManifestIn } from './heldManifest';
 import { possibleHashesOf } from './possibleHashes';
 import { setAsideHeldWhole } from './setAsideHeldWhole';
 import { gameFilesOf, gameHeld, gameToHand, type GameToHand } from './gameFolderFacts';
-import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, describedBy, type DownloadedFile, type GameHeld, type HashedModFile } from './manifestBuilder';
+import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, describedBy, packageKey, type DownloadedFile, type GameHeld, type HashedModFile } from './manifestBuilder';
 
 type Adapter = Pick<InstanceAdapter,
   'sourceModFolders' | 'foldersHeldWhole' | 'entryKey' | 'modOrder' | 'gamePlace' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'modFolderPath' | 'installationFile'
@@ -127,8 +127,6 @@ function namedAsOnDisk(held: Manifest | undefined, files: readonly HashedModFile
   return { ...held, files: rekeyed(held.files), flags: rekeyed(held.flags) };
 }
 
-const packageKey = (pkg: ManifestPackage): string => (pkg.kind === 'installationFile' ? `installationFile:${pkg.name}` : pkg.kind);
-
 // The lines `added` records, laid over those `held` keeps: every held package stays, and `added` brings those it lacks.
 function laidOver(held: Manifest | undefined, added: Manifest): Manifest {
   if (held === undefined) return added;
@@ -190,12 +188,9 @@ async function updateMod(
   const heldAsRead = await heldManifestIn(mod.folder);
   if (heldAsRead !== undefined && 'why' in heldAsRead) return refusal(heldAsRead.why);
   let held: Manifest | undefined = heldAsRead;
-  const holds = (name: string): boolean => name === (mod.installationFile === undefined ? undefined : basename(mod.installationFile.path)) || downloadedFiles.some(({ package: pkg }) => pkg.name === name);
   if (mod.game === undefined && held?.packages.some((pkg) => pkg.kind === 'gameFolder')) {
     return refusal('its manifest names the game folder, and the game folder was not found.');
   }
-  const absent = held?.packages.flatMap((pkg) => (pkg.kind === 'installationFile' && !holds(pkg.name) ? [`'${pkg.name}'`] : [])) ?? [];
-  if (absent.length > 0) return refusal(`its manifest names ${absent.join(', ')}, and this machine does not hold ${absent.length === 1 ? 'it' : 'them'}.`);
   if (await folderMissing(adapter, mod.folder)) return refusal('its folder does not exist.');
 
   let hashed: Hashed;
@@ -221,6 +216,10 @@ async function updateMod(
   const built = buildManifest(
     { downloadedFiles, ...mod.game === undefined ? {} : { game: mod.game }, ...installationFile === undefined ? {} : { installationFile } },
     copies.files, exclusionsOfFiles(hashed.exclude, files.map(({ path }) => path)), held);
+  if (built.hiddenFiles.length > 0) {
+    const named = (names: readonly string[]): string => names.map((name) => `'${name}'`).join(', ');
+    return refusal(`its manifest names ${named(built.missingPackages)}, which this machine does not hold, so no package this machine holds tells where ${named(built.hiddenFiles)} come${built.hiddenFiles.length === 1 ? 's' : ''} from.`);
+  }
   let kept: readonly ManifestPackage[] = [];
   try {
     if (mod.isSourceFolder === true) kept = await keptPackages(adapter, mod.folder, held, built.manifest, downloadedFiles);
