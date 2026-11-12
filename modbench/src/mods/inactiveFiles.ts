@@ -3,9 +3,9 @@
 
 import * as vscode from 'vscode';
 import type { FileOrigin, InstanceValue, InstanceView, OriginFolder } from '../instanceLoader/instance';
-import { modOrigin, RUNTIME_OUTPUT, sameOrigin } from '../instanceLoader/fileConflictIndex';
-import { fileRowUri, gameFolderFileOver } from './modFiles';
-import { isFileNotGotten, isNotDeployed } from '../drivingLib/modFileStates';
+import { modOrigin, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
+import { fileRowUri } from './modFiles';
+import { archiveGotten, archivedFilesOf, isFileNotGotten, isNotDeployed } from '../drivingLib/modFileStates';
 import { onSettingChange } from '../drivingLib/setting';
 import type { WorkspaceSettings } from './workspaceSettings';
 
@@ -42,14 +42,10 @@ function inactiveFiles(value: FilesValue): Inactive {
     for (const file of files) {
       const notGotten = isFileNotGotten(value, origin, enabled, file);
       add(origin, file, notGotten);
-      const contents = value.archiveContents.get(file.sourcePath);
-      if (contents === undefined) continue;
-      if (notGotten || !value.loadsArchive(file.relativePath)) archives.add(fileRowUri(origin, file.relativePath).toString());
-      if (contents.kind !== 'read') continue;
-      for (const entry of contents.answer) {
-        const winner = value.stackedCopies.get(entry)?.copies[0];
-        const winsEntry = winner !== undefined && gameFolderFileOver(value, entry) === undefined && sameOrigin(winner.origin, origin) && winner.at.kind === 'archived' && winner.at.archive === file.sourcePath;
-        if (!winsEntry) inactive.add(fileRowUri(origin, `${file.relativePath}/${entry}`).toString());
+      if (!value.archiveContents.has(file.sourcePath)) continue;
+      if (!archiveGotten(value, origin, enabled, file)) archives.add(fileRowUri(origin, file.relativePath).toString());
+      for (const { path, gotten } of archivedFilesOf(value, origin, enabled, file)) {
+        if (!gotten) inactive.add(fileRowUri(origin, `${file.relativePath}/${path}`).toString());
       }
     }
   }
