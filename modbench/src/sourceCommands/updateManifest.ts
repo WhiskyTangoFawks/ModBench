@@ -16,7 +16,7 @@ import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, descri
 
 type Adapter = Pick<InstanceAdapter,
   'sourceModFolders' | 'foldersHeldWhole' | 'entryKey' | 'modOrder' | 'gamePlace' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'modFolderPath' | 'installationFile'
-  | 'downloadedFilesHashed' | 'unheldFolderValue' | 'fileStamp' | 'nexusFileAt' | 'writeSubmodules' | 'writeOtherManifestLines'>;
+  | 'downloadedFilesHashed' | 'folderValue' | 'unheldFolderValue' | 'fileStamp' | 'nexusFileAt' | 'writeSubmodules' | 'writeOtherManifestLines'>;
 
 export interface UpdateManifestDeps {
   readonly adapter: Adapter;
@@ -55,6 +55,7 @@ interface ModToUpdate {
   readonly folder: string;
   readonly installationFile?: InstallationFile;
   readonly game?: GameHeld;
+  readonly isSourceFolder?: true;
 }
 
 interface UpdateOptions {
@@ -93,7 +94,7 @@ async function readSourceFolder(
 ): Promise<{ read: ModToUpdate; notes: readonly string[] } | { refusal: string }> {
   const taken = await gameFilesOf(adapter, { mod, folder }, { ...game, takes: () => true }, false);
   if ('refusal' in taken) return taken;
-  return { read: { name: mod, folder, ...withGame(game, taken.gameFiles) }, notes: taken.notes };
+  return { read: { name: mod, folder, isSourceFolder: true, ...withGame(game, taken.gameFiles) }, notes: taken.notes };
 }
 
 const withGame = (game: GameToHand, held: Parameters<typeof gameHeld>[1]): { game?: GameHeld } => {
@@ -164,6 +165,22 @@ function packageCopiesOf(
   return unknown.length === 0 ? { files: copies } : { unknown };
 }
 
+// instance-repository.md, Update manifest, story 7: a source folder's manifest keeps a package it names until git holds the files the package holds.
+async function keptPackages(
+  adapter: Adapter, folder: string, held: Manifest | undefined, built: Manifest, unheld: ReadonlyMap<string, unknown>, downloadedFiles: readonly DownloadedFile[],
+): Promise<readonly ManifestPackage[]> {
+  const builtKeys = new Set(built.packages.map(packageKey));
+  const named = held?.packages.filter((pkg) => pkg.kind === 'installationFile' && !builtKeys.has(packageKey(pkg))) ?? [];
+  if (named.length === 0) return [];
+  const all = await adapter.folderValue(folder);
+  const gitHolds = new Set([...all.files].flatMap(([path, file]) => (!path.startsWith('.git/') && !unheld.has(path) && file.read.kind === 'read' ? [file.read.answer.hash] : [])));
+  const gitHoldsAllOf = (pkg: ManifestPackage): boolean => {
+    const entries = pkg.kind === 'installationFile' ? downloadedFiles.find(({ package: one }) => one.name === pkg.name)?.file.entries ?? [] : [];
+    return entries.length > 0 && entries.every(({ hash }) => gitHolds.has(hash));
+  };
+  return named.filter((pkg) => !gitHoldsAllOf(pkg));
+}
+
 const unaccounted = (paths: readonly string[]): string => {
   const named = paths.map((path) => `'${path}'`).join(', ');
   return paths.length === 1
@@ -208,7 +225,9 @@ async function updateMod(
   const built = buildManifest(
     { downloadedFiles, ...mod.game === undefined ? {} : { game: mod.game }, ...installationFile === undefined ? {} : { installationFile } },
     copies.files, exclusionsOfFiles(hashed.exclude, files.map(({ path }) => path)), held);
-  const recorded = only === undefined ? built : { ...built, manifest: laidOver(held, built.manifest) };
+  const kept = mod.isSourceFolder === true ? await keptPackages(adapter, mod.folder, held, built.manifest, hashed.value.files, downloadedFiles) : [];
+  const withKept = { ...built, manifest: { ...built.manifest, packages: [...built.manifest.packages, ...kept] } };
+  const recorded = only === undefined ? withKept : { ...withKept, manifest: laidOver(held, withKept.manifest) };
   let written: boolean;
   try {
     written = await writeManifestIn(mod.folder, recorded.manifest);

@@ -431,6 +431,46 @@ describe('update manifest', () => {
       ]);
     });
 
+    describe('names a package its manifest names', () => {
+      const AUTHOR: InstallationFile = { path: '/downloads/Author.7z', size: 7, hash: 'AUTHORHASH0=', entries: [{ path: 'Author.esp', hash: HZ }, { path: 'Author.psc', hash: HX }] };
+      const PACKAGE = { kind: 'installationFile', name: 'Author.7z', size: 7, hash: AUTHOR.hash } as const;
+      const authorHeld: Manifest = { ...EMPTY, packages: [PACKAGE], files: holding({ 'tool.dll': HA }) };
+
+      const vendored = async (sourceFiles: Record<string, string>, heldByGit: string[]) => {
+        const set = await among({}, { heldByGit: new Map([[SOURCE(), heldByGit]]), downloadedFilesHashed: { files: [AUTHOR], notes: [] } }, sourceFiles);
+        await writeManifestIn(SOURCE(), authorHeld);
+        return set;
+      };
+
+      it('through update manifest, again and again, while git holds none of the files it holds', async () => {
+        const { update } = await vendored({ 'tool.dll': HA, 'Author.psc': HB }, ['Author.psc']);
+
+        await update([], {}, [], false, ['ModB']);
+        const second = await update([], {}, [], false, ['ModB']);
+
+        expect([await heldIn(SOURCE()), second.landed.map(({ manifestWritten }) => manifestWritten)]).toEqual([authorHeld, [false]]);
+      });
+
+      it('until git holds the files it holds', async () => {
+        const { update } = await vendored({ 'tool.dll': HA, 'Author.esp': HZ, 'Author.psc': HX }, ['Author.esp', 'Author.psc']);
+
+        await update([], {}, [], false, ['ModB']);
+
+        expect(await heldIn(SOURCE())).toEqual({ ...EMPTY, files: holding({ 'tool.dll': HA }) });
+      });
+
+      it('is refused, the manifest left as it was, when this machine lacks the package', async () => {
+        const { update } = await among({}, { downloadedFilesHashed: { files: [], notes: [] } }, { 'tool.dll': HA });
+        await writeManifestIn(SOURCE(), authorHeld);
+
+        const result = await update([], {}, [], false, ['ModB']);
+
+        expect([result.refused.map(({ reason }) => String(reason)), await heldIn(SOURCE())]).toEqual([
+          ["was not updated: its manifest names 'Author.7z', and this machine does not hold it."], authorHeld,
+        ]);
+      });
+    });
+
     it('has its repository entry written when named as a source folder', async () => {
       const { update, fake } = await among({}, GIT_HOLDS(), SOURCE_FILES);
 
