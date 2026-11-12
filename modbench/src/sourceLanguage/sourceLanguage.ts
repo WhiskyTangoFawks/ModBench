@@ -18,7 +18,8 @@ import { handUnsavedPluginSource } from './handUnsaved';
 import { registerBuildEntryPoint } from './buildEntryPoint';
 import { registerUpdateManifestEntryPoint } from './updateManifestEntryPoint';
 import type { Instance } from '../instanceLoader/instance';
-import { feedSourceProblems, type ProblemOnFile, type ProblemsByFile, type SourceProblemsDeps } from './sourceProblems';
+import { feedSourceProblems, mergedProblems, type ProblemOnFile, type ProblemsByFile, type SourceProblemsDeps } from './sourceProblems';
+import { feedPathProblems, type PathProblemsDeps, type PathStanding } from './pathProblems';
 import type { EntryNames, EntrySymbol, PluginSymbol, SymbolOwner } from '../symbolNames/symbolNames';
 import type { PluginsShown } from '../drivingLib/pluginsShown';
 import { pluginLanguage } from './pluginLanguage';
@@ -31,8 +32,10 @@ import { feedWorkspaceNotice } from './workspaceNotice';
 interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'sourceFiles'> {
   instance: Pick<Instance, 'value' | 'subscribe'> | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
-  client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlugins' | 'handUnsavedDocuments' | 'getRecordOfFile'> & RecordDocumentClient & ScriptClient & FileClient & SourceProblemsDeps['client'];
+  client: Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlugins' | 'handUnsavedDocuments' | 'getRecordOfFile'> & RecordDocumentClient & ScriptClient & FileClient & SourceProblemsDeps['client'] & PathProblemsDeps['client'];
   fileCopies: FileCopies;
+  /** What holds a path a plugin source names. */
+  pathStanding: PathStanding;
   /** Each box that owns files, saying where they name a symbol (ADR-0028). */
   owners: readonly SymbolOwner[];
   /** Each box that owns files, saying where they name a symbol its name alone names. */
@@ -131,22 +134,36 @@ function workspaceNotice(instance: SourceLanguageDeps['instance']): vscode.Dispo
   return new vscode.Disposable(() => { stop(); status?.dispose(); });
 }
 
+function languageStatusItem(id: string) {
+  let item: vscode.LanguageStatusItem | undefined;
+  return {
+    show: (text: string | undefined) => {
+      if (text === undefined) { item?.dispose(); item = undefined; return; }
+      item ??= vscode.languages.createLanguageStatusItem(id, pluginSourceStatusSelector);
+      item.severity = vscode.LanguageStatusSeverity.Warning;
+      item.text = text;
+    },
+    text: (): string[] => (item === undefined ? [] : [item.text]),
+    dispose: () => { item?.dispose(); },
+  };
+}
+
 function sourceProblems(deps: SourceLanguageDeps): Pick<SourceLanguage, 'dispose' | 'messages'> {
   const collection = vscode.languages.createDiagnosticCollection('modbench-source');
-  const publish = (problems: ProblemsByFile) => {
+  const parts: { links: ProblemsByFile; paths: ProblemsByFile } = { links: new Map(), paths: new Map() };
+  const publishParts = () => {
     collection.clear();
-    collection.set([...problems].map(([file, onFile]) => [vscode.Uri.file(file), onFile.map(diagnosticOf)]));
+    collection.set([...mergedProblems([parts.links, parts.paths])].map(([file, onFile]) => [vscode.Uri.file(file), onFile.map(diagnosticOf)]));
   };
-  let status: vscode.LanguageStatusItem | undefined;
-  const languageStatus = (text: string | undefined) => {
-    if (text === undefined) { status?.dispose(); status = undefined; return; }
-    status ??= vscode.languages.createLanguageStatusItem('modbench.sourceProblems', pluginSourceStatusSelector);
-    status.severity = vscode.LanguageStatusSeverity.Warning;
-    status.text = text;
-  };
-  const unsubscribe = feedSourceProblems({ ...deps, readText: readHeldText, publish, languageStatus });
-  const disposable = new vscode.Disposable(() => { unsubscribe(); collection.dispose(); status?.dispose(); });
-  return { dispose: () => { disposable.dispose(); }, messages: () => status === undefined ? [] : [status.text] };
+  const linkStatus = languageStatusItem('modbench.sourceProblems');
+  const pathStatus = languageStatusItem('modbench.sourcePaths');
+  const readText = readHeldText;
+  const unsubscribe = [
+    feedSourceProblems({ ...deps, readText, publish: (problems) => { parts.links = problems; publishParts(); }, languageStatus: linkStatus.show }),
+    feedPathProblems({ ...deps, paths: deps.pathStanding, readText, publish: (problems) => { parts.paths = problems; publishParts(); }, languageStatus: pathStatus.show }),
+  ];
+  const disposable = new vscode.Disposable(() => { for (const off of unsubscribe) off(); collection.dispose(); linkStatus.dispose(); pathStatus.dispose(); });
+  return { dispose: () => { disposable.dispose(); }, messages: () => [...linkStatus.text(), ...pathStatus.text()] };
 }
 
 /** A record's FormKey in its document, where Referenced By anchors its list. */

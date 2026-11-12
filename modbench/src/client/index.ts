@@ -1,7 +1,7 @@
 export type {
   MEditClient, LaunchOutcome, LoadOrderOutcome, LoadOrderProgress, LoadOrderSnapshot,
   NotificationPayloads, RecordPage, InteriorCellBlock, InteriorCellSubBlock,
-  PluginRecordTypeCount, PluginProblems, PluginAddress, RecordAt,
+  PluginRecordTypeCount, PluginProblems, PluginFilePaths, PluginAddress, RecordAt,
   CopyMode, CopyItem, ReferenceResult, RecordFilter,
   PluginToRepair, ModToVersionInGit, VersionInGitOutcome, DecompileOutcome, DecompileAndRepairOutcome, SourceFolderRequest, SourceModIn, BuildFacts, BuildMod, BuildOutcome, VersionInGitProgress, PluginMetadata, PluginDiagnosisReport, RecordSummary,
   WorldspaceSummary, WorldspaceBlock, WorldspaceSubBlock, CellChildRecords, CellSummary,

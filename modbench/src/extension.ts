@@ -44,6 +44,8 @@ import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
 import type { ReferencedBy } from './mods/modSymbolCommands';
 import { copyTheGameGets, revealCopy } from './mods/fileCopy';
+import { NO_PATH_STANDING, pathStandingOf } from './mods/pathStanding';
+import type { PathStanding } from './sourceLanguage/pathProblems';
 import { registerArchiveFiles, registerArchiveOpen } from './mods/archiveFiles';
 import { fileProblemsOver } from './ports/fileProblems';
 import type { Log } from './ports/log';
@@ -139,6 +141,7 @@ interface InstanceSide {
   downloadedFileTooltip: (name: string) => string | undefined;
   modOrderFileOf: (profile: string) => string | undefined;
   fileCopies: FileCopies;
+  pathStanding: PathStanding;
   sourceFiles: SourceFilesOf;
   copyValue: CopyValueAdapter[];
 }
@@ -157,6 +160,7 @@ function buildBareSide(own: Own): InstanceSide {
     downloadedFileTooltip: () => undefined,
     modOrderFileOf: () => undefined,
     fileCopies: { gameRelease: () => Promise.reject(new Error('No instance is open.')), copyOf: (path) => ({ none: `No instance is open to hold ${path}.` }), reveal: revealCopy },
+    pathStanding: NO_PATH_STANDING,
     sourceFiles: NO_SOURCE_FILES,
     copyValue: [],
   };
@@ -300,6 +304,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     modOrderFileOf: (profile) => adapter.modOrderFileOf(profile),
     fileCopies: { gameRelease: () => adapter.gameRelease(), copyOf: (path) => copyTheGameGets(instance.value, path), reveal: revealCopy },
     deployment: { folder: () => deploymentFolderOf(deploymentFolderSetting), pluginsTxtPlace: placeForGame },
+    pathStanding: pathStandingOf(instance),
     sourceFiles: (origin) => sourceFiles(instance.value, origin),
     copyValue: [mods.copyValue, plugins.copyValue, downloads.copyValue],
   };
@@ -398,6 +403,7 @@ function start(context: vscode.ExtensionContext): void {
     client: meditClient, instance: views.instance, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
     pluginsShown: views.pluginsShown,
     fileCopies: views.fileCopies,
+    pathStanding: views.pathStanding,
     entryTooltip: views.entryTooltip,
     downloadedFileTooltip: views.downloadedFileTooltip,
     modOrderFileOf: views.modOrderFileOf,

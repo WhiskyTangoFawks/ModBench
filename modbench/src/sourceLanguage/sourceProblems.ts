@@ -27,6 +27,13 @@ export interface SourceProblemsDeps {
   languageStatus: (text: string | undefined) => void;
 }
 
+/** Each part's problems, together by file. */
+export function mergedProblems(parts: readonly ProblemsByFile[]): ProblemsByFile {
+  const byFile = new Map<string, ProblemOnFile[]>();
+  for (const part of parts) for (const [file, onFile] of part) byFile.set(file, [...byFile.get(file) ?? [], ...onFile]);
+  return byFile;
+}
+
 const FIRST_LINE = { line: 0, character: 0 };
 
 function positionAt(text: string, offset: number): Position {

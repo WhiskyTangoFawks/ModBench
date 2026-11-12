@@ -1,0 +1,59 @@
+import { describe, expect, it, vi } from 'vitest';
+import { TreeItem, TreeItemCollapsibleState, Uri } from '../../test/vscodeMock';
+
+vi.mock('vscode', () => ({ Uri, TreeItem, TreeItemCollapsibleState, commands: { executeCommand: () => Promise.resolve() } }));
+
+import { FileConflictLookup, modOrigin, NO_GAME_FOLDER_ARCHIVED, type StackedFile } from '../../instanceLoader/fileConflictIndex';
+import { pathStandingOf } from '../pathStanding';
+import type { GameFolder, OriginFile } from '../../instanceAdapter/instanceAdapter';
+
+const PATH = 'textures/decals/stain_d.dds';
+const FOUND: GameFolder = { kind: 'found', root: '/game', dataFolder: '/game/Data' };
+const NOT_FOUND: GameFolder = { kind: 'notFound', looked: [], setting: 'gameFolder' };
+const file = (relativePath: string, sourcePath = `/mods/Mod/${relativePath}`): OriginFile => ({ relativePath, sourcePath, path: sourcePath, includedPath: relativePath, excluded: false, markedExcluded: false });
+
+interface Value {
+  gameFolder?: GameFolder;
+  inWorkspace?: boolean;
+  gameLoose?: true;
+  stacked?: true;
+  modFiles?: OriginFile[];
+  archive?: readonly string[];
+}
+
+function standing({ gameFolder = FOUND, inWorkspace = true, gameLoose, stacked, modFiles = [], archive }: Value) {
+  const stackedCopies = new FileConflictLookup<StackedFile>();
+  if (stacked) stackedCopies.set({ relativePath: PATH, copies: [{ origin: modOrigin('Other'), at: { kind: 'loose', path: '/mods/Other/x' } }] });
+  const value = {
+    stackedCopies, gameFolderArchived: NO_GAME_FOLDER_ARCHIVED, gameFolderInWorkspace: inWorkspace, gameFolder,
+    dataFolderFiles: { kind: 'listed' as const, files: new Map(gameLoose ? [[PATH, { relativePath: PATH, path: `/game/Data/${PATH}` }]] : []) },
+    filesByMod: new Map([['Mod', modFiles]]), overwriteFiles: [],
+    archiveContents: new Map(archive ? [['/mods/Mod/Mod.ba2', { kind: 'read' as const, answer: archive }]] : []),
+  };
+  return pathStandingOf({ value, subscribe: () => ({ dispose: () => undefined }) });
+}
+
+describe('what holds a path a plugin source names (source.md, In the text editor, story 6)', () => {
+  it.each<[string, Value, boolean]>([
+    ['a copy the game gets', { stacked: true }, true],
+    ['a loose file in a game folder the workspace holds', { gameLoose: true }, true],
+    ['a loose file in a game folder outside the workspace', { gameLoose: true, inWorkspace: false }, false],
+    ['a file its plugin\'s mod holds that the game does not get', { modFiles: [file('Textures/Decals/Stain_d.dds')] }, true],
+    ['a file in an archive its plugin\'s mod holds', { modFiles: [file('Mod.ba2')], archive: ['Textures/Decals/Stain_d.dds'] }, true],
+    ['no file at all', {}, false],
+  ])('holds %s: %s', (_what, value, held) => {
+    expect(standing(value).holds({ origin: 'Mod' }, 'Textures/Decals/Stain_d.dds')).toBe(held);
+  });
+
+  it('holds a path spelled with backslashes', () => {
+    expect(standing({ stacked: true }).holds({ origin: 'Mod' }, 'Textures\\Decals\\Stain_d.dds')).toBe(true);
+  });
+
+  it.each<[string, Value, boolean]>([
+    ['judged while the game folder is in the workspace', {}, true],
+    ['not judged while the game folder is outside it', { inWorkspace: false }, false],
+    ['judged while no game folder is found', { gameFolder: NOT_FOUND, inWorkspace: false }, true],
+  ])('is %s', (_what, value, judged) => {
+    expect(standing(value).judged()).toBe(judged);
+  });
+});

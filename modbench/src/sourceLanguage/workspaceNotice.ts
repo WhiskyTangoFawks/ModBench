@@ -1,4 +1,5 @@
 import type { InstanceValue } from '../instanceLoader/instance';
+import { outsideGameFolder } from '../instanceLoader/outsideGameFolder';
 
 interface WorkspaceNoticeDeps {
   instance: { readonly value: Pick<InstanceValue, 'gameFolder' | 'gameFolderInWorkspace'>; subscribe: (listener: () => void) => { dispose: () => unknown } };
@@ -10,8 +11,8 @@ interface WorkspaceNoticeDeps {
  *  instance (ADR-0001). */
 export function feedWorkspaceNotice({ instance, languageStatus }: WorkspaceNoticeDeps): () => void {
   const say = () => {
-    const { gameFolder, gameFolderInWorkspace } = instance.value;
-    languageStatus(gameFolder.kind === 'found' && !gameFolderInWorkspace ? `Paths are checked only against the instance: the game also gets files from ${gameFolder.root}, outside the workspace.` : undefined);
+    const outside = outsideGameFolder(instance.value);
+    languageStatus(outside && `Paths are checked only against the instance: the game also gets files from ${outside.root}, outside the workspace.`);
   };
   const subscription = instance.subscribe(say);
   say();
