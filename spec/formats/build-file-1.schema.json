@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Build file",
-  "description": "How a source mod's build makes the mod's folder from its source folder.",
+  "description": "How a build makes a mod's folder from its mod source.",
   "type": "object",
   "properties": {
     "version": {
@@ -33,7 +33,7 @@
         {
           "type": "object",
           "properties": {
-            "decompile": { "description": "Each plugin to decompile into its plugin source, by its path in the source folder.", "$ref": "#/$defs/paths" }
+            "decompile": { "description": "Each plugin to decompile into its plugin source, by its path in the mod source.", "$ref": "#/$defs/paths" }
           },
           "required": ["decompile"],
           "additionalProperties": false
@@ -49,7 +49,7 @@
         {
           "type": "object",
           "properties": {
-            "copy": { "description": "Each file or folder to copy from the source folder into the mod's folder, by its path in both.", "$ref": "#/$defs/paths" }
+            "copy": { "description": "Each file or folder to copy from the mod source into the mod's folder, by its path in both.", "$ref": "#/$defs/paths" }
           },
           "required": ["copy"],
           "additionalProperties": false
@@ -72,7 +72,7 @@
           "type": "object",
           "properties": {
             "unpack": {
-              "description": "Each archive to unpack, by its path in the source folder, with each file it unpacks into the mod's folder, by its path in the archive and in the mod's folder.",
+              "description": "Each archive to unpack, by its path in the mod source, with each file it unpacks into the mod's folder, by its path in the archive and in the mod's folder.",
               "type": "object",
               "propertyNames": { "$ref": "manifest-1.schema.json#/$defs/path" },
               "additionalProperties": { "$ref": "#/$defs/paths" },
@@ -92,7 +92,7 @@
             },
             "args": { "$ref": "#/$defs/args" },
             "page": {
-              "description": "The page where the user gets the tool the task runs. Absent when the tool comes with the source folder.",
+              "description": "The page where the user gets the tool the task runs. Absent when the tool comes with the mod source.",
               "type": "string",
               "format": "uri"
             }
@@ -104,7 +104,7 @@
           "type": "object",
           "properties": {
             "script": {
-              "description": "The Modbench script the step runs, by its path in the source folder.",
+              "description": "The Modbench script the step runs, by its path in the mod source.",
               "$ref": "manifest-1.schema.json#/$defs/path"
             },
             "args": { "$ref": "#/$defs/args" }
