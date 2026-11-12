@@ -107,23 +107,24 @@ const watchModFolders = ({ watch }: Mo2Context, folders: readonly ModFolder[]): 
   watch.follow('modFolders', folders.map((folder) => folder.path), FIRST_LEVEL);
 };
 
-const entriesIfThere = (folder: string): Promise<ResolvedEntry[]> => listEntries(folder, ignoreSkippedLink).catch((err: unknown) => {
-  if (isAbsent(err)) return [];
-  throw err;
-});
+const entriesIfThere = (skippedLink: SkippedLink) => (folder: string): Promise<ResolvedEntry[]> =>
+  listEntries(folder, skippedLink).catch((err: unknown) => {
+    if (isAbsent(err)) return [];
+    throw err;
+  });
 
-async function deployedCopyIn(folder: string, name: string, deployedPath: DeployedPath): Promise<string | undefined> {
+async function deployedCopyIn(folder: string, name: string, deployedPath: DeployedPath, skippedLink: SkippedLink): Promise<string | undefined> {
   for (const entry of await readOrAbsent(() => listDirByStamp(folder), [])) {
     const deployed = deployedPath(`${entry.name}/${name}`);
     if (deployed === undefined || !sameName(deployed, name)) continue;
-    const copy = await fileNamedIn(join(folder, entry.name), name, entriesIfThere);
+    const copy = await fileNamedIn(join(folder, entry.name), name, entriesIfThere(skippedLink));
     if (copy !== undefined) return copy;
   }
   return undefined;
 }
 
 const creationClubListOf = (context: Mo2Context, deployedPath: DeployedPath): ReadingSource['creationClubList'] =>
-  async (gameFolder, gameRelease, origins, folders, ignoredLink) => {
+  async (gameFolder, gameRelease, origins, folders, ignoredLink, skippedLink) => {
     const listAt = creationClubFileOf(gameFolder, gameRelease);
     if (listAt === undefined) {
       context.watch.follow('creationClubList', [], '');
@@ -132,7 +133,7 @@ const creationClubListOf = (context: Mo2Context, deployedPath: DeployedPath): Re
     const [root, name] = [dirname(listAt), basename(listAt)];
     const copies = await Promise.all(origins.map(async (origin) => {
       const folder = await originFolder(context, origin, folders);
-      return folder === undefined ? undefined : deployedCopyIn(folder, name, deployedPath);
+      return folder === undefined ? undefined : deployedCopyIn(folder, name, deployedPath, skippedLink);
     }));
     const list = copies.find((copy) => copy !== undefined) ?? await fileNamedIn(root, name, (folder) => listOwnEntries(folder, ignoredLink));
     context.watch.follow('creationClubList', [list === undefined ? root : dirname(list)], anyCase(name));

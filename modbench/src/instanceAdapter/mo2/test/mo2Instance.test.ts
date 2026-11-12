@@ -797,7 +797,7 @@ describe('the MO2 Instance adapter', () => {
       afterEach(() => rm(game, { recursive: true, force: true }));
 
       const found = (): GameFolder => ({ kind: 'found', root: game, dataFolder: join(game, 'Data') });
-      const ownListIn = (gameFolder: GameFolder, release: string): Promise<string[]> => source.creationClubList(gameFolder, release, [], undefined, ignoreLink);
+      const ownListIn = (gameFolder: GameFolder, release: string): Promise<string[]> => source.creationClubList(gameFolder, release, [], undefined, ignoreLink, ignoreSkippedLink);
 
       it('answers the plugins the release\'s list names, in its order', async () => {
         await writeFile(join(game, 'Fallout4.ccc'), 'ccBGSFO4044-HellfirePowerArmor.esl\r\nccBGSFO4001-PipBoy(Black).esl\r\n');
@@ -846,6 +846,14 @@ describe('the MO2 Instance adapter', () => {
           await writeFile(join(game, 'fallout4.CCC'), 'ccOwn.esl\r\n');
 
           expect(await listRead()).toEqual(['ccOwn.esl']);
+        });
+
+        it('notes a link it cannot follow where a mod deploys the list', async () => {
+          const broken = join(root, 'mods', 'Patch Mod', 'Root', 'Fallout4.ccc');
+          await mkdir(dirname(broken), { recursive: true });
+          await symlink(join(root, 'nowhere.ccc'), broken);
+
+          expect((await gameRead()).linkNotes.join('\n')).toContain(broken);
         });
 
         it('is never a folder a mod deploys under the list\'s name', async () => {
@@ -1448,7 +1456,7 @@ describe('the MO2 Instance adapter', () => {
       const watchedFromPatchMod = async (): Promise<void> => {
         const watched = watchedOver(contextOver(root));
         watched.subscribe(() => undefined);
-        await watched.creationClubList({ kind: 'found', root: game, dataFolder: join(game, 'Data') }, 'Fallout4', [{ kind: 'mod', name: 'Patch Mod' }], undefined, ignoreLink);
+        await watched.creationClubList({ kind: 'found', root: game, dataFolder: join(game, 'Data') }, 'Fallout4', [{ kind: 'mod', name: 'Patch Mod' }], undefined, ignoreLink, ignoreSkippedLink);
       };
 
       it('follows the game folder\'s own while no origin deploys one', async () => {
