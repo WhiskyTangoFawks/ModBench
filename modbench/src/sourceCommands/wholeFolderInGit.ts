@@ -1,6 +1,7 @@
 // commands.md, version in git: the mod's whole folder in the instance repository. The folder's files are let into the
 // ignore list, so git holds everything its manifest recorded and the manifest goes to the trash (ADR-0022).
 
+import type { Message } from '../ports/phrase';
 import type { VersionInGitOutcome, VersionInGitProgress, WriteRefused } from '../client';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { manifestsIn, sourceModsOf, type SourceMods } from '../manifestAdapter/manifestAdapter';
@@ -83,7 +84,7 @@ async function whyNotLanded(
  *  or cannot go to the trash, or git still leaves its folder out; the rest land. */
 export async function modsPutWholeInGit(
   adapter: Adapter, trash: MoveToTrash, { mods, commit, onProgress }: WholeFolderRequest,
-): Promise<VersionInGitOutcome | WriteRefused> {
+): Promise<VersionInGitOutcome | WriteRefused<Message>> {
   if (!(await adapter.repositoryOnDisk())) return { refused: true, message: NO_INSTANCE_REPOSITORY };
   const { folders, refused } = await foldersToHold(adapter, mods);
   if (folders.size === 0) return { landed: [], refused };

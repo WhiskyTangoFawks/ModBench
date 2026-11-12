@@ -8,6 +8,8 @@ import type { MEditClient } from '../client/MEditClient';
 import { deployFailures, deployWarnings } from '../drivingLib/deployProblems';
 import type { Deployed } from '../deployment/deployment';
 import { Refusal } from '../drivingLib/refusal';
+import { toolName, toolNamed } from './toolNames';
+import type { Message } from '../ports/phrase';
 import { formKeysNamed } from './recordNames';
 import { parseOrRefuse } from './refusal';
 import { countsOf, fitting } from './tooLarge';
@@ -320,16 +322,16 @@ export const AGENT_GESTURES: ReadonlyMap<string, readonly [GestureInput, ReadToo
   ['modbench.mod.restoreFromManifest', [MODS_OR_EVERY_MOD, 'list_mod_statuses']],
 ]);
 
-type ItemsOutcome = GestureResult<unknown>;
-type GestureOutcome = ItemsOutcome | AppliedToNoItems | { applied: false; refusal: string; detail?: string };
-type AppliedToItems = Extract<ItemsOutcome, { applied: true }>;
-const overItems = (outcome: GestureOutcome): outcome is AppliedToItems => outcome.applied && 'outcome' in outcome;
+type ItemsOutcome<Words extends Message = string> = GestureResult<unknown, unknown, Words, Words>;
+type GestureOutcome<Words extends Message = string> = ItemsOutcome<Words> | AppliedToNoItems | { applied: false; refusal: Words; detail?: string };
+type AppliedToItems<Words extends Message = string> = Extract<ItemsOutcome<Words>, { applied: true }>;
+const overItems = <Words extends Message>(outcome: GestureOutcome<Words>): outcome is AppliedToItems<Words> => outcome.applied && 'outcome' in outcome;
 
 type DeployOutcome = ({ applied: true } & Deployed) | { applied: false; refusal: string };
 
-const isDeployed = (answer: GestureOutcome | DeployOutcome): answer is { applied: true } & Deployed => answer.applied && 'pluginsTxt' in answer;
+const isDeployed = (answer: GestureOutcome<Message> | DeployOutcome): answer is { applied: true } & Deployed => answer.applied && 'pluginsTxt' in answer;
 
-function deployAnswered(answer: { applied: true } & Deployed): GestureOutcome {
+function deployAnswered(answer: { applied: true } & Deployed): GestureOutcome<Message> {
   const partial = [...deployFailures(answer), ...deployWarnings(answer)].map((problem) => ({ ...problem, severity: 'warning' as const }));
   return { applied: true, ...(partial.length === 0 ? {} : { partial }) };
 }
@@ -355,17 +357,15 @@ function answerOf(outcome: GestureOutcome) {
     : { refusal: outcome.refusal, detail: outcome.detail };
 }
 
-function namedOwn(value: InstanceValue, outcome: GestureOutcome): GestureOutcome {
+function namedForAgent(value: InstanceValue, outcome: GestureOutcome<Message>): GestureOutcome {
+  if (!outcome.applied) return { ...outcome, refusal: toolNamed(outcome.refusal) };
   if (!overItems(outcome)) return outcome;
   const { landed, refused } = outcome.outcome;
   return {
     ...outcome,
-    outcome: { landed: landed.map((item) => namedByOwnPath(value, item)), refused: refused.map((one) => ({ ...one, item: namedByOwnPath(value, one.item) })) },
+    outcome: { landed: landed.map((item) => namedByOwnPath(value, item)), refused: refused.map((one) => ({ item: namedByOwnPath(value, one.item), reason: toolNamed(one.reason) })) },
   };
 }
-
-const toolName = (command: string): string =>
-  command.replace(/^modbench\./, '').replaceAll('.', '_').replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 
 // agent.md, Reporting, stories 1 and 3.
 function countedOf(outcome: GestureOutcome, read: ReadTool): Record<string, unknown> {
@@ -383,8 +383,8 @@ export const GESTURE_TOOLS = [...AGENT_GESTURES].map(([command, [gesture, read]]
   name: toolName(command),
   input: gesture.input,
   of: async (value: InstanceValue, mEdit: NameResolver, given: unknown, warn: (line: string) => void) => {
-    const answer = await vscode.commands.executeCommand<GestureOutcome | DeployOutcome>(command, await gesture.callOf(value, given, mEdit));
-    const outcome = namedOwn(value, isDeployed(answer) ? deployAnswered(answer) : answer);
+    const answer = await vscode.commands.executeCommand<GestureOutcome<Message> | DeployOutcome>(command, await gesture.callOf(value, given, mEdit));
+    const outcome = namedForAgent(value, isDeployed(answer) ? deployAnswered(answer) : answer);
     const refusal = refusalIn(outcome);
     if (refusal === undefined && outcome.applied) partialsIn(outcome).forEach(warn);
     const answered = fitting(answerOf(outcome), () => countedOf(outcome, read));

@@ -1,3 +1,4 @@
+import type { Message } from '../ports/phrase';
 import type { components } from '../wire/generated/api';
 import {
   type ChangedPlugin,
@@ -34,9 +35,9 @@ export function isMEditGone(status: BackendStatus): status is 'disconnected' | '
 /** A write verb's outright refusal — non-2xx, a thrown request, or write-gate contention.
  *  `message` is the ready-to-show toast (common.md, Reporting); a 200 typed refusal lives on the
  *  success arm. */
-export interface WriteRefused {
+export interface WriteRefused<Reason extends Message = string> {
   readonly refused: true;
-  readonly message: string;
+  readonly message: Reason;
   /** The request never reached mEdit, so no answer of mEdit's says anything of its items. */
   readonly unreachable?: true;
 }
@@ -44,7 +45,7 @@ export interface WriteRefused {
 /** `WriteRefused`'s one structural tag — a plain check, not `instanceof`, so a scripted client's
  *  plain object narrows the same way the real one does. On the port, so narrowing never drags
  *  the HTTP adapter into a caller's test. */
-export function isRefused(result: unknown): result is WriteRefused {
+export function isRefused<Words extends Message = string>(result: unknown): result is WriteRefused<Words> {
   return typeof result === 'object' && result !== null && (result as { refused?: unknown }).refused === true;
 }
 

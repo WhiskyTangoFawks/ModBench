@@ -1,3 +1,4 @@
+import { gestureName, phrase, type Message } from '../../ports/phrase';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
@@ -20,7 +21,7 @@ const MADE = {
 interface Placing {
   notMade: Record<string, string>;
   unfinished: Record<string, string>;
-  whole: string | undefined;
+  whole: Message | undefined;
   notes: string[];
 }
 
@@ -34,7 +35,7 @@ describe('decompileAndRepair', () => {
     const made = new Map(request.mods.filter((mod) => !(mod in placing.notMade)).map((mod) => [mod, { ...MADE, sourceFolder: { ...MADE.sourceFolder, in: request.where ?? 'NewRepository' } }]));
     if (placing.whole !== undefined) return { refused: true, message: placing.whole };
     const outcome = await run(made);
-    const landed = new Set(isRefused(outcome) ? [] : landedBy(outcome));
+    const landed = new Set(isRefused<Message>(outcome) ? [] : landedBy(outcome));
     return {
       outcome, notMade: new Map(Object.entries(placing.notMade)), notes: placing.notes,
       unfinished: new Map(Object.entries(placing.unfinished).filter(([mod]) => landed.has(mod))),
@@ -100,8 +101,8 @@ describe('decompileAndRepair', () => {
     expect(sent()).toEqual([]);
   });
 
-  it('refuses the whole gesture, repairing nothing, when placing the mods does', async () => {
-    placing.whole = 'The instance holds no repository to put a mod in: git init makes one.';
+  it('refuses the whole gesture, repairing nothing, when placing the mods does, still naming the gesture as data for an agent', async () => {
+    placing.whole = phrase`The instance holds no repository to put a mod in: ${gestureName('modbench.modlist.gitInit', 'git init')} makes one.`;
 
     expect(await repairIn({}, true)).toEqual({ applied: false, refusal: placing.whole });
     expect(sent()).toEqual([]);

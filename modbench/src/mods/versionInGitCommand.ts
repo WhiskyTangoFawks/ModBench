@@ -6,6 +6,7 @@ import { registerAgentGesture, reportPartial, type AgentGesture, type GestureRes
 import { isClickedRow } from '../drivingLib/gestureEntry';
 import { pickWhereGitHolds } from '../drivingLib/whereGitHolds';
 import { errorMessage } from '../ports/errorMessage';
+import type { Message } from '../ports/phrase';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
 import type { SourceCommands, VersionInGitWhere } from '../sourceCommands/sourceCommands';
@@ -25,7 +26,7 @@ export interface VersionInGitDeps {
   pluginsView: string;
 }
 
-type VersionedInGit = GestureResult<VersionInGitOutcome['landed'][number], string>;
+type VersionedInGit = GestureResult<VersionInGitOutcome['landed'][number], string, string, Message>;
 
 interface VersionInGitOptions { readonly commit: boolean; readonly where: VersionInGitWhere }
 
@@ -76,7 +77,7 @@ async function versionModsInGit(
         ...options,
         onProgress: (status) => { progress.say(versionInGitProgressMessage(status.mod ?? firstMod, status.phase)); },
       });
-      if (isRefused(result)) return { applied: false, refusal: result.message };
+      if (isRefused<Message>(result)) return { applied: false, refusal: result.message };
       if (makesSourceMods && result.landed.length > 0) await onCommitted();
       const { notes = [], ...outcome } = result;
       return { applied: true, outcome, ...notes.length === 0 ? {} : { partial: notes.map((detail) => ({ message: 'Version in git:', detail, severity: 'warning' as const })) } };
@@ -104,7 +105,7 @@ async function showInExplorer(folder: string | undefined, mod: string): Promise<
 function reportVersioned(
   reporter: Reporter, result: VersionedInGit, mods: readonly string[], refusedRows: readonly ItemRefusal<string>[], where: VersionInGitWhere,
 ): void {
-  if (!result.applied) { reporter.report('error', result.refusal); return; }
+  if (!result.applied) { reporter.report('error', String(result.refusal)); return; }
   reportPartial(reporter, result.partial);
   const { landed, refused } = result.outcome;
   if (refused.length + refusedRows.length > 0) {

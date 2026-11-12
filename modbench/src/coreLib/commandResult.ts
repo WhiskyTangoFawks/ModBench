@@ -1,3 +1,4 @@
+import type { Message } from '../ports/phrase';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
 /** What every command returns: applied, or the one refusal the user is told. `wrote` is false when
@@ -9,9 +10,9 @@ export type CommandResult<Landed extends object = { wrote: boolean }> =
 
 /** A gesture over a selection, in one write: each item landed or refused by name, or the whole
  *  selection refused once. `notes` is what the user is told besides it, such as a file that could not be read. */
-export type SelectionResult<T> =
-  | { applied: true; outcome: SelectionOutcome<T>; notes?: readonly string[] }
-  | { applied: false; refusal: string };
+export type SelectionResult<T, Words extends Message = string> =
+  | { applied: true; outcome: SelectionOutcome<T, Words>; notes?: readonly string[] }
+  | { applied: false; refusal: Words };
 
 /** The loop every plural verb shares: `run` each item, gathering the landed and the refused.
  *  `toItem` builds the item a caller sees; a landed item is handed its own result. */

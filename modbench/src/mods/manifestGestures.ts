@@ -4,6 +4,7 @@ import { runWritingGesture } from '../drivingLib/writingGesture';
 import { MODS_KEY_ARGS } from './gestureEntry';
 import type { Instance } from '../instanceLoader/instance';
 import { everyModHere, modsAndSourceModsOfAgent, modsAndSourceModsToRun, modsOfAgent, modsToRun, type ModsToRun, type ModsToRunDeps } from './modsToRun';
+import type { Message } from '../ports/phrase';
 import type { Reporter } from '../ports/reporter';
 import type { InstanceRepositoryCommands, OtherManifests, RestoreResult, RestoreStatus } from '../sourceCommands/instanceRepositoryCommands';
 import type { ModNote, UpdateManifestResult, UpdateManifestStatus } from '../sourceCommands/updateManifest';
@@ -37,7 +38,7 @@ export function registerManifestGestures(deps: ManifestGestureDeps): vscode.Disp
 const othersOf = ({ commands }: ManifestGestureDeps, everyManifest: boolean): Promise<OtherManifests> =>
   (everyManifest ? commands.otherManifests() : Promise.resolve({ others: [], refused: [] }));
 
-type AgentOutcome<Landed> = GestureResult<Landed, string>;
+type AgentOutcome<Landed> = GestureResult<Landed, string, Message>;
 type Restored = RestoreResult['landed'];
 
 // instance-repository.md, Every mod, story 3: progress by mod with Cancel, which stops after the mod in hand. The

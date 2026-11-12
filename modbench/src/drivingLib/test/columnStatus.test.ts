@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { columnStatuses, copyStatus, type Standing } from '../columnStatus';
+import { columnStatuses, copyStatusMessage, type Standing } from '../columnStatus';
+import { forAgent } from '../../ports/phrase';
 
 const NO_STANDING: Standing = { overriddenBy: null, notActive: false };
 
@@ -16,8 +17,10 @@ interface Facts {
   standing?: Partial<Standing>;
 }
 
-const statusOf = ({ copy, plugin, standing }: Facts = {}) =>
-  copyStatus({ ...COPY, ...copy }, { ...COMPILED, ...plugin }, { ...NO_STANDING, ...standing });
+const statusOf = ({ copy, plugin, standing }: Facts = {}) => {
+  const status = copyStatusMessage({ ...COPY, ...copy }, { ...COMPILED, ...plugin }, { ...NO_STANDING, ...standing });
+  return status === null ? null : { ...status, reason: String(status.reason) };
+};
 
 describe('a column\'s status', () => {
   it.each<[string, Facts, string, string]>([
@@ -39,6 +42,16 @@ describe('a column\'s status', () => {
   });
 
   it.each<[string, Facts, string]>([
+    ['a plugin in Overwrite', { copy: { isInOverwrite: true }, plugin: { isCompiledPlugin: false } }, 'Overwrite is not a mod; move the plugin into a mod and <modbench.mod.versionInGit> that mod.'],
+    ['a plugin that is not a compiled plugin', { plugin: { isCompiledPlugin: false } }, '<modbench.mod.versionInGit>, or <modbench.plugin.decompile> in a source mod, makes it editable.'],
+    ['a compiled plugin whose plugin source decompile repairs', { plugin: { pluginSourceUnreadable: WHY } }, `${WHY.reason} Its records are its plugin file’s. <modbench.plugin.decompile> makes it editable.`],
+  ])('gives an agent the tool of each gesture its reason names, for %s', (_case, { copy, plugin }, reason) => {
+    const status = copyStatusMessage({ ...COPY, ...copy }, { ...COMPILED, ...plugin }, NO_STANDING);
+
+    expect(forAgent(status?.reason ?? '', (command) => `<${command}>`)).toBe(reason);
+  });
+
+  it.each<[string, Facts, string]>([
     ['parse failure over read-only', { copy: { parseDiagnosis: DIAGNOSIS }, plugin: { isImmutable: true } }, '(parse failure)'],
     ['parse failure over not active', { copy: { parseDiagnosis: DIAGNOSIS }, standing: { notActive: true } }, '(parse failure)'],
     ['parse failure over overridden', { copy: { parseDiagnosis: DIAGNOSIS }, standing: { overriddenBy: 'ModB' } }, '(parse failure)'],
@@ -55,7 +68,7 @@ describe('a column\'s status', () => {
   });
 
   it('reads a plugin the instance does not list as one nothing edits', () => {
-    expect(copyStatus(COPY, undefined, NO_STANDING)?.label).toBe('(read-only)');
+    expect(copyStatusMessage(COPY, undefined, NO_STANDING)?.label).toBe('(read-only)');
   });
 
   it('gives the standing to the tab\'s own file column alone, matching a plugin by origin as well as name', () => {

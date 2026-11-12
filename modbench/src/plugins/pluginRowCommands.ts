@@ -11,6 +11,7 @@ import type { PluginCommands, SelectionResult } from '../pluginCommands/plugins'
 import { selectionArgument } from '../drivingLib/gestureEntry';
 import { pickWhereGitHolds } from '../drivingLib/whereGitHolds';
 import { Refusal } from '../drivingLib/refusal';
+import type { Message } from '../ports/phrase';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
 import { pluginRowName } from '../wire/pluginAddress';
 import type { Reporter } from '../ports/reporter';
@@ -83,7 +84,7 @@ interface DecompileAndRepairGiven extends DecompileGiven {
 export function registerDecompileAndRepairCommand(
   deps: DecompileAndRepairDeps, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
-  const gesture: AgentGesture<PluginsTreeNode, DecompileAndRepairGiven, GestureResult<PluginAddress>, { force?: boolean; where?: SourceModIn }> = {
+  const gesture: AgentGesture<PluginsTreeNode, DecompileAndRepairGiven, GestureResult<PluginAddress, PluginAddress, Message, Message>, { force?: boolean; where?: SourceModIn }> = {
     fromView: async (entry, _option, clicked) => {
       const plugins = isPluginAddress(clicked) ? [clicked] : selectionArgument(entry, 'plugin').map((node) => node.argument.plugin);
       if (plugins.length === 0) return undefined;
@@ -104,13 +105,13 @@ export function registerDecompileAndRepairCommand(
       if (result.applied) {
         reportSelection(deps.reporter, result.outcome, plugins.length, { verb: 'decompile and repair', pastTense: 'Decompiled and repaired' });
         reportPartial(deps.reporter, result.partial);
-      } else deps.reporter.report('error', result.refusal);
+      } else deps.reporter.report('error', String(result.refusal));
     },
   };
   return registerAgentGesture('modbench.plugin.decompileAndRepair', viewSelection, gesture);
 }
 
-function partialOf(result: SelectionResult<PluginAddress>): GestureResult<PluginAddress> {
+function partialOf(result: SelectionResult<PluginAddress, Message>): GestureResult<PluginAddress, PluginAddress, Message, Message> {
   if (!result.applied) return result;
   const { notes = [], ...applied } = result;
   return notes.length === 0 ? applied : { ...applied, partial: notes.map((detail) => ({ message: 'Decompile and repair:', detail, severity: 'warning' as const })) };
@@ -136,13 +137,13 @@ async function withChangesGitDoesNotHold(
   });
 }
 
-type SendPlugins = (plugins: readonly PluginAddress[], force: boolean) => Promise<SelectionResult<PluginAddress>>;
+type SendPlugins<Words extends Message> = (plugins: readonly PluginAddress[], force: boolean) => Promise<SelectionResult<PluginAddress, Words>>;
 
 // commands.md, Principles, Confirm what destroys: the plugins with changes git holds nowhere go forced, the rest unforced.
-async function sendAskingOverChanges(
+async function sendAskingOverChanges<Words extends Message>(
   client: Pick<MEditClient, 'getWorkingTreeStatesBeneath'>, progress: Progress,
-  { plugins, force, agreesToReplace }: DecompileGiven, send: SendPlugins,
-): Promise<SelectionResult<PluginAddress>> {
+  { plugins, force, agreesToReplace }: DecompileGiven, send: SendPlugins<Words>,
+): Promise<SelectionResult<PluginAddress, Words>> {
   const replacing = agreesToReplace === undefined || force ? [] : await withChangesGitDoesNotHold(client, plugins);
   if (replacing.length === 0) return sendBatches([{ plugins, force }], send);
   progress.waiting();
@@ -162,8 +163,8 @@ async function decompiled(
 
 interface SendBatch { readonly plugins: readonly PluginAddress[]; readonly force: boolean }
 
-async function sendBatches(batches: readonly SendBatch[], send: SendPlugins): Promise<SelectionResult<PluginAddress>> {
-  const answered: { batch: SendBatch; answer: SelectionResult<PluginAddress> }[] = [];
+async function sendBatches<Words extends Message>(batches: readonly SendBatch[], send: SendPlugins<Words>): Promise<SelectionResult<PluginAddress, Words>> {
+  const answered: { batch: SendBatch; answer: SelectionResult<PluginAddress, Words> }[] = [];
   for (const batch of batches.filter(({ plugins }) => plugins.length > 0)) {
     const answer = await send(batch.plugins, batch.force);
     if (!answer.applied && answered.length === 0) return answer;
@@ -183,7 +184,7 @@ async function sendBatches(batches: readonly SendBatch[], send: SendPlugins): Pr
 }
 
 function reportSelection(
-  reporter: Reporter, outcome: SelectionOutcome<PluginAddress>, total: number, { verb, pastTense }: { verb: string; pastTense: string },
+  reporter: Reporter, outcome: SelectionOutcome<PluginAddress, Message>, total: number, { verb, pastTense }: { verb: string; pastTense: string },
 ): void {
   const [refused] = outcome.refused;
   if (refused !== undefined) {

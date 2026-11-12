@@ -2,11 +2,12 @@ import { expect } from 'vitest';
 import type { AskQuestion } from '../ports/dialog';
 import { reportSelectionOutcome, type ReportAction, type Reporter, type Severity } from '../ports/reporter';
 import { present } from '../ports/present';
+import type { Message } from '../ports/phrase';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
 
 export interface RecordedReport { severity: Severity; message: string; detail?: string; action?: ReportAction }
 
-interface RecordedSelectionOutcomeCall { message: string; outcome: SelectionOutcome<unknown> }
+interface RecordedSelectionOutcomeCall { message: string; outcome: SelectionOutcome<unknown, Message> }
 
 export interface RecordingReporter extends Reporter {
   readonly reports: RecordedReport[];
@@ -76,12 +77,12 @@ export function assertAskedOnce(
 // Same reason as assertAskedOnce: a refusal's exact wording is not the contract, only that it
 // names the item, so this checks `reason` by hand instead of embedding a matcher in `toEqual`.
 export function assertSelectionOutcome<T>(
-  outcome: SelectionOutcome<T>,
+  outcome: SelectionOutcome<T, Message>,
   expected: { landed: readonly T[]; refused: readonly { item: T; reasonContains: string }[] },
 ): void {
   expect(outcome.landed).toEqual(expected.landed);
   expect(outcome.refused.map((r) => r.item)).toEqual(expected.refused.map((r) => r.item));
   outcome.refused.forEach((refusal, i) => {
-    expect(refusal.reason).toContain(present(expected.refused[i], 'the matching expected refusal').reasonContains);
+    expect(String(refusal.reason)).toContain(present(expected.refused[i], 'the matching expected refusal').reasonContains);
   });
 }
