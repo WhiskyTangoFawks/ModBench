@@ -1242,6 +1242,8 @@ internal sealed class Indexer : IDisposable
                 return false;
             }
 
+            if (holdsTree) plugin = ReopenHeader(scope, plugin);
+
             // Rows a failed read left say nothing of what the plugin now reads from.
             if (held.IsHeldWithAFailure(key) || scope.Failed.Holds(key))
             {
@@ -1304,6 +1306,22 @@ internal sealed class Indexer : IDisposable
             _logger.LogWarning(ex, "Reconciling {Plugin}: its rows cannot be validated, so it is read whole", key.Name);
             return true;
         }
+    }
+
+    // A tree's rows say nothing of its compiled file's header. A file gone or unreadable leaves the header last read,
+    // and the next change to the file reads it again.
+    private PluginMetadata ReopenHeader(OpenScope scope, PluginMetadata plugin)
+    {
+        if (!_adapter.Exists(plugin.Path)) return plugin;
+        if (!scope.Held.Reopen(plugin.Registered, Registration.In(scope.LoadOrder, plugin.Key), scope.LoadOrder).Holds(out var reopened, out _)
+            || reopened.Content == plugin.Content) return plugin;
+
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("{Plugin} ({Origin}): header changed, masters now [{Masters}]", plugin.Name, plugin.Origin, string.Join(", ", reopened.Masters));
+        }
+        scope.Store.Commit(projection => projection.Announce(sequence => new PluginChangedNotification(plugin.Key, sequence)));
+        return reopened;
     }
 
     // editor.md, States, story 6: the rows stay the last good read, and say why.
