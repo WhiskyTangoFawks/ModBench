@@ -199,6 +199,45 @@ export type StackedCopies = Omit<FileConflictLookup<StackedFile>, 'set'>;
 export const copyInConflict = (file: StackedFile | undefined, own: FileOrigin): boolean =>
   file !== undefined && file.copies.length > 1 && file.copies.some(({ origin }) => sameOrigin(origin, own));
 
+export interface CopyStanding {
+  readonly overwritesLoose: boolean;
+  readonly overwrittenLoose: boolean;
+  readonly overwritesArchiveWithLoose: boolean;
+  readonly archiveOverwrittenByLoose: boolean;
+  readonly overwritesArchive: boolean;
+  readonly overwrittenByArchive: boolean;
+  readonly redundant: boolean;
+}
+
+/** Which of mods.md's loose and archive indicators `own` holds over `stack`. A losing indicator is withheld from a Redundant origin. */
+export function copyStandingOf(stack: Iterable<StackedFile>, own: FileOrigin): CopyStanding {
+  const held = { overwritesLoose: false, overwrittenLoose: false, overwritesArchiveWithLoose: false, archiveOverwrittenByLoose: false, overwritesArchive: false, overwrittenByArchive: false };
+  let gets = false;
+  let loses = false;
+  for (const { copies } of stack) {
+    const at = copies.findIndex(({ origin }) => sameOrigin(origin, own));
+    const mine = copies[at];
+    if (mine === undefined) continue;
+    gets ||= at === 0;
+    loses ||= at > 0;
+    const over = copies.slice(0, at).map(({ at: copyAt }) => copyAt.kind);
+    const under = copies.slice(at + 1).map(({ at: copyAt }) => copyAt.kind);
+    if (mine.at.kind === 'loose') {
+      held.overwritesLoose ||= under.includes('loose');
+      held.overwrittenLoose ||= over.includes('loose');
+      held.overwritesArchiveWithLoose ||= under.includes('archived');
+    } else {
+      held.archiveOverwrittenByLoose ||= over.includes('loose');
+      held.overwritesArchive ||= under.includes('archived');
+      held.overwrittenByArchive ||= over.includes('archived');
+    }
+  }
+  const redundant = loses && !gets;
+  return redundant
+    ? { ...held, overwrittenLoose: false, archiveOverwrittenByLoose: false, overwrittenByArchive: false, redundant }
+    : { ...held, redundant };
+}
+
 /** An archive the game loads, at the path that wins its name, and what it holds. */
 export interface LoadedArchive {
   readonly origin: FileOrigin;

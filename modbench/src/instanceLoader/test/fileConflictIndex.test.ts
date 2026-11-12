@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { Mod, Separator } from '../instance';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import {
-  buildFileConflictIndex, indexReusing, modOrigin, stackCopies, stackReusing, goToModCandidates, fileOrderConflictOf, outranksACopy, winsPath, RUNTIME_OUTPUT, type ConflictEntry,
+  buildFileConflictIndex, indexReusing, modOrigin, stackCopies, stackReusing, copyStandingOf, FileConflictLookup, type StackedFile, goToModCandidates, fileOrderConflictOf, outranksACopy, winsPath, RUNTIME_OUTPUT, type ConflictEntry,
 } from '../fileConflictIndex';
 import type { FileOrigin, OriginFile, OriginFiles } from '../../instanceAdapter/instanceAdapter';
 import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
@@ -333,5 +333,46 @@ describe('the copies of each file, stacked as the game stacks them', () => {
       build(index, [archive('A', 'A.ba2', files)], 'Fallout4'),
       build(index, [archive('A', 'A.ba2', [FILE])], 'Fallout4'),
     ].map((stack) => stack === first)).toEqual([true, false]);
+  });
+});
+
+describe('how an origin\'s copies stand against the others\' (mods.md, Indicators)', () => {
+  const FILE = 'meshes/shared.nif';
+  const standing = (copies: ReadonlyArray<['loose' | 'archived', string]>, own: string) => {
+    const stack = new FileConflictLookup<StackedFile>();
+    stack.set({
+      relativePath: FILE,
+      copies: copies.map(([kind, name]) => ({
+        origin: modOrigin(name),
+        at: kind === 'loose' ? { kind, path: modPath(name, FILE) } : { kind, gameRelease: 'Fallout4', archive: modPath(name, 'x.ba2'), file: FILE },
+      })),
+    });
+    return copyStandingOf(stack, modOrigin(own));
+  };
+  const NONE = {
+    overwritesLoose: false, overwrittenLoose: false, overwritesArchiveWithLoose: false, archiveOverwrittenByLoose: false,
+    overwritesArchive: false, overwrittenByArchive: false, redundant: false,
+  };
+
+  it.each<[string, ReadonlyArray<['loose' | 'archived', string]>, string, Partial<typeof NONE>]>([
+    ['a loose copy over a loose copy', [['loose', 'A'], ['loose', 'B']], 'A', { overwritesLoose: true }],
+    ['a loose copy under a loose copy', [['loose', 'A'], ['loose', 'B']], 'B', { redundant: true }],
+    ['a loose copy over an archived copy', [['loose', 'A'], ['archived', 'B']], 'A', { overwritesArchiveWithLoose: true }],
+    ['an archived copy under a loose copy', [['loose', 'A'], ['archived', 'B']], 'B', { redundant: true }],
+    ['an archived copy over an archived copy', [['archived', 'A'], ['archived', 'B']], 'A', { overwritesArchive: true }],
+    ['an archived copy under an archived copy', [['archived', 'A'], ['archived', 'B']], 'B', { redundant: true }],
+    ['a copy nobody else has', [['loose', 'A']], 'A', {}],
+    ['a copy of a mod with no copy there', [['loose', 'A'], ['loose', 'B']], 'C', {}],
+  ])('%s', (_case, copies, own, held) => {
+    expect(standing(copies, own)).toEqual({ ...NONE, ...held });
+  });
+
+  it('is Redundant only when every file the mod could get loses, and carries no losing badge then', () => {
+    const stack = new FileConflictLookup<StackedFile>();
+    const copies = (...names: string[]) => names.map((name) => ({ origin: modOrigin(name), at: { kind: 'loose', path: modPath(name, 'x') } as const }));
+    stack.set({ relativePath: 'won.nif', copies: copies('B', 'A') });
+    stack.set({ relativePath: 'lost.nif', copies: copies('A', 'B') });
+
+    expect(copyStandingOf(stack, modOrigin('B'))).toEqual({ ...NONE, overwritesLoose: true, overwrittenLoose: true });
   });
 });
