@@ -761,8 +761,8 @@ export interface InstanceAdapter extends DataFileReads {
   writeModMetadata(mod: string, metadata: ModMetadata, trash: MoveToTrash): Promise<void>;
   /** The files in every mod's folder where the mod manager keeps its metadata, by path in it, which no build makes. */
   readonly metadataFilesInModFolder: readonly string[];
-  /** The game files of `place`, in its game folder and its Steam install, at the given paths, each named as the folder that holds it names it, with its
-   *  hash. A path either folder could not read is `unreadable` as asked, with why, and no file of it is handed: neither found nor absent. */
+  /** The game files of `place`, in its game folder and its Steam install, at `paths`, each with its hash. A path either
+   *  folder could not read is `unreadable`, with why, and no file of it is handed. */
   gameFiles(place: GamePlace, paths: readonly string[]): Promise<GameFilesRead>;
   /** The game files of `place` that the files below `folder` may be: a mod's file where deploy puts it, any other at its own path.
    *  `paths`: the files asked for; else every file the folder holds. */
