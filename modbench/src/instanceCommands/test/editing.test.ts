@@ -42,12 +42,12 @@ function wired(status: 'running' | 'stopped' = 'running') {
   const around: { entered: number; settled: boolean; told: number[] } = { entered: 0, settled: false, told: [] };
   let blueprintNames: string[] = [];
   const changeListeners: (() => void)[] = [];
-  const inGameOrder = {
+  const viewOrder = {
     of: ({ active }: Pick<LoadOrderSnapshot, 'active'>) => [...active.filter(({ name }) => !blueprintNames.includes(name)), ...active.filter(({ name }) => blueprintNames.includes(name))],
     onChange: (listener: () => void) => { changeListeners.push(listener); return { dispose: () => undefined }; },
   };
   const flow = editingFlow({
-    client, instanceRoot: '/instance', inGameOrder, onPut: (put) => { tell(put); return Promise.resolve(); }, log: (line) => { logged.push(line); },
+    client, instanceRoot: '/instance', viewOrder, onPut: (put) => { tell(put); return Promise.resolve(); }, log: (line) => { logged.push(line); },
     around: async (entry) => { around.entered++; await entry(); around.settled = true; around.told.push(told.length); },
   });
   const putPluginNames = (): string[] => client.puts().map((put) => put.plugins.map((p) => p.name).join());
@@ -257,7 +257,7 @@ describe('telling a launch that threw', () => {
   it('reaches the Output once, naming the launch', async () => {
     const client = new ClientWhoseLaunchIsHeld();
     const logged: string[] = [];
-    editingFlow({ client, instanceRoot: '/instance', inGameOrder: { of: ({ active }) => [...active], onChange: () => ({ dispose: () => undefined }) }, onPut: () => Promise.resolve(), log: (line) => { logged.push(line); }, around: (entry) => entry() });
+    editingFlow({ client, instanceRoot: '/instance', viewOrder: { of: ({ active }) => [...active], onChange: () => ({ dispose: () => undefined }) }, onPut: () => Promise.resolve(), log: (line) => { logged.push(line); }, around: (entry) => entry() });
 
     client.heard(Promise.reject(new Error('no kill')));
 

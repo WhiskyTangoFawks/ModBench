@@ -16,9 +16,9 @@ interface ArchivesByPlugin {
   readonly archivesByPlugin: readonly (PluginAddress & { readonly archives: LoadOrderSnapshot['archives'] })[];
 }
 
-/** The order the game loads the snapshot's active plugins in, which the loader cannot know: it takes
+/** The snapshot's active plugins in the Plugins view's order, which the loader cannot know: it takes
  *  a blueprint plugin's place from the header facts Editing supplies (ADR-0013). */
-export type InGameOrder = (snapshot: Pick<LoadOrderSnapshot, 'active' | 'loadedWithNoLine' | 'gameRelease'>) => PluginAddress[];
+export type ViewOrder = (snapshot: Pick<LoadOrderSnapshot, 'active' | 'loadedWithNoLine' | 'gameRelease'>) => PluginAddress[];
 
 /** Nothing is sent without a game folder found: there is no Data folder to key the load order on.
  *  A refusal is the loader's, to tell once: a partial snapshot would unregister what it left out. */
@@ -29,13 +29,13 @@ export type PutLoadOrderResult =
 /** A snapshot `changed` answers false for is sent no more (ADR-0013). */
 export async function putLoadOrder(
   client: Pick<MEditClient, 'sendLoadOrder'>, instanceRoot: string, source: LoadOrderSource, stringsLanguage: string | undefined,
-  inGameOrder: InGameOrder, changed: (snapshot: LoadOrderSnapshot) => boolean,
+  viewOrder: ViewOrder, changed: (snapshot: LoadOrderSnapshot) => boolean,
 ): Promise<PutLoadOrderResult> {
   if (!source) return { sent: false };
   if ('refusal' in source) return { sent: false, refusal: source.refusal };
   if (stringsLanguage === undefined) throw new Error('The strings language has no value: package.json declares its default.');
   const { plugins, loadedWithNoLine, stringsFiles, places, gameRelease, dataFolder } = source;
-  const active = inGameOrder(source);
+  const active = viewOrder(source);
   const archives = archivesOfPlugins(source, active);
   const snapshot: LoadOrderSnapshot = {
     plugins, active, loadedWithNoLine, archives, listedArchives: source.listedArchives.map(({ path }) => path), stringsFiles, places, dataFolder,

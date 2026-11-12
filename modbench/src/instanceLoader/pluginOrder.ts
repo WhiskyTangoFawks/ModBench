@@ -24,9 +24,9 @@ export function pluginOrderOf<R extends Placed, N extends PluginAddress>(
   return { loadedWithNoLine, fromLines, others: value.plugins.filter((p) => !placed.has(pluginAddressKey(p))) };
 }
 
-/** The order the game loads in. Where the release loads a blueprint plugin after every plugin that
- *  is not one (`blueprintLoadsLast`), among the blueprint plugins those with no line come before the lines. */
-export function inGameOrder<R>(
+/** The Plugins view's order, also the one mEdit is handed: the plugins the game loads with no line, then the lines.
+ *  Where blueprint plugins load last, one with no line follows the last line that is not one. */
+export function viewOrder<R>(
   loadedWithNoLine: readonly R[], lines: readonly R[], isBlueprint: (plugin: R) => boolean, blueprintLoadsLast: boolean,
 ): R[] {
   if (!blueprintLoadsLast) return [...loadedWithNoLine, ...lines];
@@ -39,9 +39,9 @@ export function inGameOrder<R>(
   ];
 }
 
-/** The snapshot's active plugins, which hold the plugins the game loads with no line first and then the lines, in the order the game loads them. */
-export function activeInGameOrder<R>(
+/** The snapshot's active plugins, which hold the plugins the game loads with no line first and then the lines, in the view's order. */
+export function activeViewOrder<R>(
   snapshot: { readonly active: readonly R[]; readonly loadedWithNoLine: readonly R[] }, isBlueprint: (plugin: R) => boolean, blueprintLoadsLast: boolean,
 ): R[] {
-  return inGameOrder(snapshot.loadedWithNoLine, snapshot.active.slice(snapshot.loadedWithNoLine.length), isBlueprint, blueprintLoadsLast);
+  return viewOrder(snapshot.loadedWithNoLine, snapshot.active.slice(snapshot.loadedWithNoLine.length), isBlueprint, blueprintLoadsLast);
 }

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { LoadOrderOutcome, LoadOrderProgress } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { putLoadOrder, type InGameOrder, type LoadOrderSource } from '../loadOrder';
+import { putLoadOrder, type ViewOrder, type LoadOrderSource } from '../loadOrder';
 
 const READY_STATUS: LoadOrderProgress = {
   totalPlugins: 1, activePlugins: 1, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, validating: false, failures: [],
@@ -10,7 +10,7 @@ const APPLIED: LoadOrderOutcome = { outcome: 'applied', status: READY_STATUS };
 
 const PLUGIN = { name: 'TestMod.esp', path: '/instance/mods/TestMod/TestMod.esp', origin: 'TestMod', provider: { kind: 'Mod' as const, mod: 'TestMod', folder: '/instance/mods/TestMod' }, line: 0, lineNamesIt: true, archives: [], stringsFiles: [] };
 const MASTER = { name: 'Master.esm', path: '/game/Data/Master.esm', origin: 'Base Mod', provider: { kind: 'Game' as const }, line: null, lineNamesIt: false, archives: [], stringsFiles: [] };
-const AS_LOADED: InGameOrder = ({ active }) => [...active];
+const AS_LOADED: ViewOrder = ({ active }) => [...active];
 const CHANGED = (): boolean => true;
 const SENT_PLUGINS = [MASTER, PLUGIN];
 const SENT_ACTIVE = [{ name: 'Master.esm', origin: 'Base Mod' }, { name: PLUGIN.name, origin: PLUGIN.origin }];
@@ -92,7 +92,7 @@ describe('put load order, refused by the loader', () => {
 describe('put load order in the order the game loads', () => {
   it('sends the active plugins in the order it is given, and the plugins the game loads with no line as the loader read them', async () => {
     const client = attachedClient();
-    const reversed: InGameOrder = ({ active }) => [...active].reverse();
+    const reversed: ViewOrder = ({ active }) => [...active].reverse();
 
     await putLoadOrder(client, '/instance', SOURCE, 'English', reversed, CHANGED);
 
@@ -115,8 +115,8 @@ describe('put load order, the archives follow the plugins', () => {
       { ...address('A.esp'), archives: [stamped('/a/A - Main.ba2')] },
     ],
   };
-  const blueprintLast: InGameOrder = ({ active }) => [...active.filter(({ name }) => name !== 'Blueprint.esm'), ...active.filter(({ name }) => name === 'Blueprint.esm')];
-  const archivesSent = async (order: InGameOrder): Promise<string[]> => {
+  const blueprintLast: ViewOrder = ({ active }) => [...active.filter(({ name }) => name !== 'Blueprint.esm'), ...active.filter(({ name }) => name === 'Blueprint.esm')];
+  const archivesSent = async (order: ViewOrder): Promise<string[]> => {
     const client = attachedClient();
     await putLoadOrder(client, '/instance', STARFIELD, 'English', order, CHANGED);
     return client.puts().flatMap((put) => put.archives.map(({ path }) => path));
