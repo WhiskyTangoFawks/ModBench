@@ -525,14 +525,14 @@ internal sealed class RelationReads(
     public IEnumerable<CopyHoldingText> GetCopiesHoldingText(string text) =>
         CopiesWhere("contains(lower(body), lower($1))", ActiveOrCompiled, text);
 
-    /// <summary>Each copy in a plugin whose rows were derived from its plugin source or whose plugin source cannot be read.</summary>
-    public IEnumerable<CopyHoldingText> GetCopiesOfCompiledPlugins() =>
-        CopiesWhere("TRUE", $"d.derived_from <> '{DerivedFrom.Binary}'");
+    /// <summary>Each copy <paramref name="plugin"/> holds, read in batches of whole records as the caller takes them.</summary>
+    public IEnumerable<CopyHoldingText> GetCopiesOf(PluginAddress plugin) =>
+        CopiesWhere("plugin = $1 AND origin = $2", "TRUE", plugin.Name, plugin.Origin);
 
     private IEnumerable<CopyHoldingText> CopiesWhere(string recordFilter, string pluginFilter, params object[] values)
     {
         using var context = OpenRead();
-        // The length is taken below the join, which would otherwise carry every document holding the text (ADR-0010).
+        // The record filter and the length sit below the join, which would otherwise carry every document it matches (ADR-0010).
         var located = context.Rows($"""
             SELECT r.form_key, r.plugin, r.origin, r.length, {InPluginSource}
             FROM (SELECT form_key, plugin, origin, strlen(body) AS length

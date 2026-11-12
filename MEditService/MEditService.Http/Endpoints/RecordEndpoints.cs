@@ -29,11 +29,7 @@ internal static class RecordEndpoints
             {
                 logger.LogInformation("Received GetRecords for {Plugin} ({Origin}) {Types} {Search}", plugin, origin, type, search);
             }
-            PluginAddress? address = null;
-            if (!string.IsNullOrWhiteSpace(plugin) && !string.IsNullOrWhiteSpace(origin))
-                address = new PluginAddress(plugin, origin);
-            else if (!string.IsNullOrWhiteSpace(plugin) || !string.IsNullOrWhiteSpace(origin))
-                return EndpointMapping.BadRequest("Name a plugin with both plugin and origin, or neither to browse every plugin.");
+            if (!EndpointMapping.OptionalPluginAt(plugin, origin, out var address, out var refused)) return refused;
             return EndpointMapping.Ok(svc.GetRecords(type is { Length: > 0 } ? type : null, address, search, limit, offset));
         })
         .WithName("GetRecords")

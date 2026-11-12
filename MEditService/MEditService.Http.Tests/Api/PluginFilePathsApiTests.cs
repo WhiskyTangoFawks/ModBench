@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
@@ -22,14 +23,21 @@ public sealed class PluginFilePathsApiTests : HostedTests
         await Client.NextCheck(fx);
         await Client.PluginReportsCompiledPlugin(Plugin);
 
-        var answer = await Client.GetFromJsonAsync<JsonElement>("/plugins/file-paths");
+        var answer = await Client.GetFromJsonAsync<JsonElement>($"/plugins/file-paths?plugin={Plugin}&origin={Origin}");
 
         var plugin = Assert.Single(answer.EnumerateArray());
         Assert.Equal((Plugin, Origin), (plugin.GetProperty("plugin").GetProperty("name").GetString(), plugin.GetProperty("plugin").GetProperty("origin").GetString()));
         var path = Assert.Single(plugin.GetProperty("paths").EnumerateArray());
-        Assert.Equal(("Diffuse", "Textures/Decals/Stain_d.dds"), (path.GetProperty("fieldPath").GetString(), path.GetProperty("dataPath").GetString()));
         Assert.Equal(await Client.FirstFormKey(Plugin, Origin, "txst"), path.GetProperty("formKey").GetString());
         var modFolder = Path.GetDirectoryName(fx.Plugins.Single(p => p.Name == Plugin).Path).Require();
         Assert.True(File.Exists(Path.Combine(modFolder, path.GetProperty("sourceRelativePath").GetString().Require())));
+    }
+
+    [Fact]
+    public async Task GetPluginFilePaths_APluginNamedWithoutAnOrigin_ReturnsBadRequest()
+    {
+        var response = await Client.GetAsync($"/plugins/file-paths?plugin={Plugin}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 }

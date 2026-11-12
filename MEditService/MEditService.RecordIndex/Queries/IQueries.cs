@@ -55,7 +55,7 @@ public interface IQueries
     Answer<PluginDependants, IndexRefused> GetDependants(PluginAddress plugin);
     Answer<PluginIndexedState, IndexRefused> GetPluginIndexedAsOnDisk(PluginAddress plugin);
     Answer<IReadOnlyList<PluginProblems>, IndexRefused> GetProblems();
-    Answer<IReadOnlyList<PluginFilePaths>, IndexRefused> GetFilePaths();
+    Answer<IReadOnlyList<PluginFilePaths>, IndexRefused> GetFilePaths(PluginAddress? plugin);
 
     // Answered in every state, "no load order yet" included (ADR-0013).
     LoadOrderStatus GetStatus();

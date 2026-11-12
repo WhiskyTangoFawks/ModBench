@@ -354,13 +354,13 @@ public sealed record SourceProblem(
         new(failure.FormKey, null, null, failure.SourceRelativePath, failure.Message);
 }
 
-/// <summary>Why a plugin's <see cref="PluginProblems.Problems"/> are not a clean bill (ADR-0019).</summary>
+/// <summary>Why a plugin's problems or file paths are not the whole answer (ADR-0019).</summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ProblemsFailureKind
 {
-    /// <summary>Its links could not be placed on files; mEdit does not log this.</summary>
+    /// <summary>Its records could not be placed on files of its source; mEdit does not log this.</summary>
     Placement,
-    /// <summary>Its rows are the last good read's; mEdit logs this once when it begins.</summary>
+    /// <summary>A later read of its source failed, so its rows are the last good read's; mEdit logs this once when it begins.</summary>
     LaterRead,
 }
 
@@ -373,8 +373,8 @@ public sealed record PluginProblems(
 /// <paramref name="SourceRelativePath"/> that holds the record, and where it lies in the Data folder.</summary>
 public sealed record NamedFilePath(string FormKey, string FieldPath, string SourceRelativePath, string DataPath);
 
-/// <summary>Every file path a compiled plugin's source names. <paramref name="Unread"/>: the records whose path mEdit
-/// could not place. <paramref name="Failure"/> is set when <paramref name="Paths"/> are not the whole answer (ADR-0019).</summary>
+/// <summary>The file paths a compiled plugin's source names. <paramref name="Unread"/>: the files its read stopped at and
+/// the copies mEdit could not read. <paramref name="Failure"/>: the paths are not the whole answer (ADR-0019).</summary>
 public sealed record PluginFilePaths(
     PluginAddress Plugin, IReadOnlyList<NamedFilePath> Paths, IReadOnlyList<string> Unread, string? Failure = null, ProblemsFailureKind? FailureKind = null);
 

@@ -390,7 +390,7 @@ internal sealed class RecordQueries(
         var unread = new List<string>();
         foreach (var copy in _index.RequireWholeSetReads().GetCopiesHoldingText(text))
         {
-            var named = $"{copy.FormKey} in {copy.Plugin.Name} ({copy.Plugin.Origin})";
+            var named = ReadFailures.Copy(copy.FormKey, copy.Plugin);
             if (!schemas.TryGetValue(copy.RecordType, out var schema))
             {
                 unread.Add($"{named}: mEdit has no schema for its record type {copy.RecordType}");
@@ -522,11 +522,11 @@ internal sealed class RecordQueries(
             return ProblemsPanel.Of(_index, reads, _loadOrder.Require(), source);
         });
 
-    public Answer<IReadOnlyList<PluginFilePaths>, IndexRefused> GetFilePaths() =>
+    public Answer<IReadOnlyList<PluginFilePaths>, IndexRefused> GetFilePaths(PluginAddress? plugin) =>
         _answer.Of(() =>
         {
             using var reads = _index.RequireWholeSetReads().InOneSnapshot();
-            return FilePathsPanel.Of(_index, reads, _loadOrder.Require(), source, RequireSchemas());
+            return FilePathsPanel.Of(_index, reads, _loadOrder.Require(), source, RequireSchemas(), WhyUnreadable, plugin);
         });
 
     public LoadOrderStatus GetStatus() => _index.Status;

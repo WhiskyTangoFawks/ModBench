@@ -396,7 +396,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The file paths each compiled plugin's source names, in the Data folder's spelling, with the file of the plugin source that holds each naming record. Answers only once the record index is ready. */
+        /** @description The file paths each compiled plugin's source names, in the Data folder's spelling, with the file of the plugin source that holds each naming record. Given plugin and origin, only that plugin's. Answers only once the record index is ready. */
         get: operations["GetPluginFilePaths"];
         put?: never;
         post?: never;
@@ -3073,7 +3073,10 @@ export interface operations {
     };
     GetPluginFilePaths: {
         parameters: {
-            query?: never;
+            query?: {
+                plugin?: string;
+                origin?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3087,6 +3090,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginFilePaths"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Service Unavailable */

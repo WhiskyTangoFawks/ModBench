@@ -19,7 +19,7 @@ public sealed class WholeSetRefusalTests
         [nameof(IQueries.GetLoadOrderDiagnoses)] = q => q.GetLoadOrderDiagnoses().Refused(),
         [nameof(IQueries.GetDependants)] = q => q.GetDependants(FirstPlugin).Refused(),
         [nameof(IQueries.GetProblems)] = q => q.GetProblems().Refused(),
-        [nameof(IQueries.GetFilePaths)] = q => q.GetFilePaths().Refused(),
+        [nameof(IQueries.GetFilePaths)] = q => q.GetFilePaths(null).Refused(),
         [nameof(IQueries.SelectRows)] = q => q.SelectRows("SELECT form_key FROM npc_").Refused(),
         [nameof(IQueries.ResolveNames)] = q => q.ResolveNames([new NameQuery("Anything")]).Refused(),
     };
