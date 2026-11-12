@@ -329,7 +329,7 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
     const { fake, result } = await sync({ order: ['Base.esp'], provided: ['Base.esp', 'zeta.esp', 'Alpha.esl'] });
 
     expect(result).toEqual({ applied: true, wrote: true, added: ['Alpha.esl', 'zeta.esp'], dropped: [] });
-    expect(fake.calls).toEqual(synced([{ kind: 'add', plugin: 'Alpha.esl' }, { kind: 'add', plugin: 'zeta.esp' }]));
+    expect(fake.calls).toEqual(synced([{ kind: 'add', plugin: 'Alpha.esl' }, { kind: 'move', plugins: ['Alpha.esl'], toIndex: 0 }, { kind: 'add', plugin: 'zeta.esp' }]));
   });
 
   describe('a line lands where the game would load its plugin', () => {
@@ -361,6 +361,25 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
       });
 
       expect(handedChanges(fake)).toEqual([{ kind: 'add', plugin: 'Unflagged.esm' }]);
+    });
+
+    it.each([['Fallout4', [{ kind: 'add', plugin: 'New.esl' }, { kind: 'move', plugins: ['New.esl'], toIndex: 1 }]], ['Oblivion', [{ kind: 'add', plugin: 'New.esl' }]]])(
+      'places a plugin mEdit has not read by its extension as the %s release loads it: an .esl among the masters only where it has light plugins', async (gameRelease, changes) => {
+        const { fake } = await sync({
+          order: ['Base.esm', 'Plain.esp'], provided: ['Base.esm', 'Plain.esp', 'New.esl'], gameRelease,
+          facts: loading({ name: 'Base.esm', ...MASTER }, { name: 'Plain.esp' }),
+        });
+
+        expect(handedChanges(fake)).toEqual(changes);
+      });
+
+    it('places a plugin that is no blueprint master before an active blueprint master, which the game loads last', async () => {
+      const { fake } = await sync({
+        order: ['Base.esm', 'Plain.esp', 'Blue.esm'], provided: ['Base.esm', 'Plain.esp', 'Blue.esm', 'New.esp'],
+        facts: loading({ name: 'Base.esm', ...MASTER }, { name: 'Plain.esp' }, { name: 'Blue.esm', ...MASTER, isBlueprint: true }, { name: 'New.esp' }),
+      });
+
+      expect(handedChanges(fake)).toEqual([{ kind: 'add', plugin: 'New.esp' }, { kind: 'move', plugins: ['New.esp'], toIndex: 2 }]);
     });
 
     it('lands several new masters in ascending order, each after the one before', async () => {

@@ -17,6 +17,7 @@ import type { ItemRefusal } from '../ports/selectionOutcome';
 import type {
   DecidePluginOrder, DecidePluginOrderOverProvided, InstanceAdapter, PluginEntry, PluginOrderChange, PluginsProvided,
 } from '../instanceAdapter/instanceAdapter';
+import { masterExtensionsOf } from '../tables/gamePaths';
 import { pluginsNotRestored } from './pluginsNotRestored';
 import type { FileReads } from '../sortingRules/lootConditions';
 import { isReadFailed } from '../wire/readFailed';
@@ -195,7 +196,7 @@ async function askedManifests(adapter: InstanceAdapter): Promise<ManifestsRead> 
 
 type SyncDecision = PluginLinesDelta | { gameFolderNotFound: true };
 
-function decideSync(order: readonly PluginEntry[], provided: PluginsProvided, manifests: ManifestsRead, factsOf: PluginFactsOf): Decision<SyncDecision> {
+function decideSync(order: readonly PluginEntry[], provided: PluginsProvided, manifests: ManifestsRead, factsOf: PluginFactsOf, masterExtensions: readonly string[]): Decision<SyncDecision> {
   // Without the Data folder's listing, a line for a Data plugin would be dropped. A game folder
   // not found is told once, as the instance's state (common.md, States, story 5).
   if (provided.kind === 'unresolved') return { changes: [], decided: { gameFolderNotFound: true } };
@@ -211,7 +212,7 @@ function decideSync(order: readonly PluginEntry[], provided: PluginsProvided, ma
       ...delta.dropped.map((plugin): PluginOrderChange => ({ kind: 'drop', plugin })),
       ...delta.added.flatMap((plugin): PluginOrderChange[] => {
         const lines = kept.filter((name) => !noLine.has(pluginKey(name)));
-        const drop = landingDrop({ loadedWithNoLine, lines, isActive: (name) => enabled.has(pluginKey(name)) }, plugin, factsOf);
+        const drop = landingDrop({ loadedWithNoLine, lines, isActive: (name) => enabled.has(pluginKey(name)) }, plugin, factsOf, masterExtensions);
         const toIndex = dropIndexIn([...kept, plugin], [plugin], drop);
         kept.splice(toIndex, 0, plugin);
         return drop.kind === 'winningEnd' ? [{ kind: 'add', plugin }] : [{ kind: 'add', plugin }, { kind: 'move', plugins: [plugin], toIndex }];
@@ -227,8 +228,9 @@ const synced = (wrote: boolean, decided: SyncDecision): PluginSyncResult =>
 // A sync reads the manifests it decides on through the adapters, never the Mod status box (ADR-0015).
 async function syncPlugins(adapter: InstanceAdapter, masters: PluginMasters): Promise<PluginSyncResult> {
   const factsOf = await orderFactsFrom(masters);
+  const masterExtensions = masterExtensionsOf(await adapter.gameRelease());
   const manifests = await adapter.repositoryOnDisk() ? await askedManifests(adapter) : NOTHING_NAMED;
-  const decided = await changeDeciding(overProvided(adapter), (order, provided) => decideSync(order, provided, manifests, factsOf));
+  const decided = await changeDeciding(overProvided(adapter), (order, provided) => decideSync(order, provided, manifests, factsOf, masterExtensions));
   return decided.applied ? synced(decided.wrote, decided.decided) : decided;
 }
 

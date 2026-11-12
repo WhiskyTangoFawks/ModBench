@@ -100,7 +100,7 @@ describe('plugins.txt corpus', () => {
     expect(result).toEqual({
       applied: true, wrote: true, added: ['NonAsciiRetexture - Addon.esl'], dropped: ['Unofficial Fallout 4 Patch.esp'],
     });
-    expect((await pluginOrder(dir)).at(-1)).toBe('NonAsciiRetexture - Addon.esl');
+    expect((await pluginOrder(dir)).at(0)).toBe('NonAsciiRetexture - Addon.esl');
     expect(await enabledPlugins(dir)).not.toContain('NonAsciiRetexture - Addon.esl');
   });
 
@@ -126,7 +126,7 @@ describe('plugins.txt corpus', () => {
 
     expect(await syncing).toMatchObject({ applied: true, dropped: ['Unofficial Fallout 4 Patch.esp'] });
     expect(await readPluginLines(dir)).toContainEqual({ name: 'Harder VATS.esp', enabled: true });
-    expect((await pluginOrder(dir)).indexOf('Harder VATS.esp')).toBe(1);
+    expect((await pluginOrder(dir)).indexOf('Harder VATS.esp')).toBe(2);
   });
 
   it('reorderPlugins moves a plugin within load order, touching only plugins.txt and loadorder.txt', async () => {

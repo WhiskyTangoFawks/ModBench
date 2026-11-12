@@ -51,14 +51,16 @@ export function offeredMoves(listed: ListedPlugins, broken: readonly BrokenRule[
   });
 }
 
-// A plugin mEdit has not read loads as a master by its extension alone.
-const factsOrExtension = (factsOf: PluginFactsOf): PluginFactsOf => (name) =>
-  factsOf(name) ?? { origin: '', masters: [], blueprint: false, master: fileExtension(name) === '.esm' };
+const factsOrExtension = (factsOf: PluginFactsOf, masterExtensions: readonly string[]): PluginFactsOf => (name) =>
+  factsOf(name) ?? { origin: '', masters: [], blueprint: false, master: masterExtensions.includes(fileExtension(name)) };
 
-/** Where a new disabled line for `plugin` lands: after the last line, or directly before the plugin the game
- *  would load it ahead of, so the game moves nothing. */
-export function landingDrop({ loadedWithNoLine, lines, isActive }: ListedPlugins, plugin: string, factsOf: PluginFactsOf): Drop {
-  const placement = judge(loadedWithNoLine, [...lines, plugin], factsOrExtension(factsOf), isActive).broken
-    .find((broken) => broken.rule === 'gameMoves' && broken.plugins.some((ref) => ref.filename === plugin))?.placement;
-  return placement === undefined ? { kind: 'winningEnd' } : { kind: placement.side, name: placement.anchor.filename };
+/** Where a new disabled line for `plugin` lands: directly before the next line in the order the game loads, or
+ *  after the last line when none follows. */
+export function landingDrop(
+  { loadedWithNoLine, lines, isActive }: ListedPlugins, plugin: string, factsOf: PluginFactsOf, masterExtensions: readonly string[],
+): Drop {
+  const { order } = judge(loadedWithNoLine, [...lines, plugin], factsOrExtension(factsOf, masterExtensions), isActive);
+  const lined = new Set(lines);
+  const next = order.slice(order.indexOf(plugin) + 1).find((name) => lined.has(name));
+  return next === undefined ? { kind: 'winningEnd' } : { kind: 'before', name: next };
 }
