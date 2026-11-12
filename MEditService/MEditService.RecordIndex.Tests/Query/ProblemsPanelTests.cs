@@ -239,23 +239,48 @@ public sealed class ProblemsPanelTests : IDisposable
         Assert.Null(link.UncheckedBecause);
     }
 
-    [Fact]
-    public void AnActivePluginThatCannotBeRead_IsAProblemOnTheHeaderFileOfACompiledPluginHoldingALink()
+    public sealed record ExpectedProblem(string? FieldPath, string File, string MessageStart);
+
+    private const string HeaderFile = "000000_Refers.esp.json";
+    private const string ReferrerFile = "Referrer - 000800_Refers.esp.json";
+
+    public static TheoryData<string?, ExpectedProblem[]> ByWhatTheLinksNamed => new()
     {
-        var plugin = new Plugin("Refers.esp");
+        {
+            "000800:Unreadable.esp",
+            [
+                new(null, HeaderFile, "Unreadable.esp is in the load order but could not be read, so no link into it was checked: "),
+                new("Race", ReferrerFile, "Race: Unreadable.esp could not be read, so this link was not checked: "),
+            ]
+        },
+        { Absent, [new("Race", ReferrerFile, "Race: [000ABC:Absent.esp] <Error: Could not be resolved>")] },
+        { null, [] },
+    };
+
+    [Theory]
+    [MemberData(nameof(ByWhatTheLinksNamed))]
+    public void AnActivePluginThatCannotBeRead_IsAProblemOnTheHeaderFile_OnlyOfACompiledPluginWithALinkIntoIt(
+        string? refersTo, ExpectedProblem[] expected)
+    {
+        var plugin = new Plugin("Refers.esp", RefersTo: refersTo);
         using var index = ReconciledWithPoisoned(Unreadable, new Plugin(Unreadable, CompiledPlugin: false), plugin);
 
         var answer = Assert.Single(Ready(index));
 
-        var problem = Assert.Single(answer.Problems, p => p.FieldPath is null);
-        Assert.StartsWith($"{Unreadable} is in the load order but could not be read, so no link into it was checked: ", problem.Message, StringComparison.Ordinal);
-        Assert.Equal(Path.Combine(PluginSourceRoot.For(plugin.Name), "000000_Refers.esp.json"), problem.SourceRelativePath);
+        Assert.Collection(
+            answer.Problems,
+            [.. expected.Select(want => (Action<SourceProblem>)(problem =>
+            {
+                Assert.Equal(want.FieldPath, problem.FieldPath);
+                Assert.StartsWith(want.MessageStart, problem.Message, StringComparison.Ordinal);
+                Assert.EndsWith(want.File, problem.SourceRelativePath, StringComparison.Ordinal);
+            }))]);
     }
 
     [Fact]
     public void ACompiledPluginNoModProvides_WhoseLinksAreNotChecked_IsAFailureOfThatPlugin_ForItsHeaderHasNoPlace()
     {
-        var plugin = new Plugin("Unprovided.esp", RefersTo: "000801:Unprovided.esp");
+        var plugin = new Plugin("Unprovided.esp", RefersTo: $"000801:{Unreadable}");
         Build(new Plugin(Unreadable, CompiledPlugin: false), plugin);
         var holder = new LoadOrderHolder();
         OpenedIndex? reconciled = null;
@@ -276,16 +301,6 @@ public sealed class ProblemsPanelTests : IDisposable
         var unprovided = Assert.Single(answered);
         Assert.Empty(unprovided.Problems);
         Assert.Equal(ProblemsFailureKind.Placement, unprovided.FailureKind);
-    }
-
-    [Fact]
-    public void AnActivePluginThatCannotBeRead_IsNoProblemOnACompiledPluginHoldingNoLink()
-    {
-        using var index = ReconciledWithPoisoned(Unreadable, new Plugin(Unreadable, CompiledPlugin: false), new Plugin("Clean.esp", RefersTo: null));
-
-        var answer = Assert.Single(Ready(index));
-
-        Assert.Empty(answer.Problems);
     }
 
     [Fact]
