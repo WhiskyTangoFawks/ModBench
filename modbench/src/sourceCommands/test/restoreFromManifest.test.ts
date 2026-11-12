@@ -32,8 +32,8 @@ const NOT_FINISHED = 'was not finished: the restore was cancelled. Restoring it 
 const holding = (files: Record<string, string | null>): Manifest['files'] => new Map(Object.entries(files));
 const fromTheZip = (files: Record<string, string>, over: Partial<Manifest> = {}): Manifest => ({ ...EMPTY, packages: [MOD_7Z], files: holding(files), ...over });
 const read = <T>(answer: T): FileRead<T> => ({ kind: 'read', answer });
-const takenFromTheGame = (...files: [string, string, string][]): InstanceAnswers['gameFilesTaken'] =>
-  new Map([['ModA', read({ gameFiles: files.map(([path, hash, pathInFolder]) => ({ path, hash, pathInFolder })), notes: [] })]]);
+const takenFromTheGame = (...files: [string, string, string, string?][]): InstanceAnswers['gameFilesTaken'] =>
+  new Map([['ModA', read({ gameFiles: files.map(([path, hash, pathInFolder, root = '/game']) => ({ root, path, hash, pathInFolder })), notes: [] })]]);
 
 let root: string;
 let modsDir: string;
@@ -221,6 +221,16 @@ describe('restore from manifest', () => {
 
       expect(writes(fake.calls)).toEqual([
         { verb: 'writeFilesIn', folder: folderOf('ModA'), files: [{ path: 'a.nif', from: { kind: 'gameFile', root: '/game', path: 'Data/A.nif' } }] },
+      ]);
+    });
+
+    it('writes the file from the folder of the game place that holds it', async () => {
+      const { restore, fake } = await takingFromTheGame({ gameFilesTaken: takenFromTheGame(['Data/A.nif', HA, 'a.nif', '/steam']) });
+
+      await restore(['ModA']);
+
+      expect(writes(fake.calls)).toEqual([
+        { verb: 'writeFilesIn', folder: folderOf('ModA'), files: [{ path: 'a.nif', from: { kind: 'gameFile', root: '/steam', path: 'Data/A.nif' } }] },
       ]);
     });
   });

@@ -476,7 +476,7 @@ describe('update manifest', () => {
 
   describe('a mod that takes files from the game folder', () => {
     const taken = (path: string, hash: string): InstanceAnswers['gameFilesTaken'] =>
-      new Map([['ModA', read({ gameFiles: [{ path: `Data/${path}`, hash, pathInFolder: path }], notes: [] })]]);
+      new Map([['ModA', read({ gameFiles: [{ root: '/game', path: `Data/${path}`, hash, pathInFolder: path }], notes: [] })]]);
 
     it('names the game folder as its package, with no host where no store installed the game', async () => {
       const { update, manifestOf } = await over({ files: { ModA: { 'meshes/a.nif': HA } }, answers: { gameFilesTaken: taken('meshes/a.nif', HA) } });
@@ -562,7 +562,7 @@ describe('update manifest', () => {
         answers: {
           installations: new Map([['Stock Game/', read(INSTALLED)]]),
           folderFiles: new Map([[folder, ['Data/a.nif']]]), hashes: new Map([[join(folder, 'Data/a.nif'), { size: 1, hash: HA }]]),
-          gameFilesTaken: new Map([['Stock Game', read({ gameFiles: [{ path: 'Data/a.nif', hash: HA, pathInFolder: 'Data/a.nif' }], notes: [] }) ]]),
+          gameFilesTaken: new Map([['Stock Game', read({ gameFiles: [{ root: '/game', path: 'Data/a.nif', hash: HA, pathInFolder: 'Data/a.nif' }], notes: [] }) ]]),
         },
       });
 

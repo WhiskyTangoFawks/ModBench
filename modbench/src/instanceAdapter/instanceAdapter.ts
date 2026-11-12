@@ -74,8 +74,8 @@ interface PlaceDepots {
 /** The game's install in Steam's library. */
 export type SteamInstall = FoundGameFolder & PlaceDepots;
 
-/** The game folder Modbench points at, with the depots of the Steam install it is. */
-export type GamePlace = PlaceDepots & { readonly root: string };
+/** The game folder Modbench points at, and the Steam install when that is another folder, with the depots of the Steam install. */
+export type GamePlace = PlaceDepots & { readonly root: string; readonly steamRoot?: string };
 
 /** Where deploy puts a mod's file in the game folder, none for a file it does not deploy. */
 export type DeployedPath = (pathInMod: string) => string | undefined;
@@ -456,8 +456,9 @@ export interface HashedFile {
   readonly hash: string;
 }
 
-/** A game file by its forward-slash path under the game's Data folder, named as the game folder names it, with its hash. */
+/** A game file by its forward-slash path under the game's Data folder, named as the game folder names it, with its hash and the folder of the game place it is in. */
 export interface GameFile {
+  readonly root: string;
   readonly path: string;
   readonly hash: string;
 }
@@ -466,7 +467,7 @@ export interface GameFileTaken extends GameFile {
   readonly pathInFolder: string;
 }
 
-interface GameFilesRead {
+export interface GameFilesRead {
   readonly files: readonly GameFile[];
   readonly unreadable: Readonly<Record<string, string>>;
 }
@@ -760,7 +761,7 @@ export interface InstanceAdapter extends DataFileReads {
   writeModMetadata(mod: string, metadata: ModMetadata, trash: MoveToTrash): Promise<void>;
   /** The files in every mod's folder where the mod manager keeps its metadata, by path in it, which no build makes. */
   readonly metadataFilesInModFolder: readonly string[];
-  /** The game files of `place`, the game folder, at the given paths, named as the game folder names them, with their hashes. A path that
+  /** The game files of `place`, in its game folder and its Steam install, at the given paths, named as the game folder names them, with their hashes. A path that
    *  could not be read is `unreadable` as asked, with why: neither found nor absent. */
   gameFiles(place: GamePlace, paths: readonly string[]): Promise<GameFilesRead>;
   /** The game files of `place` that the files below `folder` may be: a mod's file where deploy puts it, any other at its own path.
