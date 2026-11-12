@@ -176,41 +176,59 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         Assert.Equal((first, DecompileAndRepairRefusal.OtherPluginRepairable), (refused.Item, refused.Refusal));
     }
 
-    [Fact]
-    public async Task DecompileAndRepair_OfAHealthyPluginOfAModWithNoRepositoryWhoseOtherPluginIsMalformed_IsRefusedAsOtherPluginRepairable()
+    private const string OtherRepairable = "Other Malformed.esp";
+    private const string Unrepairable = "NoRepair.esp";
+
+    [Theory]
+    [InlineData(new[] { Malformed }, DecompileAndRepairRefusal.OtherPluginRepairable)]
+    [InlineData(new[] { Malformed, OtherRepairable }, DecompileAndRepairRefusal.OtherPluginRepairable)]
+    [InlineData(new[] { Unrepairable }, DecompileAndRepairRefusal.OtherPluginRefused)]
+    [InlineData(new[] { Malformed, Unrepairable }, DecompileAndRepairRefusal.OtherPluginRefused)]
+    public async Task DecompileAndRepair_OfAHealthyPluginOfAModNotASourceMod_WhoseUnnamedSiblingsAreMalformed_IsRefusedNamingEachWithItsDiagnoses(
+        string[] siblings, DecompileAndRepairRefusal expected)
     {
-        AddToNewMod(Lossless.Malformed);
+        var fixtures = siblings.ToDictionary(sibling => sibling, sibling => sibling switch
+        {
+            Malformed => Lossless,
+            OtherRepairable => Lossless with { Malformed = Lossless.Malformed with { FileName = OtherRepairable } },
+            _ => NoRepairFixture with { Malformed = NoRepairFixture.Malformed with { FileName = Unrepairable } },
+        });
         WriteCleanPlugin(_newMod, "Clean.esp");
+        foreach (var fixture in fixtures.Values) fixture.Malformed.WriteInto(_newMod);
         var clean = new PluginAddress("Clean.esp", NewModName);
-        Load(Entry(_newMod, Malformed), Entry(_newMod, "Clean.esp"));
+        Load([Entry(_newMod, "Clean.esp"), .. siblings.Select(sibling => Entry(_newMod, sibling))]);
 
         var refused = Assert.Single((await Repair([ToRepair(clean)])).Refused);
 
-        Assert.Equal((clean, DecompileAndRepairRefusal.OtherPluginRepairable), (refused.Item, refused.Refusal));
+        Assert.Equal((clean, expected), (refused.Item, refused.Refusal));
+        foreach (var (sibling, fixture) in fixtures)
+        {
+            Assert.Contains(sibling, refused.Message, StringComparison.Ordinal);
+            Assert.Contains(fixture.Diagnosis, refused.Message, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
-    public async Task DecompileAndRepair_OfAHealthyPluginOfAModWithNoRepositoryWhoseOtherPluginIsMalformedBeyondRepair_IsRefusedAsOtherPluginRefused()
+    public async Task DecompileAndRepair_OfAHealthyPluginOfAModNotASourceMod_WhoseSiblingsAreHealthy_IsRefusedAsNotMalformedOutsideSourceMod()
     {
-        AddToNewMod(NoRepairFixture.Malformed with { FileName = "NoRepair.esp" });
         WriteCleanPlugin(_newMod, "Clean.esp");
         var clean = new PluginAddress("Clean.esp", NewModName);
-        Load(Entry(_newMod, "NoRepair.esp"), Entry(_newMod, "Clean.esp"));
+        Load(Entry(_newMod, "Clean.esp"));
 
         var refused = Assert.Single((await Repair([ToRepair(clean)])).Refused);
 
-        Assert.Equal((clean, DecompileAndRepairRefusal.OtherPluginRefused), (refused.Item, refused.Refusal));
+        Assert.Equal((clean, DecompileAndRepairRefusal.NotMalformedOutsideSourceMod), (refused.Item, refused.Refusal));
     }
 
     [Fact]
-    public async Task DecompileAndRepair_OfAHealthyPluginOfASourceModWhoseOtherPluginIsMalformed_IsRefusedAsNotMalformed()
+    public async Task DecompileAndRepair_OfAHealthyPluginOfASourceMod_WhoseSiblingIsMalformed_IsRefusedAsNotMalformed()
     {
         AddToSourceMod(Lossless.Malformed);
         var clean = new PluginAddress("First.esp", SourceModName);
 
         var refused = Assert.Single((await Repair([ToRepair(clean)])).Refused);
 
-        Assert.Equal(DecompileAndRepairRefusal.NotMalformed, refused.Refusal);
+        Assert.Equal((clean, DecompileAndRepairRefusal.NotMalformed), (refused.Item, refused.Refusal));
     }
 
     [Fact]
@@ -396,13 +414,13 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task DecompileAndRepair_OfAPluginThatIsNotMalformed_IsRefusedAsNotMalformed()
+    public async Task DecompileAndRepair_OfAHealthyPluginOfASourceMod_IsRefusedAsNotMalformed()
     {
         var clean = new PluginAddress("First.esp", SourceModName);
 
         var refused = Assert.Single((await Repair([ToRepair(clean)])).Refused);
 
-        Assert.Equal(DecompileAndRepairRefusal.NotMalformed, refused.Refusal);
+        Assert.Equal((clean, DecompileAndRepairRefusal.NotMalformed), (refused.Item, refused.Refusal));
     }
 
     [Fact]

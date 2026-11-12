@@ -26,6 +26,9 @@ public enum DecompileAndRepairRefusal
     /// <summary>No malformed record is diagnosed in the plugin, so there is nothing to repair.</summary>
     NotMalformed,
 
+    /// <summary>No malformed record is diagnosed in the plugin, and its mod is not a source mod, so decompile has no working tree for it; version in git makes one.</summary>
+    NotMalformedOutsideSourceMod,
+
     /// <summary>No malformed record is diagnosed in the plugin, and it was decompiled without a repair into the source folder made for its mod.</summary>
     DecompiledWithoutRepair,
 

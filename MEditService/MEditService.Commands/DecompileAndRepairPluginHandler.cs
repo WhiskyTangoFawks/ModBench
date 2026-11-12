@@ -44,7 +44,7 @@ public sealed class DecompileAndRepairPluginHandler
         var targets = plugins.ToDictionary(
             item => item.Plugin,
             item => RepairTarget.Of(_repairer, loadOrder, item.Plugin, named,
-                mod => (mod.SourceFolder ?? item.SourceFolder?.Path) is { } folder && _source.IsSourceMod(folder)),
+                mod => IsSourceMod(mod, item)),
             PluginAddress.Comparer);
         var repairedHere = targets.Where(target => target.Value is RepairTarget.Diagnosed).Select(target => target.Key).ToHashSet(PluginAddress.Comparer);
         var leftOutOfANewSourceFolder = new HashSet<PluginAddress>(PluginAddress.Comparer);
@@ -64,7 +64,7 @@ public sealed class DecompileAndRepairPluginHandler
         ItemRefused<PluginToRepair, DecompileAndRepairRefusal> refused, HashSet<PluginAddress> leftOut, HashSet<PluginAddress> held)
     {
         var plugin = refused.Item.Plugin;
-        if (refused.Refusal == DecompileAndRepairRefusal.NotMalformed && held.Contains(plugin))
+        if (refused.Refusal is DecompileAndRepairRefusal.NotMalformed or DecompileAndRepairRefusal.NotMalformedOutsideSourceMod && held.Contains(plugin))
         {
             return new DecompileAndRepairRefused(plugin, DecompileAndRepairRefusal.DecompiledWithoutRepair,
                 $"{plugin.Name} is not malformed, so it was decompiled without a repair, with the source folder made for its mod.");
@@ -72,6 +72,9 @@ public sealed class DecompileAndRepairPluginHandler
         var message = leftOut.Contains(plugin) ? $"{refused.Message} The source folder made for its mod holds no source for it." : refused.Message;
         return new DecompileAndRepairRefused(plugin, refused.Refusal, message);
     }
+
+    private bool IsSourceMod(PluginProvider.FromMod mod, PluginToRepair item) =>
+        (mod.SourceFolder ?? item.SourceFolder?.Path) is { } folder && _source.IsSourceMod(folder);
 
     private static ItemAnswer<DecompileAndRepairRefusal, NoOutcome> Refused(DecompileAndRepairRefusal refusal, string message) =>
         ItemAnswer<DecompileAndRepairRefusal, NoOutcome>.Refused(refusal, message);
@@ -85,7 +88,7 @@ public sealed class DecompileAndRepairPluginHandler
         var sourceFolder = mod.SourceFolder ?? item.SourceFolder?.Path;
         if (sourceFolder is null)
             return Refused(DecompileAndRepairRefusal.NoSourceFolder, $"{mod.Name} is not a source mod, and the request hands no source folder to make.");
-        var inSourceMod = _source.IsSourceMod(sourceFolder);
+        var inSourceMod = IsSourceMod(mod, item);
         var repository = _source.OverFolder(mod with { SourceFolder = sourceFolder }, loadOrder.GameRelease);
         if (inSourceMod && !force && WorkingTreeCheck.Of(repository, plugin.Key, "decompile and repair") is { } workingTree)
         {
@@ -147,7 +150,6 @@ public sealed class DecompileAndRepairPluginHandler
     {
         VersionInGitRefusal.AlreadyInitialized or VersionInGitRefusal.AnotherRepository => DecompileAndRepairRefusal.AnotherRepository,
         VersionInGitRefusal.CommitFailed => DecompileAndRepairRefusal.WriteFailed,
-        VersionInGitRefusal.MalformedRepairable => DecompileAndRepairRefusal.OtherPluginRepairable,
         _ => DecompileAndRepairRefusal.OtherPluginRefused,
     };
 

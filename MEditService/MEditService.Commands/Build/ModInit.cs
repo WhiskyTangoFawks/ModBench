@@ -85,7 +85,7 @@ internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderR
         return ItemAnswer<VersionInGitRefusal, IReadOnlyList<PluginAddress>>.Landed([.. verified.Select(v => v.Plugin.Address)]);
     }
 
-    private static List<RegisteredPlugin> ProvidedBy(LoadOrderSnapshot loadOrder, string modName) =>
+    internal static List<RegisteredPlugin> ProvidedBy(LoadOrderSnapshot loadOrder, string modName) =>
         [.. loadOrder.Plugins.Where(plugin => plugin.Provider is PluginProvider.FromMod mod
             && string.Equals(mod.Name, modName, StringComparison.OrdinalIgnoreCase))];
 

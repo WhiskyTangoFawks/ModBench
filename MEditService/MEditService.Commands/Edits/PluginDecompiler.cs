@@ -1,7 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
-using MEditService.PluginAdapter.Repair;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 
@@ -68,25 +67,19 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         if (scan.AtFailure.Count > 0)
         {
             return new RoundTripRefusal(
-                $"{plugin.Name} is a malformed plugin and cannot become source: {Described(scan.AtFailure)}.",
-                RepairClears(scan.AtFailure));
+                Malformations.CannotBecomeSource(plugin.Name, scan.AtFailure),
+                Malformations.RepairClears(scan.AtFailure));
         }
 
         var elsewhere = scan.Elsewhere.Count == 0
             ? ""
-            : $" It also holds malformed records: {Described(scan.Elsewhere)}.";
+            : $" It also holds malformed records: {Malformations.Described(scan.Elsewhere)}.";
         if (unparsed.Diagnosis.Tail is null)
             return new RoundTripRefusal(NotParsed(plugin, unparsed) + elsewhere);
         return new RoundTripRefusal(scan.Elsewhere.Count == 0
             ? $"{plugin.Name} is a correct plugin that Mutagen mishandles: {unparsed.Reason}"
             : $"Mutagen mishandles {plugin.Name}: {unparsed.Reason}.{elsewhere}");
     }
-
-    private static string Described(IEnumerable<RepairPreview> malformations) =>
-        string.Join("; ", malformations.Select(malformation => malformation.Diagnosis.Describe()));
-
-    private static bool RepairClears(IReadOnlyList<RepairPreview> malformations) =>
-        malformations.All(malformation => malformation.Change is not null);
 
     // ADR-0006's gate. Reparse, not the pre-write object: only written bytes show what
     // the writer does.
@@ -115,8 +108,8 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         if (comparison.DeletedRecordCauses is { } deleted)
         {
             return new RoundTripRefusal(
-                $"{pluginName} does not round-trip through its own source: it is a malformed plugin, and {Described(deleted)}.",
-                RepairClears(deleted));
+                $"{pluginName} does not round-trip through its own source: it is a malformed plugin, and {Malformations.Described(deleted)}.",
+                Malformations.RepairClears(deleted));
         }
 
         if (comparison.Loss is { } loss)
@@ -124,9 +117,9 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
             // A Kind B diagnosis on the record names the cause ahead of the drop it produced.
             return comparison.LossCauses is { } causes
                 ? new RoundTripRefusal(
-                    $"{pluginName} does not round-trip through its own source: it is a malformed plugin, and {Described(causes)} — " +
+                    $"{pluginName} does not round-trip through its own source: it is a malformed plugin, and {Malformations.Described(causes)} — " +
                     $"parsing the malformed subrecord dropped {string.Join(", ", loss.Signatures)} before its source was written.",
-                    RepairClears(causes))
+                    Malformations.RepairClears(causes))
                 : new RoundTripRefusal(
                     $"{pluginName} does not round-trip through its own source: {loss.RecordType} {loss.FormKey} is missing {string.Join(", ", loss.Signatures)} " +
                     "present in the original — dropped during parsing, before its source was written.");
@@ -152,8 +145,8 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         {
             return divergence.Causes is { } causes
                 ? new RoundTripRefusal(
-                    $"{pluginName} does not round-trip through its own source: it is a malformed plugin, and {Described(causes)} — {divergence.Description}",
-                    RepairClears(causes))
+                    $"{pluginName} does not round-trip through its own source: it is a malformed plugin, and {Malformations.Described(causes)} — {divergence.Description}",
+                    Malformations.RepairClears(causes))
                 : new RoundTripRefusal($"{pluginName} does not round-trip through its own source: {divergence.Description}");
         }
 
