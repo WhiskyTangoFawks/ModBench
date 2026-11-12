@@ -18,9 +18,10 @@ export function keepLoadOrderStatus(
 
   const hear = (status: LoadOrderStatus) => {
     const failuresChanged = JSON.stringify(status.failures) !== JSON.stringify(latest?.failures ?? []);
+    // A refresh reconciles the version already settled again.
+    const reconciled = status.conflictsComputed && (status.version > settledVersion || latest?.conflictsComputed === false);
     latest = status;
     tell(statusListeners, status);
-    const reconciled = status.conflictsComputed && status.version > settledVersion;
     if (reconciled) settledVersion = status.version;
     if (reconciled || failuresChanged) tell(settledListeners, status);
   };

@@ -474,6 +474,8 @@ internal sealed class Indexer : IDisposable
             .Select(plugin => plugin.Key));
         var holding = scope.Held.Plugins.Where(plugin => named.Contains(plugin.Key)).ToList();
         if (holding.Count > 0 || scope.Store.SweepOwed) Validate(scope, holding, CancellationToken.None);
+        // A plugin that failed to open is not held: the reconcile opens it again.
+        if (scope.LoadOrder.Plugins.Any(plugin => named.Contains(plugin.Key) && scope.Held.Find(plugin.Key) is null)) AskReconcile();
         return holding;
     }
 
