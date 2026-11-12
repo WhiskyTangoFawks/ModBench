@@ -47,6 +47,9 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
         return Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(room, Release));
     }
 
+    private static readonly string RoomRelativePath = Path.Combine(
+        "plugin-source", "Filed.esp", "Cells", "0", "0", "FiledRoom - 000801_Filed.esp", "FiledRoom - 000801_Filed.esp.json");
+
     private string NpcFile => Path.Combine(_modFolder, NpcDocument);
 
     private string RoomFile => Path.Combine(_modFolder, RoomDocument);
@@ -84,13 +87,13 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
         Placed,
     }
 
-    private (RecordIdentity Record, string File, bool IsContainersDocument) FilingOf(Filed filed) =>
+    private (RecordIdentity Record, string File, string RelativePath, bool IsContainersDocument) FilingOf(Filed filed) =>
         filed switch
         {
-            Filed.Npc => (Npc, NpcFile, false),
-            Filed.Header => (Header, HeaderFile, false),
-            Filed.Room => (Room, RoomFile, false),
-            Filed.Placed => (Placed, RoomFile, true),
+            Filed.Npc => (Npc, NpcFile, Path.Combine("plugin-source", "Filed.esp", "Npcs", "FiledNpc - 000800_Filed.esp.json"), false),
+            Filed.Header => (Header, HeaderFile, Path.Combine("plugin-source", "Filed.esp", "000000_Filed.esp.json"), false),
+            Filed.Room => (Room, RoomFile, RoomRelativePath, false),
+            Filed.Placed => (Placed, RoomFile, RoomRelativePath, true),
             _ => throw new ArgumentOutOfRangeException(nameof(filed), filed, null),
         };
 
@@ -101,9 +104,9 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     [InlineData(Filed.Placed)]
     public void ARecord_IsInItsOwnDocument_OrInTheDocumentOfTheRecordCarryingIt(Filed filed)
     {
-        var (record, file, isContainersDocument) = FilingOf(filed);
+        var (record, file, relativePath, isContainersDocument) = FilingOf(filed);
 
-        Assert.Equal(new DocumentFile(file, isContainersDocument), Repository.DocumentOf(Plugin, record).Value());
+        Assert.Equal(new DocumentFile(file, relativePath, isContainersDocument), Repository.DocumentOf(Plugin, record).Value());
     }
 
     [Fact]
@@ -144,7 +147,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     [InlineData(Filed.Room)]
     public void ARecordsOwnDocument_HoldsThatRecord_NotAChildItCarries(Filed filed)
     {
-        var (record, file, _) = FilingOf(filed);
+        var (record, file, _, _) = FilingOf(filed);
 
         Assert.Equal(new RecordAt(Plugin, record.FormKey), RecordOf(file));
     }
