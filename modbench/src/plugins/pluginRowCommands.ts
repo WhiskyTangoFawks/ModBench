@@ -156,14 +156,13 @@ async function sendAskingOverChanges<Words extends Message>(
 
 // mEdit names the fact; the gesture that clears it is the extension's to name.
 function decompileReason({ item, reason, refusal }: DecompileOutcome['refused'][number]): ItemRefusal<PluginAddress, Message> {
-  switch (refusal) {
-    case 'NotInSourceMod':
-      return { item, reason: phrase`${reason} Run ${gestureName('modbench.mod.versionInGit', 'version in git')} on ${item.origin}.` };
-    case 'MalformedRepairable':
-      return { item, reason: phrase`${reason} Run ${gestureName('modbench.plugin.decompileAndRepair', 'decompile and repair')} on it.` };
-    default:
-      return { item, reason };
+  if (refusal === 'NotInSourceMod') {
+    return { item, reason: phrase`${reason} Run ${gestureName('modbench.mod.versionInGit', 'version in git')} on ${item.origin}.` };
   }
+  if (refusal === 'MalformedRepairable') {
+    return { item, reason: phrase`${reason} Run ${gestureName('modbench.plugin.decompileAndRepair', 'decompile and repair')} on it.` };
+  }
+  return { item, reason };
 }
 
 async function decompiled(

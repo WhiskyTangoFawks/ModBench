@@ -66,12 +66,6 @@ function kindedSelectionOutcome<L, R, K extends string>(
   return { landed: answer.applied, refused: answer.refused.map((r) => ({ item: r.item, reason: r.message, refusal: r.refusal })) };
 }
 
-function selectionOutcome<L, R>(
-  answer: { applied: L[]; refused: { item: R; message: string }[] },
-): { landed: readonly L[]; refused: readonly ItemRefusal<R>[] } {
-  return { landed: answer.applied, refused: itemRefusals(answer.refused) };
-}
-
 function appliedWithRefusals<A, R>(
   answer: { applied: A[]; refused: { item: R; message: string }[] },
 ): { applied: A[]; refused: ItemRefusal<R>[] } {

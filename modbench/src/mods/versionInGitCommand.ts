@@ -105,14 +105,13 @@ async function showInExplorer(folder: string | undefined, mod: string): Promise<
 
 // mEdit names the fact; the gesture that clears it is the extension's to name.
 function refusedWithRemedy({ item, reason, refusal }: VersionInGitOutcome['refused'][number]): ItemRefusal<string, Message> {
-  switch (refusal) {
-    case 'AlreadyInitialized':
-      return { item, reason: phrase`${reason} To put a plugin's source into its working tree, run ${gestureName('modbench.plugin.decompile', 'decompile')} on it.` };
-    case 'MalformedRepairable':
-      return { item, reason: phrase`${reason} Run ${gestureName('modbench.plugin.decompileAndRepair', 'decompile and repair')} on its plugins.` };
-    default:
-      return { item, reason };
+  if (refusal === 'AlreadyInitialized') {
+    return { item, reason: phrase`${reason} To put a plugin's source into its working tree, run ${gestureName('modbench.plugin.decompile', 'decompile')} on it.` };
   }
+  if (refusal === 'MalformedRepairable') {
+    return { item, reason: phrase`${reason} Run ${gestureName('modbench.plugin.decompileAndRepair', 'decompile and repair')} on its plugins.` };
+  }
+  return { item, reason };
 }
 
 function reportVersioned(
