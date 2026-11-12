@@ -6,6 +6,8 @@ import { attachPortOf, createMEditClient, recordIndexReferences, stopMEditClient
 import { manifestFileReferences, manifestEntryNames } from './manifestAdapter/manifestAdapter';
 import type { EntryNames, SymbolOwner } from './symbolNames/symbolNames';
 import { makeReporter } from './drivingLib/reporter';
+import { isInsideAny } from './drivingLib/insideFolders';
+import { workspaceRoots } from './drivingLib/workspaceRoots';
 import { commandTitles } from './drivingLib/commandTitles';
 import { surfaceRefusedWrites } from './drivingLib/writingGesture';
 import { askQuestion } from './dialog';
@@ -147,6 +149,8 @@ type Views = InstanceSide & vscode.Disposable;
 const ownAll = (own: Own, disposables: vscode.Disposable[]): void => {
   own(vscode.Disposable.from(...disposables));
 };
+
+const inWorkspace = (path: string): boolean => isInsideAny(workspaceRoots(), path);
 
 function buildBareSide(own: Own): InstanceSide {
   return {
@@ -297,7 +301,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     entryTooltip: (entry) => mods.tooltipOf(entry),
     downloadedFileTooltip: (name) => downloads.tooltipOf(name),
     modOrderFileOf: (profile) => adapter.modOrderFileOf(profile),
-    fileCopies: { gameRelease: () => adapter.gameRelease(), copyOf: (path) => copyTheGameGets(instance.value, path), reveal: revealCopy },
+    fileCopies: { gameRelease: () => adapter.gameRelease(), copyOf: (path) => copyTheGameGets(instance.value, path, inWorkspace), reveal: revealCopy },
     deployment: { folder: () => deploymentFolderOf(deploymentFolderSetting), pluginsTxtPlace: placeForGame },
     sourceFiles: (origin) => sourceFiles(instance.value, origin),
     copyValue: [mods.copyValue, plugins.copyValue, downloads.copyValue],

@@ -5,12 +5,15 @@ import { revealArchivedFile } from './archiveFiles';
 import { gameFolderFile, gameFolderFileOver } from './modFiles';
 
 /** The copy of `path` that the game gets, or what searching found: a mod's or Overwrite's, else a loose game folder file,
- *  which beats an archived copy. The game folder's archives are not read. */
-export function copyTheGameGets(value: Pick<InstanceValue, 'stackedCopies' | 'dataFolderFiles'>, path: string): CopyAt | { none: string } {
+ *  which beats an archived copy. The game folder's archives are not read. A game folder outside the workspace is never a
+ *  definition (ADR-0001). */
+export function copyTheGameGets(value: Pick<InstanceValue, 'stackedCopies' | 'dataFolderFiles'>, path: string, inWorkspace: (path: string) => boolean): CopyAt | { none: string } {
   const stacked = value.stackedCopies.get(path)?.copies[0]?.at;
   const loose = stacked === undefined ? gameFolderFile(value, path) : gameFolderFileOver(value, path);
-  if (loose !== undefined) return { kind: 'loose', path: loose };
+  const outside = loose !== undefined && !inWorkspace(loose);
+  if (loose !== undefined && !outside) return { kind: 'loose', path: loose };
   if (stacked !== undefined) return stacked;
+  if (outside) return { none: `${path} is in the game folder, which is outside the workspace.` };
   return {
     none: value.dataFolderFiles.kind === 'listed'
       ? `No enabled mod, Overwrite or loose file in the Data folder holds ${path}.`

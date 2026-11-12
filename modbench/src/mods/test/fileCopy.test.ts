@@ -17,6 +17,8 @@ function held(winner: CopyAt | undefined, inGameFolder = false, listed = true) {
   return { stackedCopies, dataFolderFiles: listed ? { kind: 'listed' as const, files } : { kind: 'unresolved' as const } };
 }
 
+const INSIDE = () => true;
+
 describe('the copy of a file the game gets (symbols.md, The symbols, File)', () => {
   it.each([
     ['a loose copy in a mod', held(LOOSE), LOOSE],
@@ -27,10 +29,34 @@ describe('the copy of a file the game gets (symbols.md, The symbols, File)', () 
     ['what was searched, when no mod or Data folder file holds it', held(undefined), { none: `No enabled mod, Overwrite or loose file in the Data folder holds ${PATH}.` }],
     ['what was searched, when the Data folder cannot be listed', held(undefined, false, false), { none: `No enabled mod or Overwrite holds ${PATH}, and the Data folder's files could not be listed.` }],
   ])('is %s', (_case, value, copy) => {
-    expect(copyTheGameGets(value, PATH)).toEqual(copy);
+    expect(copyTheGameGets(value, PATH, INSIDE)).toEqual(copy);
   });
 
   it('is found by a path in any case', () => {
-    expect(copyTheGameGets(held(LOOSE), 'Textures/Decals/Stain_D.dds')).toEqual(LOOSE);
+    expect(copyTheGameGets(held(LOOSE), 'Textures/Decals/Stain_D.dds', INSIDE)).toEqual(LOOSE);
+  });
+});
+
+describe('a game folder outside the workspace (ADR-0001)', () => {
+  const outside = () => false;
+
+  it('is no definition for its loose file, and the answer says why', () => {
+    expect(copyTheGameGets(held(undefined, true), PATH, outside)).toEqual({
+      none: `${PATH} is in the game folder, which is outside the workspace.`,
+    });
+  });
+
+  it('is no definition over an archived copy in a mod, which stays the copy shown', () => {
+    expect(copyTheGameGets(held(ARCHIVED, true), PATH, outside)).toEqual(ARCHIVED);
+  });
+
+  it('leaves a copy in a mod as it is', () => {
+    expect(copyTheGameGets(held(LOOSE, true), PATH, outside)).toEqual(LOOSE);
+  });
+
+  it('is asked about the loose file by its own path', () => {
+    const asked: string[] = [];
+    copyTheGameGets(held(undefined, true), PATH, (path) => { asked.push(path); return true; });
+    expect(asked).toEqual(['/game/Data/Textures/Decals/Stain_d.dds']);
   });
 });

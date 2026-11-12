@@ -26,6 +26,8 @@ import { entryLanguage } from './entryLanguage';
 import { scriptLanguage, type ScriptClient } from './scriptLanguage';
 import { fileLanguage, type FileClient, type FileCopies } from './fileLanguage';
 import { renameSymbol } from './renameSymbol';
+import { workspaceRoots } from '../drivingLib/workspaceRoots';
+import { feedWorkspaceNotice } from './workspaceNotice';
 
 interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'sourceFiles'> {
   instance: Pick<Instance, 'value' | 'subscribe'> | undefined;
@@ -113,6 +115,22 @@ interface SourceLanguage extends vscode.Disposable {
   referencedByMod(mod: string): Promise<void>;
   /** Lists each record that names the file at its path in the Data folder, in VS Code's References view. */
   referencedByFile(path: string): Promise<void>;
+}
+
+function workspaceNotice(instance: SourceLanguageDeps['instance']): vscode.Disposable {
+  if (instance === undefined) return new vscode.Disposable(() => undefined);
+  let status: vscode.LanguageStatusItem | undefined;
+  const stop = feedWorkspaceNotice({
+    instance, workspaceRoots,
+    onWorkspaceChange: (listener) => vscode.workspace.onDidChangeWorkspaceFolders(listener),
+    languageStatus: (text) => {
+      if (text === undefined) { status?.dispose(); status = undefined; return; }
+      status ??= vscode.languages.createLanguageStatusItem('modbench.gameFolderOutside', pluginSourceStatusSelector);
+      status.severity = vscode.LanguageStatusSeverity.Warning;
+      status.text = text;
+    },
+  });
+  return new vscode.Disposable(() => { stop(); status?.dispose(); });
 }
 
 function sourceProblems(deps: SourceLanguageDeps): Pick<SourceLanguage, 'dispose' | 'messages'> {
@@ -309,7 +327,7 @@ export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
     handUnsavedPluginSource(deps.client, isPluginSourcePath),
     registerHover(deps, plugin, entry, script), registerCompletion(deps, plugin, entry, script), registerDefinition(deps, plugin, entry, script, file), registerRename(deps, plugin),
     registerReferences(deps, plugin, entry, script), registerSymbols(deps, plugin, entry, script),
-    problems, ...entryPoints,
+    problems, workspaceNotice(instance), ...entryPoints,
   );
   return {
     dispose: () => { disposable.dispose(); },
