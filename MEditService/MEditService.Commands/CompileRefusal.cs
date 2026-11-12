@@ -14,23 +14,25 @@ public enum CompileRefusal
     /// <summary>The plugin is in no source mod, so it has no source; the way out is init.</summary>
     PluginNotCompiledPlugin,
 
-    /// <summary>The way out is Decompile.</summary>
+    /// <summary>The plugin's source cannot be read, and regenerating it would not clear that.</summary>
     PluginSourceUnreadable,
+
+    /// <summary>The plugin's source cannot be read or is refused, and regenerating it from the plugin would clear that.</summary>
+    SourceRegenerable,
 
     /// <summary>Another plugin source of the mod has the same name but for case, which one mod folder cannot hold on
     /// Windows; the way out is renaming or removing one.</summary>
     TwinPluginSources,
 
-    /// <summary>The plugin's source folder holds no files, or a build file compiles a plugin the source folder holds no plugin
-    /// source for; the way out is Decompile, or the build file.</summary>
+    /// <summary>A build file compiles a plugin the source folder holds no plugin source for.</summary>
     NoSource,
 
     /// <summary>A source document could not be opened, as another program holds it; the way out is
     /// closing that program.</summary>
     SourceFileHeld,
 
-    /// <summary>A source file the Codec refuses, or source that differs from what it produces (ADR-0006): the way
-    /// out is the files named, or Decompile for a file the codec produces nothing from.</summary>
+    /// <summary>A source file the Codec refuses, or source that differs from what it produces (ADR-0006), and
+    /// regenerating it would not clear that.</summary>
     SourceDoesNotParse,
 
     /// <summary>The plugin written from the source would not hold a value the source does, such as a

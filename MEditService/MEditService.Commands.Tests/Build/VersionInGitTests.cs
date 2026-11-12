@@ -225,30 +225,32 @@ public sealed class VersionInGitTests
         Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
     }
 
-    public static TheoryData<string, Action<string>, string> PluginsTheGateRefusesNamingARecord => new()
+    public static TheoryData<string, Action<string>, VersionInGitRefusal, string> PluginsTheGateRefusesNamingARecord => new()
     {
         {
             "deleted record holding fields",
             path => DeletedNpcPlugin.WriteHoldingEveryField(path, new FormKey(ModKey.FromFileName("Fixture.esp"), 0x800)),
+            VersionInGitRefusal.MalformedRepairable,
             "Fixture.esp does not round-trip through its own source: it is a malformed plugin, and NPC_ 00000800 (Guy) — " +
             "deleted-record-holds-fields, repairable (drops 154 bytes): flagged Deleted and holds EDID, OBND, ACBS, RNAM, AIDT, FULL, DATA, DNAM, NAM6, NAM4, NAM8; " +
-            "Mutagen writes a deleted record as its header alone. Decompile and repair it."
+            "Mutagen writes a deleted record as its header alone."
         },
         {
             "record absent from the rewrite",
             path => UnknownGroupPlugin.Write(path, new FormKey(ModKey.FromFileName("Fixture.esp"), 0x800), new FormKey(ModKey.FromFileName("Fixture.esp"), 0x801)),
+            VersionInGitRefusal.RoundTripFailed,
             "Fixture.esp does not round-trip through its own source: MISC 000801:Fixture.esp is absent from the rewrite, " +
             "so its records cannot be proven intact."
         },
         {
-            "null FormID", WriteNpcWithTheNullFormId,
+            "null FormID", WriteNpcWithTheNullFormId, VersionInGitRefusal.RoundTripFailed,
             "Fixture.esp cannot become source: NPC_ 00000000 holds the null FormID, so the plugin is malformed."
         },
     };
 
     [Theory]
     [MemberData(nameof(PluginsTheGateRefusesNamingARecord))]
-    public async Task InitMod_OfAPluginTheGateRefusesNamingARecord_RefusesTheModWithThatCause_CommittingNothing(string _, Action<string> writePlugin, string message)
+    public async Task InitMod_OfAPluginTheGateRefusesNamingARecord_RefusesTheModWithThatCause_CommittingNothing(string _, Action<string> writePlugin, VersionInGitRefusal refusal, string message)
     {
         using var modFolder = new ScratchDirectory("medit-init-gate-refusal-");
         using var dataFolder = new ScratchDirectory("medit-init-gate-refusal-data-");
@@ -259,7 +261,7 @@ public sealed class VersionInGitTests
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true)]);
         var result = (await VersionInGitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
-        Assert.Equal((false, VersionInGitRefusal.RoundTripFailed), (result.Applied, result.Refusal));
+        Assert.Equal((false, refusal), (result.Applied, result.Refusal));
         Assert.Equal(message, result.Message);
         Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
     }

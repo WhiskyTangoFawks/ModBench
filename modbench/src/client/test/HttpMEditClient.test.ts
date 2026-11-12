@@ -255,7 +255,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       path: '/records/compare', body: { copies } },
     { name: 'versionInGit', verb: (c) => c.versionInGit([modToVersionInGit('ModA'), modToVersionInGit('ModC')]),
       answer: { applied: [{ mod: 'ModA', plugins: [first] }], refused: [{ item: 'ModC', refusal: 'CommitFailed', message: 'ModC was not initialized.' }] },
-      reads: { landed: [{ mod: 'ModA', plugins: [first] }], refused: [{ item: 'ModC', reason: 'ModC was not initialized.' }] },
+      reads: { landed: [{ mod: 'ModA', plugins: [first] }], refused: [{ item: 'ModC', reason: 'ModC was not initialized.', refusal: 'CommitFailed' }] },
       path: '/version-in-git', body: { mods: [modToVersionInGit('ModA'), modToVersionInGit('ModC')] } },
     { name: 'build', verb: (c) => c.build([modToBuild('ModA'), modToBuild('ModC')], buildFacts),
       answer: {
@@ -268,7 +268,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       },
       reads: {
         landed: [{
-          mod: 'ModA', compiled: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, reason: 'Second.esp has no readable source.' }],
+          mod: 'ModA', compiled: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, reason: 'Second.esp has no readable source.', refusal: 'PluginSourceUnreadable' }],
           archivesRefused: [{ item: 'ModA.ba2', reason: 'Modbench packs no archive for this game.' }],
           failure: 'The build stopped at its copy.', made: [{ path: 'a.nif', vouchedFor: true }], packed: ['a.dds'], ignored: ['b.mem'],
         }],
@@ -277,11 +277,11 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       path: '/build', body: { mods: [modToBuild('ModA'), modToBuild('ModC')], ...buildFacts } },
     { name: 'decompile', verb: (c) => c.decompile([first, second], true),
       answer: { applied: [first], refused: [{ item: second, refusal: 'NotInSourceMod', message: 'Second.esp is not in a source mod.' }] },
-      reads: { landed: [first], refused: [{ item: second, reason: 'Second.esp is not in a source mod.' }] },
+      reads: { landed: [first], refused: [{ item: second, reason: 'Second.esp is not in a source mod.', refusal: 'NotInSourceMod' }] },
       path: '/plugins/decompile', body: { plugins: [first, second], force: true } },
     { name: 'decompileAndRepair', verb: (c) => c.decompileAndRepair([{ plugin: first, sourceFolder: modToVersionInGit('ModA').sourceFolder }], false),
-      answer: { applied: [first], refused: [] },
-      reads: { landed: [first], refused: [] },
+      answer: { applied: [first], refused: [{ item: second, refusal: 'NotMalformed', message: 'Second.esp is not malformed.' }] },
+      reads: { landed: [first], refused: [{ item: second, reason: 'Second.esp is not malformed.', refusal: 'NotMalformed' }] },
       path: '/plugins/decompile-and-repair', body: { plugins: [{ plugin: first, sourceFolder: modToVersionInGit('ModA').sourceFolder }], force: false } },
     { name: 'getEditChanges', verb: (c) => c.getEditChanges('000800:MyPatch.esp', myPatch, renamed),
       answer: { formKey: '000800:MyPatch.esp', path: 'EditorID', ...editChanges, newFormKey: null }, reads: { applied: true, ...editChanges },

@@ -2,9 +2,10 @@
 // manifest what the build made (ADR-0016, ADR-0027).
 
 import { basename, join } from 'node:path';
-import { isRefused, type BuildFacts, type BuildMod, type BuildOutcome, type MEditClient, type WriteRefused } from '../client';
+import { isRefused, type BuildFacts, type BuildMod, type BuildOutcome, type MEditClient, type PluginAddress, type WriteRefused } from '../client';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { exclusionsOfFiles, folderAgainst, isUnderAny, manifestIn, writeManifestIn, type BuildFile, type BuildStep, type Manifest, type RunStep } from '../manifestAdapter/manifestAdapter';
+import { gestureName, phrase, withRemedy, type Message } from '../ports/phrase';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
@@ -40,7 +41,10 @@ export interface BuildPass {
 }
 
 /** A mod that built, as mEdit answers its steps without the files they made. `trashed`: each other file its folder held. */
-export type ModBuilt = Omit<BuildOutcome['landed'][number], 'made'> & { readonly trashed?: readonly string[] };
+export type ModBuilt = Omit<BuildOutcome['landed'][number], 'made' | 'refused'> & {
+  readonly refused: readonly ItemRefusal<PluginAddress, Message>[];
+  readonly trashed?: readonly string[];
+};
 
 /** A mod refused before anything was written; `lacksATask`: this machine has no task for a tool its steps run. */
 export type BuildRefusal = ItemRefusal<string> & { readonly lacksATask?: true };
@@ -205,8 +209,12 @@ async function whyAsideNotTrashed(deps: BuildDeps, mod: SourceModToBuild, { repl
   return await whyNotTrashed(deps.adapter, deps.trash, mod.sourceFolder, [...pathsHad.keys()], (aside) => pathsHad.get(aside)) ?? whyNotTrashed(deps.adapter, deps.trash, mod.folder, packedNotIgnored);
 }
 
+const refusedPlugin = withRemedy<PluginAddress, StepBuilt['refused'][number]['refusal']>({
+  SourceRegenerable: () => phrase`Run ${gestureName('modbench.plugin.decompile', 'decompile')} on the plugin to regenerate the source.`,
+});
+
 const joined = (outcome: ModBuilt, { compiled, refused, archivesRefused, ignored, uncommitted, unpushed }: StepBuilt, unpacking: boolean): ModBuilt => ({
-  ...outcome, compiled: [...outcome.compiled, ...compiled], refused: [...outcome.refused, ...refused],
+  ...outcome, compiled: [...outcome.compiled, ...compiled], refused: [...outcome.refused, ...refused.map(refusedPlugin)],
   archivesRefused: [...outcome.archivesRefused, ...unpacking ? archivesRefused.map((archive) => ({ ...archive, unpacking: true as const })) : archivesRefused],
   ...ignored === undefined && outcome.ignored === undefined ? {} : { ignored: [...outcome.ignored ?? [], ...ignored ?? []] },
   ...uncommitted === true ? { uncommitted } : {}, ...unpushed === true ? { unpushed } : {},

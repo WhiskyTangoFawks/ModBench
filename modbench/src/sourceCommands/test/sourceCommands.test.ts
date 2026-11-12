@@ -12,7 +12,7 @@ import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
 import { BUILD_FILE } from '../../wire/sourceMod';
 import type { Message } from '../../ports/phrase';
 import { isRefused, type ModToVersionInGit } from '../../client';
-import { forAgent } from '../../ports/phrase';
+import { forAgent, gestureName, phrase } from '../../ports/phrase';
 import type { BuildMod } from '../../client/MEditClient';
 
 const textOf = (outcome: object) => ('message' in outcome ? { ...outcome, message: String(outcome.message) } : outcome);
@@ -270,7 +270,7 @@ describe('sourceCommands build, in mod order', () => {
     await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [COMPILE, { kind: 'copy', paths: ['textures'] }] }));
     const client = new InMemoryMEditClient();
     const refused = [{ item: { name: 'A.esp', origin: 'ModA' }, reason: 'A.esp was not compiled.' }];
-    client.setCommandHandler('build', () => Promise.resolve({ landed: [{ ...builtOf('ModA'), refused }], refused: [] }));
+    client.setCommandHandler('build', () => Promise.resolve({ landed: [{ ...builtOf('ModA'), refused: refused.map((one) => ({ ...one, refusal: 'WriteFailed' as const })) }], refused: [] }));
 
     const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
 
@@ -286,11 +286,32 @@ describe('sourceCommands build, in mod order', () => {
     });
     const client = new InMemoryMEditClient();
     const refused = [{ item: { name: 'A.esp', origin: 'ModA' }, reason: "A.esp's plugin source is unreadable, so it cannot be compiled." }];
-    client.setCommandHandler('build', () => Promise.resolve({ landed: [{ ...builtOf('ModA'), refused }], refused: [] }));
+    client.setCommandHandler('build', () => Promise.resolve({ landed: [{ ...builtOf('ModA'), refused: refused.map((one) => ({ ...one, refusal: 'PluginSourceUnreadable' as const })) }], refused: [] }));
 
     const outcome = await sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
 
     expect([outcome, fake.calls.filter(({ verb }) => verb === 'trashFileIn'), await recorded('ModA')]).toEqual([{ landed: [{ ...landedOf('ModA'), refused }], refused: [] }, [], before]);
+  });
+
+  describe('a plugin mEdit refused as SourceRegenerable', () => {
+    const FACT = "A.esp's plugin source is unreadable, so it cannot be compiled.";
+    const refusedBuild = async () => {
+      await writeBuildFile(SOURCES.ModA, buildFileOf({ steps: [COMPILE] }));
+      const client = new InMemoryMEditClient();
+      client.setCommandHandler('build', () => Promise.resolve({
+        landed: [{ ...builtOf('ModA'), refused: [{ item: { name: 'A.esp', origin: 'ModA' }, reason: FACT, refusal: 'SourceRegenerable' as const }] }], refused: [],
+      }));
+      const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
+      return isRefused(outcome) ? undefined : outcome.landed[0]?.refused[0]?.reason;
+    };
+
+    it('tells the view to decompile it', async () => {
+      expect(String(await refusedBuild())).toBe(`${FACT} Run decompile on the plugin to regenerate the source.`);
+    });
+
+    it('names the gesture as data for the agent, which reads the tool that runs it', async () => {
+      expect(await refusedBuild()).toEqual(phrase`${FACT} Run ${gestureName('modbench.plugin.decompile', 'decompile')} on the plugin to regenerate the source.`);
+    });
   });
 
   describe('a decompile step (source.md, Build, story 17)', () => {

@@ -185,7 +185,7 @@ internal sealed class SourceModBuild
             var at = _source.FileIn(mod.SourceFolder, name);
             if (!_plugins.Exists(at)) return Refused(BuildRefusal.NotDecompiled, $"'{mod.SourceFolder}' holds no '{name}' to decompile.");
             var plugin = new RegisteredPlugin(name, mod.Name, at, provider, Line: null, PluginStrings.None);
-            var read = await _decompiler.DecompileAsync(loadOrder, plugin, mod.Folder, onParsed: () => { }, CancellationToken.None, namesRepair: false);
+            var read = await _decompiler.DecompileAsync(loadOrder, plugin, mod.Folder, onParsed: () => { }, CancellationToken.None);
             if (read.Source is not { } source) return Refused(BuildRefusal.NotDecompiled, read.Message);
             decompiled.Add((plugin, source));
         }

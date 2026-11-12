@@ -36,6 +36,7 @@ import { instanceThatReads, progressSteps } from '../../test/recordedProgress';
 import { registerDecompileAndRepairCommand, registerDecompileCommand } from '../pluginRowCommands';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { PluginNode } from '../pluginRows';
+import { gestureName, phrase } from '../../ports/phrase';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
@@ -178,7 +179,7 @@ describe('modbench.plugin.decompile', () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getWorkingTreeStatesBeneath', clean);
     const refusal = 'First.esp\'s source has working-tree changes that decompile would replace.';
-    client.setCommandResult('decompile', { landed: [], refused: [{ item: FIRST, reason: refusal }] });
+    client.setCommandResult('decompile', { landed: [], refused: [{ item: FIRST, reason: refusal, refusal: 'WorkingTreeChanges' }] });
     const { handler, reporter, ask } = registered(client, 'Decompile');
 
     await handler(row(FIRST));
@@ -234,7 +235,7 @@ describe('modbench.plugin.decompile', () => {
     const client = new InMemoryMEditClient();
     const refusal = 'First.esp does not round-trip through its own source.';
     client.setQueryAnswer('getWorkingTreeStatesBeneath', clean);
-    client.setCommandResult('decompile', { landed: [SECOND], refused: [{ item: FIRST, reason: refusal }] });
+    client.setCommandResult('decompile', { landed: [SECOND], refused: [{ item: FIRST, reason: refusal, refusal: 'RoundTripFailed' }] });
     const { handler, reporter } = registered(client, 'Decompile');
     const rows = [row(FIRST), row(SECOND)];
 
@@ -286,14 +287,14 @@ describe('modbench.plugin.decompile, called by the agent', () => {
 
   it('decompiles the plugins given, never the selection, asking nothing and reporting nothing, and answers the outcome', async () => {
     const client = new InMemoryMEditClient();
-    const outcome = { landed: [SECOND], refused: [{ item: FIRST, reason: 'First.esp does not round-trip through its own source.' }] };
+    const outcome = { landed: [SECOND], refused: [{ item: FIRST, reason: 'First.esp does not round-trip through its own source.', refusal: 'RoundTripFailed' as const }] };
     client.setCommandResult('decompile', outcome);
     const { handler, reporter, ask } = registered(client);
 
     const answered = await handler(calling(FIRST, SECOND));
 
     expect(client.calls.filter((c) => c.method === 'decompile').map((c) => c.args)).toEqual([[[FIRST, SECOND], false]]);
-    expect(answered).toEqual({ applied: true, outcome });
+    expect(answered).toEqual({ applied: true, outcome: { landed: [SECOND], refused: [{ item: FIRST, reason: outcome.refused[0]?.reason }] } });
     expect(ask.asked).toEqual([]);
     expect(reporter.reports).toEqual([]);
     expect(reporter.landings).toEqual([]);
@@ -307,6 +308,37 @@ describe('modbench.plugin.decompile, called by the agent', () => {
     await handler(new AgentCall([{ kind: 'plugin', plugin: SECOND }], { force: true }));
 
     expect(client.calls.filter((c) => c.method === 'decompile').map((c) => c.args)).toEqual([[[SECOND], true]]);
+  });
+
+  const FACT = 'Second.esp cannot be decompiled.';
+  describe.each([
+    ['NotInSourceMod', phrase`${FACT} Run ${gestureName('modbench.mod.versionInGit', 'version in git')} on ${SECOND.origin}.`, 'Run version in git on ModA.'],
+    ['MalformedRepairable', phrase`${FACT} Run ${gestureName('modbench.plugin.decompileAndRepair', 'decompile and repair')} on it.`, 'Run decompile and repair on it.'],
+  ] as const)('a plugin refused as %s', (refusal, reason, remedy) => {
+    const clientRefusing = () => {
+      const client = new InMemoryMEditClient();
+      client.setQueryAnswer('getWorkingTreeStatesBeneath', { plugin: ['None'], recordTypes: {}, records: {} });
+      client.setCommandResult('decompile', { landed: [], refused: [{ item: SECOND, reason: FACT, refusal }] });
+      return client;
+    };
+
+    it('tells the view the gesture that clears it', async () => {
+      const { handler, reporter } = registered(clientRefusing());
+
+      const node = new PluginNode({ name: SECOND.name, enabled: true }, SECOND.origin);
+      node.contextValue = 'plugin enabled inSourceMod nonCompiledPlugin editable';
+      await handler(node);
+
+      expect(reporter.reports).toEqual([{
+        severity: 'error', message: 'Could not decompile "Second.esp".', detail: `"Second.esp (ModA)" (${FACT} ${remedy})`,
+      }]);
+    });
+
+    it('names the gesture as data for the agent, which reads the tool that runs it', async () => {
+      const answered = await registered(clientRefusing()).handler(calling(SECOND));
+
+      expect(answered).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: SECOND, reason }] } });
+    });
   });
 
   it('answers the refusal of the whole selection', async () => {

@@ -15,7 +15,7 @@ public sealed class SubrecordInventoryRoundTripGateTests
         var result = await scratch.VersionInGitAsync();
 
         Assert.False(result.Applied);
-        Assert.Equal(VersionInGitRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(VersionInGitRefusal.MalformedRepairable, result.Refusal);
 
         Assert.Contains("REGN", result.Message);
         Assert.Contains("01000800", result.Message);

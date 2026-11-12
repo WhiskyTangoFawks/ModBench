@@ -12,8 +12,7 @@ public enum DecompileRefusal
     /// <summary>No loaded plugin is the file name and origin the gesture named.</summary>
     PluginNotLoaded,
 
-    /// <summary>The plugin's mod is not a source mod, so it has no working tree to go into; the
-    /// way out is version in git on its mod.</summary>
+    /// <summary>The plugin's mod is not a source mod, so it has no working tree to go into.</summary>
     NotInSourceMod,
 
     /// <summary>The plugin comes from the game or from no mod, so no mod can hold a source for it; no
@@ -23,6 +22,9 @@ public enum DecompileRefusal
     /// <summary>ADR-0006's gate refused it, or the plugin cannot be read or deep-parsed
     /// at all.</summary>
     RoundTripFailed,
+
+    /// <summary>ADR-0006's gate refused the plugin for malformed records, each of which a repair answers.</summary>
+    MalformedRepairable,
 
     /// <summary>A localized plugin whose strings file is missing; the way out is restoring it.</summary>
     MissingLocalizationStrings,

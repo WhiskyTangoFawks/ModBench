@@ -48,7 +48,7 @@ public sealed class CompilePluginRefusalTests : IDisposable
         var answer = (await _mod.CompileHandler.CompileAsync([_mod.Plugin])).Value();
 
         var refused = Assert.Single(answer.Refused);
-        Assert.Equal(CompileRefusal.SourceDoesNotParse, refused.Refusal);
+        Assert.Equal(CompileRefusal.SourceRegenerable, refused.Refusal);
         Assert.Contains(Path.GetRelativePath(_mod.ModFolder, misfiled), refused.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("Object reference", refused.Message, StringComparison.Ordinal);
     }
@@ -105,15 +105,14 @@ public sealed class CompilePluginRefusalTests : IDisposable
         var answer = (await _mod.CompileHandler.CompileAsync([_mod.Plugin])).Value();
 
         var refused = Assert.Single(answer.Refused);
-        Assert.Equal(CompileRefusal.SourceDoesNotParse, refused.Refusal);
+        Assert.Equal(CompileRefusal.SourceRegenerable, refused.Refusal);
         Assert.Contains($"{Path.GetRelativePath(_mod.ModFolder, npcFile)}: RaceOld", refused.Message, StringComparison.Ordinal);
         Assert.Contains($"{Path.GetRelativePath(_mod.ModFolder, otherFile)}: EditorTypo", refused.Message, StringComparison.Ordinal);
-        Assert.EndsWith("Decompile the plugin to regenerate the source.", refused.Message, StringComparison.Ordinal);
         Assert.Empty(answer.Applied);
     }
 
     [Fact]
-    public async Task Compile_WithAContainerDirectoryHoldingTwoDocumentsNoneNamedForIt_RefusesNamingTheDirectoryAndDecompile()
+    public async Task Compile_WithAContainerDirectoryHoldingTwoDocumentsNoneNamedForIt_RefusesNamingTheDirectory()
     {
         using var mod = SourceModFixture.CompiledPlugin("Cells.esp", "CellsMod", plugin =>
         {
@@ -130,13 +129,12 @@ public sealed class CompilePluginRefusalTests : IDisposable
         var answer = (await mod.CompileHandler.CompileAsync([mod.Plugin])).Value();
 
         var refused = Assert.Single(answer.Refused);
-        Assert.Equal(CompileRefusal.SourceDoesNotParse, refused.Refusal);
+        Assert.Equal(CompileRefusal.SourceRegenerable, refused.Refusal);
         Assert.Contains(Path.GetRelativePath(mod.ModFolder, directory), refused.Message, StringComparison.Ordinal);
-        Assert.EndsWith("Decompile the plugin to regenerate the source.", refused.Message, StringComparison.Ordinal);
     }
 
     [PosixFact]
-    public async Task Compile_WithAFolderOfItsSourceItCannotList_RefusesWithoutPointingAtDecompile()
+    public async Task Compile_WithAFolderOfItsSourceItCannotList_IsRefusedAsNotParsing()
     {
         var folder = Path.GetDirectoryName(TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity)).Require();
         FileModes.Set(folder, "000");
@@ -146,7 +144,6 @@ public sealed class CompilePluginRefusalTests : IDisposable
 
             var refused = Assert.Single(answer.Refused);
             Assert.Equal(CompileRefusal.SourceDoesNotParse, refused.Refusal);
-            Assert.DoesNotContain("Decompile", refused.Message, StringComparison.Ordinal);
         }
         finally
         {

@@ -13,8 +13,14 @@ public enum VersionInGitRefusal
 {
     None,
 
-    /// <summary>The mod's source folder is already a source mod's, or holds a repository.</summary>
+    /// <summary>The mod's source folder is already a source mod's.</summary>
     AlreadyInitialized,
+
+    /// <summary>The mod's source folder holds a repository with no main branch that Modbench did not make.</summary>
+    AnotherRepository,
+
+    /// <summary>ADR-0006's gate refused a plugin for malformed records, each of which a repair answers.</summary>
+    MalformedRepairable,
 
     /// <summary>ADR-0006's gate refused it, or the plugin cannot be read or deep-parsed
     /// at all. A data problem in the plugin, not a state conflict.</summary>

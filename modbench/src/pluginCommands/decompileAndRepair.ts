@@ -1,11 +1,11 @@
 // Decompile and repair (source.md, Decompile and repair): mEdit writes the two commits of each plugin. A mod that is
 // not a source mod is made one, as version in git makes it.
 
-import { isRefused, type MEditClient, type PluginAddress, type PluginToRepair, type SourceFolderRequest, type SourceModIn, type WriteRefused } from '../client';
+import { isRefused, type DecompileAndRepairOutcome, type MEditClient, type PluginAddress, type PluginToRepair, type SourceFolderRequest, type SourceModIn, type WriteRefused } from '../client';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { sourceModsOf } from '../manifestAdapter/manifestAdapter';
 import type { SelectionResult } from '../coreLib/commandResult';
-import type { Message } from '../ports/phrase';
+import { gestureName, phrase, withRemedy, type Message } from '../ports/phrase';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
 export type DecompileAndRepairClient = Pick<MEditClient, 'decompileAndRepair'>;
@@ -57,19 +57,27 @@ function firstLandedOf(landed: readonly PluginAddress[], unfinished: ReadonlyMap
   });
 }
 
+const repairReason = withRemedy<PluginAddress, DecompileAndRepairOutcome['refused'][number]['refusal']>({
+  NotMalformed: () => phrase`Run ${gestureName('modbench.plugin.decompile', 'decompile')} instead.`,
+  OtherPluginRepairable: () => phrase`Run ${gestureName('modbench.plugin.decompileAndRepair', 'decompile and repair')} on the mod's malformed plugins.`,
+});
+
+const repairOutcome = (answer: DecompileAndRepairOutcome | WriteRefused): SelectionOutcome<PluginAddress, Message> | WriteRefused =>
+  (isRefused(answer) ? answer : { landed: answer.landed, refused: answer.refused.map(repairReason) });
+
 export async function decompileAndRepair(
   access: DecompileAndRepairAccess, plugins: readonly PluginAddress[], force: boolean, where?: SourceModIn,
 ): Promise<SelectionResult<PluginAddress, Message>> {
   const { client, placeMods } = access;
   const sourceMods = await sourceModsAt(access);
   const notSourceMods = modsOutside(sourceMods, plugins);
-  const repaired = (made: ReadonlyMap<string, MadeSourceFolder>): Promise<SelectionOutcome<PluginAddress> | WriteRefused<Message>> => {
+  const repaired = (made: ReadonlyMap<string, MadeSourceFolder>): Promise<SelectionOutcome<PluginAddress, Message> | WriteRefused<Message>> => {
     const toSend = plugins.flatMap((plugin): PluginToRepair[] => {
       if (sourceMods.folderOf(plugin.origin) !== undefined) return [{ plugin }];
       const folder = made.get(plugin.origin);
       return folder === undefined ? [] : [{ plugin, sourceFolder: folder.sourceFolder }];
     });
-    return toSend.length === 0 ? Promise.resolve({ landed: [], refused: [] }) : client.decompileAndRepair(toSend, force);
+    return toSend.length === 0 ? Promise.resolve({ landed: [], refused: [] }) : client.decompileAndRepair(toSend, force).then(repairOutcome);
   };
   const placed = await placeMods({ mods: notSourceMods, where }, repaired, (outcome) => outcome.landed.map(({ origin }) => origin));
   if (isRefused<Message>(placed)) return { applied: false, refusal: placed.message };

@@ -161,7 +161,6 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         var refused = Assert.Single(result.Refused);
         Assert.Equal(DecompileRefusal.NotInSourceMod, refused.Refusal);
         Assert.Contains("Other.esp", refused.Message, StringComparison.Ordinal);
-        Assert.Contains($"version in git on {NonSourceModName}", refused.Message, StringComparison.Ordinal);
         Assert.False(TestAdapters.Source().SourceReads(new RegisteredPlugin("Other.esp", NonSourceModName, "", new PluginProvider.FromMod(NonSourceModName, _nonSourceMod, _nonSourceMod), Line: null, PluginStrings.None)));
     }
 
@@ -220,6 +219,19 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         var refused = Assert.Single(result.Refused);
         Assert.Equal(DecompileRefusal.RoundTripFailed, refused.Refusal);
         Assert.Equal(before, SourceTextOf("First.esp"));
+    }
+
+    [Fact]
+    public async Task Decompile_OfAMalformedPluginARepairAnswers_RefusesItAsRepairable()
+    {
+        var path = Path.Combine(_sourceMod, "Malformed.esp");
+        DeletedNpcPlugin.WriteHoldingEveryField(path, new FormKey(ModKey.FromFileName("Malformed.esp"), 0x800));
+        _holder.Apply(SnapshotPlugins.Snapshot(Path.Combine(_root, "Data"), _root, GameRelease.Fallout4,
+            [new LoadOrderEntry("Malformed.esp", path, SourceModName, 0, Enabled: true, Winning: true)]));
+
+        var refused = Assert.Single((await Decompile(CompiledPlugin("Malformed.esp"))).Refused);
+
+        Assert.Equal(DecompileRefusal.MalformedRepairable, refused.Refusal);
     }
 
     private static async Task<IMod> DeserializeThenCorruptTheNpc(string folder, CancellationToken cancel)

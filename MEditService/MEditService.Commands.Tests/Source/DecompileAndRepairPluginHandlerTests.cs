@@ -130,7 +130,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         Assert.Equal([malformed], result.Applied);
         var healthy = Assert.Single(result.Refused);
         Assert.Equal(clean, healthy.Item);
-        Assert.DoesNotContain("Decompile it instead", healthy.Message, StringComparison.Ordinal);
+        Assert.Equal(DecompileAndRepairRefusal.DecompiledWithoutRepair, healthy.Refusal);
         var tree = Git(_newMod, "ls-tree", "-r", "--name-only", "HEAD");
         Assert.Contains($"plugin-source/{Malformed}/", tree, StringComparison.Ordinal);
         Assert.Contains("plugin-source/Clean.esp/", tree, StringComparison.Ordinal);
@@ -162,6 +162,18 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         var refused = Assert.Single(result.Refused);
         Assert.Equal((second, DecompileAndRepairRefusal.NoRepair), (refused.Item, refused.Refusal));
         Assert.EndsWith("The source folder made for its mod holds no source for it.", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DecompileAndRepair_OfAPluginWhoseSiblingNotNamedIsMalformedInWaysARepairAnswers_IsRefusedAsOtherPluginRepairable()
+    {
+        var first = AddToNewMod(Lossless.Malformed);
+        AddToNewMod(Lossless.Malformed with { FileName = "Second Malformed.esp" });
+        Load(Entry(_newMod, Malformed), Entry(_newMod, "Second Malformed.esp"));
+
+        var refused = Assert.Single((await Repair([ToRepair(first)])).Refused);
+
+        Assert.Equal((first, DecompileAndRepairRefusal.OtherPluginRepairable), (refused.Item, refused.Refusal));
     }
 
     [Fact]
@@ -347,25 +359,23 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task DecompileAndRepair_OfAPluginThatIsNotMalformed_IsRefusedNamingDecompile()
+    public async Task DecompileAndRepair_OfAPluginThatIsNotMalformed_IsRefusedAsNotMalformed()
     {
         var clean = new PluginAddress("First.esp", SourceModName);
 
         var refused = Assert.Single((await Repair([ToRepair(clean)])).Refused);
 
         Assert.Equal(DecompileAndRepairRefusal.NotMalformed, refused.Refusal);
-        Assert.Contains("Decompile it", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task DecompileAndRepair_WhoseRepairedPluginStillFailsToRead_RefusesWithoutOfferingItself()
+    public async Task DecompileAndRepair_WhoseRepairedPluginStillFailsToRead_IsRefusedAsRoundTripFailed()
     {
         var plugin = AddToSourceMod(Lossless.Malformed);
 
         var refused = Assert.Single((await Repair([ToRepair(plugin)], adapter: new LeavingTheRepairUnmade(TestAdapters.Mutagen()))).Refused);
 
         Assert.Equal(DecompileAndRepairRefusal.RoundTripFailed, refused.Refusal);
-        Assert.DoesNotContain("Decompile and repair", refused.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed class ChangingAfterItsDiagnoses(IPluginAdapter inner, string path, byte[] changed) : DelegatingPluginAdapter(inner)
