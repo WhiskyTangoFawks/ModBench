@@ -392,6 +392,17 @@ public sealed class BuildModHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task ACompile_MarksEachPluginItWroteWritten_ForTheReadsAfterIt()
+    {
+        await InitializedWithALocalizedPlugin();
+        var before = _holder.SourceWrites;
+
+        await Landed(Compile());
+
+        Assert.Equal([new PluginAddress(Plugin, ModName)], _holder.WritesAfter(before).LastOfEach.Require().Keys);
+    }
+
+    [Fact]
     public async Task AFreshClone_WithNoPluginFile_CompilesEachPluginFromItsSource()
     {
         await InitializedWithALocalizedPlugin();

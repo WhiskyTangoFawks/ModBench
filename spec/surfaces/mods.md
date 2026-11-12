@@ -41,9 +41,9 @@ As a user, I want:
 | Label | its position in the mod order, zero-padded so every row's number aligns, then the mod's name | MO2 |
 | Check box | checked when the mod is enabled | MO2 |
 | Description | the version in the mod's metadata, then the mod's status against its manifest ([instance-repository.md](instance-repository.md), Status) | MO2 |
-| Icon | one for a mod, and another for a source mod | |
+| Icon | one for a mod, and another for a built mod | |
 | Indicators | a badge at the right edge, and a colour on the label, for each indicator that holds ([Indicators](#indicators)) | MO2's Conflicts and Flags columns |
-| Tooltip | name, version, Nexus mod ID and installation file, each only when known, and, for a source mod, its repository and that the folder is built from it, then the files its folder lacks | MO2's columns |
+| Tooltip | name, version, Nexus mod ID and installation file, each only when known, and, for a built mod, its mod source's repository and that the folder is built from it, then the files its folder lacks | MO2's columns |
 
 ### Separator
 
@@ -101,9 +101,9 @@ A mod row carries an indicator for each status that holds, and a folder or file 
 
 Each publisher tag is an indicator of its own, with the badge its publisher declares. The Badge and Colour columns are the defaults. The grey of a file the game does not get is a setting too, on by default. A mod that wins some files and loses others carries both badges. Each indicator's tooltip is its name in this table. Cites: mo2.md, divergence 12
 
-## A source mod
+## A built mod
 
-A source mod's folder is its build's output ([source.md](source.md), Build). As a user, I want:
+A built mod's folder is its build's output ([source.md](source.md), Build). As a user, I want:
 
 1. Its row to open into the folder's files as any mod's, since they are what the game gets. The source is in the Explorer and Source Control, and `open source` shows it. Cites: catalog `open source`
 2. Rename, and exclude or include, to be choices of my modlist that the next build keeps. Exclude and include change the folder, never the source. Cites: ADR-0022; Rename mod, story 5
@@ -130,7 +130,7 @@ The row menus follow VS Code's groups: open, change, create, source control, cop
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. Overflow: install… · create empty mod · check for updates, on every mod (I am logged in) · update manifest, on every manifest · restore from manifest…, on every manifest (the instance has a repository). Collapse All last. |
-| Mod menu | inline: open source (a source mod). Menu: open folder · open source (a source mod) · open conflicts · referenced by · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add publisher tag… (the instance has a publisher) · remove publisher tag… (the row holds a publisher tag) · check for updates (the mod has a Nexus mod ID, and I am logged in) · add separator · create empty mod · install… · version in git… (a mod that is not a source mod) · update manifest (a mod that is not a source mod and whose folder git does not hold whole) · restore from manifest… (the instance has a repository, and git does not hold the mod's whole folder) · copy value · uninstall |
+| Mod menu | inline: open source (a built mod). Menu: open folder · open source (a built mod) · open conflicts · referenced by · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add publisher tag… (the instance has a publisher) · remove publisher tag… (the row holds a publisher tag) · check for updates (the mod has a Nexus mod ID, and I am logged in) · add separator · create empty mod · install… · version in git… (a mod that is not a built mod) · update manifest (a mod that is not a built mod and whose folder git does not hold whole) · restore from manifest… (the instance has a repository, and git does not hold the mod's whole folder) · copy value · uninstall |
 | Separator menu | move… · add separator · rename… · check for updates (I am logged in) · update manifest · restore from manifest… (the instance has a repository) · copy value · delete |
 | Overwrite menu | open folder |
 | File menu | open folder · referenced by · compare file (a file in a file order conflict, not the winning copy) · go to mod (a file in a file order conflict) · exclude or include (not in an archive) · ignore or unignore (an instance with a repository, not in an archive) · add publisher tag… (the instance has a publisher whose publisher tags mark paths, not in an archive) · remove publisher tag… (the row holds a publisher tag) · copy value |
@@ -191,7 +191,7 @@ As a user, I want:
 2. A name another mod has, or for a separator another separator, compared without case, refused in the prompt, so Windows and Linux agree. A name with a path separator refused. Every name a gesture here gives a folder follows this rule. Cites: MO2 compares without case; Windows and Linux alike; Refuse, do not repair
 3. The mod to keep everything but its name: its place in mod order, its enabled state and its separator in every profile, and all its folder holds. Cites: MO2
 4. A rename that renamed the folder and then failed on a profile's mod order to say so, naming the profile. That profile loses the mod's place, and `mod sync` places it as a new folder when the profile is active.
-5. Each reference to its folder to follow it, and a source mod's source folder, named for it, with them. Cites: symbols.md, The features, story 6
+5. Each reference to its folder to follow it, and a built mod's mod source, named for it, with them. Cites: symbols.md, The features, story 6
 
 ### Delete separator
 
@@ -211,7 +211,7 @@ Install is offered here and on [Downloads](downloads.md#the-install-target). As 
 
 1. Install never to merge into an existing folder.
 2. A new mod to appear at the winning end of the mod order, disabled, as a mod new on disk is.
-3. An upgrade to replace the mod's files with the new file's, keeping its folder name and its manifest, and sending each file it replaces or removes to the trash. A source mod refused as the mod to upgrade, naming its build file, since its next build overwrites what an upgrade writes. Cites: ADR-0007; ADR-0027; commands.md, Confirm what destroys; commands.md, Refuse, do not repair
+3. An upgrade to replace the mod's files with the new file's, keeping its folder name and its manifest, and sending each file it replaces or removes to the trash. A built mod refused as the mod to upgrade, naming its build file, since its next build overwrites what an upgrade writes. Cites: ADR-0007; ADR-0027; commands.md, Confirm what destroys; commands.md, Refuse, do not repair
 4. An upgrade to keep every value in the mod's metadata that the new file does not know, so an unknown version never blanks a known one. Cites: ADR-0017
 5. An upgrade that fails part way to say so, naming the folder and what failed, and not to roll back. Installing again is the recovery.
 6. A file or folder that holds a FOMOD to install through the FOMOD installer ([mods-fomod.md](mods-fomod.md)). Cites: MO2

@@ -73,18 +73,36 @@ A mod entry that groups other mods in the list and holds no files. A mod belongs
 
 Avoid: LOOT group, category
 
-## Source mod
-A mod whose folder is a build artifact: the build writes it from its source folder. It follows one git workflow.
+## Built mod
+A mod whose folder is a build artifact: a build writes it from its mod source.
 
-Avoid: tracked mod (git's tracked is a file in the index)
+Avoid: source mod (it names both), tracked mod (git's tracked is a file in the index)
 
 # Separator group
 A heading in the Mods view over consecutive separators whose names share a prefix before " - ". It is a view of their names, not a mod entry.
 
 Avoid: nested separator, parent separator (it is no separator)
 
+# Source
+Source code: what a build compiles from.
+
+Avoid: source (for a package, a host, or where a file comes from: each has its own word)
+
+## Mod source
+Source that a build compiles one mod from, in a folder of its own. It follows one git workflow.
+
+Avoid: source mod (it names both), source folder (that holds every mod source)
+
+## Plugin source
+Source that holds a plugin in its deserialized form.
+
+Avoid: source (alone), text mirror, Spriggit tree
+
+# Source folder
+The instance's folder beside `mods/` that holds every mod source.
+
 # Git workflow
-How a source mod uses its `main` branch. The user chooses. Two kinds exist: authored and vendored.
+How a mod source uses its `main` branch. The user chooses. Two kinds exist: authored and vendored.
 
 ## Authored workflow
 A git workflow where `main` is the work itself.
@@ -92,22 +110,12 @@ A git workflow where `main` is the work itself.
 Avoid: custom mod, personal mod
 
 ## Vendored workflow
-A git workflow where `main` holds another author's plugin as each release ships it, decompiled, and the user's edits live on a branch. The source mod's plugin overrides the author's, whose mod stays installed.
+A git workflow where `main` holds another author's plugin as each release ships it, decompiled, and the user's edits live on a branch. The built mod's plugin overrides the author's, whose mod stays installed.
 
 Avoid: modified mod (a vendored workflow describes where `main` points), upstream (git's word for a branch's remote counterpart)
 
 # Overwrite
 The instance's folder of files that belong to no mod, such as a file a tool wrote. It wins over every mod.
-
-# Source
-Source code: what a build compiles a mod from, in a source mod's repository.
-
-Avoid: source (for a package, a host, or where a file comes from: each has its own word)
-
-## Plugin source
-Source that holds a plugin in its deserialized form.
-
-Avoid: source (alone), text mirror, Spriggit tree
 
 # Plugin
 An `.esp`, `.esm` or `.esl` file. It holds records. A plugin is not a mod, it is a component of a mod.
@@ -140,7 +148,7 @@ A plugin that another plugin's header lists, for the records it overrides or ref
 Avoid: parent plugin (an override's plugin is not its child)
 
 ## Compiled plugin
-A plugin in a source mod that a build compiles from its plugin source, which is its truth. Treat it as a build artifact.
+A plugin in a built mod that a build compiles from its plugin source, which is its truth. Treat it as a build artifact.
 
 Avoid: source plugin (that reads as plugin source), tracked plugin (git's tracked is a file in the index)
 
@@ -234,7 +242,7 @@ The folder the user picks for a deployment's files.
 Avoid: deploy folder, output folder, staging folder (that is Vortex's mod store)
 
 # Package
-What a folder is made from: an installation file, the game folder, or a source mod's repository at a commit.
+What a folder is made from: an installation file, the game folder, or a mod source at a commit.
 
 Avoid: source (that is source code), archive (that is a BA2 or BSA), provider
 
@@ -246,10 +254,10 @@ Avoid: repository (MO2's word for a host), source
 # Manifest
 The one file recording what a folder holds: the packages it is made from, each package's host when it has one, and each of its files. Like a lockfile.
 
-Avoid: record (a plugin's unit of data), recipe, directives, build file (that builds a source mod's folder)
+Avoid: record (a plugin's unit of data), recipe, directives, build file (that builds a mod from its mod source)
 
 # Build file
-The file in a source mod's repository that its build runs: the steps that make the mod's folder. Its author writes it.
+The file in a mod source that its build runs: the steps that make the mod's folder. Its author writes it.
 
 Avoid: manifest (that records a folder)
 

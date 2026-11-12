@@ -129,7 +129,7 @@ The row menus follow VS Code's groups: open, change, source control, copy, then 
 | Where | Items, in order |
 |---|---|
 | Cell | go to record (on a FormLink that resolves, and on a templated field) · open field value (on a text field) · add (on an array, or an element of one) · move up · move down (on an element of an array that takes move, editor-fields.md, Arrays) · copy value · remove (on an element) |
-| Column header | referenced by · version in git… (a mod that is not a source mod) · decompile (in a source mod) · build (in a source mod) · copy… · delete (a compiled plugin) |
+| Column header | referenced by · version in git… (a mod that is not a built mod) · decompile (in a built mod) · build (in a built mod) · copy… · delete (a compiled plugin) |
 | The tab's title bar | collapse no conflict, or show no conflict, whichever applies |
 | Keys, on the focused cell | F2: edit. Ctrl+C: copy value. Ctrl+X: cut. Ctrl+V: paste. Delete: remove, or clear. Alt+Up, Alt+Down: move. |
 
