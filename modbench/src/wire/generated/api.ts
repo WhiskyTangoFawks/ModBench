@@ -1437,7 +1437,7 @@ export interface components {
             documents: components["schemas"]["DocumentChange"][];
         };
         /** @enum {string} */
-        DecompileAndRepairRefusal: "None" | "NoLoadOrder" | "GitUnavailable" | "PluginNotLoaded" | "NotFromAMod" | "Unreadable" | "NotMalformed" | "NoRepair" | "RoundTripFailed" | "MissingLocalizationStrings" | "WorkingTreeChanges" | "WorkingTreeStatusUnreadable" | "AmbiguousSource" | "NoSourceFolder" | "AnotherRepository" | "OtherPluginRefused" | "WriteFailed" | "RepairFailed";
+        DecompileAndRepairRefusal: "None" | "NoLoadOrder" | "GitUnavailable" | "PluginNotLoaded" | "NotFromAMod" | "Unreadable" | "NotMalformed" | "DecompiledWithoutRepair" | "NoRepair" | "RoundTripFailed" | "MissingLocalizationStrings" | "WorkingTreeChanges" | "WorkingTreeStatusUnreadable" | "AmbiguousSource" | "NoSourceFolder" | "AnotherRepository" | "OtherPluginRefused" | "WriteFailed" | "RepairFailed";
         DecompileAndRepairRefused: {
             item: components["schemas"]["PluginAddress"];
             refusal: components["schemas"]["DecompileAndRepairRefusal"];
@@ -1452,7 +1452,7 @@ export interface components {
             refused: components["schemas"]["DecompileAndRepairRefused"][];
         };
         /** @enum {string} */
-        DecompileRefusal: "None" | "PluginNotLoaded" | "NotInSourceMod" | "NotFromAMod" | "RoundTripFailed" | "MissingLocalizationStrings" | "AmbiguousSource" | "WriteFailed" | "WorkingTreeStatusUnreadable" | "GitUnavailable" | "WorkingTreeChanges" | "NoLoadOrder";
+        DecompileRefusal: "None" | "PluginNotLoaded" | "NotInSourceMod" | "NotFromAMod" | "RoundTripFailed" | "MalformedRepairable" | "MissingLocalizationStrings" | "AmbiguousSource" | "WriteFailed" | "WorkingTreeStatusUnreadable" | "GitUnavailable" | "WorkingTreeChanges" | "NoLoadOrder";
         DecompileRefused: {
             item: components["schemas"]["PluginAddress"];
             refusal: components["schemas"]["DecompileRefusal"];
@@ -2075,7 +2075,7 @@ export interface components {
         /** @enum {string} */
         VersionInGitPhase: "Parsing" | "Serializing" | "Committing";
         /** @enum {string} */
-        VersionInGitRefusal: "None" | "AlreadyInitialized" | "RoundTripFailed" | "MissingLocalizationStrings" | "CommitFailed" | "PluginsRefused" | "GitUnavailable" | "NoLoadOrder";
+        VersionInGitRefusal: "None" | "AlreadyInitialized" | "AnotherRepository" | "MalformedRepairable" | "RoundTripFailed" | "MissingLocalizationStrings" | "CommitFailed" | "PluginsRefused" | "GitUnavailable" | "NoLoadOrder";
         VersionInGitRefused: {
             item: string;
             refusal: components["schemas"]["VersionInGitRefusal"];

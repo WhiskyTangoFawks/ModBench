@@ -51,16 +51,16 @@ public sealed class PluginDiagnosisRoundTripGateTests
 
     [Theory]
     [MemberData(nameof(Malformations))]
-    public async Task VersionInGit_OfAMalformedPlugin_NamesTheGestureOnlyWhenARepairAnswersIt(MalformationFixture fixture)
+    public async Task VersionInGit_OfAMalformedPlugin_IsRepairableOnlyWhenARepairAnswersIt(MalformationFixture fixture)
     {
         using var scratch = new RealFixtureScratch(fixture.Malformed);
 
         var result = await scratch.VersionInGitAsync();
 
-        Assert.Equal(VersionInGitRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(fixture.Change is not null ? VersionInGitRefusal.MalformedRepairable : VersionInGitRefusal.RoundTripFailed, result.Refusal);
         Assert.Contains("malformed plugin", result.Message, StringComparison.Ordinal);
         Assert.Contains(fixture.Diagnosis, result.Message, StringComparison.Ordinal);
-        Assert.Equal(fixture.Change is not null, result.Message.Contains("Decompile and repair", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain("Decompile and repair", result.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

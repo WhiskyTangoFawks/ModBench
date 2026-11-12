@@ -54,14 +54,14 @@ public sealed class VersionInGitShapeTests : IDisposable
                 .LastWrittenBinarySha256s(new PluginAddress("First.esp", ModName)).Value());
     }
 
-    public static TheoryData<string, Func<string, ISourceAdapter>, string> FoldersHoldingARepository => new()
+    public static TheoryData<string, Func<string, ISourceAdapter>, VersionInGitRefusal, string> FoldersHoldingARepository => new()
     {
         {
-            "a source mod", folder => new FakeSourceAdapter().WithSourceMod(folder),
-            "is already a source mod's source folder. To put a plugin's source into its working tree, decompile it."
+            "a source mod", folder => new FakeSourceAdapter().WithSourceMod(folder), VersionInGitRefusal.AlreadyInitialized,
+            "is already a source mod's source folder."
         },
         {
-            "a repository with no main", folder => new FakeSourceAdapter().HoldingAnotherRepository(folder),
+            "a repository with no main", folder => new FakeSourceAdapter().HoldingAnotherRepository(folder), VersionInGitRefusal.AnotherRepository,
             "already holds a repository with no main branch, made outside Modbench."
         },
     };
@@ -69,7 +69,7 @@ public sealed class VersionInGitShapeTests : IDisposable
     [Theory]
     [MemberData(nameof(FoldersHoldingARepository))]
     public async Task Init_IntoAFolderThatAlreadyHoldsARepository_RefusesTheMod_AndInitsNothing(
-        string _, Func<string, ISourceAdapter> holding, string reason)
+        string _, Func<string, ISourceAdapter> holding, VersionInGitRefusal refusal, string reason)
     {
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
         WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
@@ -79,7 +79,7 @@ public sealed class VersionInGitShapeTests : IDisposable
         Assert.Empty(result.Applied);
         var refused = Assert.Single(result.Refused);
         Assert.Equal(
-            (ModName, VersionInGitRefusal.AlreadyInitialized, $"'{_modFolder}' {reason}"),
+            (ModName, refusal, $"'{_modFolder}' {reason}"),
             (refused.Item, refused.Refusal, refused.Message));
     }
 

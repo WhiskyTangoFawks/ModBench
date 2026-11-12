@@ -130,7 +130,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         Assert.Equal([malformed], result.Applied);
         var healthy = Assert.Single(result.Refused);
         Assert.Equal(clean, healthy.Item);
-        Assert.DoesNotContain("Decompile it instead", healthy.Message, StringComparison.Ordinal);
+        Assert.Equal(DecompileAndRepairRefusal.DecompiledWithoutRepair, healthy.Refusal);
         var tree = Git(_newMod, "ls-tree", "-r", "--name-only", "HEAD");
         Assert.Contains($"plugin-source/{Malformed}/", tree, StringComparison.Ordinal);
         Assert.Contains("plugin-source/Clean.esp/", tree, StringComparison.Ordinal);
@@ -347,14 +347,14 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task DecompileAndRepair_OfAPluginThatIsNotMalformed_IsRefusedNamingDecompile()
+    public async Task DecompileAndRepair_OfAPluginThatIsNotMalformed_IsRefusedWithTheFactAlone()
     {
         var clean = new PluginAddress("First.esp", SourceModName);
 
         var refused = Assert.Single((await Repair([ToRepair(clean)])).Refused);
 
         Assert.Equal(DecompileAndRepairRefusal.NotMalformed, refused.Refusal);
-        Assert.Contains("Decompile it", refused.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("ecompile it", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]

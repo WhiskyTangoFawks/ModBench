@@ -15,6 +15,7 @@ import { type VersionInGitOutcome, type VersionInGitProgress, type PluginAddress
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
+import { gestureName, phrase } from '../../ports/phrase';
 import { ModNode } from '../ModListProvider';
 import { sourceCommands } from '../../sourceCommands/sourceCommands';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
@@ -355,6 +356,36 @@ describe('modbench.mod.versionInGit', () => {
     onProgress({ mod: 'ModB', phase: 'Committing', modsDone: 0, modsTotal: 1 });
 
     expect(said).toEqual(['Version in git "ModB" — writing the repository…']);
+  });
+
+  const FACT = 'its source folder is a source mod\'s.';
+  describe.each([
+    ['AlreadyInitialized', phrase`${FACT} To put a plugin's source into its working tree, run ${gestureName('modbench.plugin.decompile', 'decompile')} on it.`,
+      "To put a plugin's source into its working tree, run decompile on it."],
+    ['MalformedRepairable', phrase`${FACT} Run ${gestureName('modbench.plugin.decompileAndRepair', 'decompile and repair')} on its plugins.`,
+      'Run decompile and repair on its plugins.'],
+  ] as const)('a mod refused as %s', (refusal, reason, remedy) => {
+    const refusedAnswer = () => {
+      const commands = versionInGitCommands();
+      commands.answers({ landed: [], refused: [{ item: 'ModA', reason: FACT, refusal }] });
+      return invokeVersionInGit(commands);
+    };
+
+    it('tells the view the gesture that clears it', async () => {
+      const { handler, reporter } = refusedAnswer();
+
+      await handler(modRow('ModA'));
+
+      expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not put 1 of 1 mods under git.', detail: `"ModA" (${FACT} ${remedy})` }]);
+    });
+
+    it('names the gesture as data for the agent, which reads the tool that runs it', async () => {
+      const { handler } = refusedAnswer();
+
+      const answered = await handler(new AgentCall([{ kind: 'mod', name: 'ModA' }], { commit: true, where: 'NewRepository' }));
+
+      expect(answered).toMatchObject({ applied: true, outcome: { landed: [], refused: [{ item: 'ModA', reason }] } });
+    });
   });
 
   describe('called by the agent', () => {

@@ -17,7 +17,7 @@ export interface RowsRead { readonly rows: unknown[]; readonly more: boolean }
 export type { SourceModIn };
 import type { ReadFailed } from '../wire/readFailed';
 import type { ArchivedCopy, FlaggedPluginFile, FlaggedPluginHashes } from '../wire/messages';
-import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
+import type { ItemRefusal } from '../ports/selectionOutcome';
 
 
 /** What `getEditChanges` is handed, re-exported because its caller reaches the backend only through
@@ -158,10 +158,23 @@ export type { PluginAddress };
 
 type VersionedMod = components['schemas']['VersionedMod'];
 
-/** Version in git's answer: each mod landed with the plugins its commit holds, or refused, as a mod, with its reason. */
+/** An item mEdit refused, with the kind it named beside its message, for the command that owns the gesture to word the remedy. */
+export interface KindedRefusal<T, Kind extends string> { item: T; reason: string; refusal: Kind }
+
+/** A selection's answer whose refusals carry the kind mEdit named. */
+export interface KindedOutcome<L, T, Kind extends string> {
+  landed: readonly L[];
+  refused: readonly KindedRefusal<T, Kind>[];
+}
+
+export type DecompileOutcome = KindedOutcome<PluginAddress, PluginAddress, components['schemas']['DecompileRefusal']>;
+export type DecompileAndRepairOutcome = KindedOutcome<PluginAddress, PluginAddress, components['schemas']['DecompileAndRepairRefusal']>;
+
+/** Version in git's answer: each mod landed with the plugins its commit holds, or refused, as a mod, with its reason. A refusal
+ *  the extension itself makes names no kind. */
 export interface VersionInGitOutcome {
   landed: readonly VersionedMod[];
-  refused: readonly ItemRefusal<string>[];
+  refused: readonly (ItemRefusal<string> & { readonly refusal?: components['schemas']['VersionInGitRefusal'] })[];
 }
 
 /** A plugin to repair, and the source folder made for its mod when the mod is not a source mod. */
@@ -274,11 +287,11 @@ export interface MEditClient {
   ): Promise<CopyChangesOutcome | WriteRefused>;
   // Each plugin's source is replaced from its bytes, or it is refused, on its own. A WriteRefused is
   // the call itself refused, with nothing written.
-  decompile(plugins: readonly PluginAddress[], force: boolean): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
+  decompile(plugins: readonly PluginAddress[], force: boolean): Promise<DecompileOutcome | WriteRefused>;
   // Each plugin's source is written as two commits, or refused on its own. `force` waives the working-tree changes it replaces.
   decompileAndRepair(
     plugins: readonly PluginToRepair[], force: boolean,
-  ): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
+  ): Promise<DecompileAndRepairOutcome | WriteRefused>;
   // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the
   // call itself refused, with nothing written.
   build(mods: readonly BuildMod[], facts: BuildFacts): Promise<BuildOutcome | WriteRefused>;

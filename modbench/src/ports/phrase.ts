@@ -1,6 +1,6 @@
 /** The Command IDs a message names. The agent box holds each to a gesture it runs. */
 export type GestureCommand =
-  | 'modbench.modlist.gitInit' | 'modbench.mod.updateManifest' | 'modbench.mod.build' | 'modbench.mod.versionInGit' | 'modbench.plugin.decompile';
+  | 'modbench.modlist.gitInit' | 'modbench.mod.updateManifest' | 'modbench.mod.build' | 'modbench.mod.versionInGit' | 'modbench.plugin.decompile' | 'modbench.plugin.decompileAndRepair';
 
 /** A gesture a message names: a view shows `view`, and an agent is given the tool that runs `command`. */
 export interface GestureName { readonly command: GestureCommand; readonly view: string }

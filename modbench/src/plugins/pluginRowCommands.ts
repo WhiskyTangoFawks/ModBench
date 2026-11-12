@@ -1,5 +1,5 @@
 import type * as vscode from 'vscode';
-import { isRefused, type MEditClient, type PluginAddress, type SourceModIn } from '../client';
+import { isRefused, type DecompileOutcome, type MEditClient, type PluginAddress, type SourceModIn } from '../client';
 import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Progress } from '../drivingLib/pausableProgress';
@@ -155,10 +155,15 @@ async function sendAskingOverChanges<Words extends Message>(
 }
 
 // mEdit names the fact; the gesture that clears it is the extension's to name.
-function decompileReason({ item, reason, refusal }: ItemRefusal<PluginAddress>): ItemRefusal<PluginAddress, Message> {
-  return refusal === 'NotInSourceMod'
-    ? { item, reason: phrase`${reason} Run ${gestureName('modbench.mod.versionInGit', 'version in git')} on ${item.origin}.` }
-    : { item, reason };
+function decompileReason({ item, reason, refusal }: DecompileOutcome['refused'][number]): ItemRefusal<PluginAddress, Message> {
+  switch (refusal) {
+    case 'NotInSourceMod':
+      return { item, reason: phrase`${reason} Run ${gestureName('modbench.mod.versionInGit', 'version in git')} on ${item.origin}.` };
+    case 'MalformedRepairable':
+      return { item, reason: phrase`${reason} Run ${gestureName('modbench.plugin.decompileAndRepair', 'decompile and repair')} on it.` };
+    default:
+      return { item, reason };
+  }
 }
 
 async function decompiled(

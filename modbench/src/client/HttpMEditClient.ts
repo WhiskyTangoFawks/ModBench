@@ -22,13 +22,13 @@ import {
   type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginIndexedState, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
   type RebuildIndexOutcome, type CopyChangesOutcome, type CopyMode,
   type GridPosition, type RecordAt, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument, type RenameSourceChangesOutcome, type RenameSourceAsked,
-  type SourceChanges, type SourceMove, type RecordFilter, type ReferenceResult, type NameQuery, type NamedObject, type PluginAddress, type PluginToRepair, type ModToVersionInGit, type VersionInGitOutcome, type VersionInGitProgress,
+  type SourceChanges, type SourceMove, type RecordFilter, type ReferenceResult, type NameQuery, type NamedObject, type PluginAddress, type PluginToRepair, type ModToVersionInGit, type VersionInGitOutcome, type VersionInGitProgress, type KindedOutcome, type DecompileOutcome, type DecompileAndRepairOutcome,
   type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, type RowsRead, isRefused,
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
 import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
 import type { ArchivedCopy, FlaggedPluginFile, FlaggedPluginHashes } from '../wire/messages';
-import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
+import type { ItemRefusal } from '../ports/selectionOutcome';
 
 // 30s is an ordinary HTTP-client default. A slow call and a hung one look the same to the tree,
 // so nothing tries to tell them apart.
@@ -60,9 +60,9 @@ function itemRefusals<R>(refused: { item: R; message: string }[]): ItemRefusal<R
   return refused.map((r) => ({ item: r.item, reason: r.message }));
 }
 
-function kindedSelectionOutcome<L, R>(
-  answer: { applied: L[]; refused: { item: R; refusal: string; message: string }[] },
-): { landed: readonly L[]; refused: readonly ItemRefusal<R>[] } {
+function kindedSelectionOutcome<L, R, K extends string>(
+  answer: { applied: L[]; refused: { item: R; refusal: K; message: string }[] },
+): KindedOutcome<L, R, K> {
   return { landed: answer.applied, refused: answer.refused.map((r) => ({ item: r.item, reason: r.message, refusal: r.refusal })) };
 }
 
@@ -464,7 +464,7 @@ class HttpMEditClient implements MEditClient {
         gesture: (counted) => `put ${counted} under git`, noun: 'mod', items: mods.map((mod) => mod.name),
         op: (counted) => `versionInGit(${counted})`,
         post: () => this.apiClient.POST('/version-in-git', { body: { mods: [...mods] } }),
-        outcome: selectionOutcome,
+        outcome: kindedSelectionOutcome,
       });
     } finally {
       unsubscribe();
@@ -509,7 +509,7 @@ class HttpMEditClient implements MEditClient {
     });
   }
 
-  async decompile(plugins: readonly PluginAddress[], force: boolean): Promise<SelectionOutcome<PluginAddress> | WriteRefused> {
+  async decompile(plugins: readonly PluginAddress[], force: boolean): Promise<DecompileOutcome | WriteRefused> {
     return this.mutateEach({
       gesture: (counted) => `decompile ${counted}`, noun: 'plugin', items: plugins,
       op: (counted) => `decompile(${counted})`,
@@ -520,12 +520,12 @@ class HttpMEditClient implements MEditClient {
 
   async decompileAndRepair(
     plugins: readonly PluginToRepair[], force: boolean,
-  ): Promise<SelectionOutcome<PluginAddress> | WriteRefused> {
+  ): Promise<DecompileAndRepairOutcome | WriteRefused> {
     return this.mutateEach({
       gesture: (counted) => `decompile and repair ${counted}`, noun: 'plugin', items: plugins,
       op: (counted) => `decompileAndRepair(${counted})`,
       post: () => this.apiClient.POST('/plugins/decompile-and-repair', { body: { plugins: [...plugins], force } }),
-      outcome: selectionOutcome,
+      outcome: kindedSelectionOutcome,
     });
   }
 

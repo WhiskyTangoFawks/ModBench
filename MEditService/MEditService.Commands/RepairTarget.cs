@@ -25,7 +25,7 @@ internal abstract record RepairTarget
         if (!repairer.Diagnose(loadOrder, plugin).Holds(out var diagnoses, out var unread))
             return new Refused(DecompileAndRepairRefusal.Unreadable, $"{plugin.Name} could not be read: {unread.Reason}");
         return diagnoses.Count == 0
-            ? new Refused(DecompileAndRepairRefusal.NotMalformed, $"{plugin.Name} is not malformed, so there is nothing to repair. Decompile it instead.")
+            ? new Refused(DecompileAndRepairRefusal.NotMalformed, $"{plugin.Name} is not malformed, so there is nothing to repair.")
             : new Diagnosed(plugin, mod);
     }
 }

@@ -51,17 +51,21 @@ public sealed class DecompileAndRepairPluginHandler
         });
         return repaired.ToAnswer(
             landed => landed.Item.Plugin,
-            refused => new DecompileAndRepairRefused(refused.Item.Plugin, refused.Refusal, Explained(refused, leftOutOfANewSourceFolder, heldByANewSourceFolder)),
+            refused => Explained(refused, leftOutOfANewSourceFolder, heldByANewSourceFolder),
             (applied, refused) => new DecompileAndRepairResult(applied, refused));
     }
 
-    private static string Explained(
+    private static DecompileAndRepairRefused Explained(
         ItemRefused<PluginToRepair, DecompileAndRepairRefusal> refused, HashSet<PluginAddress> leftOut, HashSet<PluginAddress> held)
     {
         var plugin = refused.Item.Plugin;
         if (refused.Refusal == DecompileAndRepairRefusal.NotMalformed && held.Contains(plugin))
-            return $"{plugin.Name} is not malformed, so it was decompiled without a repair, with the source folder made for its mod.";
-        return leftOut.Contains(plugin) ? $"{refused.Message} The source folder made for its mod holds no source for it." : refused.Message;
+        {
+            return new DecompileAndRepairRefused(plugin, DecompileAndRepairRefusal.DecompiledWithoutRepair,
+                $"{plugin.Name} is not malformed, so it was decompiled without a repair, with the source folder made for its mod.");
+        }
+        var message = leftOut.Contains(plugin) ? $"{refused.Message} The source folder made for its mod holds no source for it." : refused.Message;
+        return new DecompileAndRepairRefused(plugin, refused.Refusal, message);
     }
 
     private static ItemAnswer<DecompileAndRepairRefusal, NoOutcome> Refused(DecompileAndRepairRefusal refusal, string message) =>
@@ -136,7 +140,7 @@ public sealed class DecompileAndRepairPluginHandler
 
     private static DecompileAndRepairRefusal RefusalOfInit(VersionInGitRefusal refusal) => refusal switch
     {
-        VersionInGitRefusal.AlreadyInitialized => DecompileAndRepairRefusal.AnotherRepository,
+        VersionInGitRefusal.AlreadyInitialized or VersionInGitRefusal.AnotherRepository => DecompileAndRepairRefusal.AnotherRepository,
         VersionInGitRefusal.CommitFailed => DecompileAndRepairRefusal.WriteFailed,
         _ => DecompileAndRepairRefusal.OtherPluginRefused,
     };

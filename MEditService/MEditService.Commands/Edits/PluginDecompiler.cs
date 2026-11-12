@@ -12,6 +12,15 @@ namespace MEditService.Commands.Edits;
 internal sealed record Decompiled(PluginSource? Source, DecompileRefusal Refusal, string Message)
 {
     internal static Decompiled Refused(DecompileRefusal refusal, string message) => new(null, refusal, message);
+
+    internal static Decompiled Refused(RoundTripRefusal refusal) =>
+        Refused(refusal.RepairClears ? DecompileRefusal.MalformedRepairable : DecompileRefusal.RoundTripFailed, refusal.Message);
+}
+
+/// <summary>A round-trip refusal's fact, and whether decompile and repair clears it.</summary>
+internal readonly record struct RoundTripRefusal(string Message, bool RepairClears = false)
+{
+    public static implicit operator RoundTripRefusal(string message) => new(message);
 }
 
 /// <summary>Init and decompile both read a plugin into its plugin source through this one gate.
@@ -34,7 +43,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
                     $"{plugin.Name} cannot become source: {failure.Reason}."),
                 PluginFailure.Inaccessible => Decompiled.Refused(DecompileRefusal.RoundTripFailed,
                     $"{plugin.Name} cannot be read from its own binary ({failure.Reason}). Close whatever holds the file, then try again."),
-                PluginFailure.Unparsed unparsed => Decompiled.Refused(DecompileRefusal.RoundTripFailed, UnparsedRefusal(plugin, unparsed, namesRepair)),
+                PluginFailure.Unparsed unparsed => Decompiled.Refused(UnparsedRefusal(plugin, unparsed, namesRepair)),
                 _ => Decompiled.Refused(DecompileRefusal.RoundTripFailed, NotParsed(plugin, failure)),
             };
         }
@@ -42,7 +51,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         onParsed();
         source = source with { Files = DeletedReferenceBases.Dropped(source.Files, loadOrder.GameRelease, schemaReflector) };
         if (await VerifyRoundTrip(plugin.Name, plugin.Path, source, loadOrder, plugin.Strings, namesRepair, cancel) is { } refusal)
-            return Decompiled.Refused(DecompileRefusal.RoundTripFailed, refusal);
+            return Decompiled.Refused(refusal);
 
         return new Decompiled(source, DecompileRefusal.None, "");
     }
@@ -50,7 +59,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
     private static string NotParsed(RegisteredPlugin plugin, PluginFailure failure) =>
         $"{plugin.Name} could not be parsed from its own binary: {failure.Reason}";
 
-    private string UnparsedRefusal(RegisteredPlugin plugin, PluginFailure.Unparsed unparsed, bool namesRepair)
+    private RoundTripRefusal UnparsedRefusal(RegisteredPlugin plugin, PluginFailure.Unparsed unparsed, bool namesRepair)
     {
         if (unparsed.Malformations is null)
             return NotParsed(plugin, unparsed);
@@ -61,8 +70,9 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         }
         if (scan.AtFailure.Count > 0)
         {
-            return $"{plugin.Name} is a malformed plugin and cannot become source: " +
-                   $"{Described(scan.AtFailure)}.{RepairClause(scan.AtFailure, namesRepair)}";
+            return new RoundTripRefusal(
+                $"{plugin.Name} is a malformed plugin and cannot become source: {Described(scan.AtFailure)}.",
+                RepairClears(scan.AtFailure, namesRepair));
         }
 
         var elsewhere = scan.Elsewhere.Count == 0
@@ -78,12 +88,12 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
     private static string Described(IEnumerable<RepairPreview> malformations) =>
         string.Join("; ", malformations.Select(malformation => malformation.Diagnosis.Describe()));
 
-    private static string RepairClause(IReadOnlyList<RepairPreview> malformations, bool namesRepair) =>
-        namesRepair && malformations.All(malformation => malformation.Change is not null) ? " Decompile and repair it." : "";
+    private static bool RepairClears(IReadOnlyList<RepairPreview> malformations, bool namesRepair) =>
+        namesRepair && malformations.All(malformation => malformation.Change is not null);
 
     // ADR-0006's gate. Reparse, not the pre-write object: only written bytes show what
     // the writer does.
-    private async Task<string?> VerifyRoundTrip(
+    private async Task<RoundTripRefusal?> VerifyRoundTrip(
         string pluginName,
         string originalPluginPath,
         PluginSource source,
@@ -108,18 +118,21 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
 
         if (comparison.DeletedRecordCauses is { } deleted)
         {
-            return $"{pluginName} does not round-trip through its own source: it is a malformed plugin, and " +
-                   $"{Described(deleted)}.{RepairClause(deleted, namesRepair)}";
+            return new RoundTripRefusal(
+                $"{pluginName} does not round-trip through its own source: it is a malformed plugin, and {Described(deleted)}.",
+                RepairClears(deleted, namesRepair));
         }
 
         if (comparison.Loss is { } loss)
         {
             // A Kind B diagnosis on the record names the cause ahead of the drop it produced.
-            return $"{pluginName} does not round-trip through its own source: " + (comparison.LossCauses is { } causes
-                ? $"it is a malformed plugin, and {Described(causes)} — " +
-                  $"parsing the malformed subrecord dropped {string.Join(", ", loss.Signatures)} before its source was written.{RepairClause(causes, namesRepair)}"
-                : $"{loss.RecordType} {loss.FormKey} is missing {string.Join(", ", loss.Signatures)} " +
-                  "present in the original — dropped during parsing, before its source was written.");
+            return comparison.LossCauses is { } causes
+                ? new RoundTripRefusal(
+                    $"{pluginName} does not round-trip through its own source: it is a malformed plugin, and {Described(causes)} — " +
+                    $"parsing the malformed subrecord dropped {string.Join(", ", loss.Signatures)} before its source was written.",
+                    RepairClears(causes, namesRepair))
+                : $"{pluginName} does not round-trip through its own source: {loss.RecordType} {loss.FormKey} is missing {string.Join(", ", loss.Signatures)} " +
+                  "present in the original — dropped during parsing, before its source was written.";
         }
 
         if (comparison.Unverified is { } unverified)
@@ -139,10 +152,11 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         }
         if (divergence is not null)
         {
-            return $"{pluginName} does not round-trip through its own source: " + (divergence.Causes is { } causes
-                ? $"it is a malformed plugin, and {Described(causes)} — " +
-                  $"{divergence.Description}{RepairClause(causes, namesRepair)}"
-                : divergence.Description);
+            return divergence.Causes is { } causes
+                ? new RoundTripRefusal(
+                    $"{pluginName} does not round-trip through its own source: it is a malformed plugin, and {Described(causes)} — {divergence.Description}",
+                    RepairClears(causes, namesRepair))
+                : $"{pluginName} does not round-trip through its own source: {divergence.Description}";
         }
 
         // An encoding-only difference (ADR-0006) is reported, never a refusal.

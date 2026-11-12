@@ -48,7 +48,7 @@ describe('decompileAndRepair', () => {
   const sent = () => client.calls.filter((call) => call.method === 'decompileAndRepair').map((call) => call.args);
   const landingEach: MEditClient['decompileAndRepair'] = (plugins) => Promise.resolve({
     landed: plugins.map(({ plugin }) => plugin),
-    refused: [REFUSED],
+    refused: [{ ...REFUSED, refusal: 'DecompiledWithoutRepair' }],
   });
 
   beforeEach(() => {
@@ -73,6 +73,15 @@ describe('decompileAndRepair', () => {
     await repairIn({ Harbor: '/source/Harbor' }, false);
 
     expect([requests, sent()]).toEqual([[{ mods: [], where: 'NewRepository' }], [[[{ plugin: MALFORMED }], false]]]);
+  });
+
+  it('tells the view to decompile a plugin that is not malformed, and the agent the tool that does', async () => {
+    client.setCommandHandler('decompileAndRepair', () => Promise.resolve({ landed: [], refused: [{ ...REFUSED, refusal: 'NotMalformed' }] }));
+
+    const answered = await repairIn({}, true);
+
+    expect(answered).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: REFUSED.item, reason: phrase`${REFUSED.reason} Run ${gestureName('modbench.plugin.decompile', 'decompile')} instead.` }] } });
+    expect(answered.applied && String(answered.outcome.refused[0]?.reason)).toBe('Clean.esp is not malformed. Run decompile instead.');
   });
 
   it('answers what a downloaded file could not give, for the user to be told', async () => {

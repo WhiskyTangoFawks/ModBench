@@ -6,7 +6,7 @@ import { registerAgentGesture, reportPartial, type AgentGesture, type GestureRes
 import { isClickedRow } from '../drivingLib/gestureEntry';
 import { pickWhereGitHolds } from '../drivingLib/whereGitHolds';
 import { errorMessage } from '../ports/errorMessage';
-import type { Message } from '../ports/phrase';
+import { gestureName, phrase, type Message } from '../ports/phrase';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
 import type { SourceCommands, VersionInGitWhere } from '../sourceCommands/sourceCommands';
@@ -26,7 +26,7 @@ export interface VersionInGitDeps {
   pluginsView: string;
 }
 
-type VersionedInGit = GestureResult<VersionInGitOutcome['landed'][number], string, string, Message>;
+type VersionedInGit = GestureResult<VersionInGitOutcome['landed'][number], string, Message, Message>;
 
 interface VersionInGitOptions { readonly commit: boolean; readonly where: VersionInGitWhere }
 
@@ -79,7 +79,8 @@ async function versionModsInGit(
       });
       if (isRefused<Message>(result)) return { applied: false, refusal: result.message };
       if (makesSourceMods && result.landed.length > 0) await onCommitted();
-      const { notes = [], ...outcome } = result;
+      const { notes = [], landed, refused } = result;
+      const outcome = { landed, refused: refused.map(refusedWithRemedy) };
       return { applied: true, outcome, ...notes.length === 0 ? {} : { partial: notes.map((detail) => ({ message: 'Version in git:', detail, severity: 'warning' as const })) } };
     } finally {
       progress.say(undefined);
@@ -102,6 +103,18 @@ async function showInExplorer(folder: string | undefined, mod: string): Promise<
   }
 }
 
+// mEdit names the fact; the gesture that clears it is the extension's to name.
+function refusedWithRemedy({ item, reason, refusal }: VersionInGitOutcome['refused'][number]): ItemRefusal<string, Message> {
+  switch (refusal) {
+    case 'AlreadyInitialized':
+      return { item, reason: phrase`${reason} To put a plugin's source into its working tree, run ${gestureName('modbench.plugin.decompile', 'decompile')} on it.` };
+    case 'MalformedRepairable':
+      return { item, reason: phrase`${reason} Run ${gestureName('modbench.plugin.decompileAndRepair', 'decompile and repair')} on its plugins.` };
+    default:
+      return { item, reason };
+  }
+}
+
 function reportVersioned(
   reporter: Reporter, result: VersionedInGit, mods: readonly string[], refusedRows: readonly ItemRefusal<string>[], where: VersionInGitWhere,
 ): void {
@@ -117,7 +130,7 @@ function reportVersioned(
 }
 
 interface VersionInGitReport {
-  refused: VersionInGitOutcome['refused'];
+  refused: readonly ItemRefusal<string, Message>[];
   plugins: readonly PluginAddress[];
   refusedPlugins: readonly ItemRefusal<string>[];
 }

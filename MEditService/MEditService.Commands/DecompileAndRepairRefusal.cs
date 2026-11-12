@@ -23,8 +23,11 @@ public enum DecompileAndRepairRefusal
     /// <summary>The plugin's bytes could not be read.</summary>
     Unreadable,
 
-    /// <summary>No malformed record is diagnosed in the plugin; the way out is decompile.</summary>
+    /// <summary>No malformed record is diagnosed in the plugin, and the plugin holds no source yet; the way out is decompile.</summary>
     NotMalformed,
+
+    /// <summary>No malformed record is diagnosed in the plugin, and it was decompiled without a repair, with the source folder made for its mod.</summary>
+    DecompiledWithoutRepair,
 
     /// <summary>A diagnosis of the plugin that no repair answers.</summary>
     NoRepair,

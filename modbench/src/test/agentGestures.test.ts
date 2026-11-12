@@ -24,6 +24,7 @@ describe('the gestures a message names (agent.md, Reporting, story 4)', () => {
     'modbench.mod.build': true,
     'modbench.mod.versionInGit': true,
     'modbench.plugin.decompile': true,
+    'modbench.plugin.decompileAndRepair': true,
   };
 
   it.each(Object.keys(NAMED))('has a tool, because %s is a gesture the agent runs', (command) => {

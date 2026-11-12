@@ -222,6 +222,20 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         Assert.Equal(before, SourceTextOf("First.esp"));
     }
 
+    [Fact]
+    public async Task Decompile_OfAMalformedPluginARepairAnswers_RefusesItAsRepairable_StatingTheFactAlone()
+    {
+        var path = Path.Combine(_sourceMod, "Malformed.esp");
+        DeletedNpcPlugin.WriteHoldingEveryField(path, new FormKey(ModKey.FromFileName("Malformed.esp"), 0x800));
+        _holder.Apply(SnapshotPlugins.Snapshot(Path.Combine(_root, "Data"), _root, GameRelease.Fallout4,
+            [new LoadOrderEntry("Malformed.esp", path, SourceModName, 0, Enabled: true, Winning: true)]));
+
+        var refused = Assert.Single((await Decompile(CompiledPlugin("Malformed.esp"))).Refused);
+
+        Assert.Equal(DecompileRefusal.MalformedRepairable, refused.Refusal);
+        Assert.DoesNotContain("ecompile and repair", refused.Message, StringComparison.Ordinal);
+    }
+
     private static async Task<IMod> DeserializeThenCorruptTheNpc(string folder, CancellationToken cancel)
     {
         var deserialized = await Fallout4WholeMod.Deserialize(folder, cancel);

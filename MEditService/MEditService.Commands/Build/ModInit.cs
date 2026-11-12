@@ -27,13 +27,13 @@ internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderR
         if (source.IsSourceMod(toCommit.SourceFolder.Path))
         {
             return Refused(VersionInGitRefusal.AlreadyInitialized,
-                $"'{toCommit.SourceFolder.Path}' is already a source mod's source folder. To put a plugin's source into its working tree, decompile it.");
+                $"'{toCommit.SourceFolder.Path}' is already a source mod's source folder.");
         }
 
         // A .git with no main that Modbench did not make is someone else's, never written to (ADR-0003).
         if (source.HoldsAnotherRepository(toCommit.SourceFolder.Path))
         {
-            return Refused(VersionInGitRefusal.AlreadyInitialized,
+            return Refused(VersionInGitRefusal.AnotherRepository,
                 $"'{toCommit.SourceFolder.Path}' already holds a repository with no main branch, made outside Modbench.");
         }
 
@@ -58,9 +58,12 @@ internal sealed class ModInit(ILogger logger, ISourceAdapter source, IModFolderR
             {
                 refused.Add(new ItemRefused<PluginAddress, VersionInGitRefusal>(
                     plugin.Key,
-                    decompiled.Refusal == DecompileRefusal.MissingLocalizationStrings
-                        ? VersionInGitRefusal.MissingLocalizationStrings
-                        : VersionInGitRefusal.RoundTripFailed,
+                    decompiled.Refusal switch
+                    {
+                        DecompileRefusal.MissingLocalizationStrings => VersionInGitRefusal.MissingLocalizationStrings,
+                        DecompileRefusal.MalformedRepairable => VersionInGitRefusal.MalformedRepairable,
+                        _ => VersionInGitRefusal.RoundTripFailed,
+                    },
                     decompiled.Message));
             }
         }
