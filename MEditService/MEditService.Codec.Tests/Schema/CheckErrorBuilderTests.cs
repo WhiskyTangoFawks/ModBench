@@ -32,6 +32,7 @@ public class CheckErrorBuilderTests
         ["a link to a record of its type"] = new(RaceLink, "\"000001:Test.esp\"", Resolving("race")),
         ["a null link that may be null"] = new(RaceLink with { AllowsNull = true }, null, Resolving("race")),
         ["a null link that may not be null"] = new(RaceLink, null, Resolving("race")),
+        ["a None link"] = new(RaceLink, "\"None\"", Unresolved),
         ["a dangling link"] = new(RaceLink, "\"000FFF:Test.esp\"", Unresolved),
         ["a link to a record of another type"] =
             new(RaceLink with { ValidFormKeyTypes = ["npc_", "lvln", "kywd"] }, "\"000001:Test.esp\"", Resolving("race")),
@@ -78,6 +79,7 @@ public class CheckErrorBuilderTests
     [InlineData("a link to a record of its type")]
     [InlineData("a null link that may be null")]
     [InlineData("a null link that may not be null")]
+    [InlineData("a None link")]
     [InlineData("a null link in a list of structs")]
     [InlineData("a link a stored document omits in a list of structs")]
     [InlineData("a null link two structs down")]

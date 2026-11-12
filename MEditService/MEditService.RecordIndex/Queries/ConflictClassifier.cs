@@ -403,7 +403,7 @@ internal sealed class ConflictClassifier(ILogger logger)
                 checkErrors[column] = error;
             if (meta.Type != "formKey") continue;
             var fk = FormReferences.ExtractString(value);
-            if (string.IsNullOrEmpty(fk) || fk == "Null") continue;
+            if (!FormReferences.IsRealRef(fk)) continue;
             resolutions[column] = FormKeyResolution.From(fk, resolve(fk), meta.ValidFormKeyTypes, ctx.Release);
         }
         return (resolutions.Count > 0 ? resolutions : null, checkErrors.Count > 0 ? checkErrors : null);

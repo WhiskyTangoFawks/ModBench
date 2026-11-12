@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using Mutagen.Bethesda.Plugins;
 using MEditService.Codec.Serialization;
 
 namespace MEditService.Codec.Schema;
@@ -137,7 +138,10 @@ public static class FormReferences
             WalkLeaves(elementType, elem, $"{path}[{idx++}]", isLeaf, onLeaf);
     }
 
-    private static bool IsRealRef([NotNullWhen(true)] string? s) => s is not null && s != "Null";
+    public static bool IsRealRef([NotNullWhen(true)] string? s) =>
+        !string.IsNullOrEmpty(s)
+        && !s.Equals(FormKey.NullStr, StringComparison.OrdinalIgnoreCase)
+        && !s.Equals(FormKey.NoneStr, StringComparison.OrdinalIgnoreCase);
 
     public static string? ExtractString(object? raw) => raw switch
     {

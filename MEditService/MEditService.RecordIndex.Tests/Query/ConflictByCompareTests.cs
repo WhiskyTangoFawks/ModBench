@@ -317,6 +317,19 @@ public class ConflictByCompareTests
     }
 
     [Fact]
+    public void ANoneLink_IsAValue_ItHasNoResolutionAndNoCheckError()
+    {
+        var result = ComparedCopies.Spelled<Npc>(
+            "B.esp",
+            document => document["Race"] = "None",
+            npc => npc.Race.SetTo(GoodRecord),
+            npc => npc.Race.SetTo(GoodRecord));
+
+        var race = Row(result, "Race");
+        Assert.False(RequireResolutions(race).ContainsKey("B.esp"));
+    }
+
+    [Fact]
     public void LinkArray_SiblingLeavesResolveIndependently_ParentCarriesNoResolutions()
     {
         var result = ComparedCopies.Beside(
