@@ -29,6 +29,7 @@ import { NO_DEPLOYMENT_FOLDER } from './noDeploymentFolder';
 import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
 
 
+const NOT_INDEXED = { getPlugins: () => Promise.reject(new Error('mEdit is indexing')) };
 const PROFILE = 'Default';
 const INI = '[General]\r\nselected_profile=@ByteArray(Default)\r\ngameName=Fallout 4\r\n';
 
@@ -76,7 +77,7 @@ async function wiredInstance(): Promise<{
   pluginSyncOn({
     instance, channel: { error: () => {}, info: () => {} },
     syncPlugins: () => {
-      const run = pluginSyncOver(adapter)();
+      const run = pluginSyncOver(adapter, NOT_INDEXED)();
       syncs.push(run);
       return run;
     },
@@ -145,7 +146,7 @@ describe('a clone opened before its mods are restored (plugins.md, The tree, sto
     const instance = new Instance({ gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, adapter, log: { info: () => {}, warn: () => {}, error: () => {} }, medit: new InMemoryMEditClient(), workspace: fakeWorkspace() });
     instances.push(instance);
     const { pluginSync } = pluginSyncOn({
-      instance, channel: { error: () => {}, info: () => {} }, syncPlugins: pluginSyncOver(adapter),
+      instance, channel: { error: () => {}, info: () => {} }, syncPlugins: pluginSyncOver(adapter, NOT_INDEXED),
     });
 
     await instance.refresh();
@@ -178,7 +179,7 @@ describe('the game folder not found, across the whole instance', () => {
     instances.push(instance);
     toolboxes.push(new ToolboxProvider({ instance, channel, deploymentFolder: NO_DEPLOYMENT_FOLDER, pluginsTxtPlace: () => Promise.resolve({ why: 'none' }) }));
     const { modSync } = modSyncOn({ instance, channel, syncMods: modSyncOver(fake.adapter) });
-    const { pluginSync } = pluginSyncOn({ instance, channel, syncPlugins: pluginSyncOver(fake.adapter) });
+    const { pluginSync } = pluginSyncOn({ instance, channel, syncPlugins: pluginSyncOver(fake.adapter, NOT_INDEXED) });
 
     await instance.refresh();
     await instance.refresh();

@@ -1,5 +1,6 @@
 import { addressOfRef, judge, type BrokenRule, type PluginFactsOf } from '../sortingRules/judge';
 import { suggestedMove } from '../sortingRules/suggestedMove';
+import { fileExtension } from '../tables/pluginFile';
 import { dropIndexIn, type Drop } from './dropIndex';
 
 /** What the game reads that a move is judged over: the plugins it loads with no line, every plugins.txt line, and which
@@ -48,4 +49,18 @@ export function offeredMoves(listed: ListedPlugins, broken: readonly BrokenRule[
     const drop = { kind: move.side, name: move.anchor.filename };
     return moveOrderRefusal(listed, [move.mover.filename], drop, factsOf) === undefined ? [{ rule, mover: addressOfRef(move.mover), drop }] : [];
   });
+}
+
+const factsOrExtension = (factsOf: PluginFactsOf, masterExtensions: readonly string[]): PluginFactsOf => (name) =>
+  factsOf(name) ?? { origin: '', masters: [], blueprint: false, master: masterExtensions.includes(fileExtension(name)) };
+
+/** Where a new disabled line for `plugin` lands: directly before the next line in the order the game loads, or
+ *  after the last line when none follows. */
+export function landingDrop(
+  { loadedWithNoLine, lines, isActive }: ListedPlugins, plugin: string, factsOf: PluginFactsOf, masterExtensions: readonly string[],
+): Drop {
+  const { order } = judge(loadedWithNoLine, [...lines, plugin], factsOrExtension(factsOf, masterExtensions), isActive);
+  const lined = new Set(lines);
+  const next = order.slice(order.indexOf(plugin) + 1).find((name) => lined.has(name));
+  return next === undefined ? { kind: 'winningEnd' } : { kind: 'before', name: next };
 }

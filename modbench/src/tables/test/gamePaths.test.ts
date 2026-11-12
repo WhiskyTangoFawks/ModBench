@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import {
-  archiveListsOf, ba2VersionsOf, blueprintLoadsLastIn, creationClubListFile, gameReleaseForGame, loadedWithNoLineOf, nexusDomainsForGame, shortNameForNexusDomain, nexusDomainForMetaGame, gamePathInfoForRelease, lootRepositoryOf, papyrusScriptAt, papyrusScriptFiles, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
+  archiveListsOf, masterExtensionsOf, ba2VersionsOf, blueprintLoadsLastIn, creationClubListFile, gameReleaseForGame, loadedWithNoLineOf, nexusDomainsForGame, shortNameForNexusDomain, nexusDomainForMetaGame, gamePathInfoForRelease, lootRepositoryOf, papyrusScriptAt, papyrusScriptFiles, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
 } from '../gamePaths';
 
 const NOT_WRITTEN = 'a game whose plugins.txt Modbench does not write';
@@ -259,6 +259,12 @@ describe('lootRepositoryOf', () => {
 describe('blueprintLoadsLastIn', () => {
   it.each([['Starfield', true], ['Fallout4', false], ['SkyrimSE', false], ['SomeRelease', false], [undefined, false]])('answers for %s: %s', (release, answer) => {
     expect(blueprintLoadsLastIn(release)).toBe(answer);
+  });
+});
+
+describe('masterExtensionsOf', () => {
+  it.each([['Fallout4', ['.esm', '.esl']], ['Starfield', ['.esm', '.esl']], ['SomeRelease', []], [undefined, []]])('answers for %s', (release, answer) => {
+    expect(masterExtensionsOf(release)).toEqual(answer);
   });
 });
 
