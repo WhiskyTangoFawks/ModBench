@@ -5,7 +5,7 @@ import { isRefused, type DecompileAndRepairOutcome, type MEditClient, type Plugi
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { sourceModsOf } from '../manifestAdapter/manifestAdapter';
 import type { SelectionResult } from '../coreLib/commandResult';
-import { gestureName, phrase, type Message } from '../ports/phrase';
+import { gestureName, phrase, withRemedy, type Message } from '../ports/phrase';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
 export type DecompileAndRepairClient = Pick<MEditClient, 'decompileAndRepair'>;
@@ -57,12 +57,10 @@ function firstLandedOf(landed: readonly PluginAddress[], unfinished: ReadonlyMap
   });
 }
 
-// mEdit names the fact; the gesture that clears it is the extension's to name.
-function repairReason({ item, reason, refusal }: DecompileAndRepairOutcome['refused'][number]): ItemRefusal<PluginAddress, Message> {
-  return refusal === 'NotMalformed'
-    ? { item, reason: phrase`${reason} Run ${gestureName('modbench.plugin.decompile', 'decompile')} instead.` }
-    : { item, reason };
-}
+const repairReason = withRemedy<PluginAddress, DecompileAndRepairOutcome['refused'][number]['refusal']>({
+  NotMalformed: () => phrase`Run ${gestureName('modbench.plugin.decompile', 'decompile')} instead.`,
+  OtherPluginRepairable: () => phrase`Run ${gestureName('modbench.plugin.decompileAndRepair', 'decompile and repair')} on its plugins.`,
+});
 
 const repairOutcome = (answer: DecompileAndRepairOutcome | WriteRefused): SelectionOutcome<PluginAddress, Message> | WriteRefused =>
   (isRefused(answer) ? answer : { landed: answer.landed, refused: answer.refused.map(repairReason) });

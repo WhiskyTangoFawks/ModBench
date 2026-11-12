@@ -235,7 +235,7 @@ describe('modbench.plugin.decompile', () => {
     const client = new InMemoryMEditClient();
     const refusal = 'First.esp does not round-trip through its own source.';
     client.setQueryAnswer('getWorkingTreeStatesBeneath', clean);
-    client.setCommandResult('decompile', { landed: [SECOND], refused: [{ item: FIRST, reason: refusal, refusal: 'WorkingTreeChanges' }] });
+    client.setCommandResult('decompile', { landed: [SECOND], refused: [{ item: FIRST, reason: refusal, refusal: 'RoundTripFailed' }] });
     const { handler, reporter } = registered(client, 'Decompile');
     const rows = [row(FIRST), row(SECOND)];
 

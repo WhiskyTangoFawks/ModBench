@@ -11,7 +11,7 @@ namespace MEditService.Commands.Tests.RealData;
 public sealed class PluginDiagnosisRoundTripGateTests
 {
     [Fact]
-    public async Task VersionInGit_OfAMisshapedPerkPlugin_NamesThePerkRecordAsMalformedAndNoGesture()
+    public async Task VersionInGit_OfAMisshapedPerkPlugin_NamesThePerkRecordAsMalformed()
     {
         using var scratch = new RealFixtureScratch(MisshapedPerkPlugin.Plugin);
 
@@ -22,12 +22,11 @@ public sealed class PluginDiagnosisRoundTripGateTests
 
         Assert.Contains(MisshapedPerkPlugin.Anchor, result.Message);
         Assert.Contains("malformed", result.Message);
-        Assert.DoesNotContain("Decompile and repair", result.Message, StringComparison.OrdinalIgnoreCase);
         Assert.False(TestAdapters.Source().IsSourceMod(scratch.ModFolder));
     }
 
     [Fact]
-    public async Task VersionInGit_OfAMismatchedFnamPlugin_NamesMutagensMishandlingAndNoRecordOrGesture()
+    public async Task VersionInGit_OfAMismatchedFnamPlugin_NamesMutagensMishandlingAndNoRecord()
     {
         using var scratch = new RealFixtureScratch(MismatchedFnamPlugin.Plugin);
 
@@ -40,27 +39,31 @@ public sealed class PluginDiagnosisRoundTripGateTests
         Assert.Contains("Mutagen mishandles", result.Message);
         Assert.DoesNotContain("EditorID", result.Message);
         Assert.DoesNotContain("FormKey", result.Message);
-        Assert.DoesNotContain("Decompile and repair", result.Message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("malformed", result.Message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain($"— {PluginDiagnosis.UnknownClass}:", result.Message);
     }
 
     private static readonly string[] ReadWithoutLoss = ["CounterDisagreeingWithEntries", "EntryPointMissingEpf3"];
 
-    public static TheoryData<MalformationFixture> Malformations => [.. MalformationFixtures.All.Where(f => !ReadWithoutLoss.Contains(f.Malformation))];
+    public static TheoryData<MalformationFixture, VersionInGitRefusal> Malformations()
+    {
+        TheoryData<MalformationFixture, VersionInGitRefusal> rows = new();
+        foreach (var fixture in MalformationFixtures.All.Where(f => !ReadWithoutLoss.Contains(f.Malformation)))
+            rows.Add(fixture, fixture.Change is not null ? VersionInGitRefusal.MalformedRepairable : VersionInGitRefusal.RoundTripFailed);
+        return rows;
+    }
 
     [Theory]
     [MemberData(nameof(Malformations))]
-    public async Task VersionInGit_OfAMalformedPlugin_IsRepairableOnlyWhenARepairAnswersIt(MalformationFixture fixture)
+    public async Task VersionInGit_OfAMalformedPlugin_IsRepairableOnlyWhenARepairAnswersIt(MalformationFixture fixture, VersionInGitRefusal refusal)
     {
         using var scratch = new RealFixtureScratch(fixture.Malformed);
 
         var result = await scratch.VersionInGitAsync();
 
-        Assert.Equal(fixture.Change is not null ? VersionInGitRefusal.MalformedRepairable : VersionInGitRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(refusal, result.Refusal);
         Assert.Contains("malformed plugin", result.Message, StringComparison.Ordinal);
         Assert.Contains(fixture.Diagnosis, result.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("Decompile and repair", result.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -88,7 +91,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
     }
 
     [Fact]
-    public async Task VersionInGit_WhenMutagenFailsAtNoRecordAndAnotherRecordIsMalformed_DoesNotCallThePluginCorrectOrNameTheGesture()
+    public async Task VersionInGit_WhenMutagenFailsAtNoRecordAndAnotherRecordIsMalformed_DoesNotCallThePluginCorrect()
     {
         using var scratch = new RealFixtureScratch(MismatchedFnamPlugin.PluginWithAShortRegion);
 
@@ -97,11 +100,11 @@ public sealed class PluginDiagnosisRoundTripGateTests
         Assert.Contains("Mutagen mishandles", result.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("correct plugin", result.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("HarborRegion", result.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("Decompile and repair", result.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(VersionInGitRefusal.RoundTripFailed, result.Refusal);
     }
 
     [Fact]
-    public async Task VersionInGit_WhenNothingClassifiesTheFailureAndAnotherRecordIsMalformed_NamesThatRecordAndNoGesture()
+    public async Task VersionInGit_WhenNothingClassifiesTheFailureAndAnotherRecordIsMalformed_NamesThatRecord()
     {
         var plugin = new GeneratedPlugin("Unclassified.esp", RawPlugin.Plugin(RawPlugin.Tes4(0x802, 4),
             RawPlugin.Group("MISC", RawPlugin.Record("MISC", 0x00000800, RawPlugin.EditorId("HarborMisc"), RawPlugin.Subrecord("FULL", "x"u8.ToArray()), OverlongSubrecord)),
@@ -111,7 +114,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
         var result = await scratch.VersionInGitAsync();
 
         Assert.Contains("HarborRegion", result.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("Decompile and repair", result.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(VersionInGitRefusal.RoundTripFailed, result.Refusal);
         Assert.Contains("could not be parsed", result.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("Mutagen mishandles", result.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("correct plugin", result.Message, StringComparison.OrdinalIgnoreCase);

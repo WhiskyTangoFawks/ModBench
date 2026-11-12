@@ -358,16 +358,17 @@ describe('modbench.mod.versionInGit', () => {
     expect(said).toEqual(['Version in git "ModB" — writing the repository…']);
   });
 
-  const FACT = 'its source folder is a source mod\'s.';
   describe.each([
-    ['AlreadyInitialized', phrase`${FACT} To put a plugin's source into its working tree, run ${gestureName('modbench.plugin.decompile', 'decompile')} on it.`,
+    ['AlreadyInitialized', 'its source folder is a source mod\'s.',
+      phrase`its source folder is a source mod's. To put a plugin's source into its working tree, run ${gestureName('modbench.plugin.decompile', 'decompile')} on it.`,
       "To put a plugin's source into its working tree, run decompile on it."],
-    ['MalformedRepairable', phrase`${FACT} Run ${gestureName('modbench.plugin.decompileAndRepair', 'decompile and repair')} on its plugins.`,
+    ['MalformedRepairable', 'Malformed.esp is a malformed plugin.',
+      phrase`Malformed.esp is a malformed plugin. Run ${gestureName('modbench.plugin.decompileAndRepair', 'decompile and repair')} on its plugins.`,
       'Run decompile and repair on its plugins.'],
-  ] as const)('a mod refused as %s', (refusal, reason, remedy) => {
+  ] as const)('a mod refused as %s', (refusal, fact, reason, remedy) => {
     const refusedAnswer = () => {
       const commands = versionInGitCommands();
-      commands.answers({ landed: [], refused: [{ item: 'ModA', reason: FACT, refusal }] });
+      commands.answers({ landed: [], refused: [{ item: 'ModA', reason: fact, refusal }] });
       return invokeVersionInGit(commands);
     };
 
@@ -376,7 +377,7 @@ describe('modbench.mod.versionInGit', () => {
 
       await handler(modRow('ModA'));
 
-      expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not put 1 of 1 mods under git.', detail: `"ModA" (${FACT} ${remedy})` }]);
+      expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not put 1 of 1 mods under git.', detail: `"ModA" (${fact} ${remedy})` }]);
     });
 
     it('names the gesture as data for the agent, which reads the tool that runs it', async () => {

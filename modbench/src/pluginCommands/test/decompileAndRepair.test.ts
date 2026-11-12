@@ -75,13 +75,13 @@ describe('decompileAndRepair', () => {
     expect([requests, sent()]).toEqual([[{ mods: [], where: 'NewRepository' }], [[[{ plugin: MALFORMED }], false]]]);
   });
 
-  it('tells the view to decompile a plugin that is not malformed, and the agent the tool that does', async () => {
-    client.setCommandHandler('decompileAndRepair', () => Promise.resolve({ landed: [], refused: [{ ...REFUSED, refusal: 'NotMalformed' }] }));
+  it.each([
+    ['NotMalformed', phrase`${REFUSED.reason} Run ${gestureName('modbench.plugin.decompile', 'decompile')} instead.`],
+    ['OtherPluginRepairable', phrase`${REFUSED.reason} Run ${gestureName('modbench.plugin.decompileAndRepair', 'decompile and repair')} on its plugins.`],
+  ] as const)('names the gesture that clears a plugin refused as %s as data, for the view and the agent', async (refusal, reason) => {
+    client.setCommandHandler('decompileAndRepair', () => Promise.resolve({ landed: [], refused: [{ ...REFUSED, refusal }] }));
 
-    const answered = await repairIn({}, true);
-
-    expect(answered).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: REFUSED.item, reason: phrase`${REFUSED.reason} Run ${gestureName('modbench.plugin.decompile', 'decompile')} instead.` }] } });
-    expect(answered.applied && String(answered.outcome.refused[0]?.reason)).toBe('Clean.esp is not malformed. Run decompile instead.');
+    expect(await repairIn({}, true)).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: REFUSED.item, reason }] } });
   });
 
   it('answers what a downloaded file could not give, for the user to be told', async () => {

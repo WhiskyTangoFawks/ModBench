@@ -11,7 +11,7 @@ import type { PluginCommands, SelectionResult } from '../pluginCommands/plugins'
 import { selectionArgument } from '../drivingLib/gestureEntry';
 import { pickWhereGitHolds } from '../drivingLib/whereGitHolds';
 import { Refusal } from '../drivingLib/refusal';
-import { gestureName, phrase, type Message } from '../ports/phrase';
+import { gestureName, phrase, withRemedy, type Message } from '../ports/phrase';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import { pluginRowName } from '../wire/pluginAddress';
 import type { Reporter } from '../ports/reporter';
@@ -154,16 +154,10 @@ async function sendAskingOverChanges<Words extends Message>(
   return sendBatches([{ plugins: replacing, force: true }, { plugins: rest, force: false }], send);
 }
 
-// mEdit names the fact; the gesture that clears it is the extension's to name.
-function decompileReason({ item, reason, refusal }: DecompileOutcome['refused'][number]): ItemRefusal<PluginAddress, Message> {
-  if (refusal === 'NotInSourceMod') {
-    return { item, reason: phrase`${reason} Run ${gestureName('modbench.mod.versionInGit', 'version in git')} on ${item.origin}.` };
-  }
-  if (refusal === 'MalformedRepairable') {
-    return { item, reason: phrase`${reason} Run ${gestureName('modbench.plugin.decompileAndRepair', 'decompile and repair')} on it.` };
-  }
-  return { item, reason };
-}
+const decompileReason = withRemedy<PluginAddress, DecompileOutcome['refused'][number]['refusal']>({
+  NotInSourceMod: ({ origin }) => phrase`Run ${gestureName('modbench.mod.versionInGit', 'version in git')} on ${origin}.`,
+  MalformedRepairable: () => phrase`Run ${gestureName('modbench.plugin.decompileAndRepair', 'decompile and repair')} on it.`,
+});
 
 async function decompiled(
   client: Pick<MEditClient, 'decompile'>, plugins: readonly PluginAddress[], force: boolean,

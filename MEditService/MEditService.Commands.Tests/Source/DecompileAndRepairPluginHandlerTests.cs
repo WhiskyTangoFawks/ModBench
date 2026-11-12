@@ -165,6 +165,18 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task DecompileAndRepair_OfAPluginWhoseSiblingNotNamedIsMalformedInWaysARepairAnswers_IsRefusedAsOtherPluginRepairable()
+    {
+        var first = AddToNewMod(Lossless.Malformed);
+        AddToNewMod(Lossless.Malformed with { FileName = "Second Malformed.esp" });
+        Load(Entry(_newMod, Malformed), Entry(_newMod, "Second Malformed.esp"));
+
+        var refused = Assert.Single((await Repair([ToRepair(first)])).Refused);
+
+        Assert.Equal((first, DecompileAndRepairRefusal.OtherPluginRepairable), (refused.Item, refused.Refusal));
+    }
+
+    [Fact]
     public async Task DecompileAndRepair_ARepairThatDropsData_WritesWithoutForce_NamingTheChangeInItsCommit()
     {
         var plugin = AddToSourceMod(Lossy.Malformed);
@@ -347,25 +359,23 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task DecompileAndRepair_OfAPluginThatIsNotMalformed_IsRefusedWithTheFactAlone()
+    public async Task DecompileAndRepair_OfAPluginThatIsNotMalformed_IsRefusedAsNotMalformed()
     {
         var clean = new PluginAddress("First.esp", SourceModName);
 
         var refused = Assert.Single((await Repair([ToRepair(clean)])).Refused);
 
         Assert.Equal(DecompileAndRepairRefusal.NotMalformed, refused.Refusal);
-        Assert.DoesNotContain("ecompile it", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task DecompileAndRepair_WhoseRepairedPluginStillFailsToRead_RefusesWithoutOfferingItself()
+    public async Task DecompileAndRepair_WhoseRepairedPluginStillFailsToRead_IsRefusedAsRoundTripFailed()
     {
         var plugin = AddToSourceMod(Lossless.Malformed);
 
         var refused = Assert.Single((await Repair([ToRepair(plugin)], adapter: new LeavingTheRepairUnmade(TestAdapters.Mutagen()))).Refused);
 
         Assert.Equal(DecompileAndRepairRefusal.RoundTripFailed, refused.Refusal);
-        Assert.DoesNotContain("Decompile and repair", refused.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed class ChangingAfterItsDiagnoses(IPluginAdapter inner, string path, byte[] changed) : DelegatingPluginAdapter(inner)

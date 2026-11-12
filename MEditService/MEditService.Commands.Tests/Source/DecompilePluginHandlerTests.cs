@@ -161,7 +161,6 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         var refused = Assert.Single(result.Refused);
         Assert.Equal(DecompileRefusal.NotInSourceMod, refused.Refusal);
         Assert.Contains("Other.esp", refused.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("version in git", refused.Message, StringComparison.OrdinalIgnoreCase);
         Assert.False(TestAdapters.Source().SourceReads(new RegisteredPlugin("Other.esp", NonSourceModName, "", new PluginProvider.FromMod(NonSourceModName, _nonSourceMod, _nonSourceMod), Line: null, PluginStrings.None)));
     }
 
@@ -223,7 +222,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Decompile_OfAMalformedPluginARepairAnswers_RefusesItAsRepairable_StatingTheFactAlone()
+    public async Task Decompile_OfAMalformedPluginARepairAnswers_RefusesItAsRepairable()
     {
         var path = Path.Combine(_sourceMod, "Malformed.esp");
         DeletedNpcPlugin.WriteHoldingEveryField(path, new FormKey(ModKey.FromFileName("Malformed.esp"), 0x800));
@@ -233,7 +232,6 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         var refused = Assert.Single((await Decompile(CompiledPlugin("Malformed.esp"))).Refused);
 
         Assert.Equal(DecompileRefusal.MalformedRepairable, refused.Refusal);
-        Assert.DoesNotContain("ecompile and repair", refused.Message, StringComparison.Ordinal);
     }
 
     private static async Task<IMod> DeserializeThenCorruptTheNpc(string folder, CancellationToken cancel)

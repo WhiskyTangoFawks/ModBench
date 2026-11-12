@@ -23,10 +23,10 @@ public enum DecompileAndRepairRefusal
     /// <summary>The plugin's bytes could not be read.</summary>
     Unreadable,
 
-    /// <summary>No malformed record is diagnosed in the plugin, and the plugin holds no source yet; the way out is decompile.</summary>
+    /// <summary>No malformed record is diagnosed in the plugin, so there is nothing to repair.</summary>
     NotMalformed,
 
-    /// <summary>No malformed record is diagnosed in the plugin, and it was decompiled without a repair, with the source folder made for its mod.</summary>
+    /// <summary>No malformed record is diagnosed in the plugin, and it was decompiled without a repair into the source folder made for its mod.</summary>
     DecompiledWithoutRepair,
 
     /// <summary>A diagnosis of the plugin that no repair answers.</summary>
@@ -55,6 +55,9 @@ public enum DecompileAndRepairRefusal
 
     /// <summary>The mod is not a source mod, and another of its plugins cannot become source to make its source folder with.</summary>
     OtherPluginRefused,
+
+    /// <summary>The mod is not a source mod, and another of its plugins is malformed in ways a repair answers, so it cannot become source to make its source folder with.</summary>
+    OtherPluginRepairable,
 
     /// <summary>The repair passed its checks, and git or the file system refused the commits. Nothing was written.</summary>
     WriteFailed,

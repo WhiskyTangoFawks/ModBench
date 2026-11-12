@@ -17,6 +17,10 @@ describe('a phrase', () => {
     expect(forAgent(phrase`its manifest was written, but ${inner}`, toolOf)).toBe('its manifest was written, but run <modbench.mod.build>');
   });
 
+  it('writes one run of text as one part, whatever it was joined from', () => {
+    expect(phrase`a ${'b'} ${phrase`c ${build}`}`.parts).toEqual(['a b c ', build, '']);
+  });
+
   it('leaves a plain string as it is, whatever it quotes', () => {
     expect(forAgent('“Build Mod” is a name', toolOf)).toBe('“Build Mod” is a name');
   });

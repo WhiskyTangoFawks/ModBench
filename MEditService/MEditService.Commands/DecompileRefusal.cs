@@ -23,8 +23,7 @@ public enum DecompileRefusal
     /// at all.</summary>
     RoundTripFailed,
 
-    /// <summary>The plugin is malformed in a way a repair answers, and the gate refused it for that; the way out is decompile
-    /// and repair.</summary>
+    /// <summary>ADR-0006's gate refused the plugin for malformed records, each of which a repair answers.</summary>
     MalformedRepairable,
 
     /// <summary>A localized plugin whose strings file is missing; the way out is restoring it.</summary>

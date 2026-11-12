@@ -142,6 +142,7 @@ public sealed class DecompileAndRepairPluginHandler
     {
         VersionInGitRefusal.AlreadyInitialized or VersionInGitRefusal.AnotherRepository => DecompileAndRepairRefusal.AnotherRepository,
         VersionInGitRefusal.CommitFailed => DecompileAndRepairRefusal.WriteFailed,
+        VersionInGitRefusal.MalformedRepairable => DecompileAndRepairRefusal.OtherPluginRepairable,
         _ => DecompileAndRepairRefusal.OtherPluginRefused,
     };
 
