@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { Mod, Separator } from '../instance';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import {
-  buildFileConflictIndex, indexReusing, modOrigin, stackCopies, stackReusing, copyStandingOf, FileConflictLookup, type StackedFile, goToModCandidates, fileOrderConflictOf, outranksACopy, winsPath, RUNTIME_OUTPUT, type ConflictEntry,
+  buildFileConflictIndex, indexReusing, modOrigin, stackCopies, stackReusing, copyStandingOf, FileConflictLookup, type StackedFile, goToModCandidates, fileOrderConflictOf, RUNTIME_OUTPUT, type ConflictEntry,
 } from '../fileConflictIndex';
 import type { FileOrigin, OriginFile, OriginFiles } from '../../instanceAdapter/instanceAdapter';
 import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
@@ -216,29 +216,6 @@ describe('whether a copy of a file wins or loses its file order conflict', () =>
     ['is none, for a path no one provides', undefined, high, 'none'],
   ])('%s', (_case, entry, own, expected) => {
     expect(fileOrderConflictOf(entry, own)).toBe(expected);
-  });
-});
-
-describe('whether a copy of a file wins the path', () => {
-  it.each<[string, ConflictEntry | undefined, FileOrigin, boolean]>([
-    ['wins it as the winner', entryOf(high), high, true],
-    ['does not when another copy is the winner', entryOf(high, low), low, false],
-    ['does not for a path no one provides', undefined, high, false],
-  ])('%s', (_case, entry, own, expected) => {
-    expect(winsPath(entry, own)).toBe(expected);
-  });
-});
-
-describe('whether a copy of a file outranks a copy', () => {
-  it.each<[string, ConflictEntry | undefined, FileOrigin, boolean]>([
-    ['outranks one as the winner over a lower copy', entryOf(high, middle, low), high, true],
-    ['outranks one as a losing copy over a lower copy', entryOf(high, middle, low), middle, true],
-    ['outranks none as the lowest copy', entryOf(high, middle, low), low, false],
-    ['outranks none for a sole copy', entryOf(high), high, false],
-    ['outranks none for a copy that is no provider', entryOf(high, middle), low, false],
-    ['outranks none for a path no one provides', undefined, high, false],
-  ])('%s', (_case, entry, own, expected) => {
-    expect(outranksACopy(entry, own)).toBe(expected);
   });
 });
 

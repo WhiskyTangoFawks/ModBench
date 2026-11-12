@@ -240,6 +240,46 @@
           "default": false,
           "description": "Overwritten loose files: colour a mod's name in the Mods view when a file of the mod loses to another copy, and the mod is not Redundant."
         },
+        "modbench.mods.indicators.overwritesArchiveWithLooseFiles.badge": {
+          "type": "boolean",
+          "default": false,
+          "description": "Overwrites an archive with loose files: badge a mod's row in the Mods view when a loose file of the mod wins over another mod's archived copy."
+        },
+        "modbench.mods.indicators.overwritesArchiveWithLooseFiles.colour": {
+          "type": "boolean",
+          "default": false,
+          "description": "Overwrites an archive with loose files: colour a mod's name in the Mods view when a loose file of the mod wins over another mod's archived copy."
+        },
+        "modbench.mods.indicators.archiveOverwrittenByLooseFiles.badge": {
+          "type": "boolean",
+          "default": true,
+          "description": "Archive is overwritten by loose files: badge a mod's row in the Mods view when an archived file of the mod loses to a loose copy in another mod or Overwrite, and the mod is not Redundant."
+        },
+        "modbench.mods.indicators.archiveOverwrittenByLooseFiles.colour": {
+          "type": "boolean",
+          "default": false,
+          "description": "Archive is overwritten by loose files: colour a mod's name in the Mods view when an archived file of the mod loses to a loose copy in another mod or Overwrite, and the mod is not Redundant."
+        },
+        "modbench.mods.indicators.overwritesAnotherArchiveFile.badge": {
+          "type": "boolean",
+          "default": false,
+          "description": "Overwrites another archive file: badge a mod's row in the Mods view when an archived file of the mod wins over another mod's archived copy."
+        },
+        "modbench.mods.indicators.overwritesAnotherArchiveFile.colour": {
+          "type": "boolean",
+          "default": false,
+          "description": "Overwrites another archive file: colour a mod's name in the Mods view when an archived file of the mod wins over another mod's archived copy."
+        },
+        "modbench.mods.indicators.overwrittenByAnotherArchiveFile.badge": {
+          "type": "boolean",
+          "default": true,
+          "description": "Overwritten by another archive file: badge a mod's row in the Mods view when an archived file of the mod loses to another mod's archived copy, and the mod is not Redundant."
+        },
+        "modbench.mods.indicators.overwrittenByAnotherArchiveFile.colour": {
+          "type": "boolean",
+          "default": false,
+          "description": "Overwritten by another archive file: colour a mod's name in the Mods view when an archived file of the mod loses to another mod's archived copy, and the mod is not Redundant."
+        },
         "modbench.mods.indicators.redundant.badge": {
           "type": "boolean",
           "default": true,
@@ -2230,6 +2270,46 @@
           "light": "charts.red",
           "highContrast": "charts.red",
           "highContrastLight": "charts.red"
+        }
+      },
+      {
+        "id": "modbench.modOverwritesArchiveWithLooseFiles",
+        "description": "The name of a mod in the Mods view that carries Overwrites an archive with loose files.",
+        "defaults": {
+          "dark": "charts.purple",
+          "light": "charts.purple",
+          "highContrast": "charts.purple",
+          "highContrastLight": "charts.purple"
+        }
+      },
+      {
+        "id": "modbench.modArchiveOverwrittenByLooseFiles",
+        "description": "The name of a mod in the Mods view that carries Archive is overwritten by loose files.",
+        "defaults": {
+          "dark": "charts.orange",
+          "light": "charts.orange",
+          "highContrast": "charts.orange",
+          "highContrastLight": "charts.orange"
+        }
+      },
+      {
+        "id": "modbench.modOverwritesAnotherArchiveFile",
+        "description": "The name of a mod in the Mods view that carries Overwrites another archive file.",
+        "defaults": {
+          "dark": "charts.purple",
+          "light": "charts.purple",
+          "highContrast": "charts.purple",
+          "highContrastLight": "charts.purple"
+        }
+      },
+      {
+        "id": "modbench.modOverwrittenByAnotherArchiveFile",
+        "description": "The name of a mod in the Mods view that carries Overwritten by another archive file.",
+        "defaults": {
+          "dark": "charts.orange",
+          "light": "charts.orange",
+          "highContrast": "charts.orange",
+          "highContrastLight": "charts.orange"
         }
       },
       {

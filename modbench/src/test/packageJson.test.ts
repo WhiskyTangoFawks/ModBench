@@ -563,6 +563,10 @@ describe('package.json contributes the Mods view\'s indicators and grey as setti
     expect(switches).toEqual({
       'overwritesLooseFiles badge': false, 'overwritesLooseFiles colour': false,
       'overwrittenLooseFiles badge': true, 'overwrittenLooseFiles colour': false,
+      'overwritesArchiveWithLooseFiles badge': false, 'overwritesArchiveWithLooseFiles colour': false,
+      'archiveOverwrittenByLooseFiles badge': true, 'archiveOverwrittenByLooseFiles colour': false,
+      'overwritesAnotherArchiveFile badge': false, 'overwritesAnotherArchiveFile colour': false,
+      'overwrittenByAnotherArchiveFile badge': true, 'overwrittenByAnotherArchiveFile colour': false,
       'redundant badge': true, 'redundant colour': false,
       'containsExcludedFiles badge': false, 'containsExcludedFiles colour': false,
       'updateAvailable badge': true, 'updateAvailable colour': false,

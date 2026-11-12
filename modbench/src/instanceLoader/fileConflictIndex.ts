@@ -43,17 +43,8 @@ function inFileOrderConflict(entry: ConflictEntry | undefined, own: FileOrigin):
   return providers.length > 1 && providers.some((provider) => sameOrigin(provider, own));
 }
 
-/** Whether `own` wins the path: its copy is the one the game gets. */
-export const winsPath = (entry: ConflictEntry | undefined, own: FileOrigin): boolean =>
+const winsPath = (entry: ConflictEntry | undefined, own: FileOrigin): boolean =>
   entry !== undefined && sameOrigin(entry.winnerOrigin, own);
-
-/** Whether `own` outranks a copy: it provides the path and a lower copy does too, whether or not
- *  it wins the path. */
-export function outranksACopy(entry: ConflictEntry | undefined, own: FileOrigin): boolean {
-  const providers = entry?.providers ?? [];
-  const at = providers.findIndex((provider) => sameOrigin(provider, own));
-  return at !== -1 && at < providers.length - 1;
-}
 
 export type FileOrderConflict = 'none' | 'wins' | 'loses';
 
