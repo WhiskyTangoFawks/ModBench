@@ -86,7 +86,7 @@ describe('a rename while a recompute is reading', () => {
       adapter: { ...writer, reading: async () => ({ ...await readInstance(holdingSource), publisherConfiguration: NO_PUBLISHER }) },
     });
     const { pluginSync } = pluginSyncOn({
-      instance, syncPlugins: pluginSyncOver(writer), channel: { error: () => {}, info: () => {} },
+      instance, syncPlugins: pluginSyncOver(writer, { getPlugins: () => Promise.reject(new Error('mEdit is indexing')) }), channel: { error: () => {}, info: () => {} },
     });
     await instance.refresh();
     await pluginSync.settled();

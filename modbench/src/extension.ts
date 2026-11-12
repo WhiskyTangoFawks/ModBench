@@ -236,7 +236,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     reporter: reporterFor('symbol.followRename'),
   })));
   const plugins = own(pluginsBox.onInstance({
-    instance, commands: commandsOfPlugins, syncPlugins: pluginSyncOver(adapter), modStatuses,
+    instance, commands: commandsOfPlugins, syncPlugins: pluginSyncOver(adapter, client), modStatuses,
     fileReads: fileReadsOver(adapter, () => instance.value.files),
   }));
   const downloads = own(createDownloadsView({
