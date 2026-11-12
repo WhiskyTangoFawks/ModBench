@@ -163,7 +163,7 @@ internal sealed class SourceRepository : ISourceRepository
     /// <summary>The file in this tree holding <paramref name="identity"/>; null when nothing there holds it.</summary>
     public Answer<DocumentFile?, SourceFailure> DocumentOf(PluginAddress plugin, RecordIdentity identity) =>
         SourceFailure.Answer(() => Locator.Locate(Spelled(plugin), identity) is { } unit && Files.FileExists(unit.FullPath)
-            ? new DocumentFile(unit.FullPath, unit.IsEmbedded)
+            ? new DocumentFile(unit.FullPath, unit.RelativePath, unit.IsEmbedded)
             : null);
 
     /// <summary>What the file at <paramref name="path"/> holds, read from its text as the record index reads it.</summary>

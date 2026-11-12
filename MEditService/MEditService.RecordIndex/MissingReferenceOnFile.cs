@@ -19,20 +19,16 @@ internal static class SourceFilePlacement
             : new(reference, null, failure);
     }
 
-    // RelativePathOf answers a flat record's would-be path when its file is gone; DocumentOf
-    // answers only a file that is there.
     internal static bool Places(
         PluginAddress plugin, RecordIdentity identity, ISourceRepositoryReads repository,
         [NotNullWhen(true)] out string? file, [NotNullWhen(false)] out string? failure)
     {
-        var placed = repository.DocumentOf(plugin, identity)
-            .Then(document => document is null ? SourceAnswer.Of<string?>(null) : repository.RelativePathOf(plugin, identity));
-        if (!placed.Holds(out var path, out var unread))
+        if (!repository.DocumentOf(plugin, identity).Holds(out var document, out var unread))
             (file, failure) = (null, $"{plugin.Name}'s source could not place {identity.FormKey}: {unread.Reason}");
-        else if (path is null)
+        else if (document is null)
             (file, failure) = (null, $"{plugin.Name}'s source holds no file for {identity.FormKey}.");
         else
-            (file, failure) = (path, null);
+            (file, failure) = (document.RelativePath, null);
         return file is not null;
     }
 
