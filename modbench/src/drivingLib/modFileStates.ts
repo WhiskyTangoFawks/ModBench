@@ -20,15 +20,8 @@ export type ModIndicator = (typeof MOD_INDICATORS)[number]['id'];
 export type IndicatorsValue = Pick<InstanceValue, 'mods' | 'modGroups' | 'filesByMod' | 'stackedCopies'>;
 
 export function indicatorsOf(value: Pick<InstanceValue, 'stackedCopies'>, { name, updateAvailable }: Mod, files: readonly OriginFile[]): ModIndicator[] {
-  const standing = copyStandingOf(value.stackedCopies, modOrigin(name));
   const holds: Record<ModIndicator, boolean> = {
-    overwritesLooseFiles: standing.overwritesLoose,
-    overwrittenLooseFiles: standing.overwrittenLoose,
-    overwritesArchiveWithLooseFiles: standing.overwritesArchiveWithLoose,
-    archiveOverwrittenByLooseFiles: standing.archiveOverwrittenByLoose,
-    overwritesAnotherArchiveFile: standing.overwritesArchive,
-    overwrittenByAnotherArchiveFile: standing.overwrittenByArchive,
-    redundant: standing.redundant,
+    ...copyStandingOf(value.stackedCopies, modOrigin(name)),
     containsExcludedFiles: files.some((file) => file.excluded),
     updateAvailable: updateAvailable === true,
   };

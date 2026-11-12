@@ -43,8 +43,7 @@ function inFileOrderConflict(entry: ConflictEntry | undefined, own: FileOrigin):
   return providers.length > 1 && providers.some((provider) => sameOrigin(provider, own));
 }
 
-const winsPath = (entry: ConflictEntry | undefined, own: FileOrigin): boolean =>
-  entry !== undefined && sameOrigin(entry.winnerOrigin, own);
+const winsPath = (entry: ConflictEntry, own: FileOrigin): boolean => sameOrigin(entry.winnerOrigin, own);
 
 export type FileOrderConflict = 'none' | 'wins' | 'loses';
 
@@ -190,43 +189,74 @@ export type StackedCopies = Omit<FileConflictLookup<StackedFile>, 'set'>;
 export const copyInConflict = (file: StackedFile | undefined, own: FileOrigin): boolean =>
   file !== undefined && file.copies.length > 1 && file.copies.some(({ origin }) => sameOrigin(origin, own));
 
+const LOSING = ['overwrittenLooseFiles', 'archiveOverwrittenByLooseFiles', 'overwrittenByAnotherArchiveFile'] as const;
+
 export interface CopyStanding {
-  readonly overwritesLoose: boolean;
-  readonly overwrittenLoose: boolean;
-  readonly overwritesArchiveWithLoose: boolean;
-  readonly archiveOverwrittenByLoose: boolean;
-  readonly overwritesArchive: boolean;
-  readonly overwrittenByArchive: boolean;
+  readonly overwritesLooseFiles: boolean;
+  readonly overwrittenLooseFiles: boolean;
+  readonly overwritesArchiveWithLooseFiles: boolean;
+  readonly archiveOverwrittenByLooseFiles: boolean;
+  readonly overwritesAnotherArchiveFile: boolean;
+  readonly overwrittenByAnotherArchiveFile: boolean;
   readonly redundant: boolean;
 }
 
-/** Which of mods.md's loose and archive indicators `own` holds over `stack`. A losing indicator is withheld from a Redundant origin. */
-export function copyStandingOf(stack: Iterable<StackedFile>, own: FileOrigin): CopyStanding {
-  const held = { overwritesLoose: false, overwrittenLoose: false, overwritesArchiveWithLoose: false, archiveOverwrittenByLoose: false, overwritesArchive: false, overwrittenByArchive: false };
-  let gets = false;
-  let loses = false;
-  for (const { copies } of stack) {
-    const at = copies.findIndex(({ origin }) => sameOrigin(origin, own));
-    const mine = copies[at];
-    if (mine === undefined) continue;
-    gets ||= at === 0;
-    loses ||= at > 0;
-    const over = copies.slice(0, at).map(({ at: copyAt }) => copyAt.kind);
-    const under = copies.slice(at + 1).map(({ at: copyAt }) => copyAt.kind);
-    if (mine.at.kind === 'loose') {
-      held.overwritesLoose ||= under.includes('loose');
-      held.overwrittenLoose ||= over.includes('loose');
-      held.overwritesArchiveWithLoose ||= under.includes('archived');
+interface Tally {
+  standing: { -readonly [K in keyof CopyStanding]: boolean };
+  gets: boolean;
+  loses: boolean;
+}
+
+const NO_STANDING: CopyStanding = {
+  overwritesLooseFiles: false, overwrittenLooseFiles: false, overwritesArchiveWithLooseFiles: false,
+  archiveOverwrittenByLooseFiles: false, overwritesAnotherArchiveFile: false, overwrittenByAnotherArchiveFile: false, redundant: false,
+};
+
+function tallyFile({ copies }: StackedFile, tallies: Map<string, Tally>): void {
+  const looseTotal = copies.filter(({ at }) => at.kind === 'loose').length;
+  const archivedTotal = copies.length - looseTotal;
+  let looseOver = 0;
+  let archivedOver = 0;
+  copies.forEach(({ origin, at }, place) => {
+    const key = originKey(origin);
+    const tally = tallies.get(key) ?? { standing: { ...NO_STANDING }, gets: false, loses: false };
+    tallies.set(key, tally);
+    tally.gets ||= place === 0;
+    tally.loses ||= place > 0;
+    const { standing } = tally;
+    if (at.kind === 'loose') {
+      standing.overwritesLooseFiles ||= looseTotal - looseOver > 1;
+      standing.overwrittenLooseFiles ||= looseOver > 0;
+      standing.overwritesArchiveWithLooseFiles ||= archivedTotal > 0;
+      looseOver++;
     } else {
-      held.archiveOverwrittenByLoose ||= over.includes('loose');
-      held.overwritesArchive ||= under.includes('archived');
-      held.overwrittenByArchive ||= over.includes('archived');
+      standing.archiveOverwrittenByLooseFiles ||= looseOver > 0;
+      standing.overwritesAnotherArchiveFile ||= archivedTotal - archivedOver > 1;
+      standing.overwrittenByAnotherArchiveFile ||= archivedOver > 0;
+      archivedOver++;
     }
+  });
+}
+
+function standingsOf(stack: StackedCopies): ReadonlyMap<string, CopyStanding> {
+  const tallies = new Map<string, Tally>();
+  for (const file of stack) tallyFile(file, tallies);
+  return new Map([...tallies].map(([key, { standing, gets, loses }]) => {
+    const redundant = loses && !gets;
+    return [key, redundant ? { ...standing, ...Object.fromEntries(LOSING.map((id) => [id, false])), redundant } : { ...standing, redundant }];
+  }));
+}
+
+const standingsOfStack = new WeakMap<StackedCopies, ReadonlyMap<string, CopyStanding>>();
+
+/** Which of mods.md's loose and archive indicators `own` holds over `stack`. The stack is walked once, however many origins ask. */
+export function copyStandingOf(stack: StackedCopies, own: FileOrigin): CopyStanding {
+  let standings = standingsOfStack.get(stack);
+  if (standings === undefined) {
+    standings = standingsOf(stack);
+    standingsOfStack.set(stack, standings);
   }
-  const redundant = loses && !gets;
-  return redundant
-    ? { ...held, overwrittenLoose: false, archiveOverwrittenByLoose: false, overwrittenByArchive: false, redundant }
-    : { ...held, redundant };
+  return standings.get(originKey(own)) ?? NO_STANDING;
 }
 
 /** An archive the game loads, at the path that wins its name, and what it holds. */

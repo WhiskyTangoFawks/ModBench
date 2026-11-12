@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { Mod, Separator } from '../instance';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import {
@@ -314,42 +314,57 @@ describe('the copies of each file, stacked as the game stacks them', () => {
 });
 
 describe('how an origin\'s copies stand against the others\' (mods.md, Indicators)', () => {
-  const FILE = 'meshes/shared.nif';
-  const standing = (copies: ReadonlyArray<['loose' | 'archived', string]>, own: string) => {
+  type Kind = 'loose' | 'archived';
+  type Stacks = Record<string, ReadonlyArray<readonly [Kind, string]>>;
+  const standing = (stacks: Stacks, own: string) => {
     const stack = new FileConflictLookup<StackedFile>();
-    stack.set({
-      relativePath: FILE,
-      copies: copies.map(([kind, name]) => ({
-        origin: modOrigin(name),
-        at: kind === 'loose' ? { kind, path: modPath(name, FILE) } : { kind, gameRelease: 'Fallout4', archive: modPath(name, 'x.ba2'), file: FILE },
-      })),
-    });
+    for (const [relativePath, copies] of Object.entries(stacks)) {
+      stack.set({
+        relativePath,
+        copies: copies.map(([kind, name]) => ({
+          origin: modOrigin(name),
+          at: kind === 'loose' ? { kind, path: modPath(name, relativePath) } : { kind, gameRelease: 'Fallout4', archive: modPath(name, 'x.ba2'), file: relativePath },
+        })),
+      });
+    }
     return copyStandingOf(stack, modOrigin(own));
   };
   const NONE = {
-    overwritesLoose: false, overwrittenLoose: false, overwritesArchiveWithLoose: false, archiveOverwrittenByLoose: false,
-    overwritesArchive: false, overwrittenByArchive: false, redundant: false,
+    overwritesLooseFiles: false, overwrittenLooseFiles: false, overwritesArchiveWithLooseFiles: false, archiveOverwrittenByLooseFiles: false,
+    overwritesAnotherArchiveFile: false, overwrittenByAnotherArchiveFile: false, redundant: false,
   };
 
-  it.each<[string, ReadonlyArray<['loose' | 'archived', string]>, string, Partial<typeof NONE>]>([
-    ['a loose copy over a loose copy', [['loose', 'A'], ['loose', 'B']], 'A', { overwritesLoose: true }],
-    ['a loose copy under a loose copy', [['loose', 'A'], ['loose', 'B']], 'B', { redundant: true }],
-    ['a loose copy over an archived copy', [['loose', 'A'], ['archived', 'B']], 'A', { overwritesArchiveWithLoose: true }],
-    ['an archived copy under a loose copy', [['loose', 'A'], ['archived', 'B']], 'B', { redundant: true }],
-    ['an archived copy over an archived copy', [['archived', 'A'], ['archived', 'B']], 'A', { overwritesArchive: true }],
-    ['an archived copy under an archived copy', [['archived', 'A'], ['archived', 'B']], 'B', { redundant: true }],
-    ['a copy nobody else has', [['loose', 'A']], 'A', {}],
-    ['a copy of a mod with no copy there', [['loose', 'A'], ['loose', 'B']], 'C', {}],
-  ])('%s', (_case, copies, own, held) => {
-    expect(standing(copies, own)).toEqual({ ...NONE, ...held });
+  it.each<[string, Stacks, string, Partial<typeof NONE>]>([
+    ['a loose copy over a loose copy', { a: [['loose', 'A'], ['loose', 'B']] }, 'A', { overwritesLooseFiles: true }],
+    ['a loose copy under a loose copy', { a: [['loose', 'A'], ['loose', 'B']] }, 'B', { redundant: true }],
+    ['a loose copy over an archived copy', { a: [['loose', 'A'], ['archived', 'B']] }, 'A', { overwritesArchiveWithLooseFiles: true }],
+    ['an archived copy under a loose copy', { a: [['loose', 'A'], ['archived', 'B']] }, 'B', { redundant: true }],
+    ['an archived copy over an archived copy', { a: [['archived', 'A'], ['archived', 'B']] }, 'A', { overwritesAnotherArchiveFile: true }],
+    ['an archived copy under an archived copy', { a: [['archived', 'A'], ['archived', 'B']] }, 'B', { redundant: true }],
+    ['a copy nobody else has', { a: [['loose', 'A']] }, 'A', {}],
+    ['a copy of a mod with no copy there', { a: [['loose', 'A'], ['loose', 'B']] }, 'C', {}],
+    ['a loose copy under a loose copy of one file and over one of another', { a: [['loose', 'A'], ['loose', 'B']], b: [['loose', 'B'], ['loose', 'A']] }, 'B',
+      { overwritesLooseFiles: true, overwrittenLooseFiles: true }],
+    ['an archived copy under a loose copy of one file and over an archived copy of another', { a: [['loose', 'A'], ['archived', 'B']], b: [['archived', 'B'], ['archived', 'C']] }, 'B',
+      { archiveOverwrittenByLooseFiles: true, overwritesAnotherArchiveFile: true }],
+    ['an archived copy under an archived copy of one file and over one of another', { a: [['archived', 'A'], ['archived', 'B']], b: [['archived', 'B'], ['archived', 'A']] }, 'B',
+      { overwritesAnotherArchiveFile: true, overwrittenByAnotherArchiveFile: true }],
+  ])('%s', (_case, stacks, own, held) => {
+    expect(standing(stacks, own)).toEqual({ ...NONE, ...held });
   });
 
   it('is Redundant only when every file the mod could get loses, and carries no losing badge then', () => {
-    const stack = new FileConflictLookup<StackedFile>();
-    const copies = (...names: string[]) => names.map((name) => ({ origin: modOrigin(name), at: { kind: 'loose', path: modPath(name, 'x') } as const }));
-    stack.set({ relativePath: 'won.nif', copies: copies('B', 'A') });
-    stack.set({ relativePath: 'lost.nif', copies: copies('A', 'B') });
+    expect(standing({ won: [['loose', 'B'], ['loose', 'A']], lost: [['loose', 'A'], ['loose', 'B']] }, 'B')).toEqual({ ...NONE, overwritesLooseFiles: true, overwrittenLooseFiles: true });
+  });
 
-    expect(copyStandingOf(stack, modOrigin('B'))).toEqual({ ...NONE, overwritesLoose: true, overwrittenLoose: true });
+  it('answers every origin from one walk of the stack', () => {
+    const stack = new FileConflictLookup<StackedFile>();
+    const walked = vi.spyOn(stack, 'values');
+    stack.set({ relativePath: 'a', copies: [{ origin: modOrigin('A'), at: { kind: 'loose', path: '/a' } }, { origin: modOrigin('B'), at: { kind: 'loose', path: '/b' } }] });
+
+    copyStandingOf(stack, modOrigin('A'));
+    copyStandingOf(stack, modOrigin('B'));
+
+    expect(walked).toHaveBeenCalledTimes(1);
   });
 });
