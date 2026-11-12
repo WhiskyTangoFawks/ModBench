@@ -41,7 +41,7 @@ interface PluginsOnInstance extends vscode.Disposable {
   drawsHighlight: PluginsView['drawsHighlight'];
   /** The Plugins view's message line, where another view's gesture says its phase. */
   say: PluginsView['progress']['say'];
-  editingInPluginsView: Pick<EditingDeps, 'around' | 'onPut' | 'inGameOrder'>;
+  editingInPluginsView: Pick<EditingDeps, 'around' | 'onPut' | 'viewOrder'>;
   nextRefill: ReconcileNarrator['nextRefill'];
   pluginsShown: PluginsView['pluginsShown'];
 }
@@ -77,7 +77,7 @@ export function createPlugins(deps: PluginsDeps): Plugins {
           narrator: view.narrator, progress: view.progress, log: channel, revealLog: () => channel.show(true), loadOrderPut: view.loadOrderPut,
           reporterFor,
         }),
-        inGameOrder: view.inGameOrder,
+        viewOrder: view.viewOrder,
       };
       return {
         followed: view.followed, nameFilter: view.nameFilter, copyValue: view.copyValue, relatesRows: view.relatesRows, drawsHighlight: view.drawsHighlight, say: view.progress.say, editingInPluginsView, pluginsShown: view.pluginsShown,

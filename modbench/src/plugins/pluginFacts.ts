@@ -5,7 +5,6 @@ import type { ConditionFacts, FileFacts } from '../sortingRules/lootConditions';
 import { judgeLoot, type LootPartition, type LootRules } from '../sortingRules/lootJudge';
 import type { UnreadableSource } from '../wire/messages';
 import { OVERWRITE_ORIGIN, pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
-import { inGameOrder } from '../instanceLoader/pluginOrder';
 import { pluginOriginName } from '../instanceLoader/pluginStanding';
 import { pluginCanBeEdited } from '../wire/pluginEditable';
 import { ByPluginAddress } from './pluginAddress';
@@ -123,7 +122,6 @@ export class PluginFacts {
   private held = new ByPluginAddress<true>();
   private reads = new ByPluginAddress<PluginRead>();
   private blueprints = '';
-  private blueprintLoadsLast = false;
   private readsByFilename = new Map<string, PluginRead[]>();
   // Every broken sorting rule on each plugin it names, as the last completed reconcile judged the order.
   private sorting = new ByPluginAddress<BrokenRule[]>();
@@ -176,9 +174,9 @@ export class PluginFacts {
     this.indexFailure = undefined;
   }
 
-  /** The completed reconcile's hand-off: which plugins mEdit holds, their facts, each failure, and
-   *  the active plugins in load order, which the sorting rules judge, and every plugins.txt line, which a move is written into. */
-  reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[], activeOrder: readonly PluginAddress[], lines: readonly PluginAddress[], loot: LootInput = NO_LOOT_RULES, blueprintLoadsLast = false): void {
+  /** The completed reconcile's hand-off: which plugins mEdit holds, their facts, each failure, the active plugins as
+   *  the view lists them, which the sorting rules judge as the game loads them, and every plugins.txt line. */
+  reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[], activeOrder: readonly PluginAddress[], lines: readonly PluginAddress[], loot: LootInput = NO_LOOT_RULES): void {
     this.held = heldSet(plugins);
     this.loadFailures = indexLoadFailures(failures);
     this.reachableFailures = this.loadFailures;
@@ -186,7 +184,6 @@ export class PluginFacts {
     this.refreshed(plugins);
     this.judgedActiveOrder = activeOrder;
     this.lineOrder = lines;
-    this.blueprintLoadsLast = blueprintLoadsLast;
     this.judgeSorting(activeOrder, loot);
   }
 
@@ -256,13 +253,14 @@ export class PluginFacts {
   private judgeSorting(treeOrder: readonly PluginAddress[], loot: LootInput): void {
     const lined = new Set(this.lineOrder.map(({ name }) => name.toLowerCase()));
     const loadedWithNoLine = (filename: string): boolean => !lined.has(filename.toLowerCase());
-    const activeOrder = inGameOrder(
-      treeOrder.filter(({ name }) => loadedWithNoLine(name)), treeOrder.filter(({ name }) => !loadedWithNoLine(name)), (address) => this.isBlueprint(address), this.blueprintLoadsLast,
-    );
+    const names = treeOrder.map(({ name }) => name);
+    const noLine = names.filter(loadedWithNoLine);
+    const game = judge(noLine, names.filter((name) => !loadedWithNoLine(name)), this.factsOver(treeOrder));
+    const treeAddressOf = new Map(treeOrder.map((address) => [address.name, address] as const));
+    const activeOrder = game.order.flatMap((name) => treeAddressOf.get(name) ?? []);
     const addressOf = new Map(activeOrder.map((address) => [address.name.toLowerCase(), address] as const));
-    const factsOf = this.factsOver(activeOrder);
     const broken = [
-      ...judge(activeOrder.map(({ name }) => name), factsOf, loadedWithNoLine),
+      ...game.broken,
       ...judgeLoot(activeOrder.map(({ name, origin }) => ({ origin, filename: name })), { ...loot, facts: this.conditionFacts(activeOrder, loot.files) }, (filename) => {
         const address = addressOf.get(filename.toLowerCase());
         const read = address && this.reads.get(address);
@@ -270,7 +268,9 @@ export class PluginFacts {
       }, loadedWithNoLine),
     ];
     this.broken = broken;
-    this.offered = offeredMoves(this.lineOrder.map(({ name }) => name), broken, this.factsOver(this.lineOrder));
+    const active = new Set(names);
+    const listed = { loadedWithNoLine: noLine, lines: this.lineOrder.map(({ name }) => name), isActive: (name: string) => active.has(name) };
+    this.offered = offeredMoves(listed, broken, this.factsOver([...treeOrder, ...this.lineOrder]));
     this.sorting = new ByPluginAddress<BrokenRule[]>();
     this.sortingNames = [];
     for (const rule of broken) {
@@ -310,7 +310,7 @@ export class PluginFacts {
     return this.broken;
   }
 
-  /** Every move that keeps a broken sorting rule without breaking another at Error, as the last judging found them. */
+  /** Every move that keeps a broken sorting rule where a drop would land, as the last judging found them. */
   suggestedMoves(): readonly OfferedMove[] {
     return this.offered;
   }

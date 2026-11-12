@@ -1,7 +1,7 @@
 import { access, constants, readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { crc32Of } from '../fileContents/contentDigest';
-import { errnoCode } from '../../ports/errno';
+import { isAbsent } from '../files';
 import { errorMessage } from '../../ports/errorMessage';
 import type { FileAnswer } from '../../sortingRules/lootConditions';
 import type { GameFolder } from '../instanceAdapter';
@@ -16,8 +16,6 @@ export interface DataFileReads {
   dataFileVersion(path: string, winner: string | undefined, field: 'file' | 'product'): Promise<FileAnswer<string | undefined>>;
   dataFileReadable(path: string, winner: string | undefined): Promise<FileAnswer<boolean>>;
 }
-
-const absent = (err: unknown): boolean => errnoCode(err) === 'ENOENT' || errnoCode(err) === 'ENOTDIR';
 
 const read = <T>(value: T): FileAnswer<T> => ({ kind: 'read', value });
 const unreadable = (why: string): { kind: 'unreadable'; why: string } => ({ kind: 'unreadable', why });
@@ -52,7 +50,7 @@ export function dataFileReads(gameFolder: () => Promise<GameFolder>): DataFileRe
     try {
       return read(await use(found.at));
     } catch (err) {
-      return absent(err) ? read(none) : unreadable(errorMessage(err));
+      return isAbsent(err) ? read(none) : unreadable(errorMessage(err));
     }
   };
   return {
@@ -67,7 +65,7 @@ export function dataFileReads(gameFolder: () => Promise<GameFolder>): DataFileRe
         const version = field === 'file' ? resource.fileVersion : resource.productVersion;
         return read(version === '' ? undefined : version);
       } catch (err) {
-        return absent(err) ? read(undefined) : unreadable(errorMessage(err));
+        return isAbsent(err) ? read(undefined) : unreadable(errorMessage(err));
       }
     },
     dataFileReadable: (path, winner) => reading(path, winner, false, (at) => access(at, constants.R_OK).then(() => true)),

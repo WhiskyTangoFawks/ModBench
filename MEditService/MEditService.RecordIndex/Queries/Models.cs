@@ -18,8 +18,8 @@ public sealed record PluginResponse(
     int? LoadOrderIndex,
     bool IsLight,
     bool IsMaster,
-    // IsBlueprint (plugins.md, Drag and drop, story 3): a blueprint plugin loads after every plugin
-    // that is not one. False for every plugin of a game without blueprint plugins.
+    // IsBlueprint (plugins.md, Sorting rules): the blueprint bit on a master, which the game loads after
+    // every plugin that is not one, as libloadorder does. False for every plugin of a game without blueprint plugins.
     bool IsBlueprint,
     IReadOnlyList<string> Masters,
     bool IsImmutable,

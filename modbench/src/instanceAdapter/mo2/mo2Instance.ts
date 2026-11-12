@@ -79,7 +79,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
     mo2Running: () => programRunning(MO2_PROGRAM),
   };
   const hashes = hashIndex(hashIndexDir(instanceRoot), installationFileReader, fileProblems);
-  const source = readingSource(context, publisherFile);
+  const source = readingSource(context, publisherFile, deployedPath);
   const gameFolder = async (): Promise<GameFolder> => (await source.settings()).gameFolder();
   const { originHoldsFile, planRename } = mo2PluginRename(context, source);
   const showUnfiltered = unfilteredShown(instanceRoot, publisherFile, fileProblems);

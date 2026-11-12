@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { judge, type PluginFactsOf } from '../../sortingRules/judge';
-import { offeredMoves } from '../pluginOrder';
+import { moveOrderRefusal, offeredMoves, type ListedPlugins } from '../pluginOrder';
 
 type Facts = NonNullable<ReturnType<PluginFactsOf>>;
 
@@ -8,13 +8,17 @@ const factsFrom = (table: Record<string, Partial<Facts>>): PluginFactsOf => (fil
   const row = table[filename];
   return row && { origin: 'Mod', masters: [], blueprint: false, master: false, ...row };
 };
+const listedOf = (lines: readonly string[], { loadedWithNoLine = [], inactive = [] }: { loadedWithNoLine?: string[]; inactive?: string[] } = {}): ListedPlugins =>
+  ({ loadedWithNoLine, lines, isActive: (name) => !inactive.includes(name) });
+const brokenIn = ({ loadedWithNoLine, lines, isActive }: ListedPlugins, facts: PluginFactsOf) =>
+  judge(loadedWithNoLine, lines.filter(isActive), facts).broken;
 
-describe('offeredMoves: the broken rules a move keeps without breaking another at Error', () => {
+describe('offeredMoves: the broken rules a move keeps where a drop would land', () => {
   it('offers the master moving directly above its dependant', () => {
     const facts = factsFrom({ 'A.esp': {}, 'B.esp': { masters: ['A.esp'] } });
-    const order = ['B.esp', 'A.esp'];
+    const listed = listedOf(['B.esp', 'A.esp']);
 
-    const [offered, ...more] = offeredMoves(order, judge(order, facts), facts);
+    const [offered, ...more] = offeredMoves(listed, brokenIn(listed, facts), facts);
 
     expect(more).toEqual([]);
     expect(offered?.drop).toEqual({ kind: 'before', name: 'B.esp' });
@@ -22,36 +26,70 @@ describe('offeredMoves: the broken rules a move keeps without breaking another a
     expect(offered?.rule.rule).toBe('master');
   });
 
-  it('leaves out a move that breaks another rule at Error', () => {
-    const facts = factsFrom({ 'N.esp': {}, 'M.esm': { master: true, masters: ['N.esp'] } });
-    const order = ['N.esp', 'M.esm'];
-    const broken = judge(order, facts);
+  it('offers the plugin the game moves going where the game loads it', () => {
+    const facts = factsFrom({ 'A.esp': {}, 'M.esm': { master: true } });
+    const listed = listedOf(['A.esp', 'M.esm']);
 
-    expect(broken.map(({ rule }) => rule)).toEqual(['masterFlag']);
-    expect(offeredMoves(order, broken, facts)).toEqual([]);
+    const [offered, ...more] = offeredMoves(listed, brokenIn(listed, facts), facts);
+
+    expect(more).toEqual([]);
+    expect(offered?.drop).toEqual({ kind: 'before', name: 'A.esp' });
+    expect(offered?.mover).toEqual({ origin: 'Mod', name: 'M.esm' });
+    expect(offered?.rule.rule).toBe('gameMoves');
   });
 
-  it('judges the move over every line, as the write does: a disabled plugin a move would strand its master after counts', () => {
-    const facts = factsFrom({ 'D.esp': { masters: ['M.esp'] }, 'X.esp': {}, 'M.esp': { masters: ['X.esp'] } });
-    const active = ['D.esp', 'M.esp'];
-    const lines = ['D.esp', 'X.esp', 'M.esp'];
+  it('leaves out a move that breaks another rule at Error', () => {
+    const facts = factsFrom({ 'B.esp': { masters: ['A.esp'] }, 'C.esp': {}, 'A.esp': { masters: ['C.esp'] } });
+    const listed = listedOf(['B.esp', 'C.esp', 'A.esp']);
+    const broken = brokenIn(listed, facts);
 
-    expect(offeredMoves(active, judge(active, facts), facts).map(({ mover }) => mover.name)).toEqual(['M.esp']);
-    expect(offeredMoves(lines, judge(active, facts), facts)).toEqual([]);
+    expect(broken.map(({ rule }) => rule)).toEqual(['master']);
+    expect(offeredMoves(listed, broken, facts)).toEqual([]);
+  });
+
+  it('offers a move past a disabled line, which the game does not load', () => {
+    const facts = factsFrom({ 'D.esp': { masters: ['M.esp'] }, 'X.esp': {}, 'M.esp': { masters: ['X.esp'] } });
+    const listed = listedOf(['D.esp', 'X.esp', 'M.esp'], { inactive: ['X.esp'] });
+
+    expect(offeredMoves(listed, brokenIn(listed, facts), facts).map(({ mover }) => mover.name)).toEqual(['M.esp']);
   });
 
   it('offers no move of or beside a plugin with no line', () => {
     const facts = factsFrom({ 'N.esp': {}, 'M.esm': { master: true } });
-    const active = ['N.esp', 'M.esm'];
+    const listed = listedOf(['M.esm'], { loadedWithNoLine: ['N.esp'] });
 
-    expect(judge(active, facts).map(({ rule }) => rule)).toEqual(['masterFlag']);
-    expect(offeredMoves(['M.esm'], judge(active, facts), facts)).toEqual([]);
+    expect(brokenIn(listed, facts).map(({ rule }) => rule)).toEqual(['gameMoves']);
+    expect(offeredMoves(listed, brokenIn(listed, facts), facts)).toEqual([]);
   });
 
   it('offers nothing for a rule no move keeps', () => {
     const facts = factsFrom({ 'B.esp': { masters: ['A.esp'] } });
-    const order = ['B.esp'];
+    const listed = listedOf(['B.esp']);
 
-    expect(offeredMoves(order, judge(order, facts), facts)).toEqual([]);
+    expect(offeredMoves(listed, brokenIn(listed, facts), facts)).toEqual([]);
+  });
+});
+
+describe('moveOrderRefusal: a drop the game would undo', () => {
+  it('refuses a drop that makes the game move the plugin it drops, giving the game\'s reason', () => {
+    const facts = factsFrom({ 'A.esp': {}, 'M.esm': { master: true } });
+    const listed = listedOf(['M.esm', 'A.esp']);
+
+    expect(moveOrderRefusal(listed, ['M.esm'], { kind: 'after', name: 'A.esp' }, facts)).toContain('"M.esm" loads as a master');
+  });
+
+  it('refuses a drop that makes the game move a plugin it did not drop', () => {
+    const facts = factsFrom({ 'A.esp': {}, 'B.esp': {}, 'M.esm': { master: true } });
+    const listed = listedOf(['M.esm', 'A.esp', 'B.esp']);
+
+    expect(moveOrderRefusal(listed, ['B.esp'], { kind: 'before', name: 'M.esm' }, facts)).toContain('"M.esm" loads as a master');
+  });
+
+  it('lands an unrelated drop while the game already moves another plugin', () => {
+    const facts = factsFrom({ 'A.esp': {}, 'M.esm': { master: true }, 'B.esp': {}, 'C.esp': {} });
+    const listed = listedOf(['A.esp', 'M.esm', 'B.esp', 'C.esp']);
+
+    expect(brokenIn(listed, facts).map(({ rule }) => rule)).toEqual(['gameMoves']);
+    expect(moveOrderRefusal(listed, ['C.esp'], { kind: 'before', name: 'B.esp' }, facts)).toBeUndefined();
   });
 });
