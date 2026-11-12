@@ -14,9 +14,10 @@ internal static class PluginLoadFlags
     private const int FlagsAt = 8;
     private const int FlagsLength = 4;
 
-    /// <summary>Writes the plugin with each flag set or cleared and every other byte as it was, and answers the xxHash64 of
-    /// what it wrote, as a manifest carries it.</summary>
-    internal static string Set(string path, IReadOnlyDictionary<string, bool> flags, GameRelease gameRelease)
+    /// <summary>Writes the plugin with each flag set or cleared, every other byte as it was, and answers its xxHash64 as a
+    /// manifest carries it. A flagged copy <paramref name="refusalOfFlaggedCopy"/> refuses leaves the plugin as it was.</summary>
+    internal static string Set(
+        string path, IReadOnlyDictionary<string, bool> flags, GameRelease gameRelease, Func<string, string?> refusalOfFlaggedCopy)
     {
         var load = GameCodecs.For(gameRelease).LoadFlags;
         var bytes = File.ReadAllBytes(path);
@@ -35,6 +36,8 @@ internal static class PluginLoadFlags
         try
         {
             File.WriteAllBytes(temp, bytes);
+            if (MayLimitFormIds(Path.GetFileName(path), set, load) && refusalOfFlaggedCopy(temp) is { } refusal)
+                throw new PluginFailureException(new PluginFailure.FormIdOutsideFlagLimit(refusal));
             File.Move(temp, path, overwrite: true);
         }
         finally
@@ -44,6 +47,10 @@ internal static class PluginLoadFlags
 
         return HashOf(bytes);
     }
+
+    private static bool MayLimitFormIds(string fileName, int flagged, IReadOnlyDictionary<string, int> load) =>
+        fileName.EndsWith(".esl", StringComparison.OrdinalIgnoreCase)
+        || load.Any(flag => flag.Key is "Small" or "Medium" && (flagged & flag.Value) != 0);
 
     /// <summary>The hash of the plugin with each named flag at each combination of original values; none unless the plugin
     /// holds each named flag as <paramref name="flags"/> sets it, and none for a file that is no plugin.</summary>

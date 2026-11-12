@@ -279,7 +279,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Sets or clears the named load flags of each plugin file, by its absolute path, in place and changing no other byte, and answers the hash of what it wrote. A file that is no plugin, or a name that is no load flag of the game, leaves its file as it was and is named with why. */
+        /** @description Sets or clears the named load flags of each plugin file, by its absolute path, in place and changing no other byte, and answers the hash of what it wrote. A file that is no plugin, a name that is no load flag of the game, or a light or medium flag whose FormID range the plugin's records exceed leaves its file as it was and is named with why. */
         post: operations["SetPluginFileFlags"];
         delete?: never;
         options?: never;
@@ -1746,7 +1746,7 @@ export interface components {
             text: string;
         };
         /** @enum {string} */
-        PluginFileFlagRefusal: "None" | "NotAPlugin" | "UnknownFlag";
+        PluginFileFlagRefusal: "None" | "NotAPlugin" | "UnknownFlag" | "FormIdOutsideFlagLimit";
         PluginFileFlagRefused: {
             item: string;
             refusal: components["schemas"]["PluginFileFlagRefusal"];
