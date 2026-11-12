@@ -10,8 +10,14 @@ describe('suggestedMove: the nearest place a plugin keeps the sorting rule it br
     expect(suggestedMove(broken(rule, 'A.esp', 'B.esp'))).toEqual({ mover: ref('A.esp'), side: 'before', anchor: ref('B.esp') });
   });
 
-  it.each(['blueprint', 'loadAfter', 'group'] as const)('moves the first plugin of a %s rule directly below the second', (rule) => {
+  it.each(['blueprint', 'loadAfter'] as const)('moves the first plugin of a %s rule directly below the second', (rule) => {
     expect(suggestedMove(broken(rule, 'A.esp', 'B.esp'))).toEqual({ mover: ref('A.esp'), side: 'after', anchor: ref('B.esp') });
+  });
+
+  it('moves the one plugin of a group rule where its placement says', () => {
+    const rule: BrokenRule = { ...broken('group', 'A.esp'), placement: { side: 'before', anchor: ref('B.esp') } };
+
+    expect(suggestedMove(rule)).toEqual({ mover: ref('A.esp'), side: 'before', anchor: ref('B.esp') });
   });
 
   it.each(['missingMaster', 'requirement', 'incompatibility', 'message', 'condition'] as const)('offers no move for %s, which no move keeps', (rule) => {

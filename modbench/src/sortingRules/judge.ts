@@ -26,6 +26,8 @@ export interface BrokenRule {
   reason: string;
   /** Where LOOT's metadata states the rule; the game's rules have none. */
   source?: RuleSource;
+  /** Where the rule's one plugin goes to keep it, when the rule names no plugin to go beside. */
+  placement?: { side: 'before' | 'after'; anchor: PluginRef };
 }
 
 // ADR-0012: the game compares a plugin's filename without case.
