@@ -6,7 +6,7 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { pluginSyncOver, type PluginsDrop } from '../plugins';
+import { askedOnceLoadOrderPut, pluginSyncOver, type PluginsDrop } from '../plugins';
 import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, fileIn, modFoldersIn, refusing, readingFixture } from '../../test/fakeInstanceAdapter';
 import type { PluginMetadata } from '../../client';
@@ -469,5 +469,24 @@ describe('loadAfter', () => {
     const result = await pluginCommandsWith(fake.adapter).loadAfter(['A.esp'], ['C.esp']);
 
     expect(result).toEqual({ applied: false, refusal: 'The userlist is not a map.' });
+  });
+});
+
+describe('askedOnceLoadOrderPut keeps mEdit from being asked for plugins before a load order is put', () => {
+  const asking = (put: unknown) => {
+    const getPlugins = vi.fn(() => Promise.resolve([]));
+    return { getPlugins, client: askedOnceLoadOrderPut({ getPlugins, latestLoadOrder: () => Promise.resolve(put as never) }) };
+  };
+
+  it('answers as an mEdit that cannot, asking nothing, while no load order has been put', async () => {
+    const { getPlugins, client } = asking(undefined);
+    await expect(client.getPlugins()).rejects.toThrow();
+    expect(getPlugins).not.toHaveBeenCalled();
+  });
+
+  it('asks mEdit once a load order has been put', async () => {
+    const { getPlugins, client } = asking({ sent: true });
+    await client.getPlugins();
+    expect(getPlugins).toHaveBeenCalledOnce();
   });
 });

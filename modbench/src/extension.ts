@@ -77,7 +77,7 @@ import { afterTrust, openedFolder, whenOpened } from './toolbox/instanceCheck';
 import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
 import { toastOncePerFailure } from './drivingLib/toastOncePerFailure';
 import { reportSubscriberThrows } from './drivingLib/reportSubscriberThrows';
-import { fileReadsOver, pluginCommands, pluginSyncOver } from './pluginCommands/plugins';
+import { askedOnceLoadOrderPut, fileReadsOver, pluginCommands, pluginSyncOver } from './pluginCommands/plugins';
 import { instanceRepositoryCommands } from './sourceCommands/instanceRepositoryCommands';
 import { placeModsOver } from './sourceCommands/newRepository';
 import { sourceCommands } from './sourceCommands/sourceCommands';
@@ -236,7 +236,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     reporter: reporterFor('symbol.followRename'),
   })));
   const plugins = own(pluginsBox.onInstance({
-    instance, commands: commandsOfPlugins, syncPlugins: pluginSyncOver(adapter, client), modStatuses,
+    instance, commands: commandsOfPlugins, syncPlugins: pluginSyncOver(adapter, askedOnceLoadOrderPut(client)), modStatuses,
     fileReads: fileReadsOver(adapter, () => instance.value.files),
   }));
   const downloads = own(createDownloadsView({
