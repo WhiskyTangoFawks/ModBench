@@ -49,7 +49,7 @@ import type { ReadingSource } from '../../instanceReading';
 import { readingSource } from '../mo2Reads';
 import { OVERWRITE_ORIGIN } from '../../../wire/pluginAddress';
 import type {
-  EntryRef, GameFolder, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange, PluginsProvided,
+  EntryRef, FileOrigin, GameFolder, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange, PluginsProvided,
 } from '../../instanceAdapter';
 import { setIniValue } from '../codecs/qSettingsIni';
 import { ownTempPrefix } from '../../../repositoriesLib/wholeWrites';
@@ -67,7 +67,7 @@ const TRASH: MoveToTrash = (file) => rm(file);
 const DOWNLOADED_FILE = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
 
 const watchedOver = (context: Mo2Context): ReadingSource & Pick<ManagerAdapter, 'subscribe'> =>
-  ({ ...readingSource(context, undefined), subscribe: (listener) => context.watch.subscribe(listener) });
+  ({ ...readingSource(context, undefined, DEPLOYED_PATH), subscribe: (listener) => context.watch.subscribe(listener) });
 
 const text = (root: string, relative: string): Promise<string> => readFile(join(root, relative), 'utf8');
 
@@ -268,6 +268,15 @@ describe('the MO2 Instance adapter', () => {
         const plugins = await pluginsOver(withGame, 'Secondary');
 
         expect(['unofficial fallout 4 patch.esp', 'patch mod.esp'].map((key) => plugins.has(key))).toEqual([true, false]);
+      });
+
+      it('loads with no line each plugin of the Creation Club list an enabled mod deploys', async () => {
+        await mkdir(join(root, 'mods', 'Patch Mod', 'Root'), { recursive: true });
+        await writeFile(join(root, 'mods', 'Patch Mod', 'Root', 'Fallout4.ccc'), 'ccDeployed.esl\r\n');
+
+        const provided = expectKind(await providedOver(withGame), 'listed');
+
+        expect(provided.loadedWithNoLine).toContain('ccDeployed.esl');
       });
 
       it('answers no plugins while the game folder is not found', async () => {
@@ -782,28 +791,83 @@ describe('the MO2 Instance adapter', () => {
       afterEach(() => rm(game, { recursive: true, force: true }));
 
       const found = (): GameFolder => ({ kind: 'found', root: game, dataFolder: join(game, 'Data') });
+      const ownListIn = (gameFolder: GameFolder, release: string): Promise<string[]> => source.creationClubList(gameFolder, release, [], undefined);
 
       it('answers the plugins the release\'s list names, in its order', async () => {
         await writeFile(join(game, 'Fallout4.ccc'), 'ccBGSFO4044-HellfirePowerArmor.esl\r\nccBGSFO4001-PipBoy(Black).esl\r\n');
 
-        expect(await source.creationClubList(found(), 'Fallout4'))
+        expect(await ownListIn(found(), 'Fallout4'))
           .toEqual(['ccBGSFO4044-HellfirePowerArmor.esl', 'ccBGSFO4001-PipBoy(Black).esl']);
       });
 
       it('answers none when the game folder holds no list', async () => {
-        expect(await source.creationClubList(found(), 'Fallout4')).toEqual([]);
+        expect(await ownListIn(found(), 'Fallout4')).toEqual([]);
       });
 
       it('answers none for a release with no Creation Club', async () => {
         await writeFile(join(game, 'Fallout4.ccc'), 'ccBGSFO4044-HellfirePowerArmor.esl\n');
 
-        expect(await source.creationClubList(found(), 'Oblivion')).toEqual([]);
+        expect(await ownListIn(found(), 'Oblivion')).toEqual([]);
       });
 
       it('answers none when the game folder was not found', async () => {
         const notFound: GameFolder = { kind: 'notFound', looked: [], setting: 'setting' };
 
-        expect(await source.creationClubList(notFound, 'Fallout4')).toEqual([]);
+        expect(await ownListIn(notFound, 'Fallout4')).toEqual([]);
+      });
+
+      describe('the list the game gets when it runs', () => {
+        const deploys = async (mod: string, names: string): Promise<void> => {
+          await mkdir(join(root, 'mods', mod, 'Root'), { recursive: true });
+          await writeFile(join(root, 'mods', mod, 'Root', 'Fallout4.ccc'), names);
+        };
+        const listRead = async (): Promise<readonly string[]> => {
+          await mkdir(join(game, 'Data'), { recursive: true });
+          return (await managerOver(root, { gameFolderSettingValue: game }).reading()).creationClubList;
+        };
+
+        it('is the list an enabled mod deploys at the game folder\'s root, over the game folder\'s own', async () => {
+          await writeFile(join(game, 'Fallout4.ccc'), 'ccOwn.esl\r\n');
+          await deploys('Patch Mod', 'ccDeployed.esl\r\n');
+
+          expect(await listRead()).toEqual(['ccDeployed.esl']);
+        });
+
+        it('is a copy spelled in any case, as the game reads it', async () => {
+          await mkdir(join(root, 'mods', 'Patch Mod', 'Root'), { recursive: true });
+          await writeFile(join(root, 'mods', 'Patch Mod', 'Root', 'fallout4.CCC'), 'ccDeployed.esl\r\n');
+
+          expect(await listRead()).toEqual(['ccDeployed.esl']);
+        });
+
+        it('is the copy of the mod that wins the mod order', async () => {
+          await deploys('Patch Mod', 'ccLosing.esl\r\n');
+          await deploys('Ñoño\'s Retexture', 'ccWinning.esl\r\n');
+
+          expect(await listRead()).toEqual(['ccWinning.esl']);
+        });
+
+        it('is never the copy of a disabled mod', async () => {
+          await writeFile(join(game, 'Fallout4.ccc'), 'ccOwn.esl\r\n');
+          await deploys('Harder VATS', 'ccDisabled.esl\r\n');
+
+          expect(await listRead()).toEqual(['ccOwn.esl']);
+        });
+
+        it('is never a copy that deploy puts in the Data folder', async () => {
+          await writeFile(join(game, 'Fallout4.ccc'), 'ccOwn.esl\r\n');
+          await mkdir(join(root, 'mods', 'Patch Mod', 'Textures'), { recursive: true });
+          await writeFile(join(root, 'mods', 'Patch Mod', 'Textures', 'Fallout4.ccc'), 'ccInData.esl\r\n');
+
+          expect(await listRead()).toEqual(['ccOwn.esl']);
+        });
+
+        it.each([['a hard link', link], ['a symlink', symlink]])('skips the game folder\'s own when it is %s, as a deploy leaves it', async (_, linked) => {
+          await deploys('Harder VATS', 'ccDisabled.esl\r\n');
+          await linked(join(root, 'mods', 'Harder VATS', 'Root', 'Fallout4.ccc'), join(game, 'Fallout4.ccc'));
+
+          expect(await listRead()).toEqual([]);
+        });
       });
     });
 
@@ -861,7 +925,7 @@ describe('the MO2 Instance adapter', () => {
           await mkdir(myGames, { recursive: true });
           myGamesSource = readingSource(contextOver(root, {
             detectors: { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefix), documents: () => Promise.resolve(documents) },
-          }), undefined);
+          }), undefined, DEPLOYED_PATH);
           await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\nsResourceArchiveList2=Default2.ba2\n');
           await localSettings(false);
         });
@@ -1359,20 +1423,36 @@ describe('the MO2 Instance adapter', () => {
       }
     });
 
-    it('follows the release\'s Creation Club list at the game folder\'s root, so a changed list does not wait for the next focus', async () => {
-      const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-ccc-'));
-      try {
-        await mkdir(join(game, 'Data'));
-        const watched = watchedOver(contextOver(root, { gameFolderSettingValue: game }));
-        watched.subscribe(() => undefined);
+    describe('the Creation Club list the game gets, so a changed list does not wait for the next focus', () => {
+      let game: string;
+      beforeEach(async () => {
+        game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-ccc-'));
+      });
+      afterEach(() => rm(game, { recursive: true, force: true }));
 
-        await (await watched.settings()).gameFolder();
+      const listRead = async (origins: readonly FileOrigin[]): Promise<void> => {
+        const watched = watchedOver(contextOver(root));
+        watched.subscribe(() => undefined);
+        await watched.creationClubList({ kind: 'found', root: game, dataFolder: join(game, 'Data') }, 'Fallout4', origins, undefined);
+      };
+
+      it('follows the game folder\'s own while no origin deploys one', async () => {
+        await listRead([{ kind: 'mod', name: 'Patch Mod' }]);
 
         expect(fire(game, 'Fallout4.ccc')).toBe(true);
         expect(fire(game, 'Fallout4.ini')).toBe(false);
-      } finally {
-        await rm(game, { recursive: true, force: true });
-      }
+      });
+
+      it('follows the copy the winning origin deploys, and not the game folder\'s own', async () => {
+        const deployed = join(root, 'mods', 'Patch Mod', 'Root');
+        await mkdir(deployed, { recursive: true });
+        await writeFile(join(deployed, 'Fallout4.ccc'), 'ccDeployed.esl\r\n');
+
+        await listRead([{ kind: 'mod', name: 'Patch Mod' }]);
+
+        expect(fire(deployed, 'Fallout4.ccc')).toBe(true);
+        expect(fire(game, 'Fallout4.ccc')).toBe(false);
+      });
     });
 
     it.each([

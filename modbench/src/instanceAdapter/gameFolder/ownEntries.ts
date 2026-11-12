@@ -1,6 +1,6 @@
 import { lstat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { listDirByStamp, type ResolvedEntry } from '../files';
+import { listDirByStamp, readOrAbsent, type ResolvedEntry } from '../files';
 
 /** Hands over a link in the game folder, by its path. */
 export type IgnoredLink = (linkPath: string) => void;
@@ -20,4 +20,10 @@ export async function listOwnEntries(path: string, ignoredLink: IgnoredLink): Pr
     return { name, isFile: dirent.isFile(), isDirectory: dirent.isDirectory() };
   }));
   return entries.filter((entry): entry is ResolvedEntry => entry !== undefined);
+}
+
+/** Whether the file at `path` in a game folder is there and the game's own, a link being a deployed file. */
+export async function isOwnFile(path: string): Promise<boolean> {
+  const stats = await readOrAbsent(() => lstat(path), undefined);
+  return stats !== undefined && stats.isFile() && stats.nlink === 1;
 }

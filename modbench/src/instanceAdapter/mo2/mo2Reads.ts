@@ -1,7 +1,8 @@
 // MO2's parsed reads: each file read through its own codec, and each answer about where the
 // instance keeps what.
 
-import { basename, dirname } from 'node:path';
+import type { Dirent } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 import { foldersRefused } from '../foldersRefused';
 import { parsePlugins } from '../../loadOrderFileCodec/pluginsText';
 import { isInstallationFileName } from '../fileContents/installationFileNames';
@@ -13,16 +14,17 @@ import { readGamePath, readSelectedProfile, SETTINGS_FILE_NAME } from './codecs/
 import { gameOfSettings } from './mo2Game';
 import type { ManagerGamePath } from '../gameFolder/gameFolderResolver';
 import { creationClubFileOf, dataFolderOf, listDataFolderFiles, listDataFolderPlugins, readCreationClubList } from '../gameFolder/dataFolder';
+import { isOwnFile } from '../gameFolder/ownEntries';
 import { pathTokensWritten } from './mo2PathTokens';
 import { pushRefusalWritten } from './mo2Submodules';
-import { get, ignoreSkippedLink, parsedBy, textByStamp, isRepository, listEntries, listFolders, readOrAbsent, readOrReason, identityOf, type SkippedLink, stampOf } from '../files';
+import { get, ignoreSkippedLink, parsedBy, textByStamp, isRepository, listDirByStamp, listEntries, listFolders, readOrAbsent, readOrReason, identityOf, type SkippedLink, stampOf } from '../files';
 import { isOwnTemp } from '../../repositoriesLib/wholeWrites';
-import type { DownloadedFile, DownloadedFiles, GameFolder, InstanceAdapter, ManagerNames, ManagerRunning, ModFolder, ModFolders, SortingRuleFile } from '../instanceAdapter';
+import type { DeployedPath, DownloadedFile, DownloadedFiles, GameFolder, InstanceAdapter, ManagerNames, ManagerRunning, ModFolder, ModFolders, SortingRuleFile } from '../instanceAdapter';
 import { DATA_FOLDER_GLOB, DOWNLOADS_WATCH_GLOB, FIRST_LEVEL, PROFILE_WATCH_PATTERN, profileDir, downloadedFilePath, downloadedFileMetadataPath, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile, sortingRuleFilePaths } from './layout';
 import { mo2Archives } from './mo2Archives';
 import type { ReadingSource } from '../instanceReading';
 import type { ConfigurationFile } from '../publisher';
-import { entryKey, listModFolders, modFolderNamed, modFoldersOf, type Mo2Context } from './mo2Context';
+import { entryKey, listModFolders, modFolderNamed, modFoldersOf, originFolder, type Mo2Context } from './mo2Context';
 import { originFilesReader } from './mo2Files';
 import { sourceModFoldersIn } from './sourceModFolders';
 import { errorMessage } from '../../ports/errorMessage';
@@ -105,7 +107,41 @@ const watchModFolders = ({ watch }: Mo2Context, folders: readonly ModFolder[]): 
   watch.follow('modFolders', folders.map((folder) => folder.path), FIRST_LEVEL);
 };
 
-export function readingSource(context: Mo2Context, publisherFile: ConfigurationFile | undefined): ReadingSource {
+const listedOrNone = (folder: string): Promise<Dirent[]> => listDirByStamp(folder).catch((err: unknown) => {
+  if (errnoCode(err) === 'ENOENT' || errnoCode(err) === 'ENOTDIR') return [];
+  throw err;
+});
+
+// Deploy puts a folder at an origin's root at the game folder's root, so the copy of `name` it deploys is one folder down.
+async function deployedCopyIn(folder: string, name: string, deployedPath: DeployedPath): Promise<string | undefined> {
+  const isName = (path: string | undefined): boolean => path?.toLowerCase() === name.toLowerCase();
+  for (const entry of await listedOrNone(folder)) {
+    if (!isName(deployedPath(`${entry.name}/${name}`))) continue;
+    const below = join(folder, entry.name);
+    const copy = (await listedOrNone(below)).find((file) => isName(file.name));
+    if (copy !== undefined) return join(below, copy.name);
+  }
+  return undefined;
+}
+
+const creationClubListGot = (context: Mo2Context, deployedPath: DeployedPath): ReadingSource['creationClubList'] =>
+  async (gameFolder, gameRelease, origins, folders) => {
+    const own = creationClubFileOf(gameFolder, gameRelease);
+    if (own === undefined) {
+      context.watch.follow('creationClubList', [], '');
+      return [];
+    }
+    const copies = await Promise.all(origins.map(async (origin) => {
+      const folder = await originFolder(context, origin, folders);
+      return folder === undefined ? undefined : deployedCopyIn(folder, basename(own), deployedPath);
+    }));
+    const deployed = copies.find((copy) => copy !== undefined);
+    const followed = deployed ?? own;
+    context.watch.follow('creationClubList', [dirname(followed)], basename(followed));
+    return deployed !== undefined || await isOwnFile(own) ? readCreationClubList(followed) : [];
+  };
+
+export function readingSource(context: Mo2Context, publisherFile: ConfigurationFile | undefined, deployedPath: DeployedPath): ReadingSource {
   const { instanceRoot, resolveGameFolder, resolveDownloadsFolder, watch, mo2Running } = context;
   const originFilesOf = originFilesReader(context);
   return {
@@ -123,9 +159,6 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
           const gameFolder = await resolveGameFolder(managedGamePath(iniText, game.gameRelease));
           const dataFolder = dataFolderOf(gameFolder);
           watch.follow('dataFolder', dataFolder === undefined ? [] : [dataFolder], DATA_FOLDER_GLOB);
-          const creationClubList = creationClubFileOf(gameFolder, game.gameRelease);
-          if (creationClubList === undefined) watch.follow('creationClubList', [], '');
-          else watch.follow('creationClubList', [dirname(creationClubList)], basename(creationClubList));
           return gameFolder;
         },
         downloadedFiles: async (skippedLink: SkippedLink): Promise<DownloadedFiles> => {
@@ -160,7 +193,7 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
 
     gameFolderFiles: listDataFolderFiles,
 
-    creationClubList: readCreationClubList,
+    creationClubList: creationClubListGot(context, deployedPath),
 
     originFiles: (origin, folders) => originFilesOf(origin, false, folders),
 

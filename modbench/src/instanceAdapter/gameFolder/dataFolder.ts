@@ -52,8 +52,5 @@ export function creationClubFileOf(gameFolder: GameFolder, gameRelease: string |
 // The game writes its Creation Club list in plugins.txt's own line format.
 const creationClubAt = parsedBy((text: string) => parsePlugins(text).map((entry) => entry.name));
 
-export async function readCreationClubList(gameFolder: GameFolder, gameRelease: string | undefined): Promise<string[]> {
-  const file = creationClubFileOf(gameFolder, gameRelease);
-  if (file === undefined) return [];
-  return readOrAbsent(() => creationClubAt(file), []);
-}
+/** The plugins the Creation Club list at `file` names, in its order; none when it is absent. */
+export const readCreationClubList = (file: string): Promise<string[]> => readOrAbsent(() => creationClubAt(file), []);
