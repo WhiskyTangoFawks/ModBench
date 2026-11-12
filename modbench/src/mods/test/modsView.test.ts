@@ -570,7 +570,7 @@ describe('the Mods view tells the indicator and publisher tag decorations when a
     const afterExpand = fired();
     treeViews.view().collapse(row);
 
-    expect([afterExpand, fired()]).toEqual([[0, 1, 1, 1, 1, 1, 1], [0, 2, 2, 2, 2, 2, 2]]);
+    expect([afterExpand, fired()]).toEqual([[0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]]);
   });
 });
 
