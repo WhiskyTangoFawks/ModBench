@@ -21,7 +21,7 @@ interface SymbolIndexDeps {
   file: Pick<ReturnType<typeof fileLanguage>, 'definitionOf' | 'placesNaming'>;
 }
 
-/** What the editor's Go to Definition and Find All References read, by symbol instead of by text position. */
+/** Each language's definition and references, dispatched by the symbol's kind. */
 export function symbolIndex({ client, open, plugin, entry, script, file }: SymbolIndexDeps): SymbolIndex {
   const references = referencesToFormKey({ client, open });
   return {

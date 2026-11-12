@@ -71,18 +71,24 @@ export function pluginLanguage({ instance, reporter, client, owners, renamePlugi
 
   const resolvedRows = () => instance?.value.plugins ?? [];
 
+  const rowNamed = (named: PluginName) => {
+    const plugin = pluginNamed(named, resolvedRows());
+    if (plugin === undefined) return { refused: `Mod order resolves ${named.name} to no plugin.` };
+    const row = resolvedRows().find((each) => samePlugin(each, plugin));
+    return row ?? { refused: `The instance holds no plugin ${named.name} from ${plugin.origin}.` };
+  };
+
   return {
     /** Where the plugin `named` is defined: its file, in the mod that holds it. */
     definitionOf: (named: PluginName): Definition => {
-      const plugin = pluginNamed(named, resolvedRows());
-      if (plugin === undefined) return { refused: `Mod order resolves ${named.name} to no plugin.` };
-      const { path } = resolvedRows().find((row) => samePlugin(row, plugin)) ?? {};
-      return path === undefined ? { refused: `${pluginRowName(plugin)} has no file on disk yet.` } : { file: path };
+      const row = rowNamed(named);
+      if ('refused' in row) return row;
+      return row.path === undefined ? { refused: `${pluginRowName(row)} has no file on disk yet.` } : { file: row.path };
     },
     /** Each place a file names the plugin `named`, and why each file went unread. */
     placesNaming: async (named: PluginName): Promise<SymbolReferences | { refused: string }> => {
-      const plugin = pluginNamed(named, resolvedRows());
-      if (plugin === undefined) return { refused: `Mod order resolves ${named.name} to no plugin.` };
+      const plugin = rowNamed(named);
+      if ('refused' in plugin) return plugin;
       const { found, unread } = await referencesTo.read(plugin);
       return { references: found.map((reference) => ('file' in reference ? reference : referenceOf(locationOf(reference)))), leftOut: unread };
     },

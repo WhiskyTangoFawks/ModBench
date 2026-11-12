@@ -113,7 +113,7 @@ class RecordSymbolInformation extends vscode.SymbolInformation {
 
 interface SourceLanguage extends vscode.Disposable {
   messages(): string[];
-  /** The symbol index the providers answer from, read by symbol: the agent's entry point. */
+  /** Each symbol's definition and the places that name it, read by symbol. */
   symbols: SymbolIndex;
   /** Lists each place a file names `plugin`, in VS Code's References view. */
   referencedBy(plugin: PluginSymbol): Promise<void>;

@@ -1435,7 +1435,7 @@ describe('the agent server, reading a record through mEdit', () => {
     expect(JSON.parse(text)).toEqual({
       tooLarge: `The reply passes the ${REPLY_CHARS} characters that one reply holds.`,
       references: 1000,
-      narrow: 'select_rows reads them as the rows of the form_references view whose target_form_key is 000800:A.esp, which its WHERE narrows further.',
+      narrow: 'select_rows reads the rows of the form_references view whose target_form_key is 000800:A.esp, which hold every plugin the record index holds, active or not, where this list holds the active and the compiled plugins. Its WHERE narrows them further.',
     });
   });
 

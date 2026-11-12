@@ -208,8 +208,7 @@ export interface SymbolReferences {
   readonly leftOut: readonly string[];
 }
 
-/** The symbol index: what Go to Definition and Find All References answer for the editor, and what the agent's
- *  find_definition and list_references answer (ADR-0028). */
+/** What the agent's find_definition and list_references answer, by symbol (ADR-0028). */
 export interface SymbolIndex {
   definitionOf(symbol: SymbolName): Promise<Definition>;
   referencesTo(symbol: SymbolName): Promise<SymbolReferences | { readonly refused: string }>;

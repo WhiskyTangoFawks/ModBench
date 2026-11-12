@@ -44,13 +44,15 @@ export function scriptLanguage({ instance, reporter, client }: ScriptLanguageDep
   const references = scriptReferences({ client, open: openPluginSourceDocument, readText: readHeldText });
   const fileOf = ({ source, compiled }: PapyrusScript): string | undefined => source ?? compiled;
 
+  const definitionOf = (name: string): Definition => {
+    const held = scripts().find((script) => sameName(script.name, name));
+    const file = held && fileOf(held);
+    return file === undefined ? { refused: `No mod, Overwrite or the Data folder holds a source or a compiled script of ${name}.` } : { file };
+  };
+
   return {
     /** Where the script `name` is defined: its source, else its compiled script. */
-    definitionOf: (name: string): Definition => {
-      const held = scripts().find((script) => sameName(script.name, name));
-      const file = held && fileOf(held);
-      return file === undefined ? { refused: `No mod, Overwrite or the Data folder holds a source or a compiled script of ${name}.` } : { file };
-    },
+    definitionOf,
     /** Each member of a record that names the script `name`, and why each copy went unread. */
     placesNaming: async (name: string): Promise<SymbolReferences> => {
       const { found, unread } = await references.read(name);
@@ -61,12 +63,9 @@ export function scriptLanguage({ instance, reporter, client }: ScriptLanguageDep
     definitionAt: async (document: AskedIn, offset: number): Promise<{ start: number; end: number; file: string | undefined } | undefined> => {
       const found = await nameAt(document, offset);
       if (found === undefined) return undefined;
-      const held = scripts().find((script) => sameName(script.name, found.name));
-      const file = held && fileOf(held);
-      if (file === undefined) {
-        reporter.shownOnSurface('warning', `Go to Definition cannot go to ${found.name}.`, `No mod, Overwrite or the Data folder holds a source or a compiled script of ${found.name}.`);
-      }
-      return { start: found.start, end: found.end, file };
+      const definition = definitionOf(found.name);
+      if ('refused' in definition) reporter.shownOnSurface('warning', `Go to Definition cannot go to ${found.name}.`, definition.refused);
+      return { start: found.start, end: found.end, file: 'file' in definition ? definition.file : undefined };
     },
     /** What a hover on the script's name at `offset` says: its name, since a script has no row. */
     hoverAt: async (document: AskedIn, offset: number): Promise<{ start: number; end: number; lines: readonly string[] } | undefined> => {

@@ -219,8 +219,13 @@ describe('the symbol index on a plugin (symbols.md, The symbols, Plugin)', () =>
     ['the file of the copy mod order resolves a file name alone to', { name: 'base.ESM' }, { file: '/mods/Base Mod/Base.esm' }],
     ['no file for a line whose file is not on disk', { name: 'Line.esp' }, { refused: 'Line.esp (Base Mod) has no file on disk yet.' }],
     ['no plugin for a name mod order resolves to none', { name: 'Gone.esp' }, { refused: 'Mod order resolves Gone.esp to no plugin.' }],
+    ['no plugin for an origin that holds none of the name', { name: 'Base.esm', origin: 'Gone Mod' }, { refused: 'The instance holds no plugin Base.esm from Gone Mod.' }],
   ])('defines a plugin at %s', (_case, named, expected) => {
     expect(indexed().definitionOf(named)).toEqual(expected);
+  });
+
+  it('refuses to list what names a plugin an origin holds none of, asking no owner', async () => {
+    expect(await indexed().placesNaming({ name: 'Base.esm', origin: 'Gone Mod' })).toEqual({ refused: 'The instance holds no plugin Base.esm from Gone Mod.' });
   });
 
   it('lists each place an owner reports, and each file it could not read as left out', async () => {
