@@ -148,6 +148,16 @@ public abstract record PluginFailure
         public override bool OfItsBytes => false;
     }
 
+    /// <summary>A load flag whose FormID range the plugin's native records exceed.</summary>
+    public sealed record FormIdOutsideFlagLimit : PluginFailure
+    {
+        private readonly string _reason;
+
+        internal FormIdOutsideFlagLimit(string reason) : base(error: null) => _reason = reason;
+
+        public override string Reason => _reason;
+    }
+
     /// <summary>Malformations that no repair answers.</summary>
     public sealed record NoRepair : PluginFailure
     {

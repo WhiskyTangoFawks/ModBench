@@ -16,6 +16,9 @@ public enum PluginFileFlagRefusal
 
     /// <summary>A name is no load flag of the game.</summary>
     UnknownFlag,
+
+    /// <summary>The plugin holds native FormIDs outside the range a light or medium flag limits it to.</summary>
+    FormIdOutsideFlagLimit,
 }
 
 /// <summary>A plugin file whose flags were not set, by its path, and why.</summary>
@@ -52,9 +55,12 @@ public sealed class SetPluginFileFlagsHandler
                 refused.Add(new PluginFileFlagRefused(file.Path, PluginFileFlagRefusal.UnknownFlag, $"'{unknown}' is no load flag of {gameRelease}"));
             else if (_plugins.SetLoadFlags(file.Path, file.Flags, gameRelease).Holds(out var hash, out var failure))
                 applied.Add(new PluginFileFlagsSet(file.Path, hash));
-            else refused.Add(new PluginFileFlagRefused(file.Path, PluginFileFlagRefusal.NotAPlugin, failure.Reason));
+            else refused.Add(new PluginFileFlagRefused(file.Path, RefusalOf(failure), failure.Reason));
         }
 
         return new SetPluginFileFlagsResult(applied, refused);
     }
+
+    private static PluginFileFlagRefusal RefusalOf(PluginFailure failure) =>
+        failure is PluginFailure.FormIdOutsideFlagLimit ? PluginFileFlagRefusal.FormIdOutsideFlagLimit : PluginFileFlagRefusal.NotAPlugin;
 }
