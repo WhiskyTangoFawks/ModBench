@@ -163,17 +163,68 @@ function judgeGroups(
     const partition = partitionOf(plugin.filename);
     return partition === undefined ? [] : [{ plugin, group: groupOf(plugin, entries), partition }];
   });
-  return placed.flatMap((early, index): BrokenRule[] => {
-    const groupsAfter = before(early.group);
-    const last = placed.slice(index + 1).findLast((other) => other.partition === early.partition && groupsAfter.has(other.group)
-      && !(loadedWithNoLine(early.plugin.filename) && loadedWithNoLine(other.plugin.filename)));
-    const source = last === undefined ? undefined : groupsAfter.get(last.group);
-    if (last === undefined || source === undefined) return [];
-    return [{
-      rule: 'group', level: 'info', plugins: [early.plugin, last.plugin], source,
-      reason: `"${early.plugin.filename}" is in the group "${early.group}", which loads after the group "${last.group}", and loads before "${last.plugin.filename}", of that group.`,
-    }];
-  });
+  const crossings: Crossing[] = placed.flatMap((early, at) => placed.flatMap((late, later): Crossing[] => {
+    const source = later > at && early.partition === late.partition ? before(early.group).get(late.group) : undefined;
+    const held = loadedWithNoLine(early.plugin.filename) && loadedWithNoLine(late.plugin.filename);
+    return source === undefined || held ? [] : [{ early: at, late: later, source }];
+  }));
+  return placeOutOfGroup(crossings, placed.length).map(({ index, crossed }) => brokenGroup(placed, index, crossed));
+}
+
+interface Crossing {
+  early: number;
+  late: number;
+  source: RuleSource;
+  dropped?: true;
+}
+
+function placeOutOfGroup(crossings: readonly Crossing[], plugins: number): { index: number; crossed: Crossing[] }[] {
+  const counts = new Array<number>(plugins).fill(0);
+  const touching = Array.from({ length: plugins }, (): Crossing[] => []);
+  for (const crossing of crossings) {
+    for (const index of [crossing.early, crossing.late]) {
+      counts[index] = (counts[index] ?? 0) + 1;
+      touching[index]?.push(crossing);
+    }
+  }
+  const picked: { index: number; crossed: Crossing[] }[] = [];
+  for (;;) {
+    const index = counts.reduce((best, count, at) => (count > 0 && count >= (counts[best] ?? 0) ? at : best), -1);
+    if (index < 0) return picked.sort((a, b) => a.index - b.index);
+    const crossed = (touching[index] ?? []).filter(({ dropped }) => !dropped);
+    for (const crossing of crossed) {
+      crossing.dropped = true;
+      const other = crossing.early === index ? crossing.late : crossing.early;
+      counts[other] = (counts[other] ?? 0) - 1;
+    }
+    counts[index] = 0;
+    picked.push({ index, crossed });
+  }
+}
+
+const plural = (count: number): string => `${count} plugin${count === 1 ? '' : 's'}`;
+
+function brokenGroup(placed: readonly Placed[], index: number, crossed: readonly Crossing[]): BrokenRule {
+  const mover = placed[index];
+  const passed = crossed.filter(({ early }) => early === index).sort((a, b) => b.late - a.late);
+  const passing = crossed.filter(({ late }) => late === index).sort((a, b) => a.early - b.early);
+  const anchor = placed[passed[0]?.late ?? passing[0]?.early ?? -1];
+  const first = passed[0] ?? passing[0];
+  if (mover === undefined || anchor === undefined || first === undefined) throw new Error('A group crossing names a plugin outside the order.');
+  const clauses = (side: 'after' | 'before', others: readonly Crossing[], at: (crossing: Crossing) => number): string[] => {
+    const counts = new Map<string, number>();
+    for (const crossing of others) {
+      const group = placed[at(crossing)]?.group ?? '';
+      counts.set(group, (counts.get(group) ?? 0) + 1);
+    }
+    return [...counts].map(([group, count]) => `which loads ${side} the group "${group}", and loads ${side === 'after' ? 'before' : 'after'} ${plural(count)} of that group`);
+  };
+  const stated = [...clauses('after', passed, ({ late }) => late), ...clauses('before', passing, ({ early }) => early)];
+  return {
+    rule: 'group', level: 'info', plugins: [mover.plugin], source: crossed.find(({ source }) => source.file === 'userlist')?.source ?? first.source,
+    placement: { side: passed.length > 0 ? 'after' : 'before', anchor: anchor.plugin },
+    reason: `"${mover.plugin.filename}" is in the group "${mover.group}", ${stated.join(', and ')}.`,
+  };
 }
 
 /** The rules of LOOT's metadata that `order`, the active plugins in load order, breaks, and the messages that apply.

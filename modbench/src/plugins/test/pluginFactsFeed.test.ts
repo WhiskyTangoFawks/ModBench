@@ -208,6 +208,20 @@ describe('PluginFactsFeed', () => {
     expect(sortingInfo.items.flat()).toEqual([]);
   });
 
+  it('puts one group problem on the one plugin outside its group, and offers its move, however many plugins it passes', async () => {
+    const rules = rulesOf(filesWith('groups:\n  - name: default\n  - {name: fixes, after: [default]}\nplugins:\n  - {name: A.esp, group: fixes}\n'));
+    const others = ['B.esp', 'C.esp', 'D.esp'].map((name) => ({ name, origin: 'SomeMod' }));
+    const order = [A, ...others];
+    const { feed, client, sortingInfo } = feedOver({ shownPlugins: () => order, activePlugins: () => order, rules: () => rules });
+    client.setQueryAnswer('getPlugins', order.map(({ name }) => held({ name })));
+
+    await feed.reconciled([]);
+
+    expect([sortingInfo.items.flat().map(({ plugin }) => plugin), feed.rows.suggestedMoves().map(({ mover, drop }) => [mover.name, drop])]).toEqual([
+      ['A.esp'], [['A.esp', { kind: 'after', name: 'D.esp' }]],
+    ]);
+  });
+
   it('publishes a rule the userlist states on its line in the userlist', async () => {
     const rules = rulesOf(filesWith('plugins: []\n', 'plugins:\n  - name: A.esp\n    req: [B.esp]\n'));
     const { feed, client, ruleFiles } = feedOver({ activePlugins: () => [A], rules: () => rules });
