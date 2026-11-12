@@ -1242,18 +1242,10 @@ internal sealed class Indexer : IDisposable
                 return false;
             }
 
-            var failedBefore = held.IsHeldWithAFailure(key) || scope.Failed.Holds(key);
-            // The tree's rows say nothing of the header its compiled file now holds. A file gone leaves no
-            // header to show; one present but unreadable leaves the header last read, for the next change to re-read.
-            if (holdsTree && !failedBefore)
-            {
-                if (!_adapter.Exists(plugin.Path)) held.Remove(key);
-                else if (held.Open(plugin.Registered, Registration.In(scope.LoadOrder, key), scope.LoadOrder).Holds(out var reopened, out _))
-                    plugin = reopened;
-            }
+            if (holdsTree) plugin = ReopenHeader(scope, plugin);
 
             // Rows a failed read left say nothing of what the plugin now reads from.
-            if (failedBefore)
+            if (held.IsHeldWithAFailure(key) || scope.Failed.Holds(key))
             {
                 return !scope.Failed.StillFailing(plugin.Registered) && ReindexHeldPlugin(scope, plugin);
             }
@@ -1316,6 +1308,22 @@ internal sealed class Indexer : IDisposable
         }
     }
 
+    // A tree's rows say nothing of the header its compiled file holds. A file gone or unreadable leaves the header last
+    // read: the header facts of a held plugin stay present, and the next change to the file reads it again.
+    private PluginMetadata ReopenHeader(OpenScope scope, PluginMetadata plugin)
+    {
+        if (!_adapter.Exists(plugin.Path)) return plugin;
+        if (!scope.Held.Reopen(plugin.Registered, Registration.In(scope.LoadOrder, plugin.Key), scope.LoadOrder).Holds(out var reopened, out _)
+            || reopened.Content == plugin.Content) return plugin;
+
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("{Plugin} ({Origin}): header changed, masters now [{Masters}]", plugin.Name, plugin.Origin, string.Join(", ", reopened.Masters));
+        }
+        scope.Store.Commit(projection => projection.Announce(sequence => new PluginChangedNotification(plugin.Key, sequence)));
+        return reopened;
+    }
+
     // editor.md, States, story 6: the rows stay the last good read, and say why.
     private static string ValidationFailure(bool holdsTree, string reason) =>
         $"Could not validate this plugin's {(holdsTree ? "source tree" : "binary")} ({reason}). Still showing " +
@@ -1355,7 +1363,7 @@ internal sealed class Indexer : IDisposable
     }
 
     // ADR-0007: the read a first index runs, so a re-read gives the same rows. A failed read is recorded and
-    // rethrown, so it is not read again until that changes. The header is reopened from the compiled file, and a tree does without it.
+    // rethrown, so it is not read again until that changes. A binary is reopened for its header.
     private bool ReindexHeldPlugin(OpenScope scope, PluginMetadata plugin)
     {
         var key = plugin.Key;
@@ -1365,9 +1373,10 @@ internal sealed class Indexer : IDisposable
         {
             outcome = scope.Store.Commit(_ => scope.Failed.Read(plugin.Registered, state =>
             {
-                var reopens = scope.Held.Open(plugin.Registered, Registration.In(scope.LoadOrder, key), scope.LoadOrder);
-                if (reopens.Holds(out var reopened, out var failure)) return ReadWhole(scope, reopened, state);
-                return readsBinary ? ReadOutcome.Failed(failure) : ReadWhole(scope, plugin, state);
+                if (!readsBinary) return ReadWhole(scope, plugin, state);
+                return scope.Held.Open(plugin.Registered, Registration.In(scope.LoadOrder, key), scope.LoadOrder).Holds(out var reopened, out var failure)
+                    ? ReadWhole(scope, reopened, state)
+                    : ReadOutcome.Failed(failure);
             }));
         }
         catch (Exception ex)
