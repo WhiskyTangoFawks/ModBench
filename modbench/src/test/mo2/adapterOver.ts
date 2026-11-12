@@ -59,7 +59,7 @@ export function contextOver(root: string, answers: AdapterAnswers = {}): Mo2Cont
 }
 
 /** The parts of one reading, each asked on its own. */
-export const sourceOver = (root: string, answers: AdapterAnswers = {}): ReadingSource => readingSource(contextOver(root, answers), undefined);
+export const sourceOver = (root: string, answers: AdapterAnswers = {}): ReadingSource => readingSource(contextOver(root, answers), undefined, DEPLOYED_PATH);
 
 export const managerOver = (root: string, answers: AdapterAnswers = {}, publisherFile?: ConfigurationFile): ManagerAdapter => mo2InstanceAdapter({
   instanceRoot: root, installationFileReader: answers.installationFileReader ?? fakeInstallationFileReader([]), fileProblems: answers.fileProblems ?? fileProblemsFake(), fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH, context: contextOver(root, answers),

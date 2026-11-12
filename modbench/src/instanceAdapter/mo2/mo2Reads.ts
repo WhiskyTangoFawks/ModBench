@@ -1,7 +1,7 @@
 // MO2's parsed reads: each file read through its own codec, and each answer about where the
 // instance keeps what.
 
-import { basename, dirname } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { foldersRefused } from '../foldersRefused';
 import { parsePlugins } from '../../loadOrderFileCodec/pluginsText';
 import { isInstallationFileName } from '../fileContents/installationFileNames';
@@ -13,16 +13,18 @@ import { readGamePath, readSelectedProfile, SETTINGS_FILE_NAME } from './codecs/
 import { gameOfSettings } from './mo2Game';
 import type { ManagerGamePath } from '../gameFolder/gameFolderResolver';
 import { creationClubFileOf, dataFolderOf, listDataFolderFiles, listDataFolderPlugins, readCreationClubList } from '../gameFolder/dataFolder';
+import { listOwnEntries } from '../gameFolder/ownEntries';
+import { sameName } from '../../symbolNames/symbolNames';
 import { pathTokensWritten } from './mo2PathTokens';
 import { pushRefusalWritten } from './mo2Submodules';
-import { get, ignoreSkippedLink, parsedBy, textByStamp, isRepository, listEntries, listFolders, readOrAbsent, readOrReason, identityOf, type SkippedLink, stampOf } from '../files';
+import { get, ignoreSkippedLink, isAbsent, parsedBy, textByStamp, isRepository, listDirByStamp, listEntries, listFolders, readOrAbsent, readOrReason, identityOf, type ResolvedEntry, type SkippedLink, stampOf } from '../files';
 import { isOwnTemp } from '../../repositoriesLib/wholeWrites';
-import type { DownloadedFile, DownloadedFiles, GameFolder, InstanceAdapter, ManagerNames, ManagerRunning, ModFolder, ModFolders, SortingRuleFile } from '../instanceAdapter';
+import { anyCase, type DeployedPath, type DownloadedFile, type DownloadedFiles, type GameFolder, type InstanceAdapter, type ManagerNames, type ManagerRunning, type ModFolder, type ModFolders, type SortingRuleFile } from '../instanceAdapter';
 import { DATA_FOLDER_GLOB, DOWNLOADS_WATCH_GLOB, FIRST_LEVEL, PROFILE_WATCH_PATTERN, profileDir, downloadedFilePath, downloadedFileMetadataPath, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile, sortingRuleFilePaths } from './layout';
-import { mo2Archives } from './mo2Archives';
+import { fileNamedIn, mo2Archives } from './mo2Archives';
 import type { ReadingSource } from '../instanceReading';
 import type { ConfigurationFile } from '../publisher';
-import { entryKey, listModFolders, modFolderNamed, modFoldersOf, type Mo2Context } from './mo2Context';
+import { entryKey, listModFolders, modFolderNamed, modFoldersOf, originFolder, type Mo2Context } from './mo2Context';
 import { originFilesReader } from './mo2Files';
 import { sourceModFoldersIn } from './sourceModFolders';
 import { errorMessage } from '../../ports/errorMessage';
@@ -105,7 +107,40 @@ const watchModFolders = ({ watch }: Mo2Context, folders: readonly ModFolder[]): 
   watch.follow('modFolders', folders.map((folder) => folder.path), FIRST_LEVEL);
 };
 
-export function readingSource(context: Mo2Context, publisherFile: ConfigurationFile | undefined): ReadingSource {
+const entriesIfThere = (skippedLink: SkippedLink) => (folder: string): Promise<ResolvedEntry[]> =>
+  listEntries(folder, skippedLink).catch((err: unknown) => {
+    if (isAbsent(err)) return [];
+    throw err;
+  });
+
+async function deployedCopyIn(folder: string, name: string, deployedPath: DeployedPath, skippedLink: SkippedLink): Promise<string | undefined> {
+  for (const entry of await readOrAbsent(() => listDirByStamp(folder), [])) {
+    const deployed = deployedPath(`${entry.name}/${name}`);
+    if (deployed === undefined || !sameName(deployed, name)) continue;
+    const copy = await fileNamedIn(join(folder, entry.name), name, entriesIfThere(skippedLink));
+    if (copy !== undefined) return copy;
+  }
+  return undefined;
+}
+
+const creationClubListOf = (context: Mo2Context, deployedPath: DeployedPath): ReadingSource['creationClubList'] =>
+  async (gameFolder, gameRelease, origins, folders, ignoredLink, skippedLink) => {
+    const listAt = creationClubFileOf(gameFolder, gameRelease);
+    if (listAt === undefined) {
+      context.watch.follow('creationClubList', [], '');
+      return [];
+    }
+    const [root, name] = [dirname(listAt), basename(listAt)];
+    const copies = await Promise.all(origins.map(async (origin) => {
+      const folder = await originFolder(context, origin, folders);
+      return folder === undefined ? undefined : deployedCopyIn(folder, name, deployedPath, skippedLink);
+    }));
+    const list = copies.find((copy) => copy !== undefined) ?? await fileNamedIn(root, name, (folder) => listOwnEntries(folder, ignoredLink));
+    context.watch.follow('creationClubList', [list === undefined ? root : dirname(list)], anyCase(name));
+    return list === undefined ? [] : readCreationClubList(list);
+  };
+
+export function readingSource(context: Mo2Context, publisherFile: ConfigurationFile | undefined, deployedPath: DeployedPath): ReadingSource {
   const { instanceRoot, resolveGameFolder, resolveDownloadsFolder, watch, mo2Running } = context;
   const originFilesOf = originFilesReader(context);
   return {
@@ -123,9 +158,6 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
           const gameFolder = await resolveGameFolder(managedGamePath(iniText, game.gameRelease));
           const dataFolder = dataFolderOf(gameFolder);
           watch.follow('dataFolder', dataFolder === undefined ? [] : [dataFolder], DATA_FOLDER_GLOB);
-          const creationClubList = creationClubFileOf(gameFolder, game.gameRelease);
-          if (creationClubList === undefined) watch.follow('creationClubList', [], '');
-          else watch.follow('creationClubList', [dirname(creationClubList)], basename(creationClubList));
           return gameFolder;
         },
         downloadedFiles: async (skippedLink: SkippedLink): Promise<DownloadedFiles> => {
@@ -160,7 +192,7 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
 
     gameFolderFiles: listDataFolderFiles,
 
-    creationClubList: readCreationClubList,
+    creationClubList: creationClubListOf(context, deployedPath),
 
     originFiles: (origin, folders) => originFilesOf(origin, false, folders),
 
