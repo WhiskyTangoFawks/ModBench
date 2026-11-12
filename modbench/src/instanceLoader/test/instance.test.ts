@@ -1472,13 +1472,33 @@ describe('Instance — what each archive holds', () => {
 
     it('does not read again when the workspace changes without changing whether it holds the game folder', async () => {
       const { instance, workspace } = await read(true);
-      const landed = vi.fn();
-      instance.subscribe(landed);
+      const landed: InstanceValue[] = [];
+      instance.subscribe((value) => { landed.push(value); });
 
       workspace.holdsEverything();
-      await new Promise((resolve) => { setTimeout(resolve, 50); });
+      await instance.refresh();
 
-      expect(landed).not.toHaveBeenCalled();
+      expect(landed).toHaveLength(1);
+    });
+
+    it('reads again when the workspace reverts while a read is under way, so the value never keeps the answer the read began with', async () => {
+      let release = (): void => undefined;
+      let reached = (): void => undefined;
+      const stamped = new Promise<void>((resolve) => { release = resolve; });
+      const underway = new Promise<void>((resolve) => { reached = resolve; });
+      const { instance, medit, workspace } = loader(reading, (adapter) => ({
+        ...adapter, fileStamp: async () => { reached(); await stamped; return { kind: 'read', answer: { size: 1n, modifiedNs: 1n } }; },
+      }));
+      medit.setQueryAnswer('getArchiveContents', [holding(GAME_ARCHIVE, FILE), holding(MOD_ARCHIVE_LATER, FILE)]);
+
+      const first = instance.refresh();
+      await underway;
+      workspace.holdsNothing();
+      release();
+      await first;
+      const settled = await pastSequence(instance, 1);
+
+      expect([settled.gameFolderInWorkspace, settled.gameFolderArchived.copies.size]).toEqual([false, 0]);
     });
   });
 

@@ -370,7 +370,7 @@ export class Instance implements Subscription {
       focused = state.focused;
     });
     this.workspaceWatch = options.workspace.onDidChange(() => {
-      if ((this.workspaceDataFolder(this.current.gameFolder) !== undefined) !== this.current.gameFolderInWorkspace) void this.enqueue({ disk: false, tellsUnheard: false });
+      if (this.workspaceMovedFrom(this.current)) void this.enqueue({ disk: false, tellsUnheard: false });
     });
     this.archives = new ArchiveContentsHeld(options.medit, (path) => options.adapter.fileStamp(path));
     this.flagged = new FlaggedHashesHeld(options.medit, (path) => options.adapter.fileStamp(path));
@@ -606,6 +606,7 @@ export class Instance implements Subscription {
     this.setLate(this.heardSinceRun());
     this.seq++;
     const reread: Reread = { named: [...run.named], disk: run.disk };
+    if (this.workspaceMovedFrom(next)) void this.enqueue({ disk: false, tellsUnheard: false });
     return { settled: this.notify(this.subscribers, 'value', (subscriber) => subscriber(next, this.seq, reread)) };
   }
 
@@ -621,6 +622,11 @@ export class Instance implements Subscription {
       }
       for (const onOutcome of [...this.outcomeListeners]) onOutcome({ listener, during, threw });
     }));
+  }
+
+  // A change heard while a read was under way is compared with the value it lands, not the one before it.
+  private workspaceMovedFrom({ gameFolder, gameFolderInWorkspace }: InstanceValue): boolean {
+    return (this.workspaceDataFolder(gameFolder) !== undefined) !== gameFolderInWorkspace;
   }
 
   private workspaceDataFolder(gameFolder: GameFolder): string | undefined {

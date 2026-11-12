@@ -3,8 +3,9 @@
 
 import { existsSync, watch, type FSWatcher } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
-import { join, sep } from 'node:path';
+import { join } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
+import { isInside } from '../ports/pathInside';
 import { errnoCode } from '../ports/errno';
 import { ignoreSkippedLink, listFolders } from './files';
 
@@ -31,8 +32,6 @@ interface HeldFolderWatchDeps {
 export function heldFolderWatchFor(glob: string, deps: HeldFolderWatchDeps): HeldFolderWatch | undefined {
   return process.platform === 'linux' && glob.endsWith('**') ? heldFolderWatch(deps) : undefined;
 }
-
-const isWithin = (folder: string, path: string): boolean => folder === path || folder.startsWith(`${path}${sep}`);
 
 // Node names the folder in a watch error's message; without it, the reason is the same for every folder it fails on.
 function reasonOf(error: unknown): string {
@@ -62,10 +61,10 @@ function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): H
   // A deletion can be heard after the folder is made again at the same path, and the folder made again is kept.
   const removed = (path: string): void => {
     if (existsSync(path)) return;
-    for (const folder of watched.keys()) if (isWithin(folder, path)) forget(folder);
-    for (const folder of createdFolders) if (isWithin(folder, path)) createdFolders.delete(folder);
-    for (const folder of failed.keys()) if (isWithin(folder, path)) failed.delete(folder);
-    for (const folder of listingFailed.keys()) if (isWithin(folder, path)) listingFailed.delete(folder);
+    for (const folder of watched.keys()) if (isInside(folder, path, process.platform)) forget(folder);
+    for (const folder of createdFolders) if (isInside(folder, path, process.platform)) createdFolders.delete(folder);
+    for (const folder of failed.keys()) if (isInside(folder, path, process.platform)) failed.delete(folder);
+    for (const folder of listingFailed.keys()) if (isInside(folder, path, process.platform)) listingFailed.delete(folder);
   };
 
   const fail = (folder: string, error: unknown): void => {

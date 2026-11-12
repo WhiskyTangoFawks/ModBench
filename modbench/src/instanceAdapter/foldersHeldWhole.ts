@@ -1,15 +1,13 @@
 import { lstat } from 'node:fs/promises';
-import { isAbsolute, join, relative, sep } from 'node:path';
+import { join, relative, sep } from 'node:path';
+import { isInside } from '../ports/pathInside';
 import { isRepository } from './files';
 import { git, gitFed } from './git';
 
 const PROBE = '.modbench-probe';
 const NONE_IGNORED = 1;
 
-const isInside = (instanceRoot: string, folder: string): boolean => {
-  const inInstance = relative(instanceRoot, folder);
-  return inInstance !== '' && inInstance !== '..' && !inInstance.startsWith(`..${sep}`) && !isAbsolute(inInstance);
-};
+const isBelow = (instanceRoot: string, folder: string): boolean => isInside(folder, instanceRoot, process.platform) && !isInside(instanceRoot, folder, process.platform);
 
 /** `folder`'s path in the instance repository. */
 export const gitPath = (instanceRoot: string, folder: string): string => relative(instanceRoot, folder).split(sep).join('/');
@@ -47,7 +45,7 @@ async function listIgnoredPaths(instanceRoot: string): Promise<string[]> {
 export async function foldersInReach(instanceRoot: string, folders: readonly string[]): Promise<string[]> {
   const reachable: string[] = [];
   for (const folder of folders) {
-    if (isInside(instanceRoot, folder) && !await runsThroughSymlink(instanceRoot, folder)) reachable.push(folder);
+    if (isBelow(instanceRoot, folder) && !await runsThroughSymlink(instanceRoot, folder)) reachable.push(folder);
   }
   return reachable;
 }
