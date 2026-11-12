@@ -11,8 +11,8 @@ import type { PluginCommands, SelectionResult } from '../pluginCommands/plugins'
 import { selectionArgument } from '../drivingLib/gestureEntry';
 import { pickWhereGitHolds } from '../drivingLib/whereGitHolds';
 import { Refusal } from '../drivingLib/refusal';
-import type { Message } from '../ports/phrase';
-import type { SelectionOutcome } from '../ports/selectionOutcome';
+import { gestureName, phrase, type Message } from '../ports/phrase';
+import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import { pluginRowName } from '../wire/pluginAddress';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -48,7 +48,7 @@ interface DecompileGiven {
 export function registerDecompileCommand(
   deps: DecompileDeps, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
-  const gesture: AgentGesture<PluginsTreeNode, DecompileGiven, SelectionResult<PluginAddress>, { force?: boolean }> = {
+  const gesture: AgentGesture<PluginsTreeNode, DecompileGiven, SelectionResult<PluginAddress, Message>, { force?: boolean }> = {
     fromView: (entry, _option, clicked) => {
       const header = columnHeaderOf(clicked);
       const plugins = header ? [header] : isPluginAddress(clicked) ? [clicked] : selectionArgument(entry, 'plugin').map((node) => node.argument.plugin);
@@ -59,7 +59,7 @@ export function registerDecompileCommand(
       sendAskingOverChanges(deps.client, progress, given, (plugins, force) => decompiled(deps.client, plugins, force))),
     report: (result, { plugins }) => {
       if (result.applied) reportSelection(deps.reporter, result.outcome, plugins.length, { verb: 'decompile', pastTense: 'Decompiled' });
-      else deps.reporter.report('error', result.refusal);
+      else deps.reporter.report('error', String(result.refusal));
     },
   };
   return registerAgentGesture('modbench.plugin.decompile', viewSelection, gesture);
@@ -154,11 +154,20 @@ async function sendAskingOverChanges<Words extends Message>(
   return sendBatches([{ plugins: replacing, force: true }, { plugins: rest, force: false }], send);
 }
 
+// mEdit names the fact; the gesture that clears it is the extension's to name.
+function decompileReason({ item, reason, refusal }: ItemRefusal<PluginAddress>): ItemRefusal<PluginAddress, Message> {
+  return refusal === 'NotInSourceMod'
+    ? { item, reason: phrase`${reason} Run ${gestureName('modbench.mod.versionInGit', 'version in git')} on ${item.origin}.` }
+    : { item, reason };
+}
+
 async function decompiled(
   client: Pick<MEditClient, 'decompile'>, plugins: readonly PluginAddress[], force: boolean,
-): Promise<SelectionResult<PluginAddress>> {
+): Promise<SelectionResult<PluginAddress, Message>> {
   const answer = await client.decompile(plugins, force);
-  return isRefused(answer) ? { applied: false, refusal: answer.message } : { applied: true, outcome: answer };
+  return isRefused(answer)
+    ? { applied: false, refusal: answer.message }
+    : { applied: true, outcome: { landed: answer.landed, refused: answer.refused.map(decompileReason) } };
 }
 
 interface SendBatch { readonly plugins: readonly PluginAddress[]; readonly force: boolean }

@@ -60,6 +60,12 @@ function itemRefusals<R>(refused: { item: R; message: string }[]): ItemRefusal<R
   return refused.map((r) => ({ item: r.item, reason: r.message }));
 }
 
+function kindedSelectionOutcome<L, R>(
+  answer: { applied: L[]; refused: { item: R; refusal: string; message: string }[] },
+): { landed: readonly L[]; refused: readonly ItemRefusal<R>[] } {
+  return { landed: answer.applied, refused: answer.refused.map((r) => ({ item: r.item, reason: r.message, refusal: r.refusal })) };
+}
+
 function selectionOutcome<L, R>(
   answer: { applied: L[]; refused: { item: R; message: string }[] },
 ): { landed: readonly L[]; refused: readonly ItemRefusal<R>[] } {
@@ -508,7 +514,7 @@ class HttpMEditClient implements MEditClient {
       gesture: (counted) => `decompile ${counted}`, noun: 'plugin', items: plugins,
       op: (counted) => `decompile(${counted})`,
       post: () => this.apiClient.POST('/plugins/decompile', { body: { plugins: [...plugins], force } }),
-      outcome: selectionOutcome,
+      outcome: kindedSelectionOutcome,
     });
   }
 

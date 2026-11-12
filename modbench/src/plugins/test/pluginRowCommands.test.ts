@@ -36,6 +36,7 @@ import { instanceThatReads, progressSteps } from '../../test/recordedProgress';
 import { registerDecompileAndRepairCommand, registerDecompileCommand } from '../pluginRowCommands';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { PluginNode } from '../pluginRows';
+import { gestureName, phrase } from '../../ports/phrase';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
@@ -307,6 +308,41 @@ describe('modbench.plugin.decompile, called by the agent', () => {
     await handler(new AgentCall([{ kind: 'plugin', plugin: SECOND }], { force: true }));
 
     expect(client.calls.filter((c) => c.method === 'decompile').map((c) => c.args)).toEqual([[[SECOND], true]]);
+  });
+
+  describe('a plugin outside a source mod', () => {
+    const NOT_IN_SOURCE_MOD = { item: SECOND, reason: 'Second.esp is not in a source mod, so there is no working tree to decompile it into.', refusal: 'NotInSourceMod' };
+    const clientRefusing = () => {
+      const client = new InMemoryMEditClient();
+      client.setQueryAnswer('getWorkingTreeStatesBeneath', { plugin: ['None'], recordTypes: {}, records: {} });
+      client.setCommandResult('decompile', { landed: [], refused: [NOT_IN_SOURCE_MOD] });
+      return client;
+    };
+
+    it('tells the view to version in git its mod', async () => {
+      const { handler, reporter } = registered(clientRefusing(), 'Decompile');
+
+      const node = new PluginNode({ name: SECOND.name, enabled: true }, SECOND.origin);
+      node.contextValue = 'plugin enabled inSourceMod nonCompiledPlugin editable';
+      await handler(node);
+
+      expect(reporter.reports).toEqual([{
+        severity: 'error', message: 'Could not decompile "Second.esp".',
+        detail: '"Second.esp (ModA)" (Second.esp is not in a source mod, so there is no working tree to decompile it into. Run version in git on ModA.)',
+      }]);
+    });
+
+    it('names the gesture as data for the agent, which reads the tool that runs it', async () => {
+      const answered = await registered(clientRefusing()).handler(calling(SECOND));
+
+      expect(answered).toEqual({
+        applied: true,
+        outcome: {
+          landed: [],
+          refused: [{ item: SECOND, reason: phrase`${NOT_IN_SOURCE_MOD.reason} Run ${gestureName('modbench.mod.versionInGit', 'version in git')} on ${SECOND.origin}.` }],
+        },
+      });
+    });
   });
 
   it('answers the refusal of the whole selection', async () => {

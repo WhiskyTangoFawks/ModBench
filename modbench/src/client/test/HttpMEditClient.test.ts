@@ -277,7 +277,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       path: '/build', body: { mods: [modToBuild('ModA'), modToBuild('ModC')], ...buildFacts } },
     { name: 'decompile', verb: (c) => c.decompile([first, second], true),
       answer: { applied: [first], refused: [{ item: second, refusal: 'NotInSourceMod', message: 'Second.esp is not in a source mod.' }] },
-      reads: { landed: [first], refused: [{ item: second, reason: 'Second.esp is not in a source mod.' }] },
+      reads: { landed: [first], refused: [{ item: second, reason: 'Second.esp is not in a source mod.', refusal: 'NotInSourceMod' }] },
       path: '/plugins/decompile', body: { plugins: [first, second], force: true } },
     { name: 'decompileAndRepair', verb: (c) => c.decompileAndRepair([{ plugin: first, sourceFolder: modToVersionInGit('ModA').sourceFolder }], false),
       answer: { applied: [first], refused: [] },
