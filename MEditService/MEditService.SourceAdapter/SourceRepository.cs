@@ -158,12 +158,12 @@ internal sealed class SourceRepository : ISourceRepository
     /// <summary>The document holding <paramref name="identity"/>, relative to the source folder — a
     /// diagnostic's path for the Problems panel. Null when nothing there holds it.</summary>
     public Answer<string?, SourceFailure> RelativePathOf(PluginAddress plugin, RecordIdentity identity) =>
-        SourceFailure.Answer(() => Locator.Locate(Spelled(plugin), identity)?.RelativePath);
+        SourceFailure.Answer(() => Locator.Locate(TreeNameAsLocated(plugin), identity)?.RelativePath);
 
     /// <summary>The file in this tree holding <paramref name="identity"/>; null when nothing there holds it.</summary>
     public Answer<DocumentFile?, SourceFailure> DocumentOf(PluginAddress plugin, RecordIdentity identity) =>
-        SourceFailure.Answer(() => Locator.Locate(Spelled(plugin), identity) is { } unit && Files.FileExists(unit.FullPath)
-            ? new DocumentFile(unit.FullPath, unit.IsEmbedded)
+        SourceFailure.Answer(() => Locator.Locate(TreeNameAsLocated(plugin), identity) is { } unit && Files.FileExists(unit.FullPath)
+            ? new DocumentFile(unit.FullPath, unit.RelativePath, unit.IsEmbedded)
             : null);
 
     /// <summary>What the file at <paramref name="path"/> holds, read from its text as the record index reads it.</summary>
@@ -423,6 +423,20 @@ internal sealed class SourceRepository : ISourceRepository
     private void RefuseInASession()
     {
         if (Files is WriteSession) throw new InvalidOperationException("A session's repository answers changes and writes nothing to disk.");
+    }
+
+    // Like the locator's listings, a tree's spelling is read once per repository: locating each record of a plugin
+    // must not list the source root again.
+    private readonly Dictionary<PluginAddress, PluginAddress> _spelledForLocating = new(PluginAddress.Comparer);
+
+    private PluginAddress TreeNameAsLocated(PluginAddress plugin)
+    {
+        lock (_spelledForLocating)
+        {
+            if (!_spelledForLocating.TryGetValue(plugin, out var spelled))
+                _spelledForLocating[plugin] = spelled = Spelled(plugin);
+            return spelled;
+        }
     }
 
     // A plugin's tree is read and written as its folder spells it; with no single tree, as the load order names it.

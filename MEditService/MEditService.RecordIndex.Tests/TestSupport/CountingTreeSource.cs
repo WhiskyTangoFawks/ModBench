@@ -7,10 +7,13 @@ using Mutagen.Bethesda;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
-/// <summary>Reads source trees as the real adapter does, and counts each time git is asked what a tree changed since its last commit.</summary>
+/// <summary>Reads source trees as the real adapter does, and counts each time git is asked what a tree changed since its last commit and each time a record is located.</summary>
 internal sealed class CountingTreeSource(ISourceAdapter inner) : DelegatingSourceAdapter(inner)
 {
     private int _asked;
+    private int _locates;
+
+    public int LocatesAsked => Volatile.Read(ref _locates);
 
     public int GitStatusAsked => Volatile.Read(ref _asked);
 
@@ -50,9 +53,17 @@ internal sealed class CountingTreeSource(ISourceAdapter inner) : DelegatingSourc
 
         public Answer<SourceDocument?, SourceFailure> RecordFromText(PluginAddress plugin, string formKey, string text) => reads.RecordFromText(plugin, formKey, text);
 
-        public Answer<DocumentFile?, SourceFailure> DocumentOf(PluginAddress plugin, RecordIdentity identity) => reads.DocumentOf(plugin, identity);
+        public Answer<DocumentFile?, SourceFailure> DocumentOf(PluginAddress plugin, RecordIdentity identity)
+        {
+            Interlocked.Increment(ref owner._locates);
+            return reads.DocumentOf(plugin, identity);
+        }
 
-        public Answer<string?, SourceFailure> RelativePathOf(PluginAddress plugin, RecordIdentity identity) => reads.RelativePathOf(plugin, identity);
+        public Answer<string?, SourceFailure> RelativePathOf(PluginAddress plugin, RecordIdentity identity)
+        {
+            Interlocked.Increment(ref owner._locates);
+            return reads.RelativePathOf(plugin, identity);
+        }
 
         public Answer<string?, SourceFailure> FileNameOf(PluginAddress plugin, RecordIdentity identity) => reads.FileNameOf(plugin, identity);
     }

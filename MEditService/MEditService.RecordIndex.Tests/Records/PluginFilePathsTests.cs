@@ -70,6 +70,19 @@ public sealed class PluginFilePathsTests : IDisposable
     }
 
     [Fact]
+    public void PlacingARecord_LocatesItOnce()
+    {
+        Build(compiled: true, Compiled);
+        var source = new CountingTreeSource(TestAdapters.Source());
+        using var index = Indexes.Reconciled(Fixture, source: source);
+        var before = source.LocatesAsked;
+
+        Assert.Single(index.Queries.GetFilePaths(null).Value());
+
+        Assert.Equal(1, source.LocatesAsked - before);
+    }
+
+    [Fact]
     public void APluginWithNoSource_IsNotAnswered()
     {
         Build(compiled: false, Compiled);

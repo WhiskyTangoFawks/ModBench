@@ -103,7 +103,8 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     {
         var (record, file, isContainersDocument) = FilingOf(filed);
 
-        Assert.Equal(new DocumentFile(file, isContainersDocument), Repository.DocumentOf(Plugin, record).Value());
+        var relative = Repository.RelativePathOf(Plugin, record).Value().Require();
+        Assert.Equal(new DocumentFile(file, relative, isContainersDocument), Repository.DocumentOf(Plugin, record).Value());
     }
 
     [Fact]
