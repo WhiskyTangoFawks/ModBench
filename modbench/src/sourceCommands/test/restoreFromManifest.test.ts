@@ -73,7 +73,7 @@ async function over({ files = {}, manifests = {}, answers = {}, sourceFolders = 
   const deps = { client, adapter: fake.adapter, nexus: nexus ?? nexusAnswering(answeringFrom({})).nexus, trash: () => Promise.resolve(), loadOrderSnapshot: ORDER_SENT, tasks: steps };
   return {
     fake, client, hashes, steps, deps,
-    restore: (asked: readonly string[], options: Parameters<typeof restoreFromManifest>[2] = {}) => restoreFromManifest(deps, asked, options, false, []),
+    restore: (asked: readonly string[], options: Parameters<typeof restoreFromManifest>[2] = {}) => restoreFromManifest(deps, asked, options, false),
   };
 }
 
@@ -102,7 +102,7 @@ describe('restore from manifest', () => {
   it('passes over a mod whose whole folder git holds when it runs on every manifest, refusing none', async () => {
     const { deps } = await heldWholeSetup();
 
-    const outcome = await restoreFromManifest(deps, ['ModA', 'ModB'], {}, true, []);
+    const outcome = await restoreFromManifest(deps, ['ModA', 'ModB'], {}, true);
 
     expect([outcome.refused, outcome.landed.map(({ mod }) => mod)]).toEqual([[], ['ModB']]);
   });
@@ -302,17 +302,6 @@ describe('restore from manifest', () => {
     });
 
     expect(await restore(['ModA'])).toEqual({ landed: [], refused: [{ item: 'ModA', reason }] });
-  });
-
-  it('restores a folder outside the mod folders by its name, and writes no metadata', async () => {
-    const stock = join(root, 'Stock Game');
-    await mkdir(stock);
-    await writeManifestIn(stock, EMPTY);
-    const { deps, fake } = await over();
-
-    const outcome = await restoreFromManifest(deps, [], {}, false, [{ name: 'Stock Game/', folder: stock }]);
-
-    expect([outcome.landed, writes(fake.calls)]).toEqual([[{ mod: 'Stock Game/', written: [], namedByNoLine: [] }], []]);
   });
 
   it('names each mod a cancel stopped before as not finished, writing nothing of it', async () => {

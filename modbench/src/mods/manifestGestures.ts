@@ -6,11 +6,11 @@ import type { Instance } from '../instanceLoader/instance';
 import { everyModHere, modsAndSourceModsOfAgent, modsAndSourceModsToRun, modsOfAgent, modsToRun, type ModsToRun, type ModsToRunDeps } from './modsToRun';
 import type { Message } from '../ports/phrase';
 import type { Reporter } from '../ports/reporter';
-import type { InstanceRepositoryCommands, OtherManifests, RestoreResult, RestoreStatus } from '../sourceCommands/instanceRepositoryCommands';
+import type { InstanceRepositoryCommands, RestoreResult, RestoreStatus } from '../sourceCommands/instanceRepositoryCommands';
 import type { ModNote, UpdateManifestResult, UpdateManifestStatus } from '../sourceCommands/updateManifest';
 
 export interface ManifestGestureDeps extends ModsToRunDeps {
-  commands: Pick<InstanceRepositoryCommands, 'updateManifest' | 'restoreFromManifest' | 'otherManifests'>;
+  commands: Pick<InstanceRepositoryCommands, 'updateManifest' | 'restoreFromManifest'>;
   instance: Pick<Instance, 'value' | 'refresh'>;
   reporter: Reporter;
   /** The Toolbox's message line: `undefined` gives it back to whatever else had something to say. */
@@ -33,10 +33,6 @@ export function registerManifestGestures(deps: ManifestGestureDeps): vscode.Disp
     registerWritingCommand('modbench.modList.restoreFromManifestHere', () => restoreFromManifest(deps, everyModHere(deps))),
   ];
 }
-
-// instance-repository.md, Every mod, story 1: every manifest is every mod's and every other one in the instance.
-const othersOf = ({ commands }: ManifestGestureDeps, everyManifest: boolean): Promise<OtherManifests> =>
-  (everyManifest ? commands.otherManifests() : Promise.resolve({ others: [], refused: [] }));
 
 type AgentOutcome<Landed> = GestureResult<Landed, string, Message>;
 type Restored = RestoreResult['landed'];
@@ -61,10 +57,9 @@ function withProgressAndCancel<T>(
 async function updateManifest(deps: ManifestGestureDeps, { mods, sourceMods, refused, view, everyMod }: ModsToRun): Promise<void> {
   const { commands, instance, reporter } = deps;
   await runWritingGesture('modbench.mod.updateManifest', view, instance, async () => {
-    const found = await othersOf(deps, everyMod);
     const outcome = await withProgressAndCancel(deps, (show, signal) =>
-      commands.updateManifest(mods, { onProgress: (status) => { show(updateMessage(status)); }, signal }, found.others, everyMod, sourceMods));
-    reportUpdated(reporter, { ...outcome, refused: [...outcome.refused, ...refused, ...found.refused] });
+      commands.updateManifest(mods, { onProgress: (status) => { show(updateMessage(status)); }, signal }, everyMod, sourceMods));
+    reportUpdated(reporter, { ...outcome, refused: [...outcome.refused, ...refused] });
   });
 }
 
@@ -73,12 +68,11 @@ async function updateManifestForAgent(
 ): Promise<AgentOutcome<UpdateManifestResult['landed'][number]>> {
   const { commands, instance } = deps;
   const { mods, sourceMods, refused } = modsAndSourceModsOfAgent(argument, instance.value);
-  const found = await othersOf(deps, argument.length === 0);
-  const result = await runWritingGesture('modbench.mod.updateManifest', MODS_KEY_ARGS.view, instance, () => commands.updateManifest(mods, {}, found.others, argument.length === 0, sourceMods));
+  const result = await runWritingGesture('modbench.mod.updateManifest', MODS_KEY_ARGS.view, instance, () => commands.updateManifest(mods, {}, argument.length === 0, sourceMods));
   const { notHeld, otherBytes } = gapsOf(result.landed, (mod, path) => `${mod}: its package does not hold ${path}`, (mod, path) => `${mod}: its package holds ${path} with other bytes`);
   return {
     applied: true,
-    outcome: { landed: result.landed, refused: [...result.refused, ...refused, ...found.refused] },
+    outcome: { landed: result.landed, refused: [...result.refused, ...refused] },
     partial: warned('Update manifest:', [...notHeld, ...otherBytes, ...notesOf(result.notes), ...result.repositoryNotes]),
   };
 }
@@ -137,16 +131,15 @@ const repositoryNotSetUp = ({ pushRefusalNotWritten, pathTokensNotWritten }: { r
 async function restoreFromManifest(deps: ManifestGestureDeps, toRun: ModsToRun): Promise<void> {
   const { commands, instance, reporter } = deps;
   const { mods, view } = toRun;
-  const found = await othersOf(deps, toRun.everyMod);
-  const refused = [...toRun.refused, ...found.refused];
-  const total = mods.length + found.others.length + refused.length;
-  if (mods.length + found.others.length === 0) {
+  const { refused } = toRun;
+  const total = mods.length + refused.length;
+  if (mods.length === 0) {
     reportRestored(reporter, total, { landed: [], refused });
     return;
   }
   await runWritingGesture('modbench.mod.restoreFromManifest', view, instance, async () => {
     const outcome = await withProgressAndCancel(deps, (show, signal) =>
-      commands.restoreFromManifest(mods, { onProgress: (status) => { show(restoreMessage(status)); }, signal }, toRun.everyMod, found.others));
+      commands.restoreFromManifest(mods, { onProgress: (status) => { show(restoreMessage(status)); }, signal }, toRun.everyMod));
     reportRestored(reporter, total, { ...outcome, refused: [...outcome.refused, ...refused] });
   });
 }
@@ -154,12 +147,11 @@ async function restoreFromManifest(deps: ManifestGestureDeps, toRun: ModsToRun):
 async function restoreFromManifestForAgent(deps: ManifestGestureDeps, { argument }: ModlistCall): Promise<AgentOutcome<Restored[number]>> {
   const { commands, instance } = deps;
   const mods = modsOfAgent(argument, instance.value);
-  const found = await othersOf(deps, argument.length === 0);
-  if (mods.length + found.others.length === 0) return { applied: true, outcome: { landed: [], refused: found.refused } };
-  const outcome = await runWritingGesture('modbench.mod.restoreFromManifest', MODS_KEY_ARGS.view, instance, () => commands.restoreFromManifest(mods, {}, argument.length === 0, found.others));
+  if (mods.length === 0) return { applied: true, outcome: { landed: [], refused: [] } };
+  const outcome = await runWritingGesture('modbench.mod.restoreFromManifest', MODS_KEY_ARGS.view, instance, () => commands.restoreFromManifest(mods, {}, argument.length === 0));
   return {
     applied: true,
-    outcome: { landed: outcome.landed, refused: [...outcome.refused, ...found.refused] },
+    outcome: { landed: outcome.landed, refused: outcome.refused },
     partial: warned('Restore from manifest:', [...restoredNotes(outcome.landed), ...uncommittedWarnings(outcome.landed), ...leftDetachedWarnings(outcome.landed), ...repositoryNotSetUp(outcome)]),
   };
 }

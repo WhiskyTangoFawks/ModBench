@@ -91,9 +91,6 @@ export const defaultDownloadsDir = (instanceRoot: string): string => join(instan
 
 export const settingsFile = (instanceRoot: string): string => join(instanceRoot, SETTINGS_FILE_NAME);
 
-// A mod's manifest, in its folder, named for the mod.
-const manifestFileName = (modName: string): string => `${modName}${MANIFEST_SUFFIX}`;
-
 /** The meta file of the mod folder `modFolder`, wherever that folder is. */
 export const modMetaFileIn = (modFolder: string): string => join(modFolder, MOD_META_FILE_NAME);
 
@@ -158,16 +155,6 @@ export function isManifestPath(instanceRoot: string, path: string): boolean {
   const [mods, , file, ...deeper] = relative(instanceRoot, path).split(sep);
   return mods?.toLowerCase() === MODS && file?.toLowerCase().endsWith(MANIFEST_SUFFIX) === true && deeper.length === 0;
 }
-
-// Each holds manifests of its own kind, or none, so the search for other manifests skips it, as it skips the downloads folder.
-const NOT_SEARCHED = new Set([MODS, PROFILES, OVERWRITE_DIR_NAME, GIT_DIR, SOURCE_MODS_FOLDER]);
-
-/** Whether the search for other manifests skips the folder named `name` at the instance root. */
-export const isSkippedByManifestSearch = (name: string): boolean => NOT_SEARCHED.has(name.toLowerCase());
-
-/** Whether `fileName` is the manifest of the folder named `folderName`. */
-export const isOwnManifest = (folderName: string, fileName: string): boolean => fileName.toLowerCase() === manifestFileName(folderName).toLowerCase();
-
 
 /** The instance repository's ignore list file. */
 export const ignoreListFile = (instanceRoot: string): string => join(instanceRoot, IGNORE_LIST_FILE);
@@ -236,57 +223,33 @@ export const whitelistIgnoreList = (publisherFileName: string | undefined): stri
 
 type Markers = readonly [first: string, last: string];
 
-// Git's last matching line wins: what leaves a folder out sits before the user's lines, and what lets a file in after.
-interface OwnLines { readonly leftOut?: Markers; readonly letIn: Markers }
-type Role = 'leftOut' | 'letIn';
+// Git's last matching line wins: what lets a file in sits after the user's lines.
+interface OwnLines { readonly letIn: Markers }
 
 const SOURCE_MODS: OwnLines = { letIn: ['# Source folders in this repository', '# End of source folders in this repository'] };
-const OTHER_MANIFESTS: OwnLines = {
-  leftOut: ['# Manifests outside the mod folders, the rest left out', '# End of manifests outside the mod folders, the rest left out'],
-  letIn: ['# Manifests outside the mod folders', '# End of manifests outside the mod folders'],
-};
 // A mod folder held whole needs no line to leave the rest out: the whitelist leaves out every mod's files already.
 const HELD_WHOLE: OwnLines = { letIn: ['# Mod folders this repository holds whole', '# End of mod folders this repository holds whole'] };
-const WHITELIST_LAST_LINE = whitelistIgnoreList(undefined).trimEnd().split('\n').at(-1);
-
-const markersOf = (role: Role): Markers[] => [SOURCE_MODS, OTHER_MANIFESTS, HELD_WHOLE].flatMap((kind) => {
-  const markers = kind[role];
-  return markers === undefined ? [] : [markers];
-});
-
-function afterLeftOutBlocks(lines: readonly string[], at: number): number {
-  const markers = markersOf('leftOut').find(([first]) => first === lines[at]);
-  const end = markers === undefined ? -1 : lines.indexOf(markers[1], at);
-  return end === -1 ? at : afterLeftOutBlocks(lines, end + 1);
-}
+const markersOf = (): Markers[] => [SOURCE_MODS, HELD_WHOLE].map(({ letIn }) => letIn);
 
 function beforeLetInBlocks(lines: readonly string[], at: number): number {
-  const markers = markersOf('letIn').find(([, last]) => last === lines[at - 1]);
+  const markers = markersOf().find(([, last]) => last === lines[at - 1]);
   const begin = markers === undefined ? -1 : lines.lastIndexOf(markers[0], at - 1);
   return begin === -1 ? at : beforeLetInBlocks(lines, begin);
 }
 
-// The run of blocks of `role`: the left-out ones after the whitelist, or first with none; the let-in ones last.
-function runOf(lines: readonly string[], role: Role): { readonly start: number; readonly end: number } {
-  if (role === 'letIn') return { start: beforeLetInBlocks(lines, lines.length), end: lines.length };
-  const start = lines.findLastIndex((line) => line.trimEnd() === WHITELIST_LAST_LINE) + 1;
-  return { start, end: afterLeftOutBlocks(lines, start) };
-}
-
-// The block of `role` made of `inner`, and gone with no `inner`: in place in its run, else moved to the run's end. False
+// The block of `letIn` made of `inner`, and gone with no `inner`: in place in the run of let-in blocks, else moved to its end. False
 // when its markers do not pair.
-function placed(lines: string[], role: Role, [first, last]: Markers, inner: readonly string[]): boolean {
+function placed(lines: string[], [first, last]: Markers, inner: readonly string[]): boolean {
   const begin = lines.indexOf(first);
   const end = lines.indexOf(last);
   if ((begin === -1) !== (end === -1) || end < begin) return false;
   const block = inner.length === 0 ? [] : [first, ...inner, last];
-  const run = runOf(lines, role);
-  if (begin !== -1 && begin >= run.start && begin < run.end) {
+  if (begin !== -1 && begin >= beforeLetInBlocks(lines, lines.length)) {
     lines.splice(begin, end - begin + 1, ...block);
     return true;
   }
   if (begin !== -1) lines.splice(begin, end - begin + 1);
-  lines.splice(runOf(lines, role).end, 0, ...block);
+  lines.push(...block);
   return true;
 }
 
@@ -296,10 +259,7 @@ function withOwnLines(ignoreList: string, kind: OwnLines, own: readonly string[]
   const lineEnding = ignoreList.includes('\r\n') ? '\r\n' : '\n';
   const lines = ignoreList.split(/\r?\n/);
   if (lines.at(-1) === '') lines.pop();
-  const leaves = kind.leftOut !== undefined;
-  const letIn = leaves ? own.filter((line) => line.startsWith('!')) : own;
-  const leftOut = own.filter((line) => !line.startsWith('!'));
-  return (kind.leftOut === undefined || placed(lines, 'leftOut', kind.leftOut, leftOut)) && placed(lines, 'letIn', kind.letIn, letIn) ? `${lines.join(lineEnding)}${lineEnding}` : undefined;
+  return placed(lines, kind.letIn, own) ? `${lines.join(lineEnding)}${lineEnding}` : undefined;
 }
 
 /** The source folders a clone gets, by name: each a submodule, or a plain folder, which holds no repository of its own. */
@@ -390,27 +350,6 @@ function withLinesOf(ignoreList: string, [first, last]: Markers, lines: readonly
   }
   return [...kept];
 }
-
-// Each folder above a manifest is let in once, before the folders and the manifest it holds.
-function otherManifestLines(manifests: readonly (readonly string[])[]): string[] {
-  const lines: string[] = [];
-  const letIn = new Set<string>();
-  for (const segments of manifests) {
-    const escaped = segments.map(escapedForIgnoreList);
-    for (const at of escaped.slice(0, -1).keys()) {
-      const folder = escaped.slice(0, at + 1).join('/');
-      if (!letIn.has(folder)) lines.push(`!/${folder}/`, `/${folder}/*`);
-      letIn.add(folder);
-    }
-    lines.push(`!/${escaped.join('/')}`);
-  }
-  return lines;
-}
-
-/** An ignore list with the lines of other manifests, each by its path in the instance. Undefined when their markers do
- *  not pair. */
-export const withOtherManifestLines = (ignoreList: string, manifests: readonly (readonly string[])[]): string | undefined =>
-  withOwnLines(ignoreList, OTHER_MANIFESTS, otherManifestLines(manifests));
 
 /** The mod manager's configuration as git's attributes match it. */
 export const SETTINGS_FILE_PATTERN = `/${SETTINGS_FILE_NAME}`;
