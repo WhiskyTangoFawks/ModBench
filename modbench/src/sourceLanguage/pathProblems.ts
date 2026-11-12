@@ -60,8 +60,8 @@ async function problemsOf(held: readonly PluginFilePaths[], { paths, sourceFiles
   return byFile;
 }
 
-/** Publishes each path a plugin's source names that no file the game gets or its mod holds answers to. A change to the
- *  files judges again without asking mEdit (ADR-0003). A plugin with no source folder is told by the links feed. */
+/** Publishes each path a plugin's source names that no file the game gets or its mod holds answers to. The links feed
+ *  tells of a plugin with no source folder. */
 export function feedPathProblems(deps: PathProblemsDeps): () => void {
   const { client, reporter, paths, publish, languageStatus } = deps;
   const held = new Map<string, Held>();

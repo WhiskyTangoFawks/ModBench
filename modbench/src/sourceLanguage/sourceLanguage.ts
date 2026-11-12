@@ -18,7 +18,7 @@ import { handUnsavedPluginSource } from './handUnsaved';
 import { registerBuildEntryPoint } from './buildEntryPoint';
 import { registerUpdateManifestEntryPoint } from './updateManifestEntryPoint';
 import type { Instance } from '../instanceLoader/instance';
-import { feedSourceProblems, type ProblemOnFile, type ProblemsByFile, type SourceProblemsDeps } from './sourceProblems';
+import { feedSourceProblems, type ProblemOnFile, type SourceProblemsDeps } from './sourceProblems';
 import { mergedFeeds } from './feedShape';
 import { feedPathProblems, type PathProblemsDeps, type PathStanding } from './pathProblems';
 import type { EntryNames, EntrySymbol, PluginSymbol, SymbolOwner } from '../symbolNames/symbolNames';
@@ -143,16 +143,16 @@ function languageStatusItem(id: string) {
 
 function sourceProblems(deps: SourceLanguageDeps): Pick<SourceLanguage, 'dispose' | 'messages'> {
   const collection = vscode.languages.createDiagnosticCollection('modbench-source');
-  const feeds = mergedFeeds((problems) => {
+  const feedOf = mergedFeeds((problems) => {
     collection.clear();
     collection.set([...problems].map(([file, onFile]) => [vscode.Uri.file(file), onFile.map(diagnosticOf)]));
-  }, 'links', 'paths');
+  });
   const linkStatus = languageStatusItem('modbench.sourceProblems');
   const pathStatus = languageStatusItem('modbench.sourcePaths');
   const readText = readHeldText;
   const unsubscribe = [
-    feedSourceProblems({ ...deps, readText, publish: feeds.links, languageStatus: linkStatus.show }),
-    feedPathProblems({ ...deps, paths: deps.pathStanding, readText, publish: feeds.paths, languageStatus: pathStatus.show }),
+    feedSourceProblems({ ...deps, readText, publish: feedOf('links'), languageStatus: linkStatus.show }),
+    feedPathProblems({ ...deps, paths: deps.pathStanding, readText, publish: feedOf('paths'), languageStatus: pathStatus.show }),
   ];
   const disposable = new vscode.Disposable(() => { for (const off of unsubscribe) off(); collection.dispose(); linkStatus.dispose(); pathStatus.dispose(); });
   return { dispose: () => { disposable.dispose(); }, messages: () => [...linkStatus.text(), ...pathStatus.text()] };

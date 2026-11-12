@@ -28,14 +28,13 @@ export function readiness(client: Pick<MEditClient, 'loadOrderStatus'>): { ready
   return { ready: () => client.loadOrderStatus?.conflictsComputed ?? answered, answeredAtSubscribe: () => { answered = true; } };
 }
 
-/** One publisher for each feed, each replacing only its own problems; `publish` gets every feed's together. */
-export function mergedFeeds<K extends string>(publish: (problems: ProblemsByFile) => void, ...feeds: K[]): Record<K, (problems: ProblemsByFile) => void> {
-  const parts = new Map<K, ProblemsByFile>();
-  const publishers = feeds.map((feed) => [feed, (problems: ProblemsByFile) => {
+/** A publisher for each feed named, each replacing only its own problems; `publish` gets every feed's together. */
+export function mergedFeeds(publish: (problems: ProblemsByFile) => void): (feed: string) => (problems: ProblemsByFile) => void {
+  const parts = new Map<string, ProblemsByFile>();
+  return (feed) => (problems) => {
     parts.set(feed, problems);
     const merged = new Map<string, ProblemOnFile[]>();
     for (const part of parts.values()) for (const [file, onFile] of part) merged.set(file, [...merged.get(file) ?? [], ...onFile]);
     publish(merged);
-  }] as const);
-  return Object.fromEntries(publishers) as Record<K, (problems: ProblemsByFile) => void>;
+  };
 }
