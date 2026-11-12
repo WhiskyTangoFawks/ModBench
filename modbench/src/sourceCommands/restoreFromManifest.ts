@@ -209,7 +209,7 @@ async function gameFilesFor(
   const taken = await pass.deps.adapter.gameFilesTakenBy(place, asking.folder, asking.paths);
   if (taken.kind === 'unreadable') return { lack: `the game files could not be read: ${taken.reason}` };
   const files = taken.answer.gameFiles.flatMap((file) => {
-    const from = { kind: 'gameFile' as const, root: place.root, path: file.path };
+    const from = { kind: 'gameFile' as const, root: file.root, path: file.path };
     const ownPaths = through === undefined ? [file.pathInFolder] : paths.filter((path) => manifest.files.get(path) === file.hash);
     return ownPaths.map((path) => ({ path, hash: file.hash, from }));
   });

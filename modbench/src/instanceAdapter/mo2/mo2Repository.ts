@@ -8,7 +8,7 @@ import { errorMessage } from '../../ports/errorMessage';
 import { exists, get, GIT_DIR, ignoreSkippedLink, listDir, listFolders, readOrAbsent, listEntries, putIfChanged, remove, type ResolvedEntry } from '../files';
 import { ignoreLink, listOwnEntries } from '../gameFolder/ownEntries';
 import type { HashIndex } from '../fileContents/hashIndex';
-import { isBareName, type DeployedPath, type FileRead, type GameFile, type GamePlace, type InstanceAdapter, type UnsearchedFolder } from '../instanceAdapter';
+import { isBareName, type DeployedPath, type FileRead, type GameFile, type InstanceAdapter, type UnsearchedFolder } from '../instanceAdapter';
 import { DATA_FOLDER } from '../gameFolder/gameFolderResolver';
 import { isWithin } from '../gameFolder/pathWithin';
 import {
@@ -124,7 +124,7 @@ async function folderLinesWritten(
 const lowerCased =(names: readonly ResolvedEntry[]): Map<string, ResolvedEntry> => new Map(names.map((entry) => [entry.name.toLowerCase(), entry]));
 
 // The game's folder is as case-sensitive as its file system, and a mod's paths are the game's, which ignores case.
-function caseBlindFinder({ root }: GamePlace) {
+function caseBlindFinder(root: string) {
   const listings = new Map<string, Promise<FileRead<Map<string, ResolvedEntry>>>>();
   const listingOf = (folder: string): Promise<FileRead<Map<string, ResolvedEntry>>> => {
     const kept = listings.get(folder) ?? listOwnEntries(folder, ignoreLink).then(
@@ -240,18 +240,23 @@ export function mo2Repository(context: Mo2Context, publisherFile: ConfigurationF
 export function mo2GameFiles(
   { instanceRoot }: Mo2Context, { gameFileHash }: Pick<HashIndex, 'gameFileHash'>, deployedPath: DeployedPath,
 ): Pick<InstanceAdapter, 'gameFiles' | 'gameFilesTakenBy'> {
-  const gameFiles: InstanceAdapter['gameFiles'] = async (place, modFilePaths) => {
-    const find = caseBlindFinder(place);
+  const gameFileIn = async (find: ReturnType<typeof caseBlindFinder>, root: string, modFilePath: string): Promise<FileRead<GameFile | undefined>> => {
+    const found = await find(modFilePath);
+    if (found.kind === 'unreadable' || found.answer === undefined) return found.kind === 'unreadable' ? found : { kind: 'read', answer: undefined };
+    const path = found.answer.join('/');
+    const hashed = await gameFileHash(join(root, ...found.answer));
+    return hashed.kind === 'unreadable' ? hashed : { kind: 'read', answer: { root, path, hash: hashed.answer.hash } };
+  };
+  const gameFiles: InstanceAdapter['gameFiles'] = async ({ root, steamRoot }, modFilePaths) => {
+    const places = [root, ...steamRoot === undefined ? [] : [steamRoot]].map((at) => ({ at, find: caseBlindFinder(at) }));
     const files = new Map<string, GameFile>();
     const unreadable: Record<string, string> = {};
     for (const modFilePath of modFilePaths) {
-      const found = await find(modFilePath);
-      if (found.kind === 'unreadable') { unreadable[modFilePath] = found.reason; continue; }
-      const names = found.answer;
-      if (names === undefined || files.has(names.join('/').toLowerCase())) continue;
-      const hashed = await gameFileHash(join(place.root, ...names));
-      if (hashed.kind === 'unreadable') { unreadable[modFilePath] = hashed.reason; continue; }
-      files.set(names.join('/').toLowerCase(), { path: names.join('/'), hash: hashed.answer.hash });
+      const reads = [];
+      for (const { at, find } of places) reads.push(await gameFileIn(find, at, modFilePath));
+      const failed = reads.find((read) => read.kind === 'unreadable');
+      if (failed !== undefined) { unreadable[modFilePath] = failed.reason; continue; }
+      for (const read of reads) if (read.kind === 'read' && read.answer !== undefined) files.set(`${read.answer.root}/${read.answer.path.toLowerCase()}`, read.answer);
     }
     return { files: [...files.values()], unreadable };
   };
@@ -269,11 +274,8 @@ export function mo2GameFiles(
       const taken = await gameFiles(place, asked.map(({ path }) => path));
       const [reason] = Object.values(taken.unreadable);
       if (reason !== undefined) return { kind: 'unreadable', reason };
-      const found = new Map(taken.files.map((file) => [file.path.toLowerCase(), file]));
-      const gameFilesTaken = asked.flatMap(({ path, pathInFolder }) => {
-        const file = found.get(path.toLowerCase());
-        return file === undefined ? [] : [{ ...file, pathInFolder }];
-      });
+      const gameFilesTaken = asked.flatMap(({ path, pathInFolder }) =>
+        taken.files.filter((file) => file.path.toLowerCase() === path.toLowerCase()).map((file) => ({ ...file, pathInFolder })));
       return { kind: 'read', answer: { gameFiles: gameFilesTaken, notes } };
     },
   };
