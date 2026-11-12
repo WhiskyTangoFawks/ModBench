@@ -66,6 +66,20 @@ describe('the mods a Mods gesture runs over (instance-repository.md, Every mod)'
     expect(modsAndSourceModsOfAgent([separator], sourceModValue)).toEqual({ mods: ['ModA'], sourceMods: [], refused: [] });
     expect(modsAndSourceModsOfAgent([{ kind: 'mod', name: 'ModB' }], sourceModValue)).toEqual({ mods: ['ModB'], sourceMods: [], refused: [] });
   });
+
+  describe('a source mod the separator holds', () => {
+    const heldSource = { ...value, paths: { ...value.paths, sourceDirs: new Map([['ModA', '/instance/source/ModA']]) } };
+    const separator: Argument = { kind: 'separator', name: 'Weapons' };
+
+    it('is skipped from the view selection and from the agent call alike, and kept when named directly', () => {
+      const view = (rows: readonly unknown[]) => modsAndSourceModsToRun({ ...focused(undefined), instance: { value: heldSource } }, rows[0], rows).mods;
+
+      expect(view([separatorRow('Weapons')])).toEqual([]);
+      expect(view([separatorRow('Weapons'), modRow('ModA')])).toEqual(['ModA']);
+      expect(modsAndSourceModsOfAgent([separator], heldSource).mods).toEqual([]);
+      expect(modsAndSourceModsOfAgent([separator, { kind: 'mod', name: 'ModA' }], heldSource).mods).toEqual(['ModA']);
+    });
+  });
 });
 
 describe('the mods an agent call runs over', () => {
