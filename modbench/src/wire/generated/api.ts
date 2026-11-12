@@ -389,6 +389,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins/file-paths": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The file paths each compiled plugin's source names, in the Data folder's spelling, with the file of the plugin source that holds each naming record. Given plugin and origin, only that plugin's. Answers only once the record index is ready. */
+        get: operations["GetPluginFilePaths"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/{plugin}/dependants": {
         parameters: {
             query?: never;
@@ -1685,6 +1702,12 @@ export interface components {
             name: string;
             origin?: string | null;
         };
+        NamedFilePath: {
+            formKey: string;
+            fieldPath: string;
+            sourceRelativePath: string;
+            dataPath: string;
+        };
         NamedObject: {
             plugin?: components["schemas"]["PluginAddress"] | null;
             formKey?: string | null;
@@ -1738,6 +1761,13 @@ export interface components {
             flags: {
                 [key: string]: boolean;
             };
+        };
+        PluginFilePaths: {
+            plugin: components["schemas"]["PluginAddress"];
+            paths: components["schemas"]["NamedFilePath"][];
+            unread: string[];
+            failure?: string | null;
+            failureKind?: components["schemas"]["ProblemsFailureKind"] | null;
         };
         PluginIndexedState: {
             state: components["schemas"]["PluginIndexing"];
@@ -3028,6 +3058,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginProblems"][];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetPluginFilePaths: {
+        parameters: {
+            query?: {
+                plugin?: string;
+                origin?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginFilePaths"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Service Unavailable */
