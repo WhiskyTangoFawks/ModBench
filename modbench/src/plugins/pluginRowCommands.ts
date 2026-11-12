@@ -59,7 +59,7 @@ export function registerDecompileCommand(
       sendAskingOverChanges(deps.client, progress, given, (plugins, force) => decompiled(deps.client, plugins, force))),
     report: (result, { plugins }) => {
       if (result.applied) reportSelection(deps.reporter, result.outcome, plugins.length, { verb: 'decompile', pastTense: 'Decompiled' });
-      else deps.reporter.report('error', String(result.refusal));
+      else deps.reporter.report('error', result.refusal);
     },
   };
   return registerAgentGesture('modbench.plugin.decompile', viewSelection, gesture);
