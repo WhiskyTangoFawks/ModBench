@@ -158,10 +158,9 @@ export type { PluginAddress };
 
 type VersionedMod = components['schemas']['VersionedMod'];
 
-/** An item mEdit refused, with the kind it named beside its message, for the command that owns the gesture to word the remedy. */
 interface KindedRefusal<T, Kind extends string> { item: T; reason: string; refusal: Kind }
 
-/** A selection's answer whose refusals carry the kind mEdit named. */
+/** A selection's answer whose refusals carry the kind mEdit named, for the command that owns the gesture to word the remedy. */
 export interface KindedOutcome<L, T, Kind extends string> {
   landed: readonly L[];
   refused: readonly KindedRefusal<T, Kind>[];
