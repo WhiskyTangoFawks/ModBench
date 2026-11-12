@@ -325,9 +325,9 @@ describe('update manifest', () => {
     });
 
     it.each([
-      ['a second installation file', 'Other.7z'],
-      ['the first installation file, among the downloaded files', 'ModA-1.0.7z'],
-    ])('whose manifest names %s that is missing from this machine, leaving the manifest as it was', async (_, missing) => {
+      ['a second installation file', 'Other.7z', 'a.nif'],
+      ['the first installation file, among the downloaded files', 'ModA-1.0.7z', 'b.nif'],
+    ])('whose manifest names %s that is missing from this machine, when a changed file might come from it, leaving the manifest as it was (Update manifest, story 5)', async (_, missing, changed) => {
       const OTHER: InstallationFile = { path: '/downloads/Other.7z', size: 5, hash: 'OOOOOOOOOOA=', entries: [{ path: 'b.nif', hash: HB }] };
       const held: Manifest = {
         packages: [{ kind: 'installationFile', name: 'ModA-1.0.7z', size: 10, hash: INSTALLED.hash }, { kind: 'installationFile', name: 'Other.7z', size: 5, hash: OTHER.hash }],
@@ -335,7 +335,7 @@ describe('update manifest', () => {
       };
       const downloads = [INSTALLED, OTHER].filter((file) => !file.path.endsWith(missing));
       const { update, manifestHeld } = await over({
-        files: { ModA: { 'a.nif': HA, 'b.nif': HB } },
+        files: { ModA: { 'a.nif': HA, 'b.nif': HB, [changed]: HX } },
         answers: { installations: new Map(), downloadedFilesHashed: { files: downloads, notes: [] } },
       });
       await writeManifestIn(join(modsDir, 'ModA'), held);
@@ -343,7 +343,7 @@ describe('update manifest', () => {
       const result = await update(['ModA']);
 
       expect([result.refused, result.landed, await manifestHeld('ModA')]).toEqual([
-        [{ item: 'ModA', reason: `was not updated: its manifest names '${missing}', and this machine does not hold it.` }], [], held,
+        [{ item: 'ModA', reason: `was not updated: its manifest names '${missing}', which this machine does not hold, so no package this machine holds tells where '${changed}' comes from.` }], [], held,
       ]);
     });
 
@@ -378,6 +378,39 @@ describe('update manifest', () => {
       const { result } = await refusedBy({ answers: { gameFilesTaken: new Map([['ModA', { kind: 'unreadable', reason: 'EACCES' }]]) } });
 
       expect([result.refused, result.landed.map(({ mod }) => mod)]).toEqual([[{ item: 'ModA', reason: 'EACCES' }], ['ModB']]);
+    });
+  });
+
+  describe('a held package', () => {
+    const NAMED = { kind: 'installationFile' as const, name: 'ModA-1.0.7z', size: 10, hash: INSTALLED.hash };
+    const OTHER: InstallationFile = { path: '/downloads/Other.7z', size: 5, hash: 'OOOOOOOOOOA=', entries: [{ path: 'b.nif', hash: HB }] };
+
+    it('stays the package of a file whose bytes are unchanged, though the game folder holds them too (Update manifest, story 2)', async () => {
+      const held: Manifest = { ...EMPTY, packages: [NAMED], files: holding({ 'a.nif': HA }) };
+      const { update, manifestHeld } = await over({
+        files: { ModA: { 'a.nif': HA } },
+        answers: {
+          installations: new Map(), downloadedFilesHashed: { files: [INSTALLED], notes: [] },
+          gameFilesTaken: new Map([['ModA', read({ gameFiles: [{ root: '/game', path: 'Data/a.nif', hash: HA, pathInFolder: 'a.nif' }], notes: [] })]]),
+        },
+      });
+      await writeManifestIn(join(modsDir, 'ModA'), held);
+
+      const result = await update(['ModA']);
+
+      expect([result.landed.map(({ manifestWritten }) => manifestWritten), await manifestHeld('ModA')]).toEqual([[false], held]);
+    });
+
+    it('lands a mod whose unchanged files only a missing package could hold, keeping the package and writing nothing (Update manifest, story 5)', async () => {
+      const held: Manifest = { ...EMPTY, packages: [NAMED, { kind: 'installationFile', name: 'Other.7z', size: 5, hash: OTHER.hash }], files: holding({ 'a.nif': HA, 'b.nif': HB }) };
+      const { update, manifestHeld } = await over({
+        files: { ModA: { 'a.nif': HA, 'b.nif': HB } }, answers: { installations: new Map(), downloadedFilesHashed: { files: [INSTALLED], notes: [] } },
+      });
+      await writeManifestIn(join(modsDir, 'ModA'), held);
+
+      const result = await update(['ModA']);
+
+      expect([result.refused, result.landed.map(({ manifestWritten, notInPackage }) => [manifestWritten, notInPackage]), await manifestHeld('ModA')]).toEqual([[], [[false, []]], held]);
     });
   });
 
@@ -719,7 +752,7 @@ describe('update manifest', () => {
     expect(await readdir(join(modsDir, 'ModA'))).toEqual(['ModA.manifest.json']);
   });
 
-  describe('a plugin its manifest flags (Update manifest, story 5)', () => {
+  describe('a plugin its manifest flags', () => {
     const FLAGS = { Small: true };
     const MANIFEST = { ...EMPTY, packages: [{ kind: 'installationFile' as const, name: 'ModA-1.0.7z', size: 10, hash: INSTALLED.hash }], flags: new Map([['Mod.esp', FLAGS]]) };
     const flagged = async (onDisk: string, couldHaveHeld: string[], recorded: string) => {
