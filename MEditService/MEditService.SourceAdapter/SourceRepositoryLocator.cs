@@ -26,6 +26,7 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
     // One locator is one operation, so all live and die with it: the next init, compile or edit
     // looks at the tree again, never trusting a file timestamp (ADR-0003).
     private readonly Dictionary<string, string[]> _entriesByScanRoot = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Dictionary<string, List<string>>> _entriesByTail = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TreeScan> _scansBySourceRoot = new(StringComparer.Ordinal);
     private readonly Dictionary<(string SourceRoot, string FormKey), TreeScan> _scansByKey = [];
     private readonly Dictionary<(PluginAddress Plugin, string FormKey), string> _foundByText = [];
@@ -200,18 +201,39 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
     // Every entry whose leaf name carries the FormKey, as the path of the document it stands for.
     private IEnumerable<string> DocumentsNaming(string sourceRoot, string spelled)
     {
-        // Computed once rather than per entry: FilesafeFormKey reparses the FormKey on every call.
         var filesafe = SourceRepositoryLayout.FilesafeFormKey(spelled);
-        foreach (var entry in EntriesUnder(sourceRoot))
+        var named = EntriesByTail(sourceRoot);
+        var entries = (named.TryGetValue(filesafe, out var bare) ? bare : [])
+            .Concat(named.TryGetValue(filesafe + SourceRepositoryLayout.JsonSuffix, out var suffixed) ? suffixed : []);
+        foreach (var entry in entries)
         {
-            var leaf = Path.GetFileName(entry);
-            if (!SourceRepositoryLayout.NameCarries(leaf, filesafe) && !SourceRepositoryLayout.NameCarries(leaf, filesafe + SourceRepositoryLayout.JsonSuffix)) continue;
-
             if (!_files.DirectoryExists(entry) && IsAContainersDocument(entry)) continue;
 
             yield return _files.DirectoryExists(entry) ? SourceRepositoryLayout.ContainerDocumentHeldBy(_files, entry) : entry;
         }
     }
+
+    // Each entry under its leaf's name tail, whole or after an " - ", so a FormKey finds its entries without a scan of the listing.
+    private Dictionary<string, List<string>> EntriesByTail(string sourceRoot)
+    {
+        if (_entriesByTail.TryGetValue(sourceRoot, out var cached)) return cached;
+        var byTail = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        void Add(string tail, string entry)
+        {
+            if (!byTail.TryGetValue(tail, out var entries)) byTail[tail] = entries = [];
+            entries.Add(entry);
+        }
+        foreach (var entry in EntriesUnder(sourceRoot))
+        {
+            var leaf = Path.GetFileName(entry);
+            Add(leaf, entry);
+            for (var at = leaf.IndexOf(EditorIdSeparator, StringComparison.Ordinal); at >= 0; at = leaf.IndexOf(EditorIdSeparator, at + 1, StringComparison.Ordinal))
+                Add(leaf[(at + EditorIdSeparator.Length)..], entry);
+        }
+        return _entriesByTail[sourceRoot] = byTail;
+    }
+
+    private const string EditorIdSeparator = " - ";
 
     private bool IsAContainersDocument(string file) =>
         SourceRepositoryLayout.InAContainerGroup(Path.GetRelativePath(_sourceFolder, file), _release)
@@ -426,6 +448,7 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
     internal void Forget()
     {
         _entriesByScanRoot.Clear();
+        _entriesByTail.Clear();
         _scansBySourceRoot.Clear();
         _scansByKey.Clear();
         foreach (var gone in _foundByText.Where(found => !_files.FileExists(found.Value)).Select(found => found.Key).ToList())
