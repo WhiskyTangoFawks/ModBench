@@ -202,7 +202,7 @@ internal sealed class SourceStopException : InvalidOperationException
     internal static SourceStopException UnreadableIn(string sourceFolder, string file, string because, string? formKey = null) =>
         Unreadable(new UnreadableFile(
             Path.GetRelativePath(sourceFolder, file),
-            $"'{file}' is filed as a record in this plugin's source tree, but {because}.",
+            $"'{file}' is filed as a record in this plugin's source tree, but {because.TrimEnd('.')}.",
             formKey));
 
     internal static SourceStopException Ambiguous(string reason) => new(new SourceFailure.Ambiguous(reason, null));

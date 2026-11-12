@@ -96,6 +96,16 @@ public sealed class SourceTreeDocumentsTests : IDisposable
     }
 
     [Fact]
+    public void AnUnreadableFile_EndsItsMessageInOneSentenceEndingPeriod()
+    {
+        File.WriteAllText(Path.Combine(_modFolder, PluginSourceRoot.HeaderDocument(PluginName)), "{not json");
+
+        var failure = Assert.IsType<SourceFailure.Unreadable>(Repository.ReadDocuments(Plugin, tree => tree.Header).Stopped());
+
+        Assert.Matches(@"[^.]\.\z", failure.Reason);
+    }
+
+    [Fact]
     public void EveryRecordTheFixtureEmbedsInAnother_ReadsBackAsItsOwnDocument()
     {
         var documents = Documents();
