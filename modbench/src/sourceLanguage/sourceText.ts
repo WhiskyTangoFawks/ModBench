@@ -155,6 +155,9 @@ export function pluginNameSpans(text: string, formKey: string, name: string): Te
 export const locationOf = (fieldPath: string): Segment[] =>
   fieldPath.split('.').flatMap((member) => [member.split('[')[0] ?? member, ...[...member.matchAll(/\[(\d+)\]/g)].map((index) => Number(index[1]))]);
 
+export const fieldPathOf = (path: readonly Segment[]): string =>
+  path.reduce<string>((text, segment) => typeof segment === 'number' ? `${text}[${segment}]` : text === '' ? segment : `${text}.${segment}`, '');
+
 function stringInScope(scope: Node, spanned: string, fieldPath: string | null | undefined): Node | undefined {
   const atPath = fieldPath ? findNodeAtLocation(scope, locationOf(fieldPath)) : undefined;
   return atPath && isStringOf(spanned)(atPath) ? atPath : find(scope, isStringOf(spanned));

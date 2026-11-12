@@ -90,7 +90,7 @@ public record FieldMetadata(
     bool IsScriptName = false,
 
     // A path to a file in the Data folder, which Mutagen models as an asset link (symbols.md, The symbols, File).
-    [property: JsonIgnore] bool IsAssetLink = false,
+    bool IsAssetLink = false,
 
     // A reference Mutagen holds as an index instead while one of these boolean siblings is set (an
     // alias or package-data parameter), when DocumentNodes.VariantFor shapes it an integer.
@@ -104,6 +104,8 @@ public record FieldMetadata(
     // pairs with the nth in every other column. The compare reads it; the webview never does.
     [property: JsonIgnore] IReadOnlyList<string>? ExtendedKeyMembers = null)
 {
+    internal Type? AssetLinkType { get; init; }
+
     /// <summary>A read-only member has no writable members of its own, so its reason reaches every
     /// member below it, except one that already names its own.</summary>
     internal FieldMetadata WithReadOnlyReason(string reason) => this with

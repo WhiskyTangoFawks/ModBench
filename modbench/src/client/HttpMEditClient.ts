@@ -795,6 +795,11 @@ class HttpMEditClient implements MEditClient {
       (api, signal) => api.GET('/file-paths/references', { params: { query: { path } }, signal }), noBodyFails);
   }
 
+  resolveFilePath(gameRelease: string, recordType: string, text: string, fieldPath: string): Promise<string | ReadFailed> {
+    return this.read(`resolveFilePath(${recordType}, ${fieldPath})`,
+      (api, signal) => api.POST('/file-paths/resolve', { body: { gameRelease, recordType, text, fieldPath }, signal }), (data) => data === undefined ? NO_ANSWER : data.dataPath);
+  }
+
   getRenderedDocument({ name: plugin, origin }: PluginAddress, formKey: string): Promise<RenderedDocument | null | ReadFailed> {
     return this.read(`getRenderedDocument(${plugin}, ${formKey})`, (api, signal) => api.GET('/plugins/{plugin}/records/{formKey}/rendered-document', {
       params: { path: { plugin, formKey }, query: { origin } }, signal,

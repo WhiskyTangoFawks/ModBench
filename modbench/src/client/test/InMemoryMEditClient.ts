@@ -11,7 +11,7 @@ import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getPluginIndexing' | 'getPluginProblems' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'getArchiveContents' | 'getArchiveFile' | 'getArchiveCopies' | 'getFlaggedPluginHashes'
   | 'getRecords' | 'searchRecords'
-  | 'getRecordOwner' | 'getRecordHolders' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getRecordsComparison' | 'getReferences' | 'getReferencesInActiveOrCompiledPlugins' | 'getPluginNameReferences' | 'getScriptReferences' | 'getFileReferences'
+  | 'getRecordOwner' | 'getRecordHolders' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getRecordsComparison' | 'getReferences' | 'getReferencesInActiveOrCompiledPlugins' | 'getPluginNameReferences' | 'getScriptReferences' | 'getFileReferences' | 'resolveFilePath'
   | 'getRenderedDocument' | 'getCopyDocument' | 'getRecordOfFile'
   | 'getEditChanges'
   | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellChildRecords' | 'getInteriorCells'
@@ -440,6 +440,9 @@ export class InMemoryMEditClient implements MEditClient {
   }
   getFileReferences(...args: Parameters<MEditClient['getFileReferences']>): ReturnType<MEditClient['getFileReferences']> {
     return this.query('getFileReferences', args);
+  }
+  resolveFilePath(...args: Parameters<MEditClient['resolveFilePath']>): ReturnType<MEditClient['resolveFilePath']> {
+    return this.query('resolveFilePath', args);
   }
   getEditChanges(...args: Parameters<MEditClient['getEditChanges']>): ReturnType<MEditClient['getEditChanges']> {
     return this.query('getEditChanges', args);

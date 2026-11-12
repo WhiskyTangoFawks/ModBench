@@ -163,8 +163,12 @@ function openingIntoItsFiles(row: FileNode, entries: readonly ArchivedEntry[], s
 /** The path of the loose file in the game folder that wins over every archived copy of `entry`: a mod's loose copy
  *  overlays the game folder's, so there is none while one exists. */
 export function gameFolderFileOver(value: Pick<InstanceValue, 'dataFolderFiles' | 'stackedCopies'>, entry: string): string | undefined {
-  if (value.dataFolderFiles.kind !== 'listed' || value.stackedCopies.get(entry)?.copies[0]?.at.kind !== 'archived') return undefined;
-  return value.dataFolderFiles.files.get(entry.toLowerCase())?.path;
+  return value.stackedCopies.get(entry)?.copies[0]?.at.kind === 'archived' ? gameFolderFile(value, entry) : undefined;
+}
+
+/** The path of the loose file `entry` in the game folder's Data folder, if it holds one. */
+export function gameFolderFile(value: Pick<InstanceValue, 'dataFolderFiles'>, entry: string): string | undefined {
+  return value.dataFolderFiles.kind === 'listed' ? value.dataFolderFiles.files.get(entry.toLowerCase())?.path : undefined;
 }
 
 function archivedRow(row: vscode.TreeItem, parent: ModlistNode, archive: FileNode, name: string, path: string, gameFolderFile?: string): void {
