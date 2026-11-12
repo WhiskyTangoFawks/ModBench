@@ -2,10 +2,12 @@
 +MB-DEV SF Patch A+B
 +Patches_separator
 +MB-DEV SF Conditions
++MB-DEV SF Orphan Archive
 +MB-DEV SF Conflict B
 +MB-DEV SF Conflict A
 +MB-DEV SF Master
 +Gameplay_separator
++MB-DEV SF Redundant Archive
 +MB-DEV SF Fixes Addon
 +MB-DEV SF Fixes
 +Fixes_separator
