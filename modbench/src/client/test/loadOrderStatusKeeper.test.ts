@@ -70,6 +70,18 @@ describe('the client\'s load-order status', () => {
       expect(settled).toHaveBeenCalledTimes(2);
     });
 
+    it('is told when a reconcile of the version already settled, as a refresh runs, becomes ready', () => {
+      const client = new InMemoryMEditClient();
+      client.emit(tick(true, [], 1));
+      const settled = vi.fn();
+      client.onLoadOrderSettled(settled);
+
+      client.emit(tick(false, [], 1));
+      client.emit(tick(true, [], 1));
+
+      expect(settled).toHaveBeenCalledOnce();
+    });
+
     it('is not told when a reconcile starts, or while it runs', () => {
       const client = new InMemoryMEditClient();
       client.emit(tick(true, [], 1));
