@@ -26,6 +26,22 @@ const built = (
 const namesOf = (manifest: Manifest): string[] => manifest.packages.map((pkg) => ('name' in pkg ? pkg.name : pkg.kind));
 
 describe('a mod\'s manifest from its files', () => {
+  it('takes a new file from a package with a host before one without', () => {
+    const { sources } = built({ 'a.nif': 'HA' }, {
+      installationFile: download('Own.7z', { 'a.nif': 'HA' }), downloads: [download('Hosted.7z', { 'a.nif': 'HA' }, { page: 'nexus:1' })],
+    });
+
+    expect(sources.get('a.nif')?.installationFile).toBe('Hosted.7z');
+  });
+
+  it('keeps the held package of a file whose bytes are unchanged before one with a host', () => {
+    const own = download('Own.7z', { 'a.nif': 'HA' });
+    const { sources } = built({ 'a.nif': 'HA' }, { installationFile: own, downloads: [download('Hosted.7z', { 'a.nif': 'HA' }, { page: 'nexus:1' })] },
+      { packages: [downloadedFileOf(own, onNexus).package], exclude: [], ignore: [], flags: new Map(), files: new Map([['a.nif', 'HA']]) });
+
+    expect(sources.get('a.nif')?.installationFile).toBe('Own.7z');
+  });
+
   it('names nothing for a folder of metadata alone', () => {
     expect(built({}).manifest).toEqual({ packages: [], exclude: [], ignore: [], flags: new Map(), files: new Map() });
   });
