@@ -206,12 +206,12 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
 
   interface Run {
     order?: readonly string[]; provided?: readonly string[]; inData?: DataFolderPlugins; gameRelease?: string; creationClubList?: readonly string[];
-    profile?: string;
+    profile?: string; facts?: Fact[];
     repository?: { manifests: Readonly<Record<string, readonly string[] | 'unreadable'>> };
     otherMod?: { name: string; enabled: boolean };
   }
   const sync = async ({
-    order = [], provided = [], inData: data = inData(), gameRelease = 'Fallout4', creationClubList = [], profile = PROFILE, repository,
+    order = [], provided = [], inData: data = inData(), gameRelease = 'Fallout4', creationClubList = [], profile = PROFILE, repository, facts,
     otherMod = { name: 'Unrestored', enabled: true },
   }: Run) => {
     for (const [mod, held] of Object.entries(repository?.manifests ?? {})) {
@@ -225,7 +225,7 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
     }), { repositoryOnDisk: repository !== undefined });
     const asked: string[] = [];
     const reading = { ...fake.adapter, modValue: (...args: Parameters<typeof fake.adapter.modValue>) => { asked.push(basename(args[0])); return fake.adapter.modValue(...args); } };
-    const result = await pluginSyncOver(reading)();
+    const result = await pluginSyncOver(reading, facts === undefined ? NOT_INDEXED : knowing(...facts))();
     return { fake, result, asked };
   };
   const handedChanges = (fake: ReturnType<typeof fakeInstanceAdapter>) =>
@@ -257,9 +257,9 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
       modFiles: new Map([['Provider', { origin: 'Provider', folder: '/mods/Provider', files: [fileIn('/mods/Provider', 'MBDevLight.esl')], folders: [], notes: [] }]]),
     }), { repositoryOnDisk: true });
     await renamedPlugin(fake.adapter, { name: 'MBDevLight.esl', origin: 'Provider' }, 'temp.esp');
-    await pluginSyncOver(fake.adapter)();
+    await pluginSyncOver(fake.adapter, NOT_INDEXED)();
     await renamedPlugin(fake.adapter, { name: 'temp.esp', origin: 'Provider' }, 'MBDevLight.esl');
-    await pluginSyncOver(fake.adapter)();
+    await pluginSyncOver(fake.adapter, NOT_INDEXED)();
 
     let order: readonly string[] = [];
     await fake.adapter.changePluginOrder(PROFILE, (entries) => {
@@ -320,7 +320,7 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
       },
     };
 
-    const result = await pluginSyncOver(enablingLate)();
+    const result = await pluginSyncOver(enablingLate, NOT_INDEXED)();
 
     expect(result).toEqual({ applied: false, refusal: 'the manifest of "Late" was not read' });
   });
@@ -330,6 +330,50 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
 
     expect(result).toEqual({ applied: true, wrote: true, added: ['Alpha.esl', 'zeta.esp'], dropped: [] });
     expect(fake.calls).toEqual(synced([{ kind: 'add', plugin: 'Alpha.esl' }, { kind: 'add', plugin: 'zeta.esp' }]));
+  });
+
+  describe('a line lands where the game would load its plugin', () => {
+    const MASTER = { isMaster: true };
+    const loading = (...facts: Fact[]) => facts;
+
+    it('places a plugin mEdit has not read by its extension: a .esm before the first line that is no master', async () => {
+      const { fake } = await sync({
+        order: ['Base.esm', 'Plain.esp'], provided: ['Base.esm', 'Plain.esp', 'New.esm'],
+        facts: loading({ name: 'Base.esm', ...MASTER }, { name: 'Plain.esp' }),
+      });
+
+      expect(handedChanges(fake)).toEqual([{ kind: 'add', plugin: 'New.esm' }, { kind: 'move', plugins: ['New.esm'], toIndex: 1 }]);
+    });
+
+    it('places a .esp by the master flag mEdit read, before the first line that is no master', async () => {
+      const { fake } = await sync({
+        order: ['Base.esm', 'Plain.esp'], provided: ['Base.esm', 'Plain.esp', 'Flagged.esp'],
+        facts: loading({ name: 'Base.esm', ...MASTER }, { name: 'Plain.esp' }, { name: 'Flagged.esp', ...MASTER }),
+      });
+
+      expect(handedChanges(fake)).toEqual([{ kind: 'add', plugin: 'Flagged.esp' }, { kind: 'move', plugins: ['Flagged.esp'], toIndex: 1 }]);
+    });
+
+    it('places a .esm by the flags mEdit read, not its extension, at the winning end when it is no master', async () => {
+      const { fake } = await sync({
+        order: ['Base.esm', 'Plain.esp'], provided: ['Base.esm', 'Plain.esp', 'Unflagged.esm'],
+        facts: loading({ name: 'Base.esm', ...MASTER }, { name: 'Plain.esp' }, { name: 'Unflagged.esm', isMaster: false }),
+      });
+
+      expect(handedChanges(fake)).toEqual([{ kind: 'add', plugin: 'Unflagged.esm' }]);
+    });
+
+    it('lands several new masters in ascending order, each after the one before', async () => {
+      const { fake } = await sync({
+        order: ['Base.esm', 'Plain.esp'], provided: ['Base.esm', 'Plain.esp', 'B.esm', 'A.esm'],
+        facts: loading({ name: 'Base.esm', ...MASTER }, { name: 'Plain.esp' }),
+      });
+
+      expect(handedChanges(fake)).toEqual([
+        { kind: 'add', plugin: 'A.esm' }, { kind: 'move', plugins: ['A.esm'], toIndex: 1 },
+        { kind: 'add', plugin: 'B.esm' }, { kind: 'move', plugins: ['B.esm'], toIndex: 2 },
+      ]);
+    });
   });
 
   it('drops a line whose plugin nothing provides, and keeps one the game Data folder provides', async () => {

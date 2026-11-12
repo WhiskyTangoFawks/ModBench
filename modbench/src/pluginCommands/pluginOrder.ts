@@ -1,5 +1,6 @@
 import { addressOfRef, judge, type BrokenRule, type PluginFactsOf } from '../sortingRules/judge';
 import { suggestedMove } from '../sortingRules/suggestedMove';
+import { fileExtension } from '../tables/pluginFile';
 import { dropIndexIn, type Drop } from './dropIndex';
 
 /** What the game reads that a move is judged over: the plugins it loads with no line, every plugins.txt line, and which
@@ -48,4 +49,16 @@ export function offeredMoves(listed: ListedPlugins, broken: readonly BrokenRule[
     const drop = { kind: move.side, name: move.anchor.filename };
     return moveOrderRefusal(listed, [move.mover.filename], drop, factsOf) === undefined ? [{ rule, mover: addressOfRef(move.mover), drop }] : [];
   });
+}
+
+// A plugin mEdit has not read loads as a master by its extension alone.
+const factsOrExtension = (factsOf: PluginFactsOf): PluginFactsOf => (name) =>
+  factsOf(name) ?? { origin: '', masters: [], blueprint: false, master: fileExtension(name) === '.esm' };
+
+/** Where a new disabled line for `plugin` lands: after the last line, or directly before the plugin the game
+ *  would load it ahead of, so the game moves nothing. */
+export function landingDrop({ loadedWithNoLine, lines, isActive }: ListedPlugins, plugin: string, factsOf: PluginFactsOf): Drop {
+  const placement = judge(loadedWithNoLine, [...lines, plugin], factsOrExtension(factsOf), isActive).broken
+    .find((broken) => broken.rule === 'gameMoves' && broken.plugins.some((ref) => ref.filename === plugin))?.placement;
+  return placement === undefined ? { kind: 'winningEnd' } : { kind: placement.side, name: placement.anchor.filename };
 }

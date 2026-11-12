@@ -11,7 +11,7 @@ import { manifestAt, packagesAskedAt, statusFrom, type ModStatus } from '../mani
 import type { TailOf } from '../coreLib/boundCommand';
 import { pluginRenameCommands, type PluginRenameClient } from './renamePlugin';
 import type { PluginFactsOf } from '../sortingRules/judge';
-import { moveOrderRefusal } from './pluginOrder';
+import { landingDrop, moveOrderRefusal } from './pluginOrder';
 import { decompileAndRepair, outsideSourceMods, type DecompileAndRepairClient, type PlaceMods } from './decompileAndRepair';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type {
@@ -195,16 +195,27 @@ async function askedManifests(adapter: InstanceAdapter): Promise<ManifestsRead> 
 
 type SyncDecision = PluginLinesDelta | { gameFolderNotFound: true };
 
-function decideSync(order: readonly PluginEntry[], provided: PluginsProvided, manifests: ManifestsRead): Decision<SyncDecision> {
+function decideSync(order: readonly PluginEntry[], provided: PluginsProvided, manifests: ManifestsRead, factsOf: PluginFactsOf): Decision<SyncDecision> {
   // Without the Data folder's listing, a line for a Data plugin would be dropped. A game folder
   // not found is told once, as the instance's state (common.md, States, story 5).
   if (provided.kind === 'unresolved') return { changes: [], decided: { gameFolderNotFound: true } };
   if (provided.kind === 'unreadable') throw new Error(`the game's Data folder cannot be listed: ${provided.reason}`);
   const delta = pluginLinesDelta(order.map((e) => e.name), provided, manifests);
+  const dropped = new Set(delta.dropped.map(pluginKey));
+  const noLine = new Set(provided.loadedWithNoLine.map(pluginKey));
+  const enabled = new Set(order.filter((e) => e.enabled).map((e) => pluginKey(e.name)));
+  const kept = order.map((e) => e.name).filter((name) => !dropped.has(pluginKey(name)));
+  const loadedWithNoLine = provided.loadedWithNoLine.flatMap((name) => provided.plugins.get(pluginKey(name)) ?? []);
   return {
     changes: [
       ...delta.dropped.map((plugin): PluginOrderChange => ({ kind: 'drop', plugin })),
-      ...delta.added.map((plugin): PluginOrderChange => ({ kind: 'add', plugin })),
+      ...delta.added.flatMap((plugin): PluginOrderChange[] => {
+        const lines = kept.filter((name) => !noLine.has(pluginKey(name)));
+        const drop = landingDrop({ loadedWithNoLine, lines, isActive: (name) => enabled.has(pluginKey(name)) }, plugin, factsOf);
+        const toIndex = dropIndexIn([...kept, plugin], [plugin], drop);
+        kept.splice(toIndex, 0, plugin);
+        return drop.kind === 'winningEnd' ? [{ kind: 'add', plugin }] : [{ kind: 'add', plugin }, { kind: 'move', plugins: [plugin], toIndex }];
+      }),
     ],
     decided: delta,
   };
@@ -214,9 +225,10 @@ const synced = (wrote: boolean, decided: SyncDecision): PluginSyncResult =>
   ('gameFolderNotFound' in decided ? { applied: false, toldAsInstanceState: true } : { applied: true, wrote, ...decided });
 
 // A sync reads the manifests it decides on through the adapters, never the Mod status box (ADR-0015).
-async function syncPlugins(adapter: InstanceAdapter): Promise<PluginSyncResult> {
+async function syncPlugins(adapter: InstanceAdapter, masters: PluginMasters): Promise<PluginSyncResult> {
+  const factsOf = await orderFactsFrom(masters);
   const manifests = await adapter.repositoryOnDisk() ? await askedManifests(adapter) : NOTHING_NAMED;
-  const decided = await changeDeciding(overProvided(adapter), (order, provided) => decideSync(order, provided, manifests));
+  const decided = await changeDeciding(overProvided(adapter), (order, provided) => decideSync(order, provided, manifests, factsOf));
   return decided.applied ? synced(decided.wrote, decided.decided) : decided;
 }
 
@@ -235,8 +247,8 @@ export function fileReadsOver(adapter: Pick<InstanceAdapter, 'dataFileChecksum' 
 }
 
 /** `syncPlugins` bound to one instance. */
-export function pluginSyncOver(adapter: InstanceAdapter): PluginSyncRun {
-  return () => syncPlugins(adapter);
+export function pluginSyncOver(adapter: InstanceAdapter, masters: PluginMasters): PluginSyncRun {
+  return () => syncPlugins(adapter, masters);
 }
 
 async function loadAfter(adapter: InstanceAdapter, plugins: readonly string[], after: readonly string[]): Promise<CommandResult> {
