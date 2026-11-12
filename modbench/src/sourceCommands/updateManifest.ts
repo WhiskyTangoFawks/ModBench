@@ -1,4 +1,4 @@
-import { basename } from 'node:path';
+import { basename, join } from 'node:path';
 import type { MEditClient } from '../client';
 import type { InstallationFile, InstanceAdapter, OtherManifest } from '../instanceAdapter/instanceAdapter';
 import {
@@ -16,7 +16,7 @@ import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, descri
 
 type Adapter = Pick<InstanceAdapter,
   'sourceModFolders' | 'foldersHeldWhole' | 'entryKey' | 'modOrder' | 'gamePlace' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'modFolderPath' | 'installationFile'
-  | 'downloadedFilesHashed' | 'folderValue' | 'unheldFolderValue' | 'fileStamp' | 'nexusFileAt' | 'writeSubmodules' | 'writeOtherManifestLines'>;
+  | 'downloadedFilesHashed' | 'filesHeldByGit' | 'originFileHash' | 'unheldFolderValue' | 'fileStamp' | 'nexusFileAt' | 'writeSubmodules' | 'writeOtherManifestLines'>;
 
 export interface UpdateManifestDeps {
   readonly adapter: Adapter;
@@ -165,20 +165,22 @@ function packageCopiesOf(
   return unknown.length === 0 ? { files: copies } : { unknown };
 }
 
-// instance-repository.md, Update manifest, story 7: a source folder's manifest keeps a package it names until git holds the files the package holds.
+// Update manifest, story 7; a mod's own folder is left out, which git never holds.
 async function keptPackages(
-  adapter: Adapter, folder: string, held: Manifest | undefined, built: Manifest, unheld: ReadonlyMap<string, unknown>, downloadedFiles: readonly DownloadedFile[],
+  adapter: Adapter, folder: string, held: Manifest | undefined, built: Manifest, downloadedFiles: readonly DownloadedFile[],
 ): Promise<readonly ManifestPackage[]> {
   const builtKeys = new Set(built.packages.map(packageKey));
-  const named = held?.packages.filter((pkg) => pkg.kind === 'installationFile' && !builtKeys.has(packageKey(pkg))) ?? [];
+  const named = held?.packages.flatMap((pkg) => (pkg.kind === 'installationFile' && !builtKeys.has(packageKey(pkg)) ? [pkg] : [])) ?? [];
   if (named.length === 0) return [];
-  const all = await adapter.folderValue(folder);
-  const gitHolds = new Set([...all.files].flatMap(([path, file]) => (!path.startsWith('.git/') && !unheld.has(path) && file.read.kind === 'read' ? [file.read.answer.hash] : [])));
-  const gitHoldsAllOf = (pkg: ManifestPackage): boolean => {
-    const entries = pkg.kind === 'installationFile' ? downloadedFiles.find(({ package: one }) => one.name === pkg.name)?.file.entries ?? [] : [];
-    return entries.length > 0 && entries.every(({ hash }) => gitHolds.has(hash));
-  };
-  return named.filter((pkg) => !gitHoldsAllOf(pkg));
+  const paths = ((await adapter.filesHeldByGit([folder])).get(folder) ?? []).filter((path) => path !== '.git' && !path.startsWith('.git/'));
+  const gitHolds = new Set<string>();
+  for (const path of paths) {
+    const read = await adapter.originFileHash(join(folder, path));
+    if (read.kind === 'read') gitHolds.add(read.answer.hash);
+  }
+  const gitHoldsAll = ({ name }: { readonly name: string }): boolean =>
+    (downloadedFiles.find(({ package: one }) => one.name === name)?.file.entries ?? []).every(({ hash }) => gitHolds.has(hash));
+  return named.filter((pkg) => !gitHoldsAll(pkg));
 }
 
 const unaccounted = (paths: readonly string[]): string => {
@@ -225,7 +227,12 @@ async function updateMod(
   const built = buildManifest(
     { downloadedFiles, ...mod.game === undefined ? {} : { game: mod.game }, ...installationFile === undefined ? {} : { installationFile } },
     copies.files, exclusionsOfFiles(hashed.exclude, files.map(({ path }) => path)), held);
-  const kept = mod.isSourceFolder === true ? await keptPackages(adapter, mod.folder, held, built.manifest, hashed.value.files, downloadedFiles) : [];
+  let kept: readonly ManifestPackage[] = [];
+  try {
+    if (mod.isSourceFolder === true) kept = await keptPackages(adapter, mod.folder, held, built.manifest, downloadedFiles);
+  } catch (err) {
+    return refusal(`a file could not be read: ${errorMessage(err)}`);
+  }
   const withKept = { ...built, manifest: { ...built.manifest, packages: [...built.manifest.packages, ...kept] } };
   const recorded = only === undefined ? withKept : { ...withKept, manifest: laidOver(held, withKept.manifest) };
   let written: boolean;

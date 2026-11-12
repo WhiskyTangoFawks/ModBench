@@ -459,15 +459,20 @@ describe('update manifest', () => {
         expect(await heldIn(SOURCE())).toEqual({ ...EMPTY, files: holding({ 'tool.dll': HA }) });
       });
 
-      it('is refused, the manifest left as it was, when this machine lacks the package', async () => {
-        const { update } = await among({}, { downloadedFilesHashed: { files: [], notes: [] } }, { 'tool.dll': HA });
-        await writeManifestIn(SOURCE(), authorHeld);
+      it('while git holds only some of the files it holds', async () => {
+        const { update } = await vendored({ 'tool.dll': HA, 'Author.esp': HZ }, ['Author.esp']);
 
-        const result = await update([], {}, [], false, ['ModB']);
+        await update([], {}, [], false, ['ModB']);
 
-        expect([result.refused.map(({ reason }) => String(reason)), await heldIn(SOURCE())]).toEqual([
-          ["was not updated: its manifest names 'Author.7z', and this machine does not hold it."], authorHeld,
-        ]);
+        expect(await heldIn(SOURCE())).toEqual(authorHeld);
+      });
+
+      it('though a gitlink named .git holds its bytes', async () => {
+        const { update } = await vendored({ 'tool.dll': HA, '.git': HX, 'Author.esp': HZ }, ['.git', 'Author.esp']);
+
+        await update([], {}, [], false, ['ModB']);
+
+        expect(await heldIn(SOURCE())).toEqual(authorHeld);
       });
     });
 

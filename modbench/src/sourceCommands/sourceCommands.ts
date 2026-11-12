@@ -22,7 +22,7 @@ interface SourceCommandsDeps {
   adapter: Pick<InstanceAdapter,
     'reading' | 'modOrder' | 'entryKey' | 'downloadedFile' | 'downloadedFilesHashed' | 'downloadedFileHolding' | 'installationFile' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceModFolders'
     | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'nexusFileAt' | 'gamePlace' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash' | 'filesIn'
-    | 'originFileHash' | 'folderValue' | 'writeFilesIn' | 'trashFileIn' | 'trashingReplaced' | 'fileStamp' | 'copyDownloadedFile' | 'putDownloadedFile' | 'unheldFolderValue'
+    | 'originFileHash' | 'folderValue' | 'writeFilesIn' | 'trashFileIn' | 'trashingReplaced' | 'fileStamp' | 'copyDownloadedFile' | 'putDownloadedFile' | 'unheldFolderValue' | 'filesHeldByGit'
     | 'repositoryOnDisk' | 'writeSourceModLines' | 'writeHeldWholeLines' | 'commitFolder' | 'foldersHeldWhole' | 'foldersInReach'>;
   /** Saves the unsaved documents under a folder that `picked` picks, as Text documents holds them; answers the paths VS
    *  Code left unsaved. */
