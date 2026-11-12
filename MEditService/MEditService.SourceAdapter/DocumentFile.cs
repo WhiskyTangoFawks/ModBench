@@ -1,5 +1,5 @@
 namespace MEditService.SourceAdapter;
 
-/// <summary>A file in plugin source, relative to the source folder as <paramref name="RelativePath"/>, and whether it is the
-/// document of the record that carries the record asked for rather than that record's own.</summary>
+/// <summary>A file in plugin source, and whether it is the document of the record that carries the
+/// record asked for rather than that record's own.</summary>
 public sealed record DocumentFile(string Path, string RelativePath, bool IsContainersDocument);

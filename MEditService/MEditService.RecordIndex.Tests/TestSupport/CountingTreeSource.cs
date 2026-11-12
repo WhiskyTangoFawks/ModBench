@@ -7,7 +7,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
-/// <summary>Reads source trees as the real adapter does, and counts each time git is asked what a tree changed since its last commit and each time a record is located.</summary>
+/// <summary>Reads source trees as the real adapter does, and counts git status asks and record locates.</summary>
 internal sealed class CountingTreeSource(ISourceAdapter inner) : DelegatingSourceAdapter(inner)
 {
     private int _asked;
