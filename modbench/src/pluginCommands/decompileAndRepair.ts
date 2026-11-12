@@ -1,7 +1,7 @@
 // Decompile and repair (source.md, Decompile and repair): mEdit writes the two commits of each plugin. A mod that is
 // not a source mod is made one, as version in git makes it.
 
-import { isRefusalOf, isRefused, type MEditClient, type PluginAddress, type PluginToRepair, type SourceFolderRequest, type SourceModIn, type WriteRefused } from '../client';
+import { isRefusalOf, type MEditClient, type PluginAddress, type PluginToRepair, type SourceFolderRequest, type SourceModIn, type WriteRefused } from '../client';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { sourceModsOf } from '../manifestAdapter/manifestAdapter';
 import type { SelectionResult } from '../coreLib/commandResult';

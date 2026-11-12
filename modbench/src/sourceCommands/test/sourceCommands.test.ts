@@ -10,11 +10,11 @@ import { recordingTasks } from '../../test/recordingTasks';
 import { manifestIn, manifestText, writeManifestIn, type BuildStep, type Manifest, type TaskStep } from '../../manifestAdapter/manifestAdapter';
 import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
 import { BUILD_FILE } from '../../wire/sourceMod';
-import { isRefusalOf, isRefused, type ModToVersionInGit } from '../../client';
+import { isRefusalOf, type ModToVersionInGit } from '../../client';
 import { forAgent } from '../../ports/phrase';
 import type { BuildMod } from '../../client/MEditClient';
 
-const textOf = (outcome: unknown) => (isRefused(outcome) ? { ...outcome, message: String(outcome.message) } : outcome);
+const textOf = (outcome: object) => ('message' in outcome ? { ...outcome, message: String(outcome.message) } : outcome);
 
 let root: string;
 let SOURCES: { ModA: string; ModB: string };

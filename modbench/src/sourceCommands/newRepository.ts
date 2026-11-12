@@ -3,7 +3,7 @@
 
 import { basename, join } from 'node:path';
 import { gestureName, phrase, type Message } from '../ports/phrase';
-import { isRefusalOf, isRefused, type SourceFolderRequest, type SourceModIn, type WriteRefused } from '../client';
+import { isRefusalOf, type SourceFolderRequest, type SourceModIn, type WriteRefused } from '../client';
 import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import {
   buildFileText, exclusionsOfFiles, isUnderAny, manifestFileFor, manifestNameOf, manifestText, ownFilesOf, sourceModsOf, type BuildStep, type Manifest,
