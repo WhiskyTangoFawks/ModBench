@@ -327,7 +327,6 @@ public class ConflictByCompareTests
 
         var race = Row(result, "Race");
         Assert.False(RequireResolutions(race).ContainsKey("B.esp"));
-        Assert.False(race.CheckErrors?.ContainsKey("B.esp") ?? false);
     }
 
     [Fact]

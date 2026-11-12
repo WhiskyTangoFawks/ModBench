@@ -31,6 +31,11 @@ describe('FormKeyCell — a read-only column opens nothing, leaving copy to Ctrl
     expect(screen.getByText('000019:Fallout4.esm')).toBeInTheDocument();
   });
 
+  it('shows "None" for a None reference', () => {
+    render(<FormKeyCell value="None" meta={fkMeta} />);
+    expect(screen.getByText('None')).toBeInTheDocument();
+  });
+
   it('plain click does not open the picker', () => {
     render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} />);
     fireEvent.click(screen.getByText('000019:Fallout4.esm'));
