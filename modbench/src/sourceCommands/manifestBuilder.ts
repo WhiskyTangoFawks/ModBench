@@ -98,7 +98,6 @@ function gameFolderPackage(game: GameHeld, taken: readonly HashedModFile[], held
   return { kind: 'gameFolder', host: { steam: { app: game.steamApp, ...depots === undefined ? {} : { depots } } } };
 }
 
-
 export const packageKey = (pkg: ManifestPackage): string => (pkg.kind === 'installationFile' ? `installationFile:${pkg.name}` : pkg.kind);
 
 interface Holder {
