@@ -1243,10 +1243,14 @@ internal sealed class Indexer : IDisposable
             }
 
             var failedBefore = held.IsHeldWithAFailure(key) || scope.Failed.Holds(key);
-            // The tree's rows say nothing of the header its compiled file now holds. A compiled file that
-            // cannot be read leaves the header last read, as the tree does not need it.
-            if (holdsTree && !failedBefore && held.Open(plugin.Registered, Registration.In(scope.LoadOrder, key), scope.LoadOrder).Holds(out var reopened, out _))
-                plugin = reopened;
+            // The tree's rows say nothing of the header its compiled file now holds. A file gone leaves no
+            // header to show; one present but unreadable leaves the header last read, for the next change to re-read.
+            if (holdsTree && !failedBefore)
+            {
+                if (!_adapter.Exists(plugin.Path)) held.Remove(key);
+                else if (held.Open(plugin.Registered, Registration.In(scope.LoadOrder, key), scope.LoadOrder).Holds(out var reopened, out _))
+                    plugin = reopened;
+            }
 
             // Rows a failed read left say nothing of what the plugin now reads from.
             if (failedBefore)

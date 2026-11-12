@@ -39,6 +39,8 @@ public sealed class CompiledHeaderFollowsFileTests : IDisposable
     private IReadOnlyList<string> MastersOfBuilt() =>
         _index.Queries.GetPlugins().Value().Single(p => p.Name == Built).Masters;
 
+    private bool IsListed() => _index.Queries.GetPlugins().Value().Any(p => p.Name == Built);
+
     private void Rebuild() =>
         PluginBinaries.Rewrite(_built.Path, mod =>
         {
@@ -66,5 +68,30 @@ public sealed class CompiledHeaderFollowsFileTests : IDisposable
         _index.SignalChange([_built.Key]);
 
         Waits.Reached(() => MastersOfBuilt().SequenceEqual([Master]), "the rewritten header");
+    }
+
+    [Fact]
+    public async Task ABuildThatDroppedAMaster_IsReadBeforeTheReadOfItsWriteIsVouched()
+    {
+        Rebuild();
+        _index.SignalChange([_built.Key]);
+        Waits.Reached(() => MastersOfBuilt().SequenceEqual([Master]), "the master read");
+        PluginBinaries.Rewrite(_built.Path, mod => mod.Npcs.AddNew("BuiltNpc"));
+        _holder.SourceWritten([_built.Key]);
+        var read = Task.Run(MastersOfBuilt);
+
+        _index.SignalChange([_built.Key]);
+
+        Assert.Empty(await read.WaitAsync(Generous));
+    }
+
+    [Fact]
+    public void ACompiledFileThatIsGone_LeavesItsPluginUnlisted_AsOneNotYetRead()
+    {
+        File.Delete(_built.Path);
+
+        _index.SignalChange([_built.Key]);
+
+        Waits.Reached(() => !IsListed(), "the plugin unlisted");
     }
 }
