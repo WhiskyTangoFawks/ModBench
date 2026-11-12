@@ -137,7 +137,7 @@ public static class FormReferences
             WalkLeaves(elementType, elem, $"{path}[{idx++}]", isLeaf, onLeaf);
     }
 
-    private static bool IsRealRef([NotNullWhen(true)] string? s) => s is not null && s != "Null";
+    public static bool IsRealRef([NotNullWhen(true)] string? s) => !string.IsNullOrEmpty(s) && s is not ("Null" or "None");
 
     public static string? ExtractString(object? raw) => raw switch
     {

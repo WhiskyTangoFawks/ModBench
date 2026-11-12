@@ -4,6 +4,7 @@ using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.RecordIndex.Tests.Query;
@@ -12,7 +13,7 @@ public sealed class ProblemsPanelTests : IDisposable
 {
     private const string Absent = "000ABC:Absent.esp";
 
-    private sealed record Plugin(string Name, string? RefersTo = Absent, bool Enabled = true, bool CompiledPlugin = true)
+    private sealed record Plugin(string Name, string? RefersTo = Absent, bool Enabled = true, bool CompiledPlugin = true, bool ResponseWithNoneEmotion = false)
     {
         public string Referrer => $"000800:{Name}";
     }
@@ -40,12 +41,26 @@ public sealed class ProblemsPanelTests : IDisposable
                 var referrer = mod.Npcs.AddNew("Referrer");
                 if (plugin.RefersTo is { } target) referrer.Race.SetTo(FormKey.Factory(target));
                 mod.Npcs.AddNew("Other");
+                if (plugin.ResponseWithNoneEmotion) AddResponseWithNoneEmotion(mod);
             }, enabled: plugin.Enabled, origin: $"{Path.GetFileNameWithoutExtension(plugin.Name)}Mod");
         }
         _fixture = builder.BuildScattered();
         foreach (var plugin in plugins.Where(p => p.CompiledPlugin))
             SourceMods.Init(Entry(plugin));
         return _fixture.Plugins;
+    }
+
+    private static void AddResponseWithNoneEmotion(Fallout4Mod mod)
+    {
+        var response = new DialogResponse();
+        response.Emotion.SetTo(FormKey.None);
+        var responses = new DialogResponses(mod.GetNextFormKey(), Fallout4Release.Fallout4);
+        responses.Responses.Add(response);
+        var topic = new DialogTopic(mod.GetNextFormKey(), Fallout4Release.Fallout4);
+        topic.Responses.Add(responses);
+        var quest = new Quest(mod.GetNextFormKey(), Fallout4Release.Fallout4);
+        quest.DialogTopics.Add(topic);
+        mod.Quests.Add(quest);
     }
 
     private ScatteredFixtureData Fixture => _fixture ?? throw new InvalidOperationException("Build the fixture first.");
@@ -175,6 +190,17 @@ public sealed class ProblemsPanelTests : IDisposable
         Build(plugin);
         Directory.Delete(PluginSourceRoot.In(Entry(plugin).ModFolderOf(), plugin.Name), recursive: true);
         using var index = Indexes.Reconciled(Fixture);
+
+        var answer = Assert.Single(Ready(index));
+
+        Assert.Empty(answer.Problems);
+        Assert.Null(answer.Failure);
+    }
+
+    [Fact]
+    public void ADialogueResponsesNoneEmotion_IsAValueNotAReference_SoItIsNoProblem()
+    {
+        using var index = Reconciled(new Plugin("Speaks.esp", RefersTo: null, ResponseWithNoneEmotion: true));
 
         var answer = Assert.Single(Ready(index));
 

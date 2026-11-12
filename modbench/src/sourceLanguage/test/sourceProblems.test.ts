@@ -66,6 +66,7 @@ describe('feedSourceProblems (source.md, In the text editor, story 6)', () => {
 
   it.each([
     ['names no field', { fieldPath: null }],
+    ['targets None, a value that names no record', { targetFormKey: 'None' }],
     ['is a link that was not checked, for it is not known to be missing', { fieldPath: 'Race', uncheckedBecause: 'Unreadable.esp' }],
   ])('carries no clearing edit on a problem that %s', async (_label, given) => {
     const { answered } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': '{}' });

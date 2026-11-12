@@ -55,6 +55,7 @@ internal static class LoadIndex
         {
             if (!FormKey.TryFactory(text, out var key)) return null;
             if (key.IsNull) return FormID.Null.Raw;
+            if (key == FormKey.None) return uint.MaxValue;
             if (!slots.TryGetValue(key.ModKey.FileName.String, out var slot) || key.ID > FormID.IdMask(slot.Style)) return null;
             return FormID.Factory(slot.Style, slot.Place, key.ID).Raw;
         }

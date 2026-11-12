@@ -51,6 +51,8 @@ public class FormReferenceCollectorTests
     [Theory]
     [InlineData("a link", "null")]
     [InlineData("a link", "\"Null\"")]
+    [InlineData("a link", "\"None\"")]
+    [InlineData("a list of structs holding a link", """[{"Faction":"None"}]""")]
     [InlineData("a list of structs holding a link", """[{"Faction":"Null"}]""")]
     [InlineData("a list of structs holding a link", """[{"Rank":1}]""")]
     [InlineData("a string", "\"some value\"")]

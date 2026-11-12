@@ -39,7 +39,7 @@ public static class CheckErrorBuilder
         string? value, IReadOnlyList<string> validTypes,
         Func<string, ResolvedFormKey?> resolve, Func<string, string?> whyUnchecked, GameRelease release, bool indexed)
     {
-        if (string.IsNullOrEmpty(value) || value == "Null")
+        if (!FormReferences.IsRealRef(value))
             return null;
 
         // Asked only of a miss: a key the lookup answers is answered, and the hardcoded-range
