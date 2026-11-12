@@ -162,7 +162,7 @@
       "properties": {
         "kind": { "description": "The package's kind.", "const": "gameFolder" },
         "host": {
-          "description": "The store that installs the game. Absent when Modbench knows no store for it.",
+          "description": "The store that holds the game's files. Absent when Modbench knows no store for it.",
           "type": "object",
           "properties": {
             "steam": { "$ref": "#/$defs/steamApp" }

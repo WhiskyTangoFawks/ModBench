@@ -31,6 +31,7 @@ A mod's installation files are the downloaded files the mod was installed from. 
 9. A plugin I rename to need no source mod. Cites: ADR-0022
 10. Each package's host taken from its downloaded file's own metadata, never the mod's, so stale mod metadata never names a host the file did not come from. Cites: Never silently wrong
 11. A file in a mod I ignore, such as one the game rewrites on every run, neither recorded nor touched, so it never reads as changed: update manifest and version in git leave it out, status never reads it as differing, and restore and build neither write nor trash it. Cites: commands.md, One identity
+12. The game's files to have the store that holds their bytes as their package's host. Cites: The manifest, story 4
 
 ## Status
 
@@ -70,6 +71,7 @@ As a user, I want:
 4. Update manifest, while it hashes downloaded files, to show progress and to stop when I cancel, keeping each hash it took. A downloaded file whose hash failed is hashed again after a reload of the window, so a tool I fix takes effect.
 5. A mod refused, and its manifest left as it was, when telling which package holds a file's bytes needs a package missing from this machine, so a missing downloaded file never reads as files no package holds. Cites: Never silently wrong; Update manifest, story 2
 6. Each file of a mod to come from whichever downloaded file holds its bytes, so an installation file the mod manager names that is missing or unreadable never refuses the mod. Cites: Status, story 7
+7. Update manifest to keep a package its manifest names until git holds the files the package holds, since committing them makes them the repository's. Cites: ADR-0022
 
 ## Restore from manifest
 

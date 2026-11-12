@@ -26,7 +26,7 @@ As a user, I want:
 | True or false | `True` or `False` | a check box, which writes as it is clicked | `True` or `False` |
 | Enum | the member's name; a value the enum does not name reads `<Unknown: 5>` | VS Code's quick pick of the names, sorted, with `<Unknown: n>` among them when the value is unnamed, opened on the current one | the name |
 | Flags | collapsed, the names of the flags set, joined by `, `; expanded, a check box for each flag | the check boxes, each of which writes as it is clicked | the names, joined by `, ` |
-| FormLink | the EditorID, or the FormKey when it resolves to no record of an active plugin, or to one with no EditorID; `—` for no reference; `EditorID [FormKey]` in its tooltip | the record picker, below | `EditorID [FormKey]` |
+| FormLink | the EditorID, or the FormKey when it resolves to no record of an active plugin, or to one with no EditorID; `—` for no reference; `None` for a None reference; `EditorID [FormKey]` in its tooltip | the record picker, below | `EditorID [FormKey]` |
 | Bytes | `0x` and the bytes in uppercase hex | a text box | the text |
 | Colour | `#AARRGGBB`, or `#RRGGBB` for a colour that holds no alpha; a swatch of the colour beside it | a text box | the text |
 | Vector | `x, y, z`; a rotation also in degrees beside it | a text box | `x, y, z` |
@@ -56,7 +56,7 @@ As a user, I want:
 3. A pasted `EditorID [FormKey]` to search by the FormKey in its brackets, so a label that has gone stale still finds the right record.
 4. Enter to write the record I chose, and Esc to change nothing. Cites: Esc changes nothing
 5. A dangling or type-mismatched FormLink to carry a warning in its cell, with the reason in its tooltip. Cites: GLOSSARY.md, FormLink
-6. A FormLink to be dangling only when the game cannot resolve it: one to a record the engine defines, such as the player, resolves though no plugin holds it. Cites: xEdit
+6. A FormLink to be dangling only when it names a record the game cannot resolve. One the engine defines, such as the player, resolves though no plugin holds it, and a None reference names no record. Cites: xEdit
 7. Go to record on a FormLink that resolves, and on one of the wrong type, as xEdit follows both. Cites: xEdit; [editor.md](editor.md)
 
 ## Arrays

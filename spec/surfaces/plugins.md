@@ -115,7 +115,7 @@ Modbench judges what the game loads from the plugin order I have against the gam
 |---|---|
 | Error | a master loads after a plugin that lists it · a master is missing or not active · a requirement is missing · an incompatibility is present · a LOOT error message |
 | Warning | the game moves a plugin from where `plugins.txt` lists it · a plugin loads before a plugin its sorting rule says it loads after · a LOOT warning message |
-| Info | a LOOT group loads before a LOOT group it names · LOOT's cleaning data says the plugin is dirty · a LOOT say message |
+| Info | a plugin loads out of its LOOT group's place · LOOT's cleaning data says the plugin is dirty · a LOOT say message |
 
 As a user, I want:
 
