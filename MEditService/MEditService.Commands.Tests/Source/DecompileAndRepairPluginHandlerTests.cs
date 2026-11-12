@@ -177,6 +177,30 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task DecompileAndRepair_OfAHealthyPluginOfAModWithNoRepositoryWhoseOtherPluginIsMalformed_IsRefusedAsOtherPluginRepairable()
+    {
+        AddToNewMod(Lossless.Malformed);
+        WriteCleanPlugin(_newMod, "Clean.esp");
+        var clean = new PluginAddress("Clean.esp", NewModName);
+        Load(Entry(_newMod, Malformed), Entry(_newMod, "Clean.esp"));
+
+        var refused = Assert.Single((await Repair([ToRepair(clean)])).Refused);
+
+        Assert.Equal((clean, DecompileAndRepairRefusal.OtherPluginRepairable), (refused.Item, refused.Refusal));
+    }
+
+    [Fact]
+    public async Task DecompileAndRepair_OfAHealthyPluginOfASourceModWhoseOtherPluginIsMalformed_IsRefusedAsNotMalformed()
+    {
+        AddToSourceMod(Lossless.Malformed);
+        var clean = new PluginAddress("First.esp", SourceModName);
+
+        var refused = Assert.Single((await Repair([ToRepair(clean)])).Refused);
+
+        Assert.Equal(DecompileAndRepairRefusal.NotMalformed, refused.Refusal);
+    }
+
+    [Fact]
     public async Task DecompileAndRepair_ARepairThatDropsData_WritesWithoutForce_NamingTheChangeInItsCommit()
     {
         var plugin = AddToSourceMod(Lossy.Malformed);

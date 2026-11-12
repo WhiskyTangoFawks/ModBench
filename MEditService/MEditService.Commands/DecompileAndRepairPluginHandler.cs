@@ -40,7 +40,12 @@ public sealed class DecompileAndRepairPluginHandler
         if (_loadOrder.Held is not { Snapshot: var loadOrder })
             return new SelectionRefusal<DecompileAndRepairRefusal>(DecompileAndRepairRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
 
-        var targets = plugins.ToDictionary(item => item.Plugin, item => RepairTarget.Of(_repairer, loadOrder, item.Plugin), PluginAddress.Comparer);
+        var named = plugins.Select(item => item.Plugin).ToHashSet(PluginAddress.Comparer);
+        var targets = plugins.ToDictionary(
+            item => item.Plugin,
+            item => RepairTarget.Of(_repairer, loadOrder, item.Plugin, named,
+                mod => (mod.SourceFolder ?? item.SourceFolder?.Path) is { } folder && _source.IsSourceMod(folder)),
+            PluginAddress.Comparer);
         var repairedHere = targets.Where(target => target.Value is RepairTarget.Diagnosed).Select(target => target.Key).ToHashSet(PluginAddress.Comparer);
         var leftOutOfANewSourceFolder = new HashSet<PluginAddress>(PluginAddress.Comparer);
         var heldByANewSourceFolder = new HashSet<PluginAddress>(PluginAddress.Comparer);
