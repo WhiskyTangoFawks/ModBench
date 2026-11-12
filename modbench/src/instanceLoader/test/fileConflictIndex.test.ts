@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { Mod, Separator } from '../instance';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import {
-  buildFileConflictIndex, indexReusing, modOrigin, stackCopies, stackReusing, goToModCandidates, fileOrderConflictOf, outranksACopy, winsPath, RUNTIME_OUTPUT, type ConflictEntry,
+  buildFileConflictIndex, indexReusing, modOrigin, stackCopies, stackReusing, copyStandingOf, FileConflictLookup, type StackedFile, goToModCandidates, fileOrderConflictOf, RUNTIME_OUTPUT, type ConflictEntry,
 } from '../fileConflictIndex';
 import type { FileOrigin, OriginFile, OriginFiles } from '../../instanceAdapter/instanceAdapter';
 import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
@@ -219,29 +219,6 @@ describe('whether a copy of a file wins or loses its file order conflict', () =>
   });
 });
 
-describe('whether a copy of a file wins the path', () => {
-  it.each<[string, ConflictEntry | undefined, FileOrigin, boolean]>([
-    ['wins it as the winner', entryOf(high), high, true],
-    ['does not when another copy is the winner', entryOf(high, low), low, false],
-    ['does not for a path no one provides', undefined, high, false],
-  ])('%s', (_case, entry, own, expected) => {
-    expect(winsPath(entry, own)).toBe(expected);
-  });
-});
-
-describe('whether a copy of a file outranks a copy', () => {
-  it.each<[string, ConflictEntry | undefined, FileOrigin, boolean]>([
-    ['outranks one as the winner over a lower copy', entryOf(high, middle, low), high, true],
-    ['outranks one as a losing copy over a lower copy', entryOf(high, middle, low), middle, true],
-    ['outranks none as the lowest copy', entryOf(high, middle, low), low, false],
-    ['outranks none for a sole copy', entryOf(high), high, false],
-    ['outranks none for a copy that is no provider', entryOf(high, middle), low, false],
-    ['outranks none for a path no one provides', undefined, high, false],
-  ])('%s', (_case, entry, own, expected) => {
-    expect(outranksACopy(entry, own)).toBe(expected);
-  });
-});
-
 describe('the index reused while no listing changed', () => {
   const listing = (name: string, paths: string[]): OriginFiles =>
     ({ origin: name, folder: `/mods/${name}`, folders: [], notes: [], files: paths.map((path) => fileIn(`/mods/${name}`, path)) });
@@ -333,5 +310,61 @@ describe('the copies of each file, stacked as the game stacks them', () => {
       build(index, [archive('A', 'A.ba2', files)], 'Fallout4'),
       build(index, [archive('A', 'A.ba2', [FILE])], 'Fallout4'),
     ].map((stack) => stack === first)).toEqual([true, false]);
+  });
+});
+
+describe('how an origin\'s copies stand against the others\' (mods.md, Indicators)', () => {
+  type Kind = 'loose' | 'archived';
+  type Stacks = Record<string, ReadonlyArray<readonly [Kind, string]>>;
+  const standing = (stacks: Stacks, own: string) => {
+    const stack = new FileConflictLookup<StackedFile>();
+    for (const [relativePath, copies] of Object.entries(stacks)) {
+      stack.set({
+        relativePath,
+        copies: copies.map(([kind, name]) => ({
+          origin: modOrigin(name),
+          at: kind === 'loose' ? { kind, path: modPath(name, relativePath) } : { kind, gameRelease: 'Fallout4', archive: modPath(name, 'x.ba2'), file: relativePath },
+        })),
+      });
+    }
+    return copyStandingOf(stack, modOrigin(own));
+  };
+  const NONE = {
+    overwritesLooseFiles: false, overwrittenLooseFiles: false, overwritesArchiveWithLooseFiles: false, archiveOverwrittenByLooseFiles: false,
+    overwritesAnotherArchiveFile: false, overwrittenByAnotherArchiveFile: false, redundant: false,
+  };
+
+  it.each<[string, Stacks, string, Partial<typeof NONE>]>([
+    ['a loose copy over a loose copy', { a: [['loose', 'A'], ['loose', 'B']] }, 'A', { overwritesLooseFiles: true }],
+    ['a loose copy under a loose copy', { a: [['loose', 'A'], ['loose', 'B']] }, 'B', { redundant: true }],
+    ['a loose copy over an archived copy', { a: [['loose', 'A'], ['archived', 'B']] }, 'A', { overwritesArchiveWithLooseFiles: true }],
+    ['an archived copy under a loose copy', { a: [['loose', 'A'], ['archived', 'B']] }, 'B', { redundant: true }],
+    ['an archived copy over an archived copy', { a: [['archived', 'A'], ['archived', 'B']] }, 'A', { overwritesAnotherArchiveFile: true }],
+    ['an archived copy under an archived copy', { a: [['archived', 'A'], ['archived', 'B']] }, 'B', { redundant: true }],
+    ['a copy nobody else has', { a: [['loose', 'A']] }, 'A', {}],
+    ['a copy of a mod with no copy there', { a: [['loose', 'A'], ['loose', 'B']] }, 'C', {}],
+    ['a loose copy under a loose copy of one file and over one of another', { a: [['loose', 'A'], ['loose', 'B']], b: [['loose', 'B'], ['loose', 'A']] }, 'B',
+      { overwritesLooseFiles: true, overwrittenLooseFiles: true }],
+    ['an archived copy under a loose copy of one file and over an archived copy of another', { a: [['loose', 'A'], ['archived', 'B']], b: [['archived', 'B'], ['archived', 'C']] }, 'B',
+      { archiveOverwrittenByLooseFiles: true, overwritesAnotherArchiveFile: true }],
+    ['an archived copy under an archived copy of one file and over one of another', { a: [['archived', 'A'], ['archived', 'B']], b: [['archived', 'B'], ['archived', 'A']] }, 'B',
+      { overwritesAnotherArchiveFile: true, overwrittenByAnotherArchiveFile: true }],
+  ])('%s', (_case, stacks, own, held) => {
+    expect(standing(stacks, own)).toEqual({ ...NONE, ...held });
+  });
+
+  it('is Redundant only when every file the mod could get loses, and carries no losing badge then', () => {
+    expect(standing({ won: [['loose', 'B'], ['loose', 'A']], lost: [['loose', 'A'], ['loose', 'B']] }, 'B')).toEqual({ ...NONE, overwritesLooseFiles: true, overwrittenLooseFiles: true });
+  });
+
+  it('answers every origin from one walk of the stack', () => {
+    const stack = new FileConflictLookup<StackedFile>();
+    const walked = vi.spyOn(stack, 'values');
+    stack.set({ relativePath: 'a', copies: [{ origin: modOrigin('A'), at: { kind: 'loose', path: '/a' } }, { origin: modOrigin('B'), at: { kind: 'loose', path: '/b' } }] });
+
+    copyStandingOf(stack, modOrigin('A'));
+    copyStandingOf(stack, modOrigin('B'));
+
+    expect(walked).toHaveBeenCalledTimes(1);
   });
 });
