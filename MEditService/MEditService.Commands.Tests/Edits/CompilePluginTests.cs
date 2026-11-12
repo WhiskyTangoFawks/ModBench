@@ -90,7 +90,7 @@ public sealed class CompilePluginTests : IDisposable
     }
 
     [Fact]
-    public async Task Compile_OfATreeHoldingADocumentTheCodecDoesNotProduce_RefusesNamingItAndDecompile()
+    public async Task Compile_OfATreeHoldingADocumentTheCodecDoesNotProduce_RefusesNamingIt()
     {
         var stray = TreeTampering.StrayGroupDocument(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
 
@@ -98,6 +98,6 @@ public sealed class CompilePluginTests : IDisposable
 
         var refused = Assert.Single(answer.Refused);
         Assert.Contains(Path.GetRelativePath(_mod.ModFolder, stray), refused.Message, StringComparison.Ordinal);
-        Assert.Contains("Decompile the plugin to regenerate the source.", refused.Message, StringComparison.Ordinal);
+        Assert.Equal(CompileRefusal.SourceRegenerable, refused.Refusal);
     }
 }

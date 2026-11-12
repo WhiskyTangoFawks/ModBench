@@ -337,7 +337,7 @@ function deployAnswered(answer: { applied: true } & Deployed): GestureOutcome<Me
 }
 
 const partialsIn = ({ partial = [] }: Extract<GestureOutcome, { applied: true }>): string[] =>
-  partial.map(({ message, detail }) => `${message} ${detail}`);
+  partial.map(({ message, detail }) => `${message} ${toolNamed(detail)}`);
 
 function refusalIn(outcome: GestureOutcome): string | undefined {
   if (!outcome.applied) return outcome.detail === undefined ? outcome.refusal : `${outcome.refusal} ${outcome.detail}`;
@@ -357,13 +357,24 @@ function answerOf(outcome: GestureOutcome) {
     : { refusal: outcome.refusal, detail: outcome.detail };
 }
 
+const REFUSALS_WITHIN = z.looseObject({ refused: z.array(z.looseObject({ reason: z.custom<Message>() })) });
+
+// A landed item that holds refusals of its own, as a built mod holds the plugins it refused.
+function withReasonsNamed(item: unknown): unknown {
+  const parsed = REFUSALS_WITHIN.safeParse(item);
+  return parsed.success ? { ...parsed.data, refused: parsed.data.refused.map((one) => ({ ...one, reason: toolNamed(one.reason) })) } : item;
+}
+
+const partialNamed = (partial: readonly { message: string; detail: Message; severity: 'warning' | 'log' }[] | undefined) =>
+  (partial === undefined ? {} : { partial: partial.map((one) => ({ ...one, detail: toolNamed(one.detail) })) });
+
 function namedForAgent(value: InstanceValue, outcome: GestureOutcome<Message>): GestureOutcome {
   if (!outcome.applied) return { ...outcome, refusal: toolNamed(outcome.refusal) };
-  if (!overItems(outcome)) return outcome;
+  if (!overItems(outcome)) return { ...outcome, ...partialNamed(outcome.partial) };
   const { landed, refused } = outcome.outcome;
   return {
-    ...outcome,
-    outcome: { landed: landed.map((item) => namedByOwnPath(value, item)), refused: refused.map((one) => ({ item: namedByOwnPath(value, one.item), reason: toolNamed(one.reason) })) },
+    ...outcome, ...partialNamed(outcome.partial),
+    outcome: { landed: landed.map((item) => withReasonsNamed(namedByOwnPath(value, item))), refused: refused.map((one) => ({ item: namedByOwnPath(value, one.item), reason: toolNamed(one.reason) })) },
   };
 }
 

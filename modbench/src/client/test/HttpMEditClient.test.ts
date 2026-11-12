@@ -268,7 +268,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       },
       reads: {
         landed: [{
-          mod: 'ModA', compiled: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, reason: 'Second.esp has no readable source.' }],
+          mod: 'ModA', compiled: [{ ...first, diagnostics: [diagnostic] }], refused: [{ item: second, reason: 'Second.esp has no readable source.', refusal: 'PluginSourceUnreadable' }],
           archivesRefused: [{ item: 'ModA.ba2', reason: 'Modbench packs no archive for this game.' }],
           failure: 'The build stopped at its copy.', made: [{ path: 'a.nif', vouchedFor: true }], packed: ['a.dds'], ignored: ['b.mem'],
         }],

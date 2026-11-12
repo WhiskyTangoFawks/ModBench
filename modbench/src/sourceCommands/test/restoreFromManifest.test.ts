@@ -592,7 +592,7 @@ describe('restore from manifest', () => {
 
     it('is not finished when its build left a plugin as it was', async () => {
       const { restore, client } = await sourceMod();
-      client.setCommandHandler('build', () => Promise.resolve({ landed: [{ ...BUILT, refused: [{ item: { name: 'A.esp', origin: 'ModA' }, reason: 'A.esp was not compiled: it holds an error.' }] }], refused: [] }));
+      client.setCommandHandler('build', () => Promise.resolve({ landed: [{ ...BUILT, refused: [{ item: { name: 'A.esp', origin: 'ModA' }, reason: 'A.esp was not compiled: it holds an error.', refusal: 'WriteFailed' as const }] }], refused: [] }));
 
       expect((await restore(['ModA'])).refused).toEqual([{ item: 'ModA', reason: 'was not finished: A.esp was not compiled: it holds an error.' }]);
     });

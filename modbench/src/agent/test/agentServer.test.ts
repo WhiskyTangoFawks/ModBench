@@ -2156,6 +2156,21 @@ describe('the agent server, running a gesture', () => {
       expect(answer.text).toContain('run mod_build on it');
     });
 
+    it('names the tool, not the gesture, in a refusal a landed item holds and in a partial failure', async () => {
+      const reason = phrase`could not be compiled. Run ${gestureName('modbench.plugin.decompile', 'decompile')} on it.`;
+      fired.outcome = {
+        applied: true,
+        outcome: { landed: [{ mod: 'ModA', refused: [{ item: { name: 'A.esp', origin: 'ModA' }, reason }] }], refused: [] },
+        partial: [{ message: 'Could not build "A.esp" in "ModA".', detail: reason, severity: 'log' }],
+      };
+      const { client } = await served(PLUGGED);
+
+      const answer = await call(client, 'plugin_decompile', { argument: [{ name: 'Solo.esp' }] });
+
+      expect(answer.text).not.toContain('parts');
+      expect(answer.text.match(/Run plugin_decompile on it\./g)).toHaveLength(2);
+    });
+
     it('names the tool, not the gesture, in a refusal of the whole selection', async () => {
       fired.outcome = { applied: false, refusal: phrase`${gestureName('modbench.modlist.gitInit', 'git init')} makes one.` };
       const { client } = await served(PLUGGED);

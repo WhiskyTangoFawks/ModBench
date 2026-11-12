@@ -1327,7 +1327,7 @@ export interface components {
             message: string;
         };
         /** @enum {string} */
-        CompileRefusal: "None" | "PluginNotInLoadOrder" | "PluginNotCompiledPlugin" | "PluginSourceUnreadable" | "TwinPluginSources" | "NoSource" | "SourceFileHeld" | "SourceDoesNotParse" | "SourceValueDropped" | "FormKeyCollision" | "FormIdOutsideFlagLimit" | "FormIdUnmappable" | "MasterNotInLoadOrder" | "MasterUnreadable" | "WriteFailed" | "GitUnavailable" | "NoLoadOrder";
+        CompileRefusal: "None" | "PluginNotInLoadOrder" | "PluginNotCompiledPlugin" | "PluginSourceUnreadable" | "SourceRegenerable" | "TwinPluginSources" | "NoSource" | "SourceFileHeld" | "SourceDoesNotParse" | "SourceValueDropped" | "FormKeyCollision" | "FormIdOutsideFlagLimit" | "FormIdUnmappable" | "MasterNotInLoadOrder" | "MasterUnreadable" | "WriteFailed" | "GitUnavailable" | "NoLoadOrder";
         CompileRefused: {
             item: components["schemas"]["PluginAddress"];
             refusal: components["schemas"]["CompileRefusal"];

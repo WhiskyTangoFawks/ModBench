@@ -36,7 +36,7 @@ export function answeredToAgent(result: { applied: true } | { applied: false; re
  *  is answered it with the Output line the server writes. */
 export interface PartialFailure {
   readonly message: string;
-  readonly detail: string;
+  readonly detail: Message;
   readonly severity: 'warning' | 'log';
 }
 
@@ -48,8 +48,8 @@ export type GestureResult<T, Refused = T, Reason extends Message = string, Whole
 
 export function reportPartial(reporter: Reporter, partial: readonly PartialFailure[] = [], log: (line: string) => void = () => undefined): void {
   for (const { message, detail, severity } of partial) {
-    if (severity === 'warning') reporter.report('warning', message, detail);
-    else log(`${message}: ${detail}`);
+    if (severity === 'warning') reporter.report('warning', message, String(detail));
+    else log(`${message}: ${String(detail)}`);
   }
 }
 

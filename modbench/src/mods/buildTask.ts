@@ -22,8 +22,8 @@ function buildVerdict(result: Built): TaskVerdict {
   const { refused } = result.outcome;
   const failures: TaskProblem[] = [
     ...refused.map(({ item, reason }): TaskProblem => ({ severity: 'error', message: `Could not build "${item}":`, detail: reason })),
-    ...buildFailures(result.outcome).map(({ message, detail }): TaskProblem => ({ severity: 'error', message, detail })),
+    ...buildFailures(result.outcome).map(({ message, detail }): TaskProblem => ({ severity: 'error', message, detail: String(detail) })),
   ];
-  const warnings = buildWarnings(result.outcome).map(({ message, detail }): TaskProblem => ({ severity: 'warning', message, detail }));
+  const warnings = buildWarnings(result.outcome).map(({ message, detail }): TaskProblem => ({ severity: 'warning', message, detail: String(detail) }));
   return { passed: failures.length === 0, lines: builtWhole(result.outcome).map((mod) => `Built "${mod}".`), problems: [...failures, ...warnings] };
 }

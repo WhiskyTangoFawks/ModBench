@@ -19,9 +19,6 @@ internal sealed class PluginCompileService(
 {
     private readonly CompileLinks _links = new(adapter, logger);
 
-    // A source mod refuses init, so decompile is the way back (ADR-0007).
-    private const string RegenerateTheSource = "Decompile the plugin to regenerate the source.";
-
     public async Task<PluginCompileOutcome> CompileAsync(PluginAddress plugin) =>
         loadOrderHolder.Current.Plugin(plugin) is { } registered
             ? await CompileAsync(registered)
@@ -39,9 +36,8 @@ internal sealed class PluginCompileService(
         if (source.WhySourceDoesNotRead(registered) is { } why)
         {
             return PluginCompileOutcome.Refused(
-                CompileRefusal.PluginSourceUnreadable,
-                $"{plugin.Name}'s plugin source is unreadable, so it cannot be compiled: {why.Reason}" +
-                (why.DecompileRepairs ? $" {RegenerateTheSource}" : ""));
+                why.DecompileRepairs ? CompileRefusal.SourceRegenerable : CompileRefusal.PluginSourceUnreadable,
+                $"{plugin.Name}'s plugin source is unreadable, so it cannot be compiled: {why.Reason}");
         }
 
         // One repository for the whole pass, so the tree it answers from is read once.
@@ -63,21 +59,20 @@ internal sealed class PluginCompileService(
         if (files.Count == 0)
         {
             return PluginCompileOutcome.Refused(
-                CompileRefusal.NoSource,
-                $"{plugin.Name}'s source folder holds no files, so there is nothing to compile. {RegenerateTheSource}");
+                CompileRefusal.SourceRegenerable,
+                $"{plugin.Name}'s source folder holds no files, so there is nothing to compile.");
         }
 
         if (!repository.RefusedFilesOf(plugin).Holds(out var refusedFiles, out unread)) return SourceDoesNotParse(plugin, unread);
         if (refusedFiles.Count > 0)
         {
             return PluginCompileOutcome.Refused(
-                CompileRefusal.SourceDoesNotParse,
-                $"{plugin.Name} cannot be compiled: {string.Join("; ", refusedFiles.Select(file => $"{file.Path}: {file.Reason}"))} {RegenerateTheSource}");
+                CompileRefusal.SourceRegenerable,
+                $"{plugin.Name} cannot be compiled: {string.Join("; ", refusedFiles.Select(file => $"{file.Path}: {file.Reason}"))}");
         }
 
         var (parsedTree, deserializeRefusal) = await DeserializeSource(files, plugin, repository, loadOrder);
-        if (deserializeRefusal != null)
-            return PluginCompileOutcome.Refused(CompileRefusal.SourceDoesNotParse, deserializeRefusal);
+        if (deserializeRefusal != null) return deserializeRefusal;
         var tree = parsedTree
             ?? throw new InvalidOperationException("Expected DeserializeSource to produce a tree when it does not refuse.");
 
@@ -105,9 +100,7 @@ internal sealed class PluginCompileService(
 
         if (!repository.Compare(plugin, await tree.SerializeTreeAsync()).Holds(out var comparison, out unread))
             return SourceDoesNotParse(plugin, unread);
-        var roundTripRefusal = RefuseIfSourceDoesNotRoundTrip(comparison.Divergences, plugin);
-        if (roundTripRefusal != null)
-            return PluginCompileOutcome.Refused(CompileRefusal.SourceDoesNotParse, roundTripRefusal);
+        if (RefuseIfSourceDoesNotRoundTrip(comparison.Divergences, plugin) is { } roundTripRefusal) return roundTripRefusal;
 
         var content = ContentFacts(tree, plugin, loadOrder);
 
@@ -170,8 +163,8 @@ internal sealed class PluginCompileService(
 
     private static PluginCompileOutcome SourceDoesNotParse(PluginAddress plugin, SourceFailure unread) =>
         PluginCompileOutcome.Refused(
-            CompileRefusal.SourceDoesNotParse,
-            $"{plugin.Name} could not be read from its source: {unread.Reason}" + (unread.DecompileRepairs ? $" {RegenerateTheSource}" : ""));
+            unread.DecompileRepairs ? CompileRefusal.SourceRegenerable : CompileRefusal.SourceDoesNotParse,
+            $"{plugin.Name} could not be read from its source: {unread.Reason}");
 
     private static PluginCompileOutcome WriteFailed(PluginAddress plugin, string reason) =>
         PluginCompileOutcome.Refused(
@@ -197,15 +190,15 @@ internal sealed class PluginCompileService(
         return new Content(records, required.Links, required.Masters);
     }
 
-    private async Task<(CompiledTree? Tree, string? RefusalReason)> DeserializeSource(
+    private async Task<(CompiledTree? Tree, PluginCompileOutcome? Refusal)> DeserializeSource(
         IReadOnlyList<TreeFile> files, PluginAddress plugin, ISourceRepository repository, LoadOrderSnapshot loadOrder)
     {
         if ((await adapter.ReadTreeAsync(files, loadOrder)).Holds(out var tree, out var failure)) return (tree, null);
 
         logger.LogWarning("{Plugin} could not be read from its source: {Reason}", plugin.Name, failure.Reason);
         if (failure is PluginFailure.Unparsed unparsed && repository.InSourceNames(plugin, unparsed.Diagnosis).Holds(out var named, out _))
-            return (null, $"{plugin.Name} could not be read from its source: {named.Describe()}");
-        return (null, $"{plugin.Name} could not be read from its source: {failure.Reason} {RegenerateTheSource}");
+            return (null, PluginCompileOutcome.Refused(CompileRefusal.SourceDoesNotParse, $"{plugin.Name} could not be read from its source: {named.Describe()}"));
+        return (null, PluginCompileOutcome.Refused(CompileRefusal.SourceRegenerable, $"{plugin.Name} could not be read from its source: {failure.Reason}"));
     }
 
     // ADR-0006. The generated deserializer skips an unrecognized property or file without
@@ -213,12 +206,13 @@ internal sealed class PluginCompileService(
 
     // No live subrecord-inventory gate here, deliberately: that loss class arises only when init
     // parses an external binary, never from Compile.
-    private static string? RefuseIfSourceDoesNotRoundTrip(IReadOnlyList<SourceDivergence> found, PluginAddress plugin)
+    private static PluginCompileOutcome? RefuseIfSourceDoesNotRoundTrip(IReadOnlyList<SourceDivergence> found, PluginAddress plugin)
     {
         if (found.Count == 0) return null;
 
-        var remedy = found.Any(divergence => divergence.Kind == SourceDivergenceKind.Unproduced) ? $" {RegenerateTheSource}" : "";
-        return $"{plugin.Name} does not round-trip through its own source: {string.Join("; ", found.Select(Describe))}.{remedy}";
+        return PluginCompileOutcome.Refused(
+            found.Any(divergence => divergence.Kind == SourceDivergenceKind.Unproduced) ? CompileRefusal.SourceRegenerable : CompileRefusal.SourceDoesNotParse,
+            $"{plugin.Name} does not round-trip through its own source: {string.Join("; ", found.Select(Describe))}.");
     }
 
     private static string Describe(SourceDivergence divergence)

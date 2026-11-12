@@ -35,7 +35,7 @@ public sealed class CompilePluginHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task APluginWhoseSourceIsUnreadable_IsRefusedBeforeAnyWrite_NamingDecompile()
+    public async Task APluginWhoseSourceIsUnreadable_IsRefusedBeforeAnyWrite_AsRegenerable()
     {
         var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
         var before = File.ReadAllBytes(pluginPath);
@@ -44,16 +44,16 @@ public sealed class CompilePluginHandlerTests : IDisposable
         var result = (await _mod.CompileHandler.CompileAsync([_mod.Plugin])).Value();
 
         var refused = Assert.Single(result.Refused);
-        Assert.Equal(CompileRefusal.PluginSourceUnreadable, refused.Refusal);
+        Assert.Equal(CompileRefusal.SourceRegenerable, refused.Refusal);
         Assert.Equal(
             $"{CompileFixture.PluginName}'s plugin source is unreadable, so it cannot be compiled: " +
-            $"plugin-source holds no folder for {CompileFixture.PluginName}. Decompile the plugin to regenerate the source.",
+            $"plugin-source holds no folder for {CompileFixture.PluginName}.",
             refused.Message);
         Assert.Equal(before, File.ReadAllBytes(pluginPath));
     }
 
     [PosixFact]
-    public async Task APluginWhoseSourceHasTwinFolders_IsRefusedNamingThem_AndNotPointedAtDecompile()
+    public async Task APluginWhoseSourceHasTwinFolders_IsRefusedNamingThem_AsUnreadable()
     {
         var sources = Path.GetDirectoryName(PluginSourceRoot.In(_mod.ModFolder, CompileFixture.PluginName)).Require();
         Directory.Move(Path.Combine(sources, CompileFixture.PluginName), Path.Combine(sources, CompileFixture.PluginName.ToUpperInvariant()));
@@ -65,7 +65,6 @@ public sealed class CompilePluginHandlerTests : IDisposable
         Assert.Equal(CompileRefusal.PluginSourceUnreadable, refused.Refusal);
         Assert.Contains(CompileFixture.PluginName.ToUpperInvariant(), refused.Message, StringComparison.Ordinal);
         Assert.Contains(CompileFixture.PluginName.ToLowerInvariant(), refused.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("Decompile", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -79,7 +78,7 @@ public sealed class CompilePluginHandlerTests : IDisposable
 
         var result = (await _mod.CompileHandler.CompileAsync([_mod.Plugin])).Value();
 
-        Assert.Equal(CompileRefusal.NoSource, Assert.Single(result.Refused).Refusal);
+        Assert.Equal(CompileRefusal.SourceRegenerable, Assert.Single(result.Refused).Refusal);
         Assert.Equal(before, File.ReadAllBytes(pluginPath));
     }
 }

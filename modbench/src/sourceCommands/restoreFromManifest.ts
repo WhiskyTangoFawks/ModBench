@@ -356,7 +356,7 @@ async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: st
   if (isRefused(outcome)) return { refusal: `was not built: ${outcome.message.replace(/\.$/, '')}.` };
   if ('refusal' in outcome) return { refusal: outcome.refusal.reason };
   const built = outcome.landed;
-  const leftAsItWas = [...built.failure === undefined ? [] : [built.failure], ...built.refused.map(({ reason }) => reason), ...built.archivesRefused.map(({ reason }) => reason)];
+  const leftAsItWas = [...built.failure === undefined ? [] : [built.failure], ...built.refused.map(({ reason }) => String(reason)), ...built.archivesRefused.map(({ reason }) => reason)];
   if (leftAsItWas.length > 0) return { refusal: `was not finished: ${leftAsItWas.map((why) => why.replace(/\.$/, '')).join('; ')}.` };
   const recorded = await manifestHeld(folder);
   if (recorded === undefined || 'refusal' in recorded) return { refusal: notFinished(recorded?.refusal ?? 'its build wrote no manifest') };

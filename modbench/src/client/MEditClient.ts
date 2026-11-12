@@ -191,9 +191,9 @@ export type BuildMod = components['schemas']['BuildModRequest'];
 /** The instance's facts every mod's build needs: the mod manager's exclusion mark, and the release's archive variants. */
 export type BuildFacts = Omit<components['schemas']['BuildRequest'], 'mods'>;
 
-// The generated mod, with each refusal as `ItemRefusal` and each unset flag absent: mEdit sends null and false.
+// The generated mod, with each refusal as `ItemRefusal`, a plugin's with the kind mEdit named, and each unset flag absent: mEdit sends null and false.
 type BuiltMod = Omit<components['schemas']['ModBuilt'], 'refused' | 'archivesRefused' | 'failure' | 'uncommitted' | 'unpushed' | 'packed' | 'replaced' | 'ignored'> & {
-  refused: readonly ItemRefusal<PluginAddress>[];
+  refused: readonly KindedRefusal<PluginAddress, components['schemas']['CompileRefusal']>[];
   archivesRefused: readonly (ItemRefusal<string> & { readonly unpacking?: true })[];
   packed?: readonly string[];
   replaced?: readonly components['schemas']['ReplacedTree'][];
