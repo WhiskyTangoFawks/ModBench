@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('vscode', () => ({ TreeItem: class { constructor(readonly label: string) {} } }));
 
 import { everyModHere, modsAndSourceModsOfAgent, modsAndSourceModsToRun, modsOfAgent, modsToRun, type ModsToRun } from '../modsToRun';
-import type { Argument } from '../../wire/argument';
+import type { Argument, ArgumentOf } from '../../wire/argument';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const value = instanceValueFixture({
@@ -54,27 +54,24 @@ describe('the mods a Mods gesture runs over (instance-repository.md, Every mod)'
 
   describe('update manifest and a source mod a separator holds (instance-repository.md, Update manifest, story 1)', () => {
     const sourceModValue = (sourceMod: string) => ({ ...value, paths: { ...value.paths, sourceDirs: new Map([[sourceMod, `/instance/source/${sourceMod}`]]) } });
-    const weapons: Argument = { kind: 'separator', name: 'Weapons' };
-    const mod = (name: string): Argument => ({ kind: 'mod', name });
-    const modsRun = (path: 'view' | 'agent', sourceMod: string, argument: readonly Argument[]): readonly string[] => {
-      const instance = { value: sourceModValue(sourceMod) };
-      const rows = argument.map((row) => ({ argument: row, name: 'name' in row ? row.name : '' }));
-      return path === 'view'
-        ? modsAndSourceModsToRun({ ...focused(undefined), instance }, rows[0], rows).mods
-        : modsAndSourceModsOfAgent(argument, instance.value).mods;
-    };
+    type Held = ArgumentOf<'mod' | 'separator'>;
+    const weapons: Held = { kind: 'separator', name: 'Weapons' };
+    const mod = (name: string): Held => ({ kind: 'mod', name });
+    const cases: readonly (readonly [string, readonly Held[], readonly string[]])[] = [
+      ['ModA', [weapons], []],
+      ['ModA', [weapons, mod('ModA')], ['ModA']],
+      ['ModB', [weapons], ['ModA']],
+      ['ModB', [mod('ModB')], ['ModB']],
+    ];
 
-    it.each([
-      ['view', 'ModA', [weapons], []],
-      ['view', 'ModA', [weapons, mod('ModA')], ['ModA']],
-      ['view', 'ModB', [weapons], ['ModA']],
-      ['view', 'ModB', [mod('ModB')], ['ModB']],
-      ['agent', 'ModA', [weapons], []],
-      ['agent', 'ModA', [weapons, mod('ModA')], ['ModA']],
-      ['agent', 'ModB', [weapons], ['ModA']],
-      ['agent', 'ModB', [mod('ModB')], ['ModB']],
-    ] as const)('through the %s, with %s the source mod, %j gives %j', (path, sourceMod, argument, expected) => {
-      expect(modsRun(path, sourceMod, argument)).toEqual(expected);
+    it.each(cases)('the view, with %s the source mod, selecting %j, runs %j', (sourceMod, selection, expected) => {
+      const rows = selection.map((argument) => ({ argument, name: argument.name }));
+
+      expect(modsAndSourceModsToRun({ ...focused(undefined), instance: { value: sourceModValue(sourceMod) } }, rows[0], rows).mods).toEqual(expected);
+    });
+
+    it.each(cases)('the agent, with %s the source mod, naming %j, runs %j', (sourceMod, argument, expected) => {
+      expect(modsAndSourceModsOfAgent(argument, sourceModValue(sourceMod)).mods).toEqual(expected);
     });
   });
 });
