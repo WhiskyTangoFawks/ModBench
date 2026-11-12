@@ -5,12 +5,13 @@ import { tagsHeldAt } from './tagsHeldAt';
 import { modNameOf } from '../instanceLoader/modName';
 import { fileOrderConflictOf, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
 import { instanceMessages, type InstanceValue, type InstanceView, type ModGroup, type ModGroups } from '../instanceLoader/instance';
+import { gameFolderFileOver } from '../drivingLib/modFileStates';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
 import { messageLine } from '../drivingLib/messageLine';
 import { dropMove, type DraggedRows } from './moveDrop';
 import {
-  anyNamed, archivedIn, gameFolderFileOver, expanderOver, filesIn, narrowToMatches, shownUnder, ArchivedFileNode, ArchivedFolderNode, FileNode, FolderNode,
+  anyNamed, archivedIn, expanderOver, filesIn, narrowToMatches, shownUnder, ArchivedFileNode, ArchivedFolderNode, FileNode, FolderNode,
   type ArchivedEntry, type ChildrenShown, type FileIgnore,
 } from './modFiles';
 import type { ModArgument } from '../drivingLib/argument';

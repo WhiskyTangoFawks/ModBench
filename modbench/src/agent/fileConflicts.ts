@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { FileOrigin } from '../instanceAdapter/instanceAdapter';
 import { foldPath, originKey, originLabel, type StackedCopy } from '../instanceLoader/fileConflictIndex';
 import type { InstanceValue } from '../instanceLoader/instance';
-import { indicatorsOf, isFileNotGotten, pathTagsOf, type ModIndicator } from '../drivingLib/modFileStates';
+import { archivedEntriesOf, indicatorsOf, isFileNotGotten, pathTagsOf, type ArchivedEntryStanding, type ModIndicator } from '../drivingLib/modFileStates';
 import { fileStates } from '../drivingLib/conflictStates';
 import { filesOfOrigin } from '../drivingLib/copiesToRead';
 import { modifiedMs, sameCopies, type CopyReads } from '../drivingLib/sameCopies';
@@ -27,7 +27,7 @@ interface ModConflicts {
   wins: { file: string; over: string[]; contents?: Contents }[];
   loses: { file: string; winner: string; contents?: Contents }[];
   indicators: ModIndicator[];
-  files: { file: string; excluded: boolean; gotten: boolean; publisherTags: string[]; contents?: Contents }[];
+  files: { file: string; excluded: boolean; gotten: boolean; publisherTags: string[]; contents?: Contents; entries?: ArchivedEntryStanding[] }[];
 }
 
 const byFile = (a: { file: string }, b: { file: string }): number => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0);
@@ -44,10 +44,13 @@ function rowOf(value: InstanceValue, origin: FileOrigin, contents: ReadonlyMap<s
     files: own.map((file) => ({
       file: file.includedPath, excluded: file.excluded, gotten: !isFileNotGotten(value, origin, enabled, file),
       publisherTags: pathTagsOf(covering, file.path, origin.kind === 'mod' ? mod : undefined).map(({ name }) => name),
+      ...entriesOf(archivedEntriesOf(value, origin, enabled, file)),
       ...contentsOf(contents.get(keyOf(origin, file.relativePath))),
     })).sort(byFile),
   };
 }
+
+const entriesOf = (entries: ArchivedEntryStanding[]) => (entries.length === 0 ? {} : { entries });
 
 const contentsOf = (contents: Contents | undefined) => (contents === undefined ? {} : { contents });
 

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { CopyAt } from '../instanceLoader/fileConflictIndex';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { revealArchivedFile } from './archiveFiles';
-import { gameFolderFile, gameFolderFileOver } from './modFiles';
+import { gameFolderFile, gameFolderFileOver } from '../drivingLib/modFileStates';
 
 // The game loads a later archive's copy over an earlier one's, a game folder archive and a mod's alike.
 function archivedCopyOver({ gameFolderArchived: { copies, loadRank } }: Pick<InstanceValue, 'gameFolderArchived'>, path: string, stacked: CopyAt | undefined): CopyAt | undefined {

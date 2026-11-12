@@ -837,6 +837,35 @@ describe('the agent server, reading file order conflicts', () => {
     ]);
   });
 
+  it('reads each entry of a mod\'s archive as the Mods view shows it: whether the game gets it, and the game folder\'s loose file that wins over it', async () => {
+    const archive = fileIn('/m/Armour', 'Armour - Main.ba2');
+    const entries = ['meshes/a.nif', 'meshes/b.nif', 'meshes/c.nif'];
+    const mods: ModlistEntry[] = [{ kind: 'mod', name: 'Armour', enabled: true }, { kind: 'mod', name: 'Patch', enabled: true }];
+    const index = buildFileConflictIndex(mods, [], new Map([
+      ['Armour', { origin: 'Armour', folder: '/m/Armour', files: [archive], folders: [], notes: [] }],
+      ['Patch', { origin: 'Patch', folder: '/m/Patch', files: [fileIn('/m/Patch', 'meshes/c.nif')], folders: [], notes: [] }],
+    ]));
+    const value = instanceValueFixture({
+      mods, files: index.files, filesByMod: index.filesByMod, foldersByMod: index.foldersByMod,
+      stackedCopies: stackCopies(index, [{ origin: modOrigin('Armour'), archive: archive.sourcePath, files: entries }], 'Fallout4'),
+      archiveContents: new Map([[archive.sourcePath, { kind: 'read', answer: entries }]]),
+      loadsArchive: () => true,
+      dataFolderFiles: { kind: 'listed', files: new Map([['meshes/a.nif', { relativePath: 'Meshes/A.nif', path: '/game/Data/Meshes/A.nif' }]]) },
+    });
+    const { client } = await clientOf(new FakeInstance(value));
+
+    expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'Armour' }] })).toMatchObject([{
+      files: [{
+        file: 'Armour - Main.ba2', gotten: true,
+        entries: [
+          { path: 'meshes/a.nif', gotten: false, gameFolderFile: '/game/Data/Meshes/A.nif' },
+          { path: 'meshes/b.nif', gotten: true },
+          { path: 'meshes/c.nif', gotten: false },
+        ],
+      }],
+    }]);
+  });
+
   it('reads Overwrite as list_mods names it, as the winner of the files it holds', async () => {
     const { client } = await clientOf(new FakeInstance(CONFLICTED));
 
