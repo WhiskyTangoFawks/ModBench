@@ -1,10 +1,11 @@
 // Decompile and repair (source.md, Decompile and repair): mEdit writes the two commits of each plugin. A mod that is
 // not a source mod is made one, as version in git makes it.
 
-import { isRefused, type MEditClient, type PluginAddress, type PluginToRepair, type SourceFolderRequest, type SourceModIn, type WriteRefused } from '../client';
+import { isRefusalOf, isRefused, type MEditClient, type PluginAddress, type PluginToRepair, type SourceFolderRequest, type SourceModIn, type WriteRefused } from '../client';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { sourceModsOf } from '../manifestAdapter/manifestAdapter';
 import type { SelectionResult } from '../coreLib/commandResult';
+import type { Message } from '../ports/phrase';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
 export type DecompileAndRepairClient = Pick<MEditClient, 'decompileAndRepair'>;
@@ -15,7 +16,7 @@ interface MadeSourceFolder {
 }
 
 interface PlacedMods<R> {
-  readonly outcome: R | WriteRefused;
+  readonly outcome: R | WriteRefused<Message>;
   readonly notMade: ReadonlyMap<string, string>;
   readonly unfinished: ReadonlyMap<string, string>;
   readonly notes: readonly string[];
@@ -24,9 +25,9 @@ interface PlacedMods<R> {
 /** The flow version in git shares (sourceCommands/newRepository.ts, `modsPlaced`), handed in by the composition root. */
 export type PlaceMods = <R>(
   request: { readonly mods: readonly string[]; readonly where?: SourceModIn },
-  run: (made: ReadonlyMap<string, MadeSourceFolder>) => Promise<R | WriteRefused>,
+  run: (made: ReadonlyMap<string, MadeSourceFolder>) => Promise<R | WriteRefused<Message>>,
   landedBy: (outcome: R) => Iterable<string>,
-) => Promise<PlacedMods<R> | WriteRefused>;
+) => Promise<PlacedMods<R> | WriteRefused<Message>>;
 
 interface DecompileAndRepairAccess {
   readonly adapter: Pick<InstanceAdapter, 'modOrder' | 'sourceModFolders' | 'entryKey'>;
@@ -62,7 +63,7 @@ export async function decompileAndRepair(
   const { client, placeMods } = access;
   const sourceMods = await sourceModsAt(access);
   const notSourceMods = modsOutside(sourceMods, plugins);
-  const repaired = (made: ReadonlyMap<string, MadeSourceFolder>): Promise<SelectionOutcome<PluginAddress> | WriteRefused> => {
+  const repaired = (made: ReadonlyMap<string, MadeSourceFolder>): Promise<SelectionOutcome<PluginAddress> | WriteRefused<Message>> => {
     const toSend = plugins.flatMap((plugin): PluginToRepair[] => {
       if (sourceMods.folderOf(plugin.origin) !== undefined) return [{ plugin }];
       const folder = made.get(plugin.origin);
@@ -71,9 +72,9 @@ export async function decompileAndRepair(
     return toSend.length === 0 ? Promise.resolve({ landed: [], refused: [] }) : client.decompileAndRepair(toSend, force);
   };
   const placed = await placeMods({ mods: notSourceMods, where }, repaired, (outcome) => outcome.landed.map(({ origin }) => origin));
-  if (isRefused(placed)) return { applied: false, refusal: placed.message };
+  if (isRefusalOf(placed)) return { applied: false, refusal: String(placed.message) };
   const { outcome, notMade, unfinished, notes } = placed;
-  if (isRefused(outcome)) return { applied: false, refusal: outcome.message };
+  if (isRefusalOf(outcome)) return { applied: false, refusal: String(outcome.message) };
   const notMadePlugins = plugins.filter(({ origin }) => notMade.has(origin)).map((item) => ({
     item, reason: `${item.origin} is not a source mod, and a source folder cannot be made for it: ${notMade.get(item.origin) ?? ''}`,
   }));

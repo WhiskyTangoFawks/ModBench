@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { Argument, ArgumentOf } from '../wire/argument';
+import type { Message } from '../ports/phrase';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
 import { Refusal } from './refusal';
 import type { Reporter } from '../ports/reporter';
@@ -41,9 +42,9 @@ export interface PartialFailure {
 
 /** What a gesture over a selection answers: the outcome, or a refusal that a view reports with its `detail`
  *  and an agent reads with the detail joined on. */
-export type GestureResult<T, Refused = T> =
-  | { applied: true; outcome: { landed: SelectionOutcome<T>['landed']; refused: SelectionOutcome<Refused>['refused'] }; partial?: readonly PartialFailure[] }
-  | { applied: false; refusal: string; detail?: string };
+export type GestureResult<T, Refused = T, Reason extends Message = string, Refusal extends Message = string> =
+  | { applied: true; outcome: { landed: SelectionOutcome<T>['landed']; refused: SelectionOutcome<Refused, Reason>['refused'] }; partial?: readonly PartialFailure[] }
+  | { applied: false; refusal: Refusal; detail?: string };
 
 export function reportPartial(reporter: Reporter, partial: readonly PartialFailure[] = [], log: (line: string) => void = () => undefined): void {
   for (const { message, detail, severity } of partial) {

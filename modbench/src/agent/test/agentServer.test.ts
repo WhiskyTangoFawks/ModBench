@@ -43,6 +43,7 @@ import type { PluginShown, PluginsShown } from '../../drivingLib/pluginsShown';
 import { TOOL_DESCRIPTIONS } from '../instructions/tools';
 import { INSTANCE_GUIDE_BY_MANAGER } from '../instructions/guides';
 import { REPLY_CHARS } from '../tooLarge';
+import { gestureName, phrase } from '../../ports/phrase';
 
 const PORT_SETTING = 'modbench.agent.port';
 
@@ -2144,6 +2145,24 @@ describe('the agent server, running a gesture', () => {
 
       expect(answer).toEqual({ isError: true, text: JSON.stringify({ refusal: 'Could not move plugins.', detail: 'A.esp is a master.' }) });
       expect(lines.join('\n')).toContain('Could not move plugins. A.esp is a master.');
+    });
+
+    it('names the tool, not the gesture, in the reason a selection refused an item', async () => {
+      fired.outcome = { applied: true, outcome: { landed: [], refused: [{ item: 'Solo.esp', reason: phrase`run ${gestureName('modbench.mod.build', 'build')} on it` }] } };
+      const { client } = await served(PLUGGED);
+
+      const answer = await call(client, 'plugin_decompile', { argument: [{ name: 'Solo.esp' }] });
+
+      expect(answer.text).toContain('run mod_build on it');
+    });
+
+    it('names the tool, not the gesture, in a refusal of the whole selection', async () => {
+      fired.outcome = { applied: false, refusal: phrase`${gestureName('modbench.modlist.gitInit', 'git init')} makes one.` };
+      const { client } = await served(PLUGGED);
+
+      const answer = await call(client, 'plugin_decompile', { argument: [{ name: 'Solo.esp' }] });
+
+      expect(answer).toEqual({ isError: true, text: JSON.stringify({ refusal: 'modlist_git_init makes one.' }) });
     });
 
     it('refuses a load after that names an origin, which LOOT does not key a rule by, firing nothing', async () => {

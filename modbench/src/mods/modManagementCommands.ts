@@ -10,6 +10,7 @@ import {
   pluralArgument, registerGesture, singularArgument, type RowOf,
 } from '../drivingLib/gestureEntry';
 import type { Instance, InstanceValue } from '../instanceLoader/instance';
+import type { Message } from '../ports/phrase';
 import type { Reporter } from '../ports/reporter';
 import type { InstanceRepositoryCommands } from '../sourceCommands/instanceRepositoryCommands';
 import type { AskQuestion } from '../ports/dialog';
@@ -96,7 +97,7 @@ export function registerFileIgnoreCommands(
   commands: Pick<InstanceRepositoryCommands, 'ignoreFiles'>, instance: Pick<Instance, 'value' | 'refresh'>,
   viewSelection: () => readonly ModlistNode[], reporter: Reporter,
 ): vscode.Disposable[] {
-  const gesture = (ignore: boolean): AgentGesture<ModlistNode, readonly OriginFileRef[], GestureResult<OriginFileRef>> => {
+  const gesture = (ignore: boolean): AgentGesture<ModlistNode, readonly OriginFileRef[], GestureResult<OriginFileRef, OriginFileRef, Message>> => {
     const verb = ignore ? 'ignore' : 'unignore';
     return {
       fromView: (entry) => {

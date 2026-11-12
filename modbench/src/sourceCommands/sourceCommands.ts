@@ -1,11 +1,12 @@
 import {
-  isRefused, type ModToVersionInGit, type VersionInGitOutcome, type VersionInGitProgress, type MEditClient, type SourceModIn, type WriteRefused,
+  isRefusalOf, isRefused, type ModToVersionInGit, type VersionInGitOutcome, type VersionInGitProgress, type MEditClient, type SourceModIn, type WriteRefused,
 } from '../client';
 import { isPluginSourcePath, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import {
   buildFileIn, exclusionsOf, isBuildFileOf, manifestIn, sourceModsOf, type BuildFile, type SourceMods,
 } from '../manifestAdapter/manifestAdapter';
 import { BUILD_FILE } from '../wire/sourceMod';
+import type { Message } from '../ports/phrase';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
@@ -146,7 +147,7 @@ export function sourceCommands({ client, adapter, saveUnsaved, loadOrderSnapshot
 
     /** A mod that cannot go where `options.where` says is refused here, naming why. mEdit makes the rest source mods, and
      *  is not asked for a whole folder. */
-    versionInGit: async (mods: readonly string[], options: VersionInGitOptions): Promise<InitializedSourceMod | WriteRefused> =>
+    versionInGit: async (mods: readonly string[], options: VersionInGitOptions): Promise<InitializedSourceMod | WriteRefused<Message>> =>
       options.where === 'WholeFolder' ? modsPutWholeInGit(adapter, trash, { mods, ...options }) : modsVersionedInGit({ client, adapter }, mods, options),
   };
 }
@@ -164,8 +165,8 @@ type VersionInGitDeps = Pick<SourceCommandsDeps, 'client' | 'adapter'>;
 
 async function modsVersionedInGit(
   { client, adapter }: VersionInGitDeps, mods: readonly string[], { commit, where, onProgress }: Extract<VersionInGitOptions, { readonly where: SourceModIn }>,
-): Promise<InitializedSourceMod | WriteRefused> {
-  const sentOver = async (made: ReadonlyMap<string, MadeSourceFolder>): Promise<VersionInGitOutcome | WriteRefused> => {
+): Promise<InitializedSourceMod | WriteRefused<Message>> {
+  const sentOver = async (made: ReadonlyMap<string, MadeSourceFolder>): Promise<VersionInGitOutcome | WriteRefused<Message>> => {
     if (made.size === 0) return { landed: [], refused: [] };
     const sent: ModToVersionInGit[] = [...made].map(([name, { modFolder, sourceFolder }]) => ({ name, modFolder, sourceFolder, commit }));
     return client.versionInGit(sent, onProgress === undefined ? {} : { onProgress });
@@ -173,9 +174,9 @@ async function modsVersionedInGit(
   const placed = await modsPlaced(
     adapter, { mods, where, onProgress: (mod, modsDone, modsTotal) => onProgress?.({ mod, modsDone, modsTotal, phase: 'ReadingFiles' }) },
     sentOver, (outcome) => outcome.landed.map(({ mod }) => mod));
-  if (isRefused(placed)) return placed;
+  if (isRefusalOf(placed)) return placed;
   const { outcome, notMade, unfinished, notes } = placed;
-  if (isRefused(outcome)) return outcome;
+  if (isRefusalOf(outcome)) return outcome;
   const refused = [
     ...outcome.refused,
     ...[...notMade].map(([item, reason]) => ({ item, reason })),

@@ -2,7 +2,8 @@
 // files no package yields with their bytes (ADR-0016).
 
 import { basename, join } from 'node:path';
-import { isRefused, type SourceFolderRequest, type SourceModIn, type WriteRefused } from '../client';
+import { gestureName, phrase, type Message } from '../ports/phrase';
+import { isRefusalOf, isRefused, type SourceFolderRequest, type SourceModIn, type WriteRefused } from '../client';
 import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import {
   buildFileText, exclusionsOfFiles, isUnderAny, manifestFileFor, manifestNameOf, manifestText, ownFilesOf, sourceModsOf, type BuildStep, type Manifest,
@@ -185,12 +186,12 @@ async function foldersUnfinished(
   return unfinished;
 }
 
-export const NO_INSTANCE_REPOSITORY = 'The instance holds no repository to put a mod in: git init makes one.';
+export const NO_INSTANCE_REPOSITORY = phrase`The instance holds no repository to put a mod in: ${gestureName('modbench.modlist.gitInit', 'git init')} makes one.`;
 
 /** What placing mods did, each answer by the mod it concerns: no source folder made or held, or a landed mod left
  *  unfinished. `notes` is what a downloaded file could not give. */
 export interface PlacedMods<R> {
-  readonly outcome: R | WriteRefused;
+  readonly outcome: R | WriteRefused<Message>;
   readonly notMade: ReadonlyMap<string, string>;
   readonly unfinished: ReadonlyMap<string, string>;
   readonly notes: readonly string[];
@@ -215,8 +216,8 @@ interface PlaceRequest {
  *  the instance repository once it lands. */
 export async function modsPlaced<R>(
   adapter: Adapter, { mods, where, onProgress }: PlaceRequest,
-  run: (made: ReadonlyMap<string, MadeSourceFolder>) => Promise<R | WriteRefused>, landedBy: (outcome: R) => Iterable<string>,
-): Promise<PlacedMods<R> | WriteRefused> {
+  run: (made: ReadonlyMap<string, MadeSourceFolder>) => Promise<R | WriteRefused<Message>>, landedBy: (outcome: R) => Iterable<string>,
+): Promise<PlacedMods<R> | WriteRefused<Message>> {
   if (where === 'InstanceRepository' && !(await adapter.repositoryOnDisk())) return { refused: true, message: NO_INSTANCE_REPOSITORY };
   const made = new Map<string, MadeSourceFolder>();
   const notMade = new Map<string, string>();
@@ -241,14 +242,14 @@ export async function modsPlaced<R>(
     const notLetIn = await ignoreListWrittenOrWhy(adapter, letIn, 'could not let the source folders in');
     if (notLetIn !== undefined) return { refused: true, message: notLetIn };
   }
-  let outcome: R | WriteRefused;
+  let outcome: R | WriteRefused<Message>;
   let notReconciled: string | undefined;
   try {
     outcome = await run(made);
   } finally {
     if (letIn.length > 0) notReconciled = await ignoreListWrittenOrWhy(adapter, [], 'could not be brought to the source folders on disk');
   }
-  const landed = [...new Set(isRefused(outcome) ? [] : landedBy(outcome))];
+  const landed = [...new Set(isRefusalOf(outcome) ? [] : landedBy(outcome))];
   const unfinished = await foldersUnfinished(adapter, made, landed);
   const notLeftOut = where === 'NewRepository' && landed.length > 0 ? await leftOutOrWhy(adapter) : notReconciled;
   if (notLeftOut !== undefined) {
@@ -262,5 +263,5 @@ export async function modsPlaced<R>(
 
 /** `modsPlaced` bound to one instance, as decompile and repair is handed it. */
 export const placeModsOver = (adapter: Adapter) =>
-  <R>(request: PlaceRequest, run: (made: ReadonlyMap<string, MadeSourceFolder>) => Promise<R | WriteRefused>, landedBy: (outcome: R) => Iterable<string>) =>
+  <R>(request: PlaceRequest, run: (made: ReadonlyMap<string, MadeSourceFolder>) => Promise<R | WriteRefused<Message>>, landedBy: (outcome: R) => Iterable<string>) =>
     modsPlaced(adapter, request, run, landedBy);

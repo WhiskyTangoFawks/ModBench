@@ -6,7 +6,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, readingFixture, repositoriesOf } from '../../test/fakeInstanceAdapter';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { isRefused, type MEditClient, type PluginAddress, type SourceModIn } from '../../client';
+import { isRefusalOf, type MEditClient, type PluginAddress, type SourceModIn } from '../../client';
 import type { PlaceMods } from '../decompileAndRepair';
 
 const MALFORMED = { name: 'Malformed.esp', origin: 'Harbor' };
@@ -34,7 +34,7 @@ describe('decompileAndRepair', () => {
     const made = new Map(request.mods.filter((mod) => !(mod in placing.notMade)).map((mod) => [mod, { ...MADE, sourceFolder: { ...MADE.sourceFolder, in: request.where ?? 'NewRepository' } }]));
     if (placing.whole !== undefined) return { refused: true, message: placing.whole };
     const outcome = await run(made);
-    const landed = new Set(isRefused(outcome) ? [] : landedBy(outcome));
+    const landed = new Set(isRefusalOf(outcome) ? [] : landedBy(outcome));
     return {
       outcome, notMade: new Map(Object.entries(placing.notMade)), notes: placing.notes,
       unfinished: new Map(Object.entries(placing.unfinished).filter(([mod]) => landed.has(mod))),

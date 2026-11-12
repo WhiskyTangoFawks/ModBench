@@ -2,6 +2,7 @@ import type { InstanceAdapter, FileOrigin } from '../instanceAdapter/instanceAda
 import { exclusionsOfFiles, isUnderAny, sourceModsOf, writeManifestIn, type Manifest } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
+import { gestureName, phrase, type Message } from '../ports/phrase';
 import { heldManifestIn } from './heldManifest';
 import { updateManifest, type UpdateManifestDeps } from './updateManifest';
 
@@ -40,12 +41,12 @@ const unignoring = (held: Manifest, paths: readonly string[]): Manifest => ({ ..
 // The files of one mod its manifest change takes, and those it refuses, each with why.
 async function changedFor(
   adapter: Adapter, mod: string, ofMod: readonly FileOfMod[], ignore: boolean,
-): Promise<{ readonly taken: readonly FileOfMod[]; readonly refused: readonly ItemRefusal<FileToIgnore>[] }> {
-  const refuseAll = (reason: string) => ({ taken: [], refused: ofMod.map(({ file }) => ({ item: file, reason })) });
+): Promise<{ readonly taken: readonly FileOfMod[]; readonly refused: readonly ItemRefusal<FileToIgnore, Message>[] }> {
+  const refuseAll = (reason: Message) => ({ taken: [], refused: ofMod.map(({ file }) => ({ item: file, reason })) });
   const folder = await adapter.modFolderPath(mod);
   if (folder === undefined) return refuseAll(`'${mod}' is gone from the disk`);
   const held = await heldManifestIn(folder);
-  if (held === undefined) return refuseAll('its mod has no manifest, so update manifest comes first');
+  if (held === undefined) return refuseAll(phrase`its mod has no manifest, so ${gestureName('modbench.mod.updateManifest', 'update manifest')} comes first`);
   if ('why' in held) return refuseAll(held.why);
   const refused = ofMod.flatMap(({ file, path }) => {
     const reason = ignore ? undefined : whyNotUnignored(held, path);
@@ -66,10 +67,10 @@ async function changedFor(
  *  recorded by its build. Each file lands or is refused on its own. */
 export async function ignoreFiles(
   deps: IgnoreFilesDeps & UpdateManifestDeps, files: readonly FileToIgnore[], ignore: boolean,
-): Promise<SelectionOutcome<FileToIgnore>> {
+): Promise<SelectionOutcome<FileToIgnore, Message>> {
   const { adapter } = deps;
   const landed: FileToIgnore[] = [];
-  const refused: ItemRefusal<FileToIgnore>[] = [];
+  const refused: ItemRefusal<FileToIgnore, Message>[] = [];
   const byMod = new Map<string, FileOfMod[]>();
   for (const file of files) {
     if (file.origin.kind !== 'mod') { refused.push({ item: file, reason: 'Overwrite is not a mod.' }); continue; }
@@ -91,7 +92,7 @@ export async function ignoreFiles(
     const reason = notRecorded.get(mod);
     for (const { file } of ofMod) {
       if (reason === undefined) landed.push(file);
-      else refused.push({ item: file, reason: `its manifest was written, but ${reason}` });
+      else refused.push({ item: file, reason: phrase`its manifest was written, but ${reason}` });
     }
   }
   return { landed, refused };
