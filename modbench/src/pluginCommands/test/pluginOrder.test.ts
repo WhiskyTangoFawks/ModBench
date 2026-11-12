@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { judge, type PluginFactsOf } from '../../sortingRules/judge';
-import { offeredMoves, type ListedPlugins } from '../pluginOrder';
+import { moveOrderRefusal, offeredMoves, type ListedPlugins } from '../pluginOrder';
 
 type Facts = NonNullable<ReturnType<PluginFactsOf>>;
 
@@ -13,7 +13,7 @@ const listedOf = (lines: readonly string[], { loadedWithNoLine = [], inactive = 
 const brokenIn = ({ loadedWithNoLine, lines, isActive }: ListedPlugins, facts: PluginFactsOf) =>
   judge(loadedWithNoLine, lines.filter(isActive), facts).broken;
 
-describe('offeredMoves: the broken rules a move keeps without breaking another at Error', () => {
+describe('offeredMoves: the broken rules a move keeps where a drop would land', () => {
   it('offers the master moving directly above its dependant', () => {
     const facts = factsFrom({ 'A.esp': {}, 'B.esp': { masters: ['A.esp'] } });
     const listed = listedOf(['B.esp', 'A.esp']);
@@ -67,5 +67,29 @@ describe('offeredMoves: the broken rules a move keeps without breaking another a
     const listed = listedOf(['B.esp']);
 
     expect(offeredMoves(listed, brokenIn(listed, facts), facts)).toEqual([]);
+  });
+});
+
+describe('moveOrderRefusal: a drop the game would undo', () => {
+  it('refuses a drop that makes the game move the plugin it drops, giving the game\'s reason', () => {
+    const facts = factsFrom({ 'A.esp': {}, 'M.esm': { master: true } });
+    const listed = listedOf(['M.esm', 'A.esp']);
+
+    expect(moveOrderRefusal(listed, ['M.esm'], { kind: 'after', name: 'A.esp' }, facts)).toContain('"M.esm" loads as a master');
+  });
+
+  it('refuses a drop that makes the game move a plugin it did not drop', () => {
+    const facts = factsFrom({ 'A.esp': {}, 'B.esp': {}, 'M.esm': { master: true } });
+    const listed = listedOf(['M.esm', 'A.esp', 'B.esp']);
+
+    expect(moveOrderRefusal(listed, ['B.esp'], { kind: 'before', name: 'M.esm' }, facts)).toContain('"M.esm" loads as a master');
+  });
+
+  it('lands an unrelated drop while the game already moves another plugin', () => {
+    const facts = factsFrom({ 'A.esp': {}, 'M.esm': { master: true }, 'B.esp': {}, 'C.esp': {} });
+    const listed = listedOf(['A.esp', 'M.esm', 'B.esp', 'C.esp']);
+
+    expect(brokenIn(listed, facts).map(({ rule }) => rule)).toEqual(['gameMoves']);
+    expect(moveOrderRefusal(listed, ['C.esp'], { kind: 'before', name: 'B.esp' }, facts)).toBeUndefined();
   });
 });
