@@ -6,11 +6,11 @@ import type { Reporter } from '../ports/reporter';
 import type { PathHop } from '../wire/messages';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { locationOf, problemSpan, type Segment } from './sourceText';
+import { lastRead, positionAt, readiness, tellingOnSurface, type Position, type Told } from './feedShape';
 import { answerOf, failureReason, type ReadFailed } from '../wire/readFailed';
 
 type SourceProblem = PluginProblems['problems'][number];
 
-interface Position { line: number; character: number }
 interface ClearingGesture { label: string; command: string; args: unknown[] }
 export interface ProblemOnFile { message: string; start: Position; end: Position; clearing?: ClearingGesture }
 /** Every problem mEdit answered, by the absolute path of the file it sits on. */
@@ -27,19 +27,7 @@ export interface SourceProblemsDeps {
   languageStatus: (text: string | undefined) => void;
 }
 
-/** Each part's problems, together by file. */
-export function mergedProblems(parts: readonly ProblemsByFile[]): ProblemsByFile {
-  const byFile = new Map<string, ProblemOnFile[]>();
-  for (const part of parts) for (const [file, onFile] of part) byFile.set(file, [...byFile.get(file) ?? [], ...onFile]);
-  return byFile;
-}
-
 const FIRST_LINE = { line: 0, character: 0 };
-
-function positionAt(text: string, offset: number): Position {
-  const lines = text.slice(0, offset).split('\n');
-  return { line: lines.length - 1, character: lines.at(-1)?.length ?? 0 };
-}
 
 const hopOf = (segment: Segment): PathHop => typeof segment === 'number' ? { kind: 'index', index: segment } : { kind: 'member', name: segment };
 
@@ -58,16 +46,6 @@ function onText(text: string, plugin: PluginAddress, problem: SourceProblem): Pr
   const clearing = clearingGesture({ plugin, problem });
   const place = target ? { start: positionAt(text, target.start), end: positionAt(text, target.end) } : { start: FIRST_LINE, end: FIRST_LINE };
   return { message: problem.message, ...place, ...clearing && { clearing } };
-}
-
-interface Told { key: string; message: string; why: string }
-
-function tellingOnce(say: (message: string, why: string) => void): (standing: Told[]) => void {
-  let told = new Map<string, string>();
-  return (standing) => {
-    for (const { key, message, why } of standing) if (told.get(key) !== why) say(message, why);
-    told = new Map(standing.map(({ key, why }) => [key, why]));
-  };
 }
 
 type OnFiles = Map<string, ProblemOnFile[]>;
@@ -129,10 +107,8 @@ function nextHeld(held: Map<string, Contribution>, answered: Map<string, Contrib
  *  language status says why. */
 export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
   const { client, reporter, publish, languageStatus } = deps;
-  const tellingOnSurface = () => tellingOnce((message, why) => { reporter.shownOnSurface('warning', message, why); });
-  const tellUnplaced = tellingOnSurface();
-  const tellUnread = tellingOnSurface();
-  const lastRead = (why: string) => `Showing the last good read: ${why}`;
+  const tellUnplaced = tellingOnSurface(reporter);
+  const tellUnread = tellingOnSurface(reporter);
   let held = new Map<string, Contribution>();
   let unplacedStatus: string | undefined;
   let failed: { ask: number; why: string } | undefined;
@@ -150,7 +126,7 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
     handOverFailed = why;
     showStatus();
   };
-  let answeredAtSubscribe = false;
+  const { ready, answeredAtSubscribe } = readiness(client);
   let latest = 0;
   let shown = 0;
   const settle = (mine: number, { ofPlugin, unplaced, unread }: Placed) => {
@@ -174,14 +150,13 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
     const mine = ++latest;
     try {
       const answer = await placed(answerOf(await client.getPluginProblems()), deps);
-      if (atSubscribe) answeredAtSubscribe = true;
+      if (atSubscribe) answeredAtSubscribe();
       settle(mine, answer);
     } catch (error) {
       if (mine === latest && !atSubscribe) keepLastAnswer(mine, error);
     }
   };
   const reask = () => { void ask(); };
-  const ready = () => client.loadOrderStatus?.conflictsComputed ?? answeredAtSubscribe;
   const reaskOnce = coalesced(reask);
   const reaskWhenReady = () => { if (ready()) reaskOnce(); };
   const unsubscribe = [

@@ -108,6 +108,7 @@ describe('feedPathProblems (source.md, In the text editor, story 6)', () => {
     client.setQueryAnswerOnce('getPluginFilePaths', new Promise<PluginFilePaths[]>((resolve) => { overtaken = resolve; }));
     client.setQueryAnswerOnce('getPluginFilePaths', [answerFor(PLUGIN, [])]);
     client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+    await vi.waitFor(() => { expect(asked(client)).toHaveLength(2); });
     client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 2 });
     await vi.waitFor(() => { expect(published.length).toBe(2); });
 
@@ -138,6 +139,34 @@ describe('feedPathProblems (source.md, In the text editor, story 6)', () => {
     await vi.waitFor(() => { expect(status.at(-1)).toContain('mEdit did not answer in time.'); });
 
     expect(published).toHaveLength(1);
+  });
+
+  it('asks once for a plugin that several notifications of one turn name', async () => {
+    const { settled, client } = feed([answerFor()]);
+    await settled(1);
+
+    for (const kind of ['rows-changed', 'plugin-changed', 'rows-changed'] as const) client.emit({ kind, plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+    await vi.waitFor(() => { expect(asked(client)).toHaveLength(2); });
+    await Promise.resolve();
+
+    expect(asked(client)).toEqual([[undefined], [PLUGIN]]);
+  });
+
+  it('does not say it shows the last read when an ask fails after a later ask for the plugin answered', async () => {
+    const { settled, client, status, published } = feed([answerFor()]);
+    await settled(1);
+    let overtaken!: (answer: PluginFilePaths[]) => void;
+    client.setQueryAnswerOnce('getPluginFilePaths', new Promise<PluginFilePaths[]>((_resolve, reject) => { overtaken = () => { reject(new Error('late')); }; }));
+    client.setQueryAnswerOnce('getPluginFilePaths', [answerFor()]);
+    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+    await vi.waitFor(() => { expect(asked(client)).toHaveLength(2); });
+    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 2 });
+    await vi.waitFor(() => { expect(published.length).toBe(2); });
+
+    overtaken([]);
+    await Promise.resolve();
+
+    expect(status.filter((text) => text !== undefined)).toEqual([]);
   });
 
   it('does not ask before the load order settles', () => {

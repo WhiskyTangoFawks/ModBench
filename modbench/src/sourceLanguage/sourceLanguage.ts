@@ -18,7 +18,8 @@ import { handUnsavedPluginSource } from './handUnsaved';
 import { registerBuildEntryPoint } from './buildEntryPoint';
 import { registerUpdateManifestEntryPoint } from './updateManifestEntryPoint';
 import type { Instance } from '../instanceLoader/instance';
-import { feedSourceProblems, mergedProblems, type ProblemOnFile, type ProblemsByFile, type SourceProblemsDeps } from './sourceProblems';
+import { feedSourceProblems, type ProblemOnFile, type ProblemsByFile, type SourceProblemsDeps } from './sourceProblems';
+import { mergedFeeds } from './feedShape';
 import { feedPathProblems, type PathProblemsDeps, type PathStanding } from './pathProblems';
 import type { EntryNames, EntrySymbol, PluginSymbol, SymbolOwner } from '../symbolNames/symbolNames';
 import type { PluginsShown } from '../drivingLib/pluginsShown';
@@ -121,17 +122,9 @@ interface SourceLanguage extends vscode.Disposable {
 
 function workspaceNotice(instance: SourceLanguageDeps['instance']): vscode.Disposable {
   if (instance === undefined) return new vscode.Disposable(() => undefined);
-  let status: vscode.LanguageStatusItem | undefined;
-  const stop = feedWorkspaceNotice({
-    instance,
-    languageStatus: (text) => {
-      if (text === undefined) { status?.dispose(); status = undefined; return; }
-      status ??= vscode.languages.createLanguageStatusItem('modbench.gameFolderOutside', pluginSourceStatusSelector);
-      status.severity = vscode.LanguageStatusSeverity.Warning;
-      status.text = text;
-    },
-  });
-  return new vscode.Disposable(() => { stop(); status?.dispose(); });
+  const status = languageStatusItem('modbench.gameFolderOutside');
+  const stop = feedWorkspaceNotice({ instance, languageStatus: status.show });
+  return new vscode.Disposable(() => { stop(); status.dispose(); });
 }
 
 function languageStatusItem(id: string) {
@@ -150,17 +143,16 @@ function languageStatusItem(id: string) {
 
 function sourceProblems(deps: SourceLanguageDeps): Pick<SourceLanguage, 'dispose' | 'messages'> {
   const collection = vscode.languages.createDiagnosticCollection('modbench-source');
-  const parts: { links: ProblemsByFile; paths: ProblemsByFile } = { links: new Map(), paths: new Map() };
-  const publishParts = () => {
+  const feeds = mergedFeeds((problems) => {
     collection.clear();
-    collection.set([...mergedProblems([parts.links, parts.paths])].map(([file, onFile]) => [vscode.Uri.file(file), onFile.map(diagnosticOf)]));
-  };
+    collection.set([...problems].map(([file, onFile]) => [vscode.Uri.file(file), onFile.map(diagnosticOf)]));
+  }, 'links', 'paths');
   const linkStatus = languageStatusItem('modbench.sourceProblems');
   const pathStatus = languageStatusItem('modbench.sourcePaths');
   const readText = readHeldText;
   const unsubscribe = [
-    feedSourceProblems({ ...deps, readText, publish: (problems) => { parts.links = problems; publishParts(); }, languageStatus: linkStatus.show }),
-    feedPathProblems({ ...deps, paths: deps.pathStanding, readText, publish: (problems) => { parts.paths = problems; publishParts(); }, languageStatus: pathStatus.show }),
+    feedSourceProblems({ ...deps, readText, publish: feeds.links, languageStatus: linkStatus.show }),
+    feedPathProblems({ ...deps, paths: deps.pathStanding, readText, publish: feeds.paths, languageStatus: pathStatus.show }),
   ];
   const disposable = new vscode.Disposable(() => { for (const off of unsubscribe) off(); collection.dispose(); linkStatus.dispose(); pathStatus.dispose(); });
   return { dispose: () => { disposable.dispose(); }, messages: () => [...linkStatus.text(), ...pathStatus.text()] };

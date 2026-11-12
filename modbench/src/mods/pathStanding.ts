@@ -1,7 +1,6 @@
 // source.md, In the text editor, story 6: what holds a path a plugin source names.
 
 import type { InstanceValue } from '../instanceLoader/instance';
-import { outsideGameFolder } from '../instanceLoader/outsideGameFolder';
 import { OVERWRITE_ORIGIN } from '../wire/pluginAddress';
 import { copyTheGameGets } from './fileCopy';
 
@@ -17,7 +16,7 @@ function modHolds(value: StandingValue, origin: string, folded: string): boolean
 
 export function pathStandingOf(instance: { readonly value: StandingValue; subscribe: (listener: () => void) => { dispose: () => unknown } }) {
   return {
-    judged: (): boolean => outsideGameFolder(instance.value) === undefined,
+    judged: (): boolean => instance.value.gameFolder.kind === 'found' && instance.value.gameFolderInWorkspace,
     holds: ({ origin }: { origin: string }, dataPath: string): boolean => {
       const path = dataPath.replaceAll('\\', '/');
       return !('none' in copyTheGameGets(instance.value, path)) || modHolds(instance.value, origin, path.toLowerCase());

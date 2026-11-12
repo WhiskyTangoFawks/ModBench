@@ -52,7 +52,7 @@ describe('what holds a path a plugin source names (source.md, In the text editor
   it.each<[string, Value, boolean]>([
     ['judged while the game folder is in the workspace', {}, true],
     ['not judged while the game folder is outside it', { inWorkspace: false }, false],
-    ['judged while no game folder is found', { gameFolder: NOT_FOUND, inWorkspace: false }, true],
+    ['not judged while no game folder is found, as before the first read', { gameFolder: NOT_FOUND, inWorkspace: false }, false],
   ])('is %s', (_what, value, judged) => {
     expect(standing(value).judged()).toBe(judged);
   });

@@ -5,12 +5,13 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { answerOf } from '../wire/readFailed';
 import { pluginAddressKey } from '../wire/pluginAddress';
+import { lastRead, positionAt, readiness, tellingOnSurface, type Told } from './feedShape';
 import type { ProblemOnFile, ProblemsByFile } from './sourceProblems';
 import { stringsAt } from './sourceText';
 
 /** What the instance says of a file the plugin source names. */
 export interface PathStanding {
-  /** False while the game gets files from outside the workspace: no path is judged then. */
+  /** False unless the game folder is found and in the workspace: no path is judged otherwise. */
   judged: () => boolean;
   /** Whether the game gets the file at the Data-folder path `dataPath`, or the plugin's mod holds it. */
   holds: (plugin: PluginAddress, dataPath: string) => boolean;
@@ -32,12 +33,8 @@ type NamedFilePath = PluginFilePaths['paths'][number];
 
 interface Held { answer: PluginFilePaths; ticket: number }
 
+const WHOLE_SET = '';
 const nameOf = ({ name, origin }: PluginAddress) => `"${name}" (${origin})`;
-
-function positionAt(text: string, offset: number): { line: number; character: number } {
-  const lines = text.slice(0, offset).split('\n');
-  return { line: lines.length - 1, character: lines.at(-1)?.length ?? 0 };
-}
 
 async function problemsOf(held: readonly PluginFilePaths[], { paths, sourceFiles, readText }: PathProblemsDeps): Promise<ProblemsByFile> {
   const byFile = new Map<string, ProblemOnFile[]>();
@@ -45,9 +42,8 @@ async function problemsOf(held: readonly PluginFilePaths[], { paths, sourceFiles
   await Promise.all(held.map(async ({ plugin, paths: named }) => {
     const files = sourceFiles(plugin.origin);
     if (files === undefined) return;
-    const missing = named.filter(({ dataPath }) => !paths.holds(plugin, dataPath));
     const filesOf = new Map<string, NamedFilePath[]>();
-    for (const path of missing) {
+    for (const path of named.filter(({ dataPath }) => !paths.holds(plugin, dataPath))) {
       const file = files.file(path.sourceRelativePath);
       filesOf.set(file, [...filesOf.get(file) ?? [], path]);
     }
@@ -65,67 +61,78 @@ async function problemsOf(held: readonly PluginFilePaths[], { paths, sourceFiles
 }
 
 /** Publishes each path a plugin's source names that no file the game gets or its mod holds answers to. A change to the
- *  files judges again without asking mEdit (ADR-0003). */
+ *  files judges again without asking mEdit (ADR-0003). A plugin with no source folder is told by the links feed. */
 export function feedPathProblems(deps: PathProblemsDeps): () => void {
   const { client, reporter, paths, publish, languageStatus } = deps;
   const held = new Map<string, Held>();
-  const told = new Map<string, string>();
+  const failures = new Map<string, { ask: number; why: string }>();
+  const latestOf = new Map<string, number>();
+  const tell = tellingOnSurface(reporter);
+  const { ready, answeredAtSubscribe } = readiness(client);
   let ticket = 0;
-  let failed: string | undefined;
-  let answeredAtSubscribe = false;
-
-  const tell = (key: string, message: string, why: string) => {
-    if (told.get(key) === why) return;
-    told.set(key, why);
-    reporter.shownOnSurface('warning', message, why);
-  };
-  const showStatus = () => {
-    const unchecked = [...held.values()].flatMap(({ answer }) => [
-      ...answer.failure == null ? [] : [`${nameOf(answer.plugin)}: ${answer.failure}`],
-      ...answer.unread.map((line) => `${nameOf(answer.plugin)}: ${line}`),
-    ]);
-    if (failed !== undefined) languageStatus(`Showing the last good read of the paths: ${failed}`);
-    else languageStatus(unchecked.length > 0 ? `Some paths are not checked: ${unchecked.join('; ')}` : undefined);
-  };
   let shown = 0;
+
+  const unchecked = () => [...held.values()].flatMap(({ answer }) => [
+    ...answer.failure == null ? [] : [`${nameOf(answer.plugin)}: ${answer.failure}`],
+    ...answer.unread.map((line) => `${nameOf(answer.plugin)}: ${line}`),
+  ]);
+  const showStatus = () => {
+    const failed = [...failures.values()][0];
+    if (failed) languageStatus(lastRead(failed.why));
+    else languageStatus(unchecked().length > 0 ? `Some paths are not checked: ${unchecked().join('; ')}` : undefined);
+  };
+  const tellStanding = () => {
+    const standing: Told[] = [...held].flatMap(([key, { answer }]) => [
+      ...answer.unread.map((line) => ({ key: `${key}\n${line}`, message: `The Problems panel does not check every path ${nameOf(answer.plugin)} names.`, why: line })),
+      ...answer.failure == null ? [] : [{ key: `${key}\nfailure`, message: `The Problems panel checks only some of the paths ${nameOf(answer.plugin)} names.`, why: answer.failure }],
+    ]);
+    tell([...standing, ...[...failures].map(([target, { why }]) => ({ key: `failed ${target}`, message: 'The Problems panel shows the last paths mEdit answered.', why }))]);
+  };
   const judge = async () => {
     const mine = ++shown;
     const problems = await problemsOf([...held.values()].map(({ answer }) => answer), deps);
     if (mine === shown) publish(problems);
   };
-  const take = (answers: readonly PluginFilePaths[], mine: number, whole: boolean) => {
+  const take = (answers: readonly PluginFilePaths[], target: string, mine: number) => {
     for (const answer of answers) {
       const key = pluginAddressKey(answer.plugin);
-      if ((held.get(key)?.ticket ?? 0) >= mine) continue;
-      held.set(key, { answer, ticket: mine });
-      for (const line of answer.unread) tell(`${key}\n${line}`, `The Problems panel does not check every path ${nameOf(answer.plugin)} names.`, line);
-      if (answer.failure != null) tell(`${key}\nfailure`, `The Problems panel checks only some of the paths ${nameOf(answer.plugin)} names.`, answer.failure);
+      if ((held.get(key)?.ticket ?? 0) < mine) held.set(key, { answer, ticket: mine });
     }
-    if (whole) {
+    if (target === WHOLE_SET) {
       const answered = new Set(answers.map(({ plugin }) => pluginAddressKey(plugin)));
       for (const [key, { ticket: had }] of held) if (!answered.has(key) && had < mine) held.delete(key);
     }
-    failed = undefined;
+    for (const [failed, { ask }] of failures) if (target === WHOLE_SET || failed === target) if (ask < mine) failures.delete(failed);
+    tellStanding();
     showStatus();
     void judge();
   };
   const ask = async (plugin?: PluginAddress, atSubscribe = false) => {
+    const target = plugin === undefined ? WHOLE_SET : pluginAddressKey(plugin);
     const mine = ++ticket;
+    latestOf.set(target, mine);
     try {
       const answer = answerOf(await client.getPluginFilePaths(plugin));
-      if (atSubscribe) answeredAtSubscribe = true;
-      take(answer, mine, plugin === undefined);
+      if (atSubscribe) answeredAtSubscribe();
+      take(answer, target, mine);
     } catch (error) {
-      if (atSubscribe) return;
-      const why = errorMessage(error);
-      tell('failed', 'The Problems panel shows the last paths mEdit answered.', why);
-      failed = why;
+      if (atSubscribe || latestOf.get(target) !== mine) return;
+      failures.set(target, { ask: mine, why: errorMessage(error) });
+      tellStanding();
       showStatus();
     }
   };
-  const ready = () => client.loadOrderStatus?.conflictsComputed ?? answeredAtSubscribe;
+  const asking = new Map<string, PluginAddress>();
+  const askAsked = coalesced(() => {
+    for (const plugin of asking.values()) void ask(plugin);
+    asking.clear();
+  });
   const askWhole = coalesced(() => { void ask(); });
-  const askPluginWhenReady = ({ plugin }: { plugin: PluginAddress }) => { if (ready()) void ask(plugin); };
+  const askPluginWhenReady = ({ plugin }: { plugin: PluginAddress }) => {
+    if (!ready()) return;
+    asking.set(pluginAddressKey(plugin), plugin);
+    askAsked();
+  };
   const unsubscribe = [
     client.onLoadOrderSettled((status) => { if (status.conflictsComputed) askWhole(); }),
     client.onNotification('rows-changed', askPluginWhenReady),
