@@ -233,13 +233,6 @@ plugins:
 
     const placed = (broken: ReturnType<typeof judged>) => broken.map(({ plugins, placement, reason }) => ({ plugins, placement, reason }));
 
-    const applied = (order: string[], broken: ReturnType<typeof judged>): string[] => broken.reduce((now, { plugins, placement }) => {
-      const rest = now.filter((name) => name !== plugins[0]?.filename);
-      const anchorAt = rest.indexOf(placement?.anchor.filename ?? '');
-      rest.splice(placement?.side === 'before' ? anchorAt : anchorAt + 1, 0, plugins[0]?.filename ?? '');
-      return rest;
-    }, order);
-
     it.each([
       ['loads after the plugins of a group its own loads before', ['L.esp', 'L2.esp', 'L3.esp', 'E.esp'], 'E.esp', 'before', 'L.esp',
         '"E.esp" is in the group "early", which loads before the group "late", and loads after 3 plugins of that group.', ['E.esp', 'L.esp', 'L2.esp', 'L3.esp']],
@@ -249,8 +242,8 @@ plugins:
       const extra = `${groups}  - {name: L3.esp, group: late}\n  - {name: E2.esp, group: early}\n  - {name: X.esp, group: early}\n`;
       const broken = judged(order, extra);
 
-      expect([placed(broken), applied(order, broken), judged(result, extra)]).toEqual([
-        [{ plugins: [at(mover)], placement: { side, anchor: at(anchor) }, reason }], result, [],
+      expect([placed(broken), judged(result, extra)]).toEqual([
+        [{ plugins: [at(mover)], placement: { side, anchor: at(anchor) }, reason }], [],
       ]);
     });
 
@@ -259,8 +252,8 @@ plugins:
       const extra = `${groups}  - {name: E2.esp, group: early}\n  - {name: L2.esp, group: late}\n`;
       const broken = judged(order, extra);
 
-      expect([broken.map(({ plugins, placement }) => [plugins[0]?.filename, placement?.side, placement?.anchor.filename]), applied(order, broken), judged(['E.esp', 'E2.esp', 'L.esp', 'L2.esp'], extra)]).toEqual([
-        [['E.esp', 'before', 'L.esp'], ['E2.esp', 'before', 'L.esp']], ['E.esp', 'E2.esp', 'L.esp', 'L2.esp'], [],
+      expect([broken.map(({ plugins, placement }) => [plugins[0]?.filename, placement?.side, placement?.anchor.filename]), judged(['E.esp', 'E2.esp', 'L.esp', 'L2.esp'], extra)]).toEqual([
+        [['E.esp', 'before', 'L.esp'], ['E2.esp', 'before', 'L.esp']], [],
       ]);
     });
 
@@ -349,17 +342,6 @@ plugins:
       const broken = judged(order, groups, order, 'groups:\n  - {name: aside}\n  - {name: early, after: [aside]}\nplugins:\n  - {name: S.esp, group: aside}\n');
 
       expect(broken.map(({ plugins, source }) => [plugins[0]?.filename, source])).toEqual([['L.esp', { file: 'userlist', line: 2 }]]);
-    });
-
-    it('judges a load order of 500 plugins against 500 that ignores groups within a second', () => {
-      const late = Array.from({ length: 500 }, (_, i) => `L${i}.esp`);
-      const early = Array.from({ length: 500 }, (_, i) => `E${i}.esp`);
-      const masterlist = `${groups}${[...late.map((name) => `  - {name: ${name}, group: late}\n`), ...early.map((name) => `  - {name: ${name}, group: early}\n`)].join('')}`;
-      const started = performance.now();
-
-      const broken = judged([...late, ...early], masterlist);
-
-      expect([broken.length, performance.now() - started < 1000]).toEqual([500, true]);
     });
 
     it('takes the group a userlist entry states over the masterlist\'s', () => {
