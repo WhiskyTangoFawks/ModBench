@@ -1308,8 +1308,8 @@ internal sealed class Indexer : IDisposable
         }
     }
 
-    // A tree's rows say nothing of the header its compiled file holds. A file gone or unreadable leaves the header last
-    // read: the header facts of a held plugin stay present, and the next change to the file reads it again.
+    // A tree's rows say nothing of its compiled file's header. A file gone or unreadable leaves the header last read,
+    // and the next change to the file reads it again.
     private PluginMetadata ReopenHeader(OpenScope scope, PluginMetadata plugin)
     {
         if (!_adapter.Exists(plugin.Path)) return plugin;
