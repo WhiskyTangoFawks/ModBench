@@ -16,7 +16,7 @@ internal static class ProblemsPanel
         var stopped = index.SourceFileFailures.ToLookup(failure => failure.Plugin, PluginAddress.Comparer);
         var found = index.FileProblems.ToLookup(problem => problem.Plugin, PluginAddress.Comparer);
         var unreadable = UnreadableActive(index, snapshot);
-        var holdingLinks = reads.GetSourcePluginsHoldingLinks();
+        var linkedPlugins = reads.GetPluginsLinkedBySourcePlugins();
         var held = snapshot.Plugins.ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);
         var missing = reads
             .GetReferencesToMissingRecordsOnFiles(plugin => held.GetValueOrDefault(plugin) is { } registered
@@ -29,7 +29,13 @@ internal static class ProblemsPanel
                 .Where(plugin => derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom.IsSourceMod() || stopped.Contains(plugin.Key))
                 .Select(plugin =>
                 {
-                    var headerProblems = holdingLinks.Contains(plugin.Key) ? NoLinkChecked(plugin, unreadable, reads.OpenedPlugins.GetValueOrDefault(plugin.Key)?.Masters, source.Over(plugin, snapshot.GameRelease)) : new HeaderProblems([], null);
+                    var linkedUnreadable = unreadable
+                        .Where(file => !file.Key.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)
+                            && linkedPlugins[plugin.Key].Contains(file.Key, StringComparer.OrdinalIgnoreCase))
+                        .ToList();
+                    var headerProblems = linkedUnreadable.Count == 0
+                        ? new HeaderProblems([], null)
+                        : NoLinkChecked(plugin, linkedUnreadable, source.Over(plugin, snapshot.GameRelease));
                     return ProblemsOf(
                         plugin.Key, snapshot.GameRelease, index.LaterReadFailure(plugin.Key),
                         [.. stopped[plugin.Key].Select(SourceProblem.StoppedAt), .. Found(found[plugin.Key].Select(held => held.Problem), stopped[plugin.Key]), .. headerProblems.Problems],
@@ -62,16 +68,10 @@ internal static class ProblemsPanel
 
     private sealed record HeaderProblems(IReadOnlyList<SourceProblem> Problems, string? PlacementFailure);
 
-    // Compile checks links against the active plugins, and says which it could not read, only when the plugin holds a link
-    // and lists that plugin as a master: a FormKey names its origin plugin.
+    // Compile says each unreadable file a link names, as the header's problem.
     private static HeaderProblems NoLinkChecked(
-        RegisteredPlugin plugin, IReadOnlyDictionary<string, string> unreadable, IReadOnlyList<string>? masters, ISourceRepositoryReads? repository)
+        RegisteredPlugin plugin, IReadOnlyList<KeyValuePair<string, string>> others, ISourceRepositoryReads? repository)
     {
-        var others = unreadable
-            .Where(file => !file.Key.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)
-                && (masters is null || masters.Contains(file.Key, StringComparer.OrdinalIgnoreCase)))
-            .ToList();
-        if (others.Count == 0) return new([], null);
         if (repository is null) return new([], $"{plugin.Name} is a compiled plugin but no mod folder provides it.");
 
         var header = PluginHeader.IdentityOf(plugin.Name);

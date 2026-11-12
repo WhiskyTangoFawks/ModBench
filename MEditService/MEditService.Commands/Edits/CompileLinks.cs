@@ -49,7 +49,9 @@ internal sealed class CompileLinks(IPluginAdapter adapter, ILogger logger)
             file => file.FileName, file => file.Reason, StringComparer.OrdinalIgnoreCase);
         string? WhyUnchecked(string formKey) => UncheckedLinks.Of(formKey, unread)?.Message;
 
+        var linkedFiles = links.Select(RecordMasters.PluginNamedBy).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var diagnostics = answers.UnreadableFiles
+            .Where(file => linkedFiles.Contains(file.FileName))
             .Select(file => PluginDiagnostic(
                 plugin, repository, UncheckedLinks.NoLinkInto(file.FileName, file.Reason)))
             .ToList();

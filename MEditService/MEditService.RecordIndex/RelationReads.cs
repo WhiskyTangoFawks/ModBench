@@ -422,17 +422,18 @@ internal sealed class RelationReads(
         ];
     }
 
-    /// <summary>Each plugin read from its source tree that holds at least one link.</summary>
-    public IReadOnlySet<PluginAddress> GetSourcePluginsHoldingLinks()
+    /// <summary>The plugin files each plugin read from its source tree links into: a FormKey names its origin plugin.</summary>
+    public ILookup<PluginAddress, string> GetPluginsLinkedBySourcePlugins()
     {
         using var context = OpenRead();
         return context.Rows($"""
-            SELECT DISTINCT fr.source_plugin, fr.source_origin
+            SELECT DISTINCT fr.source_plugin, fr.source_origin, substr(fr.target_form_key, {FormKeyPluginStart})
             FROM {TableDdlBuilder.MirrorSchema}.form_references fr
             {TableDdlBuilder.RegisteredJoin("fr", "source_plugin", "source_origin")}
             JOIN {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} d
               ON d.plugin = fr.source_plugin AND d.origin = fr.source_origin AND d.derived_from = '{DerivedFrom.SourceTree}'
-            """, reader => reader.GetPluginAddress()).ToHashSet(PluginAddress.Comparer);
+            """, reader => (Plugin: reader.GetPluginAddress(), Linked: reader.GetString(2)))
+            .ToLookup(row => row.Plugin, row => row.Linked, PluginAddress.Comparer);
     }
 
     public IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey)

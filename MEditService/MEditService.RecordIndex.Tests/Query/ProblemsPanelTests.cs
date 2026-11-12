@@ -239,14 +239,24 @@ public sealed class ProblemsPanelTests : IDisposable
         Assert.Null(link.UncheckedBecause);
     }
 
-    [Fact]
-    public void AnActivePluginThatCannotBeRead_IsAProblemOnTheHeaderFileOfACompiledPluginHoldingALink()
+    [Theory]
+    [InlineData("000800:Unreadable.esp", true, "Race")]
+    [InlineData(Absent, false, "Race")]
+    [InlineData(null, false, "")]
+    public void AnActivePluginThatCannotBeRead_IsAProblemOnTheHeaderFile_OnlyOfACompiledPluginWithALinkIntoIt(
+        string? refersTo, bool onTheHeader, string otherProblemFields)
     {
-        var plugin = new Plugin("Refers.esp", RefersTo: $"000800:{Unreadable}");
+        var plugin = new Plugin("Refers.esp", RefersTo: refersTo);
         using var index = ReconciledWithPoisoned(Unreadable, new Plugin(Unreadable, CompiledPlugin: false), plugin);
 
         var answer = Assert.Single(Ready(index));
 
+        Assert.Equal(otherProblemFields, string.Concat(answer.Problems.Select(p => p.FieldPath)));
+        if (!onTheHeader)
+        {
+            Assert.DoesNotContain(answer.Problems, p => p.FieldPath is null);
+            return;
+        }
         var problem = Assert.Single(answer.Problems, p => p.FieldPath is null);
         Assert.StartsWith($"{Unreadable} is in the load order but could not be read, so no link into it was checked: ", problem.Message, StringComparison.Ordinal);
         Assert.Equal(Path.Combine(PluginSourceRoot.For(plugin.Name), "000000_Refers.esp.json"), problem.SourceRelativePath);
@@ -276,26 +286,6 @@ public sealed class ProblemsPanelTests : IDisposable
         var unprovided = Assert.Single(answered);
         Assert.Empty(unprovided.Problems);
         Assert.Equal(ProblemsFailureKind.Placement, unprovided.FailureKind);
-    }
-
-    [Fact]
-    public void AnActivePluginThatCannotBeRead_IsNoProblemOnACompiledPluginHoldingALink_ThatDoesNotListItAsAMaster()
-    {
-        using var index = ReconciledWithPoisoned(Unreadable, new Plugin(Unreadable, CompiledPlugin: false), new Plugin("Refers.esp"));
-
-        var answer = Assert.Single(Ready(index));
-
-        Assert.DoesNotContain(answer.Problems, p => p.FieldPath is null);
-    }
-
-    [Fact]
-    public void AnActivePluginThatCannotBeRead_IsNoProblemOnACompiledPluginHoldingNoLink()
-    {
-        using var index = ReconciledWithPoisoned(Unreadable, new Plugin(Unreadable, CompiledPlugin: false), new Plugin("Clean.esp", RefersTo: null));
-
-        var answer = Assert.Single(Ready(index));
-
-        Assert.Empty(answer.Problems);
     }
 
     [Fact]
