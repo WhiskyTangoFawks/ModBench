@@ -12,8 +12,7 @@ function archivedCopyOver({ gameFolderArchived: { copies, loadRank } }: Pick<Ins
   return { kind: 'archived', ...game };
 }
 
-/** The copy of `path` that the game gets, or what searching found: a mod's or Overwrite's, else a loose game folder file,
- *  which beats an archived copy, else the archived copy that loads last. A game folder outside the workspace is never a
+/** The copy of `path` that the game gets, or what searching found. A game folder outside the workspace is never a
  *  definition (ADR-0001). */
 export function copyTheGameGets(value: Pick<InstanceValue, 'stackedCopies' | 'dataFolderFiles' | 'gameFolderArchived'>, path: string, inWorkspace: (path: string) => boolean): CopyAt | { none: string } {
   const stacked = value.stackedCopies.get(path)?.copies[0]?.at;

@@ -285,9 +285,8 @@ export function stackCopies(index: Pick<FileConflictIndex, 'winningFirst'>, load
   return stack;
 }
 
-/** The game folder's archived copies by lower-case path, each from the archive that loads last of the game folder's, and
- *  where the game loads each archive in the Data folder, a mod's included. For symbol resolution only: the stack holds
- *  no game folder copy (mods-conflicts.md, story 5). */
+/** The game folder's archived copies by lower-case path, and each Data-folder archive's load rank. The stack holds no game
+ *  folder copy (mods-conflicts.md, story 5). */
 export interface GameFolderArchived {
   readonly copies: ReadonlyMap<string, ArchivedFileAddress>;
   readonly loadRank: ReadonlyMap<string, number>;
