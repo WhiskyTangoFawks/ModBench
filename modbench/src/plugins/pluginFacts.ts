@@ -5,7 +5,6 @@ import type { ConditionFacts, FileFacts } from '../sortingRules/lootConditions';
 import { judgeLoot, type LootPartition, type LootRules } from '../sortingRules/lootJudge';
 import type { UnreadableSource } from '../wire/messages';
 import { OVERWRITE_ORIGIN, pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
-import { inGameOrder } from '../instanceLoader/pluginOrder';
 import { pluginOriginName } from '../instanceLoader/pluginStanding';
 import { pluginCanBeEdited } from '../wire/pluginEditable';
 import { ByPluginAddress } from './pluginAddress';
@@ -176,8 +175,8 @@ export class PluginFacts {
     this.indexFailure = undefined;
   }
 
-  /** The completed reconcile's hand-off: which plugins mEdit holds, their facts, each failure, and
-   *  the active plugins in load order, which the sorting rules judge, and every plugins.txt line, which a move is written into. */
+  /** The completed reconcile's hand-off: which plugins mEdit holds, their facts, each failure, the active plugins as
+   *  the view lists them, which the sorting rules judge as the game loads them, and every plugins.txt line. */
   reconciled(plugins: readonly PluginMetadata[], failures: readonly PluginLoadFailure[], activeOrder: readonly PluginAddress[], lines: readonly PluginAddress[], loot: LootInput = NO_LOOT_RULES, blueprintLoadsLast = false): void {
     this.held = heldSet(plugins);
     this.loadFailures = indexLoadFailures(failures);
@@ -248,7 +247,7 @@ export class PluginFacts {
     return (filename) => {
       const address = addressOf.get(filename.toLowerCase());
       const read = address && this.reads.get(address);
-      return address && read && { origin: address.origin, masters: read.masters, blueprint: read.blueprint, master: read.master };
+      return address && read && { origin: address.origin, masters: read.masters, blueprint: read.blueprint && this.blueprintLoadsLast, master: read.master };
     };
   }
 
@@ -256,13 +255,13 @@ export class PluginFacts {
   private judgeSorting(treeOrder: readonly PluginAddress[], loot: LootInput): void {
     const lined = new Set(this.lineOrder.map(({ name }) => name.toLowerCase()));
     const loadedWithNoLine = (filename: string): boolean => !lined.has(filename.toLowerCase());
-    const activeOrder = inGameOrder(
-      treeOrder.filter(({ name }) => loadedWithNoLine(name)), treeOrder.filter(({ name }) => !loadedWithNoLine(name)), (address) => this.isBlueprint(address), this.blueprintLoadsLast,
-    );
+    const names = treeOrder.map(({ name }) => name);
+    const game = judge(names.filter(loadedWithNoLine), names.filter((name) => !loadedWithNoLine(name)), this.factsOver(treeOrder));
+    const treeAddressOf = new Map(treeOrder.map((address) => [address.name, address] as const));
+    const activeOrder = game.order.flatMap((name) => treeAddressOf.get(name) ?? []);
     const addressOf = new Map(activeOrder.map((address) => [address.name.toLowerCase(), address] as const));
-    const factsOf = this.factsOver(activeOrder);
     const broken = [
-      ...judge(activeOrder.map(({ name }) => name), factsOf, loadedWithNoLine),
+      ...game.broken,
       ...judgeLoot(activeOrder.map(({ name, origin }) => ({ origin, filename: name })), { ...loot, facts: this.conditionFacts(activeOrder, loot.files) }, (filename) => {
         const address = addressOf.get(filename.toLowerCase());
         const read = address && this.reads.get(address);

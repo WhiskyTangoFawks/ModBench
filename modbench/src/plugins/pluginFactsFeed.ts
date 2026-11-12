@@ -17,7 +17,7 @@ export interface PluginFactsFeedDeps {
   client: PluginFactsClient;
   /** The plugins the tree shows; mEdit's facts about any other are dropped. */
   shownPlugins: () => readonly PluginAddress[];
-  /** The plugins the game loads, in load order: the order the sorting rules judge. */
+  /** The plugins the game loads, as the view lists them: the sorting rules judge the order the game loads them in. */
   activePlugins: () => readonly PluginAddress[];
   /** Whether the game's release loads a blueprint plugin after every plugin that is not one. */
   blueprintLoadsLast: () => boolean;

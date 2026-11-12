@@ -8,13 +8,14 @@ const factsFrom = (table: Record<string, Partial<Facts>>): PluginFactsOf => (fil
   const row = table[filename];
   return row && { origin: 'Mod', masters: [], blueprint: false, master: false, ...row };
 };
+const brokenIn = (order: readonly string[], facts: PluginFactsOf) => judge([], order, facts).broken;
 
 describe('offeredMoves: the broken rules a move keeps without breaking another at Error', () => {
   it('offers the master moving directly above its dependant', () => {
     const facts = factsFrom({ 'A.esp': {}, 'B.esp': { masters: ['A.esp'] } });
     const order = ['B.esp', 'A.esp'];
 
-    const [offered, ...more] = offeredMoves(order, judge(order, facts), facts);
+    const [offered, ...more] = offeredMoves(order, brokenIn(order, facts), facts);
 
     expect(more).toEqual([]);
     expect(offered?.drop).toEqual({ kind: 'before', name: 'B.esp' });
@@ -22,12 +23,24 @@ describe('offeredMoves: the broken rules a move keeps without breaking another a
     expect(offered?.rule.rule).toBe('master');
   });
 
-  it('leaves out a move that breaks another rule at Error', () => {
-    const facts = factsFrom({ 'N.esp': {}, 'M.esm': { master: true, masters: ['N.esp'] } });
-    const order = ['N.esp', 'M.esm'];
-    const broken = judge(order, facts);
+  it('offers the plugin the game moves going where the game loads it', () => {
+    const facts = factsFrom({ 'A.esp': {}, 'M.esm': { master: true } });
+    const order = ['A.esp', 'M.esm'];
 
-    expect(broken.map(({ rule }) => rule)).toEqual(['masterFlag']);
+    const [offered, ...more] = offeredMoves(order, brokenIn(order, facts), facts);
+
+    expect(more).toEqual([]);
+    expect(offered?.drop).toEqual({ kind: 'before', name: 'A.esp' });
+    expect(offered?.mover).toEqual({ origin: 'Mod', name: 'M.esm' });
+    expect(offered?.rule.rule).toBe('gameMoves');
+  });
+
+  it('leaves out a move that breaks another rule at Error', () => {
+    const facts = factsFrom({ 'B.esp': { masters: ['A.esp'] }, 'C.esp': {}, 'A.esp': { masters: ['C.esp'] } });
+    const order = ['B.esp', 'C.esp', 'A.esp'];
+    const broken = brokenIn(order, facts);
+
+    expect(broken.map(({ rule }) => rule)).toEqual(['master']);
     expect(offeredMoves(order, broken, facts)).toEqual([]);
   });
 
@@ -36,22 +49,22 @@ describe('offeredMoves: the broken rules a move keeps without breaking another a
     const active = ['D.esp', 'M.esp'];
     const lines = ['D.esp', 'X.esp', 'M.esp'];
 
-    expect(offeredMoves(active, judge(active, facts), facts).map(({ mover }) => mover.name)).toEqual(['M.esp']);
-    expect(offeredMoves(lines, judge(active, facts), facts)).toEqual([]);
+    expect(offeredMoves(active, brokenIn(active, facts), facts).map(({ mover }) => mover.name)).toEqual(['M.esp']);
+    expect(offeredMoves(lines, brokenIn(active, facts), facts)).toEqual([]);
   });
 
   it('offers no move of or beside a plugin with no line', () => {
     const facts = factsFrom({ 'N.esp': {}, 'M.esm': { master: true } });
     const active = ['N.esp', 'M.esm'];
 
-    expect(judge(active, facts).map(({ rule }) => rule)).toEqual(['masterFlag']);
-    expect(offeredMoves(['M.esm'], judge(active, facts), facts)).toEqual([]);
+    expect(brokenIn(active, facts).map(({ rule }) => rule)).toEqual(['gameMoves']);
+    expect(offeredMoves(['M.esm'], brokenIn(active, facts), facts)).toEqual([]);
   });
 
   it('offers nothing for a rule no move keeps', () => {
     const facts = factsFrom({ 'B.esp': { masters: ['A.esp'] } });
     const order = ['B.esp'];
 
-    expect(offeredMoves(order, judge(order, facts), facts)).toEqual([]);
+    expect(offeredMoves(order, brokenIn(order, facts), facts)).toEqual([]);
   });
 });

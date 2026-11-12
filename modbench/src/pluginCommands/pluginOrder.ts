@@ -18,8 +18,8 @@ const identity = (broken: { rule: string; plugins: readonly { origin: string; fi
 export function moveOrderRefusal(
   order: readonly string[], moved: readonly string[], drop: Drop, factsOf: PluginFactsOf,
 ): string | undefined {
-  const already = new Set(judge(order, factsOf).map(identity));
-  return judge(movedOrder(order, moved, drop), factsOf)
+  const already = new Set(judge([], order, factsOf).broken.map(identity));
+  return judge([], movedOrder(order, moved, drop), factsOf).broken
     .find((broken) => broken.level === 'error' && !already.has(identity(broken)))?.reason;
 }
 

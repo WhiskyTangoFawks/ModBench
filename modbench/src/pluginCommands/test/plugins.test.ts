@@ -16,7 +16,7 @@ import type { DataFolderPlugins, PluginOrderChange } from '../../instanceAdapter
 
 const PROFILE = 'Default';
 const NOT_INDEXED = { getPlugins: () => Promise.reject(new Error('mEdit is indexing')) };
-type Fact = { name: string; masters?: string[]; isBlueprint?: boolean; origin?: string; inLoadOrder?: boolean };
+type Fact = { name: string; masters?: string[]; isBlueprint?: boolean; isMaster?: boolean; origin?: string; inLoadOrder?: boolean };
 const knowing = (...facts: Fact[]) => ({
   getPlugins: () => Promise.resolve(facts.map((f): PluginMetadata => ({
     path: `/data/${f.name}`, isLight: false, isMaster: false, isImmutable: false, inLoadOrder: true,
@@ -83,12 +83,6 @@ describe('reorderPlugins hands the adapter a move decided against the order it h
       ['a master dropped below its dependant', { order: THREE, facts: AB, moved: 'A.esp', drop: { kind: 'winningEnd' } }, masterOf('A.esp', 'B.esp')],
       ['a master named in another case than its line', { order: THREE, facts: plain(THREE, { 'B.esp': { masters: ['a.ESP'] } }), moved: 'A.esp', drop: { kind: 'winningEnd' } }, masterOf('A.esp', 'B.esp')],
       ['a master dropped directly after its dependant', { order: THREE, facts: AB, moved: 'A.esp', drop: { kind: 'after', name: 'B.esp' } }, masterOf('A.esp', 'B.esp')],
-      ['a blueprint plugin dropped before one that is not', { order: THREE, facts: plain(THREE, { 'C.esp': { isBlueprint: true } }), moved: 'C.esp', drop: { kind: 'losingEnd' } },
-        '"C.esp" is a blueprint plugin, so it must load after "A.esp", which is not.'],
-      ['a plugin that is not a blueprint moved past one', { order: FIVE, facts: plain(FIVE, { 'E.esp': { isBlueprint: true } }), moved: 'C.esp', drop: { kind: 'winningEnd' } },
-        '"E.esp" is a blueprint plugin, so it must load after "C.esp", which is not.'],
-      ['a blueprint master dropped below the blueprint plugin that depends on it',
-        { order: FIVE, facts: plain(FIVE, { 'D.esp': { isBlueprint: true }, 'E.esp': { isBlueprint: true, masters: ['D.esp'] } }), moved: 'D.esp', drop: { kind: 'winningEnd' } }, masterOf('D.esp', 'E.esp')],
       ['a name two origins hold, judged by the copy in the load order',
         { order: THREE, facts: [{ name: 'A.esp' }, { name: 'B.esp', origin: 'Other', inLoadOrder: false }, { name: 'B.esp', masters: ['A.esp'] }, { name: 'C.esp' }], moved: 'A.esp', drop: { kind: 'winningEnd' } },
         masterOf('A.esp', 'B.esp')],
@@ -105,7 +99,7 @@ describe('reorderPlugins hands the adapter a move decided against the order it h
       ['a dependant dropped directly after its master', { order: THREE, facts: AB, moved: 'B.esp', drop: { kind: 'after', name: 'A.esp' } }],
       ['a plugin whose masters mEdit does not list', { order: THREE, facts: [{ name: 'A.esp' }], moved: 'A.esp', drop: { kind: 'winningEnd' } }],
       ['a plugin that is not a blueprint before its blueprint master, which only holds master order within one class',
-        { order: FIVE, facts: plain(FIVE, { 'B.esp': { isBlueprint: true }, 'D.esp': { masters: ['B.esp'] } }), moved: 'D.esp', drop: { kind: 'before', name: 'B.esp' } }],
+        { order: FIVE, facts: plain(FIVE, { 'B.esp': { isBlueprint: true, isMaster: true }, 'D.esp': { masters: ['B.esp'] } }), moved: 'D.esp', drop: { kind: 'before', name: 'B.esp' } }],
       ['a drop that leaves an order as it found it',
         { order: FIVE, facts: plain(FIVE, { 'A.esp': { masters: ['B.esp'] } }), moved: 'D.esp', drop: { kind: 'before', name: 'C.esp' } }],
       ['a plugin to the losing end past a master the game loads with no line',
