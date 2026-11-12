@@ -385,12 +385,6 @@ export type UnclonedSubmodule = { readonly name: string } & (Submodule | Submodu
 // `written`: each source mod whose `.gitmodules` entry or ignore lines the call wrote.
 interface SubmoduleReport { readonly notes: readonly SubmoduleNote[]; readonly other: readonly string[]; readonly written: readonly string[] }
 
-/** A folder outside every mod folder that holds the manifest named for it, which builds it (ADR-0022). `name` is its path in the instance, ending in `/`, so no mod has it. */
-export interface OtherManifest { readonly name: string; readonly folder: string }
-
-/** A folder the search for other manifests could not read, by its path in the instance ending in `/`, with why. */
-export interface UnsearchedFolder { readonly name: string; readonly reason: string }
-
 /** Whether the game gets a file of a mod or of Overwrite. */
 export type OriginFileMark = 'Excluded' | 'Included';
 
@@ -773,12 +767,6 @@ export interface InstanceAdapter extends DataFileReads {
   /** Makes each source mod of `acted`, or of every one, with a remote a submodule by its `.gitmodules` entry, then writes
    *  the lines `writeSourceModLines` writes. Only `every` removes a gone mod's entry. `sourceMods`: by mod. */
   writeSubmodules(acted: readonly string[] | 'every', sourceMods: ReadonlyMap<string, string>): Promise<SubmoduleReport>;
-  /** Each folder outside the mod folders that holds its manifest, none through a link; a folder it could not read is
-   *  `unsearched`, and a manifest whose folder holds or sits inside another's is `nested`, refused with why. */
-  otherManifests(): Promise<{ readonly manifests: readonly OtherManifest[]; readonly unsearched: readonly UnsearchedFolder[]; readonly nested: readonly { readonly name: string; readonly reason: string }[] }>;
-  /** Lets the instance repository hold each manifest `otherManifests` finds, and no other file of its folder. Writes
-   *  nothing without an ignore list; rejects, writing nothing, when a folder could not be searched. */
-  writeOtherManifestLines(): Promise<void>;
   /** Lets each submodule and each source folder with no repository of its own into the instance repository, and each of
    *  `letIn` by name before it exists. Writes nothing without a repository or an ignore list; rejects for an unpaired marker. */
   writeSourceModLines(letIn?: readonly string[]): Promise<void>;

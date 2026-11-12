@@ -1,6 +1,6 @@
 import { basename, join } from 'node:path';
 import type { MEditClient } from '../client';
-import type { InstallationFile, InstanceAdapter, OtherManifest } from '../instanceAdapter/instanceAdapter';
+import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import {
   exclusionsOfFiles, flaggedHashesIn, isUnderAny, ownFilesOf, sourceModsOf, writeManifestIn, type FlaggedHashes, type Manifest, type ManifestPackage,
 } from '../manifestAdapter/manifestAdapter';
@@ -10,13 +10,12 @@ import { gestureName, phrase, type Message } from '../ports/phrase';
 import { heldManifestIn } from './heldManifest';
 import { possibleHashesOf } from './possibleHashes';
 import { setAsideHeldWhole } from './setAsideHeldWhole';
-import { foldersOf, namesOf, type Folders } from './folders';
 import { gameFilesOf, gameHeld, gameToHand, type GameToHand } from './gameFolderFacts';
 import { buildManifest, downloadedFileOf, downloadedFilesOf, nexusFileOf, describedBy, type DownloadedFile, type GameHeld, type HashedModFile } from './manifestBuilder';
 
 type Adapter = Pick<InstanceAdapter,
   'sourceModFolders' | 'foldersHeldWhole' | 'entryKey' | 'modOrder' | 'gamePlace' | 'gameRelease' | 'gameFiles' | 'gameFilesTakenBy' | 'modFolderPath' | 'installationFile'
-  | 'downloadedFilesHashed' | 'filesHeldByGit' | 'originFileHash' | 'unheldFolderValue' | 'fileStamp' | 'nexusFileAt' | 'writeSubmodules' | 'writeOtherManifestLines'>;
+  | 'downloadedFilesHashed' | 'filesHeldByGit' | 'originFileHash' | 'unheldFolderValue' | 'fileStamp' | 'nexusFileAt' | 'writeSubmodules'>;
 
 export interface UpdateManifestDeps {
   readonly adapter: Adapter;
@@ -66,15 +65,10 @@ interface UpdateOptions {
 }
 
 async function readMod(
-  adapter: Adapter, mod: string, folders: Folders, game: GameToHand,
+  adapter: Adapter, mod: string, game: GameToHand,
 ): Promise<{ read: ModToUpdate; notes: readonly string[] } | { refusal: string }> {
-  const folder = await folders.of(mod);
+  const folder = await adapter.modFolderPath(mod);
   if (folder === undefined) return { refusal: 'its name gives it no folder' };
-  if (!folders.isMod(mod)) {
-    const taken = await gameFilesOf(adapter, { mod, folder }, game, false);
-    if ('refusal' in taken) return taken;
-    return { read: { name: mod, folder, ...withGame(game, taken.gameFiles) }, notes: taken.notes };
-  }
   const installed = await adapter.installationFile(mod);
   const installationFile = installed.kind === 'read' ? installed.answer : undefined;
   const taken = await gameFilesOf(adapter, { mod, folder }, game, installationFile !== undefined);
@@ -244,16 +238,6 @@ async function updateMod(
   return { landed: { mod: mod.name, manifestWritten: written, repositoryWritten: false, notInPackage: recorded.notInPackage, otherBytes: recorded.otherBytes }, notes: recorded.notes };
 }
 
-// instance-repository.md, The repository, story 2: git cannot let in a file inside a folder its ignore list leaves out.
-async function otherManifestLinesWritten(adapter: Adapter): Promise<readonly string[]> {
-  try {
-    await adapter.writeOtherManifestLines();
-    return [];
-  } catch (err) {
-    return [errorMessage(err)];
-  }
-}
-
 async function submodulesWritten(
   adapter: Adapter, acted: readonly string[] | 'every', sourceMods: ReadonlyMap<string, string>,
 ): Promise<{ notes: readonly ModNote[]; repositoryNotes: readonly string[]; written: readonly string[] }> {
@@ -273,14 +257,13 @@ const cancelledIf = (signal: AbortSignal | undefined): { cancelled?: true } => (
 /** Each mod's manifest from the mod as it is, and the source folder of each source mod in `sourceModsToRecord`, or every one when
  *  `everyMod`. A source mod's own folder is its build's. */
 export async function updateManifest(
-  deps: UpdateManifestDeps, mods: readonly string[], { onProgress, signal, only }: UpdateOptions, others: readonly OtherManifest[], everyMod: boolean,
+  deps: UpdateManifestDeps, mods: readonly string[], { onProgress, signal, only }: UpdateOptions, everyMod: boolean,
   sourceModsToRecord: readonly string[],
 ): Promise<UpdateManifestResult> {
   const { adapter } = deps;
   const order = await adapter.modOrder();
   const sourceMods = await sourceModsOf(order.modFolders, await adapter.sourceModFolders(), (name) => adapter.entryKey({ kind: 'mod', name }));
   const game = await gameToHand(adapter, sourceMods);
-  const folders = foldersOf(adapter, others);
   const refused: ItemRefusal<string, Message>[] = [];
   const notes: ModNote[] = [];
   const read: ModToUpdate[] = [];
@@ -291,14 +274,14 @@ export async function updateManifest(
     read.push(answer.read);
     notes.push(...answer.notes.map((note) => ({ mod, note })));
   };
-  const heldWhole = await setAsideHeldWhole(adapter, [...new Set(namesOf(mods, others))], order.modFolders, {
-    takes: (mod) => folders.isMod(mod) && sourceMods.folderOf(mod) === undefined, everyMod, reason: refusal('git holds its whole folder.').refusal,
+  const heldWhole = await setAsideHeldWhole(adapter, [...new Set(mods)], order.modFolders, {
+    takes: (mod) => sourceMods.folderOf(mod) === undefined, everyMod, reason: refusal('git holds its whole folder.').refusal,
   });
   refused.push(...heldWhole.refused);
   for (const mod of heldWhole.rest) {
     if (signal?.aborted) break;
-    const sourceFolder = folders.isMod(mod) ? sourceMods.folderOf(mod) : undefined;
-    if (sourceFolder === undefined) await record(mod, () => readMod(adapter, mod, folders, game));
+    const sourceFolder = sourceMods.folderOf(mod);
+    if (sourceFolder === undefined) await record(mod, () => readMod(adapter, mod, game));
     else if (!everyMod) refused.push({ item: mod, reason: phrase`its build records its folder: run ${gestureName('modbench.mod.build', 'build')} on it, or name its source folder ${sourceFolder}` });
   }
   for (const mod of new Set(everyMod ? sourceMods.folders.keys() : sourceModsToRecord)) {
@@ -330,7 +313,6 @@ export async function updateManifest(
     ...cancelledIf(signal), landed: withRepositoryWritten(landed, submodules.written), refused, notes: [...notes, ...submodules.notes],
     repositoryNotes: [
       ...downloaded.notes, ...depotProblemsOf(game, read), ...submodules.repositoryNotes,
-      ...await otherManifestLinesWritten(adapter),
     ],
   };
 }

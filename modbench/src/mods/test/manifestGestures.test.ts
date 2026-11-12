@@ -48,7 +48,6 @@ import type { InstanceRepositoryCommands } from '../../sourceCommands/instanceRe
 
 const updateManifest = vi.fn<InstanceRepositoryCommands['updateManifest']>();
 const restoreFromManifest = vi.fn<InstanceRepositoryCommands['restoreFromManifest']>();
-const otherManifests = vi.fn<InstanceRepositoryCommands['otherManifests']>();
 
 const UPDATE = 'modbench.mod.updateManifest';
 const RESTORE = 'modbench.mod.restoreFromManifest';
@@ -78,7 +77,7 @@ function register(over: Partial<Parameters<typeof registerManifestGestures>[0]> 
   const reporter = recordingReporter();
   const said: (string | undefined)[] = [];
   registerManifestGestures({
-    toolboxView: 'modbench.toolbox', commands: { updateManifest, restoreFromManifest, otherManifests },
+    toolboxView: 'modbench.toolbox', commands: { updateManifest, restoreFromManifest },
     instance: { value, ...instanceThatReads },
     reporter, say: (message) => { said.push(message); },
     focusedView: { id: () => undefined, selection: () => [] }, ...over,
@@ -96,7 +95,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   updateManifest.mockResolvedValue({ notes: [], repositoryNotes: [], landed: [], refused: [] });
   restoreFromManifest.mockResolvedValue({ landed: [], refused: [] });
-  otherManifests.mockResolvedValue({ others: [], refused: [] });
 });
 
 describe('Every mod (update manifest and restore from manifest)', () => {
@@ -146,7 +144,7 @@ describe('Every mod (update manifest and restore from manifest)', () => {
 
     await run(UPDATE, sourceFolderRow, selection);
 
-    expect(updateManifest.mock.calls.map(([sent, , , everyMod, sentSourceMods]) => [sent, everyMod, sentSourceMods])).toEqual([[mods, false, sourceMods]]);
+    expect(updateManifest.mock.calls.map(([sent, , everyMod, sentSourceMods]) => [sent, everyMod, sentSourceMods])).toEqual([[mods, false, sourceMods]]);
   });
 
   it('refuses a selected row that is neither a mod nor a separator, naming it, and acts on the rest', async () => {
@@ -210,59 +208,6 @@ describe('Every mod (update manifest and restore from manifest)', () => {
     expect([signal?.aborted, reporter.reports]).toEqual([true, [{ severity: 'error', message: 'Could not restore 1 of 2 mods.', detail: `"ModB" (${cancelled})` }]]);
   });
 
-});
-
-describe('Every other manifest', () => {
-  const STOCK_GAME = { name: 'Stock Game/', folder: '/instance/Stock Game' };
-  const othersHanded = (): unknown[] => [
-    ...updateManifest.mock.calls.map(([, , others]) => others), ...restoreFromManifest.mock.calls.map(([, , , others]) => others),
-  ];
-
-  it.each([
-    ['update manifest from the palette', UPDATE, [], 1],
-    ['restore from manifest from the palette', RESTORE, [], 1],
-    ['update manifest from the Mods view\'s title bar', 'modbench.modList.updateManifestHere', [], 1],
-    ['an agent\'s update manifest that names no mod', UPDATE, [new AgentCall([], {})], 1],
-    ['an agent\'s restore from manifest that names no mod', RESTORE, [new AgentCall([], {})], 1],
-  ])('joins every mod in %s', async (_case, command, args, calls) => {
-    otherManifests.mockResolvedValueOnce({ others: [STOCK_GAME], refused: [] });
-    const { run } = register();
-
-    await run(command, ...args);
-
-    expect(othersHanded()).toEqual(Array.from({ length: calls }, () => [STOCK_GAME]));
-  });
-
-  it('is not searched for when a Mods selection names the mods', async () => {
-    const { run } = register();
-
-    await run(UPDATE, modRow('ModA'));
-
-    expect([otherManifests.mock.calls, othersHanded()]).toEqual([[], [[]]]);
-  });
-
-  it.each([
-    ['update manifest', UPDATE, 'Update manifest: 0 mods unchanged, 0 updated, 1 refused; their packages do not hold 0 files and hold 0 files with other bytes.'],
-    ['restore from manifest', RESTORE, 'Could not restore 1 of 4 mods.'],
-  ])('%s names a folder the search could not read beside what it did, and still acts on every mod', async (_case, command, message) => {
-    otherManifests.mockResolvedValueOnce({ others: [], refused: [{ item: 'logs/', reason: 'was not searched for a manifest: EACCES' }] });
-    const { reporter, run } = register();
-
-    await run(command);
-
-    expect([[...updateManifest.mock.calls, ...restoreFromManifest.mock.calls].map(([mods]) => mods), reporter.reports]).toEqual([
-      [EVERY_MOD], [{ severity: 'error', message, detail: '"logs/" (was not searched for a manifest: EACCES)' }],
-    ]);
-  });
-
-  it('an agent\'s call names a folder the search could not read among what it refused', async () => {
-    otherManifests.mockResolvedValueOnce({ others: [], refused: [{ item: 'logs/', reason: 'was not searched for a manifest: EACCES' }] });
-    const { run } = register();
-
-    const answer = await run(UPDATE, new AgentCall([], {}));
-
-    expect(answer).toMatchObject({ applied: true, outcome: { refused: [{ item: 'logs/', reason: 'was not searched for a manifest: EACCES' }] } });
-  });
 });
 
 describe('Update manifest', () => {
@@ -517,7 +462,7 @@ describe('An agent call', () => {
 
     const answer = await run(UPDATE, new AgentCall([{ kind: 'folder', path: '/instance/source/ModA' }, { kind: 'folder', path: '/elsewhere' }, { kind: 'folder', path: 'source/ModA' }], {}));
 
-    expect(updateManifest.mock.calls.map(([mods, , , everyMod, sourceMods]) => [mods, everyMod, sourceMods])).toEqual([[[], false, ['ModA']]]);
+    expect(updateManifest.mock.calls.map(([mods, , everyMod, sourceMods]) => [mods, everyMod, sourceMods])).toEqual([[[], false, ['ModA']]]);
     const reason = 'it is not named by the absolute path of a source mod\'s source folder, the sourceFolder that list_mods gives';
     expect(answer).toMatchObject({ outcome: { refused: [{ item: '/elsewhere', reason }, { item: 'source/ModA', reason }] } });
   });

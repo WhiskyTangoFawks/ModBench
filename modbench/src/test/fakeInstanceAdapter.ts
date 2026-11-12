@@ -4,7 +4,7 @@ import { textHash } from '../instanceAdapter/fileContents/contentDigest';
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import type { NexusFileInfo } from '../ports/nexusFileInfo';
 import {
-  CHECK_THE_DISK, entryNotFound, filesWinningFirst, type ChangeListener, type Reread, isBareName, type DecideModOrder, type DownloadedFile, type DownloadedFileQuery, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp,  type GameFile, type GamePlace, type HashedFile, type InstallationFile, type InstallOutcome, type InstalledPackage, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type NexusModFile, type OtherManifest, type UnsearchedFolder, type OriginFile, type FomodAnswer, type PluginOrderChange, type PublisherTag, type PublisherTagChange, type Subscription } from '../instanceAdapter/instanceAdapter';
+  CHECK_THE_DISK, entryNotFound, filesWinningFirst, type ChangeListener, type Reread, isBareName, type DecideModOrder, type DownloadedFile, type DownloadedFileQuery, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp,  type GameFile, type GamePlace, type HashedFile, type InstallationFile, type InstallOutcome, type InstalledPackage, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type NexusModFile, type OriginFile, type FomodAnswer, type PluginOrderChange, type PublisherTag, type PublisherTagChange, type Subscription } from '../instanceAdapter/instanceAdapter';
 import { fileOriginOfPlugin } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { COMMITTED, namesPlugin, NO_FILE_CHANGES } from '../symbolNames/symbolNames';
@@ -102,7 +102,6 @@ export type AdapterCall =
   | { readonly verb: 'removeRepository' }
   | { readonly verb: 'checkPushRefusalFree' }
   | { readonly verb: 'writeSubmodules'; readonly acted: readonly string[] | 'every' }
-  | { readonly verb: 'writeOtherManifestLines' }
   | { readonly verb: 'writeSourceModLines'; readonly letIn: readonly string[] }
   | { readonly verb: 'writeHeldWholeLines'; readonly modFolders: readonly string[]; readonly held: boolean }
   | { readonly verb: 'followFoldersInRepository'; readonly moves: Parameters<InstanceAdapter['followFoldersInRepository']>[0] }
@@ -173,16 +172,12 @@ export interface InstanceAnswers {
   /** Folders the instance repository cannot hold a file in. */
   outOfReach?: ReadonlySet<string>;
   /** The reads beside `reading()` that reject, with the message each rejects with. */
-  unreadReads?: Partial<Record<'profiles' | 'modOrder' | 'downloadedFiles' | 'sourceModFolders' | 'otherManifests', string>>;
+  unreadReads?: Partial<Record<'profiles' | 'modOrder' | 'downloadedFiles' | 'sourceModFolders', string>>;
   installed?: InstallOutcome;
   /** Whether the instance folder holds a repository on disk now, whatever its reading said. */
   repositoryOnDisk?: boolean;
   /** Why a path token stays in the working tree once path tokens are written. */
   pathTokenLeft?: string;
-  /** Each folder outside the mod folders that holds its manifest. */
-  otherManifests?: readonly OtherManifest[];
-  /** Each folder the search for other manifests could not read. */
-  unsearched?: readonly UnsearchedFolder[];
   /** What writing the submodules says. */
   submodules?: Awaited<ReturnType<InstanceAdapter['writeSubmodules']>>;
   /** The host of each source folder, by its path; a folder not there has no remote. */
@@ -431,8 +426,6 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     removeRepository: () => record({ verb: 'removeRepository' }, undefined),
     checkPushRefusalFree: () => record({ verb: 'checkPushRefusalFree' }, undefined),
     writeSubmodules: (acted) => record({ verb: 'writeSubmodules', acted }, answers.submodules ?? { notes: [], other: [], written: [] }),
-    otherManifests: () => unreadable('otherManifests', { manifests: answers.otherManifests ?? [], unsearched: answers.unsearched ?? [], nested: [] }),
-    writeOtherManifestLines: () => record({ verb: 'writeOtherManifestLines' }, undefined),
     writeSourceModLines: (letIn = []) => record({ verb: 'writeSourceModLines', letIn }, undefined),
     followFoldersInRepository: (moves) => write({ verb: 'followFoldersInRepository', moves }, () => undefined),
     writeHeldWholeLines: (modFolders, held) => write({ verb: 'writeHeldWholeLines', modFolders, held }, () => {

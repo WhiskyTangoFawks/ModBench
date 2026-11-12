@@ -465,7 +465,7 @@ describe('sourceCommands versionInGit', () => {
     expect([handed, outcome.refused]).toEqual([[], [{ item: 'ModA', reason: `its '${path.split('/')[0] ?? path}' is where its source folder holds its own` }]]);
   });
 
-  const IGNORE_LIST_VERBS = new Set(['writeSourceModLines','writeHeldWholeLines', 'writeOtherManifestLines']);
+  const IGNORE_LIST_VERBS = new Set(['writeSourceModLines','writeHeldWholeLines']);
   const ignoreListWrites = (calls: readonly AdapterCall[]) => calls.filter((call) => IGNORE_LIST_VERBS.has(call.verb));
   const landingA = (client: InMemoryMEditClient, log: string[] = []): void => {
     client.setCommandHandler('versionInGit', () => {

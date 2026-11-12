@@ -1,5 +1,5 @@
 import type { CommandResult } from '../coreLib/commandResult';
-import type { InstanceAdapter, OtherManifest } from '../instanceAdapter/instanceAdapter';
+import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../coreLib/refuse';
 import type { HostGit } from '../ports/repository';
@@ -7,10 +7,10 @@ import { ignoreFiles, type FileToIgnore } from './ignoreFiles';
 import { initRepositoryIn } from './initRepositoryIn';
 import { updateManifest, type UpdateManifestDeps, type UpdateManifestResult, type UpdateManifestStatus } from './updateManifest';
 import {
-  otherManifestsOf, restoreFromManifest, type OtherManifests, type RestoreDeps, type RestoreResult, type RestoreStatus,
+  restoreFromManifest, type RestoreDeps, type RestoreResult, type RestoreStatus,
 } from './restoreFromManifest';
 
-export type { OtherManifests, RestoreResult, RestoreStatus } from './restoreFromManifest';
+export type { RestoreResult, RestoreStatus } from './restoreFromManifest';
 
 type Adapter = UpdateManifestDeps['adapter'] & RestoreDeps['adapter'] & Pick<InstanceAdapter,
   'ownPath' | 'checkPushRefusalFree' | 'publisherConfigurationRefusal' | 'writeIgnoreList' | 'removeRepository'>;
@@ -81,8 +81,6 @@ async function gitInit({ adapter, instanceRoot, hostGit }: InstanceRepositoryCom
 
 /** The modlist gestures over the Instance adapter, and mEdit for a source mod's clone and build. */
 export function instanceRepositoryCommands(deps: InstanceRepositoryCommandsDeps) {
-  const { adapter } = deps;
-
   return {
     /** Makes the repository, or adopts the one the instance folder holds, with its ignore list, push refusal and path
      *  tokens, and writes no manifest. */
@@ -91,18 +89,16 @@ export function instanceRepositoryCommands(deps: InstanceRepositoryCommandsDeps)
     /** Each mod's manifest from the mod as it is; `everyMod`: the mods are every mod, so a source mod that is gone loses its
      *  submodule entry. */
     updateManifest: (
-      mods: readonly string[], options: { onProgress?: (status: UpdateManifestStatus) => void; signal?: AbortSignal } = {}, others: readonly OtherManifest[] = [], everyMod = false, sourceMods: readonly string[],
-    ): Promise<UpdateManifestResult> => updateManifest(deps, mods, options, others, everyMod, sourceMods),
+      mods: readonly string[], options: { onProgress?: (status: UpdateManifestStatus) => void; signal?: AbortSignal } = {}, everyMod = false, sourceMods: readonly string[],
+    ): Promise<UpdateManifestResult> => updateManifest(deps, mods, options, everyMod, sourceMods),
 
     /** Keeps each file out of its mod's manifest, or puts it back, then records the manifest of each mod it changed. */
     ignoreFiles: (files: readonly FileToIgnore[], ignore: boolean) => ignoreFiles(deps, files, ignore),
 
     /** `everyManifest`: the mods are every mod, so a source mod whose folder its build has not made joins them. */
     restoreFromManifest: (
-      mods: readonly string[], options: { onProgress?: (status: RestoreStatus) => void; signal?: AbortSignal } = {}, everyManifest = false, others: readonly OtherManifest[] = [],
-    ): Promise<RestoreResult> => restoreFromManifest(deps, mods, options, everyManifest, others),
-
-    otherManifests: (): Promise<OtherManifests> => otherManifestsOf(adapter),
+      mods: readonly string[], options: { onProgress?: (status: RestoreStatus) => void; signal?: AbortSignal } = {}, everyManifest = false,
+    ): Promise<RestoreResult> => restoreFromManifest(deps, mods, options, everyManifest),
   };
 }
 

@@ -54,8 +54,8 @@ async function aModFromADownloadedFileAndTheGameFolder() {
   const trash = async (path: string): Promise<void> => { inTrash[relative(join(root, 'mods'), path).replaceAll('\\', '/')] = await readFile(path, 'utf8'); await rm(path); };
   const deps = { client: new InMemoryMEditClient(), adapter, nexus: nexusAnswering(answeringFrom({})).nexus, trash, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks() };
   return {
-    update: () => updateManifest({ adapter }, ['Mod'], {}, [], false, []),
-    restore: () => restoreFromManifest(deps, ['Mod'], {}, false, []),
+    update: () => updateManifest({ adapter }, ['Mod'], {}, false, []),
+    restore: () => restoreFromManifest(deps, ['Mod'], {}, false),
     inTrash,
   };
 }
