@@ -59,7 +59,7 @@ function firstLandedOf(landed: readonly PluginAddress[], unfinished: ReadonlyMap
 
 export async function decompileAndRepair(
   access: DecompileAndRepairAccess, plugins: readonly PluginAddress[], force: boolean, where?: SourceModIn,
-): Promise<SelectionResult<PluginAddress>> {
+): Promise<SelectionResult<PluginAddress, Message>> {
   const { client, placeMods } = access;
   const sourceMods = await sourceModsAt(access);
   const notSourceMods = modsOutside(sourceMods, plugins);
@@ -72,9 +72,9 @@ export async function decompileAndRepair(
     return toSend.length === 0 ? Promise.resolve({ landed: [], refused: [] }) : client.decompileAndRepair(toSend, force);
   };
   const placed = await placeMods({ mods: notSourceMods, where }, repaired, (outcome) => outcome.landed.map(({ origin }) => origin));
-  if (isRefusalOf(placed)) return { applied: false, refusal: String(placed.message) };
+  if (isRefusalOf(placed)) return { applied: false, refusal: placed.message };
   const { outcome, notMade, unfinished, notes } = placed;
-  if (isRefusalOf(outcome)) return { applied: false, refusal: String(outcome.message) };
+  if (isRefusalOf(outcome)) return { applied: false, refusal: outcome.message };
   const notMadePlugins = plugins.filter(({ origin }) => notMade.has(origin)).map((item) => ({
     item, reason: `${item.origin} is not a source mod, and a source folder cannot be made for it: ${notMade.get(item.origin) ?? ''}`,
   }));
