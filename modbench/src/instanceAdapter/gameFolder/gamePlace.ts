@@ -5,8 +5,8 @@ const sameFolder = async (one: string, other: string): Promise<boolean> => await
 
 export async function gamePlaceOf(game: GameFolder, steam: SteamInstall | undefined): Promise<GamePlace | undefined> {
   if (game.kind !== 'found') return undefined;
-  if (steam !== undefined && await sameFolder(game.root, steam.root)) {
-    return { root: game.root, steamApp: steam.steamApp, depots: steam.depots, depotProblems: steam.depotProblems };
-  }
-  return { root: game.root, depots: [], depotProblems: [] };
+  if (steam === undefined) return { root: game.root, depots: [], depotProblems: [] };
+  const { steamApp, depots, depotProblems } = steam;
+  const steamRoot = await sameFolder(game.root, steam.root) ? {} : { steamRoot: steam.root };
+  return { root: game.root, ...steamRoot, steamApp, depots, depotProblems };
 }
