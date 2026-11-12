@@ -14,8 +14,8 @@ import type { Mo2Context } from './mo2Context';
 
 const listAnyEntries = (folder: string): Promise<ResolvedEntry[]> => listEntries(folder, ignoreSkippedLink);
 
-// The one spelled as `name` first, then one Windows takes for it.
-async function fileNamedIn(
+/** The file in `folder` spelled as `name` first, then one Windows takes for it. */
+export async function fileNamedIn(
   folder: string, name: string, list: (folder: string) => Promise<ResolvedEntry[]>,
 ): Promise<string | undefined> {
   const names = (await readOrAbsent(() => list(folder), [])).filter((d) => d.isFile).map((d) => d.name);

@@ -54,7 +54,7 @@ export interface ReadingSource extends ArchiveReads {
   /** The plugins the Creation Club list the game gets names, in its order: the copy the first of `origins` deploys, else
    *  the game folder's own; none when the release has no Creation Club or no game folder is found. */
   creationClubList(
-    gameFolder: GameFolder, gameRelease: string | undefined, origins: readonly FileOrigin[], folders: ModFolders | undefined,
+    gameFolder: GameFolder, gameRelease: string | undefined, origins: readonly FileOrigin[], folders: ModFolders | undefined, ignoredLink: IgnoredLink,
   ): Promise<string[]>;
   /** Undefined when there is no folder for mods at all. A link that cannot be followed is no
    *  folder, and is handed to `skippedLink`. */
@@ -133,7 +133,7 @@ async function readWhole(source: ReadingSource): Promise<Omit<ManagerReading, 'u
       gameFolder,
       programVersions: await programVersions(gameFolder, gameRelease),
       dataFolderPlugins: await source.gameFolderPlugins(gameFolder, ignoreGameLink),
-      creationClubList: await source.creationClubList(gameFolder, gameRelease, originsWinningFirst(await modsKept), await modFoldersRead),
+      creationClubList: await source.creationClubList(gameFolder, gameRelease, originsWinningFirst(await modsKept), await modFoldersRead, ignoreGameLink),
       archiveList: await source.archiveList(profile, gameFolder, gameRelease, ignoreGameLink),
       dataFolderArchives: await source.gameFolderArchives(gameFolder, gameRelease, ignoreGameLink),
       dataFolderFiles: await source.gameFolderFiles(gameFolder, ignoreGameLink),
@@ -176,7 +176,7 @@ export async function readPluginsProvided(source: ReadingSource, profile: string
     Promise.all(filesWinningFirst(mods, [], () => []).flatMap(({ origin }) => (origin.kind === 'mod' ? [origin] : []))
       .map(async (origin) => [origin.name, (await source.originRootFiles(origin, modFolders)).files] as const)).then((listed) => new Map(listed)),
     source.gameFolderPlugins(gameFolder, ignoreLink),
-    source.creationClubList(gameFolder, settings.gameRelease, originsWinningFirst(mods), modFolders),
+    source.creationClubList(gameFolder, settings.gameRelease, originsWinningFirst(mods), modFolders, ignoreLink),
   ]);
   return pluginsProvidedOf(
     filesWinningFirst(mods, runtimeOutput.files, (mod) => modFiles.get(mod) ?? []), dataFolderPlugins,

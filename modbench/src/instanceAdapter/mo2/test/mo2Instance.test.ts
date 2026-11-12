@@ -43,13 +43,13 @@ import { fixedGameFolderSetting } from '../../../test/gameFolderSetting';
 import type { GameDetectors } from '../../gameFolder/gameFolderResolver';
 import { FOMOD_ENGINE } from '../../../test/fomodEngine';
 import { DEPLOYED_PATH } from '../../../test/deployedPath';
-import type { ManagerAdapter } from '../../publisher';
+import type { ManagerAdapter, ManagerReading } from '../../publisher';
 import type { Mo2Context } from '../mo2Context';
 import type { ReadingSource } from '../../instanceReading';
 import { readingSource } from '../mo2Reads';
 import { OVERWRITE_ORIGIN } from '../../../wire/pluginAddress';
 import type {
-  EntryRef, FileOrigin, GameFolder, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange, PluginsProvided,
+  EntryRef, GameFolder, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange, PluginsProvided,
 } from '../../instanceAdapter';
 import { setIniValue } from '../codecs/qSettingsIni';
 import { ownTempPrefix } from '../../../repositoriesLib/wholeWrites';
@@ -98,6 +98,13 @@ describe('the MO2 Instance adapter', () => {
     vi.mocked(readdir).mockImplementation(actualReaddir);
     await rm(root, { recursive: true, force: true });
   });
+
+  const deploys = async (mod: string, names: string, pathInMod = 'Root/Fallout4.ccc'): Promise<string> => {
+    const file = join(root, 'mods', mod, pathInMod);
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, names);
+    return file;
+  };
 
   describe('parsed reads', () => {
     describe('the reads beside the reading', () => {
@@ -271,8 +278,7 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it('loads with no line each plugin of the Creation Club list an enabled mod deploys', async () => {
-        await mkdir(join(root, 'mods', 'Patch Mod', 'Root'), { recursive: true });
-        await writeFile(join(root, 'mods', 'Patch Mod', 'Root', 'Fallout4.ccc'), 'ccDeployed.esl\r\n');
+        await deploys('Patch Mod', 'ccDeployed.esl\r\n');
 
         const provided = expectKind(await providedOver(withGame), 'listed');
 
@@ -791,7 +797,7 @@ describe('the MO2 Instance adapter', () => {
       afterEach(() => rm(game, { recursive: true, force: true }));
 
       const found = (): GameFolder => ({ kind: 'found', root: game, dataFolder: join(game, 'Data') });
-      const ownListIn = (gameFolder: GameFolder, release: string): Promise<string[]> => source.creationClubList(gameFolder, release, [], undefined);
+      const ownListIn = (gameFolder: GameFolder, release: string): Promise<string[]> => source.creationClubList(gameFolder, release, [], undefined, ignoreLink);
 
       it('answers the plugins the release\'s list names, in its order', async () => {
         await writeFile(join(game, 'Fallout4.ccc'), 'ccBGSFO4044-HellfirePowerArmor.esl\r\nccBGSFO4001-PipBoy(Black).esl\r\n');
@@ -817,14 +823,11 @@ describe('the MO2 Instance adapter', () => {
       });
 
       describe('the list the game gets when it runs', () => {
-        const deploys = async (mod: string, names: string): Promise<void> => {
-          await mkdir(join(root, 'mods', mod, 'Root'), { recursive: true });
-          await writeFile(join(root, 'mods', mod, 'Root', 'Fallout4.ccc'), names);
-        };
-        const listRead = async (): Promise<readonly string[]> => {
+        const gameRead = async (): Promise<ManagerReading> => {
           await mkdir(join(game, 'Data'), { recursive: true });
-          return (await managerOver(root, { gameFolderSettingValue: game }).reading()).creationClubList;
+          return managerOver(root, { gameFolderSettingValue: game }).reading();
         };
+        const listRead = async (): Promise<readonly string[]> => (await gameRead()).creationClubList;
 
         it('is the list an enabled mod deploys at the game folder\'s root, over the game folder\'s own', async () => {
           await writeFile(join(game, 'Fallout4.ccc'), 'ccOwn.esl\r\n');
@@ -833,11 +836,23 @@ describe('the MO2 Instance adapter', () => {
           expect(await listRead()).toEqual(['ccDeployed.esl']);
         });
 
-        it('is a copy spelled in any case, as the game reads it', async () => {
-          await mkdir(join(root, 'mods', 'Patch Mod', 'Root'), { recursive: true });
-          await writeFile(join(root, 'mods', 'Patch Mod', 'Root', 'fallout4.CCC'), 'ccDeployed.esl\r\n');
+        it('is a deployed copy spelled in any case, as the game reads it', async () => {
+          await deploys('Patch Mod', 'ccDeployed.esl\r\n', 'Root/fallout4.CCC');
 
           expect(await listRead()).toEqual(['ccDeployed.esl']);
+        });
+
+        it('is the game folder\'s own spelled in any case, as the game reads it', async () => {
+          await writeFile(join(game, 'fallout4.CCC'), 'ccOwn.esl\r\n');
+
+          expect(await listRead()).toEqual(['ccOwn.esl']);
+        });
+
+        it('is never a folder a mod deploys under the list\'s name', async () => {
+          await writeFile(join(game, 'Fallout4.ccc'), 'ccOwn.esl\r\n');
+          await mkdir(join(root, 'mods', 'Patch Mod', 'Root', 'Fallout4.ccc'), { recursive: true });
+
+          expect(await listRead()).toEqual(['ccOwn.esl']);
         });
 
         it('is the copy of the mod that wins the mod order', async () => {
@@ -856,17 +871,17 @@ describe('the MO2 Instance adapter', () => {
 
         it('is never a copy that deploy puts in the Data folder', async () => {
           await writeFile(join(game, 'Fallout4.ccc'), 'ccOwn.esl\r\n');
-          await mkdir(join(root, 'mods', 'Patch Mod', 'Textures'), { recursive: true });
-          await writeFile(join(root, 'mods', 'Patch Mod', 'Textures', 'Fallout4.ccc'), 'ccInData.esl\r\n');
+          await deploys('Patch Mod', 'ccInData.esl\r\n', 'Textures/Fallout4.ccc');
 
           expect(await listRead()).toEqual(['ccOwn.esl']);
         });
 
-        it.each([['a hard link', link], ['a symlink', symlink]])('skips the game folder\'s own when it is %s, as a deploy leaves it', async (_, linked) => {
-          await deploys('Harder VATS', 'ccDisabled.esl\r\n');
-          await linked(join(root, 'mods', 'Harder VATS', 'Root', 'Fallout4.ccc'), join(game, 'Fallout4.ccc'));
+        it.each([['a hard link', link], ['a symlink', symlink]])('skips the game folder\'s own when it is %s, as a deploy leaves it, and counts the link once', async (_, linked) => {
+          await linked(await deploys('Harder VATS', 'ccDisabled.esl\r\n'), join(game, 'Fallout4.ccc'));
 
-          expect(await listRead()).toEqual([]);
+          const { creationClubList, gameFolderLinks } = await gameRead();
+
+          expect([creationClubList, gameFolderLinks]).toEqual([[], 1]);
         });
       });
     });
@@ -1430,25 +1445,23 @@ describe('the MO2 Instance adapter', () => {
       });
       afterEach(() => rm(game, { recursive: true, force: true }));
 
-      const listRead = async (origins: readonly FileOrigin[]): Promise<void> => {
+      const watchedFromPatchMod = async (): Promise<void> => {
         const watched = watchedOver(contextOver(root));
         watched.subscribe(() => undefined);
-        await watched.creationClubList({ kind: 'found', root: game, dataFolder: join(game, 'Data') }, 'Fallout4', origins, undefined);
+        await watched.creationClubList({ kind: 'found', root: game, dataFolder: join(game, 'Data') }, 'Fallout4', [{ kind: 'mod', name: 'Patch Mod' }], undefined, ignoreLink);
       };
 
       it('follows the game folder\'s own while no origin deploys one', async () => {
-        await listRead([{ kind: 'mod', name: 'Patch Mod' }]);
+        await watchedFromPatchMod();
 
         expect(fire(game, 'Fallout4.ccc')).toBe(true);
         expect(fire(game, 'Fallout4.ini')).toBe(false);
       });
 
       it('follows the copy the winning origin deploys, and not the game folder\'s own', async () => {
-        const deployed = join(root, 'mods', 'Patch Mod', 'Root');
-        await mkdir(deployed, { recursive: true });
-        await writeFile(join(deployed, 'Fallout4.ccc'), 'ccDeployed.esl\r\n');
+        const deployed = dirname(await deploys('Patch Mod', 'ccDeployed.esl\r\n'));
 
-        await listRead([{ kind: 'mod', name: 'Patch Mod' }]);
+        await watchedFromPatchMod();
 
         expect(fire(deployed, 'Fallout4.ccc')).toBe(true);
         expect(fire(game, 'Fallout4.ccc')).toBe(false);

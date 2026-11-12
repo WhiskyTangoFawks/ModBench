@@ -470,6 +470,9 @@ export async function readOrReason<T>(read: () => Promise<T>): Promise<FileRead<
   }
 }
 
+/** Whether a failure says the path is not there: it, or a folder it names, is missing or is a file. */
+export const isAbsent = (err: unknown): boolean => errnoCode(err) === 'ENOENT' || errnoCode(err) === 'ENOTDIR';
+
 /** A missing file answers `absent`; any other failure rejects. */
 export async function readOrAbsent<T>(read: () => Promise<T>, absent: T): Promise<T> {
   try {
