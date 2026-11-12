@@ -1,105 +1,25 @@
 // What MO2's implementation lets the instance repository hold, and which game files a mod's files take.
 
-import type { Dirent } from 'node:fs';
-import { dirname, isAbsolute, join, relative, sep } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { commitFolder } from '../commitFolder';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
-import { exists, get, GIT_DIR, ignoreSkippedLink, listDir, listFolders, readOrAbsent, listEntries, putIfChanged, remove, type ResolvedEntry } from '../files';
+import { exists, get, GIT_DIR, ignoreSkippedLink, listFolders, readOrAbsent, listEntries, putIfChanged, remove, type ResolvedEntry } from '../files';
 import { ignoreLink, listOwnEntries } from '../gameFolder/ownEntries';
 import type { HashIndex } from '../fileContents/hashIndex';
-import { isBareName, type DeployedPath, type FileRead, type GameFile, type InstanceAdapter, type UnsearchedFolder } from '../instanceAdapter';
+import { isBareName, type DeployedPath, type FileRead, type GameFile, type InstanceAdapter } from '../instanceAdapter';
 import { DATA_FOLDER } from '../gameFolder/gameFolderResolver';
 import { isWithin } from '../gameFolder/pathWithin';
 import {
-  hashIndexDir, ignoreListFile, isManifestPath, isOwnManifest, isSkippedByManifestSearch, modsDir, recordIndexDir,
-  sortingRuleFilePaths, sourceRootDir, submodulesFile, whitelistIgnoreList, withHeldWholeLines, withOtherManifestLines, withSourceModLines,
+  hashIndexDir, ignoreListFile, isManifestPath, modsDir, recordIndexDir,
+  sortingRuleFilePaths, sourceRootDir, submodulesFile, whitelistIgnoreList, withHeldWholeLines, withSourceModLines,
 } from './layout';
 import type { ConfigurationFile, ManagerAdapter } from '../publisher';
-import { currentDownloadsDir, type Mo2Context } from './mo2Context';
+import type { Mo2Context } from './mo2Context';
 import { filesBelow } from './mo2Files';
 import { sourceFoldersOf } from './mo2Submodules';
 
-type Mo2Repository = Pick<InstanceAdapter, 'writeIgnoreList' | 'otherManifests' | 'writeOtherManifestLines' | 'writeHeldWholeLines' | 'commitFolder'> & Pick<ManagerAdapter, 'filesKept'>;
-
-// A manifest outside the mod folders, by the names of the folders down to it and its own.
-interface FoundManifest { readonly segments: readonly string[]; readonly folder: string }
-
-interface ManifestSearch {
-  readonly found: readonly FoundManifest[];
-  readonly unsearched: readonly UnsearchedFolder[];
-  /** Whether `path` is where the search would find a manifest, there now or not. */
-  readonly owns: (path: string) => boolean;
-}
-
-const nameOf = (folders: readonly string[]): string => `${folders.join('/')}/`;
-
-// A manifest's folder holds no other manifest (ADR-0022): each of a nested pair is refused, naming the other.
-function nestedAmong(names: readonly string[]): Map<string, string> {
-  const why = new Map<string, string[]>();
-  const add = (name: string, reason: string): void => { why.set(name, [...why.get(name) ?? [], reason]); };
-  for (const inner of names) {
-    for (const outer of names.filter((name) => name !== inner && inner.startsWith(name))) {
-      add(inner, `its folder is inside the folder of '${outer}'`);
-      add(outer, `its folder holds the folder of '${inner}'`);
-    }
-  }
-  return new Map([...why].sort(([a], [b]) => (a < b ? -1 : 1)).map(([name, reasons]) => [name, `was skipped: ${reasons.join('; ')}.`]));
-}
-
-// instance-repository.md, The repository, story 2. A link is not followed: it can leave the instance. An
-// unreadable folder is named; the rest are searched (commands.md, A selection is one gesture, and each item lands on its own).
-async function searchForOtherManifests(context: Mo2Context): Promise<ManifestSearch> {
-  const { instanceRoot } = context;
-  const downloads = await currentDownloadsDir(context);
-  const isSkipped = (folders: readonly string[]): boolean =>
-    (folders.length === 1 && isSkippedByManifestSearch(folders[0] ?? '')) || relative(join(instanceRoot, ...folders), downloads) === '';
-  const found: FoundManifest[] = [];
-  const unsearched: UnsearchedFolder[] = [];
-  const search = async (folders: readonly string[]): Promise<void> => {
-    const folder = join(instanceRoot, ...folders);
-    let entries: Dirent[];
-    try {
-      entries = await listDir(folder);
-    } catch (err) {
-      if (folders.length === 0) throw err;
-      if (errnoCode(err) !== 'ENOENT') unsearched.push({ name: nameOf(folders), reason: errorMessage(err) });
-      return;
-    }
-    const name = folders.at(-1);
-    const manifest = name === undefined ? undefined : entries.find((entry) => entry.isFile() && isOwnManifest(name, entry.name));
-    if (manifest !== undefined) found.push({ segments: [...folders, manifest.name], folder });
-    for (const child of entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort()) {
-      if (!isSkipped([...folders, child])) await search([...folders, child]);
-    }
-  };
-  await search([]);
-  const unread = new Set(unsearched.map(({ name }) => name));
-  const owns = (path: string): boolean => {
-    const inInstance = relative(instanceRoot, path);
-    const folders = inInstance.split(sep).slice(0, -1);
-    const above = folders.map((_, at) => folders.slice(0, at + 1));
-    return folders.length > 0 && folders[0] !== '..' && !isAbsolute(inInstance) && isOwnManifest(folders.at(-1) ?? '', inInstance.split(sep).at(-1) ?? '')
-      && !above.some((at) => isSkipped(at) || unread.has(nameOf(at)));
-  };
-  return { found, unsearched, owns };
-}
-
-async function otherManifestLinesWritten(context: Mo2Context): Promise<void> {
-  const { instanceRoot } = context;
-  const file = ignoreListFile(instanceRoot);
-  if (!(await exists(file))) return;
-  const { found, unsearched } = await searchForOtherManifests(context);
-  if (unsearched.length > 0) {
-    throw new Error(`The lines of the manifests outside the mod folders are left as they are in ${file}: ${
-      unsearched.map(({ name, reason }) => `'${name}' could not be searched: ${reason}`).join('; ')}`);
-  }
-  await putIfChanged(file, (before) => {
-    const after = withOtherManifestLines(before, found.map(({ segments }) => segments));
-    if (after === undefined) throw new Error(`${file} has a marker of the manifests outside the mod folders with no match, so their lines are left as they are`);
-    return after;
-  });
-}
+type Mo2Repository = Pick<InstanceAdapter, 'writeIgnoreList' | 'writeHeldWholeLines' | 'commitFolder'> & Pick<ManagerAdapter, 'filesKept'>;
 
 const namesIn = (root: string, folders: readonly string[]): string[] => folders.map((folder) => {
   const name = relative(root, folder);
@@ -196,7 +116,6 @@ export function mo2Repository(context: Mo2Context, publisherFile: ConfigurationF
     },
 
     async filesKept() {
-      const search = await searchForOtherManifests(context);
       const mods = await readOrAbsent(() => listFolders(modsDir(instanceRoot), ignoreSkippedLink), []);
       const inFolders = await Promise.all(mods.map(async (mod) => {
         const folder = join(modsDir(instanceRoot), mod);
@@ -208,19 +127,10 @@ export function mo2Repository(context: Mo2Context, publisherFile: ConfigurationF
       ];
       const held = (await Promise.all(fixed.map(async (path) => (await exists(path) ? [path] : [])))).flat();
       return {
-        present: [...held, ...inFolders.flat(), ...search.found.map(({ segments }) => join(instanceRoot, ...segments))],
-        owns: (path) => fixed.includes(path) || isManifestPath(instanceRoot, path) || search.owns(path),
+        present: [...held, ...inFolders.flat()],
+        owns: (path) => fixed.includes(path) || isManifestPath(instanceRoot, path),
       };
     },
-
-    async otherManifests() {
-      const { found, unsearched } = await searchForOtherManifests(context);
-      const named = found.map(({ segments, folder }) => ({ name: nameOf(segments.slice(0, -1)), folder }));
-      const nested = nestedAmong(named.map(({ name }) => name));
-      return { manifests: named.filter(({ name }) => !nested.has(name)), unsearched, nested: [...nested].map(([name, reason]) => ({ name, reason })) };
-    },
-
-    writeOtherManifestLines: () => otherManifestLinesWritten(context),
 
     writeHeldWholeLines: (modFolders, held) =>
       folderLinesWritten(instanceRoot, modsDir(instanceRoot), modFolders, 'mod folders held whole', (list, names) => withHeldWholeLines(list, names, held)),

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { FileRead, FoundGameFolder, GamePlace, InstallationFile, InstanceAdapter, OtherManifest } from '../../instanceAdapter/instanceAdapter';
+import type { FileRead, FoundGameFolder, GamePlace, InstallationFile, InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 import { manifestIn, writeManifestIn, type Manifest } from '../../manifestAdapter/manifestAdapter';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { fakeInstanceAdapter, modFoldersIn, readingFixture, refusing, repositoriesOf, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
@@ -50,8 +50,8 @@ async function over({ files = { ModA: {}, ModB: {} }, answers = {}, sourceFolder
   const deps = { adapter: { ...fake.adapter, ...adapterOver }, client };
   return {
     fake, client,
-    update: (mods: readonly string[], options: Parameters<typeof updateManifest>[2] = {}, others: readonly OtherManifest[] = [], everyMod = false, sourceMods: readonly string[] = []) =>
-      updateManifest(deps, mods, options, others, everyMod, sourceMods),
+    update: (mods: readonly string[], options: Parameters<typeof updateManifest>[2] = {}, everyMod = false, sourceMods: readonly string[] = []) =>
+      updateManifest(deps, mods, options, everyMod, sourceMods),
     manifestOf: (mod: string) => manifestIn(join(modsDir, mod)),
     manifestHeld: async (mod: string): Promise<Manifest> => {
       const read = await manifestIn(join(modsDir, mod));
@@ -81,7 +81,7 @@ describe('update manifest', () => {
   it('passes over a mod whose whole folder git holds when it runs on every mod, refusing none', async () => {
     const { update, manifestOf } = await over({ files: { ModA: { 'a.nif': HA }, ModB: { 'b.nif': HB } }, answers: { heldWholeByGit: new Set([join(modsDir, 'ModA')]) } });
 
-    const result = await update(['ModA', 'ModB'], {}, [], true);
+    const result = await update(['ModA', 'ModB'], {}, true);
 
     expect([result.landed.map(({ mod }) => mod), result.refused, await manifestOf('ModA')]).toEqual([['ModB'], [], undefined]);
   });
@@ -406,8 +406,8 @@ describe('update manifest', () => {
     it('counts each mod whose submodule entry or ignore lines were written, a mod with a manifest unchanged too', async () => {
       const { update } = await among({}, { submodules: { notes: [], other: [], written: ['ModB'] } }, SOURCE_FILES);
 
-      const first = await update([], {}, [], false, ['ModB']);
-      const second = await update([], {}, [], false, ['ModB']);
+      const first = await update([], {}, false, ['ModB']);
+      const second = await update([], {}, false, ['ModB']);
 
       expect([first, second].map(({ landed }) => landed.map(({ manifestWritten, repositoryWritten }) => [manifestWritten, repositoryWritten]))).toEqual([[[true, true]], [[false, true]]]);
     });
@@ -416,7 +416,7 @@ describe('update manifest', () => {
       const held = { ...GIT_HOLDS(), heldWholeByGit: new Set([join(modsDir, 'ModB')]) };
       const { update } = await among({ 'extra.nif': HX }, held, SOURCE_FILES);
 
-      const every = await update(['ModB'], {}, [], true);
+      const every = await update(['ModB'], {}, true);
 
       expect(every.refused).toEqual([]);
     });
@@ -424,7 +424,7 @@ describe('update manifest', () => {
     it('has its source folder recorded in a manifest of its own, naming no file git holds, when named as a source folder', async () => {
       const { update, manifestOf } = await among({ 'extra.nif': HX }, GIT_HOLDS(), SOURCE_FILES);
 
-      const result = await update(['ModA'], {}, [], false, ['ModB']);
+      const result = await update(['ModA'], {}, false, ['ModB']);
 
       expect([result.landed.map(({ mod }) => mod), result.refused.map(({ item, reason }) => ({ item, reason: String(reason) })), await manifestOf('ModB'), await heldIn(SOURCE())]).toEqual([
         ['ModA', 'ModB'], [], undefined, { ...EMPTY, files: holding({ 'tool.dll': HA }) },
@@ -445,8 +445,8 @@ describe('update manifest', () => {
       it('through update manifest, again and again, while git holds none of the files it holds', async () => {
         const { update } = await vendored({ 'tool.dll': HA, 'Author.psc': HB }, ['Author.psc']);
 
-        await update([], {}, [], false, ['ModB']);
-        const second = await update([], {}, [], false, ['ModB']);
+        await update([], {}, false, ['ModB']);
+        const second = await update([], {}, false, ['ModB']);
 
         expect([await heldIn(SOURCE()), second.landed.map(({ manifestWritten }) => manifestWritten)]).toEqual([authorHeld, [false]]);
       });
@@ -454,7 +454,7 @@ describe('update manifest', () => {
       it('until git holds the files it holds', async () => {
         const { update } = await vendored({ 'tool.dll': HA, 'Author.esp': HZ, 'Author.psc': HX }, ['Author.esp', 'Author.psc']);
 
-        await update([], {}, [], false, ['ModB']);
+        await update([], {}, false, ['ModB']);
 
         expect(await heldIn(SOURCE())).toEqual({ ...EMPTY, files: holding({ 'tool.dll': HA }) });
       });
@@ -462,7 +462,7 @@ describe('update manifest', () => {
       it('while git holds only some of the files it holds', async () => {
         const { update } = await vendored({ 'tool.dll': HA, 'Author.esp': HZ }, ['Author.esp']);
 
-        await update([], {}, [], false, ['ModB']);
+        await update([], {}, false, ['ModB']);
 
         expect(await heldIn(SOURCE())).toEqual(authorHeld);
       });
@@ -470,7 +470,7 @@ describe('update manifest', () => {
       it('though a gitlink named .git holds its bytes', async () => {
         const { update } = await vendored({ 'tool.dll': HA, '.git': HX, 'Author.esp': HZ }, ['.git', 'Author.esp']);
 
-        await update([], {}, [], false, ['ModB']);
+        await update([], {}, false, ['ModB']);
 
         expect(await heldIn(SOURCE())).toEqual(authorHeld);
       });
@@ -479,7 +479,7 @@ describe('update manifest', () => {
     it('has its repository entry written when named as a source folder', async () => {
       const { update, fake } = await among({}, GIT_HOLDS(), SOURCE_FILES);
 
-      await update([], {}, [], false, ['ModB']);
+      await update([], {}, false, ['ModB']);
 
       expect(fake.calls.filter(({ verb }) => verb === 'writeSubmodules')).toEqual([{ verb: 'writeSubmodules', acted: ['ModB'] }]);
     });
@@ -487,7 +487,7 @@ describe('update manifest', () => {
     it('has its source folder recorded when every mod is updated', async () => {
       const { update } = await among({}, GIT_HOLDS(), SOURCE_FILES);
 
-      await update(['ModA', 'ModB'], {}, [], true);
+      await update(['ModA', 'ModB'], {}, true);
 
       expect(await heldIn(SOURCE())).toEqual({ ...EMPTY, files: holding({ 'tool.dll': HA }) });
     });
@@ -495,7 +495,7 @@ describe('update manifest', () => {
     it('is refused when named as a source folder though no source folder builds it', async () => {
       const { update } = await among();
 
-      const result = await update([], {}, [], false, ['ModA']);
+      const result = await update([], {}, false, ['ModA']);
 
       expect([result.landed, result.refused.map(({ item }) => item)]).toEqual([[], ['ModA']]);
     });
@@ -505,7 +505,7 @@ describe('update manifest', () => {
       await writeFile(join(SOURCE(), 'one.manifest.json'), '{}');
       await writeFile(join(SOURCE(), 'two.manifest.json'), '{}');
 
-      const result = await update([], {}, [], false, ['ModB']);
+      const result = await update([], {}, false, ['ModB']);
 
       expect([result.landed, result.refused.map(({ item }) => item)]).toEqual([[], ['ModB']]);
     });
@@ -616,30 +616,6 @@ describe('update manifest', () => {
     });
   });
 
-  describe('a folder outside the mod folders', () => {
-    const STOCK_GAME: OtherManifest = { name: 'Stock Game/', folder: '' };
-
-    it('is updated by its name, with the game files its files may be and none of what a mod manager holds of a mod', async () => {
-      const folder = join(root, 'Stock Game');
-      await mkdir(folder);
-      const { update } = await over({
-        files: { ModA: {} },
-        answers: {
-          installations: new Map([['Stock Game/', read(INSTALLED)]]),
-          folderFiles: new Map([[folder, ['Data/a.nif']]]), hashes: new Map([[join(folder, 'Data/a.nif'), { size: 1, hash: HA }]]),
-          gameFilesTaken: new Map([['Stock Game', read({ gameFiles: [{ root: '/game', path: 'Data/a.nif', hash: HA, pathInFolder: 'Data/a.nif' }], notes: [] }) ]]),
-        },
-      });
-
-      const result = await update(['ModA'], {}, [{ ...STOCK_GAME, folder }]);
-
-      const { packages, ...rest } = await heldIn(folder);
-      expect([result.refused, result.landed.map(({ mod }) => mod), packages.map(({ kind }) => kind), rest]).toEqual([
-        [], ['ModA', 'Stock Game/'], ['gameFolder'], { exclude: [], ignore: [], flags: new Map(), files: holding({ 'Data/a.nif': HA }) },
-      ]);
-    });
-  });
-
   describe('what it writes in the repository', () => {
     it('makes each source mod with a remote a submodule once its mods are updated, naming a source mod that is not one', async () => {
       const { update, fake } = await over({ answers: { submodules: { notes: [{ mod: 'ModA', note: 'it has a remote but no branch checked out' }], other: ['source/Odd is not a source mod'], written: [] } } });
@@ -647,7 +623,7 @@ describe('update manifest', () => {
       const result = await update(['ModA']);
 
       expect([fake.calls, result.notes, result.repositoryNotes]).toEqual([
-        [{ verb: 'writeSubmodules', acted: ['ModA'] }, { verb: 'writeOtherManifestLines' }],
+        [{ verb: 'writeSubmodules', acted: ['ModA'] }],
         [{ mod: 'ModA', note: 'it has a remote but no branch checked out' }], ['source/Odd is not a source mod'],
       ]);
     });
@@ -655,14 +631,13 @@ describe('update manifest', () => {
     it('gives the submodules of every source mod to the Instance adapter when it acts on every mod, though a mod was refused', async () => {
       const { update, fake } = await over({ answers: { gameFilesTaken: new Map([['ModB', { kind: 'unreadable', reason: 'EACCES' }]]) } });
 
-      const result = await update(['ModA', 'ModB'], {}, [], true);
+      const result = await update(['ModA', 'ModB'], {}, true);
 
       expect([fake.calls[0], result.refused.map(({ item }) => item)]).toEqual([{ verb: 'writeSubmodules', acted: 'every' }, ['ModB']]);
     });
 
     it.each([
       ['write the submodules', { refusals: refusing('writeSubmodules', 'git is not available') }, 'git is not available'],
-      ['write the lines of the other manifests', { refusals: refusing('writeOtherManifestLines', '.gitignore has a marker with no match') }, '.gitignore has a marker with no match'],
     ] as const)('names the failure to %s beside the manifests that landed', async (_what, answers, note) => {
       const { update } = await over({ answers });
 
