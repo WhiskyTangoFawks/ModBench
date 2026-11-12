@@ -110,6 +110,19 @@ public sealed class CompilePluginLinkTests : TestInstance
     }
 
     [Fact]
+    public async Task Compile_WhenALoadOrderFileCannotBeRead_IsSilentAboutItWhenNoLinkNamesIt()
+    {
+        const string Bystander = "Bystander.esp";
+        var bystander = Add(new Fallout4Mod(ModKey.FromFileName(Bystander), Fallout4Release.Fallout4), "BystanderMod");
+        File.WriteAllText(Path.Combine(ModFolderOf(bystander), Bystander), "not a plugin at all");
+
+        var answer = await CompileHost();
+
+        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
+        Assert.DoesNotContain(diagnostics, d => d.Message.Contains(Bystander, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Compile_WhenTheLinkCheckItselfFails_StillSucceeds_AndSaysTheCheckDidNotRun()
     {
         var answer = (await CompileServices.Over(LoadOrder, new FaultyLinkAdapter())
