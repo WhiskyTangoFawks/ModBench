@@ -5,7 +5,7 @@ import { tagsHeldAt } from './tagsHeldAt';
 import { modNameOf } from '../instanceLoader/modName';
 import { fileOrderConflictOf, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
 import { instanceMessages, type InstanceValue, type InstanceView, type ModGroup, type ModGroups } from '../instanceLoader/instance';
-import { gameFolderFileOver } from '../drivingLib/modFileStates';
+import { gameFolderFileOver, unreadableArchiveReason } from '../drivingLib/modFileStates';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
 import { messageLine } from '../drivingLib/messageLine';
@@ -475,13 +475,8 @@ export class ModListProvider
       return ignoreEntriesOf(status).has(file.includedPath) ? 'entry' : 'under';
     };
     const holdsPublisherTag = (path: string) => tagsHeldAt(this.instanceValue, path).length > 0;
-    return { shown: row.shown, matches: this.matches, conflict, differs, ignored, holdsPublisherTag, archived: this.archivedOf, unreadable: this.unreadableReason };
+    return { shown: row.shown, matches: this.matches, conflict, differs, ignored, holdsPublisherTag, archived: this.archivedOf, unreadable: (file: OriginFile) => unreadableArchiveReason(this.instanceValue, file) };
   }
-
-  private unreadableReason = (file: OriginFile): string | undefined => {
-    const read = this.instanceValue.archiveContents.get(file.sourcePath);
-    return read?.kind === 'unreadable' ? read.reason : undefined;
-  };
 
   private archivedOf = (file: OriginFile): readonly ArchivedEntry[] => {
     const read = this.instanceValue.archiveContents.get(file.sourcePath);

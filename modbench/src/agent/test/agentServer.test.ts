@@ -21,6 +21,7 @@ import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { serveAgent, type AgentServer, type AgentServerOptions } from '../agentServer';
 import type { Argument } from '../../wire/argument';
 import type { InstanceValue } from '../../instanceLoader/instance';
+import type { ArchiveRead } from '../../instanceLoader/archiveContents';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
@@ -837,32 +838,29 @@ describe('the agent server, reading file order conflicts', () => {
     ]);
   });
 
-  it('reads each entry of a mod\'s archive as the Mods view shows it: whether the game gets it, and the game folder\'s loose file that wins over it', async () => {
+  it('reads each file of a mod\'s archive as the Mods view shows it, and why an archive cannot be read', async () => {
     const archive = fileIn('/m/Armour', 'Armour - Main.ba2');
-    const entries = ['meshes/a.nif', 'meshes/b.nif', 'meshes/c.nif'];
-    const mods: ModlistEntry[] = [{ kind: 'mod', name: 'Armour', enabled: true }, { kind: 'mod', name: 'Patch', enabled: true }];
-    const index = buildFileConflictIndex(mods, [], new Map([
-      ['Armour', { origin: 'Armour', folder: '/m/Armour', files: [archive], folders: [], notes: [] }],
-      ['Patch', { origin: 'Patch', folder: '/m/Patch', files: [fileIn('/m/Patch', 'meshes/c.nif')], folders: [], notes: [] }],
-    ]));
+    const broken = fileIn('/m/Armour', 'Broken.ba2');
+    const inside = ['meshes/a.nif', 'meshes/b.nif'];
+    const mods: ModlistEntry[] = [{ kind: 'mod', name: 'Armour', enabled: true }];
+    const index = buildFileConflictIndex(mods, [], new Map([['Armour', { origin: 'Armour', folder: '/m/Armour', files: [archive, broken], folders: [], notes: [] }]]));
     const value = instanceValueFixture({
       mods, files: index.files, filesByMod: index.filesByMod, foldersByMod: index.foldersByMod,
-      stackedCopies: stackCopies(index, [{ origin: modOrigin('Armour'), archive: archive.sourcePath, files: entries }], 'Fallout4'),
-      archiveContents: new Map([[archive.sourcePath, { kind: 'read', answer: entries }]]),
+      stackedCopies: stackCopies(index, [{ origin: modOrigin('Armour'), archive: archive.sourcePath, files: inside }], 'Fallout4'),
+      archiveContents: new Map<string, ArchiveRead>([
+        [archive.sourcePath, { kind: 'read', answer: inside }],
+        [broken.sourcePath, { kind: 'unreadable', reason: 'bad header' }],
+      ]),
       loadsArchive: () => true,
       dataFolderFiles: { kind: 'listed', files: new Map([['meshes/a.nif', { relativePath: 'Meshes/A.nif', path: '/game/Data/Meshes/A.nif' }]]) },
     });
     const { client } = await clientOf(new FakeInstance(value));
 
     expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'Armour' }] })).toMatchObject([{
-      files: [{
-        file: 'Armour - Main.ba2', gotten: true,
-        entries: [
-          { path: 'meshes/a.nif', gotten: false, gameFolderFile: '/game/Data/Meshes/A.nif' },
-          { path: 'meshes/b.nif', gotten: true },
-          { path: 'meshes/c.nif', gotten: false },
-        ],
-      }],
+      files: [
+        { file: 'Armour - Main.ba2', files: [{ path: 'meshes/a.nif', gotten: false, gameFolderFile: '/game/Data/Meshes/A.nif' }, { path: 'meshes/b.nif', gotten: true, gameFolderFile: null }] },
+        { file: 'Broken.ba2', unreadable: 'bad header' },
+      ],
     }]);
   });
 

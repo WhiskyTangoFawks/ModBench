@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import type { FileOrigin, InstanceValue, InstanceView, OriginFolder } from '../instanceLoader/instance';
 import { modOrigin, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
 import { fileRowUri } from './modFiles';
-import { archivedEntriesOf, isFileNotGotten, isNotDeployed } from '../drivingLib/modFileStates';
+import { archiveGotten, archivedFilesOf, isFileNotGotten, isNotDeployed } from '../drivingLib/modFileStates';
 import { onSettingChange } from '../drivingLib/setting';
 import type { WorkspaceSettings } from './workspaceSettings';
 
@@ -43,8 +43,8 @@ function inactiveFiles(value: FilesValue): Inactive {
       const notGotten = isFileNotGotten(value, origin, enabled, file);
       add(origin, file, notGotten);
       if (!value.archiveContents.has(file.sourcePath)) continue;
-      if (notGotten || !value.loadsArchive(file.relativePath)) archives.add(fileRowUri(origin, file.relativePath).toString());
-      for (const { path, gotten } of archivedEntriesOf(value, origin, enabled, file)) {
+      if (!archiveGotten(value, origin, enabled, file)) archives.add(fileRowUri(origin, file.relativePath).toString());
+      for (const { path, gotten } of archivedFilesOf(value, origin, enabled, file)) {
         if (!gotten) inactive.add(fileRowUri(origin, `${file.relativePath}/${path}`).toString());
       }
     }

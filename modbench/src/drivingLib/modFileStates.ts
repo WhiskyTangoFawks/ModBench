@@ -49,24 +49,30 @@ export function gameFolderFile(value: Pick<InstanceValue, 'dataFolderFiles'>, en
   return value.dataFolderFiles.kind === 'listed' ? value.dataFolderFiles.files.get(entry.toLowerCase())?.path : undefined;
 }
 
-export interface ArchivedEntryStanding {
+export interface ArchivedFileStanding {
   readonly path: string;
-  /** Whether the game gets this copy: its archive is loaded, it wins the entry's stack, and no loose file in the game folder wins over it. */
   readonly gotten: boolean;
-  readonly gameFolderFile: string | undefined;
+  readonly gameFolderFile: string | null;
 }
 
-type EntriesValue = Pick<InstanceValue, 'files' | 'archiveContents' | 'loadsArchive' | 'stackedCopies' | 'dataFolderFiles'>;
+type ArchiveValue = Pick<InstanceValue, 'files' | 'archiveContents' | 'loadsArchive' | 'stackedCopies' | 'dataFolderFiles'>;
 
-/** The entries of an archive file of `origin`, each with the standing the Mods view draws on its row: the grey and the tooltip. Empty for a file that is no archive mEdit read. */
-export function archivedEntriesOf(value: EntriesValue, origin: FileOrigin, enabled: boolean, file: OriginFile): ArchivedEntryStanding[] {
+export const archiveGotten = (value: ArchiveValue, origin: FileOrigin, enabled: boolean, file: OriginFile): boolean =>
+  !isFileNotGotten(value, origin, enabled, file) && value.loadsArchive(file.relativePath);
+
+export function unreadableArchiveReason(value: Pick<InstanceValue, 'archiveContents'>, file: OriginFile): string | undefined {
+  const read = value.archiveContents.get(file.sourcePath);
+  return read?.kind === 'unreadable' ? read.reason : undefined;
+}
+
+export function archivedFilesOf(value: ArchiveValue, origin: FileOrigin, enabled: boolean, file: OriginFile): ArchivedFileStanding[] {
   const contents = value.archiveContents.get(file.sourcePath);
   if (contents?.kind !== 'read') return [];
-  const archiveGotten = !isFileNotGotten(value, origin, enabled, file) && value.loadsArchive(file.relativePath);
+  const loaded = archiveGotten(value, origin, enabled, file);
   return contents.answer.map((path) => {
     const winner = value.stackedCopies.get(path)?.copies[0];
-    const gameFolderFile = gameFolderFileOver(value, path);
-    const winsEntry = winner !== undefined && gameFolderFile === undefined && sameOrigin(winner.origin, origin) && winner.at.kind === 'archived' && winner.at.archive === file.sourcePath;
-    return { path, gotten: archiveGotten && winsEntry, gameFolderFile };
+    const over = gameFolderFileOver(value, path);
+    const winsEntry = winner !== undefined && over === undefined && sameOrigin(winner.origin, origin) && winner.at.kind === 'archived' && winner.at.archive === file.sourcePath;
+    return { path, gotten: loaded && winsEntry, gameFolderFile: over ?? null };
   });
 }
