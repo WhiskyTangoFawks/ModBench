@@ -84,6 +84,7 @@ internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null)
     public Answer<PluginDependants, IndexRefused> GetDependants(PluginAddress plugin) => throw Failed();
 
     public Answer<IReadOnlyList<PluginProblems>, IndexRefused> GetProblems() => throw Failed();
+    public Answer<IReadOnlyList<PluginFilePaths>, IndexRefused> GetFilePaths() => throw Failed();
 
     internal static void Replace(IServiceCollection services, StoreRebuildRefused? rebuildRefusal = null) =>
         services.AddSingleton<IQueries>(new FailingQueries(rebuildRefusal));

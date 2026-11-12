@@ -522,6 +522,13 @@ internal sealed class RecordQueries(
             return ProblemsPanel.Of(_index, reads, _loadOrder.Require(), source);
         });
 
+    public Answer<IReadOnlyList<PluginFilePaths>, IndexRefused> GetFilePaths() =>
+        _answer.Of(() =>
+        {
+            using var reads = _index.RequireWholeSetReads().InOneSnapshot();
+            return FilePathsPanel.Of(_index, reads, _loadOrder.Require(), source, RequireSchemas());
+        });
+
     public LoadOrderStatus GetStatus() => _index.Status;
 
     public long GetSequence() => _index.Sequence;

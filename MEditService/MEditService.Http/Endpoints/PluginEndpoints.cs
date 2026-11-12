@@ -40,6 +40,16 @@ internal static class PluginEndpoints
             .Produces<IReadOnlyList<PluginProblems>>()
             .ProducesProblem(503);
 
+        app.MapGet("/plugins/file-paths", (IQueries svc) =>
+            EndpointMapping.Ok(svc.GetFilePaths()))
+            .WithName("GetPluginFilePaths")
+            .WithTags(Tag)
+            .WithDescription(
+                "The file paths each compiled plugin's source names, in the Data folder's spelling, with the file of the plugin " +
+                "source that holds each naming record. Answers only once the record index is ready.")
+            .Produces<IReadOnlyList<PluginFilePaths>>()
+            .ProducesProblem(503);
+
         app.MapGet("/plugins/{plugin}/dependants", (string plugin, string? origin, IQueries svc) =>
         {
             if (!EndpointMapping.PluginAt(plugin, origin, out var address, out var refused)) return refused;

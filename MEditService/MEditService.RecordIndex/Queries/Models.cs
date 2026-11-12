@@ -369,6 +369,16 @@ public enum ProblemsFailureKind
 public sealed record PluginProblems(
     PluginAddress Plugin, IReadOnlyList<SourceProblem> Problems, string? Failure = null, ProblemsFailureKind? FailureKind = null);
 
+/// <summary>A file path a record of a compiled plugin's source names at <paramref name="FieldPath"/>, in the file
+/// <paramref name="SourceRelativePath"/> that holds the record, and where it lies in the Data folder.</summary>
+public sealed record NamedFilePath(string FormKey, string FieldPath, string SourceRelativePath, string DataPath);
+
+/// <summary>Every file path a compiled plugin's source names. <paramref name="Unread"/>: each record, or member of one,
+/// whose path mEdit could not place in the Data folder. <paramref name="Failure"/> and its <paramref name="FailureKind"/>
+/// are set when <paramref name="Paths"/> are not the plugin's whole answer (ADR-0019).</summary>
+public sealed record PluginFilePaths(
+    PluginAddress Plugin, IReadOnlyList<NamedFilePath> Paths, IReadOnlyList<string> Unread, string? Failure = null, ProblemsFailureKind? FailureKind = null);
+
 /// <summary>The plugins whose masters list a plugin's file name, and those whose masters mEdit could not
 /// read and so may.</summary>
 public sealed record PluginDependants(IReadOnlyList<PluginAddress> Dependants, IReadOnlyList<PluginAddress> Unreadable);

@@ -522,22 +522,29 @@ internal sealed class RelationReads(
     }
 
     /// <summary>Each copy in an active or compiled plugin whose document holds <paramref name="text"/> in any case.</summary>
-    public IEnumerable<CopyHoldingText> GetCopiesHoldingText(string text)
+    public IEnumerable<CopyHoldingText> GetCopiesHoldingText(string text) =>
+        CopiesWhere("contains(lower(body), lower($1))", ActiveOrCompiled, text);
+
+    /// <summary>Each copy in a plugin whose rows were derived from its plugin source or whose plugin source cannot be read.</summary>
+    public IEnumerable<CopyHoldingText> GetCopiesOfCompiledPlugins() =>
+        CopiesWhere("TRUE", $"d.derived_from <> '{DerivedFrom.Binary}'");
+
+    private IEnumerable<CopyHoldingText> CopiesWhere(string recordFilter, string pluginFilter, params object[] values)
     {
         using var context = OpenRead();
         // The length is taken below the join, which would otherwise carry every document holding the text (ADR-0010).
         var located = context.Rows($"""
             SELECT r.form_key, r.plugin, r.origin, r.length, {InPluginSource}
             FROM (SELECT form_key, plugin, origin, strlen(body) AS length
-                  FROM {TableDdlBuilder.MirrorSchema}.records WHERE contains(lower(body), lower($1))) r
+                  FROM {TableDdlBuilder.MirrorSchema}.records WHERE {recordFilter}) r
             {TableDdlBuilder.RegisteredJoin("r", "plugin", "origin")}
             JOIN {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} d
               ON d.plugin = r.plugin AND d.origin = r.origin
-            WHERE {ActiveOrCompiled}
+            WHERE {pluginFilter}
             ORDER BY r.plugin, r.origin, r.form_key
-            """, reader => (Copy: CopySizeOf(reader), InPluginSource: reader.GetBoolean(4)), text);
+            """, reader => (Copy: CopySizeOf(reader), InPluginSource: reader.GetBoolean(4)), values);
         foreach (var (found, stored) in located.Zip(Stored(context, located.Select(found => new[] { found.Copy }))))
-            yield return new CopyHoldingText(found.Copy.FormKey, found.Copy.Plugin, stored[0].RecordType, stored[0].Body, found.InPluginSource);
+            yield return new CopyHoldingText(found.Copy.FormKey, found.Copy.Plugin, stored[0].RecordType, stored[0].EditorId, stored[0].Body, found.InPluginSource);
     }
 
     /// <summary>Every plugin at least one filtered record matches, restricted to
