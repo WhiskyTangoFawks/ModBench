@@ -112,4 +112,13 @@ public sealed class PluginLoadFlagsTests : IDisposable
 
         Assert.Equal(0, File.ReadAllBytes(path)[9] & 0x02);
     }
+
+    [Fact]
+    public void AFlagThatLimitsNoFormIds_IsSetOnAPluginWhoseRecordsMutagenCannotParse()
+    {
+        var path = Written("Garbled.esp", _ => { });
+        File.WriteAllBytes(path, [.. File.ReadAllBytes(path), .. "GRUP"u8.ToArray(), .. Enumerable.Repeat((byte)0xFF, 20)]);
+
+        Adapter.SetLoadFlags(path, new Dictionary<string, bool> { ["Master"] = true }, GameRelease.Fallout4).Answered();
+    }
 }

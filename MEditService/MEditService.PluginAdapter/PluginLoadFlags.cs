@@ -36,7 +36,7 @@ internal static class PluginLoadFlags
         try
         {
             File.WriteAllBytes(temp, bytes);
-            if (refusalOfFlaggedCopy(temp) is { } refusal)
+            if (MayLimitFormIds(Path.GetFileName(path), set, load) && refusalOfFlaggedCopy(temp) is { } refusal)
                 throw new PluginFailureException(new PluginFailure.FormIdOutsideFlagLimit(refusal));
             File.Move(temp, path, overwrite: true);
         }
@@ -47,6 +47,10 @@ internal static class PluginLoadFlags
 
         return HashOf(bytes);
     }
+
+    private static bool MayLimitFormIds(string fileName, int flagged, IReadOnlyDictionary<string, int> load) =>
+        fileName.EndsWith(".esl", StringComparison.OrdinalIgnoreCase)
+        || load.Any(flag => flag.Key is "Small" or "Medium" && (flagged & flag.Value) != 0);
 
     /// <summary>The hash of the plugin with each named flag at each combination of original values; none unless the plugin
     /// holds each named flag as <paramref name="flags"/> sets it, and none for a file that is no plugin.</summary>
