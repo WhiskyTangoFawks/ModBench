@@ -52,32 +52,29 @@ describe('the mods a Mods gesture runs over (instance-repository.md, Every mod)'
     expect(everyModHere({ instance: { value } })).toEqual(everyModUnder(MODS_VIEW, EVERY_MOD));
   });
 
-  it('skips a source mod held by a selected separator when updating its manifest', () => {
-    const sourceModValue = { ...value, paths: { ...value.paths, sourceDirs: new Map([['ModB', '/instance/source/ModB']]) } };
+  describe('update manifest and a source mod a separator holds (instance-repository.md, Update manifest, story 1)', () => {
+    const sourceModValue = (sourceMod: string) => ({ ...value, paths: { ...value.paths, sourceDirs: new Map([[sourceMod, `/instance/source/${sourceMod}`]]) } });
+    const weapons: Argument = { kind: 'separator', name: 'Weapons' };
+    const mod = (name: string): Argument => ({ kind: 'mod', name });
+    const modsRun = (path: 'view' | 'agent', sourceMod: string, argument: readonly Argument[]): readonly string[] => {
+      const instance = { value: sourceModValue(sourceMod) };
+      const rows = argument.map((row) => ({ argument: row, name: 'name' in row ? row.name : '' }));
+      return path === 'view'
+        ? modsAndSourceModsToRun({ ...focused(undefined), instance }, rows[0], rows).mods
+        : modsAndSourceModsOfAgent(argument, instance.value).mods;
+    };
 
-    expect(modsAndSourceModsToRun({ ...focused(undefined), instance: { value: sourceModValue } }, separatorRow('Weapons'), [separatorRow('Weapons')]))
-      .toEqual(named(['ModA']));
-  });
-
-  it('skips a source mod held by a separator in an agent update-manifest call, but keeps a directly named source mod', () => {
-    const sourceModValue = { ...value, paths: { ...value.paths, sourceDirs: new Map([['ModB', '/instance/source/ModB']]) } };
-    const separator: Argument = { kind: 'separator', name: 'Weapons' };
-
-    expect(modsAndSourceModsOfAgent([separator], sourceModValue)).toEqual({ mods: ['ModA'], sourceMods: [], refused: [] });
-    expect(modsAndSourceModsOfAgent([{ kind: 'mod', name: 'ModB' }], sourceModValue)).toEqual({ mods: ['ModB'], sourceMods: [], refused: [] });
-  });
-
-  describe('a source mod the separator holds', () => {
-    const heldSource = { ...value, paths: { ...value.paths, sourceDirs: new Map([['ModA', '/instance/source/ModA']]) } };
-    const separator: Argument = { kind: 'separator', name: 'Weapons' };
-
-    it('is skipped from the view selection and from the agent call alike, and kept when named directly', () => {
-      const view = (rows: readonly unknown[]) => modsAndSourceModsToRun({ ...focused(undefined), instance: { value: heldSource } }, rows[0], rows).mods;
-
-      expect(view([separatorRow('Weapons')])).toEqual([]);
-      expect(view([separatorRow('Weapons'), modRow('ModA')])).toEqual(['ModA']);
-      expect(modsAndSourceModsOfAgent([separator], heldSource).mods).toEqual([]);
-      expect(modsAndSourceModsOfAgent([separator, { kind: 'mod', name: 'ModA' }], heldSource).mods).toEqual(['ModA']);
+    it.each([
+      ['view', 'ModA', [weapons], []],
+      ['view', 'ModA', [weapons, mod('ModA')], ['ModA']],
+      ['view', 'ModB', [weapons], ['ModA']],
+      ['view', 'ModB', [mod('ModB')], ['ModB']],
+      ['agent', 'ModA', [weapons], []],
+      ['agent', 'ModA', [weapons, mod('ModA')], ['ModA']],
+      ['agent', 'ModB', [weapons], ['ModA']],
+      ['agent', 'ModB', [mod('ModB')], ['ModB']],
+    ] as const)('through the %s, with %s the source mod, %j gives %j', (path, sourceMod, argument, expected) => {
+      expect(modsRun(path, sourceMod, argument)).toEqual(expected);
     });
   });
 });

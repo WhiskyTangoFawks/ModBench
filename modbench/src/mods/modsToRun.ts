@@ -47,10 +47,10 @@ const everyMod = (value: InstanceValue): string[] =>
 export const everyModHere = ({ instance }: Pick<ModsToRunDeps, 'instance'>): ModsToRun =>
   ({ mods: everyMod(instance.value), sourceMods: [], refused: [], everyMod: true, view: MODS_KEY_ARGS.view });
 
-type HeldBy = (kind: unknown, name: string, value: InstanceValue) => string[] | undefined;
+type HoldingRule = (kind: unknown, name: string, value: InstanceValue) => string[] | undefined;
 
 // instance-repository.md, Every mod, story 2: a separator stands for its mods.
-const modsHeldBy: HeldBy = (kind, name, value) => {
+const modsHeld: HoldingRule = (kind, name, value) => {
   if (kind !== 'mod' && kind !== 'separator') return undefined;
   const asked: EntryRef = { kind, name };
   const entry = value.mods.find((listed) => sameEntry(value, listed, asked)) ?? asked;
@@ -60,36 +60,37 @@ const modsHeldBy: HeldBy = (kind, name, value) => {
   return group?.mods.map(modName) ?? [];
 };
 
-/** A separator does not stand for a source mod, which a gesture takes by naming it. */
-const modsHeldSkippingSourceMods: HeldBy = (kind, name, value) => {
-  const held = modsHeldBy(kind, name, value);
+// instance-repository.md, Update manifest, story 1: a separator does not stand for a source mod, which it leaves to build.
+const modsHeldWithoutSourceMods: HoldingRule = (kind, name, value) => {
+  const held = modsHeld(kind, name, value);
   return kind === 'separator' ? held?.filter((mod) => !value.paths.sourceDirs.has(mod)) : held;
 };
 
-function modsOf(row: unknown, value: InstanceValue, heldBy: HeldBy): string[] | undefined {
+function modsOf(row: unknown, value: InstanceValue, holding: HoldingRule): string[] | undefined {
   const name: unknown = Reflect.get(carriedArgument(row) ?? {}, 'name');
-  return typeof name === 'string' ? heldBy(kindOf(row), name, value) : undefined;
+  return typeof name === 'string' ? holding(kindOf(row), name, value) : undefined;
 }
 
-function agentMods(argument: readonly Argument[], value: InstanceValue, heldBy: HeldBy): string[] {
+// instance-repository.md, Every mod, story 1: an agent call may supply all of it, and none is every mod.
+function modsNamed(argument: readonly Argument[], value: InstanceValue, holding: HoldingRule): string[] {
   if (argument.length === 0) return everyMod(value);
   const held = argument.flatMap((entry) => {
     const { kind, name } = argumentOfKind(entry, 'mod', 'separator');
-    return heldBy(kind, name, value) ?? [];
+    return holding(kind, name, value) ?? [];
   });
   return [...new Set(held)];
 }
 
-// instance-repository.md, Every mod, story 1: an agent call may supply all of it, and none is every mod.
-export const modsOfAgent = (argument: readonly Argument[], value: InstanceValue): string[] => agentMods(argument, value, modsHeldBy);
+export const modsOfAgent = (argument: readonly Argument[], value: InstanceValue): string[] => modsNamed(argument, value, modsHeld);
 
 /** Update manifest's agent call: the mods, and the source mods whose source folder it names by path. */
 export function modsAndSourceModsOfAgent(argument: readonly Argument[], value: InstanceValue): { mods: string[]; sourceMods: string[]; refused: ItemRefusal<string>[] } {
   const isFolder = (entry: Argument): entry is ArgumentOf<'archive' | 'folder'> => entry.kind === 'folder';
   const located = argument.filter(isFolder).map(({ path }) => ({ path, mod: sourceModOfFolder(path, value) }));
   const named = argument.filter((entry) => !isFolder(entry));
+  const namesOnlyFolders = argument.length > 0 && named.length === 0;
   return {
-    mods: argument.length === 0 || named.length > 0 ? agentMods(named, value, modsHeldSkippingSourceMods) : [],
+    mods: namesOnlyFolders ? [] : modsNamed(named, value, modsHeldWithoutSourceMods),
     sourceMods: [...new Set(located.flatMap(({ mod }) => mod ?? []))],
     refused: located.filter(({ mod }) => mod === undefined).map(({ path }) => ({ item: path, reason: NOT_A_SOURCE_FOLDER })),
   };
@@ -100,7 +101,7 @@ const sourceModOfFolderRow = (row: unknown, value: InstanceValue): string | unde
 
 function toRun(
   deps: ModsToRunDeps, clicked: unknown, selected: readonly unknown[] | undefined, sourceModOf: (row: unknown, value: InstanceValue) => string | undefined,
-  heldBy: HeldBy,
+  holding: HoldingRule,
 ): ModsToRun {
   const { value } = deps.instance;
   const rows = rowsOf(deps, clicked, selected, (row) => isModOrSeparator(row) || sourceModOf(row, value) !== undefined);
@@ -110,7 +111,7 @@ function toRun(
   const mods = rows.flatMap((row) => {
     const sourceMod = sourceModOf(row, value);
     if (sourceMod !== undefined) { sourceMods.push(sourceMod); return []; }
-    const held = modsOf(row, value, heldBy);
+    const held = modsOf(row, value, holding);
     if (held === undefined) refused.push({ item: rowNameOf(row), reason: NEITHER });
     return held ?? [];
   });
@@ -118,8 +119,8 @@ function toRun(
 }
 
 export const modsToRun = (deps: ModsToRunDeps, clicked: unknown, selected: readonly unknown[] | undefined): ModsToRun =>
-  toRun(deps, clicked, selected, () => undefined, modsHeldBy);
+  toRun(deps, clicked, selected, () => undefined, modsHeld);
 
 /** Update manifest also takes a source folder, which stands for its source mod. */
 export const modsAndSourceModsToRun = (deps: ModsToRunDeps, clicked: unknown, selected: readonly unknown[] | undefined): ModsToRun =>
-  toRun(deps, clicked, selected, sourceModOfFolderRow, modsHeldSkippingSourceMods);
+  toRun(deps, clicked, selected, sourceModOfFolderRow, modsHeldWithoutSourceMods);
