@@ -168,26 +168,38 @@ function judgeGroups(
     const held = loadedWithNoLine(early.plugin.filename) && loadedWithNoLine(late.plugin.filename);
     return source === undefined || held ? [] : [{ early: at, late: later, source }];
   }));
-  return placeOutOfGroup(crossings).map(({ index, crossed }) => brokenGroup(placed, index, crossed));
+  return placeOutOfGroup(crossings, placed.length).map(({ index, crossed }) => brokenGroup(placed, index, crossed));
 }
 
 interface Crossing {
   early: number;
   late: number;
   source: RuleSource;
+  dropped?: true;
 }
 
-// Picks the plugin in most crossings, the later on a tie, drops its crossings, and repeats.
-function placeOutOfGroup(crossings: readonly Crossing[]): { index: number; crossed: Crossing[] }[] {
-  const picked: { index: number; crossed: Crossing[] }[] = [];
-  for (let left = crossings; left.length > 0;) {
-    const counts = new Map<number, number>();
-    for (const { early, late } of left) for (const index of [early, late]) counts.set(index, (counts.get(index) ?? 0) + 1);
-    const [index = 0] = [...counts].sort(([atA, countA], [atB, countB]) => countB - countA || atB - atA)[0] ?? [];
-    picked.push({ index, crossed: left.filter(({ early, late }) => early === index || late === index) });
-    left = left.filter(({ early, late }) => early !== index && late !== index);
+function placeOutOfGroup(crossings: readonly Crossing[], plugins: number): { index: number; crossed: Crossing[] }[] {
+  const counts = new Array<number>(plugins).fill(0);
+  const touching = Array.from({ length: plugins }, (): Crossing[] => []);
+  for (const crossing of crossings) {
+    for (const index of [crossing.early, crossing.late]) {
+      counts[index] = (counts[index] ?? 0) + 1;
+      touching[index]?.push(crossing);
+    }
   }
-  return picked.sort((a, b) => a.index - b.index);
+  const picked: { index: number; crossed: Crossing[] }[] = [];
+  for (;;) {
+    const index = counts.reduce((best, count, at) => (count > 0 && count >= (counts[best] ?? 0) ? at : best), -1);
+    if (index < 0) return picked.sort((a, b) => a.index - b.index);
+    const crossed = (touching[index] ?? []).filter(({ dropped }) => !dropped);
+    for (const crossing of crossed) {
+      crossing.dropped = true;
+      const other = crossing.early === index ? crossing.late : crossing.early;
+      counts[other] = (counts[other] ?? 0) - 1;
+    }
+    counts[index] = 0;
+    picked.push({ index, crossed });
+  }
 }
 
 const plural = (count: number): string => `${count} plugin${count === 1 ? '' : 's'}`;
@@ -209,7 +221,7 @@ function brokenGroup(placed: readonly Placed[], index: number, crossed: readonly
   };
   const stated = [...clauses('after', passed, ({ late }) => late), ...clauses('before', passing, ({ early }) => early)];
   return {
-    rule: 'group', level: 'info', plugins: [mover.plugin], source: first.source,
+    rule: 'group', level: 'info', plugins: [mover.plugin], source: crossed.find(({ source }) => source.file === 'userlist')?.source ?? first.source,
     placement: { side: passed.length > 0 ? 'after' : 'before', anchor: anchor.plugin },
     reason: `"${mover.plugin.filename}" is in the group "${mover.group}", ${stated.join(', and ')}.`,
   };

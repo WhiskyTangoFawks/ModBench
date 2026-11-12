@@ -14,7 +14,7 @@ const SIDE: Partial<Record<BrokenRule['rule'], SuggestedMove['side']>> = {
   loadAfter: 'after',
 };
 
-/** The nearest place a broken rule's first plugin keeps it: its placement, else beside the rule's second plugin. A rule about one plugin has none. */
+/** The nearest place a broken rule's first plugin keeps it: its placement, else beside the rule's second plugin. */
 export function suggestedMove({ rule, plugins, placement }: BrokenRule): SuggestedMove | undefined {
   const [mover] = plugins;
   if (placement) return mover && { mover, ...placement };
