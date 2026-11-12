@@ -1483,7 +1483,44 @@ describe('the MO2 adapter\'s game files', () => {
 
     const found = await adapter.gameFiles(gamePlace(), ['Data/meshes/a.nif', 'Data/mine.nif', 'Data/MESHES']);
 
-    expect(found).toEqual({ files: [{ path: 'Data/Meshes/A.nif', hash: HASH_OF_AAAA }], unreadable: {} });
+    expect(found).toEqual({ files: [{ root: join(root, 'game'), path: 'Data/Meshes/A.nif', hash: HASH_OF_AAAA }], unreadable: {} });
+  });
+
+  it('hands the Steam install\'s files beside the game folder\'s, each with the folder it is in', async () => {
+    const adapter = await instance();
+    await put('game/Fallout4.exe', 'cccc');
+    await put('steam/Data/Meshes/A.nif', 'aaaa');
+    await put('steam/Data/b.dds', 'bbbb');
+    await put('game/Data/b.dds', 'cccc');
+    const place = { ...gamePlace(), steamRoot: join(root, 'steam') };
+
+    const found = await adapter.gameFiles(place, ['Data/meshes/a.nif', 'Data/b.dds', 'Fallout4.exe']);
+
+    expect(found.unreadable).toEqual({});
+    expect(found.files).toHaveLength(4);
+    expect(found.files).toEqual(expect.arrayContaining([
+      { root: join(root, 'steam'), path: 'Data/Meshes/A.nif', hash: HASH_OF_AAAA },
+      { root: join(root, 'steam'), path: 'Data/b.dds', hash: HASH_OF_BBBB },
+      { root: join(root, 'game'), path: 'Data/b.dds', hash: HASH_OF_CCCC },
+      { root: join(root, 'game'), path: 'Fallout4.exe', hash: HASH_OF_CCCC },
+    ]));
+  });
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every folder) hands no file of a path the Steam install cannot read, though the game folder holds it', async () => {
+    const adapter = await instance();
+    await put('game/Data/Meshes/a.nif', 'aaaa');
+    await put('game/Data/b.dds', 'bbbb');
+    await put('steam/Data/Meshes/a.nif', 'aaaa');
+    const meshes = join(root, 'steam', 'Data', 'Meshes');
+    await chmod(meshes, 0o000);
+
+    try {
+      const found = await adapter.gameFiles({ ...gamePlace(), steamRoot: join(root, 'steam') }, ['Data/meshes/a.nif', 'Data/b.dds']);
+
+      expect(found).toEqual({ files: [{ root: join(root, 'game'), path: 'Data/b.dds', hash: HASH_OF_BBBB }], unreadable: { 'Data/meshes/a.nif': expect.stringMatching(/EACCES/) as unknown } });
+    } finally {
+      await chmod(meshes, 0o755);
+    }
   });
 
   it.skipIf(process.platform === 'win32')('(a link needs no privilege on POSIX) hands no game file for a path through or to a symlink in the Data folder', async () => {
@@ -1505,7 +1542,7 @@ describe('the MO2 adapter\'s game files', () => {
 
     const found = await adapter.gameFiles(gamePlace(), ['Data/textures/own.dds', 'Data/textures/c.dds']);
 
-    expect(found).toEqual({ files: [{ path: 'Data/Textures/c.dds', hash: HASH_OF_CCCC }], unreadable: {} });
+    expect(found).toEqual({ files: [{ root: join(root, 'game'), path: 'Data/Textures/c.dds', hash: HASH_OF_CCCC }], unreadable: {} });
   });
 
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every folder) answers unreadable, with why, only the paths whose folder cannot be listed, not that they are absent', async () => {
@@ -1517,7 +1554,7 @@ describe('the MO2 adapter\'s game files', () => {
 
     try {
       expect(await adapter.gameFiles(gamePlace(), ['Data/meshes/a.nif', 'Data/NotInGame.txt', 'Data/B.dds', 'Data/Textures/c.dds']))
-        .toEqual({ files: [{ path: 'Data/b.dds', hash: HASH_OF_AAAA }], unreadable: { 'Data/meshes/a.nif': expect.stringMatching(/EACCES/) as unknown } });
+        .toEqual({ files: [{ root: gamePlace().root, path: 'Data/b.dds', hash: HASH_OF_AAAA }], unreadable: { 'Data/meshes/a.nif': expect.stringMatching(/EACCES/) as unknown } });
     } finally {
       await chmod(meshes, 0o755);
     }
@@ -1554,7 +1591,7 @@ describe('the MO2 adapter\'s game files', () => {
 
     expect(taken).toEqual({
       kind: 'read',
-      answer: { notes: [], gameFiles: [{ path: 'Data/a.nif', hash: HASH_OF_AAAA, pathInFolder: 'A.nif' }, { path: 'Fallout4.exe', hash: HASH_OF_BBBB, pathInFolder: 'Root/Fallout4.exe' }] },
+      answer: { notes: [], gameFiles: [{ root: gamePlace().root, path: 'Data/a.nif', hash: HASH_OF_AAAA, pathInFolder: 'A.nif' }, { root: gamePlace().root, path: 'Fallout4.exe', hash: HASH_OF_BBBB, pathInFolder: 'Root/Fallout4.exe' }] },
     });
   });
 
@@ -1570,9 +1607,9 @@ describe('the MO2 adapter\'s game files', () => {
     const taken = await adapter.gameFilesTakenBy(gamePlace(), join(root, 'Stock Game'));
 
     const gameFiles = [
-      { path: 'Data/Textures/a.dds', hash: HASH_OF_AAAA, pathInFolder: 'Data/Textures/a.dds' },
-      { path: 'Data/b.esm', hash: HASH_OF_BBBB, pathInFolder: 'Data/b.esm' },
-      { path: 'Fallout4.exe', hash: HASH_OF_CCCC, pathInFolder: 'Fallout4.exe' },
+      { root: gamePlace().root, path: 'Data/Textures/a.dds', hash: HASH_OF_AAAA, pathInFolder: 'Data/Textures/a.dds' },
+      { root: gamePlace().root, path: 'Data/b.esm', hash: HASH_OF_BBBB, pathInFolder: 'Data/b.esm' },
+      { root: gamePlace().root, path: 'Fallout4.exe', hash: HASH_OF_CCCC, pathInFolder: 'Fallout4.exe' },
     ];
     expect(taken).toEqual({ kind: 'read', answer: { notes: [], gameFiles: expect.arrayContaining(gameFiles) as unknown } });
     expect(taken).toHaveProperty('answer.gameFiles.length', gameFiles.length);
@@ -1587,7 +1624,7 @@ describe('the MO2 adapter\'s game files', () => {
 
     const taken = await adapter.gameFilesTakenBy(gamePlace(), join(root, 'mods', 'Mod'));
 
-    expect(taken).toEqual({ kind: 'read', answer: { gameFiles: [{ path: 'Data/a.nif', hash: HASH_OF_AAAA, pathInFolder: 'a.nif' }], notes: [] } });
+    expect(taken).toEqual({ kind: 'read', answer: { gameFiles: [{ root: gamePlace().root, path: 'Data/a.nif', hash: HASH_OF_AAAA, pathInFolder: 'a.nif' }], notes: [] } });
   });
 
   it.skipIf(process.platform === 'win32')('(a link needs no privilege on POSIX) looks a mod folder up as a mod\'s however its path spells the instance', async () => {
@@ -1600,7 +1637,7 @@ describe('the MO2 adapter\'s game files', () => {
     try {
       const taken = await adapter.gameFilesTakenBy(gamePlace(), join(linked, 'mods', 'Mod'));
 
-      expect(taken).toEqual({ kind: 'read', answer: { gameFiles: [{ path: 'Data/a.nif', hash: HASH_OF_AAAA, pathInFolder: 'a.nif' }], notes: [] } });
+      expect(taken).toEqual({ kind: 'read', answer: { gameFiles: [{ root: gamePlace().root, path: 'Data/a.nif', hash: HASH_OF_AAAA, pathInFolder: 'a.nif' }], notes: [] } });
     } finally {
       await rm(linked, { force: true });
     }
@@ -1616,7 +1653,7 @@ it('answers the game files the files below any folder of the instance may be, no
 
   const taken = await adapter.gameFilesTakenBy(gamePlace(), join(root, 'Stock Game'));
 
-  expect(taken).toEqual({ kind: 'read', answer: { gameFiles: [{ path: 'Data/a.nif', hash: 'Mr+EvxoNp0I=', pathInFolder: 'Data/a.nif' }], notes: [] } });
+  expect(taken).toEqual({ kind: 'read', answer: { gameFiles: [{ root: gamePlace().root, path: 'Data/a.nif', hash: 'Mr+EvxoNp0I=', pathInFolder: 'Data/a.nif' }], notes: [] } });
 });
 
 describe('the value of a folder\'s files git does not hold', () => {

@@ -782,7 +782,7 @@ describe('sourceCommands versionInGit', () => {
 
   it('commits no asset for a file the game folder holds with its bytes', async () => {
     const { client, handed } = committing();
-    const file = { path: 'Data/textures/a.dds', hash: hashOf('G'), pathInFolder: 'textures/a.dds' };
+    const file = { root: '/game', path: 'Data/textures/a.dds', hash: hashOf('G'), pathInFolder: 'textures/a.dds' };
     const adapter = modsAt({
       ...hashed({ 'textures/a.dds': 'G', 'scripts/b.pex': 'B' }, '/instance/mods/ModC'),
       place: GAME_PLACE,

@@ -476,7 +476,7 @@ describe('update manifest', () => {
 
   describe('a mod that takes files from the game folder', () => {
     const taken = (path: string, hash: string): InstanceAnswers['gameFilesTaken'] =>
-      new Map([['ModA', read({ gameFiles: [{ path: `Data/${path}`, hash, pathInFolder: path }], notes: [] })]]);
+      new Map([['ModA', read({ gameFiles: [{ root: '/game', path: `Data/${path}`, hash, pathInFolder: path }], notes: [] })]]);
 
     it('names the game folder as its package, with no host where no store installed the game', async () => {
       const { update, manifestOf } = await over({ files: { ModA: { 'meshes/a.nif': HA } }, answers: { gameFilesTaken: taken('meshes/a.nif', HA) } });
@@ -497,6 +497,26 @@ describe('update manifest', () => {
       expect([result.repositoryNotes, (await manifestHeld('ModA')).packages]).toEqual([
         place.depotProblems, [{ kind: 'gameFolder', host: { steam: { app: 377160, depots: { 1: '11' } } } }],
       ]);
+    });
+
+    it('names Steam as the host of files only the Steam install holds, though the game folder is a stock one', async () => {
+      const place: GamePlace = { root: '/game', steamRoot: '/steam', steamApp: 377160, depots: [{ id: '1', version: '11' }], depotProblems: [] };
+      const gameFiles = [{ root: '/steam', path: 'Data/a.nif', hash: HA, pathInFolder: 'a.nif' }];
+      const { update, manifestHeld } = await over({ files: { ModA: { 'a.nif': HA } }, answers: { place, gameFilesTaken: new Map([['ModA', read({ gameFiles, notes: [] })]]) } });
+
+      await update(['ModA']);
+
+      expect((await manifestHeld('ModA')).packages).toEqual([{ kind: 'gameFolder', host: { steam: { app: 377160, depots: { 1: '11' } } } }]);
+    });
+
+    it('names no host for files only the stock game folder holds the bytes of', async () => {
+      const place: GamePlace = { root: '/game', steamRoot: '/steam', steamApp: 377160, depots: [{ id: '1', version: '11' }], depotProblems: [] };
+      const gameFiles = [{ root: '/game', path: 'Data/a.nif', hash: HA, pathInFolder: 'a.nif' }, { root: '/steam', path: 'Data/a.nif', hash: HX, pathInFolder: 'a.nif' }];
+      const { update, manifestHeld } = await over({ files: { ModA: { 'a.nif': HA } }, answers: { place, gameFilesTaken: new Map([['ModA', read({ gameFiles, notes: [] })]]) } });
+
+      await update(['ModA']);
+
+      expect((await manifestHeld('ModA')).packages).toEqual([{ kind: 'gameFolder' }]);
     });
 
     it('notes no depot problem when no mod of the update takes a file from the game', async () => {
@@ -562,7 +582,7 @@ describe('update manifest', () => {
         answers: {
           installations: new Map([['Stock Game/', read(INSTALLED)]]),
           folderFiles: new Map([[folder, ['Data/a.nif']]]), hashes: new Map([[join(folder, 'Data/a.nif'), { size: 1, hash: HA }]]),
-          gameFilesTaken: new Map([['Stock Game', read({ gameFiles: [{ path: 'Data/a.nif', hash: HA, pathInFolder: 'Data/a.nif' }], notes: [] }) ]]),
+          gameFilesTaken: new Map([['Stock Game', read({ gameFiles: [{ root: '/game', path: 'Data/a.nif', hash: HA, pathInFolder: 'Data/a.nif' }], notes: [] }) ]]),
         },
       });
 
