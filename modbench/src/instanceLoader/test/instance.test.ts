@@ -1421,7 +1421,7 @@ describe('Instance — what each archive holds', () => {
 
   describe('the game folder\'s archived copies, for symbol resolution only', () => {
     const FILE = 'meshes/x.nif';
-    const GAME_ARCHIVE = '/game/Data/Fallout4 - Meshes.ba2';
+    const GAME_ARCHIVE = join('/game/Data', 'Fallout4 - Meshes.ba2');
     const MOD_ARCHIVE_LATER = '/instance/mods/A/A - Main.ba2';
     const reading: Partial<InstanceReading> = {
       ...GAME_FOUND, mods: [mod('A')], archiveList: ['Fallout4 - Meshes.ba2'],
