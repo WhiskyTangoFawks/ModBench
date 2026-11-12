@@ -22,6 +22,8 @@ export interface GamePathInfo {
   readonly masters: readonly string[];
   /** The release loads a blueprint plugin after every plugin that is not one. */
   readonly blueprintLoadsLast?: true;
+  /** The release has light plugins, which the game loads as masters (libloot's `is_master_file`). Mutagen's `CanBeSmallMaster`. */
+  readonly lightPlugins?: true;
   /** The Creation Club list's file name in the game folder, for a release that has one. */
   readonly creationClubList?: string;
   /** The folder a mod's script-extender files sit in, under the Data folder. */
@@ -112,35 +114,35 @@ const SKYRIM_ARCHIVES: ArchiveLists = {
 
 const GAME_PATHS: Record<string, GamePathInfo> = {
   Fallout4: {
-    gameName: 'Fallout 4', nexusSlug: 'fallout4', lootRepository: 'fallout4', steamAppId: '377160', steamFolderName: 'Fallout 4',
+    gameName: 'Fallout 4', lightPlugins: true, nexusSlug: 'fallout4', lootRepository: 'fallout4', steamAppId: '377160', steamFolderName: 'Fallout 4',
     masters: FALLOUT4_MASTERS, creationClubList: 'Fallout4.ccc',
     scriptExtenderFolder: 'f4se', programs: { game: 'Fallout4.exe', extenderLoader: 'f4se_loader.exe' },
     pluginCompanions: FALLOUT4_COMPANIONS, archiveLists: FALLOUT4_ARCHIVES, papyrusFolders: FALLOUT4_PAPYRUS,
     ba2Versions: FALLOUT4_BA2_VERSIONS,
   },
   Fallout4VR: {
-    gameName: 'Fallout 4 VR', nexusSlug: 'fallout4', lootRepository: 'fallout4vr', validShortNames: ['Fallout4'], masters: [...FALLOUT4_MASTERS, 'Fallout4_VR.esm'],
+    gameName: 'Fallout 4 VR', lightPlugins: true, nexusSlug: 'fallout4', lootRepository: 'fallout4vr', validShortNames: ['Fallout4'], masters: [...FALLOUT4_MASTERS, 'Fallout4_VR.esm'],
     creationClubList: 'Fallout4.ccc',
     scriptExtenderFolder: 'f4se', programs: { game: 'Fallout4VR.exe', extenderLoader: 'f4sevr_loader.exe' }, pluginCompanions: FALLOUT4_COMPANIONS,
     archiveLists: { ...FALLOUT4_ARCHIVES, myGamesFolder: 'Fallout4VR', defaultIni: 'Fallout4.ini' }, papyrusFolders: FALLOUT4_PAPYRUS,
     ba2Versions: FALLOUT4_BA2_VERSIONS,
   },
   SkyrimSE: {
-    gameName: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition', lootRepository: 'skyrimse', validShortNames: ['Skyrim'], steamAppId: '489830', steamFolderName: 'Skyrim Special Edition',
+    gameName: 'Skyrim Special Edition', lightPlugins: true, nexusSlug: 'skyrimspecialedition', lootRepository: 'skyrimse', validShortNames: ['Skyrim'], steamAppId: '489830', steamFolderName: 'Skyrim Special Edition',
     masters: SKYRIM_MASTERS,
     creationClubList: 'Skyrim.ccc',
     scriptExtenderFolder: 'skse', programs: { game: 'SkyrimSE.exe', extenderLoader: 'skse64_loader.exe' },
     pluginCompanions: SKYRIM_COMPANIONS, archiveLists: SKYRIM_ARCHIVES, papyrusFolders: SKYRIM_PAPYRUS,
   },
   SkyrimVR: {
-    gameName: 'Skyrim VR', nexusSlug: 'skyrimspecialedition', lootRepository: 'skyrimvr', validShortNames: ['Skyrim', 'SkyrimSE'], masters: [...SKYRIM_MASTERS, 'SkyrimVR.esm'],
+    gameName: 'Skyrim VR', lightPlugins: true, nexusSlug: 'skyrimspecialedition', lootRepository: 'skyrimvr', validShortNames: ['Skyrim', 'SkyrimSE'], masters: [...SKYRIM_MASTERS, 'SkyrimVR.esm'],
     creationClubList: 'Skyrim.ccc',
     scriptExtenderFolder: 'skse', programs: { game: 'SkyrimVR.exe', extenderLoader: 'sksevr_loader.exe' }, pluginCompanions: SKYRIM_COMPANIONS,
     archiveLists: { ...SKYRIM_ARCHIVES, myGamesFolder: 'Skyrim VR', defaultIni: 'Skyrim.ini', userInis: ['Skyrim.ini', 'SkyrimVR.ini', 'SkyrimCustom.ini'] },
     papyrusFolders: SKYRIM_PAPYRUS,
   },
   Starfield: {
-    gameName: 'Starfield', nexusSlug: 'starfield', lootRepository: 'starfield', steamAppId: '1716740', steamFolderName: 'Starfield',
+    gameName: 'Starfield', lightPlugins: true, nexusSlug: 'starfield', lootRepository: 'starfield', steamAppId: '1716740', steamFolderName: 'Starfield',
     masters: STARFIELD_MASTERS, creationClubList: 'Starfield.ccc', blueprintLoadsLast: true,
     scriptExtenderFolder: 'sfse', programs: { game: 'Starfield.exe', extenderLoader: 'sfse_loader.exe' }, pluginCompanions: FALLOUT4_COMPANIONS,
     archiveLists: { myGamesFolder: 'Starfield', defaultIni: 'Starfield.ini', userInis: ['StarfieldCustom.ini'], keys: RESOURCE_INDEX_KEYS },
@@ -224,6 +226,12 @@ export function programsOf(release: string | undefined): Programs | undefined {
 /** Whether the release loads a blueprint plugin after every plugin that is not one. */
 export function blueprintLoadsLastIn(release: string | undefined): boolean {
   return (release === undefined ? undefined : GAME_PATHS[release])?.blueprintLoadsLast === true;
+}
+
+/** The extensions the game loads a plugin as a master by, whatever its flags; the release's own, none for no release. */
+export function masterExtensionsOf(release: string | undefined): readonly string[] {
+  const info = release === undefined ? undefined : GAME_PATHS[release];
+  return info === undefined ? [] : info.lightPlugins === true ? ['.esm', '.esl'] : ['.esm'];
 }
 
 /** The plugins the game loads with no line (ADR-0013): its masters in Mutagen's
