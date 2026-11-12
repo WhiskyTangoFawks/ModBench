@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# A throwaway Modbench instance, headless: up <game|folder> | call <dir> <tool> [json] | tools <dir> | down <dir> | seed <game>
+# A throwaway Modbench instance, headless: up <game|folder> [--source] [--game-folder] | call <dir> <tool> [json] | tools <dir> | down <dir> | seed <game>
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,7 +12,7 @@ games="fallout skyrim starfield"
 game_of() { case " $games " in *" $1 "*) echo "$1";; esac; }
 
 usage() {
-  echo "usage: accept.sh up <fallout|skyrim|starfield|instance folder> | call <dir> <tool> [json] | tools <dir> | down <dir> | seed <fallout|skyrim|starfield>" >&2
+  echo "usage: accept.sh up <fallout|skyrim|starfield|instance folder> [--source] [--game-folder] | call <dir> <tool> [json] | tools <dir> | down <dir> | seed <fallout|skyrim|starfield>" >&2
   exit 2
 }
 
@@ -33,9 +33,39 @@ free_display() {
 
 ready() { python3 -I "$here/mcp.py" "$1" call select_rows '{"sql":"SELECT 1 AS one"}' >/dev/null 2>&1; }
 
+# Per game: its Steam folder, the mod whose source gets the records, that mod's plugin, and a path in a vanilla archive.
+game_facts() {
+  case "$1" in
+    fallout) echo 'Fallout 4|MB-DEV Conflict A|MBDevConflictA.esp|Weapons\HandMade\Grips\HandMadePistolGrip.nif';;
+    skyrim) echo 'Skyrim Special Edition|MB-DEV Conflict A|MBDevConflictA.esp|Clutter\Bucket01.nif';;
+    starfield) echo 'Starfield|MB-DEV SF Conflict A|MBDevSFConflictA.esp|ErrorIcon.nif';;
+  esac
+}
+
+call_tool() { python3 -I "$here/mcp.py" "$1" call "$2" "$3"; }
+
+shape_source() {
+  local dir="$1" port="$2" facts="$3" mod plugin vanilla
+  IFS='|' read -r _ mod plugin vanilla <<< "$facts"
+  call_tool "$port" mod_version_in_git "$(python3 -I -c 'import json, sys
+print(json.dumps({"argument": [{"name": sys.argv[1]}], "options": {"where": "NewRepository", "commit": True}}))' "$mod")" >/dev/null
+  python3 -I "$here/name_files.py" "$dir/instance/source/$mod/plugin-source" "$plugin" "$vanilla"
+  git -C "$dir/instance/source/$mod" add -A
+  git -C "$dir/instance/source/$mod" -c user.name=accept -c user.email=accept@localhost commit -q -m "Records name files"
+  call_tool "$port" instance_refresh '{}' >/dev/null
+}
+
 up() {
-  local target="${1:-}" dir port display instance game
+  local target="${1:-}" dir port display instance game source="" game_folder="" facts=""
   [ -n "$target" ] || usage
+  shift
+  for option in "$@"; do
+    case "$option" in
+      --source) source=1;;
+      --game-folder) game_folder=1;;
+      *) usage;;
+    esac
+  done
   game="$(game_of "$target")"
   [ -n "$game" ] || [ -d "$target" ] || { echo "refused: not a game ($games) or an instance folder: $target" >&2; exit 1; }
   local others; others="$(live_runs)"
@@ -49,6 +79,16 @@ up() {
     local fixture; fixture="DevList$(tr '[:lower:]' '[:upper:]' <<< "${game:0:1}")${game:1}"
     mkdir -p "$instance" && (cd "$root/$fixture" && git ls-files -z | xargs -0 cp --parents -t "$instance")
   else cp -a "$target" "$instance"
+  fi
+  if [ -n "$source$game_folder" ]; then
+    [ -n "$game" ] || { echo "refused: --source and --game-folder take a game, not a folder" >&2; exit 1; }
+    facts="$(game_facts "$game")"
+  fi
+  if [ -n "$game_folder" ]; then
+    local installed="$HOME/.steam/steam/steamapps/common/${facts%%|*}"
+    [ -d "$installed" ] || { echo "refused: no game install at $installed" >&2; exit 1; }
+    ln -s "$installed" "$instance/game"
+    sed -i "s|^gameName=.*|&\ngamePath=@ByteArray($instance/game)|" "$instance/ModOrganizer.ini"
   fi
   mkdir -p "$instance/.vscode" "$instance/modbench" "$dir/user/User" "$dir/ext"
   if [ ! -f "$instance/modbench/index.duckdb" ] && [ -n "$game" ] && [ -f "$state/seed/$game/index.duckdb" ]; then
@@ -82,6 +122,7 @@ print(json.dumps({"modbench.agent.port": int(sys.argv[1])}))' "$port" > "$instan
     sleep 5; waited=$((waited + 5))
     [ "$waited" -ge 900 ] && { echo "the index was not ready in 900s" >&2; down "$dir"; exit 1; }
   done
+  [ -z "$source" ] || shape_source "$dir" "$port" "$facts"
   echo "DIR=$dir PORT=$port ready after ${waited}s"
 }
 
@@ -124,7 +165,7 @@ down() {
 port_of() { cat "$1/port"; }
 
 case "${1:-}" in
-  up) up "${2:-}" ;;
+  up) up "${@:2}" ;;
   down) down "${@:2}" ;;
   tools) python3 -I "$here/mcp.py" "$(port_of "$2")" tools ;;
   call) python3 -I "$here/mcp.py" "$(port_of "$2")" call "$3" "${4:-{\}}" ;;
