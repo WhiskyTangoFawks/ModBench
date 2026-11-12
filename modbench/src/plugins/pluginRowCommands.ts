@@ -12,7 +12,7 @@ import { selectionArgument } from '../drivingLib/gestureEntry';
 import { pickWhereGitHolds } from '../drivingLib/whereGitHolds';
 import { Refusal } from '../drivingLib/refusal';
 import { gestureName, phrase, withRemedy, type Message } from '../ports/phrase';
-import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
+import type { SelectionOutcome } from '../ports/selectionOutcome';
 import { pluginRowName } from '../wire/pluginAddress';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
