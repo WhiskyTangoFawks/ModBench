@@ -20,7 +20,7 @@ import { isRecordRow } from './gestureEntry';
 import type { RecordGroup, RecordPlace } from './createdRecordSelection';
 import { isPluginAddress } from '../wire/messages';
 import { blueprintLoadsLastIn } from '../tables/gamePaths';
-import { activeInGameOrder, inGameOrder, pluginOrderOf, unplaced } from '../instanceLoader/pluginOrder';
+import { activeViewOrder, viewOrder, pluginOrderOf, unplaced } from '../instanceLoader/pluginOrder';
 import { filePresence, filesPresent } from '../instanceLoader/filePresence';
 import { readFileFacts, type FileReads } from '../sortingRules/lootConditions';
 import { rulesReader, type ReadRules } from '../sortingRules/lootMetadata';
@@ -139,10 +139,10 @@ export class PluginsTreeProvider
   private lastBuildHadNoRows = false;
   private rowsBlueprints = '';
 
-  /** The order the game loads in, which mEdit is handed: it needs what Editing read of the plugins, so it is asked again as the facts change. */
-  readonly inGameOrder = {
+  /** The view's order of the active plugins, which mEdit is handed: it needs what Editing read of the plugins, so it is asked again as the facts change. */
+  readonly viewOrder = {
     of: (snapshot: Pick<LoadOrderSnapshot, 'active' | 'loadedWithNoLine' | 'gameRelease'>): PluginAddress[] =>
-      activeInGameOrder(snapshot, (plugin) => this.facts.rows.isBlueprint(plugin), blueprintLoadsLastIn(snapshot.gameRelease)),
+      activeViewOrder(snapshot, (plugin) => this.facts.rows.isBlueprint(plugin), blueprintLoadsLastIn(snapshot.gameRelease)),
     onChange: (listener: () => void) => this.facts.onDidChange(listener),
   };
   private lines = new Map<string | undefined, string>();
@@ -157,7 +157,6 @@ export class PluginsTreeProvider
       client: options.client,
       shownPlugins: () => this.builtRows().map(addressOfRow),
       activePlugins: () => this.builtRows().filter((row) => row.kind === 'implicitMaster' || row.plugin.enabled).map(addressOfRow),
-      blueprintLoadsLast: () => this.instanceValue.blueprintLoadsLast,
       lines: () => this.builtRows().flatMap((row) => (row.kind === 'plugin' ? [addressOfRow(row)] : [])),
       publishDiagnoses: options.publishDiagnoses,
       publishChangedOutside: options.publishChangedOutside,
@@ -439,7 +438,7 @@ export class PluginsTreeProvider
     const lineRows = fromLines.map((p) => ({ row: new PluginNode({ name: p.name, enabled: p.enabled }, p.origin), line: p.line }));
     const width = String(Math.max(0, ...fromLines.map(({ line }) => line))).length;
     this.lines = new Map(lineRows.map(({ row, line }) => [row.id, String(line).padStart(width, '0')]));
-    return inGameOrder<PluginListNode>(
+    return viewOrder<PluginListNode>(
       lockedRows, lineRows.map(({ row }) => row), (row) => this.facts.rows.isBlueprint(addressOfRow(row)), this.instanceValue.blueprintLoadsLast,
     );
   }

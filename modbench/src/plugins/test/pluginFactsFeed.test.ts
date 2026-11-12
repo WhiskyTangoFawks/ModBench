@@ -69,7 +69,7 @@ function feedOver({ shownPlugins = () => [A], activePlugins = () => [], publishD
   const ruleFiles = watched<readonly { path: string; line: number; level: string; text: string }[]>();
   let calls = 0;
   const feed = new PluginFactsFeed({
-    client, shownPlugins, activePlugins, rules, lines: activePlugins, blueprintLoadsLast: () => false,
+    client, shownPlugins, activePlugins, rules, lines: activePlugins,
     fileFacts: async (reads) => {
       asked?.(reads);
       await gates[calls++];

@@ -9,8 +9,6 @@ export interface SuggestedMove {
 
 const SIDE: Partial<Record<BrokenRule['rule'], SuggestedMove['side']>> = {
   master: 'before',
-  masterFlag: 'before',
-  blueprint: 'after',
   loadAfter: 'after',
 };
 

@@ -785,7 +785,7 @@ describe('PluginsTreeProvider — the sort direction', () => {
   });
 });
 
-describe('PluginsTreeProvider.inGameOrder, the order mEdit is handed', () => {
+describe('PluginsTreeProvider.viewOrder, the order mEdit is handed', () => {
   const at = (name: string) => ({ name, origin: 'Data/' });
   const snapshot = (gameRelease: string) => ({
     gameRelease, active: ['Base.esm', 'Blueprint.esm', 'A.esp'].map(at), loadedWithNoLine: ['Base.esm', 'Blueprint.esm'].map(at),
@@ -794,7 +794,7 @@ describe('PluginsTreeProvider.inGameOrder, the order mEdit is handed', () => {
   const orderFor = async (gameRelease: string, read: PluginMetadata[]) => {
     const h = makeTree([plugin({ name: 'A.esp', line: 0 })], { loadedWithNoLine: ['Base.esm', 'Blueprint.esm'] });
     await reconcile(h, read);
-    return h.tree.inGameOrder.of(snapshot(gameRelease)).map(({ name }) => name);
+    return h.tree.viewOrder.of(snapshot(gameRelease)).map(({ name }) => name);
   };
 
   it.each([
@@ -808,7 +808,7 @@ describe('PluginsTreeProvider.inGameOrder, the order mEdit is handed', () => {
   it('tells its listener when Editing has read the plugins', async () => {
     const h = makeTree([plugin({ name: 'A.esp', line: 0 })]);
     const listener = vi.fn();
-    h.tree.inGameOrder.onChange(listener);
+    h.tree.viewOrder.onChange(listener);
 
     await reconcile(h, facts);
 
@@ -1622,12 +1622,12 @@ describe('PluginsTreeProvider — sorting-error decoration', () => {
       expect(await flagged(h)).toEqual([['B.esp', false], ['A.esp', true]]);
     });
 
-    it('flags no move that a disabled plugins.txt line makes break another rule at Error', async () => {
+    it('flags a move past a disabled plugins.txt line, which the game does not load', async () => {
       const h = makeTree([plugin({ name: 'D.esp', line: 0 }), plugin({ name: 'X.esp', line: 1, enabled: false }), plugin({ name: 'M.esp', line: 2 })]);
 
       await reconcile(h, [held('D.esp', { masters: ['M.esp'] }), held('X.esp'), held('M.esp', { masters: ['X.esp'] })]);
 
-      expect(await flagged(h)).toEqual([['D.esp', false], ['X.esp', false], ['M.esp', false]]);
+      expect(await flagged(h)).toEqual([['D.esp', false], ['X.esp', false], ['M.esp', true]]);
     });
 
     it('flags a master-flagged plugin that loads after a plugin without the flag', async () => {

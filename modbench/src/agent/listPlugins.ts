@@ -1,4 +1,4 @@
-import { inGameOrder, pluginOrderOf, unplaced } from '../instanceLoader/pluginOrder';
+import { viewOrder, pluginOrderOf, unplaced } from '../instanceLoader/pluginOrder';
 import { Refusal } from '../drivingLib/refusal';
 import type { PluginsShown } from '../drivingLib/pluginsShown';
 import { originShown, type AgentValue } from './notRestored';
@@ -20,7 +20,7 @@ export const LIST_PLUGINS = {
       { plugins, pluginsLoadedWithNoLine: pluginsLoadedWithNoLine ?? [] },
       unplaced,
     );
-    const shownOrder = [...inGameOrder(loadedWithNoLine, fromLines, (plugin) => view.isBlueprint(plugin), blueprintLoadsLast), ...others];
+    const shownOrder = [...viewOrder(loadedWithNoLine, fromLines, (plugin) => view.isBlueprint(plugin), blueprintLoadsLast), ...others];
     const held = holding(filter);
     const answer = fitting({
       plugins: shownOrder.filter(({ name }) => held(name)).map((plugin) => ({
