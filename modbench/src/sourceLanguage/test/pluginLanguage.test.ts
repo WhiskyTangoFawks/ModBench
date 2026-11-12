@@ -201,3 +201,35 @@ describe('Go to Definition, hover, Go to Symbol and completion on a plugin (symb
     expect(await language.symbolsFor('mid')).toEqual([]);
   });
 });
+
+describe('the symbol index on a plugin (symbols.md, The symbols, Plugin)', () => {
+  const rows = [
+    { ...BASE, path: '/mods/Base Mod/Base.esm', line: 0, enabled: true, winning: true },
+    { name: 'Base.esm', origin: 'Other Mod', path: '/mods/Other Mod/Base.esm', line: 1, enabled: true, winning: false },
+    { name: 'Line.esp', origin: 'Base Mod', path: undefined, line: 2, enabled: true, winning: true },
+  ];
+  const indexed = () => pluginLanguage({
+    instance: { value: { plugins: rows } }, reporter: recordingReporter(),
+    client: { getCopyDocument: () => Promise.resolve(null), getRecordOwner: () => Promise.resolve(undefined) },
+    owners: [ownerThatCannotReadAFile], renamePlugin: () => Promise.resolve(), goTo: () => Promise.resolve(), tooltip: () => [],
+  });
+
+  it.each([
+    ['the file of the copy its origin names', { name: 'Base.esm', origin: 'Other Mod' }, { file: '/mods/Other Mod/Base.esm' }],
+    ['the file of the copy mod order resolves a file name alone to', { name: 'base.ESM' }, { file: '/mods/Base Mod/Base.esm' }],
+    ['no file for a line whose file is not on disk', { name: 'Line.esp' }, { refused: 'Line.esp (Base Mod) has no file on disk yet.' }],
+    ['no plugin for a name mod order resolves to none', { name: 'Gone.esp' }, { refused: 'Mod order resolves Gone.esp to no plugin.' }],
+  ])('defines a plugin at %s', (_case, named, expected) => {
+    expect(indexed().definitionOf(named)).toEqual(expected);
+  });
+
+  it('lists each place an owner reports, and each file it could not read as left out', async () => {
+    expect(await indexed().placesNaming({ name: 'Base.esm' })).toEqual({
+      references: [{ file: PLUGINS_TXT, start: { line: 0, character: 1 }, end: { line: 0, character: 9 } }], leftOut: [UNREAD],
+    });
+  });
+
+  it('refuses to list what names a plugin mod order resolves to none', async () => {
+    expect(await indexed().placesNaming({ name: 'Gone.esp' })).toEqual({ refused: 'Mod order resolves Gone.esp to no plugin.' });
+  });
+});

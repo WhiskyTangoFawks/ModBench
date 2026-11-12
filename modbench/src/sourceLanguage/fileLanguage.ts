@@ -11,7 +11,8 @@ import { openPluginSourceDocument } from '../textDocuments/pluginSource';
 import { fieldPathOf, fieldAt, formKeyAt } from './sourceText';
 import { recordTypeOfPathField } from './fieldMetadata';
 import { membersNaming } from './memberReferences';
-import { referencedByInput, reportedForGesture, type AskedIn, type ListedLocations } from './symbolPlaces';
+import type { Definition, SymbolReferences } from '../symbolNames/symbolNames';
+import { referenceOf, referencedByInput, reportedForGesture, type AskedIn, type ListedLocations } from './symbolPlaces';
 
 export type FileClient = Pick<MEditClient, 'getFileReferences' | 'getComparison' | 'resolveFilePath'> & RecordDocumentClient;
 
@@ -56,6 +57,17 @@ export function fileLanguage({ reporter, client, gameRelease, copyOf, reveal }: 
   };
 
   return {
+    /** Where the file at `path` in the Data folder is defined: the copy the game gets, inside its archive when archived. */
+    definitionOf: (path: string): Definition => {
+      const copy = copyOf(path);
+      if (!holdsCopy(copy)) return { refused: copy.none };
+      return copy.kind === 'loose' ? { file: copy.path } : { archived: { archive: copy.archive, file: copy.file } };
+    },
+    /** Each member of a record that names the file at `path`, and why each copy went unread. */
+    placesNaming: async (path: string): Promise<SymbolReferences> => {
+      const { found, unread } = await membersNaming(client, openPluginSourceDocument, await client.getFileReferences(path));
+      return { references: found.map(referenceOf), leftOut: unread };
+    },
     /** Go to Definition on the path at `offset`: the copy of its file the game gets, shown in the Explorer. Undefined where no
      *  path is; `resolved` is false where it could not go, and says why. */
     definitionAt: async (document: AskedIn, offset: number): Promise<{ start: number; end: number; resolved: boolean } | undefined> => {

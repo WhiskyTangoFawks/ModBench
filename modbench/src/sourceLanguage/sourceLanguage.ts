@@ -21,7 +21,8 @@ import type { Instance } from '../instanceLoader/instance';
 import { feedSourceProblems, type ProblemOnFile, type SourceProblemsDeps } from './sourceProblems';
 import { mergedFeeds } from './feedShape';
 import { feedPathProblems, type PathProblemsDeps, type PathStanding } from './pathProblems';
-import type { EntryNames, EntrySymbol, PluginSymbol, SymbolOwner } from '../symbolNames/symbolNames';
+import { symbolIndex } from './symbolIndex';
+import type { EntryNames, EntrySymbol, PluginSymbol, SymbolIndex, SymbolOwner } from '../symbolNames/symbolNames';
 import type { PluginsShown } from '../drivingLib/pluginsShown';
 import { pluginLanguage } from './pluginLanguage';
 import { entryLanguage } from './entryLanguage';
@@ -112,6 +113,8 @@ class RecordSymbolInformation extends vscode.SymbolInformation {
 
 interface SourceLanguage extends vscode.Disposable {
   messages(): string[];
+  /** The symbol index the providers answer from, read by symbol: the agent's entry point. */
+  symbols: SymbolIndex;
   /** Lists each place a file names `plugin`, in VS Code's References view. */
   referencedBy(plugin: PluginSymbol): Promise<void>;
   /** Lists each place a file names the mod, in VS Code's References view. */
@@ -339,6 +342,7 @@ export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
   return {
     dispose: () => { disposable.dispose(); },
     messages: () => problems.messages(),
+    symbols: symbolIndex({ client: deps.client, open: openPluginSourceDocument, plugin, entry, script, file }),
     referencedBy: plugin.referencedBy,
     referencedByMod: entry.referencedBy,
     referencedByFile: file.referencedBy,

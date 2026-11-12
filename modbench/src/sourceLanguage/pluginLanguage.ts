@@ -4,13 +4,13 @@ import type { InstanceValue } from '../instanceLoader/instance';
 import { isPluginSourcePath } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
-import { heldTexts, pluginNamed, type PluginName, type PluginSymbol, type SymbolOwner } from '../symbolNames/symbolNames';
+import { heldTexts, pluginNamed, samePlugin, type Definition, type SymbolReferences, type PluginName, type PluginSymbol, type SymbolOwner } from '../symbolNames/symbolNames';
 import { heldText, unsavedTexts } from '../textDocuments/heldText';
 import { openPluginSourceDocument } from '../textDocuments/pluginSource';
 import type { RecordDocumentClient } from '../textDocuments/recordDocument';
 import { headerFormKeyOf } from '../wire/headerFormKey';
 import { pluginRowName } from '../wire/pluginAddress';
-import { placeLocation, referencedByInput, spelledAround, type AskedIn, type ListedLocations } from './symbolPlaces';
+import { placeLocation, referenceOf, referencedByInput, spelledAround, type AskedIn, type ListedLocations } from './symbolPlaces';
 import { pluginReferencesOf, type PluginReference } from './pluginReferences';
 import { locateRecord, locationOf } from './recordLocation';
 import { formKeyPluginAt, formKeyValue } from './sourceText';
@@ -69,7 +69,23 @@ export function pluginLanguage({ instance, reporter, client, owners, renamePlugi
     return first.locations[0] ?? { refused: header?.refused ?? `No active plugin holds ${headerFormKeyOf(plugin)}.` };
   };
 
+  const resolvedRows = () => instance?.value.plugins ?? [];
+
   return {
+    /** Where the plugin `named` is defined: its file, in the mod that holds it. */
+    definitionOf: (named: PluginName): Definition => {
+      const plugin = pluginNamed(named, resolvedRows());
+      if (plugin === undefined) return { refused: `Mod order resolves ${named.name} to no plugin.` };
+      const { path } = resolvedRows().find((row) => samePlugin(row, plugin)) ?? {};
+      return path === undefined ? { refused: `${pluginRowName(plugin)} has no file on disk yet.` } : { file: path };
+    },
+    /** Each place a file names the plugin `named`, and why each file went unread. */
+    placesNaming: async (named: PluginName): Promise<SymbolReferences | { refused: string }> => {
+      const plugin = pluginNamed(named, resolvedRows());
+      if (plugin === undefined) return { refused: `Mod order resolves ${named.name} to no plugin.` };
+      const { found, unread } = await referencesTo.read(plugin);
+      return { references: found.map((reference) => ('file' in reference ? reference : referenceOf(locationOf(reference)))), leftOut: unread };
+    },
     /** Go to Definition on the plugin whose name is at `offset`: the plugin's `go to`. False where no plugin's name is. */
     definitionAt: async (document: AskedIn, offset: number): Promise<{ start: number; end: number; resolved: boolean } | undefined> => {
       const found = await nameWithSpan(document, offset);

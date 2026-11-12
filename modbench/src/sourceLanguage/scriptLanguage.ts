@@ -4,13 +4,13 @@ import type { InstanceValue, PapyrusScript } from '../instanceLoader/instance';
 import { isPluginSourcePath } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
-import { sameName } from '../symbolNames/symbolNames';
+import { sameName, type Definition, type SymbolReferences } from '../symbolNames/symbolNames';
 import { heldText } from '../textDocuments/heldText';
 import { openPluginSourceDocument, readHeldText } from '../textDocuments/pluginSource';
 import { fieldOfRecord } from './fieldMetadata';
 import { scriptReferences, type ScriptReferencesClient } from './scriptReferences';
 import { fieldAt, formKeyAt } from './sourceText';
-import { reportedForFeature, type AskedIn } from './symbolPlaces';
+import { referenceOf, reportedForFeature, type AskedIn } from './symbolPlaces';
 
 export type ScriptClient = Pick<MEditClient, 'getComparison'> & ScriptReferencesClient;
 
@@ -45,6 +45,17 @@ export function scriptLanguage({ instance, reporter, client }: ScriptLanguageDep
   const fileOf = ({ source, compiled }: PapyrusScript): string | undefined => source ?? compiled;
 
   return {
+    /** Where the script `name` is defined: its source, else its compiled script. */
+    definitionOf: (name: string): Definition => {
+      const held = scripts().find((script) => sameName(script.name, name));
+      const file = held && fileOf(held);
+      return file === undefined ? { refused: `No mod, Overwrite or the Data folder holds a source or a compiled script of ${name}.` } : { file };
+    },
+    /** Each member of a record that names the script `name`, and why each copy went unread. */
+    placesNaming: async (name: string): Promise<SymbolReferences> => {
+      const { found, unread } = await references.read(name);
+      return { references: found.map(referenceOf), leftOut: unread };
+    },
     /** Go to Definition on the script whose name is at `offset`: its source, else its compiled script. Undefined where no
      *  script's name is. */
     definitionAt: async (document: AskedIn, offset: number): Promise<{ start: number; end: number; file: string | undefined } | undefined> => {

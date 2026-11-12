@@ -20,6 +20,7 @@ import type { TerminalEnvironment } from '../scriptEnvironment';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { serveAgent, type AgentServer, type AgentServerOptions } from '../agentServer';
 import type { Argument } from '../../wire/argument';
+import type { Definition, SymbolIndex, SymbolName, SymbolReferences } from '../../symbolNames/symbolNames';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import type { ArchiveRead } from '../../instanceLoader/archiveContents';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
@@ -102,13 +103,24 @@ afterEach(() => { shownRead.answer = new Map(); sortingRead.rules = []; sortingR
 
 const copyAnswers: InstanceAnswers = {};
 
+const symbolReads = {
+  asked: [] as SymbolName[],
+  definition: { file: '/mods/Mod' } as Definition,
+  references: { references: [], leftOut: [] } as SymbolReferences | { refused: string },
+};
+const symbols: SymbolIndex = {
+  definitionOf: (symbol) => { symbolReads.asked.push(symbol); return Promise.resolve(symbolReads.definition); },
+  referencesTo: (symbol) => { symbolReads.asked.push(symbol); return Promise.resolve(symbolReads.references); },
+};
+beforeEach(() => { symbolReads.asked = []; symbolReads.definition = { file: '/mods/Mod' }; symbolReads.references = { references: [], leftOut: [] }; });
+
 async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient(), terminalEnvironment: TerminalEnvironment = NO_ENVIRONMENT, deployment: AgentServerOptions['deployment'] = NO_DEPLOYMENT, standing: AgentServerOptions['standing'] = NO_STANDING) {
   const reporter = recordingReporter();
   const lines: string[] = [];
   const warned: string[] = [];
   const errored: string[] = [];
   const server = serveAgent({
-    port, instance, copyReads: fakeInstanceAdapter(readingFixture(), copyAnswers).adapter, mEdit, terminalEnvironment, reporter, statuses, deployment, standing, pluginsShown,
+    port, instance, copyReads: fakeInstanceAdapter(readingFixture(), copyAnswers).adapter, mEdit, symbols, terminalEnvironment, reporter, statuses, deployment, standing, pluginsShown,
     log: { ...SILENT_LOG, info: (line) => lines.push(line), warn: (line) => { lines.push(line); warned.push(line); }, error: (line) => { lines.push(line); errored.push(line); } },
   });
   running.push(server);
@@ -152,7 +164,7 @@ describe('the agent server, given an instance value', () => {
 
     const { tools } = await client.listTools();
 
-    expect(tools.map((tool) => tool.name)).toEqual(expect.arrayContaining(['list_downloads', 'list_file_conflicts', 'list_mod_statuses', 'list_mods', 'list_plugins', 'list_profiles', 'list_problems', 'list_sorting_rules', 'list_references', 'read_record', 'resolve_instance_names', 'resolve_names', 'script_environment', 'select_rows']));
+    expect(tools.map((tool) => tool.name)).toEqual(expect.arrayContaining(['list_downloads', 'list_file_conflicts', 'list_mod_statuses', 'list_mods', 'list_plugins', 'list_profiles', 'list_problems', 'list_sorting_rules', 'list_references', 'find_definition', 'read_record', 'resolve_instance_names', 'resolve_names', 'script_environment', 'select_rows']));
   });
 
   it('advertises the JSON type of every input of every tool, so a client sends JSON and never a string', async () => {
@@ -1412,16 +1424,17 @@ describe('the agent server, reading a record through mEdit', () => {
   it('answers references too large for one reply with how many there are, and the SQL view select_rows narrows them in', async () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', NPC);
-    mEdit.setQueryAnswer('getReferences', Array.from({ length: 600 }, (_, n) => (
-      { formKey: `${(0x900 + n).toString(16)}:B.esp`, plugin: 'B.esp', origin: 'Big Rocks', fieldPath: 'Items\\Item\\Reference', recordType: 'LVLI', recordTypeName: 'Leveled Item' })));
+    symbolReads.references = {
+      references: Array.from({ length: 1000 }, (_, n) => ({ formKey: `${(0x900 + n).toString(16)}:B.esp`, plugin: { name: 'B.esp', origin: 'Big Rocks' } })), leftOut: [],
+    };
     const { client } = await clientOf(new FakeInstance(ENABLED), mEdit);
 
-    const { isError, text } = await call(client, 'list_references', { name: 'SharedNpc' });
+    const { isError, text } = await call(client, 'list_references', { kind: 'record', name: 'SharedNpc' });
 
     expect(isError).toBe(true);
     expect(JSON.parse(text)).toEqual({
       tooLarge: `The reply passes the ${REPLY_CHARS} characters that one reply holds.`,
-      references: 600,
+      references: 1000,
       narrow: 'select_rows reads them as the rows of the form_references view whose target_form_key is 000800:A.esp, which its WHERE narrows further.',
     });
   });
@@ -1444,18 +1457,15 @@ describe('the agent server, reading a record through mEdit', () => {
     expect(await call(client, 'read_record', { name: 'SharedNpc' })).toEqual({ isError: true, text: 'No active plugin holds 000800:A.esp.' });
   });
 
-  it('lists the records that reference the record named', async () => {
+  it('lists the places the symbol index gives for the record named, resolved to its FormKey, and what went unread', async () => {
     const mEdit = new InMemoryMEditClient();
-    const referrers = [{ formKey: '000900:B.esp', plugin: 'B.esp', origin: 'Big Rocks', fieldPath: 'Race', recordType: 'NPC_', recordTypeName: 'Npc' }];
     mEdit.setQueryAnswer('resolveNames', NPC);
-    mEdit.setQueryAnswer('getPlugins', PLUGINS);
-    mEdit.setQueryAnswer('getReferences', referrers);
+    const place = { file: '/source/B.json', start: { line: 1, character: 2 }, end: { line: 1, character: 9 } };
+    symbolReads.references = { references: [place, { formKey: '000900:B.esp', plugin: { name: 'B.esp', origin: 'Big Rocks' } }], leftOut: ['C.esp: unreadable'] };
     const { client } = await clientOf(new FakeInstance(ENABLED), mEdit);
 
-    const answered = await read(client, 'list_references', { name: 'SharedNpc' });
-
-    expect(mEdit.calls).toContainEqual({ method: 'getReferences', args: ['000800:A.esp'] });
-    expect(answered).toEqual(referrers);
+    expect(await read(client, 'list_references', { kind: 'record', name: 'SharedNpc' })).toEqual(symbolReads.references);
+    expect(symbolReads.asked).toEqual([{ kind: 'record', formKey: '000800:A.esp' }]);
   });
 
   it('refuses with mEdit\'s listing of an ambiguous name, reading no references', async () => {
@@ -1463,8 +1473,55 @@ describe('the agent server, reading a record through mEdit', () => {
     mEdit.setQueryAnswer('resolveNames', { failed: 'refused', refusal: 'Ambiguous.' });
     const { client } = await clientOf(new FakeInstance(ENABLED), mEdit);
 
-    expect(await call(client, 'list_references', { name: 'Dup' })).toEqual({ isError: true, text: 'Ambiguous.' });
-    expect(mEdit.calls.map(({ method }) => method)).not.toContain('getReferences');
+    expect(await call(client, 'list_references', { kind: 'record', name: 'Dup' })).toEqual({ isError: true, text: 'Ambiguous.' });
+    expect(symbolReads.asked).toEqual([]);
+  });
+});
+
+describe('the agent server, finding a symbol\'s definition and references', () => {
+  const served = () => clientOf(new FakeInstance(VALUE));
+
+  it.each([
+    [{ kind: 'plugin', name: 'A.esp', origin: 'Big Rocks' }, { kind: 'plugin', name: 'A.esp', origin: 'Big Rocks' }],
+    [{ kind: 'mod', name: 'Big Rocks' }, { kind: 'mod', name: 'Big Rocks' }],
+    [{ kind: 'file', name: 'textures/a.dds' }, { kind: 'file', path: 'textures/a.dds' }],
+  ])('asks the symbol index for %j as %j, for both reads', async (args, symbol) => {
+    const { client } = await served();
+
+    await call(client, 'find_definition', args);
+    await call(client, 'list_references', args);
+
+    expect(symbolReads.asked).toEqual([symbol, symbol]);
+  });
+
+  it('answers the definition the index gives', async () => {
+    symbolReads.definition = { archived: { archive: '/mods/Mod/Mod - Textures.ba2', file: 'textures/a.dds' } };
+    const { client } = await served();
+
+    expect(await read(client, 'find_definition', { kind: 'file', name: 'textures/a.dds' })).toEqual(symbolReads.definition);
+  });
+
+  it('answers that a kind has no definition, rather than refusing', async () => {
+    symbolReads.definition = { none: 'A profile has no definition.' };
+    const { client } = await served();
+
+    expect(await call(client, 'find_definition', { kind: 'profile', name: 'Default' })).toEqual({ isError: false, text: JSON.stringify({ none: 'A profile has no definition.' }) });
+  });
+
+  it('refuses with the reason the index gives, for a definition and for references', async () => {
+    symbolReads.definition = { refused: 'Mods lists no mod named Gone.' };
+    symbolReads.references = { refused: 'Mods lists no mod named Gone.' };
+    const { client } = await served();
+
+    expect([await call(client, 'find_definition', { kind: 'mod', name: 'Gone' }), await call(client, 'list_references', { kind: 'mod', name: 'Gone' })])
+      .toEqual(Array.from({ length: 2 }, () => ({ isError: true, text: 'Mods lists no mod named Gone.' })));
+  });
+
+  it('refuses an origin on a symbol that is no plugin, asking the index nothing', async () => {
+    const { client } = await served();
+
+    expect(await call(client, 'find_definition', { kind: 'mod', name: 'Big Rocks', origin: 'X' })).toEqual({ isError: true, text: 'origin names the mod that holds a plugin, and a mod has none.' });
+    expect(symbolReads.asked).toEqual([]);
   });
 });
 

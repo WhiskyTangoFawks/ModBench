@@ -28,7 +28,7 @@ export const originsWinningFirst = (modOrder: readonly { readonly kind: string; 
 /** Whether two plugin file names, or two mod names, name one thing: the game compares them in any case. */
 export const sameName = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
-const samePlugin = (a: PluginSymbol, b: PluginSymbol): boolean => sameName(a.name, b.name) && sameName(a.origin, b.origin);
+export const samePlugin = (a: PluginSymbol, b: PluginSymbol): boolean => sameName(a.name, b.name) && sameName(a.origin, b.origin);
 
 /** The plugin `named` names: with its mod, that copy; by its file name alone, the copy mod order resolves it to, if any. */
 export function pluginNamed({ name, origin }: PluginName, plugins: readonly ResolvedPlugin[]): PluginSymbol | undefined {
@@ -181,4 +181,36 @@ export interface SymbolOwner {
   plan(symbol: PluginSymbol, newName: string, held: HeldTexts, plugins: readonly ResolvedPlugin[]): Promise<Planned>;
   /** The plugin one of its files names at `offset` of the file's `text`; undefined where it names none. */
   nameAt(file: string, text: string, offset: number): Promise<PluginName | undefined>;
+}
+
+/** A symbol the agent names: a record by its FormKey, a file by its path in the Data folder. */
+export type SymbolName =
+  | ({ readonly kind: 'plugin' } & PluginName)
+  | { readonly kind: 'record'; readonly formKey: string }
+  | EntrySymbol
+  | ScriptSymbol
+  | { readonly kind: 'file'; readonly path: string };
+
+/** Where a symbol is defined (symbols.md, The symbols). `none` says its kind has no definition, `refused` why this
+ *  symbol has none to give. */
+export type Definition =
+  | { readonly file: string }
+  | { readonly place: PlaceInFile }
+  | { readonly plugin: PluginSymbol }
+  | { readonly archived: { readonly archive: string; readonly file: string } }
+  | { readonly none: string }
+  | { readonly refused: string };
+
+/** Each place a file names a symbol, each at the record that holds it where its plugin has no plugin source, and why
+ *  each file went unread. */
+export interface SymbolReferences {
+  readonly references: readonly (PlaceInFile | CopyNaming)[];
+  readonly leftOut: readonly string[];
+}
+
+/** The symbol index: what Go to Definition and Find All References answer for the editor, and what the agent's
+ *  find_definition and list_references answer (ADR-0028). */
+export interface SymbolIndex {
+  definitionOf(symbol: SymbolName): Promise<Definition>;
+  referencesTo(symbol: SymbolName): Promise<SymbolReferences | { readonly refused: string }>;
 }

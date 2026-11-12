@@ -27,7 +27,9 @@ import { Refusal } from '../drivingLib/refusal';
 import { parseOrRefuse } from './refusal';
 import { LIST_MOD_STATUSES } from './modStatuses';
 import type { ModStatuses } from '../modStatus/modStatuses';
-import { LIST_REFERENCES, READ_RECORD } from './readRecord';
+import { READ_RECORD } from './readRecord';
+import { FIND_DEFINITION, LIST_REFERENCES } from './symbols';
+import type { SymbolIndex } from '../symbolNames/symbolNames';
 import { RESOLVE_NAMES } from './resolveNames';
 import { SCRIPT_ENVIRONMENT, type TerminalEnvironment } from './scriptEnvironment';
 import { SELECT_ROWS } from './selectRows';
@@ -40,7 +42,8 @@ export interface AgentServerOptions {
   port: number;
   instance: Pick<InstanceView, 'value' | 'sequence' | 'readFailure'> | undefined;
   copyReads: CopyReads | undefined;
-  mEdit: Pick<MEditClient, 'resolveNames' | 'selectRows' | 'getComparison' | 'getPlugins' | 'getCopyDocument' | 'getRenderedDocument' | 'getReferences' | 'getArchiveCopies'>;
+  mEdit: Pick<MEditClient, 'resolveNames' | 'selectRows' | 'getComparison' | 'getPlugins' | 'getCopyDocument' | 'getRenderedDocument' | 'getArchiveCopies'>;
+  symbols: SymbolIndex;
   terminalEnvironment: TerminalEnvironment;
   statuses: Pick<ModStatuses, 'current'> | undefined;
   deployment: DeploymentRead | undefined;
@@ -122,7 +125,9 @@ const namesAnOrigin = (args: unknown): boolean =>
 
 const RECORD_READS: readonly Source[] = ['instance', 'mEdit', 'plugins', 'sourceLanguage'];
 
-function mcpServerOf({ instance, copyReads, mEdit, terminalEnvironment, statuses, deployment, standing: standingSources, pluginsShown, log }: OpenOptions): McpServer {
+const SYMBOL_READS: readonly Source[] = [...RECORD_READS, 'modList'];
+
+function mcpServerOf({ instance, copyReads, mEdit, symbols, terminalEnvironment, statuses, deployment, standing: standingSources, pluginsShown, log }: OpenOptions): McpServer {
   const server = new McpServer({ name: 'modbench', version: '0' }, { instructions: INSTRUCTIONS });
   const sources: Record<Source, () => readonly string[]> = { ...standingSources, instance: () => instanceMessages(instance).filter((line) => line !== undefined) };
   const reading = (...read: Source[]) => () => [...new Set(read.flatMap((source) => sources[source]()))];
@@ -137,7 +142,8 @@ function mcpServerOf({ instance, copyReads, mEdit, terminalEnvironment, statuses
   register(server, log, reading('instance', 'modList'), RESOLVE_INSTANCE_NAMES, (args) => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args));
   register(server, log, reading(...RECORD_READS), RESOLVE_NAMES, (args) => RESOLVE_NAMES.of(mEdit, args));
   register(server, log, reading(...RECORD_READS), READ_RECORD, async (args) => READ_RECORD.of(mEdit, await naming(args), args));
-  register(server, log, reading(...RECORD_READS), LIST_REFERENCES, (args) => LIST_REFERENCES.of(mEdit, args));
+  register(server, log, reading(...SYMBOL_READS), FIND_DEFINITION, (args) => FIND_DEFINITION.of({ mEdit, symbols }, args));
+  register(server, log, reading(...SYMBOL_READS), LIST_REFERENCES, (args) => LIST_REFERENCES.of({ mEdit, symbols }, args));
   register(server, log, reading(...RECORD_READS), SELECT_ROWS, (args) => SELECT_ROWS.of(mEdit, args));
   for (const gesture of GESTURE_TOOLS) register(server, log, reading('instance'), gesture, async (args) => gesture.of(await naming(args), mEdit, args, (line) => { log.warn(`[agent] ${gesture.name}: ${line}`); }));
   register(server, log, reading(), { ...SCRIPT_ENVIRONMENT, input: NO_INPUT }, () => SCRIPT_ENVIRONMENT.of(terminalEnvironment));
