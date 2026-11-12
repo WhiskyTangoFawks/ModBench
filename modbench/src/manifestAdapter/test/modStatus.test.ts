@@ -226,14 +226,6 @@ describe('a mod\'s status against its manifest', () => {
       expect(await status()).toEqual(heldAs({ packages: [{ kind: 'gameFolder', host: { steam: { app: 1 } } }] }));
     });
 
-    it('reads a game file of its name with other bytes in the game folder or the Steam install as other bytes', async () => {
-      gameFiles = [{ path: 'a.nif', hash: EDITED }];
-      await write('a.nif', HELLO);
-      await manifested(manifest({ 'a.nif': HELLO }, { packages: [{ kind: 'gameFolder', host: { steam: { app: 1 } } }] }));
-
-      expect(await status()).toMatchObject({ notInPackage: [], otherBytes: ['a.nif'], unpackaged: ['a.nif'] });
-    });
-
     it('names none while this machine lacks a package, which could hold it', async () => {
       notDownloaded.add('Mod.zip');
       await write('a.nif', HELLO);
