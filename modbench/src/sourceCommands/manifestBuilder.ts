@@ -107,9 +107,8 @@ interface Holder {
   readonly hosted: boolean;
 }
 
-/** A folder's manifest from its files, `exclude` naming the paths it excludes. An unchanged file keeps its held package, any other
- *  takes a package with a host before one without, then the installation file, the game folder, another download. A lacking held
- *  package stays while an unchanged file only it could hold; `hiddenFiles` are the changed files it might hold. */
+/** A folder's manifest from its files: an unchanged file keeps its held package, any other takes one with a host first.
+ *  A held package this machine lacks stays while an unchanged file only it could hold. */
 export function buildManifest(
   { installationFile, game, downloadedFiles }: ManifestSources, files: readonly HashedModFile[], exclude: readonly string[], held: Manifest | undefined,
 ): Recorded {
