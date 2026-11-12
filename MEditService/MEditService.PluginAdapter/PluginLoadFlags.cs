@@ -14,9 +14,8 @@ internal static class PluginLoadFlags
     private const int FlagsAt = 8;
     private const int FlagsLength = 4;
 
-    /// <summary>Writes the plugin with each flag set or cleared and every other byte as it was, and answers the xxHash64 of
-    /// what it wrote, as a manifest carries it. A flagged copy that <paramref name="refusalOfFlaggedCopy"/> gives a reason
-    /// for is refused, and the plugin stays as it was.</summary>
+    /// <summary>Writes the plugin with each flag set or cleared, every other byte as it was, and answers its xxHash64 as a
+    /// manifest carries it. A flagged copy <paramref name="refusalOfFlaggedCopy"/> refuses leaves the plugin as it was.</summary>
     internal static string Set(
         string path, IReadOnlyDictionary<string, bool> flags, GameRelease gameRelease, Func<string, string?> refusalOfFlaggedCopy)
     {
