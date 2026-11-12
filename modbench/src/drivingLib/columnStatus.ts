@@ -29,6 +29,11 @@ export interface Standing {
 const versionInGit = gestureName('modbench.mod.versionInGit', '“Version in Git”');
 const decompile = gestureName('modbench.plugin.decompile', '“Decompile Plugin”');
 
+const unreadableReason = ({ reason, decompileRepairs }: UnreadableSource): Message =>
+  (decompileRepairs
+    ? phrase`${reason} Its records are its plugin file’s. ${decompile}${viewOnly(', in this header’s menu,')} makes it editable.`
+    : `${reason} Its records are its plugin file’s.`);
+
 export const NO_STANDING: Standing = { overriddenBy: null, notActive: false };
 
 /** editor.md, A column's header, the Status table: the first row that applies. No plugin facts read as a plugin that is
@@ -55,9 +60,7 @@ export function copyStatusMessage(copy: CopyFacts, plugin: PluginFacts | undefin
   if (unreadable != null) {
     return {
       label: '(read-only)',
-      reason: unreadable.decompileRepairs
-        ? phrase`${unreadable.reason} Its records are its plugin file’s. ${decompile}${viewOnly(', in this header’s menu,')} makes it editable.`
-        : `${unreadable.reason} Its records are its plugin file’s.`,
+      reason: unreadableReason(unreadable),
     };
   }
   return null;
