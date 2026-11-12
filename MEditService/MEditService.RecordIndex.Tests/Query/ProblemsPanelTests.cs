@@ -239,27 +239,42 @@ public sealed class ProblemsPanelTests : IDisposable
         Assert.Null(link.UncheckedBecause);
     }
 
+    public sealed record ExpectedProblem(string? FieldPath, string File, string MessageStart);
+
+    private const string HeaderFile = "000000_Refers.esp.json";
+    private const string ReferrerFile = "Referrer - 000800_Refers.esp.json";
+
+    public static TheoryData<string?, ExpectedProblem[]> ByWhatTheLinksNamed => new()
+    {
+        {
+            "000800:Unreadable.esp",
+            [
+                new(null, HeaderFile, "Unreadable.esp is in the load order but could not be read, so no link into it was checked: "),
+                new("Race", ReferrerFile, "Race: Unreadable.esp could not be read, so this link was not checked: "),
+            ]
+        },
+        { Absent, [new("Race", ReferrerFile, "Race: [000ABC:Absent.esp] <Error: Could not be resolved>")] },
+        { null, [] },
+    };
+
     [Theory]
-    [InlineData("000800:Unreadable.esp", true, "Race")]
-    [InlineData(Absent, false, "Race")]
-    [InlineData(null, false, "")]
+    [MemberData(nameof(ByWhatTheLinksNamed))]
     public void AnActivePluginThatCannotBeRead_IsAProblemOnTheHeaderFile_OnlyOfACompiledPluginWithALinkIntoIt(
-        string? refersTo, bool onTheHeader, string otherProblemFields)
+        string? refersTo, ExpectedProblem[] expected)
     {
         var plugin = new Plugin("Refers.esp", RefersTo: refersTo);
         using var index = ReconciledWithPoisoned(Unreadable, new Plugin(Unreadable, CompiledPlugin: false), plugin);
 
         var answer = Assert.Single(Ready(index));
 
-        Assert.Equal(otherProblemFields, string.Concat(answer.Problems.Select(p => p.FieldPath)));
-        if (!onTheHeader)
-        {
-            Assert.DoesNotContain(answer.Problems, p => p.FieldPath is null);
-            return;
-        }
-        var problem = Assert.Single(answer.Problems, p => p.FieldPath is null);
-        Assert.StartsWith($"{Unreadable} is in the load order but could not be read, so no link into it was checked: ", problem.Message, StringComparison.Ordinal);
-        Assert.Equal(Path.Combine(PluginSourceRoot.For(plugin.Name), "000000_Refers.esp.json"), problem.SourceRelativePath);
+        Assert.Collection(
+            answer.Problems,
+            [.. expected.Select(want => (Action<SourceProblem>)(problem =>
+            {
+                Assert.Equal(want.FieldPath, problem.FieldPath);
+                Assert.StartsWith(want.MessageStart, problem.Message, StringComparison.Ordinal);
+                Assert.EndsWith(want.File, problem.SourceRelativePath, StringComparison.Ordinal);
+            }))]);
     }
 
     [Fact]
