@@ -310,7 +310,7 @@ export class PluginFacts {
     return this.broken;
   }
 
-  /** Every move that keeps a broken sorting rule without breaking another at Error, as the last judging found them. */
+  /** Every move that keeps a broken sorting rule where a drop would land, as the last judging found them. */
   suggestedMoves(): readonly OfferedMove[] {
     return this.offered;
   }
