@@ -1,7 +1,7 @@
 // Decompile and repair (source.md, Decompile and repair): mEdit writes the two commits of each plugin. A mod that is
 // not a source mod is made one, as version in git makes it.
 
-import { isRefusalOf, type MEditClient, type PluginAddress, type PluginToRepair, type SourceFolderRequest, type SourceModIn, type WriteRefused } from '../client';
+import { isRefused, type MEditClient, type PluginAddress, type PluginToRepair, type SourceFolderRequest, type SourceModIn, type WriteRefused } from '../client';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { sourceModsOf } from '../manifestAdapter/manifestAdapter';
 import type { SelectionResult } from '../coreLib/commandResult';
@@ -72,9 +72,9 @@ export async function decompileAndRepair(
     return toSend.length === 0 ? Promise.resolve({ landed: [], refused: [] }) : client.decompileAndRepair(toSend, force);
   };
   const placed = await placeMods({ mods: notSourceMods, where }, repaired, (outcome) => outcome.landed.map(({ origin }) => origin));
-  if (isRefusalOf(placed)) return { applied: false, refusal: placed.message };
+  if (isRefused<Message>(placed)) return { applied: false, refusal: placed.message };
   const { outcome, notMade, unfinished, notes } = placed;
-  if (isRefusalOf(outcome)) return { applied: false, refusal: outcome.message };
+  if (isRefused<Message>(outcome)) return { applied: false, refusal: outcome.message };
   const notMadePlugins = plugins.filter(({ origin }) => notMade.has(origin)).map((item) => ({
     item, reason: `${item.origin} is not a source mod, and a source folder cannot be made for it: ${notMade.get(item.origin) ?? ''}`,
   }));

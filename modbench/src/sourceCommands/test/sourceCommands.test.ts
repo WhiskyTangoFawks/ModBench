@@ -10,7 +10,8 @@ import { recordingTasks } from '../../test/recordingTasks';
 import { manifestIn, manifestText, writeManifestIn, type BuildStep, type Manifest, type TaskStep } from '../../manifestAdapter/manifestAdapter';
 import { buildFileOf, writeBuildFile } from '../../test/buildFiles';
 import { BUILD_FILE } from '../../wire/sourceMod';
-import { isRefusalOf, type ModToVersionInGit } from '../../client';
+import type { Message } from '../../ports/phrase';
+import { isRefused, type ModToVersionInGit } from '../../client';
 import { forAgent } from '../../ports/phrase';
 import type { BuildMod } from '../../client/MEditClient';
 
@@ -483,7 +484,7 @@ describe('sourceCommands versionInGit', () => {
       const outcome = await sourceCommands({ client, adapter: fake.adapter, saveUnsaved: savedAll, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).versionInGit(['ModA'], inInstanceRepository);
 
       expect([handed, ignoreListWrites(fake.calls), textOf(outcome)]).toEqual([[], [], { refused: true, message: 'The instance holds no repository to put a mod in: git init makes one.' }]);
-      expect(isRefusalOf(outcome) ? forAgent(outcome.message, (command) => `<${command}>`) : outcome).toBe('The instance holds no repository to put a mod in: <modbench.modlist.gitInit> makes one.');
+      expect(isRefused<Message>(outcome) ? forAgent(outcome.message, (command) => `<${command}>`) : outcome).toBe('The instance holds no repository to put a mod in: <modbench.modlist.gitInit> makes one.');
     });
   });
 

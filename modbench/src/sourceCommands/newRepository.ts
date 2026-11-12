@@ -3,7 +3,7 @@
 
 import { basename, join } from 'node:path';
 import { gestureName, phrase, type Message } from '../ports/phrase';
-import { isRefusalOf, type SourceFolderRequest, type SourceModIn, type WriteRefused } from '../client';
+import { isRefused, type SourceFolderRequest, type SourceModIn, type WriteRefused } from '../client';
 import type { InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import {
   buildFileText, exclusionsOfFiles, isUnderAny, manifestFileFor, manifestNameOf, manifestText, ownFilesOf, sourceModsOf, type BuildStep, type Manifest,
@@ -249,7 +249,7 @@ export async function modsPlaced<R>(
   } finally {
     if (letIn.length > 0) notReconciled = await ignoreListWrittenOrWhy(adapter, [], 'could not be brought to the source folders on disk');
   }
-  const landed = [...new Set(isRefusalOf(outcome) ? [] : landedBy(outcome))];
+  const landed = [...new Set(isRefused<Message>(outcome) ? [] : landedBy(outcome))];
   const unfinished = await foldersUnfinished(adapter, made, landed);
   const notLeftOut = where === 'NewRepository' && landed.length > 0 ? await leftOutOrWhy(adapter) : notReconciled;
   if (notLeftOut !== undefined) {

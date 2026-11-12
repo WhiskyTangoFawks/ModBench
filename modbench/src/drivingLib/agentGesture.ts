@@ -42,9 +42,9 @@ export interface PartialFailure {
 
 /** What a gesture over a selection answers: the outcome, or a refusal that a view reports with its `detail`
  *  and an agent reads with the detail joined on. */
-export type GestureResult<T, Refused = T, Reason extends Message = string, Refusal extends Message = string> =
+export type GestureResult<T, Refused = T, Reason extends Message = string, Whole extends Message = string> =
   | { applied: true; outcome: { landed: SelectionOutcome<T>['landed']; refused: SelectionOutcome<Refused, Reason>['refused'] }; partial?: readonly PartialFailure[] }
-  | { applied: false; refusal: Refusal; detail?: string };
+  | { applied: false; refusal: Whole; detail?: string };
 
 export function reportPartial(reporter: Reporter, partial: readonly PartialFailure[] = [], log: (line: string) => void = () => undefined): void {
   for (const { message, detail, severity } of partial) {

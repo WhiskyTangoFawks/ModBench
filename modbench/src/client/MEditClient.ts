@@ -45,13 +45,8 @@ export interface WriteRefused<Reason extends Message = string> {
 /** `WriteRefused`'s one structural tag — a plain check, not `instanceof`, so a scripted client's
  *  plain object narrows the same way the real one does. On the port, so narrowing never drags
  *  the HTTP adapter into a caller's test. */
-export function isRefused(result: unknown): result is WriteRefused {
+export function isRefused<Words extends Message = string>(result: unknown): result is WriteRefused<Words> {
   return typeof result === 'object' && result !== null && (result as { refused?: unknown }).refused === true;
-}
-
-/** `isRefused` over a result whose type names its refusal, so the refusal keeps the message type it was declared with. */
-export function isRefusalOf<Result>(result: Result): result is Extract<Result, { readonly refused: true }> {
-  return isRefused(result);
 }
 
 const NOTIFICATION_KINDS = [

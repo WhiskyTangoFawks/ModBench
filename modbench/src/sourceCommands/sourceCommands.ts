@@ -1,5 +1,5 @@
 import {
-  isRefusalOf, isRefused, type ModToVersionInGit, type VersionInGitOutcome, type VersionInGitProgress, type MEditClient, type SourceModIn, type WriteRefused,
+  isRefused, type ModToVersionInGit, type VersionInGitOutcome, type VersionInGitProgress, type MEditClient, type SourceModIn, type WriteRefused,
 } from '../client';
 import { isPluginSourcePath, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import {
@@ -174,9 +174,9 @@ async function modsVersionedInGit(
   const placed = await modsPlaced(
     adapter, { mods, where, onProgress: (mod, modsDone, modsTotal) => onProgress?.({ mod, modsDone, modsTotal, phase: 'ReadingFiles' }) },
     sentOver, (outcome) => outcome.landed.map(({ mod }) => mod));
-  if (isRefusalOf(placed)) return placed;
+  if (isRefused<Message>(placed)) return placed;
   const { outcome, notMade, unfinished, notes } = placed;
-  if (isRefusalOf(outcome)) return outcome;
+  if (isRefused<Message>(outcome)) return outcome;
   const refused = [
     ...outcome.refused,
     ...[...notMade].map(([item, reason]) => ({ item, reason })),
