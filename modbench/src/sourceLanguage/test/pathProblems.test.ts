@@ -89,6 +89,36 @@ describe('feedPathProblems (source.md, In the text editor, story 6)', () => {
     expect([asked(client), [...published[1]?.keys() ?? []]]).toEqual([[[undefined], [PLUGIN]], ['/source/OtherMod/Other.esp/Set.json']]);
   });
 
+  it('drops a plugin that a whole-set answer no longer holds', async () => {
+    const { settled, client, published } = feed([answerFor(), answerFor(OTHER, [named(DATA_PATH, { sourceRelativePath: 'Other.esp/Set.json' })])]);
+    await settled(1);
+    client.setQueryAnswer('getPluginFilePaths', [answerFor()]);
+
+    client.emit(loadOrderStatusEventFixture({ state: 'Reconciling', conflictsComputed: false, version: 2 }));
+    client.emit(loadOrderStatusEventFixture({ state: 'Ready', conflictsComputed: true, version: 3 }));
+    await vi.waitFor(() => { expect(published.length).toBe(2); });
+
+    expect([...published[1]?.keys() ?? []]).toEqual([FILE]);
+  });
+
+  it('keeps the answer of the later ask when an earlier one comes back after it', async () => {
+    const { settled, client, published, instanceChanged } = feed([answerFor()]);
+    await settled(1);
+    let overtaken!: (answer: PluginFilePaths[]) => void;
+    client.setQueryAnswerOnce('getPluginFilePaths', new Promise<PluginFilePaths[]>((resolve) => { overtaken = resolve; }));
+    client.setQueryAnswerOnce('getPluginFilePaths', [answerFor(PLUGIN, [])]);
+    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 2 });
+    await vi.waitFor(() => { expect(published.length).toBe(2); });
+
+    overtaken([answerFor()]);
+    await Promise.resolve();
+    instanceChanged();
+    await vi.waitFor(() => { expect(published.length).toBe(3); });
+
+    expect(published[2]).toEqual(new Map());
+  });
+
   it('shows each line mEdit could not read and each failure, and still judges the paths it answered', async () => {
     const { settled, reporter, status } = feed([answerFor(PLUGIN, [named()], { unread: ['000801:Names.esp: no schema', 'TextureSet.json: stopped'], failure: 'the source is unreadable' })]);
 
