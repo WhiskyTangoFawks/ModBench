@@ -89,7 +89,7 @@ describe('feedPathProblems (source.md, In the text editor, story 6)', () => {
     expect([asked(client), [...published[1]?.keys() ?? []]]).toEqual([[[undefined], [PLUGIN]], ['/source/OtherMod/Other.esp/Set.json']]);
   });
 
-  it('drops a plugin that a whole-set answer no longer holds', async () => {
+  it('drops a plugin that a whole-set answer leaves out', async () => {
     const { settled, client, published } = feed([answerFor(), answerFor(OTHER, [named(DATA_PATH, { sourceRelativePath: 'Other.esp/Set.json' })])]);
     await settled(1);
     client.setQueryAnswer('getPluginFilePaths', [answerFor()]);
