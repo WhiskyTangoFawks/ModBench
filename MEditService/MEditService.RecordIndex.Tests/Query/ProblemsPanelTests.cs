@@ -242,7 +242,7 @@ public sealed class ProblemsPanelTests : IDisposable
     [Fact]
     public void AnActivePluginThatCannotBeRead_IsAProblemOnTheHeaderFileOfACompiledPluginHoldingALink()
     {
-        var plugin = new Plugin("Refers.esp");
+        var plugin = new Plugin("Refers.esp", RefersTo: $"000800:{Unreadable}");
         using var index = ReconciledWithPoisoned(Unreadable, new Plugin(Unreadable, CompiledPlugin: false), plugin);
 
         var answer = Assert.Single(Ready(index));
@@ -255,7 +255,7 @@ public sealed class ProblemsPanelTests : IDisposable
     [Fact]
     public void ACompiledPluginNoModProvides_WhoseLinksAreNotChecked_IsAFailureOfThatPlugin_ForItsHeaderHasNoPlace()
     {
-        var plugin = new Plugin("Unprovided.esp", RefersTo: "000801:Unprovided.esp");
+        var plugin = new Plugin("Unprovided.esp", RefersTo: $"000801:{Unreadable}");
         Build(new Plugin(Unreadable, CompiledPlugin: false), plugin);
         var holder = new LoadOrderHolder();
         OpenedIndex? reconciled = null;
@@ -276,6 +276,16 @@ public sealed class ProblemsPanelTests : IDisposable
         var unprovided = Assert.Single(answered);
         Assert.Empty(unprovided.Problems);
         Assert.Equal(ProblemsFailureKind.Placement, unprovided.FailureKind);
+    }
+
+    [Fact]
+    public void AnActivePluginThatCannotBeRead_IsNoProblemOnACompiledPluginHoldingALink_ThatDoesNotListItAsAMaster()
+    {
+        using var index = ReconciledWithPoisoned(Unreadable, new Plugin(Unreadable, CompiledPlugin: false), new Plugin("Refers.esp"));
+
+        var answer = Assert.Single(Ready(index));
+
+        Assert.DoesNotContain(answer.Problems, p => p.FieldPath is null);
     }
 
     [Fact]

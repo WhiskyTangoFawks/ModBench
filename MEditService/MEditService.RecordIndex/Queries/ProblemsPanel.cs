@@ -29,7 +29,7 @@ internal static class ProblemsPanel
                 .Where(plugin => derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom.IsSourceMod() || stopped.Contains(plugin.Key))
                 .Select(plugin =>
                 {
-                    var headerProblems = holdingLinks.Contains(plugin.Key) ? NoLinkChecked(plugin, unreadable, source.Over(plugin, snapshot.GameRelease)) : new HeaderProblems([], null);
+                    var headerProblems = holdingLinks.Contains(plugin.Key) ? NoLinkChecked(plugin, unreadable, reads.OpenedPlugins.GetValueOrDefault(plugin.Key)?.Masters, source.Over(plugin, snapshot.GameRelease)) : new HeaderProblems([], null);
                     return ProblemsOf(
                         plugin.Key, snapshot.GameRelease, index.LaterReadFailure(plugin.Key),
                         [.. stopped[plugin.Key].Select(SourceProblem.StoppedAt), .. Found(found[plugin.Key].Select(held => held.Problem), stopped[plugin.Key]), .. headerProblems.Problems],
@@ -62,10 +62,15 @@ internal static class ProblemsPanel
 
     private sealed record HeaderProblems(IReadOnlyList<SourceProblem> Problems, string? PlacementFailure);
 
-    // Compile checks links against the active plugins, and says which it could not read, only when the plugin holds a link.
-    private static HeaderProblems NoLinkChecked(RegisteredPlugin plugin, IReadOnlyDictionary<string, string> unreadable, ISourceRepositoryReads? repository)
+    // Compile checks links against the active plugins, and says which it could not read, only when the plugin holds a link
+    // and lists that plugin as a master: a FormKey names its origin plugin.
+    private static HeaderProblems NoLinkChecked(
+        RegisteredPlugin plugin, IReadOnlyDictionary<string, string> unreadable, IReadOnlyList<string>? masters, ISourceRepositoryReads? repository)
     {
-        var others = unreadable.Where(file => !file.Key.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)).ToList();
+        var others = unreadable
+            .Where(file => !file.Key.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)
+                && (masters is null || masters.Contains(file.Key, StringComparer.OrdinalIgnoreCase)))
+            .ToList();
         if (others.Count == 0) return new([], null);
         if (repository is null) return new([], $"{plugin.Name} is a compiled plugin but no mod folder provides it.");
 
