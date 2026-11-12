@@ -145,6 +145,7 @@ export type PluginIndexedState = components['schemas']['PluginIndexedState'];
 /** What is wrong in a compiled, active plugin's source, per plugin: each problem names the referring
  *  record and its source file relative to the mod's source folder. */
 export type PluginProblems = components['schemas']['PluginProblems'];
+export type PluginFilePaths = components['schemas']['PluginFilePaths'];
 export type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
 export type WorkingTreeStatesBeneath = components['schemas']['WorkingTreeStatesBeneath'];
 export type RecordTypeChoice = components['schemas']['RecordTypeChoice'];
@@ -306,6 +307,8 @@ export interface MEditClient {
   getPluginIndexing(plugin: PluginAddress): Promise<PluginIndexedState | ReadFailed>;
   // Fails while mEdit has not finished indexing: a plugin it has not reached would read as clean.
   getPluginProblems(): Promise<PluginProblems[] | ReadFailed>;
+  /** The file paths each compiled plugin's source names, or only `plugin`'s. */
+  getPluginFilePaths(plugin?: PluginAddress): Promise<PluginFilePaths[] | ReadFailed>;
   getRecordTypes(plugin: PluginAddress): Promise<PluginRecordTypeCount[] | ReadFailed>;
   getWorkingTreeStatesBeneath(plugin: PluginAddress): Promise<WorkingTreeStatesBeneath | ReadFailed>;
   // The game's, not a plugin's: every plugin of the load order shares it.

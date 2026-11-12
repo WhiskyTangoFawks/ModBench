@@ -19,7 +19,7 @@ import {
   type Submodule, type SubmodulesCloned, type PluginFilesFlagged, type PluginFileToFlag,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
-  type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginIndexedState, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
+  type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginIndexedState, type PluginFilePaths, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
   type RebuildIndexOutcome, type CopyChangesOutcome, type CopyMode,
   type GridPosition, type RecordAt, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument, type RenameSourceChangesOutcome, type RenameSourceAsked,
   type SourceChanges, type SourceMove, type RecordFilter, type ReferenceResult, type NameQuery, type NamedObject, type PluginAddress, type PluginToRepair, type ModToVersionInGit, type VersionInGitOutcome, type VersionInGitProgress, type KindedOutcome, type DecompileOutcome, type DecompileAndRepairOutcome,
@@ -657,6 +657,12 @@ class HttpMEditClient implements MEditClient {
 
   getPluginProblems(): Promise<PluginProblems[] | ReadFailed> {
     return this.read('getPluginProblems', (api, signal) => api.GET('/plugins/problems', { signal }), noBodyFails, { timed: true });
+  }
+
+  getPluginFilePaths(plugin?: PluginAddress): Promise<PluginFilePaths[] | ReadFailed> {
+    return this.read('getPluginFilePaths', (api, signal) => api.GET('/plugins/file-paths', {
+      params: { query: plugin === undefined ? {} : { plugin: plugin.name, origin: plugin.origin } }, signal,
+    }), noBodyFails, { timed: true });
   }
 
   getRecordTypes({ name: plugin, origin }: PluginAddress): Promise<PluginRecordTypeCount[] | ReadFailed> {

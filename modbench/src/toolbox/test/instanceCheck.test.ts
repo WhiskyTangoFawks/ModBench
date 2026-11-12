@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const h = vi.hoisted(() => ({
   executeCommand: vi.fn(),
-  folders: undefined as { uri: { fsPath: string } }[] | undefined,
+  folders: undefined as { uri: { scheme: string; fsPath: string } }[] | undefined,
   isTrusted: true,
   grantTrust: (): void => undefined,
 }));
@@ -30,7 +30,7 @@ beforeEach(() => {
   h.isTrusted = true;
 });
 
-const open = (...roots: string[]) => { h.folders = roots.map((fsPath) => ({ uri: { fsPath } })); };
+const open = (...roots: string[]) => { h.folders = roots.map((fsPath) => ({ uri: { scheme: 'file', fsPath } })); };
 
 const answerInstanceCheck = (root: string | undefined, isInstance: (root: string) => boolean) => {
   if (root === undefined) h.folders = undefined; else open(root);

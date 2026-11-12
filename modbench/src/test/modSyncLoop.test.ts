@@ -1,3 +1,4 @@
+import { fakeWorkspace } from './fakeWorkspace';
 import { GAME_FOLDER_SETTING_ID } from './gameFolderSetting';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -47,7 +48,7 @@ async function settledWiredInstance(): Promise<{
   const instance = new Instance({
     gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW,
     adapter: adapterOver(root, { gameFolder: DATA_FOLDER_FOUND }),
-    log: { info: () => {}, warn: () => {}, error: () => {} }, medit: new InMemoryMEditClient(),
+    log: { info: () => {}, warn: () => {}, error: () => {} }, medit: new InMemoryMEditClient(), workspace: fakeWorkspace(),
   });
   instances.push(instance);
   const channel = channelDouble();
@@ -85,7 +86,7 @@ describe('mod sync and the Instance, over a real mods/ folder', () => {
 async function settledFakeInstance(overrides: Partial<InstanceReading>) {
   const fake = fakeInstanceAdapter(readingFixture(overrides));
   const instance = new Instance({
-    gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, adapter: fake.adapter, log: { info: () => {}, warn: () => {}, error: () => {} }, medit: new InMemoryMEditClient(),
+    gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, adapter: fake.adapter, log: { info: () => {}, warn: () => {}, error: () => {} }, medit: new InMemoryMEditClient(), workspace: fakeWorkspace(),
   });
   instances.push(instance);
   const channel = channelDouble();

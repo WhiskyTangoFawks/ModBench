@@ -1,6 +1,8 @@
 // instance-repository.md, The repository, story 3. Git runs the filter with no Modbench running, so it is sed, which git
 // ships on Windows too. The filter is the one program that tokenizes and restores.
 
+import { isInside } from '../ports/pathInside';
+
 /** This machine's folders a token names; a folder not found has no token. */
 export interface TokenFolders {
   readonly instance: string;
@@ -84,12 +86,6 @@ function spellingsOf(name: string, folder: string | undefined, platform: NodeJS.
     ? spelt(rootings(folder, platform), separators, () => `{${name}}`)
     : spelt([{ root: ({ first }) => first, segments: segmentsOf(folder), start: startAfter(nativeStarts.map(sedLiteral)) }], [POSIX], () => `{${name}}`);
   return [...own, ...windows];
-}
-
-function isInside(folder: string, parent: string, platform: NodeJS.Platform): boolean {
-  const [inner, outer, separator] = platform === 'win32'
-    ? [folder.toLowerCase().replaceAll('/', '\\'), parent.toLowerCase().replaceAll('/', '\\'), '\\'] : [folder, parent, '/'];
-  return inner === outer || inner.startsWith(outer.endsWith(separator) ? outer : outer + separator);
 }
 
 // The delimiter is no character a regular expression needs, so `\|` is sed's alternation.
