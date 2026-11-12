@@ -29,6 +29,17 @@ internal static class EndpointMapping
         return true;
     }
 
+    /// <summary>A query that names one plugin by both plugin and origin, or every plugin by neither.</summary>
+    internal static bool OptionalPluginAt(string? plugin, string? origin, out PluginAddress? address, [NotNullWhen(false)] out IResult? refusal)
+    {
+        (address, refusal) = (null, null);
+        if (!string.IsNullOrWhiteSpace(plugin) && !string.IsNullOrWhiteSpace(origin))
+            address = new PluginAddress(plugin, origin);
+        else if (!string.IsNullOrWhiteSpace(plugin) || !string.IsNullOrWhiteSpace(origin))
+            refusal = BadRequest("Name a plugin with both plugin and origin, or neither to browse every plugin.");
+        return refusal is null;
+    }
+
     /// <summary>A request that is malformed in itself: the protocol's 400, before any handler is reached.</summary>
     internal static IResult BadRequest(string detail) => Results.Problem(detail, statusCode: StatusCodes.Status400BadRequest);
 

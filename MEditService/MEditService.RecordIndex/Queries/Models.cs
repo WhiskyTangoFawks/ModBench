@@ -354,13 +354,13 @@ public sealed record SourceProblem(
         new(failure.FormKey, null, null, failure.SourceRelativePath, failure.Message);
 }
 
-/// <summary>Why a plugin's <see cref="PluginProblems.Problems"/> are not a clean bill (ADR-0019).</summary>
+/// <summary>Why a plugin's problems or file paths are not the whole answer (ADR-0019).</summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ProblemsFailureKind
 {
-    /// <summary>Its links could not be placed on files; mEdit does not log this.</summary>
+    /// <summary>Its records could not be placed on files of its source; mEdit does not log this.</summary>
     Placement,
-    /// <summary>Its rows are the last good read's; mEdit logs this once when it begins.</summary>
+    /// <summary>A later read of its source failed, so its rows are the last good read's; mEdit logs this once when it begins.</summary>
     LaterRead,
 }
 
@@ -368,6 +368,15 @@ public enum ProblemsFailureKind
 /// <paramref name="Problems"/> are not a clean bill (ADR-0019).</summary>
 public sealed record PluginProblems(
     PluginAddress Plugin, IReadOnlyList<SourceProblem> Problems, string? Failure = null, ProblemsFailureKind? FailureKind = null);
+
+/// <summary>A file path a record of a compiled plugin's source names at <paramref name="FieldPath"/>, in the file
+/// <paramref name="SourceRelativePath"/> that holds the record, and where it lies in the Data folder.</summary>
+public sealed record NamedFilePath(string FormKey, string FieldPath, string SourceRelativePath, string DataPath);
+
+/// <summary>The file paths a compiled plugin's source names. <paramref name="Unread"/>: the files its read stopped at and
+/// the copies mEdit could not read. <paramref name="Failure"/>: the paths are not the whole answer (ADR-0019).</summary>
+public sealed record PluginFilePaths(
+    PluginAddress Plugin, IReadOnlyList<NamedFilePath> Paths, IReadOnlyList<string> Unread, string? Failure = null, ProblemsFailureKind? FailureKind = null);
 
 /// <summary>The plugins whose masters list a plugin's file name, and those whose masters mEdit could not
 /// read and so may.</summary>

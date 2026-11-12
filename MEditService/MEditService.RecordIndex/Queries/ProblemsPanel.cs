@@ -72,7 +72,7 @@ internal static class ProblemsPanel
     private static HeaderProblems NoLinkChecked(
         RegisteredPlugin plugin, IReadOnlyList<KeyValuePair<string, string>> others, ISourceRepositoryReads? repository)
     {
-        if (repository is null) return new([], $"{plugin.Name} is a compiled plugin but no mod folder provides it.");
+        if (repository is null) return new([], ReadFailures.NoModFolder(plugin.Name));
 
         var header = PluginHeader.IdentityOf(plugin.Name);
         var path = repository.RelativePathOf(plugin.Key, header).Holds(out var placed, out var failure) && placed is not null
@@ -97,7 +97,7 @@ internal static class ProblemsPanel
     private static (string? Failure, ProblemsFailureKind? Kind) FailureOf(
         IReadOnlyList<SourceFileFailure>? laterReadFailure, List<MissingReferenceOnFile> rows, string? headerPlacementFailure)
     {
-        if (laterReadFailure is { } files) return (string.Join(" ", files.Select(file => file.Message)), ProblemsFailureKind.LaterRead);
+        if (laterReadFailure is { } files) return (ReadFailures.LaterRead(files), ProblemsFailureKind.LaterRead);
         var placement = rows.FirstOrDefault(row => row.Failure is not null)?.Failure ?? headerPlacementFailure;
         return (placement, placement is null ? null : ProblemsFailureKind.Placement);
     }
