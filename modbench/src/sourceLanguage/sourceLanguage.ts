@@ -26,7 +26,6 @@ import { entryLanguage } from './entryLanguage';
 import { scriptLanguage, type ScriptClient } from './scriptLanguage';
 import { fileLanguage, type FileClient, type FileCopies } from './fileLanguage';
 import { renameSymbol } from './renameSymbol';
-import { workspaceRoots } from '../drivingLib/workspaceRoots';
 import { feedWorkspaceNotice } from './workspaceNotice';
 
 interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'sourceFiles'> {
@@ -121,8 +120,7 @@ function workspaceNotice(instance: SourceLanguageDeps['instance']): vscode.Dispo
   if (instance === undefined) return new vscode.Disposable(() => undefined);
   let status: vscode.LanguageStatusItem | undefined;
   const stop = feedWorkspaceNotice({
-    instance, workspaceRoots,
-    onWorkspaceChange: (listener) => vscode.workspace.onDidChangeWorkspaceFolders(listener),
+    instance,
     languageStatus: (text) => {
       if (text === undefined) { status?.dispose(); status = undefined; return; }
       status ??= vscode.languages.createLanguageStatusItem('modbench.gameFolderOutside', pluginSourceStatusSelector);

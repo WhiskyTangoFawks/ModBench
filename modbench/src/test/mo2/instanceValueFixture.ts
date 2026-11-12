@@ -26,6 +26,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     loadsArchive: () => false,
     stackedCopies: new FileConflictLookup(),
     gameFolderArchived: NO_GAME_FOLDER_ARCHIVED,
+    gameFolderInWorkspace: true,
     papyrusScripts: [],
     plugins: [],
     downloadedFiles: { kind: 'listed', rows: [] },

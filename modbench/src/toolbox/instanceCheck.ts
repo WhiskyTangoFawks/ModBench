@@ -1,12 +1,11 @@
 import * as vscode from 'vscode';
+import { openRoots } from './workspaceFolders';
 
 // VS Code reads `key == false` as `!key`, which an unset key also satisfies, so the instance
 // check's answer is a string and an unset key means the check has not run.
 const FOLDER_KEY = 'modbench.folder';
 
 type FolderCheck = 'instance' | 'untrustedInstance' | 'notAnInstance';
-
-const openRoots = (): string[] => vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath) ?? [];
 
 function answerInstanceCheck(foundInstance: boolean, instance: Exclude<FolderCheck, 'notAnInstance'>): FolderCheck {
   const answer = foundInstance ? instance : 'notAnInstance';

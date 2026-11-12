@@ -8,20 +8,24 @@ import { gameFolderFile, gameFolderFileOver } from './modFiles';
 function archivedCopyOver({ gameFolderArchived: { copies, loadRank } }: Pick<InstanceValue, 'gameFolderArchived'>, path: string, stacked: CopyAt | undefined): CopyAt | undefined {
   const game = copies.get(path.toLowerCase());
   if (game === undefined || stacked?.kind === 'loose') return stacked;
-  if (stacked?.kind === 'archived' && (loadRank.get(stacked.archive) ?? -1) > (loadRank.get(game.archive) ?? -1)) return stacked;
-  return { kind: 'archived', ...game };
+  const rank = (archive: string): number => {
+    const found = loadRank.get(archive);
+    if (found === undefined) throw new Error(`The game's load order does not hold ${archive}.`);
+    return found;
+  };
+  return stacked?.kind === 'archived' && rank(stacked.archive) > rank(game.archive) ? stacked : { kind: 'archived', ...game };
 }
 
 /** The copy of `path` that the game gets, or what searching found. A game folder outside the workspace is never a
  *  definition (ADR-0001). */
-export function copyTheGameGets(value: Pick<InstanceValue, 'stackedCopies' | 'dataFolderFiles' | 'gameFolderArchived'>, path: string, inWorkspace: (path: string) => boolean): CopyAt | { none: string } {
+export function copyTheGameGets(value: Pick<InstanceValue, 'stackedCopies' | 'dataFolderFiles' | 'gameFolderArchived' | 'gameFolderInWorkspace'>, path: string): CopyAt | { none: string } {
   const stacked = value.stackedCopies.get(path)?.copies[0]?.at;
   const loose = stacked === undefined ? gameFolderFile(value, path) : gameFolderFileOver(value, path);
-  const outside = loose !== undefined && !inWorkspace(loose);
-  if (loose !== undefined && !outside) return { kind: 'loose', path: loose };
+  if (loose !== undefined) {
+    return value.gameFolderInWorkspace ? { kind: 'loose', path: loose } : { none: `${path} is in the game folder, which is outside the workspace.` };
+  }
   const archived = archivedCopyOver(value, path, stacked);
   if (archived !== undefined) return archived;
-  if (outside) return { none: `${path} is in the game folder, which is outside the workspace.` };
   return {
     none: value.dataFolderFiles.kind === 'listed'
       ? `No enabled mod, Overwrite or loose file in the Data folder holds ${path}.`

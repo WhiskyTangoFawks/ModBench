@@ -13,6 +13,7 @@ import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { Instance, instanceMessages, type InstanceValue } from '../instance';
 import { factsOf } from '../instanceFacts';
 import { modOrigin } from '../fileConflictIndex';
+import { fakeWorkspace } from '../../test/fakeWorkspace';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { writeManifestIn } from '../../manifestAdapter/manifestAdapter';
 
@@ -40,7 +41,7 @@ const GAME_FOUND: Partial<InstanceReading> = {
   dataFolderArchives: { kind: 'listed', archives: [], stringsFiles: [] } satisfies DataFolderArchives,
 };
 
-function loader(overrides: Partial<InstanceReading> = {}, wrap: (adapter: InstanceAdapter) => InstanceAdapter = (adapter) => adapter, gameFolderInWorkspace: (dataFolder: string) => boolean = () => true) {
+function loader(overrides: Partial<InstanceReading> = {}, wrap: (adapter: InstanceAdapter) => InstanceAdapter = (adapter) => adapter, workspace = fakeWorkspace()) {
   const fake = fakeInstanceAdapter(readingFixture(overrides));
   const medit = new InMemoryMEditClient();
   const log = leveledLog();
@@ -58,11 +59,11 @@ function loader(overrides: Partial<InstanceReading> = {}, wrap: (adapter: Instan
     window,
     log,
     medit,
-    gameFolderInWorkspace,
+    workspace,
   });
   instances.push(instance);
   return {
-    instance, fake, medit, logs: log.lines.info, warnings: log.lines.warn, errorLines: log.lines.error, windowListeners,
+    instance, fake, medit, workspace, logs: log.lines.info, warnings: log.lines.warn, errorLines: log.lines.error, windowListeners,
     windowState: (state: WindowState) => {
       window.state = state;
       for (const listener of [...windowListeners]) listener(state);
@@ -935,7 +936,7 @@ describe('Instance — game folder and the archives the game loads', () => {
       archiveList: ['Fallout4 - Interface.ba2'],
       archiveListNotes: [note],
       dataFolderArchives: { kind: 'listed', archives: ['Fallout4 - Interface.ba2'], stringsFiles: [] },
-    }, (adapter) => adapter, () => false);
+    }, (adapter) => adapter, fakeWorkspace(false));
 
     await instance.refresh();
     await instance.refresh();
@@ -1429,10 +1430,10 @@ describe('Instance — what each archive holds', () => {
       pluginOrder: [{ name: 'A.esp', enabled: true }],
     };
     const read = async (inWorkspace: boolean) => {
-      const { instance, medit } = loader(reading, (adapter) => ({ ...adapter, fileStamp: () => Promise.resolve({ kind: 'read', answer: { size: 1n, modifiedNs: 1n } }) }), () => inWorkspace);
+      const { instance, medit, workspace } = loader(reading, (adapter) => ({ ...adapter, fileStamp: () => Promise.resolve({ kind: 'read', answer: { size: 1n, modifiedNs: 1n } }) }), fakeWorkspace(inWorkspace));
       medit.setQueryAnswer('getArchiveContents', [holding(GAME_ARCHIVE, FILE), holding(MOD_ARCHIVE_LATER, FILE)]);
       await instance.refresh();
-      return { value: instance.value, medit };
+      return { instance, value: instance.value, medit, workspace };
     };
 
     it('carries the copy in a game folder archive, and no copy of it in the stack', async () => {
@@ -1453,7 +1454,31 @@ describe('Instance — what each archive holds', () => {
     it('reads no game folder archive while the game folder is outside the workspace', async () => {
       const { value, medit } = await read(false);
 
-      expect([value.gameFolderArchived.copies.size, asked(medit)]).toEqual([0, [['Fallout4', [MOD_ARCHIVE_LATER]]]]);
+      expect([value.gameFolderInWorkspace, value.gameFolderArchived.copies.size, asked(medit)]).toEqual([false, 0, [['Fallout4', [MOD_ARCHIVE_LATER]]]]);
+    });
+
+    it('reads the game folder\'s archives again once the workspace takes the game folder in, and drops them once it lets it go', async () => {
+      const { instance, workspace } = await read(false);
+
+      const start = instance.sequence;
+      workspace.holdsEverything();
+      const entered = await pastSequence(instance, start);
+      const middle = instance.sequence;
+      workspace.holdsNothing();
+      const left = await pastSequence(instance, middle);
+
+      expect([entered.gameFolderInWorkspace, entered.gameFolderArchived.copies.size, left.gameFolderInWorkspace, left.gameFolderArchived.copies.size]).toEqual([true, 1, false, 0]);
+    });
+
+    it('does not read again when the workspace changes without changing whether it holds the game folder', async () => {
+      const { instance, workspace } = await read(true);
+      const landed = vi.fn();
+      instance.subscribe(landed);
+
+      workspace.holdsEverything();
+      await new Promise((resolve) => { setTimeout(resolve, 50); });
+
+      expect(landed).not.toHaveBeenCalled();
     });
   });
 

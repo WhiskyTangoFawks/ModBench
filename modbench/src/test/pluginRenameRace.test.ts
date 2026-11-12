@@ -1,3 +1,4 @@
+import { fakeWorkspace } from './fakeWorkspace';
 import { GAME_FOLDER_SETTING_ID } from './gameFolderSetting';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdir, rm } from 'node:fs/promises';
@@ -81,7 +82,7 @@ describe('a rename while a recompute is reading', () => {
       },
     };
     instance = new Instance({
-      gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, log: { info: () => {}, warn: () => {}, error: () => {} }, medit: new InMemoryMEditClient(), gameFolderInWorkspace: () => true,
+      gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, log: { info: () => {}, warn: () => {}, error: () => {} }, medit: new InMemoryMEditClient(), workspace: fakeWorkspace(),
       adapter: { ...writer, reading: async () => ({ ...await readInstance(holdingSource), publisherConfiguration: NO_PUBLISHER }) },
     });
     const { pluginSync } = pluginSyncOn({

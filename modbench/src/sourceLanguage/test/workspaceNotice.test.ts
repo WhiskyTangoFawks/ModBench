@@ -2,45 +2,33 @@ import { describe, expect, it } from 'vitest';
 import { feedWorkspaceNotice } from '../workspaceNotice';
 import type { GameFolder } from '../../instanceAdapter/instanceAdapter';
 
-const found = (root: string): GameFolder => ({ kind: 'found', root, dataFolder: `${root}/Data` });
+const FOUND: GameFolder = { kind: 'found', root: '/games/FO4', dataFolder: '/games/FO4/Data' };
 const NOT_FOUND: GameFolder = { kind: 'notFound', looked: [], setting: 'gameFolder' };
+const NOTICE = 'Paths are checked only against the instance: the game also gets files from /games/FO4, outside the workspace.';
 
-function fed(gameFolder: GameFolder, roots: string[]) {
+function fed(value: { gameFolder: GameFolder; gameFolderInWorkspace: boolean }) {
   const shown: (string | undefined)[] = [];
-  let value = { gameFolder };
-  let landed = (): void => undefined;
-  let moved = (): void => undefined;
-  const stop = feedWorkspaceNotice({
-    instance: { get value() { return value; }, subscribe: (listener) => { landed = listener; return { dispose: () => undefined }; } },
-    workspaceRoots: () => roots,
-    onWorkspaceChange: (listener) => { moved = listener; return { dispose: () => undefined }; },
-    languageStatus: (text) => shown.push(text),
-  });
-  return { shown, stop, land: (next: GameFolder) => { value = { gameFolder: next }; landed(); }, move: (next: string[]) => { roots.splice(0, roots.length, ...next); moved(); } };
+  let land = (): void => undefined;
+  const instance = { value, subscribe: (listener: () => void) => { land = listener; return { dispose: () => undefined }; } };
+  feedWorkspaceNotice({ instance, languageStatus: (text) => shown.push(text) });
+  return { shown, land: (next: typeof value) => { instance.value = next; land(); } };
 }
 
 describe('the language status for a game folder outside the workspace (source.md, In the text editor, story 6)', () => {
-  it('says paths are checked only against the instance, naming the game folder', () => {
-    expect(fed(found('/games/FO4'), ['/instance']).shown).toEqual(['Paths are checked only against the instance: the game also gets files from /games/FO4, outside the workspace.']);
+  it.each([
+    ['says paths are checked only against the instance, naming the game folder, for one outside the workspace', FOUND, false, NOTICE],
+    ['says nothing for a game folder inside the workspace', FOUND, true, undefined],
+    ['says nothing while no game folder is found', NOT_FOUND, false, undefined],
+  ])('%s', (_case, gameFolder, gameFolderInWorkspace, text) => {
+    expect(fed({ gameFolder, gameFolderInWorkspace }).shown).toEqual([text]);
   });
 
-  it('says nothing for a game folder inside the workspace', () => {
-    expect(fed(found('/instance/game'), ['/instance']).shown).toEqual([undefined]);
-  });
-
-  it('says nothing while no game folder is found', () => {
-    expect(fed(NOT_FOUND, ['/instance']).shown).toEqual([undefined]);
-  });
-
-  it('clears when the workspace takes the game folder in', () => {
-    const { shown, move } = fed(found('/games/FO4'), ['/instance']);
-    move(['/instance', '/games/FO4']);
-    expect(shown.at(-1)).toBeUndefined();
-  });
-
-  it('follows the game folder the instance reads next', () => {
-    const { shown, land } = fed(NOT_FOUND, ['/instance']);
-    land(found('/games/FO4'));
-    expect(shown.at(-1)).toContain('/games/FO4');
+  it.each([
+    ['takes the game folder in', false, undefined],
+    ['lets the game folder go', true, NOTICE],
+  ])('follows the workspace when it %s', (_case, before, text) => {
+    const { shown, land } = fed({ gameFolder: FOUND, gameFolderInWorkspace: before });
+    land({ gameFolder: FOUND, gameFolderInWorkspace: !before });
+    expect(shown.at(-1)).toBe(text);
   });
 });

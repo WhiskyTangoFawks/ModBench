@@ -111,6 +111,8 @@ export interface InstanceValue {
   readonly stackedCopies: StackedCopies;
   /** The game folder's archives, read while the game folder is in the workspace: for symbol resolution, never for a conflict. */
   readonly gameFolderArchived: GameFolderArchived;
+  /** Whether the workspace holds the game folder's Data folder: its archives are read, and its files are definitions, only then. */
+  readonly gameFolderInWorkspace: boolean;
   /** Each Papyrus script an enabled mod, Overwrite or the Data folder holds (`papyrusScriptsOf`). */
   readonly papyrusScripts: readonly PapyrusScript[];
   /** Every plugin file, with origin, line, enabled and winning. A listed
@@ -226,14 +228,18 @@ interface FocusWindow {
   onDidChangeWindowState(listener: (state: { readonly focused: boolean }) => void): Subscription;
 }
 
+interface Workspace {
+  holds(path: string): boolean;
+  onDidChange(listener: () => void): Subscription;
+}
+
 interface InstanceOptions {
   /** The one reader of the instance; each recompute reads its settings once. */
   adapter: InstanceAdapter;
   /** The id of the setting that names the game folder, for a game folder not yet read. */
   gameFolderSettingId: string;
   window: FocusWindow;
-  /** Whether the game folder's Data folder is in the workspace, which its archives need to take part in symbol resolution (ADR-0001). */
-  gameFolderInWorkspace: (dataFolder: string) => boolean;
+  workspace: Workspace;
   log: Log;
   medit: ArchiveReader & FlaggedReader;
 }
@@ -282,6 +288,7 @@ const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey' | 'publi
   loadsArchive: () => false,
   stackedCopies: new FileConflictLookup(),
   gameFolderArchived: NO_GAME_FOLDER_ARCHIVED,
+  gameFolderInWorkspace: false,
   papyrusScripts: [],
   plugins: [],
   downloadedFiles: { kind: 'listed', rows: [] },
@@ -341,6 +348,7 @@ export class Instance implements Subscription {
   private readonly changes: Subscription;
 
   private readonly focus: Subscription;
+  private readonly workspaceWatch: Subscription;
 
   private readonly archives: ArchiveContentsHeld;
 
@@ -360,6 +368,9 @@ export class Instance implements Subscription {
     this.focus = options.window.onDidChangeWindowState((state) => {
       if (state.focused && !focused) void this.enqueue({ disk: true, tellsUnheard: true });
       focused = state.focused;
+    });
+    this.workspaceWatch = options.workspace.onDidChange(() => {
+      if ((this.workspaceDataFolder(this.current.gameFolder) !== undefined) !== this.current.gameFolderInWorkspace) void this.enqueue({ disk: false, tellsUnheard: false });
     });
     this.archives = new ArchiveContentsHeld(options.medit, (path) => options.adapter.fileStamp(path));
     this.flagged = new FlaggedHashesHeld(options.medit, (path) => options.adapter.fileStamp(path));
@@ -475,6 +486,7 @@ export class Instance implements Subscription {
     clearTimeout(this.settleTimer);
     this.changes.dispose();
     this.focus.dispose();
+    this.workspaceWatch.dispose();
     this.stopHearingMEditStatus();
     this.subscribers = [];
     this.failureListeners = [];
@@ -611,14 +623,17 @@ export class Instance implements Subscription {
     }));
   }
 
+  private workspaceDataFolder(gameFolder: GameFolder): string | undefined {
+    return gameFolder.kind === 'found' && this.options.workspace.holds(gameFolder.dataFolder) ? gameFolder.dataFolder : undefined;
+  }
+
   private async archivesIn(
     { gameRelease, listed, inData, files, filesByOrigin }: ArchiveSources, index: FileConflictIndex,
     order: { readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[]; readonly pluginsLoadedWithNoLine: readonly PluginWithNoLine[] },
-    gameFolder: GameFolder,
+    dataFolder: string | undefined,
   ): Promise<Pick<InstanceValue, 'archiveContents' | 'loadsArchive' | 'stackedCopies' | 'gameFolderArchived'>> {
     const { loadedWithNoLine, fromLines } = pluginOrderOf(order, unplaced);
     const active = [...loadedWithNoLine, ...fromLines.filter((plugin) => plugin.enabled && plugin.path !== undefined)].map(({ name, origin }) => ({ name, origin }));
-    const dataFolder = gameFolder.kind === 'found' && this.options.gameFolderInWorkspace(gameFolder.dataFolder) ? gameFolder.dataFolder : undefined;
     const inLoadOrder = dataFolder === undefined ? [] : archivesInLoadOrder({ gameRelease, listed, inData, files, filesByOrigin }, dataFolder, active);
     const gameArchives = new Set(inData.kind === 'listed' && dataFolder !== undefined ? inData.archives.map((name) => fileInFolder(dataFolder, name)) : []);
     const inGameFolder = inLoadOrder.filter((archive) => gameArchives.has(archive));
@@ -675,7 +690,8 @@ export class Instance implements Subscription {
       filesByOrigin: new Map([...index.filesByMod, [OVERWRITE_ORIGIN, runtimeOutput.files]]),
     };
     this.tellArchivesNothingHolds(archiveSources);
-    const archives = await this.archivesIn(archiveSources, index, { plugins, pluginsLoadedWithNoLine: pluginsLoadedWithNoLine ?? [] }, gameFolder);
+    const dataFolder = this.workspaceDataFolder(gameFolder);
+    const archives = await this.archivesIn(archiveSources, index, { plugins, pluginsLoadedWithNoLine: pluginsLoadedWithNoLine ?? [] }, dataFolder);
     const flaggedHashes = await this.flaggedHashesIn(reading, entries, modFolders, index.filesByMod);
     const loadOrderSnapshot = loadOrderSnapshotOf({
       plugins, gameFolder, pluginsLoadedWithNoLine, modFolders, sourceDirs: paths.sourceDirs, places: pluginPlacesOf({ mods: entries, paths }), archives: archiveSources,
@@ -711,6 +727,7 @@ export class Instance implements Subscription {
       blueprintLoadsLast: blueprintLoadsLastIn(gameRelease),
       nexusDomainOf: nexusDomainForMetaGame,
       gameFolder,
+      gameFolderInWorkspace: dataFolder !== undefined,
       programVersions,
       gameFolderLinks: reading.gameFolderLinks,
       dataFolderPlugins,

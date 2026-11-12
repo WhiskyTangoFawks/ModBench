@@ -254,24 +254,30 @@ export function archivesGameLoads(gameRelease: string, listed: readonly string[]
   return [...new Set([...loaded.listed, ...loaded.byPlugin.flatMap((plugin) => plugin.archives)])];
 }
 
-/** Every archive the game loads from the Data folder, a mod's and the game folder's, by the path it is read from, in the order
- *  it loads them. */
-export function archivesInLoadOrder({ gameRelease, listed, inData, files }: ArchiveSources, dataFolder: string, active: readonly PluginAddress[]): string[] {
+// The archives the game loads from the Data folder, a mod's and the game folder's, by the path each is read from.
+function loadedFromData({ gameRelease, listed, inData, files }: ArchiveSources, dataFolder: string, active: readonly PluginAddress[]) {
   const rule = pluginCompanionRule(gameRelease);
-  if (rule === undefined || inData.kind !== 'listed') return [];
-  const loaded = archivesLoaded(rule, listed, active, winningFiles(dataFolder, inData.archives, files, rule.isArchive));
+  if (rule === undefined || inData.kind !== 'listed') return undefined;
+  return { rule, inData, loaded: archivesLoaded(rule, listed, active, winningFiles(dataFolder, inData.archives, files, rule.isArchive)) };
+}
+
+/** Every archive the game loads from the Data folder, by the path it is read from, in the order it loads them. */
+export function archivesInLoadOrder(sources: ArchiveSources, dataFolder: string, active: readonly PluginAddress[]): string[] {
+  const held = loadedFromData(sources, dataFolder, active);
+  if (held === undefined) return [];
+  const { loaded } = held;
   return [...new Set([...loaded.listed, ...loaded.byPlugin.flatMap((plugin) => plugin.archives)].map(({ path }) => path))];
 }
 
 function archivesAndStringsOf(
-  { gameRelease, listed, inData, files }: ArchiveSources, dataFolder: string, active: readonly PluginAddress[],
+  sources: ArchiveSources, dataFolder: string, active: readonly PluginAddress[],
 ): Pick<LoadOrderSnapshotValue<string>, 'listedArchives' | 'archivesByPlugin' | 'stringsFiles'> {
-  const rule = pluginCompanionRule(gameRelease);
-  if (rule === undefined || inData.kind !== 'listed') return { listedArchives: [], archivesByPlugin: [], stringsFiles: [] };
-  const loaded = archivesLoaded(rule, listed, active, winningFiles(dataFolder, inData.archives, files, rule.isArchive));
+  const held = loadedFromData(sources, dataFolder, active);
+  if (held === undefined) return { listedArchives: [], archivesByPlugin: [], stringsFiles: [] };
+  const { rule, inData, loaded } = held;
   const listedArchives = loaded.listed.map(({ path }) => path);
   const archivesByPlugin = loaded.byPlugin.map(({ name, origin, archives }) => ({ name, origin, archives: archives.map(({ path }) => path) }));
-  const strings = winningFiles(dataFolder, inData.stringsFiles, files, rule.isStringsFile);
+  const strings = winningFiles(dataFolder, inData.stringsFiles, sources.files, rule.isStringsFile);
   return {
     listedArchives, archivesByPlugin,
     stringsFiles: [...strings.values()].map(({ path }) => path),

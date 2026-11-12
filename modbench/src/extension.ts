@@ -6,7 +6,7 @@ import { attachPortOf, createMEditClient, recordIndexReferences, stopMEditClient
 import { manifestFileReferences, manifestEntryNames } from './manifestAdapter/manifestAdapter';
 import type { EntryNames, SymbolOwner } from './symbolNames/symbolNames';
 import { makeReporter } from './drivingLib/reporter';
-import { inWorkspace, refreshWhenGameFolderEntersOrLeavesWorkspace } from './drivingLib/workspaceRoots';
+import { workspaceFolders } from './toolbox/workspaceFolders';
 import { commandTitles } from './drivingLib/commandTitles';
 import { surfaceRefusedWrites } from './drivingLib/writingGesture';
 import { askQuestion } from './dialog';
@@ -195,9 +195,8 @@ function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, 
         instanceRoot, gameFolderSetting, scriptEnvironmentFileSetting: scriptEnvironmentFileOf(instanceRoot), installationFileReader: downloadedFileReader, fileProblems: fileProblemsOver(problemsHostOver(own(vscode.languages.createDiagnosticCollection('modbench-unhashed'))), outputChannel), fomodEngine: fomodEngineIn(extensionUri, outputChannel), deployedPath,
       });
       const instance = own(new Instance({
-        adapter, gameFolderSettingId: gameFolderSetting.id, window: vscode.window, log: outputChannel, medit, gameFolderInWorkspace: inWorkspace,
+        adapter, gameFolderSettingId: gameFolderSetting.id, window: vscode.window, log: outputChannel, medit, workspace: workspaceFolders,
       }));
-      refreshWhenGameFolderEntersOrLeavesWorkspace(own, instance);
       const owners = [adapter.pluginReferences, manifestFileReferences({
         sourceFolders: () => instance.value.paths.sourceDirs,
         modFolderOf: (mod) => adapter.modFolderPath(mod),
@@ -299,7 +298,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     entryTooltip: (entry) => mods.tooltipOf(entry),
     downloadedFileTooltip: (name) => downloads.tooltipOf(name),
     modOrderFileOf: (profile) => adapter.modOrderFileOf(profile),
-    fileCopies: { gameRelease: () => adapter.gameRelease(), copyOf: (path) => copyTheGameGets(instance.value, path, inWorkspace), reveal: revealCopy },
+    fileCopies: { gameRelease: () => adapter.gameRelease(), copyOf: (path) => copyTheGameGets(instance.value, path), reveal: revealCopy },
     deployment: { folder: () => deploymentFolderOf(deploymentFolderSetting), pluginsTxtPlace: placeForGame },
     sourceFiles: (origin) => sourceFiles(instance.value, origin),
     copyValue: [mods.copyValue, plugins.copyValue, downloads.copyValue],
