@@ -1,12 +1,12 @@
 # Source
 
-A source mod's folder is a mod in Mods ([mods.md](mods.md), A source mod). Its source is here. I build it from here, never from the mod's row.
+A built mod's mod source is here ([mods.md](mods.md), A built mod). I build it from here, never from the mod's row.
 
 Each story cites what decides it. A story that cites nothing is owned here.
 
 ## Plugin source
 
-The plugin source is a compiled plugin's text, and compile builds the plugin from it ([ADR-0006](../adr/0006-a-compiled-plugins-truth-is-its-plugin-source.md)). Version in git, and decompile, write it into the source folder ([ADR-0007](../adr/0007-plugin-edits-are-git-working-tree-changes.md)), under `plugin-source/`, and I read, diff and edit it as I would any source code. Its layout is Modbench's schema: Mutagen's serialization gives the structure, and Modbench changes it where the stories below need. Mutagen decides what a record holds; Modbench decides where the text departs from Mutagen's.
+The plugin source is a compiled plugin's text, and compile makes the plugin from it ([ADR-0006](../adr/0006-a-compiled-plugins-truth-is-its-plugin-source.md)). Version in git, and decompile, write it into the mod source ([ADR-0007](../adr/0007-plugin-edits-are-git-working-tree-changes.md)), under `plugin-source/`, and I read, diff and edit it as I would any source code. Its layout is Modbench's schema: Mutagen's serialization gives the structure, and Modbench changes it where the stories below need. Mutagen decides what a record holds; Modbench decides where the text departs from Mutagen's.
 
 ### The tree
 
@@ -33,7 +33,7 @@ As a user, I want:
 1. To run Decompile and repair on a malformed plugin from its Problems entry, as well as from its menu in Plugins. Cites: GLOSSARY.md, Malformed plugin; plugins.md, Menus and keys
 2. A plugin with a diagnosis no repair answers refused, naming each one. Cites: Refuse, do not repair
 3. The repair to land as two commits in the mod's plugin source: the plugin as it was, each malformed record a placeholder naming its diagnosis, then the repair, so the history shows the repair changed only those records. Cites: ADR-0006; ADR-0007; principles.md, Mutagen's data
-4. When the mod is not a source mod, the repair makes it one, asking which repository as version in git does, and decompiles the mod's other plugins with it. Cites: plugins.md, Version in git, story 1
+4. When the mod is not a built mod, the repair makes it one, asking which repository as version in git does, and decompiles the mod's other plugins with it. Cites: plugins.md, Version in git, story 1
 5. One confirmation, as decompile asks it (plugins.md, Decompile). Cites: Confirm what destroys
 
 ### Changes outside Modbench
@@ -63,30 +63,30 @@ As a user, I want:
 
 | Where | Items, in order |
 |---|---|
-| Explorer menu, on a source mod's source folder and on its build file | build |
-| Editor title, on a source mod's build file | the run button: build |
-| Explorer menu, on the manifest in a source mod's source folder | update manifest |
+| Explorer menu, on a mod source and on its build file | build |
+| Editor title, on a build file | the run button: build |
+| Explorer menu, on the manifest in a mod source | update manifest |
 
 ## Build
 
 As a user, I want:
 
-1. Build to write the mod folder from its source folder by running its build file's steps in order. Cites: catalog `build`; ADR-0027
+1. Build to write the mod folder from its mod source by running its build file's steps in order. Cites: catalog `build`; ADR-0027
 2. A pack step to take the loose files it packs out of the mod folder, so the game reads one copy.
 3. Build to record what it made in the mod's manifest, down to each file's bytes, so a build that comes out differently, here or after a clone, shows in Source Control as a change I review, and one that comes out the same changes nothing. A file a task makes or changes is recorded by its path alone, since a tool's output follows the tool, and is not checked. Cites: ADR-0022; ADR-0027; Existing tools; Never silently wrong
-4. A source mod's folder renamed outside Modbench to build where it is. Cites: ADR-0022; ADR-0003
+4. A built mod's folder renamed outside Modbench to build where it is. Cites: ADR-0022; ADR-0003
 5. Build to save the mod's unsaved plugin source and build file first, without asking, as Run Build Task saves before it builds, so the plugins are built from what I see. A file VS Code does not save refuses build, naming it. Cites: VS Code's save before run; ADR-0001; Never silently wrong
 6. A notification when it lands, pointing at the Problems panel when it left diagnostics. The diagnostics sit on the plugin source files.
-7. From the palette with no mod, a pick of every source mod, one with no folder yet included, so a clone builds its mods back. Cites: commands.md, The entry point supplies what it knows
+7. From the palette with no mod, a pick of every mod source, one with no mod yet included, so a clone builds its mods back. Cites: commands.md, The entry point supplies what it knows
 8. A plugin whose header flag limits its FormIDs, light or medium, refused when its records fall outside that range, naming the records, what limits the plugin, and what lifts that limit. The step's other plugins compile, and the refused plugin is left as it was.
 9. A plugin whose plugin source is unreadable refused the same way, naming it and pointing at decompile. Cites: Never silently wrong
 10. An interrupted build to leave each file old or new, and none to read as changed outside Modbench. A localized plugin can be left with its strings written without its binary. Building again fixes it.
-11. A patcher to be a source mod whose step runs its patching script on my load order, the script from its repository or an installation file. Its output joins the load order, so the next patcher reads it there.
-12. Source mods built in mod order, the winning mod last, when build or restore builds more than one, so a patcher reads every mod before it, the patchers before it included.
+11. A patcher to be a built mod whose build step runs its patching script on my load order, the script from its repository or an installation file. Its output joins the load order, so the next patcher reads it there.
+12. Mods built in mod order, the winning mod last, when build or restore builds more than one, so a patcher reads every mod before it, the patchers before it included.
 13. A step to run an external tool, such as a texture optimiser, by the label of a task in my VS Code user tasks. The step holds the tool's arguments. The task holds only where the tool is on my machine and how it runs there, under Proton on Linux. A build whose tool this machine has no task for refused, naming the tool and its page, with Open User Tasks. Cites: Existing tools; VS Code's tasks; instance-repository.md, The repository, story 3
 14. Build as a task, so my chain builds before it deploys or publishes. Cites: commands.md, A task is an entry point for a chain
 15. A build from uncommitted or unpushed changes to land, with a warning that a clone does not rebuild it. Cites: Respect the user; Never silently wrong
-16. A step to be a built-in step, a task, or a Modbench script, a default one or one from the source folder, so what goes in the mod is only what my build file says. Cites: Respect the user; scripts.md, Default scripts
+16. A step to be a built-in step, a task, or a Modbench script, a default one or one from the mod source, so what goes in the mod is only what my build file says. Cites: Respect the user; scripts.md, Default scripts
 17. A decompile step to replace plugin source without asking, sending what it replaces to the trash. Cites: commands.md, Confirm what destroys
 18. A failed step to stop its mod's build, so no step runs on what it left. Cites: Never silently wrong
 19. A script step to run its script with my window's Python, in a terminal, as a task Modbench makes and I never pick from Run Task. Cites: scripts.md, Running a Modbench script, stories 1–3

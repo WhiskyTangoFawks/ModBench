@@ -1,4 +1,4 @@
-# Restore from manifest, orange: each mod's folder made what its manifest says; a source mod rebuilt from its submodule at the commit the modlist pins.
+# Restore from manifest, orange: each mod's folder made what its manifest says; a built mod rebuilt from its mod source's submodule at the commit the modlist pins.
 ...@../../spec/architecture/styles
 shape: sequence_diagram
 driving: "Mods · Source Control · Toolbox" {class: driving}
@@ -54,7 +54,7 @@ tasks -> sourcecommands: "each task's label" {class: outside}
 sourcecommands -> instanceadapter: "each file whose bytes differ, from its package · each file no line names · each mod's metadata · the push check" {class: compile}
 instanceadapter -> instance: "the files · the trash · metadata · the push check" {class: compile}
 
-sourcemod: "a source mod with a remote" {
+modsource: "a mod source with a remote" {
   sourcecommands -> client: "clone: the submodule and its pin" {class: compile}
   client -> http: envelope {class: compile}
   http -> commands: envelope {class: compile}

@@ -31,20 +31,20 @@ modbench_driving: "MODBENCH · Driving adapters — the views and the agent: rea
   downloads: "Downloads\nowns: the downloaded files, as the user sees them" {class: driving}
   editor: "Editor\nowns: a record, opened to read and edit" {class: driving}
   webview: "Webview pages\nowns: the pages a view draws in a webview\nhides: the grid" {class: driving}
-  sourcelanguage: "Source\nowns: a source mod's source, as the user works on it,\nand VS Code's language features over every symbol\nhides: the map from a text position to a FormKey" {class: driving}
+  sourcelanguage: "Source\nowns: a mod source, as the user works on it,\nand VS Code's language features over every symbol\nhides: the map from a text position to a FormKey" {class: driving}
   agent: "Agent\nowns: what the user's agent reads and runs,\nand how a script finds mEdit\nhides: MCP and the terminal's environment" {class: driving}
 }
 
 medit_core: "MEDIT · Core — the write side; it references the kernel and the repositories" {
   class: band; grid-rows: 1
   commands: "Commands\nowns: the write side\nhides: the rules that decide a write" {
-    engine: "Build engine — one deep module\nowns: a source mod's plugins and archives, from its source\nhides: the built-in steps" {class: core}
+    engine: "Build engine — one deep module\nowns: a built mod's plugins and archives, from its mod source\nhides: the built-in steps" {class: core}
   }
 }
 modbench_core: "MODBENCH · Core — one command per gesture; each writes through a repository and forgets" {
   class: band; grid-rows: 1
   modcommands: "mod commands\nowns: changes to mods and separators, their files,\nand the mod order" {class: core}
-  sourcecommands: "source commands\nowns: changes to source mods and the instance repository" {class: core}
+  sourcecommands: "source commands\nowns: changes to mod sources and the instance repository" {class: core}
   plugincommands: "plugin commands\nowns: changes to plugins and the plugin order\nhides: how a move is held to the sorting rules" {class: core}
   instancecommands: "instance commands\nowns: changes to the instance as a whole, its profiles\nand its deployment" {class: core}
   downloadedfilecommands: "downloaded file commands\nowns: changes to the downloaded files" {class: core}
@@ -59,7 +59,7 @@ medit_kernel: "MEDIT · Kernel — read by the core, the read model and the repo
 modbench_kernel: "MODBENCH · Kernel — pure; read by the core, the read model and the repositories; a kernel box references nothing" {
   class: band; grid-rows: 1
   loadorderfilecodec: "Load-order file codec\nowns: plugins.txt as text\nhides: its format" {class: kernel}
-  wire: "Wire\nowns: the API types, the webview protocol,\nand the shape of a source mod both processes read" {class: kernel}
+  wire: "Wire\nowns: the API types, the webview protocol,\nand the shape of a mod source both processes read" {class: kernel}
   tables: "per-release tables\nowns: what differs per game release\nhides: every game name" {class: kernel}
   sortingrules: "Sorting rules\nowns: whether a plugin order keeps its sorting rules\nhides: each rule, and LOOT's metadata format and condition language" {class: kernel}
   ports: "Ports\nowns: how the core reaches the user and VS Code,\nand the idioms every band shares" {class: kernel}
@@ -81,9 +81,9 @@ modbench_readmodel: "MODBENCH · Read model — the instance value, derived from
 
 medit_repositories: "MEDIT · Repositories — the only boxes that read or write a system of record" {
   class: band; grid-rows: 1
-  sourceadapter: "Source adapter\nowns: a source mod's folder: plugin source, assets\nand repository\nhides: the layout inside plugin source, and git" {class: repositories}
+  sourceadapter: "Source adapter\nowns: a mod source: plugin source, assets\nand repository\nhides: the layout inside plugin source, and git" {class: repositories}
   pluginadapter: "Plugin adapter\nowns: the plugin files\nhides: the binary format" {class: repositories}
-  modfolderadapter: "Mod folder adapter\nowns: the assets and archives of a source mod's output folder,\nand what any archive holds\nhides: the archive formats" {class: repositories}
+  modfolderadapter: "Mod folder adapter\nowns: the assets and archives of a built mod's folder,\nand what any archive holds\nhides: the archive formats" {class: repositories}
 }
 modbench_repositories: "MODBENCH · Repositories — the Instance adapter is the one reader and writer of the mod manager's and the publisher's files" {
   class: band; grid-rows: 1
@@ -104,7 +104,7 @@ modbench_repositories: "MODBENCH · Repositories — the Instance adapter is the
 
 medit_data: "MEDIT · Systems of record" {
   class: band; grid-rows: 1
-  source: "Mod source\nthe source folder beside mods/, in git" {class: sor}
+  source: "Source folder\nevery mod source, beside mods/, in git" {class: sor}
   plugin: "Plugin files" {class: sor}
   modfolder: "Mod folders\nthe assets a build is handed, read · the archives it packs" {class: sor}
   tools: "Other tools\nthe mod manager, xEdit, CK, the game — at any time" {class: other}

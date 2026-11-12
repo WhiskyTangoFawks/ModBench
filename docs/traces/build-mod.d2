@@ -1,4 +1,4 @@
-# Build, orange: a source mod's folder written from its source folder, then recorded in its manifest.
+# Build, orange: a built mod's folder written from its mod source, then recorded in its manifest.
 ...@../../spec/architecture/styles
 shape: sequence_diagram
 driving: "Source · Editor" {class: driving}
@@ -50,7 +50,7 @@ builtin: "each built-in step, a decompile, compile, copy or pack, in build-file 
   sourcecommands -> client: "build: the mod's folder · its step" {class: compile}
   client -> http: envelope {class: compile}
   http -> engine: envelope {class: compile}
-  source -> sourceadapter: "the source folder's files · plugin source" {class: compile}
+  source -> sourceadapter: "the mod source's files · plugin source" {class: compile}
   sourceadapter -> engine: "the files a copy names · the plugin source" {class: compile}
   engine -> commands: "compile-plugin, per plugin a compile names" {class: compile}
   engine -> sourceadapter: "the plugin source a decompile makes, once every plugin of it decompiled" {class: compile}

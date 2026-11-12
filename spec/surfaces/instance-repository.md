@@ -14,7 +14,7 @@ As a user, I want:
 4. Commit, diff, history, branches and merge to be VS Code's. Modbench adds no gesture for them. Cites: Existing tools
 5. A push never to publish a modlist a clone cannot fetch. Cites: Never silently wrong
 6. My name and accounts never to reach a remote.
-7. A mod, or a source mod's source, versioned in this repository with no repository of its own. Cites: ADR-0022; Respect the user
+7. A mod, or a mod source, versioned in this repository with no repository of its own. Cites: ADR-0022; Respect the user
 
 ## The manifest
 
@@ -27,8 +27,8 @@ A mod's installation files are the downloaded files the mod was installed from. 
 5. A manifest to name each of its folder's own files that git does not hold, and each of its packages, even a file no package holds or a package with no host. Each such file and package is a problem (Status, story 2), so nothing a clone cannot rebuild drops out of the manifest. Cites: Never silently wrong
 6. A manifest I open to show each value's meaning on hover, and to mark a hand edit its schema refuses as I type, as VS Code does for any JSON file with a schema. Cites: Existing tools; formats/manifest.md
 7. Each package to name its version when one is known, so an upgrade reads in a git diff as the versions it moves between.
-8. To flag a plugin by setting its flags in its manifest and restoring, so a flag needs no source mod. Cites: ADR-0022
-9. A plugin I rename to need no source mod. Cites: ADR-0022
+8. To flag a plugin by setting its flags in its manifest and restoring, so a flag needs no mod source. Cites: ADR-0022
+9. A plugin I rename to need no mod source. Cites: ADR-0022
 10. Each package's host taken from its downloaded file's own metadata, never the mod's, so stale mod metadata never names a host the file did not come from. Cites: Never silently wrong
 11. A file in a mod I ignore, such as one the game rewrites on every run, neither recorded nor touched, so it never reads as changed: update manifest and version in git leave it out, status never reads it as differing, and restore and build neither write nor trash it. Cites: commands.md, One identity
 12. The game's files to have the store that holds their bytes as their package's host. Cites: The manifest, story 4
@@ -65,7 +65,7 @@ As a user, I want:
 
 As a user, I want:
 
-1. An update manifest gesture that records a folder git does not hold whole in its manifest, and creates the manifest when the folder has none: a mod's folder, or a source mod's source folder. It leaves a source mod's own folder to build, which records it. Cites: ADR-0022; ADR-0027
+1. An update manifest gesture that records a folder git does not hold whole in its manifest, and creates the manifest when the folder has none: a mod's folder, or a mod source. It leaves a built mod's folder to build, which records it. Cites: ADR-0022; ADR-0027
 2. Update manifest to write only what changed, so an unchanged mod changes nothing and Source Control holds only what I did. Cites: source.md, The tree, story 2
 3. It stages nothing and commits nothing. Cites: Existing tools
 4. Update manifest, while it hashes downloaded files, to show progress and to stop when I cancel, keeping each hash it took. A downloaded file whose hash failed is hashed again after a reload of the window, so a tool I fix takes effect.
@@ -77,12 +77,12 @@ As a user, I want:
 
 As a user, I want:
 
-1. Each folder to become what its manifest says, a source mod's by its build, sending each file restore replaces or removes to the trash. A file that already matches is left alone, so a restore after a checkout costs only what the checkout changed. Cites: ADR-0022; commands.md, Confirm what destroys
+1. Each folder to become what its manifest says, a built mod's by its build, sending each file restore replaces or removes to the trash. A file that already matches is left alone, so a restore after a checkout costs only what the checkout changed. Cites: ADR-0022; commands.md, Confirm what destroys
 2. Restore to ask nothing, since the trash takes back each file it replaces or removes. Cites: commands.md, Confirm what destroys
-3. A source mod left on its branch when the branch is at the commit the repository pins, so I land on a branch. Cites: ADR-0022; ADR-0003
+3. A mod source left on its branch when the branch is at the commit the repository pins, so I land on a branch. Cites: ADR-0022; ADR-0003
 4. Each package taken from wherever this machine already holds it with the pinned bytes, and fetched only when it does not: an installation file from Nexus, downloaded with my Premium account and refused when it is not the pinned file, or without Premium, its file page opened in my browser for me to download. With Premium, a clone then restores with no Nexus file fetched by hand. Cites: Minimal by default
 5. A restore interrupted part way to say so, naming the mods it did not finish. Restoring again is the recovery. Cites: mods.md, What install does, story 5
-6. A source mod's repository cloned when it is absent, and never moved when it is at another commit than the one the modlist pins, since my repository is mine to move. Cites: ADR-0003
+6. A mod source's repository cloned when it is absent, and never moved when it is at another commit than the one the modlist pins, since my repository is mine to move. Cites: ADR-0003
 7. A package this machine lacks whose host is an address, named with that address, so I fetch it by hand. Cites: Deferred, item 2
 8. A flag my manifest sets whose FormID range the plugin's records exceed refused, naming why, while the rest of the restore lands. Cites: source.md, Build, story 8; Never silently wrong
 
@@ -94,7 +94,7 @@ As a user, I want:
 | Mods view, title bar overflow | update manifest · restore from manifest…, on every manifest |
 | Source Control view, title bar overflow | update manifest · restore from manifest…, on every manifest |
 | Source Control view, welcome content with no repository | git init (Git init, story 2) |
-| Explorer menu, on the manifest in a source mod's source folder | update manifest ([source.md](source.md)) |
+| Explorer menu, on the manifest in a mod source | update manifest ([source.md](source.md)) |
 | Toolbox, Modlist menu | git init, with no repository or one git init has not set up · update manifest · restore from manifest…, on every manifest |
 
 Each item but git init shows while the instance has a repository.
@@ -110,11 +110,11 @@ By [common.md](common.md#reporting). As a user, I want:
 
 What I expect to need and choose not to build yet, each with why.
 
-1. An official master cleaned with xEdit as a source mod whose build step runs the cleaning on the game's own file, so git holds the process, not a delta. It waits on item 5.
+1. An official master cleaned with xEdit as a built mod whose build step runs the cleaning on the game's own file, so git holds the process, not a delta. It waits on item 5.
 2. Fetching an installation file from a host other than Nexus, or a game's files from its store, such as a Steam depot. Restore from manifest names what it lacks, and I fetch it.
 3. Which side changed: a mark of the manifest each folder was last restored from, so a mod reads as changed by a checkout or by me, and a checkout restores in one click. I know whether I pulled or edited.
 4. A gesture that validates the modlist and writes nothing, for a CI job. Update manifest's report is the validation.
 5. An external tool that needs the load order, such as xEdit, run by a step. It reads a data folder, so it waits for a deploy.
 6. A count in the status bar of the folders that differ from their manifests, each named in its tooltip, so a folder that is not a mod shows that it differs. A mod's row already says so, and no goal yet needs the rest.
 7. Restore as a VS Code task. No chain of mine runs it (commands.md, A task is an entry point for a chain).
-8. A source mod built outside VS Code, for a CI job that publishes it. It needs a host spec/architecture/ does not draw, a load order with no Mod Management to hand it over, and each master's header, which a public runner cannot hold.
+8. A build run outside VS Code, for a CI job that publishes the built mod. It needs a host spec/architecture/ does not draw, a load order with no Mod Management to hand it over, and each master's header, which a public runner cannot hold.
