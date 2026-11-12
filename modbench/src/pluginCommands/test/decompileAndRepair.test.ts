@@ -77,6 +77,7 @@ describe('decompileAndRepair', () => {
 
   it.each([
     ['NotMalformed', phrase`${REFUSED.reason} Run ${gestureName('modbench.plugin.decompile', 'decompile')} instead.`],
+    ['NotMalformedOutsideSourceMod', phrase`${REFUSED.reason} Run ${gestureName('modbench.mod.versionInGit', 'version in git')} on ${REFUSED.item.origin}.`],
     ['OtherPluginRepairable', phrase`${REFUSED.reason} Run ${gestureName('modbench.plugin.decompileAndRepair', 'decompile and repair')} on the mod's malformed plugins.`],
   ] as const)('names the gesture that clears a plugin refused as %s as data, for the view and the agent', async (refusal, reason) => {
     client.setCommandHandler('decompileAndRepair', () => Promise.resolve({ landed: [], refused: [{ ...REFUSED, refusal }] }));
