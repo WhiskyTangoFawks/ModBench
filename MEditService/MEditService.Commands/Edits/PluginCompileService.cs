@@ -120,6 +120,7 @@ internal sealed class PluginCompileService(
             };
         }
         if (!landed.Holds(out var recorded, out var refused)) return refused;
+        loadOrderHolder.SourceWritten([plugin]);
 
         if (logger.IsEnabled(LogLevel.Information))
         {

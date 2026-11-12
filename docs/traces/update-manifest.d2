@@ -14,7 +14,7 @@ instanceloader: @../../spec/architecture/target-architecture.modbench_readmodel.
 instanceloader.label: Instance loader
 views: "every view" {class: driving}
 
-driving -> sourcecommands: "update manifest: the mods or source folders" {class: track}
+driving -> sourcecommands: "update manifest: the mods or mod sources" {class: track}
 sourcecommands -> manifestadapter: "get: each mod's manifest" {class: track}
 instance -> manifestadapter: manifests {class: track}
 manifestadapter -> sourcecommands: "each mod's manifest" {class: track}
@@ -23,7 +23,7 @@ instance -> instanceadapter: "each mod's files · downloaded files · metadata" 
 instanceadapter -> sourcecommands: "each mod's files and package, hashed, and its metadata" {class: track}
 sourcecommands -> manifestadapter: "each mod's manifest" {class: track}
 manifestadapter -> instance: manifests {class: track}
-sourcecommands -> instanceadapter: "each source mod it acts on with a remote: its submodule" {class: track}
+sourcecommands -> instanceadapter: "each mod source it acts on with a remote: its submodule" {class: track}
 instanceadapter -> instance: ".gitmodules · the ignore list" {class: track}
 sourcecommands -> driving: "the outcome" {class: track}
 instance -> instanceadapter: watch {class: signal}

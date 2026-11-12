@@ -1,6 +1,6 @@
 # Workflows
 
-Modbench keeps two kinds of git repositories. The instance repository in the Mod Manager instance folder, and a mod repository for each source mod that Version in Git gives a repository of its own. The instance repository holds the mod manifests, the profiles and Mod Manager Instance configuration. A source mod's source folder, in `source/`, holds that mod's plugin source, its assets and its build file. Understanding how to use git effectively as part of a standard software development workflow is key to using Modbench.
+Modbench keeps two kinds of git repositories. The instance repository in the Mod Manager instance folder, and a mod repository for each mod source that Version in Git gives a repository of its own. The instance repository holds the mod manifests, the profiles and Mod Manager Instance configuration. A mod source, in `source/`, holds that mod's plugin source, its assets and its build file. Understanding how to use git effectively as part of a standard software development workflow is key to using Modbench.
 
 ## The 2 Step Process for Modlists Management in Git
 
@@ -8,7 +8,7 @@ Because a git repo can't hold gigabytes of files, Modbench is setup to commit a 
 
 - Before you commit the modlist, run Update Manifests, so the manifests say what your mod folders hold. This is how you track new modlist changes in git.
 - After a checkout, a pull or a merge of the modlist, run Restore from Manifests…, so your mod folders hold what the manifests say.
-- After a source mod's source changes, run Build Mod, so its mod folder holds what its source makes, and its manifest records it. Update Manifests records a source mod's source folder, and Build Mod records its mod folder.
+- After a mod source changes, run Build Mod, so its mod folder holds what its source makes, and its manifest records it. Update Manifests records a mod source, and Build Mod records its mod folder.
 
 With no mod selected, Update Manifests and Restore from Manifests… act on every mod. Both are in the overflow menu of the Source Control view's title bar.
 
@@ -18,9 +18,9 @@ With no mod selected, Update Manifests and Restore from Manifests… act on ever
 
 Run Git Init Modlist. It makes the instance folder a repository, with an ignore list that keeps the mods' files out of git. Run Update Manifests, then stage and commit in Source Control.
 
-A manifest records a mod's folder or a source mod's source folder. The mod manager, its plugins and the game installation are yours to set up, and stay out of the modlist.
+A manifest records a mod's folder or a mod source. The mod manager, its plugins and the game installation are yours to set up, and stay out of the modlist.
 
-Keep each mod folder to one installation file, as installing makes it, so where each folder comes from stays one fact. When a folder holds files from a second download or the game folder, Update Manifests finds it and names it as a second package, so the folder still restores. Then move the merged folder into a source mod, whose source folder holds the files and whose own manifest restores them.
+Keep each mod folder to one installation file, as installing makes it, so where each folder comes from stays one fact. When a folder holds files from a second download or the game folder, Update Manifests finds it and names it as a second package, so the folder still restores. Then move the merged folder into a mod source, which holds the files and whose own manifest restores them.
 
 GitIgnore is how the modlist knows which files to track, and what to ignore. It's setup with a default allow list, but can be managed by the user however they want. As the user, it is your responsibility to understand the limitations of git, and if you are going to publish this remotely, to only republish what you have permission to publish.
 
@@ -42,13 +42,13 @@ Restore needs each installation file a manifest names in your downloads folder. 
 
 ### Set up a modlist on another machine
 
-Clone the instance repository: the clone is the instance folder. Log in to Nexus, or put the installation files in its downloads folder. Then restore. The repository holds a token in place of each path to the instance folder, the game folder or the downloads folder, and restore puts this machine's paths there. Restore also clones each source mod that has a remote, and builds it.
+Clone the instance repository: the clone is the instance folder. Log in to Nexus, or put the installation files in its downloads folder. Then restore. The repository holds a token in place of each path to the instance folder, the game folder or the downloads folder, and restore puts this machine's paths there. Restore also clones each mod source that has a remote, and builds it.
 
-## Source mods
+## Mod sources
 
-Version in Git puts any mod under git as a source mod, with its source folder in `source/`. Pick a new repository of its own, or the instance repository. Git holds the mod's plugin source, its manifest, its build file, and only the files no package yields with their bytes, in one commit of those files alone when you pick that, and uncommitted when you do not. The manifest names the packages the rest come from, and restore writes them into `source/`.
+Version in Git puts any mod under git as a built mod, with its mod source in `source/`. Pick a new repository of its own, or the instance repository. Git holds the mod's plugin source, its manifest, its build file, and only the files no package yields with their bytes, in one commit of those files alone when you pick that, and uncommitted when you do not. The manifest names the packages the rest come from, and restore writes them into `source/`.
 
-While the instance holds a repository, Version in Git also offers the mod's whole folder in the instance repository. Git then holds every file of the mod folder, and the mod is not a source mod.
+While the instance holds a repository, Version in Git also offers the mod's whole folder in the instance repository. Git then holds every file of the mod folder, and the mod is not a built mod.
 
 The mod's manifest goes to the trash, since git holds everything it recorded. A mod whose manifest ignores files is refused, naming them: git would hold them too.
 
@@ -56,15 +56,15 @@ The build file is yours: Modbench writes the first one, and after that changes o
 
 The mod folder's name and the files you exclude belong to the modlist, not the source. Renaming the mod or excluding a file never touches the repository, and the next build keeps it.
 
-### Publish a source mod
+### Publish a mod source
 
-Give the source mod's repository a remote, and push it. The next Update Manifests writes its entry in `.gitmodules` and lets it into the instance repository's ignore list, and stages nothing. Stage `source/<name>` yourself to pin its commit; git warns "adding embedded git repository" on that `git add`, which is expected. Until you do, the Problems panel says on its manifest that the repository is not pinned. A source mod in the instance repository is published when you push the modlist.
+Give the mod source's repository a remote, and push it. The next Update Manifests writes its entry in `.gitmodules` and lets it into the instance repository's ignore list, and stages nothing. Stage `source/<name>` yourself to pin its commit; git warns "adding embedded git repository" on that `git add`, which is expected. Until you do, the Problems panel says on its manifest that the repository is not pinned. A mod source in the instance repository is published when you push the modlist.
 
-Push the source mod before the modlist. An instance repository made by Git Init Modlist refuses a push that pins a commit the source mod's remote lacks, so the modlist never pins a commit a clone cannot fetch.
+Push the mod source before the modlist. An instance repository made by Git Init Modlist refuses a push that pins a commit the mod source's remote lacks, so the modlist never pins a commit a clone cannot fetch.
 
-Restore never moves a source mod repository you have checked out at another commit. It skips that mod and names the commit.
+Restore never moves a mod source's repository you have checked out at another commit. It skips that mod and names the commit.
 
-A source mod's repository with no remote stays out of the instance repository. Its mod row says its package has no host, so you see what a clone cannot rebuild.
+A mod source's repository with no remote stays out of the instance repository. Its mod row says its package has no host, so you see what a clone cannot rebuild.
 
 ## Workflows
 
@@ -76,7 +76,7 @@ For your own mods, you can use whatever workflow you want. Work directly on main
 
 ### Vendored
 
-Another author's mod is theirs, so you never edit it in place. Keep it installed as an ordinary mod, and make a source mod of your own whose plugin overrides theirs.
+Another author's mod is theirs, so you never edit it in place. Keep it installed as an ordinary mod, and make a mod source of your own whose built mod's plugin overrides theirs.
 
 Prefer a standard patch: a plugin of your own that holds only your edits, which needs no vendored workflow. When you need the whole plugin, the vendored workflow keeps your edits apart from each release:
 
@@ -84,6 +84,6 @@ Prefer a standard patch: a plugin of your own that holds only your edits, which 
 2. Make a branch, and edit on it. Run Build Mod. Your plugin has the author's file name, so it wins the file conflict and overrides theirs.
 3. When the author releases an update, upgrade their mod as you would any other. Switch to `main`, copy the new plugin into your mod's folder, decompile it, and commit. Then merge `main` into your branch, where each conflict lands in one record's file, and build.
 
-Merge rather than rebase. The modlist pins your source mod's commits, so a rebase rewrites commits that older modlist commits point at, and a force-push leaves them unfetchable.
+Merge rather than rebase. The modlist pins your mod source's commits, so a rebase rewrites commits that older modlist commits point at, and a force-push leaves them unfetchable.
 
 A whole-plugin patch redistributes part of the author's work. It still needs the author's mod and its assets to do anything, so it is justifiable, if not ideal, and a standard patch is preferred. Publishing it is your call: understand the mod's permissions before you push its repository. Publishing plugin source or assets you have no permission for is a violation of Nexus terms of service.

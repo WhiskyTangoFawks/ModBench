@@ -160,7 +160,7 @@ The menus follow VS Code's groups: open, change, create, source control, copy, t
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. 3: filter records, or clear the record filter while active. 4: create plugin. Collapse All last. |
-| Plugin menu | reveal · referenced by · enable or disable · apply suggested move (a broken sorting rule a move keeps) · rename… (a plugin in a mod) · load after… · create record… · version in git… (a mod that is not a source mod) · decompile (in a source mod) · decompile and repair (a malformed plugin) · copy value |
+| Plugin menu | reveal · referenced by · enable or disable · apply suggested move (a broken sorting rule a move keeps) · rename… (a plugin in a mod) · load after… · create record… · version in git… (a mod that is not a built mod) · decompile (in a built mod) · decompile and repair (a malformed plugin) · copy value |
 | Plugin the game loads with no line | reveal · referenced by · copy value |
 | Record-type group menu | create record…, except on a group of a type the game cannot create |
 | Record menu, on every record row, worldspaces, cells and placed references included | open · referenced by · create record… (on a container record, Menus and keys, story 4) · copy… · copy value · delete (Menus and keys, story 4) |
@@ -197,7 +197,7 @@ As a user, I want:
 4. Esc at any step to create nothing. Cites: Esc changes nothing
 5. The new plugin to appear disabled. Cites: catalog `plugin sync`; Sorting rules, story 9
 6. The new plugin empty: a header with no records and no masters.
-7. A plugin created in a source mod to land with its plugin source, as working-tree changes I can review. Cites: GLOSSARY.md, Source mod
+7. A plugin created in a built mod to land with its plugin source, as working-tree changes I can review. Cites: GLOSSARY.md, Built mod
 8. The header flagged with the combination I pick from those xEdit offers a new file of its extension, with no pick when it offers one. Cites: Mutagen's data, the reference's behaviour, VS Code's interaction
 
 ### Version in git
@@ -205,12 +205,12 @@ As a user, I want:
 As a user, I want:
 
 1. One pick of where git holds the mod, then one of whether to commit, with not committing first. While it runs, the view's message line names the mod and the phase. Cites: catalog `version in git`; instance-repository.md, The repository, story 7
-2. Git to track, of a source mod's source folder, the plugin source, the mod's assets, the build file, the manifest, `.gitignore` and `.gitattributes`, and nothing else. The assets are the mod's files that no package yields with their bytes. The build file holds its version and the steps that build the mod folder back as it was, for me to add to. Cites: ADR-0007; ADR-0022
+2. Git to track, of a mod source, the plugin source, the mod's assets, the build file, the manifest, `.gitignore` and `.gitattributes`, and nothing else. The assets are the mod's files that no package yields with their bytes. The build file holds its version and the steps that build the mod folder back as it was, for me to add to. Cites: ADR-0007; ADR-0022
 3. When I pick it, a commit, `Init <mod>`, of only what version in git put under git.
 4. Each file's line endings kept as written.
 5. Version in git that refuses any plugin to write nothing, naming each refused plugin and why.
-6. A mod that holds no plugin to become a source mod of its assets.
-7. A source mod to show me its source in the Explorer when it lands, since I work on it there. Cites: source.md
+6. A mod that holds no plugin to become a built mod of its assets.
+7. A mod source to show in the Explorer when it lands, since I work on it there. Cites: source.md
 
 ### Decompile
 
@@ -224,7 +224,7 @@ As a user, I want:
 2. The plugin to keep its place in plugin order and its enabled state in every profile. Its plugin source and what Modbench last wrote follow it. Cites: Never silently wrong
 3. The files in its mod that the game ties to it by name to follow it. Cites: Never silently wrong
 4. A plugin source, when the plugin has one, renamed first, as working-tree changes I can review. Then the file, the files named for it and its lines, in one write. A rename that failed on that write to say so, naming the plugin. Git shows the source rename, and reverting it is the recovery. The file reads as a plugin whose plugin source is unreadable until then.
-5. Each reference to it to follow it, so its source mod's next build makes what I renamed. Cites: symbols.md, The features, story 6
+5. Each reference to it to follow it, so its built mod's next build makes what I renamed. Cites: symbols.md, The features, story 6
 
 ### Move
 

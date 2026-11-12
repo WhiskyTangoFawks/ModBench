@@ -198,12 +198,12 @@
       "additionalProperties": false
     },
     "repository": {
-      "description": "A source mod's repository, whose build makes the folder.",
+      "description": "A mod source's repository, whose build makes the folder.",
       "type": "object",
       "properties": {
         "kind": { "description": "The package's kind.", "const": "repository" },
         "name": {
-          "description": "The source folder's name.",
+          "description": "The mod source's name in the source folder.",
           "type": "string",
           "minLength": 1
         }

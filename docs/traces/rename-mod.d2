@@ -19,14 +19,14 @@ instanceloader.label: Instance loader
 
 mods."the name"
 mods -> modcommands: "the gesture: the mod or separator, the new name, the unsaved texts" {class: loadorder}
-modcommands -> instanceadapter: "get: mod order, folders, profiles, and the source folder named for a mod" {class: loadorder}
+modcommands -> instanceadapter: "get: mod order, folders, profiles, and the mod source named for a mod" {class: loadorder}
 a_mod: "a mod" {
-  modcommands -> manifestadapter: "plan: the manifest's file name and repository · the source folder's files named for it" {class: edit}
-  modcommands -> client: "plan: the source folder's move" {class: edit}
+  modcommands -> manifestadapter: "plan: the manifest's file name and repository · the mod source's files named for it" {class: edit}
+  modcommands -> client: "plan: the mod source's move" {class: edit}
 }
 modcommands -> textdocuments: "every owner's changes, one workspace edit" {class: edit}
-moved: "a mod's source folder moved" {
-  modcommands -> client: "commit: git follows the source folder" {class: edit}
+moved: "a mod's mod source moved" {
+  modcommands -> client: "commit: git follows the mod source" {class: edit}
 }
 modcommands -> instanceadapter: "commit, last: the folder · the line, every profile · the instance repository's lines and submodule entry" {class: loadorder}
 modcommands -> instanceadapter: "each folder's new place" {class: loadorder}
