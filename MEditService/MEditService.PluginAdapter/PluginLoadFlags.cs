@@ -15,8 +15,10 @@ internal static class PluginLoadFlags
     private const int FlagsLength = 4;
 
     /// <summary>Writes the plugin with each flag set or cleared and every other byte as it was, and answers the xxHash64 of
-    /// what it wrote, as a manifest carries it.</summary>
-    internal static string Set(string path, IReadOnlyDictionary<string, bool> flags, GameRelease gameRelease)
+    /// what it wrote, as a manifest carries it. A flagged copy that <paramref name="refusalOfFlaggedCopy"/> gives a reason
+    /// for is refused, and the plugin stays as it was.</summary>
+    internal static string Set(
+        string path, IReadOnlyDictionary<string, bool> flags, GameRelease gameRelease, Func<string, string?> refusalOfFlaggedCopy)
     {
         var load = GameCodecs.For(gameRelease).LoadFlags;
         var bytes = File.ReadAllBytes(path);
@@ -35,6 +37,8 @@ internal static class PluginLoadFlags
         try
         {
             File.WriteAllBytes(temp, bytes);
+            if (refusalOfFlaggedCopy(temp) is { } refusal)
+                throw new PluginFailureException(new PluginFailure.FormIdOutsideFlagLimit(refusal));
             File.Move(temp, path, overwrite: true);
         }
         finally

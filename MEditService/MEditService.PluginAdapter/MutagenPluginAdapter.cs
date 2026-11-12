@@ -153,7 +153,16 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     public Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath, GameRelease gameRelease) => PluginBinaryHash.ClaimOfFile(pluginPath, gameRelease);
 
     public Answer<string, PluginFailure> SetLoadFlags(string pluginPath, IReadOnlyDictionary<string, bool> flags, GameRelease gameRelease) =>
-        PluginFailure.Answer(() => PluginLoadFlags.Set(pluginPath, flags, gameRelease));
+        PluginFailure.Answer(() => PluginLoadFlags.Set(pluginPath, flags, gameRelease, copy => FormIdsOutsideLimit(pluginPath, copy, gameRelease)));
+
+    private static string? FormIdsOutsideLimit(string pluginPath, string flaggedCopy, GameRelease gameRelease)
+    {
+        var fileName = Path.GetFileName(pluginPath);
+        using var loaded = Open(new ModPath(ModKey.FromFileName(fileName), flaggedCopy), gameRelease, read: null, loadOrder: null);
+        if (PluginFlags.LimitOf(loaded.Getter, fileName) is not { } limit) return null;
+        var outside = limit.Outside(loaded.Getter.ModKey, loaded.Getter.EnumerateMajorRecords().Select(record => record.FormKey));
+        return outside.Count == 0 ? null : limit.Refusal(fileName, outside);
+    }
 
     public Answer<IReadOnlyList<RepairPreview>, PluginFailure> RepairsOf(string pluginPath, GameRelease gameRelease) =>
         PluginFailure.Answer(() => PluginRepair.Preview(File.ReadAllBytes(pluginPath), gameRelease));

@@ -73,4 +73,43 @@ public sealed class PluginLoadFlagsTests : IDisposable
         Assert.IsType<PluginFailure.Unparsed>(Adapter.SetLoadFlags(path, new Dictionary<string, bool> { ["Small"] = true }, GameRelease.Fallout4).Failure());
         Assert.Equal(new byte[64], File.ReadAllBytes(path));
     }
+
+    private static Action<Fallout4Mod> HoldingNativeId(uint id) =>
+        mod => mod.Npcs.Add(new Npc(new FormKey(mod.ModKey, id), Fallout4Release.Fallout4));
+
+    [Fact]
+    public void ALightFlag_OverRecordsBeyondTheLightRange_IsRefused_AndTheFileLeftAsItWas()
+    {
+        var path = Written("Big.esp", HoldingNativeId(0x1000));
+        var before = File.ReadAllBytes(path);
+
+        var failure = Assert.IsType<PluginFailure.FormIdOutsideFlagLimit>(
+            Adapter.SetLoadFlags(path, new Dictionary<string, bool> { ["Small"] = true }, GameRelease.Fallout4).Failure());
+
+        Assert.Contains("light", failure.Reason);
+        Assert.Contains("001000", failure.Reason);
+        Assert.Equal(before, File.ReadAllBytes(path));
+        Assert.Equal(["Big.esp"], Directory.GetFiles(_scratch).Select(Path.GetFileName));
+    }
+
+    [Fact]
+    public void ALightFlag_OverRecordsInsideTheLightRange_IsSet()
+    {
+        var path = Written("Fits.esp", HoldingNativeId(0x800));
+
+        Adapter.SetLoadFlags(path, new Dictionary<string, bool> { ["Small"] = true }, GameRelease.Fallout4).Answered();
+    }
+
+    [Fact]
+    public void AClearedLimitingFlag_IsNotHeldToTheRangeItLimited()
+    {
+        var path = Written("Big.esp", HoldingNativeId(0x1000));
+        var bytes = File.ReadAllBytes(path);
+        bytes[9] |= 0x02;
+        File.WriteAllBytes(path, bytes);
+
+        Adapter.SetLoadFlags(path, new Dictionary<string, bool> { ["Small"] = false }, GameRelease.Fallout4).Answered();
+
+        Assert.Equal(0, File.ReadAllBytes(path)[9] & 0x02);
+    }
 }
