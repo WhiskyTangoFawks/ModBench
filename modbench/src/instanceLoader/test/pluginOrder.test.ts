@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activeInGameOrder, inGameOrder, pluginOrderOf } from '../pluginOrder';
+import { activeViewOrder, viewOrder, pluginOrderOf } from '../pluginOrder';
 
 interface Row { name: string; origin: string; line: number | null; enabled: boolean; winning: boolean }
 const row = (name: string, origin: string, line: number | null, enabled = true, winning = true): Row => ({ name, origin, line, enabled, winning });
@@ -42,11 +42,11 @@ describe('the plugin order: the plugins the game loads with no line, then the li
   });
 });
 
-describe('the game\'s order, where the release loads a blueprint plugin after every plugin that is not one', () => {
+describe('the view\'s order, where the release loads a blueprint plugin after every plugin that is not one', () => {
   const at = (name: string) => ({ name, origin: 'Mod' });
   const blueprints = (...names: string[]) => (p: { name: string }) => names.includes(p.name);
   const orderOfNames = (noLine: string[], lines: string[], isBlueprint: (p: { name: string }) => boolean, blueprintLoadsLast = true) =>
-    inGameOrder(noLine.map(at), lines.map(at), isBlueprint, blueprintLoadsLast).map((p) => p.name);
+    viewOrder(noLine.map(at), lines.map(at), isBlueprint, blueprintLoadsLast).map((p) => p.name);
 
   it('places a blueprint plugin with no line after the last line that is not a blueprint plugin, and before a blueprint line', () => {
     expect(orderOfNames(['Base.esm', 'Blueprint.esm'], ['A.esp', 'B.esp', 'Ship.esm'], blueprints('Blueprint.esm', 'Ship.esm')))
@@ -67,11 +67,11 @@ describe('the game\'s order, where the release loads a blueprint plugin after ev
   });
 });
 
-describe('the snapshot\'s active plugins in the game\'s order', () => {
+describe('the snapshot\'s active plugins in the view\'s order', () => {
   const at = (name: string) => ({ name, origin: 'Mod' });
   const snapshot = { loadedWithNoLine: ['Base.esm', 'Blueprint.esm'].map(at), active: ['Base.esm', 'Blueprint.esm', 'A.esp', 'B.esp'].map(at) };
 
   it('takes the lines to be what follows the plugins the game loads with no line', () => {
-    expect(activeInGameOrder(snapshot, (p) => p.name === 'Blueprint.esm', true).map((p) => p.name)).toEqual(['Base.esm', 'A.esp', 'B.esp', 'Blueprint.esm']);
+    expect(activeViewOrder(snapshot, (p) => p.name === 'Blueprint.esm', true).map((p) => p.name)).toEqual(['Base.esm', 'A.esp', 'B.esp', 'Blueprint.esm']);
   });
 });

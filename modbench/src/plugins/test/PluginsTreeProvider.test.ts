@@ -785,7 +785,7 @@ describe('PluginsTreeProvider — the sort direction', () => {
   });
 });
 
-describe('PluginsTreeProvider.inGameOrder, the order mEdit is handed', () => {
+describe('PluginsTreeProvider.viewOrder, the order mEdit is handed', () => {
   const at = (name: string) => ({ name, origin: 'Data/' });
   const snapshot = (gameRelease: string) => ({
     gameRelease, active: ['Base.esm', 'Blueprint.esm', 'A.esp'].map(at), loadedWithNoLine: ['Base.esm', 'Blueprint.esm'].map(at),
@@ -794,7 +794,7 @@ describe('PluginsTreeProvider.inGameOrder, the order mEdit is handed', () => {
   const orderFor = async (gameRelease: string, read: PluginMetadata[]) => {
     const h = makeTree([plugin({ name: 'A.esp', line: 0 })], { loadedWithNoLine: ['Base.esm', 'Blueprint.esm'] });
     await reconcile(h, read);
-    return h.tree.inGameOrder.of(snapshot(gameRelease)).map(({ name }) => name);
+    return h.tree.viewOrder.of(snapshot(gameRelease)).map(({ name }) => name);
   };
 
   it.each([
@@ -808,7 +808,7 @@ describe('PluginsTreeProvider.inGameOrder, the order mEdit is handed', () => {
   it('tells its listener when Editing has read the plugins', async () => {
     const h = makeTree([plugin({ name: 'A.esp', line: 0 })]);
     const listener = vi.fn();
-    h.tree.inGameOrder.onChange(listener);
+    h.tree.viewOrder.onChange(listener);
 
     await reconcile(h, facts);
 

@@ -4,13 +4,13 @@
 import type { LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, MEditClient } from '../client';
 import { exactPluginAddressKey } from '../wire/pluginAddress';
 import { errorMessage } from '../ports/errorMessage';
-import { putLoadOrder, type InGameOrder, type LoadOrderSource, type PutLoadOrderResult } from './loadOrder';
+import { putLoadOrder, type ViewOrder, type LoadOrderSource, type PutLoadOrderResult } from './loadOrder';
 
 export interface EditingDeps {
   client: Pick<MEditClient, 'sendLoadOrder' | 'onLoadOrderResent' | 'onLaunch' | 'latestLoadOrder' | 'signalChange'>;
   instanceRoot: string;
-  /** The order the game loads in; `onChange` is the moment it may have changed, as Editing read the plugins. */
-  inGameOrder: { of: InGameOrder; onChange(listener: () => void): { dispose(): void } };
+  /** The Plugins view's order of the active plugins; `onChange` is the moment it may have changed, as Editing read the plugins. */
+  viewOrder: { of: ViewOrder; onChange(listener: () => void): { dispose(): void } };
   /** Shows a launch, from its start until the snapshot it was for is told (plugins.md, States 2). */
   around: (entry: () => Promise<void>) => Promise<void>;
   /** What came of a put: the snapshot sent and mEdit's outcome, or why nothing was sent. */
@@ -70,15 +70,15 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
     }));
   };
 
-  const orderOf = (source: Sent): string => deps.inGameOrder.of(source).map(exactPluginAddressKey).join('\n');
+  const orderOf = (source: Sent): string => deps.viewOrder.of(source).map(exactPluginAddressKey).join('\n');
 
   const put = (source: LoadOrderSource, stringsLanguage: string | undefined): void => {
     last = source === undefined || 'refusal' in source ? undefined : { source, stringsLanguage, order: orderOf(source) };
     if (last === undefined) handed = undefined;
-    tellPut(putLoadOrder(client, instanceRoot, source, stringsLanguage, deps.inGameOrder.of, changed));
+    tellPut(putLoadOrder(client, instanceRoot, source, stringsLanguage, deps.viewOrder.of, changed));
   };
 
-  const changeOfOrder = deps.inGameOrder.onChange(() => {
+  const changeOfOrder = deps.viewOrder.onChange(() => {
     if (last !== undefined && orderOf(last.source) !== last.order) put(last.source, last.stringsLanguage);
   });
 
