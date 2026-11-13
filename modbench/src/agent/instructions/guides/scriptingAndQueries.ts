@@ -1,6 +1,6 @@
 export const SCRIPTING_AND_QUERIES_GUIDE = `The record index works like an analytical columnar database, and medit is its client library.
 
-- help(medit) lists medit's functions, and its source is medit.py in the folder that PYTHONPATH names. Another language calls the HTTP API, whose reference is at http://127.0.0.1:$MEDIT_PORT/swagger.
+- help(medit) lists medit's classes, then its functions, and its source is medit.py in the folder that PYTHONPATH names. Another language calls the HTTP API, whose reference is at http://127.0.0.1:$MEDIT_PORT/swagger.
 - The record index is DuckDB, which stores data by column. A SELECT reads each column that it names for every row that its filters keep.
 - A join or a subquery does not narrow what DuckDB reads. A SELECT whose join carries body, or a field of a record type's view, which is read from body, reads every record in the load order and can run out of memory.
 - Query in two steps:
