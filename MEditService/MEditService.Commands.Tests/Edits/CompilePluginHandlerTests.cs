@@ -28,7 +28,7 @@ public sealed class CompilePluginHandlerTests : IDisposable
 
         (await _mod.CompileHandler.CompileAsync([_mod.Plugin])).Value();
 
-        Assert.Equal([_mod.Plugin], _mod.Holder.WritesAfter(before).LastOfEach.Require().Keys);
+        Assert.Equal([_mod.Plugin], _mod.Holder.WritesAfter(before).LastOfEach.Keys);
     }
 
     [Fact]
