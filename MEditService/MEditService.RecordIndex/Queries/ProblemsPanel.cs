@@ -36,12 +36,42 @@ internal static class ProblemsPanel
                     var headerProblems = linkedUnreadable.Count == 0
                         ? new HeaderProblems([], null)
                         : NoLinkChecked(plugin, linkedUnreadable, source.Over(plugin, snapshot.GameRelease));
-                    return ProblemsOf(
+                    return Placed(plugin, index.SourceTextOf, ProblemsOf(
                         plugin.Key, snapshot.GameRelease, index.LaterReadFailure(plugin.Key),
                         [.. stopped[plugin.Key].Select(SourceProblem.StoppedAt), .. Found(found[plugin.Key].Select(held => held.Problem), stopped[plugin.Key]), .. headerProblems.Problems],
-                        [.. missing[plugin.Key]], unreadable, headerProblems.PlacementFailure);
+                        [.. missing[plugin.Key]], unreadable, headerProblems.PlacementFailure));
                 }),
         ];
+    }
+
+    // A file that cannot be read to place its problems is a failure of the plugin; its problems sit on the first line.
+    private static PluginProblems Placed(RegisteredPlugin plugin, Func<string, string> textOf, PluginProblems answer)
+    {
+        var folder = (plugin.Provider as PluginProvider.FromMod)?.SourceFolder;
+        var placements = new Dictionary<string, ProblemPlacement?>();
+        var unread = new List<string>();
+        SourceRange RangeOf(SourceProblem problem)
+        {
+            if (folder is null) return SourceRange.FirstLine;
+            var path = Path.Combine(folder, problem.SourceRelativePath);
+            if (!placements.TryGetValue(path, out var placement))
+            {
+                try
+                {
+                    placement = new ProblemPlacement(textOf(path));
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    unread.Add($"{path} could not be read to place its problems: {ex.Message}");
+                }
+                placements[path] = placement;
+            }
+            return placement?.Of(problem.FormKey, problem.TargetFormKey, problem.FieldPath) ?? SourceRange.FirstLine;
+        }
+        var placed = answer with { Problems = [.. answer.Problems.Select(problem => problem with { Range = RangeOf(problem) })] };
+        return unread.Count > 0 && placed.Failure is null
+            ? placed with { Failure = string.Join(" ", unread), FailureKind = ProblemsFailureKind.Placement }
+            : placed;
     }
 
     // Only the load order's active plugins answer a link, and it holds one per file name (ADR-0012).

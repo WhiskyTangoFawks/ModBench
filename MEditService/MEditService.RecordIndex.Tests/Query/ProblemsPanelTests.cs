@@ -13,7 +13,7 @@ public sealed class ProblemsPanelTests : IDisposable
 {
     private const string Absent = "000ABC:Absent.esp";
 
-    private sealed record Plugin(string Name, string? RefersTo = Absent, bool Enabled = true, bool CompiledPlugin = true, bool ResponseWithNoneEmotion = false)
+    private sealed record Plugin(string Name, string? RefersTo = Absent, bool Enabled = true, bool CompiledPlugin = true, bool ResponseWithNoneEmotion = false, int ResponsesWithMissingEmotion = 0, int MissingKeywords = 0)
     {
         public string Referrer => $"000800:{Name}";
     }
@@ -41,7 +41,12 @@ public sealed class ProblemsPanelTests : IDisposable
                 var referrer = mod.Npcs.AddNew("Referrer");
                 if (plugin.RefersTo is { } target) referrer.Race.SetTo(FormKey.Factory(target));
                 mod.Npcs.AddNew("Other");
-                if (plugin.ResponseWithNoneEmotion) AddResponseWithNoneEmotion(mod);
+                if (plugin.ResponseWithNoneEmotion) AddResponsesWithEmotion(mod, FormKey.None);
+                if (plugin.ResponsesWithMissingEmotion > 0) AddResponsesWithEmotion(mod, [.. Enumerable.Repeat(FormKey.Factory(Absent), plugin.ResponsesWithMissingEmotion)]);
+                if (plugin.MissingKeywords > 0)
+                {
+                    referrer.Keywords = [.. Enumerable.Repeat(new FormLink<IKeywordGetter>(FormKey.Factory(Absent)), plugin.MissingKeywords)];
+                }
             }, enabled: plugin.Enabled, origin: $"{Path.GetFileNameWithoutExtension(plugin.Name)}Mod");
         }
         _fixture = builder.BuildScattered();
@@ -50,14 +55,17 @@ public sealed class ProblemsPanelTests : IDisposable
         return _fixture.Plugins;
     }
 
-    private static void AddResponseWithNoneEmotion(Fallout4Mod mod)
+    private static void AddResponsesWithEmotion(Fallout4Mod mod, params FormKey[] emotions)
     {
-        var response = new DialogResponse();
-        response.Emotion.SetTo(FormKey.None);
-        var responses = new DialogResponses(mod.GetNextFormKey(), Fallout4Release.Fallout4);
-        responses.Responses.Add(response);
         var topic = new DialogTopic(mod.GetNextFormKey(), Fallout4Release.Fallout4);
-        topic.Responses.Add(responses);
+        foreach (var emotion in emotions)
+        {
+            var response = new DialogResponse();
+            response.Emotion.SetTo(emotion);
+            var responses = new DialogResponses(mod.GetNextFormKey(), Fallout4Release.Fallout4);
+            responses.Responses.Add(response);
+            topic.Responses.Add(responses);
+        }
         var quest = new Quest(mod.GetNextFormKey(), Fallout4Release.Fallout4);
         quest.DialogTopics.Add(topic);
         mod.Quests.Add(quest);
@@ -116,7 +124,25 @@ public sealed class ProblemsPanelTests : IDisposable
             ((string?)null, (string?)null, Relative(plugin, stray)),
             (problem.FormKey, problem.TargetFormKey, problem.SourceRelativePath));
         Assert.Contains("declares no FormKey", problem.Message, StringComparison.Ordinal);
+        Assert.Equal(SourceRange.FirstLine, problem.Range);
         Assert.Null(answer.Failure);
+    }
+
+    [Fact]
+    public void AProblemWhoseFileCannotBeReadToPlaceIt_StaysOnTheFirstLine_AndItsPluginIsAnsweredWithThePlacementFailure()
+    {
+        var plugin = new Plugin("Strayed.esp", RefersTo: null);
+        Build(plugin);
+        var stray = Path.Combine(Path.GetDirectoryName(SourceFileHolding(plugin, "Other")) ?? "", "Stray.json");
+        File.WriteAllText(stray, "{}");
+        using var index = Indexes.Reconciled(Fixture);
+        File.Delete(stray);
+
+        var answer = Assert.Single(Ready(index));
+
+        Assert.Equal(SourceRange.FirstLine, Assert.Single(answer.Problems).Range);
+        Assert.Contains("Stray.json could not be read to place its problems", answer.Failure, StringComparison.Ordinal);
+        Assert.Equal(ProblemsFailureKind.Placement, answer.FailureKind);
     }
 
     [Theory]
@@ -223,6 +249,91 @@ public sealed class ProblemsPanelTests : IDisposable
              "Race: [000ABC:Absent.esp] <Error: Could not be resolved>"),
             (problem.FormKey, problem.TargetFormKey, problem.FieldPath, problem.SourceRelativePath, problem.Message));
         Assert.Null(answer.Failure);
+    }
+
+    private static SourceRange RangeOf(string text, string token)
+    {
+        var start = text.IndexOf(token, StringComparison.Ordinal);
+        SourcePosition At(int offset)
+        {
+            var before = text[..offset];
+            var line = before.Count(c => c == '\n');
+            return new(line, offset - (before.LastIndexOf('\n') + 1));
+        }
+        return new(At(start), At(start + token.Length));
+    }
+
+    [Fact]
+    public void AMissingReferenceOfACompiledPlugin_CarriesTheRangeOfItsTargetInTheReferrersFile()
+    {
+        var plugin = new Plugin("Refers.esp");
+        using var index = Reconciled(plugin);
+
+        var problem = Assert.Single(Assert.Single(Ready(index)).Problems);
+
+        Assert.Equal(RangeOf(File.ReadAllText(SourceFileHolding(plugin, "Referrer")), $"\"{Absent}\""), problem.Range);
+    }
+
+    [Fact]
+    public void AMissingReferenceInAnEmbeddedChild_CarriesItsRangeInTheOwnersFile()
+    {
+        var plugin = new Plugin("Speaks.esp", RefersTo: null, ResponsesWithMissingEmotion: 1);
+        using var index = Reconciled(plugin);
+
+        var problem = Assert.Single(Assert.Single(Ready(index)).Problems);
+
+        var owner = Path.Combine(Entry(plugin).ModFolderOf(), problem.SourceRelativePath);
+        Assert.Equal(RangeOf(File.ReadAllText(owner), $"\"{Absent}\""), problem.Range);
+    }
+
+    private string TextOf(Plugin plugin, SourceProblem problem) =>
+        File.ReadAllText(Path.Combine(Entry(plugin).ModFolderOf(), problem.SourceRelativePath));
+
+    [Fact]
+    public void RecordsOfOneFileCitingTheSameMissingRecord_EachCarryTheRangeOfTheirOwnReference()
+    {
+        var plugin = new Plugin("Speaks.esp", RefersTo: null, ResponsesWithMissingEmotion: 2);
+        using var index = Reconciled(plugin);
+
+        var problems = Assert.Single(Ready(index)).Problems;
+
+        Assert.Equal(2, problems.Count);
+        Assert.All(problems, problem =>
+        {
+            var text = TextOf(plugin, problem);
+            var own = RangeOf(text, problem.FormKey ?? "").Start;
+            var cited = text.Split('\n').Select((line, number) => (line, number)).Where(l => l.number >= own.Line && l.line.Contains(Absent, StringComparison.Ordinal)).First().number;
+            Assert.Equal(cited, problem.Range?.Start.Line);
+        });
+        Assert.Equal(2, problems.Select(problem => problem.Range?.Start.Line).Distinct().Count());
+    }
+
+    [Fact]
+    public void LinksAtDifferentElementsOfOneList_EachCarryTheRangeOfTheirOwnElement()
+    {
+        var plugin = new Plugin("Lists.esp", RefersTo: null, MissingKeywords: 3);
+        using var index = Reconciled(plugin);
+
+        var problems = Assert.Single(Ready(index)).Problems.OrderBy(problem => problem.FieldPath, StringComparer.Ordinal).ToList();
+
+        var text = TextOf(plugin, problems[0]);
+        var lines = text.Split('\n').Select((line, number) => (line, number)).Where(l => l.line.Contains(Absent, StringComparison.Ordinal)).Select(l => l.number).ToList();
+        Assert.Equal(lines, problems.Select(problem => problem.Range?.Start.Line ?? -1).ToList());
+        Assert.Equal(3, lines.Count);
+    }
+
+    [Fact]
+    public void FilesThatClaimOneFormKey_EachCarryTheRangeOfTheFormKeyTheyDeclare()
+    {
+        var plugin = new Plugin("Twice.esp", RefersTo: null);
+        Build(plugin);
+        BackupClaimingTheFormKeyOf(plugin, "Referrer");
+        using var index = Indexes.Reconciled(Fixture);
+
+        var problems = Assert.Single(Ready(index)).Problems;
+
+        Assert.Equal(2, problems.Count);
+        Assert.All(problems, problem => Assert.Equal(RangeOf(TextOf(plugin, problem), $"\"{plugin.Referrer}\""), problem.Range));
     }
 
     private const string Unreadable = "Unreadable.esp";

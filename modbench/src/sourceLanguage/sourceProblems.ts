@@ -5,8 +5,8 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import type { PathHop } from '../wire/messages';
 import { pluginAddressKey } from '../wire/pluginAddress';
-import { locationOf, problemSpan, type Segment } from './sourceText';
-import { lastRead, positionAt, readiness, tellingOnSurface, type Position, type Told } from './feedShape';
+import { locationOf, type Segment } from './sourceText';
+import { lastRead, readiness, tellingOnSurface, type Position, type Told } from './feedShape';
 import { answerOf, failureReason, type ReadFailed } from '../wire/readFailed';
 
 type SourceProblem = PluginProblems['problems'][number];
@@ -19,7 +19,6 @@ export type ProblemsByFile = ReadonlyMap<string, ProblemOnFile[]>;
 export interface SourceProblemsDeps {
   client: Pick<MEditClient, 'getPluginProblems' | 'onNotification' | 'loadOrderStatus' | 'onLoadOrderSettled' | 'onUnsavedHandOver'>;
   sourceFiles: SourceFilesOf;
-  readText: (path: string) => Promise<string>;
   reporter: Pick<Reporter, 'shownOnSurface'>;
   /** Replaces every problem published before. */
   publish: (problems: ProblemsByFile) => void;
@@ -41,11 +40,10 @@ function clearingGesture({ plugin, problem }: { plugin: PluginAddress; problem: 
     : { label: 'clear reference', command: 'modbench.record.editField', args: [record, { op: 'set', path, value: null }] };
 }
 
-function onText(text: string, plugin: PluginAddress, problem: SourceProblem): ProblemOnFile {
-  const target = problemSpan(text, problem);
+function onFile(plugin: PluginAddress, problem: SourceProblem): ProblemOnFile {
   const clearing = clearingGesture({ plugin, problem });
-  const place = target ? { start: positionAt(text, target.start), end: positionAt(text, target.end) } : { start: FIRST_LINE, end: FIRST_LINE };
-  return { message: problem.message, ...place, ...clearing && { clearing } };
+  const { start, end } = problem.range ?? { start: FIRST_LINE, end: FIRST_LINE };
+  return { message: problem.message, start, end, ...clearing && { clearing } };
 }
 
 type OnFiles = Map<string, ProblemOnFile[]>;
@@ -53,15 +51,14 @@ type OnFiles = Map<string, ProblemOnFile[]>;
 interface Contribution { links: OnFiles; stops: OnFiles }
 // `told`: a failure mEdit does not log itself. It logs a later-read failure when it begins.
 interface Unplaced extends Told { plugin: string; told: boolean }
-interface Placed { ofPlugin: Map<string, Contribution | undefined>; unplaced: Unplaced[]; unread: Told[] }
+interface Placed { ofPlugin: Map<string, Contribution | undefined>; unplaced: Unplaced[] }
 
 const nameOf = ({ name, origin }: { name: string; origin: string }) => `"${name}" (${origin})`;
 const isLink = (problem: SourceProblem) => problem.fieldPath != null;
 
-async function placed(answer: PluginProblems[], { sourceFiles, readText }: SourceProblemsDeps): Promise<Placed> {
+function placed(answer: PluginProblems[], { sourceFiles }: SourceProblemsDeps): Placed {
   const unplaced: Unplaced[] = [];
-  const unread: Told[] = [];
-  const ofPlugin = new Map(await Promise.all(answer.map(async ({ plugin, problems, failure, failureKind }) => {
+  const ofPlugin = new Map(answer.map(({ plugin, problems, failure, failureKind }) => {
     const files = sourceFiles(plugin.origin);
     const key = pluginAddressKey(plugin);
     const why = files === undefined ? `The instance holds no source folder for ${plugin.origin}.` : failure;
@@ -73,17 +70,13 @@ async function placed(answer: PluginProblems[], { sourceFiles, readText }: Sourc
       const path = files.file(problem.sourceRelativePath);
       byPath.set(path, [...(byPath.get(path) ?? []), problem]);
     }
-    await Promise.all([...byPath].map(async ([path, onPath]) => {
-      const text = await readText(path).catch((error: unknown) => {
-        unread.push({ key: path, message: `The Problems panel shows the problems of "${path}" on its first line.`, why: errorMessage(error) });
-        return '';
-      });
-      contribution.links.set(path, onPath.filter(isLink).map((problem) => onText(text, plugin, problem)));
-      contribution.stops.set(path, onPath.filter((problem) => !isLink(problem)).map((problem) => onText(text, plugin, problem)));
-    }));
+    for (const [path, onPath] of byPath) {
+      contribution.links.set(path, onPath.filter(isLink).map((problem) => onFile(plugin, problem)));
+      contribution.stops.set(path, onPath.filter((problem) => !isLink(problem)).map((problem) => onFile(plugin, problem)));
+    }
     return [key, contribution] as const;
-  })));
-  return { ofPlugin, unplaced, unread };
+  }));
+  return { ofPlugin, unplaced };
 }
 
 function onEveryFile(contributions: Contribution[]): ProblemsByFile {
@@ -108,7 +101,6 @@ function nextHeld(held: Map<string, Contribution>, answered: Map<string, Contrib
 export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
   const { client, reporter, publish, languageStatus } = deps;
   const tellUnplaced = tellingOnSurface(reporter);
-  const tellUnread = tellingOnSurface(reporter);
   let held = new Map<string, Contribution>();
   let unplacedStatus: string | undefined;
   let failed: { ask: number; why: string } | undefined;
@@ -129,7 +121,7 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
   const { ready, answeredAtSubscribe } = readiness(client);
   let latest = 0;
   let shown = 0;
-  const settle = (mine: number, { ofPlugin, unplaced, unread }: Placed) => {
+  const settle = (mine: number, { ofPlugin, unplaced }: Placed) => {
     if (mine < shown) return;
     shown = mine;
     if (failed && failed.ask < mine) failed = undefined;
@@ -138,7 +130,6 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
     unplacedStatus = unplaced.length > 0 ? lastRead(unplaced.map(({ plugin, why }) => `${plugin}: ${why}`).join('; ')) : undefined;
     showStatus();
     tellUnplaced(unplaced.filter(({ told }) => told));
-    tellUnread(unread);
   };
   const keepLastAnswer = (mine: number, error: unknown) => {
     const why = errorMessage(error);
@@ -149,7 +140,7 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
   const ask = async (atSubscribe = false) => {
     const mine = ++latest;
     try {
-      const answer = await placed(answerOf(await client.getPluginProblems()), deps);
+      const answer = placed(answerOf(await client.getPluginProblems()), deps);
       if (atSubscribe) answeredAtSubscribe();
       settle(mine, answer);
     } catch (error) {

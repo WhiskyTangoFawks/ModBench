@@ -13,12 +13,6 @@ export interface FieldAtOffset extends TextSpan {
   path: Segment[];
 }
 
-interface ProblemPlace {
-  formKey?: string | null;
-  targetFormKey?: string | null;
-  fieldPath?: string | null;
-}
-
 const FORM_KEY = /^[0-9A-F]{6}[:_].+\.(esm|esp|esl)$/i;
 
 // Mutagen reads either delimiter and either hex case as one FormKey; the Index names it by the colon and upper case.
@@ -158,11 +152,6 @@ export const locationOf = (fieldPath: string): Segment[] =>
 export const fieldPathOf = (path: readonly Segment[]): string =>
   path.reduce<string>((text, segment) => typeof segment === 'number' ? `${text}[${segment}]` : text === '' ? segment : `${text}.${segment}`, '');
 
-function stringInScope(scope: Node, spanned: string, fieldPath: string | null | undefined): Node | undefined {
-  const atPath = fieldPath ? findNodeAtLocation(scope, locationOf(fieldPath)) : undefined;
-  return atPath && isStringOf(spanned)(atPath) ? atPath : find(scope, isStringOf(spanned));
-}
-
 /** Each string the record `formKey` holds at one of `fieldPaths`, mEdit's member paths, by the span between its
  *  quotes. */
 export function stringsAt(text: string, formKey: string, fieldPaths: readonly string[]): (TextSpan & { value: string })[] {
@@ -175,14 +164,4 @@ export function stringsAt(text: string, formKey: string, fieldPaths: readonly st
       ? [{ value: node.value, start: node.offset + 1, end: node.offset + node.length - 1 }]
       : [];
   });
-}
-
-/** The span a problem sits on: the string of the FormKey it names at its field path, else the first
- *  such string in its record; undefined where the text holds none. */
-export function problemSpan(text: string, { formKey, targetFormKey, fieldPath }: ProblemPlace): TextSpan | undefined {
-  const root = parseTree(text);
-  const scope = root && formKey ? (recordOf(root, formKey) ?? root) : root;
-  const spanned = targetFormKey ?? formKey;
-  const target = scope && spanned ? stringInScope(scope, spanned, fieldPath) : undefined;
-  return target && spanOf(target);
 }

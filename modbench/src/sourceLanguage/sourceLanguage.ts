@@ -154,7 +154,7 @@ function sourceProblems(deps: SourceLanguageDeps): Pick<SourceLanguage, 'dispose
   const pathStatus = languageStatusItem('modbench.sourcePaths');
   const readText = readHeldText;
   const unsubscribe = [
-    feedSourceProblems({ ...deps, readText, publish: feedOf('links'), languageStatus: linkStatus.show }),
+    feedSourceProblems({ ...deps, publish: feedOf('links'), languageStatus: linkStatus.show }),
     feedPathProblems({ ...deps, paths: deps.pathStanding, readText, publish: feedOf('paths'), languageStatus: pathStatus.show }),
   ];
   const disposable = new vscode.Disposable(() => { for (const off of unsubscribe) off(); collection.dispose(); linkStatus.dispose(); pathStatus.dispose(); });
