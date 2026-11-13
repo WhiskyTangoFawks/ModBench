@@ -701,6 +701,33 @@ describe('Instance — built by watching', () => {
 });
 
 describe('Instance — a write that changes several files', () => {
+  it('reads again only the files a refresh names as written', async () => {
+    const { instance, fake } = loader();
+    await instance.refresh();
+
+    await instance.refresh(['/instance/mods/A/a.esp']);
+
+    expect(fake.rereads).toEqual([CHECK, reread('/instance/mods/A/a.esp')]);
+  });
+
+  it('reads again only the files its work names as written', async () => {
+    const { instance, fake } = loader();
+    await instance.refresh();
+
+    await instance.quiet((written) => { written.name(['/instance/mods/A/a.esp']); return Promise.resolve(); });
+
+    expect(fake.rereads).toEqual([CHECK, reread('/instance/mods/A/a.esp')]);
+  });
+
+  it('checks the disk after work that names no file', async () => {
+    const { instance, fake } = loader();
+    await instance.refresh();
+
+    await instance.quiet(() => Promise.resolve());
+
+    expect(fake.rereads).toEqual([CHECK, CHECK]);
+  });
+
   it('lands no value read inside it, and lands the refresh after it', async () => {
     const { instance } = loader();
     await instance.refresh();

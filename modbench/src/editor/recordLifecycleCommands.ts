@@ -8,6 +8,7 @@ import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
 import type { RecordWrite } from '../drivingLib/writingGesture';
+import type { WrittenFiles } from '../instanceLoader/writtenFiles';
 import type { SourceEditing } from '../textDocuments/sourceEditing';
 import { applyAnswered } from '../textDocuments/applyAnswered';
 import { keyArgsView } from '../drivingLib/copyValue';
@@ -84,14 +85,14 @@ export function registerRecordLifecycleCommands(
       const { records, unreadable, labels } = selectedRecords(rowsOf(clicked, selected, selections));
       const label = (item: RecordAt | string) => (typeof item === 'string' ? item : addressLabel(item, labels));
 
-      const reportOutcome = () => source.oneAtATime(async () => {
+      const reportOutcome = (written?: WrittenFiles) => source.oneAtATime(async () => {
         const answer = records.length > 0 ? await client.getDeleteChanges(records) : { applied: [], refused: [] };
         if (isRefused(answer)) { reporter.report('error', answer.message); return; }
         const refused = [...unreadable, ...answer.refused];
         const outcome = (landed: readonly RecordAt[]) => reporter.selectionOutcome(
           `Could not delete ${refused.length} of ${records.length + unreadable.length} records.`, { landed, refused }, label);
         const touched = answer.applied.map(({ record }) => record);
-        const failure = await applyAnswered(source, answer.applied, touched.map(({ plugin }) => plugin));
+        const failure = await applyAnswered(source, answer.applied, touched.map(({ plugin }) => plugin), written);
         outcome(landedUnless(failure, touched, reporter, 'Could not delete the records.'));
       });
       await (records.length > 0 ? write(reportOutcome) : reportOutcome());
@@ -203,12 +204,12 @@ export function registerRecordCopyCommands(
       const confirmed = mode === 'Override' ? await confirmReplacement(client, records, destinations, labels, ask, reporter) : { replace: false };
       if (confirmed === 'cancelled') return;
 
-      await write(() => source.oneAtATime(async () => {
+      await write((filesWritten) => source.oneAtATime(async () => {
         const answer = await client.getCopyChanges(records, mode, destinations, confirmed.replace);
         if (isRefused(answer)) { reporter.report('error', answer.message); return; }
         const answered = answer.applied.map(({ record, destination }) => ({ record, destination }));
         const attempted = copiesWritten(answered, mode).length + answer.refused.length;
-        const failure = await applyAnswered(source, answer.applied, answered.map(({ destination }) => destination));
+        const failure = await applyAnswered(source, answer.applied, answered.map(({ destination }) => destination), filesWritten);
         const landed = landedUnless(failure, answered, reporter, 'Could not copy the records.');
         const written = copiesWritten(landed, mode);
         if (written.length > 0) reporter.landed(landedMessage(written, labels));
