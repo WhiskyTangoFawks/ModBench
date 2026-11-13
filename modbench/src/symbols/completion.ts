@@ -1,8 +1,8 @@
 import type { MEditClient } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
-import { fieldOfRecord, type metadataAt } from './fieldMetadata';
-import { fieldAt } from './sourceText';
+import { fieldOfRecord, type metadataAt } from '../drivingLib/fieldMetadata';
+import { fieldAt } from '../drivingLib/sourceText';
 import { answerOf } from '../wire/readFailed';
 
 interface SourceCompletion {
@@ -12,7 +12,6 @@ interface SourceCompletion {
 }
 
 interface SourceCompletions {
-  kind: 'reference' | 'enumMember';
   isIncomplete: boolean;
   start: number;
   end: number;
@@ -23,27 +22,19 @@ type Client = Pick<MEditClient, 'getComparison' | 'searchRecords'>;
 type FieldMetadata = NonNullable<ReturnType<typeof metadataAt>>;
 type Range = Pick<SourceCompletions, 'start' | 'end'>;
 
-const enumCompletions = (field: FieldMetadata, range: Range): SourceCompletions => ({
-  ...range,
-  kind: 'enumMember',
-  isIncomplete: false,
-  items: field.enumMembers.map(({ value, label }) => ({ label: value, detail: label ?? '', insertText: value })),
-});
-
 async function referenceCompletions(client: Client, field: FieldMetadata, typed: string, range: Range): Promise<SourceCompletions | undefined> {
   if (!typed) return undefined;
   const { items } = answerOf(await client.searchRecords(typed, field.validFormKeyTypes));
   const records = [...new Map(items.map((record) => [record.formKey, record])).values()];
   return {
     ...range,
-    kind: 'reference',
     isIncomplete: true,
     items: records.map(({ editorId, formKey }) => ({ label: editorId || formKey, detail: formKey, insertText: formKey })),
   };
 }
 
-/** What the string under the cursor completes to: the records a reference field offers for the text typed so
- *  far, or the values of an enum field; undefined elsewhere, and where mEdit cannot answer, which the Output says. */
+/** The records a reference field offers for the text typed so far; undefined elsewhere, and where mEdit cannot answer,
+ *  which the Output says. */
 export async function completionsAt(
   { client, reporter }: { client: Client; reporter: Pick<Reporter, 'shownOnSurface'> },
   text: string, offset: number,
@@ -53,7 +44,6 @@ export async function completionsAt(
   try {
     const field = await fieldOfRecord(client, found);
     const range = { start: found.start + 1, end: found.end - 1 };
-    if (field?.type === 'enum' || field?.type === 'flags') return enumCompletions(field, range);
     if (field?.type === 'formKey') return await referenceCompletions(client, field, text.slice(range.start, offset), range);
     return undefined;
   } catch (error) {

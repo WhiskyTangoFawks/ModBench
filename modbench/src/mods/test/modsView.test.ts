@@ -62,6 +62,8 @@ import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import { file, folder, mod } from './indexedValue';
 import { ModNode, SeparatorNode } from '../ModListProvider';
 import { createModsView } from '../modsView';
+import { modArgumentOf } from '../../drivingLib/argument';
+import { ArchivedFileNode, FileNode } from '../modFiles';
 import { createFocusedView } from '../../drivingLib/focusedView';
 import { ModStatuses } from '../../modStatus/modStatuses';
 import { modValueOver } from '../../instanceAdapter/modValue';
@@ -118,7 +120,6 @@ const otherDeps = () => ({
   extensionUri: Uri.file('/extension'), downloadsView: 'modbench.downloads', channel: { warn: () => undefined },
   focusedView: { id: () => undefined, selection: () => [], selectionOf: () => [], follow: () => ({ dispose: () => undefined }), enter: () => undefined, onDidChange: () => ({ dispose: () => undefined }) },
   statuses: new ModStatuses(foldersHoldingNothing(), () => undefined),
-  referencedBy: { mod: () => Promise.resolve(), file: () => Promise.resolve() },
   archives: new InMemoryMEditClient(),
   sourceGestures: {
     commands: sourceCommands({ client: new InMemoryMEditClient(), adapter: fakeInstanceAdapter().adapter, saveUnsaved: () => Promise.resolve([]), loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }),
@@ -253,6 +254,31 @@ describe('the Mods view registers its own gestures', () => {
     expect([
       tooltipOf({ kind: 'mod', name: 'Harder VATS' }), tooltipOf({ kind: 'separator', name: 'Unassigned (Modlist Development)' }), tooltipOf({ kind: 'mod', name: 'Gone' }),
     ]).toEqual(['Harder VATS', undefined, undefined]);
+  });
+
+  it('says the one selected mod row to Symbols, and none over several rows or a separator', () => {
+    const { symbolRows } = createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
+    const harderVats = new ModNode({ kind: 'mod', name: 'Harder VATS', enabled: true });
+    const gear = new SeparatorNode({ kind: 'separator', name: 'Gear', enabled: true }, []);
+
+    treeViews.view().selectRows([harderVats]);
+    const one = modArgumentOf(symbolRows.selected());
+    treeViews.view().selectRows([harderVats, harderVats]);
+    const several = symbolRows.selected();
+    treeViews.view().selectRows([gear]);
+
+    expect([one, several, symbolRows.selected()]).toEqual([{ kind: 'mod', name: 'Harder VATS' }, undefined, undefined]);
+  });
+
+  it('says the Data folder path a file row stands for, and none for any other argument', () => {
+    const { symbolRows } = createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
+    const owner = new ModNode({ kind: 'mod', name: 'Harder VATS', enabled: true });
+    const loose = new FileNode(owner, { kind: 'mod', name: 'Harder VATS' }, file('mods/Harder VATS', 'meshes/a.nif'), 'a.nif');
+    const archive = new FileNode(owner, { kind: 'mod', name: 'Harder VATS' }, file('mods/Harder VATS', 'Main.ba2'), 'Main.ba2');
+
+    expect([
+      symbolRows.dataPathOf(loose), symbolRows.dataPathOf(new ArchivedFileNode(archive, archive, 'meshes/b.nif', 'b.nif', undefined)), symbolRows.dataPathOf(owner),
+    ]).toEqual(['meshes/a.nif', 'meshes/b.nif', undefined]);
   });
 
   it('hears its copy value in the Mods view\'s key', () => {

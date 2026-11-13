@@ -17,8 +17,9 @@ import { highlightFollowingFocus } from './drivingLib/highlightFollowsFocus';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, loadOrderComing, sourceModRepositoriesOver, type Editor } from './editor';
 import { quickFixes } from './drivingLib/quickFixes';
-import type { FileCopies } from './sourceLanguage/fileLanguage';
-import { createSourceLanguage, followRenames, formKeyLocation, registerFollowRename, scriptReferences } from './sourceLanguage';
+import type { FileCopies } from './symbols/fileLanguage';
+import { createSymbols, followRenames, formKeyLocation, registerFollowRename, scriptReferences, type SymbolRows } from './symbols';
+import { createSourceLanguage } from './sourceLanguage';
 import { saveUnsavedUnder } from './textDocuments/saveUnsavedUnder';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
 import { registerCopyValueCommand, type CopyValueAdapter } from './drivingLib/copyValue';
@@ -45,7 +46,6 @@ import { reportUnwatchedFolders } from './drivingLib/unwatchedFolders';
 import { createPlugins, PLUGINS_KEY_ARGS, type Plugins } from './plugins';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
-import type { ReferencedBy } from './mods/modSymbolCommands';
 import { copyTheGameGets, revealCopy } from './mods/fileCopy';
 import { NO_PATH_STANDING, pathStandingOf } from './mods/pathStanding';
 import type { PathStanding } from './sourceLanguage/pathProblems';
@@ -128,7 +128,6 @@ interface ViewsDeps {
   focusedView: FocusedView;
   editor: Pick<Editor, 'copyValue'>;
   sourceEditing: SourceEditing;
-  referencedBy: ReferencedBy;
 }
 
 interface InstanceSide {
@@ -138,6 +137,7 @@ interface InstanceSide {
   deployment?: DeploymentRead;
   copyReads?: CopyReads;
   pluginsShown?: PluginsShown;
+  symbolRows?: SymbolRows;
   toolbox: ToolboxView;
   modsLines: () => string[];
   entryTooltip: (entry: EntryRef) => string | undefined;
@@ -260,7 +260,6 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     checkForUpdates: checkForUpdatesOver(adapter, deps.nexus),
     manifestGestures: { commands: instanceRepository, toolboxView: TOOLBOX_VIEW, say: toolbox.say },
     statuses: modStatuses,
-    referencedBy: deps.referencedBy,
     archives: client,
   }));
   own(registerArchiveOpen({ gameRelease: () => adapter.gameRelease(), reporter: reporterFor('archive.open') }));
@@ -310,6 +309,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     deployment: { folder: () => deploymentFolderOf(deploymentFolderSetting), pluginsTxtPlace: placeForGame },
     pathStanding: pathStandingOf(instance),
     sourceFiles: (origin) => sourceFiles(instance.value, origin),
+    symbolRows: { mods: mods.symbolRows, plugins: plugins.symbolRows, filesHeld: () => instance.value },
     copyValue: [mods.copyValue, plugins.copyValue, downloads.copyValue],
   };
 }
@@ -371,7 +371,6 @@ function start(context: vscode.ExtensionContext): void {
   const plugins = createPlugins({
     client: meditClient, facts: opened.facts, channel: outputChannel, reporterFor,
     registerRepositories: sourceModRepositories.registerRepositories, ask: askQuestion, sourceEditing,
-    referencedBy: (plugin) => sourceLanguage.referencedBy(plugin),
   });
   const editor = createEditor({
     context, meditClient, outputChannel,
@@ -401,22 +400,24 @@ function start(context: vscode.ExtensionContext): void {
     focusedView,
     editor,
     sourceEditing,
-    referencedBy: { mod: (mod) => sourceLanguage.referencedByMod(mod), file: (path) => sourceLanguage.referencedByFile(path) },
   });
   const scriptEnvironmentFailures = toastOncePerFailure(reporterFor('scriptEnvironment'));
   const scriptsPath = vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath;
   const sourceLanguage = createSourceLanguage({
     client: meditClient, instance: views.instance, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
+    pathStanding: views.pathStanding,
+  });
+  const symbols = createSymbols({
+    client: meditClient, instance: views.instance, reporter: makeReporter(outputChannel, 'symbols'), reporterFor, rows: views.symbolRows,
     pluginsShown: views.pluginsShown,
     fileCopies: views.fileCopies,
-    pathStanding: views.pathStanding,
     entryTooltip: views.entryTooltip,
     downloadedFileTooltip: views.downloadedFileTooltip,
     modOrderFileOf: views.modOrderFileOf,
     owners: [recordIndexReferences(meditClient, () => Promise.resolve([])), ...opened.owners],
     entryOwners: opened.entryOwners,
   });
-  const agentServer = serveAgent({ port: agentPort(), instance: views.instance, copyReads: views.copyReads, symbols: sourceLanguage.symbols, statuses: views.statuses, deployment: views.deployment, pluginsShown: views.pluginsShown, standing: { mEdit: () => plugins.standing.mEdit(), plugins: () => plugins.standing.plugins(), sortingRules: () => plugins.standing.sortingRules(), modList: () => views.modsLines(), sourceLanguage: () => sourceLanguage.messages() }, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
+  const agentServer = serveAgent({ port: agentPort(), instance: views.instance, copyReads: views.copyReads, symbols: symbols.symbols, statuses: views.statuses, deployment: views.deployment, pluginsShown: views.pluginsShown, standing: { mEdit: () => plugins.standing.mEdit(), plugins: () => plugins.standing.plugins(), sortingRules: () => plugins.standing.sortingRules(), modList: () => views.modsLines(), sourceLanguage: () => sourceLanguage.messages() }, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
   context.subscriptions.push(
     views,
     plugins,
@@ -430,6 +431,7 @@ function start(context: vscode.ExtensionContext): void {
       fail: (message, detail) => { scriptEnvironmentFailures.threw(scriptEnvironmentFailures, message, detail); },
     }),
     sourceLanguage,
+    symbols,
   );
 }
 

@@ -9,7 +9,7 @@ import type { pluginLanguage } from './pluginLanguage';
 import type { scriptLanguage } from './scriptLanguage';
 import { locateRecord, locationOf } from './recordLocation';
 import { referencesToFormKey } from './formKeyReferences';
-import { formKeyMember } from './sourceText';
+import { formKeyMember } from './formKeyText';
 import { placeOfLocation, referenceOf } from './symbolPlaces';
 
 /** A symbol by its name: a record by its FormKey, a file by its path in the Data folder. */

@@ -3,7 +3,7 @@ import { namesPlugin, type CopyNaming, type HeldTexts, type PlaceInFile, type Pl
 import { heldText } from '../textDocuments/heldText';
 import { pluginRowName } from '../wire/pluginAddress';
 import { locateCopies, type RecordLocation, type RecordLocationDeps } from './recordLocation';
-import { pluginNameSpans } from './sourceText';
+import { pluginNameSpans } from './formKeyText';
 import { readBy, reportedForFeature, reportedForGesture } from './symbolPlaces';
 
 interface PluginReferencesDeps<Document> extends RecordLocationDeps<Document> {

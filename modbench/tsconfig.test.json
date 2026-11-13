@@ -37,6 +37,7 @@
     { "path": "./src/plugins" },
     { "path": "./src/editor" },
     { "path": "./src/sourceLanguage" },
+    { "path": "./src/symbols" },
     { "path": "./src/agent" }
   ],
   "include": ["src/**/*.test.ts", "src/**/test/**/*.ts"],

@@ -32,8 +32,8 @@ const MESSAGE_API_SITES = [
     `ObjectPattern > Property[key.name=${MESSAGE_API}]`,
 ];
 
-const PATHLESS_BOXES = ['toolbox', 'mods', 'plugins', 'downloads', 'editor', 'drivingLib', 'textDocuments', 'instanceLoader', 'sourceLanguage'];
-const PACKAGE_BOXES = ['client', 'sourceLanguage', 'agent'];
+const PATHLESS_BOXES = ['toolbox', 'mods', 'plugins', 'downloads', 'editor', 'drivingLib', 'textDocuments', 'instanceLoader', 'sourceLanguage', 'symbols'];
+const PACKAGE_BOXES = ['client', 'agent'];
 const NOT_PRODUCTION = ['**/*.test.ts', '**/test/**'];
 
 const FS_IMPORT = {
@@ -46,7 +46,7 @@ const PATH_IMPORT = {
 };
 const PACKAGE_IMPORT = {
     regex: '^(?![.]|node:|vscode$)',
-    message: 'Only the mEdit client, the Source language, the content digest (xxhash-wasm), the FOMOD installer (its engine) and the Wabbajack publisher (jsonc-parser) and LOOT\'s metadata (yaml) import a package.',
+    message: 'Only the mEdit client, the content digest (xxhash-wasm), the FOMOD installer (its engine), the Wabbajack publisher and the text of plugin source (jsonc-parser) and LOOT\'s metadata (yaml) import a package.',
 };
 const DIGEST_PACKAGE_IMPORT = {
     regex: '^(?![.]|node:|vscode$|xxhash-wasm$)',
@@ -58,7 +58,7 @@ const FOMOD_ENGINE_PACKAGE_IMPORT = {
 };
 const JSONC_PACKAGE_IMPORT = {
     regex: '^(?![.]|node:|vscode$|jsonc-parser$)',
-    message: 'The Wabbajack publisher imports one package: the parser that reads its settings as Wabbajack does.',
+    message: 'The Wabbajack publisher and the text of plugin source import one package: the JSON parser that reads a file as its owner does.',
 };
 const YAML_PACKAGE_IMPORT = {
     regex: '^(?![.]|node:|vscode$|yaml$)',
@@ -290,6 +290,13 @@ export default defineConfig(
         },
     },
     {
+        files: ['src/drivingLib/sourceText.ts', 'src/symbols/formKeyText.ts'],
+        ignores: NOT_PRODUCTION,
+        rules: {
+            'no-restricted-imports': restrictedImports({ vscode: true, packages: false, path: true, extra: [JSONC_PACKAGE_IMPORT] }),
+        },
+    },
+    {
         files: ['src/sortingRules/lootMetadata.ts'],
         rules: {
             'no-restricted-imports': restrictedImports({ vscode: true, packages: false, path: true, extra: [YAML_PACKAGE_IMPORT] }),
@@ -439,6 +446,7 @@ export default defineConfig(
                     './src/editor/tsconfig.json',
                     './src/toolbox/tsconfig.json',
                     './src/sourceLanguage/tsconfig.json',
+                    './src/symbols/tsconfig.json',
                     './src/agent/tsconfig.json',
                 ],
                 tsconfigRootDir: import.meta.dirname,

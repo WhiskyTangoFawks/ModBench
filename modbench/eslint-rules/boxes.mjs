@@ -8,7 +8,7 @@ const SRC = new URL('src/', MODBENCH);
 const ZOOM_OUT = new URL('../spec/architecture/target-architecture.d2', MODBENCH);
 
 /** @type {string[]} */
-export const DRAWN_AHEAD_OF_CODE = ['symbols'];
+export const DRAWN_AHEAD_OF_CODE = [];
 
 const COMPOSITION_ROOT = 'activation';
 

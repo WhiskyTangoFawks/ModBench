@@ -1,7 +1,11 @@
-import type { CompareResult, MEditClient } from '../client';
 import type { FieldAtOffset, Segment } from './sourceText';
+import type { CompareResult } from '../wire/messages';
 import { shapeUnderOwner } from '../wire/indexShape';
-import { answerOf } from '../wire/readFailed';
+import { answerOf, type ReadFailed } from '../wire/readFailed';
+
+export interface ComparisonClient {
+  getComparison(formKey: string): Promise<CompareResult | null | ReadFailed>;
+}
 
 type Field = CompareResult['overrides'][number]['fields'][number];
 type FieldMetadata = Field['metadata'];
@@ -30,21 +34,21 @@ export function metadataAt(fields: Field[], record: unknown, path: Segment[]): F
   return current;
 }
 
-async function winningCopy(client: Pick<MEditClient, 'getComparison'>, formKey: string) {
+async function winningCopy(client: ComparisonClient, formKey: string) {
   const comparison = answerOf(await client.getComparison(formKey));
   return comparison?.overrides.find((candidate) => candidate.isWinner);
 }
 
 /** The metadata of the field `found` sits in, from mEdit's answer for its record's winning copy; rejects when mEdit
  *  cannot answer. */
-export async function fieldOfRecord(client: Pick<MEditClient, 'getComparison'>, found: FieldAtOffset): Promise<FieldMetadata | undefined> {
+export async function fieldOfRecord(client: ComparisonClient, found: FieldAtOffset): Promise<FieldMetadata | undefined> {
   const copy = await winningCopy(client, found.recordFormKey);
   return copy && metadataAt(copy.fields, found.record, found.path);
 }
 
 /** The record type of the winning copy, when the field `found` sits in holds a path to a file; rejects when mEdit cannot
  *  answer. */
-export async function recordTypeOfPathField(client: Pick<MEditClient, 'getComparison'>, found: FieldAtOffset): Promise<string | undefined> {
+export async function recordTypeOfPathField(client: ComparisonClient, found: FieldAtOffset): Promise<string | undefined> {
   const copy = await winningCopy(client, found.recordFormKey);
   return copy && metadataAt(copy.fields, found.record, found.path)?.isAssetLink ? copy.recordType : undefined;
 }

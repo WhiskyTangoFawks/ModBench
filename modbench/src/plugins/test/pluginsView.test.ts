@@ -92,7 +92,8 @@ import { createFocusedView } from '../../drivingLib/focusedView';
 import { createPluginsView } from '../pluginsView';
 import { createPluginSync, type Sync } from '../../drivingLib/syncFailureReport';
 import { NO_PLUGINS_MESSAGE } from '../PluginsTreeProvider';
-import { PluginNode } from '../pluginRows';
+import { ImplicitMasterNode, PluginNode } from '../pluginRows';
+import { pluginArgumentOf } from '../../drivingLib/argument';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { RecordBrowser, type RecordBrowserNode } from '../RecordBrowser';
 import { soleGroup } from './browserRows';
@@ -162,7 +163,6 @@ function pluginsView(
     statusBar: { ready: vi.fn(), showMEditState: vi.fn(), standing: () => "", dispose: vi.fn() }, registerRepositories: () => Promise.resolve(),
     ask: scriptedDialog(), recordWrite: (command) => command(),
     sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
-    referencedBy: () => Promise.resolve(),
   });
   const provider = () => treeViews.view().treeDataProvider;
   const rows = async () => (await provider().getChildren()) ?? [];
@@ -240,6 +240,33 @@ describe('the Plugins view\'s selection for a key', () => {
     Object.assign(view(), { selection: [] });
 
     expect(focused.selectionOf('modbench.pluginListTree')).toEqual([row]);
+  });
+});
+
+describe('the Plugins view says its one selected row to Symbols (commands.md, `go to` and `referenced by` under Symbol)', () => {
+  const shown = () => instanceValueFixture({
+    plugins: ['A.esp', 'B.esp'].map((name, line) => ({ name, path: `/fixture/${name}`, origin: 'SomeMod', line, enabled: true, winning: true })), gameFolder: FOUND,
+  });
+
+  it('names the one selected plugin, and none over several', async () => {
+    const { plugins, rows, view } = pluginsView(shown());
+    const [a, b] = (await rows()).map((row) => present(row, 'a plugin row'));
+
+    view().selectRows([a]);
+    const one = pluginArgumentOf(plugins.symbolRows.selected());
+    view().selectRows([a, b]);
+
+    expect([one?.plugin, plugins.symbolRows.selected()]).toEqual([{ name: 'A.esp', origin: 'SomeMod' }, undefined]);
+  });
+
+  it('names the plugin the game loads with no line', async () => {
+    const { plugins, rows, view } = pluginsView(shown());
+    await rows();
+    const locked = new ImplicitMasterNode('Fallout4.esm', 'Data/');
+
+    view().selectRows([locked]);
+
+    expect(pluginArgumentOf(plugins.symbolRows.selected())?.plugin).toEqual({ name: 'Fallout4.esm', origin: 'Data/' });
   });
 });
 

@@ -4,7 +4,7 @@ import { Uri } from '../../test/vscodeMock';
 vi.mock('vscode', () => ({ Uri }));
 
 import { locateRecord } from '../recordLocation';
-import { formKeyValue } from '../sourceText';
+import { formKeyValue } from '../formKeyText';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const GUN = '000801:A.esp';

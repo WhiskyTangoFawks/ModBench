@@ -20,7 +20,7 @@ import type { TerminalEnvironment } from '../scriptEnvironment';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { serveAgent, type AgentServer, type AgentServerOptions } from '../agentServer';
 import type { Argument } from '../../wire/argument';
-import type { Definition, SymbolIndex, SymbolName, SymbolReferences } from '../../sourceLanguage/symbolIndex';
+import type { Definition, SymbolIndex, SymbolName, SymbolReferences } from '../../symbols/symbolIndex';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import type { ArchiveRead } from '../../instanceLoader/archiveContents';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';

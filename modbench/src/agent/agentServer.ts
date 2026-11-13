@@ -29,7 +29,7 @@ import { LIST_MOD_STATUSES } from './modStatuses';
 import type { ModStatuses } from '../modStatus/modStatuses';
 import { READ_RECORD } from './readRecord';
 import { FIND_DEFINITION, LIST_REFERENCES } from './symbols';
-import type { SymbolIndex } from '../sourceLanguage/symbolIndex';
+import type { SymbolIndex } from '../symbols/symbolIndex';
 import { RESOLVE_NAMES } from './resolveNames';
 import { SCRIPT_ENVIRONMENT, type TerminalEnvironment } from './scriptEnvironment';
 import { SELECT_ROWS } from './selectRows';

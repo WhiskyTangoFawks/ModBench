@@ -11,17 +11,17 @@ import { recordingReporter } from '../../test/surfacingDoubles';
 describe('go to, for an object a view shows as a row and the Explorer as a file', () => {
   beforeEach(() => { executeCommand.mockClear(); });
 
-  function goTo(shown: { row?: string; file?: string }) {
-    const reveal = vi.fn((_row: string) => Promise.resolve());
+  function goTo(shown: { row?: boolean; file?: string }) {
+    const reveal = vi.fn(() => Promise.resolve());
     const reporter = recordingReporter();
-    return goToRowOrFile({ name: '"Base"', row: shown.row, file: shown.file, reveal, reporter, nowhere: 'no view and no file shows it.' })
+    return goToRowOrFile({ name: '"Base"', show: shown.row ? reveal : undefined, file: shown.file, reporter, nowhere: 'no view and no file shows it.' })
       .then(() => ({ reveal, reporter }));
   }
 
   it('selects its row', async () => {
-    const { reveal, reporter } = await goTo({ row: 'the row', file: '/data/Base' });
+    const { reveal, reporter } = await goTo({ row: true, file: '/data/Base' });
 
-    expect([reveal.mock.calls, executeCommand.mock.calls, reporter.reports]).toEqual([[['the row']], [], []]);
+    expect([reveal.mock.calls, executeCommand.mock.calls, reporter.reports]).toEqual([[[]], [], []]);
   });
 
   it('shows its file in the Explorer when the view shows no row for it', async () => {

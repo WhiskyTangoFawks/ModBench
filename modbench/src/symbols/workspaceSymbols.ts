@@ -6,7 +6,7 @@ import { pluginAddressOf } from '../wire/pluginAddress';
 import type { RecordCopy } from '../wire/recordCopy';
 import { heldText } from '../textDocuments/heldText';
 import { locateCopies, type RecordLocation, type RecordLocationDeps } from './recordLocation';
-import { formKeyMember } from './sourceText';
+import { formKeyMember } from './formKeyText';
 import { recordLabel } from '../wire/recordLabel';
 import { answerOf } from '../wire/readFailed';
 
