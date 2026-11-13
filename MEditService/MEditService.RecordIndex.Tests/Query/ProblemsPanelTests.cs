@@ -128,6 +128,23 @@ public sealed class ProblemsPanelTests : IDisposable
         Assert.Null(answer.Failure);
     }
 
+    [Fact]
+    public void AProblemWhoseFileCannotBeReadToPlaceIt_StaysOnTheFirstLine_AndItsPluginIsAnsweredWithThePlacementFailure()
+    {
+        var plugin = new Plugin("Strayed.esp", RefersTo: null);
+        Build(plugin);
+        var stray = Path.Combine(Path.GetDirectoryName(SourceFileHolding(plugin, "Other")) ?? "", "Stray.json");
+        File.WriteAllText(stray, "{}");
+        using var index = Indexes.Reconciled(Fixture);
+        File.Delete(stray);
+
+        var answer = Assert.Single(Ready(index));
+
+        Assert.Equal(SourceRange.FirstLine, Assert.Single(answer.Problems).Range);
+        Assert.Contains("Stray.json could not be read to place its problems", answer.Failure, StringComparison.Ordinal);
+        Assert.Equal(ProblemsFailureKind.Placement, answer.FailureKind);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
