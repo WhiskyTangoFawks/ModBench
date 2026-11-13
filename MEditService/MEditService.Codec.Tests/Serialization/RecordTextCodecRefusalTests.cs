@@ -133,15 +133,14 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
         Assert.StartsWith(member, why, StringComparison.Ordinal);
     }
 
-    private static readonly string[] FlagViews = ["Fallout4MajorRecordFlags", "MajorFlags", "IsCompressed", "IsDeleted"];
-
-    private static string? WhyNotARecordOfNpcFlagged0x400WithRawSetTo(string raw, params string[] viewsHeld)
+    private static string? WhyNotARecordOfNpcFlagged0x400(string raw, string[] held, Action<JsonObject>? alsoEdited = null)
     {
         var npc = new Npc(new FormKey(Refusal, 0x801), Fallout4Release.Fallout4) { EditorID = "Guy", MajorRecordFlagsRaw = 1024 };
         var text = Edited(RecordTextCodec.SerializeToText(npc, Release), root =>
         {
-            foreach (var view in FlagViews.Except(viewsHeld)) _ = root.Remove(view);
+            foreach (var view in RecordFlagViews.All.Except(held)) _ = root.Remove(view);
             root["MajorRecordFlagsRaw"] = JsonNode.Parse(raw);
+            alsoEdited?.Invoke(root);
         });
         return RecordTextCodec.WhyNotARecord(text, Release, "npc_");
     }
@@ -150,18 +149,26 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
     [InlineData]
     [InlineData("MajorFlags")]
     [InlineData("Fallout4MajorRecordFlags")]
-    [InlineData("Fallout4MajorRecordFlags", "MajorFlags", "IsCompressed", "IsDeleted")]
-    public void ARawFlagsValue_WithAnyOfItsViewsOmitted_IsTheRecord(params string[] kept)
+    [InlineData("Fallout4MajorRecordFlags", "MajorFlags", "IsCompressed")]
+    public void ARawFlagsValue_WithAnyOfItsViewsOmitted_IsTheRecord(params string[] held)
     {
-        Assert.Null(WhyNotARecordOfNpcFlagged0x400WithRawSetTo("1024", kept));
+        Assert.Null(WhyNotARecordOfNpcFlagged0x400("1024", held));
     }
 
     [Theory]
     [InlineData("Fallout4MajorRecordFlags")]
     [InlineData("MajorFlags")]
-    public void ARawFlagsValue_ThatDisagreesWithAViewTheDocumentHolds_IsRefused(string kept)
+    public void ARawFlagsValue_ThatDisagreesWithAViewTheDocumentHolds_IsRefused_NamingTheRawMember(string held)
     {
-        Assert.NotNull(WhyNotARecordOfNpcFlagged0x400WithRawSetTo("2048", kept));
+        Assert.StartsWith(RecordHeaderFlags.Member, WhyNotARecordOfNpcFlagged0x400("2048", [held]), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AHeldFlagsView_EditedWhileTheRawValueIsNot_IsRefused_NamingTheRawMember()
+    {
+        var why = WhyNotARecordOfNpcFlagged0x400("1024", ["IsDeleted"], root => root["IsDeleted"] = true);
+
+        Assert.StartsWith(RecordHeaderFlags.Member, why, StringComparison.Ordinal);
     }
 
     [Fact]
