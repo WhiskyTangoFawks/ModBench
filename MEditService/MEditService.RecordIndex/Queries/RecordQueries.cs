@@ -524,11 +524,11 @@ internal sealed class RecordQueries(
 
     // A plugin the record index has not reached holds no record yet, so every link into it would read as a
     // missing record.
-    public Task<Answer<IReadOnlyList<PluginProblems>, IndexRefused>> GetProblems(CancellationToken cancel) =>
+    public Task<Answer<IReadOnlyList<PluginProblems>, IndexRefused>> GetProblems(PluginAddress? plugin, CancellationToken cancel) =>
         _answer.Of(() =>
         {
             using var reads = _index.RequireWholeSetReads().InOneSnapshot();
-            return ProblemsPanel.Of(_index, reads, _loadOrder.Require(), source);
+            return ProblemsPanel.Of(_index, reads, _loadOrder.Require(), source, plugin);
         }, cancel);
 
     public Task<Answer<IReadOnlyList<PluginFilePaths>, IndexRefused>> GetFilePaths(PluginAddress? plugin, CancellationToken cancel) =>

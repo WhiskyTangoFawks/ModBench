@@ -379,7 +379,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description What is wrong in each compiled plugin's source, on the file that holds the record: a reference to a record neither it nor an active plugin holds. Answers only once the record index is ready. */
+        /** @description What is wrong in each compiled plugin's source, on the file that holds the record: a reference to a record neither it nor an active plugin holds. Answers only once the record index is ready. Given plugin and origin, only that plugin's. */
         get: operations["GetPluginProblems"];
         put?: never;
         post?: never;
@@ -3052,7 +3052,10 @@ export interface operations {
     };
     GetPluginProblems: {
         parameters: {
-            query?: never;
+            query?: {
+                plugin?: string;
+                origin?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3066,6 +3069,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginProblems"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Service Unavailable */

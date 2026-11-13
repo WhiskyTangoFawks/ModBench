@@ -129,6 +129,25 @@ public sealed class ProblemsPanelTests : IDisposable
     }
 
     [Fact]
+    public void GivenAPlugin_OnlyThatPluginIsAnswered()
+    {
+        var other = new Plugin("Other.esp");
+        using var index = Reconciled(Broken, other);
+
+        var answer = Assert.Single(index.Queries.GetProblems(Entry(other).Key).Value());
+
+        Assert.Equal(Entry(other).Key, answer.Plugin);
+    }
+
+    [Fact]
+    public void GivenAPluginNameWithAnotherOrigin_NothingIsAnswered()
+    {
+        using var index = Reconciled(Broken);
+
+        Assert.Empty(index.Queries.GetProblems(new PluginAddress(Broken.Name, "AnotherMod")).Value());
+    }
+
+    [Fact]
     public void AProblemWhoseFileCannotBeReadToPlaceIt_StaysOnTheFirstLine_AndItsPluginIsAnsweredWithThePlacementFailure()
     {
         var plugin = new Plugin("Strayed.esp", RefersTo: null);

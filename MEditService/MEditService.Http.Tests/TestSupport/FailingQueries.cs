@@ -101,7 +101,7 @@ internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null)
 
     public Task<Answer<PluginDependants, IndexRefused>> GetDependants(PluginAddress plugin, CancellationToken cancel) => throw Failed();
 
-    public Task<Answer<IReadOnlyList<PluginProblems>, IndexRefused>> GetProblems(CancellationToken cancel) => throw Failed();
+    public Task<Answer<IReadOnlyList<PluginProblems>, IndexRefused>> GetProblems(PluginAddress? plugin, CancellationToken cancel) => throw Failed();
     public Task<Answer<IReadOnlyList<PluginFilePaths>, IndexRefused>> GetFilePaths(PluginAddress? plugin, CancellationToken cancel) =>
         throw Failed();
 

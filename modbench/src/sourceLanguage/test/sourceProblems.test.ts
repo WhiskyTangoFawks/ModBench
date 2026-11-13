@@ -161,6 +161,53 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
 
     await answered([]);
 
+    expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(2);
+  });
+
+  it('asks again for only the plugin a notification names, and keeps the problems of the others', async () => {
+    const other = { name: 'Other.esp', origin: 'OtherMod' };
+    const { client, answered } = feed();
+    await answered([{ plugin: PLUGIN, problems: [problem()] }, { plugin: other, problems: [problem({ sourceRelativePath: 'Other.esp/Npc.json' })] }]);
+
+    const shown = await answered([{ plugin: PLUGIN, problems: [] }], { kind: 'rows-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [REFERRER], sequence: 1 });
+
+    expect([[...shown.keys()], client.calls.filter(({ method }) => method === 'getPluginProblems').map(({ args }) => args).at(-1)])
+      .toEqual([['/source/OtherMod/Other.esp/Npc.json'], [PLUGIN]]);
+  });
+
+  it('drops the problems of a plugin that a notification names and mEdit answers no entry for', async () => {
+    const { answered } = feed();
+    await answered([{ plugin: PLUGIN, problems: [problem()] }]);
+
+    const shown = await answered([], { kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+
+    expect([...shown]).toEqual([]);
+  });
+
+  it('asks for every plugin when the load order settles', async () => {
+    const { client, answered } = feed();
+    await answered([]);
+
+    expect(client.calls.filter(({ method }) => method === 'getPluginProblems').map(({ args }) => args).at(-1)).toEqual([undefined]);
+  });
+
+  it('keeps one ask in flight and at most one pending, however many notifications arrive meanwhile', async () => {
+    const { client, published } = feed(sourceFolders, [{ plugin: PLUGIN, problems: [] }]);
+    await vi.waitFor(() => { expect(published).toHaveLength(1); });
+    let answerFirst!: (answer: PluginProblems[]) => void;
+    client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((resolve) => { answerFirst = resolve; }));
+    const named = (sequence: number): NotificationEvent => ({ kind: 'rows-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [REFERRER], sequence });
+    client.emit(named(1));
+    await vi.waitFor(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(2); });
+
+    for (let sequence = 2; sequence < 6; sequence += 1) client.emit(named(sequence));
+    await new Promise((resolve) => { setTimeout(resolve, 20); });
+    expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(2);
+
+    answerFirst([]);
+    await vi.waitFor(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(3); });
+    await new Promise((resolve) => { setTimeout(resolve, 20); });
+
     expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(3);
   });
 
@@ -220,54 +267,15 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
     client.setQueryFailureOnce('getPluginProblems', { failed: 'timed-out' });
 
     reconciledAgain(client);
+    await vi.waitFor(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(2); });
     reconciledAgain(client);
-    await vi.waitFor(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(4); });
+    await vi.waitFor(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(3); });
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
 
     expect(published).toHaveLength(2);
     expect(reporter.shownFailures).toEqual([
       { severity: 'warning', message: 'The Problems panel shows mEdit\'s last answer.', detail: 'mEdit did not answer in time.' },
     ]);
-  });
-
-  it('publishes no answer that a later one overtook', async () => {
-    const { client, answered, published } = feed();
-    let overtaken!: (answer: PluginProblems[]) => void;
-    client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((resolve) => { overtaken = resolve; }));
-    reconciledAgain(client);
-
-    await answered([]);
-    overtaken([{ plugin: PLUGIN, problems: [problem()] }]);
-    await answered([]);
-
-    expect(published.map((problems) => problems.size)).toEqual([0, 0]);
-  });
-
-  it('says nothing of a failed ask that a later one overtook', async () => {
-    const { client, answered, reporter } = feed();
-    let overtaken!: (error: Error) => void;
-    client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((_, reject) => { overtaken = reject; }));
-    reconciledAgain(client);
-
-    await answered([]);
-    overtaken(new Error('mEdit did not answer in time.'));
-    await answered([]);
-
-    expect(reporter.shownFailures).toEqual([]);
-  });
-
-  it('publishes an older answer when the ask that overtook it fails', async () => {
-    const { client, published } = feed();
-    let older!: (answer: PluginProblems[]) => void;
-    client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((resolve) => { older = resolve; }));
-    client.setQueryFailureOnce('getPluginProblems', { failed: 'timed-out' });
-    reconciledAgain(client);
-    reconciledAgain(client);
-    await vi.waitFor(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(3); });
-
-    older([{ plugin: PLUGIN, problems: [problem()] }]);
-
-    await vi.waitFor(() => { expect(published.map((problems) => problems.size)).toEqual([1]); });
   });
 
   it('says in the language status that it shows the last good read, and why, until the next good answer clears it', async () => {
@@ -342,22 +350,6 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
     });
   });
 
-  it('keeps the status of a failed ask when an older, slower answer arrives after it', async () => {
-    const { client, answered, published, status } = feed();
-    let older!: (answer: PluginProblems[]) => void;
-    client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((resolve) => { older = resolve; }));
-    client.setQueryFailureOnce('getPluginProblems', { failed: 'refused', refusal: 'timed out' });
-    reconciledAgain(client);
-    reconciledAgain(client);
-    await vi.waitFor(() => { expect(status.at(-1)).toBe('Showing the last good read: timed out'); });
-
-    older([]);
-    await vi.waitFor(() => { expect(published).toHaveLength(1); });
-
-    expect(status.at(-1)).toBe('Showing the last good read: timed out');
-    await answered([]);
-    expect(status.at(-1)).toBeUndefined();
-  });
 });
 
 describe('feedSourceProblems, when mEdit cannot take the unsaved plugin source', () => {

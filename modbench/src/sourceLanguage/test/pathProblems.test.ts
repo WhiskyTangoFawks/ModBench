@@ -5,6 +5,7 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import type { PluginFilePaths } from '../../client';
 import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
+import type { NotificationEvent } from '../../client/apiClient';
 import type { SourceFilesOf } from '../../instanceLoader/loadOrderSnapshot';
 
 const HOLDER = '000800:Names.esp';
@@ -101,25 +102,6 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     expect([...published[1]?.keys() ?? []]).toEqual([FILE]);
   });
 
-  it('keeps the answer of the later ask when an earlier one comes back after it', async () => {
-    const { settled, client, published, instanceChanged } = feed([answerFor()]);
-    await settled(1);
-    let overtaken!: (answer: PluginFilePaths[]) => void;
-    client.setQueryAnswerOnce('getPluginFilePaths', new Promise<PluginFilePaths[]>((resolve) => { overtaken = resolve; }));
-    client.setQueryAnswerOnce('getPluginFilePaths', [answerFor(PLUGIN, [])]);
-    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
-    await vi.waitFor(() => { expect(asked(client)).toHaveLength(2); });
-    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 2 });
-    await vi.waitFor(() => { expect(published.length).toBe(2); });
-
-    overtaken([answerFor()]);
-    await Promise.resolve();
-    instanceChanged();
-    await vi.waitFor(() => { expect(published.length).toBe(3); });
-
-    expect(published[2]).toEqual(new Map());
-  });
-
   it('shows each line mEdit could not read and each failure, and still judges the paths it answered', async () => {
     const { settled, reporter, status } = feed([answerFor(PLUGIN, [named()], { unread: ['000801:Names.esp: no schema', 'TextureSet.json: stopped'], failure: 'the source is unreadable' })]);
 
@@ -152,24 +134,88 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     expect(asked(client)).toEqual([[undefined], [PLUGIN]]);
   });
 
-  it('does not say it shows the last read when an ask fails after a later ask for the plugin answered', async () => {
-    const { settled, client, status, published } = feed([answerFor()]);
+  it('drops a plugin that a notification names and mEdit answers no entry for', async () => {
+    const { settled, client } = feed([answerFor()]);
     await settled(1);
-    let overtaken!: (answer: PluginFilePaths[]) => void;
-    client.setQueryAnswerOnce('getPluginFilePaths', new Promise<PluginFilePaths[]>((_resolve, reject) => { overtaken = () => { reject(new Error('late')); }; }));
-    client.setQueryAnswerOnce('getPluginFilePaths', [answerFor()]);
+    client.setQueryAnswer('getPluginFilePaths', []);
+
     client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
-    await vi.waitFor(() => { expect(asked(client)).toHaveLength(2); });
-    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 2 });
-    await vi.waitFor(() => { expect(published.length).toBe(2); });
 
-    overtaken([]);
-    await Promise.resolve();
-
-    expect(status.filter((text) => text !== undefined)).toEqual([]);
+    expect(await settled(2)).toEqual(new Map());
   });
 
-  it('does not ask before the load order settles', () => {
+  it('asks again after a read that timed out, and publishes its answer', async () => {
+    const { settled, client } = feed([answerFor()]);
+    await settled(1);
+    client.setQueryFailureOnce('getPluginFilePaths', { failed: 'timed-out' });
+    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+    await vi.waitFor(() => { expect(asked(client)).toHaveLength(2); });
+    client.setQueryAnswer('getPluginFilePaths', [answerFor(PLUGIN, [])]);
+
+    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 2 });
+
+    expect(await settled(2)).toEqual(new Map());
+  });
+
+  it('places against the text of the plugin\'s next answer, which an unsaved edit brings with its notification', async () => {
+    let text = TEXT;
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getPluginFilePaths', [answerFor()]);
+    const published: ProblemsByFile[] = [];
+    feedPathProblems({
+      client, sourceFiles: sourceFolders, readText: () => Promise.resolve(text), reporter: recordingReporter(),
+      paths: { judged: () => true, holds: () => false, subscribe: () => ({ dispose: () => undefined }) },
+      publish: (problems) => published.push(problems), languageStatus: () => undefined,
+    });
+    await vi.waitFor(() => { expect(published).toHaveLength(1); });
+    text = `  ${TEXT}`;
+
+    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+    await vi.waitFor(() => { expect(published).toHaveLength(2); });
+
+    expect(published[1]?.get(FILE)?.[0]?.start.character).toBe(SPAN.start + 2);
+  });
+
+  it('keeps one ask in flight and at most one pending, however many notifications arrive meanwhile', async () => {
+    const { settled, client } = feed([answerFor()]);
+    await settled(1);
+    let answerFirst!: (answer: PluginFilePaths[]) => void;
+    client.setQueryAnswerOnce('getPluginFilePaths', new Promise<PluginFilePaths[]>((resolve) => { answerFirst = resolve; }));
+    const named = (sequence: number): NotificationEvent => ({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence });
+    client.emit(named(1));
+    await vi.waitFor(() => { expect(asked(client)).toHaveLength(2); });
+
+    for (let sequence = 2; sequence < 6; sequence += 1) client.emit(named(sequence));
+    await new Promise((resolve) => { setTimeout(resolve, 20); });
+    expect(asked(client)).toHaveLength(2);
+
+    answerFirst([answerFor()]);
+    await vi.waitFor(() => { expect(asked(client)).toHaveLength(3); });
+    await new Promise((resolve) => { setTimeout(resolve, 20); });
+
+    expect(asked(client)).toHaveLength(3);
+  });
+
+  it('reads a file once for an answer, however often the instance changes', async () => {
+    const reads: string[] = [];
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getPluginFilePaths', [answerFor()]);
+    const listeners = new Set<() => void>();
+    const published: ProblemsByFile[] = [];
+    feedPathProblems({
+      client, sourceFiles: sourceFolders, readText: (path) => { reads.push(path); return Promise.resolve(TEXT); }, reporter: recordingReporter(),
+      paths: { judged: () => true, holds: () => false, subscribe: (listener) => { listeners.add(listener); return { dispose: () => undefined }; } },
+      publish: (problems) => published.push(problems), languageStatus: () => undefined,
+    });
+    await vi.waitFor(() => { expect(published).toHaveLength(1); });
+
+    for (const listener of listeners) listener();
+    await vi.waitFor(() => { expect(published).toHaveLength(2); });
+
+    expect(reads).toEqual([FILE]);
+  });
+
+  it('does not ask before the load order settles', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getPluginFilePaths', [answerFor()]);
     client.emit(loadOrderStatusEventFixture({ state: 'Reconciling', conflictsComputed: false, version: 1 }));
@@ -178,6 +224,7 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
       paths: { judged: () => true, holds: () => false, subscribe: () => ({ dispose: () => undefined }) }, publish: () => undefined, languageStatus: () => undefined,
     });
     client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+    await new Promise((resolve) => { setTimeout(resolve, 20); });
 
     expect(asked(client)).toEqual([[undefined]]);
   });

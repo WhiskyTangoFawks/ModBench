@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
@@ -45,5 +46,23 @@ public sealed class PluginProblemsApiTests : HostedTests
         var file = File.ReadAllText(Path.Combine(modFolder, problem.GetProperty("sourceRelativePath").GetString().Require()));
         Assert.Contains(Npc, file, StringComparison.Ordinal);
         Assert.Contains(JsonSerializer.Serialize(AbsentRecord.ToString()), file, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GetProblems_GivenAPluginAndItsOrigin_AnswersOnlyThatPlugin()
+    {
+        await CompiledPluginLoad();
+
+        var answer = await Client.GetFromJsonAsync<JsonElement>($"/plugins/problems?plugin={Plugin}&origin=AnotherMod");
+
+        Assert.Empty(answer.EnumerateArray());
+    }
+
+    [Fact]
+    public async Task GetProblems_APluginNamedWithoutAnOrigin_ReturnsBadRequest()
+    {
+        var response = await Client.GetAsync($"/plugins/problems?plugin={Plugin}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 }

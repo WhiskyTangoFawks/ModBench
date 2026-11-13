@@ -352,7 +352,7 @@ export class InMemoryMEditClient implements MEditClient {
   getPluginIndexing(...args: Parameters<MEditClient['getPluginIndexing']>): ReturnType<MEditClient['getPluginIndexing']> {
     return this.query('getPluginIndexing', args);
   }
-  getPluginProblems(): ReturnType<MEditClient['getPluginProblems']> { return this.query('getPluginProblems', []); }
+  getPluginProblems(...args: Parameters<MEditClient['getPluginProblems']>): ReturnType<MEditClient['getPluginProblems']> { return this.query('getPluginProblems', args); }
   getPluginFilePaths(...args: Parameters<MEditClient['getPluginFilePaths']>): ReturnType<MEditClient['getPluginFilePaths']> { return this.query('getPluginFilePaths', args); }
   getRecordTypes(...args: Parameters<MEditClient['getRecordTypes']>): ReturnType<MEditClient['getRecordTypes']> {
     return this.query('getRecordTypes', args);
