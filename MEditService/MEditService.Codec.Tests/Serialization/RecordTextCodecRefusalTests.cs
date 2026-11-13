@@ -135,13 +135,12 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
 
     private static readonly string[] FlagViews = ["Fallout4MajorRecordFlags", "MajorFlags", "IsCompressed", "IsDeleted"];
 
-    // The document of an npc flagged 0x400, holding only the views kept, with the raw value then set to raw.
-    private static string? WhyNpcFlagsHeld(string raw, params string[] kept)
+    private static string? WhyNotARecordOfNpcFlagged0x400WithRawSetTo(string raw, params string[] viewsHeld)
     {
         var npc = new Npc(new FormKey(Refusal, 0x801), Fallout4Release.Fallout4) { EditorID = "Guy", MajorRecordFlagsRaw = 1024 };
         var text = Edited(RecordTextCodec.SerializeToText(npc, Release), root =>
         {
-            foreach (var view in FlagViews.Except(kept)) _ = root.Remove(view);
+            foreach (var view in FlagViews.Except(viewsHeld)) _ = root.Remove(view);
             root["MajorRecordFlagsRaw"] = JsonNode.Parse(raw);
         });
         return RecordTextCodec.WhyNotARecord(text, Release, "npc_");
@@ -154,7 +153,7 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
     [InlineData("Fallout4MajorRecordFlags", "MajorFlags", "IsCompressed", "IsDeleted")]
     public void ARawFlagsValue_WithAnyOfItsViewsOmitted_IsTheRecord(params string[] kept)
     {
-        Assert.Null(WhyNpcFlagsHeld("1024", kept));
+        Assert.Null(WhyNotARecordOfNpcFlagged0x400WithRawSetTo("1024", kept));
     }
 
     [Theory]
@@ -162,7 +161,7 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
     [InlineData("MajorFlags")]
     public void ARawFlagsValue_ThatDisagreesWithAViewTheDocumentHolds_IsRefused(string kept)
     {
-        Assert.NotNull(WhyNpcFlagsHeld("2048", kept));
+        Assert.NotNull(WhyNotARecordOfNpcFlagged0x400WithRawSetTo("2048", kept));
     }
 
     [Fact]
