@@ -151,6 +151,10 @@ internal sealed class Indexer : IDisposable
     // The source writes made before each plugin's last failed re-read began, and why it failed, guarded by _lock.
     private readonly Dictionary<PluginAddress, (long Writes, string Failure)> _reReadFailedOf = new(PluginAddress.Comparer);
 
+    // The source writes made before the change signalled that the last failed check of the disk answered, and why it
+    // failed, guarded by _lock.
+    private (long Writes, string Failure) _checkFailed = (0, "");
+
     // Completed and replaced, under _lock, each time either count above moves.
     private TaskCompletionSource _writesRead = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -509,10 +513,10 @@ internal sealed class Indexer : IDisposable
     {
         long writes = writesSignalled ?? 0;
         bool arrived;
-        bool refused;
+        string? refusal;
         try
         {
-            arrived = ReconcileOrRefuse(arrival, writesSignalled is not null, ref writes, out refused);
+            arrived = ReconcileOrRefuse(arrival, writesSignalled is not null, ref writes, out refusal);
         }
         catch (OperationCanceledException ex)
         {
@@ -522,9 +526,10 @@ internal sealed class Indexer : IDisposable
         }
         if (arrived)
         {
-            if (!refused)
+            lock (_lock)
             {
-                lock (_lock) _writesChecked = Math.Max(_writesChecked, writes);
+                if (refusal is null) _writesChecked = Math.Max(_writesChecked, writes);
+                else if (writesSignalled is { } signalled && signalled > _checkFailed.Writes) _checkFailed = (signalled, refusal);
             }
             AnnounceWritesRead();
         }
@@ -542,7 +547,7 @@ internal sealed class Indexer : IDisposable
             lock (_lock)
             {
                 if (ReadSince(awaited, lastOfEach)) return;
-                if (FailedReReadOf(lastOfEach) is { } failure) throw new IndexNotReadyException($"{NotReadYet}its re-read of the plugins written failed: {failure}");
+                if (FailedReadOf(awaited, lastOfEach) is { } failed) throw new IndexNotReadyException(NotReadYet + failed);
                 announced = _writesRead.Task;
             }
             var remaining = deadline - _timeProvider.GetUtcNow();
@@ -574,13 +579,17 @@ internal sealed class Indexer : IDisposable
         lock (_lock) return lastWrite.Value <= _writesChecked || _writesReReadOf.GetValueOrDefault(lastWrite.Key) >= lastWrite.Value;
     }
 
-    // The re-read that began after a plugin's last write and failed: nothing reads that write until another change.
-    private string? FailedReReadOf(IReadOnlyDictionary<PluginAddress, long>? lastOfEach)
+    // The re-read or check asked after the writes that failed: nothing reads them until another change.
+    private string? FailedReadOf(long awaited, IReadOnlyDictionary<PluginAddress, long>? lastOfEach)
     {
         lock (_lock)
         {
-            return lastOfEach?.Where(last => !ReadSince(last))
-                .Select(last => _reReadFailedOf.TryGetValue(last.Key, out var failed) && failed.Writes >= last.Value ? failed.Failure : null)
+            if (lastOfEach is null)
+                return _checkFailed.Writes >= awaited ? $"its check of the disk failed: {_checkFailed.Failure}" : null;
+            return lastOfEach.Where(last => !ReadSince(last))
+                .Select(last => _reReadFailedOf.TryGetValue(last.Key, out var failed) && failed.Writes >= last.Value
+                    ? $"its re-read of the plugins written failed: {failed.Failure}"
+                    : null)
                 .FirstOrDefault(failure => failure is not null);
         }
     }
@@ -593,7 +602,7 @@ internal sealed class Indexer : IDisposable
     // A superseded reconcile throws and publishes nothing. The closing swap and its publish share one
     // hold of _lock, so no reader sees a version before the status answering it.
     private bool ReconcileOrRefuse(
-        Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, bool check, ref long writes, out bool refused)
+        Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, bool check, ref long writes, out string? refusal)
     {
         _exclusive.Enter();
         var token = CancellationToken.None;
@@ -602,7 +611,7 @@ internal sealed class Indexer : IDisposable
         long version = 0;
         string? heldElsewhere = null;
         string? failure = null;
-        refused = false;
+        refusal = null;
         try
         {
             if (arrival() is not { } resolved) return false;
@@ -653,7 +662,7 @@ internal sealed class Indexer : IDisposable
         finally
         {
             EndReconcile();
-            refused = heldElsewhere is not null || failure is not null;
+            refusal = heldElsewhere ?? failure;
             try
             {
                 if (!superseded)

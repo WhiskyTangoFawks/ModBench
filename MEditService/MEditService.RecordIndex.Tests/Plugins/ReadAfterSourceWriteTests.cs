@@ -1,4 +1,5 @@
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.RepositoriesLib;
@@ -20,6 +21,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     private readonly FakeTimeProvider _clock = new(Start);
     private readonly LoadOrderHolder _holder = new();
     private readonly GatedPluginAdapter _gate = new();
+    private readonly FailingCheck _checks;
     private readonly ParkingSource _source = new();
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderEntry _compiledPlugin;
@@ -36,7 +38,8 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
         _compiledPlugin = _fixture.Plugins.Single(p => p.Name == CompiledPlugin);
         _npc = npc;
         SourceMods.Init(_compiledPlugin);
-        _index = Indexes.Open(_holder, _gate, timeProvider: _clock, source: _source);
+        _checks = new FailingCheck(_gate);
+        _index = Indexes.Open(_holder, _checks, timeProvider: _clock, source: _source);
         _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         _compiledPlugin.HandEdit(_index.DocumentOf(_npc, _compiledPlugin.Key), "\"CompiledPluginNpc\"", "\"Written\"");
     }
@@ -143,6 +146,34 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     }
 
     [Fact]
+    public async Task AReadAfterASourceWriteNamingNoPlugin_WhoseCheckFails_IsRefusedAtOnce_NamingTheFailedCheck()
+    {
+        _checks.FailNext();
+        _holder.SourceWritten(null);
+
+        var refused = (await Read().WaitAsync(Generous)).Refused();
+
+        Assert.Equal(IndexRefusal.IndexNotReady, refused.Refusal);
+        Assert.Contains("its check of the disk failed", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AReadAfterAWriteThatFollowsAFailedCheck_WaitsForItsOwnCheck()
+    {
+        _checks.FailNext();
+        _holder.SourceWritten(null);
+        await Read().WaitAsync(Generous);
+
+        await WorkerParkedInAReconcile();
+        _holder.SourceWritten(null);
+        var read = Read();
+
+        Assert.False(read.IsCompleted);
+        _gate.Release();
+        AssertWritten(await read.WaitAsync(Generous));
+    }
+
+    [Fact]
     public async Task AReadAfterAWriteThatFollowsAFailedReRead_WaitsForItsOwnReRead()
     {
         IndexFiles.Invalidate(_fixture.InstanceRoot);
@@ -198,5 +229,18 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
         var refused = (await resolved.WaitAsync(Generous)).Refused();
         Assert.Equal(IndexRefusal.NameRefused, refused.Refusal);
         Assert.Contains("Nothing is named", refused.Message, StringComparison.Ordinal);
+    }
+
+    private sealed class FailingCheck(IPluginAdapter inner) : DelegatingPluginAdapter(inner)
+    {
+        private int _armed;
+
+        public void FailNext() => Volatile.Write(ref _armed, 1);
+
+        public override void KeepStateOf(IReadOnlySet<string> pluginPaths)
+        {
+            if (Interlocked.Exchange(ref _armed, 0) == 1) throw new InvalidOperationException("The check of the disk was made to fail.");
+            base.KeepStateOf(pluginPaths);
+        }
     }
 }
