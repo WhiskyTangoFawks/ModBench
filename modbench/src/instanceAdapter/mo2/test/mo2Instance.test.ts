@@ -1838,15 +1838,24 @@ describe('the MO2 Instance adapter', () => {
         expect(files.notes.join('\n')).toMatch(/cycle.*loop/);
       });
 
-      it('rejects when a folder below an origin cannot be read, rather than listing fewer files', async () => {
-        const nested = join(root, 'overwrite', 'SKSE');
-        await mkdir(nested, { recursive: true });
+      it.each([
+        ['the overwrite folder', { kind: 'runtimeOutput' as const }, 'overwrite'],
+        ['a mod', mod('Harder VATS'), join('mods', 'Harder VATS')],
+      ])('lists the rest of %s and notes a folder below it that cannot be read', async (_name, origin, below) => {
+        const held = join(root, below, 'Textures', 'Locked');
+        await mkdir(held, { recursive: true });
+        await writeFile(join(root, below, 'Textures', 'a.dds'), '');
         vi.mocked(readdir).mockImplementation(async (path, options) => {
-          if (String(path) === nested) throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+          if (String(path) === held) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
           return actualReaddir(path, options);
         });
 
-        await expect(source.originFiles({ kind: 'runtimeOutput' }, 'list')).rejects.toThrow(/permission denied/);
+        const first = await source.originFiles(origin, 'list');
+        const second = await source.originFiles(origin, 'list');
+
+        expect(relativePaths(first.files)).toContain('Textures/a.dds');
+        expect(first.notes).toEqual([expect.stringMatching(/Locked.*EACCES/)]);
+        expect(second).not.toBe(first);
       });
 
       it('rejects when a link\'s target cannot be checked for a reason other than its absence, simulated through a mocked stat as chmod denies nothing when the runner is root', async () => {
