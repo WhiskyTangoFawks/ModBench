@@ -28,31 +28,31 @@ describe('judge: the game\'s sorting rules held against the order the game loads
     }]);
   });
 
-  it('moves a plugin that loads as a master above the plugins listed before it that do not, a Warning on it alone, beside the first of them', () => {
+  it('moves a plugin that loads as a master above the plugins listed before it that do not, an Error on it alone, beside the first of them', () => {
     const facts = factsFrom({ 'A.esp': {}, 'B.esp': {}, 'C.esm': MASTER });
 
     expect(judge([], ['A.esp', 'B.esp', 'C.esm'], facts)).toEqual({
       order: ['C.esm', 'A.esp', 'B.esp'],
       broken: [{
-        rule: 'gameMoves', level: 'warning', plugins: [ref('C.esm')], placement: { side: 'before', anchor: ref('A.esp') },
+        rule: 'gameMoves', level: 'error', plugins: [ref('C.esm')], placement: { side: 'before', anchor: ref('A.esp') },
         reason: '"C.esm" loads as a master, by its master flag or its extension, so the game loads it before "A.esp", not where plugins.txt lists it.',
       }],
     });
   });
 
-  it('gives each plugin the game moves its own Warning', () => {
+  it('gives each plugin the game moves its own Error', () => {
     const facts = factsFrom({ 'A.esp': {}, 'B.esm': MASTER, 'C.esm': MASTER });
 
     expect(judge([], ['A.esp', 'B.esm', 'C.esm'], facts).broken.map(({ plugins }) => plugins.map(({ filename }) => filename))).toEqual([['B.esm'], ['C.esm']]);
   });
 
-  it('hoists a master above a master that lists it, a Warning in place of the master Error', () => {
+  it('hoists a master above a master that lists it, an Error in place of the master Error', () => {
     const facts = factsFrom({ 'D.esm': { master: true, masters: ['M.esm'] }, 'M.esm': MASTER });
 
     expect(judge([], ['D.esm', 'M.esm'], facts)).toEqual({
       order: ['M.esm', 'D.esm'],
       broken: [{
-        rule: 'gameMoves', level: 'warning', plugins: [ref('M.esm')], placement: { side: 'before', anchor: ref('D.esm') },
+        rule: 'gameMoves', level: 'error', plugins: [ref('M.esm')], placement: { side: 'before', anchor: ref('D.esm') },
         reason: '"M.esm" is a master of "D.esm", which loads as a master, so the game loads it before "D.esm", not where plugins.txt lists it.',
       }],
     });
@@ -99,7 +99,7 @@ describe('judge: the game\'s sorting rules held against the order the game loads
     expect(judge([], ['B.esm', 'X.esp', 'Y.esp'], facts)).toEqual({
       order: ['X.esp', 'Y.esp', 'B.esm'],
       broken: [{
-        rule: 'gameMoves', level: 'warning', plugins: [ref('B.esm')], placement: { side: 'after', anchor: ref('Y.esp') },
+        rule: 'gameMoves', level: 'error', plugins: [ref('B.esm')], placement: { side: 'after', anchor: ref('Y.esp') },
         reason: '"B.esm" is a blueprint plugin, so the game loads it after "Y.esp", not where plugins.txt lists it.',
       }],
     });
@@ -174,7 +174,7 @@ describe('judge: the game\'s sorting rules held against the order the game loads
     expect(judge(['Blueprint.esm'], ['A.esp', 'Ship.esm'], facts)).toEqual({ order: ['A.esp', 'Blueprint.esm', 'Ship.esm'], broken: [] });
   });
 
-  it('hoists a line above a plugin the game loads with no line that lists it, a Warning in place of the master Error', () => {
+  it('hoists a line above a plugin the game loads with no line that lists it, an Error in place of the master Error', () => {
     const facts = factsFrom({ 'Creation.esm': { master: true, masters: ['Mod.esm'] }, 'Mod.esm': MASTER });
 
     const judged = judge(['Creation.esm'], ['Mod.esm'], facts);
