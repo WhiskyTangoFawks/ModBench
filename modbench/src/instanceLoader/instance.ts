@@ -14,7 +14,7 @@ import { blueprintLoadsLastIn, loadedWithNoLineOf, nexusDomainForMetaGame } from
 import {
   ABSENT_SORTING_RULE_FILES, fileInFolder, type DownloadedFiles, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
   type ProgramVersion, type ProgramVersions, type EntryRef, type ManagerNames, type ManagerRunning, type ModGroups, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type PublisherConfiguration,
-  type PublisherTag, type Reread, type SortingRuleFiles, type Subscription,
+  type PublisherTag, type Reread, type SortingRuleFiles, type Subscription, type UnwatchedFolder,
 } from '../instanceAdapter/instanceAdapter';
 import { sourceModsOf, type FlaggedRead, type SourceMods } from '../manifestAdapter/manifestAdapter';
 import { pluginPlacesOf } from './pluginPlacesOf';
@@ -53,7 +53,7 @@ function nextRun(): Run {
   return { named: new Set(), disk: false, tellsUnheard: false, fromEvents: false, settled, land };
 }
 
-type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'dataFolderFiles' | 'gameArchives' | 'archives' | 'archiveContents' | 'watchNotes' | 'listingNotes' | 'managerRunning' | 'publisherConfiguration' | 'programVersions';
+type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'dataFolderFiles' | 'gameArchives' | 'archives' | 'archiveContents' | 'listingNotes' | 'managerRunning' | 'publisherConfiguration' | 'programVersions';
 
 type DownloadedFilesResult =
   | { readonly kind: 'listed'; readonly rows: readonly LocatedDownloadedFileRow[] }
@@ -163,6 +163,8 @@ export interface InstanceValue {
   readonly publisherConfiguration: PublisherConfiguration;
   /** LOOT's metadata files, as the instance holds them. */
   readonly sortingRuleFiles: SortingRuleFiles;
+  /** Each folder whose watch failed: a change in it shows only after a refresh. */
+  readonly unwatchedFolders: readonly UnwatchedFolder[];
 }
 
 /** A subscriber that returns a promise holds `refresh` until it settles. `reread` is what the value was read again for. */
@@ -305,6 +307,7 @@ const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey' | 'publi
   publisherTags: adapter.publisherTags,
   publisherConfiguration: { kind: 'none' },
   sortingRuleFiles: ABSENT_SORTING_RULE_FILES,
+  unwatchedFolders: [],
 });
 
 export class Instance implements Subscription {
@@ -482,7 +485,7 @@ export class Instance implements Subscription {
   }
 
   private tellReading({
-    linkNotes, archiveListNotes, orderNotes, modFiles, runtimeOutput, dataFolderPlugins, dataFolderFiles, dataFolderArchives, watchNotes, managerRunning,
+    linkNotes, archiveListNotes, orderNotes, modFiles, runtimeOutput, dataFolderPlugins, dataFolderFiles, dataFolderArchives, managerRunning,
     publisherConfiguration, programVersions,
   }: InstanceReading, sourceMods: SourceMods): void {
     const notes = [...runtimeOutput.notes.map((n) => `${runtimeOutput.origin}: ${n}`), ...sourceMods.notes];
@@ -492,7 +495,6 @@ export class Instance implements Subscription {
     this.tellOnce('links', linkNotes.map((note) => `[instance] ${note}`), 'info');
     this.tellOnce('orderNotes', orderNotes.map((note) => `[instance] ${note}`), 'warn');
     this.tellOnce('archiveListNotes', archiveListNotes.map((note) => `[instance] ${note}`), 'warn');
-    this.tellOnce('watchNotes', watchNotes.map((note) => `[instance] ${note}`), 'warn');
     // An unreadable Data folder or its archives is an answer, never a failed read: the whole value
     // would otherwise go stale over a folder outside the instance.
     this.tellOnce('dataFolder', dataFolderPlugins.kind === 'unreadable' ? [`[instance] the game's Data folder could not be listed: ${dataFolderPlugins.reason}`] : [], 'warn');
@@ -734,6 +736,7 @@ export class Instance implements Subscription {
       publisherTags: adapter.publisherTags,
       publisherConfiguration: reading.publisherConfiguration,
       sortingRuleFiles: reading.sortingRuleFiles,
+      unwatchedFolders: reading.unwatchedFolders,
     };
   }
 }

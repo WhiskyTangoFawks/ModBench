@@ -614,6 +614,12 @@ export const ABSENT_SORTING_RULE_FILES: SortingRuleFiles = {
 };
 
 /** The instance as parsed facts, every one from the same read of its settings, and what the watch cannot hear. */
+/** A folder whose watch failed, and why: no change inside it is heard. */
+export interface UnwatchedFolder {
+  readonly folder: string;
+  readonly reason: string;
+}
+
 export interface InstanceReading extends InstanceGame {
   /** The profile the mod manager's configuration selects. */
   readonly profile: string;
@@ -655,8 +661,7 @@ export interface InstanceReading extends InstanceGame {
   readonly holdsRepository: boolean;
   /** Whether git init has set the repository up: the instance repository holds Modbench's push check and its path tokens. */
   readonly repositorySetUp: boolean;
-  /** Why a folder's watch failed, once per reason: no change inside that folder is heard. */
-  readonly watchNotes: readonly string[];
+  readonly unwatchedFolders: readonly UnwatchedFolder[];
   /** Each path the check of the disk found changed that no event named. */
   readonly unheardChanges: readonly string[];
   readonly managerRunning: ManagerRunning;

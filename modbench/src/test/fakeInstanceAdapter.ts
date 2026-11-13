@@ -62,7 +62,7 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
     sourceModFolders: new Map(),
     holdsRepository: false,
     repositorySetUp: false,
-    watchNotes: [],
+    unwatchedFolders: [],
     unheardChanges: [],
     managerRunning: { kind: 'notRunning' },
     publisherConfiguration: NO_PUBLISHER,

@@ -1363,11 +1363,11 @@ describe('the MO2 Instance adapter', () => {
         signals = 0;
 
         const signalled = await eventually(() => signals > 0, () => writeFile(join(folder, 'Gun.json'), `${Date.now()}`));
-        const { watchNotes } = await watched.reading();
+        const { unwatchedFolders } = await watched.reading();
         subscription.dispose();
 
         expect(signalled).toBe(true);
-        expect(watchNotes).toEqual([]);
+        expect(unwatchedFolders).toEqual([]);
       });
 
       it('signals no write to git\'s own bookkeeping in a source repository\'s .git', async () => {
@@ -1388,7 +1388,7 @@ describe('the MO2 Instance adapter', () => {
         expect(signals).toBe(0);
       });
 
-      it.skipIf(process.getuid?.() === 0)('(root reads every folder) signals a folder whose watch failed, and the next reading notes why', async () => {
+      it.skipIf(process.getuid?.() === 0)('(root reads every folder) signals a folder whose watch failed, and the next reading names it and why', async () => {
         const unreadable = join(mod(), 'Unreadable');
         await mkdir(unreadable, { recursive: true });
         await chmod(unreadable, 0o000);
@@ -1399,12 +1399,12 @@ describe('the MO2 Instance adapter', () => {
         fireCreated(mod());
         signals = 0;
         const signalled = await eventually(() => signals > 0);
-        const { watchNotes } = await watched.reading();
+        const { unwatchedFolders } = await watched.reading();
         await chmod(unreadable, 0o755);
         subscription.dispose();
 
         expect(signalled).toBe(true);
-        expect(watchNotes).toEqual(['Modbench hears no change inside a folder whose watch failed: EACCES: permission denied']);
+        expect(unwatchedFolders).toEqual([{ folder: unreadable, reason: 'EACCES: permission denied' }]);
       });
     });
 

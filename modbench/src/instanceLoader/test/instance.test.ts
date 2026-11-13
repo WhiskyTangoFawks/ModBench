@@ -910,14 +910,13 @@ describe('Instance — game folder and the archives the game loads', () => {
     expect(warnings).toEqual([`[instance] ${note}`]);
   });
 
-  it('warns once, until it changes, of each change the watch cannot hear', async () => {
-    const note = 'Modbench hears no change inside a folder whose watch failed: EACCES: permission denied';
-    const { instance, warnings } = loader({ ...GAME_FOUND, watchNotes: [note] });
+  it('holds each folder the reading cannot watch, and why', async () => {
+    const textures = { folder: '/instance/mods/A/textures', reason: 'EACCES: permission denied' };
+    const { instance } = loader({ unwatchedFolders: [textures] });
 
-    await instance.refresh();
-    await instance.refresh();
+    const { unwatchedFolders } = await instance.landed();
 
-    expect(warnings).toEqual([`[instance] ${note}`]);
+    expect(unwatchedFolders).toEqual([textures]);
   });
 
   it('tells once, until it changes, each archive the INIs list that nothing holds', async () => {
