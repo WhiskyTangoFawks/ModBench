@@ -28,6 +28,9 @@ public sealed class LoadOrderHolder
     private readonly Dictionary<PluginAddress, long> _lastWriteOf = new(PluginAddress.Comparer);
     private long _lastUnnamedWrite;
 
+    /// <summary>Raised by every SourceWritten, once it is counted, with the plugins it names.</summary>
+    public event Action<IReadOnlyCollection<PluginAddress>?>? Written;
+
     /// <summary>Marks that mEdit wrote a system of record, of <paramref name="plugins"/>; null when no plugin names
     /// what it wrote.</summary>
     public void SourceWritten(IReadOnlyCollection<PluginAddress>? plugins)
@@ -38,6 +41,7 @@ public sealed class LoadOrderHolder
             if (plugins is null) _lastUnnamedWrite = write;
             else foreach (var plugin in plugins) _lastWriteOf[plugin] = write;
         }
+        Written?.Invoke(plugins);
     }
 
     /// <summary>The writes so far, and of those after <paramref name="checkedThrough"/> each plugin's last; null when one

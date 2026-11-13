@@ -10,14 +10,14 @@ internal static class ContainerChildEndpoints
     {
         var logger = loggerFactory.CreateLogger(nameof(ContainerChildEndpoints));
 
-        app.MapGet("/plugins/{plugin}/records/{formKey}/children", (string plugin, string formKey, string? origin, IQueries svc) =>
+        app.MapGet("/plugins/{plugin}/records/{formKey}/children", async (string plugin, string formKey, string? origin, IQueries svc, CancellationToken aborted) =>
         {
             if (logger.IsEnabled(LogLevel.Information))
             {
                 logger.LogInformation("Received GetContainerChildren for {Plugin} {FormKey} ({Origin})", plugin, formKey, origin);
             }
             if (!EndpointMapping.PluginAt(plugin, origin, out var address, out var refused)) return refused;
-            return EndpointMapping.Ok(svc.GetContainerChildren(address, Uri.UnescapeDataString(formKey)));
+            return EndpointMapping.Ok(await svc.GetContainerChildren(address, Uri.UnescapeDataString(formKey), aborted));
         })
         .WithName("GetContainerChildren")
         .WithTags("Records")

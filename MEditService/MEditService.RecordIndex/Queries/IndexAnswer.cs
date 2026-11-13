@@ -6,8 +6,23 @@ namespace MEditService.RecordIndex.Queries;
 
 /// <summary>Builds the answers the Index's face gives. Inside the Index a read that finds nothing held,
 /// not ready or out of memory throws; here it becomes the answer.</summary>
-internal sealed class IndexAnswer(Action onInvalidation)
+internal sealed class IndexAnswer(Action onInvalidation, Func<CancellationToken, Task> sourceWritesRead)
 {
+    /// <summary>The <paramref name="answer"/>, built once the record index has read every source write mEdit made
+    /// before it.</summary>
+    public async Task<Answer<T, IndexRefused>> AfterSourceWrites<T>(Func<Answer<T, IndexRefused>> answer, CancellationToken cancel)
+    {
+        try
+        {
+            await sourceWritesRead(cancel).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (RefusalOf(ex) is { } refused)
+        {
+            return refused;
+        }
+        return answer();
+    }
+
     public Answer<T, IndexRefused> Of<T>(Func<T> read) => Flat<T>(() => read());
 
     public Answer<T, IndexRefused> Flat<T>(Func<Answer<T, IndexRefused>> read)

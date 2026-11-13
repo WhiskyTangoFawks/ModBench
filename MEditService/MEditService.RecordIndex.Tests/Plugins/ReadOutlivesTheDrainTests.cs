@@ -48,7 +48,7 @@ public sealed class ReadOutlivesTheDrainTests : IDisposable
 
     private static bool AnswersEveryRow(OpenedIndex index, string sql)
     {
-        if (!index.Queries.SelectRows(sql).Holds(out var rows, out _)) return false;
+        if (!index.Queries.SelectRows(sql).Answered().Holds(out var rows, out _)) return false;
         using (rows) return rows.Rows().All(row => row.Holds(out _, out _));
     }
 

@@ -24,14 +24,15 @@ internal sealed class RecordQueries(
 {
     private readonly ILogger _logger = logger;
     private readonly Indexer _index = index;
-    private readonly IndexAnswer _answer = new(index.RecoverFromInvalidation);
+    private readonly IndexAnswer _answer = new(index.RecoverFromInvalidation, index.AwaitTheReadOfTheLastSourceWrite);
     private readonly LoadOrderHolder _loadOrder = loadOrder;
     private readonly SchemaReflector _schemaReflector = schemaReflector;
     private const int NotInLoadOrder = int.MaxValue;
 
     private readonly ConflictClassifier _conflictClassifier = new ConflictClassifier(logger);
 
-    public Answer<IReadOnlyList<PluginResponse>, IndexRefused> GetPlugins() => _answer.Of(PluginResponses);
+    public Task<Answer<IReadOnlyList<PluginResponse>, IndexRefused>> GetPlugins(CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(() => _answer.Of(PluginResponses), cancel);
 
     private IReadOnlyList<PluginResponse> PluginResponses()
     {
@@ -77,9 +78,9 @@ internal sealed class RecordQueries(
     private static bool IsGroup(string recordType, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
         recordType != PluginHeader.RecordType && schemas.ContainsKey(recordType);
 
-    public Answer<PagedResult<RecordSummary>, IndexRefused> GetRecords(
-        IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset) =>
-        _answer.Of(() => RecordPage(types, plugin, search, limit, offset));
+    public Task<Answer<PagedResult<RecordSummary>, IndexRefused>> GetRecords(
+        IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset, CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(() => _answer.Of(() => RecordPage(types, plugin, search, limit, offset)), cancel);
 
     private PagedResult<RecordSummary> RecordPage(
         IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset)
@@ -105,14 +106,15 @@ internal sealed class RecordQueries(
     private string? FormKeyOfFormId(string? search, RelationReads reads) =>
         search is null ? null : LoadIndex.FormKeyOf(search, _loadOrder.Require(), reads.OpenedPlugins)?.ToString();
 
-    public Answer<RecordDetail?, IndexRefused> GetRecord(string formKey) => _answer.Of(() =>
-    {
-        var document = _index.RequireWholeSetReads().GetDocument(formKey);
-        return document == null ? null : ToRecordDetail(document);
-    });
+    public Task<Answer<RecordDetail?, IndexRefused>> GetRecord(string formKey, CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(() => _answer.Of(() =>
+        {
+            var document = _index.RequireWholeSetReads().GetDocument(formKey);
+            return document == null ? null : ToRecordDetail(document);
+        }), cancel);
 
-    public Answer<CompareResult?, IndexRefused> GetCompare(string formKey, CopyText? text = null) =>
-        _answer.Of(() => CompareOf(formKey, text));
+    public Task<Answer<CompareResult?, IndexRefused>> GetCompare(string formKey, CopyText? text = null, CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(() => _answer.Of(() => CompareOf(formKey, text)), cancel);
 
     private CompareResult? CompareOf(string formKey, CopyText? text)
     {
@@ -178,8 +180,8 @@ internal sealed class RecordQueries(
             ? new CopyMissing(copy.FormKey, copy.Plugin, CopyMissingReason.NotInPlugin, $"{copy.FormKey} is not in {copy.Plugin.Name} ({copy.Plugin.Origin}).")
             : new CopyMissing(copy.FormKey, copy.Plugin, CopyMissingReason.RecordGone, $"{copy.FormKey} is held by no plugin.");
 
-    public Answer<CompareRecordsAnswer, IndexRefused> GetCompareRecords(IReadOnlyList<RecordCopy> copies) =>
-        _answer.Of(() => CompareCopies(copies));
+    public Task<Answer<CompareRecordsAnswer, IndexRefused>> GetCompareRecords(IReadOnlyList<RecordCopy> copies, CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(() => _answer.Of(() => CompareCopies(copies)), cancel);
 
     private CompareRecordsAnswer CompareCopies(IReadOnlyList<RecordCopy> copies)
     {
@@ -215,8 +217,9 @@ internal sealed class RecordQueries(
             ComparisonOf(overrides, diffs, conflictAll, documents[0].RecordType, snapshot));
     }
 
-    public Answer<IReadOnlyList<RecordCopyStates>, IndexRefused> GetCopyStates(IReadOnlyList<string> formKeys, PluginAddress? plugin) =>
-        _answer.Flat(() => CopyStatesOf(formKeys, plugin));
+    public Task<Answer<IReadOnlyList<RecordCopyStates>, IndexRefused>> GetCopyStates(
+        IReadOnlyList<string> formKeys, PluginAddress? plugin, CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(() => _answer.Flat(() => CopyStatesOf(formKeys, plugin)), cancel);
 
     private Answer<IReadOnlyList<RecordCopyStates>, IndexRefused> CopyStatesOf(IReadOnlyList<string> formKeys, PluginAddress? plugin)
     {
@@ -288,8 +291,8 @@ internal sealed class RecordQueries(
         return (classification, classification.ConflictAll);
     }
 
-    public Answer<IReadOnlyList<PluginRecordTypeCount>, IndexRefused> GetPluginRecordTypes(PluginAddress plugin) =>
-        _answer.Of(() => RecordTypeCounts(plugin));
+    public Task<Answer<IReadOnlyList<PluginRecordTypeCount>, IndexRefused>> GetPluginRecordTypes(PluginAddress plugin, CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(() => _answer.Of(() => RecordTypeCounts(plugin)), cancel);
 
     private IReadOnlyList<PluginRecordTypeCount> RecordTypeCounts(PluginAddress plugin)
     {
@@ -306,8 +309,8 @@ internal sealed class RecordQueries(
             .ThenBy(r => r.Type, StringComparer.Ordinal)];
     }
 
-    public Answer<WorkingTreeStatesBeneath, IndexRefused> GetWorkingTreeStatesBeneath(PluginAddress plugin) =>
-        _answer.Of(() => RequireReads().GetWorkingTreeStatesBeneath(plugin));
+    public Task<Answer<WorkingTreeStatesBeneath, IndexRefused>> GetWorkingTreeStatesBeneath(PluginAddress plugin, CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(() => _answer.Of(() => RequireReads().GetWorkingTreeStatesBeneath(plugin)), cancel);
 
     public Answer<IReadOnlyList<RecordTypeChoice>, IndexRefused> GetCreatableRecordTypes() => _answer.Of<IReadOnlyList<RecordTypeChoice>>(() =>
     {
@@ -327,8 +330,9 @@ internal sealed class RecordQueries(
                 : new IndexRefused(IndexRefusal.NameRefused, $"{name} is not a plugin file name.");
         });
 
-    public Answer<IReadOnlyList<RecordTypeChoice>?, IndexRefused> GetChildRecordTypes(PluginAddress plugin, string formKey) =>
-        _answer.Of<IReadOnlyList<RecordTypeChoice>?>(() => ChildRecordTypesOf(plugin, formKey));
+    public Task<Answer<IReadOnlyList<RecordTypeChoice>?, IndexRefused>> GetChildRecordTypes(
+        PluginAddress plugin, string formKey, CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(() => _answer.Of<IReadOnlyList<RecordTypeChoice>?>(() => ChildRecordTypesOf(plugin, formKey)), cancel);
 
     private List<RecordTypeChoice>? ChildRecordTypesOf(PluginAddress plugin, string formKey)
     {
@@ -347,15 +351,17 @@ internal sealed class RecordQueries(
             .OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.Type, StringComparer.Ordinal)];
 
-    public Answer<IReadOnlyList<ReferenceResult>, IndexRefused> GetReferences(string targetFormKey) =>
-        _answer.Of(() => Referrers(RequireReads().GetReferencedBy(targetFormKey)));
+    public Task<Answer<IReadOnlyList<ReferenceResult>, IndexRefused>> GetReferences(string targetFormKey, CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(() => _answer.Of(() => Referrers(RequireReads().GetReferencedBy(targetFormKey))), cancel);
 
-    public Answer<IReadOnlyList<ReferenceResult>, IndexRefused> GetReferencesInActiveOrCompiledPlugins(string targetFormKey) =>
-        _answer.Of(() => Referrers(RequireReads().GetReferencedByInActiveOrCompiledPlugins(targetFormKey)));
+    public Task<Answer<IReadOnlyList<ReferenceResult>, IndexRefused>> GetReferencesInActiveOrCompiledPlugins(
+        string targetFormKey, CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(
+            () => _answer.Of(() => Referrers(RequireReads().GetReferencedByInActiveOrCompiledPlugins(targetFormKey))), cancel);
 
     // A plugin the record index has not reached would read as naming nothing.
-    public Answer<IReadOnlyList<CopyNaming>, IndexRefused> GetPluginNameReferences(string name) =>
-        _answer.Of(() => _index.RequireWholeSetReads().GetCopiesNaming(name));
+    public Task<Answer<IReadOnlyList<CopyNaming>, IndexRefused>> GetPluginNameReferences(string name, CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(() => _answer.Of(() => _index.RequireWholeSetReads().GetCopiesNaming(name)), cancel);
 
     public Answer<IReadOnlyList<RecordAt>, IndexRefused> GetCopiesWithNoPluginSourceNaming(PluginAddress plugin, string formKey) => _answer.Of(() =>
     {
@@ -364,24 +370,26 @@ internal sealed class RecordQueries(
             .Where(copy => snapshot.NamesRecordsOf(plugin, copy.Plugin))];
     });
 
-    public Answer<MemberReferences, IndexRefused> GetScriptReferences(string name) => _answer.Of(() =>
-        CopiesNamingAtMembers(name, (copy, columns) => ([.. ScriptAttachments.Collect(copy.Body, columns)
-            .Where(attached => attached.Name.Equals(name, StringComparison.OrdinalIgnoreCase)).Select(attached => attached.FieldPath)], null)));
+    public Task<Answer<MemberReferences, IndexRefused>> GetScriptReferences(string name, CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(() => _answer.Of(() =>
+            CopiesNamingAtMembers(name, (copy, columns) => ([.. ScriptAttachments.Collect(copy.Body, columns)
+                .Where(attached => attached.Name.Equals(name, StringComparison.OrdinalIgnoreCase)).Select(attached => attached.FieldPath)], null))), cancel);
 
     private static readonly char[] PathSeparators = ['/', '\\'];
 
     // Every path that names the file holds its name.
-    public Answer<MemberReferences, IndexRefused> GetFileReferences(string dataPath) => _answer.Of(() =>
-    {
-        var file = new DataRelativePath(dataPath);
-        var name = dataPath[(dataPath.LastIndexOfAny(PathSeparators) + 1)..];
-        return CopiesNamingAtMembers(name, (copy, columns) =>
+    public Task<Answer<MemberReferences, IndexRefused>> GetFileReferences(string dataPath, CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(() => _answer.Of(() =>
         {
-            var named = AssetPaths.Collect(copy.Body, columns);
-            return ([.. named.Files.Where(path => new DataRelativePath(path.DataPath) == file).Select(path => path.FieldPath)],
-                named.Refusals is [var refused, ..] ? $"{refused.FieldPath}: {refused.Reason}" : null);
-        });
-    });
+            var file = new DataRelativePath(dataPath);
+            var name = dataPath[(dataPath.LastIndexOfAny(PathSeparators) + 1)..];
+            return CopiesNamingAtMembers(name, (copy, columns) =>
+            {
+                var named = AssetPaths.Collect(copy.Body, columns);
+                return ([.. named.Files.Where(path => new DataRelativePath(path.DataPath) == file).Select(path => path.FieldPath)],
+                    named.Refusals is [var refused, ..] ? $"{refused.FieldPath}: {refused.Reason}" : null);
+            });
+        }), cancel);
 
     private MemberReferences CopiesNamingAtMembers(string text, Func<CopyHoldingText, IReadOnlyList<ColumnSpec>, (IReadOnlyList<string> Paths, string? Unread)> namingPaths)
     {
@@ -427,8 +435,8 @@ internal sealed class RecordQueries(
     }
 
     // The record index stores each copy's document as the codec writes it, or a stub (ADR-0005).
-    public Answer<RenderedDocument?, IndexRefused> GetRenderedDocument(PluginAddress plugin, string formKey) =>
-        _answer.Sourced(() => RenderedDocumentOf(plugin, formKey));
+    public Task<Answer<RenderedDocument?, IndexRefused>> GetRenderedDocument(PluginAddress plugin, string formKey, CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(() => _answer.Sourced(() => RenderedDocumentOf(plugin, formKey)), cancel);
 
     private Answer<RenderedDocument?, SourceFailure> RenderedDocumentOf(PluginAddress plugin, string formKey)
     {
@@ -437,8 +445,8 @@ internal sealed class RecordQueries(
     }
 
     // A compiled plugin's truth is its tree (ADR-0006), so a copy whose file is gone has no answer.
-    public Answer<CopyDocument?, IndexRefused> GetCopyDocument(PluginAddress plugin, string formKey) =>
-        _answer.Sourced(() => CopyDocumentOf(plugin, formKey));
+    public Task<Answer<CopyDocument?, IndexRefused>> GetCopyDocument(PluginAddress plugin, string formKey, CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(() => _answer.Sourced(() => CopyDocumentOf(plugin, formKey)), cancel);
 
     private Answer<CopyDocument?, SourceFailure> CopyDocumentOf(PluginAddress plugin, string formKey)
     {
@@ -475,59 +483,62 @@ internal sealed class RecordQueries(
     public Answer<RecordOfFileAnswer, IndexRefused> GetRecordOfFile(string path) =>
         _answer.Of(() => source.RecordOfFile(_loadOrder.Require(), path));
 
-    public Answer<IReadOnlyList<WorldspaceSummary>, IndexRefused> GetWorldspaces(PluginAddress plugin) =>
-        _answer.Of(() =>
+    public Task<Answer<IReadOnlyList<WorldspaceSummary>, IndexRefused>> GetWorldspaces(PluginAddress plugin, CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(() => _answer.Of(() =>
         {
             using var reads = RequireReads().InOneSnapshot();
             return WorldspaceTree.WorldspacesOf(reads, plugin, _loadOrder.Require().GameRelease);
-        });
+        }), cancel);
 
-    public Answer<WorldspaceBlocks, IndexRefused> GetWorldspaceBlocks(PluginAddress plugin, string worldspaceFormKey) =>
-        _answer.Of(() => WorldspaceTree.BlocksOf(RequireReads().GetWorldspaceCells(plugin, worldspaceFormKey)));
+    public Task<Answer<WorldspaceBlocks, IndexRefused>> GetWorldspaceBlocks(
+        PluginAddress plugin, string worldspaceFormKey, CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(
+            () => _answer.Of(() => WorldspaceTree.BlocksOf(RequireReads().GetWorldspaceCells(plugin, worldspaceFormKey))), cancel);
 
-    public Answer<CellChildRecords, IndexRefused> GetCellChildRecords(PluginAddress plugin, string cellFormKey) =>
-        _answer.Of(() => RequireReads().GetCellChildRecords(plugin, cellFormKey));
+    public Task<Answer<CellChildRecords, IndexRefused>> GetCellChildRecords(PluginAddress plugin, string cellFormKey, CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(() => _answer.Of(() => RequireReads().GetCellChildRecords(plugin, cellFormKey)), cancel);
 
-    public Answer<IReadOnlyList<InteriorCellBlock>, IndexRefused> GetInteriorCells(PluginAddress plugin) =>
-        _answer.Of(() => WorldspaceTree.InteriorBlocksOf(RequireReads().GetInteriorCells(plugin)));
+    public Task<Answer<IReadOnlyList<InteriorCellBlock>, IndexRefused>> GetInteriorCells(PluginAddress plugin, CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(() => _answer.Of(() => WorldspaceTree.InteriorBlocksOf(RequireReads().GetInteriorCells(plugin))), cancel);
 
-    public Answer<IReadOnlyList<ContainerChildSummary>, IndexRefused> GetContainerChildren(PluginAddress plugin, string parentFormKey) =>
-        _answer.Of(() =>
+    public Task<Answer<IReadOnlyList<ContainerChildSummary>, IndexRefused>> GetContainerChildren(
+        PluginAddress plugin, string parentFormKey, CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(() => _answer.Of(() =>
         {
             using var reads = RequireReads().InOneSnapshot();
             return ContainerChildren.Of(reads, plugin, parentFormKey, _loadOrder.Require().GameRelease);
-        });
+        }), cancel);
 
     // A plugin the record index has not reached holds no rows yet and would read clean.
-    public Answer<IReadOnlyList<PluginDiagnosisReport>, IndexRefused> GetLoadOrderDiagnoses() =>
-        _answer.Of(() => LoadOrderDiagnoses.Of(_index.RequireWholeSetReads(), _loadOrder.Require()));
+    public Task<Answer<IReadOnlyList<PluginDiagnosisReport>, IndexRefused>> GetLoadOrderDiagnoses(CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(() => _answer.Of(() => LoadOrderDiagnoses.Of(_index.RequireWholeSetReads(), _loadOrder.Require())), cancel);
 
     // A plugin the record index has not opened would read as no dependant.
-    public Answer<PluginDependants, IndexRefused> GetDependants(PluginAddress plugin) =>
-        _answer.Of(() =>
+    public Task<Answer<PluginDependants, IndexRefused>> GetDependants(PluginAddress plugin, CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(() => _answer.Of(() =>
         {
             var opened = _index.RequireWholeSetReads().OpenedPlugins;
             return Dependants.Of(plugin, _loadOrder.Require(), opened);
-        });
+        }), cancel);
 
     public Answer<PluginIndexedState, IndexRefused> GetPluginIndexedAsOnDisk(PluginAddress plugin) =>
         _answer.Of(() => _index.IndexedState(plugin));
 
     // A plugin the record index has not reached holds no record yet, so every link into it would read as a
     // missing record.
-    public Answer<IReadOnlyList<PluginProblems>, IndexRefused> GetProblems() =>
-        _answer.Of(() =>
+    public Task<Answer<IReadOnlyList<PluginProblems>, IndexRefused>> GetProblems(CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(() => _answer.Of(() =>
         {
             using var reads = _index.RequireWholeSetReads().InOneSnapshot();
             return ProblemsPanel.Of(_index, reads, _loadOrder.Require(), source);
-        });
+        }), cancel);
 
-    public Answer<IReadOnlyList<PluginFilePaths>, IndexRefused> GetFilePaths(PluginAddress? plugin) =>
-        _answer.Of(() =>
+    public Task<Answer<IReadOnlyList<PluginFilePaths>, IndexRefused>> GetFilePaths(PluginAddress? plugin, CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(() => _answer.Of(() =>
         {
             using var reads = _index.RequireWholeSetReads().InOneSnapshot();
             return FilePathsPanel.Of(_index, reads, _loadOrder.Require(), source, RequireSchemas(), WhyUnreadable, plugin);
-        });
+        }), cancel);
 
     public LoadOrderStatus GetStatus() => _index.Status;
 
@@ -550,10 +561,11 @@ internal sealed class RecordQueries(
 
     public void ClearFilter() => filter.Clear(_index);
 
-    public Answer<SelectedRows, IndexRefused> SelectRows(string sql) => SelectedRows.Selected(_index, sql, _answer);
+    public Task<Answer<SelectedRows, IndexRefused>> SelectRows(string sql, CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(() => SelectedRows.Selected(_index, sql, _answer), cancel);
 
-    public Answer<IReadOnlyList<NamedObject>, IndexRefused> ResolveNames(IReadOnlyList<NameQuery> names) =>
-        _answer.Flat<IReadOnlyList<NamedObject>>(() =>
+    public Task<Answer<IReadOnlyList<NamedObject>, IndexRefused>> ResolveNames(IReadOnlyList<NameQuery> names, CancellationToken cancel = default) =>
+        _answer.AfterSourceWrites(() => _answer.Flat<IReadOnlyList<NamedObject>>(() =>
         {
             using var reads = _index.RequireWholeSetReads().InOneSnapshot();
             var snapshot = _loadOrder.Require();
@@ -562,7 +574,7 @@ internal sealed class RecordQueries(
             if (unresolved.Count > 0)
                 return new IndexRefused(IndexRefusal.NameRefused, string.Join(" ", unresolved.Select(m => Unresolved(m.Query, m.Matches))));
             return matches.Select(m => m.Matches[0]).ToList();
-        });
+        }), cancel);
 
     private static List<NamedObject> NamedBy(NameQuery query, LoadOrderSnapshot snapshot, RelationReads reads)
     {

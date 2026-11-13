@@ -13,8 +13,8 @@ internal static class PluginEndpoints
 
     public static IEndpointRouteBuilder MapPluginEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/plugins", (IQueries svc) =>
-            EndpointMapping.Ok(svc.GetPlugins()))
+        app.MapGet("/plugins", async (IQueries svc, CancellationToken aborted) =>
+            EndpointMapping.Ok(await svc.GetPlugins(aborted)))
             .WithName("GetPlugins")
             .WithTags(Tag)
             .Produces<IReadOnlyList<PluginResponse>>()
@@ -23,15 +23,15 @@ internal static class PluginEndpoints
         // Every mutable plugin in the load order, diagnosed off its original bytes — the
         // session-load complement of init's refusal. With no load order applied the refusal is a
         // 503, never an unmapped 500.
-        app.MapGet("/plugins/diagnoses", (IQueries svc) =>
-            EndpointMapping.Ok(svc.GetLoadOrderDiagnoses()))
+        app.MapGet("/plugins/diagnoses", async (IQueries svc, CancellationToken aborted) =>
+            EndpointMapping.Ok(await svc.GetLoadOrderDiagnoses(aborted)))
             .WithName("GetPluginDiagnoses")
             .WithTags(Tag)
             .Produces<IReadOnlyList<PluginDiagnosisReport>>()
             .ProducesProblem(503);
 
-        app.MapGet("/plugins/problems", (IQueries svc) =>
-            EndpointMapping.Ok(svc.GetProblems()))
+        app.MapGet("/plugins/problems", async (IQueries svc, CancellationToken aborted) =>
+            EndpointMapping.Ok(await svc.GetProblems(aborted)))
             .WithName("GetPluginProblems")
             .WithTags(Tag)
             .WithDescription(
@@ -40,10 +40,10 @@ internal static class PluginEndpoints
             .Produces<IReadOnlyList<PluginProblems>>()
             .ProducesProblem(503);
 
-        app.MapGet("/plugins/file-paths", (string? plugin, string? origin, IQueries svc) =>
+        app.MapGet("/plugins/file-paths", async (string? plugin, string? origin, IQueries svc, CancellationToken aborted) =>
         {
             if (!EndpointMapping.OptionalPluginAt(plugin, origin, out var address, out var refused)) return refused;
-            return EndpointMapping.Ok(svc.GetFilePaths(address));
+            return EndpointMapping.Ok(await svc.GetFilePaths(address, aborted));
         })
             .WithName("GetPluginFilePaths")
             .WithTags(Tag)
@@ -54,10 +54,10 @@ internal static class PluginEndpoints
             .ProducesProblem(400)
             .ProducesProblem(503);
 
-        app.MapGet("/plugins/{plugin}/dependants", (string plugin, string? origin, IQueries svc) =>
+        app.MapGet("/plugins/{plugin}/dependants", async (string plugin, string? origin, IQueries svc, CancellationToken aborted) =>
         {
             if (!EndpointMapping.PluginAt(plugin, origin, out var address, out var refused)) return refused;
-            return EndpointMapping.Ok(svc.GetDependants(address));
+            return EndpointMapping.Ok(await svc.GetDependants(address, aborted));
         })
             .WithName("GetPluginDependants")
             .WithTags(Tag)
@@ -68,8 +68,8 @@ internal static class PluginEndpoints
             .ProducesProblem(400)
             .ProducesProblem(503);
 
-        app.MapGet("/plugin-names/{name}/references", (string name, IQueries svc) =>
-            EndpointMapping.Ok(svc.GetPluginNameReferences(name)))
+        app.MapGet("/plugin-names/{name}/references", async (string name, IQueries svc, CancellationToken aborted) =>
+            EndpointMapping.Ok(await svc.GetPluginNameReferences(name, aborted)))
             .WithName("GetPluginNameReferences")
             .WithTags(Tag)
             .WithDescription(
@@ -95,10 +95,10 @@ internal static class PluginEndpoints
             .ProducesProblem(400)
             .ProducesProblem(503);
 
-        app.MapGet("/plugins/{plugin}/record-types", (string plugin, string? origin, IQueries svc) =>
+        app.MapGet("/plugins/{plugin}/record-types", async (string plugin, string? origin, IQueries svc, CancellationToken aborted) =>
         {
             if (!EndpointMapping.PluginAt(plugin, origin, out var address, out var refused)) return refused;
-            return EndpointMapping.Ok(svc.GetPluginRecordTypes(address));
+            return EndpointMapping.Ok(await svc.GetPluginRecordTypes(address, aborted));
         })
             .WithName("GetPluginRecordTypes")
             .WithTags(Tag)
@@ -106,10 +106,10 @@ internal static class PluginEndpoints
             .ProducesProblem(400)
             .ProducesProblem(503);
 
-        app.MapGet("/plugins/{plugin}/working-tree-states-beneath", (string plugin, string? origin, IQueries svc) =>
+        app.MapGet("/plugins/{plugin}/working-tree-states-beneath", async (string plugin, string? origin, IQueries svc, CancellationToken aborted) =>
         {
             if (!EndpointMapping.PluginAt(plugin, origin, out var address, out var refused)) return refused;
-            return EndpointMapping.Ok(svc.GetWorkingTreeStatesBeneath(address));
+            return EndpointMapping.Ok(await svc.GetWorkingTreeStatesBeneath(address, aborted));
         })
             .WithName("GetWorkingTreeStatesBeneath")
             .WithTags(Tag)
@@ -125,8 +125,8 @@ internal static class PluginEndpoints
             .ProducesProblem(503);
 
         app.MapGet("/plugins/{plugin}/records/{formKey}/child-record-types", (
-            string plugin, string formKey, string? origin, IQueries svc) =>
-            PluginRecordAnswer(plugin, formKey, origin, svc.GetChildRecordTypes))
+            string plugin, string formKey, string? origin, IQueries svc, CancellationToken aborted) =>
+            PluginRecordAnswer(plugin, formKey, origin, (address, key) => svc.GetChildRecordTypes(address, key, aborted)))
             .WithName("GetChildRecordTypes")
             .WithTags(Tag)
             .WithDescription("The record types the plugin's copy of a container record can hold, in name order.")
@@ -136,8 +136,8 @@ internal static class PluginEndpoints
             .ProducesProblem(503);
 
         app.MapGet("/plugins/{plugin}/records/{formKey}/rendered-document", (
-            string plugin, string formKey, string? origin, IQueries svc) =>
-            PluginRecordAnswer(plugin, formKey, origin, svc.GetRenderedDocument))
+            string plugin, string formKey, string? origin, IQueries svc, CancellationToken aborted) =>
+            PluginRecordAnswer(plugin, formKey, origin, (address, key) => svc.GetRenderedDocument(address, key, aborted)))
             .WithName("GetRenderedDocument")
             .WithTags(Tag)
             .WithDescription(
@@ -151,8 +151,8 @@ internal static class PluginEndpoints
             .ProducesProblem(503);
 
         app.MapGet("/plugins/{plugin}/records/{formKey}/document", (
-            string plugin, string formKey, string? origin, IQueries svc) =>
-            PluginRecordAnswer(plugin, formKey, origin, svc.GetCopyDocument))
+            string plugin, string formKey, string? origin, IQueries svc, CancellationToken aborted) =>
+            PluginRecordAnswer(plugin, formKey, origin, (address, key) => svc.GetCopyDocument(address, key, aborted)))
             .WithName("GetCopyDocument")
             .WithTags(Tag)
             .WithDescription(
@@ -440,12 +440,12 @@ internal static class PluginEndpoints
     }
 
     // A source tree that cannot say where the copy is answers why.
-    private static IResult PluginRecordAnswer<T>(
-        string plugin, string formKey, string? origin, Func<PluginAddress, string, Answer<T?, IndexRefused>> answer) where T : class
+    private static async Task<IResult> PluginRecordAnswer<T>(
+        string plugin, string formKey, string? origin, Func<PluginAddress, string, Task<Answer<T?, IndexRefused>>> answer) where T : class
     {
         if (!EndpointMapping.PluginAt(plugin, origin, out var address, out var refused)) return refused;
         return EndpointMapping.Answered(
-            answer(address, Uri.UnescapeDataString(formKey)),
+            await answer(address, Uri.UnescapeDataString(formKey)),
             found => found is not null ? Results.Ok(found) : Results.Problem("The plugin holds no such record.", statusCode: 404));
     }
 }

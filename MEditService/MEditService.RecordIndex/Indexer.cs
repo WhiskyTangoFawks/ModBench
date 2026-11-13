@@ -142,15 +142,17 @@ internal sealed class Indexer : IDisposable
     private readonly Lock _turns = new();
 
     // The source writes made before the change signalled that the last whole check of the disk answered, guarded by _lock
-    // and pulsed on _reconciled, which a read after a source write waits on.
+    // and announced by _writesRead, which a read after a source write waits on.
     private long _writesChecked;
 
-    // The source writes made before each plugin's last re-read began, guarded by _lock and pulsed on _reconciled.
+    // The source writes made before each plugin's last re-read began, guarded by _lock and announced by _writesRead.
     private readonly Dictionary<PluginAddress, long> _writesReReadOf = new(PluginAddress.Comparer);
+
+    // Completed and replaced, under _lock, each time either count above moves.
+    private TaskCompletionSource _writesRead = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     // ADR-0015. Guarded by _lock.
     private bool _openedUnchecked;
-    private readonly object _reconciled = new();
     private static readonly TimeSpan SourceWriteReadLimit = TimeSpan.FromSeconds(60);
 
     // LoadOrder: the snapshot the scope last reconciled, which holds the masters a plugin is read against.
@@ -195,15 +197,10 @@ internal sealed class Indexer : IDisposable
 
     /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: before the first reconcile
     /// the Index has opened no store to read.</summary>
-    public RelationReads RequireReads()
-    {
-        AwaitTheReadOfTheLastSourceWrite();
-        return RequireScope().Store.Reads;
-    }
+    public RelationReads RequireReads() => RequireScope().Store.Reads;
 
     public RelationReads RequireWholeSetReads()
     {
-        AwaitTheReadOfTheLastSourceWrite();
         var status = Status;
         if (status.State == LoadOrderState.Ready) return RequireReads();
         if (_holder.Held is null) throw new NoLoadOrderException();
@@ -335,14 +332,15 @@ internal sealed class Indexer : IDisposable
         }
     }
 
-    // ADR-0015: the plugins a change names are re-read, and a change that names none checks every plugin.
-    private void OnChangeSignalled(IReadOnlyList<PluginAddress>? plugins)
+    // ADR-0001: the plugins a change names are re-read, and a change that names none checks every plugin. mEdit's own
+    // source write is such a change, named by mEdit.
+    private void OnChange(IReadOnlyCollection<PluginAddress>? plugins)
     {
         if (plugins is null) AskCheck();
         else AskReRead(plugins);
     }
 
-    private void AskReRead(IReadOnlyList<PluginAddress> plugins)
+    private void AskReRead(IReadOnlyCollection<PluginAddress> plugins)
     {
         lock (_turns)
         {
@@ -425,7 +423,6 @@ internal sealed class Indexer : IDisposable
             if (_reconcileAsked || _checkAsked)
             {
                 long? writes = _checkAsked ? _writesSignalled : null;
-                if (_checkAsked) _named.Clear();
                 _validatingTurn = _checkAsked;
                 (_reconcileAsked, _checkAsked) = (false, false);
                 return () => ReconcileHeld(writes);
@@ -461,7 +458,14 @@ internal sealed class Indexer : IDisposable
         {
             foreach (var key in reRead.Select(plugin => plugin.Key)) _writesReReadOf[key] = Math.Max(_writesReReadOf.GetValueOrDefault(key), writes);
         }
-        lock (_reconciled) Monitor.PulseAll(_reconciled);
+        AnnounceWritesRead();
+    }
+
+    private void AnnounceWritesRead()
+    {
+        TaskCompletionSource announced;
+        lock (_lock) (announced, _writesRead) = (_writesRead, new(TaskCreationOptions.RunContinuationsAsynchronously));
+        announced.SetResult();
     }
 
     private List<PluginMetadata> ValidateNamed(List<string> paths, HashSet<PluginAddress> named)
@@ -509,31 +513,36 @@ internal sealed class Indexer : IDisposable
             {
                 lock (_lock) _writesChecked = Math.Max(_writesChecked, writes);
             }
-            lock (_reconciled) Monitor.PulseAll(_reconciled);
+            AnnounceWritesRead();
         }
     }
 
-    // ADR-0015, read-your-writes: a read after a source write waits for a re-read of the plugins it names, or else a check
-    // of the disk, and refuses rather than answer the rows from before it.
-    private void AwaitTheReadOfTheLastSourceWrite()
+    /// <summary>Read-your-writes: returns once the plugins mEdit's source writes so far name are re-read, or the disk is
+    /// checked after them. Throws <see cref="IndexNotReadyException"/> rather than answer the rows from before them.</summary>
+    public async Task AwaitTheReadOfTheLastSourceWrite(CancellationToken cancel)
     {
         var (awaited, lastOfEach) = _holder.WritesAfter(WritesChecked);
         var deadline = _timeProvider.GetUtcNow() + SourceWriteReadLimit;
-        lock (_reconciled)
+        while (true)
         {
-            while (!ReadSince(awaited, lastOfEach))
+            Task announced;
+            lock (_lock)
             {
-                var remaining = deadline - _timeProvider.GetUtcNow();
-                if (remaining <= TimeSpan.Zero)
-                {
-                    var reason = Status.Message is { } message ? $" ({message})" : "";
-                    throw new IndexNotReadyException(
-                        "mEdit's record index has not read the plugin source mEdit wrote: " +
-                        (CheckSignalledAfter(awaited) ? $"its check of the disk did not finish{reason}." : "no change was signalled after the write."));
-                }
-                Monitor.Wait(_reconciled, remaining < SequencePollInterval ? remaining : SequencePollInterval);
+                if (ReadSince(awaited, lastOfEach)) return;
+                announced = _writesRead.Task;
             }
+            var remaining = deadline - _timeProvider.GetUtcNow();
+            if (remaining <= TimeSpan.Zero) throw NotRead(named: lastOfEach is not null);
+            await announced.WaitAsync(remaining, _timeProvider, cancel).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+            cancel.ThrowIfCancellationRequested();
         }
+    }
+
+    private IndexNotReadyException NotRead(bool named)
+    {
+        var reason = Status.Message is { } message ? $" ({message})" : "";
+        var unfinished = named ? "its re-read of the plugins written" : "its check of the disk";
+        return new IndexNotReadyException($"mEdit's record index has not read the plugin source mEdit wrote: {unfinished} did not finish{reason}.");
     }
 
     private bool ReadSince(long awaited, IReadOnlyDictionary<PluginAddress, long>? lastOfEach)
@@ -544,11 +553,6 @@ internal sealed class Indexer : IDisposable
                 || lastOfEach is not null && lastOfEach.All(last =>
                     last.Value <= _writesChecked || _writesReReadOf.GetValueOrDefault(last.Key) >= last.Value);
         }
-    }
-
-    private bool CheckSignalledAfter(long writes)
-    {
-        lock (_turns) return _writesSignalled >= writes;
     }
 
     private long WritesChecked
@@ -1441,7 +1445,8 @@ internal sealed class Indexer : IDisposable
     {
         _holder.Arrived += OnArrived;
         _unsaved.Arrived += ValidateTreesHolding;
-        _source.ChangeSignalled += OnChangeSignalled;
+        _source.ChangeSignalled += OnChange;
+        _holder.Written += OnChange;
     }
 
     private void OnArrived(LoadOrderSnapshot snapshot, long version) => AskReconcile();
@@ -1469,7 +1474,8 @@ internal sealed class Indexer : IDisposable
     {
         _holder.Arrived -= OnArrived;
         _unsaved.Arrived -= ValidateTreesHolding;
-        _source.ChangeSignalled -= OnChangeSignalled;
+        _source.ChangeSignalled -= OnChange;
+        _holder.Written -= OnChange;
 
         lock (_turns) _disposed = true;
 

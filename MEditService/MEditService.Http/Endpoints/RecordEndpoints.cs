@@ -16,11 +16,12 @@ internal static class RecordEndpoints
     {
         var logger = loggerFactory.CreateLogger(nameof(RecordEndpoints));
 
-        app.MapGet("/records", (
+        app.MapGet("/records", async (
             IQueries svc,
             string? plugin,
             string[]? type,
             string? search,
+            CancellationToken aborted,
             string? origin = null,
             int limit = 50,
             int offset = 0) =>
@@ -30,7 +31,7 @@ internal static class RecordEndpoints
                 logger.LogInformation("Received GetRecords for {Plugin} ({Origin}) {Types} {Search}", plugin, origin, type, search);
             }
             if (!EndpointMapping.OptionalPluginAt(plugin, origin, out var address, out var refused)) return refused;
-            return EndpointMapping.Ok(svc.GetRecords(type is { Length: > 0 } ? type : null, address, search, limit, offset));
+            return EndpointMapping.Ok(await svc.GetRecords(type is { Length: > 0 } ? type : null, address, search, limit, offset, aborted));
         })
         .WithName("GetRecords")
         .WithTags("Records")
@@ -38,13 +39,13 @@ internal static class RecordEndpoints
         .ProducesProblem(400)
         .ProducesProblem(503);
 
-        app.MapPost("/records/select", (SelectRequest request, IQueries svc) =>
+        app.MapPost("/records/select", async (SelectRequest request, IQueries svc, CancellationToken aborted) =>
         {
             if (logger.IsEnabled(LogLevel.Information))
             {
                 logger.LogInformation("Received SelectRecords with {Sql}", request.Sql);
             }
-            return EndpointMapping.Answered(svc.SelectRows(request.Sql), rows => new SelectedRowLines(rows));
+            return EndpointMapping.Answered(await svc.SelectRows(request.Sql, aborted), rows => new SelectedRowLines(rows));
         })
         .WithName("SelectRecords")
         .WithTags("Records")
@@ -52,13 +53,13 @@ internal static class RecordEndpoints
         .ProducesProblem(400)
         .ProducesProblem(503);
 
-        app.MapPost("/names/resolve", (ResolveNamesRequest request, IQueries svc) =>
+        app.MapPost("/names/resolve", async (ResolveNamesRequest request, IQueries svc, CancellationToken aborted) =>
         {
             if (logger.IsEnabled(LogLevel.Information))
             {
                 logger.LogInformation("Received ResolveNames for {Count} names", request.Names.Count);
             }
-            return EndpointMapping.Ok(svc.ResolveNames(request.Names));
+            return EndpointMapping.Ok(await svc.ResolveNames(request.Names, aborted));
         })
         .WithName("ResolveNames")
         .WithTags("Records")
@@ -66,14 +67,14 @@ internal static class RecordEndpoints
         .ProducesProblem(400)
         .ProducesProblem(503);
 
-        app.MapGet("/records/{formKey}", (string formKey, IQueries svc) =>
+        app.MapGet("/records/{formKey}", async (string formKey, IQueries svc, CancellationToken aborted) =>
         {
             if (logger.IsEnabled(LogLevel.Information))
             {
                 logger.LogInformation("Received GetRecord for {FormKey}", formKey);
             }
             var decoded = Uri.UnescapeDataString(formKey);
-            return EndpointMapping.Answered(svc.GetRecord(decoded), detail => detail is null ? Results.NotFound() : Results.Ok(detail));
+            return EndpointMapping.Answered(await svc.GetRecord(decoded, aborted), detail => detail is null ? Results.NotFound() : Results.Ok(detail));
         })
         .WithName("GetRecord")
         .WithTags("Records")
@@ -81,14 +82,15 @@ internal static class RecordEndpoints
         .ProducesProblem(404)
         .ProducesProblem(503);
 
-        app.MapGet("/records/{formKey}/compare", (string formKey, IQueries svc) =>
+        app.MapGet("/records/{formKey}/compare", async (string formKey, IQueries svc, CancellationToken aborted) =>
         {
             if (logger.IsEnabled(LogLevel.Information))
             {
                 logger.LogInformation("Received CompareRecord for {FormKey}", formKey);
             }
             var decoded = Uri.UnescapeDataString(formKey);
-            return EndpointMapping.Answered(svc.GetCompare(decoded), result => result is null ? Results.NotFound() : Results.Ok(result));
+            return EndpointMapping.Answered(
+                await svc.GetCompare(decoded, cancel: aborted), result => result is null ? Results.NotFound() : Results.Ok(result));
         })
         .WithName("CompareRecord")
         .WithTags("Records")
@@ -96,8 +98,8 @@ internal static class RecordEndpoints
         .ProducesProblem(404)
         .ProducesProblem(503);
 
-        app.MapPost("/records/{formKey}/compare", (string formKey, CopyText copy, IQueries svc) =>
-            CompareRecord(Uri.UnescapeDataString(formKey), copy, svc))
+        app.MapPost("/records/{formKey}/compare", (string formKey, CopyText copy, IQueries svc, CancellationToken aborted) =>
+            CompareRecord(Uri.UnescapeDataString(formKey), copy, svc, aborted))
         .WithName("CompareRecordWithText")
         .WithSummary("One record as every active plugin has it, one plugin's copy read from the document text given.")
         .WithDescription(
@@ -111,8 +113,8 @@ internal static class RecordEndpoints
         .ProducesProblem(404)
         .ProducesProblem(503);
 
-        app.MapPost("/records/compare", (CompareRecordsRequest request, IQueries svc) =>
-            CompareRecords(request.Copies ?? [], svc))
+        app.MapPost("/records/compare", (CompareRecordsRequest request, IQueries svc, CancellationToken aborted) =>
+            CompareRecords(request.Copies ?? [], svc, aborted))
         .WithName("CompareRecords")
         .WithSummary("Several records side by side: one column per copy, in the order given, with no conflict state.")
         .WithDescription(
@@ -123,8 +125,8 @@ internal static class RecordEndpoints
         .ProducesProblem(400)
         .ProducesProblem(503);
 
-        app.MapPost("/records/copy-states", (CopyStatesRequest request, IQueries svc) =>
-            CopyStates(request, svc))
+        app.MapPost("/records/copy-states", (CopyStatesRequest request, IQueries svc, CancellationToken aborted) =>
+            CopyStates(request, svc, aborted))
         .WithName("CompareCopyStates")
         .WithSummary("Many records' copies, each with its state against the master, in one call.")
         .WithDescription(
@@ -160,24 +162,26 @@ internal static class RecordEndpoints
         .ProducesProblem(422)
         .ProducesProblem(503);
 
-        app.MapGet("/records/{formKey}/references", (string formKey, IQueries svc) =>
-            GetReferences(nameof(IQueries.GetReferences), formKey, svc.GetReferences, logger))
+        app.MapGet("/records/{formKey}/references", (string formKey, IQueries svc, CancellationToken aborted) =>
+            GetReferences(nameof(IQueries.GetReferences), formKey, key => svc.GetReferences(key, aborted), logger))
         .WithName("GetReferences")
         .WithTags("Records")
         .Produces<IReadOnlyList<ReferenceResult>>()
         .ProducesProblem(503)
         .ProducesProblem(500);
 
-        app.MapGet("/records/{formKey}/references-in-active-or-compiled-plugins", (string formKey, IQueries svc) =>
+        app.MapGet("/records/{formKey}/references-in-active-or-compiled-plugins", (string formKey, IQueries svc, CancellationToken aborted) =>
             GetReferences(
-                nameof(IQueries.GetReferencesInActiveOrCompiledPlugins), formKey, svc.GetReferencesInActiveOrCompiledPlugins, logger))
+                nameof(IQueries.GetReferencesInActiveOrCompiledPlugins), formKey,
+                key => svc.GetReferencesInActiveOrCompiledPlugins(key, aborted), logger))
         .WithName("GetReferencesInActiveOrCompiledPlugins")
         .WithTags("Records")
         .Produces<IReadOnlyList<ReferenceResult>>()
         .ProducesProblem(503)
         .ProducesProblem(500);
 
-        app.MapGet("/script-names/{name}/references", (string name, IQueries svc) => EndpointMapping.Ok(svc.GetScriptReferences(name)))
+        app.MapGet("/script-names/{name}/references", async (string name, IQueries svc, CancellationToken aborted) =>
+            EndpointMapping.Ok(await svc.GetScriptReferences(name, aborted)))
         .WithName("GetScriptReferences")
         .WithTags("Records")
         .WithDescription(
@@ -187,7 +191,8 @@ internal static class RecordEndpoints
         .Produces<MemberReferences>()
         .ProducesProblem(503);
 
-        app.MapGet("/file-paths/references", (string path, IQueries svc) => EndpointMapping.Ok(svc.GetFileReferences(path)))
+        app.MapGet("/file-paths/references", async (string path, IQueries svc, CancellationToken aborted) =>
+            EndpointMapping.Ok(await svc.GetFileReferences(path, aborted)))
         .WithName("GetFileReferences")
         .WithTags("Records")
         .WithDescription(
@@ -435,43 +440,43 @@ internal static class RecordEndpoints
         return await answer(records);
     }
 
-    internal static IResult CompareRecords(IReadOnlyList<RecordCopy> copies, IQueries svc)
+    internal static async Task<IResult> CompareRecords(IReadOnlyList<RecordCopy> copies, IQueries svc, CancellationToken aborted)
     {
         if (copies.Count == 0)
             return EndpointMapping.BadRequest("At least one record is required.");
         if (copies.Any(c => string.IsNullOrWhiteSpace(c.FormKey)
                 || string.IsNullOrWhiteSpace(c.Plugin.Name) || string.IsNullOrWhiteSpace(c.Plugin.Origin)))
             return EndpointMapping.BadRequest("Every record needs a FormKey, a plugin name and an origin.");
-        return EndpointMapping.Ok(svc.GetCompareRecords(copies));
+        return EndpointMapping.Ok(await svc.GetCompareRecords(copies, aborted));
     }
 
-    internal static IResult CopyStates(CopyStatesRequest request, IQueries svc)
+    internal static async Task<IResult> CopyStates(CopyStatesRequest request, IQueries svc, CancellationToken aborted)
     {
         var formKeys = request.FormKeys ?? [];
         if (formKeys.Count == 0 || formKeys.Any(string.IsNullOrWhiteSpace))
             return EndpointMapping.BadRequest("At least one FormKey is required.");
         if (request.Plugin is { } plugin && (string.IsNullOrWhiteSpace(plugin.Name) || string.IsNullOrWhiteSpace(plugin.Origin)))
             return EndpointMapping.BadRequest("A plugin needs a name and an origin.");
-        return EndpointMapping.Ok(svc.GetCopyStates(formKeys, request.Plugin));
+        return EndpointMapping.Ok(await svc.GetCopyStates(formKeys, request.Plugin, aborted));
     }
 
-    internal static IResult CompareRecord(string formKey, CopyText copy, IQueries svc)
+    internal static async Task<IResult> CompareRecord(string formKey, CopyText copy, IQueries svc, CancellationToken aborted)
     {
         if (copy.DocumentText is null || string.IsNullOrWhiteSpace(copy.Plugin.Name) || string.IsNullOrWhiteSpace(copy.Plugin.Origin))
             return EndpointMapping.BadRequest("A plugin name, an origin and a document text are required.");
         return EndpointMapping.Answered(
-            svc.GetCompare(formKey, copy),
+            await svc.GetCompare(formKey, copy, aborted),
             result => result is not null ? Results.Ok(result) : Results.Problem("No plugin indexes this record.", statusCode: 404));
     }
 
-    internal static IResult GetReferences(
-        string operation, string formKey, Func<string, Answer<IReadOnlyList<ReferenceResult>, IndexRefused>> read, ILogger logger)
+    internal static async Task<IResult> GetReferences(
+        string operation, string formKey, Func<string, Task<Answer<IReadOnlyList<ReferenceResult>, IndexRefused>>> read, ILogger logger)
     {
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation("Received {Operation} for {FormKey}", operation, formKey);
         }
-        return EndpointMapping.Ok(read(Uri.UnescapeDataString(formKey)));
+        return EndpointMapping.Ok(await read(Uri.UnescapeDataString(formKey)));
     }
 }
 

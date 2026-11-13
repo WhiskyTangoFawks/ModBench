@@ -12,6 +12,16 @@ internal static class IndexAnswers
             ? value
             : throw new InvalidOperationException($"Expected the Index to answer here: {refused.Refusal}: {refused.Message}");
 
+    /// <summary>The answer of a read, which a test takes on its own thread once the read has waited out the source
+    /// writes before it.</summary>
+    internal static Answer<T, IndexRefused> Answered<T>(this Task<Answer<T, IndexRefused>> read) => read.GetAwaiter().GetResult();
+
+    internal static T Value<T>(this Task<Answer<T, IndexRefused>> read) => read.Answered().Value();
+
+    internal static IndexRefused Refused<T>(this Task<Answer<T, IndexRefused>> read) => read.Answered().Refused();
+
+    internal static CompareResult Compared(this Task<Answer<CompareRecordsAnswer, IndexRefused>> read) => read.Answered().Compared();
+
     /// <summary>Every row the SELECT selects, read to its end; a refusal here is a broken fixture.</summary>
     internal static JsonElement[] Selected(this IQueries queries, string sql)
     {

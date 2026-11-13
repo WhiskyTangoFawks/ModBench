@@ -12,12 +12,15 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
 {
     private const string CompiledPlugin = "CompiledPlugin.esp";
     private const string OtherPlugin = "Other.esp";
+    private const string NotCompiled = "NotCompiled.esp";
     private static readonly DateTimeOffset Start = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
     private static readonly TimeSpan Generous = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan WellInsideThePark = TimeSpan.FromSeconds(5);
 
     private readonly FakeTimeProvider _clock = new(Start);
     private readonly LoadOrderHolder _holder = new();
     private readonly GatedPluginAdapter _gate = new();
+    private readonly ParkingSource _source = new();
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderEntry _compiledPlugin;
     private readonly string _npc;
@@ -33,120 +36,136 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
         _compiledPlugin = _fixture.Plugins.Single(p => p.Name == CompiledPlugin);
         _npc = npc;
         SourceMods.Init(_compiledPlugin);
-        _index = Indexes.Open(_holder, _gate, timeProvider: _clock);
+        _index = Indexes.Open(_holder, _gate, timeProvider: _clock, source: _source);
         _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         _compiledPlugin.HandEdit(_index.DocumentOf(_npc, _compiledPlugin.Key), "\"CompiledPluginNpc\"", "\"Written\"");
-        _holder.SourceWritten([_compiledPlugin.Key]);
     }
 
     public void Dispose()
     {
         _index.Dispose();
         _gate.Dispose();
+        _source.Dispose();
         _fixture.Dispose();
     }
 
-    private Task<Answer<RenderedDocument?, IndexRefused>> Read() =>
-        Task.Run(() => _index.Queries.GetRenderedDocument(_compiledPlugin.Key, _npc));
+    private void Written() => _holder.SourceWritten([_compiledPlugin.Key]);
 
-    [Fact]
-    public async Task AReadAfterASourceWrite_AnswersOnceTheNextCheckOfTheDiskEnds()
+    private async Task WrittenWithItsReReadParked()
     {
-        var read = Read();
-        var first = await Task.WhenAny(read, Task.Delay(TimeSpan.FromMilliseconds(500)));
-
-        _index.SignalChange();
-
-        Assert.NotSame(read, first);
-        Assert.Contains("\"Written\"", (await read.WaitAsync(Generous)).Value()?.Text, StringComparison.Ordinal);
+        _source.ParkNextTreeLookup();
+        Written();
+        await _source.WaitUntilParkedAsync();
     }
 
-    [Fact]
-    public async Task AReadAfterASourceWrite_AnswersOnceAChangeNamingItsPluginIsReRead_WithNoCheckOfTheDisk()
-    {
-        var read = Read();
-
-        _index.SignalChange([_compiledPlugin.Key]);
-
-        Assert.Contains("\"Written\"", (await read.WaitAsync(Generous)).Value()?.Text, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task AReadAfterASourceWrite_WaitsPastAReReadOfAnotherPlugin()
-    {
-        var read = Read();
-
-        _index.SignalChange([_fixture.Plugins.Single(p => p.Name == OtherPlugin).Key]);
-        var first = await Task.WhenAny(read, Task.Delay(TimeSpan.FromMilliseconds(500)));
-
-        Assert.NotSame(read, first);
-        _index.SignalChange();
-        Assert.Contains("\"Written\"", (await read.WaitAsync(Generous)).Value()?.Text, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task AReadAfterASourceWrite_WaitsPastALoadOrderThatArrives()
-    {
-        var read = Read();
-
-        _index.Receive(_holder, SnapshotPlugins.Snapshot(
-            _fixture.DataFolder, _fixture.InstanceRoot, GameRelease.Fallout4, [.. _fixture.Plugins, NotCompiledPlugin()]));
-        var first = await Task.WhenAny(read, Task.Delay(TimeSpan.FromMilliseconds(500)));
-
-        Assert.NotSame(read, first);
-        _index.SignalChange();
-        Assert.Contains("\"Written\"", (await read.WaitAsync(Generous)).Value()?.Text, StringComparison.Ordinal);
-    }
-
-    private const string NotCompiled = "NotCompiled.esp";
-
-    private LoadOrderEntry NotCompiledPlugin()
+    private async Task WorkerParkedInAReconcile()
     {
         var path = Path.Combine(_fixture.DataFolder, NotCompiled);
         PluginBinaries.Rewrite(path, mod => mod.Npcs.AddNew("NotCompiledNpc"));
-        return new LoadOrderEntry(NotCompiled, path, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true);
+        var notCompiled = new LoadOrderEntry(NotCompiled, path, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true);
+        _gate.ParkNextOpenOf(NotCompiled);
+        _holder.Apply(SnapshotPlugins.Snapshot(
+            _fixture.DataFolder, _fixture.InstanceRoot, GameRelease.Fallout4, [.. _fixture.Plugins, notCompiled]));
+        await _gate.WaitUntilParkedAsync();
+    }
+
+    private Task<Answer<RenderedDocument?, IndexRefused>> Read(CancellationToken cancel = default) =>
+        _index.Queries.GetRenderedDocument(_compiledPlugin.Key, _npc, cancel);
+
+    private static void AssertWritten(Answer<RenderedDocument?, IndexRefused> answer) =>
+        Assert.Contains("\"Written\"", answer.Value()?.Text, StringComparison.Ordinal);
+
+    [Fact]
+    public async Task AReadAfterASourceWrite_AnswersWhatItWrote_WithNoChangeSignalled()
+    {
+        Written();
+
+        AssertWritten(await Read().WaitAsync(Generous));
     }
 
     [Fact]
-    public async Task AReadAfterASourceWrite_WithNoCheckAfterIt_IsRefusedOnceItsWaitExpires_NamingWhy()
+    public async Task AReadAfterASourceWriteNamingNoPlugin_AnswersWhatItWrote_WithNoChangeSignalled()
     {
+        _holder.SourceWritten(null);
+
+        AssertWritten(await Read().WaitAsync(Generous));
+    }
+
+    [Fact]
+    public async Task AReadWaitingOnTheReadOfASourceWrite_HoldsNoThread()
+    {
+        await WrittenWithItsReReadParked();
+
+        var read = Read();
+
+        Assert.False(read.IsCompleted);
+        _source.Release();
+        AssertWritten(await read.WaitAsync(Generous));
+    }
+
+    [Fact]
+    public async Task AReadWaitingOnTheReadOfASourceWrite_EndsWhenItsCallerCancels()
+    {
+        await WrittenWithItsReReadParked();
+        using var aborted = new CancellationTokenSource();
+        var read = Read(aborted.Token);
+
+        await aborted.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => read.WaitAsync(WellInsideThePark));
+        _source.Release();
+    }
+
+    [Fact]
+    public async Task AReadAfterASourceWrite_WhoseReReadIsUnfinished_IsRefusedOnceItsWaitExpires_NamingTheReRead()
+    {
+        await WrittenWithItsReReadParked();
         var read = Read();
 
         await _clock.AdvancingUntil(read, TimeSpan.FromMinutes(2));
 
         var refused = (await read.WaitAsync(Generous)).Refused();
         Assert.Equal(IndexRefusal.IndexNotReady, refused.Refusal);
-        Assert.Contains("no change was signalled after the write", refused.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("its check of the disk did not finish", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("its re-read of the plugins written did not finish", refused.Message, StringComparison.Ordinal);
+        _source.Release();
     }
 
     [Fact]
-    public async Task AReadAfterASourceWrite_WhoseCheckIsSignalledButUnfinished_IsRefusedOnceItsWaitExpires_NamingTheCheck()
+    public async Task AReadAfterASourceWriteNamingNoPlugin_WhoseCheckIsUnfinished_IsRefusedOnceItsWaitExpires_NamingTheCheck()
     {
+        await WorkerParkedInAReconcile();
+        _holder.SourceWritten(null);
         var read = Read();
-        _gate.ParkNextOpenOf(NotCompiled);
-        _holder.Apply(SnapshotPlugins.Snapshot(
-            _fixture.DataFolder, _fixture.InstanceRoot, GameRelease.Fallout4, [.. _fixture.Plugins, NotCompiledPlugin()]));
-        await _gate.WaitUntilParkedAsync();
-        _index.SignalChange();
 
         await _clock.AdvancingUntil(read, TimeSpan.FromMinutes(2));
 
         var refused = (await read.WaitAsync(Generous)).Refused();
         Assert.Equal(IndexRefusal.IndexNotReady, refused.Refusal);
         Assert.Contains("its check of the disk did not finish", refused.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("no change was signalled", refused.Message, StringComparison.Ordinal);
         _gate.Release();
     }
 
     [Fact]
-    public async Task ANameResolvedAfterASourceWrite_IsResolvedAgainstTheLoadOrderHeldAtTheNextCheck()
+    public async Task AReReadASourceWriteAsks_WhileACheckAskedBeforeItWaits_StillReleasesTheRead()
     {
-        var resolved = Task.Run(() => _index.Queries.ResolveNames([new NameQuery(CompiledPlugin, null)]));
-        await Task.Delay(TimeSpan.FromMilliseconds(500));
+        await WorkerParkedInAReconcile();
+        _index.SignalChange();
+        Written();
+        var read = Read();
+
+        _gate.Release();
+
+        AssertWritten(await read.WaitAsync(Generous));
+    }
+
+    [Fact]
+    public async Task ANameResolvedAfterASourceWrite_IsResolvedAgainstTheLoadOrderHeldOnceTheWriteIsRead()
+    {
+        await WrittenWithItsReReadParked();
+        var resolved = _index.Queries.ResolveNames([new NameQuery(CompiledPlugin, null)]);
 
         _holder.Apply(SnapshotPlugins.Snapshot(_fixture.DataFolder, _fixture.InstanceRoot, GameRelease.Fallout4, []));
-        _index.SignalChange();
+        _source.Release();
 
         var refused = (await resolved.WaitAsync(Generous)).Refused();
         Assert.Equal(IndexRefusal.NameRefused, refused.Refusal);
