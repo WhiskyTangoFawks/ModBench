@@ -125,11 +125,12 @@ describe('Find All References on a Papyrus script', () => {
 describe('the symbol index on a Papyrus script', () => {
   const copy = { formKey: QUEST, plugin: { name: 'Mod.esp', origin: 'Mod' }, inPluginSource: true, fieldPaths: [PATH] };
 
-  it('defines the script at its source, else its compiled script, and refuses one no mod holds', () => {
-    expect([language().language.definitionOf('ns:quest'), language().language.definitionOf('Other'), language(NONE, []).language.definitionOf('Ns:Quest')]).toEqual([
-      { file: QUEST_SOURCE }, { file: '/instance/mods/Mod/Scripts/Other.pex' },
-      { refused: 'No mod, Overwrite or the Data folder holds a source or a compiled script of Ns:Quest.' },
-    ]);
+  it.each([
+    ['at its source', 'ns:quest', SCRIPTS, { file: QUEST_SOURCE }],
+    ['at its compiled script when it has no source', 'Other', SCRIPTS, { file: '/instance/mods/Mod/Scripts/Other.pex' }],
+    ['nowhere when no mod holds it, refusing', 'Ns:Quest', [], { refused: 'No mod, Overwrite or the Data folder holds a source or a compiled script of Ns:Quest.' }],
+  ])('defines a script %s', (_case, name, scripts, expected) => {
+    expect(language(NONE, scripts).language.definitionOf(name)).toEqual(expected);
   });
 
   it('lists each member that attaches it as a place, and each copy it could not read as left out', async () => {

@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import type { MEditClient } from '../client/MEditClient';
+import type { InstanceValue } from '../instanceLoader/instance';
 import { Refusal } from '../drivingLib/refusal';
 import type { SymbolIndex, SymbolName } from '../sourceLanguage/symbolIndex';
+import { pluginsNamed } from './names';
 import { formKeysNamed } from './recordNames';
 import { fitting } from './tooLarge';
 
@@ -13,23 +15,28 @@ const SYMBOL = {
 
 type NamedSymbol = z.output<z.ZodObject<typeof SYMBOL>>;
 
-async function symbolNamed(mEdit: Pick<MEditClient, 'resolveNames'>, { kind, name, origin }: NamedSymbol): Promise<SymbolName> {
+type Naming = { mEdit: Pick<MEditClient, 'resolveNames'>; value: InstanceValue };
+
+async function symbolNamed({ mEdit, value }: Naming, { kind, name, origin }: NamedSymbol): Promise<SymbolName> {
   if (origin !== undefined && kind !== 'plugin') throw new Refusal(`origin names the mod that holds a plugin, and a ${kind} has none.`);
   switch (kind) {
-    case 'plugin': return { kind, name, origin };
+    case 'plugin': {
+      const [plugin = { name, origin }] = pluginsNamed(value, [{ name, origin }]);
+      return { kind, ...plugin };
+    }
     case 'record': return { kind, formKey: (await formKeysNamed(mEdit, [name]))[0] ?? '' };
     case 'file': return { kind, path: name };
     case 'mod': case 'separator': case 'downloadedFile': case 'profile': case 'script': return { kind, name };
   }
 }
 
-type SymbolReads = { mEdit: Pick<MEditClient, 'resolveNames'>; symbols: SymbolIndex };
+type SymbolReads = Naming & { symbols: SymbolIndex };
 
 export const FIND_DEFINITION = {
   name: 'find_definition',
   input: SYMBOL,
-  of: async ({ mEdit, symbols }: SymbolReads, args: NamedSymbol) => {
-    const definition = await symbols.definitionOf(await symbolNamed(mEdit, args));
+  of: async ({ symbols, ...naming }: SymbolReads, args: NamedSymbol) => {
+    const definition = await symbols.definitionOf(await symbolNamed(naming, args));
     if ('refused' in definition) throw new Refusal(definition.refused);
     return definition;
   },
@@ -38,8 +45,8 @@ export const FIND_DEFINITION = {
 export const LIST_REFERENCES = {
   name: 'list_references',
   input: SYMBOL,
-  of: async ({ mEdit, symbols }: SymbolReads, args: NamedSymbol) => {
-    const symbol = await symbolNamed(mEdit, args);
+  of: async ({ symbols, ...naming }: SymbolReads, args: NamedSymbol) => {
+    const symbol = await symbolNamed(naming, args);
     const found = await symbols.referencesTo(symbol);
     if ('refused' in found) throw new Refusal(found.refused);
     return fitting(found, ({ references }) => ({

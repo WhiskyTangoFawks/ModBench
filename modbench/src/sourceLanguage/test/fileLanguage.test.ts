@@ -142,18 +142,14 @@ describe('Go to Definition on a path in plugin source (symbols.md, The symbols, 
 describe('the symbol index on a file (symbols.md, The symbols, File)', () => {
   const NONE = { copies: [], unread: [] };
 
-  it('defines a loose file at the copy the game gets', () => {
-    expect(language(NONE).definitionOf(FILE)).toEqual({ file: '/instance/mods/Mod/Textures/Decals/Stain_d.dds' });
-  });
+  const ARCHIVE = '/instance/mods/Mod/Mod - Textures.ba2';
 
-  it('defines an archived file inside its archive', () => {
-    const archived: CopyAt = { kind: 'archived', gameRelease: 'Fallout4', archive: '/instance/mods/Mod/Mod - Textures.ba2', file: FILE };
-
-    expect(language(NONE, { copy: archived }).definitionOf(FILE)).toEqual({ archived: { archive: archived.archive, file: FILE } });
-  });
-
-  it('refuses a file no copy exists of, saying what was searched', () => {
-    expect(language(NONE, { copy: NO_COPY }).definitionOf(FILE)).toEqual({ refused: NO_COPY.none });
+  it.each([
+    ['a loose file at the copy the game gets', LOOSE, { file: '/instance/mods/Mod/Textures/Decals/Stain_d.dds' }],
+    ['an archived file inside its archive', { kind: 'archived', gameRelease: 'Fallout4', archive: ARCHIVE, file: FILE } satisfies CopyAt, { archived: { archive: ARCHIVE, file: FILE } }],
+    ['nothing for a file no copy exists of, refusing with what was searched', NO_COPY, { refused: NO_COPY.none }],
+  ])('defines %s', (_case, copy, expected) => {
+    expect(language(NONE, { copy }).definitionOf(FILE)).toEqual(expected);
   });
 
   it('lists each record that names it at its member, and each copy it could not read as left out', async () => {

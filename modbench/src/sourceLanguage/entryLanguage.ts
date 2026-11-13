@@ -81,11 +81,11 @@ export function entryLanguage({ instance, reporter, owners, goTo, entryTooltip, 
   return {
     /** Where the entry is defined: a mod's folder. A separator, a downloaded file and a profile have none. */
     definitionOf: (named: EntrySymbol): Definition => {
-      if (named.kind !== 'mod') return { none: `A ${NOUNS[named.kind]} has no definition.` };
-      const mod = entryListed(named);
-      if (mod === undefined) return { refused: unlisted(named) };
-      const folder = instance?.value.paths.modDirs.get(mod.name);
-      return folder === undefined ? { refused: `${mod.name} has no folder.` } : { file: folder };
+      const entry = entryListed(named);
+      if (entry === undefined) return { refused: unlisted(named) };
+      if (entry.kind !== 'mod') return { none: `A ${NOUNS[entry.kind]} has no definition.` };
+      const folder = instance?.value.paths.modDirs.get(entry.name);
+      return folder === undefined ? { refused: `${entry.name} has no folder.` } : { file: folder };
     },
     /** Each place a file names the entry, and why each file went unread. */
     placesNaming: async (named: EntrySymbol): Promise<EntryReading | { refused: string }> => {

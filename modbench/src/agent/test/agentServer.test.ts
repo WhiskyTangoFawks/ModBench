@@ -1464,7 +1464,10 @@ describe('the agent server, reading a record through mEdit', () => {
     symbolReads.references = { references: [place, { formKey: '000900:B.esp', plugin: { name: 'B.esp', origin: 'Big Rocks' } }], leftOut: ['C.esp: unreadable'] };
     const { client } = await clientOf(new FakeInstance(ENABLED), mEdit);
 
-    expect(await read(client, 'list_references', { kind: 'record', name: 'SharedNpc' })).toEqual(symbolReads.references);
+    expect(await read(client, 'list_references', { kind: 'record', name: 'SharedNpc' })).toEqual({
+      references: [{ file: '/source/B.json', start: { line: 1, character: 2 }, end: { line: 1, character: 9 } }, { formKey: '000900:B.esp', plugin: { name: 'B.esp', origin: 'Big Rocks' } }],
+      leftOut: ['C.esp: unreadable'],
+    });
     expect(symbolReads.asked).toEqual([{ kind: 'record', formKey: '000800:A.esp' }]);
   });
 
@@ -1498,7 +1501,7 @@ describe('the agent server, finding a symbol\'s definition and references', () =
     symbolReads.definition = { archived: { archive: '/mods/Mod/Mod - Textures.ba2', file: 'textures/a.dds' } };
     const { client } = await served();
 
-    expect(await read(client, 'find_definition', { kind: 'file', name: 'textures/a.dds' })).toEqual(symbolReads.definition);
+    expect(await read(client, 'find_definition', { kind: 'file', name: 'textures/a.dds' })).toEqual({ archived: { archive: '/mods/Mod/Mod - Textures.ba2', file: 'textures/a.dds' } });
   });
 
   it('answers that a kind has no definition, rather than refusing', async () => {
@@ -1515,6 +1518,18 @@ describe('the agent server, finding a symbol\'s definition and references', () =
 
     expect([await call(client, 'find_definition', { kind: 'mod', name: 'Gone' }), await call(client, 'list_references', { kind: 'mod', name: 'Gone' })])
       .toEqual(Array.from({ length: 2 }, () => ({ isError: true, text: 'Mods lists no mod named Gone.' })));
+  });
+
+  it.each(['find_definition', 'list_references'])('%s refuses a plugin file name two mods share, listing each, asking the index nothing', async (tool) => {
+    const shared = (origin: string, line: number, winning: boolean) => ({ name: 'Same.esp', origin, path: `/m/${origin}/Same.esp`, line, enabled: true, winning });
+    const { client } = await clientOf(new FakeInstance(instanceValueFixture({
+      mods: [{ kind: 'mod', name: 'ModA', enabled: true }, { kind: 'mod', name: 'ModB', enabled: true }],
+      plugins: [shared('ModA', 0, true), shared('ModB', 1, false)],
+    })));
+
+    expect(await call(client, tool, { kind: 'plugin', name: 'Same.esp' }))
+      .toEqual({ isError: true, text: '"Same.esp" means more than one plugin: Same.esp in ModA; Same.esp in ModB. Name it with its origin.' });
+    expect(symbolReads.asked).toEqual([]);
   });
 
   it('refuses an origin on a symbol that is no plugin, asking the index nothing', async () => {

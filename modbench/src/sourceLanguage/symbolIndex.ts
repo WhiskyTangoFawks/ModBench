@@ -12,7 +12,7 @@ import { referencesToFormKey } from './formKeyReferences';
 import { formKeyMember } from './sourceText';
 import { placeOfLocation, referenceOf } from './symbolPlaces';
 
-/** A symbol the agent names: a record by its FormKey, a file by its path in the Data folder. */
+/** A symbol by its name: a record by its FormKey, a file by its path in the Data folder. */
 export type SymbolName =
   | ({ readonly kind: 'plugin' } & PluginName)
   | { readonly kind: 'record'; readonly formKey: string }
@@ -37,7 +37,6 @@ export interface SymbolReferences {
   readonly leftOut: readonly string[];
 }
 
-/** What the agent's find_definition and list_references answer, by symbol (ADR-0028). */
 export interface SymbolIndex {
   definitionOf(symbol: SymbolName): Promise<Definition>;
   referencesTo(symbol: SymbolName): Promise<SymbolReferences | { readonly refused: string }>;
@@ -52,7 +51,6 @@ interface SymbolIndexDeps {
   file: Pick<ReturnType<typeof fileLanguage>, 'definitionOf' | 'placesNaming'>;
 }
 
-/** Each language's definition and references, dispatched by the symbol's kind. */
 export function symbolIndex({ client, open, plugin, entry, script, file }: SymbolIndexDeps): SymbolIndex {
   const references = referencesToFormKey({ client, open });
   return {
@@ -62,7 +60,8 @@ export function symbolIndex({ client, open, plugin, entry, script, file }: Symbo
         case 'script': return script.definitionOf(symbol.name);
         case 'file': return file.definitionOf(symbol.path);
         case 'record': {
-          const located = await locateRecord({ client, open }, { formKey: symbol.formKey }, formKeyMember);
+          const located = await locateRecord({ client, open }, { formKey: symbol.formKey }, formKeyMember)
+            .catch((error: unknown) => ({ refused: `Where ${symbol.formKey} is defined could not be read: ${errorMessage(error)}` }));
           if (located === undefined) return { refused: `No active plugin holds ${symbol.formKey}.` };
           if ('refused' in located) return located;
           if (located.uri.scheme === RENDERED_DOCUMENT_SCHEME) return { plugin: copyOf(located.uri).plugin };

@@ -142,8 +142,8 @@ function mcpServerOf({ instance, copyReads, mEdit, symbols, terminalEnvironment,
   register(server, log, reading('instance', 'modList'), RESOLVE_INSTANCE_NAMES, (args) => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args));
   register(server, log, reading(...RECORD_READS), RESOLVE_NAMES, (args) => RESOLVE_NAMES.of(mEdit, args));
   register(server, log, reading(...RECORD_READS), READ_RECORD, async (args) => READ_RECORD.of(mEdit, await naming(args), args));
-  register(server, log, reading(...SYMBOL_READS), FIND_DEFINITION, (args) => FIND_DEFINITION.of({ mEdit, symbols }, args));
-  register(server, log, reading(...SYMBOL_READS), LIST_REFERENCES, (args) => LIST_REFERENCES.of({ mEdit, symbols }, args));
+  register(server, log, reading(...SYMBOL_READS), FIND_DEFINITION, async (args) => FIND_DEFINITION.of({ mEdit, symbols, value: await naming(args) }, args));
+  register(server, log, reading(...SYMBOL_READS), LIST_REFERENCES, async (args) => LIST_REFERENCES.of({ mEdit, symbols, value: await naming(args) }, args));
   register(server, log, reading(...RECORD_READS), SELECT_ROWS, (args) => SELECT_ROWS.of(mEdit, args));
   for (const gesture of GESTURE_TOOLS) register(server, log, reading('instance'), gesture, async (args) => gesture.of(await naming(args), mEdit, args, (line) => { log.warn(`[agent] ${gesture.name}: ${line}`); }));
   register(server, log, reading(), { ...SCRIPT_ENVIRONMENT, input: NO_INPUT }, () => SCRIPT_ENVIRONMENT.of(terminalEnvironment));

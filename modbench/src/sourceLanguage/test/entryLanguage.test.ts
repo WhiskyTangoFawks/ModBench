@@ -83,6 +83,9 @@ describe('the symbol index on a name of a mod, a separator, a downloaded file or
     ['gives a separator no definition', separator('Gear'), { none: 'A mod separator has no definition.' }],
     ['gives a downloaded file no definition', downloadedFile('Patch-1.7z'), { none: 'A downloaded file has no definition.' }],
     ['gives a profile no definition', profile('Default'), { none: 'A profile has no definition.' }],
+    ['refuses a separator no row lists', separator('Gone'), { refused: 'Mods lists no separator named Gone.' }],
+    ['refuses a downloaded file no row lists', downloadedFile('Gone.7z'), { refused: 'Downloads lists no downloaded file named Gone.7z.' }],
+    ['refuses a profile the instance does not hold', profile('Gone'), { refused: 'The instance holds no profile named Gone.' }],
   ])('%s', (_case, entry, expected) => {
     expect(language(undefined).definitionOf(entry)).toEqual(expected);
   });
