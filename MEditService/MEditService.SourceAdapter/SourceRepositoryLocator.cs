@@ -359,6 +359,8 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
     internal static bool IsOrIsUnder(string directory, string path) =>
         string.Equals(directory, path, FilePaths.Comparison) || IsUnder(directory, path);
 
+    internal static bool Overlaps(string one, string other) => IsOrIsUnder(one, other) || IsUnder(other, one);
+
     /// <summary>Where the tree puts the cell <paramref name="identity"/> names, or null when nothing
     /// holds it. Only the repository reads block directories back (ADR-0014). A
     /// worldspace document declaring no FormKey throws.</summary>

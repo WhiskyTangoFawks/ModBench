@@ -121,7 +121,7 @@ internal sealed partial class SourceRepositoryLayout(string sourceFolder, GameRe
     internal static bool ReadForThePluginsOf(string sourceFolder, string fullPath)
     {
         var folder = Path.GetFullPath(sourceFolder);
-        return new[] { BuildFileName, RootFolderName }.Any(name => SourceRepositoryLocator.IsOrIsUnder(Path.Combine(folder, name), fullPath));
+        return new[] { BuildFileName, RootFolderName }.Any(name => SourceRepositoryLocator.Overlaps(Path.Combine(folder, name), fullPath));
     }
 
     /// <summary>The folder of the mod's plugin source that <paramref name="fullPath"/> sits in, as the path spells

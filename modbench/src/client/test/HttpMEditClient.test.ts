@@ -322,6 +322,19 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   });
 
   it.each([
+    { name: 'moveLastWritten', verb: (c: MEditClient) => c.moveLastWritten({ name: 'Old.esp', origin: 'ModA' }, 'OLD.esp', 'New.esp') },
+    { name: 'followSourceFolderMove', verb: (c: MEditClient) => c.followSourceFolderMove('/source/Old', '/source/New') },
+    { name: 'cloneSubmodules', verb: (c: MEditClient) => c.cloneSubmodules([{ folder: '/source/A', pin: 'abc' }]) },
+    { name: 'setPluginFileFlags', verb: (c: MEditClient) => c.setPluginFileFlags('Fallout4', []) },
+  ])('$name leaves the files it writes unnamed', async ({ verb }) => {
+    const leaveWritesUnnamed = vi.fn();
+
+    await verb(makeClient(() => answers(204)(), { leaveWritesUnnamed }));
+
+    expect(leaveWritesUnnamed).toHaveBeenCalledOnce();
+  });
+
+  it.each([
     { name: 'moveLastWritten', verb: (c: MEditClient) => c.moveLastWritten({ name: 'Old.esp', origin: 'ModA' }, 'OLD.esp', 'New.esp'),
       reads: { moved: true }, path: '/plugins/move-last-written', body: { origin: 'ModA', name: 'Old.esp', treeName: 'OLD.esp', newName: 'New.esp' } },
     { name: 'followSourceFolderMove', verb: (c: MEditClient) => c.followSourceFolderMove('/source/Old', '/source/New'),

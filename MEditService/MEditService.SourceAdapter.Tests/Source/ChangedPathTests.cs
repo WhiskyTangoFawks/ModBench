@@ -47,12 +47,19 @@ public sealed class ChangedPathTests : IDisposable
     [InlineData("source/Mod/build.json", "unnamed")]
     [InlineData("source/Mod/.git/refs/heads/main", "unnamed")]
     [InlineData("source/Mod/plugin-source/Other.esp/Npcs/Npc.json", "unnamed")]
+    [InlineData("source/Mod/plugin-source/Mod.esp", "Mod.esp")]
+    [InlineData("source/Mod/plugin-source", "unnamed")]
+    [InlineData("source/Mod", "unnamed")]
+    [InlineData("source", "unnamed")]
+    [InlineData(".git/modules", "unnamed")]
+    [InlineData("source/Mo", "untouched")]
+    [InlineData("source/Mod/textures", "untouched")]
     [InlineData("source/Mod/textures/mod.dds", "untouched")]
     [InlineData("source/Pinned/.git", "unnamed")]
     [InlineData(".git/modules/Pinned/refs/heads/main", "unnamed")]
     [InlineData(".git/modules/Other/HEAD", "untouched")]
     [InlineData("mods/Mod/Mod.esp", "untouched")]
-    public void APath_TouchesThePluginsWhosePluginSourceHoldsIt_OrPluginsItCannotNameForWhatASourceModBuildsFrom(string path, string answer)
+    public void APath_TouchesThePluginsWhosePluginSourceItIsOrHolds_OrPluginsItCannotNameForWhatASourceModBuildsFrom(string path, string answer)
     {
         Assert.Equal(answer, PathAnswers.Spelled(TestAdapters.Source().Touching(LoadOrder, Path.Combine(_instance, path))));
     }
