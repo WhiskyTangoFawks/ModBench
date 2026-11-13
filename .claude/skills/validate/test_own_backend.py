@@ -102,12 +102,12 @@ class OwnBackend(unittest.TestCase):
 
     def test_stops_the_backend_when_the_caller_is_terminated(self):
         run = self.run_with_backend("terminated", 'sleep 600')
-        client_running = lambda: subprocess.run(["pgrep", "-g", str(run.pid), "-x", "sleep"],
-                                                capture_output=True).returncode == 0
+        pid_file = self.pid_file("terminated")
+        written = lambda: pid_file.exists() and len(pid_file.read_text().split()) == 2
         deadline = time.monotonic() + 60
-        while not client_running() and time.monotonic() < deadline:
+        while not written() and time.monotonic() < deadline:
             time.sleep(0.05)
-        self.assertTrue(client_running(), "the caller never reached its client")
+        self.assertTrue(written(), "the backend never wrote its pids")
         os.killpg(run.pid, signal.SIGTERM)
         run.communicate(timeout=10)
         self.assertEqual(run.returncode, 143)
