@@ -355,8 +355,7 @@ public sealed record SourceRange(SourcePosition Start, SourcePosition End)
 
 /// <summary>What is wrong in a plugin's source, on its file: a link at <paramref name="FieldPath"/> to
 /// <paramref name="TargetFormKey"/> no active plugin holds, or a file the read stopped at.
-/// <paramref name="UncheckedBecause"/>: the unreadable plugin. Range: where it sits in its file, as
-/// the Problems panel's answer places it; null in an answer that does not.</summary>
+/// <paramref name="UncheckedBecause"/>: the unreadable plugin. Range: set by the Problems panel's answer.</summary>
 public sealed record SourceProblem(
     string? FormKey, string? TargetFormKey, string? FieldPath, string SourceRelativePath, string Message, string? UncheckedBecause = null)
 {
