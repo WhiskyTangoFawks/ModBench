@@ -251,7 +251,7 @@ describe('the index reused while no listing changed', () => {
 
 describe('the copies of each file, stacked as the game stacks them', () => {
   const FILE = 'meshes/shared.nif';
-  const archive = (name: string, archiveName: string, files: string[]) => ({ origin: modOrigin(name), archive: modPath(name, archiveName), files });
+  const archive = (name: string, archiveName: string, files: string[] | undefined) => ({ origin: modOrigin(name), archive: modPath(name, archiveName), files });
   const loose = (name: string) => ({ origin: modOrigin(name), at: { kind: 'loose', path: modPath(name, FILE) } });
   const archived = (name: string, archiveName: string) =>
     ({ origin: modOrigin(name), at: { kind: 'archived', gameRelease: 'Fallout4', archive: modPath(name, archiveName), file: FILE } });
@@ -276,6 +276,24 @@ describe('the copies of each file, stacked as the game stacks them', () => {
     ]);
 
     expect(stack.get(FILE)?.copies).toEqual([loose('A'), archived('B', 'B.ba2')]);
+  });
+
+  it('holds no copy of a loaded archive under its own name, the files it holds standing for it', () => {
+    const stack = stacked({ A: ['A.ba2'], B: ['B.ba2'] }, [archive('A', 'A.ba2', [FILE]), archive('B', 'B.ba2', [FILE])]);
+
+    expect([...stack].map(({ relativePath }) => relativePath)).toEqual([FILE]);
+  });
+
+  it('holds no copy of an archive the game does not load, which gives the game no file', () => {
+    const stack = stacked({ A: ['A.ba2'] }, []);
+
+    expect([...stack]).toEqual([]);
+  });
+
+  it('keeps a copy of a loaded archive it cannot read under its own name, what it holds being unknown', () => {
+    const stack = stacked({ A: ['A.ba2'] }, [archive('A', 'A.ba2', undefined)]);
+
+    expect([...stack].map(({ relativePath }) => relativePath)).toEqual(['A.ba2']);
   });
 
   it('finds an archived copy of a loose file whatever its case', () => {
@@ -314,6 +332,23 @@ describe('the copies of each file, stacked as the game stacks them', () => {
 });
 
 describe('how an origin\'s copies stand against the others\' (mods.md, Indicators)', () => {
+  it('is Redundant for a mod whose loaded archive loses every file it holds', () => {
+    const FILE = 'meshes/shared.nif';
+    const index = indexOver([mod('A'), mod('B')], { A: ['A.ba2', FILE], B: ['B.ba2'] });
+    const stack = stackCopies(index, [{ origin: modOrigin('B'), archive: modPath('B', 'B.ba2'), files: [FILE] }], 'Fallout4');
+
+    expect([copyStandingOf(stack, modOrigin('A')).redundant, copyStandingOf(stack, modOrigin('B')).redundant]).toEqual([false, true]);
+  });
+
+  it('is Redundant for a mod whose every other file loses, an archive the game does not load keeping it from nothing', () => {
+    const FILE = 'meshes/shared.nif';
+    const index = indexOver([mod('A'), mod('B')], { A: ['A.ba2', FILE], B: [FILE, 'B.ba2'] });
+    const stack = stackCopies(index, [], 'Fallout4');
+
+    expect([copyStandingOf(stack, modOrigin('A')).redundant, copyStandingOf(stack, modOrigin('B')).redundant]).toEqual([false, true]);
+  });
+
+
   type Kind = 'loose' | 'archived';
   type Stacks = Record<string, ReadonlyArray<readonly [Kind, string]>>;
   const standing = (stacks: Stacks, own: string) => {
