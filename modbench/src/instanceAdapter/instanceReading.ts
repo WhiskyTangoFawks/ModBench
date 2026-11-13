@@ -7,7 +7,7 @@ import { ignoreSkippedLink, readTrustingKept, type SkippedLink } from './files';
 import {
   CHECK_THE_DISK, filesWinningFirst, type Reread, type DataFolderArchives, type DataFolderFiles, type DataFolderPlugins, type DownloadedFiles, type EntryRef, type FileOrigin, type GameFolder,
   type ManagerNames, type ManagerRunning, type ModFolders, type ModMeta, type ModlistEntry, type OriginFiles, type PluginEntry, type PluginsProvided,
-  type SortingRuleFiles,
+  type SortingRuleFiles, type UnwatchedFolder,
 } from './instanceAdapter';
 import { groupModOrder } from './modGroups';
 import type { ManagerReading } from './publisher';
@@ -68,7 +68,7 @@ export interface ReadingSource extends ArchiveReads {
   sortingRuleFiles(): Promise<SortingRuleFiles>;
   holdsRepository(): Promise<boolean>;
   repositorySetUp(): Promise<boolean>;
-  watchNotes(): string[];
+  unwatchedFolders(): UnwatchedFolder[];
   managerRunning(): Promise<ManagerRunning>;
 }
 
@@ -158,7 +158,7 @@ async function readWhole(source: ReadingSource): Promise<Omit<ManagerReading, 'u
     profile, gameName, gameRelease, mods: mods.kept, modGroups: groupModOrder(mods.kept), pluginOrder: pluginOrder.kept, orderNotes: [...mods.notes, ...pluginOrder.notes], downloadedFiles, ...gameFacts,
     archiveList: archiveList.archives, archiveListNotes: archiveList.notes, dataFolderArchives,
     profiles, modFolders, runtimeOutput, modFiles, folderMeta,
-    sourceModFolders, sortingRuleFiles, holdsRepository, repositorySetUp, watchNotes: source.watchNotes(), managerRunning,
+    sourceModFolders, sortingRuleFiles, holdsRepository, repositorySetUp, unwatchedFolders: source.unwatchedFolders(), managerRunning,
     gameFolderLinks: gameFolderLinks.size,
     linkNotes: [...skippedLinks].map(([linkPath, reason]) => `${linkPath} is a link Modbench cannot follow, so it is not read: ${reason}`),
   };

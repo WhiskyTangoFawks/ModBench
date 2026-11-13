@@ -39,6 +39,7 @@ import { agentPort } from './agent/agentPort';
 import { deploymentFolderSetting, gameFolderSetting } from './toolbox/workspaceSettings';
 import { registerPutLoadOrder } from './toolbox/putLoadOrderCommand';
 import { showProgressWhileLate } from './drivingLib/lateProgress';
+import { reportUnwatchedFolders } from './drivingLib/unwatchedFolders';
 import { createPlugins, PLUGINS_KEY_ARGS, type Plugins } from './plugins';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
@@ -199,7 +200,7 @@ function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, 
         instanceRoot, gameFolderSetting, scriptEnvironmentFileSetting: scriptEnvironmentFileOf(instanceRoot), installationFileReader: downloadedFileReader, fileProblems: fileProblemsOver(problemsHostOver(own(vscode.languages.createDiagnosticCollection('modbench-unhashed'))), outputChannel), fomodEngine: fomodEngineIn(extensionUri, outputChannel), deployedPath,
       });
       const instance = own(new Instance({
-        adapter, gameFolderSettingId: gameFolderSetting.id, window: vscode.window, log: outputChannel, medit, workspace: workspaceFolders,
+        adapter, gameFolderSettingId: gameFolderSetting.id, log: outputChannel, medit, workspace: workspaceFolders,
       }));
       const owners = [adapter.pluginReferences, manifestFileReferences({
         sourceFolders: () => instance.value.paths.sourceDirs,
@@ -217,6 +218,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const { outputChannel, client, plugins: pluginsBox, reporterFor, ask, trash, extensionId } = deps;
   own(markFirstReadLanded(instance));
   own(reportSubscriberThrows(instance, reporterFor));
+  own(reportUnwatchedFolders(instance, reporterFor('instance')));
   own(showProgressWhileLate(instance, [TOOLBOX_VIEW, MODS_KEY_ARGS.view, PLUGINS_KEY_ARGS.view, DOWNLOADS_KEY_ARGS.view]));
   const commands = instanceCommands({ adapter, client, instanceRoot });
   const tasks = stepTasks(hostTasks, scriptHostIn(deps.extensionUri));

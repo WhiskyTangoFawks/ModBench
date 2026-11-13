@@ -208,7 +208,7 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
 
     holdsRepository: () => isRepository(instanceRoot),
     repositorySetUp: async () => await isRepository(instanceRoot) && await pushRefusalWritten(instanceRoot) && await pathTokensWritten(instanceRoot, publisherFile),
-    watchNotes: () => watch.watchNotes(),
+    unwatchedFolders: () => watch.unwatchedFolders(),
     managerRunning: () => mo2Running().then(
       (running): ManagerRunning => ({ kind: running ? 'running' : 'notRunning' }),
       (err: unknown): ManagerRunning => ({ kind: 'unknown', reason: errorMessage(err) }),

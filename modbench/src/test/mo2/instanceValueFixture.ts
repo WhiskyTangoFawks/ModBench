@@ -50,6 +50,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     publisherTags: [],
     publisherConfiguration: { kind: 'none' },
     sortingRuleFiles: READ_SORTING_RULE_FILES,
+    unwatchedFolders: [],
   };
   const value = { ...base, ...overrides };
   const modGroups = groupModOrder(value.mods);

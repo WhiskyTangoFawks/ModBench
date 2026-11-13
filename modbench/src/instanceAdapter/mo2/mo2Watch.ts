@@ -4,7 +4,7 @@
 import { heldFolderWatchFor, type HeldFolderWatch } from '../heldFolders';
 import { watchFiles } from '../watchFiles';
 import { outsideTrustedRead } from '../files';
-import type { ChangeListener, Subscription } from '../instanceAdapter';
+import type { ChangeListener, Subscription, UnwatchedFolder } from '../instanceAdapter';
 import { instanceWatches, sourceRootDir } from './layout';
 
 type FollowedFolder = 'downloadedFiles' | 'dataFolder' | 'creationClubList' | 'defaultIni' | 'myGamesInis' | 'gameFolderArchives' | 'modFolders' | 'profileFolders';
@@ -29,7 +29,7 @@ export interface Mo2Watch {
   /** Watches each of `bases` under `glob` for `what`, in place of the folders it followed before. A watch newly armed has
    *  the disk checked once, for a change it missed while arming. */
   follow(what: FollowedFolder, bases: readonly string[], glob: string): void;
-  watchNotes(): string[];
+  unwatchedFolders(): UnwatchedFolder[];
 }
 
 export function mo2Watch(instanceRoot: string, gameFolderChanged: (listener: () => void) => Subscription): Mo2Watch {
@@ -101,7 +101,6 @@ export function mo2Watch(instanceRoot: string, gameFolderChanged: (listener: () 
       if (added.length > 0 && armed()) checkDue();
     }),
 
-    watchNotes: () => [...new Set([...held.values()].flatMap((folders) => folders?.failures() ?? []))]
-      .map((reason) => `Modbench hears no change inside a folder whose watch failed: ${reason}`),
+    unwatchedFolders: () => [...held.values()].flatMap((folders) => folders?.failures() ?? []),
   };
 }
