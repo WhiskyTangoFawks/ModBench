@@ -155,7 +155,7 @@ internal sealed class Indexer : IDisposable
     // failed, guarded by _lock.
     private (long Writes, string Failure) _checkFailed = (0, "");
 
-    // Completed and replaced, under _lock, each time either count above moves.
+    // Replaced under _lock, then completed, each time a re-read or a check of the disk lands or fails.
     private TaskCompletionSource _writesRead = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     // ADR-0015. Guarded by _lock.
@@ -535,23 +535,26 @@ internal sealed class Indexer : IDisposable
         }
     }
 
-    /// <summary>Read-your-writes: returns once the plugins mEdit's source writes so far name are re-read, or the disk is
-    /// checked after them. Throws <see cref="IndexNotReadyException"/> rather than answer the rows from before them.</summary>
+    /// <summary>Read-your-writes: returns once a check of the disk has read each source write that named no plugin, and
+    /// a re-read or check has read each plugin the others named. Throws <see cref="IndexNotReadyException"/> otherwise.</summary>
     public async Task AwaitTheReadOfTheLastSourceWrite(CancellationToken cancel)
     {
-        var (awaited, lastOfEach) = _holder.WritesAfter(WritesChecked);
+        var (lastUnnamed, lastOfEach) = _holder.WritesAfter(WritesChecked);
         var deadline = _timeProvider.GetUtcNow() + SourceWriteReadLimit;
         while (true)
         {
             Task announced;
+            bool checkUnfinished;
             lock (_lock)
             {
-                if (ReadSince(awaited, lastOfEach)) return;
-                if (FailedReadOf(awaited, lastOfEach) is { } failed) throw new IndexNotReadyException(NotReadYet + failed);
+                checkUnfinished = lastUnnamed > _writesChecked;
+                var unread = lastOfEach.Where(last => !ReadSince(last)).ToList();
+                if (!checkUnfinished && unread.Count == 0) return;
+                if (FailedReadOf(checkUnfinished ? lastUnnamed : 0, unread) is { } failed) throw new IndexNotReadyException(NotReadYet + failed);
                 announced = _writesRead.Task;
             }
             var remaining = deadline - _timeProvider.GetUtcNow();
-            if (remaining <= TimeSpan.Zero) throw NotRead(named: lastOfEach is not null);
+            if (remaining <= TimeSpan.Zero) throw NotRead(checkUnfinished);
             await announced.WaitAsync(remaining, _timeProvider, cancel).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
             cancel.ThrowIfCancellationRequested();
         }
@@ -559,19 +562,11 @@ internal sealed class Indexer : IDisposable
 
     private const string NotReadYet = "mEdit's record index has not read the plugin source mEdit wrote: ";
 
-    private IndexNotReadyException NotRead(bool named)
+    private IndexNotReadyException NotRead(bool checkUnfinished)
     {
         var reason = Status.Message is { } message ? $" ({message})" : "";
-        var unfinished = named ? "its re-read of the plugins written" : "its check of the disk";
+        var unfinished = checkUnfinished ? "its check of the disk" : "its re-read of the plugins written";
         return new IndexNotReadyException($"{NotReadYet}{unfinished} did not finish{reason}.");
-    }
-
-    private bool ReadSince(long awaited, IReadOnlyDictionary<PluginAddress, long>? lastOfEach)
-    {
-        lock (_lock)
-        {
-            return _writesChecked >= awaited || lastOfEach is not null && lastOfEach.All(ReadSince);
-        }
     }
 
     private bool ReadSince(KeyValuePair<PluginAddress, long> lastWrite)
@@ -579,14 +574,14 @@ internal sealed class Indexer : IDisposable
         lock (_lock) return lastWrite.Value <= _writesChecked || _writesReReadOf.GetValueOrDefault(lastWrite.Key) >= lastWrite.Value;
     }
 
-    // The re-read or check asked after the writes that failed: nothing reads them until another change.
-    private string? FailedReadOf(long awaited, IReadOnlyDictionary<PluginAddress, long>? lastOfEach)
+    // The check or re-read asked after an unread write that failed: nothing reads that write until another change.
+    private string? FailedReadOf(long uncheckedUnnamed, List<KeyValuePair<PluginAddress, long>> unread)
     {
         lock (_lock)
         {
-            if (lastOfEach is null)
-                return _checkFailed.Writes >= awaited ? $"its check of the disk failed: {_checkFailed.Failure}" : null;
-            return lastOfEach.Where(last => !ReadSince(last))
+            if (uncheckedUnnamed > 0 && _checkFailed.Writes >= uncheckedUnnamed)
+                return $"its check of the disk failed: {_checkFailed.Failure}";
+            return unread
                 .Select(last => _reReadFailedOf.TryGetValue(last.Key, out var failed) && failed.Writes >= last.Value
                     ? $"its re-read of the plugins written failed: {failed.Failure}"
                     : null)

@@ -108,7 +108,7 @@ public sealed class ScriptRecordWriteTests
 
         Delete(mod, mod.Npc.ToString());
 
-        Assert.Equal([mod.Plugin], mod.Holder.WritesAfter(before).LastOfEach.Require().Keys);
+        Assert.Equal([mod.Plugin], mod.Holder.WritesAfter(before).LastOfEach.Keys);
     }
 
     [Fact]

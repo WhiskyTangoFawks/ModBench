@@ -90,7 +90,7 @@ internal static class RecordEndpoints
             }
             var decoded = Uri.UnescapeDataString(formKey);
             return EndpointMapping.Answered(
-                await svc.GetCompare(decoded, cancel: aborted), result => result is null ? Results.NotFound() : Results.Ok(result));
+                await svc.GetCompare(decoded, null, aborted), result => result is null ? Results.NotFound() : Results.Ok(result));
         })
         .WithName("CompareRecord")
         .WithTags("Records")
