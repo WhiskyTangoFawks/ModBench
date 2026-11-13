@@ -2,6 +2,7 @@ using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
+using Microsoft.Extensions.Time.Testing;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -11,6 +12,7 @@ namespace MEditService.RecordIndex.Tests.Records;
 
 public sealed class ValidateByStampsTests : IDisposable
 {
+    private readonly FakeTimeProvider _clock = new(TimeProvider.System.GetUtcNow());
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderEntry _mod;
     private readonly LoadOrderEntry _partner;
@@ -39,7 +41,7 @@ public sealed class ValidateByStampsTests : IDisposable
         _mod = _fixture.Plugins.Single(p => p.Name == "Fixture.esp");
         _partner = _fixture.Plugins.Single(p => p.Name == "Partner.esp");
         _npc = npc.ToString();
-        _index = Indexes.Reconciled(_fixture, notifications: _notifications);
+        _index = Indexes.Reconciled(_fixture, notifications: _notifications, source: TestAdapters.Source(_clock));
     }
 
     public void Dispose()
