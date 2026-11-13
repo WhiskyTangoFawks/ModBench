@@ -8,7 +8,7 @@ export const SOURCE_MODS_GUIDE = `A source mod works like a project repository a
   - In a repository of its own, with a remote. It is published on its own, and the instance repository pins its commit.
   - In a repository of its own, with no remote. It stays on this machine and out of the instance repository, so a clone cannot rebuild it.
 - Or mod_version_in_git puts the whole mod folder in the instance repository. The mod then stays an ordinary mod, not a source mod.
-- Git holds the plugin source, the build file, and only the files that no package provides. The manifest names the packages that the other files come from.
+- By default git holds the plugin source, the build file, and only the files that no package provides, and the manifest names the packages the other files come from. In the authored workflow you may commit those files too: let them past the source folder's .gitignore, commit them, and call mod_update_manifest, which then names no package for them.
 - A source mod follows one of two git workflows:
   - Authored: the user is the author. main is the work, branched however the user likes.
   - Vendored: the user is not the author. main holds the author's plugin as each release ships it, decompiled, and the user's edits live on a branch. Commit each new release to main, and merge main into the branch.

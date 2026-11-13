@@ -2514,6 +2514,24 @@ describe('the agent server, given an input its tool does not take', () => {
     expect(await call(client, 'read_guide', { topic: 'instance' })).toEqual({ isError: true, text: 'No instance guide for Another Manager.' });
   });
 
+  it('states what git holds in a source mod as a default, and names the authored route past it', async () => {
+    const { client } = await clientOf(new FakeInstance(VALUE));
+
+    const guide = (await call(client, 'read_guide', { topic: 'source-mods' })).text;
+
+    expect(guide).toContain('By default git holds');
+    expect(guide).toContain('In the authored workflow you may commit those files too');
+  });
+
+  it('describes mod_move, script_environment and select_rows without the sentences that misled', async () => {
+    const { tools } = await (await clientOf(new FakeInstance(VALUE))).client.listTools();
+    const described = (name: string) => tools.find((tool) => tool.name === name)?.description;
+
+    expect(described('mod_move')).toContain('whatever order you name them in');
+    expect(described('script_environment')).toContain('python3 -I ignores PYTHONPATH');
+    expect(described('select_rows')).toContain('SELECT DISTINCT view_name FROM view_columns');
+  });
+
   it('answers the vocabulary from the glossary\'s first term, without the opening line that points into spec/', async () => {
     const { client } = await clientOf(new FakeInstance(VALUE));
 
