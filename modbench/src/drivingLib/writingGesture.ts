@@ -21,6 +21,7 @@ export async function runUnderProgress<T>(
     progress.working();
     try {
       await instance.refresh(written.named);
+      await readModelShows?.();
     } finally {
       await progress.done();
     }
@@ -28,6 +29,15 @@ export async function runUnderProgress<T>(
 }
 
 let inFlight: string | undefined;
+
+let readModelShows: (() => Promise<unknown>) | undefined;
+
+/** Sets what a writing gesture waits on after the instance has read: the other read model, such as mEdit's record index,
+ *  holding what the instance now holds. */
+export function surfaceReadModel(shows: () => Promise<unknown>): { dispose: () => void } {
+  readModelShows = shows;
+  return { dispose: () => { readModelShows = undefined; } };
+}
 
 interface RefusalSurface {
   readonly reporter: Reporter;

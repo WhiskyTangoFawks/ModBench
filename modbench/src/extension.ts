@@ -8,7 +8,7 @@ import type { EntryNames, SymbolOwner } from './symbolNames/symbolNames';
 import { makeReporter } from './drivingLib/reporter';
 import { workspaceFolders } from './toolbox/workspaceFolders';
 import { commandTitles } from './drivingLib/commandTitles';
-import { surfaceRefusedWrites } from './drivingLib/writingGesture';
+import { surfaceReadModel, surfaceRefusedWrites } from './drivingLib/writingGesture';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
 import { ambientWrites } from './instanceLoader/ambientWrites';
@@ -367,6 +367,7 @@ function start(context: vscode.ExtensionContext): void {
   };
   const reporterFor = (tag: string) => makeReporter(outputChannel, tag);
   context.subscriptions.push(surfaceRefusedWrites({ reporter: reporterFor('write'), titles: commandTitles(context.extension.packageJSON), redraw: opened.facts.redraw }));
+  context.subscriptions.push(surfaceReadModel(() => meditClient.latestLoadOrder()));
   const plugins = createPlugins({
     client: meditClient, facts: opened.facts, channel: outputChannel, reporterFor,
     registerRepositories: sourceModRepositories.registerRepositories, ask: askQuestion, sourceEditing,

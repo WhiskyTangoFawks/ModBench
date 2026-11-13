@@ -6,7 +6,7 @@ vi.mock('vscode', async () => {
 });
 
 import { progressSteps as steps } from '../../test/recordedProgress';
-import { asViewCall, RefusedWrite, runWritingGesture, surfaceRefusedWrites } from '../writingGesture';
+import { asViewCall, RefusedWrite, runWritingGesture, surfaceReadModel, surfaceRefusedWrites } from '../writingGesture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { Refusal } from '../refusal';
 import { ambientWrites } from '../../instanceLoader/ambientWrites';
@@ -64,6 +64,21 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
     await runWritingGesture('modbench.write', 'modbench.thing', { refresh }, () => Promise.resolve());
 
     expect(refresh.mock.calls).toEqual([[['/a.esp']], [undefined]]);
+  });
+
+  it('holds the view\'s progress until the read model shows what the instance read', async () => {
+    steps.length = 0;
+    let shows!: () => void;
+    const surface = surfaceReadModel(() => new Promise<void>((resolve) => { shows = resolve; }));
+    onTestFinished(() => { surface.dispose(); });
+
+    const running = runWritingGesture('modbench.write', 'modbench.thing', instanceThatReads(), () => Promise.resolve());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(steps).toEqual(['progress opens on modbench.thing', 'refresh']);
+
+    shows();
+    await running;
+    expect(steps.at(-1)).toBe('progress closes');
   });
 
   it('answers what the command answered', async () => {
