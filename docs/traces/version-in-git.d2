@@ -64,6 +64,5 @@ sourcecommands -> driving: "the outcome" {class: track}
 refused: "refused, before any write: nothing of the mod, and no repository" {
   engine -> http: "the refusal" {class: track}
 }
-instance -> instanceadapter: watch {class: signal}
-instanceadapter -> instanceloader: "the instance changed" {class: signal}
+instanceadapter -> instanceloader: "the files it wrote, or that it cannot tell which" {class: signal}
 instanceloader -> views: value {class: loadorder}

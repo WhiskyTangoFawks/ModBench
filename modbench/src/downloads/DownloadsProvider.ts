@@ -77,7 +77,7 @@ interface DownloadsProviderOptions {
 }
 
 /** Flat: downloaded files have no grouping or reorder concept, so every row is a leaf. One row per
- *  downloaded file, from the Instance value alone (ADR-0015). */
+ *  downloaded file, from the Instance value alone. */
 export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeNode>, vscode.Disposable {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<DownloadsTreeNode | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;

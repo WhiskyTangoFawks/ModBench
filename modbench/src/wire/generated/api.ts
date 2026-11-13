@@ -46,7 +46,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Says that the disk changed at the paths named, or, naming none, that mEdit is to check it (ADR-0015). A path that the record index reads for plugins mEdit cannot name, such as a build file or an archive, checks the disk; one it reads nothing of is dropped. Answers once the mods of the plugins whose files are touched, or every mod at a check, are checked for a change made outside Modbench, published as external-change; the record index validates the plugins touched, or every plugin, after, and announces what it re-read. */
+        /** @description Says that the disk changed at the paths named, or, naming none, that mEdit is to check it. A path that the record index reads for plugins mEdit cannot name, such as a build file or an archive, checks the disk; one it reads nothing of is dropped. Answers once the mods of the plugins whose files are touched, or every mod at a check, are checked for a change made outside Modbench, published as external-change; the record index validates the plugins touched, or every plugin, after, and announces what it re-read. */
         post: operations["SignalChange"];
         delete?: never;
         options?: never;
@@ -1098,7 +1098,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description Every plugin-source document VS Code holds unsaved, each read in place of the file at its absolute path, replacing those put before (ADR-0015). Answers once they are held; the plugins whose source holds a document put or dropped are validated after, and announce rows-changed. */
+        /** @description Every plugin-source document VS Code holds unsaved, each read in place of the file at its absolute path, replacing those put before. Answers once they are held; the plugins whose source holds a document put or dropped are validated after, and announce rows-changed. */
         put: operations["PutUnsavedDocuments"];
         post?: never;
         delete?: never;

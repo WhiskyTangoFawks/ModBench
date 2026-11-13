@@ -34,7 +34,7 @@ internal sealed class IndexWriteGate
 }
 
 /// <summary>A projection waited out the gate: busy, not broken. No caller offers a retry: a record
-/// gesture never takes the gate (ADR-0015).</summary>
+/// gesture never takes the gate.</summary>
 internal sealed class IndexWriteGateTimeoutException : TimeoutException
 {
     private const string DefaultMessage = "Another write to the record index is still in progress.";

@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 namespace MEditService.Commands;
 
 /// <summary>A script's Create: the changes the Create gesture answers, which mEdit writes to plugin source itself
-/// (scripts.md, Writing; ADR-0015).</summary>
+/// (scripts.md, Writing).</summary>
 public sealed class CreateRecordHandler
 {
     private readonly CreateRecordChangesHandler _changes;

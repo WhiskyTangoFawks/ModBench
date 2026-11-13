@@ -11,7 +11,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>A real source mod folder and the load order value over it, and nothing else: compile
-/// reads only those (ADR-0015).</summary>
+/// reads only those.</summary>
 public sealed class CompileFixture : TestInstance, ICompiledPlugin
 {
     public const string Origin = "CompileMod";

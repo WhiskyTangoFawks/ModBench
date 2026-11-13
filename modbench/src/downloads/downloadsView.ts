@@ -36,7 +36,7 @@ interface DownloadsView extends vscode.Disposable {
   tooltipOf: (name: string) => string | undefined;
 }
 
-/** Rows come from the Instance value alone (ADR-0015). */
+/** Rows come from the Instance value alone. */
 export function createDownloadsView(
   { commands, queryInfo, download, instance, reporterFor, trash, channel }: DownloadsViewDeps,
 ): DownloadsView {

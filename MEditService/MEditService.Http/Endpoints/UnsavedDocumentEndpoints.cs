@@ -12,7 +12,7 @@ internal static class UnsavedDocumentEndpoints
             .WithTags("Records")
             .WithDescription(
                 "Every plugin-source document VS Code holds unsaved, each read in place of the file at its absolute " +
-                "path, replacing those put before (ADR-0015). Answers once they are held; the plugins whose source " +
+                "path, replacing those put before. Answers once they are held; the plugins whose source " +
                 "holds a document put or dropped are validated after, and announce rows-changed.")
             .Produces(204)
             .ProducesProblem(400);

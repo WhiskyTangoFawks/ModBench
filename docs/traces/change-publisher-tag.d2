@@ -22,11 +22,10 @@ cmds -> instanceadapter: "the change: the publisher tag and the path of each row
 instanceadapter -> wabbajack: "the change" {class: loadorder}
 wabbajack -> instance: "the configuration, whole, in its own form" {class: loadorder}
 wabbajack -> instanceadapter: "the paths it refused" {class: loadorder}
+instanceadapter -> instanceloader: "the files it wrote, or that it cannot tell which" {class: signal}
 instanceadapter -> cmds: "the paths it refused" {class: loadorder}
 cmds -> mods: "applied or refusal, per row" {class: loadorder}
 mods -> instanceloader: refresh {class: loadorder}
-instance -> instanceadapter: watch {class: signal}
-instanceadapter -> instanceloader: "the instance changed" {class: signal}
 
 refused: "refused, before any write" {
   cmds -> mods: "the refusal" {class: loadorder}

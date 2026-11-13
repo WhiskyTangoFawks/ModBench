@@ -606,7 +606,7 @@ internal sealed class Store : IDisposable
         DuckDbSql.Execute(Connection, $"DELETE FROM {PluginDiagnosisRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
     }
 
-    // ADR-0015: one advance per logical projection, not per transaction inside it. A whole-plugin
+    // One advance per logical projection, not per transaction inside it. A whole-plugin
     // ingest is four transactions, so a client awaiting the sequence once could otherwise read an
     // in-between state.
     private readonly Lock _projectionLock = new();
@@ -723,7 +723,7 @@ internal sealed class Store : IDisposable
         public void Dispose() => Interlocked.Exchange(ref _endProjection, null)?.Invoke(this);
     }
 
-    /// <summary>ADR-0015: one monotonic counter, advanced in the same transaction as any row change.
+    /// <summary>One monotonic counter, advanced in the same transaction as any row change.
     /// Zero until the first change lands.</summary>
     public long Sequence
     {
@@ -737,14 +737,14 @@ internal sealed class Store : IDisposable
         }
     }
 
-    // ADR-0015: raises the sequence to at least atLeast, never lowers it — Sequence
+    // Raises the sequence to at least atLeast, never lowers it — Sequence
     // must never regress within one process across a rebuild.
     internal void SeedSequence(long atLeast)
     {
         DuckDbSql.Execute(Connection, $"UPDATE {SequenceRelation} SET value = $1 WHERE value < $1", atLeast);
     }
 
-    /// <summary>The one way the rows change (ADR-0015). The outermost commit then lands them, thrown
+    /// <summary>The one way the rows change. The outermost commit then lands them, thrown
     /// or not: the sweep and the checkpoint they owe, the filter again, one advance and their
     /// announcements. The first throw reaches the caller.</summary>
     public T Commit<T>(Func<Projection, T> write) => StoreFaults.Translating(() => CommitUntranslated(write));
@@ -835,7 +835,7 @@ internal sealed class Store : IDisposable
         public void Announce(Func<long, INotification> announcement) =>
             store.Announce(() => store._notifications?.Publish(announcement(store.Sequence)));
 
-        /// <summary>ADR-0015: a whole plugin re-derived or removed can move the winner of every
+        /// <summary>A whole plugin re-derived or removed can move the winner of every
         /// FormKey it holds.</summary>
         public void PluginChanged(PluginAddress key)
         {

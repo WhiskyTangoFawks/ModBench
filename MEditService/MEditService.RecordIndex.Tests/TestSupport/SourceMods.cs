@@ -126,7 +126,7 @@ internal static class SourceMods
     }
 
     /// <summary>Several working-tree changes made the Source repository's own way, then the next check of the disk's one
-    /// validation (ADR-0015). A null body is the document taken out.</summary>
+    /// validation. A null body is the document taken out.</summary>
     internal static void Project(
         this OpenedIndex index, LoadOrderEntry entry, IReadOnlyList<(string FormKey, string? Body)> deltas)
     {

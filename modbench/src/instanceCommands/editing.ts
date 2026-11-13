@@ -1,4 +1,4 @@
-// Put load order (ADR-0013) when the snapshot changed, and signal change (ADR-0015). The client owns the process both go
+// Put load order (ADR-0013) when the snapshot changed, and signal change. The client owns the process both go
 // to; what came of each put comes back through `onPut`.
 
 import type { LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, MEditClient } from '../client';
@@ -25,7 +25,7 @@ export interface EditingFlow {
   enter(firstRead: Promise<unknown>): Promise<void>;
   /** Puts the snapshot when it differs from the one mEdit holds (ADR-0013). */
   onRecompute(source: LoadOrderSource, stringsLanguage: string | undefined): void;
-  /** Tells mEdit the files at `paths` changed, or, with none, to check the disk (ADR-0015). */
+  /** Tells mEdit the files at `paths` changed, or, with none, to check the disk. */
   signalChange(paths: readonly string[]): void;
   dispose(): void;
 }

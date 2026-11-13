@@ -9,7 +9,7 @@ using Noggog;
 namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>The container counterpart to SourceEditFixture, which holds only flat records. No
-/// index anywhere in it (ADR-0015).</summary>
+/// index anywhere in it.</summary>
 public sealed class ContainerModFixture : TestInstance, ICompiledPlugin
 {
     public const string ModFolderOrigin = "ContainerFixtureMod";
