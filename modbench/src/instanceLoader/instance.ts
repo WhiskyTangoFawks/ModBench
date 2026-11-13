@@ -656,9 +656,9 @@ export class Instance implements Subscription {
     this.tellOnce('archiveContents', unreadableArchiveLines(archiveContents), 'warn');
     const loaded = archivesGameLoads(gameRelease, listed, active, files);
     const names = new Set(loaded.map(({ relativePath }) => foldPath(relativePath)));
-    const read = loaded.flatMap(({ winner, winnerOrigin }) => {
+    const read = loaded.map(({ winner, winnerOrigin }) => {
       const contents = archiveContents.get(winner);
-      return contents?.kind === 'read' ? [{ origin: winnerOrigin, archive: winner, files: contents.answer }] : [];
+      return { origin: winnerOrigin, archive: winner, files: contents?.kind === 'read' ? contents.answer : undefined };
     });
     const gameFolderArchived = gameFolderArchivedOf(inLoadOrder.map((archive) => {
       const contents = archiveContents.get(archive);

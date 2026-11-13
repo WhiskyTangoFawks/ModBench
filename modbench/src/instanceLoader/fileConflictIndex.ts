@@ -1,5 +1,6 @@
 // The effective merged mod view — the merge a VFS performs over the Mod override order.
 
+import { pluginCompanionRule } from '../tables/gamePaths';
 import {
   filesWinningFirst, type FileOrigin, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type OriginProvides,
 } from '../instanceAdapter/instanceAdapter';
@@ -259,11 +260,11 @@ export function copyStandingOf(stack: StackedCopies, own: FileOrigin): CopyStand
   return standings.get(originKey(own)) ?? NO_STANDING;
 }
 
-/** An archive the game loads, at the path that wins its name, and what it holds. */
+/** An archive the game loads, at the path that wins its name, and what it holds: nothing known when it cannot be read. */
 export interface LoadedArchive {
   readonly origin: FileOrigin;
   readonly archive: string;
-  readonly files: readonly string[];
+  readonly files: readonly string[] | undefined;
 }
 
 // The reference tool's FileEntry::sortOrigins (fileentry.cpp): every loose copy wins over every archived one, and of two
@@ -274,13 +275,15 @@ function add(stack: FileConflictLookup<StackedFile>, relativePath: string, copy:
   else if (!entry.copies.some(({ origin }) => sameOrigin(origin, copy.origin))) entry.copies.push(copy);
 }
 
-/** Each file an enabled mod or Overwrite provides, loose or in an archive in `loaded` (in the order the game loads them),
- *  with its copies as the game stacks them. */
+/** Each file a mod or Overwrite provides, loose or in an archive in `loaded` (in load order), as the game stacks its
+ *  copies. An archive is the files it holds: one not loaded gives none, one unreadable stays a file. */
 export function stackCopies(index: Pick<FileConflictIndex, 'winningFirst'>, loaded: readonly LoadedArchive[], gameRelease: string): StackedCopies {
+  const isArchive = pluginCompanionRule(gameRelease)?.isArchive ?? (() => false);
   const stack = new FileConflictLookup<StackedFile>();
-  for (const { origin, files } of index.winningFirst) for (const file of files) add(stack, file.relativePath, { origin, at: { kind: 'loose', path: file.sourcePath } });
+  const unreadable = new Set(loaded.filter(({ files }) => files === undefined).map(({ archive }) => archive));
+  for (const { origin, files } of index.winningFirst) for (const file of files) if (!isArchive(file.relativePath) || unreadable.has(file.sourcePath)) add(stack, file.relativePath, { origin, at: { kind: 'loose', path: file.sourcePath } });
   for (const { origin, archive, files } of [...loaded].reverse()) {
-    for (const file of files) add(stack, file, { origin, at: { kind: 'archived', gameRelease, archive, file } });
+    for (const file of files ?? []) add(stack, file, { origin, at: { kind: 'archived', gameRelease, archive, file } });
   }
   return stack;
 }
