@@ -10,9 +10,6 @@ internal static class RecordHeaderColumns
 {
     private const string FlagsMember = RecordHeaderFlags.Member;
 
-    // Every bit, so each flag view Mutagen spells over the raw integer shows up.
-    private const long AllBits = -1;
-
     internal static List<ColumnSpec> For(
         Type getterType, IReadOnlyDictionary<string, IGrouping<string, PropertyInfo>> declarations, GameReflection game, ILogger logger)
     {
@@ -44,7 +41,7 @@ internal static class RecordHeaderColumns
     private static ColumnSpec WithFlagViews(
         ColumnSpec flags, Type getterType, IReadOnlyDictionary<string, IGrouping<string, PropertyInfo>> declarations, GameReflection game)
     {
-        var aliases = game.Defaults.MembersAliasing(getterType, FlagsMember, AllBits);
+        var aliases = game.Defaults.MembersAliasing(getterType, FlagsMember, RecordHeaderFlags.AllBits);
         var names = BitNames(aliases, declarations, getterType, game);
         return flags with { Field = flags.Field with { EnumMembers = names }, Aliases = aliases };
     }
