@@ -12,7 +12,7 @@ export interface RecordLocationDeps<Document> {
 
 export interface RecordLocation<Document> extends TextSpan { uri: vscode.Uri; document: Document }
 
-export const locationOf = ({ uri, document, start, end }: RecordLocation<vscode.TextDocument>): vscode.Location =>
+export const locationOf = ({ uri, document, start, end }: RecordLocation<Pick<vscode.TextDocument, 'positionAt'>>): vscode.Location =>
   new vscode.Location(uri, new vscode.Range(document.positionAt(start), document.positionAt(end)));
 
 /** The span `spanIn` finds of a record in the document it opens as; a copy when it names its plugin,

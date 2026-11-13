@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { ReferencesViewInput } from '../drivingLib/referencesView';
-import { sameName, type HeldTexts, type PlaceInFile } from '../symbolNames/symbolNames';
+import { sameName, type CopyNaming, type HeldTexts, type PlaceInFile } from '../symbolNames/symbolNames';
+import { copyOf, RENDERED_DOCUMENT_SCHEME } from '../textDocuments/recordDocument';
 import { locationsList } from './locationsList';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
@@ -57,6 +58,13 @@ export interface ListedLocations {
 
 export const placeLocation = ({ file, start, end }: PlaceInFile): vscode.Location =>
   new vscode.Location(vscode.Uri.file(file), new vscode.Range(start.line, start.character, end.line, end.character));
+
+/** A rendered plugin is no file, so its reference sits at the record that holds it (symbols.md, The features, story 10). */
+export const referenceOf = (location: vscode.Location): PlaceInFile | CopyNaming =>
+  (location.uri.scheme === RENDERED_DOCUMENT_SCHEME ? copyOf(location.uri) : placeOfLocation(location));
+
+export const placeOfLocation = ({ uri, range }: vscode.Location): PlaceInFile =>
+  ({ file: uri.fsPath, start: { line: range.start.line, character: range.start.character }, end: { line: range.end.line, character: range.end.character } });
 
 /** What the References view shows for Referenced By: the places `read` lists, anchored at `location`, which `first` has already read. */
 export function referencedByInput(

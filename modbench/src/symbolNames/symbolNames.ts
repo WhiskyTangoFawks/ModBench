@@ -28,7 +28,7 @@ export const originsWinningFirst = (modOrder: readonly { readonly kind: string; 
 /** Whether two plugin file names, or two mod names, name one thing: the game compares them in any case. */
 export const sameName = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
-const samePlugin = (a: PluginSymbol, b: PluginSymbol): boolean => sameName(a.name, b.name) && sameName(a.origin, b.origin);
+export const samePlugin = (a: PluginSymbol, b: PluginSymbol): boolean => sameName(a.name, b.name) && sameName(a.origin, b.origin);
 
 /** The plugin `named` names: with its mod, that copy; by its file name alone, the copy mod order resolves it to, if any. */
 export function pluginNamed({ name, origin }: PluginName, plugins: readonly ResolvedPlugin[]): PluginSymbol | undefined {

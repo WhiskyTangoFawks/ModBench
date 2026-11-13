@@ -134,17 +134,3 @@ export const READ_RECORD = {
     return fitted;
   },
 };
-
-export const LIST_REFERENCES = {
-  name: 'list_references',
-  input: { name: z.string() },
-  of: async (mEdit: Pick<MEditClient, 'resolveNames' | 'getReferences'>, { name }: { name: string }) => {
-    const [formKey = ''] = await formKeysNamed(mEdit, [name]);
-    const referrers = await mEdit.getReferences(formKey);
-    if (isReadFailed(referrers)) throw new Refusal(failureReason(referrers));
-    return fitting(referrers, (all) => ({
-      references: all.length,
-      narrow: `select_rows reads them as the rows of the form_references view whose target_form_key is ${formKey}, which its WHERE narrows further.`,
-    }));
-  },
-};

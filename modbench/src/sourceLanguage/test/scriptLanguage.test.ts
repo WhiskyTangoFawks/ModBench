@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, Uri } from '../../test/vscodeMock';
 
 const opened = vi.hoisted(() => new Map<string, string>());
-const Range = vi.hoisted(() => class { readonly args: unknown[]; constructor(...args: unknown[]) { this.args = args; } });
+const Range = vi.hoisted(() => class { readonly args: unknown[]; constructor(...args: unknown[]) { this.args = args; } get start() { return this.args[0]; } get end() { return this.args[1]; } });
 vi.mock('vscode', () => ({
   Uri, Range, TreeItem, TreeItemCollapsibleState,
   Location: class { constructor(readonly uri: unknown, readonly range: unknown) {} },
@@ -119,5 +119,27 @@ describe('Find All References on a Papyrus script', () => {
 
     expect(await failing.referencesAt(document(), AT_SCRIPT)).toEqual([]);
     expect(reporter.shownFailures.map(({ detail }) => detail)).toEqual(['the plugins mEdit reads: the record index is not ready']);
+  });
+});
+
+describe('the symbol index on a Papyrus script', () => {
+  const copy = { formKey: QUEST, plugin: { name: 'Mod.esp', origin: 'Mod' }, inPluginSource: true, fieldPaths: [PATH] };
+
+  it.each([
+    ['at its source', 'ns:quest', SCRIPTS, { file: QUEST_SOURCE }],
+    ['at its compiled script when it has no source', 'Other', SCRIPTS, { file: '/instance/mods/Mod/Scripts/Other.pex' }],
+    ['nowhere when no mod holds it, refusing', 'Ns:Quest', [], { refused: 'No mod, Overwrite or the Data folder holds a source or a compiled script of Ns:Quest.' }],
+  ])('defines a script %s', (_case, name, scripts, expected) => {
+    expect(language(NONE, scripts).language.definitionOf(name)).toEqual(expected);
+  });
+
+  it('lists each member that attaches it as a place, and each copy it could not read as left out', async () => {
+    opened.set(SOURCE, TEXT);
+    const { language: answering } = language({ copies: [copy], unread: ['000802:Mod.esp: unreadable'] });
+
+    expect(await answering.placesNaming('Ns:Quest')).toEqual({
+      references: [{ file: SOURCE, start: { line: 0, character: SPAN.start }, end: { line: 0, character: SPAN.end } }],
+      leftOut: ['000802:Mod.esp: unreadable'],
+    });
   });
 });
