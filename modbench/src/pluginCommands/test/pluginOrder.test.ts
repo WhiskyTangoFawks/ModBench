@@ -1,6 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { judge, type PluginFactsOf } from '../../sortingRules/judge';
-import { moveOrderRefusal, offeredMoves, type ListedPlugins } from '../pluginOrder';
+import { landingDrop, moveOrderRefusal, offeredMoves, type ListedPlugins } from '../pluginOrder';
+
+vi.mock('../../sortingRules/judge', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../sortingRules/judge')>();
+  return { ...original, judge: vi.fn(original.judge) };
+});
 
 type Facts = NonNullable<ReturnType<PluginFactsOf>>;
 
@@ -91,5 +96,18 @@ describe('moveOrderRefusal: a drop the game would undo', () => {
 
     expect(brokenIn(listed, facts).map(({ rule }) => rule)).toEqual(['gameMoves']);
     expect(moveOrderRefusal(listed, ['C.esp'], { kind: 'before', name: 'B.esp' }, facts)).toBeUndefined();
+  });
+});
+
+describe('landingDrop: the cost of a landing', () => {
+  it('judges a fixed number of times however many lines plugins.txt holds', () => {
+    const plain = Array.from({ length: 500 }, (_, index) => `Plain${index}.esp`);
+    const facts = factsFrom({ 'Base.esm': { master: true }, ...Object.fromEntries(plain.map((name) => [name, {}])) });
+    vi.mocked(judge).mockClear();
+
+    const drop = landingDrop(listedOf(['Base.esm', ...plain]), 'New.esm', facts, ['.esm']);
+
+    expect(drop).toEqual({ kind: 'before', name: 'Plain0.esp' });
+    expect(vi.mocked(judge)).toHaveBeenCalledTimes(3);
   });
 });
