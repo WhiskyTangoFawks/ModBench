@@ -44,20 +44,14 @@ The source is files, and any tool can change them. As a user, I want:
 2. Compile to stop on a file it cannot read, on a file that holds what no plugin can carry, and on two files that claim one FormKey, naming every such file and the field at fault where there is one, so a broken change never becomes a broken plugin. Spacing and key order alone change no meaning. Cites: Never silently wrong; ADR-0006
 3. A record file in the wrong place to compile, with a warning naming where it belongs. Modbench's next write to that record moves it there. Cites: Never silently wrong
 
-### In the text editor
+### Editing plugin source
 
-A FormKey is a record's symbol ([symbols.md](symbols.md)). Inside a FormKey, the plugin's name is the plugin's symbol. The gestures are VS Code's own, under VS Code's names and keys: Go to Definition and Go to Symbol are entry points to `open`, Find All References to `referenced by`, and Rename Symbol to `edit field` on the FormKey or the EditorID. On the plugin's name they are entry points to the plugin's `go to`, `referenced by` and `rename` (commands.md, Entry points are not gestures).
+Plugin source names symbols, and [symbols.md](symbols.md) says how the language features answer for them.
 
 As a user, I want:
 
-1. Go to Definition on a FormKey to open the record, as Opening in [editor.md](editor.md) opens a record given without a plugin. Cites: VS Code; xEdit Ctrl + click
-2. Find All References on a FormKey to list every record that references it, one entry for each plugin's copy, in the peek and in the References view. Cites: VS Code; [editor-referenced-by.md](editor-referenced-by.md), The tree, stories 2 to 4
-3. Hovering a FormKey to show `EditorID [FormKey]`, the record type, and the plugin whose copy wins. Cites: xedit.md, divergence 10
-4. Go to Symbol in Workspace to find a record by EditorID or FormKey across every compiled plugin, and to open it. Cites: VS Code; catalog `open` with no Argument
-5. Completion inside a reference field to offer records by EditorID and insert the FormKey, and inside an enum field to offer its values. Cites: VS Code; ADR-0001
-6. The Problems panel to carry, on the plugin source of every compiled plugin, active or not, each refusal and warning compile would give that file, a reference to a record that neither its plugin nor an active plugin holds, and a path field that names no file the game gets or its plugin's mod holds. A path field that no file in the workspace holds is not judged while the game gets files from outside it, and the language status says so. A problem appears as I type and clears the same way (ADR-0001). When mEdit cannot answer, the problems stay, and the language status says so, as common, States, story 6 says of a view. Cites: Changes outside Modbench, stories 2 and 3; ADR-0015; ADR-0012; common, States, story 6; ADR-0019; VS Code's language status
-7. Rename Symbol on a FormKey to change it, each reference following (symbols.md, The features, story 6). Cites: xEdit's Change FormID
-8. A language feature that fails to answer as any language server's feature does. Cites: VS Code; common.md, Reporting
+1. The Problems panel to carry, on the plugin source of every compiled plugin, active or not, each refusal and warning compile would give that file, a reference to a record that neither its plugin nor an active plugin holds, and a path field that names no file the game gets or its plugin's mod holds. A path field that no file in the workspace holds is not judged while the game gets files from outside it, and the language status says so. A problem appears as I type and clears the same way (ADR-0001). When mEdit cannot answer, the problems stay, and the language status says so, as common, States, story 6 says of a view. Cites: Changes outside Modbench, stories 2 and 3; ADR-0015; ADR-0012; common, States, story 6; ADR-0019; VS Code's language status
+2. Completion inside an enum field to offer its values. Cites: VS Code; ADR-0001
 
 ## Menus and keys
 

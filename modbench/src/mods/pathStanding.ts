@@ -1,4 +1,4 @@
-// source.md, In the text editor, story 6: what holds a path a plugin source names.
+// source.md, Editing plugin source, story 1: what holds a path a plugin source names.
 
 import type { InstanceValue } from '../instanceLoader/instance';
 import { OVERWRITE_ORIGIN } from '../wire/pluginAddress';

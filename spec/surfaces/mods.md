@@ -1,6 +1,6 @@
 # Mods
 
-The Mods surface shows the active profile's mod order: its mods, grouped by separators, and the Overwrite folder. Each mod and Overwrite opens into its files, and each file shows whether the game gets it. Its template is MO2's mod list ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)); where it departs, [mo2.md](../out-of-scope/mo2.md) says why. Its gestures are in [commands.md](commands.md) under Mod and Separator. What every view shares is in [common.md](common.md). [mods-conflicts.md](mods-conflicts.md) holds the conflict table, which opens from a mod's row in an editor tab.
+The Mods surface shows the active profile's mod order: its mods, grouped by separators, and the Overwrite folder. Each mod and Overwrite opens into its files, and each file shows whether the game gets it. Its template is MO2's mod list ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)); where it departs, [mo2.md](../out-of-scope/mo2.md) says why. Its gestures are in [commands.md](commands.md) under Mod, Separator and Symbol. What every view shares is in [common.md](common.md). [mods-conflicts.md](mods-conflicts.md) holds the conflict table, which opens from a mod's row in an editor tab.
 
 Each story cites what decides it. A story that cites nothing is owned here.
 
@@ -136,7 +136,6 @@ The row menus follow VS Code's groups: open, change, create, source control, cop
 | File menu | open folder · referenced by · compare file (a file in a file order conflict, not the winning copy) · go to mod (a file in a file order conflict) · exclude or include (not in an archive) · ignore or unignore (an instance with a repository, not in an archive) · add publisher tag… (the instance has a publisher whose publisher tags mark paths, not in an archive) · remove publisher tag… (the row holds a publisher tag) · copy value |
 | Folder menu | open folder · add publisher tag… (the instance has a publisher whose publisher tags mark paths) · remove publisher tag… (the row holds a publisher tag) · copy value |
 | Explorer menu, on an archive | open |
-| Explorer menu, on a file in a mod or the game folder | referenced by |
 | Check box | enable or disable |
 | Keys | Space: enable or disable. Delete: uninstall, or delete a separator. F2: rename a mod or a separator. Ctrl+C: copy value. |
 

@@ -26,7 +26,7 @@ function renaming({ pluginNamed, file = { formKey: '000800:Patch.esp', plugin: P
   return { symbol, executeCommand, renameAt };
 }
 
-describe('Rename Symbol (source.md, In the text editor)', () => {
+describe('Rename Symbol (symbols.md, The features, story 6)', () => {
   it('on a plugin\'s name, is the plugin\'s rename, before any record\'s edit', async () => {
     const { symbol, executeCommand, renameAt } = renaming({ pluginNamed: 'Base.esm' });
 

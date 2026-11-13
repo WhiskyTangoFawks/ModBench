@@ -10,7 +10,7 @@ const KEPT_FROM_THE_AGENT = ['modbench.instance.logIn'];
 const GIVEN_TO_THE_AGENT = ['modbench.record.open'];
 
 describe('the gestures the agent runs (agent.md, Gestures, story 1)', () => {
-  const specified = [...catalogCommandIds(GESTURES_MARKDOWN, 'writes'), ...GIVEN_TO_THE_AGENT, ...RETIRED_AHEAD_OF_CODE].filter((id) => !KEPT_FROM_THE_AGENT.includes(id) && !SPECIFIED_AHEAD_OF_CODE.includes(id));
+  const specified = [...catalogCommandIds(GESTURES_MARKDOWN, 'writes'), ...GIVEN_TO_THE_AGENT, ...RETIRED_AHEAD_OF_CODE.filter((id) => AGENT_GESTURES.has(id))].filter((id) => !KEPT_FROM_THE_AGENT.includes(id) && !SPECIFIED_AHEAD_OF_CODE.includes(id));
 
   it('are the catalog\'s gestures whose effect is writes and whose code exists, less those agent.md keeps from it, plus those it gives', () => {
     expect([...AGENT_GESTURES.keys()].sort()).toEqual(specified.sort());

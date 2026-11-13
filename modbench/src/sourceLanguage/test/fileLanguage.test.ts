@@ -51,7 +51,7 @@ function language(answer: Awaited<ReturnType<FileClient['getFileReferences']>>, 
   return { reporter, getFileReferences, resolveFilePath, reveal, ...fileLanguage({ reporter, client, gameRelease: () => Promise.resolve('Fallout4'), copyOf, reveal }) };
 }
 
-describe('referenced by on a file (commands.md, `referenced by` under Mod, a file as its Argument)', () => {
+describe('referenced by on a file (commands.md, `referenced by` under Symbol)', () => {
   beforeEach(() => { setInput.mockClear(); });
 
   it('lists the records that name its path in the Data folder, at the member that names it, and notifies of a record it could not read', async () => {

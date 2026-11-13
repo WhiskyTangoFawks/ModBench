@@ -74,7 +74,8 @@ A template is a standalone program. Modbench is not. A gesture leaves this file 
 | Plugins | navigator | plugin list | [plugins.md](plugins.md) |
 | Downloads | - | Downloads tab | [downloads.md](downloads.md) |
 | Editor | View grid, Referenced By | - | [editor.md](editor.md) |
-| Source | Referenced By, Ctrl + click | - | [source.md](source.md) |
+| Source | - | - | [source.md](source.md) |
+| Symbols | Ctrl + click | - | [symbols.md](symbols.md) |
 | Agent | - | - | [agent.md](agent.md) |
 | Scripts | Apply Script | - | [scripts.md](scripts.md) |
 | Instance repository | - | - | [instance-repository.md](instance-repository.md) |
@@ -159,8 +160,6 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | exclude / include file | writes | `modbench.mod.excludeFile`, `modbench.mod.includeFile` | files in mods or Overwrite | - | MO2 Information dialog, Conflicts tab, Hide; MO2 mod list, Restore hidden files | Keep each file from the game with the mod manager's exclusion mark, or clear the mark. | update-load-order-file |
 | ignore / unignore file | writes | `modbench.mod.ignoreFile`, `modbench.mod.unignoreFile` | files in mods | - | none | Keep each file out of its mod's manifest, or put it back. | update-manifest |
 | rename | writes | `modbench.mod.rename` | mod | name | MO2 mod list | Rename a mod's folder, and each reference to it. | update-load-order-file |
-| referenced by | reads | `modbench.mod.referencedBy` | mod, or a file | - | none | List each place a file names a mod or a file, in VS Code's References view. | - |
-| go to | reads | `modbench.mod.goTo` | mod | - | none | Select a mod's row in Mods, or show its folder in the Explorer when Mods shows no row for it. | none |
 | add / remove publisher tag | writes | `modbench.mod.addPublisherTag`, `modbench.mod.removePublisherTag` | mods, or files and folders in mods | publisher tag: a pick | none | Add a publisher tag to each mod, folder or file, or remove it ([publishing.md](publishing.md), Publisher tags). | change-publisher-tag |
 
 ## Separator
@@ -183,8 +182,6 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | sort direction | reads | `modbench.plugin.sortWinningAtTop`, `modbench.plugin.sortLosingAtTop` | - | - | MO2 plugin list | List plugins with the winning end at the top or at the bottom. | none |
 | reveal | reads | `modbench.plugin.reveal` | plugin | - | MO2 plugin list | Show a plugin file in the system's file manager. | none |
 | rename | writes | `modbench.plugin.rename` | plugin | name | none | Rename a plugin, the files named for it, and each reference to it. | rename-plugin |
-| referenced by | reads | `modbench.plugin.referencedBy` | plugin | - | none | List each place a file names a plugin, in VS Code's References view. | - |
-| go to | reads | `modbench.plugin.goTo` | plugin | - | none | Select a plugin's row in Plugins, or show its file in the Explorer when Plugins shows no row for it. | none |
 | apply suggested move | writes | `modbench.plugin.applySuggestedMove` | plugin | broken sorting rule: a pick, when more than one offers a move | none | Move a plugin to the nearest place that keeps a broken sorting rule. | update-load-order-file |
 | load after | writes | `modbench.plugin.loadAfter` | plugins | plugins to load after: a pick | LOOT, Edit Metadata, Load After | Add a sorting rule to the userlist that each plugin loads after the picked plugins. | update-load-order-file |
 
@@ -201,7 +198,6 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | delete | edits | `modbench.record.delete` | records | - | xEdit navigator, Referenced By, View header | Remove records from a plugin. | edit-record |
 | copy | edits | `modbench.record.copy` | records | mode: new or override; destination plugins; replace, for a destination that holds the record | xEdit navigator, Referenced By, View header; xEdit Inject Forms into master... | Copy records into other plugins. | edit-record |
 | open | reads | `modbench.record.open` | records, a reference field, or a templated field | pinned | xEdit navigator; xEdit Referenced By; xEdit Compare Selected; xEdit Ctrl + click | Open a record in an editor tab. | query-record-index |
-| referenced by | reads | `modbench.record.referencedBy` | a record | - | xEdit Referenced By | List the records that reference a record, in VS Code's References view. | query-record-index |
 | open field value | reads | `modbench.record.openFieldValue` | record, plugin, field path | - | xEdit View grid | Open a field value in an editor tab. | none |
 | filter | reads | `modbench.record.filter`, `modbench.record.clearFilter` | - | query: a `.sql` file, or a new document | xEdit navigator | Narrow the record tree to the FormKeys a SQL query returns. | query-record-index |
 | collapse no conflict | reads | `modbench.record.collapseNoConflict`, `modbench.record.showNoConflict` | - | - | xEdit View grid, Hide no conflict and empty rows | Collapse the rows and columns that add nothing to the conflict, in every record panel, or show them again. | none |
@@ -224,6 +220,15 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | open metadata | reads | `modbench.downloadedFile.openMeta` | downloaded file | - | MO2 Downloads | Open the file that holds a downloaded file's metadata in an editor tab. | none |
 | sort | reads | `modbench.downloadedFile.sort` | - | field; direction | MO2 Downloads | Choose the field the downloaded files sort by. | none |
 | show excluded | reads | `modbench.downloadedFile.showExcluded`, `modbench.downloadedFile.hideExcluded` | - | - | MO2 Downloads | Show or hide the excluded downloaded files. | none |
+
+## Symbol
+
+A symbol of any kind ([symbols.md](symbols.md)).
+
+| Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
+|---|---|---|---|---|---|---|---|
+| go to | reads | `modbench.symbol.goTo` | a symbol that has a definition, other than a record | - | none | Show a symbol's definition. | none |
+| referenced by | reads | `modbench.symbol.referencedBy` | a symbol | - | xEdit Referenced By | List each place a file names a symbol, in VS Code's References view. | - |
 
 ## System commands
 

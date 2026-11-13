@@ -49,7 +49,7 @@ function feed(files: Record<string, string>, sourceFiles = sourceFolders, answer
   return { client, reporter, published, status, answered };
 }
 
-describe('feedSourceProblems (source.md, In the text editor, story 6)', () => {
+describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () => {
   const RECORD = { formKey: REFERRER, plugin: 'Refers.esp', origin: 'ReferringMod' };
   const ITEMS = { kind: 'member', name: 'Items' };
   it.each([

@@ -35,7 +35,7 @@ interface Rename {
 
 type RenameDeps = Pick<RenamePluginDeps, 'commands' | 'source'>;
 
-// Rename Symbol supplies the plugin and the new name (source.md, In the text editor).
+// Rename Symbol supplies the plugin and the new name (symbols.md, The features, story 6).
 const isSupplied = (option: unknown): option is { readonly plugin: PluginAddress; readonly name: string } =>
   typeof option === 'object' && option !== null && typeof Reflect.get(option, 'name') === 'string' && isPluginAddress(Reflect.get(option, 'plugin'));
 

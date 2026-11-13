@@ -49,7 +49,7 @@ describe('a document spelling a FormKey as Mutagen reads it, not as the Index wr
   });
 });
 
-describe('a plugin\'s name inside a FormKey is the plugin\'s symbol (source.md, In the text editor)', () => {
+describe('a plugin\'s name inside a FormKey is the plugin\'s symbol (symbols.md, The symbols, Plugin)', () => {
   const spelled = '{ "FormKey": "000700:A.esp", "Ref": "00080a_B.esp" }';
 
   it('is found under a place in the name, and not under its object ID', () => {

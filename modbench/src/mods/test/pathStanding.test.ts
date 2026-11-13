@@ -33,7 +33,7 @@ function standing({ gameFolder = FOUND, inWorkspace = true, gameLoose, stacked, 
   return pathStandingOf({ value, subscribe: () => ({ dispose: () => undefined }) });
 }
 
-describe('what holds a path a plugin source names (source.md, In the text editor, story 6)', () => {
+describe('what holds a path a plugin source names (source.md, Editing plugin source, story 1)', () => {
   it.each<[string, Value, boolean]>([
     ['a copy the game gets', { stacked: true }, true],
     ['a loose file in a game folder the workspace holds', { gameLoose: true }, true],

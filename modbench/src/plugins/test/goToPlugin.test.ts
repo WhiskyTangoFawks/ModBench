@@ -32,7 +32,7 @@ function setup(shown: { row?: PluginNode; file?: string }) {
   return { reveal, reporter, run };
 }
 
-describe('the plugin go to command (commands.md, `go to` under Plugin)', () => {
+describe('the plugin go to command (commands.md, `go to` under Symbol)', () => {
   beforeEach(() => { handlers.clear(); executeCommand.mockClear(); });
 
   it('selects the plugin\'s row in Plugins', async () => {

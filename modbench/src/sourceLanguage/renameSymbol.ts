@@ -32,7 +32,7 @@ function recordNamedAt(document: AskedIn, offset: number): RecordNamed | undefin
 }
 
 /** Rename Symbol: on a plugin's name, the plugin's `rename`; on a FormKey or an EditorID in plugin source, `edit
- *  field` on it (source.md, In the text editor). */
+ *  field` on it (symbols.md, The symbols, Record). */
 export function renameSymbol({ plugin, plugins, client, executeCommand }: RenameSymbolDeps) {
   // A FormKey names its plugin by its file name alone; an EditorID is the label of the copy its file holds.
   async function copyEdited(record: RecordNamed, path: string): Promise<PluginSymbol> {

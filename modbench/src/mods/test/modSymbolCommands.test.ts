@@ -25,7 +25,7 @@ import { recordingReporter } from '../../test/surfacingDoubles';
 const aRow = new ModNode({ kind: 'mod', name: 'Base Mod', enabled: true });
 const asked = { argument: { kind: 'mod', name: 'Base Mod' } };
 
-describe('the mod go to command (commands.md, `go to` under Mod)', () => {
+describe('the mod go to command (commands.md, `go to` under Symbol)', () => {
   beforeEach(() => { handlers.clear(); executeCommand.mockClear(); });
 
   function setup(selection: readonly ModNode[] = []) {
@@ -52,7 +52,7 @@ describe('the mod go to command (commands.md, `go to` under Mod)', () => {
   });
 });
 
-describe('the mod referenced by command (commands.md, `referenced by` under Mod)', () => {
+describe('the mod referenced by command (commands.md, `referenced by` under Symbol)', () => {
   beforeEach(() => { handlers.clear(); });
 
   const WALL = file('mods/Walls', 'meshes/architecture/wall.nif');

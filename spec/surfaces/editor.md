@@ -1,6 +1,6 @@
 # Editor: the record panel
 
-The record panel shows a record as its file, with every active plugin's copy beside it: a row for each field, a column for each copy. Opened on several records, it shows them side by side instead. Its template is xEdit's View grid ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)); where it departs, [xedit.md](../out-of-scope/xedit.md) says why. Its gestures are in [commands.md](commands.md) under Record, Plugin, Mod (`version in git`, `build`) and Every view.
+The record panel shows a record as its file, with every active plugin's copy beside it: a row for each field, a column for each copy. Opened on several records, it shows them side by side instead. Its template is xEdit's View grid ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)); where it departs, [xedit.md](../out-of-scope/xedit.md) says why. Its gestures are in [commands.md](commands.md) under Record, Plugin, Mod (`version in git`, `build`), Symbol and Every view.
 
 The Editor surface has three more files:
 

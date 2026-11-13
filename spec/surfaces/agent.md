@@ -30,16 +30,17 @@ As a user, I want:
 1. My agent to name an object as the views show it: a plugin by its file name, a mod or a separator by its name, a record by its EditorID or FormKey, a downloaded file by its file name, a file or a folder outside my downloads by its path, and a file in a mod by its path in the mod.
 2. A name that means more than one thing to be refused, and the refusal to list each match as my agent can name it: a plugin with its origin, a mod or a separator with which of the two it is. My agent names the one it means as the refusal lists it. Cites: ADR-0012; Never silently wrong
 3. My agent to name several objects in one request, as my selection does. Cites: common, A view, story 6
+4. My agent to find a symbol's definition and each place a file names it, as I find them. Cites: symbols.md
 
 ## Records
 
 As a user, I want:
 
 1. My agent to read any record the record index holds, in a compiled plugin or not: each plugin's copy, and the copy that wins. Cites: editor.md; editor-conflicts.md
-2. My agent to find a record by its EditorID or FormKey, and the records that reference it. Cites: editor-referenced-by.md; source.md, In the text editor, story 4
+2. My agent to find a record by its EditorID or FormKey. Cites: symbols.md, The features, story 4
 3. My agent to query the record index with one SQL SELECT. Cites: scripts.md, Reading, story 1; catalog, Record, `filter`
 4. My agent to edit a compiled plugin by editing its source, so each edit is a working-tree change I review, commit or discard in Source Control. Cites: ADR-0007; Any agent, story 2
-5. My agent to see the problems I see in the Problems panel for the source it changed. Cites: source.md, In the text editor, story 6
+5. My agent to see the problems I see in the Problems panel for the source it changed. Cites: source.md, Editing plugin source, story 1
 6. My agent never to edit a plugin with no plugin source. Editing needs plugin source, for my agent as for me. Cites: ADR-0007
 7. My agent to open a record in an editor tab, to show me what it found. Cites: catalog, Record, `open`
 8. My agent to change many records by a rule with a Modbench script, as I do. Cites: scripts.md; ADR-0021

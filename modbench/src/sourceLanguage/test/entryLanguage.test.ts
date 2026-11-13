@@ -221,7 +221,7 @@ describe('every feature answers where no entry is named, so another feature may'
   });
 });
 
-describe('referenced by on a mod (commands.md, `referenced by` under Mod)', () => {
+describe('referenced by on a mod (commands.md, `referenced by` under Symbol)', () => {
   beforeEach(() => { setInput.mockClear(); });
 
   it('lists the places in the References view, titled with the mod and anchored at the first, and notifies of a file it could not read', async () => {

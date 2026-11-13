@@ -44,7 +44,7 @@ function feed(answer: PluginFilePaths[], standing: Partial<PathStanding> = {}) {
 
 const asked = (client: InMemoryMEditClient) => client.calls.filter((call) => call.method === 'getPluginFilePaths').map((call) => call.args);
 
-describe('feedPathProblems (source.md, In the text editor, story 6)', () => {
+describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
   it('puts a path that no file the game gets and no file its mod holds names on the path itself', async () => {
     const { settled } = feed([answerFor()]);
 

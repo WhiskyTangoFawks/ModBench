@@ -32,8 +32,8 @@ interface PluginLanguageDeps {
 const locationOfReference = (found: PluginReference<vscode.TextDocument>): vscode.Location =>
   ('file' in found ? placeLocation(found) : locationOf(found));
 
-/** A plugin as a symbol in the text editor: inside a FormKey, and wherever an owner's file names it (source.md, In the
- *  text editor), and the places files name it. */
+/** A plugin as a symbol in the text editor: inside a FormKey, and wherever an owner's file names it (symbols.md, The symbols,
+ *  Plugin), and the places files name it. */
 export function pluginLanguage({ instance, reporter, client, owners, renamePlugin, goTo, tooltip }: PluginLanguageDeps) {
   const referencesTo = pluginReferencesOf({
     owners, reporter, client, open: openPluginSourceDocument,
@@ -141,7 +141,7 @@ export function pluginLanguage({ instance, reporter, client, owners, renamePlugi
       const found = await nameWithSpan(document, offset);
       return found && { start: found.start, end: found.end, name: found.name };
     },
-    /** Rename Symbol on the plugin whose name is at `offset`: the plugin's `rename` (source.md, In the text editor). */
+    /** Rename Symbol on the plugin whose name is at `offset`: the plugin's `rename` (symbols.md, The features, story 6). */
     renameAt: async (document: AskedIn, offset: number, newName: string): Promise<void> => {
       const named = await nameAt(document, offset);
       if (named === undefined) return;

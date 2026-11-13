@@ -95,7 +95,7 @@ export function formKeyValue(text: string, formKey: string): TextSpan | undefine
 const valuesOf = (node: Node): Node[] => (node.type === 'property' ? node.children?.slice(1) : node.children) ?? [];
 
 // A nested object with a FormKey of its own is a child record, whose references are its own
-// (editor-referenced-by.md, The tree, story 5).
+// (symbols.md, The symbols, Record).
 function firstReference(record: Node, formKey: string): Node | undefined {
   const own = ownFormKey(record)?.parent;
   for (const child of valuesOf(record)) {

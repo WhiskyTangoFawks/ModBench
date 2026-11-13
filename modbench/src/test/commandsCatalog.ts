@@ -8,9 +8,9 @@ const SYSTEM_COMMANDS = COMMANDS_MARKDOWN.indexOf('## System commands');
 export const GESTURES_MARKDOWN = COMMANDS_MARKDOWN.slice(0, SYSTEM_COMMANDS);
 export const SYSTEM_COMMANDS_MARKDOWN = COMMANDS_MARKDOWN.slice(SYSTEM_COMMANDS);
 
-export const SPECIFIED_AHEAD_OF_CODE: string[] = [];
+export const SPECIFIED_AHEAD_OF_CODE: string[] = ['modbench.symbol.goTo', 'modbench.symbol.referencedBy'];
 
-export const RETIRED_AHEAD_OF_CODE: string[] = [];
+export const RETIRED_AHEAD_OF_CODE: string[] = ['modbench.mod.goTo', 'modbench.mod.referencedBy', 'modbench.plugin.goTo', 'modbench.plugin.referencedBy', 'modbench.record.referencedBy'];
 
 /** The Command IDs of the catalog's rows, or of those whose Effect is `effect`. */
 export function catalogCommandIds(markdown: string, effect?: string): Set<string> {

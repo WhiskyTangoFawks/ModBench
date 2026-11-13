@@ -14,7 +14,7 @@ function fed(value: { gameFolder: GameFolder; gameFolderInWorkspace: boolean }) 
   return { shown, land: (next: typeof value) => { instance.value = next; land(); } };
 }
 
-describe('the language status for a game folder outside the workspace (source.md, In the text editor, story 6)', () => {
+describe('the language status for a game folder outside the workspace (source.md, Editing plugin source, story 1)', () => {
   it.each([
     ['says paths are checked only against the instance, naming the game folder, for one outside the workspace', FOUND, false, NOTICE],
     ['says nothing for a game folder inside the workspace', FOUND, true, undefined],

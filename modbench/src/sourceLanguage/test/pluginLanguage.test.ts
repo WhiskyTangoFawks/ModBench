@@ -42,7 +42,7 @@ function plugin(owner: SymbolOwner = ownerThatCannotReadAFile) {
   return { language, reporter };
 }
 
-describe('Rename Symbol on a plugin\'s name is the plugin\'s rename (source.md, In the text editor)', () => {
+describe('Rename Symbol on a plugin\'s name is the plugin\'s rename (symbols.md, The features, story 6)', () => {
   const document = { uri: Uri.file(PLUGINS_TXT), getText: () => '*Mid.esp\r\n*base.ESM\r\n' };
   const renamePlugin = vi.fn(() => Promise.resolve());
   const naming = (name?: string) => pluginLanguage({
