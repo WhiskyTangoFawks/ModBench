@@ -39,6 +39,18 @@ public sealed class ReadOutOfMemoryTests : IDisposable
     }
 
     [Fact]
+    public void ASelectThatRunsOutOfMemoryBeforeItsFirstRow_IsRefusedSayingHowToSelectBodies()
+    {
+        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
+        using var fullPool = new FilledMemory(IndexFiles.In(_fixture.InstanceRoot));
+
+        var refused = index.Queries.SelectRows("SELECT 1 AS form_key").Refused();
+
+        Assert.Equal(IndexRefusal.OutOfMemory, refused.Refusal);
+        Assert.EndsWith(" A sort or a join that carries body holds all of it in memory: find the keys on narrow columns, then select body for those keys.", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AFilterWhoseMatchesDuckDbRunsOutOfMemoryFor_IsRefusedSayingSo()
     {
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
