@@ -98,6 +98,22 @@ public sealed class UnsavedDocumentTests : IDisposable
     }
 
     [Fact]
+    public void AHandedDocumentThatDoesNotParse_IsAnsweredAsItsParseError_OnTheFirstLine_AndNoLink()
+    {
+        var good = "\n\n" + Typed(_race, Absent);
+        Hand(new DocumentChange(_file, good));
+        Assert.Contains(ProblemsOfCompiledPlugin().Problems, p => p.TargetFormKey == Absent);
+
+        HandUntil(PluginChanged(_compiledPlugin), new DocumentChange(_file, good + ",,"));
+
+        var problems = ProblemsOfCompiledPlugin();
+        var stop = Assert.Single(problems.Problems);
+        Assert.Null(stop.TargetFormKey);
+        Assert.Equal(SourceRange.FirstLine, stop.Range);
+        Assert.Equal(ProblemsFailureKind.LaterRead, problems.FailureKind);
+    }
+
+    [Fact]
     public void ADroppedDocument_IsReadFromItsFileAgain()
     {
         Hand(new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\"")));
