@@ -10,6 +10,8 @@ const ZOOM_OUT = new URL('../spec/architecture/target-architecture.d2', MODBENCH
 /** @type {string[]} */
 export const DRAWN_AHEAD_OF_CODE = [];
 
+const COMPOSITION_ROOT = 'activation';
+
 /** @param {string} drawing @returns {Record<string, string[]>} */
 function drawnByBand(drawing) {
     /** @type {Record<string, string[]>} */
@@ -25,7 +27,7 @@ function drawnByBand(drawing) {
         }
         if (/^\w/.test(line)) current = undefined;
         const member = /^ {2}(\w+): "/.exec(line)?.[1];
-        if (member !== undefined && current !== undefined) current.push(member);
+        if (member !== undefined && current !== undefined && member !== COMPOSITION_ROOT && !line.includes('{class: other}')) current.push(member);
     }
     return bands;
 }
@@ -61,10 +63,10 @@ function boxesOf(drawnBands, band) {
 /** @param {string} drawing @returns {Record<string, string[]>} */
 export function boxesByBand(drawing) {
     const drawn = drawnByBand(drawing);
-    return Object.fromEntries(['kernel', 'driving', 'core', 'readmodel', 'repositories'].map((band) => [band, boxesOf(drawn, band)]));
+    return Object.fromEntries(['drivers', 'driving', 'core', 'kernel', 'readmodel', 'repositories'].map((band) => [band, boxesOf(drawn, band)]));
 }
 
 export const BOXES_BY_BAND = boxesByBand(readFileSync(ZOOM_OUT, 'utf8'));
-export const DRIVING_BOXES = BOXES_BY_BAND.driving;
+export const VSCODE_BOXES = [...BOXES_BY_BAND.drivers, ...BOXES_BY_BAND.driving, 'textDocuments'];
 export const CORE_BOXES = BOXES_BY_BAND.core;
 export const BOXES = Object.values(BOXES_BY_BAND).flat();

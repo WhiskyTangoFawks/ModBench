@@ -6,7 +6,7 @@ import sonarjs from 'eslint-plugin-sonarjs';
 import { noGestureResultUse } from './eslint-rules/noGestureResultUse.mjs';
 import { noLeadingMEdit } from './eslint-rules/noLeadingMEdit.mjs';
 import { noRereadAfterWrite } from './eslint-rules/noRereadAfterWrite.mjs';
-import { BOXES, DRIVING_BOXES } from './eslint-rules/boxes.mjs';
+import { BOXES, VSCODE_BOXES } from './eslint-rules/boxes.mjs';
 import { ACTIVATION_DECIDES_MESSAGE, ACTIVATION_DECIDES_SELECTORS } from './eslint-rules/activationDecides.mjs';
 
 // The message states ADR-0019's rule in full, because a developer who breaks it meets the rule only there.
@@ -89,8 +89,7 @@ const BYTE_READ_PATHS = ['node:fs', 'node:fs/promises', 'fs', 'fs/promises'].map
     importNames: BYTE_READS,
     message: 'The extension interprets no plugin binary (ADR-0004): the byte-level reads are the Instance adapter\'s content digest and the Game folder\'s read of a program\'s version.',
 }));
-const VSCODE_BOXES = [...DRIVING_BOXES, 'textDocuments'];
-const VSCODE_IMPORT = { name: 'vscode', message: 'Only a view takes VS Code types, the Instance adapter\'s watch, and Text documents.' };
+const VSCODE_IMPORT = { name: 'vscode', message: 'Only Agent, a view, the Instance adapter\'s watch and Text documents take VS Code types.' };
 const REPORTER_IMPORT = {
     group: ['**/reporter'],
     message: 'The Instance leaves a read failure in its value for a subscriber to render; it raises no notification.',

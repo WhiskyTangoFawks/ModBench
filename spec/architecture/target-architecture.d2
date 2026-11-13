@@ -16,6 +16,7 @@ modbench_drivers: "MODBENCH · Drivers — the user, in VS Code's trees, panels 
   class: band; grid-rows: 1
   user: "The user\nclicks, checks, drags, types" {class: other}
   agent_driver: "The agent\nasks and acts through MCP" {class: other}
+  agent: "Agent\nowns: what the user's agent reads and runs,\nand how a script finds mEdit\nhides: MCP and the terminal's environment" {class: driving}
   activation: "Activation\nowns: wiring" {class: driving}
 }
 
@@ -23,7 +24,7 @@ medit_driving: "MEDIT · Driving adapters — the API" {
   class: band; grid-rows: 1
   http: "HTTP endpoints\nowns: mEdit's API, and its composition root\nhides: the protocol" {class: driving}
 }
-modbench_driving: "MODBENCH · Driving adapters — the views and the agent: read a value, fire a command" {
+modbench_driving: "MODBENCH · Driving adapters — the views: read a value, fire a command" {
   class: band; grid-rows: 1
   toolbox: "Toolbox\nowns: the instance at a glance" {class: driving}
   mods: "Mods\nowns: the mods and their conflicts, as the user sees them" {class: driving}
@@ -32,7 +33,6 @@ modbench_driving: "MODBENCH · Driving adapters — the views and the agent: rea
   editor: "Editor\nowns: a record, opened to read and edit" {class: driving}
   webview: "Webview pages\nowns: the pages a view draws in a webview\nhides: the grid" {class: driving}
   sourcelanguage: "Source\nowns: a mod source, as the user works on it,\nand VS Code's language features over every symbol\nhides: the map from a text position to a FormKey" {class: driving}
-  agent: "Agent\nowns: what the user's agent reads and runs,\nand how a script finds mEdit\nhides: MCP and the terminal's environment" {class: driving}
 }
 
 medit_core: "MEDIT · Core — the write side; it references the kernel and the repositories" {

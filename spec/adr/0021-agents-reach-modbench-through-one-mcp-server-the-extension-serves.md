@@ -6,6 +6,7 @@ The user's agent runs in VS Code, in Chat or in its own panel, and MCP is the on
 
 - A record in plugin source has no edit gesture for the agent. The format is Modbench's own, so the agent edits the files, and git and the Problems panel review the edit as they review a hand edit (ADR-0007).
 - The agent changes the mod manager's files through the gestures, so it works the same in every mod manager's instance. Modbench guides it there and blocks nothing.
+- The agent is a user of the views, so the agent and the user never get two answers to one question.
 - A change to many records by a rule is a script. The user's agent writes and runs one as the user does, and the script, not the agent, is mEdit's client ([scripts.md](../surfaces/scripts.md)).
 
 ## Alternatives rejected
