@@ -5,6 +5,7 @@ The user owns the plugin order, and a tool that sorts it takes that control away
 ## Consequences
 
 - The game's own rules, such as a master loading before its dependants, are sorting rules in the same system, and no other box judges the order. The game's rules cannot be turned off.
+- Every view shows the plugin order, and every judgement on records uses it. The plugin list shows the order the user edits, so a view corrected for the game's moves would disagree with it. No view corrects for a plugin the game moves: the move breaks a sorting rule at Error.
 - A sorting rule names a plugin by its file name, as LOOT and the game do. It judges the active plugin of that name, which is unique, and a broken rule names that plugin as `(origin, filename)` ([ADR-0012](0012-index-every-plugin-filter-to-the-active-ones.md)). A plugin is present when mod order resolves a file of that name, as LOOT sees the Data folder.
 - The facts a condition reads come from mEdit and the instance, never from a parser of LOOT's. Mutagen still decides the data ([ADR-0004](0004-mutagen-is-the-parser.md)).
 - The userlist is the instance's, so git holds it. LOOT's global userlist is not read: it is one per machine, and git cannot see it.
