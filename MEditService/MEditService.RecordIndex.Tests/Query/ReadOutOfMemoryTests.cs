@@ -42,6 +42,7 @@ public sealed class ReadOutOfMemoryTests : IDisposable
     public void ASelectThatRunsOutOfMemoryBeforeItsFirstRow_IsRefusedSayingHowToSelectBodies()
     {
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
+        index.Settled();
         using var fullPool = new FilledMemory(IndexFiles.In(_fixture.InstanceRoot));
 
         var refused = index.Queries.SelectRows("SELECT 1 AS form_key").Refused();
