@@ -137,13 +137,13 @@ interface InstanceSide {
   deployment?: DeploymentRead;
   copyReads?: CopyReads;
   pluginsShown?: PluginsShown;
+  symbolRows?: SymbolRows;
   toolbox: ToolboxView;
   modsLines: () => string[];
   entryTooltip: (entry: EntryRef) => string | undefined;
   downloadedFileTooltip: (name: string) => string | undefined;
   modOrderFileOf: (profile: string) => string | undefined;
   fileCopies: FileCopies;
-  symbolRows?: SymbolRows;
   pathStanding: PathStanding;
   sourceFiles: SourceFilesOf;
   copyValue: CopyValueAdapter[];
@@ -309,7 +309,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     deployment: { folder: () => deploymentFolderOf(deploymentFolderSetting), pluginsTxtPlace: placeForGame },
     pathStanding: pathStandingOf(instance),
     sourceFiles: (origin) => sourceFiles(instance.value, origin),
-    symbolRows: { mods: mods.symbolRows, plugins: plugins.symbolRows },
+    symbolRows: { mods: mods.symbolRows, plugins: plugins.symbolRows, filesHeld: () => instance.value },
     copyValue: [mods.copyValue, plugins.copyValue, downloads.copyValue],
   };
 }

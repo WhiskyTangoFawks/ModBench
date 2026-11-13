@@ -62,6 +62,7 @@ import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import { file, folder, mod } from './indexedValue';
 import { ModNode, SeparatorNode } from '../ModListProvider';
 import { createModsView } from '../modsView';
+import { modArgumentOf } from '../../drivingLib/argument';
 import { ArchivedFileNode, FileNode } from '../modFiles';
 import { createFocusedView } from '../../drivingLib/focusedView';
 import { ModStatuses } from '../../modStatus/modStatuses';
@@ -255,6 +256,20 @@ describe('the Mods view registers its own gestures', () => {
     ]).toEqual(['Harder VATS', undefined, undefined]);
   });
 
+  it('says the one selected mod row to Symbols, and none over several rows or a separator', () => {
+    const { symbolRows } = createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
+    const harderVats = new ModNode({ kind: 'mod', name: 'Harder VATS', enabled: true });
+    const gear = new SeparatorNode({ kind: 'separator', name: 'Gear', enabled: true }, []);
+
+    treeViews.view().selectRows([harderVats]);
+    const one = modArgumentOf(symbolRows.selected());
+    treeViews.view().selectRows([harderVats, harderVats]);
+    const several = symbolRows.selected();
+    treeViews.view().selectRows([gear]);
+
+    expect([one, several, symbolRows.selected()]).toEqual([{ kind: 'mod', name: 'Harder VATS' }, undefined, undefined]);
+  });
+
   it('says the Data folder path a file row stands for, and none for any other argument', () => {
     const { symbolRows } = createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
     const owner = new ModNode({ kind: 'mod', name: 'Harder VATS', enabled: true });
@@ -262,7 +277,7 @@ describe('the Mods view registers its own gestures', () => {
     const archive = new FileNode(owner, { kind: 'mod', name: 'Harder VATS' }, file('mods/Harder VATS', 'Main.ba2'), 'Main.ba2');
 
     expect([
-      symbolRows.fileOf(loose), symbolRows.fileOf(new ArchivedFileNode(archive, archive, 'meshes/b.nif', 'b.nif', undefined)), symbolRows.fileOf(owner),
+      symbolRows.dataPathOf(loose), symbolRows.dataPathOf(new ArchivedFileNode(archive, archive, 'meshes/b.nif', 'b.nif', undefined)), symbolRows.dataPathOf(owner),
     ]).toEqual(['meshes/a.nif', 'meshes/b.nif', undefined]);
   });
 

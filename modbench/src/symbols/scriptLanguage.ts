@@ -8,9 +8,10 @@ import { sameName } from '../symbolNames/symbolNames';
 import type { Definition, SymbolReferences } from './symbolIndex';
 import { heldText } from '../textDocuments/heldText';
 import { openPluginSourceDocument, readHeldText } from '../textDocuments/pluginSource';
-import { fieldOfRecord } from './fieldMetadata';
+import { fieldOfRecord } from '../drivingLib/fieldMetadata';
 import { scriptReferences, type ScriptReferencesClient } from './scriptReferences';
-import { fieldAt, formKeyAt } from '../drivingLib/sourceText';
+import { fieldAt } from '../drivingLib/sourceText';
+import { formKeyAt } from './formKeyText';
 import { referenceOf, reportedForFeature, type AskedIn } from './symbolPlaces';
 
 export type ScriptClient = Pick<MEditClient, 'getComparison'> & ScriptReferencesClient;

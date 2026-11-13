@@ -1,7 +1,7 @@
 import type { CompareResult, MEditClient } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
-import { formKeyAt } from '../drivingLib/sourceText';
+import { formKeyAt } from './formKeyText';
 import { recordLabel } from '../wire/recordLabel';
 import { answerOf } from '../wire/readFailed';
 

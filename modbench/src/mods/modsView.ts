@@ -222,7 +222,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
       selected: () => { const [only, ...rest] = view.selection; return rest.length === 0 && only?.kind === 'mod' ? only : undefined; },
       show: (mod) => { const row = provider.entryRow({ kind: 'mod', name: mod }); return row && (() => view.reveal(row, { select: true, focus: true })); },
       folderOf: (mod) => instance.value.paths.modDirs.get(mod),
-      fileOf: (clicked) => clicked instanceof FileNode ? clicked.file.relativePath : clicked instanceof ArchivedFileNode ? clicked.path : undefined,
+      dataPathOf: (clicked) => clicked instanceof FileNode ? clicked.file.relativePath : clicked instanceof ArchivedFileNode ? clicked.path : undefined,
     },
     standingLines: () => [modSync.message(), statusMessage()].filter((line) => line !== undefined),
     tooltipOf: (entry) => { const { tooltip } = provider.entryRow(entry) ?? {}; return typeof tooltip === 'string' ? tooltip : undefined; },

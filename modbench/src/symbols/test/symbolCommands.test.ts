@@ -29,7 +29,7 @@ beforeEach(() => { handlers.clear(); executeCommand.mockClear(); });
 function modRows(over: Partial<ModRows> = {}) {
   const reveal = vi.fn(() => Promise.resolve());
   const shown = vi.fn((_mod: string) => reveal);
-  const rows: ModRows = { selected: () => undefined, show: shown, folderOf: () => '/mods/Base Mod', fileOf: () => undefined, ...over };
+  const rows: ModRows = { selected: () => undefined, show: shown, folderOf: () => '/mods/Base Mod', dataPathOf: () => undefined, ...over };
   return { rows, reveal, shown };
 }
 
@@ -97,12 +97,14 @@ describe('the mod referenced by command (commands.md, `referenced by` under Symb
     expect([mod.mock.calls, files.mock.calls]).toEqual([[], []]);
   });
 
-  it('lists the records that name the path a file row stands for', async () => {
-    const { files, run } = setup({ fileOf: () => 'meshes/architecture/door.nif' });
+  it('lists the records that name the path the view says a file row stands for, and no mod', async () => {
+    const fileRow = { a: 'file row' };
+    const { mod, files, run } = setup({ dataPathOf: (clicked) => clicked === fileRow ? 'meshes/architecture/door.nif' : undefined });
 
-    await run({ a: 'file row' });
+    await run(fileRow);
+    await run({ a: 'row the view says no file for' });
 
-    expect(files.mock.calls).toEqual([['meshes/architecture/door.nif']]);
+    expect([files.mock.calls, mod.mock.calls]).toEqual([[['meshes/architecture/door.nif']], []]);
   });
 
   it('lists the records that name a file the Explorer shows, in a mod or the game\'s Data folder, by its path in the Data folder', async () => {

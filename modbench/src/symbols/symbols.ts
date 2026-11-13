@@ -9,7 +9,7 @@ import { hoverAt } from './formKeyHover';
 import { definitionsOf } from './formKeyDefinition';
 import { referencesOf } from './formKeyReferences';
 import { locateRecord, locationOf } from './recordLocation';
-import { formKeyValue } from '../drivingLib/sourceText';
+import { formKeyValue } from './formKeyText';
 import { completionsAt } from './completion';
 import { workspaceSymbolsOf, type RecordSymbol } from './workspaceSymbols';
 import type { Instance } from '../instanceLoader/instance';
@@ -22,6 +22,7 @@ import { scriptLanguage, type ScriptClient } from './scriptLanguage';
 import { fileLanguage, type FileClient, type FileCopies } from './fileLanguage';
 import { renameSymbol } from './renameSymbol';
 import type { ModRows, PluginRows } from '../drivingLib/symbolRows';
+import type { FilesHeld } from './symbolCommands';
 import { registerGoToMod, registerGoToPlugin, registerModReferencedBy, registerPluginReferencedBy } from './symbolCommands';
 
 interface SymbolsDeps {
@@ -49,6 +50,7 @@ interface SymbolsDeps {
 export interface SymbolRows {
   mods: ModRows;
   plugins: PluginRows;
+  filesHeld: () => FilesHeld;
 }
 
 // Go to Definition, and Go to Symbol in Workspace, are entry points to the plugin's `go to` (commands.md).
@@ -66,7 +68,6 @@ const renamePluginNamed = async (plugin: PluginSymbol, name: string): Promise<vo
   await vscode.commands.executeCommand('modbench.plugin.rename', undefined, undefined, { plugin, name });
 };
 
-const kinds = { reference: vscode.CompletionItemKind.Reference, enumMember: vscode.CompletionItemKind.EnumMember };
 const pluginSource: vscode.DocumentSelector = { language: 'json' };
 // symbols.md, The features, story 2: any file an owner of files reports may name a plugin.
 const ownedFiles: vscode.DocumentSelector = [pluginSource, { scheme: 'file' }];
@@ -175,7 +176,7 @@ function registerCompletion(deps: SymbolsDeps, plugin: PluginLanguage, entry: En
       const found = await completionsAt(deps, heldText(document), document.offsetAt(position));
       if (found === undefined) return undefined;
       const items = found.items.map(({ label, detail, insertText }) => {
-        const item = new vscode.CompletionItem({ label, description: detail }, kinds[found.kind]);
+        const item = new vscode.CompletionItem({ label, description: detail }, vscode.CompletionItemKind.Reference);
         item.insertText = insertText;
         item.filterText = `${label} ${insertText}`;
         item.range = rangeIn(document, found);
@@ -280,9 +281,9 @@ export function createSymbols(deps: SymbolsDeps): Symbols {
   const disposable = vscode.Disposable.from(
     registerHover(deps, plugin, entry, script), registerCompletion(deps, plugin, entry, script), registerDefinition(deps, plugin, entry, script, file), registerRename(deps, plugin),
     registerReferences(deps, plugin, entry, script), registerSymbols(deps, plugin, entry, script),
-    ...(rows && instance ? [
+    ...(rows ? [
       registerGoToMod({ rows: rows.mods, reporter: reporterFor('mod.goTo') }),
-      registerModReferencedBy({ referencedBy: { mod: entry.referencedBy, file: file.referencedBy }, rows: rows.mods, value: () => instance.value, reporter: reporterFor('mod.referencedBy') }),
+      registerModReferencedBy({ referencedBy: { mod: entry.referencedBy, file: file.referencedBy }, rows: rows.mods, value: rows.filesHeld, reporter: reporterFor('mod.referencedBy') }),
       registerGoToPlugin({ rows: rows.plugins, reporter: reporterFor('pluginListTree.goTo') }),
       registerPluginReferencedBy({ referencedBy: plugin.referencedBy, rows: rows.plugins }),
     ] : []),

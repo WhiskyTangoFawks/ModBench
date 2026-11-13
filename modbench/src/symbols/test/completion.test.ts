@@ -29,7 +29,7 @@ const completingAtBar = (client: Parameters<typeof completionsAt>[0]['client'], 
 
 const documentOf = (members: string) => `{ "FormKey": "${OWNER}", ${members} }`;
 
-describe('completionsAt (symbols.md, The features, story 5; source.md, Editing plugin source, story 2)', () => {
+describe('completionsAt (symbols.md, The features, story 5)', () => {
   it('offers records by EditorID, inserting the FormKey', async () => {
     const found = await completingAtBar(asking([reference('Armor')]), documentOf('"Armor": "Gu|"'));
 
@@ -99,53 +99,6 @@ describe('completionsAt (symbols.md, The features, story 5; source.md, Editing p
     ['a place outside a record', { [OWNER]: [reference('Armor')] }, '{ "Armor": "Gu|" }'],
   ])('offers nothing for %s', async (_case, held, marked) => {
     expect(await completingAtBar(asking([], [record('Gun', GUN)], held), marked)).toBeUndefined();
-  });
-
-  describe('inside an enum field', () => {
-    const members = [{ value: 'Auto', label: 'Automatic' }, { value: 'Single' }];
-    const enumField = fieldOf({ name: 'Mode', type: 'enum', enumMembers: members });
-    const flagsField = fieldOf({
-      name: 'Flags', type: 'flags',
-      enumMembers: [{ value: 'Silent', bitValue: '1' }, { value: 'Loud', bitValue: '2', label: 'Noisy' }],
-    });
-
-    it('offers its values as the document spells them, before anything is typed', async () => {
-      const client = asking([enumField]);
-      const found = await completingAtBar(client, documentOf('"Mode": "|"'));
-
-      expect(found?.items).toEqual([
-        { label: 'Auto', detail: 'Automatic', insertText: 'Auto' },
-        { label: 'Single', detail: '', insertText: 'Single' },
-      ]);
-    });
-
-    it('replaces the string between its quotes', async () => {
-      const marked = documentOf('"Mode": "Si|ng"');
-      const found = await completingAtBar(asking([enumField]), marked);
-
-      expect(marked.replace('|', '').slice(found?.start, found?.end)).toBe('Sing');
-    });
-
-    it('offers one flag as an element of the array the document writes', async () => {
-      const found = await completingAtBar(asking([flagsField]), documentOf('"Flags": ["Silent", "|"]'));
-
-      expect(found?.items.map((item) => item.insertText)).toEqual(['Silent', 'Loud']);
-    });
-
-    it('offers the values of an enum nested in structs', async () => {
-      const data = fieldOf({ name: 'Data', type: 'struct', fields: [enumField.metadata] });
-      const found = await completingAtBar(asking([data]), documentOf('"Data": { "Mode": "|" }'));
-
-      expect(found?.items.map((item) => item.insertText)).toEqual(['Auto', 'Single']);
-    });
-
-    it('offers nothing in a property name', async () => {
-      expect(await completingAtBar(asking([enumField]), documentOf('"Mo|": 1'))).toBeUndefined();
-    });
-
-    it('offers nothing for a string field that has no members', async () => {
-      expect(await completingAtBar(asking([fieldOf({ name: 'Mode', type: 'string' })]), documentOf('"Mode": "|"'))).toBeUndefined();
-    });
   });
 
   it.each([

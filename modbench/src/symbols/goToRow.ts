@@ -1,19 +1,19 @@
 import * as vscode from 'vscode';
+import type { Reveal } from '../drivingLib/symbolRows';
 import type { Reporter } from '../ports/reporter';
 
-interface GoTo<Row> {
+interface GoTo {
   name: string;
-  row: Row | undefined;
+  show: Reveal | undefined;
   file: string | undefined;
-  reveal: (row: Row) => PromiseLike<void>;
   reporter: Pick<Reporter, 'report'>;
   nowhere: string;
 }
 
 /** `go to` on an object a view lists: select its row, else show its file in the Explorer, else say `nowhere` of `name`. */
-export async function goToRowOrFile<Row>({ name, row, file, reveal, reporter, nowhere }: GoTo<Row>): Promise<void> {
-  if (row !== undefined) {
-    await reveal(row);
+export async function goToRowOrFile({ name, show, file, reporter, nowhere }: GoTo): Promise<void> {
+  if (show !== undefined) {
+    await show();
     return;
   }
   if (file === undefined) {

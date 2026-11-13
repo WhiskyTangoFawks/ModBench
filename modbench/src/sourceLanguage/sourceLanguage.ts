@@ -4,7 +4,9 @@ import { commandLink } from '../drivingLib/quickFixes';
 import type { MEditClient } from '../client';
 import type { Reporter } from '../ports/reporter';
 import { isPluginSourcePath, PLUGIN_SOURCE_GLOB } from '../instanceAdapter/instanceAdapter';
+import { heldText } from '../textDocuments/heldText';
 import { readHeldText } from '../textDocuments/pluginSource';
+import { enumCompletionsAt } from './enumCompletion';
 import { handUnsavedPluginSource } from './handUnsaved';
 import { registerBuildEntryPoint } from './buildEntryPoint';
 import { registerUpdateManifestEntryPoint } from './updateManifestEntryPoint';
@@ -17,12 +19,28 @@ import { feedWorkspaceNotice } from './workspaceNotice';
 interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'sourceFiles'> {
   instance: Pick<Instance, 'value' | 'subscribe'> | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
-  client: Pick<MEditClient, 'handUnsavedDocuments'> & SourceProblemsDeps['client'] & PathProblemsDeps['client'];
+  client: Pick<MEditClient, 'handUnsavedDocuments' | 'getComparison'> & SourceProblemsDeps['client'] & PathProblemsDeps['client'];
   /** What holds a path a plugin source names. */
   pathStanding: PathStanding;
 }
 
 const pluginSourceStatusSelector: vscode.DocumentSelector = { language: 'json', pattern: PLUGIN_SOURCE_GLOB };
+
+function registerEnumCompletion(deps: SourceLanguageDeps): vscode.Disposable {
+  return vscode.languages.registerCompletionItemProvider({ language: 'json' }, {
+    async provideCompletionItems(document, position) {
+      if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
+      const found = await enumCompletionsAt(deps, heldText(document), document.offsetAt(position));
+      return found?.items.map(({ label, detail, insertText }) => {
+        const item = new vscode.CompletionItem({ label, description: detail }, vscode.CompletionItemKind.EnumMember);
+        item.insertText = insertText;
+        item.filterText = `${label} ${insertText}`;
+        item.range = new vscode.Range(document.positionAt(found.start), document.positionAt(found.end));
+        return item;
+      });
+    },
+  });
+}
 
 function diagnosticOf({ message, start, end, clearing }: ProblemOnFile): vscode.Diagnostic {
   const diagnostic = modbenchDiagnostic(new vscode.Range(start.line, start.character, end.line, end.character), message, vscode.DiagnosticSeverity.Warning);
@@ -77,7 +95,7 @@ export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
   const entryPoints = deps.instance ? [registerBuildEntryPoint({ instance: deps.instance, reporter: deps.reporter }), registerUpdateManifestEntryPoint({ instance: deps.instance, reporter: deps.reporter })] : [];
   const disposable = vscode.Disposable.from(
     handUnsavedPluginSource(deps.client, isPluginSourcePath),
-    problems, workspaceNotice(deps.instance), ...entryPoints,
+    registerEnumCompletion(deps), problems, workspaceNotice(deps.instance), ...entryPoints,
   );
   return { dispose: () => { disposable.dispose(); }, messages: () => problems.messages() };
 }
