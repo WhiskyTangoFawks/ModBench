@@ -104,9 +104,10 @@ class OwnBackend(unittest.TestCase):
         run = self.run_with_backend("terminated", 'sleep 600')
         client_running = lambda: subprocess.run(["pgrep", "-g", str(run.pid), "-x", "sleep"],
                                                 capture_output=True).returncode == 0
-        deadline = time.monotonic() + 10
+        deadline = time.monotonic() + 60
         while not client_running() and time.monotonic() < deadline:
             time.sleep(0.05)
+        self.assertTrue(client_running(), "the caller never reached its client")
         os.killpg(run.pid, signal.SIGTERM)
         run.communicate(timeout=10)
         self.assertEqual(run.returncode, 143)
