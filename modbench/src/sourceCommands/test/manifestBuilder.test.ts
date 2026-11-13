@@ -42,6 +42,24 @@ describe('a mod\'s manifest from its files', () => {
     expect(sources.get('a.nif')?.installationFile).toBe('Own.7z');
   });
 
+  describe('when the held package of an unchanged file is missing from this machine', () => {
+    const gone = download('Gone.7z', { 'a.nif': 'HA' });
+    const held: Manifest = { packages: [downloadedFileOf(gone, onNexus).package], exclude: [], ignore: [], flags: new Map(), files: new Map([['a.nif', 'HA']]) };
+
+    it('keeps the held package and takes no game folder though the game holds the bytes', () => {
+      const { manifest } = built({ 'a.nif': 'HA' }, { game: place({ 'a.nif': 'HA' }, { steamApp: 377160, steamAt: '/game' }) }, held);
+
+      expect(manifest.packages).toEqual(held.packages);
+    });
+
+    it('takes a changed file from a newly added download, with no game folder', () => {
+      const added = download('Added.7z', { 'a.nif': 'HB' });
+      const { manifest, sources } = built({ 'a.nif': 'HB' }, { game: place({ 'a.nif': 'HA' }, { steamApp: 377160, steamAt: '/game' }), downloads: [added] }, held);
+
+      expect([namesOf(manifest), sources.get('a.nif')?.installationFile]).toEqual([['Added.7z'], 'Added.7z']);
+    });
+  });
+
   it('names nothing for a folder of metadata alone', () => {
     expect(built({}).manifest).toEqual({ packages: [], exclude: [], ignore: [], flags: new Map(), files: new Map() });
   });
