@@ -8,7 +8,6 @@ import { NO_PUBLISHER } from './fakeInstanceAdapter';
 import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter, Uri } from './vscodeMock';
 import { adapterOver, readPluginLines, sourceOver } from './mo2/adapterOver';
 import { pluginCommandsWith } from './pluginCommandsWith';
-import { STEADY_WINDOW } from './steadyWindow';
 import { readInstance, type ReadingSource } from '../instanceAdapter/instanceReading';
 import { cloneCorpusFixture } from './mo2/corpusFixture';
 
@@ -82,7 +81,7 @@ describe('a rename while a recompute is reading', () => {
       },
     };
     instance = new Instance({
-      gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, log: { info: () => {}, warn: () => {}, error: () => {} }, medit: new InMemoryMEditClient(), workspace: fakeWorkspace(),
+      gameFolderSettingId: GAME_FOLDER_SETTING_ID, log: { info: () => {}, warn: () => {}, error: () => {} }, medit: new InMemoryMEditClient(), workspace: fakeWorkspace(),
       adapter: { ...writer, reading: async () => ({ ...await readInstance(holdingSource), publisherConfiguration: NO_PUBLISHER }) },
     });
     const { pluginSync } = pluginSyncOn({

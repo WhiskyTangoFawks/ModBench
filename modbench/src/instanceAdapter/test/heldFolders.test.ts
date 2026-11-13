@@ -164,7 +164,7 @@ describe.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher miss
     expect(heard).toEqual([]);
   });
 
-  it.skipIf(process.getuid?.() === 0)('(root reads every folder) answers once each reason a folder\'s watch failed, signalling each failure, and forgets one removed', async () => {
+  it.skipIf(process.getuid?.() === 0)('(root reads every folder) answers each folder whose watch failed and why, signalling each failure, and forgets one removed', async () => {
     const created = join(root, 'Created');
     const unreadable = join(created, 'Unreadable');
     const alsoUnreadable = join(created, 'AlsoUnreadable');
@@ -180,12 +180,15 @@ describe.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher miss
     await rm(created, { recursive: true });
     held.removed(created);
 
-    expect(answered).toEqual(['EACCES: permission denied']);
+    expect([...answered].sort((a, b) => a.folder.localeCompare(b.folder))).toEqual([
+      { folder: alsoUnreadable, reason: 'EACCES: permission denied' },
+      { folder: unreadable, reason: 'EACCES: permission denied' },
+    ]);
     expect(failures).toBe(2);
     expect(held.failures()).toEqual([]);
   });
 
-  it.skipIf(process.getuid?.() === 0)('(root reads every folder) answers the reason a created folder cannot be listed, signalling the failure', async () => {
+  it.skipIf(process.getuid?.() === 0)('(root reads every folder) answers a created folder that cannot be listed and why, signalling the failure', async () => {
     const created = join(root, 'Created');
     await mkdir(created, { recursive: true });
     await chmod(created, 0o000);
@@ -193,7 +196,7 @@ describe.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher miss
     await held.created(created);
     await chmod(created, 0o755);
 
-    expect(held.failures()).toEqual(['EACCES: permission denied']);
+    expect(held.failures()).toEqual([{ folder: created, reason: 'EACCES: permission denied' }]);
     expect(failures).toBe(1);
   });
 
@@ -204,14 +207,14 @@ describe.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher miss
     expect(failures).toBe(0);
   });
 
-  it('answers the reason a listed folder cannot be resolved, signalling the failure', async () => {
+  it('answers a listed folder that cannot be resolved and why, signalling the failure', async () => {
     const created = join(root, 'Created');
     unresolvable = join(created, 'Held');
     await mkdir(unresolvable, { recursive: true });
 
     await held.created(created);
 
-    expect(held.failures()).toEqual(['EIO: i/o error']);
+    expect(held.failures()).toEqual([{ folder: unresolvable, reason: 'EIO: i/o error' }]);
     expect(failures).toBe(1);
   });
 

@@ -8,6 +8,7 @@ import { errorMessage } from '../ports/errorMessage';
 import { isInside } from '../ports/pathInside';
 import { errnoCode } from '../ports/errno';
 import { ignoreSkippedLink, listFolders } from './files';
+import type { UnwatchedFolder } from './instanceAdapter';
 
 export interface HeldFolderWatch {
   /** Watches each folder, at any depth, that `folder` holds, while open; settles once each is watched. */
@@ -17,8 +18,8 @@ export interface HeldFolderWatch {
   /** Watches again each folder held by every folder heard created before. */
   open(): Promise<void>;
   close(): void;
-  /** Each distinct reason a folder's watch failed while open. */
-  failures(): string[];
+  /** Each folder whose watch failed while open. */
+  failures(): UnwatchedFolder[];
 }
 
 interface HeldFolderWatchDeps {
@@ -157,6 +158,6 @@ function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): H
       failed.clear();
       listingFailed.clear();
     },
-    failures: () => [...new Set([...failed.values(), ...listingFailed.values()])],
+    failures: () => [...new Map([...listingFailed, ...failed])].map(([folder, reason]) => ({ folder, reason })),
   };
 }

@@ -23,10 +23,6 @@ afterEach(() => {
   for (const instance of instances.splice(0)) instance.dispose();
 });
 
-interface WindowState {
-  focused: boolean;
-}
-
 const mod = (name: string, enabled = true, meta: Partial<Mod> = {}): Mod => ({ kind: 'mod', name, enabled, ...meta });
 const separator = (name: string): Separator => ({ kind: 'separator', name, enabled: false });
 
@@ -45,29 +41,16 @@ function loader(overrides: Partial<InstanceReading> = {}, wrap: (adapter: Instan
   const fake = fakeInstanceAdapter(readingFixture(overrides));
   const medit = new InMemoryMEditClient();
   const log = leveledLog();
-  const windowListeners = new Set<(state: WindowState) => void>();
-  const window = {
-    state: { focused: true },
-    onDidChangeWindowState: (listener: (state: WindowState) => void) => {
-      windowListeners.add(listener);
-      return { dispose: () => { windowListeners.delete(listener); } };
-    },
-  };
   const instance = new Instance({
     adapter: wrap(fake.adapter),
     gameFolderSettingId: GAME_FOLDER_SETTING_ID,
-    window,
     log,
     medit,
     workspace,
   });
   instances.push(instance);
   return {
-    instance, fake, medit, workspace, logs: log.lines.info, warnings: log.lines.warn, errorLines: log.lines.error, windowListeners,
-    windowState: (state: WindowState) => {
-      window.state = state;
-      for (const listener of [...windowListeners]) listener(state);
-    },
+    instance, fake, medit, workspace, logs: log.lines.info, warnings: log.lines.warn, errorLines: log.lines.error,
   };
 }
 
@@ -342,14 +325,14 @@ describe('Instance — redraw', () => {
 });
 
 describe('Instance — built by watching', () => {
-  it('listens for the adapter\'s signal and the window\'s state from construction, before any read, until disposed', () => {
-    const { instance, fake, windowListeners } = loader();
+  it('listens for the adapter\'s signal from construction, before any read, until disposed', () => {
+    const { instance, fake } = loader();
     expect(instance.sequence).toBe(0);
-    expect([fake.subscribers, windowListeners.size]).toEqual([1, 1]);
+    expect(fake.subscribers).toBe(1);
 
     instance.dispose();
 
-    expect([fake.subscribers, windowListeners.size]).toEqual([0, 0]);
+    expect(fake.subscribers).toBe(0);
   });
 
   it('reads again what a burst of events names, in one re-read once the burst settles', async () => {
@@ -510,57 +493,6 @@ describe('Instance — built by watching', () => {
     expect(instance.mayBeLate).toBe(false);
   });
 
-  it('is not late for a check the window focus asked for', async () => {
-    const { instance, windowState } = loader();
-    await instance.refresh();
-    windowState({ focused: false });
-    const told = vi.fn();
-    instance.onMayBeLate(told);
-
-    windowState({ focused: true });
-    await pastSequence(instance, 1);
-
-    expect(told).not.toHaveBeenCalled();
-  });
-
-  it('checks the disk at once when the window regains focus, and not when it loses it or keeps it', async () => {
-    const { instance, fake, windowState } = loader();
-    await instance.refresh();
-
-    windowState({ focused: true });
-    windowState({ focused: false });
-    await instance.refresh();
-    expect(fake.rereads).toEqual([CHECK, CHECK]);
-
-    windowState({ focused: true });
-    await pastSequence(instance, 2);
-
-    expect(fake.rereads).toEqual([CHECK, CHECK, CHECK]);
-  });
-
-  it('adds no check when the window regains focus while a check already waits', async () => {
-    let release!: () => void;
-    let readHeld: Promise<void> = Promise.resolve();
-    const { instance, fake, windowState } = loader({}, (adapter) => ({
-      ...adapter,
-      reading: async (asked) => {
-        await readHeld;
-        return adapter.reading(asked);
-      },
-    }));
-    await instance.refresh();
-    windowState({ focused: false });
-    readHeld = new Promise<void>((resolve) => { release = resolve; });
-    const reading = instance.refresh();
-    const waiting = instance.refresh();
-
-    windowState({ focused: true });
-    release();
-    await Promise.all([reading, waiting]);
-
-    expect(fake.rereads).toEqual([CHECK, CHECK, CHECK]);
-  });
-
   it('finishes a re-read in progress, and folds the events heard during it into one more', async () => {
     let release!: () => void;
     let readHeld: Promise<void> = Promise.resolve();
@@ -643,18 +575,14 @@ describe('Instance — built by watching', () => {
     expect(fake.rereads).toEqual([CHECK, { named: ['/instance/mods/A/a.esp'], disk: true }]);
   });
 
-  it('tells each change the check on window focus found that no event named, and none a refresh found', async () => {
-    const { instance, fake, logs, windowState } = loader();
+  it('tells no change a refresh\'s check found that no event named', async () => {
+    const { instance, fake, logs } = loader();
     await instance.refresh();
     fake.read({ unheardChanges: ['/instance/mods/A/textures'] });
+
     await instance.refresh();
+
     expect(logs).toEqual([]);
-    windowState({ focused: false });
-
-    windowState({ focused: true });
-    await pastSequence(instance, 2);
-
-    expect(logs).toEqual(['[instance] The check of the disk found a change no event named: /instance/mods/A/textures']);
   });
 
   it('tells each change the check after a change with no path found, as that change named none', async () => {
@@ -982,14 +910,13 @@ describe('Instance — game folder and the archives the game loads', () => {
     expect(warnings).toEqual([`[instance] ${note}`]);
   });
 
-  it('warns once, until it changes, of each change the watch cannot hear', async () => {
-    const note = 'Modbench hears no change inside a folder whose watch failed: EACCES: permission denied';
-    const { instance, warnings } = loader({ ...GAME_FOUND, watchNotes: [note] });
+  it('holds each folder the reading cannot watch, and why', async () => {
+    const textures = { folder: '/instance/mods/A/textures', reason: 'EACCES: permission denied' };
+    const { instance } = loader({ unwatchedFolders: [textures] });
 
-    await instance.refresh();
-    await instance.refresh();
+    const { unwatchedFolders } = await instance.landed();
 
-    expect(warnings).toEqual([`[instance] ${note}`]);
+    expect(unwatchedFolders).toEqual([textures]);
   });
 
   it('tells once, until it changes, each archive the INIs list that nothing holds', async () => {
