@@ -40,8 +40,7 @@ const SETTLE_MS = 200;
 interface Run {
   readonly named: Set<string>;
   disk: boolean;
-  /** The check was the watch's or the window focus's, so a change it finds is one no event named; a refresh's finds its
-   *  caller's own write. */
+  /** The check was the watch's, so a change it finds is one no event named; a refresh's finds its caller's own write. */
   tellsUnheard: boolean;
   fromEvents: boolean;
   readonly settled: Promise<void>;
@@ -222,11 +221,6 @@ export function instanceMessages(view: Pick<InstanceView, 'value' | 'sequence' |
   return [managerRunningMessage(view.value), reason === undefined ? undefined : `Showing the last good read: ${reason}`];
 }
 
-interface FocusWindow {
-  readonly state: { readonly focused: boolean };
-  onDidChangeWindowState(listener: (state: { readonly focused: boolean }) => void): Subscription;
-}
-
 interface Workspace {
   holds(path: string): boolean;
   onDidChange(listener: () => void): Subscription;
@@ -237,7 +231,6 @@ interface InstanceOptions {
   adapter: InstanceAdapter;
   /** The id of the setting that names the game folder, for a game folder not yet read. */
   gameFolderSettingId: string;
-  window: FocusWindow;
   workspace: Workspace;
   log: Log;
   medit: ArchiveReader & FlaggedReader;
@@ -346,7 +339,6 @@ export class Instance implements Subscription {
 
   private readonly changes: Subscription;
 
-  private readonly focus: Subscription;
   private readonly workspaceWatch: Subscription;
 
   private readonly archives: ArchiveContentsHeld;
@@ -363,11 +355,6 @@ export class Instance implements Subscription {
   constructor(private readonly options: InstanceOptions) {
     this.current = emptyValue(options.adapter, options.gameFolderSettingId);
     this.changes = options.adapter.subscribe((path) => { this.hear(path); });
-    let focused = options.window.state.focused;
-    this.focus = options.window.onDidChangeWindowState((state) => {
-      if (state.focused && !focused) void this.enqueue({ disk: true, tellsUnheard: true });
-      focused = state.focused;
-    });
     this.workspaceWatch = options.workspace.onDidChange(() => {
       if (this.workspaceMovedFrom(this.current)) void this.enqueue({ disk: false, tellsUnheard: false });
     });
@@ -485,7 +472,6 @@ export class Instance implements Subscription {
   dispose(): void {
     clearTimeout(this.settleTimer);
     this.changes.dispose();
-    this.focus.dispose();
     this.workspaceWatch.dispose();
     this.stopHearingMEditStatus();
     this.subscribers = [];

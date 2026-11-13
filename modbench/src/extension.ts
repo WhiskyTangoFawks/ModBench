@@ -199,7 +199,7 @@ function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, 
         instanceRoot, gameFolderSetting, scriptEnvironmentFileSetting: scriptEnvironmentFileOf(instanceRoot), installationFileReader: downloadedFileReader, fileProblems: fileProblemsOver(problemsHostOver(own(vscode.languages.createDiagnosticCollection('modbench-unhashed'))), outputChannel), fomodEngine: fomodEngineIn(extensionUri, outputChannel), deployedPath,
       });
       const instance = own(new Instance({
-        adapter, gameFolderSettingId: gameFolderSetting.id, window: vscode.window, log: outputChannel, medit, workspace: workspaceFolders,
+        adapter, gameFolderSettingId: gameFolderSetting.id, log: outputChannel, medit, workspace: workspaceFolders,
       }));
       const owners = [adapter.pluginReferences, manifestFileReferences({
         sourceFolders: () => instance.value.paths.sourceDirs,
