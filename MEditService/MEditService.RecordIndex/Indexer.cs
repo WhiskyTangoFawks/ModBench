@@ -148,6 +148,9 @@ internal sealed class Indexer : IDisposable
     // The source writes made before each plugin's last re-read began, guarded by _lock and announced by _writesRead.
     private readonly Dictionary<PluginAddress, long> _writesReReadOf = new(PluginAddress.Comparer);
 
+    // The source writes made before each plugin's last failed re-read began, and why it failed, guarded by _lock.
+    private readonly Dictionary<PluginAddress, (long Writes, string Failure)> _reReadFailedOf = new(PluginAddress.Comparer);
+
     // Completed and replaced, under _lock, each time either count above moves.
     private TaskCompletionSource _writesRead = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -446,6 +449,7 @@ internal sealed class Indexer : IDisposable
             List<PluginMetadata> reRead = [];
             var failure = ValidationFailure(() => reRead = ValidateNamed(paths, named), CancellationToken.None, out _);
             if (failure is null) VouchForWritesTo(reRead, writes);
+            else FailReReadOf(named, writes, failure);
             moved = Swap(standing => standing with { ReReadFailure = failure });
         }
         finally { _exclusive.Exit(); }
@@ -457,6 +461,15 @@ internal sealed class Indexer : IDisposable
         lock (_lock)
         {
             foreach (var key in reRead.Select(plugin => plugin.Key)) _writesReReadOf[key] = Math.Max(_writesReReadOf.GetValueOrDefault(key), writes);
+        }
+        AnnounceWritesRead();
+    }
+
+    private void FailReReadOf(IEnumerable<PluginAddress> named, long writes, string failure)
+    {
+        lock (_lock)
+        {
+            foreach (var key in named) _reReadFailedOf[key] = (writes, failure);
         }
         AnnounceWritesRead();
     }
@@ -529,6 +542,7 @@ internal sealed class Indexer : IDisposable
             lock (_lock)
             {
                 if (ReadSince(awaited, lastOfEach)) return;
+                if (FailedReReadOf(lastOfEach) is { } failure) throw new IndexNotReadyException($"{NotReadYet}its re-read of the plugins written failed: {failure}");
                 announced = _writesRead.Task;
             }
             var remaining = deadline - _timeProvider.GetUtcNow();
@@ -538,20 +552,36 @@ internal sealed class Indexer : IDisposable
         }
     }
 
+    private const string NotReadYet = "mEdit's record index has not read the plugin source mEdit wrote: ";
+
     private IndexNotReadyException NotRead(bool named)
     {
         var reason = Status.Message is { } message ? $" ({message})" : "";
         var unfinished = named ? "its re-read of the plugins written" : "its check of the disk";
-        return new IndexNotReadyException($"mEdit's record index has not read the plugin source mEdit wrote: {unfinished} did not finish{reason}.");
+        return new IndexNotReadyException($"{NotReadYet}{unfinished} did not finish{reason}.");
     }
 
     private bool ReadSince(long awaited, IReadOnlyDictionary<PluginAddress, long>? lastOfEach)
     {
         lock (_lock)
         {
-            return _writesChecked >= awaited
-                || lastOfEach is not null && lastOfEach.All(last =>
-                    last.Value <= _writesChecked || _writesReReadOf.GetValueOrDefault(last.Key) >= last.Value);
+            return _writesChecked >= awaited || lastOfEach is not null && lastOfEach.All(ReadSince);
+        }
+    }
+
+    private bool ReadSince(KeyValuePair<PluginAddress, long> lastWrite)
+    {
+        lock (_lock) return lastWrite.Value <= _writesChecked || _writesReReadOf.GetValueOrDefault(lastWrite.Key) >= lastWrite.Value;
+    }
+
+    // The re-read that began after a plugin's last write and failed: nothing reads that write until another change.
+    private string? FailedReReadOf(IReadOnlyDictionary<PluginAddress, long>? lastOfEach)
+    {
+        lock (_lock)
+        {
+            return lastOfEach?.Where(last => !ReadSince(last))
+                .Select(last => _reReadFailedOf.TryGetValue(last.Key, out var failed) && failed.Writes >= last.Value ? failed.Failure : null)
+                .FirstOrDefault(failure => failure is not null);
         }
     }
 

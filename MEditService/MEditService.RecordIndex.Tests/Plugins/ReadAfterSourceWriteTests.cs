@@ -131,6 +131,34 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     }
 
     [Fact]
+    public async Task AReadAfterASourceWrite_WhoseReReadFails_IsRefusedAtOnce_NamingTheFailedReRead()
+    {
+        IndexFiles.Invalidate(_fixture.InstanceRoot);
+        Written();
+
+        var refused = (await Read().WaitAsync(Generous)).Refused();
+
+        Assert.Equal(IndexRefusal.IndexNotReady, refused.Refusal);
+        Assert.Contains("its re-read of the plugins written failed", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AReadAfterAWriteThatFollowsAFailedReRead_WaitsForItsOwnReRead()
+    {
+        IndexFiles.Invalidate(_fixture.InstanceRoot);
+        Written();
+        await Read().WaitAsync(Generous);
+        Waits.Reached(() => !_index.Status.Validating, "the failed re-read's turn ending");
+
+        await WrittenWithItsReReadParked();
+        var read = Read();
+
+        Assert.False(read.IsCompleted);
+        _source.Release();
+        AssertWritten(await read.WaitAsync(Generous));
+    }
+
+    [Fact]
     public async Task AReadAfterASourceWriteNamingNoPlugin_WhoseCheckIsUnfinished_IsRefusedOnceItsWaitExpires_NamingTheCheck()
     {
         await WorkerParkedInAReconcile();
