@@ -46,7 +46,7 @@ const PATH_IMPORT = {
 };
 const PACKAGE_IMPORT = {
     regex: '^(?![.]|node:|vscode$)',
-    message: 'Only the mEdit client, the Source language, the content digest (xxhash-wasm), the FOMOD installer (its engine) and the Wabbajack publisher (jsonc-parser) and LOOT\'s metadata (yaml) import a package.',
+    message: 'Only the mEdit client, the Source language, the driving lib (the text of plugin source), the content digest (xxhash-wasm), the FOMOD installer (its engine) and the Wabbajack publisher (jsonc-parser) and LOOT\'s metadata (yaml) import a package.',
 };
 const DIGEST_PACKAGE_IMPORT = {
     regex: '^(?![.]|node:|vscode$|xxhash-wasm$)',
