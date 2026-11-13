@@ -70,7 +70,8 @@ async function versionModsInGit(
   if (firstMod === undefined) return { applied: true, outcome: { landed: [], refused: [] } };
   const progress = progressIn(invokedFrom);
   const makesSourceMods = options.where !== 'WholeFolder';
-  const result = await runWritingGesture('modbench.mod.versionInGit', invokedFrom, instance, async (): Promise<VersionedInGit> => {
+  const result = await runWritingGesture('modbench.mod.versionInGit', invokedFrom, instance, async (_progress, written): Promise<VersionedInGit> => {
+    written.leaveUnnamed();
     try {
       progress.say(versionInGitProgressMessage(firstMod, undefined));
       const result = await commands.versionInGit(mods, {

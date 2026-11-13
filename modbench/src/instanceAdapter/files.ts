@@ -17,6 +17,7 @@ import { keptByStamp, sameStamp, stampFrom, type FileStamp, type Kept } from '..
 import { isOwnTemp, ownTempPrefix, renameOver, tempOwner } from '../repositoriesLib/wholeWrites';
 import { digestOf } from './fileContents/contentDigest';
 import type { MoveToTrash } from '../ports/trash';
+import { nameWrites } from '../ports/writeNaming';
 
 /** ADR-0007, answered without the backend. */
 export function isRepository(sourceFolder: string): Promise<boolean> {
@@ -200,6 +201,7 @@ function reportedAsTarget(err: unknown, tmp: string, target: string): unknown {
 // A temp file beside the real target, then one rename: never a partial read, never a target
 // left half-written. Not writable is refused before any temp is written.
 async function writeAtomic(path: string, text: string): Promise<void> {
+  nameWrites(path);
   const target = await writeTargetOf(path);
   await removeStaleTempsFor(target);
   const mode = await modeOf(target);
@@ -218,6 +220,7 @@ async function writeAtomic(path: string, text: string): Promise<void> {
 /** Streams `bytes` to a temp beside `path`, and moves it to `path` only when `keep` accepts the temp; answers whether it did.
  *  The temp goes either way. */
 export async function putStreamedIf(path: string, bytes: AsyncIterable<Uint8Array>, keep: (temp: string) => Promise<boolean>): Promise<boolean> {
+  nameWrites(path);
   await removeStaleTempsFor(path);
   const tmp = tempWritePath(path);
   try {
@@ -237,6 +240,7 @@ export function write(path: string, text: string): Promise<void> {
 
 /** Writes `text` to `path` as `write` does, trashing the file it replaces only once the text waits beside it. */
 export async function writeTrashing(path: string, text: string, trash: MoveToTrash): Promise<void> {
+  nameWrites(path);
   await removeStaleTempsFor(path);
   const tmp = tempWritePath(path);
   try {
@@ -249,16 +253,19 @@ export async function writeTrashing(path: string, text: string, trash: MoveToTra
 }
 
 export function append(path: string, text: string): Promise<void> {
+  nameWrites(path);
   return appendFile(path, text);
 }
 
 /** Moves `from` to `to` in one filesystem step — an install's own entries moving up into a mod folder. */
 export function rename(from: string, to: string): Promise<void> {
+  nameWrites(from, to);
   return fsRename(from, to);
 }
 
 /** Copies `from`'s whole tree to `to`, leaving `from` in place. */
 export function copyTree(from: string, to: string): Promise<void> {
+  nameWrites(to);
   return cp(from, to, { recursive: true });
 }
 
@@ -270,6 +277,7 @@ export function makeTempDir(prefix: string): Promise<string> {
 /** Creates `path` alone, its parent already there. Rejects with EEXIST when another tool got
  *  there first, so the caller owns exactly what it made. */
 export function makeDir(path: string): Promise<void> {
+  nameWrites(path);
   return mkdir(path).then(() => undefined);
 }
 
@@ -297,7 +305,7 @@ export const listDirByStamp = stampKept(listDir, listings);
 
 function touchedBy(named: readonly string[]): (key: string) => boolean {
   const keys = new Set(named.flatMap((path) => [pathKey(path), pathKey(dirname(path))]));
-  const below = named.map(pathKey).filter((key) => listings.has(key)).map((key) => key + sep);
+  const below = named.map((path) => pathKey(path) + sep);
   return (key) => keys.has(key) || below.some((folder) => key.startsWith(folder));
 }
 
@@ -377,11 +385,13 @@ export async function listFolders(
 
 /** Creates `path` and every missing parent; a no-op when it is already there. */
 export async function ensureDir(path: string): Promise<void> {
+  nameWrites(path);
   await mkdir(path, { recursive: true });
 }
 
 /** Deletes `path` when it is an empty directory; answers whether it is gone, and false when it holds an entry. */
 export async function removeIfEmpty(path: string): Promise<boolean> {
+  nameWrites(path);
   try {
     await rmdir(path);
     return true;
@@ -399,6 +409,7 @@ export async function sameBytes(one: string, other: string): Promise<boolean> {
 
 /** Deletes `path`, file or directory, and everything under it; already-gone is not an error. */
 export function remove(path: string): Promise<void> {
+  nameWrites(path);
   return rm(path, { recursive: true, force: true });
 }
 

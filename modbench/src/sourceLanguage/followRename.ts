@@ -100,7 +100,7 @@ export function followRenames(deps: FollowRenameDeps) {
       const symbols = (await Promise.all(renames.map(({ from, to }) => deps.adapter.renamedSymbol(from, to)))).filter((symbol) => symbol !== undefined);
       let unplanned = symbols.length;
       if (unplanned === 0) return;
-      await deps.source.oneAtATime(() => deps.instance.quiet(async () => {
+      await deps.source.oneAtATime(() => deps.instance.quiet(async (written) => {
         const held = heldTexts(unsavedTexts());
         await Promise.all(symbols.map(async (symbol) => {
           let isPlanned = false;
@@ -114,7 +114,7 @@ export function followRenames(deps: FollowRenameDeps) {
             held,
             apply: async (changes: readonly FileChanges[]) => {
               hasPlanned();
-              return await landed ? applyAnswered(deps.source, changes, touched) : NOT_RENAMED;
+              return await landed ? applyAnswered(deps.source, changes, touched, written) : NOT_RENAMED;
             },
           });
           let outcome: Followed;

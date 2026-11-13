@@ -1,5 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
+import { nameWrites } from '../ports/writeNaming';
 
 const WORKSPACE_FOLDER = '${workspaceFolder}';
 
@@ -25,6 +26,9 @@ export function scriptEnvironmentFile(instanceRoot: string, setting: () => strin
         throw err;
       }
     },
-    write: (text) => writeFile(path(), text),
+    write: (text) => {
+      nameWrites(path());
+      return writeFile(path(), text);
+    },
   };
 }

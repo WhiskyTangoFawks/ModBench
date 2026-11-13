@@ -15,7 +15,7 @@ export async function runUnderProgress<T>(
   const written = new WrittenFiles();
   progress.working();
   try {
-    return await command(progress, written);
+    return await written.collecting(() => command(progress, written));
   } finally {
     progress.working();
     try {

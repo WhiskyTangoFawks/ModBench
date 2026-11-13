@@ -9,6 +9,7 @@ import { progressSteps as steps } from '../../test/recordedProgress';
 import { asViewCall, RefusedWrite, runWritingGesture, surfaceRefusedWrites } from '../writingGesture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { Refusal } from '../refusal';
+import { nameWrites } from '../../ports/writeNaming';
 
 function instanceThatReads() {
   return {
@@ -46,6 +47,22 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
       .rejects.toThrow('half written');
 
     expect(steps).toEqual(['progress opens on modbench.thing', 'refresh', 'progress closes']);
+  });
+
+  it('refreshes at the files a write the command made named, though the command named none itself', async () => {
+    const refresh = vi.fn(() => Promise.resolve());
+
+    await runWritingGesture('modbench.write', 'modbench.thing', { refresh }, () => { nameWrites('/mods/A/meta.ini'); return Promise.resolve(); });
+
+    expect(refresh.mock.calls).toEqual([[['/mods/A/meta.ini']]]);
+  });
+
+  it('refreshes at the whole disk when the command says one of its writes cannot be told', async () => {
+    const refresh = vi.fn(() => Promise.resolve());
+
+    await runWritingGesture('modbench.write', 'modbench.thing', { refresh }, (_progress, written) => { nameWrites('/a'); written.leaveUnnamed(); return Promise.resolve(); });
+
+    expect(refresh.mock.calls).toEqual([[undefined]]);
   });
 
   it('refreshes at the files the command named, and at the whole disk when it named none', async () => {

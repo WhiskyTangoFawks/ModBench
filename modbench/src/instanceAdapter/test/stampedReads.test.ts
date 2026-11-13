@@ -95,6 +95,19 @@ describe('a folder listed and a file parsed by their stamps', () => {
     expect((await readTrustingKept([path], false, () => textAt(path))).answer).toBe('three');
   });
 
+  it('parses again within a re-read each file kept below a folder the re-read is named, the folder never listed', async () => {
+    const path = join(root, 'Mod', 'meta.ini');
+    await mkdir(join(root, 'Mod'));
+    await writeFile(path, 'one');
+    settle();
+    const textAt = parsedBy((text) => text);
+    await textAt(path);
+    await writeFile(path, 'three');
+    await modifiedLater(path);
+
+    expect((await readTrustingKept([join(root, 'Mod')], false, () => textAt(path))).answer).toBe('three');
+  });
+
   it('lists again within a re-read each folder kept below a folder the re-read is named', async () => {
     const below = join(root, 'Mod', 'textures');
     await mkdir(below, { recursive: true });

@@ -60,8 +60,14 @@ export function registerDeployCommands({ commands, instance, reporterFor }: Depl
   // the instance value reads its Data folder.
   return [
     registerDeployTask(reporter),
-    registerWritingCommand('modbench.instance.deploy', (called?: unknown) => runWritingGesture('modbench.instance.deploy', TOOLBOX_VIEW, instance, () => deploy(called instanceof AgentCall))),
-    registerWritingCommand('modbench.instance.purge', (called?: unknown) => runWritingGesture('modbench.instance.purge', TOOLBOX_VIEW, instance, () => purge(called))),
+    registerWritingCommand('modbench.instance.deploy', (called?: unknown) => runWritingGesture('modbench.instance.deploy', TOOLBOX_VIEW, instance, (_progress, written) => {
+      written.leaveUnnamed();
+      return deploy(called instanceof AgentCall);
+    })),
+    registerWritingCommand('modbench.instance.purge', (called?: unknown) => runWritingGesture('modbench.instance.purge', TOOLBOX_VIEW, instance, (_progress, written) => {
+      written.leaveUnnamed();
+      return purge(called);
+    })),
     registerMoveToOverwriteCommand({ commands, instance, reporter }, publishProblems),
     collection,
     subscription,

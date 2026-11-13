@@ -137,7 +137,8 @@ async function restoreFromManifest(deps: ManifestGestureDeps, toRun: ModsToRun):
     reportRestored(reporter, total, { landed: [], refused });
     return;
   }
-  await runWritingGesture('modbench.mod.restoreFromManifest', view, instance, async () => {
+  await runWritingGesture('modbench.mod.restoreFromManifest', view, instance, async (_progress, written) => {
+    written.leaveUnnamed();
     const outcome = await withProgressAndCancel(deps, (show, signal) =>
       commands.restoreFromManifest(mods, { onProgress: (status) => { show(restoreMessage(status)); }, signal }, toRun.everyMod));
     reportRestored(reporter, total, { ...outcome, refused: [...outcome.refused, ...refused] });
@@ -148,7 +149,10 @@ async function restoreFromManifestForAgent(deps: ManifestGestureDeps, { argument
   const { commands, instance } = deps;
   const mods = modsOfAgent(argument, instance.value);
   if (mods.length === 0) return { applied: true, outcome: { landed: [], refused: [] } };
-  const outcome = await runWritingGesture('modbench.mod.restoreFromManifest', MODS_KEY_ARGS.view, instance, () => commands.restoreFromManifest(mods, {}, argument.length === 0));
+  const outcome = await runWritingGesture('modbench.mod.restoreFromManifest', MODS_KEY_ARGS.view, instance, (_progress, written) => {
+    written.leaveUnnamed();
+    return commands.restoreFromManifest(mods, {}, argument.length === 0);
+  });
   return {
     applied: true,
     outcome: { landed: outcome.landed, refused: outcome.refused },

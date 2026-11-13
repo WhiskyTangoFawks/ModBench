@@ -10,6 +10,7 @@ import { ownTempPrefix } from '../../repositoriesLib/wholeWrites';
 import type { InstanceAdapter, PackageFile } from '../instanceAdapter';
 import { EXTRACTION_PREFIX } from './hashIndex';
 import type { InstallationFileReader } from './installationFileReader';
+import { nameWrites } from '../../ports/writeNaming';
 
 const reachesOut = (path: string): boolean => path.split('/').some((segment) => ['', '.', '..'].includes(segment) || segment.includes('\\'));
 
@@ -35,6 +36,7 @@ async function putCopy(from: string, to: string, trash: MoveToTrash): Promise<vo
   try {
     await copyFile(from, temp);
     if (await exists(to)) await trash(to);
+    nameWrites(to);
     await rename(temp, to);
   } finally {
     await remove(temp);

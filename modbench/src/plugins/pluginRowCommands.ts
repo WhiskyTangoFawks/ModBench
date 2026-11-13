@@ -55,8 +55,10 @@ export function registerDecompileCommand(
       return plugins.length > 0 ? { plugins, force: false, agreesToReplace: (replaced) => confirmReplace(deps.ask, 'Decompile', replaced) } : undefined;
     },
     fromAgent: ({ argument, options }) => ({ plugins: argument.map(pluginOf), force: options.force === true }),
-    run: (given) => runWritingGesture('modbench.plugin.decompile', PLUGINS_KEY_ARGS.view, deps.instance, (progress) =>
-      sendAskingOverChanges(deps.client, progress, given, (plugins, force) => decompiled(deps.client, plugins, force))),
+    run: (given) => runWritingGesture('modbench.plugin.decompile', PLUGINS_KEY_ARGS.view, deps.instance, (progress, written) => {
+      written.leaveUnnamed();
+      return sendAskingOverChanges(deps.client, progress, given, (plugins, force) => decompiled(deps.client, plugins, force));
+    }),
     report: (result, { plugins }) => {
       if (result.applied) reportSelection(deps.reporter, result.outcome, plugins.length, { verb: 'decompile', pastTense: 'Decompiled' });
       else deps.reporter.report('error', String(result.refusal));
@@ -99,8 +101,10 @@ export function registerDecompileAndRepairCommand(
       }
       return { plugins, force: options.force === true, where: options.where };
     },
-    run: async (given) => partialOf(await runWritingGesture('modbench.plugin.decompileAndRepair', PLUGINS_KEY_ARGS.view, deps.instance, (progress) =>
-      sendAskingOverChanges(deps.client, progress, given, (plugins, force) => deps.commands.decompileAndRepair(plugins, force, given.where)))),
+    run: async (given) => partialOf(await runWritingGesture('modbench.plugin.decompileAndRepair', PLUGINS_KEY_ARGS.view, deps.instance, (progress, written) => {
+      written.leaveUnnamed();
+      return sendAskingOverChanges(deps.client, progress, given, (plugins, force) => deps.commands.decompileAndRepair(plugins, force, given.where));
+    })),
     report: (result, { plugins }) => {
       if (result.applied) {
         reportSelection(deps.reporter, result.outcome, plugins.length, { verb: 'decompile and repair', pastTense: 'Decompiled and repaired' });

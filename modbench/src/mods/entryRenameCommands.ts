@@ -53,8 +53,8 @@ function renameGesture(
       if (only === undefined || more.length > 0) throw new Refusal(`An agent call to rename a ${kind} carries one ${kind}.`);
       return { oldName: kind === 'mod' ? modNameOf(only) : separatorNameOf(only), newName: name };
     },
-    run: async (asked) => (asked.oldName === asked.newName ? { applied: true, outcome: { landed: [], refused: [] } } : runModsWriting(kind === 'mod' ? 'modbench.mod.rename' : 'modbench.separator.rename', instance, () => instance.quiet(() => source.oneAtATime(async () => {
-      const apply = (changes: readonly FileChanges[]) => applyAnswered(source, changes, []);
+    run: async (asked) => (asked.oldName === asked.newName ? { applied: true, outcome: { landed: [], refused: [] } } : runModsWriting(kind === 'mod' ? 'modbench.mod.rename' : 'modbench.separator.rename', instance, () => instance.quiet((written) => source.oneAtATime(async () => {
+      const apply = (changes: readonly FileChanges[]) => applyAnswered(source, changes, [], written);
       return resultOf(asked, await rename({ held: heldTexts(unsavedTexts()), apply }, asked.oldName, asked.newName));
     })))),
     report: (result) => {

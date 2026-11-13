@@ -458,7 +458,7 @@ export class Instance implements Subscription {
     this.quietEpoch++;
     this.quiets++;
     try {
-      return await work(written);
+      return await written.collecting(() => work(written));
     } finally {
       this.quiets--;
       this.quietEpoch++;
