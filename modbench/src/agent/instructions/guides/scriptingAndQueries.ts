@@ -6,6 +6,6 @@ export const SCRIPTING_AND_QUERIES_GUIDE = `The record index works like an analy
 - Query in two steps:
   1. SELECT the keys that you need. Filter by values such as the plugin, its origin and the FormKey.
   2. SELECT body, or the fields, for those keys as a literal list.
-- A SELECT reads only the views. view_columns lists each view and its columns, and is_active says whether a row's plugin is active.
+- A SELECT reads only the views. SELECT DISTINCT view_name FROM view_columns lists the views; filter view_columns by view_name for a view's columns. is_active says whether a row's plugin is active.
 - Read in bulk: one select returns many records, and compare takes a list of FormKeys. To find the copies identical to their master, call compare, which gives each copy's state against its master. Do not compare bodies in SQL.
 - edit, copy and delete write one record's plugin source per call. Select first, then write only the records that need the change.`;
