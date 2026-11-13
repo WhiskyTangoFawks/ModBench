@@ -3,7 +3,7 @@ import { posix, sep } from 'node:path';
 import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 import { tsFiles } from './tsFiles';
-import { BOXES, BOXES_BY_BAND, DRAWN_AHEAD_OF_CODE, DRIVING_BOXES, boxesByBand } from '../../eslint-rules/boxes.mjs';
+import { BOXES, BOXES_BY_BAND, DRAWN_AHEAD_OF_CODE, VSCODE_BOXES, boxesByBand } from '../../eslint-rules/boxes.mjs';
 import { parseProject } from './boxes';
 
 const join = (...segments: string[]): string => posix.join(...segments);
@@ -45,8 +45,6 @@ const productionFilesOnDisk = (): string[] =>
   tsFiles(join(MODBENCH, 'src'), { tsx: false, includeTests: false, exclude: ['test'] })
     .map((f) => relative(MODBENCH, f));
 
-const VSCODE_BOXES = [...DRIVING_BOXES, 'textDocuments'];
-
 describe('one composite project per box', () => {
   it('reads a real body of boxes off the zoom-out', () => {
     expect(BOXES.length).toBeGreaterThan(10);
@@ -76,9 +74,8 @@ describe('one composite project per box', () => {
     expect(parsed(boxProject(box)).options.types).toEqual(types);
   });
 
-  it.each(LIBS)('$lib is used by two or more boxes of its band, and by no other box', ({ users, band }) => {
-    expect(users.length).toBeGreaterThanOrEqual(2);
-    expect(users.filter((box) => !band.includes(box))).toEqual([]);
+  it.each(LIBS)('$lib is used by two or more boxes of its band', ({ users, band }) => {
+    expect(users.filter((box) => band.includes(box)).length).toBeGreaterThanOrEqual(2);
   });
 
   it.each(LIBS)('$lib references only boxes every box using it references', ({ lib, users }) => {

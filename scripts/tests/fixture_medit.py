@@ -73,7 +73,6 @@ def fixture_medit() -> Generator[Fixture]:
         scratch = pathlib.Path(temporary)
         instance = scratch / 'instance'
         copy_checked_in(INSTANCE, instance)
-        (instance / 'overwrite').mkdir()
         # DevListFallout has no game folder; an empty one stands in, so the game loads no plugin of its own.
         game = scratch / 'game'
         game.mkdir()
