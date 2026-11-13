@@ -4,7 +4,7 @@ using MEditService.RepositoriesLib;
 namespace MEditService.Commands;
 
 /// <summary>A script's create gesture: the plugin goes into the place its origin names, one the gesture's pick offers, and
-/// the write is marked for the next read to wait on (ADR-0015).</summary>
+/// the write names its file, so the next read waits on it.</summary>
 public sealed class CreatePluginInModHandler
 {
     private readonly CreatePluginHandler _create;

@@ -2,7 +2,7 @@ import type { MEditClient } from '../client';
 import type { RecordTab } from './recordTab';
 import { isReadFailed } from '../wire/readFailed';
 
-// A plugin re-derived whole is announced with no keys (ADR-0015): a tab waiting on a report reads once mEdit holds its record.
+// A plugin re-derived whole is announced with no keys: a tab waiting on a report reads once mEdit holds its record.
 export function subscribeRecordTabsToNotifications(
   client: Pick<MEditClient, 'onNotification' | 'getRecordOwner'>,
   tabs: Iterable<RecordTab>,

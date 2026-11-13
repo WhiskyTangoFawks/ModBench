@@ -44,7 +44,7 @@ public interface ISourceAdapter
     /// build file, repository, or plugin source no plugin's tree holds.</summary>
     PathAnswer Touching(LoadOrderSnapshot loadOrder, string path);
 
-    /// <summary>Relays Mod Management's word that the disk changed to the record index (ADR-0015): the plugins its paths name,
+    /// <summary>Relays Mod Management's word that the disk changed to the record index: the plugins its paths name,
     /// which it re-reads, or null, and it checks every plugin.</summary>
     void SignalChange(IReadOnlyList<PluginAddress>? plugins);
 

@@ -13,7 +13,7 @@ export interface LoadOrderWire extends LauncherWire {
   signalChange(paths: readonly string[]): Promise<void>;
 }
 
-/** The one sender of ADR-0013's snapshot and ADR-0015's change signal, and the owner of the process they are sent to. */
+/** The one sender of ADR-0013's snapshot and its change signal, and the owner of the process they are sent to. */
 export interface LoadOrderSender {
   send(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome>;
   signalChange(paths: readonly string[]): void;

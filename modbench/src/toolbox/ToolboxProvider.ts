@@ -89,8 +89,7 @@ function deploymentRow(setting: DeploymentRowSetting): vscode.TreeItem {
   return row;
 }
 
-/** A readout of the instance itself, one fact per row, read from the instance value alone
- *  (ADR-0015). */
+/** A readout of the instance itself, one fact per row, read from the instance value alone. */
 export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>, vscode.Disposable {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<undefined>();
 

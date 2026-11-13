@@ -84,7 +84,7 @@ export class FileConflictLookup<E extends { readonly relativePath: string } = Co
   }
 }
 
-/** The winner lookup minus its one mutator (ADR-0015).
+/** The winner lookup minus its one mutator.
  *  Every reader of the Instance's `files` field takes this. */
 export type FileWinners = Omit<FileConflictLookup, 'set'>;
 
@@ -150,7 +150,7 @@ interface Built {
 }
 
 /** `buildFileConflictIndex`, answering the index it built last while the mods, their order, Overwrite's files and every mod's
- *  listing are the ones it built from. The cost of a refresh then grows with the listings it changed (ADR-0015). */
+ *  listing are the ones it built from. The cost of a refresh then grows with the listings it changed. */
 export function indexReusing(): typeof buildFileConflictIndex {
   let last: Built | undefined;
   return (entries, overwrite, modFiles) => {
@@ -314,7 +314,7 @@ const sameLoaded = (a: readonly LoadedArchive[], b: readonly LoadedArchive[]): b
   });
 
 /** `stackCopies`, answering the stack it built last while the index, the archives loaded and what each holds are the ones
- *  it built from (ADR-0015). */
+ *  it built from. */
 export function stackReusing(): typeof stackCopies {
   let last: { readonly index: object; readonly loaded: readonly LoadedArchive[]; readonly gameRelease: string; readonly stack: StackedCopies } | undefined;
   return (index, loaded, gameRelease) => {

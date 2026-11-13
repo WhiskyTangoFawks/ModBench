@@ -83,7 +83,7 @@ export function mo2Watch(instanceRoot: string, gameFolderChanged: (listener: () 
       };
     },
 
-    // A read that follows a folder trusts what it keeps; what the watch arms, and the listeners it calls, never do (ADR-0015).
+    // A read that follows a folder trusts what it keeps; what the watch arms, and the listeners it calls, never do.
     follow: (what, bases, glob) => outsideTrustedRead(() => {
       const before: Followed = followed.get(what) ?? { glob, watches: new Map<string, Subscription | undefined>() };
       const kept = new Set(before.glob === glob ? bases : []);

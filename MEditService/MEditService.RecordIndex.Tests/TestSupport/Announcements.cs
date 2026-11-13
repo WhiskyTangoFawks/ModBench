@@ -4,7 +4,7 @@ using MEditService.TestSupport;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
-/// <summary>What a check of the disk announces, as a test waits for it (ADR-0015).</summary>
+/// <summary>What a check of the disk announces, as a test waits for it.</summary>
 internal static class Announcements
 {
     internal static Predicate<INotification> PluginChanged(LoadOrderEntry plugin) =>

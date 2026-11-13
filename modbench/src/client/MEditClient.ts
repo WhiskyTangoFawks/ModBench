@@ -396,14 +396,14 @@ export interface MEditClient {
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome>;
   /** The newest snapshot's outcome, following a superseding one. Undefined when none was sent. */
   latestLoadOrder(): Promise<LoadOrderOutcome | undefined>;
-  /** Tells mEdit the files at `paths` changed, or, with none, to check the disk (ADR-0015), once every snapshot handed
+  /** Tells mEdit the files at `paths` changed, or, with none, to check the disk, once every snapshot handed
    *  before has answered. Signals handed while one is in flight fold into one more. */
   signalChange(paths: readonly string[]): void;
   /** Each put of the newest snapshot that no send asked for: after a reconnect, since the process
    *  behind the stream may hold nothing sent before. */
   onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void;
 
-  /** Every plugin-source document VS Code holds unsaved, which mEdit reads in place of its file (ADR-0015).
+  /** Every plugin-source document VS Code holds unsaved, which mEdit reads in place of its file.
    *  Put at once and in order while mEdit runs, and the newest again whenever the process may hold none. */
   handUnsavedDocuments(documents: readonly UnsavedDocument[]): void;
   /** Each put of the unsaved documents as it answers: undefined when mEdit took them, else why not. */

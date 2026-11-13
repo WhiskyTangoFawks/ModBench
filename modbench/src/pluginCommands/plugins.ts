@@ -1,4 +1,4 @@
-// Every change to a profile's plugin order (ADR-0014; ADR-0015).
+// Every change to a profile's plugin order (ADR-0014).
 
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import { dropIndexIn, type Drop } from './dropIndex';
@@ -235,7 +235,7 @@ function decideSync(order: readonly PluginEntry[], provided: PluginsProvided, ma
 const synced = (wrote: boolean, decided: SyncDecision): PluginSyncResult =>
   ('gameFolderNotFound' in decided ? { applied: false, toldAsInstanceState: true } : { applied: true, wrote, ...decided });
 
-// A sync reads the manifests it decides on through the adapters, never the Mod status box (ADR-0015).
+// A sync reads the manifests it decides on through the adapters, never the Mod status box.
 async function syncPlugins(adapter: InstanceAdapter, masters: PluginMasters): Promise<PluginSyncResult> {
   const factsOf = await orderFactsFrom(masters);
   const masterExtensions = masterExtensionsOf(await adapter.gameRelease());

@@ -333,7 +333,6 @@ class HttpMEditClient implements MEditClient {
     }
   }
 
-  // ADR-0015. A signal mEdit never heard is told in the log, and the next window focus checks the disk.
   private async postSignalChange(paths: readonly string[]): Promise<void> {
     try {
       const { error, response } = await this.apiClient.POST('/signal-change', { body: { paths: [...paths] } });

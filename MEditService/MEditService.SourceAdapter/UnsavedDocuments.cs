@@ -1,7 +1,7 @@
 namespace MEditService.SourceAdapter;
 
 /// <summary>The plugin-source documents VS Code holds unsaved, as Modbench last handed them, whole. Each is read in
-/// place of the file at its absolute path (ADR-0015).</summary>
+/// place of the file at its absolute path.</summary>
 public sealed class UnsavedDocuments
 {
     private IReadOnlyList<DocumentChange> _held = [];

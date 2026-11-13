@@ -8,7 +8,7 @@ namespace MEditService.Commands.Tests.TestSupport;
 
 /// <summary>A mod folder holding whatever record shape a suite needs, and the write service over
 /// it: the caller fills the plugin, this writes, registers and inits it. No index and no store
-/// (ADR-0015).</summary>
+/// in it.</summary>
 internal sealed class SourceModFixture : TestInstance
 {
     public string ModFolder { get; }

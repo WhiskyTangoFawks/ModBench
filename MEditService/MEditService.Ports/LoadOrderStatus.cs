@@ -46,8 +46,8 @@ public sealed record LoadOrderStatus(
     // The Apply this status answers for — a client waits for this to reach its own Apply's
     // version, never for a tick a fast or no-op reconcile can settle before one is subscribed.
     long Version = 0,
-    // A change signalled has been asked for and the record index has not yet validated what it names
-    // (ADR-0015). Reads answer meanwhile: this says only that the rows may be late.
+    // A change signalled has been asked for and the record index has not yet validated what it names.
+    // Reads answer meanwhile: this says only that the rows may be late.
     bool Validating = false)
 {
     public static readonly LoadOrderStatus None =

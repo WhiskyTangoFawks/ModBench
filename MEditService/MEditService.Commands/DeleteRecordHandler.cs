@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 namespace MEditService.Commands;
 
 /// <summary>A script's Delete: the changes the Delete gesture answers for one record, which mEdit writes to plugin
-/// source itself (scripts.md, Writing; ADR-0015).</summary>
+/// source itself (scripts.md, Writing).</summary>
 public sealed class DeleteRecordHandler
 {
     private readonly DeleteRecordChangesHandler _changes;
