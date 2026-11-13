@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { createPluginSync, type Sync, type SyncChannel } from '../drivingLib/syncFailureReport';
 import type { Instance } from '../instanceLoader/instance';
+import { WrittenFiles } from '../instanceLoader/writtenFiles';
+import { isolatingWrites } from '../instanceLoader/ambientWrites';
 import type { PluginSyncRun } from '../pluginCommands/plugins';
 
 export interface PluginSyncOn {
@@ -9,7 +11,7 @@ export interface PluginSyncOn {
 }
 
 interface PluginSyncDeps {
-  instance: Pick<Instance, 'subscribe'>;
+  instance: Pick<Instance, 'refresh'> & { subscribe(subscriber: () => Promise<void>): { dispose(): void } };
   syncPlugins: PluginSyncRun;
   channel: SyncChannel;
 }
@@ -18,7 +20,11 @@ interface PluginSyncDeps {
 // disk, so the sync writes nothing and the loop stops; a sync that wrote unconditionally never would.
 export function pluginSyncOn({ instance, syncPlugins, channel }: PluginSyncDeps): PluginSyncOn {
   const pluginSync = createPluginSync(syncPlugins, channel);
-  const subscription = instance.subscribe(() => { void pluginSync.run(); });
+  const subscription = instance.subscribe(async () => {
+    const written = new WrittenFiles();
+    const synced = await isolatingWrites(written, () => pluginSync.run());
+    if (synced?.wrote) await instance.refresh(written.named);
+  });
   return { pluginSync, dispose: () => { subscription.dispose(); } };
 }
 

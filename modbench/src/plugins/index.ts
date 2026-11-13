@@ -57,7 +57,7 @@ export function createPlugins(deps: PluginsDeps): Plugins {
   const { client, channel, reporterFor } = deps;
   const statusBar = createStatusBar(client, reporterFor);
   const recordBrowser = new RecordBrowser(client);
-  const recordWrite = recordWriteOver(PLUGINS_KEY_ARGS.view, deps.facts, client);
+  const recordWrite = recordWriteOver(PLUGINS_KEY_ARGS.view, deps.facts);
   let pluginLines: () => string[] = () => [];
   let ruleLines: () => string[] = () => [];
   return {

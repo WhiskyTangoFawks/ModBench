@@ -7,7 +7,7 @@ import { registerPluginSyncCommand } from '../pluginSync';
 describe('the plugin sync command', () => {
   it('is modbench.plugin.sync, and runs the plugin sync', async () => {
     const handlers = new Map<string, () => unknown>();
-    const pluginSync = { run: vi.fn(() => Promise.resolve()) };
+    const pluginSync = { run: vi.fn(() => Promise.resolve(undefined)) };
     registerPluginSyncCommand(pluginSync, (id, handler) => { handlers.set(id, handler); return { dispose: () => undefined }; });
 
     await present(handlers.get('modbench.plugin.sync'), 'the modbench.plugin.sync handler')();

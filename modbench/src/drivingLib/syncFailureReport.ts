@@ -30,7 +30,7 @@ interface SyncRuns {
   settled(): Promise<void>;
 }
 
-function trackSyncRuns(): SyncRuns & { begin(run: Promise<void>): void } {
+function trackSyncRuns(): SyncRuns & { begin(run: Promise<unknown>): void } {
   const inFlight = new Set<Promise<void>>();
   return {
     begin: (run) => {
@@ -107,12 +107,12 @@ interface SyncLabels {
 }
 
 /** A system command: its runs, its failure message and its Output lines. */
-export interface Sync extends SyncMessage, SyncRuns {
-  /** Resolves once this run has told what it did. */
-  run(): Promise<void>;
+export interface Sync<T extends SyncOutcome = SyncOutcome> extends SyncMessage, SyncRuns {
+  /** Resolves once this run has told what it did, with its outcome if it landed. */
+  run(): Promise<Extract<T, { applied: true }> | undefined>;
 }
 
-function createSync<T extends SyncOutcome>(sync: () => Promise<T>, channel: SyncChannel, labels: SyncLabels): Sync {
+function createSync<T extends SyncOutcome>(sync: () => Promise<T>, channel: SyncChannel, labels: SyncLabels): Sync<T> {
   const failures = reportSyncFailures(labels.command, labels.unsynced, (line) => channel.error(`${labels.prefix} ${line}`));
   const runs = trackSyncRuns();
   const tell = (verb: string, what: string, names: readonly string[]): void => {
@@ -122,9 +122,10 @@ function createSync<T extends SyncOutcome>(sync: () => Promise<T>, channel: Sync
     run: () => {
       const run = (async () => {
         const outcome = await failures.run(sync);
-        if (outcome === undefined) return;
+        if (outcome === undefined) return undefined;
         tell('added', labels.added, outcome.added);
         tell('dropped', labels.dropped, outcome.dropped);
+        return outcome;
       })();
       runs.begin(run);
       return run;
@@ -145,7 +146,7 @@ export function createModSync<T extends SyncOutcome>(sync: () => Promise<T>, cha
   });
 }
 
-export function createPluginSync<T extends SyncOutcome>(sync: () => Promise<T>, channel: SyncChannel): Sync {
+export function createPluginSync<T extends SyncOutcome>(sync: () => Promise<T>, channel: SyncChannel): Sync<T> {
   return createSync(sync, channel, {
     command: 'plugin sync',
     prefix: '[pluginCommands]',
