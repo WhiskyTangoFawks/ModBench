@@ -94,11 +94,9 @@ export function feedPathProblems(deps: PathProblemsDeps): () => void {
     if (mine === shown) publish(problems);
   };
   const take = (answers: readonly PluginFilePaths[], target: string) => {
+    const answered = new Set(answers.map(({ plugin }) => pluginAddressKey(plugin)));
+    for (const key of held.keys()) if ((target === WHOLE_SET || key === target) && !answered.has(key)) held.delete(key);
     for (const answer of answers) held.set(pluginAddressKey(answer.plugin), { answer, texts: new Map() });
-    if (target === WHOLE_SET) {
-      const answered = new Set(answers.map(({ plugin }) => pluginAddressKey(plugin)));
-      for (const key of held.keys()) if (!answered.has(key)) held.delete(key);
-    }
     for (const failed of failures.keys()) if (target === WHOLE_SET || failed === target) failures.delete(failed);
     tellStanding();
     showStatus();

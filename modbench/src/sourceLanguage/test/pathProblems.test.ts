@@ -134,6 +134,48 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     expect(asked(client)).toEqual([[undefined], [PLUGIN]]);
   });
 
+  it('drops a plugin that a notification names and mEdit answers no entry for', async () => {
+    const { settled, client } = feed([answerFor()]);
+    await settled(1);
+    client.setQueryAnswer('getPluginFilePaths', []);
+
+    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+
+    expect(await settled(2)).toEqual(new Map());
+  });
+
+  it('asks again after a read that timed out, and publishes its answer', async () => {
+    const { settled, client } = feed([answerFor()]);
+    await settled(1);
+    client.setQueryFailureOnce('getPluginFilePaths', { failed: 'timed-out' });
+    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+    await vi.waitFor(() => { expect(asked(client)).toHaveLength(2); });
+    client.setQueryAnswer('getPluginFilePaths', [answerFor(PLUGIN, [])]);
+
+    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 2 });
+
+    expect(await settled(2)).toEqual(new Map());
+  });
+
+  it('places against the text of the plugin\'s next answer, which an unsaved edit brings with its notification', async () => {
+    let text = TEXT;
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getPluginFilePaths', [answerFor()]);
+    const published: ProblemsByFile[] = [];
+    feedPathProblems({
+      client, sourceFiles: sourceFolders, readText: () => Promise.resolve(text), reporter: recordingReporter(),
+      paths: { judged: () => true, holds: () => false, subscribe: () => ({ dispose: () => undefined }) },
+      publish: (problems) => published.push(problems), languageStatus: () => undefined,
+    });
+    await vi.waitFor(() => { expect(published).toHaveLength(1); });
+    text = `  ${TEXT}`;
+
+    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+    await vi.waitFor(() => { expect(published).toHaveLength(2); });
+
+    expect(published[1]?.get(FILE)?.[0]?.start.character).toBe(SPAN.start + 2);
+  });
+
   it('keeps one ask in flight and at most one pending, however many notifications arrive meanwhile', async () => {
     const { settled, client } = feed([answerFor()]);
     await settled(1);
