@@ -596,6 +596,16 @@ describe('restore from manifest', () => {
       expect((await restore(['ModA'])).refused).toEqual([{ item: 'ModA', reason: 'was not finished: A.esp was not compiled: it holds an error.' }]);
     });
 
+    it('is restored, naming the flag it refused and why, when its build refused a plugin\'s flag', async () => {
+      const { restore, client } = await sourceMod();
+      const why = 'A.esp holds FormIDs outside the range its light flag allows.';
+      client.setCommandHandler('build', () => Promise.resolve({ landed: [{ ...BUILT, refused: [{ item: { name: 'A.esp', origin: 'ModA' }, reason: why, refusal: 'FormIdOutsideFlagLimit' as const }] }], refused: [] }));
+
+      const outcome = await restore(['ModA']);
+
+      expect([outcome.refused, outcome.landed.map(({ mod, notes }) => ({ mod, notes }))]).toEqual([[], [{ mod: 'ModA', notes: [why] }]]);
+    });
+
     it('is skipped with its build\'s reason when the build refused it', async () => {
       const { restore, client } = await sourceMod();
       client.setCommandHandler('build', () => Promise.resolve({ landed: [], refused: [{ item: 'ModA', reason: 'no load order is held.' }] }));
