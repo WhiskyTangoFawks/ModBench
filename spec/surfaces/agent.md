@@ -10,7 +10,7 @@ As a user, I want:
 
 1. Every agent I run inside VS Code to reach the same things, with only its standard MCP setup, once. Cites: VS Code's interaction; ADR-0021
 2. My agent to edit plugin source as files, and to change the mod manager's files through the gestures I use (story 6). Modbench blocks no file it can reach. A question the files cannot answer, it asks Modbench. Cites: ADR-0021; Respect the user; Existing tools
-3. My agent's changes to reach every view as mine do. Cites: common, A view, story 2; ADR-0015
+3. My agent's changes to reach every view as mine do. Cites: common, A view, story 2
 4. To approve my agent's requests to Modbench as I approve any of its tools, in my agent's own way. Modbench adds no approval of its own. Cites: VS Code's interaction; Minimal by default
 5. While an instance is open, Modbench to take one port for my agent, the same in every workspace unless I set another for a workspace, so two windows on two instances each have their own. A window that cannot take its port says so, and names the setting.
 6. My agent to learn Modbench from Modbench: what plugin source holds, how each object is named, and which job is a file edit, which a gesture and which a Modbench script. I set up nothing to teach it. Cites: Minimal by default
@@ -21,7 +21,7 @@ As a user, I want:
 11. My agent to read Nexus itself where Nexus needs no key, and to learn from Modbench how. Cites: story 6
 12. My agent to learn from Modbench that a FOMOD's choices are mine, so it names only choices I made or gave it to make, and otherwise puts them to me. Cites: story 6
 13. My agent to understand that Modbench is modding with software development practice, so that it works as Modbench intends even before I know how Modbench applies that practice. Cites: story 6; Existing tools
-14. My agent to understand what Modbench does to the instance automatically, and what follows a change I make by hand, so that a change it did not make does not surprise it. Cites: story 6; ADR-0003; ADR-0015
+14. My agent to understand what Modbench does to the instance automatically, and what follows a change I make by hand, so that a change it did not make does not surprise it. Cites: story 6; ADR-0003; ADR-0001
 
 ## Names
 
@@ -62,7 +62,7 @@ As a user, I want:
 As a user, I want:
 
 1. My agent to run each gesture whose effect is `writes`, with the same result as mine, except a gesture a story here keeps from it. A gesture whose effect is `edits` or `reads` is kept from my agent unless a story here gives it: my agent edits the files, and my screen is mine. Cites: commands.md, Effect; Existing tools
-2. My agent's next read to see the change its gesture made. Cites: commands.md, A gesture that writes ends when the read model shows it; ADR-0015
+2. My agent's next read to see the change its gesture made. Cites: commands.md, A gesture that writes ends when the read model shows it
 3. My agent to refresh the instance as I do (story 1). Cites: Respect the user
 4. Each gesture my agent runs to be a tool of its own, named for the gesture, so I approve each as I approve any of its tools, and my agent learns its Argument and Options, and their types, from Modbench. Cites: Any agent, story 4; ADR-0021
 5. My agent never to log in: logging in hands it my Nexus API key, a secret it never holds. Log out it requests as I do.

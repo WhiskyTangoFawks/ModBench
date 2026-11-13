@@ -8,7 +8,7 @@ Each story cites what decides it. A story that cites nothing is owned here.
 
 A native tree view (commands.md, Where surfaces live). It is a readout, not a list: each row is one fact about the instance, and a row's click is that fact's gesture. It has no name filter, no sort direction and no Collapse All, and selecting several rows means nothing. A row's click never writes with no prompt, so a stray click changes nothing.
 
-As a user, I want every row to read the instance value and nothing else, so the Toolbox never disagrees with the views below it. Cites: ADR-0015
+As a user, I want every row to read the instance value and nothing else, so the Toolbox never disagrees with the views below it.
 
 ## Rows
 

@@ -50,7 +50,7 @@ Plugin source names symbols, and [symbols.md](symbols.md) says how the language 
 
 As a user, I want:
 
-1. The Problems panel to carry, on the plugin source of every compiled plugin, active or not, each refusal and warning compile would give that file, a reference to a record that neither its plugin nor an active plugin holds, and a path field that names no file the game gets or its plugin's mod holds. A path field that no file in the workspace holds is not judged while the game gets files from outside it, and the language status says so. A problem appears as I type and clears the same way (ADR-0001). When mEdit cannot answer, the problems stay, and the language status says so, as common, States, story 6 says of a view. Cites: Changes outside Modbench, stories 2 and 3; ADR-0015; ADR-0012; common, States, story 6; ADR-0019; VS Code's language status
+1. The Problems panel to carry, on the plugin source of every compiled plugin, active or not, each refusal and warning compile would give that file, a reference to a record that neither its plugin nor an active plugin holds, and a path field that names no file the game gets or its plugin's mod holds. A path field that no file in the workspace holds is not judged while the game gets files from outside it, and the language status says so. A problem appears as I type and clears the same way (ADR-0001). When mEdit cannot answer, the problems stay, and the language status says so, as common, States, story 6 says of a view. Cites: Changes outside Modbench, stories 2 and 3; ADR-0012; common, States, story 6; ADR-0019; VS Code's language status
 2. Completion inside an enum field to offer its values. Cites: VS Code; ADR-0001
 
 ## Menus and keys

@@ -118,7 +118,7 @@ As a user, I want:
 2. When the first read fails, the reason in place of the grid, and a line in the Output. The next good read replaces it. Cites: common, States, story 2; ADR-0019
 3. While mEdit is still indexing plugins, a message above the grid that the comparison is not complete, so the colours are not final. It goes by itself once they are, and the grid reads again. Cites: Never silently wrong
 4. When a record the tab showed is gone from every plugin, the panel to say the record is gone, naming it, in place of the grid.
-5. The file's column to follow its document, which the read model reads unsaved (ADR-0001), and the other columns to read again when mEdit reports the record changed, from an edit of mine or from any other tool, and not before. The tab stays as I left it (Opening, story 7). Collapse No Conflict applies again to the rows and columns whose state changed, and leaves alone what I restored. Cites: ADR-0015; ADR-0001
+5. The file's column to follow its document, which the read model reads unsaved (ADR-0001), and the other columns to read again when mEdit reports the record changed, from an edit of mine or from any other tool, and not before. The tab stays as I left it (Opening, story 7). Collapse No Conflict applies again to the rows and columns whose state changed, and leaves alone what I restored.
 6. While mEdit cannot read a plugin the panel shows, the message above the grid saying it shows the last good read, and the reason. Cites: common, States, story 6
 7. A file whose plugin is not active to show its own column alone, editable, with no conflict colour, and the message above the grid saying the plugin is not active, so no other copy is compared. Cites: ADR-0012; ADR-0001
 
