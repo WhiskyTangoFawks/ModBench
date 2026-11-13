@@ -2064,6 +2064,12 @@ export interface components {
             from: string;
             to: string;
         };
+        SourcePosition: {
+            /** Format: int32 */
+            line: number;
+            /** Format: int32 */
+            character: number;
+        };
         SourceProblem: {
             formKey?: string | null;
             targetFormKey?: string | null;
@@ -2071,6 +2077,11 @@ export interface components {
             sourceRelativePath: string;
             message: string;
             uncheckedBecause?: string | null;
+            range?: components["schemas"]["SourceRange"] | null;
+        };
+        SourceRange: {
+            start: components["schemas"]["SourcePosition"];
+            end: components["schemas"]["SourcePosition"];
         };
         StampedFile: {
             path: string;

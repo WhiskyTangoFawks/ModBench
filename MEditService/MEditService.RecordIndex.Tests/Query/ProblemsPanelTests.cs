@@ -13,7 +13,7 @@ public sealed class ProblemsPanelTests : IDisposable
 {
     private const string Absent = "000ABC:Absent.esp";
 
-    private sealed record Plugin(string Name, string? RefersTo = Absent, bool Enabled = true, bool CompiledPlugin = true, bool ResponseWithNoneEmotion = false)
+    private sealed record Plugin(string Name, string? RefersTo = Absent, bool Enabled = true, bool CompiledPlugin = true, bool ResponseWithNoneEmotion = false, bool ResponseWithMissingEmotion = false)
     {
         public string Referrer => $"000800:{Name}";
     }
@@ -41,7 +41,8 @@ public sealed class ProblemsPanelTests : IDisposable
                 var referrer = mod.Npcs.AddNew("Referrer");
                 if (plugin.RefersTo is { } target) referrer.Race.SetTo(FormKey.Factory(target));
                 mod.Npcs.AddNew("Other");
-                if (plugin.ResponseWithNoneEmotion) AddResponseWithNoneEmotion(mod);
+                if (plugin.ResponseWithNoneEmotion) AddResponseWithEmotion(mod, FormKey.None);
+                if (plugin.ResponseWithMissingEmotion) AddResponseWithEmotion(mod, FormKey.Factory(Absent));
             }, enabled: plugin.Enabled, origin: $"{Path.GetFileNameWithoutExtension(plugin.Name)}Mod");
         }
         _fixture = builder.BuildScattered();
@@ -50,10 +51,10 @@ public sealed class ProblemsPanelTests : IDisposable
         return _fixture.Plugins;
     }
 
-    private static void AddResponseWithNoneEmotion(Fallout4Mod mod)
+    private static void AddResponseWithEmotion(Fallout4Mod mod, FormKey emotion)
     {
         var response = new DialogResponse();
-        response.Emotion.SetTo(FormKey.None);
+        response.Emotion.SetTo(emotion);
         var responses = new DialogResponses(mod.GetNextFormKey(), Fallout4Release.Fallout4);
         responses.Responses.Add(response);
         var topic = new DialogTopic(mod.GetNextFormKey(), Fallout4Release.Fallout4);
@@ -223,6 +224,41 @@ public sealed class ProblemsPanelTests : IDisposable
              "Race: [000ABC:Absent.esp] <Error: Could not be resolved>"),
             (problem.FormKey, problem.TargetFormKey, problem.FieldPath, problem.SourceRelativePath, problem.Message));
         Assert.Null(answer.Failure);
+    }
+
+    private static SourceRange RangeOf(string text, string token)
+    {
+        var start = text.IndexOf(token, StringComparison.Ordinal);
+        SourcePosition At(int offset)
+        {
+            var before = text[..offset];
+            var line = before.Count(c => c == '\n');
+            return new(line, offset - (before.LastIndexOf('\n') + 1));
+        }
+        return new(At(start), At(start + token.Length));
+    }
+
+    [Fact]
+    public void AMissingReferenceOfACompiledPlugin_CarriesTheRangeOfItsTargetInTheReferrersFile()
+    {
+        var plugin = new Plugin("Refers.esp");
+        using var index = Reconciled(plugin);
+
+        var problem = Assert.Single(Assert.Single(Ready(index)).Problems);
+
+        Assert.Equal(RangeOf(File.ReadAllText(SourceFileHolding(plugin, "Referrer")), $"\"{Absent}\""), problem.Range);
+    }
+
+    [Fact]
+    public void AMissingReferenceInAnEmbeddedChild_CarriesItsRangeInTheOwnersFile()
+    {
+        var plugin = new Plugin("Speaks.esp", RefersTo: null, ResponseWithMissingEmotion: true);
+        using var index = Reconciled(plugin);
+
+        var problem = Assert.Single(Assert.Single(Ready(index)).Problems);
+
+        var owner = Path.Combine(Entry(plugin).ModFolderOf(), problem.SourceRelativePath);
+        Assert.Equal(RangeOf(File.ReadAllText(owner), $"\"{Absent}\""), problem.Range);
     }
 
     private const string Unreadable = "Unreadable.esp";

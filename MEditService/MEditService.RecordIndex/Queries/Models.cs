@@ -344,12 +344,24 @@ public record WorkingTreeStatesBeneath(
     IReadOnlyDictionary<string, IReadOnlyList<WorkingTreeState>> RecordTypes,
     IReadOnlyDictionary<string, IReadOnlyList<WorkingTreeState>> Records);
 
+/// <summary>A place in a text: a zero-based line, and the UTF-16 code unit on it.</summary>
+public sealed record SourcePosition(int Line, int Character);
+
+/// <summary>A span of a text, from <paramref name="Start"/> up to <paramref name="End"/>.</summary>
+public sealed record SourceRange(SourcePosition Start, SourcePosition End)
+{
+    public static readonly SourceRange FirstLine = new(new(0, 0), new(0, 0));
+}
+
 /// <summary>What is wrong in a plugin's source, on its file: a link at <paramref name="FieldPath"/> to
 /// <paramref name="TargetFormKey"/> no active plugin holds, or a file the read stopped at.
-/// <paramref name="UncheckedBecause"/>: the unreadable plugin.</summary>
+/// <paramref name="UncheckedBecause"/>: the unreadable plugin. Range: where it sits in its file, as
+/// the Problems panel's answer places it; null in an answer that does not.</summary>
 public sealed record SourceProblem(
     string? FormKey, string? TargetFormKey, string? FieldPath, string SourceRelativePath, string Message, string? UncheckedBecause = null)
 {
+    public SourceRange? Range { get; init; }
+
     internal static SourceProblem StoppedAt(SourceFileFailure failure) =>
         new(failure.FormKey, null, null, failure.SourceRelativePath, failure.Message);
 }

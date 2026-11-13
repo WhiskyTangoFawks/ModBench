@@ -85,6 +85,19 @@ public sealed class UnsavedDocumentTests : IDisposable
     }
 
     [Fact]
+    public void AProblemOfAHandedDocument_CarriesItsRangeInTheHandedText()
+    {
+        var handed = "\n\n" + Typed(_race, Absent);
+
+        Hand(new DocumentChange(_file, handed));
+
+        var problem = Assert.Single(ProblemsOfCompiledPlugin().Problems, p => p.TargetFormKey == Absent);
+        var line = handed.Split('\n').ToList().FindIndex(l => l.Contains(Absent, StringComparison.Ordinal));
+        Assert.Equal(line, problem.Range?.Start.Line);
+        Assert.NotEqual(0, line);
+    }
+
+    [Fact]
     public void ADroppedDocument_IsReadFromItsFileAgain()
     {
         Hand(new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\"")));

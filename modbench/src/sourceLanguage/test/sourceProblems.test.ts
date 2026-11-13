@@ -25,7 +25,7 @@ const reconciledAgain = (client: InMemoryMEditClient) => {
 
 const sourceFolders: SourceFilesOf = (origin) => ({ file: (relativePath) => `/source/${origin}/${relativePath}` });
 
-function feed(files: Record<string, string>, sourceFiles = sourceFolders, answeredAtSubscribe?: PluginProblems[] | PromiseLike<PluginProblems[]>) {
+function feed(sourceFiles = sourceFolders, answeredAtSubscribe?: PluginProblems[] | PromiseLike<PluginProblems[]>) {
   const client = new InMemoryMEditClient();
   if (answeredAtSubscribe) client.setQueryAnswerOnce('getPluginProblems', answeredAtSubscribe);
   const published: ProblemsByFile[] = [];
@@ -34,7 +34,6 @@ function feed(files: Record<string, string>, sourceFiles = sourceFolders, answer
   feedSourceProblems({
     client,
     sourceFiles,
-    readText: (path) => path in files ? Promise.resolve(files[path] ?? '') : Promise.reject(new Error(`no ${path}`)),
     reporter,
     publish: (problems) => published.push(problems),
     languageStatus: (text) => status.push(text),
@@ -57,7 +56,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
     ['a member of a list element', 'Items[0].Item', { label: 'clear reference', command: 'modbench.record.editField', args: [RECORD, { op: 'set', path: [ITEMS, { kind: 'index', index: 0 }, { kind: 'member', name: 'Item' }], value: null }] }],
     ['a list element', 'Items[1]', { label: 'remove element', command: 'modbench.record.removeElement', args: [{ ...RECORD, path: [ITEMS, { kind: 'index', index: 1 }] }] }],
   ])('carries the gesture that clears a reference in %s, on the copy that holds it', async (_label, fieldPath, gesture) => {
-    const { answered } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': '{}' });
+    const { answered } = feed();
 
     const shown = await answered([{ plugin: PLUGIN, problems: [problem({ fieldPath })] }]);
 
@@ -68,42 +67,27 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
     ['names no field', { fieldPath: null }],
     ['is a link that was not checked, for it is not known to be missing', { fieldPath: 'Race', uncheckedBecause: 'Unreadable.esp' }],
   ])('carries no clearing edit on a problem that %s', async (_label, given) => {
-    const { answered } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': '{}' });
+    const { answered } = feed();
 
     const shown = await answered([{ plugin: PLUGIN, problems: [problem(given)] }]);
 
     expect(shown.get('/source/ReferringMod/Refers.esp/Npc.json')?.map(({ clearing }) => clearing)).toEqual([undefined]);
   });
 
-  it('puts a reference to a missing record on its file, spanning the FormKey no active plugin holds', async () => {
-    const text = `{\n  "FormKey": "${REFERRER}",\n  "Race": "${MISSING}"\n}`;
-    const { answered } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': text });
+  it('puts a problem on its file at the range mEdit answered', async () => {
+    const range = { start: { line: 2, character: 10 }, end: { line: 2, character: 31 } };
+    const { answered } = feed();
 
-    const shown = await answered([{ plugin: PLUGIN, problems: [problem()] }]);
+    const shown = await answered([{ plugin: PLUGIN, problems: [problem({ range })] }]);
 
     expect([...shown]).toEqual([['/source/ReferringMod/Refers.esp/Npc.json', [expect.objectContaining({
       message: `Race: [${MISSING}] <Error: Could not be resolved>`,
-      start: { line: 2, character: 10 },
-      end: { line: 2, character: 10 + MISSING.length + 2 },
+      ...range,
     })]]]);
   });
 
-  it('spans each child record\'s own reference when several records of one file cite the same missing record', async () => {
-    const lines = ['{', '  "FormKey": "000800:Refers.esp",', '  "Temporary": [',
-      `    { "FormKey": "000801:Refers.esp", "Base": "${MISSING}" },`,
-      `    { "FormKey": "000802:Refers.esp", "Base": "${MISSING}" }`, '  ]', '}'];
-    const { answered } = feed({ '/source/ReferringMod/Refers.esp/Cell.json': lines.join('\n') });
-    const placed = (formKey: string) => problem({ formKey, sourceRelativePath: 'Refers.esp/Cell.json', message: formKey });
-
-    const shown = await answered([{ plugin: PLUGIN, problems: [placed('000802:Refers.esp'), placed('000801:Refers.esp')] }]);
-
-    expect(shown.get('/source/ReferringMod/Refers.esp/Cell.json')?.map(({ message, start }) => [message, start.line])).toEqual([
-      ['000802:Refers.esp', 4], ['000801:Refers.esp', 3],
-    ]);
-  });
-
-  it('keeps a problem at the first line of a file that does not spell its missing record', async () => {
-    const { answered } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': `{ "FormKey": "${REFERRER}" }` });
+  it('puts a problem mEdit answered no range for on the first line', async () => {
+    const { answered } = feed();
 
     const shown = await answered([{ plugin: PLUGIN, problems: [problem()] }]);
 
@@ -112,47 +96,11 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
     ]);
   });
 
-  it('spans the FormKey a file declares when another file claims it too', async () => {
-    const text = `{\n  "FormKey": "${REFERRER}",\n  "Race": "${MISSING}"\n}`;
-    const { answered } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': text });
-
-    const shown = await answered([{ plugin: PLUGIN, problems: [problem({ targetFormKey: null, message: 'claimed twice' })] }]);
-
-    expect(shown.get('/source/ReferringMod/Refers.esp/Npc.json')?.map(({ start, end }) => [start, end])).toEqual([
-      [{ line: 1, character: 13 }, { line: 1, character: 13 + REFERRER.length + 2 }],
-    ]);
-  });
-
-  it('spans each link at its own field path when one record names the same missing record in many', async () => {
-    const items = Array.from({ length: 11 }, () => `    { "Item": "${MISSING}" }`);
-    const text = ['{', `  "FormKey": "${REFERRER}",`, `  "Voice": "${MISSING}",`, '  "Items": [', items.join(',\n'), '  ]', '}'].join('\n');
-    const { answered } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': text });
-    const at = (fieldPath: string) => problem({ fieldPath, message: fieldPath });
-
-    const shown = await answered([{ plugin: PLUGIN, problems: [at('Items[10].Item'), at('Items[2].Item'), at('Voice')] }]);
-
-    expect(shown.get('/source/ReferringMod/Refers.esp/Npc.json')?.map(({ message, start }) => [message, start.line])).toEqual([
-      ['Items[10].Item', 14], ['Items[2].Item', 6], ['Voice', 2],
-    ]);
-  });
-
-  it('keeps a problem whose file it cannot read at the first line, saying why in the Output once', async () => {
-    const { answered, reporter } = feed({});
-
-    await answered([{ plugin: PLUGIN, problems: [problem()] }]);
-    const shown = await answered([{ plugin: PLUGIN, problems: [problem()] }]);
-
-    expect(shown.get('/source/ReferringMod/Refers.esp/Npc.json')?.map(({ start }) => start)).toEqual([{ line: 0, character: 0 }]);
-    expect(reporter.shownFailures).toEqual([
-      { severity: 'warning', message: 'The Problems panel shows the problems of "/source/ReferringMod/Refers.esp/Npc.json" on its first line.', detail: 'no /source/ReferringMod/Refers.esp/Npc.json' },
-    ]);
-  });
-
   it.each([
     ['a save re-derives its rows', 'rows-changed'],
     ['mEdit re-reads its plugin', 'plugin-changed'],
   ])('clears a problem when %s and mEdit answers none', async (_, kind) => {
-    const { answered } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
+    const { answered } = feed();
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
 
     const shown = await answered([{ plugin: PLUGIN, problems: [] }], { kind, plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [REFERRER], sequence: 1 });
@@ -161,7 +109,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
   });
 
   it('asks nothing when a plugin\'s failure arrives mid-reconcile, since mEdit would answer that it is not ready', () => {
-    const { client } = feed({});
+    const { client } = feed();
     const asked = () => client.calls.filter(({ method }) => method === 'getPluginProblems').length;
     const before = asked();
 
@@ -171,7 +119,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
   });
 
   it('shows mEdit\'s answer at subscribe, and asks again on a save before any load-order-status', async () => {
-    const { client, published } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` }, sourceFolders, [{ plugin: PLUGIN, problems: [problem()] }]);
+    const { client, published } = feed(sourceFolders, [{ plugin: PLUGIN, problems: [problem()] }]);
     await vi.waitFor(() => { expect(published.map((problems) => problems.size)).toEqual([1]); });
 
     client.setQueryAnswer('getPluginProblems', [{ plugin: PLUGIN, problems: [] }]);
@@ -182,7 +130,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
 
   it('says nothing when mEdit cannot answer at subscribe, and asks nothing on a save until the record index is ready', async () => {
     const refused = Promise.reject(new Error('mEdit is down.'));
-    const { client, reporter, answered } = feed({}, sourceFolders, refused);
+    const { client, reporter, answered } = feed(sourceFolders, refused);
     await refused.catch(() => undefined);
     client.emit({ kind: 'rows-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [REFERRER], sequence: 1 });
 
@@ -194,7 +142,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
 
   it('asks nothing on a save when the record index began reconciling while the ask at subscribe was in flight', async () => {
     let answer!: (problems: PluginProblems[]) => void;
-    const { client, published, answered } = feed({}, sourceFolders, new Promise<PluginProblems[]>((resolve) => { answer = resolve; }));
+    const { client, published, answered } = feed(sourceFolders, new Promise<PluginProblems[]>((resolve) => { answer = resolve; }));
     client.emit(loadOrderStatusEventFixture(RECONCILING));
     answer([]);
     await vi.waitFor(() => { expect(published).toHaveLength(1); });
@@ -206,7 +154,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
   });
 
   it.each(['rows-changed', 'plugin-changed'])('asks nothing on %s while the record index reconciles', async (kind) => {
-    const { client, answered } = feed({});
+    const { client, answered } = feed();
     await answered([]);
     client.emit(loadOrderStatusEventFixture(RECONCILING));
     client.emit({ kind, plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [REFERRER], sequence: 1 });
@@ -217,7 +165,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
   });
 
   it('adds no line for a failure mEdit answers, however its text changes, and keeps the language status current', async () => {
-    const { answered, reporter, status } = feed({});
+    const { answered, reporter, status } = feed();
     const failed = (failure: string): PluginProblems[] => [{ plugin: PLUGIN, problems: [], failure, failureKind: 'LaterRead' }];
 
     await answered(failed('Unexpected end at 1.'));
@@ -230,7 +178,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
   });
 
   it('tells of a placement failure once while its reason stands and again when it changes', async () => {
-    const { answered, reporter } = feed({});
+    const { answered, reporter } = feed();
     const failed = (failure: string): PluginProblems[] => [{ plugin: PLUGIN, problems: [], failure, failureKind: 'Placement' }];
 
     await answered(failed('Refers.esp\'s source holds no file for 000800:Refers.esp.'));
@@ -244,7 +192,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
   });
 
   it('shows the problems mEdit placed for a plugin whose other problems it could not place', async () => {
-    const { answered, reporter } = feed({ '/source/ReferringMod/Refers.esp/Stray.json': '{' });
+    const { answered, reporter } = feed();
     const stray = problem({ formKey: null, targetFormKey: null, fieldPath: null, sourceRelativePath: 'Refers.esp/Stray.json', message: 'unreadable' });
 
     const shown = await answered([{ plugin: PLUGIN, problems: [stray], failure: 'Refers.esp\'s source could not place 000800:Refers.esp.', failureKind: 'Placement' }]);
@@ -256,7 +204,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
   });
 
   it('tells of a plugin whose mod the instance holds no source folder for, rather than dropping its problems', async () => {
-    const { answered, reporter } = feed({}, () => undefined);
+    const { answered, reporter } = feed(() => undefined);
 
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
 
@@ -266,7 +214,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
   });
 
   it('keeps the last answer when mEdit cannot answer, saying so in the Output once for each reason', async () => {
-    const { client, answered, published, reporter } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
+    const { client, answered, published, reporter } = feed();
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
     client.setQueryFailureOnce('getPluginProblems', { failed: 'timed-out' });
     client.setQueryFailureOnce('getPluginProblems', { failed: 'timed-out' });
@@ -283,7 +231,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
   });
 
   it('publishes no answer that a later one overtook', async () => {
-    const { client, answered, published } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
+    const { client, answered, published } = feed();
     let overtaken!: (answer: PluginProblems[]) => void;
     client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((resolve) => { overtaken = resolve; }));
     reconciledAgain(client);
@@ -296,7 +244,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
   });
 
   it('says nothing of a failed ask that a later one overtook', async () => {
-    const { client, answered, reporter } = feed({});
+    const { client, answered, reporter } = feed();
     let overtaken!: (error: Error) => void;
     client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((_, reject) => { overtaken = reject; }));
     reconciledAgain(client);
@@ -309,7 +257,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
   });
 
   it('publishes an older answer when the ask that overtook it fails', async () => {
-    const { client, published } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
+    const { client, published } = feed();
     let older!: (answer: PluginProblems[]) => void;
     client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((resolve) => { older = resolve; }));
     client.setQueryFailureOnce('getPluginProblems', { failed: 'timed-out' });
@@ -323,7 +271,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
   });
 
   it('says in the language status that it shows the last good read, and why, until the next good answer clears it', async () => {
-    const { client, answered, status } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
+    const { client, answered, status } = feed();
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
     client.setQueryFailureOnce('getPluginProblems', { failed: 'timed-out' });
     reconciledAgain(client);
@@ -336,8 +284,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
 
   it('keeps the problems of a plugin mEdit cannot place while the rest publishes, and says so in the language status', async () => {
     const other = { name: 'Other.esp', origin: 'OtherMod' };
-    const files = { '/source/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"`, '/source/OtherMod/Other.esp/Npc.json': `"${MISSING}"` };
-    const { answered, status } = feed(files);
+    const { answered, status } = feed();
     await answered([{ plugin: PLUGIN, problems: [problem()] }, { plugin: other, problems: [] }]);
     const why = 'Refers.esp is a compiled plugin but no mod folder provides it.';
 
@@ -351,7 +298,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
   });
 
   it('drops the kept problems of a plugin once mEdit places it again', async () => {
-    const { answered, status } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
+    const { answered, status } = feed();
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
     await answered([{ plugin: PLUGIN, problems: [], failure: 'unplaced' }]);
 
@@ -363,7 +310,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
 
   it('names every unplaced plugin in one language status line', async () => {
     const other = { name: 'Other.esp', origin: 'OtherMod' };
-    const { answered, status } = feed({});
+    const { answered, status } = feed();
 
     await answered([{ plugin: PLUGIN, problems: [], failure: 'one' }, { plugin: other, problems: [], failure: 'two' }]);
 
@@ -377,7 +324,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
     const messagesOn = (shown: ProblemsByFile) => shown.get(FILE)?.map(({ message }) => message);
 
     it('keeps the links of a file that now stops a read, beside the stop', async () => {
-      const { answered } = feed({ [FILE]: `"${MISSING}"` });
+      const { answered } = feed();
       await answered([{ plugin: PLUGIN, problems: [problem({ message: 'link' })] }]);
 
       const shown = await answered(unplaced(stop('stopped')));
@@ -386,7 +333,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
     });
 
     it('drops a stop that was fixed', async () => {
-      const { answered } = feed({ [FILE]: `"${MISSING}"` });
+      const { answered } = feed();
       await answered(unplaced(stop('stopped')));
 
       const shown = await answered(unplaced());
@@ -396,7 +343,7 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
   });
 
   it('keeps the status of a failed ask when an older, slower answer arrives after it', async () => {
-    const { client, answered, published, status } = feed({});
+    const { client, answered, published, status } = feed();
     let older!: (answer: PluginProblems[]) => void;
     client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((resolve) => { older = resolve; }));
     client.setQueryFailureOnce('getPluginProblems', { failed: 'refused', refusal: 'timed out' });
@@ -417,7 +364,7 @@ describe('feedSourceProblems, when mEdit cannot take the unsaved plugin source',
   const lastRead = (why: string) => `Showing the last good read: mEdit could not take the unsaved plugin source: ${why}`;
 
   it('says so in the language status, with one line in the Output for a reason told again', () => {
-    const { client, reporter, status } = feed({});
+    const { client, reporter, status } = feed();
 
     client.settleHandOver({ failed: 'refused', refusal: 'connection reset' });
     client.settleHandOver({ failed: 'refused', refusal: 'connection reset' });
@@ -429,7 +376,7 @@ describe('feedSourceProblems, when mEdit cannot take the unsaved plugin source',
   });
 
   it('clears the language status once the next hand-over lands', () => {
-    const { client, status } = feed({});
+    const { client, status } = feed();
     client.settleHandOver({ failed: 'refused', refusal: 'connection reset' });
 
     client.settleHandOver(undefined);
