@@ -134,7 +134,8 @@ export function buildManifest(
     ];
     const unchanged = held?.files.get(file.path) === file.hash;
     const keyOf = ({ download }: Holder): string => (download === undefined ? 'gameFolder' : packageKey(download.package));
-    const holder = (unchanged ? holders.find((one) => heldKeys.has(keyOf(one))) : undefined) ?? holders.find(({ hosted }) => hosted) ?? holders[0];
+    const heldHolder = unchanged ? holders.find((one) => heldKeys.has(keyOf(one))) : undefined;
+    const holder = heldHolder ?? (unchanged && missing.length > 0 ? undefined : holders.find(({ hosted }) => hosted) ?? holders[0]);
     if (holder === undefined) {
       if (missing.length === 0) continue;
       if (unchanged) unplaced.push(file);
