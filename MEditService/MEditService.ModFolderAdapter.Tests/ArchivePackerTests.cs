@@ -18,7 +18,7 @@ public sealed class ArchivePackerTests : IDisposable
     private static readonly byte[] Script = Encoding.ASCII.GetBytes("Scriptname A");
 
     private static readonly Ba2Variant Ba2 = new(1, Ba2Contents.General, Compressed: false);
-    private static readonly BsaVariant Bsa104 = new(104, ArchiveFlags: 0x3, FileFlags: 0x3);
+    private static readonly BsaVariant Bsa104 = new(104, Compressed: false);
 
     private readonly Dictionary<string, Func<Stream>> _assets = [];
     private readonly ScratchDirectory _scratch = new("archive-packer-");
@@ -39,11 +39,6 @@ public sealed class ArchivePackerTests : IDisposable
         { 3, Ba2Contents.Textures, false },
         { 7, Ba2Contents.General, false },
         { 8, Ba2Contents.General, true },
-    };
-
-    public static TheoryData<uint, uint> BsasNotWritten => new()
-    {
-        { 36, 0x3 }, { 102, 0x3 }, { 106, 0x3 }, { 104, 0x0 }, { 104, 0x1 }, { 104, 0x103 }, { 104, 0x43 },
     };
 
     public void Dispose() => _scratch.Dispose();
@@ -204,26 +199,28 @@ public sealed class ArchivePackerTests : IDisposable
     }
 
     [Theory]
-    [MemberData(nameof(BsasNotWritten))]
-    public void ABsaWithoutAWriter_IsNotWritten(uint version, uint archiveFlags)
+    [InlineData(36u)]
+    [InlineData(102u)]
+    [InlineData(103u)]
+    [InlineData(106u)]
+    public void ABsaVersionWithoutAWriter_IsNotWritten(uint version)
     {
         WithMeshAndScript();
 
-        var refusal = Refused(new BsaVariant(version, archiveFlags, FileFlags: 3), Scripts);
+        var refusal = Refused(new BsaVariant(version, Compressed: false), Scripts);
 
         Assert.Equal(ArchiveRefusal.VariantNotWritten, refusal.Reason);
     }
 
     [Theory]
-    [InlineData(GameRelease.Oblivion, 103u, 0x3u)]
-    [InlineData(GameRelease.SkyrimLE, 104u, 0x3u)]
-    [InlineData(GameRelease.SkyrimSE, 105u, 0x3u)]
-    [InlineData(GameRelease.SkyrimSE, 105u, 0x7u)]
-    public void ABsa_ReadsBackThroughMutagenUnderLowercasedFolderAndName(GameRelease release, uint version, uint archiveFlags)
+    [InlineData(GameRelease.SkyrimLE, 104u, false)]
+    [InlineData(GameRelease.SkyrimSE, 105u, false)]
+    [InlineData(GameRelease.SkyrimSE, 105u, true)]
+    public void ABsa_ReadsBackThroughMutagenUnderLowercasedFolderAndName(GameRelease release, uint version, bool compressed)
     {
         WithMeshAndScript();
 
-        var contents = ContentsOf(Reader(release, Packed(new BsaVariant(version, archiveFlags, FileFlags: 0x3), Meshes, Scripts)));
+        var contents = ContentsOf(Reader(release, Packed(new BsaVariant(version, compressed), Meshes, Scripts)));
 
         Assert.Equal(["meshes\\actors\\a.nif", "scripts\\a.pex"], contents.Keys.Order());
         Assert.Equal(Mesh, contents["meshes\\actors\\a.nif"]);
@@ -235,7 +232,7 @@ public sealed class ArchivePackerTests : IDisposable
     {
         WithMeshAndScript();
 
-        var archive = Packed(Bsa104 with { ArchiveFlags = 0x7 }, Meshes);
+        var archive = Packed(Bsa104 with { Compressed = true }, Meshes);
 
         var fileRecord = 36 + 16 + 1 + "meshes\\actors".Length + 1 + 8;
         var (size, offset) = (U32(archive, fileRecord), (int)U32(archive, fileRecord + 4));
@@ -244,6 +241,38 @@ public sealed class ArchivePackerTests : IDisposable
         using var whole = new MemoryStream();
         inflated.CopyTo(whole);
         Assert.Equal(Mesh, whole.ToArray());
+    }
+
+    [Theory]
+    [InlineData(104u, new[] { "meshes/a.nif" }, 0x83u, 0x1u)]
+    [InlineData(104u, new[] { "textures/a_d.dds" }, 0x3u, 0x2u)]
+    [InlineData(104u, new[] { "sound/fx/a.wav" }, 0x13u, 0x8u)]
+    [InlineData(104u, new[] { "sound/voice/a.fuz" }, 0x3u, 0x10u)]
+    [InlineData(104u, new[] { "trees/a.spt" }, 0x3u, 0x40u)]
+    [InlineData(104u, new[] { "scripts/a.pex" }, 0x13u, 0x100u)]
+    [InlineData(104u, new[] { "scripts/source/a.psc" }, 0x3u, 0x100u)]
+    [InlineData(105u, new[] { "scripts/a.pex" }, 0x13u, 0x0u)]
+    [InlineData(105u, new[] { "interface/a.swf" }, 0x3u, 0x0u)]
+    [InlineData(105u, new[] { "a.nif" }, 0x83u, 0x1u)]
+    [InlineData(105u, new[] { "meshes/a.nif", "textures/a_d.dds", "sound/fx/a.wav", "scripts/a.pex", "seq/a.seq" }, 0x93u, 0xBu)]
+    [InlineData(104u, new[] { "lodsettings/a.lod" }, 0x83u, 0x101u)]
+    public void ABsa_FlagsWhatItsFilesAre(uint version, string[] files, uint archiveFlags, uint fileFlags)
+    {
+        foreach (var file in files) WithBytes(file, Script);
+
+        var archive = Packed(new BsaVariant(version, Compressed: false), files);
+
+        Assert.Equal((archiveFlags, fileFlags), (U32(archive, 12), U32(archive, 32)));
+    }
+
+    [Fact]
+    public void ACompressedBsa_FlagsItsFilesCompressed()
+    {
+        WithMeshAndScript();
+
+        var archive = Packed(Bsa104 with { Compressed = true }, Meshes);
+
+        Assert.Equal(0x87u, U32(archive, 12));
     }
 
     [Fact]

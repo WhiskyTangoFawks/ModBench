@@ -17,7 +17,7 @@ public sealed class ArchiveReaderTests : IDisposable
     };
 
     private static IArchiveVariant VariantNamed(string format) =>
-        format == "ba2" ? new Ba2Variant(1, Ba2Contents.General, Compressed: true) : new BsaVariant(105, ArchiveFlags: 0x3, FileFlags: 0x3);
+        format == "ba2" ? new Ba2Variant(1, Ba2Contents.General, Compressed: true) : new BsaVariant(105, Compressed: false);
 
     [Theory]
     [MemberData(nameof(Variants))]
@@ -87,7 +87,7 @@ public sealed class ArchiveReaderTests : IDisposable
         { "ba2", new Ba2Variant(1, Ba2Contents.General, Compressed: true), GameRelease.Fallout4 },
         { "ba2", new Ba2Variant(1, Ba2Contents.General, Compressed: false), GameRelease.Fallout4 },
         { "ba2", new Ba2Variant(1, Ba2Contents.Textures, Compressed: true), GameRelease.Fallout4 },
-        { "bsa", new BsaVariant(105, ArchiveFlags: 0x3, FileFlags: 0x3), GameRelease.SkyrimSE },
+        { "bsa", new BsaVariant(105, Compressed: false), GameRelease.SkyrimSE },
     };
 
     [Theory]
