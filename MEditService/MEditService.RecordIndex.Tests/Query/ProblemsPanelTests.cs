@@ -1,6 +1,7 @@
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -596,4 +597,131 @@ public sealed class ProblemsPanelTests : IDisposable
         Assert.Equal("000801:Holder.esp", Assert.Single(answer.Problems).TargetFormKey);
     }
 
+    private static readonly TimeSpan AtOnce = TimeSpan.FromSeconds(5);
+
+    private void LinkResolvedByHand(OpenedIndex index, Plugin plugin) =>
+        Entry(plugin).HandEdit(index.DocumentOf(plugin.Referrer, Entry(plugin).Key), $"\"{Absent}\"", "\"000801:Refers.esp\"");
+
+    private static Action Once(Action act)
+    {
+        var done = 0;
+        return () =>
+        {
+            if (Interlocked.Exchange(ref done, 1) == 0) act();
+        };
+    }
+
+    private static void AssertTheLinkIsAnswered(IReadOnlyList<PluginProblems> answer) =>
+        Assert.Equal(Absent, Assert.Single(Assert.Single(answer).Problems).TargetFormKey);
+
+    [Fact]
+    public void ASourceWriteLandingAsTheProblemsArePlaced_IsReadBeforeTheyAreAnswered()
+    {
+        var plugin = new Plugin("Refers.esp");
+        Build(plugin);
+        var source = new WritingAtThePlacement(TestAdapters.Source());
+        using var index = Indexes.Reconciled(Fixture, source: source);
+        source.AtEachText = Once(() =>
+        {
+            LinkResolvedByHand(index, plugin);
+            index.Holder.SourceWritten([Entry(plugin).Key]);
+        });
+
+        var answer = Assert.Single(Ready(index));
+
+        Assert.Empty(answer.Problems);
+    }
+
+    [Fact]
+    public async Task ASourceWriteLandingAsTheProblemsArePlaced_ThatLeavesTheirFilesAsRead_IsNotWaitedFor()
+    {
+        var plugin = new Plugin("Refers.esp");
+        Build(plugin);
+        using var parking = new ParkingSource();
+        var source = new WritingAtThePlacement(parking);
+        using var index = Indexes.Reconciled(Fixture, source: source);
+        source.AtEachText = Once(() =>
+        {
+            parking.ParkNextTreeLookup();
+            index.Holder.SourceWritten([Entry(plugin).Key]);
+        });
+
+        var problems = index.Queries.GetProblems();
+        await parking.WaitUntilParkedAsync();
+        var answered = await Waits.CompletesWithin(problems, AtOnce);
+        parking.Release();
+
+        Assert.True(answered);
+        AssertTheLinkIsAnswered(problems.Value());
+    }
+
+    [Fact]
+    public async Task AnEditOutsideMEditLandingAsTheProblemsArePlaced_IsNotWaitedFor_AndItsLinkIsAnsweredAsRead()
+    {
+        var plugin = new Plugin("Refers.esp");
+        Build(plugin);
+        var source = new WritingAtThePlacement(TestAdapters.Source());
+        using var index = Indexes.Reconciled(Fixture, source: source);
+        source.AtEachText = Once(() => LinkResolvedByHand(index, plugin));
+
+        var problems = Task.Run(() => index.Queries.GetProblems());
+
+        Assert.True(await Waits.CompletesWithin(problems, AtOnce));
+        AssertTheLinkIsAnswered(problems.Value());
+    }
+
+    [Fact]
+    public async Task AnEditOutsideMEditAndASourceWriteToAnotherPlugin_LandingAsTheProblemsArePlaced_AreNotWaitedFor()
+    {
+        var plugin = new Plugin("Refers.esp");
+        var other = new Plugin("Other.esp", RefersTo: null);
+        Build(plugin, other);
+        using var parking = new ParkingSource();
+        var source = new WritingAtThePlacement(parking);
+        using var index = Indexes.Reconciled(Fixture, source: source);
+        source.AtEachText = Once(() =>
+        {
+            LinkResolvedByHand(index, plugin);
+            parking.ParkNextTreeLookup();
+            index.Holder.SourceWritten([Entry(other).Key]);
+        });
+
+        var problems = index.Queries.GetProblems(Entry(plugin).Key);
+        await parking.WaitUntilParkedAsync();
+        var answered = await Waits.CompletesWithin(problems, AtOnce);
+        parking.Release();
+
+        Assert.True(answered);
+        AssertTheLinkIsAnswered(problems.Value());
+    }
+
+    [Fact]
+    public async Task SourceWritesLandingAsEachPassPlacesTheProblems_HoldTheAnswerForOneMorePassAtMost()
+    {
+        var plugin = new Plugin("Refers.esp");
+        Build(plugin);
+        var source = new WritingAtThePlacement(TestAdapters.Source());
+        using var index = Indexes.Reconciled(Fixture, source: source);
+        var referrer = Entry(plugin).SourceFileOf(index.DocumentOf(plugin.Referrer, Entry(plugin).Key));
+        source.AtEachText = () =>
+        {
+            File.AppendAllText(referrer, "\n");
+            index.Holder.SourceWritten([Entry(plugin).Key]);
+        };
+
+        var problems = Task.Run(() => index.Queries.GetProblems());
+
+        Assert.True(await Waits.CompletesWithin(problems, AtOnce));
+    }
+
+    private sealed class WritingAtThePlacement(ISourceAdapter inner) : DelegatingSourceAdapter(inner)
+    {
+        public Action AtEachText { private get; set; } = () => { };
+
+        public override string TextOf(string sourceFolder, string path)
+        {
+            AtEachText();
+            return base.TextOf(sourceFolder, path);
+        }
+    }
 }

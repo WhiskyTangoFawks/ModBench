@@ -67,6 +67,10 @@ public interface ISourceAdapter
     /// file that is not valid UTF-8 stamps alike on disk and in the record index.</summary>
     string ContentStamp(string text);
 
+    /// <summary>The FormKey the record index files the document at <paramref name="path"/> under, or null when it declares
+    /// none: an embedded child's owner's, and the header's computed from <paramref name="pluginFileName"/>.</summary>
+    string? FormKeyDeclaredIn(string text, string path, string pluginFileName);
+
     /// <summary>A source folder in the repository <paramref name="heldIn"/> names, and the mod folder's manifest: one commit,
     /// <c>Init &lt;mod&gt;</c>, of the source folder, and in the instance repository that manifest, then any repair.</summary>
     SourceFailure? Init(

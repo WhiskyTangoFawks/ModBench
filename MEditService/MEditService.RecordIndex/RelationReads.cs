@@ -422,6 +422,16 @@ internal sealed class RelationReads(
         ];
     }
 
+    public ILookup<string, string> GetContentStamps(PluginAddress plugin, IReadOnlyCollection<string> formKeys)
+    {
+        using var context = OpenRead();
+        return context.Rows($"""
+            SELECT form_key, content_hash FROM {TableDdlBuilder.MirrorSchema}.records
+            WHERE plugin = $1 AND origin = $2 AND form_key IN (SELECT unnest($3::VARCHAR[]))
+            """, reader => (FormKey: reader.GetString(0), Stamp: reader.GetString(1)), plugin.Name, plugin.Origin, formKeys.ToList())
+            .ToLookup(row => row.FormKey, row => row.Stamp);
+    }
+
     /// <summary>The plugin files each plugin read from its source tree links into: a FormKey names its origin plugin.</summary>
     public ILookup<PluginAddress, string> GetPluginsLinkedBySourcePlugins()
     {
