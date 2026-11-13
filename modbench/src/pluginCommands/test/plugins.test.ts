@@ -484,8 +484,8 @@ describe('askedOnceLoadOrderPut keeps mEdit from being asked for plugins before 
     expect(getPlugins).not.toHaveBeenCalled();
   });
 
-  it('asks mEdit once a load order has been put', async () => {
-    const { getPlugins, client } = asking({ outcome: 'abandoned' });
+  it('asks mEdit once a put has been answered', async () => {
+    const { getPlugins, client } = asking({ outcome: 'failed', message: 'refused' });
     await client.getPlugins();
     expect(getPlugins).toHaveBeenCalledOnce();
   });
