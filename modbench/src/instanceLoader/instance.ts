@@ -455,9 +455,8 @@ export class Instance implements Subscription {
     };
   }
 
-  /** A read of the files `wrote` names, or a check of the disk when none is named: the recompute activation runs, and the
-   *  one that corrects the value after a change the adapter never signalled. Settles when its read has run; a read that
-   *  overlapped `quiet` is dropped, not landed. */
+  /** A read of the files `wrote` names, or a check of the disk when none is named. Settles when its read has run; a read
+   *  that overlapped `quiet` is dropped, not landed. */
   refresh(wrote?: readonly string[]): Promise<void> {
     return this.enqueue({ named: wrote, disk: wrote === undefined, tellsUnheard: false });
   }
