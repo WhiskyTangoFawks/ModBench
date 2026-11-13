@@ -4,7 +4,7 @@
 import * as vscode from 'vscode';
 import type { Covering, FileOrigin, InstanceValue, InstanceView, OriginFolder, PublisherTag } from '../instanceLoader/instance';
 import { modOrigin, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
-import { pathTagsOf } from '../drivingLib/modFileStates';
+import { pathTagsOf } from './modFileStates';
 import { fileRowUri } from './modFiles';
 import {
   IndicatorDecorationProvider, isModRow, modRowUri, OpenableRowDecorations, overwriteRowUri, PUBLISHER_TAG_INDICATOR, separatorRowUri,

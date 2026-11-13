@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import type { FileOrigin, InstanceValue, InstanceView, OriginFolder } from '../instanceLoader/instance';
 import { modOrigin, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
 import { fileRowUri } from './modFiles';
-import { archiveGotten, archivedFilesOf, isFileNotGotten, isNotDeployed } from '../drivingLib/modFileStates';
+import { archiveGotten, archivedFilesOf, isFileNotGotten, isNotDeployed } from './modFileStates';
 import { onSettingChange } from '../drivingLib/setting';
 import type { WorkspaceSettings } from './workspaceSettings';
 

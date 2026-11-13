@@ -11,11 +11,11 @@ vi.mock('vscode', () => ({
 import { FILE_CONFLICTS } from '../agent/fileConflicts';
 import type { PublisherConfiguration, PublisherTag } from '../instanceAdapter/instanceAdapter';
 import { modOrigin } from '../instanceLoader/fileConflictIndex';
-import { MOD_INDICATORS } from '../drivingLib/modFileStates';
+import { MOD_INDICATORS } from '../mods/modFileStates';
 import { FakeInstance } from './mo2/fakeInstance';
 import { fakeInstanceAdapter, readingFixture } from './fakeInstanceAdapter';
-import { copiesToRead } from '../drivingLib/copiesToRead';
-import { sameCopies } from '../drivingLib/sameCopies';
+import { copiesToRead } from '../mods/copiesToRead';
+import { sameCopies } from '../mods/sameCopies';
 import { conflictPaths, conflictTable } from '../mods/conflictTable';
 import { InactiveFileDecorationProvider } from '../mods/inactiveFiles';
 import { fileRowUri } from '../mods/modFiles';

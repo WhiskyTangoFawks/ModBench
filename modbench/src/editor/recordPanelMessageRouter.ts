@@ -16,9 +16,9 @@ import type { FocusedCellContext } from '../wire/messages';
 import { errorMessage } from '../ports/errorMessage';
 import type { TitledColumn } from './recordTitle';
 import { modsByOrigin, type ModFacts } from './modsByOrigin';
-import { fileStanding } from '../drivingLib/fileStanding';
-import { columnStatuses } from '../drivingLib/columnStatus';
-import { withMasterCellStates } from '../drivingLib/masterCellStates';
+import { fileStanding } from './fileStanding';
+import { columnStatuses } from './columnStatus';
+import { withMasterCellStates } from './masterCellStates';
 import { copyColumnKey } from '../wire/columnKey';
 import { failureReason, isReadFailed, localFailure, type ReadFailed } from '../wire/readFailed';
 

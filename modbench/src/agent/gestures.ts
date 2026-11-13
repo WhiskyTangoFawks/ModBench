@@ -5,7 +5,7 @@ import type { InstanceValue } from '../instanceLoader/instance';
 import type { Argument } from '../wire/argument';
 import { CONTAINER_NAME, downloadedFilesNamed, filesAndFoldersNamed, filesNamed, linesNamed, modsNamed, namedByOwnPath, pluginsNamed } from './names';
 import type { MEditClient } from '../client/MEditClient';
-import { deployFailures, deployWarnings } from '../drivingLib/deployProblems';
+import { deployFailures, deployWarnings } from '../toolbox/deployProblems';
 import type { Deployed } from '../deployment/deployment';
 import { Refusal } from '../drivingLib/refusal';
 import { toolName, toolNamed } from './toolNames';

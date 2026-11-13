@@ -31,7 +31,7 @@ import { CELL_VALUE_SETTING } from '../mods/conflictTableEditor';
 import { CONFLICT_CELL_VALUES } from '../wire/conflictTable';
 import { NO_PLUGINS_MESSAGE } from '../plugins/PluginsTreeProvider';
 import { GREY_INACTIVE_FILES_SETTING } from '../mods/inactiveFiles';
-import { MOD_INDICATORS } from '../drivingLib/modFileStates';
+import { MOD_INDICATORS } from '../mods/modFileStates';
 import { indicatorSetting, PUBLISHER_TAG_INDICATOR } from '../mods/modIndicators';
 import { recordingReporter } from './surfacingDoubles';
 

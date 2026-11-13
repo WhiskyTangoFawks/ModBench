@@ -4,7 +4,7 @@ import type { DeployCommands, DeployResult, PurgeResult } from '../instanceComma
 import { AgentCall, registerWritingCommand, answeredToAgent, deployedPathsOf, isAgentCall, reportPartial, type GestureResult, type NoItemsResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
-import { deployFailures, deployWarnings } from '../drivingLib/deployProblems';
+import { deployFailures, deployWarnings } from './deployProblems';
 import { MOVE_TO_OVERWRITE, unmanagedProblems } from './unmanagedProblems';
 import { registerDeployTask } from './deployTask';
 import { TOOLBOX_VIEW } from './toolboxCommands';

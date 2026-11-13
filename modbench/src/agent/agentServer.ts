@@ -6,8 +6,8 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
 import type { ServerNotification, ServerRequest } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import type { CopyReads } from '../drivingLib/sameCopies';
-import { ArchivedCopies } from '../drivingLib/archivedCopies';
+import type { CopyReads } from '../mods/sameCopies';
+import { ArchivedCopies } from '../mods/archivedCopies';
 import type { PluginsShown } from '../drivingLib/pluginsShown';
 import { instanceMessages, type InstanceView } from '../instanceLoader/instance';
 import type { Log } from '../ports/log';

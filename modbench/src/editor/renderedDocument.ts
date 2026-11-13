@@ -4,7 +4,7 @@ import { samePluginAddress } from '../wire/pluginAddress';
 import type { CopyChanged } from '../wire/recordCopy';
 import { followReportedCopies } from './recordCopy';
 import { RENDERED_DOCUMENT_SCHEME, copyOf } from '../textDocuments/recordDocument';
-import { renderedCopy } from '../drivingLib/renderedCopy';
+import { renderedCopy } from './renderedCopy';
 
 /** The read-only documents a non-compiled plugin's copies open as: mEdit's rendering, read again
  *  when mEdit reports the copy changed, and when its reports resume, since one may have been missed. */
