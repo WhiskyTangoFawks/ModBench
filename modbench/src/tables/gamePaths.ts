@@ -33,9 +33,8 @@ export interface GamePathInfo {
   readonly archiveLists: ArchiveLists;
   /** Absent for a release whose folders no reference names. */
   readonly papyrusFolders?: PapyrusFolders;
-  /** The BA2 versions the release reads its archives of textures and its other archives as; absent until what mEdit
-   *  writes is known to load in the game. */
-  readonly ba2Versions?: Ba2Versions;
+  /** The formats a build packs the release's archives of textures and its other archives as. */
+  readonly archives?: ArchiveFormats;
 }
 
 /** In the game folder: the game's program, and its script extender's loader. */
@@ -51,9 +50,14 @@ interface PapyrusFolders {
   readonly compiled: string;
 }
 
-export interface Ba2Versions {
-  readonly general: number;
-  readonly textures: number;
+export interface ArchiveFormat {
+  readonly format: 'ba2' | 'bsa';
+  readonly version: number;
+}
+
+export interface ArchiveFormats {
+  readonly general: ArchiveFormat;
+  readonly textures: ArchiveFormat;
 }
 
 /** The INIs whose `[Archive]` keys list the archives the game loads, and those keys: xEdit's for the
@@ -101,7 +105,9 @@ const SKYRIM_COMPANIONS: PluginCompanions = {
 };
 
 // Next-gen Fallout 4 reads version 1 too, and writes versions 7 and 8 that mEdit does not.
-const FALLOUT4_BA2_VERSIONS: Ba2Versions = { general: 1, textures: 1 };
+const FALLOUT4_ARCHIVES_PACKED: ArchiveFormats = { general: { format: 'ba2', version: 1 }, textures: { format: 'ba2', version: 1 } };
+const SKYRIM_ARCHIVES_PACKED: ArchiveFormats = { general: { format: 'bsa', version: 105 }, textures: { format: 'bsa', version: 105 } };
+const STARFIELD_ARCHIVES_PACKED: ArchiveFormats = { general: { format: 'ba2', version: 2 }, textures: { format: 'ba2', version: 3 } };
 
 const RESOURCE_ARCHIVE_KEYS = ['sResourceArchiveList', 'sResourceArchiveList2'];
 const RESOURCE_INDEX_KEYS = ['sResourceIndexFileList', 'sResourceStartUpArchiveList', ...RESOURCE_ARCHIVE_KEYS];
@@ -118,14 +124,14 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
     masters: FALLOUT4_MASTERS, creationClubList: 'Fallout4.ccc',
     scriptExtenderFolder: 'f4se', programs: { game: 'Fallout4.exe', extenderLoader: 'f4se_loader.exe' },
     pluginCompanions: FALLOUT4_COMPANIONS, archiveLists: FALLOUT4_ARCHIVES, papyrusFolders: FALLOUT4_PAPYRUS,
-    ba2Versions: FALLOUT4_BA2_VERSIONS,
+    archives: FALLOUT4_ARCHIVES_PACKED,
   },
   Fallout4VR: {
     gameName: 'Fallout 4 VR', lightPlugins: true, nexusSlug: 'fallout4', lootRepository: 'fallout4vr', validShortNames: ['Fallout4'], masters: [...FALLOUT4_MASTERS, 'Fallout4_VR.esm'],
     creationClubList: 'Fallout4.ccc',
     scriptExtenderFolder: 'f4se', programs: { game: 'Fallout4VR.exe', extenderLoader: 'f4sevr_loader.exe' }, pluginCompanions: FALLOUT4_COMPANIONS,
     archiveLists: { ...FALLOUT4_ARCHIVES, myGamesFolder: 'Fallout4VR', defaultIni: 'Fallout4.ini' }, papyrusFolders: FALLOUT4_PAPYRUS,
-    ba2Versions: FALLOUT4_BA2_VERSIONS,
+    archives: FALLOUT4_ARCHIVES_PACKED,
   },
   SkyrimSE: {
     gameName: 'Skyrim Special Edition', lightPlugins: true, nexusSlug: 'skyrimspecialedition', lootRepository: 'skyrimse', validShortNames: ['Skyrim'], steamAppId: '489830', steamFolderName: 'Skyrim Special Edition',
@@ -133,19 +139,21 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
     creationClubList: 'Skyrim.ccc',
     scriptExtenderFolder: 'skse', programs: { game: 'SkyrimSE.exe', extenderLoader: 'skse64_loader.exe' },
     pluginCompanions: SKYRIM_COMPANIONS, archiveLists: SKYRIM_ARCHIVES, papyrusFolders: SKYRIM_PAPYRUS,
+    archives: SKYRIM_ARCHIVES_PACKED,
   },
   SkyrimVR: {
     gameName: 'Skyrim VR', lightPlugins: true, nexusSlug: 'skyrimspecialedition', lootRepository: 'skyrimvr', validShortNames: ['Skyrim', 'SkyrimSE'], masters: [...SKYRIM_MASTERS, 'SkyrimVR.esm'],
     creationClubList: 'Skyrim.ccc',
     scriptExtenderFolder: 'skse', programs: { game: 'SkyrimVR.exe', extenderLoader: 'sksevr_loader.exe' }, pluginCompanions: SKYRIM_COMPANIONS,
     archiveLists: { ...SKYRIM_ARCHIVES, myGamesFolder: 'Skyrim VR', defaultIni: 'Skyrim.ini', userInis: ['Skyrim.ini', 'SkyrimVR.ini', 'SkyrimCustom.ini'] },
-    papyrusFolders: SKYRIM_PAPYRUS,
+    papyrusFolders: SKYRIM_PAPYRUS, archives: SKYRIM_ARCHIVES_PACKED,
   },
   Starfield: {
     gameName: 'Starfield', lightPlugins: true, nexusSlug: 'starfield', lootRepository: 'starfield', steamAppId: '1716740', steamFolderName: 'Starfield',
     masters: STARFIELD_MASTERS, creationClubList: 'Starfield.ccc', blueprintLoadsLast: true,
     scriptExtenderFolder: 'sfse', programs: { game: 'Starfield.exe', extenderLoader: 'sfse_loader.exe' }, pluginCompanions: FALLOUT4_COMPANIONS,
     archiveLists: { myGamesFolder: 'Starfield', defaultIni: 'Starfield.ini', userInis: ['StarfieldCustom.ini'], keys: RESOURCE_INDEX_KEYS },
+    archives: STARFIELD_ARCHIVES_PACKED,
   },
 };
 
@@ -285,9 +293,9 @@ function isArchiveOf(stem: string, name: string, extension: string): boolean {
   return bare === stem || (cut !== -1 && bare.slice(0, cut) === stem);
 }
 
-/** The BA2 versions a build packs the release's archives as; none for a release the table names none for. */
-export function ba2VersionsOf(release: string): Ba2Versions | undefined {
-  return GAME_PATHS[release]?.ba2Versions;
+/** The formats a build packs the release's archives as; none for a release the table names none for. */
+export function archiveFormatsOf(release: string): ArchiveFormats | undefined {
+  return GAME_PATHS[release]?.archives;
 }
 
 /** The rule for what the release names for a plugin; none for a release the table holds no row for. */

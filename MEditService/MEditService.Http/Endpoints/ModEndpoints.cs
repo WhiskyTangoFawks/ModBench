@@ -195,14 +195,14 @@ internal sealed record ArchiveVariantRequest(Ba2VariantRequest? Ba2, BsaVariantR
     internal IArchiveVariant? Variant(Ba2Contents contents) => (Ba2, Bsa) switch
     {
         ({ } ba2, null) => new Ba2Variant(ba2.Version, contents, ba2.Compressed),
-        (null, { } bsa) => new BsaVariant(bsa.Version, bsa.ArchiveFlags, bsa.FileFlags),
+        (null, { } bsa) => new BsaVariant(bsa.Version, bsa.Compressed),
         _ => null,
     };
 }
 
 internal sealed record Ba2VariantRequest(uint Version, bool Compressed);
 
-internal sealed record BsaVariantRequest(uint Version, uint ArchiveFlags, uint FileFlags);
+internal sealed record BsaVariantRequest(uint Version, bool Compressed);
 
 /// <summary>The mods to version in git (ADR-0013).</summary>
 internal sealed record VersionInGitRequest(IReadOnlyList<ModToVersionInGitRequest> Mods);

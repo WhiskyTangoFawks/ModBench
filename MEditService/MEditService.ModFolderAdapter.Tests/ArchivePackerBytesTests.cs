@@ -38,7 +38,7 @@ public sealed class ArchivePackerBytesTests : IDisposable
     [Fact]
     public void ACompressedBsa_IsTheSameBytesOnEveryMachine()
     {
-        var archive = Packed(new BsaVariant(104, ArchiveFlags: 0x7, FileFlags: 0x3),
+        var archive = Packed(new BsaVariant(104, Compressed: true),
             ("Meshes/Actors/A.nif", Encoding.ASCII.GetBytes(string.Concat(Enumerable.Repeat("nif data ", 500)))),
             ("scripts/a.pex", Encoding.ASCII.GetBytes("Scriptname A")));
 
