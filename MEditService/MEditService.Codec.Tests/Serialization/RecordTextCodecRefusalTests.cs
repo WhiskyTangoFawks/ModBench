@@ -133,7 +133,6 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
         Assert.StartsWith(member, why, StringComparison.Ordinal);
     }
 
-    // Every view is written at these flags: 0x400, deleted (0x20) and compressed (0x40000).
     private const int FlagsThatWriteEveryView = 0x40420;
 
     private static string? WhyNotARecordOfNpcWithTheViews(string[] held, Action<JsonObject>? edited = null)
@@ -153,10 +152,15 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
     [InlineData("MajorFlags")]
     [InlineData("Fallout4MajorRecordFlags")]
     [InlineData("Fallout4MajorRecordFlags", "MajorFlags", "IsCompressed")]
-    [InlineData("Fallout4MajorRecordFlags", "MajorFlags", "IsCompressed", "IsDeleted")]
     public void ARawFlagsValue_WithAnyOfItsViewsOmitted_IsTheRecord(params string[] held)
     {
         Assert.Null(WhyNotARecordOfNpcWithTheViews(held));
+    }
+
+    [Fact]
+    public void ARawFlagsValue_WithEveryViewHeldAgreeingWithIt_IsTheRecord()
+    {
+        Assert.Null(WhyNotARecordOfNpcWithTheViews([.. RecordFlagViews.All]));
     }
 
     [Theory]
