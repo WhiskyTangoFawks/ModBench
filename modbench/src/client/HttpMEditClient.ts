@@ -40,6 +40,8 @@ interface PostSpec<T> {
   post: () => Promise<{ data?: T; error?: unknown; response: { ok: boolean; status: number } }>;
   /** What a 2xx with no body answers. */
   noContent?: T;
+  /** The call answers the changes a write makes, which Modbench makes itself; every other call writes files only mEdit can name. */
+  answersChanges?: true;
 }
 
 interface HttpMEditClientDeps {
@@ -52,6 +54,8 @@ interface HttpMEditClientDeps {
   fetch?: (input: Request) => Promise<Response>;
   log?: Log;
   listenerThrows: ListenerThrows;
+  /** Called by each call that writes files its caller cannot name. */
+  leaveWritesUnnamed: () => void;
   timeoutMs?: number;
   reconnectDelayMs?: number;
 }
@@ -110,7 +114,10 @@ class HttpMEditClient implements MEditClient {
   private readonly loadOrder: LoadOrderSender;
   private readonly loadOrderStatusKept: LoadOrderStatusKeeper;
   private readonly handOver: UnsavedHandOver;
+  private readonly leaveWritesUnnamed: () => void;
+
   constructor(deps: HttpMEditClientDeps) {
+    this.leaveWritesUnnamed = deps.leaveWritesUnnamed;
     this.log = deps.log ?? SILENT_LOG;
     this.timeoutMs = deps.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
     this.fetchImpl = deps.fetch ?? createUnlimitedFetch();
@@ -209,6 +216,7 @@ class HttpMEditClient implements MEditClient {
   // Every write verb below shares this shape: wait for the load order and unsaved documents it
   // depends on, then `sendNow`. No refresh, no toast — the caller does both, from what this returns.
   private async mutate<T>(spec: PostSpec<T>): Promise<T | WriteRefused> {
+    if (spec.answersChanges !== true) this.leaveWritesUnnamed();
     try {
       await this.handOver.sent();
       await this.loadOrder.latest();
@@ -248,9 +256,10 @@ class HttpMEditClient implements MEditClient {
     op: (counted: string) => string;
     post: () => Promise<{ data?: T; error?: unknown; response: { ok: boolean; status: number } }>;
     outcome: (answer: T) => O;
+    answersChanges?: true;
   }): Promise<O | WriteRefused> {
     const counted = spec.items.length === 1 ? `1 ${spec.noun}` : `${spec.items.length} ${spec.noun}s`;
-    const answer = await this.mutate({ op: spec.op(counted), failMsg: `Could not ${spec.gesture(counted)}`, post: spec.post });
+    const answer = await this.mutate({ op: spec.op(counted), failMsg: `Could not ${spec.gesture(counted)}`, post: spec.post, answersChanges: spec.answersChanges });
     return isRefused(answer) ? answer : spec.outcome(answer);
   }
 
@@ -275,6 +284,7 @@ class HttpMEditClient implements MEditClient {
       post: () => this.apiClient.POST('/plugins/rename-source-changes', {
         body: { origin: plugin.origin, name: plugin.name, newName, namedByFileName, sourceFiles },
       }),
+      answersChanges: true,
     });
   }
 
@@ -292,6 +302,7 @@ class HttpMEditClient implements MEditClient {
       op: `getSourceFolderMoveChanges(${sourceFolder})`,
       failMsg: `Could not move "${sourceFolder}"`,
       post: () => this.apiClient.POST('/source-folders/move-changes', { body: { sourceFolder, movedTo, files: [...files] } }),
+      answersChanges: true,
     });
   }
 
@@ -476,6 +487,7 @@ class HttpMEditClient implements MEditClient {
         params: { path: { plugin } },
         body: { origin, recordType, ...into },
       }),
+      answersChanges: true,
     });
   }
 
@@ -487,6 +499,7 @@ class HttpMEditClient implements MEditClient {
       op: (counted) => `getDeleteChanges(${counted})`,
       post: () => this.apiClient.POST('/records/delete-changes', { body: { records: [...records] } }),
       outcome: appliedWithRefusals,
+      answersChanges: true,
     });
   }
 
@@ -500,6 +513,7 @@ class HttpMEditClient implements MEditClient {
         body: { records: [...records], mode, destinations: [...destinations], replace },
       }),
       outcome: appliedWithRefusals,
+      answersChanges: true,
     });
   }
 

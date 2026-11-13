@@ -11,5 +11,5 @@ export function recordWriteOver(
       await client.latestLoadOrder();
     },
   };
-  return (command) => runUnderProgress(view, untilIndexShows, (_progress, written) => command(written));
+  return (command) => runUnderProgress(view, untilIndexShows, command);
 }

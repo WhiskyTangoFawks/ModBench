@@ -69,8 +69,9 @@ const NOT_WRITTEN = { kind: 'notWritten', why: 'no place' } as const;
 let place: PluginsTxtPlace;
 let order: PluginOrder;
 
-const deploy = (files: readonly FileTheGameGets[], to = folder) => hardlinkDeployment(storage, place).deploy(to, files, order);
-const purge = (to = folder) => hardlinkDeployment(storage, place).purge(to);
+const noNaming = (): void => undefined;
+const deploy = (files: readonly FileTheGameGets[], to = folder) => hardlinkDeployment(storage, place, noNaming).deploy(to, files, order);
+const purge = (to = folder) => hardlinkDeployment(storage, place, noNaming).purge(to);
 const NOTHING = { wrote: false, restored: undefined, leftRenamed: [], unmanaged: [], unfinished: [] };
 
 const inode = async (path: string): Promise<bigint> => (await lstat(path, { bigint: true })).ino;
@@ -624,7 +625,7 @@ describe('plugins.txt', () => {
 
   it('is replaced, with nothing renamed, when a deploy of another instance wrote it', async () => {
     await mkdir(join(root, 'other-deployed'), { recursive: true });
-    await hardlinkDeployment(join(root, 'other-storage'), place).deploy(join(root, 'other-deployed'), [], order);
+    await hardlinkDeployment(join(root, 'other-storage'), place, noNaming).deploy(join(root, 'other-deployed'), [], order);
     order = { release: 'Fallout4', entries: [{ name: 'B.esp', enabled: true }] };
 
     const deployed = await deploy([]);
@@ -861,7 +862,7 @@ describe('the files in the deployment folder deploy does not manage', () => {
     await writeFile(join(folder, 'Data', 'b.esp'), 'mine');
     await writeFile(join(folder, 'game.exe'), 'game');
 
-    expect((await hardlinkDeployment(storage, place).unmanaged(folder)).sort()).toEqual(['Data/b.esp', 'game.exe']);
+    expect((await hardlinkDeployment(storage, place, noNaming).unmanaged(folder)).sort()).toEqual(['Data/b.esp', 'game.exe']);
   });
 
   it.skipIf(process.platform === 'win32')('names a file whose name differs only in case from one deploy wrote', async () => {
@@ -876,11 +877,11 @@ describe('the files in the deployment folder deploy does not manage', () => {
     await deploy([await modFile('Mod', 'foo.esp')]);
     await rename(join(folder, 'Data', 'foo.esp'), join(folder, 'Data', 'Foo.esp'));
 
-    expect(await hardlinkDeployment(storage, place).unmanaged(folder)).toEqual([]);
+    expect(await hardlinkDeployment(storage, place, noNaming).unmanaged(folder)).toEqual([]);
   });
 
   it('is read after a deploy under way, which it does not race', async () => {
-    const deployment = hardlinkDeployment(storage, place);
+    const deployment = hardlinkDeployment(storage, place, noNaming);
     const file = await modFile('Mod', 'a.esp');
     const finished: string[] = [];
     let read: Promise<string[]> | undefined;
@@ -890,6 +891,18 @@ describe('the files in the deployment folder deploy does not manage', () => {
     await read;
 
     expect([finished, await read]).toEqual([['deploy', 'read'], []]);
+  });
+
+  it('leaves the files it writes unnamed when it deploys or purges, and not when it only reads', async () => {
+    const leaveWritesUnnamed = vi.fn();
+    const deployment = hardlinkDeployment(storage, place, leaveWritesUnnamed);
+
+    await deployment.unmanaged(folder);
+    expect(leaveWritesUnnamed).not.toHaveBeenCalled();
+    await deployment.deploy(folder, [], order);
+    await deployment.purge(folder);
+
+    expect(leaveWritesUnnamed).toHaveBeenCalledTimes(2);
   });
 
   it('names none in an empty folder', async () => {

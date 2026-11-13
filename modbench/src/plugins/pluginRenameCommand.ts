@@ -19,7 +19,6 @@ import { holdingTheWrite } from '../drivingLib/writingGesture';
 import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
 import { creatablePluginExtensionsOf } from './creatablePluginExtensions';
 import type { PluginsTreeNode } from './pluginRows';
-import type { WrittenFiles } from '../instanceLoader/writtenFiles';
 
 export interface RenamePluginDeps {
   commands: Pick<PluginCommands, 'renameRefusal' | 'renamePlugin'>;
@@ -40,8 +39,8 @@ type RenameDeps = Pick<RenamePluginDeps, 'commands' | 'source'>;
 const isSupplied = (option: unknown): option is { readonly plugin: PluginAddress; readonly name: string } =>
   typeof option === 'object' && option !== null && typeof Reflect.get(option, 'name') === 'string' && isPluginAddress(Reflect.get(option, 'plugin'));
 
-async function renamed({ commands, source }: RenameDeps, plugin: PluginAddress, newName: string, written: WrittenFiles): Promise<GestureResult<PluginAddress>> {
-  const apply = (changes: readonly FileChanges[]) => applyAnswered(source, changes, [plugin], written);
+async function renamed({ commands, source }: RenameDeps, plugin: PluginAddress, newName: string): Promise<GestureResult<PluginAddress>> {
+  const apply = (changes: readonly FileChanges[]) => applyAnswered(source, changes, [plugin]);
   const result = await commands.renamePlugin({ held: heldTexts(unsavedTexts()), apply }, plugin, newName);
   return renameOutcome(result, { named: `"${plugin.name}" (${plugin.origin})`, newName, landed: { name: newName, origin: plugin.origin }, definition: 'its file and lines' });
 }
@@ -79,7 +78,7 @@ export function registerRenamePluginCommand(
       return { plugin, newName: name };
     },
     run: ({ plugin, newName }) => holdingTheWrite('modbench.plugin.rename', async () => vscode.window.withProgress({ location: { viewId: PLUGINS_KEY_ARGS.view } }, () =>
-      instance.quiet((written) => source.oneAtATime(() => renamed({ commands, source }, plugin, newName, written))))),
+      instance.quiet(() => source.oneAtATime(() => renamed({ commands, source }, plugin, newName))))),
     report: (result) => {
       if (result.applied) reportPartial(reporter, result.partial);
       else reporter.report('error', result.refusal, result.detail);

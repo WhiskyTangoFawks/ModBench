@@ -6,14 +6,11 @@ import type { WorkspaceChanges } from './applyWorkspaceChanges';
 export type ApplyingSource = Pick<SourceEditing, 'applyWorkspaceChanges' | 'refreshSourceControlFor'>;
 
 /** Applies the changes mEdit answered, resolving why VS Code could not apply them, or undefined when it did.
- *  VS Code keeps what it applied before a failure, so Source Control refreshes and `written` names every file touched. */
+ *  VS Code keeps what it applied before a change it cannot make, so Source Control refreshes for every plugin
+ *  touched. */
 export async function applyAnswered(
   source: ApplyingSource, items: readonly WorkspaceChanges[], plugins: readonly PluginAddress[],
-  written?: { name(paths: readonly string[]): void },
 ): Promise<string | undefined> {
-  written?.name(items.flatMap(({ moves, deletions, documents }) => [
-    ...moves.flatMap(({ from, to }) => [from, to]), ...deletions, ...documents.map(({ path }) => path),
-  ]));
   let failure: string | undefined;
   try {
     await source.applyWorkspaceChanges(items);

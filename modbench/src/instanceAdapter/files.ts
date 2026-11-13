@@ -17,7 +17,7 @@ import { keptByStamp, sameStamp, stampFrom, type FileStamp, type Kept } from '..
 import { isOwnTemp, ownTempPrefix, renameOver, tempOwner } from '../repositoriesLib/wholeWrites';
 import { digestOf } from './fileContents/contentDigest';
 import type { MoveToTrash } from '../ports/trash';
-import { nameWrites } from '../ports/writeNaming';
+import { nameWrites } from '../repositoriesLib/writeNaming';
 
 /** ADR-0007, answered without the backend. */
 export function isRepository(sourceFolder: string): Promise<boolean> {

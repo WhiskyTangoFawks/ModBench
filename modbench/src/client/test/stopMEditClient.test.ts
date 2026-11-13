@@ -14,7 +14,7 @@ describe('stopMEditClient', () => {
 
   it('stops the client the last createMEditClient made', async () => {
     const { createMEditClient, stopMEditClient } = await import('../index');
-    const client = createMEditClient({ backend: { attachPort: 5172 }, backendLog, listenerThrows: IGNORED_THROWS });
+    const client = createMEditClient({ backend: { attachPort: 5172 }, backendLog, listenerThrows: IGNORED_THROWS, leaveWritesUnnamed: () => undefined });
     const stop = vi.spyOn(client, 'stop').mockResolvedValue();
 
     await stopMEditClient();

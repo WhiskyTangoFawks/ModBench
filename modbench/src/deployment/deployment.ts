@@ -346,7 +346,7 @@ async function purgeFrom(record: DeploymentRecord, folder: string): Promise<Purg
 
 /** The hardlink deployment, one deploy at a time, which keeps what it wrote in `storage`, a folder of
  *  the instance's own that no deployment folder holds. */
-export function hardlinkDeployment(storage: string, place: PluginsTxtPlace): Deployment {
+export function hardlinkDeployment(storage: string, place: PluginsTxtPlace, leaveWritesUnnamed: () => void): Deployment {
   const record = recordIn(join(storage, 'deployment.json'));
   let last: Promise<unknown> = Promise.resolve();
   return {
@@ -356,11 +356,13 @@ export function hardlinkDeployment(storage: string, place: PluginsTxtPlace): Dep
       return run;
     },
     purge(folder) {
+      leaveWritesUnnamed();
       const run = last.then(() => purgeFrom(record, folder));
       last = run.catch(() => undefined);
       return run;
     },
     deploy(folder, files, plugins) {
+      leaveWritesUnnamed();
       const run = last.then(() => deployTo(record, place, folder, files, plugins));
       last = run.catch(() => undefined);
       return run;

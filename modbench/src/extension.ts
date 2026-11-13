@@ -11,6 +11,8 @@ import { commandTitles } from './drivingLib/commandTitles';
 import { surfaceRefusedWrites } from './drivingLib/writingGesture';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
+import { ambientWrites } from './instanceLoader/ambientWrites';
+import { leaveWritesUnnamed, writesNamedTo } from './repositoriesLib/writeNaming';
 import { highlightFollowingFocus } from './drivingLib/highlightFollowsFocus';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, loadOrderComing, sourceModRepositoriesOver, type Editor } from './editor';
@@ -293,7 +295,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   ownAll(own, registerDeployCommands({
     commands: deployCommands({
       adapter,
-      deployment: hardlinkDeployment(present(deps.storage, 'the storage of the workspace an instance opens in').fsPath, placeOfPluginsTxt),
+      deployment: hardlinkDeployment(present(deps.storage, 'the storage of the workspace an instance opens in').fsPath, placeOfPluginsTxt, leaveWritesUnnamed),
       deploymentFolder: deploymentFolderSetting,
     }),
     instance, reporterFor,
@@ -346,11 +348,12 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 function start(context: vscode.ExtensionContext): void {
+  writesNamedTo(ambientWrites);
   const outputChannel = vscode.window.createOutputChannel('Modbench', { log: true });
   context.subscriptions.push(outputChannel);
 
   // ADR-0002.
-  const meditClient = createMEditClient({ backend: { attachPort: attachPortOf((key) => vscode.workspace.getConfiguration('modbench').get(key)) }, backendLog: outputChannel, log: outputChannel, listenerThrows: toastOncePerFailure(makeReporter(outputChannel, 'notifications')) });
+  const meditClient = createMEditClient({ backend: { attachPort: attachPortOf((key) => vscode.workspace.getConfiguration('modbench').get(key)) }, backendLog: outputChannel, log: outputChannel, listenerThrows: toastOncePerFailure(makeReporter(outputChannel, 'notifications')), leaveWritesUnnamed });
   context.subscriptions.push(registerArchiveFiles(meditClient));
   const focusedView = createFocusedView();
 
@@ -358,7 +361,7 @@ function start(context: vscode.ExtensionContext): void {
   const opened = openFolderAsInstance(outputChannel, ownedByViews.own, context.extensionUri, meditClient);
   const sourceModRepositories = sourceModRepositoriesOver({ client: meditClient, outputChannel, ...opened.facts });
   const sourceEditing: SourceEditing = {
-    applyWorkspaceChanges: (items) => applyWorkspaceChanges(items),
+    applyWorkspaceChanges: (items) => applyWorkspaceChanges(items, { writing: (paths) => ambientWrites.name(paths) }),
     oneAtATime: oneAtATime(),
     refreshSourceControlFor: sourceModRepositories.refreshSourceControlFor,
   };

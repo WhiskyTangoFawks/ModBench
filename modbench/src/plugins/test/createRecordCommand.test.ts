@@ -1,4 +1,3 @@
-import { WrittenFiles } from '../../instanceLoader/writtenFiles';
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { TreeItem, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, Uri } from '../../test/vscodeMock';
 
@@ -80,7 +79,6 @@ function harness(viewSelection: readonly PluginsTreeNode[] = []) {
   });
   const reporter = recordingReporter();
   const writing: string[] = [];
-  const written = new WrittenFiles();
   const source = {
     applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve()),
     oneAtATime: <T,>(job: () => Promise<T>) => job(),
@@ -90,7 +88,7 @@ function harness(viewSelection: readonly PluginsTreeNode[] = []) {
     client, reporter, source,
     write: async (command) => {
       writing.push('opens');
-      await command(written);
+      await command();
       writing.push('ends');
     },
     createdRecords: {
@@ -107,20 +105,12 @@ function harness(viewSelection: readonly PluginsTreeNode[] = []) {
     },
   }, () => viewSelection);
   const create = present(handlers.get('modbench.record.create'), "the handler registered for 'modbench.record.create'");
-  return { client, reporter, steps, writing, create, source, written };
+  return { client, reporter, steps, writing, create, source };
 }
 
 beforeEach(() => { showQuickPick.mockReset(); showInputBox.mockReset(); });
 
 describe('modbench.record.create', () => {
-  it('names the file it wrote, for the read after the write', async () => {
-    const { written, create } = harness([OTHER_GROUP]);
-
-    await create(NPC_GROUP);
-
-    expect(written.named).toEqual(['/source/ModA/plugin-source/MyPatch.esp/Npcs/000900_MyPatch.esp.json']);
-  });
-
   it('on a group, awaits the new record of its type, then creates it, asking nothing', async () => {
     const { steps, create } = harness([OTHER_GROUP]);
 

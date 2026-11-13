@@ -1,4 +1,3 @@
-import { WrittenFiles } from '../../instanceLoader/writtenFiles';
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import type { CopyItem, RecordAt } from '../../client';
 import type { ItemRefusal } from '../../ports/selectionOutcome';
@@ -62,7 +61,7 @@ function recordingWrite(): { write: RecordWrite; writing: string[] } {
     writing,
     write: async (command) => {
       writing.push('opens');
-      await command(new WrittenFiles());
+      await command();
       writing.push('ends');
     },
   };

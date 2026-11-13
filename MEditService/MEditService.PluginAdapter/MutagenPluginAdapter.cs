@@ -136,7 +136,8 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     public PathAnswer Touching(LoadOrderSnapshot loadOrder, string path)
     {
         var full = Path.GetFullPath(path);
-        bool At(string file) => string.Equals(file, full, FilePaths.Comparison);
+        var below = full.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        bool At(string file) => string.Equals(file, full, FilePaths.Comparison) || file.StartsWith(below, FilePaths.Comparison);
         bool AtOneOf(IEnumerable<StampedFile> files) => files.Any(file => At(file.Path));
         // Every plugin that reads the game's strings reads each of these.
         if (AtOneOf(loadOrder.Archives) || AtOneOf(loadOrder.StringsFiles)) return new PathAnswer.Unnamed();

@@ -45,6 +45,16 @@ describe('applying workspace changes', () => {
     expect(h.applied).toEqual([[['move', '/a/Npc.json', '/a/Renamed.json'], ['create', '/a/Renamed.json'], ['replace', '/a/Renamed.json', 'renamed']]]);
   });
 
+  it.each([true, false])('tells the caller every file it moves, deletes or writes before VS Code applies, when VS Code applies: %s', async (lands) => {
+    h.applyLands = lands;
+    const writing = vi.fn<(paths: readonly string[]) => void>();
+    const changes = { moves: [{ from: '/a/Old', to: '/a/New' }], deletions: ['/a/Gone'], documents: [{ path: '/a/New/A.json', text: '{}' }] };
+
+    await applyWorkspaceChanges([changes], { writing }).catch(() => undefined);
+
+    expect(writing.mock.calls).toEqual([[['/a/Old', '/a/New', '/a/Gone', '/a/New/A.json']]]);
+  });
+
   it('tells the caller the moves before VS Code applies, and does not undo when VS Code applies', async () => {
     const undo = vi.fn();
     const moving = vi.fn<(moves: readonly { from: { path: string }; to: { path: string } }[]) => () => void>(() => undo);

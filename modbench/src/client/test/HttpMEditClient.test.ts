@@ -22,9 +22,9 @@ const fakeLogChannel = () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), er
 
 function makeClient(
   fetch: (input: Request) => Promise<Response>,
-  { health = 'up', ...deps }: { health?: 'up' | 'down' } & Pick<Parameters<typeof createMEditClient>[0], 'timeoutMs' | 'reconnectDelayMs' | 'log'> = {},
+  { health = 'up', ...deps }: { health?: 'up' | 'down' } & Pick<Parameters<typeof createMEditClient>[0], 'timeoutMs' | 'reconnectDelayMs' | 'log' | 'leaveWritesUnnamed'> = {},
 ) {
-  return createMEditClient({ listenerThrows: IGNORED_THROWS,
+  return createMEditClient({ listenerThrows: IGNORED_THROWS, leaveWritesUnnamed: () => undefined,
     backend: {
       attachPort: 5172, pollIntervalMs: 5, pollTimeoutMs: 20,
       checkHealth: () => Promise.resolve(answered(health === 'up')),
@@ -305,6 +305,20 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     expect(url.pathname).toBe(path);
     expect([...url.searchParams]).toEqual([]);
     expect(await request.json()).toEqual(body);
+  });
+
+  const answeringChangesOnly = [
+    'getCreateChanges', 'getCreateChanges in a container', 'getDeleteChanges', 'getRenameSourceChanges', 'getSourceFolderMoveChanges',
+    'getCopyChanges', 'getComparison with the document text', 'getRecordsComparison', 'getEditChanges', 'getEditChanges of the FormID', 'resolveNames',
+  ];
+
+  it.each(posts)('$name leaves the files it writes unnamed unless it only answers changes', async ({ name, verb, answer }) => {
+    const leaveWritesUnnamed = vi.fn();
+    const fetch = vi.fn(() => answers(200, answer)());
+
+    await verb(makeClient(fetch, { leaveWritesUnnamed }));
+
+    expect(leaveWritesUnnamed).toHaveBeenCalledTimes(answeringChangesOnly.includes(name) ? 0 : 1);
   });
 
   it.each([
@@ -765,7 +779,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
 
   it('stays stopped after a crash, telling its exit once: a snapshot answers backendFailed', async () => {
     const children: EventEmitter[] = [];
-    const client = createMEditClient({ listenerThrows: IGNORED_THROWS,
+    const client = createMEditClient({ listenerThrows: IGNORED_THROWS, leaveWritesUnnamed: () => undefined,
       backend: {
         freePort: () => Promise.resolve(5172), executablePath: '/x/backend',
         spawn: () => {
@@ -800,7 +814,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     ]);
     const child = Object.assign(new EventEmitter(), { kill: () => undefined, stdin: new PassThrough() });
     child.stdin.on('finish', () => { abortedAtKill = putSignal?.aborted; child.emit('exit', 0); });
-    const client = createMEditClient({ listenerThrows: IGNORED_THROWS,
+    const client = createMEditClient({ listenerThrows: IGNORED_THROWS, leaveWritesUnnamed: () => undefined,
       backend: {
         freePort: () => Promise.resolve(5172), spawn: () => child, executablePath: '/x/backend',
         pollIntervalMs: 5, pollTimeoutMs: 20, checkHealth: () => Promise.resolve(answered(true)),
@@ -869,7 +883,7 @@ describe('HttpMEditClient — a read before mEdit has started', () => {
   it('fails as unreachable, and files the reason in the log alone', async () => {
     const log = leveledLog();
     const fetch = vi.fn();
-    const client = createMEditClient({ listenerThrows: IGNORED_THROWS, backendLog: fakeLogChannel(), fetch, log });
+    const client = createMEditClient({ listenerThrows: IGNORED_THROWS, leaveWritesUnnamed: () => undefined, backendLog: fakeLogChannel(), fetch, log });
 
     await expect(client.getPlugins()).resolves.toEqual({ failed: 'unreachable' });
     expect(fetch).not.toHaveBeenCalled();
@@ -906,7 +920,7 @@ describe('HttpMEditClient, the backend process it hides', () => {
       state.healthy = true;
       return { kill: vi.fn(), on: vi.fn(), stdin: new PassThrough(), stdout: Readable.from(['[10:00:00 WRN] slow\n']), stderr: null };
     });
-    const client = createMEditClient({ listenerThrows: IGNORED_THROWS,
+    const client = createMEditClient({ listenerThrows: IGNORED_THROWS, leaveWritesUnnamed: () => undefined,
       backend: {
         freePort: () => Promise.resolve(5172), pollIntervalMs: 5, spawn, executablePath: '/x/backend',
         checkHealth: () => Promise.resolve(answered(state.healthy)),

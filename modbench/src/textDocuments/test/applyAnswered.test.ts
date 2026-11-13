@@ -34,13 +34,4 @@ describe('applying the changes mEdit answered', () => {
     expect(await applyAnswered(applying, [CHANGES], [A])).toBe('EEXIST VS Code stops at the first change it cannot make, so some changes may have landed.');
     expect(refreshed).toEqual([A]);
   });
-
-  it('names every file the changes move, delete or write, applied or not, since some may have landed', async () => {
-    const changes: WorkspaceChanges = { moves: [{ from: '/a/Old', to: '/a/New' }], deletions: ['/a/Gone'], documents: [{ path: '/a/New/A.json', text: '{}' }] };
-    const named: string[][] = [];
-
-    await applyAnswered(source('EEXIST').applying, [changes], [], { name: (paths) => { named.push([...paths]); } });
-
-    expect(named).toEqual([['/a/Old', '/a/New', '/a/Gone', '/a/New/A.json']]);
-  });
 });

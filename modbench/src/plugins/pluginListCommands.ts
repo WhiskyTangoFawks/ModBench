@@ -192,8 +192,7 @@ export function registerCreatePluginCommand(
       }
       return { ...newPlugin(name, { origin: where.name, label: placeLabel(where.name) }, where), flags: call.options.flags };
     },
-    run: ({ plugin, folder, sourceFolder, flags }) => runWritingGesture('modbench.plugin.create', PLUGINS_KEY_ARGS.view, instance, async (_progress, written) => {
-      written.leaveUnnamed();
+    run: ({ plugin, folder, sourceFolder, flags }) => runWritingGesture('modbench.plugin.create', PLUGINS_KEY_ARGS.view, instance, async () => {
       const result = await client.createPlugin(plugin, folder, sourceFolder, flags);
       return isRefused(result)
         ? { applied: false, refusal: result.message }

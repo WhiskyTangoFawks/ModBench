@@ -1,10 +1,11 @@
 import type { Instance } from '../instanceLoader/instance';
 import { WrittenFiles } from '../instanceLoader/writtenFiles';
+import { collectingWrites } from '../instanceLoader/ambientWrites';
 import { pausableProgress, type Progress } from './pausableProgress';
 import { Refusal } from './refusal';
 import type { Reporter } from '../ports/reporter';
 
-export type RecordWrite = (command: (written: WrittenFiles) => Promise<void>) => Promise<void>;
+export type RecordWrite = (command: () => Promise<void>) => Promise<void>;
 
 /** Runs `command` under the view's progress, which a command that waits on a person closes through the `Progress` it is
  *  given. The refresh that follows is work, so the progress is shown for it. */
@@ -15,7 +16,7 @@ export async function runUnderProgress<T>(
   const written = new WrittenFiles();
   progress.working();
   try {
-    return await written.collecting(() => command(progress, written));
+    return await collectingWrites(written, () => command(progress, written));
   } finally {
     progress.working();
     try {

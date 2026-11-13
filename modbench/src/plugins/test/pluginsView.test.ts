@@ -1,4 +1,3 @@
-import { WrittenFiles } from '../../instanceLoader/writtenFiles';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type * as vscode from 'vscode';
 import {
@@ -161,7 +160,7 @@ function pluginsView(
     log: () => undefined,
     reporterFor: (tag) => { const reporter = recordingReporter(); reporters.set(tag, reporter); return reporter; },
     statusBar: { ready: vi.fn(), showMEditState: vi.fn(), standing: () => "", dispose: vi.fn() }, registerRepositories: () => Promise.resolve(),
-    ask: scriptedDialog(), recordWrite: (command) => command(new WrittenFiles()),
+    ask: scriptedDialog(), recordWrite: (command) => command(),
     sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
     referencedBy: () => Promise.resolve(),
   });

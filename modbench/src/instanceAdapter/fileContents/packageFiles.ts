@@ -10,7 +10,7 @@ import { ownTempPrefix } from '../../repositoriesLib/wholeWrites';
 import type { InstanceAdapter, PackageFile } from '../instanceAdapter';
 import { EXTRACTION_PREFIX } from './hashIndex';
 import type { InstallationFileReader } from './installationFileReader';
-import { nameWrites } from '../../ports/writeNaming';
+import { nameWrites } from '../../repositoriesLib/writeNaming';
 
 const reachesOut = (path: string): boolean => path.split('/').some((segment) => ['', '.', '..'].includes(segment) || segment.includes('\\'));
 

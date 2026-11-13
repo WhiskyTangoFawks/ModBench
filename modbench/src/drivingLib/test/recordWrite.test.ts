@@ -7,6 +7,7 @@ vi.mock('vscode', async () => {
 
 import { progressSteps as steps } from '../../test/recordedProgress';
 import { recordWriteOver } from '../recordWrite';
+import { ambientWrites } from '../../instanceLoader/ambientWrites';
 
 const VIEW = 'a.view';
 const instanceThatReads = () => ({ refresh: () => { steps.push('refresh'); return Promise.resolve(undefined); } });
@@ -16,7 +17,7 @@ describe('a record write', () => {
   it('refreshes at the files the write named', async () => {
     const refresh = vi.fn(() => Promise.resolve(undefined));
 
-    await recordWriteOver(VIEW, { refresh }, noPut)((written) => { written.name(['/Data/A.esp']); return Promise.resolve(); });
+    await recordWriteOver(VIEW, { refresh }, noPut)(() => { ambientWrites.name(['/Data/A.esp']); return Promise.resolve(); });
 
     expect(refresh).toHaveBeenCalledWith(['/Data/A.esp']);
   });
