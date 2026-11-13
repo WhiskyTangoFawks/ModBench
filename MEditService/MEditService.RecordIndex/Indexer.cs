@@ -265,6 +265,9 @@ internal sealed class Indexer : IDisposable
             ?? File.ReadAllText(full);
     }
 
+    public string SourceTextOf(string sourceFolder, string sourceRelativePath) =>
+        SourceTextOf(Path.Combine(sourceFolder, sourceRelativePath));
+
     public UnreadableSource? WhyTreeStopped(PluginAddress key)
     {
         lock (_lock) return _scope?.Failed.WhyTreeStopped(key);

@@ -317,9 +317,10 @@ function createMockBackend(): http.Server {
       });
       return;
     }
-    if (url === '/plugins/problems') {
+    if (url.split('?')[0] === '/plugins/problems') {
+      const named = new URL(url, 'http://localhost').searchParams;
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(pluginProblems));
+      res.end(JSON.stringify(pluginProblems.filter(({ plugin }) => !named.has('plugin') || (plugin.name === named.get('plugin') && plugin.origin === named.get('origin')))));
       return;
     }
     if (url === '/plugins') {
@@ -2505,8 +2506,13 @@ describe('The Problems panel on plugin source', () => {
     rmSync(path.join(root, 'source'), { recursive: true, force: true });
   });
 
+  const rangeOfTarget = () => {
+    const line = readFileSync(file, 'utf8').split('\n').findIndex((text) => text.includes(NOT_HELD_FORM_KEY));
+    const character = readFileSync(file, 'utf8').split('\n')[line]?.indexOf(`"${NOT_HELD_FORM_KEY}"`) ?? 0;
+    return { start: { line, character }, end: { line, character: character + NOT_HELD_FORM_KEY.length + 2 } };
+  };
   const saved = (problems: PluginProblems['problems']) => {
-    pluginProblems = [{ plugin, problems }];
+    pluginProblems = [{ plugin, problems: problems.map((problem) => ({ range: rangeOfTarget(), ...problem })) }];
     for (const res of sseClients) writeSseFrame(res, 'rows-changed', { plugin: plugin.name, origin: plugin.origin, keys: [HELD_FORM_KEY] });
   };
   const shown = () => vscode.languages.getDiagnostics(vscode.Uri.file(file)).filter((diagnostic) => diagnostic.message === MESSAGE);

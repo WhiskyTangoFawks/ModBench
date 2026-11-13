@@ -124,7 +124,7 @@ public sealed class ProblemsPanelTests : IDisposable
             ((string?)null, (string?)null, Relative(plugin, stray)),
             (problem.FormKey, problem.TargetFormKey, problem.SourceRelativePath));
         Assert.Contains("declares no FormKey", problem.Message, StringComparison.Ordinal);
-        Assert.Equal(SourceRange.FirstLine, problem.Range);
+        Assert.Equal(Ranges.FirstLine, problem.Range);
         Assert.Null(answer.Failure);
     }
 
@@ -159,7 +159,7 @@ public sealed class ProblemsPanelTests : IDisposable
 
         var answer = Assert.Single(Ready(index));
 
-        Assert.Equal(SourceRange.FirstLine, Assert.Single(answer.Problems).Range);
+        Assert.Equal(Ranges.FirstLine, Assert.Single(answer.Problems).Range);
         Assert.Contains("Stray.json could not be read to place its problems", answer.Failure, StringComparison.Ordinal);
         Assert.Equal(ProblemsFailureKind.Placement, answer.FailureKind);
     }
