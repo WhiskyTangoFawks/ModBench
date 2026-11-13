@@ -75,7 +75,7 @@ public sealed class StreamedSelectTests : IDisposable
     }
 
     [Fact]
-    public void AFaultAfterTheFirstRow_EndsTheRowsWithDuckDBsReason()
+    public void AFaultAfterTheFirstRow_EndsTheRowsWithARefusalThatStatesWhatDuckDBGave()
     {
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, new MadeUpAdapter((Master, () => Items(Master, Records))));
 
@@ -86,6 +86,7 @@ public sealed class StreamedSelectTests : IDisposable
         Assert.InRange(read.Count - 1, 1, 999_999);
         var refused = read[^1].Refused();
         Assert.Equal(IndexRefusal.SelectRejected, refused.Refusal);
-        Assert.Contains("Could not convert string 'x'", refused.Message, StringComparison.Ordinal);
+        // DuckDB's workers race: the stream gets the fault's reason or only the interrupt that follows it.
+        Assert.Matches("Could not convert string 'x'|^DuckDB interrupted the SELECT partway, and gave no reason", refused.Message);
     }
 }
