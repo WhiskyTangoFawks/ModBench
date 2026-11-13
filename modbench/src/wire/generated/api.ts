@@ -1228,10 +1228,7 @@ export interface components {
         BsaVariantRequest: {
             /** Format: int32 */
             version: number;
-            /** Format: int32 */
-            archiveFlags: number;
-            /** Format: int32 */
-            fileFlags: number;
+            compressed: boolean;
         };
         BuildModRequest: {
             name: string;

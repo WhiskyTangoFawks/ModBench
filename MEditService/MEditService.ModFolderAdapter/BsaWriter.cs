@@ -9,9 +9,7 @@ namespace MEditService.ModFolderAdapter;
 internal static class BsaWriter
 {
     private const uint LongRecordVersion = 105;
-    private const uint CompressedFlag = 0x4;
-    private const uint FolderAndFileNames = 0x3;
-    private const uint FlagsWithoutAWriter = 0x40 | 0x100 | 0x200;
+    private const uint FirstVersion = 104;
     private const int HeaderLength = 36;
     private const int FileRecordLength = 16;
     private const long CompressionFlipBit = 1 << 30;
@@ -26,10 +24,7 @@ internal static class BsaWriter
         public int BlockLength => 1 + Spelling.Length + FileRecordLength * Entries.Count;
     }
 
-    public static bool Writes(BsaVariant variant) =>
-        variant.Version is >= 103 and <= LongRecordVersion
-        && (variant.ArchiveFlags & FolderAndFileNames) == FolderAndFileNames
-        && (variant.ArchiveFlags & FlagsWithoutAWriter) == 0;
+    public static bool Writes(BsaVariant variant) => variant.Version is >= FirstVersion and <= LongRecordVersion;
 
     public static void Write(Stream output, BsaVariant variant, IReadOnlyList<PackedFile> files)
     {
@@ -40,21 +35,21 @@ internal static class BsaWriter
         var namesStart = blocksStart + folders.Sum(folder => folder.BlockLength);
         var fileNamesLength = fileNames.Sum(name => name.Length);
 
-        var compressed = (variant.ArchiveFlags & CompressedFlag) != 0;
+        var (archiveFlags, fileFlags) = BsaFlags.Derive(variant.Version, variant.Compressed, files);
         output.Position = namesStart + fileNamesLength;
-        var stored = folders.SelectMany(folder => folder.Entries).Select(file => Store(output, file.Packed, variant.Version, compressed)).ToList();
+        var stored = folders.SelectMany(folder => folder.Entries).Select(file => Store(output, file.Packed, variant.Version, archiveFlags)).ToList();
 
         using var head = new MemoryStream();
         using var writer = new BinaryWriter(head, Encoding.UTF8, leaveOpen: true);
         writer.Write("BSA\0"u8);
         writer.Write(variant.Version);
         writer.Write((uint)HeaderLength);
-        writer.Write(variant.ArchiveFlags);
+        writer.Write(archiveFlags);
         writer.Write((uint)folders.Count);
         writer.Write((uint)files.Count);
         writer.Write((uint)folders.Sum(folder => folder.Spelling.Length));
         writer.Write((uint)fileNamesLength);
-        writer.Write(variant.FileFlags);
+        writer.Write(fileFlags);
 
         var blockStart = blocksStart;
         foreach (var folder in folders)
@@ -131,15 +126,16 @@ internal static class BsaWriter
         }
     }
 
-    private static (uint Size, uint Offset) Store(Stream output, PackedFile file, uint version, bool compressed)
+    private static (uint Size, uint Offset) Store(Stream output, PackedFile file, uint version, uint archiveFlags)
     {
         using var content = file.Open();
         var offset = checked((uint)output.Position);
         RefuseASizeTheFlagBitReads(file, content.Length);
-        if (!compressed)
+        if ((archiveFlags & BsaFlags.EmbeddedNames) != 0) WriteEmbeddedName(output, file);
+        if ((archiveFlags & BsaFlags.Compressed) == 0)
         {
             content.CopyTo(output);
-            return ((uint)content.Length, offset);
+            return (checked((uint)(output.Position - offset)), offset);
         }
 
         using (var writer = new BinaryWriter(output, Encoding.UTF8, leaveOpen: true))
@@ -158,6 +154,14 @@ internal static class BsaWriter
         var stored = output.Position - offset;
         RefuseASizeTheFlagBitReads(file, stored);
         return ((uint)stored, offset);
+    }
+
+    private static void WriteEmbeddedName(Stream output, PackedFile file)
+    {
+        var name = Terminated(file.Name, file)[..^1];
+        if (name.Length > byte.MaxValue) throw new InvalidDataException($"'{file.Source}' has a path too long for a BSA's embedded name.");
+        output.WriteByte((byte)name.Length);
+        output.Write(name);
     }
 
     private static void RefuseASizeTheFlagBitReads(PackedFile file, long size)

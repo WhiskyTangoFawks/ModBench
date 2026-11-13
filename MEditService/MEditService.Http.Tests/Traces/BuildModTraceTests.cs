@@ -141,7 +141,7 @@ public sealed class BuildModTraceTests : HostedTests
         {
             "a variant both a BA2 and a BSA",
             $"{{\"mods\": [{{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\", {Copy}}}], \"exclusionMark\": \".mohidden\", " +
-            "\"archives\": {\"general\": {\"ba2\": {\"version\": 1, \"compressed\": true}, \"bsa\": {\"version\": 105, \"archiveFlags\": 3, \"fileFlags\": 0}}, " +
+            "\"archives\": {\"general\": {\"ba2\": {\"version\": 1, \"compressed\": true}, \"bsa\": {\"version\": 105, \"compressed\": true}}, " +
             "\"textures\": {\"ba2\": {\"version\": 1, \"compressed\": true}}}}"
         },
     };

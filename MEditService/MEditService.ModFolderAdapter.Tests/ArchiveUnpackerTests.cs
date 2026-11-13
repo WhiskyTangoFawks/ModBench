@@ -77,7 +77,7 @@ public sealed class ArchiveUnpackerTests : IDisposable
     public void ABsa_UnpacksAFileWhoseEntryIsSpelledInAnotherCase()
     {
         With(Meshes, Mesh);
-        var archive = Packed(new BsaVariant(104, ArchiveFlags: 0x3, FileFlags: 0x3), Meshes);
+        var archive = Packed(new BsaVariant(104, Compressed: false), Meshes);
 
         var files = Unpacked(GameRelease.SkyrimLE, archive, "MESHES/actors/A.NIF");
 

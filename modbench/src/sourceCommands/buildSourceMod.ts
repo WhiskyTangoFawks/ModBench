@@ -9,7 +9,7 @@ import { gestureName, phrase, withRemedy, type Message } from '../ports/phrase';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
-import { ba2VersionsOf } from '../tables/gamePaths';
+import { archiveFormatsOf, type ArchiveFormat } from '../tables/gamePaths';
 import type { StepTasks } from './steps';
 
 type Adapter = Pick<InstanceAdapter, 'pathInFolder' | 'ownPath' | 'writeFilesIn' | 'filesIn' | 'originFileHash' | 'folderValue' | 'trashFileIn' | 'trashingReplaced' | 'fileStamp'>;
@@ -54,12 +54,12 @@ export interface SourceBuildOutcome {
   readonly refused: readonly BuildRefusal[];
 }
 
-/** The release's archive variants, none when the table names none. Modbench packs a BA2 compressed, as the game's own are. */
+const variantOf = ({ format, version }: ArchiveFormat) => (format === 'ba2' ? { ba2: { version, compressed: true } } : { bsa: { version, compressed: true } });
+
+/** The release's archive variants, none when the table names none. Modbench packs compressed, as the game's own archives are. */
 export function archiveVariants(gameRelease: string): BuildFacts['archives'] {
-  const versions = ba2VersionsOf(gameRelease);
-  return versions === undefined
-    ? null
-    : { general: { ba2: { version: versions.general, compressed: true } }, textures: { ba2: { version: versions.textures, compressed: true } } };
+  const formats = archiveFormatsOf(gameRelease);
+  return formats === undefined ? null : { general: variantOf(formats.general), textures: variantOf(formats.textures) };
 }
 
 const notBuilt = (why: string): string => `was not built: ${why.replace(/\.$/, '')}.`;
