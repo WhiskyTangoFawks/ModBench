@@ -1,3 +1,4 @@
+import { WrittenFiles } from '../../instanceLoader/writtenFiles';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Uri } from '../../test/vscodeMock';
 
@@ -78,7 +79,7 @@ function follower(symbols: ReadonlyMap<string, RenamedSymbol> | Error, answers: 
     instance: {
       quiet: async (work) => {
         quiet += 1;
-        try { return await work(); } finally { quiet -= 1; }
+        try { return await work(new WrittenFiles()); } finally { quiet -= 1; }
       },
     },
     reporter,

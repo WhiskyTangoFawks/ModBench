@@ -10,7 +10,7 @@ interface Editing {
 const STRINGS_LANGUAGE_SETTING = 'stringsLanguage';
 
 /** At every recompute, puts the load order with the strings language set then (ADR-0013) and signals a change at the
- *  paths read again, or none at a check (ADR-0015); at every change of the strings language, puts it. */
+ *  paths read again, or none at a check; at every change of the strings language, puts it. */
 export function registerPutLoadOrder(editing: Editing, instance: Pick<Instance, 'subscribe' | 'value'>): vscode.Disposable {
   const put = (value: InstanceValue): void => {
     editing.onRecompute(value.loadOrderSnapshot, vscode.workspace.getConfiguration('modbench').get<string>(STRINGS_LANGUAGE_SETTING));

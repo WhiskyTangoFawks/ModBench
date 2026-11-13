@@ -2,15 +2,16 @@ import { noRereadAfterWrite, WRITES, VIEW_REREADS } from '../../eslint-rules/noR
 import { RuleTester } from './ruleTester';
 
 const MESSAGE =
-  "A write writes its file and returns. A view changes only when a read lands: the Instance loader's, which "
-  + "runWritingGesture asks for once the command ends, or mEdit's published rows for plugin source. "
-  + 'A write path never refreshes or invalidates a view itself, landed or failed (ADR-0015).';
+  "A write writes its file, may name the files it wrote, and returns. A view changes only when a read lands: the "
+  + "Instance loader's, which runWritingGesture asks for once the command ends, at the files named, or mEdit's "
+  + 'published rows for plugin source. A write path never refreshes or invalidates a view itself, landed or failed.';
 
 const lines = (...source: string[]) => source.join('\n');
 const fails = (name: string, code: string, line?: number) => ({ name, code, errors: [{ message: MESSAGE, ...(line === undefined ? {} : { line }) }] });
 
 new RuleTester({ languageOptions: { ecmaVersion: 2022, sourceType: 'module' } }).run('no-reread-after-write', noRereadAfterWrite, {
   valid: [
+    { name: 'a write that names the files it wrote', code: 'async function f(commands, written) { await commands.versionInGit(x); written.name([path]); }\n' },
     { name: 'a write run through runWritingGesture', code: 'async function f(commands, instance) { await commands.versionInGit(x); await runWritingGesture(view, instance, noop); }\n' },
     {
       name: 'an anonymous export default function, which no name can call',

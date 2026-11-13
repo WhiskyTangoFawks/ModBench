@@ -1,23 +1,25 @@
 import type { Instance } from '../instanceLoader/instance';
+import { WrittenFiles } from '../instanceLoader/writtenFiles';
 import { pausableProgress, type Progress } from './pausableProgress';
 import { Refusal } from './refusal';
 import type { Reporter } from '../ports/reporter';
 
-export type RecordWrite = (command: () => Promise<void>) => Promise<void>;
+export type RecordWrite = (command: (written: WrittenFiles) => Promise<void>) => Promise<void>;
 
 /** Runs `command` under the view's progress, which a command that waits on a person closes through the `Progress` it is
- *  given. The refresh that shows the disk is work, so the progress is shown for it. */
+ *  given. The refresh that follows is work, so the progress is shown for it. */
 export async function runUnderProgress<T>(
-  viewId: string, instance: Pick<Instance, 'refresh'>, command: (progress: Progress) => Promise<T>,
+  viewId: string, instance: Pick<Instance, 'refresh'>, command: (progress: Progress, written: WrittenFiles) => Promise<T>,
 ): Promise<T> {
   const progress = pausableProgress(viewId);
+  const written = new WrittenFiles();
   progress.working();
   try {
-    return await command(progress);
+    return await command(progress, written);
   } finally {
     progress.working();
     try {
-      await instance.refresh();
+      await instance.refresh(written.named);
     } finally {
       await progress.done();
     }
@@ -73,5 +75,5 @@ export async function holdingTheWrite<T>(write: string, work: () => Promise<T>):
 
 /** Runs the `write` gesture's `command` under the view's progress, holding the write. */
 export const runWritingGesture = <T>(
-  write: string, viewId: string, instance: Pick<Instance, 'refresh'>, command: (progress: Progress) => Promise<T>,
+  write: string, viewId: string, instance: Pick<Instance, 'refresh'>, command: (progress: Progress, written: WrittenFiles) => Promise<T>,
 ): Promise<T> => holdingTheWrite(write, () => runUnderProgress(viewId, instance, command));
