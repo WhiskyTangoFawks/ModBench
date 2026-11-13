@@ -60,10 +60,12 @@ function boxesOf(drawnBands, band) {
     return [...(lib === undefined ? [] : [lib]), ...drawn.flatMap((id) => srcBoxOf(band, id))];
 }
 
-/** @param {string} drawing @returns {Record<string, string[]>} */
+/** @param {string} drawing */
 export function boxesByBand(drawing) {
     const drawn = drawnByBand(drawing);
-    return Object.fromEntries(['drivers', 'driving', 'core', 'kernel', 'readmodel', 'repositories'].map((band) => [band, boxesOf(drawn, band)]));
+    /** @param {string} band */
+    const of = (band) => boxesOf(drawn, band);
+    return { drivers: of('drivers'), driving: of('driving'), core: of('core'), kernel: of('kernel'), readmodel: of('readmodel'), repositories: of('repositories') };
 }
 
 export const BOXES_BY_BAND = boxesByBand(readFileSync(ZOOM_OUT, 'utf8'));
