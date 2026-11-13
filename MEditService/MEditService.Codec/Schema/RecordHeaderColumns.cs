@@ -41,7 +41,7 @@ internal static class RecordHeaderColumns
     private static ColumnSpec WithFlagViews(
         ColumnSpec flags, Type getterType, IReadOnlyDictionary<string, IGrouping<string, PropertyInfo>> declarations, GameReflection game)
     {
-        var aliases = game.Defaults.MembersAliasing(getterType, FlagsMember, RecordHeaderFlags.AllBits);
+        var aliases = RecordHeaderFlags.ViewsOf(getterType, game.Defaults.Release);
         var names = BitNames(aliases, declarations, getterType, game);
         return flags with { Field = flags.Field with { EnumMembers = names }, Aliases = aliases };
     }

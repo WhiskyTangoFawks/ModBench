@@ -93,13 +93,12 @@ public sealed class RecordHeaderSchemaTests
     [Fact]
     public void TheDocumentsOtherSpellingsOfTheFlags_AreNoColumns_AndClearWithTheFlags()
     {
-        string[] aliases = ["Fallout4MajorRecordFlags", "IsCompressed", "IsDeleted", "MajorFlags"];
         var cell = Document.Parse("""{"Fallout4MajorRecordFlags":0,"IsCompressed":0,"IsDeleted":0,"MajorFlags":0,"WaterHeight":0}""");
 
         var cleared = cell.WithoutAliasesOf(RecordFlags("cell"));
 
         Assert.Equal("""{"WaterHeight":0}""", cleared.Text);
-        Assert.Empty(Schema("cell").RecordColumns.Select(c => c.Name).Intersect(aliases));
+        Assert.Empty(Schema("cell").RecordColumns.Select(c => c.Name).Intersect(RecordFlagViews.All));
     }
 
     [Fact]

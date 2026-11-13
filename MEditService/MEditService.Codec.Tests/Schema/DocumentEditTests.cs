@@ -617,6 +617,22 @@ public sealed class DocumentEditTests
         Assert.Equal(new EditFailure.NoField("NoSuchField", "npc_", "NoSuchField"), failure);
     }
 
+    [Theory]
+    [InlineData("Fallout4MajorRecordFlags", EditOp.Set, "[]", null)]
+    [InlineData("MajorFlags", EditOp.Add, "\"Deleted\"", null)]
+    [InlineData("IsCompressed", EditOp.Set, "true", null)]
+    [InlineData("IsDeleted", EditOp.Set, "true", null)]
+    [InlineData("Fallout4MajorRecordFlags", EditOp.Remove, "0", 0)]
+    [InlineData("Fallout4MajorRecordFlags", EditOp.Move, "0", 0)]
+    public void AViewOfTheRecordFlags_AsTheFirstHop_FailsAsAnAliasOfTheFlagsColumn(string view, EditOp op, string value, int? index)
+    {
+        DocumentHop[] path = index is { } at ? [Member(view), At(at)] : [Member(view)];
+
+        var failure = Failure(NpcText(), "npc_", op, value, path);
+
+        Assert.Equal(new EditFailure.AliasOfColumn(index is null ? view : $"{view}[{index}]", view, "MajorRecordFlagsRaw"), failure);
+    }
+
     [Fact]
     public void UnknownNestedPath_FailsNamingTheHopThatFailed()
     {

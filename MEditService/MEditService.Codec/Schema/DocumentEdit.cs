@@ -126,7 +126,11 @@ public sealed class DocumentEdit
         var spelled = DocumentHop.Spell(path);
         var name = path[0].RequireMember();
         if (schema.RecordColumns.FirstOrDefault(c => c.Name == name) is not { } column)
+        {
+            if (schema.RecordColumns.FirstOrDefault(c => c.Aliases.Contains(name)) is { } spelledAgain)
+                return new EditFailure.AliasOfColumn(spelled, name, spelledAgain.Name);
             return new EditFailure.NoField(spelled, schema.TableName, name);
+        }
         if (column.Synthetic != null && path.Count > 1) return new EditFailure.NoMembers(spelled, name);
 
         var meta = column.Field;

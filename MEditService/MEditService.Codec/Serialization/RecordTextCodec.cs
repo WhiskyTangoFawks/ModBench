@@ -43,23 +43,21 @@ public static class RecordTextCodec
             ? WhyNotProduced(text, gameRelease, source => HeaderRoundTrip(source, gameRelease), HeaderIdentityOf(text))
             : WhyNotAProducedRecord(text, gameRelease, recordType);
 
-    // The views of the flags that a document omits are no difference: the reader takes the raw value alone,
-    // and the codec writes every view beside it.
-    private static string? WhyNotAProducedRecord(string text, GameRelease gameRelease, string? recordType)
-    {
-        IReadOnlyList<string> views = [];
-        return WhyNotProduced(
+    // The reader takes the raw flags value alone and the codec writes every view beside it, so a document
+    // that omits a view is the record.
+    private static string? WhyNotAProducedRecord(string text, GameRelease gameRelease, string? recordType) =>
+        WhyNotProduced(
             text,
             gameRelease,
             source =>
             {
                 var record = Deserialize(source, gameRelease, recordType);
-                views = RecordHeaderFlags.ViewsOf(record.GetType(), gameRelease);
-                return SerializeToText(record, gameRelease);
+                var produced = Document.Parse(SerializeToText(record, gameRelease));
+                var written = Document.Parse(source);
+                var omitted = RecordHeaderFlags.ViewsOf(record.Registration.GetterType, gameRelease).Where(view => written.At(view) is null);
+                return omitted.Aggregate(produced, (document, view) => document.Without(view)).Text;
             },
-            NoIdentityMembers,
-            (written, produced) => views.Where(view => written.At(view) is null).Aggregate(produced, (document, view) => document.Without(view)));
-    }
+            NoIdentityMembers);
 
     private static readonly IReadOnlySet<string> NoIdentityMembers = new HashSet<string>(StringComparer.Ordinal);
 
@@ -90,13 +88,13 @@ public static class RecordTextCodec
         WhyNotProduced(text, gameRelease, source => BlankDocument(level, gameRelease, Document.Parse(source)), NoIdentityMembers);
 
     private static string? WhyNotProduced(
-        string text, GameRelease gameRelease, Func<string, string> produce, IReadOnlySet<string> identity, Func<Document, Document, Document>? alignedTo = null)
+        string text, GameRelease gameRelease, Func<string, string> produce, IReadOnlySet<string> identity)
     {
         if (!Document.TryRead(text, out var written, out var whyNot)) return whyNot;
         try
         {
             var produced = Document.Parse(produce(text));
-            return DocumentMeaning.FirstDifference(WithoutEmptyChildLists(written, gameRelease).Element, (alignedTo?.Invoke(written, produced) ?? produced).Element) is { } at
+            return DocumentMeaning.FirstDifference(WithoutEmptyChildLists(written, gameRelease).Element, produced.Element) is { } at
                 ? $"{at} does not match what the current codec would produce from it."
                 : null;
         }

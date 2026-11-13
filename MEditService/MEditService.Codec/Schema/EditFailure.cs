@@ -8,6 +8,8 @@ public abstract record EditFailure(string Path)
 {
     public sealed record NoField(string Path, string Owner, string Field) : EditFailure(Path);
 
+    public sealed record AliasOfColumn(string Path, string Alias, string Column) : EditFailure(Path);
+
     public sealed record NoMember(string Path, string Owner, string Member) : EditFailure(Path);
 
     public sealed record NoMembers(string Path, string Subject) : EditFailure(Path);

@@ -133,15 +133,16 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
         Assert.StartsWith(member, why, StringComparison.Ordinal);
     }
 
-    private static readonly string[] FlagViews = ["Fallout4MajorRecordFlags", "MajorFlags", "IsCompressed", "IsDeleted"];
+    private const int FlagsThatWriteEveryView = 0x40420;
 
-    private static string? WhyNotARecordOfNpcFlagged0x400WithRawSetTo(string raw, params string[] viewsHeld)
+    private static string? WhyNotARecordOfNpcWithTheViews(string[] held, Action<JsonObject>? edited = null)
     {
-        var npc = new Npc(new FormKey(Refusal, 0x801), Fallout4Release.Fallout4) { EditorID = "Guy", MajorRecordFlagsRaw = 1024 };
+        var npc = new Npc(new FormKey(Refusal, 0x801), Fallout4Release.Fallout4) { EditorID = "Guy", MajorRecordFlagsRaw = FlagsThatWriteEveryView };
         var text = Edited(RecordTextCodec.SerializeToText(npc, Release), root =>
         {
-            foreach (var view in FlagViews.Except(viewsHeld)) _ = root.Remove(view);
-            root["MajorRecordFlagsRaw"] = JsonNode.Parse(raw);
+            Assert.All(RecordFlagViews.All, view => Assert.NotNull(root[view]));
+            foreach (var view in RecordFlagViews.All.Except(held)) _ = root.Remove(view);
+            edited?.Invoke(root);
         });
         return RecordTextCodec.WhyNotARecord(text, Release, "npc_");
     }
@@ -150,18 +151,34 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
     [InlineData]
     [InlineData("MajorFlags")]
     [InlineData("Fallout4MajorRecordFlags")]
-    [InlineData("Fallout4MajorRecordFlags", "MajorFlags", "IsCompressed", "IsDeleted")]
-    public void ARawFlagsValue_WithAnyOfItsViewsOmitted_IsTheRecord(params string[] kept)
+    [InlineData("Fallout4MajorRecordFlags", "MajorFlags", "IsCompressed")]
+    public void ARawFlagsValue_WithAnyOfItsViewsOmitted_IsTheRecord(params string[] held)
     {
-        Assert.Null(WhyNotARecordOfNpcFlagged0x400WithRawSetTo("1024", kept));
+        Assert.Null(WhyNotARecordOfNpcWithTheViews(held));
+    }
+
+    [Fact]
+    public void ARawFlagsValue_WithEveryViewHeldAgreeingWithIt_IsTheRecord()
+    {
+        Assert.Null(WhyNotARecordOfNpcWithTheViews([.. RecordFlagViews.All]));
     }
 
     [Theory]
     [InlineData("Fallout4MajorRecordFlags")]
     [InlineData("MajorFlags")]
-    public void ARawFlagsValue_ThatDisagreesWithAViewTheDocumentHolds_IsRefused(string kept)
+    public void ARawFlagsValue_ThatDisagreesWithAViewTheDocumentHolds_IsRefused_NamingTheRawMember(string held)
     {
-        Assert.NotNull(WhyNotARecordOfNpcFlagged0x400WithRawSetTo("2048", kept));
+        var why = WhyNotARecordOfNpcWithTheViews([held], root => root["MajorRecordFlagsRaw"] = FlagsThatWriteEveryView + 0x800);
+
+        Assert.StartsWith("MajorRecordFlagsRaw", why, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AHeldFlagsView_EditedWhileTheRawValueIsNot_IsRefused_NamingTheView()
+    {
+        var why = WhyNotARecordOfNpcWithTheViews(["IsDeleted"], root => root["IsDeleted"] = false);
+
+        Assert.StartsWith("IsDeleted", why, StringComparison.Ordinal);
     }
 
     [Fact]
