@@ -37,8 +37,6 @@ internal sealed partial class ProblemPlacement
         _root = Parse(_bytes);
     }
 
-    public string? DocumentFormKey => _root?.Member("FormKey")?.Value is { } formKey ? Canonical(formKey) : null;
-
     public SourceRange Of(string? formKey, string? targetFormKey, string? fieldPath)
     {
         var scope = _root is not null && formKey is not null ? RecordOf(_root, formKey) ?? _root : _root;

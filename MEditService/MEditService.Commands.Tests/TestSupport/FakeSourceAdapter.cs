@@ -69,6 +69,8 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
     public string ContentStamp(string text) => throw Unreached();
 
+    public string? FormKeyDeclaredIn(string text, string path, string pluginFileName) => throw Unreached();
+
     public SourceFailure? Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<FileToCopy> assets, bool commit, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest, IReadOnlyList<string> ignored,

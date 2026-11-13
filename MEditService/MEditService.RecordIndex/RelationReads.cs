@@ -422,8 +422,6 @@ internal sealed class RelationReads(
         ];
     }
 
-    /// <summary>The content stamp of the text the record index read of each of <paramref name="formKeys"/> in
-    /// <paramref name="plugin"/>, by FormKey.</summary>
     public ILookup<string, string> GetContentStamps(PluginAddress plugin, IReadOnlyCollection<string> formKeys)
     {
         using var context = OpenRead();
@@ -431,7 +429,7 @@ internal sealed class RelationReads(
             SELECT form_key, content_hash FROM {TableDdlBuilder.MirrorSchema}.records
             WHERE plugin = $1 AND origin = $2 AND form_key IN (SELECT unnest($3::VARCHAR[]))
             """, reader => (FormKey: reader.GetString(0), Stamp: reader.GetString(1)), plugin.Name, plugin.Origin, formKeys.ToList())
-            .ToLookup(row => row.FormKey, row => row.Stamp, StringComparer.OrdinalIgnoreCase);
+            .ToLookup(row => row.FormKey, row => row.Stamp);
     }
 
     /// <summary>The plugin files each plugin read from its source tree links into: a FormKey names its origin plugin.</summary>
