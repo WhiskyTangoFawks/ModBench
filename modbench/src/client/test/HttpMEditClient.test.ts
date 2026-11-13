@@ -22,7 +22,7 @@ const fakeLogChannel = () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), er
 
 function makeClient(
   fetch: (input: Request) => Promise<Response>,
-  { health = 'up', ...deps }: { health?: 'up' | 'down' } & Pick<Parameters<typeof createMEditClient>[0], 'timeoutMs' | 'reconnectDelayMs' | 'log' | 'leaveWritesUnnamed'> = {},
+  { health = 'up', ...deps }: { health?: 'up' | 'down' } & Partial<Pick<Parameters<typeof createMEditClient>[0], 'timeoutMs' | 'reconnectDelayMs' | 'log' | 'leaveWritesUnnamed'>> = {},
 ) {
   return createMEditClient({ listenerThrows: IGNORED_THROWS, leaveWritesUnnamed: () => undefined,
     backend: {
