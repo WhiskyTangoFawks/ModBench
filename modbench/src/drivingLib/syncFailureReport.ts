@@ -30,7 +30,7 @@ interface SyncRuns {
   settled(): Promise<void>;
 }
 
-function trackSyncRuns(): SyncRuns & { begin(run: Promise<void>): void } {
+function trackSyncRuns(): SyncRuns & { begin(run: Promise<unknown>): void } {
   const inFlight = new Set<Promise<void>>();
   return {
     begin: (run) => {

@@ -48,11 +48,10 @@ describe('plugin sync on the instance', () => {
     const { instance, refresh, hears } = instanceHeard();
     let finishFirst!: () => void;
     const gate = new Promise<void>((resolve) => { finishFirst = resolve; });
-    const runs = [
-      async () => { await gate; ambientWrites.name(['/profile/plugins.txt']); return { applied: true as const, wrote: true, added: [], dropped: [] }; },
-      () => Promise.resolve({ applied: true as const, wrote: false, added: [], dropped: [] }),
-    ];
-    pluginSyncOn({ instance, channel, syncPlugins: () => runs.shift()!() });
+    const firstRun = async () => { await gate; ambientWrites.name(['/profile/plugins.txt']); return { applied: true as const, wrote: true, added: [], dropped: [] }; };
+    const later = () => Promise.resolve({ applied: true as const, wrote: false, added: [], dropped: [] });
+    let called = 0;
+    pluginSyncOn({ instance, channel, syncPlugins: () => (called++ === 0 ? firstRun() : later()) });
 
     const first = hears();
     await hears();
