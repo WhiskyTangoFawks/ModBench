@@ -161,7 +161,7 @@ interface RootPlugins {
 }
 
 // What the index holds at the game's root is read from every file once per index, which a refresh that
-// changed no listing reuses whole (ADR-0015).
+// changed no listing reuses whole.
 const rootPluginsOfIndex = new WeakMap<RootFiles, RootPlugins>();
 
 function rootPluginsOf(index: RootFiles): RootPlugins {
@@ -308,7 +308,7 @@ export function listedArchivesNothingHolds({ gameRelease, listed, inData, files 
   return listed.filter((name) => !held.has(foldPath(name)));
 }
 
-// The archives the files hold are scanned once per index, which a refresh that changed no listing reuses whole (ADR-0015).
+// The archives the files hold are scanned once per index, which a refresh that changed no listing reuses whole.
 const archivesOfIndex = new WeakMap<FileWinners, { readonly gameRelease: string; readonly archives: ReadonlySet<string> }>();
 
 function archivesOfFiles(files: FileWinners, gameRelease: string, isArchive: (relativePath: string) => boolean): ReadonlySet<string> {

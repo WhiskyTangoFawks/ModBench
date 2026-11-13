@@ -1,7 +1,7 @@
 import type { MEditClient } from '../client';
 import { coalesced } from '../ports/coalesced';
 
-// Each rows-changed event (ADR-0015) re-reads the whole tree, which has no per-row
+// Each rows-changed event re-reads the whole tree, which has no per-row
 // identity to check it against. The plugin facts too, as a changed record can start or stop
 // matching the record filter.
 export function subscribeTreeToNotifications(

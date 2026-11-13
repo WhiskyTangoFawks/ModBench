@@ -16,7 +16,7 @@ using Mutagen.Bethesda.Strings;
 namespace MEditService.RecordIndex;
 
 /// <summary>Brings the Store to the load order (ADR-0013), and validates each plugin a change names, or every plugin at a
-/// check of the disk (ADR-0015). It holds the open plugins, the progress and the scope.</summary>
+/// check of the disk (ADR-0001). It holds the open plugins, the progress and the scope.</summary>
 internal sealed class Indexer : IDisposable
 {
     private readonly LoadOrderHolder _holder;
@@ -95,7 +95,7 @@ internal sealed class Indexer : IDisposable
 
     private (long Version, LoadOrderState State, string? Message, bool Validating) _told;
 
-    // ADR-0015: every site that changes what Status reports calls this after. A status counts as told
+    // Every site that changes what Status reports calls this after. A status counts as told
     // only once Publish returns. _lock is reentrant, so this is safe from inside a lock a caller holds.
     private void PublishStatus()
     {
@@ -159,7 +159,7 @@ internal sealed class Indexer : IDisposable
     // Replaced under _lock, then completed, each time a re-read or a check of the disk lands or fails.
     private TaskCompletionSource _writesRead = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    // ADR-0015. Guarded by _lock.
+    // Guarded by _lock.
     private bool _openedUnchecked;
     private static readonly TimeSpan SourceWriteReadLimit = TimeSpan.FromSeconds(60);
 
@@ -381,7 +381,7 @@ internal sealed class Indexer : IDisposable
         lock (_turns) return _validatingTurn || _checkAsked || _handed.Count > 0 || _named.Count > 0;
     }
 
-    // ADR-0015: a handed path is validated as a change on disk is.
+    // A handed path is validated as a change on disk is.
     private void ValidateTreesHolding(IReadOnlyList<string> paths)
     {
         lock (_turns)
@@ -516,7 +516,7 @@ internal sealed class Indexer : IDisposable
         lock (_turns) return _disposed ? null : _holder.Held;
     }, writesSignalled);
 
-    // ADR-0013's one verb, then, for a check of the disk, every plugin validated (ADR-0015). The arrival is read once the
+    // ADR-0013's one verb, then, for a check of the disk, every plugin validated. The arrival is read once the
     // exclusive right is held, so a refill reconciles the load order held then. Null reconciles nothing.
     private void Reconcile(Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, long? writesSignalled)
     {
@@ -1114,7 +1114,7 @@ internal sealed class Indexer : IDisposable
     }
 
     // ADR-0010: a plugin the store has seen, still matching the disk, is registered, not
-    // indexed; ADR-0015 validates a compiled plugin by content on that same warm path.
+    // indexed; ADR-0003 validates a compiled plugin by content on that same warm path.
     private ReadOutcome RegisterWarmOrIndex(OpenScope scope, PluginMetadata plugin, ReadState state, Store.IndexedStamps indexed, CancellationToken token)
     {
         if (indexed.FileOf(plugin.Key) is not null && WarmRegister(scope, plugin, state, indexed, token))
@@ -1142,7 +1142,7 @@ internal sealed class Indexer : IDisposable
 
     // ADR-0007; HeldPlugins still reads a compiled plugin's metadata off its binary.
 
-    // One commit for the whole plugin, whichever door it came through (ADR-0015).
+    // One commit for the whole plugin, whichever door it came through.
     private ReadOutcome IndexOnePlugin(OpenScope scope, PluginMetadata plugin, ReadState state, CancellationToken token) =>
         scope.Store.Commit(_ => IndexOnePluginRows(scope, plugin, state, token));
 
@@ -1227,7 +1227,6 @@ internal sealed class Indexer : IDisposable
             ? string.Join('\n', places.Select(place => $"{Store.Store.RelativeWithin(loadOrder.DataFolderPath, place)}|{plugin.Strings.StampOf(place) ?? loadOrder.StampOf(place)}"))
             : failure.Reason);
 
-    // ADR-0015.
     private void ValidateIndex(CancellationToken token)
     {
         var scope = RequireScope();
@@ -1338,7 +1337,7 @@ internal sealed class Indexer : IDisposable
             foreach (var failure in report.Failures)
                 _logger.LogWarning("Reconciling {Plugin}: {Failure}", key.Name, failure);
 
-            // Gained records are refreshed by key so the rows that moved are named (ADR-0015).
+            // Gained records are refreshed by key so the rows that moved are named.
             if (report.NeedsRebuild && report.ChangedKeys.Count > 0 && plugin.Provider is PluginProvider.FromMod)
             {
                 if (scope.Projector.RefreshByKeys(plugin.Registered, report.ChangedKeys) is not { } stopped) return false;
@@ -1376,7 +1375,7 @@ internal sealed class Indexer : IDisposable
         $"Could not validate this plugin's {(holdsTree ? "source tree" : "binary")} ({reason}). Still showing " +
         "what was last read from it.";
 
-    // ADR-0015: a check of the disk that changed the status reads Reconciling until the plugins are validated. The message
+    // A check of the disk that changed the status reads Reconciling until the plugins are validated. The message
     // when validation failed outright, which becomes status data.
     private string? ValidateHeld(CancellationToken token, out bool busy) => ValidationFailure(() => ValidateIndex(token), token, out busy);
 

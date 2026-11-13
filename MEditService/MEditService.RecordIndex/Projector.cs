@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 namespace MEditService.RecordIndex;
 
 /// <summary>Reads a system of record (a compiled plugin's source tree, or its binary's hash) and writes
-/// what differs into the Store (ADR-0015).</summary>
+/// what differs into the Store.</summary>
 internal sealed class Projector(
     Store.Store index, Func<PluginAddress, PluginMetadata?> held, ISourceAdapter source, ILogger logger)
 {
@@ -93,7 +93,7 @@ internal sealed class Projector(
             .Where(formKey => !EqualityComparer<T>.Default.Equals(
                 before.GetValueOrDefault(formKey), after.GetValueOrDefault(formKey)));
 
-    /// <summary>ADR-0015: re-derives <paramref name="formKeys"/>' rows from the Source repository,
+    /// <summary>Re-derives <paramref name="formKeys"/>' rows from the Source repository,
     /// idempotent by content, the whole plugin for a key the record index does not hold. Answers what stopped
     /// the tree.</summary>
     internal SourceFailure? RefreshByKeys(RegisteredPlugin plugin, IReadOnlyList<string> formKeys) => index.Commit(projection =>
@@ -175,7 +175,7 @@ internal sealed class Projector(
         projection.OweWinnerSweep(before.Keys.Union(after.Keys));
         var statesAfter = index.HeldWorkingTreeStates(key);
 
-        // ADR-0015: the keys asked about, and every row the tree read again moved, gone
+        // The keys asked about, and every row the tree read again moved, gone
         // or gained.
         var moved = KeysDiffering(before, after).Union(KeysDiffering(statesBefore, statesAfter), StringComparer.Ordinal);
         AnnounceRows(projection, key, [.. formKeys.Union(moved, StringComparer.Ordinal)]);
@@ -185,7 +185,7 @@ internal sealed class Projector(
     private static void AnnounceRows(Store.Store.Projection projection, PluginAddress key, IReadOnlyList<string> formKeys) =>
         projection.Announce(sequence => new RowsChangedNotification(key, formKeys, sequence));
 
-    /// <summary>ADR-0015: compares <paramref name="plugin"/>'s rows against the system of record they
+    /// <summary>Compares <paramref name="plugin"/>'s rows against the system of record they
     /// came from, the tree <paramref name="state"/> stamps or else the binary, and refreshes what
     /// differs.</summary>
     internal ValidationReport Validate(RegisteredPlugin plugin, ReadState state, Store.IndexedStamps indexed) =>
@@ -268,7 +268,7 @@ internal sealed class Projector(
         }
 
         // A held record with no document here is refreshed by key too, so the rows-changed it
-        // publishes names it (ADR-0015). A refresh learns the working tree states itself.
+        // publishes names it. A refresh learns the working tree states itself.
         var deleted = heldStamps.Keys.Except(onDisk.Keys, StringComparer.Ordinal);
         List<string> stale = [.. deleted, .. drifted];
         var stopped = stale.Count > 0

@@ -96,7 +96,7 @@ internal static class Indexes
         return index;
     }
 
-    /// <summary>A change signalled (ADR-0015), answered once <paramref name="announced"/> holds, its status is out and its
+    /// <summary>A change signalled, answered once <paramref name="announced"/> holds, its status is out and its
     /// validation has ended: a check that re-derived nothing shows that only in the write gate.</summary>
     internal static void NextCheckUntil(this OpenedIndex index, Func<bool> announced, string what)
     {

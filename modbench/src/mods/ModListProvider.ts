@@ -167,7 +167,7 @@ function isEntryNode(node: ModlistNode): node is ModNode | SeparatorNode {
 }
 
 /** Sidebar Mods tree over the instance's active profile: rows, statuses and the overwrite count
- *  from the Instance value alone (ADR-0015). */
+ *  from the Instance value alone. */
 export class ModListProvider
   implements vscode.TreeDataProvider<ModlistNode>, vscode.TreeDragAndDropController<ModlistNode>, vscode.Disposable
 {

@@ -8,8 +8,7 @@ import type { PluginCommands } from '../pluginCommands/plugins';
 import type { Reporter } from '../ports/reporter';
 
 /** The boxes toggled to one state are one call to
- *  `setPluginsParticipation`'s core: one splice, one report. The rows change as ADR-0015
- *  says. */
+ *  `setPluginsParticipation`'s core: one splice, one report. */
 export async function onPluginCheckboxChanged(
   e: vscode.TreeCheckboxChangeEvent<PluginsTreeNode>,
   commands: Pick<PluginCommands, 'setPluginsParticipation'>, reporter: Reporter, instance: Pick<Instance, 'refresh'>,

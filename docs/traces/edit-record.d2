@@ -64,8 +64,7 @@ textdocuments -> vscode: "the changes, as one workspace edit" {class: outside}
 vscode."apply, as a refactoring"
 vscode -> textdocuments: "the changed documents, handed as above" {class: outside}
 vscode -> source: "the files it saves, as after any refactoring" {class: outside}
-instance -> instanceadapter: watch {class: signal}
-instanceadapter -> instanceloader: "the instance changed" {class: signal}
+textdocuments -> instanceloader: "the files the changes touch, named before VS Code applies them" {class: signal}
 instanceloader."the next snapshot: index-load-order"
 
 refused: "refused, nothing written for that record" {

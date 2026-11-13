@@ -12,7 +12,7 @@ export const TOOLBOX_VIEW = 'modbench.toolbox';
 
 interface ToolboxCommandDeps {
   commands: Pick<InstanceCommands, 'switchProfile'>;
-  /** The profiles and the active one, from the instance value (ADR-0015); `refresh` ends each gesture. */
+  /** The profiles and the active one, from the instance value; `refresh` ends each gesture. */
   instance: Pick<Instance, 'value' | 'refresh'>;
   /** Modbench's own extension ID, which scopes the Settings editor to its settings. */
   extensionId: string;

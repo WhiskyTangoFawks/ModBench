@@ -20,7 +20,7 @@ internal static class Wire
         client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.DataFolder, fx.InstanceRoot, plugins));
 
     /// <summary>What Modbench sends once its watch sees a change: the snapshot, which an equal one leaves as it was, then the
-    /// signal of a change. Returns once its check has validated every file (ADR-0015).</summary>
+    /// signal of a change. Returns once its check has validated every file.</summary>
     internal static async Task NextCheck(this HttpClient client, ScatteredFixtureData fx, params string[] origins)
     {
         (await client.PutLoadOrder(fx, origins)).EnsureSuccessStatusCode();
@@ -287,7 +287,7 @@ internal static class Wire
     internal static async Task<JsonElement> Plugin(this HttpClient client, string name) =>
         (await client.Plugins()).Single(p => p.GetProperty("name").GetString() == name);
 
-    /// <summary>Version in git's write reaches the answers at the next check of the disk (ADR-0015), whose reconcile
+    /// <summary>Version in git's write reaches the answers at the next check of the disk, whose reconcile
     /// reports the plugin compiled before it validates every plugin, so its end is awaited too.</summary>
     internal static async Task PluginReportsCompiledPlugin(this HttpClient client, string name)
     {

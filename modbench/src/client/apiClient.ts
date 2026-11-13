@@ -82,7 +82,7 @@ export interface LoadOrderStatus {
   version: number;
   /** The wire's `None`: no load order has arrived, or a rebuild dropped the record index it filled. */
   holdsNone: boolean;
-  /** A change signalled is asked for and the record index has not yet validated what it names (ADR-0015). */
+  /** A change signalled is asked for and the record index has not yet validated what it names. */
   validating: boolean;
 }
 

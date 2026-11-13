@@ -21,7 +21,7 @@ public sealed class LoadOrderHolder
     public event Action<LoadOrderSnapshot, long>? Arrived;
 
     /// <summary>How many times mEdit has written a system of record. A read after a write waits for the record index to
-    /// have read what it wrote (ADR-0015).</summary>
+    /// have read what it wrote.</summary>
     public long SourceWrites => Interlocked.Read(ref _sourceWrites);
 
     private readonly Lock _writing = new();

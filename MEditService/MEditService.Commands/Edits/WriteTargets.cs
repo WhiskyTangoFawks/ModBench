@@ -150,7 +150,6 @@ internal sealed class WriteTargets(
             : $"{plugin.Name} is a base-game plugin with no mod folder, so it cannot be a compiled plugin. " +
               "Author a patch plugin and edit the override there.";
 
-    // The codec's own words are the reason (ADR-0015).
     internal static RecordEditResult RefuseUnreadable(string formKey, string why, string? spelled = null) =>
         new(false, RecordEditRefusal.RecordParseFailed,
             $"{formKey}'s document cannot be read, so nothing can be written to it: {why}", Path: spelled);

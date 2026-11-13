@@ -1,6 +1,6 @@
 namespace MEditService.LoadOrder;
 
-/// <summary>What the adapter that owns a changed path answers for it (ADR-0015).</summary>
+/// <summary>What the adapter that owns a changed path answers for it.</summary>
 public abstract record PathAnswer
 {
     private PathAnswer()

@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 namespace MEditService.Commands;
 
 /// <summary>A script's Copy: the changes the Copy gesture answers for one record into one destination, which mEdit
-/// writes to plugin source itself (scripts.md, Writing; ADR-0015).</summary>
+/// writes to plugin source itself (scripts.md, Writing).</summary>
 public sealed class CopyRecordHandler
 {
     private readonly CopyRecordChangesHandler _changes;

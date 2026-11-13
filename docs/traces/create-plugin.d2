@@ -40,8 +40,7 @@ builtmod: "in a built mod" {
 commands -> http: applied or refusal {class: edit}
 http -> client: applied or refusal {class: edit}
 client -> plugins: applied or refusal {class: edit}
-instance -> instanceadapter: watch {class: signal}
-instanceadapter -> instanceloader: "the instance changed" {class: signal}
+instanceadapter -> instanceloader: "the files it wrote, or that it cannot tell which" {class: signal}
 instanceloader -> activation: value {class: loadorder}
 activation -> plugincommands: "plugin sync: update-load-order-file" {class: loadorder}
 instanceloader."the next snapshot: index-load-order; in a built mod, detect-external-change"

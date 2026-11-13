@@ -117,7 +117,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         DuckDbSql.Execute(connection, $"INSERT INTO {StringsLanguageRelation} SELECT '{Language.English}' WHERE NOT EXISTS (SELECT 1 FROM {StringsLanguageRelation})");
     }
 
-    // ADR-0015: a plain table, not DuckDB's SEQUENCE — nextval() is not transactional,
+    // A plain table, not DuckDB's SEQUENCE — nextval() is not transactional,
     // and this count must roll back with the rows it describes. The seed is a no-op past the first
     // open.
     private static void CreateSequenceTable(DuckDBConnection connection)

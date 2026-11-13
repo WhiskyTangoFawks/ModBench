@@ -1,4 +1,4 @@
-// A free function per gesture, applied or a refusal (ADR-0014; ADR-0015).
+// A free function per gesture, applied or a refusal (ADR-0014).
 
 import { refuse } from '../coreLib/refuse';
 import type { SelectionOutcome } from '../ports/selectionOutcome';

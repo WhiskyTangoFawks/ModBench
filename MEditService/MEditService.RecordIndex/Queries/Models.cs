@@ -178,7 +178,7 @@ public record PluginRecordTypeCount(
 
 public record RecordTypeChoice(string Type, string DisplayName);
 
-/// <summary>The answer to "did the projection reach at least N?" (ADR-0015). Sequence
+/// <summary>The answer to "did the projection reach at least N?". Sequence
 /// is the value observed at the moment of that answer, not necessarily equal to the awaited
 /// bound.</summary>
 public record SequenceAwaitResponse(bool Reached, long Sequence);

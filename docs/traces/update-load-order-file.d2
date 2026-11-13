@@ -38,10 +38,9 @@ uninstall: "an uninstall, from a downloaded file" {
   cmds -> instanceadapter: "the downloaded file's metadata: uninstalled" {class: loadorder}
 }
 instanceadapter -> instance: bytes {class: loadorder}
+instanceadapter -> instanceloader: "the files it wrote, or that it cannot tell which" {class: signal}
 cmds -> surfaces: "applied or refusal, per item" {class: loadorder}
 surfaces -> instanceloader: refresh {class: loadorder}
-instance -> instanceadapter: watch {class: signal}
-instanceadapter -> instanceloader: "the paths that changed, or a check is due" {class: signal}
 instanceloader -> views: value {class: loadorder}
 instanceloader -> activation: value {class: loadorder}
 activation -> cmds: "put load order: the snapshot" {class: loadorder}

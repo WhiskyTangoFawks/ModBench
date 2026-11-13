@@ -56,7 +56,7 @@ export function createdRecordSelection<Row>(deps: CreatedRecordSelectionDeps<Row
           else landed ||= event.keys.includes(created.formKey);
           settle();
         }),
-        // A plugin re-derived whole is announced with no keys (ADR-0015).
+        // A plugin re-derived whole is announced with no keys.
         deps.client.onNotification('plugin-changed', (event) => {
           if (!samePluginAddress(event.plugin, plugin)) return;
           landed = true;

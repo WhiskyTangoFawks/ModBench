@@ -1,4 +1,4 @@
-// The switch profile gesture (ADR-0015), refresh and the rename of a profile, bound to one instance.
+// The switch profile gesture, refresh and the rename of a profile, bound to one instance.
 
 import type { MEditClient } from '../client';
 import { refuse } from '../coreLib/refuse';
