@@ -2,7 +2,7 @@ import type * as vscode from 'vscode';
 import { registerTaskGesture, type TaskVerdict } from '../drivingLib/taskGesture';
 import type { Reporter } from '../ports/reporter';
 import type { DeployResult } from '../instanceCommands/deploy';
-import { deployFailures, deployWarnings } from '../drivingLib/deployProblems';
+import { deployFailures, deployWarnings } from './deployProblems';
 
 /** deployment-hardlink.md, Deploy, story 7. */
 export function registerDeployTask(reporter: Reporter): vscode.Disposable {

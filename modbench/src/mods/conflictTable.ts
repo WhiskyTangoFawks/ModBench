@@ -1,11 +1,11 @@
 // mods-conflicts.md: one mod's file order conflicts, as a table.
 
 import type { FileOrigin, InstanceValue, InstanceView, Mod } from '../instanceLoader/instance';
-import { modifiedMs, type Copy, type FileCopies } from '../drivingLib/sameCopies';
+import { modifiedMs, type Copy, type FileCopies } from './sameCopies';
 import { copyInConflict, modOrigin, originLabel, sameOrigin, type StackedFile } from '../instanceLoader/fileConflictIndex';
 import type { ConflictCell, ConflictCellValue, ConflictColumn, ConflictRow, ConflictTable } from '../wire/conflictTable';
 import { byLevel, byName } from './fileTree';
-import { fileStates, worstCell, worstRow } from '../drivingLib/conflictStates';
+import { fileStates, worstCell, worstRow } from './conflictStates';
 
 type ReadCopy = Extract<Copy, { kind: 'read' }>;
 

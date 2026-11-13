@@ -16,7 +16,7 @@ import { present } from '../../ports/present';
 import { ModListProvider, ModNode, SeparatorNode } from '../ModListProvider';
 import { OpenRows } from '../openRows';
 import { NO_MOD_STATUSES } from '../../test/noModStatuses';
-import { MOD_INDICATORS } from '../../drivingLib/modFileStates';
+import { MOD_INDICATORS } from '../modFileStates';
 import { modOrigin, type LoadedArchive } from '../../instanceLoader/fileConflictIndex';
 import { indicatorSetting, ModIndicatorDecorations, modRowUri, separatorRowUri } from '../modIndicators';
 import { file, indexedValueOf, mod } from './indexedValue';

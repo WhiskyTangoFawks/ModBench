@@ -28,7 +28,7 @@ import { Instance } from './instanceLoader/instance';
 import { factsOf, NO_INSTANCE_FACTS, type InstanceFacts } from './instanceLoader/instanceFacts';
 import { sourceFiles, NO_SOURCE_FILES, type SourceFilesOf } from './instanceLoader/loadOrderSnapshot';
 import { downloadedFileReader, type InstanceAdapter, type EntryRef } from './instanceAdapter/instanceAdapter';
-import type { CopyReads } from './drivingLib/sameCopies';
+import type { CopyReads } from './mods/sameCopies';
 import { adapterForInstance, isInstance } from './instanceAdapter/openInstance';
 import { serveAgent } from './agent/agentServer';
 import type { DeploymentRead } from './agent/instanceReads';

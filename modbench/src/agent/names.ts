@@ -4,7 +4,7 @@ import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import { sameEntry, type FileOrigin, type OriginFolder } from '../instanceAdapter/instanceAdapter';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { exactPluginAddressKey, pluginNameKey, samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
-import { filesOfOrigin } from '../drivingLib/copiesToRead';
+import { filesOfOrigin } from '../mods/copiesToRead';
 import { present } from '../ports/present';
 import { Refusal } from '../drivingLib/refusal';
 import { originShown, type AgentValue } from './notRestored';

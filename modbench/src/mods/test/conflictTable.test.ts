@@ -4,7 +4,7 @@ import { file, indexedValueOf, mod } from './indexedValue';
 import { modOrigin } from '../../instanceLoader/fileConflictIndex';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import type { ConflictCellValue, ConflictRow, ConflictTable } from '../../wire/conflictTable';
-import type { Copy, FileCopies } from '../../drivingLib/sameCopies';
+import type { Copy, FileCopies } from '../sameCopies';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const read = (value: InstanceValue) => ({ value, sequence: 1 });

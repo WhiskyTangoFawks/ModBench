@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
-import { mEditState } from '../drivingLib/mEditState';
+import { mEditState } from './mEditState';
 import type { Reporter } from '../ports/reporter';
 
 const STOPPED = 'mEdit stopped. Reload the window to start it again.';

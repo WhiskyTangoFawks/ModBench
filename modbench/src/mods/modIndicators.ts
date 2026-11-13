@@ -2,7 +2,7 @@
 
 import * as vscode from 'vscode';
 import type { InstanceValue, InstanceView } from '../instanceLoader/instance';
-import { indicatorsOf, MOD_INDICATORS, type IndicatorsValue, type ModIndicator } from '../drivingLib/modFileStates';
+import { indicatorsOf, MOD_INDICATORS, type IndicatorsValue, type ModIndicator } from './modFileStates';
 import { onSettingChange } from '../drivingLib/setting';
 import type { OpenRows } from './openRows';
 import type { WorkspaceSettings } from './workspaceSettings';

@@ -4,7 +4,7 @@ import type { ModStatus } from '../manifestAdapter/manifestAdapter';
 import type { ModStatuses } from '../modStatus/modStatuses';
 import { Refusal } from '../drivingLib/refusal';
 import { modOrigin } from '../instanceLoader/fileConflictIndex';
-import { filesOfOrigin } from '../drivingLib/copiesToRead';
+import { filesOfOrigin } from '../mods/copiesToRead';
 import { FILTER, filterNarrows, fitting, holding } from './tooLarge';
 
 const LEFT_OUT = new Set<string>(['mod', 'heldWhole', 'manifestFile', 'packages', 'ignored', 'ignoreEntries'] satisfies (keyof ModStatus)[]);
