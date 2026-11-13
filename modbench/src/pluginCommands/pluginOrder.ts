@@ -54,13 +54,20 @@ export function offeredMoves(listed: ListedPlugins, broken: readonly BrokenRule[
 const factsOrExtension = (factsOf: PluginFactsOf, masterExtensions: readonly string[]): PluginFactsOf => (name) =>
   factsOf(name) ?? { origin: '', masters: [], blueprint: false, master: masterExtensions.includes(fileExtension(name)) };
 
-/** Where a new disabled line for `plugin` lands: directly before the next line in the order the game loads, or
- *  after the last line when none follows. */
+/** Where a new disabled line for `plugin` lands: at the winning-most place in plugins.txt where the game moves no plugin
+ *  it did not already move once the line is enabled. */
 export function landingDrop(
   { loadedWithNoLine, lines, isActive }: ListedPlugins, plugin: string, factsOf: PluginFactsOf, masterExtensions: readonly string[],
 ): Drop {
-  const { order } = judge(loadedWithNoLine, [...lines, plugin], factsOrExtension(factsOf, masterExtensions), isActive);
-  const lined = new Set(lines);
-  const next = order.slice(order.indexOf(plugin) + 1).find((name) => lined.has(name));
-  return next === undefined ? { kind: 'winningEnd' } : { kind: 'before', name: next };
+  const facts = factsOrExtension(factsOf, masterExtensions);
+  const gameMoves = (order: readonly string[]) =>
+    judge(loadedWithNoLine, order, facts, (name) => name === plugin || isActive(name)).broken.filter((broken) => broken.rule === 'gameMoves').map(identity);
+  const already = new Set(gameMoves(lines));
+  for (let at = lines.length; at > 0; at--) {
+    if (gameMoves([...lines.slice(0, at), plugin, ...lines.slice(at)]).every((moved) => already.has(moved))) {
+      const next = lines[at];
+      return next === undefined ? { kind: 'winningEnd' } : { kind: 'before', name: next };
+    }
+  }
+  return { kind: 'losingEnd' };
 }

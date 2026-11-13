@@ -393,6 +393,15 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
         { kind: 'add', plugin: 'B.esm' }, { kind: 'move', plugins: ['B.esm'], toIndex: 2 },
       ]);
     });
+
+    it('lands a new master where the game would not move it, past a line the game itself hoisted', async () => {
+      const { fake } = await sync({
+        order: ['Base.esm', 'Plain.esp', 'Dependent.esm', 'Hoisted.esp'], provided: ['Base.esm', 'Plain.esp', 'Dependent.esm', 'Hoisted.esp', 'New.esm'],
+        facts: loading({ name: 'Base.esm', ...MASTER }, { name: 'Plain.esp' }, { name: 'Dependent.esm', ...MASTER, masters: ['Hoisted.esp'] }, { name: 'Hoisted.esp' }),
+      });
+
+      expect(handedChanges(fake)).toEqual([{ kind: 'add', plugin: 'New.esm' }, { kind: 'move', plugins: ['New.esm'], toIndex: 1 }]);
+    });
   });
 
   it('drops a line whose plugin nothing provides, and keeps one the game Data folder provides', async () => {
