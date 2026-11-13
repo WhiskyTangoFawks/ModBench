@@ -402,6 +402,15 @@ describe('syncPlugins decides the lines plugins.txt converges on, from what the 
 
       expect(handedChanges(fake)).toEqual([{ kind: 'add', plugin: 'New.esm' }, { kind: 'move', plugins: ['New.esm'], toIndex: 1 }]);
     });
+
+    it('walks back to the winning-most place the game moves nothing new when the plugin loaded after it would add a move', async () => {
+      const { fake } = await sync({
+        order: ['Plain.esp', 'Other.esp', 'Base.esm'], provided: ['Plain.esp', 'Other.esp', 'Base.esm', 'New.esm'],
+        facts: loading({ name: 'Plain.esp' }, { name: 'Other.esp' }, { name: 'Base.esm', ...MASTER, masters: ['Plain.esp'] }),
+      });
+
+      expect(handedChanges(fake)).toEqual([{ kind: 'add', plugin: 'New.esm' }, { kind: 'move', plugins: ['New.esm'], toIndex: 0 }]);
+    });
   });
 
   it('drops a line whose plugin nothing provides, and keeps one the game Data folder provides', async () => {

@@ -54,20 +54,28 @@ export function offeredMoves(listed: ListedPlugins, broken: readonly BrokenRule[
 const factsOrExtension = (factsOf: PluginFactsOf, masterExtensions: readonly string[]): PluginFactsOf => (name) =>
   factsOf(name) ?? { origin: '', masters: [], blueprint: false, master: masterExtensions.includes(fileExtension(name)) };
 
-/** Where a new disabled line for `plugin` lands: at the winning-most place in plugins.txt where the game moves no plugin
- *  it did not already move once the line is enabled. */
+/** Where a new disabled line for `plugin` lands: directly before the earliest-listed line the game loads after it, which
+ *  passes a hoisted line. Failing that, the winning-most place where the game moves nothing new, judged as enabled. */
 export function landingDrop(
   { loadedWithNoLine, lines, isActive }: ListedPlugins, plugin: string, factsOf: PluginFactsOf, masterExtensions: readonly string[],
 ): Drop {
   const facts = factsOrExtension(factsOf, masterExtensions);
-  const gameMoves = (order: readonly string[]) =>
-    judge(loadedWithNoLine, order, facts, (name) => name === plugin || isActive(name)).broken.filter((broken) => broken.rule === 'gameMoves').map(identity);
+  const judged = (order: readonly string[]) => judge(loadedWithNoLine, order, facts, (name) => name === plugin || isActive(name));
+  const gameMoves = (order: readonly string[]) => judged(order).broken.filter((broken) => broken.rule === 'gameMoves').map(identity);
   const already = new Set(gameMoves(lines));
-  for (let at = lines.length; at > 0; at--) {
-    if (gameMoves([...lines.slice(0, at), plugin, ...lines.slice(at)]).every((moved) => already.has(moved))) {
-      const next = lines[at];
-      return next === undefined ? { kind: 'winningEnd' } : { kind: 'before', name: next };
-    }
+  const dropAt = (at: number): Drop => {
+    const next = lines[at];
+    return next === undefined ? { kind: 'winningEnd' } : { kind: 'before', name: next };
+  };
+  const keepsGameQuiet = (at: number): boolean => gameMoves([...lines.slice(0, at), plugin, ...lines.slice(at)]).every((moved) => already.has(moved));
+
+  const { order } = judged([...lines, plugin]);
+  const loadedAfter = new Set(order.slice(order.indexOf(plugin) + 1));
+  const earliest = lines.findIndex((name) => loadedAfter.has(name));
+  const candidate = earliest === -1 ? lines.length : earliest;
+  if (keepsGameQuiet(candidate)) return dropAt(candidate);
+  for (let at = lines.length; at >= 0; at--) {
+    if (keepsGameQuiet(at)) return dropAt(at);
   }
-  return { kind: 'losingEnd' };
+  return { kind: 'winningEnd' };
 }
