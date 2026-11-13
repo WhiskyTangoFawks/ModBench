@@ -110,4 +110,10 @@ describe('landingDrop: the cost of a landing', () => {
     expect(drop).toEqual({ kind: 'before', name: 'Plain0.esp' });
     expect(vi.mocked(judge)).toHaveBeenCalledTimes(3);
   });
+
+  it('lands where the game loads the plugin when its own master is hoisted wherever it lands', () => {
+    const facts = factsFrom({ 'Base.esm': { master: true }, 'Dep.esp': {}, 'Other.esp': {}, 'New.esm': { master: true, masters: ['Dep.esp'] } });
+
+    expect(landingDrop(listedOf(['Base.esm', 'Other.esp', 'Dep.esp']), 'New.esm', facts, ['.esm'])).toEqual({ kind: 'before', name: 'Other.esp' });
+  });
 });

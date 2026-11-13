@@ -54,8 +54,8 @@ export function offeredMoves(listed: ListedPlugins, broken: readonly BrokenRule[
 const factsOrExtension = (factsOf: PluginFactsOf, masterExtensions: readonly string[]): PluginFactsOf => (name) =>
   factsOf(name) ?? { origin: '', masters: [], blueprint: false, master: masterExtensions.includes(fileExtension(name)) };
 
-/** Where a new disabled line for `plugin` lands: directly before the earliest-listed line the game loads after it, which
- *  passes a hoisted line. Failing that, the winning-most place where the game moves nothing new, judged as enabled. */
+/** Where a new disabled line for `plugin` lands: before the earliest-listed line the game loads after it, else the
+ *  winning-most place the game moves nothing new, else where the game loads the plugin itself. */
 export function landingDrop(
   { loadedWithNoLine, lines, isActive }: ListedPlugins, plugin: string, factsOf: PluginFactsOf, masterExtensions: readonly string[],
 ): Drop {
@@ -77,5 +77,5 @@ export function landingDrop(
   for (let at = lines.length; at >= 0; at--) {
     if (keepsGameQuiet(at)) return dropAt(at);
   }
-  return { kind: 'winningEnd' };
+  return dropAt(candidate);
 }
