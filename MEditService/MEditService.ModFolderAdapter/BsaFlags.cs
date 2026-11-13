@@ -1,13 +1,13 @@
 namespace MEditService.ModFolderAdapter;
 
-/// <summary>The flags BSArch's <c>DetectFlags</c> derives for a Skyrim LE or Skyrim SE archive from the files it packs,
-/// except the embedded-names flag of an archive of textures, which <see cref="BsaWriter"/> does not write.</summary>
+/// <summary>The flags BSArch's <c>DetectFlags</c> derives for a Skyrim LE or Skyrim SE archive from the files it packs.</summary>
 internal static class BsaFlags
 {
     private const uint FolderAndFileNames = 0x3;
-    private const uint Compressed = 0x4;
+    internal const uint Compressed = 0x4;
     private const uint RetainNames = 0x10;
     private const uint StartupStrings = 0x80;
+    internal const uint EmbeddedNames = 0x100;
 
     private const uint Meshes = 0x1;
     private const uint Textures = 0x2;
@@ -71,10 +71,12 @@ internal static class BsaFlags
             if (asset == Asset.Script) archive |= RetainNames;
         }
 
+        if (file == Textures) archive |= EmbeddedNames;
         if (version == SkyrimSe) file &= ~Misc;
         if ((file & Meshes) != 0) archive |= StartupStrings;
         if ((file & Sounds) != 0) archive |= RetainNames;
-        if (compressed) archive |= Compressed;
+        // Skyrim SE crashes on an uncompressed file with embedded names.
+        if (compressed || (version == SkyrimSe && (archive & EmbeddedNames) != 0)) archive |= Compressed;
         return (archive, file);
     }
 

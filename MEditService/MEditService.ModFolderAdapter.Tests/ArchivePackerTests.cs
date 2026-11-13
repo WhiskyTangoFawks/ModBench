@@ -245,7 +245,9 @@ public sealed class ArchivePackerTests : IDisposable
 
     [Theory]
     [InlineData(104u, new[] { "meshes/a.nif" }, 0x83u, 0x1u)]
-    [InlineData(104u, new[] { "textures/a_d.dds" }, 0x3u, 0x2u)]
+    [InlineData(104u, new[] { "textures/a_d.dds" }, 0x103u, 0x2u)]
+    [InlineData(105u, new[] { "textures/a_d.dds" }, 0x107u, 0x2u)]
+    [InlineData(105u, new[] { "textures/a_d.dds", "interface/a.swf" }, 0x3u, 0x2u)]
     [InlineData(104u, new[] { "sound/fx/a.wav" }, 0x13u, 0x8u)]
     [InlineData(104u, new[] { "sound/voice/a.fuz" }, 0x3u, 0x10u)]
     [InlineData(104u, new[] { "trees/a.spt" }, 0x3u, 0x40u)]
@@ -263,6 +265,22 @@ public sealed class ArchivePackerTests : IDisposable
         var archive = Packed(new BsaVariant(version, Compressed: false), files);
 
         Assert.Equal((archiveFlags, fileFlags), (U32(archive, 12), U32(archive, 32)));
+    }
+
+    [Theory]
+    [InlineData(GameRelease.SkyrimLE, 104u, false)]
+    [InlineData(GameRelease.SkyrimSE, 105u, false)]
+    [InlineData(GameRelease.SkyrimSE, 105u, true)]
+    public void ABsaOfTextures_ReadsBackThroughMutagenWithEachFilesNameEmbeddedBeforeItsData(GameRelease release, uint version, bool compressed)
+    {
+        WithBytes("textures/a_d.dds", Mesh).WithBytes("textures/cube_e.dds", Script);
+
+        var archive = Packed(new BsaVariant(version, compressed), "textures/a_d.dds", "textures/cube_e.dds");
+
+        var contents = ContentsOf(Reader(release, archive));
+        Assert.Equal(Mesh, contents["textures\\a_d.dds"]);
+        Assert.Equal(Script, contents["textures\\cube_e.dds"]);
+        Assert.True(archive.AsSpan().IndexOf("\u0010textures\\a_d.dds"u8) >= 0);
     }
 
     [Fact]

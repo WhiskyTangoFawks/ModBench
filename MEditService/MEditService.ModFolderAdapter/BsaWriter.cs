@@ -37,7 +37,7 @@ internal static class BsaWriter
 
         var (archiveFlags, fileFlags) = BsaFlags.Derive(variant.Version, variant.Compressed, files);
         output.Position = namesStart + fileNamesLength;
-        var stored = folders.SelectMany(folder => folder.Entries).Select(file => Store(output, file.Packed, variant.Version, variant.Compressed)).ToList();
+        var stored = folders.SelectMany(folder => folder.Entries).Select(file => Store(output, file.Packed, variant.Version, archiveFlags)).ToList();
 
         using var head = new MemoryStream();
         using var writer = new BinaryWriter(head, Encoding.UTF8, leaveOpen: true);
@@ -126,15 +126,16 @@ internal static class BsaWriter
         }
     }
 
-    private static (uint Size, uint Offset) Store(Stream output, PackedFile file, uint version, bool compressed)
+    private static (uint Size, uint Offset) Store(Stream output, PackedFile file, uint version, uint archiveFlags)
     {
         using var content = file.Open();
         var offset = checked((uint)output.Position);
         RefuseASizeTheFlagBitReads(file, content.Length);
-        if (!compressed)
+        if ((archiveFlags & BsaFlags.EmbeddedNames) != 0) WriteEmbeddedName(output, file);
+        if ((archiveFlags & BsaFlags.Compressed) == 0)
         {
             content.CopyTo(output);
-            return ((uint)content.Length, offset);
+            return (checked((uint)(output.Position - offset)), offset);
         }
 
         using (var writer = new BinaryWriter(output, Encoding.UTF8, leaveOpen: true))
@@ -153,6 +154,14 @@ internal static class BsaWriter
         var stored = output.Position - offset;
         RefuseASizeTheFlagBitReads(file, stored);
         return ((uint)stored, offset);
+    }
+
+    private static void WriteEmbeddedName(Stream output, PackedFile file)
+    {
+        var name = Terminated(file.Name, file)[..^1];
+        if (name.Length > byte.MaxValue) throw new InvalidDataException($"'{file.Source}' has a path too long for a BSA's embedded name.");
+        output.WriteByte((byte)name.Length);
+        output.Write(name);
     }
 
     private static void RefuseASizeTheFlagBitReads(PackedFile file, long size)
