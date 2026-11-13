@@ -5,7 +5,7 @@ import { pluginAddressOf } from '../wire/pluginAddress';
 import type { RecordCopy } from '../wire/recordCopy';
 import { locateCopies, type RecordLocation, type RecordLocationDeps } from './recordLocation';
 import { heldText } from '../textDocuments/heldText';
-import { formKeyAt, referenceSpan } from './sourceText';
+import { formKeyAt, referenceSpan } from '../drivingLib/sourceText';
 import { answerOf } from '../wire/readFailed';
 
 interface ReferencesDeps<Document> extends RecordLocationDeps<Document> {

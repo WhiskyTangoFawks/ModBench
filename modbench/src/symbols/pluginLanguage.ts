@@ -14,7 +14,7 @@ import { pluginRowName } from '../wire/pluginAddress';
 import { placeLocation, referenceOf, referencedByInput, spelledAround, type AskedIn, type ListedLocations } from './symbolPlaces';
 import { pluginReferencesOf, type PluginReference } from './pluginReferences';
 import { locateRecord, locationOf } from './recordLocation';
-import { formKeyPluginAt, formKeyValue } from './sourceText';
+import { formKeyPluginAt, formKeyValue } from '../drivingLib/sourceText';
 
 interface PluginLanguageDeps {
   instance: { readonly value: Pick<InstanceValue, 'plugins'> } | undefined;

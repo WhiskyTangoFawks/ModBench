@@ -2,7 +2,7 @@ import type { MEditClient } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { fieldOfRecord, type metadataAt } from './fieldMetadata';
-import { fieldAt } from './sourceText';
+import { fieldAt } from '../drivingLib/sourceText';
 import { answerOf } from '../wire/readFailed';
 
 interface SourceCompletion {

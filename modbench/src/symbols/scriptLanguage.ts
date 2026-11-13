@@ -10,7 +10,7 @@ import { heldText } from '../textDocuments/heldText';
 import { openPluginSourceDocument, readHeldText } from '../textDocuments/pluginSource';
 import { fieldOfRecord } from './fieldMetadata';
 import { scriptReferences, type ScriptReferencesClient } from './scriptReferences';
-import { fieldAt, formKeyAt } from './sourceText';
+import { fieldAt, formKeyAt } from '../drivingLib/sourceText';
 import { referenceOf, reportedForFeature, type AskedIn } from './symbolPlaces';
 
 export type ScriptClient = Pick<MEditClient, 'getComparison'> & ScriptReferencesClient;

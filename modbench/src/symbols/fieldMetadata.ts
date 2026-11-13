@@ -1,5 +1,5 @@
 import type { CompareResult, MEditClient } from '../client';
-import type { FieldAtOffset, Segment } from './sourceText';
+import type { FieldAtOffset, Segment } from '../drivingLib/sourceText';
 import { shapeUnderOwner } from '../wire/indexShape';
 import { answerOf } from '../wire/readFailed';
 

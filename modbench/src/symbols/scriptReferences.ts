@@ -5,7 +5,7 @@ import { CONTAINER_SCHEMES, type RecordDocumentClient } from '../textDocuments/r
 import { pluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
 import { copiesNamingAtMembers, membersNaming } from './memberReferences';
 import { locateCopies } from './recordLocation';
-import { stringsAt, type TextSpan } from './sourceText';
+import { stringsAt, type TextSpan } from '../drivingLib/sourceText';
 
 export type ScriptReferencesClient = Pick<MEditClient, 'getScriptReferences'> & RecordDocumentClient;
 

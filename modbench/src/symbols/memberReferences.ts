@@ -4,7 +4,7 @@ import { heldText } from '../textDocuments/heldText';
 import type { RecordDocumentClient } from '../textDocuments/recordDocument';
 import { failureReason, isReadFailed } from '../wire/readFailed';
 import { locateCopies, locationOf } from './recordLocation';
-import { formKeyValue, stringsAt } from './sourceText';
+import { formKeyValue, stringsAt } from '../drivingLib/sourceText';
 
 type MemberReferences = Awaited<ReturnType<MEditClient['getFileReferences']>>;
 

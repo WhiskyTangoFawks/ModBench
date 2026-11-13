@@ -31,7 +31,8 @@ import { registerModInstallCommands } from './installCommands';
 import { fomodDialog } from './fomodDialog';
 import { registerCompareFileCommand } from './compareFile';
 import { registerGoToModCommand } from './goToMod';
-import { registerGoToModRowCommand, registerModReferencedByCommand, type ReferencedBy } from './modSymbolCommands';
+import type { ModRows } from '../drivingLib/symbolRows';
+import { ArchivedFileNode, FileNode } from './modFiles';
 import { registerBuildCommand } from './buildCommand';
 import { registerBuildTask } from './buildTask';
 import { ModProblems } from './modProblems';
@@ -85,7 +86,6 @@ interface ModsViewDeps {
   checkForUpdates: CheckForUpdates;
   /** Each mod's status, as mEdit last answered it. */
   statuses: ModStatuses;
-  referencedBy: ReferencedBy;
   /** Reads the copies of files in archives. */
   archives: Pick<MEditClient, 'getArchiveCopies'>;
 }
@@ -100,6 +100,7 @@ interface ModsView extends vscode.Disposable {
   copyValue: CopyValueAdapter;
   relatesRows: RelatesRows;
   drawsHighlight: DrawsHighlight;
+  symbolRows: ModRows;
   /** The lines that bear on a read of the mods, for the agent, without the instance's own. */
   standingLines(): string[];
   /** The tooltip of the row the view shows for the entry; undefined where it shows none. */
@@ -201,12 +202,6 @@ export function createModsView(deps: ModsViewDeps): ModsView {
       rowFor: (origin) => provider.rowFor(origin),
       reveal: (row) => view.reveal(row, { select: true, focus: true }),
     }),
-    registerModReferencedByCommand({ ...deps.referencedBy, value: () => instance.value, reporter: reporterFor('mod.referencedBy') }, () => view.selection),
-    registerGoToModRowCommand({
-      rowOf: (mod) => provider.entryRow({ kind: 'mod', name: mod }),
-      folderOf: (mod) => instance.value.paths.modDirs.get(mod),
-      reveal: (row) => view.reveal(row, { select: true, focus: true }), reporter: reporterFor('mod.goTo'),
-    }, () => view.selection),
     registerCompareFileCommand(instance, reporterFor('mod.compareFile'), () => view.selection),
     ...registerConflictTable(instance, (files) => sameCopies(deps.copyReads, archivedCopies, files), deps.extensionUri, () => view.selection, reporterFor('mod.openConflicts'), vscode.workspace),
     ...registerModInstallCommands({
@@ -223,6 +218,12 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     view, nameFilter, copyValue: { text: modsCopyValueText(() => view.selection), reporterTag: 'mod.copyValue' },
     relatesRows: { related: (selection) => ({ plugins: pluginsHeld(instance.value, selection), origins: [] }) },
     drawsHighlight: { highlight: (related) => { provider.highlight(related.origins); } },
+    symbolRows: {
+      selected: () => { const [only, ...rest] = view.selection; return rest.length === 0 && only?.kind === 'mod' ? only : undefined; },
+      show: (mod) => { const row = provider.entryRow({ kind: 'mod', name: mod }); return row && (() => view.reveal(row, { select: true, focus: true })); },
+      folderOf: (mod) => instance.value.paths.modDirs.get(mod),
+      fileOf: (clicked) => clicked instanceof FileNode ? clicked.file.relativePath : clicked instanceof ArchivedFileNode ? clicked.path : undefined,
+    },
     standingLines: () => [modSync.message(), statusMessage()].filter((line) => line !== undefined),
     tooltipOf: (entry) => { const { tooltip } = provider.entryRow(entry) ?? {}; return typeof tooltip === 'string' ? tooltip : undefined; },
     dispose: () => { disposable.dispose(); },

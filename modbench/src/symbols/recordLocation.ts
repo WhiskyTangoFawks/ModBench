@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { errorMessage } from '../ports/errorMessage';
 import { copyDocument, recordDocument, type RecordDocumentClient } from '../textDocuments/recordDocument';
 import type { RecordCopy } from '../wire/recordCopy';
-import type { TextSpan } from './sourceText';
+import type { TextSpan } from '../drivingLib/sourceText';
 import { heldText } from '../textDocuments/heldText';
 
 export interface RecordLocationDeps<Document> {

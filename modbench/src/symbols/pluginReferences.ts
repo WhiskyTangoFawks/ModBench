@@ -1,9 +1,9 @@
 import type { Reporter } from '../ports/reporter';
-import { namesPlugin, type CopyNaming, type HeldTexts, type PlaceInFile, type PluginSymbol, type ResolvedPlugin, type SymbolOwner } from '../symbolNames/symbolNames';
+import { namesPlugin, sameName, type CopyNaming, type HeldTexts, type PlaceInFile, type PluginSymbol, type ResolvedPlugin, type SymbolOwner } from '../symbolNames/symbolNames';
 import { heldText } from '../textDocuments/heldText';
 import { pluginRowName } from '../wire/pluginAddress';
 import { locateCopies, type RecordLocation, type RecordLocationDeps } from './recordLocation';
-import { pluginNameSpans } from './sourceText';
+import { pluginNameSpans } from '../drivingLib/sourceText';
 import { readBy, reportedForFeature, reportedForGesture } from './symbolPlaces';
 
 interface PluginReferencesDeps<Document> extends RecordLocationDeps<Document> {
@@ -49,7 +49,7 @@ function readReferences<Document extends { getText(): string }>(
     const copies = naming.flatMap((reference): CopyNaming[] => ('copy' in reference ? [reference.copy] : []));
     const { found, leftOut } = await locateCopies(client, copies, async (copy, uri) => {
       const document = await open(uri);
-      return pluginNameSpans(heldText(document), copy.formKey, symbol.name).map((span) => ({ uri, document, ...span }));
+      return pluginNameSpans(heldText(document), copy.formKey, (name) => sameName(name, symbol.name)).map((span) => ({ uri, document, ...span }));
     });
     return { found: [...places, ...found.flat()], unread: [...readings.flatMap((reading) => reading.leftOut), ...leftOut] };
   };

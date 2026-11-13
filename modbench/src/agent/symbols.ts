@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { MEditClient } from '../client/MEditClient';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { Refusal } from '../drivingLib/refusal';
-import type { SymbolIndex, SymbolName } from '../sourceLanguage/symbolIndex';
+import type { SymbolIndex, SymbolName } from '../symbols/symbolIndex';
 import { pluginsNamed } from './names';
 import { formKeysNamed } from './recordNames';
 import { fitting } from './tooLarge';

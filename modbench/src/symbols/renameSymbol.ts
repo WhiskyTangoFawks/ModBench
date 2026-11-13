@@ -5,7 +5,7 @@ import { heldText } from '../textDocuments/heldText';
 import type { RecordEditEnvelope } from '../wire/messages';
 import { failureReason, isReadFailed } from '../wire/readFailed';
 import type { pluginLanguage } from './pluginLanguage';
-import { fieldAt, formKeyAt, pluginNameIn, type TextSpan } from './sourceText';
+import { fieldAt, formKeyAt, pluginNameIn, type TextSpan } from '../drivingLib/sourceText';
 import type { AskedIn } from './symbolPlaces';
 
 interface RenameSymbolDeps {

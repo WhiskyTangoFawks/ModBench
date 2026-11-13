@@ -30,6 +30,7 @@
     { "path": "./src/plugins" },
     { "path": "./src/editor" },
     { "path": "./src/sourceLanguage" },
+    { "path": "./src/symbols" },
     { "path": "./src/agent" },
     { "path": "./src" },
     { "path": "./webview" },

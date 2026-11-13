@@ -17,7 +17,7 @@
     { "path": "../instanceLoader" },
     { "path": "../pluginCommands" },
     { "path": "../ports" },
-    { "path": "../sourceLanguage" },
+    { "path": "../symbols" },
     { "path": "../toolbox" },
     { "path": "../wire" }
   ],

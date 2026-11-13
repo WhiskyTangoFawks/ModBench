@@ -8,7 +8,7 @@ import { referencesView } from '../drivingLib/referencesView';
 import type { Reporter } from '../ports/reporter';
 import type { RecordDocumentClient } from '../textDocuments/recordDocument';
 import { openPluginSourceDocument } from '../textDocuments/pluginSource';
-import { fieldPathOf, fieldAt, formKeyAt } from './sourceText';
+import { fieldPathOf, fieldAt, formKeyAt } from '../drivingLib/sourceText';
 import { recordTypeOfPathField } from './fieldMetadata';
 import { membersNaming } from './memberReferences';
 import type { Definition, SymbolReferences } from './symbolIndex';

@@ -18,14 +18,14 @@ import { type PluginsTreeNode } from './pluginRows';
 import type { PluginFactsClient } from './pluginFactsFeed';
 import type { RecordBrowser } from './RecordBrowser';
 import { decompileAndRepairLink, decompileLink, publishPluginProblems, publishRuleFileDiagnostics } from './loadDiagnostics';
-import { PLUGINS_KEY_ARGS, pluginsKeyContext } from './gestureEntry';
+import { PLUGINS_KEY_ARGS, PLUGIN_ROW_KINDS, onlySelected, pluginsKeyContext } from './gestureEntry';
 import { RecordDecorationProvider } from './RecordDecorationProvider';
 import { ImplicitMasterDecorationProvider } from './ImplicitMasterDecorationProvider';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
 import {
-  pluginsCopyValueText, registerCreatePluginCommand, registerReferencedByCommand, registerRevealInExplorerCommand,
+  pluginsCopyValueText, registerCreatePluginCommand, registerRevealInExplorerCommand,
 } from './pluginListCommands';
-import { registerGoToCommand } from './goToPlugin';
+import type { PluginRows } from '../drivingLib/symbolRows';
 import { registerRenamePluginCommand, type RenamePluginDeps } from './pluginRenameCommand';
 import { registerRecordCreateCommand } from './createRecordCommand';
 import { createdRecordSelection } from './createdRecordSelection';
@@ -71,8 +71,6 @@ export interface PluginsViewDeps {
   /** The Instance adapter's reads of the files LOOT's conditions name. */
   fileReads: FileReads;
   channel: SyncChannel;
-  /** Lists each place a file names a plugin, in VS Code's References view. */
-  referencedBy: (plugin: PluginAddress) => Promise<void>;
   log: (level: 'info' | 'warn' | 'error', msg: string) => void;
   reporterFor: (tag: string) => Reporter;
 }
@@ -88,6 +86,7 @@ export interface PluginsView extends vscode.Disposable {
   progress: PluginsViewProgress;
   relatesRows: RelatesRows;
   drawsHighlight: DrawsHighlight;
+  symbolRows: PluginRows;
   narrator: ReconcileNarrator;
   /** The lines that bear on a read of the plugins, for the agent. */
   standingLines: () => string[];
@@ -174,11 +173,6 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     }),
     ...registerSortDirectionToggle('plugin', tree),
     registerRevealInExplorerCommand(tree, reporterFor('pluginListTree.revealInExplorer'), selected.rows),
-    registerReferencedByCommand(deps.referencedBy, selected.rows),
-    registerGoToCommand({
-      rowOf: (plugin) => tree.rowOf(plugin), fileOf: (plugin) => tree.pluginFile(plugin),
-      reveal: (row) => view.reveal(row, { select: true, focus: true }), reporter: reporterFor('pluginListTree.goTo'),
-    }, selected.rows),
     view.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(
       e, commands, reporterFor('pluginListTree.checkbox'), instance)),
     // Grays an implicit master's row the way the reference tool grays COL_NAME for a forceLoaded
@@ -205,6 +199,11 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     viewOrder: tree.viewOrder,
     followed: { get selection() { return selected.rows(); }, onDidChangeSelection: view.onDidChangeSelection }, loadOrderPut,
     copyValue: { text: pluginsCopyValueText(selected.rows), reporterTag: 'pluginListTree.copyValue' },
+    symbolRows: {
+      selected: () => onlySelected(selected.rows(), ...PLUGIN_ROW_KINDS),
+      show: (plugin) => { const row = tree.rowOf(plugin); return row && (() => view.reveal(row, { select: true, focus: true })); },
+      fileOf: (plugin) => tree.pluginFile(plugin),
+    },
     progress, narrator: indexStatus.narrator,
     relatesRows: { related: (selection) => ({ plugins: mastersOfPlugins(instance.value, tree.facts.rows, selection), origins: modsOfPlugins(instance.value, selection) }) },
     drawsHighlight: { highlight: (related) => { tree.highlight(related.plugins); } },

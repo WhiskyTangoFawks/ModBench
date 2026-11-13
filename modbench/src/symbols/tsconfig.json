@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.box.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../../out/projects/symbols",
+    // A driving adapter registers its providers with VS Code's own language API.
+    "types": ["node", "vscode"]
+  },
+  "references": [
+    { "path": "../client" },
+    { "path": "../downloadedFileCommands" },
+    { "path": "../drivingLib" },
+    { "path": "../instanceAdapter" },
+    { "path": "../instanceCommands" },
+    { "path": "../instanceLoader" },
+    { "path": "../modCommands" },
+    { "path": "../pluginCommands" },
+    { "path": "../ports" },
+    { "path": "../symbolNames" },
+    { "path": "../textDocuments" },
+    { "path": "../wire" }
+  ],
+  "include": ["**/*.ts"],
+  "exclude": ["test", "**/*.test.ts"]
+}

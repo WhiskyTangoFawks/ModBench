@@ -26,7 +26,6 @@ export interface PluginsDeps {
   registerRepositories: () => Promise<void>;
   ask: AskQuestion;
   sourceEditing: PluginsViewDeps['sourceEditing'];
-  referencedBy: PluginsViewDeps['referencedBy'];
 }
 
 type PluginsInstanceDeps = Pick<PluginsViewDeps, 'instance' | 'commands' | 'modStatuses' | 'fileReads'> & {
@@ -39,6 +38,7 @@ interface PluginsOnInstance extends vscode.Disposable {
   copyValue: PluginsView['copyValue'];
   relatesRows: PluginsView['relatesRows'];
   drawsHighlight: PluginsView['drawsHighlight'];
+  symbolRows: PluginsView['symbolRows'];
   /** The Plugins view's message line, where another view's gesture says its phase. */
   say: PluginsView['progress']['say'];
   editingInPluginsView: Pick<EditingDeps, 'around' | 'onPut' | 'viewOrder'>;
@@ -67,7 +67,7 @@ export function createPlugins(deps: PluginsDeps): Plugins {
       const syncCommand = registerPluginSyncCommand(syncing.pluginSync);
       const view = createPluginsView({
         ...instanceDeps, pluginSync: syncing.pluginSync, recordBrowser, client, statusBar, channel, registerRepositories: deps.registerRepositories, reporterFor,
-        ask: deps.ask, recordWrite, sourceEditing: deps.sourceEditing, referencedBy: deps.referencedBy,
+        ask: deps.ask, recordWrite, sourceEditing: deps.sourceEditing,
         log: (level, msg) => channel[level](msg),
       });
       pluginLines = view.standingLines;
@@ -80,7 +80,7 @@ export function createPlugins(deps: PluginsDeps): Plugins {
         viewOrder: view.viewOrder,
       };
       return {
-        followed: view.followed, nameFilter: view.nameFilter, copyValue: view.copyValue, relatesRows: view.relatesRows, drawsHighlight: view.drawsHighlight, say: view.progress.say, editingInPluginsView, pluginsShown: view.pluginsShown,
+        followed: view.followed, nameFilter: view.nameFilter, copyValue: view.copyValue, relatesRows: view.relatesRows, drawsHighlight: view.drawsHighlight, symbolRows: view.symbolRows, say: view.progress.say, editingInPluginsView, pluginsShown: view.pluginsShown,
         nextRefill: () => view.narrator.nextRefill(),
         dispose: () => {
           syncCommand.dispose();

@@ -1,5 +1,4 @@
 import { findNodeAtLocation, findNodeAtOffset, getNodePath, getNodeValue, parseTree, type Node } from 'jsonc-parser';
-import { sameName } from '../symbolNames/symbolNames';
 
 export interface TextSpan { start: number; end: number }
 
@@ -134,13 +133,13 @@ function formKeysOf(record: Node): Node[] {
   });
 }
 
-/** Where the record `formKey` names the plugin `name`: the name in each of its FormKeys that names it, else its own
+/** Where the record `formKey` names a plugin that `names` accepts: the name in each of its FormKeys that it accepts, else its own
  *  FormKey; the start of the text when the record is absent. */
-export function pluginNameSpans(text: string, formKey: string, name: string): TextSpan[] {
+export function pluginNameSpans(text: string, formKey: string, names: (name: string) => boolean): TextSpan[] {
   const root = parseTree(text);
   const record = root && recordOf(root, formKey);
   if (!record) return [{ start: 0, end: 0 }];
-  const naming = formKeysOf(record).map(pluginPartOf).filter((part) => sameName(part.name, name));
+  const naming = formKeysOf(record).map(pluginPartOf).filter((part) => names(part.name));
   const own = ownFormKey(record);
   return naming.length > 0 ? naming.map(({ start, end }) => ({ start, end })) : own ? [spanOf(own)] : [{ start: 0, end: 0 }];
 }

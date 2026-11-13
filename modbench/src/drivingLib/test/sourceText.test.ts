@@ -62,11 +62,11 @@ describe('a plugin\'s name inside a FormKey is the plugin\'s symbol (symbols.md,
   it('is spanned in each FormKey of a record that names the plugin, its child records left to themselves', () => {
     const record = `{ "FormKey": "000700:B.esp", "Refs": ["000801:B.esp", "000802:C.esp"], "Placed": [{ "FormKey": "000803:A.esp", "Base": "000804:B.esp" }] }`;
 
-    expect(pluginNameSpans(record, '000700:B.esp', 'B.esp').map(({ start, end }) => record.slice(start, end))).toEqual(['B.esp', 'B.esp']);
+    expect(pluginNameSpans(record, '000700:B.esp', (name) => name === 'B.esp').map(({ start, end }) => record.slice(start, end))).toEqual(['B.esp', 'B.esp']);
   });
 
   it('is spanned at the record\'s own FormKey when no FormKey of it names the plugin, and at the start without the record', () => {
-    expect(pluginNameSpans(spelled, '000700:A.esp', 'Master.esm').map(({ start, end }) => spelled.slice(start, end))).toEqual(['"000700:A.esp"']);
-    expect(pluginNameSpans(spelled, '000900:A.esp', 'B.esp')).toEqual([{ start: 0, end: 0 }]);
+    expect(pluginNameSpans(spelled, '000700:A.esp', (name) => name === 'Master.esm').map(({ start, end }) => spelled.slice(start, end))).toEqual(['"000700:A.esp"']);
+    expect(pluginNameSpans(spelled, '000900:A.esp', (name) => name === 'B.esp')).toEqual([{ start: 0, end: 0 }]);
   });
 });

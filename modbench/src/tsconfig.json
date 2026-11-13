@@ -36,6 +36,7 @@
     { "path": "./plugins" },
     { "path": "./editor" },
     { "path": "./sourceLanguage" },
+    { "path": "./symbols" },
     { "path": "./agent" }
   ],
   "include": ["*.ts"],
