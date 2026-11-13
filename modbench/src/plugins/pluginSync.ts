@@ -11,7 +11,7 @@ export interface PluginSyncOn {
 }
 
 interface PluginSyncDeps {
-  instance: Pick<Instance, 'subscribe' | 'refresh'>;
+  instance: Pick<Instance, 'refresh'> & { subscribe(subscriber: () => Promise<void>): { dispose(): void } };
   syncPlugins: PluginSyncRun;
   channel: SyncChannel;
 }
@@ -27,7 +27,6 @@ export function pluginSyncOn({ instance, syncPlugins, channel }: PluginSyncDeps)
   }, channel);
   const subscription = instance.subscribe(async () => {
     const written = new WrittenFiles();
-    wrote = false;
     await collectingWrites(written, () => pluginSync.run());
     if (wrote) await instance.refresh(written.named);
   });

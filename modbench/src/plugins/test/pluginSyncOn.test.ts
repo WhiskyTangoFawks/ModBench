@@ -3,16 +3,15 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('vscode', () => ({}));
 
 import { pluginSyncOn } from '../pluginSync';
-import type { InstanceSubscriber } from '../../instanceLoader/instance';
 import { ambientWrites } from '../../instanceLoader/ambientWrites';
 
 const channel = { error: () => undefined, info: () => undefined };
 
 function instanceHeard() {
-  let subscriber!: InstanceSubscriber;
+  let subscriber!: () => Promise<void>;
   const refresh = vi.fn((wrote?: readonly string[]) => { void wrote; return Promise.resolve(); });
-  const instance = { refresh, subscribe: (s: InstanceSubscriber) => { subscriber = s; return { dispose: () => undefined }; } };
-  const hears = () => subscriber({} as never, 1, { named: [], disk: false });
+  const instance = { refresh, subscribe: (s: () => Promise<void>) => { subscriber = s; return { dispose: () => undefined }; } };
+  const hears = () => subscriber();
   return { instance, refresh, hears };
 }
 
@@ -27,7 +26,7 @@ describe('plugin sync on the instance', () => {
     });
 
     let settled = false;
-    const heard = hears()?.then(() => { settled = true; });
+    const heard = hears().then(() => { settled = true; });
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect({ refreshed: refresh.mock.calls, settled }).toEqual({ refreshed: [[['/profile/plugins.txt']]], settled: false });
 
