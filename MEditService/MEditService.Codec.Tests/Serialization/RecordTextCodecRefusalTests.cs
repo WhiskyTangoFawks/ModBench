@@ -133,6 +133,37 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
         Assert.StartsWith(member, why, StringComparison.Ordinal);
     }
 
+    private static readonly string[] FlagViews = ["Fallout4MajorRecordFlags", "MajorFlags", "IsCompressed", "IsDeleted"];
+
+    private static string? WhyNotARecordOfNpcFlagged0x400WithRawSetTo(string raw, params string[] viewsHeld)
+    {
+        var npc = new Npc(new FormKey(Refusal, 0x801), Fallout4Release.Fallout4) { EditorID = "Guy", MajorRecordFlagsRaw = 1024 };
+        var text = Edited(RecordTextCodec.SerializeToText(npc, Release), root =>
+        {
+            foreach (var view in FlagViews.Except(viewsHeld)) _ = root.Remove(view);
+            root["MajorRecordFlagsRaw"] = JsonNode.Parse(raw);
+        });
+        return RecordTextCodec.WhyNotARecord(text, Release, "npc_");
+    }
+
+    [Theory]
+    [InlineData]
+    [InlineData("MajorFlags")]
+    [InlineData("Fallout4MajorRecordFlags")]
+    [InlineData("Fallout4MajorRecordFlags", "MajorFlags", "IsCompressed", "IsDeleted")]
+    public void ARawFlagsValue_WithAnyOfItsViewsOmitted_IsTheRecord(params string[] kept)
+    {
+        Assert.Null(WhyNotARecordOfNpcFlagged0x400WithRawSetTo("1024", kept));
+    }
+
+    [Theory]
+    [InlineData("Fallout4MajorRecordFlags")]
+    [InlineData("MajorFlags")]
+    public void ARawFlagsValue_ThatDisagreesWithAViewTheDocumentHolds_IsRefused(string kept)
+    {
+        Assert.NotNull(WhyNotARecordOfNpcFlagged0x400WithRawSetTo("2048", kept));
+    }
+
     [Fact]
     public void ANumberWhereATranslatedStringBelongs_IsRefused()
     {
