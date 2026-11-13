@@ -14,6 +14,8 @@ internal sealed class DeclaredDefaults(GameRelease release, ILogger logger)
 {
     internal const string RefusalPrefix = "SchemaReflector: declared defaults unavailable";
 
+    internal GameRelease Release => release;
+
     private readonly ConcurrentDictionary<Type, object?> _instances = new();
     private readonly ConcurrentDictionary<PropertyInfo, object?> _defaults = new();
 

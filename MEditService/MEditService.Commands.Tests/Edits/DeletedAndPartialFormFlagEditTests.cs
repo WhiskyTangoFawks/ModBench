@@ -270,13 +270,14 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
     }
 
     [Fact]
-    public void AViewOfRecordFlags_IsRefusedAsFieldNotFound_AndAnswersNoChanges()
+    public void AViewOfRecordFlags_IsRefusedAsFieldNotFound_NamingTheFieldThatEditsIt()
     {
         var formKey = _fixture.Seed(InteriorCellOfFallout4Esm(), "cell");
 
         var result = _fixture.Refused(formKey, SetAt(JsonDocument.Parse("[\"Deleted\"]").RootElement, Member("Fallout4MajorRecordFlags")));
 
         Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
+        Assert.Equal("'Fallout4MajorRecordFlags' spells MajorRecordFlagsRaw again; edit MajorRecordFlagsRaw.", result.Message);
     }
 
     [Theory]

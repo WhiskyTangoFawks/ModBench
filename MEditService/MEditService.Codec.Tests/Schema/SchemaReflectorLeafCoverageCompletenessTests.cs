@@ -42,10 +42,8 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         Assert.Contains(members, member => member.IsDiscriminator);
     }
 
-    private static readonly string[] RecordFlagViews = ["Fallout4MajorRecordFlags", "IsCompressed", "IsDeleted", "MajorFlags"];
-
     private static bool IsAFlagView(ColumnSpec column, string member) =>
-        column.Name == "MajorRecordFlagsRaw" && RecordFlagViews.Contains(member);
+        column.Name == "MajorRecordFlagsRaw" && RecordFlagViews.All.Contains(member);
 
     [Fact]
     public void EveryDirectRecordProperty_IsRepresentedInItsSchemaOrExplicitlyExcluded_ReDerivedFromMutagensReflectionNotTheReflectorsClassificationAcceptingNoGap()
