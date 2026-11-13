@@ -6,10 +6,10 @@ export function recordWriteOver(
   view: string, instance: Pick<Instance, 'refresh'>, client: { latestLoadOrder(): Promise<unknown> },
 ): RecordWrite {
   const untilIndexShows = {
-    refresh: async () => {
-      await instance.refresh();
+    refresh: async (wrote?: readonly string[]) => {
+      await instance.refresh(wrote);
       await client.latestLoadOrder();
     },
   };
-  return (command) => runUnderProgress(view, untilIndexShows, command);
+  return (command) => runUnderProgress(view, untilIndexShows, (_progress, written) => command(written));
 }

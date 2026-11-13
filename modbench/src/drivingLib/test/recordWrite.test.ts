@@ -13,6 +13,14 @@ const instanceThatReads = () => ({ refresh: () => { steps.push('refresh'); retur
 const noPut = { latestLoadOrder: () => Promise.resolve(undefined) };
 
 describe('a record write', () => {
+  it('refreshes at the files the write named', async () => {
+    const refresh = vi.fn(() => Promise.resolve(undefined));
+
+    await recordWriteOver(VIEW, { refresh }, noPut)((written) => { written.name(['/Data/A.esp']); return Promise.resolve(); });
+
+    expect(refresh).toHaveBeenCalledWith(['/Data/A.esp']);
+  });
+
   it('holds the view\'s progress until the record index reaches the newest load order the read put', async () => {
     steps.length = 0;
     let reached!: () => void;

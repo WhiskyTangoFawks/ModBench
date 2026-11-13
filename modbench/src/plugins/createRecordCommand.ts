@@ -142,14 +142,14 @@ export function registerRecordCreateCommand(
     const created = deps.createdRecords.watch(plugin);
     const answer: { formKey?: string } = {};
     try {
-      await deps.write(() => deps.source.oneAtATime(async () => {
+      await deps.write((written) => deps.source.oneAtATime(async () => {
         const into = container === undefined ? undefined : { container, position };
         const changes = await deps.client.getCreateChanges(plugin, recordType, into);
         if (isRefused(changes)) {
           deps.reporter.report('error', changes.message);
           return;
         }
-        const failure = await applyAnswered(deps.source, [changes], [plugin]);
+        const failure = await applyAnswered(deps.source, [changes], [plugin], written);
         if (failure !== undefined) {
           deps.reporter.report('error', `Could not create the ${typeName} record.`, failure);
           return;

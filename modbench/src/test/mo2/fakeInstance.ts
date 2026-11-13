@@ -1,4 +1,5 @@
 import type { InstanceSubscriber, InstanceValue } from '../../instanceLoader/instance';
+import { WrittenFiles } from '../../instanceLoader/writtenFiles';
 import { CHECK_THE_DISK } from '../../instanceAdapter/instanceAdapter';
 
 /** The double every provider's row contract needs: `.value` plus `.subscribe`, structurally
@@ -29,12 +30,12 @@ export class FakeInstance {
     this.sequence++;
     for (const subscriber of [...this.subscribers]) void subscriber(value, this.sequence, reread);
   }
-  refresh(): Promise<void> {
-    this.publish(this.value);
+  refresh(wrote?: readonly string[]): Promise<void> {
+    this.publish(this.value, wrote === undefined ? CHECK_THE_DISK : { named: wrote, disk: false });
     return Promise.resolve();
   }
-  quiet<T>(work: () => Promise<T>): Promise<T> {
-    return work();
+  quiet<T>(work: (written: WrittenFiles) => Promise<T>): Promise<T> {
+    return work(new WrittenFiles());
   }
   onReadFailure(listener: () => void) {
     this.failureListeners.push(listener);

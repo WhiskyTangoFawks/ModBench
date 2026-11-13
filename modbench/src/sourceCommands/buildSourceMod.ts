@@ -42,7 +42,7 @@ export interface BuildPass {
 
 /** A mod that built, as mEdit answers its steps without the files they made. `trashed`: each other file its folder held. */
 export type ModBuilt = Omit<BuildOutcome['landed'][number], 'made' | 'refused'> & {
-  readonly refused: readonly ItemRefusal<PluginAddress, Message>[];
+  readonly refused: readonly (ItemRefusal<PluginAddress, Message> & { readonly refusal?: StepBuilt['refused'][number]['refusal'] })[];
   readonly trashed?: readonly string[];
 };
 
@@ -214,7 +214,7 @@ const refusedPlugin = withRemedy<PluginAddress, StepBuilt['refused'][number]['re
 });
 
 const joined = (outcome: ModBuilt, { compiled, refused, archivesRefused, ignored, uncommitted, unpushed }: StepBuilt, unpacking: boolean): ModBuilt => ({
-  ...outcome, compiled: [...outcome.compiled, ...compiled], refused: [...outcome.refused, ...refused.map(refusedPlugin)],
+  ...outcome, compiled: [...outcome.compiled, ...compiled], refused: [...outcome.refused, ...refused.map((plugin) => ({ ...refusedPlugin(plugin), refusal: plugin.refusal }))],
   archivesRefused: [...outcome.archivesRefused, ...unpacking ? archivesRefused.map((archive) => ({ ...archive, unpacking: true as const })) : archivesRefused],
   ...ignored === undefined && outcome.ignored === undefined ? {} : { ignored: [...outcome.ignored ?? [], ...ignored ?? []] },
   ...uncommitted === true ? { uncommitted } : {}, ...unpushed === true ? { unpushed } : {},

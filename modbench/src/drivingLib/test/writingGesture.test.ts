@@ -48,6 +48,15 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
     expect(steps).toEqual(['progress opens on modbench.thing', 'refresh', 'progress closes']);
   });
 
+  it('refreshes at the files the command named, and at the whole disk when it named none', async () => {
+    const refresh = vi.fn(() => Promise.resolve());
+
+    await runWritingGesture('modbench.write', 'modbench.thing', { refresh }, (_progress, written) => { written.name(['/a.esp']); return Promise.resolve(); });
+    await runWritingGesture('modbench.write', 'modbench.thing', { refresh }, () => Promise.resolve());
+
+    expect(refresh.mock.calls).toEqual([[['/a.esp']], [undefined]]);
+  });
+
   it('answers what the command answered', async () => {
     expect(await runWritingGesture('modbench.write', 'modbench.thing', instanceThatReads(), () => Promise.resolve('landed'))).toBe('landed');
   });

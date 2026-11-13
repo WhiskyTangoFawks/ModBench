@@ -322,6 +322,8 @@ async function sourceFolderRestored(
 
 const NO_FILES: FolderValue = { files: new Map(), exclude: [], ignoresCase: false };
 
+const partition = <T>(items: readonly T[], inFirst: (item: T) => boolean): [T[], T[]] => [items.filter(inFirst), items.filter((item) => !inFirst(item))];
+
 // ADR-0006: what the build makes comes back as the build makes it, with the exclusions the manifest records.
 async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: string, manifest: Manifest, pinned: Submodule | undefined): Promise<Answer> {
   const { adapter, client, tasks, trash } = pass.deps;
@@ -338,7 +340,8 @@ async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: st
   if (isRefused(outcome)) return { refusal: `was not built: ${outcome.message.replace(/\.$/, '')}.` };
   if ('refusal' in outcome) return { refusal: outcome.refusal.reason };
   const built = outcome.landed;
-  const leftAsItWas = [...built.failure === undefined ? [] : [built.failure], ...built.refused.map(({ reason }) => String(reason)), ...built.archivesRefused.map(({ reason }) => reason)];
+  const [flagsRefused, pluginsRefused] = partition(built.refused, ({ refusal }) => refusal === 'FormIdOutsideFlagLimit');
+  const leftAsItWas = [...built.failure === undefined ? [] : [built.failure], ...pluginsRefused.map(({ reason }) => String(reason)), ...built.archivesRefused.map(({ reason }) => reason)];
   if (leftAsItWas.length > 0) return { refusal: `was not finished: ${leftAsItWas.map((why) => why.replace(/\.$/, '')).join('; ')}.` };
   const recorded = await manifestHeld(folder);
   if (recorded === undefined || 'refusal' in recorded) return { refusal: notFinished(recorded?.refusal ?? 'its build wrote no manifest') };
@@ -353,6 +356,7 @@ async function rebuilt(pass: Pass, mod: string, folder: string, sourceFolder: st
       mod, written: [...sourceRestored.written, ...[...after].filter(([path, hash]) => before.get(path) !== hash).map(([path]) => path).sort()],
       namedByNoLine: [...sourceRestored.namedByNoLine, ...built.trashed ?? []],
       ...(built.uncommitted ? { uncommitted: true } : {}), ...cloned,
+      ...flagsRefused.length === 0 ? {} : { notes: flagsRefused.map(({ reason }) => String(reason)) },
     },
   };
 }

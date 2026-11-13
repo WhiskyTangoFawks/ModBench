@@ -1,5 +1,3 @@
-// The instance value (ADR-0015).
-
 import type { Log } from '../ports/log';
 import {
   FileConflictLookup, foldPath, gameFolderArchivedOf, indexReusing, NO_GAME_FOLDER_ARCHIVED, stackReusing, type FileConflictIndex, type GameFolderArchived, type FileWinners, type StackedCopies,
@@ -25,6 +23,7 @@ import { errorMessage } from '../ports/errorMessage';
 import { FlaggedHashesHeld, flaggedPluginsIn, type FlaggedReader } from './flaggedHashes';
 import { ArchiveContentsHeld, archivePathsIn, unreadableArchiveLines, type ArchiveRead, type ArchiveReader } from './archiveContents';
 import { pluginOrderOf, unplaced } from './pluginOrder';
+import { WrittenFiles } from './writtenFiles';
 
 /** The rows this value is made of. A view names a row's shape through the read model that
  *  publishes it, never through the codec that parsed the file behind it. */
@@ -429,7 +428,7 @@ export class Instance implements Subscription {
     return { dispose: () => { this.redrawListeners = this.redrawListeners.filter((l) => l !== listener); } };
   }
 
-  /** Whether a change was heard that no read has taken in since (ADR-0015). */
+  /** Whether a change was heard that no read has taken in since. */
   get mayBeLate(): boolean {
     return this.late;
   }
@@ -456,23 +455,24 @@ export class Instance implements Subscription {
     };
   }
 
-  /** A check of the disk: the recompute activation runs, and the one that corrects the value after a change the adapter
-   *  never signalled. Settles when its read has run; a read that overlapped `quiet` is dropped, not landed. */
-  refresh(): Promise<void> {
-    return this.enqueue({ disk: true, tellsUnheard: false });
+  /** A read of the files `wrote` names, or a check of the disk when none is named. Settles when its read has run; a read
+   *  that overlapped `quiet` is dropped, not landed. */
+  refresh(wrote?: readonly string[]): Promise<void> {
+    return this.enqueue({ named: wrote, disk: wrote === undefined, tellsUnheard: false });
   }
 
-  /** Runs `work`, a write to several files the value reads, then refreshes. A read that overlapped
+  /** Runs `work`, a write to several files the value reads, then refreshes at the files `work` names. A read that overlapped
    *  it never lands: it may hold some files from before the write and some after. */
-  async quiet<T>(work: () => Promise<T>): Promise<T> {
+  async quiet<T>(work: (written: WrittenFiles) => Promise<T>): Promise<T> {
+    const written = new WrittenFiles();
     this.quietEpoch++;
     this.quiets++;
     try {
-      return await work();
+      return await work(written);
     } finally {
       this.quiets--;
       this.quietEpoch++;
-      await this.refresh();
+      await this.refresh(written.named);
     }
   }
 

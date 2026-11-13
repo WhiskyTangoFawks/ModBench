@@ -2,9 +2,9 @@
 /** @import { CallExpression, Identifier, Node, Program } from 'estree' */
 
 export const REREAD_AFTER_WRITE_MESSAGE =
-    "A write writes its file and returns. A view changes only when a read lands: the Instance loader's, which "
-    + "runWritingGesture asks for once the command ends, or mEdit's published rows for plugin source. "
-    + 'A write path never refreshes or invalidates a view itself, landed or failed (ADR-0015).';
+    "A write writes its file, may name the files it wrote, and returns. A view changes only when a read lands: the "
+    + "Instance loader's, which runWritingGesture asks for once the command ends, at the files named, or mEdit's "
+    + 'published rows for plugin source. A write path never refreshes or invalidates a view itself, landed or failed.';
 
 // Every call that writes a system of record from a view's gesture, by the name it is called under.
 export const WRITES = new Set([
@@ -123,7 +123,7 @@ export const noRereadAfterWrite = {
     meta: {
         type: 'problem',
         docs: {
-            description: 'A function that makes a write never re-reads a view (ADR-0015).',
+            description: 'A function that makes a write may name the files it wrote, and never re-reads a view.',
         },
         schema: [],
         messages: { reread: REREAD_AFTER_WRITE_MESSAGE },

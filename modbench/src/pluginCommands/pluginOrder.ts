@@ -22,14 +22,14 @@ function movedOrder(order: readonly string[], moved: readonly string[], drop: Dr
 const identity = (broken: { rule: string; plugins: readonly { origin: string; filename: string }[] }): string =>
   [broken.rule, ...broken.plugins.map((plugin) => `${plugin.origin}/${plugin.filename.toLowerCase()}`)].join('|');
 
-/** Why moving `moved` to `drop` breaks a sorting rule at Error or adds a plugin the game moves, naming the plugins. Only
+/** Why moving `moved` to `drop` breaks a sorting rule at Error, naming the plugins. Only
  *  what the move adds is refused: an order already broken is not the move's doing. */
 export function moveOrderRefusal(
   { loadedWithNoLine, lines, isActive }: ListedPlugins, moved: readonly string[], drop: Drop, factsOf: PluginFactsOf,
 ): string | undefined {
   const brokenIn = (order: readonly string[]) => judge(loadedWithNoLine, order, factsOf, isActive).broken;
   const already = new Set(brokenIn(lines).map(identity));
-  return brokenIn(movedOrder(lines, moved, drop)).find((broken) => (broken.level === 'error' || broken.rule === 'gameMoves') && !already.has(identity(broken)))?.reason;
+  return brokenIn(movedOrder(lines, moved, drop)).find((broken) => broken.level === 'error' && !already.has(identity(broken)))?.reason;
 }
 
 /** A broken rule and the move of `mover` to `drop` that keeps it. */
