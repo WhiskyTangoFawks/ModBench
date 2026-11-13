@@ -113,8 +113,8 @@ Modbench judges what the game loads from the plugin order I have against the gam
 
 | Level | A sorting rule broken, or a LOOT message or cleaning data that applies |
 |---|---|
-| Error | a master loads after a plugin that lists it · a master is missing or not active · a requirement is missing · an incompatibility is present · a LOOT error message |
-| Warning | the game moves a plugin from where `plugins.txt` lists it · a plugin loads before a plugin its sorting rule says it loads after · a LOOT warning message |
+| Error | the game moves a plugin from where `plugins.txt` lists it · a master loads after a plugin that lists it · a master is missing or not active · a requirement is missing · an incompatibility is present · a LOOT error message |
+| Warning | a plugin loads before a plugin its sorting rule says it loads after · a LOOT warning message |
 | Info | a plugin loads out of its LOOT group's place · LOOT's cleaning data says the plugin is dirty · a LOOT say message |
 
 As a user, I want:
@@ -181,7 +181,7 @@ As a user, I want:
 
 1. To drag plugin rows, one or several. They move as one block in their `plugins.txt` order.
 2. A drop on a plugin row to place the block directly above it, as shown; on a plugin the game loads with no line, at the losing end of `plugins.txt`; below the last row, at the bottom of the view, as shown.
-3. A drop that would newly break a sorting rule at Error, or newly make the game move a plugin from where `plugins.txt` lists it, refused, naming the rule and its plugins. Any other drop lands, and each rule it breaks shows as broken once mEdit reads the plugin. Cites: ADR-0026; xedit.md, divergence 28; mo2.md, divergence 22
+3. A drop that would newly break a sorting rule at Error refused, naming the rule and its plugins. Any other drop lands, and each rule it breaks shows as broken once mEdit reads the plugin. Cites: ADR-0026; xedit.md, divergence 28; mo2.md, divergence 22
 4. A drop where the block cannot go to be refused, saying why: on a record, a group, or a row being dragged. Cites: Refuse, do not repair; mods.md, Drag and drop, story 5
 5. Records, groups and the rows of plugins the game loads with no line not to drag, and nothing from outside the view to drop here. Cites: xedit.md: Drag a record onto a reference field
 

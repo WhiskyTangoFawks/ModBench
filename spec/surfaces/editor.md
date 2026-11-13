@@ -46,7 +46,7 @@ As a user, I want:
 
 As a user, I want:
 
-1. One column for each active plugin that holds the record, in plugin order: the copy in the record's origin plugin on the left, the winning copy on the right. The file's column is marked as the one I edit. Cites: xEdit; ADR-0012
+1. One column for each active plugin that holds the record, in plugin order. The file's column is marked as the one I edit. Cites: xEdit; xedit.md, divergence 46; ADR-0012
 2. The file I opened to be a column even when its plugin is not active: just before the plugin that overrides it, or alone when the game does not load it (States, story 7). Cites: ADR-0012; ADR-0001
 3. To collapse a column to a narrow strip from a control in its header, and to restore it the same way. The strip shows the load index, keeps the column's colour, and its tooltip holds the rest of the header. Cites: editor-conflicts.md, Cells, story 3
 4. A cell in a column that cannot be edited, or that is not the file's, to open no editor. Its header says why, or opens its file. Cites: xedit.md, divergence 42; ADR-0018
