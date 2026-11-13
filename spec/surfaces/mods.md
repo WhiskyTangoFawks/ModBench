@@ -94,12 +94,12 @@ A mod row carries an indicator for each status that holds, and a folder or file 
 | Archive is overwritten by loose files | an archived file of the mod loses to a loose copy in another mod or Overwrite, and the mod is not Redundant | on | off |
 | Overwrites another archive file | an archived file of the mod wins over another mod's archived copy | off | off |
 | Overwritten by another archive file | an archived file of the mod loses to another mod's archived copy, and the mod is not Redundant | on | off |
-| Redundant | the mod has a file the game could get, and every such file loses to another copy | on | off |
+| Redundant | the mod has a file the game could get, and every such file loses to another copy. An archive counts as the files it holds | on | off |
 | Contains excluded files | the mod has an excluded file | off | off |
 | Update available | the mod's version is older than the newest version check for updates found | on | off |
 | Publisher tag | a publisher tag covers the row ([publishing.md](publishing.md), Publisher tags, story 1) | on | off |
 
-Each publisher tag is an indicator of its own, with the badge its publisher declares. The Badge and Colour columns are the defaults. The grey of a file the game does not get is a setting too, on by default. A mod that wins some files and loses others carries both badges. Each indicator's tooltip is its name in this table. Cites: mo2.md, divergence 12
+Each publisher tag is an indicator of its own, with the badge its publisher declares. The Badge and Colour columns are the defaults. The grey of a file the game does not get is a setting too, on by default. A mod that wins some files and loses others carries both badges. Each indicator's tooltip is its name in this table. Cites: mo2.md, divergences 12 and 28
 
 ## A built mod
 

@@ -49,6 +49,7 @@ Gestures Modbench does differently.
 | 25 | Where a new mod lands | At the winning end of the mod order ([mods.md](../surfaces/mods.md), What install does, story 2) | At the priority of the row the gesture started from, or inside the separator it started from; Create empty mod and Install mod inside are on the separator menu | Ruling: deferred. |
 | 26 | Archive parsing | Always on, with no setting | An experimental setting, off by default | Principle: Usable first. |
 | 27 | Plugins the game loads with no line | Read from the files the game gets when it runs, a Creation Club list a mod deploys included ([plugins.md](../surfaces/plugins.md), The tree, stories 1 and 2) | Reads the game folder alone, so a list a mod deploys leaves its plugins as ordinary rows | Principle: Never silently wrong. |
+| 28 | Redundant, for a mod with an archive | Counts the archive as the files it holds ([mods.md](../surfaces/mods.md), Indicators) | Counts the archive file itself as a file the mod provides | Ruling: Redundant answers whether disabling the mod loses anything in game. |
 
 ## Omissions by object
 
