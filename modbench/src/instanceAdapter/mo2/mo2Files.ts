@@ -62,15 +62,16 @@ const keepFolder = (walk: Walk, path: string): void => {
   walk.folders.push({ relativePath, path, includedPath: includedPathOf(relativePath), excluded: isExcluded(relativePath) });
 };
 
-// Another tool can remove a subfolder mid-walk: that skips it alone, noted. The root's absence is
-// its caller's to answer.
+// A subfolder that is gone mid-walk or that this process may not read is skipped alone, noted. The root's
+// absence is its caller's to answer.
 async function inSubfolder(walk: Walk, dir: string, visit: () => Promise<void>): Promise<void> {
   try {
     await visit();
   } catch (err) {
-    if (errnoCode(err) !== 'ENOENT') throw err;
+    const code = errnoCode(err);
+    if (code !== 'ENOENT' && code !== 'EACCES' && code !== 'EPERM') throw err;
     walk.stampsCover = false;
-    walk.notes.push(`"${dir}" was removed mid-read, skipped`);
+    walk.notes.push(code === 'ENOENT' ? `"${dir}" was removed mid-read, skipped` : `"${dir}" cannot be read (${errorMessage(err)}), skipped`);
   }
 }
 
