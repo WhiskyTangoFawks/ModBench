@@ -87,6 +87,10 @@ function onEveryFile(contributions: Contribution[]): ProblemsByFile {
   return byFile;
 }
 
+const WHOLE_SET = '';
+const outsideTarget = <V>(held: ReadonlyMap<string, V>, target: string): [string, V][] =>
+  target === WHOLE_SET ? [] : [...held].filter(([key]) => key !== target);
+
 function nextHeld(held: Map<string, Contribution>, answered: Map<string, Contribution | undefined>, unplaced: Set<string>): Map<string, Contribution> {
   return new Map([...answered].flatMap(([key, fresh]) => {
     const before = held.get(key);
@@ -102,13 +106,14 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
   const { client, reporter, publish, languageStatus } = deps;
   const tellUnplaced = tellingOnSurface(reporter);
   let held = new Map<string, Contribution>();
-  let unplacedStatus: string | undefined;
-  let failed: string | undefined;
+  let unplacedHeld = new Map<string, Unplaced>();
+  const failures = new Map<string, string>();
   let handOverFailed: string | undefined;
   const showStatus = () => {
+    const failed = [...failures.values()][0];
     if (failed !== undefined) languageStatus(lastRead(failed));
     else if (handOverFailed !== undefined) languageStatus(lastRead(`mEdit could not take the unsaved plugin source: ${handOverFailed}`));
-    else languageStatus(unplacedStatus);
+    else languageStatus(unplacedStatus());
   };
   const handedOver = (failure: ReadFailed | undefined) => {
     const why = failure && failureReason(failure);
@@ -119,40 +124,53 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
     showStatus();
   };
   const { ready, answeredAtSubscribe } = readiness(client);
-  const settle = ({ ofPlugin, unplaced }: Placed) => {
-    failed = undefined;
-    held = nextHeld(held, ofPlugin, new Set(unplaced.map(({ key }) => key)));
+  const unplacedStatus = () => unplacedHeld.size > 0
+    ? lastRead([...unplacedHeld.values()].map(({ plugin, why }) => `${plugin}: ${why}`).join('; '))
+    : undefined;
+  const settle = (target: string, { ofPlugin, unplaced }: Placed) => {
+    for (const failed of failures.keys()) if (target === WHOLE_SET || failed === target) failures.delete(failed);
+    held = new Map([...outsideTarget(held, target), ...nextHeld(held, ofPlugin, new Set(unplaced.map(({ key }) => key)))]);
+    unplacedHeld = new Map([...outsideTarget(unplacedHeld, target), ...unplaced.map((one) => [one.key, one] as const)]);
     publish(onEveryFile([...held.values()]));
-    unplacedStatus = unplaced.length > 0 ? lastRead(unplaced.map(({ plugin, why }) => `${plugin}: ${why}`).join('; ')) : undefined;
     showStatus();
-    tellUnplaced(unplaced.filter(({ told }) => told));
+    tellUnplaced([...unplacedHeld.values()].filter(({ told }) => told));
   };
-  const keepLastAnswer = (error: unknown) => {
+  const keepLastAnswer = (target: string, error: unknown) => {
     const why = errorMessage(error);
-    if (why !== failed) reporter.shownOnSurface('warning', 'The Problems panel shows mEdit\'s last answer.', why);
-    failed = why;
+    if (why !== failures.get(target)) reporter.shownOnSurface('warning', 'The Problems panel shows mEdit\'s last answer.', why);
+    failures.set(target, why);
     showStatus();
   };
-  let atSubscribe = true;
-  const ask = async () => {
-    const first = atSubscribe;
-    atSubscribe = false;
+  const ask = async (plugin?: PluginAddress, first = false) => {
+    const target = plugin === undefined ? WHOLE_SET : pluginAddressKey(plugin);
     try {
-      const answer = placed(answerOf(await client.getPluginProblems()), deps);
+      const answer = placed(answerOf(await client.getPluginProblems(plugin)), deps);
       if (first) answeredAtSubscribe();
-      settle(answer);
+      settle(target, answer);
     } catch (error) {
-      if (!first) keepLastAnswer(error);
+      if (!first) keepLastAnswer(target, error);
     }
   };
-  const reaskOnce = coalesced(ask);
-  const reaskWhenReady = () => { if (ready()) reaskOnce(); };
+  let wholeWanted = true;
+  let atSubscribe = true;
+  const asking = new Map<string, PluginAddress>();
+  const askWanted = coalesced(async () => {
+    const [whole, first, named] = [wholeWanted, atSubscribe, [...asking.values()]];
+    [wholeWanted, atSubscribe] = [false, false];
+    asking.clear();
+    await Promise.all(whole ? [ask(undefined, first)] : named.map((plugin) => ask(plugin)));
+  });
+  const askPluginWhenReady = ({ plugin }: { plugin: PluginAddress }) => {
+    if (!ready()) return;
+    asking.set(pluginAddressKey(plugin), plugin);
+    askWanted();
+  };
   const unsubscribe = [
-    client.onLoadOrderSettled((status) => { if (status.conflictsComputed) reaskOnce(); }),
-    client.onNotification('rows-changed', reaskWhenReady),
-    client.onNotification('plugin-changed', reaskWhenReady),
+    client.onLoadOrderSettled((status) => { if (status.conflictsComputed) { wholeWanted = true; askWanted(); } }),
+    client.onNotification('rows-changed', askPluginWhenReady),
+    client.onNotification('plugin-changed', askPluginWhenReady),
     client.onUnsavedHandOver(handedOver),
   ];
-  reaskOnce();
+  askWanted();
   return () => { for (const off of unsubscribe) off(); };
 }

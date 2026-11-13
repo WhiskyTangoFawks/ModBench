@@ -164,6 +164,33 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
     expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(2);
   });
 
+  it('asks again for only the plugin a notification names, and keeps the problems of the others', async () => {
+    const other = { name: 'Other.esp', origin: 'OtherMod' };
+    const { client, answered } = feed();
+    await answered([{ plugin: PLUGIN, problems: [problem()] }, { plugin: other, problems: [problem({ sourceRelativePath: 'Other.esp/Npc.json' })] }]);
+
+    const shown = await answered([{ plugin: PLUGIN, problems: [] }], { kind: 'rows-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [REFERRER], sequence: 1 });
+
+    expect([[...shown.keys()], client.calls.filter(({ method }) => method === 'getPluginProblems').map(({ args }) => args).at(-1)])
+      .toEqual([['/source/OtherMod/Other.esp/Npc.json'], [PLUGIN]]);
+  });
+
+  it('drops the problems of a plugin that a notification names and mEdit answers no entry for', async () => {
+    const { answered } = feed();
+    await answered([{ plugin: PLUGIN, problems: [problem()] }]);
+
+    const shown = await answered([], { kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+
+    expect([...shown]).toEqual([]);
+  });
+
+  it('asks for every plugin when the load order settles', async () => {
+    const { client, answered } = feed();
+    await answered([]);
+
+    expect(client.calls.filter(({ method }) => method === 'getPluginProblems').map(({ args }) => args).at(-1)).toEqual([undefined]);
+  });
+
   it('keeps one ask in flight and at most one pending, however many notifications arrive meanwhile', async () => {
     const { client, published } = feed(sourceFolders, [{ plugin: PLUGIN, problems: [] }]);
     await vi.waitFor(() => { expect(published).toHaveLength(1); });

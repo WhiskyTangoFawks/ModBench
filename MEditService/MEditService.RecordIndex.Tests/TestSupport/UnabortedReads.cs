@@ -78,7 +78,7 @@ internal static class UnabortedReads
     internal static Task<Answer<PluginDependants, IndexRefused>> GetDependants(this IQueries queries, PluginAddress plugin) =>
         queries.GetDependants(plugin, Never);
 
-    internal static Task<Answer<IReadOnlyList<PluginProblems>, IndexRefused>> GetProblems(this IQueries queries) => queries.GetProblems(Never);
+    internal static Task<Answer<IReadOnlyList<PluginProblems>, IndexRefused>> GetProblems(this IQueries queries, PluginAddress? plugin = null) => queries.GetProblems(plugin, Never);
 
     internal static Task<Answer<IReadOnlyList<PluginFilePaths>, IndexRefused>> GetFilePaths(this IQueries queries, PluginAddress? plugin) =>
         queries.GetFilePaths(plugin, Never);

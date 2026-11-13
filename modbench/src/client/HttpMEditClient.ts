@@ -669,8 +669,10 @@ class HttpMEditClient implements MEditClient {
     }), noBodyFails);
   }
 
-  getPluginProblems(): Promise<PluginProblems[] | ReadFailed> {
-    return this.read('getPluginProblems', (api, signal) => api.GET('/plugins/problems', { signal }), noBodyFails, { timed: true });
+  getPluginProblems(plugin?: PluginAddress): Promise<PluginProblems[] | ReadFailed> {
+    return this.read('getPluginProblems', (api, signal) => api.GET('/plugins/problems', {
+      params: { query: plugin === undefined ? {} : { plugin: plugin.name, origin: plugin.origin } }, signal,
+    }), noBodyFails, { timed: true });
   }
 
   getPluginFilePaths(plugin?: PluginAddress): Promise<PluginFilePaths[] | ReadFailed> {

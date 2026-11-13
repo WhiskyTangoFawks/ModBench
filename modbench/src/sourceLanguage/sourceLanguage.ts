@@ -146,9 +146,9 @@ function languageStatusItem(id: string) {
 
 function sourceProblems(deps: SourceLanguageDeps): Pick<SourceLanguage, 'dispose' | 'messages'> {
   const collection = vscode.languages.createDiagnosticCollection('modbench-source');
-  const feedOf = mergedFeeds((problems) => {
-    collection.clear();
-    collection.set([...problems].map(([file, onFile]) => [vscode.Uri.file(file), onFile.map(diagnosticOf)]));
+  const feedOf = mergedFeeds((file, onFile) => {
+    if (onFile.length === 0) collection.delete(vscode.Uri.file(file));
+    else collection.set(vscode.Uri.file(file), onFile.map(diagnosticOf));
   });
   const linkStatus = languageStatusItem('modbench.sourceProblems');
   const pathStatus = languageStatusItem('modbench.sourcePaths');

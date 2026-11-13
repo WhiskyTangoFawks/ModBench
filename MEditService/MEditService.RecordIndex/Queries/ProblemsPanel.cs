@@ -6,11 +6,11 @@ using Mutagen.Bethesda;
 
 namespace MEditService.RecordIndex.Queries;
 
-/// <summary>The Problems panel's source, per compiled plugin, active or not. A plugin whose read
+/// <summary>The Problems panel's source, per compiled plugin, active or not, or one plugin's. A plugin whose read
 /// failed is answered with the files that stopped it, and the links of rows its tree gave.</summary>
 internal static class ProblemsPanel
 {
-    public static IReadOnlyList<PluginProblems> Of(Indexer index, RelationReads reads, LoadOrderSnapshot snapshot, ISourceAdapter source)
+    public static IReadOnlyList<PluginProblems> Of(Indexer index, RelationReads reads, LoadOrderSnapshot snapshot, ISourceAdapter source, PluginAddress? only = null)
     {
         var derivations = reads.GetDerivations();
         var stopped = index.SourceFileFailures.ToLookup(failure => failure.Plugin, PluginAddress.Comparer);
@@ -26,6 +26,7 @@ internal static class ProblemsPanel
         return
         [
             .. snapshot.Plugins
+                .Where(plugin => only is not { } one || PluginAddress.Comparer.Equals(plugin.Key, one))
                 .Where(plugin => derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom.IsSourceMod() || stopped.Contains(plugin.Key))
                 .Select(plugin =>
                 {
