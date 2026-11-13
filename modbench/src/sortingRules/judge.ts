@@ -119,7 +119,7 @@ function brokenGameMoves(
       : by === undefined ? `"${plugin}" loads as a master, by its master flag or its extension, so the game loads it before "${anchor}", ${NOT_LISTED_THERE}`
         : `"${plugin}" is a master of "${by}", which loads as a master, so the game loads it before "${anchor}", ${NOT_LISTED_THERE}`;
     return [{
-      rule: 'gameMoves', level: 'warning', plugins: [refOf(plugin, facts)],
+      rule: 'gameMoves', level: 'error', plugins: [refOf(plugin, facts)],
       placement: { side: anchorBefore === undefined ? 'after' : 'before', anchor: refOf(anchor, anchorFacts) }, reason,
     }];
   });

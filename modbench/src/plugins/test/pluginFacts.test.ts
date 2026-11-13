@@ -26,12 +26,15 @@ const lackingMasters = (...ghosts: string[]): Scene => (facts) => facts.reconcil
 const missingMaster = (ghost: string) => `"${ghost}" is a master of "A.esp", and is missing or not active.`;
 const masterFlagAfterB = (overrides: Partial<PluginMetadata> = {}): Scene => (facts) =>
   facts.reconciled([held({ isMaster: true, ...overrides }), held({ name: 'B.esp' })], [], [B, A], [B, A]);
-const MASTER_FLAG_LINE = 'Warning: "A.esp" loads as a master, by its master flag or its extension, so the game loads it before "B.esp", not where plugins.txt lists it.';
+const MASTER_FLAG_LINE = 'Error: "A.esp" loads as a master, by its master flag or its extension, so the game loads it before "B.esp", not where plugins.txt lists it.';
 const absentRuleFile = { path: '/i/f.yaml', kind: 'absent' } as const;
+const LOAD_AFTER_LINE = 'Warning: "A.esp" loads before "B.esp", and should load after it.';
 const masterlistOf = (text: string): LootInput => ({
   ...rulesReader()({ masterlist: { path: '/i/masterlist.yaml', kind: 'text', text }, prelude: absentRuleFile, userlist: absentRuleFile }),
   files: { files: () => ({ names: [], complete: true }), isPresent: () => 'present', answer: () => ({ kind: 'read', value: undefined }) },
 });
+const loadsBeforeB: Scene = (facts) =>
+  facts.reconciled([held(), held({ name: 'B.esp' })], [], [A, B], [A, B], masterlistOf("plugins:\n  - name: 'A.esp'\n    after: ['B.esp']\n"));
 const unreadable: Scene = (facts) => facts.reconciled([held({ hasParseFailure: true })], [], [], []);
 const sourceUnreadable: Scene = (facts) => facts.reconciled([held({ isCompiledPlugin: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } })], [], [], []);
 const sourceUnreadableForGood: Scene = (facts) => facts.reconciled([held({ isCompiledPlugin: true, pluginSourceUnreadable: { reason: 'Twin folders.', decompileRepairs: false } })], [], [], []);
@@ -71,7 +74,8 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
     ['two sorting errors', lackingMasters('Ghost.esm', 'Off.esm'), 'error', '2 errors',
       [`Error: ${missingMaster('Ghost.esm')}\nError: ${missingMaster('Off.esm')}`]],
     ['no sorting errors', lackingMasters(), undefined, undefined, []],
-    ['one sorting warning', masterFlagAfterB(), 'warning', '1 warning', [MASTER_FLAG_LINE]],
+    ['one sorting error from the game moving it', masterFlagAfterB(), 'error', '1 error', [MASTER_FLAG_LINE]],
+    ['one sorting warning', loadsBeforeB, 'warning', '1 warning', [LOAD_AFTER_LINE]],
     ['unreadable records', unreadable, 'error', 'unreadable records',
       ['This plugin holds a record that could not be read into its document.']],
     ['plugin source unreadable', sourceUnreadable, 'warning', 'plugin source unreadable',
@@ -100,8 +104,8 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
     ['unreadable records over malformed', scenes(unreadable, malformed), 'error'],
     ['failed to read over malformed', scenes(malformed, failed), 'error'],
     ['malformed alone', malformed, 'warning'],
-    ['a sorting warning alone', masterFlagAfterB(), 'warning'],
-    ['malformed over a sorting warning', scenes(masterFlagAfterB(), malformed), 'warning'],
+    ['a sorting warning alone', loadsBeforeB, 'warning'],
+    ['malformed over a sorting warning', scenes(loadsBeforeB, malformed), 'warning'],
   ] as const)('%s: the first status that holds sets the icon', (_label, scene, icon) => {
     const facts = new PluginFacts();
     scene(facts);
@@ -115,10 +119,10 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
     facts.reconciled([
       held({ isMaster: true, masters: ['Ghost.esm'], hasParseFailure: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }),
       held({ name: 'B.esp' }),
-    ], [failure('Malformed record')], [B, A], [B, A]);
+    ], [failure('Malformed record')], [B, A], [B, A], masterlistOf("plugins:\n  - name: 'A.esp'\n    after: ['B.esp']\n"));
 
     expect(facts.description(A))
-      .toBe('failed to read, 1 error, unreadable records, plugin source unreadable, changed outside Modbench, malformed, 1 warning');
+      .toBe('failed to read, 2 errors, unreadable records, plugin source unreadable, changed outside Modbench, malformed, 1 warning');
   });
 
   it('names a master that loads after its dependant on both plugins', () => {
@@ -131,7 +135,7 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
     expect(facts.tooltipLines(late)).toContain(line);
   });
 
-  it('warns, on a blueprint line listed before a plugin that is not one, that the game moves it, and on no blueprint plugin with no line', () => {
+  it('raises an Error, on a blueprint line listed before a plugin that is not one, that the game moves it, and on no blueprint plugin with no line', () => {
     const facts = new PluginFacts();
     const blueprint = { name: 'Blueprint.esm', origin: 'SomeMod' };
     const ship = { name: 'Ship.esm', origin: 'SomeMod' };
@@ -322,8 +326,11 @@ describe('PluginFacts — the Problems panel reads the answers the rows read', (
     const facts = new PluginFacts();
     masterFlagAfterB({ masters: ['Ghost.esm'] })(facts);
 
-    expect(facts.problems().sortingErrors).toEqual([{ plugin: 'A.esp', origin: 'SomeMod', text: missingMaster('Ghost.esm') }]);
-    expect(facts.problems().sortingWarnings).toEqual([{ plugin: 'A.esp', origin: 'SomeMod', text: MASTER_FLAG_LINE.replace('Warning: ', '') }]);
+    expect(facts.problems().sortingErrors).toEqual([
+      { plugin: 'A.esp', origin: 'SomeMod', text: missingMaster('Ghost.esm') },
+      { plugin: 'A.esp', origin: 'SomeMod', text: MASTER_FLAG_LINE.replace('Error: ', '') },
+    ]);
+    expect(facts.problems().sortingWarnings).toEqual([]);
   });
 
   it('lists the diagnosis of each failed read that carries one, on its plugin, as the reconcile answered', () => {
