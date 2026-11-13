@@ -7,7 +7,7 @@ import { registerModSyncCommand } from '../modSync';
 describe('the mod sync command', () => {
   it('is modbench.mod.sync, and runs the mod sync', async () => {
     const handlers = new Map<string, () => unknown>();
-    const modSync = { run: vi.fn(() => Promise.resolve()) };
+    const modSync = { run: vi.fn(() => Promise.resolve(undefined)) };
     registerModSyncCommand(modSync, (id, handler) => { handlers.set(id, handler); return { dispose: () => undefined }; });
 
     await present(handlers.get('modbench.mod.sync'), 'the modbench.mod.sync handler')();

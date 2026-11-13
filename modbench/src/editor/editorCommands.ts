@@ -62,7 +62,7 @@ export interface EditorCommandDeps {
 
 export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const { context, tabs, meditClient, outputChannel } = deps;
-  const recordWrite = recordWriteOver(deps.recordWriteProgressView, deps.instance, meditClient);
+  const recordWrite = recordWriteOver(deps.recordWriteProgressView, deps.instance);
   const selections: ViewSelections = { focused: deps.focusedViewSelection, of: deps.selectionOf };
   // The picker and the title are each tab's own, which the record grid adds per tab.
   const routerDeps: SharedRecordPanelDeps = {
