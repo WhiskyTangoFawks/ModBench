@@ -367,7 +367,7 @@ function start(context: vscode.ExtensionContext): void {
   };
   const reporterFor = (tag: string) => makeReporter(outputChannel, tag);
   context.subscriptions.push(surfaceRefusedWrites({ reporter: reporterFor('write'), titles: commandTitles(context.extension.packageJSON), redraw: opened.facts.redraw }));
-  context.subscriptions.push(surfaceReadModel(() => meditClient.latestLoadOrder()));
+  context.subscriptions.push(surfaceReadModel({ handed: () => meditClient.loadOrdersHanded(), latest: () => meditClient.latestLoadOrder() }));
   const plugins = createPlugins({
     client: meditClient, facts: opened.facts, channel: outputChannel, reporterFor,
     registerRepositories: sourceModRepositories.registerRepositories, ask: askQuestion, sourceEditing,

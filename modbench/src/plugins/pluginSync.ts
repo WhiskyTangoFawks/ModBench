@@ -19,16 +19,11 @@ interface PluginSyncDeps {
 // Termination: a write re-enters through the Instance adapter's signal. The next value agrees with
 // disk, so the sync writes nothing and the loop stops; a sync that wrote unconditionally never would.
 export function pluginSyncOn({ instance, syncPlugins, channel }: PluginSyncDeps): PluginSyncOn {
-  let wrote = false;
-  const pluginSync = createPluginSync(async () => {
-    const outcome = await syncPlugins();
-    wrote = outcome.applied && outcome.wrote;
-    return outcome;
-  }, channel);
+  const pluginSync = createPluginSync(syncPlugins, channel);
   const subscription = instance.subscribe(async () => {
     const written = new WrittenFiles();
-    await collectingWrites(written, () => pluginSync.run());
-    if (wrote) await instance.refresh(written.named);
+    const synced = await collectingWrites(written, () => pluginSync.run());
+    if (synced?.wrote) await instance.refresh(written.named);
   });
   return { pluginSync, dispose: () => { subscription.dispose(); } };
 }

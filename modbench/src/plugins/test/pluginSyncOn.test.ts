@@ -43,4 +43,22 @@ describe('plugin sync on the instance', () => {
 
     expect(refresh).not.toHaveBeenCalled();
   });
+
+  it('reads back what its own run wrote when a later run, overlapping it, wrote nothing', async () => {
+    const { instance, refresh, hears } = instanceHeard();
+    let finishFirst!: () => void;
+    const gate = new Promise<void>((resolve) => { finishFirst = resolve; });
+    const runs = [
+      async () => { await gate; ambientWrites.name(['/profile/plugins.txt']); return { applied: true as const, wrote: true, added: [], dropped: [] }; },
+      () => Promise.resolve({ applied: true as const, wrote: false, added: [], dropped: [] }),
+    ];
+    pluginSyncOn({ instance, channel, syncPlugins: () => runs.shift()!() });
+
+    const first = hears();
+    await hears();
+    finishFirst();
+    await first;
+
+    expect(refresh.mock.calls).toEqual([[['/profile/plugins.txt']]]);
+  });
 });

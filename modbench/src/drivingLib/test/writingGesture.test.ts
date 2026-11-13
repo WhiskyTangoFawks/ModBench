@@ -66,19 +66,41 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
     expect(refresh.mock.calls).toEqual([[['/a.esp']], [undefined]]);
   });
 
-  it('holds the view\'s progress until the read model shows what the instance read', async () => {
-    steps.length = 0;
-    let shows!: () => void;
-    const surface = surfaceReadModel(() => new Promise<void>((resolve) => { shows = resolve; }));
-    onTestFinished(() => { surface.dispose(); });
+  describe('with the other read model surfaced', () => {
+    function otherReadModel() {
+      let handed = 0;
+      let shows!: () => void;
+      const surface = surfaceReadModel({
+        handed: () => handed,
+        latest: () => new Promise<void>((resolve) => { shows = resolve; }),
+      });
+      onTestFinished(() => { surface.dispose(); });
+      return { hand: () => { handed++; }, shows: () => { shows(); } };
+    }
 
-    const running = runWritingGesture('modbench.write', 'modbench.thing', instanceThatReads(), () => Promise.resolve());
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(steps).toEqual(['progress opens on modbench.thing', 'refresh']);
+    it('holds the view\'s progress until the send its refresh handed has shown', async () => {
+      steps.length = 0;
+      const other = otherReadModel();
+      const instance = { refresh: () => { other.hand(); steps.push('refresh'); return Promise.resolve(undefined); } };
 
-    shows();
-    await running;
-    expect(steps.at(-1)).toBe('progress closes');
+      const running = runWritingGesture('modbench.write', 'modbench.thing', instance, () => Promise.resolve());
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(steps).toEqual(['progress opens on modbench.thing', 'refresh']);
+
+      other.shows();
+      await running;
+      expect(steps.at(-1)).toBe('progress closes');
+    });
+
+    it('ends at once when its refresh handed no send, whatever send is outstanding', async () => {
+      steps.length = 0;
+      const other = otherReadModel();
+      other.hand();
+
+      await runWritingGesture('modbench.write', 'modbench.thing', instanceThatReads(), () => Promise.resolve());
+
+      expect(steps).toEqual(['progress opens on modbench.thing', 'refresh', 'progress closes']);
+    });
   });
 
   it('answers what the command answered', async () => {

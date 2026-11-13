@@ -18,6 +18,7 @@ export interface LoadOrderSender {
   send(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome>;
   signalChange(paths: readonly string[]): void;
   latest(): Promise<LoadOrderOutcome | undefined>;
+  handed(): number;
   onResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void;
   onAppliedAfterReopen(listener: (snapshot: LoadOrderSnapshot) => void): () => void;
   onLaunch(listener: (launched: Promise<LaunchOutcome>) => void): () => void;
@@ -171,6 +172,7 @@ function listeners<A extends unknown[]>() {
 export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
   const slot = createSendSlot(wire);
   let newestHanded: LoadOrderSnapshot | undefined;
+  let handedCount = 0;
   let reopenUnannounced = false;
   const resent = listeners<[LoadOrderSnapshot, LoadOrderOutcome]>();
   const appliedAfterReopen = listeners<[LoadOrderSnapshot]>();
@@ -188,6 +190,7 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     if (launcher.stopped()) return Promise.resolve(ABANDONED);
     if (isMEditGone(wire.status()) && !launcher.launching()) return Promise.resolve(BACKEND_FAILED);
     newestHanded = snapshot;
+    handedCount++;
     const sent = slot.hold(snapshot);
     void sent.then((outcome) => {
       if (!reopenUnannounced || outcome.outcome !== 'applied' || snapshot !== newestHanded) return;
@@ -221,6 +224,7 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     send: hand,
     signalChange: (paths) => { if (!launcher.stopped()) slot.oweSignal(paths); },
     latest: () => slot.latest(),
+    handed: () => handedCount,
     onResent: resent.add,
     onAppliedAfterReopen: appliedAfterReopen.add,
     onLaunch: launches.add,

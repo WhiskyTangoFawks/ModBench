@@ -14,6 +14,7 @@ export async function runUnderProgress<T>(
 ): Promise<T> {
   const progress = pausableProgress(viewId);
   const written = new WrittenFiles();
+  const handedBefore = readModel?.handed();
   progress.working();
   try {
     return await collectingWrites(written, () => command(progress, written));
@@ -21,7 +22,7 @@ export async function runUnderProgress<T>(
     progress.working();
     try {
       await instance.refresh(written.named);
-      await readModelShows?.();
+      if (readModel !== undefined && readModel.handed() !== handedBefore) await readModel.latest();
     } finally {
       await progress.done();
     }
@@ -30,13 +31,19 @@ export async function runUnderProgress<T>(
 
 let inFlight: string | undefined;
 
-let readModelShows: (() => Promise<unknown>) | undefined;
+interface ReadModel {
+  /** How many sends the other read model was handed. */
+  readonly handed: () => number;
+  /** Settles when the newest send has shown. */
+  readonly latest: () => Promise<unknown>;
+}
 
-/** Sets what a writing gesture waits on after the instance has read: the other read model, such as mEdit's record index,
- *  holding what the instance now holds. */
-export function surfaceReadModel(shows: () => Promise<unknown>): { dispose: () => void } {
-  readModelShows = shows;
-  return { dispose: () => { readModelShows = undefined; } };
+let readModel: ReadModel | undefined;
+
+/** Sets the other read model, such as mEdit's record index, that a writing gesture waits on when its work led to a send. */
+export function surfaceReadModel(on: ReadModel): { dispose: () => void } {
+  readModel = on;
+  return { dispose: () => { readModel = undefined; } };
 }
 
 interface RefusalSurface {
