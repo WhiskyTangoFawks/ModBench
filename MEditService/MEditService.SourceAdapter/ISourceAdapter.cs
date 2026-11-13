@@ -74,6 +74,10 @@ public interface ISourceAdapter
         IReadOnlyList<FileToCopy> assets, bool commit, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest, IReadOnlyList<string> ignored,
         SourceModIn heldIn, ModFolderManifest? modFolderManifest);
 
+    /// <summary>The text of the file at <paramref name="path"/> in <paramref name="sourceFolder"/>: the unsaved document
+    /// handed in its place, else the file's.</summary>
+    string TextOf(string sourceFolder, string path);
+
     /// <summary>Where <paramref name="sourceFolder"/> holds the file at its forward-slash <paramref name="path"/>.</summary>
     string FileIn(string sourceFolder, string path);
 

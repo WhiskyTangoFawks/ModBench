@@ -350,17 +350,16 @@ public sealed record SourcePosition(int Line, int Character);
 /// <summary>A span of a text, from <paramref name="Start"/> up to <paramref name="End"/>.</summary>
 public sealed record SourceRange(SourcePosition Start, SourcePosition End)
 {
-    public static readonly SourceRange FirstLine = new(new(0, 0), new(0, 0));
+    internal static readonly SourceRange FirstLine = new(new(0, 0), new(0, 0));
 }
 
 /// <summary>What is wrong in a plugin's source, on its file: a link at <paramref name="FieldPath"/> to
 /// <paramref name="TargetFormKey"/> no active plugin holds, or a file the read stopped at.
 /// <paramref name="UncheckedBecause"/>: the unreadable plugin.</summary>
 public sealed record SourceProblem(
-    string? FormKey, string? TargetFormKey, string? FieldPath, string SourceRelativePath, string Message, string? UncheckedBecause = null)
+    string? FormKey, string? TargetFormKey, string? FieldPath, string SourceRelativePath, string Message, string? UncheckedBecause = null,
+    SourceRange? Range = null)
 {
-    public SourceRange? Range { get; init; }
-
     internal static SourceProblem StoppedAt(SourceFileFailure failure) =>
         new(failure.FormKey, null, null, failure.SourceRelativePath, failure.Message);
 }

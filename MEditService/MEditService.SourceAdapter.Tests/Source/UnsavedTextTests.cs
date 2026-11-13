@@ -61,6 +61,21 @@ public sealed class UnsavedTextTests : IDisposable
     }
 
     [Fact]
+    public void ThePluginSourceFileText_IsTheUnsavedDocumentHandedInItsPlace_AndTheFilesOnceDropped()
+    {
+        var path = FileOf(Npc, "npc_");
+        var relative = Path.GetRelativePath(_modFolder.Path, path);
+
+        _unsaved.Apply([new DocumentChange(path, NpcBody("TypedNpc"))]);
+        var held = _adapter.TextOf(_modFolder.Path, relative);
+        _unsaved.Apply([]);
+        var dropped = _adapter.TextOf(_modFolder.Path, relative);
+
+        Assert.Equal(NpcBody("TypedNpc"), held);
+        Assert.Contains("VendorNpc", dropped, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TheCellAtAGrid_InASession_IsTheOneWhoseUnsavedTextNamesTheGrid()
     {
         Repository.Put(Plugin, new SourceDocument(Worldspace, "wrld", null, $"{{\n  \"FormKey\": \"{Worldspace}\"\n}}")).Wrote();

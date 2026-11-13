@@ -37,7 +37,7 @@ internal static class ProblemsPanel
                     var headerProblems = linkedUnreadable.Count == 0
                         ? new HeaderProblems([], null)
                         : NoLinkChecked(plugin, linkedUnreadable, source.Over(plugin, snapshot.GameRelease));
-                    return Placed(plugin, index.SourceTextOf, ProblemsOf(
+                    return Placed(plugin, source.TextOf, ProblemsOf(
                         plugin.Key, snapshot.GameRelease, index.LaterReadFailure(plugin.Key),
                         [.. stopped[plugin.Key].Select(SourceProblem.StoppedAt), .. Found(found[plugin.Key].Select(held => held.Problem), stopped[plugin.Key]), .. headerProblems.Problems],
                         [.. missing[plugin.Key]], unreadable, headerProblems.PlacementFailure));
@@ -46,7 +46,7 @@ internal static class ProblemsPanel
     }
 
     // A file that cannot be read to place its problems is a failure of the plugin; its problems sit on the first line.
-    private static PluginProblems Placed(RegisteredPlugin plugin, Func<string, string> textOf, PluginProblems answer)
+    private static PluginProblems Placed(RegisteredPlugin plugin, Func<string, string, string> textOf, PluginProblems answer)
     {
         var folder = (plugin.Provider as PluginProvider.FromMod)?.SourceFolder;
         var placements = new Dictionary<string, ProblemPlacement?>();
@@ -54,12 +54,12 @@ internal static class ProblemsPanel
         SourceRange RangeOf(SourceProblem problem)
         {
             if (folder is null) return SourceRange.FirstLine;
-            var path = Path.Combine(folder, problem.SourceRelativePath);
+            var path = problem.SourceRelativePath;
             if (!placements.TryGetValue(path, out var placement))
             {
                 try
                 {
-                    placement = new ProblemPlacement(textOf(path));
+                    placement = new ProblemPlacement(textOf(folder, path));
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {

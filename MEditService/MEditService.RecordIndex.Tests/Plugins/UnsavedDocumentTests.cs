@@ -109,7 +109,7 @@ public sealed class UnsavedDocumentTests : IDisposable
         var problems = ProblemsOfCompiledPlugin();
         var stop = Assert.Single(problems.Problems);
         Assert.Null(stop.TargetFormKey);
-        Assert.Equal(SourceRange.FirstLine, stop.Range);
+        Assert.Equal(Ranges.FirstLine, stop.Range);
         Assert.Equal(ProblemsFailureKind.LaterRead, problems.FailureKind);
     }
 

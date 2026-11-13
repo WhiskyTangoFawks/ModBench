@@ -57,6 +57,8 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved, TimeProvider time
 
     public string FileIn(string sourceFolder, string path) => Path.Combine(sourceFolder, path);
 
+    public string TextOf(string sourceFolder, string path) => Files().ReadAllText(FileIn(sourceFolder, path));
+
     public Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder, IReadOnlyList<string> read) =>
         SourceFailure.Answer(() => SourceAdapter.SourceToBuild.In(sourceFolder, read));
 
