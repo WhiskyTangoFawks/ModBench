@@ -15,7 +15,7 @@ const within = (path: string, folder: string) => path === folder || path.startsW
 /** Applies the changes as one workspace edit, a refactoring: VS Code saves as it does for any other. A document keeps its last text; one a later item deletes is not written. `moving` answers its undo. */
 export async function applyWorkspaceChanges(
   items: readonly WorkspaceChanges[],
-  options: { read?: vscode.Uri; moving?: (moves: readonly FileMove[]) => () => void } = {},
+  options: { read?: vscode.Uri; moving?: (moves: readonly FileMove[]) => () => void; writing?: (paths: readonly string[]) => void } = {},
 ): Promise<void> {
   // VS Code answers an empty edit as not applied.
   if (items.every(({ moves, deletions, documents }) => moves.length + deletions.length + documents.length === 0)) return;
@@ -41,6 +41,9 @@ export async function applyWorkspaceChanges(
     }
   });
 
+  options.writing?.(items.flatMap(({ moves, deletions, documents }) => [
+    ...moves.flatMap(({ from, to }) => [from, to]), ...deletions, ...documents.map(({ path }) => path),
+  ]));
   const notMoving = options.moving?.(moves);
   let applied = false;
   try {

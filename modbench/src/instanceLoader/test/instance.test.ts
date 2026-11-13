@@ -669,6 +669,42 @@ describe('Instance — a write that changes several files', () => {
     expect(instance.sequence).toBe(before + 1);
   });
 
+  it('reads again, after it, what the events named while it ran, though the read they started was dropped', async () => {
+    const { instance, fake } = loader();
+    await instance.refresh();
+
+    fakeClockLeavingSetImmediateReal();
+    try {
+      await instance.quiet(async (written) => {
+        fake.changed('/instance/mods/B/meta.ini');
+        await vi.advanceTimersByTimeAsync(SETTLE_MS);
+        written.name(['/instance/mods/A/a.esp']);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(fake.rereads.at(-1)).toEqual(reread('/instance/mods/B/meta.ini', '/instance/mods/A/a.esp'));
+  });
+
+  it('checks the disk, after it, when the events that came while it ran could not be named', async () => {
+    const { instance, fake } = loader();
+    await instance.refresh();
+
+    fakeClockLeavingSetImmediateReal();
+    try {
+      await instance.quiet(async (written) => {
+        fake.changed(undefined);
+        await vi.advanceTimersByTimeAsync(SETTLE_MS);
+        written.name(['/instance/mods/A/a.esp']);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(fake.rereads.at(-1)).toEqual({ named: ['/instance/mods/A/a.esp'], disk: true });
+  });
+
   it('reports only the failure of the read after it, not of one inside it that fails on a file the write is half-way through', async () => {
     const { instance, fake, errorLines } = loader();
     await instance.refresh();

@@ -191,7 +191,7 @@ internal abstract class SourceRepositoryGit
         var folder = Path.GetFullPath(sourceFolder);
         var gitDir = GitDirOf(folder);
         return new[] { Path.Combine(folder, ".git"), gitDir, CommonDirectoryOf(gitDir) }
-            .Any(directory => SourceRepositoryLocator.IsOrIsUnder(directory, fullPath));
+            .Any(directory => SourceRepositoryLocator.Overlaps(directory, fullPath));
     }
 
     // A submodule git checks out holds a .git file naming its git directory, as gitrepository-layout(5) has it.

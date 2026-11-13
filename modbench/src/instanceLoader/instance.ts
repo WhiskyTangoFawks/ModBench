@@ -24,6 +24,7 @@ import { FlaggedHashesHeld, flaggedPluginsIn, type FlaggedReader } from './flagg
 import { ArchiveContentsHeld, archivePathsIn, unreadableArchiveLines, type ArchiveRead, type ArchiveReader } from './archiveContents';
 import { pluginOrderOf, unplaced } from './pluginOrder';
 import { WrittenFiles } from './writtenFiles';
+import { collectingWrites } from './ambientWrites';
 
 /** The rows this value is made of. A view names a row's shape through the read model that
  *  publishes it, never through the codec that parsed the file behind it. */
@@ -335,6 +336,7 @@ export class Instance implements Subscription {
   private reading = false;
 
   private next: Run | undefined;
+  private dropped: Run | undefined;
 
   private quiets = 0;
 
@@ -458,7 +460,7 @@ export class Instance implements Subscription {
     this.quietEpoch++;
     this.quiets++;
     try {
-      return await work(written);
+      return await collectingWrites(written, () => work(written));
     } finally {
       this.quiets--;
       this.quietEpoch++;
@@ -548,6 +550,13 @@ export class Instance implements Subscription {
   }): Promise<void> {
     const next = this.next ?? nextRun();
     this.next = next;
+    if (this.dropped !== undefined) {
+      for (const path of this.dropped.named) next.named.add(path);
+      next.disk ||= this.dropped.disk;
+      next.tellsUnheard ||= this.dropped.tellsUnheard;
+      next.fromEvents ||= this.dropped.fromEvents;
+      this.dropped = undefined;
+    }
     for (const path of named) next.named.add(path);
     next.fromEvents ||= fromEvents || (disk && (this.heard.size > 0 || this.heardNoPath));
     if (disk) {
@@ -581,14 +590,14 @@ export class Instance implements Subscription {
     try {
       next = await this.read(run);
     } catch (err) {
-      if (epoch !== this.quietEpoch || this.quiets > 0) return { settled: Promise.resolve() };
+      if (epoch !== this.quietEpoch || this.quiets > 0) return this.dropRun(run);
       this.setLate(this.heardSinceRun());
       const failure = errorMessage(err);
       this.options.log.error(`[instance] Failed to read the instance: ${failure}`);
       this.failure = failure;
       return { settled: this.notify(this.failureListeners, 'read-failure', (listener) => listener()) };
     }
-    if (epoch !== this.quietEpoch || this.quiets > 0) return { settled: Promise.resolve() };
+    if (epoch !== this.quietEpoch || this.quiets > 0) return this.dropRun(run);
     this.current = next;
     this.failure = undefined;
     this.setLate(this.heardSinceRun());
@@ -596,6 +605,18 @@ export class Instance implements Subscription {
     const reread: Reread = { named: [...run.named], disk: run.disk };
     if (this.workspaceMovedFrom(next)) void this.enqueue({ disk: false, tellsUnheard: false });
     return { settled: this.notify(this.subscribers, 'value', (subscriber) => subscriber(next, this.seq, reread)) };
+  }
+
+  // What a dropped run was to read is read by the next run, so a change the watch heard while a write ran is never lost.
+  private dropRun(run: Run): { settled: Promise<void> } {
+    const dropped = this.dropped ?? nextRun();
+    this.dropped = dropped;
+    for (const path of run.named) dropped.named.add(path);
+    dropped.disk ||= run.disk;
+    dropped.tellsUnheard ||= run.tellsUnheard;
+    dropped.fromEvents ||= run.fromEvents;
+    if (this.quiets === 0) void this.enqueue({ disk: false, tellsUnheard: false });
+    return { settled: Promise.resolve() };
   }
 
   // A throwing subscriber would otherwise reject the queue for good, and no later recompute
