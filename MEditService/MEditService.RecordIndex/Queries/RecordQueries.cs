@@ -523,13 +523,21 @@ internal sealed class RecordQueries(
         _answer.Of(() => _index.IndexedState(plugin));
 
     // A plugin the record index has not reached holds no record yet, so every link into it would read as a
-    // missing record.
-    public Task<Answer<IReadOnlyList<PluginProblems>, IndexRefused>> GetProblems(PluginAddress? plugin, CancellationToken cancel) =>
-        _answer.Of(() =>
+    // missing record. A source write can land after the wait, before a link's file is read.
+    public async Task<Answer<IReadOnlyList<PluginProblems>, IndexRefused>> GetProblems(PluginAddress? plugin, CancellationToken cancel)
+    {
+        while (true)
         {
-            using var reads = _index.RequireWholeSetReads().InOneSnapshot();
-            return ProblemsPanel.Of(_index, reads, _loadOrder.Require(), source, plugin);
-        }, cancel);
+            var written = _loadOrder.SourceWrites;
+            var answer = await _answer.Of(() =>
+            {
+                using var reads = _index.RequireWholeSetReads().InOneSnapshot();
+                return ProblemsPanel.Of(_index, reads, _loadOrder.Require(), source, plugin);
+            }, cancel).ConfigureAwait(false);
+            if (!answer.Holds(out var placed, out var refused)) return refused;
+            if (!placed.OnUnreadText || _loadOrder.SourceWrites == written) return placed.Problems.ToList();
+        }
+    }
 
     public Task<Answer<IReadOnlyList<PluginFilePaths>, IndexRefused>> GetFilePaths(PluginAddress? plugin, CancellationToken cancel) =>
         _answer.Of(() =>
