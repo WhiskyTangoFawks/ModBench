@@ -3,7 +3,8 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('vscode', () => ({}));
 
 import { pluginSyncOn } from '../pluginSync';
-import { ambientWrites } from '../../instanceLoader/ambientWrites';
+import { ambientWrites, collectingWrites } from '../../instanceLoader/ambientWrites';
+import { WrittenFiles } from '../../instanceLoader/writtenFiles';
 
 const channel = { error: () => undefined, info: () => undefined };
 
@@ -59,5 +60,18 @@ describe('plugin sync on the instance', () => {
     await first;
 
     expect(refresh.mock.calls).toEqual([[['/profile/plugins.txt']]]);
+  });
+
+  it('leaves a collector around the call without the files it wrote', async () => {
+    const { instance, hears } = instanceHeard();
+    pluginSyncOn({
+      instance, channel,
+      syncPlugins: () => { ambientWrites.name(['/profile/plugins.txt']); return Promise.resolve({ applied: true, wrote: true, added: [], dropped: [] }); },
+    });
+    const around = new WrittenFiles();
+
+    await collectingWrites(around, hears);
+
+    expect(around.named).toBeUndefined();
   });
 });

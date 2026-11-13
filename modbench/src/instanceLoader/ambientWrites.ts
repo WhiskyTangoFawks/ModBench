@@ -11,6 +11,11 @@ export function collectingWrites<T>(sink: WriteSink, work: () => Promise<T>): Pr
   }, work);
 }
 
+/** Collects the writes of `work` into `sink` alone: a command running around it does not hear them. */
+export function isolatingWrites<T>(sink: WriteSink, work: () => Promise<T>): Promise<T> {
+  return running.run(sink, work);
+}
+
 /** The sink of the command running, if any. */
 export const ambientWrites: WriteSink = {
   name: (paths) => running.getStore()?.name(paths),

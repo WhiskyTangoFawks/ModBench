@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { createPluginSync, type Sync, type SyncChannel } from '../drivingLib/syncFailureReport';
 import type { Instance } from '../instanceLoader/instance';
 import { WrittenFiles } from '../instanceLoader/writtenFiles';
-import { collectingWrites } from '../instanceLoader/ambientWrites';
+import { isolatingWrites } from '../instanceLoader/ambientWrites';
 import type { PluginSyncRun } from '../pluginCommands/plugins';
 
 export interface PluginSyncOn {
@@ -22,7 +22,7 @@ export function pluginSyncOn({ instance, syncPlugins, channel }: PluginSyncDeps)
   const pluginSync = createPluginSync(syncPlugins, channel);
   const subscription = instance.subscribe(async () => {
     const written = new WrittenFiles();
-    const synced = await collectingWrites(written, () => pluginSync.run());
+    const synced = await isolatingWrites(written, () => pluginSync.run());
     if (synced?.wrote) await instance.refresh(written.named);
   });
   return { pluginSync, dispose: () => { subscription.dispose(); } };
