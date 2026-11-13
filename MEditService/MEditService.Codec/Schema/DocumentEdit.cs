@@ -128,7 +128,7 @@ public sealed class DocumentEdit
         if (schema.RecordColumns.FirstOrDefault(c => c.Name == name) is not { } column)
         {
             if (schema.RecordColumns.FirstOrDefault(c => c.Aliases.Contains(name)) is { } spelledAgain)
-                return new EditFailure.SpellsAgain(spelled, name, spelledAgain.Name);
+                return new EditFailure.AliasOfColumn(spelled, name, spelledAgain.Name);
             return new EditFailure.NoField(spelled, schema.TableName, name);
         }
         if (column.Synthetic != null && path.Count > 1) return new EditFailure.NoMembers(spelled, name);

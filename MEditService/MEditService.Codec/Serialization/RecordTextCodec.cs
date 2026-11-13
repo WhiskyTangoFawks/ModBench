@@ -43,7 +43,8 @@ public static class RecordTextCodec
             ? WhyNotProduced(text, gameRelease, source => HeaderRoundTrip(source, gameRelease), HeaderIdentityOf(text))
             : WhyNotAProducedRecord(text, gameRelease, recordType);
 
-    // A document that omits a flag view is no difference (DeclaredDefaults.MembersAliasing).
+    // The reader takes the raw flags value alone and the codec writes every view beside it, so a document
+    // that omits a view is the record.
     private static string? WhyNotAProducedRecord(string text, GameRelease gameRelease, string? recordType) =>
         WhyNotProduced(
             text,
@@ -52,7 +53,7 @@ public static class RecordTextCodec
             {
                 var record = Deserialize(source, gameRelease, recordType);
                 var produced = Document.Parse(SerializeToText(record, gameRelease));
-                if (!Document.TryRead(source, out var written, out _)) return produced.Text;
+                var written = Document.Parse(source);
                 var omitted = RecordHeaderFlags.ViewsOf(record.Registration.GetterType, gameRelease).Where(view => written.At(view) is null);
                 return omitted.Aggregate(produced, (document, view) => document.Without(view)).Text;
             },

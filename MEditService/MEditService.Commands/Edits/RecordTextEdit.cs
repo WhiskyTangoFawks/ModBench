@@ -146,7 +146,7 @@ internal static class RecordTextEdit
     private static RecordEditResult Refusal(EditFailure failure) => failure switch
     {
         EditFailure.NoField(var path, var owner, var field) => NotFound(path, $"'{owner}' has no field '{field}'."),
-        EditFailure.SpellsAgain(var path, var alias, var column) => NotFound(path, $"'{alias}' spells {column} again; edit {column}."),
+        EditFailure.AliasOfColumn(var path, var alias, var column) => NotFound(path, $"'{alias}' spells {column} again; edit {column}."),
         EditFailure.NoMember(var path, var owner, var member) => NotFound(path, $"'{owner}' has no member '{member}'."),
         EditFailure.NoMembers(var path, var subject) => NotFound(path, $"'{subject}' has no members."),
         EditFailure.Absent(var path, var subject) => NotFound(path, $"'{subject}' is not present in the document."),

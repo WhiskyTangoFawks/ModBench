@@ -618,25 +618,19 @@ public sealed class DocumentEditTests
     }
 
     [Theory]
-    [InlineData("Fallout4MajorRecordFlags", EditOp.Set, "[]")]
-    [InlineData("MajorFlags", EditOp.Add, "\"Deleted\"")]
-    [InlineData("IsCompressed", EditOp.Set, "true")]
-    [InlineData("IsDeleted", EditOp.Set, "true")]
-    public void AViewOfTheRecordFlags_FailsAsSpellingTheFlagsColumnAgain(string view, EditOp op, string value)
+    [InlineData("Fallout4MajorRecordFlags", EditOp.Set, "[]", null)]
+    [InlineData("MajorFlags", EditOp.Add, "\"Deleted\"", null)]
+    [InlineData("IsCompressed", EditOp.Set, "true", null)]
+    [InlineData("IsDeleted", EditOp.Set, "true", null)]
+    [InlineData("Fallout4MajorRecordFlags", EditOp.Remove, "0", 0)]
+    [InlineData("Fallout4MajorRecordFlags", EditOp.Move, "0", 0)]
+    public void AViewOfTheRecordFlags_AsTheFirstHop_FailsAsAnAliasOfTheFlagsColumn(string view, EditOp op, string value, int? index)
     {
-        var failure = Failure(NpcText(), "npc_", op, value, Member(view));
+        DocumentHop[] path = index is { } at ? [Member(view), At(at)] : [Member(view)];
 
-        Assert.Equal(new EditFailure.SpellsAgain(view, view, "MajorRecordFlagsRaw"), failure);
-    }
+        var failure = Failure(NpcText(), "npc_", op, value, path);
 
-    [Theory]
-    [InlineData(EditOp.Remove)]
-    [InlineData(EditOp.Move)]
-    public void AViewOfTheRecordFlags_AtAnIndex_FailsAsSpellingTheFlagsColumnAgain_OnEveryOp(EditOp op)
-    {
-        var failure = Failure(NpcText(), "npc_", op, "0", Member("Fallout4MajorRecordFlags"), At(0));
-
-        Assert.Equal(new EditFailure.SpellsAgain("Fallout4MajorRecordFlags[0]", "Fallout4MajorRecordFlags", "MajorRecordFlagsRaw"), failure);
+        Assert.Equal(new EditFailure.AliasOfColumn(index is null ? view : $"{view}[{index}]", view, "MajorRecordFlagsRaw"), failure);
     }
 
     [Fact]

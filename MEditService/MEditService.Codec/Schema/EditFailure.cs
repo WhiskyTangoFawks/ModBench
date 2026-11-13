@@ -8,8 +8,7 @@ public abstract record EditFailure(string Path)
 {
     public sealed record NoField(string Path, string Owner, string Field) : EditFailure(Path);
 
-    /// <summary>A member the document writes beside a column, spelling the column's value again.</summary>
-    public sealed record SpellsAgain(string Path, string Alias, string Column) : EditFailure(Path);
+    public sealed record AliasOfColumn(string Path, string Alias, string Column) : EditFailure(Path);
 
     public sealed record NoMember(string Path, string Owner, string Member) : EditFailure(Path);
 
