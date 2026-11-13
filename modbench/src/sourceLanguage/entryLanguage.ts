@@ -3,12 +3,13 @@ import { referencesView } from '../drivingLib/referencesView';
 import type { EntryRef, InstanceValue } from '../instanceLoader/instance';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
-import { heldTexts, sameName, type EntryNames, type EntrySymbol, type PlaceInFile } from '../symbolNames/symbolNames';
+import { heldTexts, sameName, type EntryNames, type EntryReading, type EntrySymbol, type PlaceInFile } from '../symbolNames/symbolNames';
+import type { Definition } from './symbolIndex';
 import { heldText, unsavedTexts } from '../textDocuments/heldText';
 import { placeLocation, readBy, referencedByInput, reportedForFeature, reportedForGesture, type AskedIn, type ListedLocations } from './symbolPlaces';
 
 interface EntryLanguageDeps {
-  instance: { readonly value: Pick<InstanceValue, 'mods' | 'downloadedFiles' | 'profiles'> } | undefined;
+  instance: { readonly value: Pick<InstanceValue, 'mods' | 'downloadedFiles' | 'profiles' | 'paths'> } | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
   owners: readonly EntryNames[];
   /** The mod's `go to`. */
@@ -31,6 +32,8 @@ const unlisted = ({ kind, name }: EntrySymbol): string => ({
   downloadedFile: `Downloads lists no downloaded file named ${name}.`,
   profile: `The instance holds no profile named ${name}.`,
 })[kind];
+
+const NOUNS: Record<EntrySymbol['kind'], string> = { mod: 'mod', separator: 'mod separator', downloadedFile: 'downloaded file', profile: 'profile' };
 
 /** A mod, a separator, a downloaded file and a profile as symbols in the text editor: wherever an owner's file names
  *  them, and the places files name them (symbols.md). */
@@ -76,6 +79,21 @@ export function entryLanguage({ instance, reporter, owners, goTo, entryTooltip, 
   };
 
   return {
+    /** Where the entry is defined: a mod's folder. A separator, a downloaded file and a profile have none. */
+    definitionOf: (named: EntrySymbol): Definition => {
+      const entry = entryListed(named);
+      if (entry === undefined) return { refused: unlisted(named) };
+      if (entry.kind !== 'mod') return { none: `A ${NOUNS[entry.kind]} has no definition.` };
+      const folder = instance?.value.paths.modDirs.get(entry.name);
+      return folder === undefined ? { refused: `${entry.name} has no folder.` } : { file: folder };
+    },
+    /** Each place a file names the entry, and why each file went unread. */
+    placesNaming: async (named: EntrySymbol): Promise<EntryReading | { refused: string }> => {
+      const entry = entryListed(named);
+      if (entry === undefined) return { refused: unlisted(named) };
+      const { found, unread } = await referencesTo(entry);
+      return { references: found, leftOut: unread };
+    },
     /** Go to Definition on the mod whose name is at `offset`: the mod's `go to`. A separator has none. Undefined where
      *  no mod's name is. */
     definitionAt: async (document: AskedIn, offset: number): Promise<{ start: number; end: number; resolved: boolean } | undefined> => {

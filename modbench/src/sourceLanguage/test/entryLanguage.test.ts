@@ -53,7 +53,8 @@ function language(named: EntryNamed | undefined, options: Options = {}) {
     { kind: 'mod' as const, name: 'Base Mod', enabled: true }, { kind: 'mod' as const, name: 'Other Mod', enabled: true },
     { kind: 'separator' as const, name: 'Gear', enabled: true },
   ];
-  const value = { mods, downloadedFiles: { kind: 'listed' as const, rows: [downloadedFileRowFixture('Patch-1.7z'), downloadedFileRowFixture('Armor-2.zip')] }, profiles: ['Default', 'Armor Test'] };
+  const paths = { overwriteDir: undefined, downloadsDir: undefined, modDirs: new Map([['Base Mod', '/instance/mods/Base Mod']]), sourceDirs: new Map<string, string>() };
+  const value = { mods, paths, downloadedFiles: { kind: 'listed' as const, rows: [downloadedFileRowFixture('Patch-1.7z'), downloadedFileRowFixture('Armor-2.zip')] }, profiles: ['Default', 'Armor Test'] };
   return { goTo, reporter, reads, ...entryLanguage({
     instance: { value }, reporter, owners: [owner], goTo, entryTooltip: () => options.tooltip, downloadedFileTooltip: () => options.downloadedFileTooltip,
     modOrderFileOf: (name) => `/profiles/${name}/modlist.txt`,
@@ -72,6 +73,33 @@ describe('Go to Definition on a name of a mod, a separator, a downloaded file or
 
     expect(await definitionAt(document, AT_NAME)).toEqual(expected);
     expect([goTo.mock.calls.map(([name]) => name), reporter.shownFailures.map(({ severity }) => severity)]).toEqual([goneTo, severities]);
+  });
+});
+
+describe('the symbol index on a name of a mod, a separator, a downloaded file or a profile (symbols.md, The symbols)', () => {
+  it.each([
+    ['defines a mod at its folder, by the name as the instance spells it', mod('base mod'), { file: '/instance/mods/Base Mod' }],
+    ['refuses a mod no row lists', mod('Gone Mod'), { refused: 'Mods lists no mod named Gone Mod.' }],
+    ['gives a separator no definition', separator('Gear'), { none: 'A mod separator has no definition.' }],
+    ['gives a downloaded file no definition', downloadedFile('Patch-1.7z'), { none: 'A downloaded file has no definition.' }],
+    ['gives a profile no definition', profile('Default'), { none: 'A profile has no definition.' }],
+    ['refuses a separator no row lists', separator('Gone'), { refused: 'Mods lists no separator named Gone.' }],
+    ['refuses a downloaded file no row lists', downloadedFile('Gone.7z'), { refused: 'Downloads lists no downloaded file named Gone.7z.' }],
+    ['refuses a profile the instance does not hold', profile('Gone'), { refused: 'The instance holds no profile named Gone.' }],
+  ])('%s', (_case, entry, expected) => {
+    expect(language(undefined).definitionOf(entry)).toEqual(expected);
+  });
+
+  it('lists each place the owners report, naming each file they could not read', async () => {
+    expect(await language(undefined, { leftOut: [UNREAD] }).placesNaming(profile('armor test')))
+      .toEqual({ references: [place(MODLIST, 1)], leftOut: [UNREAD] });
+  });
+
+  it('refuses to list what names an entry no row lists, and asks no owner', async () => {
+    const { placesNaming, reads } = language(undefined);
+
+    expect(await placesNaming(mod('Gone Mod'))).toEqual({ refused: 'Mods lists no mod named Gone Mod.' });
+    expect(reads).not.toHaveBeenCalled();
   });
 });
 

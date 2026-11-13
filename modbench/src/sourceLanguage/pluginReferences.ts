@@ -28,10 +28,11 @@ type Read<Document> = (symbol: PluginSymbol) => Promise<PluginReferences<Documen
  *  the gesture, and a line in the Output each for Find All References (common.md, Reporting). */
 export function pluginReferencesOf<Document extends { getText(): string }>(
   deps: PluginReferencesDeps<Document>,
-): { forGesture: Read<Document>; forFeature: Read<Document> } {
+): { read: Read<Document>; forGesture: Read<Document>; forFeature: Read<Document> } {
   const read = readReferences(deps);
   const { reporter } = deps;
   return {
+    read,
     forGesture: async (symbol) => reportedForGesture(reporter, pluginRowName(symbol), await read(symbol)),
     forFeature: async (symbol) => reportedForFeature(reporter, pluginRowName(symbol), await read(symbol)),
   };

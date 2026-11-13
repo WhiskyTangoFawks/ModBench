@@ -7,7 +7,7 @@ vi.mock('vscode', () => ({
   Range: class { constructor(readonly start: unknown, readonly end: unknown) {} },
   Location: class { constructor(readonly uri: unknown, readonly range: unknown) {} },
   extensions: { getExtension: () => ({ activate: () => Promise.resolve({ setInput }) }) },
-  workspace: { openTextDocument: () => Promise.resolve({ getText: () => TEXT, positionAt: (offset: number) => offset }) },
+  workspace: { openTextDocument: () => Promise.resolve({ getText: () => TEXT, positionAt: (offset: number) => ({ line: 0, character: offset }) }) },
 }));
 
 import { fileLanguage, type FileClient } from '../fileLanguage';
@@ -63,7 +63,7 @@ describe('referenced by on a file (commands.md, `referenced by` under Mod, a fil
 
     expect(getFileReferences.mock.calls).toEqual([[FILE]]);
     expect(setInput).toHaveBeenCalledWith(expect.objectContaining({
-      title: `Referenced By: ${FILE}`, location: { uri: Uri.file(SOURCE), range: { start: NAMED, end: NAMED + 'Decals\\\\Stain_d.dds'.length } },
+      title: `Referenced By: ${FILE}`, location: { uri: Uri.file(SOURCE), range: { start: { line: 0, character: NAMED }, end: { line: 0, character: NAMED + 'Decals\\\\Stain_d.dds'.length } } },
     }));
     expect(reporter.reports.map(({ severity, detail }) => [severity, detail])).toEqual([['warning', UNREAD]]);
   });
@@ -136,5 +136,30 @@ describe('Go to Definition on a path in plugin source (symbols.md, The symbols, 
 
     expect(await definitionAt(document(file), offset)).toBeUndefined();
     expect(resolveFilePath).not.toHaveBeenCalled();
+  });
+});
+
+describe('the symbol index on a file (symbols.md, The symbols, File)', () => {
+  const NONE = { copies: [], unread: [] };
+
+  const ARCHIVE = '/instance/mods/Mod/Mod - Textures.ba2';
+
+  it.each([
+    ['a loose file at the copy the game gets', LOOSE, { file: '/instance/mods/Mod/Textures/Decals/Stain_d.dds' }],
+    ['an archived file inside its archive', { kind: 'archived', gameRelease: 'Fallout4', archive: ARCHIVE, file: FILE } satisfies CopyAt, { archived: { archive: ARCHIVE, file: FILE } }],
+    ['nothing for a file no copy exists of, refusing with what was searched', NO_COPY, { refused: NO_COPY.none }],
+  ])('defines %s', (_case, copy, expected) => {
+    expect(language(NONE, { copy }).definitionOf(FILE)).toEqual(expected);
+  });
+
+  it('lists each record that names it at its member, and each copy it could not read as left out', async () => {
+    const { placesNaming } = language({
+      copies: [{ formKey: HOLDER, plugin: { name: 'Mod.esp', origin: 'Mod' }, inPluginSource: true, fieldPaths: ['Diffuse'] }], unread: [UNREAD],
+    });
+
+    expect(await placesNaming(FILE)).toEqual({
+      references: [{ file: SOURCE, start: { line: 0, character: NAMED }, end: { line: 0, character: NAMED + 'Decals\\\\Stain_d.dds'.length } }],
+      leftOut: [UNREAD],
+    });
   });
 });
