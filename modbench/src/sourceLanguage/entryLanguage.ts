@@ -3,7 +3,8 @@ import { referencesView } from '../drivingLib/referencesView';
 import type { EntryRef, InstanceValue } from '../instanceLoader/instance';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
-import { heldTexts, sameName, type Definition, type EntryNames, type EntryReading, type EntrySymbol, type PlaceInFile } from '../symbolNames/symbolNames';
+import { heldTexts, sameName, type EntryNames, type EntryReading, type EntrySymbol, type PlaceInFile } from '../symbolNames/symbolNames';
+import type { Definition } from './symbolIndex';
 import { heldText, unsavedTexts } from '../textDocuments/heldText';
 import { placeLocation, readBy, referencedByInput, reportedForFeature, reportedForGesture, type AskedIn, type ListedLocations } from './symbolPlaces';
 

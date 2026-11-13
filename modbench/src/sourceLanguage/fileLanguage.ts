@@ -11,7 +11,7 @@ import { openPluginSourceDocument } from '../textDocuments/pluginSource';
 import { fieldPathOf, fieldAt, formKeyAt } from './sourceText';
 import { recordTypeOfPathField } from './fieldMetadata';
 import { membersNaming } from './memberReferences';
-import type { Definition, SymbolReferences } from '../symbolNames/symbolNames';
+import type { Definition, SymbolReferences } from './symbolIndex';
 import { referenceOf, referencedByInput, reportedForGesture, type AskedIn, type ListedLocations } from './symbolPlaces';
 
 export type FileClient = Pick<MEditClient, 'getFileReferences' | 'getComparison' | 'resolveFilePath'> & RecordDocumentClient;

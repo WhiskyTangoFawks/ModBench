@@ -182,34 +182,3 @@ export interface SymbolOwner {
   /** The plugin one of its files names at `offset` of the file's `text`; undefined where it names none. */
   nameAt(file: string, text: string, offset: number): Promise<PluginName | undefined>;
 }
-
-/** A symbol the agent names: a record by its FormKey, a file by its path in the Data folder. */
-export type SymbolName =
-  | ({ readonly kind: 'plugin' } & PluginName)
-  | { readonly kind: 'record'; readonly formKey: string }
-  | EntrySymbol
-  | ScriptSymbol
-  | { readonly kind: 'file'; readonly path: string };
-
-/** Where a symbol is defined (symbols.md, The symbols). `none` says its kind has no definition, `refused` why this
- *  symbol has none to give. */
-export type Definition =
-  | { readonly file: string }
-  | { readonly place: PlaceInFile }
-  | { readonly plugin: PluginSymbol }
-  | { readonly archived: { readonly archive: string; readonly file: string } }
-  | { readonly none: string }
-  | { readonly refused: string };
-
-/** Each place a file names a symbol, each at the record that holds it where its plugin has no plugin source, and why
- *  each file went unread. */
-export interface SymbolReferences {
-  readonly references: readonly (PlaceInFile | CopyNaming)[];
-  readonly leftOut: readonly string[];
-}
-
-/** What the agent's find_definition and list_references answer, by symbol (ADR-0028). */
-export interface SymbolIndex {
-  definitionOf(symbol: SymbolName): Promise<Definition>;
-  referencesTo(symbol: SymbolName): Promise<SymbolReferences | { readonly refused: string }>;
-}

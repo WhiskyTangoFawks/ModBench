@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { MEditClient } from '../client/MEditClient';
 import { Refusal } from '../drivingLib/refusal';
-import type { SymbolIndex, SymbolName } from '../symbolNames/symbolNames';
+import type { SymbolIndex, SymbolName } from '../sourceLanguage/symbolIndex';
 import { formKeysNamed } from './recordNames';
 import { fitting } from './tooLarge';
 
@@ -19,7 +19,7 @@ async function symbolNamed(mEdit: Pick<MEditClient, 'resolveNames'>, { kind, nam
     case 'plugin': return { kind, name, origin };
     case 'record': return { kind, formKey: (await formKeysNamed(mEdit, [name]))[0] ?? '' };
     case 'file': return { kind, path: name };
-    default: return { kind, name };
+    case 'mod': case 'separator': case 'downloadedFile': case 'profile': case 'script': return { kind, name };
   }
 }
 

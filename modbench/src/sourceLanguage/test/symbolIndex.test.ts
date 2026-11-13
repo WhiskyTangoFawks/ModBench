@@ -3,10 +3,12 @@ import { TreeItem, TreeItemCollapsibleState, Uri } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({
   Uri, TreeItem, TreeItemCollapsibleState,
+  Position: class { constructor(readonly line: number, readonly character: number) {} },
   Range: class { constructor(readonly start: unknown, readonly end: unknown) {} },
   Location: class { constructor(readonly uri: unknown, readonly range: unknown) {} },
 }));
 
+import * as vscode from 'vscode';
 import { symbolIndex } from '../symbolIndex';
 import { copyDocumentsOf, copyKey } from './copyDocuments';
 import type { ReferenceResult } from '../../client';
@@ -37,7 +39,7 @@ function index(copies: Parameters<typeof copyDocumentsOf>[0], options: { owner?:
     },
     open: (uri) => {
       const text = uri.scheme === 'file' ? textOnFile(uri.path) : STAND_TEXT;
-      return Promise.resolve({ getText: () => text ?? '', positionAt: (offset: number) => ({ line: 0, character: offset }) } as never);
+      return Promise.resolve({ getText: () => text ?? '', positionAt: (offset: number) => new vscode.Position(0, offset) });
     },
   });
 }

@@ -15,7 +15,7 @@
     { "path": "../instanceLoader" },
     { "path": "../pluginCommands" },
     { "path": "../ports" },
-    { "path": "../symbolNames" },
+    { "path": "../sourceLanguage" },
     { "path": "../wire" }
   ],
   "include": ["**/*.ts"],

@@ -1,7 +1,7 @@
 import type * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import { errorMessage } from '../ports/errorMessage';
-import type { SymbolIndex } from '../symbolNames/symbolNames';
+import type { CopyNaming, EntrySymbol, PlaceInFile, PluginName, PluginSymbol, ScriptSymbol } from '../symbolNames/symbolNames';
 import { copyOf, RENDERED_DOCUMENT_SCHEME, type RecordDocumentClient } from '../textDocuments/recordDocument';
 import type { entryLanguage } from './entryLanguage';
 import type { fileLanguage } from './fileLanguage';
@@ -12,9 +12,40 @@ import { referencesToFormKey } from './formKeyReferences';
 import { formKeyMember } from './sourceText';
 import { placeOfLocation, referenceOf } from './symbolPlaces';
 
+/** A symbol the agent names: a record by its FormKey, a file by its path in the Data folder. */
+export type SymbolName =
+  | ({ readonly kind: 'plugin' } & PluginName)
+  | { readonly kind: 'record'; readonly formKey: string }
+  | EntrySymbol
+  | ScriptSymbol
+  | { readonly kind: 'file'; readonly path: string };
+
+/** Where a symbol is defined (symbols.md, The symbols). `none` says its kind has no definition, `refused` why this
+ *  symbol has none to give. */
+export type Definition =
+  | { readonly file: string }
+  | { readonly place: PlaceInFile }
+  | { readonly plugin: PluginSymbol }
+  | { readonly archived: { readonly archive: string; readonly file: string } }
+  | { readonly none: string }
+  | { readonly refused: string };
+
+/** Each place a file names a symbol, each at the record that holds it where its plugin has no plugin source, and why
+ *  each file went unread. */
+export interface SymbolReferences {
+  readonly references: readonly (PlaceInFile | CopyNaming)[];
+  readonly leftOut: readonly string[];
+}
+
+/** What the agent's find_definition and list_references answer, by symbol (ADR-0028). */
+export interface SymbolIndex {
+  definitionOf(symbol: SymbolName): Promise<Definition>;
+  referencesTo(symbol: SymbolName): Promise<SymbolReferences | { readonly refused: string }>;
+}
+
 interface SymbolIndexDeps {
   client: RecordDocumentClient & Pick<MEditClient, 'getReferencesInActiveOrCompiledPlugins'>;
-  open: (uri: vscode.Uri) => PromiseLike<vscode.TextDocument>;
+  open: (uri: vscode.Uri) => PromiseLike<Pick<vscode.TextDocument, 'getText' | 'positionAt'>>;
   plugin: Pick<ReturnType<typeof pluginLanguage>, 'definitionOf' | 'placesNaming'>;
   entry: Pick<ReturnType<typeof entryLanguage>, 'definitionOf' | 'placesNaming'>;
   script: Pick<ReturnType<typeof scriptLanguage>, 'definitionOf' | 'placesNaming'>;
@@ -37,7 +68,7 @@ export function symbolIndex({ client, open, plugin, entry, script, file }: Symbo
           if (located.uri.scheme === RENDERED_DOCUMENT_SCHEME) return { plugin: copyOf(located.uri).plugin };
           return { place: placeOfLocation(locationOf(located)) };
         }
-        default: return entry.definitionOf(symbol);
+        case 'mod': case 'separator': case 'downloadedFile': case 'profile': return entry.definitionOf(symbol);
       }
     },
     async referencesTo(symbol) {
@@ -52,7 +83,7 @@ export function symbolIndex({ client, open, plugin, entry, script, file }: Symbo
           } catch (error) {
             return { refused: `mEdit cannot list what references ${symbol.formKey}: ${errorMessage(error)}` };
           }
-        default: return entry.placesNaming(symbol);
+        case 'mod': case 'separator': case 'downloadedFile': case 'profile': return entry.placesNaming(symbol);
       }
     },
   };
