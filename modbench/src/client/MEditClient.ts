@@ -306,7 +306,7 @@ export interface MEditClient {
   getDiagnoses(): Promise<PluginDiagnosisReport[] | ReadFailed>;
   getPluginIndexing(plugin: PluginAddress): Promise<PluginIndexedState | ReadFailed>;
   // Fails while mEdit has not finished indexing: a plugin it has not reached would read as clean.
-  getPluginProblems(): Promise<PluginProblems[] | ReadFailed>;
+  getPluginProblems(plugin?: PluginAddress): Promise<PluginProblems[] | ReadFailed>;
   /** The file paths each compiled plugin's source names, or only `plugin`'s. */
   getPluginFilePaths(plugin?: PluginAddress): Promise<PluginFilePaths[] | ReadFailed>;
   getRecordTypes(plugin: PluginAddress): Promise<PluginRecordTypeCount[] | ReadFailed>;

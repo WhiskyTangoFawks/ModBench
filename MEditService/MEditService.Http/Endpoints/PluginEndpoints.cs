@@ -30,14 +30,18 @@ internal static class PluginEndpoints
             .Produces<IReadOnlyList<PluginDiagnosisReport>>()
             .ProducesProblem(503);
 
-        app.MapGet("/plugins/problems", async (IQueries svc, CancellationToken aborted) =>
-            EndpointMapping.Ok(await svc.GetProblems(aborted)))
+        app.MapGet("/plugins/problems", async (string? plugin, string? origin, IQueries svc, CancellationToken aborted) =>
+        {
+            if (!EndpointMapping.OptionalPluginAt(plugin, origin, out var address, out var refused)) return refused;
+            return EndpointMapping.Ok(await svc.GetProblems(address, aborted));
+        })
             .WithName("GetPluginProblems")
             .WithTags(Tag)
             .WithDescription(
                 "What is wrong in each compiled plugin's source, on the file that holds the " +
-                "record: a reference to a record neither it nor an active plugin holds. Answers only once the record index is ready.")
+                "record: a reference to a record neither it nor an active plugin holds. Answers only once the record index is ready. Given plugin and origin, only that plugin's.")
             .Produces<IReadOnlyList<PluginProblems>>()
+            .ProducesProblem(400)
             .ProducesProblem(503);
 
         app.MapGet("/plugins/file-paths", async (string? plugin, string? origin, IQueries svc, CancellationToken aborted) =>
