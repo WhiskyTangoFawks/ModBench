@@ -249,30 +249,30 @@ describe('PluginFactsFeed', () => {
 
   describe('judging again as the facts are re-read', () => {
     const B = { name: 'B.esp', origin: 'SomeMod' };
-    const warned = (warnings: readonly (readonly unknown[])[]) => warnings.map((published) => published.length > 0);
+    const raised = (errors: readonly (readonly unknown[])[]) => errors.map((published) => published.length > 0);
     const reads = (bIsMaster: boolean) => [held(), held({ name: 'B.esp', isMaster: bIsMaster })];
 
     it.each([
-      ['raises the warning a re-read master flag causes', false, [false, true]],
-      ['clears the warning a re-read dropped master flag leaves', true, [true, false]],
+      ['raises the error a re-read master flag causes', false, [false, true]],
+      ['clears the error a re-read dropped master flag leaves', true, [true, false]],
     ])('%s', async (_, masterAtReconcile, counts) => {
-      const { feed, client, sortingWarnings } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B] });
+      const { feed, client, sortingErrors } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B] });
       client.setQueryAnswer('getPlugins', reads(masterAtReconcile));
       await feed.reconciled([]);
       client.setQueryAnswer('getPlugins', reads(!masterAtReconcile));
 
       await feed.refresh();
 
-      expect(warned(sortingWarnings.items)).toEqual(counts);
+      expect(raised(sortingErrors.items)).toEqual(counts);
     });
 
     it('judges nothing before the first reconcile', async () => {
-      const { feed, client, sortingWarnings } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B] });
+      const { feed, client, sortingErrors } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B] });
       client.setQueryAnswer('getPlugins', reads(true));
 
       await feed.refresh();
 
-      expect(sortingWarnings.items).toEqual([]);
+      expect(sortingErrors.items).toEqual([]);
     });
   });
 
