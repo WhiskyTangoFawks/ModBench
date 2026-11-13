@@ -5,7 +5,6 @@ using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Store;
-using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -256,17 +255,6 @@ internal sealed class Indexer : IDisposable
     {
         get { lock (_lock) return _scope?.Failed.FileProblems ?? []; }
     }
-
-    /// <summary>The text at <paramref name="fullPath"/>: the unsaved document standing in for the file, else the file's.</summary>
-    public string SourceTextOf(string fullPath)
-    {
-        var full = Path.GetFullPath(fullPath);
-        return _unsaved.Current.FirstOrDefault(document => string.Equals(Path.GetFullPath(document.Path), full, FilePaths.Comparison))?.Text
-            ?? File.ReadAllText(full);
-    }
-
-    public string SourceTextOf(string sourceFolder, string sourceRelativePath) =>
-        SourceTextOf(Path.Combine(sourceFolder, sourceRelativePath));
 
     public UnreadableSource? WhyTreeStopped(PluginAddress key)
     {

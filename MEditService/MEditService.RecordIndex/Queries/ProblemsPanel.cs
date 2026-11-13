@@ -37,7 +37,7 @@ internal static class ProblemsPanel
                     var headerProblems = linkedUnreadable.Count == 0
                         ? new HeaderProblems([], null)
                         : NoLinkChecked(plugin, linkedUnreadable, source.Over(plugin, snapshot.GameRelease));
-                    return Placed(plugin, index.SourceTextOf, ProblemsOf(
+                    return Placed(plugin, source.TextOf, ProblemsOf(
                         plugin.Key, snapshot.GameRelease, index.LaterReadFailure(plugin.Key),
                         [.. stopped[plugin.Key].Select(SourceProblem.StoppedAt), .. Found(found[plugin.Key].Select(held => held.Problem), stopped[plugin.Key]), .. headerProblems.Problems],
                         [.. missing[plugin.Key]], unreadable, headerProblems.PlacementFailure));

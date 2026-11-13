@@ -56,6 +56,8 @@ public abstract class DelegatingSourceAdapter(ISourceAdapter inner) : ISourceAda
         SourceModIn heldIn, ModFolderManifest? modFolderManifest) =>
         inner.Init(sourceFolder, buildFile, plugins, assets, commit, repair, manifest, ignored, heldIn, modFolderManifest);
 
+    public virtual string TextOf(string sourceFolder, string path) => inner.TextOf(sourceFolder, path);
+
     public virtual string FileIn(string sourceFolder, string path) => inner.FileIn(sourceFolder, path);
 
     public virtual Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder, IReadOnlyList<string> read) =>

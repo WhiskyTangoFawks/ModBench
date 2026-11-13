@@ -80,6 +80,8 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
         return null;
     }
 
+    public string TextOf(string sourceFolder, string path) => throw Unreached();
+
     public string FileIn(string sourceFolder, string path) => throw Unreached();
 
     public Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder, IReadOnlyList<string> read) => throw Unreached();
