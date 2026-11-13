@@ -120,11 +120,23 @@ describe('sourceCommands build', () => {
     expect(outcome).toMatchObject({ refused: [{ item: 'ModB', reason: `VS Code did not save its source: ${SOURCES.ModB}/plugin-source/B.esp/Cell.json` }] });
   });
 
+  it.each([
+    ['SkyrimSE', { bsa: { version: 105, compressed: true } }, { bsa: { version: 105, compressed: true } }],
+    ['Starfield', { ba2: { version: 2, compressed: true } }, { ba2: { version: 3, compressed: true } }],
+  ])('hands mEdit the archive variants of %s', async (release, general, textures) => {
+    const client = new InMemoryMEditClient();
+    buildingEach(client);
+
+    await sourceCommands({ client, adapter: fakeAdapter({}, release), saveUnsaved: savedAll, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
+
+    expect(client.calls.map((call) => call.args[1])).toEqual([{ exclusionMark: EXCLUSION_MARK, archives: { general, textures } }]);
+  });
+
   it('hands mEdit no archive variant for a release the table names none for', async () => {
     const client = new InMemoryMEditClient();
     buildingEach(client);
 
-    await sourceCommands({ client, adapter: fakeAdapter({}, 'SkyrimSE'), saveUnsaved: savedAll, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
+    await sourceCommands({ client, adapter: fakeAdapter({}, 'Oblivion'), saveUnsaved: savedAll, loadOrderSnapshot: ORDER_SENT, tasks: recordingTasks(), trash: vi.fn() }).build(['ModA']);
 
     expect(client.calls.map((call) => call.args[1])).toEqual([{ exclusionMark: EXCLUSION_MARK, archives: null }]);
   });

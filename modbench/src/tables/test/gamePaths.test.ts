@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import {
-  archiveListsOf, masterExtensionsOf, ba2VersionsOf, blueprintLoadsLastIn, creationClubListFile, gameReleaseForGame, loadedWithNoLineOf, nexusDomainsForGame, shortNameForNexusDomain, nexusDomainForMetaGame, gamePathInfoForRelease, lootRepositoryOf, papyrusScriptAt, papyrusScriptFiles, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
+  archiveListsOf, masterExtensionsOf, archiveFormatsOf, blueprintLoadsLastIn, creationClubListFile, gameReleaseForGame, loadedWithNoLineOf, nexusDomainsForGame, shortNameForNexusDomain, nexusDomainForMetaGame, gamePathInfoForRelease, lootRepositoryOf, papyrusScriptAt, papyrusScriptFiles, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
 } from '../gamePaths';
 
 const NOT_WRITTEN = 'a game whose plugins.txt Modbench does not write';
@@ -31,14 +31,21 @@ describe('gameReleaseForGame', () => {
   });
 });
 
-describe('ba2VersionsOf', () => {
+describe('archiveFormatsOf', () => {
+  const ba2 = (general: number, textures: number) => ({ general: { format: 'ba2', version: general }, textures: { format: 'ba2', version: textures } });
+  const bsa105 = { general: { format: 'bsa', version: 105 }, textures: { format: 'bsa', version: 105 } };
   it.each([
-    ['Fallout4', { general: 1, textures: 1 }],
-    ['Fallout4VR', { general: 1, textures: 1 }],
-    ['Starfield', undefined],
-    ['SkyrimSE', undefined],
-  ])('answers the BA2 versions %s\'s archives pack as, and none for a release whose archives mEdit is not known to write so the game loads them', (release, variants) => {
-    expect(ba2VersionsOf(release)).toEqual(variants);
+    ['Fallout4', ba2(1, 1)],
+    ['Fallout4VR', ba2(1, 1)],
+    ['Starfield', ba2(2, 3)],
+    ['SkyrimSE', bsa105],
+    ['SkyrimVR', bsa105],
+  ])('answers the formats %s\'s archives pack as', (release, formats) => {
+    expect(archiveFormatsOf(release)).toEqual(formats);
+  });
+
+  it('answers none for a release the table holds no row for', () => {
+    expect(archiveFormatsOf('Oblivion')).toBeUndefined();
   });
 });
 
