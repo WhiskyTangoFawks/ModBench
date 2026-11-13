@@ -23,7 +23,7 @@ public sealed class SelectedRows : IDisposable
     /// <summary>The rows, once the first is read: a SELECT refused, or out of memory, before its first row is refused
     /// whole.</summary>
     internal static Answer<SelectedRows, IndexRefused> Selected(Indexer index, string sql, IndexAnswer answer) =>
-        answer.Flat(() => RefusingTheSql<SelectedRows>(() =>
+        Hinted(answer.Flat(() => RefusingTheSql<SelectedRows>(() =>
         {
             if (!SqlDoor.Select(index, sql).Holds(out var rows, out var rejection)) return new IndexRefused(IndexRefusal.SelectRejected, rejection);
             var selected = new SelectedRows(rows, answer);
@@ -39,7 +39,7 @@ public sealed class SelectedRows : IDisposable
             if (selected._first.Holds(out _, out var refused)) return selected;
             selected.Dispose();
             return refused;
-        }));
+        })));
 
     /// <summary>Each row in turn, read once. A refusal that stops them is the last.</summary>
     public IEnumerable<Answer<string, IndexRefused>> Rows()
@@ -50,7 +50,7 @@ public sealed class SelectedRows : IDisposable
         {
             if (!next.Holds(out var row, out var refused))
             {
-                yield return refused;
+                yield return Hinted(refused);
                 yield break;
             }
             if (row is null) yield break;
@@ -72,12 +72,17 @@ public sealed class SelectedRows : IDisposable
         }
     }
 
-    private Answer<string?, IndexRefused> Next()
+    private Answer<string?, IndexRefused> Next() => _answer.Flat(() => RefusingTheSql<string?>(() => _rows.Next()));
+
+    // A SELECT can run out of memory in any step, so the hint is attached once, where its refusals leave.
+    private static Answer<T, IndexRefused> Hinted<T>(Answer<T, IndexRefused> answer)
     {
-        var next = _answer.Flat(() => RefusingTheSql<string?>(() => _rows.Next()));
-        if (next.Holds(out _, out var refused) || refused.Refusal != IndexRefusal.OutOfMemory) return next;
-        return refused with { Message = $"{refused.Message} {BodiesByKey}" };
+        if (answer.Holds(out var value, out var refused)) return value;
+        return Hinted(refused);
     }
+
+    private static IndexRefused Hinted(IndexRefused refused) =>
+        refused.Refusal == IndexRefusal.OutOfMemory ? refused with { Message = $"{refused.Message} {BodiesByKey}" } : refused;
 
     public void Dispose() => _rows.Dispose();
 }
