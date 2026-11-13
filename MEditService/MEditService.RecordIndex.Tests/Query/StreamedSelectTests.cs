@@ -86,7 +86,7 @@ public sealed class StreamedSelectTests : IDisposable
         Assert.InRange(read.Count - 1, 1, 999_999);
         var refused = read[^1].Refused();
         Assert.Equal(IndexRefusal.SelectRejected, refused.Refusal);
-        // DuckDB's workers race: the stream gets the fault's reason or only the interrupt that follows it.
-        Assert.Matches("Could not convert string 'x'|^DuckDB interrupted the SELECT partway, and gave no reason", refused.Message);
+        const string TheFaultsReasonOrOnlyTheInterruptThatFollowsIt = "Could not convert string 'x'|^DuckDB interrupted the SELECT partway, and gave no reason";
+        Assert.Matches(TheFaultsReasonOrOnlyTheInterruptThatFollowsIt, refused.Message);
     }
 }
