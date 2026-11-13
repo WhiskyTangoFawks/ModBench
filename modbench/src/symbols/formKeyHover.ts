@@ -1,38 +1,29 @@
 import type { CompareResult, MEditClient } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
-import { formKeyAt } from './formKeyText';
 import { recordLabel } from '../wire/recordLabel';
 import { answerOf } from '../wire/readFailed';
 
-interface SourceHover {
-  start: number;
-  end: number;
-  markdown: string;
-}
-
-function markdownOf(formKey: string, comparison: CompareResult): string {
+function linesOf(formKey: string, comparison: CompareResult): string[] {
   const winner = comparison.overrides.find((copy) => copy.isWinner);
   return [
     '`' + recordLabel(winner?.editorId, formKey) + '`',
     comparison.recordTypeName,
     ...(winner ? [`Winner: ${winner.plugin}`] : []),
-  ].join('\n\n');
+  ];
 }
 
-/** The hover over the FormKey string at `offset` of a plugin source document; undefined where
- *  there is no FormKey, no active plugin holds it, or mEdit cannot answer, which the Output says. */
-export async function hoverAt(
+/** The hover's lines on the record `formKey` names; undefined where no active plugin holds it, or mEdit cannot answer,
+ *  which the Output says. */
+export async function hoverOf(
   { client, reporter }: { client: Pick<MEditClient, 'getComparison'>; reporter: Pick<Reporter, 'shownOnSurface'> },
-  text: string, offset: number,
-): Promise<SourceHover | undefined> {
-  const found = formKeyAt(text, offset);
-  if (!found) return undefined;
+  formKey: string,
+): Promise<string[] | undefined> {
   try {
-    const comparison = answerOf(await client.getComparison(found.formKey));
-    return comparison ? { start: found.start, end: found.end, markdown: markdownOf(found.formKey, comparison) } : undefined;
+    const comparison = answerOf(await client.getComparison(formKey));
+    return comparison ? linesOf(formKey, comparison) : undefined;
   } catch (error) {
-    reporter.shownOnSurface('error', `Hover cannot describe ${found.formKey}.`, errorMessage(error));
+    reporter.shownOnSurface('error', `Hover cannot describe ${formKey}.`, errorMessage(error));
     return undefined;
   }
 }

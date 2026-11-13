@@ -1,20 +1,20 @@
 import * as vscode from 'vscode';
-import { referencesView } from '../drivingLib/referencesView';
+import type { PluginRows } from '../drivingLib/symbolRows';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { isPluginSourcePath } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { heldTexts, pluginNamed, samePlugin, type PluginName, type PluginSymbol, type SymbolOwner } from '../symbolNames/symbolNames';
-import type { Definition, SymbolReferences } from './symbolIndex';
 import { heldText, unsavedTexts } from '../textDocuments/heldText';
 import { openPluginSourceDocument } from '../textDocuments/pluginSource';
 import type { RecordDocumentClient } from '../textDocuments/recordDocument';
 import { headerFormKeyOf } from '../wire/headerFormKey';
 import { pluginRowName } from '../wire/pluginAddress';
-import { placeLocation, referenceOf, referencedByInput, spelledAround, type AskedIn, type ListedLocations } from './symbolPlaces';
+import { placeLocation, showReferencedBy, spelledAround, type AskedIn, type ListedLocations } from './symbolPlaces';
 import { pluginReferencesOf, type PluginReference } from './pluginReferences';
 import { locateRecord, locationOf } from './recordLocation';
 import { formKeyPluginAt, formKeyValue } from './formKeyText';
+import type { Definition, Listed, Named, References, SymbolKind } from './symbolKind';
 
 interface PluginLanguageDeps {
   instance: { readonly value: Pick<InstanceValue, 'plugins'> } | undefined;
@@ -23,28 +23,27 @@ interface PluginLanguageDeps {
   owners: readonly SymbolOwner[];
   /** The plugin's `rename`, with the new name an entry point supplies. */
   renamePlugin: (plugin: PluginSymbol, newName: string) => Promise<void>;
-  /** The plugin's `go to`. */
-  goTo: (plugin: PluginSymbol) => Promise<void>;
+  /** What Plugins shows of its rows; absent with no instance. */
+  rows: () => Pick<PluginRows, 'show' | 'fileOf'> | undefined;
   /** The lines of the tooltip its row shows. */
   tooltip: (plugin: PluginSymbol) => readonly string[];
 }
 
+type PluginNamed = { readonly kind: 'plugin' } & PluginName;
+
 const locationOfReference = (found: PluginReference<vscode.TextDocument>): vscode.Location =>
   ('file' in found ? placeLocation(found) : locationOf(found));
 
-/** A plugin as a symbol in the text editor: inside a FormKey, and wherever an owner's file names it (symbols.md, The symbols,
- *  Plugin), and the places files name it. */
-export function pluginLanguage({ instance, reporter, client, owners, renamePlugin, goTo, tooltip }: PluginLanguageDeps) {
-  const referencesTo = pluginReferencesOf({
-    owners, reporter, client, open: openPluginSourceDocument,
+const atFile = (file: string): vscode.Location => new vscode.Location(vscode.Uri.file(file), new vscode.Range(0, 0, 0, 0));
+
+/** A plugin as a symbol: inside a FormKey, and wherever an owner's file names it (symbols.md, The symbols, Plugin). */
+export function pluginLanguage({ instance, reporter, client, owners, renamePlugin, rows, tooltip }: PluginLanguageDeps) {
+  const read = pluginReferencesOf({
+    owners, client, open: openPluginSourceDocument,
     plugins: () => instance?.value.plugins ?? [],
     held: () => heldTexts(unsavedTexts()),
   });
-  const listed = (read: typeof referencesTo.forGesture) => async (plugin: PluginSymbol): Promise<ListedLocations> => {
-    const { found, unread } = await read(plugin);
-    return { locations: found.map(locationOfReference), unread: unread.length };
-  };
-  const [listedForGesture, listedForFeature] = [listed(referencesTo.forGesture), listed(referencesTo.forFeature)];
+  const plugins = () => instance?.value.plugins ?? [];
 
   const nameAt = async (document: AskedIn, offset: number): Promise<PluginName | undefined> => {
     const text = heldText(document);
@@ -62,80 +61,90 @@ export function pluginLanguage({ instance, reporter, client, owners, renamePlugi
     return named && span && { named, ...span };
   };
 
+  const unresolved = ({ name }: PluginName) => ({ refused: `Mod order resolves ${name} to no plugin.` });
+
+  const rowNamed = (named: PluginName) => {
+    const plugin = pluginNamed(named, plugins());
+    if (plugin === undefined) return unresolved(named);
+    return plugins().find((each) => samePlugin(each, plugin)) ?? { refused: `The instance holds no plugin ${named.name} from ${plugin.origin}.` };
+  };
+
+  const referencesTo = async (named: PluginName): Promise<References> => {
+    const plugin = rowNamed(named);
+    if ('refused' in plugin) return plugin;
+    const { found, unread } = await read(plugin);
+    return { locations: found.map(locationOfReference), unread };
+  };
+
   // Referenced By anchors at the plugin's header, as a record's anchors at its FormKey; else at a place that names it.
-  const anchorOf = async (plugin: PluginSymbol, first: ListedLocations): Promise<vscode.Location | { refused: string }> => {
+  const anchorOf = (plugin: PluginSymbol) => async (first: ListedLocations): Promise<vscode.Location | { refused: string }> => {
     const header = await locateRecord({ client, open: openPluginSourceDocument }, { formKey: headerFormKeyOf(plugin), plugin }, formKeyValue)
       .catch((error: unknown) => ({ refused: errorMessage(error) }));
     if (header && !('refused' in header)) return locationOf(header);
     return first.locations[0] ?? { refused: header?.refused ?? `No active plugin holds ${headerFormKeyOf(plugin)}.` };
   };
 
-  const resolvedRows = () => instance?.value.plugins ?? [];
-
-  const rowNamed = (named: PluginName) => {
-    const plugin = pluginNamed(named, resolvedRows());
-    if (plugin === undefined) return { refused: `Mod order resolves ${named.name} to no plugin.` };
-    const row = resolvedRows().find((each) => samePlugin(each, plugin));
-    return row ?? { refused: `The instance holds no plugin ${named.name} from ${plugin.origin}.` };
-  };
-
-  return {
-    /** Where the plugin `named` is defined: its file, in the mod that holds it. */
-    definitionOf: (named: PluginName): Definition => {
-      const row = rowNamed(named);
-      if ('refused' in row) return row;
-      return row.path === undefined ? { refused: `${pluginRowName(row)} has no file on disk yet.` } : { file: row.path };
-    },
-    /** Each place a file names the plugin `named`, and why each file went unread. */
-    placesNaming: async (named: PluginName): Promise<SymbolReferences | { refused: string }> => {
-      const plugin = rowNamed(named);
-      if ('refused' in plugin) return plugin;
-      const { found, unread } = await referencesTo.read(plugin);
-      return { references: found.map((reference) => ('file' in reference ? reference : referenceOf(locationOf(reference)))), leftOut: unread };
-    },
-    /** Go to Definition on the plugin whose name is at `offset`: the plugin's `go to`. False where no plugin's name is. */
-    definitionAt: async (document: AskedIn, offset: number): Promise<{ start: number; end: number; resolved: boolean } | undefined> => {
+  const kind: SymbolKind<PluginNamed> = {
+    async nameAt(document, offset): Promise<Named<PluginNamed> | undefined> {
       const found = await nameWithSpan(document, offset);
-      if (found === undefined) return undefined;
-      const plugin = pluginNamed(found.named, instance?.value.plugins ?? []);
-      if (plugin) await goTo(plugin);
-      else reporter.shownOnSurface('warning', `Go to Definition cannot go to ${found.named.name}.`, `Mod order resolves ${found.named.name} to no plugin.`);
-      return { start: found.start, end: found.end, resolved: plugin !== undefined };
+      return found && { start: found.start, end: found.end, spelled: found.name, symbol: { kind: 'plugin', ...found.named } };
     },
-    /** What a hover on the plugin's name at `offset` says: its row's tooltip, or its name when it has none. */
-    hoverAt: async (document: AskedIn, offset: number): Promise<{ start: number; end: number; lines: readonly string[] } | undefined> => {
-      const found = await nameWithSpan(document, offset);
-      if (found === undefined) return undefined;
-      const plugin = pluginNamed(found.named, instance?.value.plugins ?? []);
+    /** Its row in Plugins, else its file. */
+    definitionOf(named): Promise<Definition> {
+      const plugin = pluginNamed(named, plugins());
+      if (plugin === undefined) return Promise.resolve(unresolved(named));
+      const show = rows()?.show(plugin);
+      if (show !== undefined) return Promise.resolve({ row: 'Plugins', show });
+      const held = plugins().find((each) => samePlugin(each, plugin));
+      const path = rows()?.fileOf(plugin) ?? held?.path;
+      if (path !== undefined) return Promise.resolve({ shown: { kind: 'loose', path } });
+      return Promise.resolve({ refused: held === undefined ? `The instance holds no plugin ${named.name} from ${plugin.origin}.` : 'Plugins shows no row for it and no file holds it.' });
+    },
+    referencesTo,
+    hoverOf({ symbol, spelled }) {
+      const plugin = 'refused' in symbol ? undefined : pluginNamed(symbol, plugins());
       const lines = plugin ? tooltip(plugin) : [];
-      return { start: found.start, end: found.end, lines: lines.length > 0 ? lines : [found.name] };
+      return Promise.resolve(lines.length > 0 ? lines : [spelled]);
     },
-    /** Completion where a file names a plugin: each plugin file name with the mods that hold it, over the name so far. */
-    completionsAt: async (document: AskedIn, offset: number): Promise<{ start: number; end: number; items: { name: string; origins: string[] }[] } | undefined> => {
+    /** Each plugin file name with the mods that hold it, over the name so far. */
+    async completionsAt(document, offset) {
       const found = await nameWithSpan(document, offset);
       if (found === undefined) return undefined;
-      const byName = new Map<string, { name: string; origins: string[] }>();
-      for (const { name, origin } of instance?.value.plugins ?? []) {
-        const item = byName.get(name.toLowerCase()) ?? { name, origins: [] };
+      const byName = new Map<string, { label: string; origins: string[] }>();
+      for (const { name, origin } of plugins()) {
+        const item = byName.get(name.toLowerCase()) ?? { label: name, origins: [] };
         item.origins.push(origin);
         byName.set(name.toLowerCase(), item);
       }
-      return { start: found.start, end: found.end, items: [...byName.values()].sort((a, b) => a.name.localeCompare(b.name)) };
+      const items = [...byName.values()].sort((a, b) => a.label.localeCompare(b.label)).map(({ label, origins }) => ({ label, detail: origins.join(', ') }));
+      return { start: found.start, end: found.end, icon: vscode.CompletionItemKind.File, items };
     },
-    /** Go to Symbol in Workspace: each plugin copy whose file name holds `query`, at its file, else at a place a file
-     *  names it. A copy with neither has no place to be listed at. */
-    symbolsFor: async (query: string): Promise<{ plugin: PluginSymbol; location: vscode.Location }[]> => {
+    /** Each plugin copy whose file name holds `query`, at its file, else at a place a file names it. A copy with neither
+     *  has no place to be listed at. */
+    async symbolsFor(query) {
       const wanted = query.trim().toLowerCase();
       if (wanted === '') return [];
-      const matching = (instance?.value.plugins ?? []).filter(({ name }) => name.toLowerCase().includes(wanted));
-      const placed = await Promise.all(matching.map(async ({ name, origin, path }) => {
+      const matching = plugins().filter(({ name }) => name.toLowerCase().includes(wanted));
+      const placed = await Promise.all(matching.map(async ({ name, origin, path }): Promise<Listed | undefined> => {
         const plugin = { name, origin };
-        if (path !== undefined) return { plugin, location: new vscode.Location(vscode.Uri.file(path), new vscode.Range(0, 0, 0, 0)) };
-        const named = (await referencesTo.forFeature(plugin)).found.find((reference) => 'file' in reference);
-        return named && 'file' in named ? { plugin, location: placeLocation(named) } : undefined;
+        const listedAt = (location: vscode.Location): Listed => ({
+          name, detail: origin, icon: vscode.SymbolKind.File, location,
+          resolve: async () => {
+            const definition = await kind.definitionOf({ kind: 'plugin', ...plugin });
+            if ('row' in definition) await definition.show();
+            return undefined;
+          },
+        });
+        if (path !== undefined) return listedAt(atFile(path));
+        const named = (await read(plugin)).found.find((reference) => 'file' in reference);
+        return named && 'file' in named ? listedAt(placeLocation(named)) : undefined;
       }));
       return placed.filter((symbol) => symbol !== undefined);
     },
+  };
+
+  return {
+    ...kind,
     /** The plugin's name at `offset`, which Rename Symbol offers to rename; undefined where no plugin's name is. */
     renameRangeAt: async (document: AskedIn, offset: number) => {
       const found = await nameWithSpan(document, offset);
@@ -145,30 +154,14 @@ export function pluginLanguage({ instance, reporter, client, owners, renamePlugi
     renameAt: async (document: AskedIn, offset: number, newName: string): Promise<void> => {
       const named = await nameAt(document, offset);
       if (named === undefined) return;
-      const plugin = pluginNamed(named, instance?.value.plugins ?? []);
-      if (plugin === undefined) throw new Error(`Mod order resolves ${named.name} to no plugin.`);
+      const plugin = pluginNamed(named, plugins());
+      if (plugin === undefined) throw new Error(unresolved(named).refused);
       await renamePlugin(plugin, newName);
     },
-    /** Find All References on the plugin whose name is at `offset`; undefined where no plugin's name is. */
-    referencesAt: async (document: AskedIn, offset: number): Promise<vscode.Location[] | undefined> => {
-      const named = await nameAt(document, offset);
-      if (named === undefined) return undefined;
-      const plugin = pluginNamed(named, instance?.value.plugins ?? []);
-      if (plugin) return (await listedForFeature(plugin)).locations;
-      reporter.shownOnSurface('warning', `Find All References cannot list what names ${named.name}.`, `Mod order resolves ${named.name} to no plugin.`);
-      return [];
-    },
     /** Lists each place a file names `plugin`, in VS Code's References view. */
-    referencedBy: async (plugin: PluginSymbol): Promise<void> => {
-      const view = await referencesView();
-      if (!view) return;
-      const first = await listedForGesture(plugin);
-      const anchor = await anchorOf(plugin, first);
-      if ('refused' in anchor) {
-        reporter.report('error', `Could not list where files name ${pluginRowName(plugin)}.`, anchor.refused);
-        return;
-      }
-      view.setInput(referencedByInput(`Referenced By: ${pluginRowName(plugin)}`, 'modbench.pluginReferencedBy', anchor, () => listedForGesture(plugin), first));
-    },
+    referencedBy: (plugin: PluginSymbol): Promise<void> => showReferencedBy({
+      reporter, subject: pluginRowName(plugin), contextValue: 'modbench.pluginReferencedBy',
+      references: () => referencesTo(plugin), anchorOf: anchorOf(plugin),
+    }),
   };
 }

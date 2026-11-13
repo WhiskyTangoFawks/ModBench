@@ -12,9 +12,9 @@ export const SYMBOLS_GUIDE = `Modbench works like a language server whose symbol
 - A file that names a symbol holds a reference to it. Plugin source, build files, the profiles' mod order and plugin order, and manifests hold references.
 - Resolve a name before you act on it: resolve_names for plugins and records, resolve_instance_names for downloaded files and files in mods. A name that means more than one thing is refused, with each match listed. Name the one that you mean as the list names it.
 - find_definition gives where a symbol is defined:
-  - a plugin: its file, in the mod that holds it
+  - a plugin: the view whose row it is, Plugins, or its file when Plugins shows no row for it
   - a record: its file in plugin source, or its plugin when it has no plugin source
-  - a mod: its folder
+  - a mod: the view whose row it is, Mods, or its folder when Mods shows no row for it
   - a Papyrus script: its source, or its compiled script when it has no source
   - a file: the copy that the game gets, inside its archive when it is archived
   - a mod separator, a downloaded file or a profile has no definition

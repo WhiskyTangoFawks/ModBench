@@ -20,7 +20,8 @@ import type { TerminalEnvironment } from '../scriptEnvironment';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { serveAgent, type AgentServer, type AgentServerOptions } from '../agentServer';
 import type { Argument } from '../../wire/argument';
-import type { Definition, SymbolIndex, SymbolName, SymbolReferences } from '../../symbols/symbolIndex';
+import type { SymbolIndex } from '../../symbols/symbolIndex';
+import type { SymbolName } from '../../symbols/symbolKind';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import type { ArchiveRead } from '../../instanceLoader/archiveContents';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
@@ -105,8 +106,8 @@ const copyAnswers: InstanceAnswers = {};
 
 const symbolReads = {
   asked: [] as SymbolName[],
-  definition: { file: '/mods/Mod' } as Definition,
-  references: { references: [], leftOut: [] } as SymbolReferences | { refused: string },
+  definition: { file: '/mods/Mod' } as Awaited<ReturnType<SymbolIndex['definitionOf']>>,
+  references: { references: [], leftOut: [] } as Awaited<ReturnType<SymbolIndex['referencesTo']>>,
 };
 const symbols: SymbolIndex = {
   definitionOf: (symbol) => { symbolReads.asked.push(symbol); return Promise.resolve(symbolReads.definition); },

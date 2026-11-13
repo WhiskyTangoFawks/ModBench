@@ -1,19 +1,19 @@
 import * as vscode from 'vscode';
-import { referencesView } from '../drivingLib/referencesView';
+import type { ModRows } from '../drivingLib/symbolRows';
 import type { EntryRef, InstanceValue } from '../instanceLoader/instance';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
-import { heldTexts, sameName, type EntryNames, type EntryReading, type EntrySymbol, type PlaceInFile } from '../symbolNames/symbolNames';
-import type { Definition } from './symbolIndex';
+import { heldTexts, sameName, type EntryNames, type EntrySymbol, type PlaceInFile } from '../symbolNames/symbolNames';
 import { heldText, unsavedTexts } from '../textDocuments/heldText';
-import { placeLocation, readBy, referencedByInput, reportedForFeature, reportedForGesture, type AskedIn, type ListedLocations } from './symbolPlaces';
+import { placeLocation, readBy, showReferencedBy } from './symbolPlaces';
+import type { Definition, Listed, References, SymbolKind } from './symbolKind';
 
 interface EntryLanguageDeps {
-  instance: { readonly value: Pick<InstanceValue, 'mods' | 'downloadedFiles' | 'profiles' | 'paths'> } | undefined;
+  instance: { readonly value: Pick<InstanceValue, 'mods' | 'downloadedFiles' | 'profiles'> } | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
   owners: readonly EntryNames[];
-  /** The mod's `go to`. */
-  goTo: (mod: string) => Promise<void>;
+  /** What Mods shows of its rows; absent with no instance. */
+  rows: () => Pick<ModRows, 'show' | 'folderOf'> | undefined;
   /** The tooltip of the row Mods shows for a mod or a separator; undefined where it shows none. */
   entryTooltip: (entry: EntryRef) => string | undefined;
   /** The tooltip of the row Downloads shows for a downloaded file; undefined where it shows none. */
@@ -35,9 +35,16 @@ const unlisted = ({ kind, name }: EntrySymbol): string => ({
 
 const NOUNS: Record<EntrySymbol['kind'], string> = { mod: 'mod', separator: 'mod separator', downloadedFile: 'downloaded file', profile: 'profile' };
 
-/** A mod, a separator, a downloaded file and a profile as symbols in the text editor: wherever an owner's file names
- *  them, and the places files name them (symbols.md). */
-export function entryLanguage({ instance, reporter, owners, goTo, entryTooltip, downloadedFileTooltip, modOrderFileOf }: EntryLanguageDeps) {
+const SHOWN: Record<EntrySymbol['kind'], { readonly kind: vscode.SymbolKind; readonly completion: vscode.CompletionItemKind }> = {
+  mod: { kind: vscode.SymbolKind.Package, completion: vscode.CompletionItemKind.Folder },
+  separator: { kind: vscode.SymbolKind.Namespace, completion: vscode.CompletionItemKind.Folder },
+  downloadedFile: { kind: vscode.SymbolKind.File, completion: vscode.CompletionItemKind.File },
+  profile: { kind: vscode.SymbolKind.Module, completion: vscode.CompletionItemKind.Folder },
+};
+
+/** A mod, a separator, a downloaded file and a profile as symbols: wherever an owner's file names them, and the places
+ *  files name them (symbols.md). */
+export function entryLanguage({ instance, reporter, owners, rows, entryTooltip, downloadedFileTooltip, modOrderFileOf }: EntryLanguageDeps) {
   // A profile has no row.
   const tooltip = ({ kind, name }: EntrySymbol): string | undefined => {
     if (kind === 'downloadedFile') return downloadedFileTooltip(name);
@@ -60,70 +67,57 @@ export function entryLanguage({ instance, reporter, owners, goTo, entryTooltip, 
     return found === undefined ? undefined : { kind, name: found };
   };
 
-  const referencesTo = async (entry: EntrySymbol) => {
+  const read = async (entry: EntrySymbol) => {
     const readings = await Promise.all(owners.map((owner) => readBy(owner, entry, heldTexts(unsavedTexts()))));
     return { found: readings.flatMap(({ references }) => references), unread: readings.flatMap(({ leftOut }) => leftOut) };
   };
-  const located = (report: typeof reportedForGesture) => async (entry: EntrySymbol): Promise<ListedLocations> => {
-    const { found, unread } = report(reporter, entry.name, await referencesTo(entry));
-    return { locations: found.map(placeLocation), unread: unread.length };
-  };
-  const [locatedForGesture, locatedForFeature] = [located(reportedForGesture), located(reportedForFeature)];
 
-  const nameWithSpan = async (document: AskedIn, offset: number) => {
-    for (const owner of owners) {
-      const found = await owner.nameAt(document.uri.fsPath, heldText(document), offset);
-      if (found !== undefined) return { named: found.entry, start: found.start, end: found.end };
-    }
-    return undefined;
+  const referencesTo = async (named: EntrySymbol): Promise<References> => {
+    const entry = entryListed(named);
+    if (entry === undefined) return { refused: unlisted(named) };
+    const { found, unread } = await read(entry);
+    return { locations: found.map(placeLocation), unread };
   };
 
-  return {
-    /** Where the entry is defined: a mod's folder. A separator, a downloaded file and a profile have none. */
-    definitionOf: (named: EntrySymbol): Definition => {
+  const kind: SymbolKind<EntrySymbol> = {
+    async nameAt(document, offset) {
+      for (const owner of owners) {
+        const found = await owner.nameAt(document.uri.fsPath, heldText(document), offset);
+        if (found !== undefined) return { start: found.start, end: found.end, spelled: found.entry.name, symbol: found.entry };
+      }
+      return undefined;
+    },
+    /** A mod's row in Mods, else its folder. A separator, a downloaded file and a profile have none. */
+    definitionOf(named): Promise<Definition> {
       const entry = entryListed(named);
-      if (entry === undefined) return { refused: unlisted(named) };
-      if (entry.kind !== 'mod') return { none: `A ${NOUNS[entry.kind]} has no definition.` };
-      const folder = instance?.value.paths.modDirs.get(entry.name);
-      return folder === undefined ? { refused: `${entry.name} has no folder.` } : { file: folder };
+      if (entry === undefined) return Promise.resolve({ refused: unlisted(named) });
+      if (entry.kind !== 'mod') return Promise.resolve({ none: `A ${NOUNS[entry.kind]} has no definition.` });
+      const show = rows()?.show(entry.name);
+      if (show !== undefined) return Promise.resolve({ row: 'Mods', show });
+      const path = rows()?.folderOf(entry.name);
+      return Promise.resolve(path === undefined ? { refused: 'Mods shows no row for it and no folder holds it.' } : { shown: { kind: 'loose', path } });
     },
-    /** Each place a file names the entry, and why each file went unread. */
-    placesNaming: async (named: EntrySymbol): Promise<EntryReading | { refused: string }> => {
-      const entry = entryListed(named);
-      if (entry === undefined) return { refused: unlisted(named) };
-      const { found, unread } = await referencesTo(entry);
-      return { references: found, leftOut: unread };
-    },
-    /** Go to Definition on the mod whose name is at `offset`: the mod's `go to`. A separator has none. Undefined where
-     *  no mod's name is. */
-    definitionAt: async (document: AskedIn, offset: number): Promise<{ start: number; end: number; resolved: boolean } | undefined> => {
-      const found = await nameWithSpan(document, offset);
-      if (found?.named.kind !== 'mod') return undefined;
-      const mod = entryListed(found.named);
-      if (mod === undefined) reporter.shownOnSurface('warning', `Go to Definition cannot go to ${found.named.name}.`, unlisted(found.named));
-      else await goTo(mod.name);
-      return { start: found.start, end: found.end, resolved: mod !== undefined };
-    },
-    /** What a hover on the name at `offset` says: its row's tooltip, or its name when Mods shows none. */
-    hoverAt: async (document: AskedIn, offset: number): Promise<{ start: number; end: number; lines: readonly string[] } | undefined> => {
-      const found = await nameWithSpan(document, offset);
-      if (found === undefined) return undefined;
-      const shown = entryListed(found.named);
+    referencesTo,
+    /** Its row's tooltip, or its name when its view shows none. */
+    hoverOf({ symbol, spelled }) {
+      const shown = 'refused' in symbol ? undefined : entryListed(symbol);
       const lines = (shown && tooltip(shown))?.split('\n').filter((line) => line !== '') ?? [];
-      return { start: found.start, end: found.end, lines: lines.length > 0 ? lines : [found.named.name] };
+      return Promise.resolve(lines.length > 0 ? lines : [spelled]);
     },
-    /** Completion where a file names a symbol: each of its kind, over the name so far. */
-    completionsAt: async (document: AskedIn, offset: number): Promise<{ start: number; end: number; kind: EntrySymbol['kind']; items: readonly string[] } | undefined> => {
-      const found = await nameWithSpan(document, offset);
-      return found && { start: found.start, end: found.end, kind: found.named.kind, items: listed(found.named.kind) };
+    /** Each of its kind, over the name so far. */
+    async completionsAt(document, offset) {
+      const found = await kind.nameAt(document, offset);
+      if (found === undefined || 'refused' in found.symbol) return undefined;
+      const { kind: named } = found.symbol;
+      return { start: found.start, end: found.end, icon: SHOWN[named].completion, items: listed(named).map((label) => ({ label })) };
     },
-    /** Go to Symbol in Workspace: each symbol whose name holds `query`, at its own file, else at its line in the owners'
-     *  list, else at the first place a file names it. An entry no file names is left out. */
-    symbolsFor: async (query: string): Promise<{ entry: EntrySymbol; location: vscode.Location }[]> => {
+    /** Each symbol whose name holds `query`, at its own file, else at its line in the owners' list, else at the first
+     *  place a file names it. An entry no file names is left out. */
+    async symbolsFor(query) {
       const wanted = query.trim().toLowerCase();
       if (wanted === '') return [];
-      const matching = KINDS.flatMap((kind) =>
-        listed(kind).filter((name) => name.toLowerCase().includes(wanted)).map((name): EntrySymbol => ({ kind, name })));
+      const matching = KINDS.flatMap((each) =>
+        listed(each).filter((name) => name.toLowerCase().includes(wanted)).map((name): EntrySymbol => ({ kind: each, name })));
       const lists = await Promise.all(owners.map((owner) => owner.listed(heldTexts(unsavedTexts())).catch((error: unknown) => {
         reporter.shownOnSurface('warning', 'Go to Symbol in Workspace could not read an owner\'s list of mods and separators.', errorMessage(error));
         return [];
@@ -133,36 +127,35 @@ export function entryLanguage({ instance, reporter, owners, goTo, entryTooltip, 
         const key = entryKey(entry);
         if (!lines.has(key)) lines.set(key, place);
       }
-      const placed = await Promise.all(matching.map(async (entry) => {
+      const placeOf = async (entry: EntrySymbol): Promise<vscode.Location | undefined> => {
         const own = ownFile(entry);
-        if (own !== undefined) return { entry, location: new vscode.Location(vscode.Uri.file(own), new vscode.Range(0, 0, 0, 0)) };
+        if (own !== undefined) return new vscode.Location(vscode.Uri.file(own), new vscode.Range(0, 0, 0, 0));
         const line = lines.get(entryKey(entry));
-        const [first] = line === undefined ? (await locatedForFeature(entry)).locations : [placeLocation(line)];
-        return first && { entry, location: first };
+        if (line !== undefined) return placeLocation(line);
+        const { found, unread } = await read(entry);
+        for (const why of unread) reporter.shownOnSurface('warning', `Go to Symbol in Workspace on ${entry.name} could not read a file that may name it.`, why);
+        return found[0] && placeLocation(found[0]);
+      };
+      const placed = await Promise.all(matching.map(async (entry): Promise<Listed | undefined> => {
+        const location = await placeOf(entry);
+        return location && {
+          name: entry.name, detail: NOUNS[entry.kind], icon: SHOWN[entry.kind].kind, location,
+          resolve: async () => {
+            const definition = await kind.definitionOf(entry);
+            if ('row' in definition) await definition.show();
+            return undefined;
+          },
+        };
       }));
       return placed.filter((symbol) => symbol !== undefined);
     },
-    /** Find All References on the symbol whose name is at `offset`; undefined where no such symbol's name is. */
-    referencesAt: async (document: AskedIn, offset: number): Promise<vscode.Location[] | undefined> => {
-      const found = await nameWithSpan(document, offset);
-      if (found === undefined) return undefined;
-      const entry = entryListed(found.named);
-      if (entry !== undefined) return (await locatedForFeature(entry)).locations;
-      reporter.shownOnSurface('warning', `Find All References cannot list what names ${found.named.name}.`, unlisted(found.named));
-      return [];
-    },
+  };
+
+  return {
+    ...kind,
     /** Lists each place a file names `mod`, in VS Code's References view, anchored at the first. */
-    referencedBy: async (mod: string): Promise<void> => {
-      const view = await referencesView();
-      if (!view) return;
-      const entry = { kind: 'mod', name: mod } as const;
-      const first = await locatedForGesture(entry);
-      const [anchor] = first.locations;
-      if (anchor === undefined) {
-        reporter.report('error', `Could not list where files name ${mod}.`, 'No file names it.');
-        return;
-      }
-      view.setInput(referencedByInput(`Referenced By: ${mod}`, 'modbench.modReferencedBy', anchor, () => locatedForGesture(entry), first));
-    },
+    referencedBy: (mod: string): Promise<void> => showReferencedBy({
+      reporter, subject: mod, contextValue: 'modbench.modReferencedBy', references: () => referencesTo({ kind: 'mod', name: mod }),
+    }),
   };
 }
