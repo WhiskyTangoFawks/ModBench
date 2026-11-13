@@ -103,10 +103,10 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
   const tellUnplaced = tellingOnSurface(reporter);
   let held = new Map<string, Contribution>();
   let unplacedStatus: string | undefined;
-  let failed: { ask: number; why: string } | undefined;
+  let failed: string | undefined;
   let handOverFailed: string | undefined;
   const showStatus = () => {
-    if (failed) languageStatus(lastRead(failed.why));
+    if (failed !== undefined) languageStatus(lastRead(failed));
     else if (handOverFailed !== undefined) languageStatus(lastRead(`mEdit could not take the unsaved plugin source: ${handOverFailed}`));
     else languageStatus(unplacedStatus);
   };
@@ -119,43 +119,40 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
     showStatus();
   };
   const { ready, answeredAtSubscribe } = readiness(client);
-  let latest = 0;
-  let shown = 0;
-  const settle = (mine: number, { ofPlugin, unplaced }: Placed) => {
-    if (mine < shown) return;
-    shown = mine;
-    if (failed && failed.ask < mine) failed = undefined;
+  const settle = ({ ofPlugin, unplaced }: Placed) => {
+    failed = undefined;
     held = nextHeld(held, ofPlugin, new Set(unplaced.map(({ key }) => key)));
     publish(onEveryFile([...held.values()]));
     unplacedStatus = unplaced.length > 0 ? lastRead(unplaced.map(({ plugin, why }) => `${plugin}: ${why}`).join('; ')) : undefined;
     showStatus();
     tellUnplaced(unplaced.filter(({ told }) => told));
   };
-  const keepLastAnswer = (mine: number, error: unknown) => {
+  const keepLastAnswer = (error: unknown) => {
     const why = errorMessage(error);
-    if (why !== failed?.why) reporter.shownOnSurface('warning', 'The Problems panel shows mEdit\'s last answer.', why);
-    failed = { ask: mine, why };
+    if (why !== failed) reporter.shownOnSurface('warning', 'The Problems panel shows mEdit\'s last answer.', why);
+    failed = why;
     showStatus();
   };
-  const ask = async (atSubscribe = false) => {
-    const mine = ++latest;
+  let atSubscribe = true;
+  const ask = async () => {
+    const first = atSubscribe;
+    atSubscribe = false;
     try {
       const answer = placed(answerOf(await client.getPluginProblems()), deps);
-      if (atSubscribe) answeredAtSubscribe();
-      settle(mine, answer);
+      if (first) answeredAtSubscribe();
+      settle(answer);
     } catch (error) {
-      if (mine === latest && !atSubscribe) keepLastAnswer(mine, error);
+      if (!first) keepLastAnswer(error);
     }
   };
-  const reask = () => { void ask(); };
-  const reaskOnce = coalesced(reask);
+  const reaskOnce = coalesced(ask);
   const reaskWhenReady = () => { if (ready()) reaskOnce(); };
   const unsubscribe = [
-    client.onLoadOrderSettled((status) => { if (status.conflictsComputed) reask(); }),
+    client.onLoadOrderSettled((status) => { if (status.conflictsComputed) reaskOnce(); }),
     client.onNotification('rows-changed', reaskWhenReady),
     client.onNotification('plugin-changed', reaskWhenReady),
     client.onUnsavedHandOver(handedOver),
   ];
-  void ask(true);
+  reaskOnce();
   return () => { for (const off of unsubscribe) off(); };
 }

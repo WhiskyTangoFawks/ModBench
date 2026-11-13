@@ -31,15 +31,16 @@ export interface PathProblemsDeps {
 
 type NamedFilePath = PluginFilePaths['paths'][number];
 
-interface Held { answer: PluginFilePaths; ticket: number }
+// `texts`: each file read once for the answer, since a change to a file brings a new answer.
+interface Held { answer: PluginFilePaths; texts: Map<string, Promise<string>> }
 
 const WHOLE_SET = '';
 const nameOf = ({ name, origin }: PluginAddress) => `"${name}" (${origin})`;
 
-async function problemsOf(held: readonly PluginFilePaths[], { paths, sourceFiles, readText }: PathProblemsDeps): Promise<ProblemsByFile> {
+async function problemsOf(held: readonly Held[], { paths, sourceFiles, readText }: PathProblemsDeps): Promise<ProblemsByFile> {
   const byFile = new Map<string, ProblemOnFile[]>();
   if (!paths.judged()) return byFile;
-  await Promise.all(held.map(async ({ plugin, paths: named }) => {
+  await Promise.all(held.map(async ({ answer: { plugin, paths: named }, texts }) => {
     const files = sourceFiles(plugin.origin);
     if (files === undefined) return;
     const filesOf = new Map<string, NamedFilePath[]>();
@@ -48,7 +49,8 @@ async function problemsOf(held: readonly PluginFilePaths[], { paths, sourceFiles
       filesOf.set(file, [...filesOf.get(file) ?? [], path]);
     }
     await Promise.all([...filesOf].map(async ([file, naming]) => {
-      const text = await readText(file).catch(() => '');
+      if (!texts.has(file)) texts.set(file, readText(file).catch(() => ''));
+      const text = await texts.get(file) ?? '';
       const found = naming.map(({ formKey, fieldPath, dataPath }): ProblemOnFile => {
         const [span] = stringsAt(text, formKey, [fieldPath]);
         const at = span ?? { start: 0, end: 0 };
@@ -65,11 +67,9 @@ async function problemsOf(held: readonly PluginFilePaths[], { paths, sourceFiles
 export function feedPathProblems(deps: PathProblemsDeps): () => void {
   const { client, reporter, paths, publish, languageStatus } = deps;
   const held = new Map<string, Held>();
-  const failures = new Map<string, { ask: number; why: string }>();
-  const latestOf = new Map<string, number>();
+  const failures = new Map<string, string>();
   const tell = tellingOnSurface(reporter);
   const { ready, answeredAtSubscribe } = readiness(client);
-  let ticket = 0;
   let shown = 0;
 
   const unchecked = () => [...held.values()].flatMap(({ answer }) => [
@@ -78,7 +78,7 @@ export function feedPathProblems(deps: PathProblemsDeps): () => void {
   ]);
   const showStatus = () => {
     const failed = [...failures.values()][0];
-    if (failed) languageStatus(lastRead(failed.why));
+    if (failed) languageStatus(lastRead(failed));
     else languageStatus(unchecked().length > 0 ? `Some paths are not checked: ${unchecked().join('; ')}` : undefined);
   };
   const tellStanding = () => {
@@ -86,60 +86,61 @@ export function feedPathProblems(deps: PathProblemsDeps): () => void {
       ...answer.unread.map((line) => ({ key: `${key}\n${line}`, message: `The Problems panel does not check every path ${nameOf(answer.plugin)} names.`, why: line })),
       ...answer.failure == null ? [] : [{ key: `${key}\nfailure`, message: `The Problems panel checks only some of the paths ${nameOf(answer.plugin)} names.`, why: answer.failure }],
     ]);
-    tell([...standing, ...[...failures].map(([target, { why }]) => ({ key: `failed ${target}`, message: 'The Problems panel shows the last paths mEdit answered.', why }))]);
+    tell([...standing, ...[...failures].map(([target, why]) => ({ key: `failed ${target}`, message: 'The Problems panel shows the last paths mEdit answered.', why }))]);
   };
   const judge = async () => {
     const mine = ++shown;
-    const problems = await problemsOf([...held.values()].map(({ answer }) => answer), deps);
+    const problems = await problemsOf([...held.values()], deps);
     if (mine === shown) publish(problems);
   };
-  const take = (answers: readonly PluginFilePaths[], target: string, mine: number) => {
-    for (const answer of answers) {
-      const key = pluginAddressKey(answer.plugin);
-      if ((held.get(key)?.ticket ?? 0) < mine) held.set(key, { answer, ticket: mine });
-    }
+  const take = (answers: readonly PluginFilePaths[], target: string) => {
+    for (const answer of answers) held.set(pluginAddressKey(answer.plugin), { answer, texts: new Map() });
     if (target === WHOLE_SET) {
       const answered = new Set(answers.map(({ plugin }) => pluginAddressKey(plugin)));
-      for (const [key, { ticket: had }] of held) if (!answered.has(key) && had < mine) held.delete(key);
+      for (const key of held.keys()) if (!answered.has(key)) held.delete(key);
     }
-    for (const [failed, { ask }] of failures) if (target === WHOLE_SET || failed === target) if (ask < mine) failures.delete(failed);
+    for (const failed of failures.keys()) if (target === WHOLE_SET || failed === target) failures.delete(failed);
     tellStanding();
     showStatus();
     void judge();
   };
   const ask = async (plugin?: PluginAddress, atSubscribe = false) => {
     const target = plugin === undefined ? WHOLE_SET : pluginAddressKey(plugin);
-    const mine = ++ticket;
-    latestOf.set(target, mine);
     try {
       const answer = answerOf(await client.getPluginFilePaths(plugin));
       if (atSubscribe) answeredAtSubscribe();
-      take(answer, target, mine);
+      take(answer, target);
     } catch (error) {
-      if (atSubscribe || latestOf.get(target) !== mine) return;
-      failures.set(target, { ask: mine, why: errorMessage(error) });
+      if (atSubscribe) return;
+      failures.set(target, errorMessage(error));
       tellStanding();
       showStatus();
     }
   };
   const asking = new Map<string, PluginAddress>();
-  const askAsked = coalesced(() => {
-    for (const plugin of asking.values()) void ask(plugin);
+  let wholeWanted = true;
+  let atSubscribe = true;
+  const askWanted = coalesced(async () => {
+    const whole = wholeWanted;
+    const first = atSubscribe;
+    const named = [...asking.values()];
+    wholeWanted = false;
+    atSubscribe = false;
     asking.clear();
+    await Promise.all(whole ? [ask(undefined, first)] : named.map((plugin) => ask(plugin)));
   });
-  const askWhole = coalesced(() => { void ask(); });
   const askPluginWhenReady = ({ plugin }: { plugin: PluginAddress }) => {
     if (!ready()) return;
     asking.set(pluginAddressKey(plugin), plugin);
-    askAsked();
+    askWanted();
   };
   const unsubscribe = [
-    client.onLoadOrderSettled((status) => { if (status.conflictsComputed) askWhole(); }),
+    client.onLoadOrderSettled((status) => { if (status.conflictsComputed) { wholeWanted = true; askWanted(); } }),
     client.onNotification('rows-changed', askPluginWhenReady),
     client.onNotification('plugin-changed', askPluginWhenReady),
   ];
   const judging = paths.subscribe(() => { void judge(); });
-  void ask(undefined, true);
+  askWanted();
   return () => {
     for (const off of unsubscribe) off();
     judging.dispose();
