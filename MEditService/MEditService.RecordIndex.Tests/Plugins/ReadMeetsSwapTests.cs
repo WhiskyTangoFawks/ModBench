@@ -57,7 +57,7 @@ public sealed class ReadMeetsSwapTests : IDisposable
 
         Assert.Equal(IndexRefusal.IndexNotReady, refused.Refusal);
         Assert.Contains("invalidated", refused.Message, StringComparison.Ordinal);
-        Waits.Reached(() => _index.Status.State == LoadOrderState.Ready && _index.Queries.GetPlugins().Holds(out _, out _), "the reopened index");
+        Waits.Reached(() => _index.Status.State == LoadOrderState.Ready && _index.Queries.GetPlugins().Answered().Holds(out _, out _), "the reopened index");
         Assert.Contains(LoadOrderState.Reconciling, _notifications.Notifications.Skip(statusesBefore)
             .OfType<LoadOrderStatusNotification>().Select(n => n.Status.State));
         Assert.NotEmpty(_index.ListedIn(_fixture.Plugins.Single().Key));

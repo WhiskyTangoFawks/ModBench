@@ -28,6 +28,9 @@ public sealed class LoadOrderHolder
     private readonly Dictionary<PluginAddress, long> _lastWriteOf = new(PluginAddress.Comparer);
     private long _lastUnnamedWrite;
 
+    /// <summary>Raised by every SourceWritten, once it is counted, with the plugins it names.</summary>
+    public event Action<IReadOnlyCollection<PluginAddress>?>? Written;
+
     /// <summary>Marks that mEdit wrote a system of record, of <paramref name="plugins"/>; null when no plugin names
     /// what it wrote.</summary>
     public void SourceWritten(IReadOnlyCollection<PluginAddress>? plugins)
@@ -38,17 +41,17 @@ public sealed class LoadOrderHolder
             if (plugins is null) _lastUnnamedWrite = write;
             else foreach (var plugin in plugins) _lastWriteOf[plugin] = write;
         }
+        Written?.Invoke(plugins);
     }
 
-    /// <summary>The writes so far, and of those after <paramref name="checkedThrough"/> each plugin's last; null when one
-    /// of them named no plugin, so only a check of the whole disk reads it.</summary>
-    public (long Through, IReadOnlyDictionary<PluginAddress, long>? LastOfEach) WritesAfter(long checkedThrough)
+    /// <summary>Of the writes after <paramref name="checkedThrough"/>, the last that named no plugin, which only a check of
+    /// the whole disk reads, or 0 when none did; and each plugin's last.</summary>
+    public (long LastUnnamed, IReadOnlyDictionary<PluginAddress, long> LastOfEach) WritesAfter(long checkedThrough)
     {
         lock (_writing)
         {
-            var through = SourceWrites;
-            if (_lastUnnamedWrite > checkedThrough) return (through, null);
-            return (through, _lastWriteOf.Where(last => last.Value > checkedThrough).ToDictionary(PluginAddress.Comparer));
+            return (_lastUnnamedWrite > checkedThrough ? _lastUnnamedWrite : 0,
+                _lastWriteOf.Where(last => last.Value > checkedThrough).ToDictionary(PluginAddress.Comparer));
         }
     }
 

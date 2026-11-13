@@ -399,7 +399,7 @@ public sealed class BuildModHandlerTests : IDisposable
 
         await Landed(Compile());
 
-        Assert.Equal([new PluginAddress(Plugin, ModName)], _holder.WritesAfter(before).LastOfEach.Require().Keys);
+        Assert.Equal([new PluginAddress(Plugin, ModName)], _holder.WritesAfter(before).LastOfEach.Keys);
     }
 
     [Fact]

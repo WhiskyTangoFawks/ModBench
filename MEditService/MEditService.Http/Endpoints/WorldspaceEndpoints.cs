@@ -8,8 +8,8 @@ internal static class WorldspaceEndpoints
     {
         var logger = loggerFactory.CreateLogger(nameof(WorldspaceEndpoints));
 
-        app.MapGet("/plugins/{plugin}/worldspaces", (string plugin, string? origin, IQueries svc) =>
-            GetWorldspaces(plugin, origin, svc, logger))
+        app.MapGet("/plugins/{plugin}/worldspaces", (string plugin, string? origin, IQueries svc, CancellationToken aborted) =>
+            GetWorldspaces(plugin, origin, svc, logger, aborted))
         .WithName("GetWorldspaces")
         .WithTags("Worldspaces")
         .Produces<IReadOnlyList<WorldspaceSummary>>()
@@ -17,7 +17,8 @@ internal static class WorldspaceEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        app.MapGet("/plugins/{plugin}/worldspaces/{formKey}/blocks", (string plugin, string formKey, string? origin, IQueries svc) =>
+        app.MapGet("/plugins/{plugin}/worldspaces/{formKey}/blocks", async (
+            string plugin, string formKey, string? origin, IQueries svc, CancellationToken aborted) =>
         {
             if (logger.IsEnabled(LogLevel.Information))
             {
@@ -25,7 +26,7 @@ internal static class WorldspaceEndpoints
             }
             if (!EndpointMapping.PluginAt(plugin, origin, out var address, out var refused)) return refused;
             var decodedFk = Uri.UnescapeDataString(formKey);
-            return EndpointMapping.Ok(svc.GetWorldspaceBlocks(address, decodedFk));
+            return EndpointMapping.Ok(await svc.GetWorldspaceBlocks(address, decodedFk, aborted));
         })
         .WithName("GetWorldspaceBlocks")
         .WithTags("Worldspaces")
@@ -34,7 +35,8 @@ internal static class WorldspaceEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        app.MapGet("/plugins/{plugin}/cells/{formKey}/children", (string plugin, string formKey, string? origin, IQueries svc) =>
+        app.MapGet("/plugins/{plugin}/cells/{formKey}/children", async (
+            string plugin, string formKey, string? origin, IQueries svc, CancellationToken aborted) =>
         {
             if (logger.IsEnabled(LogLevel.Information))
             {
@@ -42,7 +44,7 @@ internal static class WorldspaceEndpoints
             }
             if (!EndpointMapping.PluginAt(plugin, origin, out var address, out var refused)) return refused;
             var decodedFk = Uri.UnescapeDataString(formKey);
-            return EndpointMapping.Ok(svc.GetCellChildRecords(address, decodedFk));
+            return EndpointMapping.Ok(await svc.GetCellChildRecords(address, decodedFk, aborted));
         })
         .WithName("GetCellChildRecords")
         .WithTags("Worldspaces")
@@ -51,14 +53,14 @@ internal static class WorldspaceEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        app.MapGet("/plugins/{plugin}/interior-cells", (string plugin, string? origin, IQueries svc) =>
+        app.MapGet("/plugins/{plugin}/interior-cells", async (string plugin, string? origin, IQueries svc, CancellationToken aborted) =>
         {
             if (logger.IsEnabled(LogLevel.Information))
             {
                 logger.LogInformation("Received GetInteriorCells for {Plugin} ({Origin})", plugin, origin);
             }
             if (!EndpointMapping.PluginAt(plugin, origin, out var address, out var refused)) return refused;
-            return EndpointMapping.Ok(svc.GetInteriorCells(address));
+            return EndpointMapping.Ok(await svc.GetInteriorCells(address, aborted));
         })
         .WithName("GetInteriorCells")
         .WithTags("Worldspaces")
@@ -70,13 +72,13 @@ internal static class WorldspaceEndpoints
         return app;
     }
 
-    internal static IResult GetWorldspaces(string plugin, string? origin, IQueries svc, ILogger logger)
+    internal static async Task<IResult> GetWorldspaces(string plugin, string? origin, IQueries svc, ILogger logger, CancellationToken aborted)
     {
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation("Received GetWorldspaces for {Plugin} ({Origin})", plugin, origin);
         }
         if (!EndpointMapping.PluginAt(plugin, origin, out var address, out var refused)) return refused;
-        return EndpointMapping.Ok(svc.GetWorldspaces(address));
+        return EndpointMapping.Ok(await svc.GetWorldspaces(address, aborted));
     }
 }
