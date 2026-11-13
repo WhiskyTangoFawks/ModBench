@@ -1,4 +1,5 @@
 using DuckDB.NET.Data;
+using DuckDB.NET.Native;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
@@ -41,7 +42,7 @@ internal sealed class FilledMemory : IDisposable
             act();
             return false;
         }
-        catch (DuckDBException ex) when (ex.ErrorType == DuckDBErrorType.OutOfMemory)
+        catch (DuckDBException ex) when (ex.ErrorType == DuckDBErrorType.OutOfMemory || ex.Message.Contains("could not allocate", StringComparison.Ordinal))
         {
             return true;
         }
