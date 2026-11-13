@@ -2,7 +2,7 @@ import type * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 
-/** common.md, States, story 12. A folder is told again only once its watch has recovered and failed anew. */
+/** A folder is told again only once its watch has recovered and failed anew. */
 export function reportUnwatchedFolders(instance: Pick<Instance, 'subscribe'>, reporter: Pick<Reporter, 'report'>): vscode.Disposable {
   let told: ReadonlySet<string> = new Set();
   return instance.subscribe(({ unwatchedFolders }) => {

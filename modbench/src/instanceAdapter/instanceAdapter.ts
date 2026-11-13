@@ -613,13 +613,13 @@ export const ABSENT_SORTING_RULE_FILES: SortingRuleFiles = {
   masterlist: { path: '', kind: 'absent' }, prelude: { path: '', kind: 'absent' }, userlist: { path: '', kind: 'absent' },
 };
 
-/** The instance as parsed facts, every one from the same read of its settings, and what the watch cannot hear. */
 /** A folder whose watch failed, and why: no change inside it is heard. */
 export interface UnwatchedFolder {
   readonly folder: string;
   readonly reason: string;
 }
 
+/** The instance as parsed facts, every one from the same read of its settings, and what the watch cannot hear. */
 export interface InstanceReading extends InstanceGame {
   /** The profile the mod manager's configuration selects. */
   readonly profile: string;
