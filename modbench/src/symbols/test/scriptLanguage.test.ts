@@ -44,7 +44,7 @@ const JUDGING: Standing = {
   gameFolderInWorkspace: true, archiveContents: new Map([['/game/Data/Misc.ba2', { kind: 'read', answer: ['scripts/quest.pex'] }]]),
 };
 
-function language(references: Awaited<ReturnType<ScriptClient['getScriptReferences']>> = NONE, scripts: PapyrusScript[] = SCRIPTS, standing: Partial<Standing> = {}, scriptsNamed: SourceNames['scriptsNamed'] = () => Promise.resolve(NAMED)) {
+function language(references: Awaited<ReturnType<ScriptClient['getScriptReferences']>> = NONE, scripts: PapyrusScript[] = SCRIPTS, standing: Partial<Standing> = {}, asking: Partial<Pick<SourceNames, 'scriptsNamed' | 'scriptsIn'>> = {}) {
   const client: ScriptClient = {
     getScriptReferences: () => Promise.resolve(references),
     getRecordOwner: () => Promise.resolve(undefined),
@@ -52,8 +52,9 @@ function language(references: Awaited<ReturnType<ScriptClient['getScriptReferenc
   };
   const names = sourceNames({
     scriptAt: (file: string, _text: string, offset: number) => Promise.resolve(file === SOURCE && offset === AT_SCRIPT ? { ...SPAN, name: 'Ns:Quest' } : undefined),
-    scriptsNamed,
+    scriptsNamed: () => Promise.resolve(NAMED),
     scriptsIn: (file: string, text: string) => Promise.resolve(file === SOURCE && text === TEXT ? [{ ...SPAN, name: 'Ns:Quest' }, { start: 0, end: 1, name: 'Gone' }] : []),
+    ...asking,
     membersIn: (text: string, formKey: string, fieldPaths: readonly string[]) =>
       Promise.resolve(text === TEXT && formKey === QUEST && fieldPaths.includes(PATH) ? [SPAN] : []),
   });
@@ -99,10 +100,14 @@ describe('a script a document names that no mod, Overwrite, Data folder file or 
     ['the game folder is outside the workspace, so its archives are unread', { gameFolderInWorkspace: false }, OUTSIDE],
     ['an archive has not answered', { archiveContents: new Map([['/a.ba2', { kind: 'unanswered' }]]) }, undefined],
     ['an archive cannot be read', { archiveContents: new Map([['/a.ba2', { kind: 'unreadable', reason: 'it is no BA2' }]]) }, UNREADABLE],
-  ] satisfies [string, Partial<Standing>, string | undefined][])('judges nothing while %s, and says why where the state lasts', async (_case, standing, why) => {
-    const { language: unjudged, reporter } = language(NONE, SCRIPTS, standing);
+  ] satisfies [string, Partial<Standing>, string | undefined][])('asks mEdit nothing while %s, and says why where the state lasts', async (_case, standing, why) => {
+    const asked = { scriptsIn: vi.fn(() => Promise.resolve([])), scriptsNamed: vi.fn(() => Promise.resolve([])) };
+    const { language: unjudged, reporter } = language(NONE, SCRIPTS, standing, asked);
 
-    expect([await unjudged.namesNothingIn(document()), await unjudged.filesNamingNothing()]).toEqual([undefined, undefined]);
+    const answers = [await unjudged.namesNothingIn(document()), await unjudged.filesNamingNothing([{ name: 'Mod.esp', origin: 'Mod' }])];
+
+    expect(answers).toEqual(why === undefined ? [undefined, undefined] : [[], []]);
+    expect([asked.scriptsIn.mock.calls, asked.scriptsNamed.mock.calls]).toEqual([[], []]);
     expect(reporter.shownFailures).toEqual(why === undefined ? [] : [{ severity: 'warning', message: NOT_JUDGED, detail: why }]);
   });
 
@@ -121,12 +126,6 @@ describe('a script a document names that no mod, Overwrite, Data folder file or 
     expect(reporter.shownFailures.map(({ detail }) => detail)).toEqual([OUTSIDE, UNREADABLE, OUTSIDE]);
   });
 
-  it('says nothing of a document that names no script, nor of plugin source that names none', async () => {
-    const { language: judging, reporter } = language(NONE, SCRIPTS, { gameFolderInWorkspace: false }, () => Promise.resolve([]));
-
-    expect([await judging.namesNothingIn(document('/instance/none.json')), await judging.filesNamingNothing(), reporter.shownFailures]).toEqual([[], [], []]);
-  });
-
   it('lists each file that holds one, once, whether or not it is open', async () => {
     expect(await language().language.filesNamingNothing()).toEqual([SOURCE, '/instance/source/Other/Npc.json']);
   });
@@ -135,7 +134,7 @@ describe('a script a document names that no mod, Overwrite, Data folder file or 
     const asked = vi.fn<SourceNames['scriptsNamed']>(() => Promise.resolve(undefined));
     const only = [{ name: 'Mod.esp', origin: 'Mod' }];
 
-    expect([await language(NONE, SCRIPTS, {}, asked).language.filesNamingNothing(only), asked.mock.calls]).toEqual([undefined, [[only]]]);
+    expect([await language(NONE, SCRIPTS, {}, { scriptsNamed: asked }).language.filesNamingNothing(only), asked.mock.calls]).toEqual([undefined, [[only]]]);
   });
 });
 

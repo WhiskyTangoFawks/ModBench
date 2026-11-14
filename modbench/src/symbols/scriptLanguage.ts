@@ -39,14 +39,16 @@ function unjudgedBecause(value: ScriptsValue | undefined): { reason?: string } |
 export function scriptLanguage({ instance, names, client, reporter }: ScriptLanguageDeps): SymbolKind<ScriptSymbol> & Required<Pick<SymbolKind<ScriptSymbol>, 'namesNothingIn' | 'filesNamingNothing'>> {
   const scripts = (): readonly PapyrusScript[] => instance?.value.papyrusScripts ?? [];
 
+  // Ready to judge; stopped for a reason that lasts, told once; or waiting for a place to answer.
   let toldWhy: string | undefined;
-  const judged = (): boolean => {
+  const standing = (): 'ready' | 'stopped' | 'waiting' => {
     const unjudged = unjudgedBecause(instance?.value);
-    if (unjudged?.reason !== toldWhy && unjudged?.reason !== undefined) {
+    if (unjudged?.reason !== undefined && unjudged.reason !== toldWhy) {
       reporter.shownOnSurface('warning', 'The Problems panel does not check the scripts plugin source names.', unjudged.reason);
     }
     toldWhy = unjudged?.reason;
-    return unjudged === undefined;
+    if (unjudged === undefined) return 'ready';
+    return unjudged.reason === undefined ? 'waiting' : 'stopped';
   };
   const isHeld = (name: string): boolean => scripts().some((script) => sameName(script.name, name));
 
@@ -75,20 +77,20 @@ export function scriptLanguage({ instance, names, client, reporter }: ScriptLang
     referencedBy: (script) => showReferencedBy({
       reporter, subject: script.name, contextValue: 'modbench.scriptReferencedBy', references: () => referencesTo(script),
     }),
-    /** Each script plugin source names that nothing holds; undefined where nothing can be said yet. */
+    /** Each script plugin source names that nothing holds; none where judging has stopped, and undefined where nothing
+     *  can be said yet. Nothing is asked of mEdit in either. */
     async namesNothingIn(document) {
-      const found = await names.scriptsIn(document.uri.fsPath, heldText(document));
-      if (found.length === 0) return [];
-      if (!judged()) return undefined;
-      return found.filter(({ name }) => !isHeld(name))
+      const now = standing();
+      if (now !== 'ready') return now === 'stopped' ? [] : undefined;
+      return (await names.scriptsIn(document.uri.fsPath, heldText(document))).filter(({ name }) => !isHeld(name))
         .map(({ start, end, name }) => ({ start, end, name, why: `No mod, Overwrite, Data folder file or archive holds ${name}.` }));
     },
-    /** Each file plugin source holds that names a script nothing holds; undefined where nothing can be said yet. */
+    /** Each file plugin source holds that names a script nothing holds, under the same answers. */
     async filesNamingNothing(only) {
+      const now = standing();
+      if (now !== 'ready') return now === 'stopped' ? [] : undefined;
       const named = await names.scriptsNamed(only);
-      if (named === undefined) return undefined;
-      if (named.length === 0) return [];
-      return judged() ? [...new Set(named.filter(({ name }) => !isHeld(name)).map(({ file }) => file))] : undefined;
+      return named && [...new Set(named.filter(({ name }) => !isHeld(name)).map(({ file }) => file))];
     },
     /** None: a script has no row. */
     tooltipOf: () => Promise.resolve([]),
