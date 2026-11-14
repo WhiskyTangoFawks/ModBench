@@ -3,7 +3,7 @@ import type { MEditClient } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { heldText } from '../textDocuments/heldText';
-import type { RecordDocumentClient } from '../textDocuments/recordDocument';
+import { copyDocument, type RecordDocumentClient } from '../textDocuments/recordDocument';
 import { hoverOf } from './formKeyHover';
 import { referencesToFormKey } from './formKeyReferences';
 import { locateRecord, locationOf } from './recordLocation';
@@ -41,7 +41,9 @@ export function recordLanguage({ client, names, reporter, open }: RecordLanguage
     const winning = await locateRecord({ client, open }, { formKey }, names.formKeyIn);
     if (winning !== undefined) return 'refused' in winning ? winning : locationOf(winning);
     const [compiled] = await workspace.compiledCopiesOf(formKey, REFERENCED_BY);
-    return compiled ? new vscode.Location(compiled.uri, new vscode.Position(0, 0)) : { refused: noActivePluginHolds(formKey) };
+    if (compiled === undefined) return { refused: noActivePluginHolds(formKey) };
+    const document = await copyDocument(client, compiled);
+    return 'refused' in document ? document : new vscode.Location(document.uri, new vscode.Position(0, 0));
   };
   const referencedBy = recordReferencedBy({ client, reporter, anchorOf });
   return {
@@ -66,13 +68,14 @@ export function recordLanguage({ client, names, reporter, open }: RecordLanguage
       const found = await names.recordsOfferedAt(document.uri.fsPath, heldText(document), offset);
       return found && { ...found, icon: vscode.CompletionItemKind.Reference, isIncomplete: true };
     },
-    /** Each copy, in an active or a compiled plugin, of a record whose EditorID or FormKey holds `query`, at its document. */
-    async symbolsFor(query, gesture) {
-      return (await workspace.symbolsFor(query, gesture)).map((record) => ({
+    /** Each copy, in an active or a compiled plugin, of a record whose EditorID or FormKey holds `query`, at its plugin's
+     *  file until the user picks it, and then at its document. */
+    async symbolsFor(query, search) {
+      return (await workspace.symbolsFor(query, search)).map((record) => ({
         symbol: { kind: 'record', formKey: record.formKey }, name: record.name, detail: `${record.plugin.name} (${record.plugin.origin})`, icon: vscode.SymbolKind.Object,
-        location: new vscode.Location(record.uri, new vscode.Position(0, 0)),
+        location: new vscode.Location(vscode.Uri.file(record.pluginFile), new vscode.Position(0, 0)),
         resolve: async () => {
-          const found = await workspace.locate(record, gesture);
+          const found = await workspace.locate(record, search.gesture);
           return found && locationOf(found);
         },
       }));

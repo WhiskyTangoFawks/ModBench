@@ -17,7 +17,7 @@ export function pickSymbol(kinds: SymbolKinds, reporter: Pick<Reporter, 'report'
       const mine = ++typed;
       pick.busy = true;
       try {
-        const listed = await listedSymbols(kinds, value, gesture);
+        const listed = await listedSymbols(kinds, value, { gesture, cancelled: () => mine !== typed });
         if (mine === typed) pick.items = listed.map(itemOf);
       } catch (error) {
         reporter.report('error', 'Could not list the symbols that hold what was typed.', errorMessage(error));
@@ -25,7 +25,7 @@ export function pickSymbol(kinds: SymbolKinds, reporter: Pick<Reporter, 'report'
       if (mine === typed) pick.busy = false;
     });
     pick.onDidAccept(() => { resolve(pick.selectedItems[0]?.symbol); pick.hide(); });
-    pick.onDidHide(() => { resolve(undefined); pick.dispose(); });
+    pick.onDidHide(() => { typed++; resolve(undefined); pick.dispose(); });
     pick.show();
   });
 }

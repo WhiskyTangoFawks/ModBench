@@ -1,4 +1,7 @@
-import type { SymbolKind, SymbolKinds } from '../symbolKind';
+import type { SymbolKind, SymbolKinds, SymbolSearch } from '../symbolKind';
+
+/** Go to Symbol in Workspace's search, which nothing cancels. */
+export const SEARCH: SymbolSearch = { gesture: 'Go to Symbol in Workspace', cancelled: () => false };
 
 /** A kind that names nothing and answers nothing but what `over` answers. */
 export function fakeKind<Symbol>(over: Partial<SymbolKind<Symbol>> = {}): SymbolKind<Symbol> {

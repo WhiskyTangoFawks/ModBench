@@ -41,6 +41,13 @@ export interface NamesNothing extends TextSpan {
   readonly why: string;
 }
 
+/** A search for symbols by name: the gesture the user ran, which the Output names, and whether a later keystroke has
+ *  superseded it. */
+export interface SymbolSearch {
+  readonly gesture: string;
+  readonly cancelled: () => boolean;
+}
+
 /** A symbol as Go to Symbol in Workspace lists it. `resolve`, on the symbol the user picks, says where it opens, or
  *  leaves `location`. */
 export interface Listed {
@@ -73,9 +80,9 @@ export interface SymbolKind<Symbol> {
   /** Each file, open or not, that holds a name that names nothing, from one ask of its owner; `only` asks of those
    *  plugins' files. None where judging has stopped; undefined where nothing can be said yet. */
   filesNamingNothing?(only?: readonly PluginAddress[]): Promise<readonly string[] | undefined>;
-  /** Each symbol of the kind whose name holds `query`, which is trimmed and never empty. `gesture` names what the user ran
-   *  in what the Output says. */
-  symbolsFor(query: string, gesture: string): Promise<readonly Listed[]>;
+  /** Each symbol of the kind whose name holds `query`, which is trimmed and never empty, asking nothing further once the
+   *  search is cancelled. */
+  symbolsFor(query: string, search: SymbolSearch): Promise<readonly Listed[]>;
 }
 
 export interface SymbolKinds {
@@ -151,9 +158,9 @@ export function asked(kinds: SymbolKinds, symbol: SymbolName): AskedSymbol {
 /** `referenced by`, as the Output names it. */
 export const REFERENCED_BY = 'Referenced By';
 
-/** Each symbol, of any kind, whose name holds `query`: what Go to Symbol in Workspace lists, for `gesture`. */
-export async function listedSymbols(kinds: SymbolKinds, query: string, gesture: string): Promise<Listed[]> {
+/** Each symbol, of any kind, whose name holds `query`: what Go to Symbol in Workspace lists. */
+export async function listedSymbols(kinds: SymbolKinds, query: string, search: SymbolSearch): Promise<Listed[]> {
   const wanted = query.trim();
   if (wanted === '') return [];
-  return (await Promise.all(inOrder(kinds).map((kind) => kind.symbolsFor(wanted, gesture)))).flat();
+  return (await Promise.all(inOrder(kinds).map((kind) => kind.symbolsFor(wanted, search)))).flat();
 }

@@ -40,7 +40,7 @@ const listed = (symbol: SymbolName, name: string): Listed => ({ symbol, name, de
 
 describe('pick a symbol as Go to Symbol in Workspace finds it', () => {
   it('lists the symbols of every kind that hold what is typed, each kind told the gesture it picks for, and answers the one accepted', async () => {
-    const kinds = fakeKinds({ record: fakeKind({ symbolsFor: (query, gesture) => Promise.resolve(query === 'gun' ? [listed(GUN, `Gun for ${gesture}`)] : []) }) });
+    const kinds = fakeKinds({ record: fakeKind({ symbolsFor: (query, { gesture }) => Promise.resolve(query === 'gun' ? [listed(GUN, `Gun for ${gesture}`)] : []) }) });
     const picked = pickSymbol(kinds, recordingReporter(), 'Referenced By');
 
     await quickPick.change?.('gun');
@@ -49,6 +49,17 @@ describe('pick a symbol as Go to Symbol in Workspace finds it', () => {
     quickPick.accept?.();
 
     expect(await picked).toEqual(GUN);
+  });
+
+  it('cancels the search of what was typed once more is typed', async () => {
+    const searches: (() => boolean)[] = [];
+    const kinds = fakeKinds({ record: fakeKind({ symbolsFor: (_query, { cancelled }) => { searches.push(cancelled); return Promise.resolve([]); } }) });
+    void pickSymbol(kinds, recordingReporter(), 'Referenced By');
+
+    await quickPick.change?.('g');
+    await quickPick.change?.('gu');
+
+    expect(searches.map((cancelled) => cancelled())).toEqual([true, false]);
   });
 
   it('answers no symbol when the user dismisses it', async () => {

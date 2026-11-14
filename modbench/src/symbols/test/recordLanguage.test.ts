@@ -17,6 +17,8 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { localFailure } from '../../wire/readFailed';
 import { sourceNames, spelledIn } from './fakeSourceNames';
+import { SEARCH } from './fakeKinds';
+import { pluginMetadataFixture } from '../../client/test/fixtures';
 
 const GUN = '000801:A.esp';
 const modA = { name: 'A.esp', origin: 'ModA' };
@@ -72,6 +74,23 @@ describe('what references a record, and its hover (symbols.md, The symbols, Reco
     client.setQueryAnswer('getComparison', null);
 
     expect(await record.tooltipOf(RECORD)).toEqual([]);
+  });
+});
+
+describe('Go to Symbol in Workspace on a record (symbols.md, The features, story 4)', () => {
+  it('lists a copy at its plugin\'s file, and opens it at its FormKey member in its document once picked', async () => {
+    const { client, record } = kind();
+    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ ...modA, path: '/mods/ModA/A.esp', isCompiledPlugin: true })]);
+    client.setQueryAnswer('searchRecords', {
+      items: [{ formKey: GUN, plugin: modA.name, origin: modA.origin, editorId: 'Gun', loadOrderIndex: 0, isWinner: true, workingTreeState: 'None', hasContainerChildren: false, hasParseFailure: false }],
+      total: 1,
+    });
+    const [listed] = await record.symbolsFor('Gun', SEARCH);
+    const member = GUN_TEXT.indexOf(`"FormKey": "${GUN}"`);
+
+    expect([listed?.location.uri.path, await listed?.resolve?.()]).toMatchObject([
+      '/mods/ModA/A.esp', { uri: { path: GUN_FILE }, range: { start: { character: member } } },
+    ]);
   });
 });
 

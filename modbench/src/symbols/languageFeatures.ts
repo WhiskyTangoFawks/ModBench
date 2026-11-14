@@ -34,8 +34,9 @@ class ListedSymbol extends vscode.SymbolInformation {
 export function registerLanguageFeatures({ kinds, reporter, reveal, rename }: LanguageFeaturesDeps): vscode.Disposable {
   const at = (document: vscode.TextDocument, position: vscode.Position) => askedAt(kinds, document, document.offsetAt(position));
   const workspaceSymbols: vscode.WorkspaceSymbolProvider<ListedSymbol> = {
-    async provideWorkspaceSymbols(query) {
-      return (await listedSymbols(kinds, query, 'Go to Symbol in Workspace')).map((symbol) => new ListedSymbol(symbol));
+    async provideWorkspaceSymbols(query, token) {
+      const search = { gesture: 'Go to Symbol in Workspace', cancelled: () => token.isCancellationRequested };
+      return (await listedSymbols(kinds, query, search)).map((symbol) => new ListedSymbol(symbol));
     },
     async resolveWorkspaceSymbol(symbol) {
       const location = await symbol.listed.resolve?.();

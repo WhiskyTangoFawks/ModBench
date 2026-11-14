@@ -127,7 +127,7 @@ export function entryLanguage({ instance, reporter, owners, rows, entryTooltip, 
     },
     /** Each symbol whose name holds `query`, at its own file, else at its line in the owners' list, else at the first
      *  place a file names it. An entry no file names is left out. */
-    async symbolsFor(query, gesture) {
+    async symbolsFor(query, { gesture }) {
       const matching = KINDS.flatMap((each) =>
         listed(each).filter((name) => nameHolds(name, query)).map((name): EntrySymbol => ({ kind: each, name })));
       const lists = await Promise.all(owners.map((owner) => owner.listed(heldTexts(unsavedTexts())).catch((error: unknown) => {

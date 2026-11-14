@@ -2432,13 +2432,14 @@ describe('A FormKey in plugin source', () => {
     assert.deepStrictEqual(definitions, []);
   });
 
-  it('finds a record by Go to Symbol in Workspace, each copy at its document', async () => {
+  it('finds a record by Go to Symbol in Workspace, each copy at its plugin\'s file until it is picked', async () => {
     await activated();
     const found = await vscode.commands.executeCommand<vscode.SymbolInformation[]>('vscode.executeWorkspaceSymbolProvider', 'CompiledPlugin');
 
+    const pluginFile = vscode.Uri.file(`/mods/${COMPILED_PLUGIN_ORIGIN}/${COMPILED_PLUGIN}`).toString(true);
     assert.deepStrictEqual(found.map((symbol) => [symbol.name, symbol.containerName, symbol.location.uri.toString(true)]).sort(), [
-      [`CompiledPluginGun [${COMPILED_PLUGIN_FORM_KEY}]`, `${COMPILED_PLUGIN} (${COMPILED_PLUGIN_ORIGIN})`, vscode.Uri.file(COMPILED_PLUGIN_FILE).toString(true)],
-      [`CompiledPluginRef [${CHILD_FORM_KEY}]`, `${COMPILED_PLUGIN} (${COMPILED_PLUGIN_ORIGIN})`, compiledPluginChildUri],
+      [`CompiledPluginGun [${COMPILED_PLUGIN_FORM_KEY}]`, `${COMPILED_PLUGIN} (${COMPILED_PLUGIN_ORIGIN})`, pluginFile],
+      [`CompiledPluginRef [${CHILD_FORM_KEY}]`, `${COMPILED_PLUGIN} (${COMPILED_PLUGIN_ORIGIN})`, pluginFile],
     ].sort());
   });
 
