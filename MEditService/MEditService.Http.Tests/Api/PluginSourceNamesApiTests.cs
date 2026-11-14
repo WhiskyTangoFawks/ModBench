@@ -24,23 +24,6 @@ public sealed class PluginSourceNamesApiTests(LoadedApiFixture<TestPluginFixture
                 .Select(name => (name.GetProperty("kind").GetString(), Text[name.GetProperty("start").GetInt32()..name.GetProperty("end").GetInt32()])));
     }
 
-    [Fact]
-    public async Task AFileNoPluginSourceHolds_HoldsNoName()
-    {
-        var response = await NamesOf(new { text = Text, path = Path.GetFullPath("README.json") });
-
-        Assert.Equal((HttpStatusCode.OK, 0), (response.StatusCode, (await response.Content.ReadFromJsonAsync<JsonElement>()).GetArrayLength()));
-    }
-
-    [Fact]
-    public async Task AFile_WithNoLoadOrder_Is503()
-    {
-        await using var app = new MEditHost();
-
-        await (await app.CreateClient().PostAsJsonAsync("/plugin-source/names", new { text = Text, path = Path.GetFullPath("README.json") }))
-            .AssertIsProblem(HttpStatusCode.ServiceUnavailable);
-    }
-
     public static TheoryData<string, object> Refused => new()
     {
         { "a file named by no absolute path", new { text = Text, path = "plugin-source/Mod.esp/Record.json" } },

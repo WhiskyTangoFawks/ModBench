@@ -140,10 +140,18 @@ describe('rename separator: its line in each profile, its folder, and each refer
     expect(renamer.fake.calls).toEqual([]);
   });
 
-  it('fails a separator no profile lists, writing nothing', async () => {
+  it('fails a separator no profile lists and no folder holds, writing no line', async () => {
     const renamer = over();
 
     expect(await renamer.commands.renameSeparator(renamer.editing, 'Missing', 'Renamed')).toEqual({ applied: false, failed: 'Separator not found in modlist: Missing', edited: false, moved: [] });
+    expect(renamer.fake.calls.flatMap((call) => ('changes' in call ? call.changes : []))).toEqual([]);
+  });
+
+  it('lands a separator no profile lists but a folder holds, with no line to carry', async () => {
+    const renamer = over({}, { modFolders: modFoldersOf(...ORDER, separator('Orphan')) });
+
+    expect(await renamer.commands.renameSeparator(renamer.editing, 'Orphan', 'Renamed')).toEqual({ applied: true, cannotFollow: [], name: 'Renamed' });
+    expect(renamer.fake.calls.flatMap((call) => ('changes' in call ? call.changes : []))).toEqual([]);
   });
 
   it('says its line was not renamed when the active profile\'s write failed', async () => {

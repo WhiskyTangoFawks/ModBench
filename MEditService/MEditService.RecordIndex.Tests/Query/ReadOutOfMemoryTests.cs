@@ -43,7 +43,7 @@ public sealed class ReadOutOfMemoryTests : IDisposable
     public void ASelectThatRunsOutOfMemoryBeforeItsFirstRow_IsRefusedSayingHowToSelectBodies()
     {
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
-        Waits.Reached(() => index.Status is { State: LoadOrderState.Ready, Validating: false }, "the index at rest, nothing of it left to take or free memory");
+        Waits.Reached(() => index.Status is { State: LoadOrderState.Ready, Validating: false }, "the index at rest");
         index.Settled();
         using var fullPool = new FilledMemory(IndexFiles.In(_fixture.InstanceRoot));
 

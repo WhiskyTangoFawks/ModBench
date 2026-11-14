@@ -44,20 +44,22 @@ const renamedLine = ({ kind, name }: EntryRef, to: string): ModOrderChange =>
   (kind === 'mod' ? { kind: 'renameMod', from: name, to } : { kind: 'renameSeparator', from: name, to });
 
 // A separator's folder moves with the first line renamed, so a failure
-// before it writes nothing.
-async function linesRenamed(adapter: InstanceAdapter, entry: EntryRef, to: string, inProfiles: readonly string[]): Promise<Committed> {
+// before it writes nothing. An entry no profile lists and no folder held does not exist.
+async function linesRenamed(adapter: InstanceAdapter, entry: EntryRef, to: string, inProfiles: readonly string[], hadFolder: boolean): Promise<Committed> {
   const cannotFollow: string[] = [];
   let folderMoved = entry.kind === 'mod';
+  let listed = false;
   for (const profile of inProfiles) {
     try {
-      const { landed } = await adapter.changeModOrder(profile, (order) => (order.some((listed) => sameEntry(adapter, listed, entry)) ? [renamedLine(entry, to)] : []));
-      folderMoved ||= landed.length > 0;
+      const { landed } = await adapter.changeModOrder(profile, (order) => (order.some((each) => sameEntry(adapter, each, entry)) ? [renamedLine(entry, to)] : []));
+      listed ||= landed.length > 0;
+      folderMoved ||= listed;
     } catch (err) {
       if (!folderMoved) return { failed: errorMessage(err) };
       cannotFollow.push(`profile "${profile}"'s ${adapter.names.modOrderFile}: ${errorMessage(err)}`);
     }
   }
-  return folderMoved ? { cannotFollow } : { failed: entryNotFound(entry) };
+  return listed || hadFolder ? { cannotFollow } : { failed: entryNotFound(entry) };
 }
 
 async function profilesActiveFirst(adapter: InstanceAdapter): Promise<string[]> {
@@ -90,7 +92,7 @@ function entryDefinition(adapter: InstanceAdapter, sourceFolder: FolderMove | un
           } catch (err) {
             return { failed: errorMessage(err) };
           }
-          const lines = await linesRenamed(adapter, entry, to, ordered);
+          const lines = await linesRenamed(adapter, entry, to, ordered, from !== undefined);
           if ('failed' in lines) return lines;
           const moved = await folderOf(adapter, { kind: entry.kind, name: to });
           const folders = from === undefined || moved === undefined ? [] : [{ from, to: moved }];
