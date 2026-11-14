@@ -18,7 +18,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { registerNamesNothing } from '../namesNothing';
-import { REQUESTS_AT_ONCE } from '../../ports/bounded';
+import { bounded, REQUESTS_AT_ONCE } from '../../ports/bounded';
 import type { PluginAddress } from '../../client';
 import type { ScriptSymbol } from '../../symbolNames/symbolNames';
 import { fakeKind, fakeKinds } from './fakeKinds';
@@ -40,11 +40,13 @@ function start(kinds: ReturnType<typeof fakeKinds>, saved: Record<string, string
   const reporter = recordingReporter();
   const savedText = vi.fn((path: string) => Promise.resolve(saved[path]));
   let changed: (plugin?: PluginAddress) => void = () => undefined;
+  const forgotten: (PluginAddress | undefined)[] = [];
   registerNamesNothing({
     kinds, reporter, savedText, collection,
+    asker: { inTurn: bounded(REQUESTS_AT_ONCE), forget: (plugin) => { forgotten.push(plugin); } },
     onChanged: (listener) => { changed = listener; return { dispose: () => undefined }; },
   });
-  return { collection, reporter, savedText, changed: (plugin?: PluginAddress) => { changed(plugin); } };
+  return { collection, reporter, savedText, forgotten, changed: (plugin?: PluginAddress) => { changed(plugin); } };
 }
 
 describe('the problem a name that names nothing raises (symbols.md, The features, story 8)', () => {
@@ -122,6 +124,38 @@ describe('the problem a name that names nothing raises (symbols.md, The features
     await vi.waitFor(() => { expect(judgedFiles).toHaveBeenCalledTimes(files.length); });
 
     expect(mostAtOnce).toBe(REQUESTS_AT_ONCE);
+  });
+
+  it('has the asker forget what it held of the plugin that changed, of all when the instance changes, and of all when a document closes', async () => {
+    world.documents = [];
+    const { changed, forgotten } = start(script({ filesNamingNothing: () => Promise.resolve([]) }));
+    await settle();
+
+    changed(PLUGIN);
+    changed();
+    world.handlers.get('close')?.(document('closed'));
+
+    expect(forgotten).toEqual([PLUGIN, undefined, undefined]);
+  });
+
+  it('judges the document being edited before the closed files that wait for a place', async () => {
+    const closed = Array.from({ length: REQUESTS_AT_ONCE * 2 }, (_, each) => `/closed/${each}.json`);
+    world.documents = [];
+    const order: string[] = [];
+    const finish: (() => void)[] = [];
+    const judgedFile = vi.fn(({ uri }: { uri: { fsPath: string } }) => {
+      order.push(uri.fsPath);
+      return new Promise<never[]>((resolve) => { finish.push(() => { resolve([]); }); });
+    });
+    start(script({ filesNamingNothing: () => Promise.resolve(closed), namesNothingIn: judgedFile }), Object.fromEntries(closed.map((file) => [file, ''])));
+    await vi.waitFor(() => { expect(order).toHaveLength(REQUESTS_AT_ONCE); });
+
+    world.handlers.get('change')?.({ document: document('typed', FILE) });
+    await settle();
+    finish[0]?.();
+    await vi.waitFor(() => { expect(order).toHaveLength(REQUESTS_AT_ONCE + 1); });
+
+    expect(order.at(-1)).toBe(FILE);
   });
 
   it('asks each kind once for all its files, however many files hold a name', async () => {

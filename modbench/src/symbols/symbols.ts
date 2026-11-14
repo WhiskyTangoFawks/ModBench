@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import type { MEditClient, PluginAddress } from '../client';
+import type { MEditClient, PluginAddress, PluginFilePaths } from '../client';
+import type { ProblemsAsker } from '../drivingLib/problemsAsker';
 import { sourceNames } from './sourceNames';
 import type { Reporter } from '../ports/reporter';
 import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
@@ -31,8 +32,7 @@ interface SymbolsDeps {
   instance: Pick<Instance, 'value' | 'subscribe'> | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
   client: Pick<MEditClient, 'getRecordOfFile' | 'onNotification' | 'onLoadOrderSettled'> & RecordClient & ScriptClient & FileClient & RecordReferencedByDeps['client'];
-  /** The file paths and scripts every compiled plugin's source names. */
-  paths: Pick<MEditClient, 'getPluginFilePaths'>;
+  asker: Pick<ProblemsAsker<PluginFilePaths, unknown, unknown>, 'getPluginFilePaths' | 'inTurn' | 'forget'>;
   /** What mEdit's record index names in plugin source. */
   names: Pick<MEditClient, 'getPluginSourceNames'>;
   focusedRecord: () => string | undefined;
@@ -81,7 +81,7 @@ interface Symbols extends vscode.Disposable {
 
 export function createSymbols(deps: SymbolsDeps): Symbols {
   const { instance, reporter, client, rows, reporterFor, fileCopies, focusedRecord } = deps;
-  const names = sourceNames({ names: deps.names, paths: deps.paths, sourceFiles: deps.sourceFiles, reporter });
+  const names = sourceNames({ names: deps.names, paths: deps.asker, sourceFiles: deps.sourceFiles, reporter });
   const plugin = pluginLanguage({
     instance, reporter, client, owners: deps.owners, names, renamePlugin: renamePluginNamed, rows: () => rows?.plugins,
     tooltip: (shown) => deps.pluginsShown?.tooltipLines(shown) ?? [],
@@ -107,7 +107,7 @@ export function createSymbols(deps: SymbolsDeps): Symbols {
   });
   const disposable = vscode.Disposable.from(
     problems,
-    registerNamesNothing({ kinds, collection: problems, reporter, savedText: deps.savedText, onChanged: changed }),
+    registerNamesNothing({ kinds, collection: problems, reporter, savedText: deps.savedText, onChanged: changed, asker: deps.asker }),
     registerLanguageFeatures({ kinds, reporter, reveal: fileCopies.reveal, rename }),
     registerGoTo({ kinds, reporter: reporterFor('symbol.goTo'), reveal: fileCopies.reveal, selection: () => rows?.selection() ?? [], dataPathOf: (row) => rows?.mods.dataPathOf(row) }),
     publishReferencesView((key, value) => { void vscode.commands.executeCommand('setContext', key, value); }),

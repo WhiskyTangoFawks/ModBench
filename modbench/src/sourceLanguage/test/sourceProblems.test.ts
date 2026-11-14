@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { problemsAsker } from '../../drivingLib/problemsAsker';
 import { feedSourceProblems, type ProblemsByFile } from '../sourceProblems';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -33,7 +34,7 @@ function feed(sourceFiles = sourceFolders, answeredAtSubscribe?: PluginProblems[
   const status: (string | undefined)[] = [];
   feedSourceProblems({
     client,
-    ask: client,
+    ask: problemsAsker(client),
     sourceFiles,
     reporter,
     publish: (problems) => published.push(problems),

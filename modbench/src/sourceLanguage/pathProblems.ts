@@ -5,7 +5,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { answerOf } from '../wire/readFailed';
 import { pluginAddressKey } from '../wire/pluginAddress';
-import { lastRead, positionAt, readiness, tellingOnSurface, type Told } from './feedShape';
+import { lastRead, positionAt, readiness, tellingOnSurface, type Asked, type Told } from './feedShape';
 import type { ProblemOnFile, ProblemsByFile } from './sourceProblems';
 import { stringsAt } from './sourceText';
 
@@ -19,8 +19,8 @@ export interface PathStanding {
 }
 
 export interface PathProblemsDeps {
-  client: Pick<MEditClient, 'onNotification' | 'loadOrderStatus' | 'onLoadOrderSettled'>;
-  ask: Pick<MEditClient, 'getPluginFilePaths'>;
+  client: Pick<MEditClient, 'loadOrderStatus'>;
+  ask: Pick<Asked, 'getPluginFilePaths' | 'onPluginChanged' | 'onLoadOrderSettled'>;
   sourceFiles: SourceFilesOf;
   readText: (path: string) => Promise<string>;
   reporter: Pick<Reporter, 'shownOnSurface'>;
@@ -134,9 +134,8 @@ export function feedPathProblems(deps: PathProblemsDeps): () => void {
     askWanted();
   };
   const unsubscribe = [
-    client.onLoadOrderSettled((status) => { if (status.conflictsComputed) { wholeWanted = true; askWanted(); } }),
-    client.onNotification('rows-changed', askPluginWhenReady),
-    client.onNotification('plugin-changed', askPluginWhenReady),
+    deps.ask.onLoadOrderSettled((status) => { if (status.conflictsComputed) { wholeWanted = true; askWanted(); } }),
+    deps.ask.onPluginChanged(askPluginWhenReady),
   ];
   const judging = paths.subscribe(() => { void judge(); });
   askWanted();

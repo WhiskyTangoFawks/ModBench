@@ -32,6 +32,18 @@ describe('bounded', () => {
     expect(await Promise.all(results)).toEqual([0, 1, 2, 3]);
   });
 
+  it('starts an urgent ask before the asks that waited longer', async () => {
+    const { run, started, finish } = slowRuns();
+    const inTurn = bounded(1);
+
+    void [inTurn(run(0)), inTurn(run(1)), inTurn(run(2)), inTurn(run(3), true)];
+    await turn();
+    finish[0]?.();
+    await turn();
+
+    expect(started).toEqual([0, 3]);
+  });
+
   it('frees its place when a run fails, and passes the failure to its caller', async () => {
     const inTurn = bounded(1);
 

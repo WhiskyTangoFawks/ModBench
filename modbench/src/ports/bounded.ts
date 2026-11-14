@@ -1,16 +1,18 @@
 export const REQUESTS_AT_ONCE = 4;
 
-/** Runs the asks it is given, no more than `limit` at a time and the rest in the order asked. */
-export function bounded(limit: number): <T>(run: () => Promise<T>) => Promise<T> {
+export type InTurn = <T>(run: () => Promise<T>, urgent?: boolean) => Promise<T>;
+
+export function bounded(limit: number): InTurn {
   let running = 0;
+  const urgentWaiting: (() => void)[] = [];
   const waiting: (() => void)[] = [];
   const release = () => {
-    const next = waiting.shift();
+    const next = urgentWaiting.shift() ?? waiting.shift();
     if (next) next(); else running -= 1;
   };
-  return async (run) => {
+  return async (run, urgent = false) => {
     if (running < limit) running += 1;
-    else await new Promise<void>((resolve) => { waiting.push(resolve); });
+    else await new Promise<void>((resolve) => { (urgent ? urgentWaiting : waiting).push(resolve); });
     try {
       return await run();
     } finally {

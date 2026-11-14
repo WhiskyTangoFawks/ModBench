@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { PluginAddress } from '../client';
 import { modbenchDiagnostic } from '../drivingLib/modbenchDiagnostic';
-import { bounded, REQUESTS_AT_ONCE } from '../ports/bounded';
+import type { InTurn } from '../ports/bounded';
 import { coalesced } from '../ports/coalesced';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
@@ -18,6 +18,8 @@ interface NamesNothingDeps {
   savedText: (path: string) => Promise<string | undefined>;
   /** Told whenever what a name resolves to, or what a file names, may have changed: of one plugin's files, or of all. */
   onChanged: (listener: (plugin?: PluginAddress) => void) => { dispose: () => unknown };
+  /** The one bound on requests, and what it holds of mEdit's answers, dropped whenever a file may have changed. */
+  asker: { inTurn: InTurn; forget: (plugin?: PluginAddress) => void };
 }
 
 const isFile = (document: vscode.TextDocument): boolean => document.uri.scheme === 'file';
@@ -51,8 +53,7 @@ function judgingOpenDocuments(judged: (file: string, text: () => string) => Prom
 }
 
 /** A reference that names nothing is a problem on its place in its file, open or not (symbols.md, The features, story 8). */
-export function registerNamesNothing({ kinds, collection, reporter, savedText, onChanged }: NamesNothingDeps): vscode.Disposable {
-  const inTurn = bounded(REQUESTS_AT_ONCE);
+export function registerNamesNothing({ kinds, collection, reporter, savedText, onChanged, asker }: NamesNothingDeps): vscode.Disposable {
   const told = new Set<string>();
   const latest = new Map<string, number>();
   let shown = new Set<string>();
@@ -104,8 +105,8 @@ export function registerNamesNothing({ kinds, collection, reporter, savedText, o
     const closed = (files ?? []).filter((file) => !held.some((document) => document.uri.fsPath === file));
     const judging = new Set([...held.map((document) => document.uri.fsPath), ...closed]);
     await Promise.all([
-      ...held.map((document) => inTurn(() => judged(document.uri.fsPath, () => heldText(document)))),
-      ...closed.map((file) => inTurn(() => judged(file, () => savedText(file)))),
+      ...held.map((document) => asker.inTurn(() => judged(document.uri.fsPath, () => heldText(document)), true)),
+      ...closed.map((file) => asker.inTurn(() => judged(file, () => savedText(file)))),
     ]);
     if (files === undefined) {
       if (only === undefined) wholeWanted = true;
@@ -117,17 +118,18 @@ export function registerNamesNothing({ kinds, collection, reporter, savedText, o
     shown = judging;
   });
 
-  const open = judgingOpenDocuments((file, text) => inTurn(() => judged(file, text)));
+  const open = judgingOpenDocuments((file, text) => asker.inTurn(() => judged(file, text), true));
 
   judgeAll();
   return vscode.Disposable.from(
     onChanged((plugin) => {
+      asker.forget(plugin);
       if (plugin === undefined) wholeWanted = true;
       else asking.set(pluginAddressKey(plugin), plugin);
       judgeAll();
     }),
     vscode.workspace.onDidOpenTextDocument(open.judge),
     vscode.workspace.onDidChangeTextDocument(({ document }) => { open.judge(document); }),
-    vscode.workspace.onDidCloseTextDocument((document) => { open.forget(document); judgeAll(); }),
+    vscode.workspace.onDidCloseTextDocument((document) => { open.forget(document); asker.forget(); judgeAll(); }),
   );
 }

@@ -6,7 +6,7 @@ import type { Reporter } from '../ports/reporter';
 import type { PathHop } from '../wire/messages';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { locationOf, type Segment } from './sourceText';
-import { lastRead, readiness, tellingOnSurface, type Position, type Told } from './feedShape';
+import { lastRead, readiness, tellingOnSurface, type Asked, type Position, type Told } from './feedShape';
 import { answerOf, failureReason, type ReadFailed } from '../wire/readFailed';
 
 type SourceProblem = PluginProblems['problems'][number];
@@ -17,8 +17,8 @@ export interface ProblemOnFile { message: string; start: Position; end: Position
 export type ProblemsByFile = ReadonlyMap<string, ProblemOnFile[]>;
 
 export interface SourceProblemsDeps {
-  client: Pick<MEditClient, 'onNotification' | 'loadOrderStatus' | 'onLoadOrderSettled' | 'onUnsavedHandOver'>;
-  ask: Pick<MEditClient, 'getPluginProblems'>;
+  client: Pick<MEditClient, 'loadOrderStatus' | 'onUnsavedHandOver'>;
+  ask: Pick<Asked, 'getPluginProblems' | 'onPluginChanged' | 'onLoadOrderSettled'>;
   sourceFiles: SourceFilesOf;
   reporter: Pick<Reporter, 'shownOnSurface'>;
   /** Replaces every problem published before. */
@@ -167,9 +167,8 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
     askWanted();
   };
   const unsubscribe = [
-    client.onLoadOrderSettled((status) => { if (status.conflictsComputed) { wholeWanted = true; askWanted(); } }),
-    client.onNotification('rows-changed', askPluginWhenReady),
-    client.onNotification('plugin-changed', askPluginWhenReady),
+    deps.ask.onLoadOrderSettled((status) => { if (status.conflictsComputed) { wholeWanted = true; askWanted(); } }),
+    deps.ask.onPluginChanged(askPluginWhenReady),
     client.onUnsavedHandOver(handedOver),
   ];
   askWanted();
