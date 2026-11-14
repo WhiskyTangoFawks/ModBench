@@ -1,3 +1,4 @@
+import type { EntryRef } from '../instanceLoader/instance';
 import type { PluginAddress } from '../wire/pluginAddress';
 
 export type Reveal = () => PromiseLike<void>;
@@ -7,7 +8,7 @@ interface RowsOf<Held> {
   show: (held: Held) => Reveal | undefined;
 }
 
-export interface ModRows extends RowsOf<string> {
+export interface ModRows extends RowsOf<EntryRef> {
   /** The mod's folder on disk. */
   folderOf: (mod: string) => string | undefined;
   /** The path in the Data folder a file row stands for; undefined for any other argument. */

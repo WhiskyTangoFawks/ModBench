@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { ModRows } from '../drivingLib/symbolRows';
+import type { ModRows, Reveal } from '../drivingLib/symbolRows';
 import type { EntryRef, InstanceValue } from '../instanceLoader/instance';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
@@ -19,6 +19,7 @@ interface EntryLanguageDeps {
   entryTooltip: (entry: EntryRef) => string | undefined;
   /** The tooltip of the row Downloads shows for a downloaded file; undefined where it shows none. */
   downloadedFileTooltip: (name: string) => string | undefined;
+  downloadedFileRow: (name: string) => Reveal | undefined;
   /** The file that holds the profile's mod order; undefined with no instance. */
   modOrderFileOf: (profile: string) => string | undefined;
 }
@@ -45,7 +46,7 @@ const SHOWN: Record<EntrySymbol['kind'], { readonly kind: vscode.SymbolKind; rea
 
 /** A mod, a separator, a downloaded file and a profile as symbols: wherever an owner's file names them, and the places
  *  files name them (symbols.md). */
-export function entryLanguage({ instance, reporter, owners, rows, entryTooltip, downloadedFileTooltip, modOrderFileOf }: EntryLanguageDeps) {
+export function entryLanguage({ instance, reporter, owners, rows, entryTooltip, downloadedFileTooltip, downloadedFileRow, modOrderFileOf }: EntryLanguageDeps) {
   // A profile has no row.
   const tooltip = ({ kind, name }: EntrySymbol): string | undefined => {
     if (kind === 'downloadedFile') return downloadedFileTooltip(name);
@@ -88,13 +89,18 @@ export function entryLanguage({ instance, reporter, owners, rows, entryTooltip, 
       }
       return undefined;
     },
-    /** A mod's row in Mods, else its folder. A separator, a downloaded file and a profile have none. */
+    /** A mod's or a separator's row in Mods, a downloaded file's row in Downloads. A mod with no row is its folder. */
     definitionOf(named): Promise<Definition> {
       const entry = entryListed(named);
       if (entry === undefined) return Promise.resolve({ refused: unlisted(named) });
-      if (entry.kind !== 'mod') return Promise.resolve({ none: `A ${NOUNS[entry.kind]} has no definition.` });
-      const show = rows()?.show(entry.name);
+      if (entry.kind === 'profile') return Promise.resolve({ none: `A ${NOUNS[entry.kind]} has no definition.` });
+      if (entry.kind === 'downloadedFile') {
+        const show = downloadedFileRow(entry.name);
+        return Promise.resolve(show === undefined ? { refused: 'Downloads shows no row for it.' } : { row: 'Downloads', show });
+      }
+      const show = rows()?.show({ kind: entry.kind, name: entry.name });
       if (show !== undefined) return Promise.resolve({ row: 'Mods', show });
+      if (entry.kind === 'separator') return Promise.resolve({ refused: 'Mods shows no row for it.' });
       const path = rows()?.folderOf(entry.name);
       return Promise.resolve(path === undefined ? { refused: 'Mods shows no row for it and no folder holds it.' } : { shown: { kind: 'loose', path } });
     },

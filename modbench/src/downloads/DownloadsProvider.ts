@@ -176,7 +176,16 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
     // A folder Modbench cannot resolve is not the folder the mod manager names — no rows, so no
     // command has anything to act on (common.md, States, story 2; scoped to this view alone).
     if (this.instanceValue.downloadedFiles.kind === 'unresolved') return [new ErrorNode(this.instanceValue.downloadedFiles.reason)];
-    this.cache ??= this.build(this.instanceValue.downloadedFiles.rows);
+    return this.shownRows(this.instanceValue.downloadedFiles.rows);
+  }
+
+  rowFor(name: string): DownloadedFileNode | undefined {
+    const { downloadedFiles } = this.instanceValue;
+    return downloadedFiles.kind === 'listed' ? this.shownRows(downloadedFiles.rows).find((node) => node.argument.row.name === name) : undefined;
+  }
+
+  private shownRows(rows: readonly LocatedDownloadedFileRow[]): DownloadedFileNode[] {
+    this.cache ??= this.build(rows);
     if (!this.filterLower) return this.cache;
     return this.cache.filter((n) => n.argument.row.displayName.toLowerCase().includes(this.filterLower));
   }

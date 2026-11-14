@@ -62,7 +62,7 @@ import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import { file, folder, mod } from './indexedValue';
 import { ModNode, SeparatorNode } from '../ModListProvider';
 import { createModsView } from '../modsView';
-import { modArgumentOf } from '../../drivingLib/argument';
+import { modArgumentOf, separatorArgumentOf } from '../../drivingLib/argument';
 import { ArchivedFileNode, FileNode } from '../modFiles';
 import { createFocusedView } from '../../drivingLib/focusedView';
 import { ModStatuses } from '../../modStatus/modStatuses';
@@ -254,6 +254,10 @@ describe('the Mods view registers its own gestures', () => {
     expect([
       tooltipOf({ kind: 'mod', name: 'Harder VATS' }), tooltipOf({ kind: 'separator', name: 'Unassigned (Modlist Development)' }), tooltipOf({ kind: 'mod', name: 'Gone' }),
     ]).toEqual(['Harder VATS', undefined, undefined]);
+  });
+
+  it('names the separator a separator row stands for', () => {
+    expect(separatorArgumentOf(new SeparatorNode({ kind: 'separator', name: 'Gear', enabled: true }, []))).toEqual({ kind: 'separator', name: 'Gear' });
   });
 
   it('says the one selected mod row to Symbols, and none over several rows or a separator', () => {

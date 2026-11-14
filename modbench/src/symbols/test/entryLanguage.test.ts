@@ -32,6 +32,8 @@ const SPAN = { start: 7, end: 15 };
 const locationAt = (line: number) => ({ uri: Uri.file(MODLIST), range: new Range(line, 1, line, 9) });
 const located = (found: readonly { uri: unknown; range: unknown }[] | undefined) => found?.map(({ uri, range }) => ({ uri, range }));
 const SHOW_BASE_MOD = vi.fn(() => Promise.resolve());
+const SHOW_GEAR = vi.fn(() => Promise.resolve());
+const SHOW_PATCH = vi.fn(() => Promise.resolve());
 
 interface Options {
   places?: PlaceInFile[];
@@ -55,13 +57,15 @@ function language(named: EntryNamed | undefined, options: Options = {}) {
     { kind: 'mod' as const, name: 'Base Mod', enabled: true }, { kind: 'mod' as const, name: 'Other Mod', enabled: true },
     { kind: 'separator' as const, name: 'Gear', enabled: true },
   ];
+  const shownRows: Record<string, typeof SHOW_BASE_MOD> = { 'mod:Base Mod': SHOW_BASE_MOD, 'separator:Gear': SHOW_GEAR };
   const rows = {
-    show: (name: string) => (options.shown !== false && name === 'Base Mod' ? SHOW_BASE_MOD : undefined),
+    show: ({ kind, name }: { kind: string; name: string }) => (options.shown === false ? undefined : shownRows[`${kind}:${name}`]),
     folderOf: (name: string) => (name === 'Base Mod' ? '/instance/mods/Base Mod' : undefined),
   };
   const value = { mods, downloadedFiles: { kind: 'listed' as const, rows: [downloadedFileRowFixture('Patch-1.7z'), downloadedFileRowFixture('Armor-2.zip')] }, profiles: ['Default', 'Armor Test'] };
   return { reporter, reads, ...entryLanguage({
     instance: { value }, reporter, owners: [owner], rows: () => rows, entryTooltip: () => options.tooltip, downloadedFileTooltip: () => options.downloadedFileTooltip,
+    downloadedFileRow: (name) => (options.shown !== false && name === 'Patch-1.7z' ? SHOW_PATCH : undefined),
     modOrderFileOf: (name) => `/profiles/${name}/modlist.txt`,
   }) };
 }
@@ -83,21 +87,29 @@ describe('where a mod, a separator, a downloaded file or a profile is defined (s
     expect(await language(undefined).definitionOf(mod('base mod'))).toEqual({ row: 'Mods', show: SHOW_BASE_MOD });
   });
 
+  it('is a separator\'s row in Mods', async () => {
+    expect(await language(undefined).definitionOf(separator('gear'))).toEqual({ row: 'Mods', show: SHOW_GEAR });
+  });
+
+  it('is a downloaded file\'s row in Downloads', async () => {
+    expect(await language(undefined).definitionOf(downloadedFile('patch-1.7z'))).toEqual({ row: 'Downloads', show: SHOW_PATCH });
+  });
+
   it('is a mod\'s folder when Mods shows no row for it', async () => {
     expect(await language(undefined, { shown: false }).definitionOf(mod('Base Mod'))).toEqual({ shown: { kind: 'loose', path: '/instance/mods/Base Mod' } });
   });
 
-  it.each([
+  it.each<[string, EntrySymbol, object, Options?]>([
     ['refuses a mod no row lists', mod('Gone Mod'), { refused: 'Mods lists no mod named Gone Mod.' }],
     ['refuses a mod with neither a row nor a folder', mod('Other Mod'), { refused: 'Mods shows no row for it and no folder holds it.' }],
-    ['gives a separator no definition', separator('Gear'), { none: 'A mod separator has no definition.' }],
-    ['gives a downloaded file no definition', downloadedFile('Patch-1.7z'), { none: 'A downloaded file has no definition.' }],
     ['gives a profile no definition', profile('Default'), { none: 'A profile has no definition.' }],
+    ['refuses a separator whose row Mods does not show', separator('Gear'), { refused: 'Mods shows no row for it.' }, { shown: false }],
+    ['refuses a downloaded file whose row Downloads does not show', downloadedFile('Patch-1.7z'), { refused: 'Downloads shows no row for it.' }, { shown: false }],
     ['refuses a separator no row lists', separator('Gone'), { refused: 'Mods lists no separator named Gone.' }],
     ['refuses a downloaded file no row lists', downloadedFile('Gone.7z'), { refused: 'Downloads lists no downloaded file named Gone.7z.' }],
     ['refuses a profile the instance does not hold', profile('Gone'), { refused: 'The instance holds no profile named Gone.' }],
-  ])('%s', async (_case, entry, expected) => {
-    expect(await language(undefined).definitionOf(entry)).toEqual(expected);
+  ])('%s', async (_case, entry, expected, options) => {
+    expect(await language(undefined, options).definitionOf(entry)).toEqual(expected);
   });
 });
 

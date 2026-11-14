@@ -10,6 +10,7 @@ import {
   registerDownloadsDownloadCommand, registerDownloadsExcludedToggleCommands, registerDownloadsMultiRowCommands, registerDownloadsQueryInfoCommand,
   registerDownloadsSingleRowCommands, registerDownloadsSortCommand,
 } from './DownloadsPanel';
+import type { Reveal } from '../drivingLib/symbolRows';
 import { downloadedFileTooltip, DownloadsProvider, type DownloadsTreeNode } from './DownloadsProvider';
 import { ExcludedDownloadedFileDecorationProvider } from './ExcludedDownloadedFileDecorationProvider';
 import { downloadsFolderUnresolvedLine } from './downloadsFolderUnresolvedLog';
@@ -34,6 +35,7 @@ interface DownloadsView extends vscode.Disposable {
   copyValue: CopyValueAdapter;
   /** The tooltip of the downloaded file's row; undefined while no row shows it. */
   tooltipOf: (name: string) => string | undefined;
+  show: (name: string) => Reveal | undefined;
 }
 
 /** Rows come from the Instance value alone. */
@@ -97,6 +99,7 @@ export function createDownloadsView(
       const row = files.kind === 'listed' ? files.rows.find((each) => each.name === name) : undefined;
       return row && downloadedFileTooltip(row).value;
     },
+    show: (name) => { const row = provider.rowFor(name); return row && (() => view.reveal(row, { select: true, focus: true })); },
     dispose: () => { disposable.dispose(); },
   };
 }

@@ -17,9 +17,10 @@ import { fileLanguage, type FileClient, type FileCopies } from './fileLanguage';
 import { recordLanguage, type RecordClient } from './recordLanguage';
 import { renameSymbol } from './renameSymbol';
 import { registerLanguageFeatures } from './languageFeatures';
-import type { ModRows, PluginRows } from '../drivingLib/symbolRows';
+import type { ModRows, PluginRows, Reveal } from '../drivingLib/symbolRows';
 import type { FilesHeld } from './symbolCommands';
-import { registerGoToMod, registerGoToPlugin, registerModReferencedBy, registerPluginReferencedBy } from './symbolCommands';
+import { registerModReferencedBy, registerPluginReferencedBy } from './symbolCommands';
+import { registerGoTo } from './goTo';
 import type { SymbolKinds } from './symbolKind';
 import { registerRecordReferencedBy, type RecordReferencedByDeps } from './recordReferencedBy';
 import { publishReferencesView } from '../drivingLib/referencesView';
@@ -40,6 +41,7 @@ interface SymbolsDeps {
   entryTooltip: (entry: EntryRef) => string | undefined;
   /** The tooltip of the row Downloads shows for a downloaded file; undefined where it shows none. */
   downloadedFileTooltip: (name: string) => string | undefined;
+  downloadedFileRow: (name: string) => Reveal | undefined;
   /** The file that holds a profile's mod order; undefined with no instance. */
   modOrderFileOf: (profile: string) => string | undefined;
   /** What Plugins shows of a plugin's row; absent with no instance. */
@@ -50,6 +52,7 @@ interface SymbolsDeps {
 }
 
 export interface SymbolRows {
+  selection: () => readonly unknown[];
   mods: ModRows;
   plugins: PluginRows;
   filesHeld: () => FilesHeld;
@@ -79,8 +82,8 @@ export function createSymbols(deps: SymbolsDeps): Symbols {
     instance, reporter, client, owners: deps.owners, names, renamePlugin: renamePluginNamed, rows: () => rows?.plugins,
     tooltip: (shown) => deps.pluginsShown?.tooltipLines(shown) ?? [],
   });
-  const { entryTooltip, downloadedFileTooltip, modOrderFileOf } = deps;
-  const entry = entryLanguage({ instance, reporter, owners: deps.entryOwners, rows: () => rows?.mods, entryTooltip, downloadedFileTooltip, modOrderFileOf });
+  const { entryTooltip, downloadedFileTooltip, downloadedFileRow, modOrderFileOf } = deps;
+  const entry = entryLanguage({ instance, reporter, owners: deps.entryOwners, rows: () => rows?.mods, entryTooltip, downloadedFileTooltip, downloadedFileRow, modOrderFileOf });
   const file = fileLanguage({ instance, reporter, client, names, ...fileCopies, tooltip: (path) => rows?.mods.fileTooltip(path) });
   const kinds: SymbolKinds = {
     plugin, entry, file,
@@ -91,15 +94,13 @@ export function createSymbols(deps: SymbolsDeps): Symbols {
     plugin, names, client, plugins: () => instance?.value.plugins ?? [],
     executeCommand: (command, ...args) => vscode.commands.executeCommand(command, ...args),
   });
-  const goTo = { kinds, reveal: fileCopies.reveal };
   const disposable = vscode.Disposable.from(
     registerLanguageFeatures({ kinds, reporter, reveal: fileCopies.reveal, rename }),
+    registerGoTo({ kinds, reporter: reporterFor('symbol.goTo'), reveal: fileCopies.reveal, selection: () => rows?.selection() ?? [], dataPathOf: (row) => rows?.mods.dataPathOf(row) }),
     publishReferencesView((key, value) => { void vscode.commands.executeCommand('setContext', key, value); }),
     registerRecordReferencedBy({ client, reporter: reporterFor('referencedBy'), locateRecord: formKeyLocation(client, names), focusedOrPickedRecord }),
     ...(rows ? [
-      registerGoToMod({ ...goTo, rows: rows.mods, reporter: reporterFor('mod.goTo') }),
       registerModReferencedBy({ referencedBy: { mod: entry.referencedBy, file: file.referencedBy }, rows: rows.mods, value: rows.filesHeld, reporter: reporterFor('mod.referencedBy') }),
-      registerGoToPlugin({ ...goTo, rows: rows.plugins, reporter: reporterFor('pluginListTree.goTo') }),
       registerPluginReferencedBy({ referencedBy: plugin.referencedBy, rows: rows.plugins }),
     ] : []),
   );
