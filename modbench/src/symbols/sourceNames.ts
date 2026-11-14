@@ -1,13 +1,18 @@
 import type { DocumentName, MEditClient } from '../client';
+import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { sameName, type PluginName, type TextSpan } from '../symbolNames/symbolNames';
 import { answerOf, failureReason, isReadFailed } from '../wire/readFailed';
+import { scriptsNamed } from './scriptsNamed';
 
 interface SourceNamesDeps {
   client: Pick<MEditClient, 'searchRecords'>;
   /** What mEdit's record index names in plugin source. */
   names: Pick<MEditClient, 'getPluginSourceNames'>;
+  /** What mEdit's record index names across every compiled plugin's source. */
+  paths: Pick<MEditClient, 'getPluginFilePaths'>;
+  sourceFiles: SourceFilesOf;
   reporter: Pick<Reporter, 'shownOnSurface'>;
 }
 
@@ -33,7 +38,7 @@ const betweenQuotes = ({ start, end }: TextSpan): TextSpan => ({ start: start + 
 
 /** The names plugin source holds, and where each sits, as mEdit's record index answers them (target-architecture.md).
  *  A place is asked of with its file; a copy's document by its text alone. */
-export function sourceNames({ client, names, reporter }: SourceNamesDeps) {
+export function sourceNames({ client, names, paths, sourceFiles, reporter }: SourceNamesDeps) {
   let told: string | undefined;
 
   // Every kind asks of one place in turn, so a place mEdit cannot answer for is told once.
@@ -63,6 +68,15 @@ export function sourceNames({ client, names, reporter }: SourceNamesDeps) {
     async scriptAt(file: string, text: string, offset: number): Promise<(TextSpan & { name: string }) | undefined> {
       const found = await nameAt(file, text, offset, 'Script');
       return found && { ...spanOf(found), name: found.value };
+    },
+
+    scriptsNamed: scriptsNamed({ paths, sourceFiles, reporter }),
+
+    /** Each Papyrus script a document names, which fails where mEdit cannot answer. */
+    async scriptsIn(file: string, text: string): Promise<(TextSpan & { name: string })[]> {
+      return answerOf(await names.getPluginSourceNames(text, file))
+        .filter(({ kind }) => kind === 'Script')
+        .map((found) => ({ ...spanOf(found), name: found.value }));
     },
 
     /** The file a record's path at `offset` names. */

@@ -19,7 +19,9 @@ vi.mock('vscode', () => ({
 }));
 
 import { scriptLanguage, type ScriptClient } from '../scriptLanguage';
+import type { InstanceValue, PapyrusScript } from '../../instanceLoader/instance';
 import { sourceNames } from './fakeSourceNames';
+import type { SourceNames } from '../sourceNames';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
 const QUEST = '000801:Mod.esp';
@@ -34,9 +36,15 @@ const SCRIPTS = [
   { name: 'Ns:Quest', source: QUEST_SOURCE, compiled: '/instance/mods/Mod/Scripts/Ns/Quest.pex' },
   { name: 'Other', compiled: '/instance/mods/Mod/Scripts/Other.pex' },
 ];
+const NAMED = [{ file: SOURCE, name: 'Gone' }, { file: SOURCE, name: 'Ns:Quest' }, { file: '/instance/source/Other/Npc.json', name: 'gone' }, { file: '/instance/source/Held/Npc.json', name: 'ns:quest' }];
 const NONE = { copies: [], unread: [] };
+type Standing = Pick<InstanceValue, 'dataFolderFiles' | 'gameFolder' | 'gameFolderInWorkspace' | 'archiveContents'>;
+const JUDGING: Standing = {
+  dataFolderFiles: { kind: 'listed', files: new Map() }, gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' },
+  gameFolderInWorkspace: true, archiveContents: new Map([['/game/Data/Misc.ba2', { kind: 'read', answer: ['scripts/quest.pex'] }]]),
+};
 
-function language(references: Awaited<ReturnType<ScriptClient['getScriptReferences']>> = NONE, scripts: { name: string; source?: string; compiled?: string }[] = SCRIPTS) {
+function language(references: Awaited<ReturnType<ScriptClient['getScriptReferences']>> = NONE, scripts: PapyrusScript[] = SCRIPTS, standing: Partial<Standing> = {}, asking: Partial<Pick<SourceNames, 'scriptsNamed' | 'scriptsIn'>> = {}) {
   const client: ScriptClient = {
     getScriptReferences: () => Promise.resolve(references),
     getRecordOwner: () => Promise.resolve(undefined),
@@ -44,10 +52,15 @@ function language(references: Awaited<ReturnType<ScriptClient['getScriptReferenc
   };
   const names = sourceNames({
     scriptAt: (file: string, _text: string, offset: number) => Promise.resolve(file === SOURCE && offset === AT_SCRIPT ? { ...SPAN, name: 'Ns:Quest' } : undefined),
+    scriptsNamed: () => Promise.resolve(NAMED),
+    scriptsIn: (file: string, text: string) => Promise.resolve(file === SOURCE && text === TEXT ? [{ ...SPAN, name: 'Ns:Quest' }, { start: 0, end: 1, name: 'Gone' }] : []),
+    ...asking,
     membersIn: (text: string, formKey: string, fieldPaths: readonly string[]) =>
       Promise.resolve(text === TEXT && formKey === QUEST && fieldPaths.includes(PATH) ? [SPAN] : []),
   });
-  return { language: scriptLanguage({ instance: { value: { papyrusScripts: scripts } }, names, client, reporter: recordingReporter() }) };
+  const instance = { value: { papyrusScripts: scripts, ...JUDGING, ...standing } };
+  const reporter = recordingReporter();
+  return { language: scriptLanguage({ instance, names, client, reporter }), instance, reporter };
 }
 
 const document = (path = SOURCE) => ({ uri: Uri.file(path), getText: () => TEXT });
@@ -69,6 +82,59 @@ describe('a Papyrus script\'s name in plugin source (symbols.md, The symbols)', 
       ['Ns:Quest', { uri: Uri.file(QUEST_SOURCE), range: new Range(0, 0, 0, 0) }],
       ['Other', { uri: Uri.file('/instance/mods/Mod/Scripts/Other.pex'), range: new Range(0, 0, 0, 0) }],
     ]);
+  });
+});
+
+describe('a script a document names that no mod, Overwrite, Data folder file or archive holds (symbols.md, The features, story 8)', () => {
+  it('names nothing, saying which script, over its span, and everywhere it looked', async () => {
+    expect(await language().language.namesNothingIn(document())).toEqual([{ start: 0, end: 1, name: 'Gone', why: 'No mod, Overwrite, Data folder file or archive holds Gone.' }]);
+  });
+
+  const OUTSIDE = 'The game folder /game is outside the workspace, so its archives are not read.';
+  const UNREADABLE = '/a.ba2 cannot be read: it is no BA2';
+  const NOT_JUDGED = 'The Problems panel does not check the scripts plugin source names.';
+
+  it.each([
+    ['the Data folder is not listed', { dataFolderFiles: { kind: 'unresolved' } }, undefined],
+    ['the game folder is not found', { gameFolder: { kind: 'notFound', looked: [], setting: 'gameFolder' } }, 'The game folder is not found.'],
+    ['the game folder is outside the workspace, so its archives are unread', { gameFolderInWorkspace: false }, OUTSIDE],
+    ['an archive has not answered', { archiveContents: new Map([['/a.ba2', { kind: 'unanswered' }]]) }, undefined],
+    ['an archive cannot be read', { archiveContents: new Map([['/a.ba2', { kind: 'unreadable', reason: 'it is no BA2' }]]) }, UNREADABLE],
+  ] satisfies [string, Partial<Standing>, string | undefined][])('asks mEdit nothing while %s, and says why where the state lasts', async (_case, standing, why) => {
+    const asked = { scriptsIn: vi.fn(() => Promise.resolve([])), scriptsNamed: vi.fn(() => Promise.resolve([])) };
+    const { language: unjudged, reporter } = language(NONE, SCRIPTS, standing, asked);
+
+    const answers = [await unjudged.namesNothingIn(document()), await unjudged.filesNamingNothing([{ name: 'Mod.esp', origin: 'Mod' }])];
+
+    expect(answers).toEqual(why === undefined ? [undefined, undefined] : [[], []]);
+    expect([asked.scriptsIn.mock.calls, asked.scriptsNamed.mock.calls]).toEqual([[], []]);
+    expect(reporter.shownFailures).toEqual(why === undefined ? [] : [{ severity: 'warning', message: NOT_JUDGED, detail: why }]);
+  });
+
+  it('says it once, again only when the reason changes, and again when judging stopped after it resumed', async () => {
+    const { language: judging, instance, reporter } = language(NONE, SCRIPTS, { gameFolderInWorkspace: false });
+    const ask = () => judging.namesNothingIn(document());
+    await ask();
+    await ask();
+    instance.value = { ...instance.value, ...JUDGING, archiveContents: new Map([['/a.ba2', { kind: 'unreadable', reason: 'it is no BA2' }]]) };
+    await ask();
+    instance.value = { ...instance.value, ...JUDGING };
+    await ask();
+    instance.value = { ...instance.value, gameFolderInWorkspace: false };
+    await ask();
+
+    expect(reporter.shownFailures.map(({ detail }) => detail)).toEqual([OUTSIDE, UNREADABLE, OUTSIDE]);
+  });
+
+  it('lists each file that holds one, once, whether or not it is open', async () => {
+    expect(await language().language.filesNamingNothing()).toEqual([SOURCE, '/instance/source/Other/Npc.json']);
+  });
+
+  it('asks of the plugins it is given, and says nothing can be said where mEdit has not answered', async () => {
+    const asked = vi.fn<SourceNames['scriptsNamed']>(() => Promise.resolve(undefined));
+    const only = [{ name: 'Mod.esp', origin: 'Mod' }];
+
+    expect([await language(NONE, SCRIPTS, {}, { scriptsNamed: asked }).language.filesNamingNothing(only), asked.mock.calls]).toEqual([undefined, [[only]]]);
   });
 });
 

@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
-import type { MEditClient } from '../client';
+import type { MEditClient, PluginAddress } from '../client';
 import { sourceNames } from './sourceNames';
 import type { Reporter } from '../ports/reporter';
+import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import type { EntryRef } from '../instanceAdapter/instanceAdapter';
 import { openPluginSourceDocument } from '../textDocuments/pluginSource';
 import type { Instance } from '../instanceLoader/instance';
@@ -21,6 +22,7 @@ import { pickSymbol } from './symbolPick';
 import { registerGoTo } from './goTo';
 import { asked, type SymbolKinds } from './symbolKind';
 import type { RecordReferencedByDeps } from './recordReferencedBy';
+import { registerNamesNothing } from './namesNothing';
 import { publishReferencesView } from '../drivingLib/referencesView';
 
 const NO_FILES: FilesHeld = { filesByMod: new Map(), dataFolderFiles: { kind: 'listed', files: new Map() } };
@@ -28,10 +30,13 @@ const NO_FILES: FilesHeld = { filesByMod: new Map(), dataFolderFiles: { kind: 'l
 interface SymbolsDeps {
   instance: Pick<Instance, 'value' | 'subscribe'> | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
-  client: Pick<MEditClient, 'getRecordOfFile'> & RecordClient & ScriptClient & FileClient & RecordReferencedByDeps['client'];
+  client: Pick<MEditClient, 'getRecordOfFile' | 'getPluginFilePaths' | 'onNotification' | 'onLoadOrderSettled'> & RecordClient & ScriptClient & FileClient & RecordReferencedByDeps['client'];
   /** What mEdit's record index names in plugin source. */
   names: Pick<MEditClient, 'getPluginSourceNames'>;
   focusedRecord: () => string | undefined;
+  sourceFiles: SourceFilesOf;
+  /** The text of a file on disk; undefined where it is gone. */
+  savedText: (path: string) => Promise<string | undefined>;
   fileCopies: FileCopies;
   /** Each box that owns files, saying where they name a symbol (ADR-0028). */
   owners: readonly SymbolOwner[];
@@ -74,7 +79,7 @@ interface Symbols extends vscode.Disposable {
 
 export function createSymbols(deps: SymbolsDeps): Symbols {
   const { instance, reporter, client, rows, reporterFor, fileCopies, focusedRecord } = deps;
-  const names = sourceNames({ client, names: deps.names, reporter });
+  const names = sourceNames({ client, names: deps.names, paths: client, sourceFiles: deps.sourceFiles, reporter });
   const plugin = pluginLanguage({
     instance, reporter, client, owners: deps.owners, names, renamePlugin: renamePluginNamed, rows: () => rows?.plugins,
     tooltip: (shown) => deps.pluginsShown?.tooltipLines(shown) ?? [],
@@ -87,11 +92,20 @@ export function createSymbols(deps: SymbolsDeps): Symbols {
     script: scriptLanguage({ instance, names, client, reporter }),
     record: recordLanguage({ client, names, reporter, open: openPluginSourceDocument }),
   };
+  const changed = (listener: (plugin?: PluginAddress) => void): vscode.Disposable => vscode.Disposable.from(
+    instance?.subscribe(() => { listener(); }) ?? { dispose: () => undefined },
+    { dispose: client.onLoadOrderSettled(() => { listener(); }) },
+    { dispose: client.onNotification('rows-changed', ({ plugin }) => { listener(plugin); }) },
+    { dispose: client.onNotification('plugin-changed', ({ plugin }) => { listener(plugin); }) },
+  );
+  const problems = vscode.languages.createDiagnosticCollection('modbench-names');
   const rename = renameSymbol({
     plugin, entry, names, client, plugins: () => instance?.value.plugins ?? [],
     executeCommand: (command, ...args) => vscode.commands.executeCommand(command, ...args),
   });
   const disposable = vscode.Disposable.from(
+    problems,
+    registerNamesNothing({ kinds, collection: problems, reporter, savedText: deps.savedText, onChanged: changed }),
     registerLanguageFeatures({ kinds, reporter, reveal: fileCopies.reveal, rename }),
     registerGoTo({ kinds, reporter: reporterFor('symbol.goTo'), reveal: fileCopies.reveal, selection: () => rows?.selection() ?? [], dataPathOf: (row) => rows?.mods.dataPathOf(row) }),
     publishReferencesView((key, value) => { void vscode.commands.executeCommand('setContext', key, value); }),

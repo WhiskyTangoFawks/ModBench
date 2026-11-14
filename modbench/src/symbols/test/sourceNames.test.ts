@@ -26,7 +26,7 @@ function names(answer: DocumentName[] | ReadFailed, found: RecordSummary[] = [re
     getPluginSourceNames: vi.fn<MEditClient['getPluginSourceNames']>(() => Promise.resolve(answer)),
     searchRecords: vi.fn<MEditClient['searchRecords']>(() => Promise.resolve({ items: found, total: found.length })),
   };
-  return { owner: sourceNames({ client, names: client, reporter }), client, reporter };
+  return { owner: sourceNames({ client, names: client, paths: { getPluginFilePaths: () => Promise.resolve([]) }, sourceFiles: () => undefined, reporter }), client, reporter };
 }
 
 describe('the names at a place in plugin source, as mEdit answers them (target-architecture.md)', () => {
@@ -59,6 +59,81 @@ describe('the names at a place in plugin source, as mEdit answers them (target-a
 
     expect(await owner.recordAt(FILE, TEXT, 20)).toBeUndefined();
     expect(reporter.shownFailures).toEqual([{ severity: 'error', message: 'Cannot tell what plugin source names here.', detail: 'mEdit is down' }]);
+  });
+});
+
+describe('every script a document names, with its span', () => {
+  it('asks for the whole document and answers each script in it', async () => {
+    const { owner, client } = names([named('Record', 13, 29, NPC), named('Script', 40, 42, 'Gu'), named('Script', 50, 53, 'Other')]);
+
+    expect(await owner.scriptsIn(FILE, TEXT)).toEqual([{ start: 40, end: 42, name: 'Gu' }, { start: 50, end: 53, name: 'Other' }]);
+    expect(client.getPluginSourceNames.mock.calls).toEqual([[TEXT, FILE]]);
+  });
+
+  it('fails where mEdit cannot answer, for its caller to say', async () => {
+    await expect(names(localFailure('mEdit is down')).owner.scriptsIn(FILE, TEXT)).rejects.toThrow('mEdit is down');
+  });
+});
+
+describe('every script the plugin source of the compiled plugins names', () => {
+  type Answer = Awaited<ReturnType<MEditClient['getPluginFilePaths']>>;
+  const ORIGIN = 'ModA';
+  const plugin = { name: 'Mod.esp', origin: ORIGIN };
+  const beside = { name: 'Beside.esp', origin: ORIGIN };
+  const FILE_OF = (relative: string) => `/instance/source/ModA/${relative}`;
+  const attached = (name: string, sourceRelativePath: string) => ({ formKey: NPC, fieldPath: 'VirtualMachineAdapter.Scripts[0].Name', sourceRelativePath, name });
+  const holding = (who: typeof plugin, name: string, over: Partial<Extract<Answer, unknown[]>[number]> = {}) =>
+    ({ plugin: who, paths: [], scripts: [attached(name, `${who.name}/Npc.json`)], unread: [], ...over });
+  const owning = (answer: (asked?: Parameters<MEditClient['getPluginFilePaths']>[0]) => Answer) => {
+    const files = (origin: string) => (origin === ORIGIN ? { file: FILE_OF } : undefined);
+    const paths = { getPluginFilePaths: vi.fn<MEditClient['getPluginFilePaths']>((asked) => Promise.resolve(answer(asked))) };
+    const reporter = recordingReporter();
+    return { owner: sourceNames({ client: { searchRecords: vi.fn() }, names: { getPluginSourceNames: vi.fn() }, paths, sourceFiles: files, reporter }), paths, reporter };
+  };
+
+  it('asks once for every plugin and answers each script with the file that holds it, the plugins of no mod left out', async () => {
+    const { owner, paths } = owning(() => [holding(plugin, 'Gone'), holding({ name: 'Other.esp', origin: 'Overwrite' }, 'Elsewhere')]);
+
+    expect(await owner.scriptsNamed()).toEqual([{ file: FILE_OF('Mod.esp/Npc.json'), name: 'Gone' }]);
+    expect(paths.getPluginFilePaths.mock.calls).toEqual([[]]);
+  });
+
+  it('says nothing is answered while the record index cannot answer yet', async () => {
+    expect(await owning(() => ({ failed: 'refused', refusal: 'not ready' })).owner.scriptsNamed()).toBeUndefined();
+  });
+
+  it('fails where mEdit cannot answer, for its caller to say', async () => {
+    await expect(owning(() => localFailure('mEdit is down')).owner.scriptsNamed()).rejects.toThrow('mEdit is down');
+  });
+
+  it('asks of the plugins named alone, answers every plugin\'s scripts, and asks of none for an empty list', async () => {
+    const { owner, paths } = owning((asked) => [holding(asked ?? plugin, `Of${asked?.name ?? 'All'}`)]);
+    await owner.scriptsNamed([plugin]);
+    await owner.scriptsNamed([beside]);
+
+    expect(await owner.scriptsNamed([])).toEqual([
+      { file: FILE_OF('Mod.esp/Npc.json'), name: 'OfMod.esp' }, { file: FILE_OF('Beside.esp/Npc.json'), name: 'OfBeside.esp' },
+    ]);
+    expect(paths.getPluginFilePaths.mock.calls).toEqual([[plugin], [beside]]);
+  });
+
+  it('drops a plugin that left the load order, and keeps what a plugin whose answer failed last held, saying why once', async () => {
+    let answer: Answer = [holding(plugin, 'First'), holding(beside, 'Second')];
+    const { owner, reporter } = owning(() => answer);
+    await owner.scriptsNamed();
+    answer = [holding(plugin, 'Changed', { failure: 'its source is unreadable' })];
+
+    const kept = [await owner.scriptsNamed(), await owner.scriptsNamed()];
+
+    expect(kept).toEqual([[{ file: FILE_OF('Mod.esp/Npc.json'), name: 'First' }], [{ file: FILE_OF('Mod.esp/Npc.json'), name: 'First' }]]);
+    expect(reporter.shownFailures).toEqual([{ severity: 'warning', message: 'The Problems panel does not check every script plugin source names.', detail: 'Mod.esp (ModA): its source is unreadable' }]);
+  });
+
+  it('says the copies it could not read, and keeps the scripts that read', async () => {
+    const { owner, reporter } = owning(() => [holding(plugin, 'Read', { unread: ['000801:Mod.esp: no schema'] })]);
+
+    expect(await owner.scriptsNamed()).toEqual([{ file: FILE_OF('Mod.esp/Npc.json'), name: 'Read' }]);
+    expect(reporter.shownFailures.map(({ detail }) => detail)).toEqual(['Mod.esp (ModA): 000801:Mod.esp: no schema']);
   });
 });
 

@@ -383,10 +383,14 @@ public sealed record PluginProblems(
 /// <paramref name="SourceRelativePath"/> that holds the record, and where it lies in the Data folder.</summary>
 public sealed record NamedFilePath(string FormKey, string FieldPath, string SourceRelativePath, string DataPath);
 
-/// <summary>The file paths a compiled plugin's source names. <paramref name="Unread"/>: the files its read stopped at and
-/// the copies mEdit could not read. <paramref name="Failure"/>: the paths are not the whole answer (ADR-0019).</summary>
+/// <summary>A script a record of a compiled plugin's source attaches at <paramref name="FieldPath"/>, in the file
+/// <paramref name="SourceRelativePath"/> that holds the record.</summary>
+public sealed record NamedScript(string FormKey, string FieldPath, string SourceRelativePath, string Name);
+
+/// <summary>The paths and scripts a compiled plugin's source names. <paramref name="Unread"/>: the files its read stopped
+/// at and the copies mEdit could not read. <paramref name="Failure"/>: not the whole answer (ADR-0019).</summary>
 public sealed record PluginFilePaths(
-    PluginAddress Plugin, IReadOnlyList<NamedFilePath> Paths, IReadOnlyList<string> Unread, string? Failure = null, ProblemsFailureKind? FailureKind = null);
+    PluginAddress Plugin, IReadOnlyList<NamedFilePath> Paths, IReadOnlyList<NamedScript> Scripts, IReadOnlyList<string> Unread, string? Failure = null, ProblemsFailureKind? FailureKind = null);
 
 /// <summary>The plugins whose masters list a plugin's file name, and those whose masters mEdit could not
 /// read and so may.</summary>

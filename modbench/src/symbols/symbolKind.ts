@@ -1,4 +1,5 @@
 import type * as vscode from 'vscode';
+import type { PluginAddress } from '../client';
 import type { Reveal } from '../drivingLib/symbolRows';
 import type { CopyAt } from '../instanceLoader/fileConflictIndex';
 import type { EntrySymbol, PluginName, ScriptSymbol, TextSpan } from '../symbolNames/symbolNames';
@@ -34,6 +35,12 @@ export interface Named<Symbol> extends TextSpan {
   readonly symbol: Symbol | Refused;
 }
 
+/** A name a document holds that names nothing, over its span, and why. */
+export interface NamesNothing extends TextSpan {
+  readonly name: string;
+  readonly why: string;
+}
+
 /** A symbol as Go to Symbol in Workspace lists it. `resolve`, on the symbol the user picks, says where it opens, or
  *  leaves `location`. */
 export interface Listed {
@@ -60,6 +67,12 @@ export interface SymbolKind<Symbol> {
     readonly items: readonly { readonly label: string; readonly detail?: string; readonly insertText?: string }[];
     readonly isIncomplete?: boolean;
   }) | undefined>;
+  /** Each name in the document that names nothing (symbols.md, The features, story 8). None where judging has stopped
+   *  for a reason that lasts; undefined while the instance has not read what would hold them. */
+  namesNothingIn?(document: AskedIn): Promise<readonly NamesNothing[] | undefined>;
+  /** Each file, open or not, that holds a name that names nothing, from one ask of its owner; `only` asks of those
+   *  plugins' files. None where judging has stopped; undefined where nothing can be said yet. */
+  filesNamingNothing?(only?: readonly PluginAddress[]): Promise<readonly string[] | undefined>;
   /** Each symbol of the kind whose name holds `query`, which is trimmed and never empty. */
   symbolsFor(query: string): Promise<readonly Listed[]>;
 }
@@ -72,7 +85,6 @@ export interface SymbolKinds {
   readonly file: SymbolKind<FileNamed>;
 }
 
-/** A symbol, with its kind's answers. */
 interface Asked {
   definition(): Promise<Definition>;
   references(): Promise<References>;

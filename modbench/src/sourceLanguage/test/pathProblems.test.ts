@@ -18,7 +18,7 @@ const DATA_PATH = 'Textures/Decals/Stain_d.dds';
 
 const named = (dataPath = DATA_PATH, over: Partial<PluginFilePaths['paths'][number]> = {}): PluginFilePaths['paths'][number] =>
   ({ formKey: HOLDER, fieldPath: 'Diffuse', sourceRelativePath: 'Names.esp/TextureSet.json', dataPath, ...over });
-const answerFor = (plugin = PLUGIN, paths = [named()], over: Partial<PluginFilePaths> = {}): PluginFilePaths => ({ plugin, paths, unread: [], ...over });
+const answerFor = (plugin = PLUGIN, paths = [named()], over: Partial<PluginFilePaths> = {}): PluginFilePaths => ({ plugin, paths, scripts: [], unread: [], ...over });
 
 const sourceFolders: SourceFilesOf = (origin) => ({ file: (relativePath) => `/source/${origin}/${relativePath}` });
 

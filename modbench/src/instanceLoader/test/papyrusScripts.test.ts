@@ -36,6 +36,13 @@ describe('papyrusScriptsOf', () => {
     ]);
   });
 
+  it('holds a script only an archive holds, with no file of its own', () => {
+    expect(papyrusScriptsOf(filesOf({ Mod: ['Scripts/Actor.pex'] }), NO_DATA_FOLDER, 'Fallout4', ['Scripts/Quest.pex', 'Textures/Quest.pex'])).toEqual([
+      { name: 'Actor', compiled: '/mods/Mod/Scripts/Actor.pex' },
+      { name: 'Quest' },
+    ]);
+  });
+
   it('names none for a release the tables hold no folders for', () => {
     expect(papyrusScriptsOf(filesOf({ Mod: ['Scripts/Quest.pex'] }), NO_DATA_FOLDER, undefined)).toEqual([]);
   });

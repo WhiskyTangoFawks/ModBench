@@ -14,16 +14,43 @@ import type { Definition, References, SymbolKind } from './symbolKind';
 export type ScriptClient = Pick<MEditClient, 'getScriptReferences'> & RecordDocumentClient;
 
 interface ScriptLanguageDeps {
-  instance: { readonly value: Pick<InstanceValue, 'papyrusScripts'> } | undefined;
-  names: Pick<SourceNames, 'scriptAt' | 'membersIn' | 'formKeyIn'>;
+  instance: { readonly value: ScriptsValue } | undefined;
+  names: Pick<SourceNames, 'scriptAt' | 'scriptsIn' | 'scriptsNamed' | 'membersIn' | 'formKeyIn'>;
   client: ScriptClient;
   reporter: Pick<Reporter, 'report' | 'shownOnSurface'>;
 }
 
+type ScriptsValue = Pick<InstanceValue, 'papyrusScripts' | 'dataFolderFiles' | 'gameFolder' | 'gameFolderInWorkspace' | 'archiveContents'>;
+
+// A script is held by nothing only once every place that could hold it has answered. A reason is given only where
+// the state lasts; a place that has not answered yet is waited for.
+function unjudgedBecause(value: ScriptsValue | undefined): { reason?: string } | undefined {
+  if (value === undefined || value.dataFolderFiles.kind !== 'listed') return {};
+  if (value.gameFolder.kind !== 'found') return { reason: 'The game folder is not found.' };
+  if (!value.gameFolderInWorkspace) return { reason: `The game folder ${value.gameFolder.root} is outside the workspace, so its archives are not read.` };
+  const archives = [...value.archiveContents];
+  const unreadable = archives.find(([, read]) => read.kind === 'unreadable');
+  if (unreadable?.[1].kind === 'unreadable') return { reason: `${unreadable[0]} cannot be read: ${unreadable[1].reason}` };
+  return archives.some(([, read]) => read.kind !== 'read') ? {} : undefined;
+}
+
 /** A Papyrus script as a symbol: where plugin source names one a record attaches, and the records that attach it, which
  *  mEdit answers (symbols.md). */
-export function scriptLanguage({ instance, names, client, reporter }: ScriptLanguageDeps): SymbolKind<ScriptSymbol> {
+export function scriptLanguage({ instance, names, client, reporter }: ScriptLanguageDeps): SymbolKind<ScriptSymbol> & Required<Pick<SymbolKind<ScriptSymbol>, 'namesNothingIn' | 'filesNamingNothing'>> {
   const scripts = (): readonly PapyrusScript[] => instance?.value.papyrusScripts ?? [];
+
+  // Ready to judge; stopped for a reason that lasts, told once; or waiting for a place to answer.
+  let toldWhy: string | undefined;
+  const standing = (): 'ready' | 'stopped' | 'waiting' => {
+    const unjudged = unjudgedBecause(instance?.value);
+    if (unjudged?.reason !== undefined && unjudged.reason !== toldWhy) {
+      reporter.shownOnSurface('warning', 'The Problems panel does not check the scripts plugin source names.', unjudged.reason);
+    }
+    toldWhy = unjudged?.reason;
+    if (unjudged === undefined) return 'ready';
+    return unjudged.reason === undefined ? 'waiting' : 'stopped';
+  };
+  const isHeld = (name: string): boolean => scripts().some((script) => sameName(script.name, name));
 
   const nameAt = (document: AskedIn, offset: number) => names.scriptAt(document.uri.fsPath, heldText(document), offset);
 
@@ -50,6 +77,21 @@ export function scriptLanguage({ instance, names, client, reporter }: ScriptLang
     referencedBy: (script) => showReferencedBy({
       reporter, subject: script.name, contextValue: 'modbench.scriptReferencedBy', references: () => referencesTo(script),
     }),
+    /** Each script plugin source names that nothing holds; none where judging has stopped, and undefined where nothing
+     *  can be said yet. Nothing is asked of mEdit in either. */
+    async namesNothingIn(document) {
+      const now = standing();
+      if (now !== 'ready') return now === 'stopped' ? [] : undefined;
+      return (await names.scriptsIn(document.uri.fsPath, heldText(document))).filter(({ name }) => !isHeld(name))
+        .map(({ start, end, name }) => ({ start, end, name, why: `No mod, Overwrite, Data folder file or archive holds ${name}.` }));
+    },
+    /** Each file plugin source holds that names a script nothing holds, under the same answers. */
+    async filesNamingNothing(only) {
+      const now = standing();
+      if (now !== 'ready') return now === 'stopped' ? [] : undefined;
+      const named = await names.scriptsNamed(only);
+      return named && [...new Set(named.filter(({ name }) => !isHeld(name)).map(({ file }) => file))];
+    },
     /** None: a script has no row. */
     tooltipOf: () => Promise.resolve([]),
     async completionsAt(document, offset) {
