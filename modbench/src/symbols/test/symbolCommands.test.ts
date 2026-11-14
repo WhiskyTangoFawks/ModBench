@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Uri } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, Uri } from '../../test/vscodeMock';
 
 const { handlers, executeCommand } = vi.hoisted(() => ({
   handlers: new Map<string, (clicked?: unknown) => Promise<void>>(),
@@ -11,7 +11,7 @@ vi.mock('vscode', () => ({
     registerCommand: (command: string, handler: (clicked?: unknown) => Promise<void>) => { handlers.set(command, handler); return { dispose: vi.fn() }; },
     executeCommand,
   },
-  Uri,
+  Uri, TreeItem, TreeItemCollapsibleState,
 }));
 
 import { registerGoToMod, registerGoToPlugin, registerModReferencedBy, registerPluginReferencedBy } from '../symbolCommands';
@@ -19,6 +19,9 @@ import type { OriginFile } from '../../instanceLoader/instance';
 import { present } from '../../ports/present';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import type { ModRows, PluginRows } from '../../drivingLib/symbolRows';
+import type { CopyAt } from '../../instanceLoader/fileConflictIndex';
+import type { Definition } from '../symbolKind';
+import { fakeKind, fakeKinds } from './fakeKinds';
 
 const askedMod = { argument: { kind: 'mod', name: 'Base Mod' } };
 const BASE = { name: 'Base.esm', origin: 'Base Mod' };
@@ -27,41 +30,62 @@ const askedPlugin = { argument: { kind: 'plugin', plugin: BASE } };
 beforeEach(() => { handlers.clear(); executeCommand.mockClear(); });
 
 function modRows(over: Partial<ModRows> = {}) {
-  const reveal = vi.fn(() => Promise.resolve());
-  const shown = vi.fn((_mod: string) => reveal);
-  const rows: ModRows = { selected: () => undefined, show: shown, folderOf: () => '/mods/Base Mod', dataPathOf: () => undefined, ...over };
-  return { rows, reveal, shown };
+  const rows: ModRows = { selected: () => undefined, show: () => undefined, folderOf: () => undefined, dataPathOf: () => undefined, fileTooltip: () => undefined, ...over };
+  return { rows };
 }
 
-describe('the mod go to command (commands.md, `go to` under Symbol)', () => {
-  function setup(over: Partial<ModRows> = {}) {
-    const { rows, reveal, shown } = modRows(over);
-    registerGoToMod({ rows, reporter: recordingReporter() });
-    return { reveal, shown, run: present(handlers.get('modbench.mod.goTo'), 'the go to command') };
+describe('the go to commands present the symbol\'s definition (commands.md, `go to` under Symbol)', () => {
+  const FOLDER = { kind: 'loose', path: '/mods/Base Mod' } as const;
+
+  function setup(definition: Definition, selected?: unknown) {
+    const show = vi.fn(() => Promise.resolve());
+    const reveal = vi.fn((_copy: CopyAt) => Promise.resolve());
+    const definitionOf = vi.fn((_symbol: never) => Promise.resolve('row' in definition ? { ...definition, show } : definition));
+    const reporter = recordingReporter();
+    const kinds = fakeKinds({ entry: fakeKind({ definitionOf }), plugin: fakeKind({ definitionOf }) });
+    registerGoToMod({ kinds, reveal, reporter, rows: { selected: () => selected } });
+    registerGoToPlugin({ kinds, reveal, reporter, rows: { selected: () => selected } });
+    return { show, reveal, definitionOf, reporter, run: (command: string) => present(handlers.get(command), 'the go to command') };
   }
 
-  it('goes to the mod the clicked row carries, which Mods shows as that row', async () => {
-    const { reveal, shown, run } = setup();
+  it('selects the mod\'s row, for the mod the clicked row carries', async () => {
+    const { show, definitionOf, run } = setup({ row: 'Mods', show: () => Promise.resolve() });
 
-    await run(askedMod);
+    await run('modbench.mod.goTo')(askedMod);
 
-    expect([shown.mock.calls, reveal.mock.calls.length, executeCommand.mock.calls]).toEqual([[['Base Mod']], 1, []]);
+    expect([definitionOf.mock.calls, show.mock.calls.length, executeCommand.mock.calls]).toEqual([[[{ kind: 'mod', name: 'Base Mod' }]], 1, []]);
   });
 
   it('takes the one selected row from the palette', async () => {
-    const { shown, run } = setup({ selected: () => askedMod });
+    const { definitionOf, run } = setup({ row: 'Mods', show: () => Promise.resolve() }, askedMod);
 
-    await run();
+    await run('modbench.mod.goTo')();
 
-    expect(shown.mock.calls).toEqual([['Base Mod']]);
+    expect(definitionOf.mock.calls).toEqual([[{ kind: 'mod', name: 'Base Mod' }]]);
   });
 
-  it('shows the folder in the Explorer when Mods shows no row for it', async () => {
-    const { run } = setup({ show: () => undefined });
+  it('shows the copy its definition names in the Explorer', async () => {
+    const { reveal, run } = setup({ shown: FOLDER });
 
-    await run(askedMod);
+    await run('modbench.mod.goTo')(askedMod);
 
-    expect(executeCommand.mock.calls).toEqual([['revealInExplorer', Uri.file('/mods/Base Mod')]]);
+    expect(reveal.mock.calls).toEqual([[FOLDER]]);
+  });
+
+  it('says why it cannot go where the symbol has no definition', async () => {
+    const { reporter, run } = setup({ refused: 'Mods shows no row for it and no folder holds it.' });
+
+    await run('modbench.mod.goTo')(askedMod);
+
+    expect(reporter.reports.map(({ severity, message }) => [severity, message])).toEqual([['error', 'Could not go to "Base Mod": Mods shows no row for it and no folder holds it.']]);
+  });
+
+  it('selects the plugin\'s row, for the plugin an Argument carries', async () => {
+    const { show, definitionOf, reporter, run } = setup({ row: 'Plugins', show: () => Promise.resolve() });
+
+    await run('modbench.plugin.goTo')(askedPlugin);
+
+    expect([definitionOf.mock.calls, show.mock.calls.length, reporter.reports]).toEqual([[[{ kind: 'plugin', ...BASE }]], 1, []]);
   });
 });
 
@@ -126,22 +150,9 @@ describe('the mod referenced by command (commands.md, `referenced by` under Symb
 });
 
 function pluginRows(over: Partial<PluginRows> = {}) {
-  const reveal = vi.fn(() => Promise.resolve());
-  const rows: PluginRows = { selected: () => undefined, show: () => reveal, fileOf: () => '/data/Base.esm', ...over };
-  return { rows, reveal };
+  const rows: PluginRows = { selected: () => undefined, show: () => undefined, fileOf: () => undefined, ...over };
+  return { rows };
 }
-
-describe('the plugin go to command (commands.md, `go to` under Symbol)', () => {
-  it('selects the plugin\'s row in Plugins', async () => {
-    const { rows, reveal } = pluginRows();
-    const reporter = recordingReporter();
-    registerGoToPlugin({ rows, reporter });
-
-    await present(handlers.get('modbench.plugin.goTo'), 'the go to command')(askedPlugin);
-
-    expect([reveal.mock.calls.length, executeCommand.mock.calls, reporter.reports]).toEqual([1, [], []]);
-  });
-});
 
 describe('the plugin referenced by command (plugins.md, Menus and keys)', () => {
   const OTHER = { name: 'Other.esp', origin: 'Other' };

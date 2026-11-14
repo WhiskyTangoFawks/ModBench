@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
-import type { ReferencesViewInput } from '../drivingLib/referencesView';
+import { referencesView, type ReferencesViewInput } from '../drivingLib/referencesView';
 import { sameName, type CopyNaming, type HeldTexts, type PlaceInFile } from '../symbolNames/symbolNames';
 import { copyOf, RENDERED_DOCUMENT_SCHEME } from '../textDocuments/recordDocument';
 import { locationsList } from './locationsList';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
+import type { References } from './symbolKind';
 
 interface Reading<Reference> {
   readonly references: readonly Reference[];
@@ -24,8 +25,7 @@ function listMessage(found: number, unread: number): string | undefined {
 
 type Unread = Pick<Reporter, 'report' | 'shownOnSurface'>;
 
-/** `references` of `subject`, with a notification naming each file the gesture could not read. */
-export function reportedForGesture<References extends { readonly unread: readonly string[] }>(reporter: Unread, subject: string, references: References): References {
+function reportedForGesture<References extends { readonly unread: readonly string[] }>(reporter: Unread, subject: string, references: References): References {
   if (references.unread.length > 0) {
     reporter.report('warning', `Referenced by on ${subject} could not read every file that may name it.`, references.unread.join('\n'));
   }
@@ -56,6 +56,14 @@ export interface ListedLocations {
   readonly unread: number;
 }
 
+export const atFile = (file: string): vscode.Location => new vscode.Location(vscode.Uri.file(file), new vscode.Range(0, 0, 0, 0));
+
+/** Whether a symbol's name holds a Go to Symbol in Workspace query, whatever the case. */
+export const nameHolds = (name: string, query: string): boolean => name.toLowerCase().includes(query.toLowerCase());
+
+/** A row's tooltip, a line to each of its lines; none where the row shows no tooltip. */
+export const tooltipLines = (tooltip: string | undefined): readonly string[] => tooltip?.split('\n').filter((line) => line !== '') ?? [];
+
 export const placeLocation = ({ file, start, end }: PlaceInFile): vscode.Location =>
   new vscode.Location(vscode.Uri.file(file), new vscode.Range(start.line, start.character, end.line, end.character));
 
@@ -66,8 +74,7 @@ export const referenceOf = (location: vscode.Location): PlaceInFile | CopyNaming
 export const placeOfLocation = ({ uri, range }: vscode.Location): PlaceInFile =>
   ({ file: uri.fsPath, start: { line: range.start.line, character: range.start.character }, end: { line: range.end.line, character: range.end.character } });
 
-/** What the References view shows for Referenced By: the places `read` lists, anchored at `location`, which `first` has already read. */
-export function referencedByInput(
+function referencedByInput(
   title: string, contextValue: string, location: vscode.Location, read: () => Promise<ListedLocations>, first?: ListedLocations,
 ): ReferencesViewInput {
   let unshown = first;
@@ -80,4 +87,40 @@ export function referencedByInput(
     },
     with: (moved) => referencedByInput(title, contextValue, moved, read),
   };
+}
+
+interface ReferencedBy {
+  readonly reporter: Unread;
+  readonly subject: string;
+  readonly contextValue: string;
+  readonly references: () => Promise<References>;
+  /** Where the list anchors, given its first read; its first place when absent. */
+  readonly anchorOf?: (first: ListedLocations) => Promise<vscode.Location | { refused: string }>;
+}
+
+const firstPlace = ({ locations: [first], unread }: ListedLocations): Promise<vscode.Location | { refused: string }> =>
+  Promise.resolve(first ?? { refused: unread > 0 ? 'No file that could be read names it.' : 'No file names it.' });
+
+/** `referenced by`: the places `references` lists, in VS Code's References view (commands.md, Symbol). */
+export async function showReferencedBy({ reporter, subject, contextValue, references, anchorOf = firstPlace }: ReferencedBy): Promise<void> {
+  const view = await referencesView();
+  if (!view) return;
+  const listed = async (): Promise<ListedLocations | { refused: string }> => {
+    const found = await references();
+    if ('refused' in found) return found;
+    const { locations, unread } = reportedForGesture(reporter, subject, found);
+    return { locations: [...locations], unread: unread.length };
+  };
+  const refused = (why: string): void => { reporter.report('error', `Could not list where files name ${subject}.`, why); };
+  const first = await listed();
+  if ('refused' in first) return refused(first.refused);
+  const anchor = await anchorOf(first);
+  if ('refused' in anchor) return refused(anchor.refused);
+  const again = async (): Promise<ListedLocations> => {
+    const found = await listed();
+    if (!('refused' in found)) return found;
+    refused(found.refused);
+    return { locations: [], unread: 1 };
+  };
+  view.setInput(referencedByInput(`Referenced By: ${subject}`, contextValue, anchor, again, first));
 }
