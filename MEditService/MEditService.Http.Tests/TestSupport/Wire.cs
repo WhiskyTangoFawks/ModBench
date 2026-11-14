@@ -274,9 +274,12 @@ internal static class Wire
     internal static async Task<JsonElement> Body(this HttpResponseMessage response) =>
         await response.Content.ReadFromJsonAsync<JsonElement>();
 
-    internal static async Task<JsonElement> Record(this HttpClient client, string formKey, string? query = null) =>
-        await client.GetFromJsonAsync<JsonElement>(
-            $"/records/{Uri.EscapeDataString(formKey)}{(query is null ? string.Empty : "?" + query)}");
+    /// <summary>The winning copy, as the comparison of the active plugins answers it.</summary>
+    internal static async Task<JsonElement> Record(this HttpClient client, string formKey) =>
+        WinnerIn(await client.Compare(formKey));
+
+    internal static JsonElement WinnerIn(JsonElement comparison) =>
+        comparison.GetProperty("overrides").EnumerateArray().Single(copy => copy.GetProperty("isWinner").GetBoolean());
 
     internal static async Task<JsonElement> Compare(this HttpClient client, string formKey) =>
         await client.GetFromJsonAsync<JsonElement>($"/records/{Uri.EscapeDataString(formKey)}/compare");

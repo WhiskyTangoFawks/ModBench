@@ -16,6 +16,7 @@ export const documentChanges = new Set<(event: { document: unknown; contentChang
 export const disk = new Map<string, string | Uint8Array>();
 export const tabGroups: { viewColumn: number; tabs: unknown[] }[] = [];
 export const applyEdit = vi.fn<() => Promise<boolean>>(() => Promise.resolve(true));
+export const showQuickPick = vi.fn<(items: readonly unknown[], options?: unknown) => Promise<unknown>>();
 
 interface UriParts { scheme: string; path: string; query?: string }
 
@@ -94,6 +95,7 @@ export const editorVscode = {
     tabGroups: { get all() { return tabGroups; }, close: () => Promise.resolve(true) },
     withProgress: (_options: unknown, task: () => Promise<unknown>) => task(),
     showTextDocument: () => Promise.resolve(),
+    showQuickPick: (items: readonly unknown[], options?: unknown) => showQuickPick(items, options),
     registerFileDecorationProvider: () => ({ dispose: () => undefined }),
     createTreeView: () => ({ selection: [], onDidChangeSelection: () => ({ dispose: () => undefined }), dispose: () => undefined }),
     createQuickPick: () => {
@@ -155,4 +157,5 @@ export function forgetVscode(): void {
   executeCommand.mockImplementation(dispatch);
   applyEdit.mockReset();
   applyEdit.mockResolvedValue(true);
+  showQuickPick.mockReset();
 }

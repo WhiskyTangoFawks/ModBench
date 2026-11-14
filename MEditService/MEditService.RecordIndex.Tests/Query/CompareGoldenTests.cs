@@ -78,7 +78,7 @@ public sealed class CompareGoldenTests(CompareGoldenFixture fixture) : IClassFix
             fk => fk.ToString(),
             fk =>
             {
-                var d = Index.Queries.GetRecord(fk.ToString()).Value().Require();
+                var d = Index.Queries.GetWinner(fk.ToString()).Value().Require();
                 return new { d.Plugin, d.Origin, d.IsWinner, d.EditorId, d.RecordType };
             });
 

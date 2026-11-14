@@ -68,19 +68,17 @@ internal static class RecordEndpoints
         .ProducesProblem(400)
         .ProducesProblem(503);
 
-        app.MapGet("/records/{formKey}", async (string formKey, IQueries svc, CancellationToken aborted) =>
+        app.MapGet("/records/{formKey}/owners", async (string formKey, IQueries svc, CancellationToken aborted) =>
         {
             if (logger.IsEnabled(LogLevel.Information))
             {
-                logger.LogInformation("Received GetRecord for {FormKey}", formKey);
+                logger.LogInformation("Received GetRecordOwners for {FormKey}", formKey);
             }
-            var decoded = Uri.UnescapeDataString(formKey);
-            return EndpointMapping.Answered(await svc.GetRecord(decoded, aborted), detail => detail is null ? Results.NotFound() : Results.Ok(detail));
+            return EndpointMapping.Ok(await svc.GetRecordOwners(Uri.UnescapeDataString(formKey), aborted));
         })
-        .WithName("GetRecord")
+        .WithName("GetRecordOwners")
         .WithTags("Records")
-        .Produces<RecordDetail>()
-        .ProducesProblem(404)
+        .Produces<IReadOnlyList<PluginAddress>>()
         .ProducesProblem(503);
 
         app.MapGet("/records/{formKey}/compare", async (string formKey, IQueries svc, CancellationToken aborted) =>

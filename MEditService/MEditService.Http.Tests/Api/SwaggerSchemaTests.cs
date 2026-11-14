@@ -42,7 +42,7 @@ public sealed class SwaggerSchemaTests
     [Theory]
     [InlineData("get", "/plugins")]
     [InlineData("get", "/records")]
-    [InlineData("get", "/records/{formKey}")]
+    [InlineData("get", "/records/{formKey}/owners")]
     [InlineData("get", "/records/{formKey}/compare")]
     [InlineData("get", "/plugins/{plugin}/record-types")]
     [InlineData("get", "/plugins/{plugin}/records/{formKey}/children")]

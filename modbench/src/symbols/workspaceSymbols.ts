@@ -88,14 +88,6 @@ export function workspaceSymbolsOf<Document extends { getText(): string }>({ cli
   const symbolsFor = async (query: string, search: SymbolSearch): Promise<RecordSymbol[]> =>
     (await recordsFor(query, search, { types: [], eachRecordOnce: false })).found;
 
-  /** Each copy of `formKey` in a compiled plugin outside the load order. */
-  const compiledCopiesOf = async (formKey: string, gesture: string): Promise<RecordSymbol[]> => {
-    const plugins = await pluginsListed(gesture);
-    if (plugins === undefined) return [];
-    const searches = await Promise.all(compiledOutsideTheLoadOrder(plugins).map((plugin) => searched(formKey, [], plugin)));
-    return listed(plugins, searches, gesture, (row) => row.formKey === formKey);
-  };
-
   /** Where the copy the user picked opens: its FormKey member in its document. */
   const locate = async ({ editorId, formKey, plugin }: RecordSymbol, gesture: string): Promise<RecordLocation<Document> | undefined> => {
     const name = recordLabel(editorId, formKey);
@@ -109,5 +101,5 @@ export function workspaceSymbolsOf<Document extends { getText(): string }>({ cli
       return undefined;
     }
   };
-  return { recordsFor, symbolsFor, compiledCopiesOf, locate };
+  return { recordsFor, symbolsFor, locate };
 }

@@ -752,12 +752,12 @@ class HttpMEditClient implements MEditClient {
     }), (data) => data ?? { items: [], total: 0 });
   }
 
-  getRecordOwner(formKey: string): Promise<PluginAddress | undefined | ReadFailed> {
-    return this.read(`getRecordOwner(${formKey})`, (api, signal) => api.GET('/records/{formKey}', { params: { path: { formKey } }, signal }),
-      (data) => (data ? { name: data.plugin, origin: data.origin } : undefined), { absent: { status: 404, answers: undefined } });
+  getRecordOwners(formKey: string): Promise<PluginAddress[] | ReadFailed> {
+    return this.read(`getRecordOwners(${formKey})`, (api, signal) => api.GET('/records/{formKey}/owners', { params: { path: { formKey } }, signal }),
+      noBodyFails);
   }
 
-  // A 404 (unknown FormKey) is "nothing holds it yet", not a fault, as getRecordOwner's own 404 is.
+  // A 404 (unknown FormKey) is "nothing holds it yet", not a fault.
   getRecordHolders(formKey: string): Promise<PluginAddress[] | ReadFailed> {
     return this.read(`getRecordHolders(${formKey})`, (api, signal) => api.GET('/records/{formKey}/compare', { params: { path: { formKey } }, signal }),
       (data) => (data?.overrides ?? []).map((o) => ({ name: o.plugin, origin: o.origin })), { absent: { status: 404, answers: [] } });

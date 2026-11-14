@@ -38,20 +38,25 @@ internal sealed class RelationReads(
     /// </summary>
     public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins => openedPlugins();
 
-    /// <summary>The winning override of <paramref name="formKey"/>, across every active
-    /// plugin. Null if the FormKey isn't indexed.</summary>
-    public RecordDocument? GetDocument(string formKey)
-    {
-        using var context = OpenRead();
-        return OneDocument(context, Located(context, "records", "form_key = $1 AND is_winner", formKey));
-    }
-
     /// <summary>One specific plugin's copy of <paramref name="formKey"/>, winner or not. Null if
     /// that plugin never indexed this FormKey.</summary>
     public RecordDocument? GetDocument(string formKey, PluginAddress plugin)
     {
         using var context = OpenRead();
         return OneDocument(context, Located(context, "records", "form_key = $1 AND plugin = $2 AND origin = $3", formKey, plugin.Name, plugin.Origin));
+    }
+
+    public IReadOnlyList<PluginAddress> GetOwners(string formKey)
+    {
+        using var context = OpenRead();
+        return context.Rows($"""
+            WITH winner AS (SELECT plugin, origin FROM records WHERE form_key = $1 AND is_winner)
+            SELECT plugin, origin FROM winner
+            UNION ALL
+            SELECT r.plugin, r.origin FROM {Copies}
+            WHERE r.form_key = $1 AND {InPluginSource} AND NOT EXISTS (SELECT 1 FROM winner)
+            ORDER BY plugin, origin
+            """, reader => reader.GetPluginAddress(), formKey);
     }
 
     private RecordDocument? OneDocument(ReadContext context, List<CopySize> located) =>

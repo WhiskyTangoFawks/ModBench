@@ -41,9 +41,9 @@ public sealed class DecompilePluginTraceTests : HostedTests
 
     private async Task<string?> EditorIdUnlessTheIndexIsReconciling(string formKey)
     {
-        using var response = await Client.GetAsync($"/records/{Uri.EscapeDataString(formKey)}");
+        using var response = await Client.GetAsync($"/records/{Uri.EscapeDataString(formKey)}/compare");
         if (response.StatusCode == HttpStatusCode.ServiceUnavailable) return null;
-        return (await response.EnsureSuccessStatusCode().Body()).GetProperty("editorId").GetString();
+        return Wire.WinnerIn(await response.EnsureSuccessStatusCode().Body()).GetProperty("editorId").GetString();
     }
 
     [Fact]

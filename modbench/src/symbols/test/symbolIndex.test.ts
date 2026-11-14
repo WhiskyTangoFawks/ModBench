@@ -25,7 +25,7 @@ const PLACE = { file: STAND_FILE, start: { line: 0, character: 2 }, end: { line:
 
 async function inRendered(): Promise<vscode.Location> {
   const opened = await copyDocument({
-    getCopyDocument: () => Promise.resolve({ kind: 'Rendered', location: 'Stand - 000700_A.esp.json' }), getRecordOwner: () => Promise.resolve(MOD_A),
+    getCopyDocument: () => Promise.resolve({ kind: 'Rendered', location: 'Stand - 000700_A.esp.json' }), getRecordOwners: () => Promise.resolve([MOD_A]),
   }, { formKey: STAND, plugin: MOD_A });
   if ('refused' in opened) throw new Error(opened.refused);
   return new vscode.Location(opened.uri, new vscode.Position(0, 0));

@@ -47,7 +47,7 @@ function language(answer: Awaited<ReturnType<FileClient['getFileReferences']>>, 
   const reveal = vi.fn(() => Promise.resolve());
   const client: FileClient = {
     getFileReferences,
-    getRecordOwner: () => Promise.resolve(undefined),
+    getRecordOwners: () => Promise.resolve([]),
     getCopyDocument: () => Promise.resolve({ kind: 'OwnFile' as const, location: SOURCE }),
   };
   const stackedCopies = new FileConflictLookup<StackedFile>();

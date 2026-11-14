@@ -453,17 +453,13 @@ function createMockBackend(): http.Server {
       });
       return;
     }
-    const wonFormKey = /^\/records\/([^/?]+)$/.exec(url)?.[1];
-    if (wonFormKey !== undefined && decodeURIComponent(wonFormKey) === NOT_HELD_FORM_KEY) {
-      res.writeHead(404);
-      res.end();
-      return;
-    }
-    if (wonFormKey !== undefined) {
-      const winner = [COMPILED_PLUGIN_FORM_KEY, CHILD_FORM_KEY].includes(decodeURIComponent(wonFormKey))
-        ? { plugin: COMPILED_PLUGIN, origin: COMPILED_PLUGIN_ORIGIN } : { plugin: 'Fallout4.esm', origin: 'Data/' };
+    const ownedFormKey = /^\/records\/([^/?]+)\/owners$/.exec(url)?.[1];
+    if (ownedFormKey !== undefined) {
+      const formKey = decodeURIComponent(ownedFormKey);
+      const owner = [COMPILED_PLUGIN_FORM_KEY, CHILD_FORM_KEY].includes(formKey)
+        ? { name: COMPILED_PLUGIN, origin: COMPILED_PLUGIN_ORIGIN } : { name: 'Fallout4.esm', origin: 'Data/' };
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ formKey: decodeURIComponent(wonFormKey), ...winner }));
+      res.end(JSON.stringify(formKey === NOT_HELD_FORM_KEY ? [] : [owner]));
       return;
     }
     const comparedFormKey = /^\/records\/([^/?]+)\/compare$/.exec(url)?.[1];

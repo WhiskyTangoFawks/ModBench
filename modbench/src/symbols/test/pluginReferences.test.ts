@@ -40,7 +40,7 @@ function references(owners: SymbolOwner[], copies: Record<string, CopyOnDisk> = 
   const held = heldTexts([['/source/Child Mod/build.json', '{}']]);
   const referencesTo = pluginReferencesOf({
     owners, plugins: () => plugins, held: () => held,
-    client: { getCopyDocument, getRecordOwner: () => Promise.reject(new Error('A copy names its plugin.')) },
+    client: { getCopyDocument, getRecordOwners: () => Promise.reject(new Error('A copy names its plugin.')) },
     open: (uri) => Promise.resolve({ getText: () => textAt(uri) }),
     spansIn: (text, formKey, name) => Promise.resolve([spelledIn(text, name) ?? spelledIn(text, `"${formKey}"`) ?? { start: 0, end: 0 }]),
   });

@@ -5,7 +5,7 @@ import { Uri } from '../../test/vscodeMock';
 vi.mock('vscode', () => ({ Uri }));
 
 import * as vscode from 'vscode';
-import { copyDocument, copyOf, type RecordDocumentClient } from '../recordDocument';
+import { copyDocument, copyOf, recordDocument, type RecordDocumentClient } from '../recordDocument';
 import type { RecordCopy } from '../../wire/recordCopy';
 
 const GUN = '000801:A.esp';
@@ -15,7 +15,7 @@ const NAME = 'Gun - 000801_A.esp.json';
 const CELL_FILE = '/source/ModA/plugin-source/A.esp/Cells/Cell.json';
 
 const nonCompiledPlugin = (renderedFileName: string): RecordDocumentClient => ({
-  getRecordOwner: () => Promise.resolve(undefined),
+  getRecordOwners: () => Promise.resolve([]),
   getCopyDocument: () => Promise.resolve({ kind: 'Rendered', location: renderedFileName }),
 });
 
@@ -98,5 +98,23 @@ describe("a copy's document", () => {
 
   it('is a refusal naming the plugin when it holds no copy', async () => {
     expect(await copyDocument(holdingNone, copy)).toEqual({ refused: 'A.esp (ModA) holds no 000801:A.esp.' });
+  });
+});
+
+describe('the document of a record given without a plugin', () => {
+  const ownedBy = (...owners: (typeof modA)[]): RecordDocumentClient => ({ ...ownFile(CELL_FILE), getRecordOwners: () => Promise.resolve(owners) });
+
+  it('is its one owner\'s copy\'s', async () => {
+    expect(await recordDocument(ownedBy(modA), { formKey: GUN })).toEqual({ uri: vscode.Uri.file(CELL_FILE) });
+  });
+
+  it('is none when no plugin owns it', async () => {
+    expect(await recordDocument(ownedBy(), { formKey: GUN })).toBeUndefined();
+  });
+
+  it('is a refusal naming each owner when several own it, none of them active', async () => {
+    expect(await recordDocument(ownedBy(modA, { name: 'B.esp', origin: 'ModB' }), { formKey: GUN })).toMatchObject({
+      refused: 'No active plugin holds 000801:A.esp, and several compiled plugins do: A.esp (ModA), B.esp (ModB). Give the plugin whose copy to open.',
+    });
   });
 });

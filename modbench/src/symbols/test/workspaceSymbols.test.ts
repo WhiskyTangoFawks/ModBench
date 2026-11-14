@@ -40,7 +40,7 @@ function symbols(plugins: PluginMetadata[], found: RecordSummary[], files: Recor
       const items = found.filter((row) => searched.some((each) => row.plugin === each.name && row.origin === each.origin));
       return Promise.resolve({ items: items.slice(0, atMost ?? 20), total: items.length });
     }),
-    getRecordOwner: () => Promise.reject(new Error('A symbol names its plugin.')),
+    getRecordOwners: () => Promise.reject(new Error('A symbol names its plugin.')),
     getCopyDocument: documentsAsked,
     ...answering,
   };
@@ -57,7 +57,6 @@ function symbols(plugins: PluginMetadata[], found: RecordSummary[], files: Recor
     client, reporter, documentsAsked,
     symbolsFor: (query: string, cancelled = () => false) => workspace.symbolsFor(query, { gesture: GO_TO_SYMBOL, cancelled }),
     recordsFor: (query: string, search: RecordSearch) => workspace.recordsFor(query, { gesture: 'Completion', cancelled: () => false }, search),
-    compiledCopiesOf: (formKey: string) => workspace.compiledCopiesOf(formKey, 'Referenced By'),
     locate: (symbol: RecordSymbol) => workspace.locate(symbol, GO_TO_SYMBOL),
   };
 }
@@ -122,14 +121,6 @@ describe('Go to Symbol in Workspace (symbols.md, The features, story 4)', () => 
     await symbolsFor(query);
 
     expect(reporter.shownFailures.map((shown) => shown.detail)).toEqual([detail]);
-  });
-
-  it('finds a record\'s copies for Referenced By in the compiled plugins outside the load order alone', async () => {
-    const { compiledCopiesOf } = symbols(
-      [plugin(modA), plugin(inactive, { inLoadOrder: false })], [summary(GUN, modA, 'RustyGun'), summary(GUN, inactive, 'RustyGun')],
-    );
-
-    expect(listed(await compiledCopiesOf(GUN))).toEqual([{ editorId: 'RustyGun', formKey: GUN, plugin: 'D.esp', pluginFile: '/mods/ModD/D.esp' }]);
   });
 
   it('lists what it found and writes a line for each search that failed and each copy of a plugin mEdit does not list', async () => {

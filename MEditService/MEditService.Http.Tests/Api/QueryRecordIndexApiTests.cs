@@ -117,11 +117,11 @@ public sealed class QueryRecordIndexApiTests(LoadedApiFixture<QueriedPluginsFixt
     }
 
     [Fact]
-    public async Task AQuestionAboutARecordNoPluginHolds_IsAnsweredWithNothingFound()
+    public async Task TheOwnersOfARecordNoPluginHolds_AreNone()
     {
-        var response = await Client.GetAsync(new Uri("/records/000FFF:Nowhere.esp", UriKind.Relative));
+        var owners = await Client.GetFromJsonAsync<JsonElement>(new Uri("/records/000FFF:Nowhere.esp/owners", UriKind.Relative));
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(0, owners.GetArrayLength());
     }
 
     [Fact]

@@ -61,7 +61,7 @@ public sealed class LinkResolutionTests
 
         Assert.Equal(ExpectedKeywordErrors, KeywordErrors(index.DocumentOf(linker, OverKey)));
         Assert.Equal(ExpectedKeywordErrors, KeywordErrors(Assert.Single(index.StackOf(linker))));
-        Assert.Equal(ExpectedKeywordErrors, KeywordErrors(index.Queries.GetRecord(linker).Value()
+        Assert.Equal(ExpectedKeywordErrors, KeywordErrors(index.Queries.GetWinner(linker).Value()
             ?? throw new InvalidOperationException("Expected the linker to have a winner.")));
 
         Assert.Equal(

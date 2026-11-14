@@ -14,7 +14,7 @@ const GUN_TEXT = `{\n  "FormKey": "${GUN}",\n  "Base": "${GUN}",\n  "EditorID": 
 
 function located(text = GUN_TEXT) {
   const client = new InMemoryMEditClient();
-  client.setQueryAnswer('getRecordOwner', modA);
+  client.setQueryAnswer('getRecordOwners', [modA]);
   client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: GUN_FILE });
   const at = (record: { formKey: string }) =>
     locateRecord({ client, open: () => Promise.resolve({ getText: () => text }) }, record, (held, formKey) => Promise.resolve(spelledIn(held, `"${formKey}"`)));

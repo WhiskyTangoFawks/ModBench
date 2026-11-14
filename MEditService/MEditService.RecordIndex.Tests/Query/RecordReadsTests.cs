@@ -152,7 +152,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
         var formKey = _fixture.Npc1FormKey.ToString();
         var schema = Reflector.GetSchemas(GameRelease.Fallout4)["npc_"];
 
-        var record = index.Queries.GetRecord(formKey).Value();
+        var record = index.Queries.GetWinner(formKey).Value();
 
         Assert.NotNull(record);
         Assert.NotEmpty(schema.RecordColumns);
@@ -175,7 +175,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var record = index.Queries.GetRecord(npcFormKey.ToString()).Value();
+        var record = index.Queries.GetWinner(npcFormKey.ToString()).Value();
 
         Assert.NotNull(record);
         var raceField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "Race");
@@ -229,7 +229,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var record = index.Queries.GetRecord(raceFormKey.ToString()).Value();
+        var record = index.Queries.GetWinner(raceFormKey.ToString()).Value();
 
         Assert.NotNull(record);
         var flags = record.Fields.Single(f => f.Metadata.Name == "Flags");
@@ -245,7 +245,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     {
         using var index = LoadedIndex();
 
-        Assert.Null(index.Queries.GetRecord(formKey).Value());
+        Assert.Null(index.Queries.GetWinner(formKey).Value());
     }
 
     private static PluginFixtureData TwoProviders(string prefix, out FormKey sharedNpc)
@@ -317,7 +317,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var record = index.Queries.GetRecord(npcFormKey.ToString()).Value();
+        var record = index.Queries.GetWinner(npcFormKey.ToString()).Value();
 
         Assert.NotNull(record);
         var keywordsField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "Keywords");
@@ -351,7 +351,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
         var summary = index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 100, offset: 0).Value().Items.Single();
         Assert.Null(summary.EditorId);
 
-        var detail = index.Queries.GetRecord(npcFormKey.ToString()).Value();
+        var detail = index.Queries.GetWinner(npcFormKey.ToString()).Value();
         Assert.NotNull(detail);
         Assert.Null(detail.EditorId);
     }
@@ -361,7 +361,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     {
         using var index = LoadedIndex();
 
-        var record = index.Queries.GetRecord(_fixture.Npc1FormKey.ToString()).Value();
+        var record = index.Queries.GetWinner(_fixture.Npc1FormKey.ToString()).Value();
 
         Assert.NotNull(record);
         var combatStyle = Assert.Single(record.Fields, f => f.Metadata.Name == "CombatStyle");
@@ -398,7 +398,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var record = index.Queries.GetRecord(npcFormKey.ToString()).Value();
+        var record = index.Queries.GetWinner(npcFormKey.ToString()).Value();
 
         Assert.NotNull(record);
         Assert.Equal(checkError, Assert.Single(record.Fields, f => f.Metadata.Name == "Keywords").CheckError);
