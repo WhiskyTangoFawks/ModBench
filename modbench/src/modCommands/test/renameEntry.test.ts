@@ -25,6 +25,8 @@ function over(answers: InstanceAnswers = {}, reading: Partial<InstanceReading> =
   return { fake, client, applied, editing, commands: entryRenameCommands({ adapter: fake.adapter, client }) };
 }
 
+const linesWritten = (calls: readonly AdapterCall[]) => calls.flatMap((call) => (call.verb === 'changeModOrder' ? call.changes : []));
+
 const verbs = (calls: readonly AdapterCall[]) => calls.map((call) => ('profile' in call ? `${call.verb} ${call.profile}` : call.verb));
 
 describe('rename mod: the folder, its line in each profile, and each reference to it (mods.md, Rename mod)', () => {
@@ -144,14 +146,14 @@ describe('rename separator: its line in each profile, its folder, and each refer
     const renamer = over();
 
     expect(await renamer.commands.renameSeparator(renamer.editing, 'Missing', 'Renamed')).toEqual({ applied: false, failed: 'Separator not found in modlist: Missing', edited: false, moved: [] });
-    expect(renamer.fake.calls.flatMap((call) => ('changes' in call ? call.changes : []))).toEqual([]);
+    expect(linesWritten(renamer.fake.calls)).toEqual([]);
   });
 
   it('lands a separator no profile lists but a folder holds, with no line to carry', async () => {
     const renamer = over({}, { modFolders: modFoldersOf(...ORDER, separator('Orphan')) });
 
     expect(await renamer.commands.renameSeparator(renamer.editing, 'Orphan', 'Renamed')).toEqual({ applied: true, cannotFollow: [], name: 'Renamed' });
-    expect(renamer.fake.calls.flatMap((call) => ('changes' in call ? call.changes : []))).toEqual([]);
+    expect(linesWritten(renamer.fake.calls)).toEqual([]);
   });
 
   it('says its line was not renamed when the active profile\'s write failed', async () => {
