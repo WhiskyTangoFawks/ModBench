@@ -1422,11 +1422,12 @@ describe('the agent server, reading a record through mEdit', () => {
     expect(await call(client, 'read_record', { name: 'SharedNpc', plugin: { name: 'A.esp' } })).toEqual({ isError: true, text: 'A.esp (Big Rocks) holds no 000800:A.esp.' });
   });
 
-  it('answers references too large for one reply with how many there are, and the SQL view select_rows narrows them in', async () => {
+  it('answers references too large for one reply with how many there are, how many files it left out unread, and the SQL view select_rows narrows them in', async () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', NPC);
     symbolReads.references = {
-      references: Array.from({ length: 1000 }, (_, n) => ({ formKey: `${(0x900 + n).toString(16)}:B.esp`, plugin: { name: 'B.esp', origin: 'Big Rocks' } })), leftOut: [],
+      references: Array.from({ length: 1000 }, (_, n) => ({ formKey: `${(0x900 + n).toString(16)}:B.esp`, plugin: { name: 'B.esp', origin: 'Big Rocks' } })),
+      leftOut: Array.from({ length: 3 }, (_, n) => `${(0xA00 + n).toString(16)}:B.esp in B.esp (Big Rocks): mEdit's record index ran out of memory for this read`),
     };
     const { client } = await clientOf(new FakeInstance(ENABLED), mEdit);
 
@@ -1436,6 +1437,7 @@ describe('the agent server, reading a record through mEdit', () => {
     expect(JSON.parse(text)).toEqual({
       tooLarge: `The reply passes the ${REPLY_CHARS} characters that one reply holds.`,
       references: 1000,
+      leftOut: 3,
       narrow: 'select_rows reads the rows of the form_references view whose target_form_key is 000800:A.esp, which hold every plugin the record index holds, active or not, where this list holds the active and the compiled plugins. Its WHERE narrows them further.',
     });
   });
