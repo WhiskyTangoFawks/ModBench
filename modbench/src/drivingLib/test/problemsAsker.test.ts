@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { problemsAsker } from '../problemsAsker';
 import { REQUESTS_AT_ONCE } from '../../ports/bounded';
 import type { PluginAddress } from '../../wire/pluginAddress';
@@ -11,6 +11,7 @@ type Method = 'getPluginFilePaths' | 'getPluginProblems';
 const A: PluginAddress = { name: 'A.esp', origin: 'ModA' };
 const B: PluginAddress = { name: 'B.esp', origin: 'ModB' };
 const answerFor = (plugin: PluginAddress, over: Partial<Answered> = {}): Answered => ({ plugin, unread: [], ...over });
+const RETRY_AFTER_MS = 1000;
 const TIMED_OUT: ReadFailed = { failed: 'timed-out' };
 
 const turn = () => new Promise<void>((resolve) => { setTimeout(resolve, 0); });
@@ -47,8 +48,10 @@ function fakeClient() {
 
 function started() {
   const client = fakeClient();
-  return { client, asker: problemsAsker(client) };
+  return { client, asker: problemsAsker(client, RETRY_AFTER_MS) };
 }
+
+afterEach(() => { vi.useRealTimers(); });
 
 describe('problemsAsker', () => {
   it('asks the whole set once however many ask for it, before and after it is answered', async () => {
@@ -67,7 +70,7 @@ describe('problemsAsker', () => {
     expect([await asker.getPluginFilePaths(B), client.asked()]).toEqual([[answerFor(B)], [undefined]]);
   });
 
-  it('asks again of a plugin a notification names, and of the whole set, and keeps what it holds of the others', async () => {
+  it('asks again of a plugin a notification names, and keeps what it holds of the others', async () => {
     const { client, asker } = started();
     client.answerNext('getPluginFilePaths', () => Promise.resolve([answerFor(A)]));
     client.answerNext('getPluginFilePaths', () => Promise.resolve([answerFor(B)]));
@@ -195,5 +198,93 @@ describe('problemsAsker', () => {
     await turn();
     release.forEach((each) => { each.now(); });
     await Promise.all([...waiting, urgent]);
+  });
+
+  it('asks again of the whole set when a plugin changes, and of every plugin it held', async () => {
+    const { client, asker } = started();
+    await asker.getPluginFilePaths();
+    asker.onPluginChanged(() => undefined);
+
+    client.pluginChanged(A);
+    await asker.getPluginFilePaths();
+    await asker.getPluginFilePaths(B);
+
+    expect(client.asked()).toEqual([undefined, undefined]);
+  });
+
+  it('keeps the whole set when no plugin changed', async () => {
+    const { client, asker } = started();
+    await asker.getPluginFilePaths();
+    asker.onPluginChanged(() => undefined);
+
+    await asker.getPluginFilePaths();
+    await asker.getPluginFilePaths(B);
+
+    expect(client.asked()).toEqual([undefined]);
+  });
+
+  describe('a read that failed', () => {
+    const failing = (method: Method, plugin?: PluginAddress) => {
+      vi.useFakeTimers();
+      const { client, asker } = started();
+      client.answerNext(method, () => Promise.resolve(TIMED_OUT));
+      const again: (PluginAddress | undefined)[] = [];
+      asker.onAskedAgain(method, (each) => { again.push(each); });
+      return { client, asker, again, ask: () => asker[method](plugin).catch(() => undefined) };
+    };
+
+    it.each([
+      ['getPluginFilePaths', undefined, 'whole set'],
+      ['getPluginFilePaths', A, 'plugin'],
+      ['getPluginProblems', undefined, 'whole set'],
+      ['getPluginProblems', A, 'plugin'],
+    ] as const)('tells its listeners after a delay, never at once, to ask again: %s of the %s', async (method, plugin, _of) => {
+      const { again, ask } = failing(method, plugin);
+
+      await ask();
+      const atOnce = [...again];
+      await vi.advanceTimersByTimeAsync(RETRY_AFTER_MS - 1);
+      const beforeDelay = [...again];
+      await vi.advanceTimersByTimeAsync(1);
+
+      expect([atOnce, beforeDelay, again]).toEqual([[], [], [plugin]]);
+    });
+
+    it('is told to ask again once, however many asks failed meanwhile', async () => {
+      const { client, again, ask } = failing('getPluginFilePaths');
+      client.answerNext('getPluginFilePaths', () => Promise.resolve(TIMED_OUT));
+
+      await ask();
+      await ask();
+      await vi.advanceTimersByTimeAsync(RETRY_AFTER_MS * 3);
+
+      expect(again).toEqual([undefined]);
+    });
+
+    it.each([
+      ['a change to the plugin, which asks again itself', (asker: ReturnType<typeof started>['asker']) => { asker.forget(A); }],
+      ['a settled load order, which asks again itself', (asker: ReturnType<typeof started>['asker']) => { asker.forget(); }],
+    ])('is not asked again after %s', async (_case, forget) => {
+      const { asker, again, ask } = failing('getPluginFilePaths', A);
+      await ask();
+
+      forget(asker);
+      await vi.advanceTimersByTimeAsync(RETRY_AFTER_MS * 2);
+
+      expect(again).toEqual([]);
+    });
+
+    it('is asked again until it is answered, and no longer', async () => {
+      const { client, asker, again } = failing('getPluginFilePaths');
+      client.answerNext('getPluginFilePaths', () => Promise.resolve(TIMED_OUT));
+      asker.onAskedAgain('getPluginFilePaths', () => { void asker.getPluginFilePaths(); });
+
+      await asker.getPluginFilePaths().catch(() => undefined);
+      await vi.advanceTimersByTimeAsync(RETRY_AFTER_MS);
+      await vi.advanceTimersByTimeAsync(RETRY_AFTER_MS);
+      await vi.advanceTimersByTimeAsync(RETRY_AFTER_MS * 3);
+
+      expect([client.asked(), again]).toEqual([[undefined, undefined, undefined], [undefined, undefined]]);
+    });
   });
 });

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { problemsAsker } from '../../drivingLib/problemsAsker';
 import { feedPathProblems, type PathStanding } from '../pathProblems';
 import type { ProblemsByFile } from '../sourceProblems';
@@ -9,6 +9,7 @@ import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 import type { NotificationEvent } from '../../client/apiClient';
 import type { SourceFilesOf } from '../../instanceLoader/loadOrderSnapshot';
 
+const RETRY_AFTER_MS = 1000;
 const HOLDER = '000800:Names.esp';
 const PLUGIN = { name: 'Names.esp', origin: 'NamingMod' };
 const OTHER = { name: 'Other.esp', origin: 'OtherMod' };
@@ -36,7 +37,7 @@ function feed(answer: PluginFilePaths[], standing: Partial<PathStanding> = {}) {
     ...standing,
   };
   feedPathProblems({
-    client, ask: problemsAsker(client), sourceFiles: sourceFolders, readText: () => Promise.resolve(TEXT), reporter, paths,
+    client, ask: problemsAsker(client, RETRY_AFTER_MS), sourceFiles: sourceFolders, readText: () => Promise.resolve(TEXT), reporter, paths,
     publish: (problems) => published.push(problems), languageStatus: (text) => status.push(text),
   });
   const latest = () => published[published.length - 1] ?? new Map();
@@ -45,6 +46,8 @@ function feed(answer: PluginFilePaths[], standing: Partial<PathStanding> = {}) {
 }
 
 const asked = (client: InMemoryMEditClient) => client.calls.filter((call) => call.method === 'getPluginFilePaths').map((call) => call.args);
+
+afterEach(() => { vi.useRealTimers(); });
 
 describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
   it('puts a path that no file the game gets and no file its mod holds names on the path itself', async () => {
@@ -228,5 +231,40 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     await new Promise((resolve) => { setTimeout(resolve, 20); });
 
     expect(asked(client)).toEqual([[undefined]]);
+  });
+
+  describe.each([
+    ['the whole set', (client: InMemoryMEditClient) => { client.emit(loadOrderStatusEventFixture({ state: 'Ready', conflictsComputed: true, version: 2 })); }, undefined],
+    ['a plugin', (client: InMemoryMEditClient) => { client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 }); }, PLUGIN],
+  ] as const)('an ask for %s that failed', (_what, trigger, target) => {
+    const failedOnce = async () => {
+      const made = feed([answerFor()]);
+      await made.settled(1);
+      vi.useFakeTimers();
+      made.client.setQueryFailureOnce('getPluginFilePaths', { failed: 'timed-out' });
+      trigger(made.client);
+      await vi.waitFor(() => { expect(made.status.at(-1)).toContain('mEdit did not answer in time.'); });
+      return made;
+    };
+
+    it('is asked again after a delay, with no event between, and its answer is published', async () => {
+      const { client, settled } = await failedOnce();
+      client.setQueryAnswer('getPluginFilePaths', [answerFor(PLUGIN, [])]);
+
+      const atOnce = asked(client).length;
+      await vi.advanceTimersByTimeAsync(RETRY_AFTER_MS);
+
+      expect([atOnce, asked(client).at(-1), await settled(2)]).toEqual([2, [target], new Map()]);
+    });
+
+    it('says the panel shows the last good read until the retry is answered, and no longer', async () => {
+      const { client, status } = await failedOnce();
+      const whileWaiting = status.at(-1);
+      client.setQueryAnswer('getPluginFilePaths', [answerFor()]);
+
+      await vi.advanceTimersByTimeAsync(RETRY_AFTER_MS);
+
+      expect([whileWaiting, status.at(-1)]).toEqual([expect.stringContaining('Showing the last good read'), undefined]);
+    });
   });
 });

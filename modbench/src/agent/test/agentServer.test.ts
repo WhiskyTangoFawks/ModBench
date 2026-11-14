@@ -83,7 +83,7 @@ const NO_TOOLBOX = {
   game: { name: 'Fallout 4', folder: GAME_FOLDER_NOT_FOUND, versions: { kind: 'unresolved' } },
   gameFolderLinks: 0, holdsRepository: false, deployment: { folder: null },
 };
-const NO_STANDING = { mEdit: () => [], plugins: () => [], sortingRules: () => [], modList: () => [], sourceLanguage: () => [] };
+const NO_STANDING = { mEdit: () => [], plugins: () => [], sortingRules: () => [], modList: () => [], sourceLanguage: () => [], unsavedSource: () => [] };
 const NO_DEPLOYMENT = { folder: () => undefined, pluginsTxtPlace: () => Promise.resolve({ why: 'none' }) };
 
 const statusRead: { asked: number; answer: readonly ModStatus[] } = { asked: 0, answer: [] };
@@ -691,7 +691,7 @@ describe('the agent server, given an instance value', () => {
   describe('the standing lines it answers beside', () => {
     const EVERY_SOURCE = {
       mEdit: () => ['mEdit is Running'], plugins: () => ['plugins read failed'], sortingRules: () => ['No masterlist'],
-      modList: () => ['modlist.txt is not synced'], sourceLanguage: () => ['a source problem'],
+      modList: () => ['modlist.txt is not synced'], sourceLanguage: () => ['a source problem'], unsavedSource: () => ['the unsaved plugin source was not taken'],
     };
     const LAST_GOOD_READ = 'Showing the last good read: the modlist is unreadable';
     const blocksOf = async (client: Awaited<ReturnType<typeof clientOf>>['client'], tool: string) =>
@@ -721,7 +721,8 @@ describe('the agent server, given an instance value', () => {
       ['list_plugins', ['mEdit is Running', 'plugins read failed', 'No masterlist']],
       ['list_sorting_rules', ['mEdit is Running', 'plugins read failed', 'No masterlist']],
       ['list_problems', ['No masterlist', 'a source problem']],
-      ['read_record', ['mEdit is Running', 'plugins read failed', 'a source problem']],
+      ['read_record', ['mEdit is Running', 'plugins read failed', 'the unsaved plugin source was not taken']],
+      ['select_rows', ['mEdit is Running', 'plugins read failed', 'the unsaved plugin source was not taken']],
     ])('reach %s with its own sources, instance lines first', async (tool, own) => {
       const instance = new FakeInstance(VALUE);
       instance.fail('the modlist is unreadable');

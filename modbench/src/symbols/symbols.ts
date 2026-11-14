@@ -31,8 +31,8 @@ const NO_FILES: FilesHeld = { filesByMod: new Map(), dataFolderFiles: { kind: 'l
 interface SymbolsDeps {
   instance: Pick<Instance, 'value' | 'subscribe'> | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
-  client: Pick<MEditClient, 'getRecordOfFile' | 'onNotification' | 'onLoadOrderSettled'> & RecordClient & ScriptClient & FileClient & RecordReferencedByDeps['client'];
-  asker: Pick<ProblemsAsker<PluginFilePaths, unknown, unknown>, 'getPluginFilePaths' | 'inTurn' | 'forget'>;
+  client: Pick<MEditClient, 'getRecordOfFile'> & RecordClient & ScriptClient & FileClient & RecordReferencedByDeps['client'];
+  asker: Pick<ProblemsAsker<PluginFilePaths, unknown, unknown>, 'getPluginFilePaths' | 'inTurn' | 'forget' | 'onPluginChanged' | 'onLoadOrderSettled'>;
   /** What mEdit's record index names in plugin source. */
   names: Pick<MEditClient, 'getPluginSourceNames'>;
   focusedRecord: () => string | undefined;
@@ -95,10 +95,9 @@ export function createSymbols(deps: SymbolsDeps): Symbols {
     record: recordLanguage({ client, names, reporter, open: openPluginSourceDocument }),
   };
   const changed = (listener: (plugin?: PluginAddress) => void): vscode.Disposable => vscode.Disposable.from(
-    instance?.subscribe(() => { listener(); }) ?? { dispose: () => undefined },
-    { dispose: client.onLoadOrderSettled(() => { listener(); }) },
-    { dispose: client.onNotification('rows-changed', ({ plugin }) => { listener(plugin); }) },
-    { dispose: client.onNotification('plugin-changed', ({ plugin }) => { listener(plugin); }) },
+    instance?.subscribe(() => { deps.asker.forget(); listener(); }) ?? { dispose: () => undefined },
+    { dispose: deps.asker.onLoadOrderSettled(() => { listener(); }) },
+    { dispose: deps.asker.onPluginChanged(({ plugin }) => { listener(plugin); }) },
   );
   const problems = vscode.languages.createDiagnosticCollection('modbench-names');
   const rename = renameSymbol({
