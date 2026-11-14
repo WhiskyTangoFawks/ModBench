@@ -328,8 +328,8 @@ export interface MEditClient {
   /** Each plugin file's hashes with its flags at each combination of their original values, as a manifest carries them; writes nothing. */
   getFlaggedPluginHashes(gameRelease: string, files: readonly FlaggedPluginFile[]): Promise<FlaggedPluginHashes[] | ReadFailed>;
   getRecords(plugin: PluginAddress, type: string, offset: number, limit: number): Promise<RecordPage | ReadFailed>;
-  /** Every active plugin's copies, or one plugin's. */
-  searchRecords(query: string, validTypes: string[], plugin?: PluginAddress): Promise<RecordPage | ReadFailed>;
+  /** Every active plugin's copies, or one plugin's: at most `atMost`, 20 unless told, and how many match. */
+  searchRecords(query: string, validTypes: string[], plugin?: PluginAddress, atMost?: number): Promise<RecordPage | ReadFailed>;
   getRecordOwner(formKey: string): Promise<PluginAddress | undefined | ReadFailed>;
   /** Every plugin that holds a copy of the record, its own included. */
   getRecordHolders(formKey: string): Promise<PluginAddress[] | ReadFailed>;

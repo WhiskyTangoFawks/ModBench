@@ -17,6 +17,9 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { localFailure } from '../../wire/readFailed';
 import { sourceNames, spelledIn } from './fakeSourceNames';
+import { SEARCH } from './fakeKinds';
+import { present } from '../../ports/present';
+import { pluginMetadataFixture } from '../../client/test/fixtures';
 
 const GUN = '000801:A.esp';
 const modA = { name: 'A.esp', origin: 'ModA' };
@@ -75,6 +78,37 @@ describe('what references a record, and its hover (symbols.md, The symbols, Reco
   });
 });
 
+describe('Go to Symbol in Workspace on a record (symbols.md, The features, story 4)', () => {
+  const searching = () => {
+    const k = kind();
+    k.client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ ...modA, path: '/mods/ModA/A.esp', isCompiledPlugin: true })]);
+    k.client.setQueryAnswer('searchRecords', {
+      items: [{ formKey: GUN, plugin: modA.name, origin: modA.origin, editorId: 'Gun', loadOrderIndex: 0, isWinner: true, workingTreeState: 'None', hasContainerChildren: false, hasParseFailure: false }],
+      total: 1,
+    });
+    return k;
+  };
+
+  it('refuses a pick it cannot open, saying why, so VS Code opens nothing', async () => {
+    const { client, record, reporter } = searching();
+    client.setQueryAnswer('getCopyDocument', null);
+    const [listed] = await record.symbolsFor('Gun', SEARCH);
+
+    await expect(present(listed?.resolve, 'its resolve')()).rejects.toThrow(`Go to Symbol in Workspace cannot open Gun [${GUN}].`);
+    expect(reporter.shownFailures.map(({ detail }) => detail)).toEqual([`A.esp (ModA) holds no ${GUN}.`]);
+  });
+
+  it('lists a copy at its plugin\'s file, and opens it at its FormKey member in its document once picked', async () => {
+    const { record } = searching();
+    const [listed] = await record.symbolsFor('Gun', SEARCH);
+    const member = GUN_TEXT.indexOf(`"FormKey": "${GUN}"`);
+
+    expect([listed?.location.uri.path, await listed?.resolve?.()]).toMatchObject([
+      '/mods/ModA/A.esp', { uri: { path: GUN_FILE }, range: { start: { character: member } } },
+    ]);
+  });
+});
+
 describe('referenced by on a record anchors its list wherever a plugin holds it (symbols.md, The symbols, Record)', () => {
   const compiled = {
     ...modA, path: '/mods/ModA/A.esp', isLight: false, isMaster: false, isBlueprint: false, masters: [], isImmutable: false, inLoadOrder: false,
@@ -107,6 +141,25 @@ describe('referenced by on a record anchors its list wherever a plugin holds it 
     await record.referencedBy(RECORD);
 
     expect([shownLocation(), reporter.reports]).toMatchObject([{ uri: { path: GUN_FILE }, range: { line: 0, character: 0 } }, []]);
+  });
+
+  it('is refused, saying why, where the winning copy cannot be read, though a compiled plugin holds the record', async () => {
+    const { record, reporter } = asking((k) => { k.client.setQueryFailure('getRecordOwner', localFailure('mEdit is down')); });
+
+    await record.referencedBy(RECORD);
+
+    expect([setInput.mock.calls, reporter.reports.map(({ severity, detail }) => [severity, detail])]).toEqual([[], [['error', 'mEdit is down']]]);
+  });
+
+  it('names Referenced By where it cannot search the compiled plugins', async () => {
+    const { record, reporter } = asking((k) => {
+      k.client.setQueryAnswer('getRecordOwner', undefined);
+      k.client.setQueryFailure('getPlugins', localFailure('mEdit is down'));
+    });
+
+    await record.referencedBy(RECORD);
+
+    expect(reporter.shownFailures.map(({ message }) => message)).toEqual(['Referenced By cannot list the compiled plugins.']);
   });
 
   it('is refused, saying why, where no plugin holds the record', async () => {

@@ -15,7 +15,7 @@ interface Captured {
   definition?: { provideDefinition(document: FakeDocument, position: FakePosition): Promise<unknown> };
   references?: { provideReferences(document: FakeDocument, position: FakePosition): Promise<unknown> };
   workspaceSymbols?: {
-    provideWorkspaceSymbols(query: string): Promise<{ name: string; location: unknown }[]>;
+    provideWorkspaceSymbols(query: string, token: { isCancellationRequested: boolean }): Promise<{ name: string; location: unknown }[]>;
     resolveWorkspaceSymbol(symbol: { name: string; location: unknown }): Promise<{ location: unknown }>;
   };
 }
@@ -87,7 +87,8 @@ function features(kinds: SymbolKinds) {
     references: () => present(captured.references, 'references').provideReferences(document, AT),
     hover: () => present(captured.hover, 'hover').provideHover(document, AT),
     completion: () => present(captured.completion, 'completion').provideCompletionItems(document, AT),
-    workspaceSymbols: (query: string) => present(captured.workspaceSymbols, 'workspace symbols').provideWorkspaceSymbols(query),
+    workspaceSymbols: (query: string, isCancellationRequested = false) =>
+      present(captured.workspaceSymbols, 'workspace symbols').provideWorkspaceSymbols(query, { isCancellationRequested }),
     resolve: (symbol: { name: string; location: unknown }) => present(captured.workspaceSymbols, 'workspace symbols').resolveWorkspaceSymbol(symbol),
   };
 }
@@ -250,20 +251,36 @@ describe('completion offers the symbols of the kind a file names at the place (s
 describe('Go to Symbol in Workspace lists every kind\'s symbols (symbols.md, The features, story 4)', () => {
   const listed = (name: string, resolve?: () => Promise<vscode.Location | undefined>) => ({ symbol: { kind: 'file' as const, path: name }, name, detail: 'a detail', icon: SymbolKind.File, location: ELSEWHERE, resolve });
 
-  it('lists each kind\'s symbols whose name holds the query, the kinds in order', async () => {
+  it('lists each kind\'s symbols whose name holds the query, the kinds in order, each kind told the gesture', async () => {
     const asked = features(fakeKinds({
       record: fakeKind({ symbolsFor: () => Promise.resolve([listed('Gun')]) }),
       plugin: fakeKind({ symbolsFor: () => Promise.resolve([listed('Gun.esp')]) }),
-      file: fakeKind({ symbolsFor: (query) => Promise.resolve([listed(query)]) }),
+      file: fakeKind({ symbolsFor: (query, { gesture }) => Promise.resolve([listed(`${query} for ${gesture}`)]) }),
     }));
 
-    expect((await asked.workspaceSymbols(' gun ')).map(({ name }) => name)).toEqual(['Gun.esp', 'gun', 'Gun']);
+    expect((await asked.workspaceSymbols(' gun ')).map(({ name }) => name)).toEqual(['Gun.esp', 'gun for Go to Symbol in Workspace', 'Gun']);
+  });
+
+  it.each([
+    ['is cancelled', true],
+    ['is not', false],
+  ])('tells each kind whether VS Code\'s search %s', async (_case, isCancellationRequested) => {
+    const asked = features(fakeKinds({ file: fakeKind({ symbolsFor: (_query, { cancelled }) => Promise.resolve([listed(`cancelled: ${cancelled()}`)]) }) }));
+
+    expect((await asked.workspaceSymbols('gun', isCancellationRequested)).map(({ name }) => name)).toEqual([`cancelled: ${isCancellationRequested}`]);
   });
 
   it('lists nothing for an empty query, asking no kind', async () => {
     const symbolsFor = vi.fn(() => Promise.resolve([listed('Gun')]));
 
     expect([await features(fakeKinds({ record: fakeKind({ symbolsFor }) })).workspaceSymbols('  '), symbolsFor.mock.calls]).toEqual([[], []]);
+  });
+
+  it('refuses the symbol the user picks where its kind cannot open it, so VS Code opens nothing', async () => {
+    const asked = features(fakeKinds({ record: fakeKind({ symbolsFor: () => Promise.resolve([listed('Gun', () => Promise.reject(new Error('Gun opens nowhere.')))]) }) }));
+    const [gun] = await asked.workspaceSymbols('g');
+
+    await expect(asked.resolve(present(gun, 'Gun'))).rejects.toThrow('Gun opens nowhere.');
   });
 
   it('moves the symbol the user picks to where its kind resolves it, and leaves one its kind does not move', async () => {

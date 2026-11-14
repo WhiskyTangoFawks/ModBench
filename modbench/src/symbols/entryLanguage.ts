@@ -127,11 +127,11 @@ export function entryLanguage({ instance, reporter, owners, rows, entryTooltip, 
     },
     /** Each symbol whose name holds `query`, at its own file, else at its line in the owners' list, else at the first
      *  place a file names it. An entry no file names is left out. */
-    async symbolsFor(query) {
+    async symbolsFor(query, { gesture }) {
       const matching = KINDS.flatMap((each) =>
         listed(each).filter((name) => nameHolds(name, query)).map((name): EntrySymbol => ({ kind: each, name })));
       const lists = await Promise.all(owners.map((owner) => owner.listed(heldTexts(unsavedTexts())).catch((error: unknown) => {
-        reporter.shownOnSurface('warning', 'Go to Symbol in Workspace could not read an owner\'s list of mods and separators.', errorMessage(error));
+        reporter.shownOnSurface('warning', `${gesture} could not read an owner's list of mods and separators.`, errorMessage(error));
         return [];
       })));
       const lines = new Map<string, PlaceInFile>();
@@ -145,7 +145,7 @@ export function entryLanguage({ instance, reporter, owners, rows, entryTooltip, 
         const line = lines.get(entryKey(entry));
         if (line !== undefined) return placeLocation(line);
         const { found, unread } = await read(entry);
-        for (const why of unread) reporter.shownOnSurface('warning', `Go to Symbol in Workspace on ${entry.name} could not read a file that may name it.`, why);
+        for (const why of unread) reporter.shownOnSurface('warning', `${gesture} on ${entry.name} could not read a file that may name it.`, why);
         return found[0] && placeLocation(found[0]);
       };
       const placed = await Promise.all(matching.map(async (entry): Promise<Listed | undefined> => {
@@ -158,20 +158,27 @@ export function entryLanguage({ instance, reporter, owners, rows, entryTooltip, 
     },
   };
 
+  const renamableAt = async (document: AskedIn, offset: number) => {
+    const found = await kind.nameAt(document, offset);
+    return found && !('refused' in found.symbol) && isRenamable(found.symbol) ? { ...found, symbol: found.symbol } : undefined;
+  };
+
   return {
     ...kind,
     /** The name of the mod or separator at `offset`, which Rename Symbol offers to rename; undefined where none is. */
     renameRangeAt: async (document: AskedIn, offset: number) => {
-      const found = await kind.nameAt(document, offset);
-      return found && !('refused' in found.symbol) && isRenamable(found.symbol) ? { start: found.start, end: found.end, name: found.name } : undefined;
+      const found = await renamableAt(document, offset);
+      return found && { start: found.start, end: found.end, name: found.name };
     },
-    /** Rename Symbol on the mod or separator whose name is at `offset`: its `rename` (symbols.md, The features, story 6). */
-    renameAt: async (document: AskedIn, offset: number, newName: string): Promise<void> => {
-      const found = await kind.nameAt(document, offset);
-      if (found === undefined || 'refused' in found.symbol || !isRenamable(found.symbol)) return;
+    /** Rename Symbol on the mod or separator whose name is at `offset`: its `rename` (symbols.md, The features, story 6);
+     *  false where none is. */
+    renameAt: async (document: AskedIn, offset: number, newName: string): Promise<boolean> => {
+      const found = await renamableAt(document, offset);
+      if (found === undefined) return false;
       const entry = entryListed(found.symbol);
       if (entry === undefined || !isRenamable(entry)) throw new Error(unlisted(found.symbol));
       await renameEntry(entry, newName);
+      return true;
     },
   };
 }
