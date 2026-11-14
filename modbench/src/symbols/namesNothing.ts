@@ -5,7 +5,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { placeIn } from '../symbolNames/symbolNames';
 import { heldText } from '../textDocuments/heldText';
-import { inOrder, type SymbolKinds } from './symbolKind';
+import { inOrder, type NamesNothing, type SymbolKinds } from './symbolKind';
 
 interface NamesNothingDeps {
   kinds: SymbolKinds;
@@ -30,7 +30,7 @@ export function registerNamesNothing({ kinds, reporter, readText, onChanged }: N
   };
 
   const publish = async (file: string, text: string) => {
-    const found = (await Promise.all(inOrder(kinds).map((kind) => kind.namesNothingIn?.({ uri: { fsPath: file }, getText: () => text }) ?? Promise.resolve([])))).flat();
+    const found: NamesNothing[] = (await Promise.all(inOrder(kinds).map((kind) => kind.namesNothingIn?.({ uri: { fsPath: file }, getText: () => text }) ?? Promise.resolve([])))).flat();
     collection.set(vscode.Uri.file(file), found.sort((a, b) => a.start - b.start).map(({ start, end, name, why }) => {
       const { start: from, end: to } = placeIn(file, text, start, end);
       return modbenchDiagnostic(new vscode.Range(from.line, from.character, to.line, to.character), `${name} names nothing. ${why}`, vscode.DiagnosticSeverity.Warning);
