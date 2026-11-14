@@ -50,10 +50,6 @@ function language(references: Awaited<ReturnType<ScriptClient['getScriptReferenc
 const document = (path = SOURCE) => ({ uri: Uri.file(path), getText: () => TEXT });
 
 describe('a Papyrus script\'s name in plugin source (symbols.md, The symbols)', () => {
-  it('names the script plugin source names there, at its span', async () => {
-    expect(await language().language.nameAt(document(), AT_SCRIPT)).toEqual({ ...SPAN, name: 'Ns:Quest', symbol: { kind: 'script', name: 'Ns:Quest' } });
-  });
-
 
   it('has no tooltip, since a script has no row', async () => {
     expect(await language().language.tooltipOf({ kind: 'script', name: 'Ns:Quest' })).toEqual([]);

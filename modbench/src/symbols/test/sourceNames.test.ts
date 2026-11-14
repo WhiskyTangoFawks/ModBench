@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { sourceNames, type SourceNamesClient } from '../sourceNames';
-import type { DocumentName, RecordSummary } from '../../client';
+import { sourceNames } from '../sourceNames';
+import type { DocumentName, MEditClient, RecordSummary } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
 import { localFailure, type ReadFailed } from '../../wire/readFailed';
@@ -23,19 +23,28 @@ const record = (editorId: string | null, formKey: string): RecordSummary => ({
 function names(answer: DocumentName[] | ReadFailed, found: RecordSummary[] = [record('Gun', GUN)]) {
   const reporter = recordingReporter();
   const client = {
-    getPluginSourceNames: vi.fn<SourceNamesClient['getPluginSourceNames']>(() => Promise.resolve(answer)),
-    searchRecords: vi.fn<SourceNamesClient['searchRecords']>(() => Promise.resolve({ items: found, total: found.length })),
+    getPluginSourceNames: vi.fn<MEditClient['getPluginSourceNames']>(() => Promise.resolve(answer)),
+    searchRecords: vi.fn<MEditClient['searchRecords']>(() => Promise.resolve({ items: found, total: found.length })),
   };
-  return { owner: sourceNames({ client, reporter }), client, reporter };
+  return { owner: sourceNames({ client, names: client, reporter }), client, reporter };
 }
 
 describe('the names at a place in plugin source, as mEdit answers them (target-architecture.md)', () => {
-  it('asks mEdit once of a place, with its file, however many kinds ask of it', async () => {
+  it('answers each kind the name of that kind at a place, asking with its file', async () => {
     const { owner, client } = names([named('Script', 40, 42, 'Gu')]);
 
-    const answers = [await owner.recordAt(FILE, TEXT, 41), await owner.scriptAt(FILE, TEXT, 41), await owner.fileAt(FILE, TEXT, 41)];
+    const answers = [await owner.recordAt(FILE, TEXT, 41), await owner.scriptAt(FILE, TEXT, 41)];
 
-    expect([answers, client.getPluginSourceNames.mock.calls]).toEqual([[undefined, { start: 40, end: 42, name: 'Gu' }, undefined], [[TEXT, FILE, 41]]]);
+    expect([answers, client.getPluginSourceNames.mock.calls[0]]).toEqual([[undefined, { start: 40, end: 42, name: 'Gu' }], [TEXT, FILE, 41]]);
+  });
+
+  it('tells the Output once of a place mEdit cannot answer for, however many kinds ask of it', async () => {
+    const { owner, reporter } = names(localFailure('mEdit is down'));
+
+    await owner.recordAt(FILE, TEXT, 20);
+    await owner.scriptAt(FILE, TEXT, 20);
+
+    expect(reporter.shownFailures).toHaveLength(1);
   });
 
   it.each([
@@ -102,6 +111,12 @@ describe('where a copy\'s document names a symbol, asked of its text alone', () 
 
     expect(await owner.referenceIn(TEXT, NPC, GUN)).toEqual(expected);
     expect(client.getPluginSourceNames.mock.calls).toEqual([[TEXT]]);
+  });
+
+  it('lists a record that references itself at the field that holds the reference, never at its own FormKey', async () => {
+    const { owner } = names([OWN, named('Record', 40, 56, NPC, { fieldPath: 'Template' })]);
+
+    expect(await owner.referenceIn(TEXT, NPC, NPC)).toEqual({ start: 40, end: 56 });
   });
 
   it.each([

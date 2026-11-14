@@ -813,6 +813,11 @@ class HttpMEditClient implements MEditClient {
       (api, signal) => api.GET('/file-paths/references', { params: { query: { path } }, signal }), noBodyFails);
   }
 
+  getScriptRenameSourceChanges(name: string, newName: string): Promise<components['schemas']['ScriptRenameSourceChanges'] | ReadFailed> {
+    return this.read(`getScriptRenameSourceChanges(${name}, ${newName})`,
+      (api, signal) => api.POST('/script-names/rename-source-changes', { body: { name, newName }, signal }), noBodyFails);
+  }
+
   getPluginSourceNames(text: string, path?: string, at?: number): Promise<DocumentName[] | ReadFailed> {
     return this.read(`getPluginSourceNames(${path ?? 'a document with no file'})`,
       (api, signal) => api.POST('/plugin-source/names', { body: { text, path, at }, signal }), (data) => data ?? []);

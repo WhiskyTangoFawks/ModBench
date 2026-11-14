@@ -15,4 +15,5 @@ export { attachPortOf } from './attachPort';
 export { createMEditClient, stopMEditClient } from './HttpMEditClient';
 export { recordIndexReferences } from './recordIndexReferences';
 export { scriptSourceRename } from './scriptSourceRename';
+export { pluginSourceNames } from './pluginSourceNames';
 export { sourceFolderMove } from './sourceFolderMove';

@@ -7,16 +7,17 @@ const MEDIT_READS = 'the plugins mEdit reads';
 /** Each file of a source folder a build reads by the renamed plugin's name, and the name it takes, relative to the folder. */
 export type SourceFilesOf = (symbol: PluginSymbol, newName: string, held: HeldTexts) => Promise<readonly NonNullable<RenameSourceAsked['sourceFiles']>[number][]>;
 
-/** The plugins mEdit reads, as an owner of files that name a plugin: by a FormKey, or a master. A rename moves the files
- *  `sourceFilesOf` names too. */
+/** The plugins mEdit reads, as an owner of files that name a plugin: by a FormKey, or a master. `names` answers what a
+ *  place in plugin source names. A rename moves the files `sourceFilesOf` names too. */
 export function recordIndexReferences(
-  client: Pick<MEditClient, 'getPluginNameReferences' | 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginSourceNames'>, sourceFilesOf: SourceFilesOf,
+  client: Pick<MEditClient, 'getPluginNameReferences' | 'getRenameSourceChanges' | 'moveLastWritten'>, sourceFilesOf: SourceFilesOf,
+  names: Pick<MEditClient, 'getPluginSourceNames'>,
 ): SymbolOwner {
   return {
-    // Where mEdit cannot answer, the other kinds asking of the same text say so.
+    // Where mEdit cannot answer, the other kinds asking of the same place say so.
     async nameAt(file, text, offset) {
-      const names = await client.getPluginSourceNames(text, file, offset);
-      const plugin = isReadFailed(names) ? undefined : names.find(({ kind }) => kind === 'Plugin');
+      const named = await names.getPluginSourceNames(text, file, offset);
+      const plugin = isReadFailed(named) ? undefined : named.find(({ kind }) => kind === 'Plugin');
       return plugin && { name: plugin.value };
     },
     async read({ name }) {

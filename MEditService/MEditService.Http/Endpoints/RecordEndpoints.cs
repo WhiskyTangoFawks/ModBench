@@ -203,6 +203,18 @@ internal static class RecordEndpoints
         .Produces<MemberReferences>()
         .ProducesProblem(503);
 
+        app.MapPost("/script-names/rename-source-changes", ScriptRenameSourceChanges)
+        .WithName("ScriptRenameSourceChanges")
+        .WithTags("Records")
+        .WithDescription(
+            "Over the unsaved documents mEdit holds, the text of each plugin source document renaming the Papyrus script " +
+            "changes: every member that names the script takes the new name, writing nothing. Each copy that cannot follow, " +
+            "in a plugin with no plugin source or whose document does not name the script where the record index says, is " +
+            "left behind, saying why.")
+        .Produces<ScriptRenameSourceChanges>()
+        .ProducesProblem(400)
+        .ProducesProblem(503);
+
         app.MapGet("/file-paths/references", async (string path, IQueries svc, CancellationToken aborted) =>
             EndpointMapping.Ok(await svc.GetFileReferences(path, aborted)))
         .WithName("GetFileReferences")
@@ -357,6 +369,46 @@ internal static class RecordEndpoints
             "EditRecord", logger, edits.Edit(plugin, decoded, envelope, CopiesWithNoPluginSource(svc, plugin, decoded)), Results.Ok);
     }
 
+    internal static async Task<IResult> ScriptRenameSourceChanges(
+        ScriptRenameRequest request, IQueries svc, ScriptRenameSourceChangesHandler rename, CancellationToken aborted)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.NewName))
+            return EndpointMapping.BadRequest("The script's name and its new name are required.");
+        var references = await svc.GetScriptReferences(request.Name, aborted);
+        var (located, leftBehind) = references.Holds(out var held, out _) ? await ScriptCopyFiles(svc, held, aborted) : ([], []);
+        return EndpointMapping.Answered(references, _ =>
+        {
+            var changes = rename.Changes(request.Name, request.NewName, located);
+            return Results.Ok(changes with { LeftBehind = [.. leftBehind, .. changes.LeftBehind] });
+        });
+    }
+
+    // A copy follows only from the file of its record in plugin source.
+    private static async Task<(List<ScriptCopyFile> Located, List<string> LeftBehind)> ScriptCopyFiles(
+        IQueries svc, MemberReferences references, CancellationToken aborted)
+    {
+        var located = new List<ScriptCopyFile>();
+        var leftBehind = new List<string>();
+        foreach (var copy in references.Copies)
+        {
+            var named = $"{copy.FormKey} in {copy.Plugin.Name} ({copy.Plugin.Origin})";
+            if (!copy.InPluginSource)
+            {
+                leftBehind.Add(named);
+                continue;
+            }
+            if (!(await svc.GetCopyDocument(copy.Plugin, copy.FormKey, aborted)).Holds(out var document, out var refused))
+                leftBehind.Add($"{named}: {refused.Message}");
+            else if (document is null)
+                leftBehind.Add($"{copy.Plugin.Name} ({copy.Plugin.Origin}) holds no {copy.FormKey}.");
+            else if (document.Kind == CopyDocumentKind.Rendered)
+                leftBehind.Add($"{named}: its plugin source holds no file of it");
+            else
+                located.Add(new(copy.FormKey, copy.Plugin, copy.FieldPaths, document.Location));
+        }
+        return (located, [.. references.Unread, .. leftBehind]);
+    }
+
     private static RecordEditEnvelope EnvelopeOf(RecordEditRequest edit) => new(edit.Op, edit.Path ?? [], edit.EditedValue);
 
     private static Func<Answer<RecordAt[], string>> CopiesWithNoPluginSource(IQueries svc, PluginAddress plugin, string formKey) =>
@@ -493,6 +545,8 @@ internal static class RecordEndpoints
 }
 
 internal sealed record SelectRequest(string Sql);
+
+internal sealed record ScriptRenameRequest(string Name, string NewName);
 
 /// <summary>A document's text, the absolute path of its file when it is one, and the offset whose names are asked.</summary>
 internal sealed record PluginSourceNamesRequest(string Text, string? Path = null, int? At = null);

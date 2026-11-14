@@ -356,6 +356,9 @@ export interface MEditClient {
   /** The names a document's `text` holds, and where each sits; with `at`, those at that offset. With the `path` of its
    *  file, none when no plugin's source holds the file. */
   getPluginSourceNames(text: string, path?: string, at?: number): Promise<DocumentName[] | ReadFailed>;
+  /** The text of each plugin source document renaming the Papyrus script `name` changes, over the unsaved documents
+   *  mEdit holds, the plugins whose source changes, and each reference left behind. */
+  getScriptRenameSourceChanges(name: string, newName: string): Promise<components['schemas']['ScriptRenameSourceChanges'] | ReadFailed>;
   /** Null: the plugin holds no such record. */
   getRenderedDocument(plugin: PluginAddress, formKey: string): Promise<RenderedDocument | null | ReadFailed>;
   /** Null: the plugin holds no such record. `location` is the path of the copy's own file, of the file of the

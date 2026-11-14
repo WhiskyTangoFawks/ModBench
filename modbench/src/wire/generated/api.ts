@@ -921,6 +921,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/script-names/rename-source-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Over the unsaved documents mEdit holds, the text of each plugin source document renaming the Papyrus script changes: every member that names the script takes the new name, writing nothing. Each copy that cannot follow, in a plugin with no plugin source or whose document does not name the script where the record index says, is left behind, saying why. */
+        post: operations["ScriptRenameSourceChanges"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/file-paths/references": {
         parameters: {
             query?: never;
@@ -2006,6 +2023,15 @@ export interface components {
             mode: components["schemas"]["CopyMode"];
             destination: components["schemas"]["PluginAddress"];
             replace: boolean;
+        };
+        ScriptRenameRequest: {
+            name: string;
+            newName: string;
+        };
+        ScriptRenameSourceChanges: {
+            documents: components["schemas"]["DocumentChange"][];
+            plugins: components["schemas"]["PluginAddress"][];
+            leftBehind: string[];
         };
         SelectRequest: {
             sql: string;
@@ -4633,6 +4659,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MemberReferences"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ScriptRenameSourceChanges: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScriptRenameRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScriptRenameSourceChanges"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Service Unavailable */

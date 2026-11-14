@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
-import { sourceNames, type SourceNames, type SourceNamesClient } from './sourceNames';
+import { sourceNames, type SourceNames } from './sourceNames';
 import type { Reporter } from '../ports/reporter';
 import type { EntryRef } from '../instanceAdapter/instanceAdapter';
 import type { RecordDocumentClient } from '../textDocuments/recordDocument';
@@ -27,7 +27,9 @@ import { publishReferencesView } from '../drivingLib/referencesView';
 interface SymbolsDeps {
   instance: Pick<Instance, 'value' | 'subscribe'> | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
-  client: Pick<MEditClient, 'getRecordOfFile'> & RecordClient & ScriptClient & FileClient & RecordReferencedByDeps['client'] & SourceNamesClient;
+  client: Pick<MEditClient, 'getRecordOfFile'> & RecordClient & ScriptClient & FileClient & RecordReferencedByDeps['client'];
+  /** What mEdit's record index names in plugin source. */
+  names: Pick<MEditClient, 'getPluginSourceNames'>;
   focusedOrPickedRecord: () => Promise<string | undefined>;
   fileCopies: FileCopies;
   /** Each box that owns files, saying where they name a symbol (ADR-0028). */
@@ -72,7 +74,7 @@ function formKeyLocation(client: RecordDocumentClient, names: Pick<SourceNames, 
 
 export function createSymbols(deps: SymbolsDeps): Symbols {
   const { instance, reporter, client, rows, reporterFor, fileCopies, focusedOrPickedRecord } = deps;
-  const names = sourceNames({ client, reporter });
+  const names = sourceNames({ client, names: deps.names, reporter });
   const plugin = pluginLanguage({
     instance, reporter, client, owners: deps.owners, names, renamePlugin: renamePluginNamed, rows: () => rows?.plugins,
     tooltip: (shown) => deps.pluginsShown?.tooltipLines(shown) ?? [],

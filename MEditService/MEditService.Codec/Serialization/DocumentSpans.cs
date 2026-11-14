@@ -37,6 +37,14 @@ public sealed class DocumentSpans
         return found is null ? null : (found.Start, found.End);
     }
 
+    /// <summary>Each string the record <paramref name="formKey"/> holds at one of <paramref name="fieldPaths"/>, by the span
+    /// between its quotes, with its value.</summary>
+    public IReadOnlyList<(int Start, int End, string Value)> StringsAt(string formKey, IReadOnlyList<string> fieldPaths) =>
+        RecordOf(formKey) is { } record
+            ? [.. fieldPaths.Select(record.At).OfType<SpanNode>().Where(node => node.Text is not null)
+                .Select(node => (node.Inside.Start, node.Inside.End, node.Text ?? ""))]
+            : [];
+
     internal IEnumerable<SpanNode> Records => Root?.SelfAndDescendants().Where(node => node.OwnFormKey is not null) ?? [];
 
     private SpanNode? RecordOf(string formKey) => Records.FirstOrDefault(record => record.Member(RecordMembers.FormKey)?.IsStringOf(formKey) == true);
@@ -208,7 +216,7 @@ internal sealed class SpanNode
     public SpanNode? Member(string name) => Members?.LastOrDefault(member => member.Name == name)?.Value;
 
     /// <summary>The canonical FormKey this object's own <c>FormKey</c> member holds; null when it holds none.</summary>
-    public string? OwnFormKey => Member(RecordMembers.FormKey)?.Text is { } spelled ? CanonicalFormKey.Of(spelled) : null;
+    public string? OwnFormKey => Member(RecordMembers.FormKey)?.Text is { } spelled ? CanonicalFormKey.OfLink(spelled) : null;
 
     /// <summary>The nearest record holding this node: itself when it is one.</summary>
     public SpanNode? Record => OwnFormKey is not null ? this : Parent?.Record;

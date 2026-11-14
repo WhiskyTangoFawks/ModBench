@@ -46,6 +46,29 @@ public sealed class DocumentNamesTests
                 """)));
     }
 
+    [Theory]
+    [InlineData("Null")]
+    [InlineData("null")]
+    [InlineData(" Null ")]
+    public void AnUnsetLink_NamesNoRecord_OnlyTheTextOfItsField(string unset)
+    {
+        Assert.Equal(
+            [(DocumentNameKind.Reference, unset, unset, Npc, "Race")],
+            Named(NpcText($$"""
+                "Race": "{{unset}}"
+                """)).Where(name => name.FieldPath == "Race"));
+    }
+
+    [Fact]
+    public void AFormKeySpelledWithSpaceAroundIt_NamesItsPluginWhereTheTextSpellsIt()
+    {
+        var text = NpcText("""
+            "Race": " 000802:Base.esm "
+            """);
+
+        Assert.Contains((DocumentNameKind.Plugin, "Base.esm", "Base.esm", Npc, "Race"), Named(text));
+    }
+
     [Fact]
     public void AnEditorIdThatLooksLikeAFormKey_NamesNoRecord()
     {

@@ -82,6 +82,10 @@ public interface ISourceAdapter
     /// handed in its place, else the file's.</summary>
     string TextOf(string sourceFolder, string path);
 
+    /// <summary>The text of the file at the absolute <paramref name="path"/>: the unsaved document handed in its place, else
+    /// the file's.</summary>
+    string TextAt(string path);
+
     /// <summary>Where <paramref name="sourceFolder"/> holds the file at its forward-slash <paramref name="path"/>.</summary>
     string FileIn(string sourceFolder, string path);
 

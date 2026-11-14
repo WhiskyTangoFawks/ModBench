@@ -290,7 +290,7 @@ export default defineConfig(
         },
     },
     {
-        files: ['src/drivingLib/sourceText.ts'],
+        files: ['src/sourceLanguage/sourceText.ts'],
         ignores: NOT_PRODUCTION,
         rules: {
             'no-restricted-imports': restrictedImports({ vscode: true, packages: false, path: true, extra: [JSONC_PACKAGE_IMPORT] }),

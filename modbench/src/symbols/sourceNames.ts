@@ -4,10 +4,10 @@ import type { Reporter } from '../ports/reporter';
 import { sameName, type PluginName, type TextSpan } from '../symbolNames/symbolNames';
 import { answerOf, failureReason, isReadFailed } from '../wire/readFailed';
 
-export type SourceNamesClient = Pick<MEditClient, 'getPluginSourceNames' | 'searchRecords'>;
-
 interface SourceNamesDeps {
-  client: SourceNamesClient;
+  client: Pick<MEditClient, 'searchRecords'>;
+  /** What mEdit's record index names in plugin source. */
+  names: Pick<MEditClient, 'getPluginSourceNames'>;
   reporter: Pick<Reporter, 'shownOnSurface'>;
 }
 
@@ -33,22 +33,20 @@ const betweenQuotes = ({ start, end }: TextSpan): TextSpan => ({ start: start + 
 
 /** The names plugin source holds, and where each sits, as mEdit's record index answers them (target-architecture.md).
  *  A place is asked of with its file; a copy's document by its text alone. */
-export function sourceNames({ client, reporter }: SourceNamesDeps) {
-  let asked: { file: string; text: string; offset: number; names: Promise<DocumentName[]> } | undefined;
+export function sourceNames({ client, names, reporter }: SourceNamesDeps) {
+  let told: string | undefined;
 
-  // Every kind asks of one place in turn, so the place is asked of mEdit once.
-  const namesAt = (file: string, text: string, offset: number): Promise<DocumentName[]> => {
-    if (asked?.file === file && asked.text === text && asked.offset === offset) return asked.names;
-    const names = client.getPluginSourceNames(text, file, offset).then((answer) => {
-      if (!isReadFailed(answer)) return answer;
-      reporter.shownOnSurface('error', 'Cannot tell what plugin source names here.', failureReason(answer));
-      return [];
-    });
-    asked = { file, text, offset, names };
-    return names;
+  // Every kind asks of one place in turn, so a place mEdit cannot answer for is told once.
+  const namesAt = async (file: string, text: string, offset: number): Promise<DocumentName[]> => {
+    const answer = await names.getPluginSourceNames(text, file, offset);
+    if (!isReadFailed(answer)) return answer;
+    const place = JSON.stringify([file, offset, text, failureReason(answer)]);
+    if (told !== place) reporter.shownOnSurface('error', 'Cannot tell what plugin source names here.', failureReason(answer));
+    told = place;
+    return [];
   };
 
-  const namesIn = async (text: string): Promise<DocumentName[]> => answerOf(await client.getPluginSourceNames(text));
+  const namesIn = async (text: string): Promise<DocumentName[]> => answerOf(await names.getPluginSourceNames(text));
 
   const nameAt = async (file: string, text: string, offset: number, kind: DocumentName['kind']): Promise<DocumentName | undefined> =>
     (await namesAt(file, text, offset)).find((name) => name.kind === kind);

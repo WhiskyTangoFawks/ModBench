@@ -4,7 +4,6 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSy
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { findNodeAtLocation, getNodePath, parseTree, type Node as JsonNode } from 'jsonc-parser';
 import { before, after, afterEach, beforeEach, describe, it } from 'mocha';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -179,47 +178,35 @@ function pushLoadOrderStatus(): void {
   for (const res of sseClients) writeSseFrame(res, 'load-order-status', { loadOrderStatus });
 }
 
-const FORM_KEY = /^[0-9A-F]{6}[:_].+\.(esm|esp|esl)$/i;
-const REFERENCE_FIELDS = new Set(['Armor']);
+const fixtureFormKeys = (): readonly string[] => [
+  COMPILED_PLUGIN_FORM_KEY, CHILD_FORM_KEY, SECOND_CHILD_FORM_KEY, HELD_FORM_KEY, NOT_HELD_FORM_KEY, RENDERED_REFERRER_FORM_KEY, NON_COMPILED_PLUGIN_FORM_KEY,
+];
 
-const canonicalOf = (text: string): string => `${text.slice(0, 6).toUpperCase()}:${text.slice(7)}`;
+interface CannedName { name: Record<string, unknown>; from: number; to: number }
 
-const ownFormKeyOf = (node: JsonNode): string | undefined => {
-  const own = node.type === 'object' ? findNodeAtLocation(node, ['FormKey']) : undefined;
-  return typeof own?.value === 'string' && FORM_KEY.test(own.value) ? canonicalOf(own.value) : undefined;
-};
+function cannedNamesOfMember(member: string, value: string, start: number, end: number, record: string | undefined): CannedName[] {
+  const placed = { record: record ?? null, fieldPath: member };
+  const names: CannedName[] = [];
+  if (fixtureFormKeys().includes(value)) {
+    names.push({ name: { kind: 'Record', start, end, value, ...placed }, from: start, to: end });
+    names.push({ name: { kind: 'Plugin', start: start + 8, end: end - 1, value: value.slice(7), ...placed }, from: start + 8, to: end });
+  }
+  if (member === 'Armor') names.push({ name: { kind: 'Reference', start: start + 1, end: end - 1, value, ...placed, validFormKeyTypes: ['WEAP'] }, from: start, to: end });
+  return names;
+}
 
-const fieldPathOf = (node: JsonNode, holder: JsonNode): string => getNodePath(node).slice(getNodePath(holder).length)
-  .reduce<string>((joined, segment) => (typeof segment === 'number' ? `${joined}[${segment}]` : joined === '' ? segment : `${joined}.${segment}`), '');
-
-function sourceNamesMEditAnswers(text: string, file: string | undefined, at: number | undefined): unknown[] {
-  if (file !== undefined && !/[\\/]plugin-source[\\/]/.test(file)) return [];
-  const names: { name: Record<string, unknown>; from: number; to: number }[] = [];
-  const visit = (node: JsonNode, record: JsonNode | undefined): void => {
-    const holder = ownFormKeyOf(node) === undefined ? record : node;
-    const recordKey = holder && ownFormKeyOf(holder);
-    const isKey = node.parent?.type === 'property' && node.parent.children?.[0] === node;
-    const member = holder === node ? findNodeAtLocation(node, ['FormKey'])?.parent : undefined;
-    if (member && recordKey !== undefined) {
-      const span = { start: member.offset, end: member.offset + member.length };
-      names.push({ name: { kind: 'Declaration', ...span, value: recordKey, record: recordKey, fieldPath: 'FormKey' }, from: span.start, to: span.end });
+function cannedSourceNames(text: string, at: number | undefined): unknown[] {
+  const names: CannedName[] = [];
+  let record: string | undefined;
+  for (const member of text.matchAll(/"(\w+)": ?"([^"]*)"/g)) {
+    const [spelled, name = '', value = ''] = member;
+    const [start, end] = [member.index + spelled.length - value.length - 2, member.index + spelled.length];
+    if (name === 'FormKey' && fixtureFormKeys().includes(value)) {
+      record = value;
+      names.push({ name: { kind: 'Declaration', start: member.index, end, value, record, fieldPath: 'FormKey' }, from: member.index, to: end });
     }
-    if (node.type === 'string' && !isKey && typeof node.value === 'string') {
-      const [start, end] = [node.offset, node.offset + node.length];
-      const placed = { record: recordKey ?? null, fieldPath: holder ? fieldPathOf(node, holder) : null };
-      if (FORM_KEY.test(node.value)) {
-        names.push({ name: { kind: 'Record', start, end, value: canonicalOf(node.value), ...placed }, from: start, to: end });
-        names.push({ name: { kind: 'Plugin', start: start + 8, end: end - 1, value: node.value.slice(7), ...placed }, from: start + 8, to: end });
-      }
-      const field: unknown = node.parent?.type === 'property' ? node.parent.children?.[0]?.value : undefined;
-      if (typeof field === 'string' && REFERENCE_FIELDS.has(field)) {
-        names.push({ name: { kind: 'Reference', start: start + 1, end: end - 1, value: node.value, ...placed, validFormKeyTypes: ['WEAP'] }, from: start, to: end });
-      }
-    }
-    for (const child of node.children ?? []) visit(child, holder);
-  };
-  const root = parseTree(text);
-  if (root) visit(root, undefined);
+    names.push(...cannedNamesOfMember(name, value, start, end, record));
+  }
   return names.filter(({ from, to }) => at === undefined || (at >= from && at < to)).map(({ name }) => name).sort((a, b) => Number(a.start) - Number(b.start));
 }
 
@@ -411,9 +398,9 @@ function createMockBackend(): http.Server {
       req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
       req.on('end', () => {
         const asked: unknown = JSON.parse(body);
-        const { text, path: file, at } = isRecord(asked) ? asked : {};
+        const { text, at } = isRecord(asked) ? asked : {};
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(sourceNamesMEditAnswers(String(text), typeof file === 'string' ? file : undefined, typeof at === 'number' ? at : undefined)));
+        res.end(JSON.stringify(cannedSourceNames(String(text), typeof at === 'number' ? at : undefined)));
       });
       return;
     }

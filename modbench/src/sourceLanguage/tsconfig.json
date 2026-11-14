@@ -12,6 +12,7 @@
     { "path": "../instanceAdapter" },
     { "path": "../instanceLoader" },
     { "path": "../ports" },
+    { "path": "../symbolNames" },
     { "path": "../textDocuments" },
     { "path": "../wire" }
   ],

@@ -1,6 +1,5 @@
 import { findNodeAtLocation, findNodeAtOffset, getNodePath, getNodeValue, parseTree, type Node } from 'jsonc-parser';
-
-interface TextSpan { start: number; end: number }
+import type { TextSpan } from '../symbolNames/symbolNames';
 
 export type Segment = string | number;
 

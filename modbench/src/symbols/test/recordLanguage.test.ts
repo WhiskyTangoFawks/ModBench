@@ -20,8 +20,6 @@ const GUN = '000801:A.esp';
 const modA = { name: 'A.esp', origin: 'ModA' };
 const GUN_FILE = '/source/ModA/plugin-source/A.esp/Weapons/Gun.json';
 const GUN_TEXT = `{\n  "FormKey": "${GUN}",\n  "EditorID": "Gun"\n}`;
-const REFERENCING = `{ "FormKey": "000700:A.esp", "Armor": "${GUN}" }`;
-const NAMED = { start: REFERENCING.indexOf(GUN) - 1, end: REFERENCING.indexOf(GUN) + GUN.length + 1 };
 const RECORD = { kind: 'record', formKey: GUN } as const;
 
 function kind({ open = (): Promise<{ getText(): string }> => Promise.resolve({ getText: () => GUN_TEXT }) } = {}) {
@@ -31,21 +29,12 @@ function kind({ open = (): Promise<{ getText(): string }> => Promise.resolve({ g
   const opened: unknown[] = [];
   const record = recordLanguage({
     client, reporter: recordingReporter(), names: sourceNames({
-      recordAt: () => Promise.resolve({ ...NAMED, formKey: GUN }),
       declarationIn: (text: string, formKey: string) => Promise.resolve(spelledIn(text, `"FormKey": "${formKey}"`)),
     }),
     open: async (uri: vscode.Uri) => { opened.push(uri); return { ...await open(), positionAt: (offset: number) => new vscode.Position(0, offset) }; },
   });
   return { client, opened, record };
 }
-
-describe('a record\'s FormKey in plugin source (symbols.md, The symbols, Record)', () => {
-  it('names the record plugin source names there, at its span', async () => {
-    const found = await kind().record.nameAt({ uri: Uri.file(GUN_FILE), getText: () => REFERENCING }, REFERENCING.indexOf(GUN));
-
-    expect(found).toEqual({ ...NAMED, name: GUN, symbol: RECORD });
-  });
-});
 
 describe('where a record is defined (symbols.md, The symbols, Record)', () => {
   it('is the winning copy\'s file at the record\'s own FormKey member', async () => {

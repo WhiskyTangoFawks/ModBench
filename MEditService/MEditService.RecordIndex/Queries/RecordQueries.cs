@@ -482,7 +482,8 @@ internal sealed class RecordQueries(
     public Answer<IReadOnlyList<DocumentName>, IndexRefused> GetPluginSourceNames(string? path, string text, int? at) =>
         _answer.Of(() =>
         {
-            if (path is not null && source.Touching(_loadOrder.Require(), path) is not PathAnswer.Touches) return (IReadOnlyList<DocumentName>)[];
+            if (path is not null && (_loadOrder.Held is not { Snapshot: var held } || source.Touching(held, path) is not PathAnswer.Touches))
+                return (IReadOnlyList<DocumentName>)[];
             var document = DocumentSpans.Read(text);
             var schemas = RequireSchemas();
             var typeOf = RequireReads().LinkResolver([.. document.RecordFormKeys]);

@@ -6,7 +6,9 @@ import { recordIndexReferences, type SourceFilesOf } from '../recordIndexReferen
 const symbol = { name: 'Base.esm', origin: 'BaseMod' };
 const child = { name: 'Child.esp', origin: 'ChildMod' };
 
-type PlanClient = Pick<MEditClient, 'getPluginNameReferences' | 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginSourceNames'>;
+type PlanClient = Pick<MEditClient, 'getPluginNameReferences' | 'getRenameSourceChanges' | 'moveLastWritten'>;
+
+const NAMES_UNASKED = { getPluginSourceNames: (): never => { throw new Error('not asked'); } };
 
 const unasked = (): never => { throw new Error('not asked'); };
 
@@ -28,7 +30,6 @@ function planClient(answers: Partial<PlanClient> = {}): PlanClient & { moved: un
     moved,
     asked,
     getPluginNameReferences: () => Promise.resolve([]),
-    getPluginSourceNames: () => Promise.resolve([]),
     getRenameSourceChanges: (...args) => { asked.push(args); return Promise.resolve(SOURCE_CHANGES); },
     moveLastWritten: (...args) => { moved.push(args); return Promise.resolve({ moved: true }); },
     ...answers,
@@ -39,7 +40,7 @@ const WINNING = [{ ...symbol, winning: true }];
 const LOSING = [{ ...symbol, origin: 'Other Mod', winning: true }, { ...symbol, winning: false }];
 
 const planned = async (client: PlanClient, plugins: readonly ResolvedPlugin[] = WINNING): Promise<RenamePlan> => {
-  const plan = await recordIndexReferences(client, sourceFiles).plan(symbol, 'New.esm', heldTexts([]), plugins);
+  const plan = await recordIndexReferences(client, sourceFiles, NAMES_UNASKED).plan(symbol, 'New.esm', heldTexts([]), plugins);
   if ('refused' in plan) throw new Error(plan.refused);
   return plan;
 };
@@ -55,7 +56,9 @@ describe('the plugin a place in plugin source names, as the record index answers
     ['none where mEdit cannot answer', { failed: 'unreachable' as const }, undefined],
   ])('is %s, asking of the text at that place', async (_case, answer, expected) => {
     const asked: unknown[][] = [];
-    const owner = recordIndexReferences(planClient({ getPluginSourceNames: (...args) => { asked.push(args); return Promise.resolve(answer); } }), sourceFiles);
+    const owner = recordIndexReferences(planClient(), sourceFiles, {
+      getPluginSourceNames: (...args) => { asked.push(args); return Promise.resolve(answer); },
+    });
 
     expect(await owner.nameAt(FILE, TEXT, 14)).toEqual(expected);
     expect(asked).toEqual([[TEXT, FILE, 14]]);
@@ -66,8 +69,8 @@ describe('the record index says where plugins name a plugin (ADR-0028)', () => {
   it('answers each copy that names the plugin, named by its file name alone', async () => {
     const owner = recordIndexReferences({
       getPluginNameReferences: () => Promise.resolve([{ formKey: '000800:Base.esm', plugin: child, inPluginSource: false }]),
-      getRenameSourceChanges: unasked, moveLastWritten: unasked, getPluginSourceNames: unasked,
-    }, sourceFiles);
+      getRenameSourceChanges: unasked, moveLastWritten: unasked,
+    }, sourceFiles, NAMES_UNASKED);
 
     expect(await owner.read(symbol, heldTexts([]))).toEqual({
       references: [{ copy: { formKey: '000800:Base.esm', plugin: child }, names: { name: 'Base.esm' } }], leftOut: [],
@@ -75,7 +78,7 @@ describe('the record index says where plugins name a plugin (ADR-0028)', () => {
   });
 
   it('leaves out every plugin, saying why, when mEdit cannot answer', async () => {
-    const owner = recordIndexReferences(planClient({ getPluginNameReferences: () => Promise.resolve({ failed: 'refused', refusal: 'mEdit is still indexing plugins.' }) }), sourceFiles);
+    const owner = recordIndexReferences(planClient({ getPluginNameReferences: () => Promise.resolve({ failed: 'refused', refusal: 'mEdit is still indexing plugins.' }) }), sourceFiles, NAMES_UNASKED);
 
     expect(await owner.read(symbol, heldTexts([]))).toEqual({ references: [], leftOut: ['the plugins mEdit reads: mEdit is still indexing plugins.'] });
   });
@@ -125,7 +128,7 @@ describe('the record index plans a rename of a plugin (ADR-0028)', () => {
   });
 
   it('refuses the rename mEdit refuses', async () => {
-    const owner = recordIndexReferences(planClient({ getRenameSourceChanges: () => Promise.resolve({ refused: true, message: 'Old.esp\'s source was not renamed.' }) }), sourceFiles);
+    const owner = recordIndexReferences(planClient({ getRenameSourceChanges: () => Promise.resolve({ refused: true, message: 'Old.esp\'s source was not renamed.' }) }), sourceFiles, NAMES_UNASKED);
 
     expect(await owner.plan(symbol, 'New.esm', heldTexts([]), WINNING)).toEqual({ refused: 'Old.esp\'s source was not renamed.' });
   });

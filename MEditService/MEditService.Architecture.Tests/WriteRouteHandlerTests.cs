@@ -26,6 +26,7 @@ public sealed class WriteRouteHandlerTests
         ("POST", "/plugins/compile", typeof(CompilePluginHandler), "Compile"),
         ("POST", "/plugins/rename-source-changes", typeof(RenameSourceChangesHandler), "RenameSourceChanges"),
         ("POST", "/plugins/move-last-written", typeof(MoveLastWrittenHandler), "MoveLastWritten"),
+        ("POST", "/script-names/rename-source-changes", typeof(ScriptRenameSourceChangesHandler), "ScriptRenameSourceChanges"),
         ("POST", "/plugins/{plugin}/create-record-changes", typeof(CreateRecordChangesHandler), "CreateRecordChanges"),
         ("PUT", "/load-order", typeof(PutLoadOrderHandler), "PutLoadOrder"),
         ("POST", "/signal-change", typeof(SignalChangeHandler), "SignalChange"),

@@ -51,6 +51,8 @@ public sealed class CommandHandlerConventionTests
         typeof(RenameSourceChanges),
         typeof(RenameSourceRefusal),
         typeof(RenameSourceResult),
+        typeof(ScriptCopyFile),
+        typeof(ScriptRenameSourceChanges),
         typeof(SetPluginFileFlagsResult),
         typeof(SourceFolderMoveRefusal),
         typeof(SourceFolderMoveRefused),

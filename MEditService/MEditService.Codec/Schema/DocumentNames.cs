@@ -47,7 +47,7 @@ public static class DocumentNames
     {
         var held = new List<Held>();
         foreach (var node in document.Root?.SelfAndDescendants() ?? [])
-            if (node.Text is { } text && CanonicalFormKey.Of(text) is { } formKey) held.AddRange(FormKeyNames(node, text, formKey));
+            if (node.Text is { } text && CanonicalFormKey.OfLink(text) is { } formKey) held.AddRange(FormKeyNames(node, text, formKey));
         foreach (var record in document.Records) held.AddRange(RecordNames(record, columnsOf));
         return [.. held
             .Where(name => at is not { } offset || (offset >= name.From && offset < name.To))
@@ -58,10 +58,11 @@ public static class DocumentNames
     private static IEnumerable<Held> FormKeyNames(SpanNode node, string text, string formKey)
     {
         var (record, fieldPath) = Placed(node);
-        var (_, end) = node.Inside;
         yield return new(new(DocumentNameKind.Record, node.Start, node.End, formKey, record, fieldPath), node.Start, node.End);
-        var plugin = node.Start + 1 + PluginNameOffset;
-        yield return new(new(DocumentNameKind.Plugin, plugin, end, text[PluginNameOffset..], record, fieldPath), plugin, end + 1);
+        // Mutagen reads a FormKey past the whitespace around it.
+        var (from, to) = (text.Length - text.TrimStart().Length + PluginNameOffset, text.TrimEnd().Length);
+        var (start, end) = (node.Inside.Start + from, node.Inside.Start + to);
+        yield return new(new(DocumentNameKind.Plugin, start, end, text[from..to], record, fieldPath), start, end + 1);
     }
 
     private static IEnumerable<Held> RecordNames(SpanNode record, Func<string, IReadOnlyList<ColumnSpec>?> columnsOf)
@@ -96,7 +97,7 @@ public static class DocumentNames
     private static DocumentName? NameAt(FieldMetadata leaf, string given, string record, string path)
     {
         if (leaf.Type == "formKey") return new(DocumentNameKind.Reference, 0, 0, given, record, path, ValidFormKeyTypes: leaf.ValidFormKeyTypes);
-        if (given.Length == 0 || CanonicalFormKey.Of(given) is not null) return null;
+        if (given.Length == 0 || CanonicalFormKey.OfLink(given) is not null) return null;
         if (leaf.IsScriptName) return new(DocumentNameKind.Script, 0, 0, given, record, path);
         if (leaf.AssetLinkType is not { } linkType) return null;
         var placed = AssetLinks.DataPathOf(linkType, given);
