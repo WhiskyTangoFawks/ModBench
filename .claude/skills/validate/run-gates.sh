@@ -125,12 +125,22 @@ backend_tests() {
   fi
   echo "=== Gate 3: Backend test times ==="
   python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$results" || return
-  # Building the record index of real size takes minutes, so its budgets run apart from the box's own tests.
-  if grep -qx MEditService.RecordIndex.Tests <<< "$selected"; then
-    echo "=== Gate 3: Budgets on the record index of real size ==="
-    (cd "$ROOT/MEditService" && MEDIT_REAL_SIZE=1 dotnet test --no-build -v minimal MEditService.RecordIndex.Tests \
-      --filter "FullyQualifiedName~.RealSize.")
-  fi
+  real_size_budgets "$selected"
+}
+
+# The test projects that reach the record index, directly or through a gesture that writes to it.
+REAL_SIZE_REACHERS='^MEditService\.(RecordIndex|Http)\.Tests$'
+
+real_size_budgets() {
+  grep -Eq "$REAL_SIZE_REACHERS" <<< "$1" || return 0
+  echo "=== Gate 3: Budgets on the record index of real size ==="
+  local results="/tmp/medit-real-size-results.$(basename "$ROOT")" project
+  rm -rf "$results"
+  for project in $(cd "$ROOT/MEditService" && grep -rl --include='*.cs' '\[RealSizeFact' -- *.Tests | cut -d/ -f1 | sort -u); do
+    (cd "$ROOT/MEditService" && MEDIT_REAL_SIZE=1 dotnet test --no-build -v minimal --logger trx --results-directory "$results" \
+      "$project" --filter "FullyQualifiedName~.RealSize.") || return
+  done
+  grep -qs 'outcome="Passed"' "$results"/*.trx || { echo "No budget of real size ran."; return 1; }
 }
 
 if $BACKEND; then

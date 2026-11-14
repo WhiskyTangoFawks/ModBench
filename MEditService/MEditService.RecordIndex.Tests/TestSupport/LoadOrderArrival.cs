@@ -19,16 +19,16 @@ internal static class LoadOrderArrival
     }
 
     /// <summary>The version the snapshot arrived as, once the Index's status answers it.</summary>
-    internal static long Receive(this OpenedIndex index, LoadOrderHolder holder, LoadOrderSnapshot snapshot)
+    internal static long Receive(this OpenedIndex index, LoadOrderHolder holder, LoadOrderSnapshot snapshot, TimeSpan? patience = null)
     {
         var answered = index.Status.Version;
         var version = holder.Apply(snapshot);
         if (version <= answered)
             throw new InvalidOperationException("An equal snapshot has no version to wait for: wait on what it announces.");
-        index.AwaitVersion(version);
+        index.AwaitVersion(version, patience);
         return version;
     }
 
-    internal static void AwaitVersion(this OpenedIndex index, long version) =>
-        Waits.Reached(() => index.Status.Version >= version, $"the status answering version {version}");
+    internal static void AwaitVersion(this OpenedIndex index, long version, TimeSpan? patience = null) =>
+        Waits.Reached(() => index.Status.Version >= version, $"the status answering version {version}", patience);
 }

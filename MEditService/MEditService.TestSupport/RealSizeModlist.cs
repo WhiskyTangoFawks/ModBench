@@ -1,21 +1,22 @@
 using MEditService.LoadOrder;
-using MEditService.TestSupport;
+using MEditService.SourceAdapter;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Noggog;
 
-namespace MEditService.RecordIndex.Tests.TestSupport;
+namespace MEditService.TestSupport;
 
 /// <summary>A modlist of LitR's shape, every record generated: 705 plugin binaries, 252 with a source tree. The record
 /// index reads it as it reads any modlist, so the index holds whatever the index derives.</summary>
-internal sealed class RealSizeModlist : IDisposable
+public sealed class RealSizeModlist : IDisposable
 {
-    internal const int Plugins = 705;
-    internal const int SourceTreePlugins = 252;
-    private const int ReferencesInTheBigCell = 4_000;
+    public const int Plugins = 705;
+    public const int SourceTreePlugins = 252;
+    public const int ReferencesInTheBigCell = 4_000;
+    public const int ManyDocuments = 1_000;
 
-    // LitR's records per plugin, by rank from the largest: its largest plugins, then its quantiles. A rank between two
-    // is interpolated on a log scale.
+    // LitR's records per plugin, by rank from the largest.
     private static readonly (int Rank, int Records)[] Sizes =
         [(0, 1_600_000), (1, 310_000), (3, 134_000), (11, 17_000), (70, 1_350), (176, 230), (352, 47), (528, 8), (634, 2), (704, 1)];
 
@@ -30,36 +31,54 @@ internal sealed class RealSizeModlist : IDisposable
     private const int InteriorEveryCells = 25;
     private const int LightRecordLimit = 2_000;
 
-    private readonly ScratchDirectory _scratch = new("real-size-");
-    private readonly List<(FormKey Key, string EditorId)> _baseStatics = [];
+    // LitR's largest source tree is about its eighth largest plugin.
+    private const int BigSourceRank = 7;
 
-    // An NPC of Base.esm the next PluginsOverridingOneRecord plugins override, as deep as LitR's deepest conflict stack.
+    // LitR's deepest conflict stack.
     private const int PluginsOverridingOneRecord = 230;
+
+    private readonly RunFolder _folder;
+    private readonly List<(FormKey Key, string EditorId)> _baseStatics = [];
+    private readonly List<string> _manyDocuments = [];
     private string _recordManyPluginsOverride = "";
+    private LoadOrderEntry? _uncommitted;
 
-    internal string InstanceRoot => _scratch.Path;
+    public string InstanceRoot => _folder.Path;
 
-    internal string DataFolder => Path.Combine(InstanceRoot, "Data");
+    public string DataFolder => Path.Combine(InstanceRoot, "Data");
 
-    internal IReadOnlyList<LoadOrderEntry> LoadOrder { get; }
+    public IReadOnlyList<LoadOrderEntry> LoadOrder { get; private set; } = [];
 
-    /// <summary>The largest plugin, the master every other plugin names.</summary>
-    internal LoadOrderEntry Base => LoadOrder[0];
+    /// <summary>A plugin read from its source tree, holding a big cell and many records each a document of its own.</summary>
+    public LoadOrderEntry BigSourcePlugin => LoadOrder[BigSourceRank];
 
-    internal string BigCell { get; private set; } = "";
+    public string BigCell { get; private set; } = "";
 
+    public string AReferenceInTheBigCell { get; private set; } = "";
 
-    internal RealSizeModlist()
+    public IReadOnlyList<string> TheManyDocuments => _manyDocuments;
+
+    /// <summary>A source mod no commit holds the tree of, kept out of the load order until a test brings it in.</summary>
+    public LoadOrderEntry UncommittedPlugin => _uncommitted.Require();
+
+    public string AReferenceInTheUncommittedCell { get; private set; } = "";
+
+    public RealSizeModlist() => _folder = RunFolder.Written("medit-real-size", Write);
+
+    public LoadOrderSnapshot Snapshot(params LoadOrderEntry[] added) =>
+        SnapshotPlugins.Snapshot(DataFolder, InstanceRoot, GameRelease.Fallout4, [.. LoadOrder, .. added]);
+
+    private void Write(string root)
     {
-        Directory.CreateDirectory(DataFolder);
         List<LoadOrderEntry> loadOrder = [];
         for (var rank = 0; rank < Plugins; rank++)
         {
-            var entry = Write(rank);
-            if (IsSourceTree(rank)) SourceMods.Init(entry);
+            var entry = Write(root, rank);
+            if (IsSourceTree(rank)) InitSource(entry);
             loadOrder.Add(entry);
         }
         LoadOrder = loadOrder;
+        _uncommitted = WriteUncommitted(root);
     }
 
     private static int RecordsOf(int rank)
@@ -72,23 +91,24 @@ internal sealed class RealSizeModlist : IDisposable
         return (int)Math.Round(from * Math.Pow((double)to / from, along));
     }
 
-    // LitR's largest source tree is about its eighth largest plugin; the rest are small.
-    private static bool IsSourceTree(int rank) => rank == 7 || (rank >= 150 && rank < 150 + 2 * (SourceTreePlugins - 1) && rank % 2 == 0);
+    private static bool IsSourceTree(int rank) =>
+        rank == BigSourceRank || (rank >= 150 && rank < 150 + 2 * (SourceTreePlugins - 1) && rank % 2 == 0);
 
     // 70 of LitR's 705 plugins are inactive.
     private static bool IsActive(int rank) => rank % 10 != 5;
 
-    private LoadOrderEntry Write(int rank)
+    private LoadOrderEntry Write(string root, int rank)
     {
         var records = RecordsOf(rank);
         var name = rank == 0 ? "Base.esm" : $"Mod{rank:D3}.esp";
         var origin = rank == 0 ? PluginOrigin.DataDirectory : $"Mod{rank:D3}";
-        var folder = rank == 0 ? DataFolder : Path.Combine(InstanceRoot, "mods", origin);
+        var folder = rank == 0 ? Path.Combine(root, "Data") : Path.Combine(root, "mods", origin);
         Directory.CreateDirectory(folder);
         var mod = new Fallout4Mod(ModKey.FromFileName(name), Fallout4Release.Fallout4);
         if (records <= LightRecordLimit && rank % 5 != 0) mod.ModHeader.Flags |= Fallout4ModHeader.HeaderFlag.Small;
 
-        var left = records - (rank == 0 ? AddBigCell(mod) : Override(mod, rank, records));
+        var left = records - (rank == 0 ? 0 : Override(mod, rank, records));
+        if (rank == BigSourceRank) left -= AddBigCellAndManyDocuments(mod);
         if (left >= RecordsPerCell) left -= AddWorld(mod, left / RecordsPerCell, rank);
         for (var k = 0; k < left; k++) mod.Keywords.Add(new Keyword(mod) { EditorID = $"Keyword{rank:D3}x{k}" });
 
@@ -97,25 +117,67 @@ internal sealed class RealSizeModlist : IDisposable
         return new LoadOrderEntry(name, path, origin, rank, IsActive(rank), Winning: true);
     }
 
-    private int AddBigCell(Fallout4Mod mod)
+    private int AddBigCellAndManyDocuments(Fallout4Mod mod)
     {
-        var placed = new Static(mod) { EditorID = "BigCellStatic" };
+        var cell = AddBigCell(mod, "BigCell");
+        BigCell = cell.FormKey.ToString();
+        AReferenceInTheBigCell = cell.Temporary[ReferencesInTheBigCell / 2].FormKey.ToString();
+        for (var d = 0; d < ManyDocuments; d++)
+        {
+            var keyword = new Keyword(mod) { EditorID = $"Document{d:D4}" };
+            mod.Keywords.Add(keyword);
+            _manyDocuments.Add(keyword.FormKey.ToString());
+        }
+        return 2 + ReferencesInTheBigCell + ManyDocuments;
+    }
+
+    private static Cell AddBigCell(Fallout4Mod mod, string editorId)
+    {
+        var placed = new Static(mod) { EditorID = $"{editorId}Static" };
         mod.Statics.Add(placed);
-        var cell = new Cell(mod) { EditorID = "BigCell" };
+        var cell = new Cell(mod) { EditorID = editorId };
         for (var r = 0; r < ReferencesInTheBigCell; r++)
         {
-            var reference = new PlacedObject(mod) { Position = new P3Float(r, 0, 0) };
+            var reference = new PlacedObject(mod) { EditorID = $"{editorId}Ref{r:D4}", Position = new P3Float(r, 0, 0) };
             reference.Base.SetTo(placed.FormKey);
             cell.Temporary.Add(reference);
         }
         mod.AddInteriorCells(cell);
-        BigCell = cell.FormKey.ToString();
-        return 2 + ReferencesInTheBigCell;
+        return cell;
     }
 
-    // LitR overrides about one record in twenty.
+    private LoadOrderEntry WriteUncommitted(string root)
+    {
+        const string name = "Uncommitted.esp";
+        var folder = Path.Combine(root, "mods", "Uncommitted");
+        Directory.CreateDirectory(folder);
+        var mod = new Fallout4Mod(ModKey.FromFileName(name), Fallout4Release.Fallout4);
+        AReferenceInTheUncommittedCell = AddBigCell(mod, "UncommittedCell").Temporary[0].FormKey.ToString();
+        var path = Path.Combine(folder, name);
+        mod.WriteToBinary(path);
+        var entry = new LoadOrderEntry(name, path, "Uncommitted", Plugins, Enabled: true, Winning: true);
+        InitSource(entry);
+        var git = Path.Combine(folder, ".git");
+        GitProbe.Run(git, folder, "rm", "-r", "-q", "--cached", PluginSourceRoot.For(name).Replace('\\', '/'));
+        GitProbe.Run(git, folder, "commit", "-q", "-m", "The tree untracked");
+        return entry;
+    }
+
+    // The source mod made the Source repository's own way: the binary read as the tree it would commit.
+    private static void InitSource(LoadOrderEntry entry)
+    {
+        var source = TestAdapters.Mutagen()
+            .ReadSourceOfAsync(
+                new RegisteredPlugin(entry.Name, PluginOrigin.DataDirectory, entry.Path, PluginProvider.Game, Line: null, HandedStrings.Of(entry.Path)),
+                EmptyLoadOrder.Of(GameRelease.Fallout4))
+            .GetAwaiter().GetResult().Answered();
+        TestAdapters.Source().Init(
+            Path.GetDirectoryName(entry.Path).Require(), [(source.Files, new DecompiledPlugin(new PluginAddress(entry.Name, entry.Origin), source.BinarySha256))]);
+    }
+
     private int Override(Fallout4Mod mod, int rank, int records)
     {
+        // LitR overrides about one record in twenty.
         var overrides = Math.Max(1, records / 20);
         var made = 0;
         if (rank <= PluginsOverridingOneRecord)
@@ -274,5 +336,5 @@ internal sealed class RealSizeModlist : IDisposable
     private static Landscape Landscape(Fallout4Mod mod) =>
         new(mod) { VertexHeightMap = new LandscapeVertexHeightMap(), VertexNormals = LandscapeVertices, VertexColors = LandscapeVertices };
 
-    public void Dispose() => _scratch.Dispose();
+    public void Dispose() => _folder.Dispose();
 }

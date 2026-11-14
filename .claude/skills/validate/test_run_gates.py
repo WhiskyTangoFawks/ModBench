@@ -122,44 +122,74 @@ class SelectedByChange(GateRepo):
 
 
 class RealSizeBudgets(GateRepo):
-    REAL_SIZE_RUN = "MEDIT_REAL_SIZE=1 test --no-build -v minimal MEditService.RecordIndex.Tests --filter FullyQualifiedName~.RealSize."
+    REAL_SIZE_RUN = "MEDIT_REAL_SIZE=1 test --no-build -v minimal --logger trx --results-directory {results} " \
+        "MEditService.RecordIndex.Tests --filter FullyQualifiedName~.RealSize."
+    DOTNET_PASSING_EACH_RUN_OF_REAL_SIZE = """#!/bin/sh
+echo "MEDIT_REAL_SIZE=$MEDIT_REAL_SIZE $*" >> {calls}
+previous=
+for arg in "$@"; do
+  if [ "$previous" = --results-directory ] && [ "$MEDIT_REAL_SIZE" = 1 ] && [ -z "$NONE_RAN" ]; then
+    mkdir -p "$arg" && echo '<UnitTestResult outcome="Passed" />' > "$arg/run.trx"
+  fi
+  previous=$arg
+done
+"""
 
     def setUp(self):
         super().setUp()
         shutil.copy(SCRIPT.parent / "select_backend_tests.py", self.validate)
         shutil.copy(SCRIPT.parent / "check_test_times.py", self.validate)
-        self.write("MEditService/MEditService.RecordIndex/MEditService.RecordIndex.csproj", "<Project />")
-        self.write("MEditService/MEditService.RecordIndex.Tests/MEditService.RecordIndex.Tests.csproj",
-                   '<PackageReference Include="Microsoft.NET.Test.Sdk" />'
-                   '<ProjectReference Include="..\\MEditService.RecordIndex\\MEditService.RecordIndex.csproj" />')
-        self.write("MEditService/MEditService.Http/MEditService.Http.csproj", "<Project />")
-        self.write("MEditService/MEditService.Http.Tests/MEditService.Http.Tests.csproj",
-                   '<PackageReference Include="Microsoft.NET.Test.Sdk" />'
-                   '<ProjectReference Include="..\\MEditService.Http\\MEditService.Http.csproj" />')
+        self.project("RecordIndex")
+        self.project("RecordIndex.Tests", "RecordIndex")
+        self.write("MEditService/MEditService.RecordIndex.Tests/RealSize/Budgets.cs", "[RealSizeFact]")
+        self.project("Commands")
+        self.project("Http", "Commands")
+        self.project("Http.Tests", "Http")
+        self.project("LoadOrder")
+        self.project("LoadOrder.Tests", "LoadOrder")
         self.calls = pathlib.Path(self.repo, "dotnet-calls")
         self.bin = pathlib.Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.bin)
         dotnet = self.bin / "dotnet"
-        dotnet.write_text(f'#!/bin/sh\necho "MEDIT_REAL_SIZE=$MEDIT_REAL_SIZE $*" >> {self.calls}\n')
+        dotnet.write_text(self.DOTNET_PASSING_EACH_RUN_OF_REAL_SIZE.format(calls=self.calls))
         dotnet.chmod(0o755)
         git(self.repo, "add", ".")
         git(self.repo, "commit", "-q", "-m", "projects")
         git(self.repo, "checkout", "-q", "-b", "feature")
 
-    def dotnet_calls_after_changing(self, path):
+    def project(self, name, *references):
+        test_sdk = '<PackageReference Include="Microsoft.NET.Test.Sdk" />' if name.endswith(".Tests") else ""
+        self.write(f"MEditService/MEditService.{name}/MEditService.{name}.csproj", test_sdk + "".join(
+            f'<ProjectReference Include="..\\MEditService.{r}\\MEditService.{r}.csproj" />' for r in references))
+
+    def run_after_changing(self, path, **env):
         self.write(path, "edited")
         git(self.repo, "add", ".")
         git(self.repo, "commit", "-q", "-m", "edit")
-        self.gates("--backend", BUILD_SLOT_HELD="1", PATH=f"{self.bin}:{os.environ['PATH']}")
-        return self.calls.read_text().splitlines()
+        for results in ("medit-test-results", "medit-real-size-results"):
+            self.addCleanup(shutil.rmtree, f"/tmp/{results}.{pathlib.Path(self.repo).name}", ignore_errors=True)
+        run = self.gates("--backend", BUILD_SLOT_HELD="1", PATH=f"{self.bin}:{os.environ['PATH']}", **env)
+        return run, self.calls.read_text().splitlines()
+
+    def real_size_run(self):
+        return self.REAL_SIZE_RUN.format(results=f"/tmp/medit-real-size-results.{pathlib.Path(self.repo).name}")
 
     def test_a_change_the_record_index_tests_can_break_runs_the_budgets_of_real_size(self):
-        self.assertIn(self.REAL_SIZE_RUN, self.dotnet_calls_after_changing("MEditService/MEditService.RecordIndex/a.cs"))
+        _, calls = self.run_after_changing("MEditService/MEditService.RecordIndex/a.cs")
+        self.assertIn(self.real_size_run(), calls)
 
-    def test_a_change_they_cannot_break_runs_no_budget_of_real_size(self):
-        calls = self.dotnet_calls_after_changing("MEditService/MEditService.Http/a.cs")
+    def test_a_change_to_the_write_path_runs_the_budgets_of_real_size(self):
+        _, calls = self.run_after_changing("MEditService/MEditService.Commands/a.cs")
+        self.assertIn(self.real_size_run(), calls)
+
+    def test_a_change_no_gesture_reaches_the_index_through_runs_no_budget_of_real_size(self):
+        _, calls = self.run_after_changing("MEditService/MEditService.LoadOrder/a.cs")
         self.assertTrue(any(call.endswith("selected.slnf") for call in calls), calls)
-        self.assertNotIn(self.REAL_SIZE_RUN, calls)
+        self.assertNotIn(self.real_size_run(), calls)
+
+    def test_a_run_of_real_size_that_ran_no_test_fails_the_gate(self):
+        run, _ = self.run_after_changing("MEditService/MEditService.RecordIndex/a.cs", NONE_RAN="1")
+        self.assertIn("BACKEND GATES FAILED", run.stdout)
 
 
 if __name__ == '__main__':
