@@ -176,8 +176,8 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
 
       await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN } });
 
-      expect(showQuickPick.mock.calls.map(([items]) => (items as { label: string; description: string }[]).map(({ label, description }) => [label, description])))
-        .toEqual([[['A.esp', 'ModA'], ['B.esp', 'ModB']]]);
+      expect(showQuickPick).toHaveBeenCalledWith(
+        [expect.objectContaining({ label: 'A.esp', description: 'ModA' }), expect.objectContaining({ label: 'B.esp', description: 'ModB' })], expect.anything());
       expect(opened()).toEqual([['modbench-rendered:/ModB/B.esp/Gun.json?formKey=000801%3AA.esp&name=B.esp&origin=ModB', 'modbench.record']]);
     });
 

@@ -23,7 +23,7 @@ public sealed class RecordTypeViewsTests
         IReadOnlyList<RecordSummary> Listed() =>
             index.Queries.GetRecords(types: null, Plugin, search: null, limit: 10, offset: 0).Value().Items;
 
-        Assert.Equal("LazyNpc", (index.Queries.GetRecord(npc).Value()
+        Assert.Equal("LazyNpc", (index.Queries.GetWinner(npc).Value()
             ?? throw new InvalidOperationException($"Expected a document for '{npc}'.")).EditorId);
         Assert.Equal("LazyNpc", index.DocumentOf(npc, Plugin).EditorId);
         Assert.Contains(Listed(), i => i.FormKey == npc);

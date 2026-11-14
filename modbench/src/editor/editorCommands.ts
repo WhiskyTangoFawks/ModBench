@@ -156,7 +156,7 @@ function recordOpenGesture(
     fromAgent: async ({ argument, options }) => {
       if (argument.length === 0) throw new Refusal('modbench.record.open takes at least one record.');
       const addresses = argument.map((record) => argumentOfKind(record, 'record')).map(({ formKey, plugin }) => (plugin ? { formKey, plugin } : { formKey }));
-      const copies = await copiesToOpen(client, addresses, refuseSeveralOwners);
+      const copies = await copiesToOpen<never>(client, addresses, refuseSeveralOwners);
       if ('refused' in copies) throw new Refusal(copies.refused);
       return { copies, pinned: options.pinned === true };
     },
@@ -199,7 +199,7 @@ const refuseSeveralOwners = (formKey: string, owners: readonly PluginAddress[]):
 
 // A record given without a plugin is its owner's copy (editor.md, Opening, story 8); of several owners, `choose` says which,
 // as a gesture never guesses (commands.md, Principles).
-async function copiesToOpen<Unchosen extends undefined = never>(
+async function copiesToOpen<Unchosen extends undefined>(
   client: OpenClient, addresses: readonly RecordToOpen[],
   choose: (formKey: string, owners: readonly PluginAddress[]) => Promise<PluginAddress | { refused: string } | Unchosen>,
 ): Promise<RecordCopy[] | { refused: string } | Unchosen> {

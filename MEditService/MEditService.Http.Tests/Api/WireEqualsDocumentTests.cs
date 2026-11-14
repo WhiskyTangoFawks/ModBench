@@ -16,8 +16,7 @@ public sealed class WireEqualsDocumentTests(LoadedApiFixture<CutDownPluginApiFix
     public async Task EveryCompareValue_IsTheOverridesOwnField(string formKey)
     {
         var compare = await _client.Compare(formKey);
-        var independentRecordRead = await _client.Record(formKey);
-        var fields = independentRecordRead.GetProperty("fields");
+        var fields = Wire.WinnerIn(compare).GetProperty("fields");
 
         var metadata = new Dictionary<string, FieldMetadata>(StringComparer.Ordinal);
         var fieldsByName = new Dictionary<string, JsonElement>(StringComparer.Ordinal);

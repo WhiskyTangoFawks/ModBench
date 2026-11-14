@@ -106,13 +106,6 @@ internal sealed class RecordQueries(
     private string? FormKeyOfFormId(string? search, RelationReads reads) =>
         search is null ? null : LoadIndex.FormKeyOf(search, _loadOrder.Require(), reads.OpenedPlugins)?.ToString();
 
-    public Task<Answer<RecordDetail?, IndexRefused>> GetRecord(string formKey, CancellationToken cancel) =>
-        _answer.Of(() =>
-        {
-            var document = _index.RequireWholeSetReads().GetDocument(formKey);
-            return document == null ? null : ToRecordDetail(document);
-        }, cancel);
-
     public Task<Answer<IReadOnlyList<PluginAddress>, IndexRefused>> GetRecordOwners(string formKey, CancellationToken cancel) =>
         _answer.Of(() => _index.RequireWholeSetReads().GetOwners(formKey), cancel);
 

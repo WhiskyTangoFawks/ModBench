@@ -15,8 +15,9 @@ internal static class UnabortedReads
         this IQueries queries, IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset) =>
         queries.GetRecords(types, plugin, search, limit, offset, Never);
 
-    internal static Task<Answer<RecordDetail?, IndexRefused>> GetRecord(this IQueries queries, string formKey) =>
-        queries.GetRecord(formKey, Never);
+    /// <summary>The winning copy, as the comparison of the active plugins answers it; null when no active plugin holds it.</summary>
+    internal static async Task<Answer<RecordDetail?, IndexRefused>> GetWinner(this IQueries queries, string formKey) =>
+        (await queries.GetCompare(formKey, null, Never)).Then<RecordDetail?>(compared => compared?.Overrides.SingleOrDefault(copy => copy.IsWinner));
 
     internal static Task<Answer<IReadOnlyList<PluginAddress>, IndexRefused>> GetRecordOwners(this IQueries queries, string formKey) =>
         queries.GetRecordOwners(formKey, Never);
