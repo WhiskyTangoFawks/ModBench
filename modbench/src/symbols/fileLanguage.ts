@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import type { SourceNames } from './sourceNames';
-import type { CopyAt } from '../instanceLoader/fileConflictIndex';
+import { foldPath, type CopyAt } from '../instanceLoader/fileConflictIndex';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { heldText } from '../textDocuments/heldText';
 import type { Reporter } from '../ports/reporter';
@@ -47,15 +47,13 @@ function foldedPathsOf(value: FilesValue): readonly FoldedPath[] {
     ...value.dataFolderFiles.kind === 'listed' ? [...value.dataFolderFiles.files.values()].map(({ relativePath }) => relativePath) : [],
     ...[...value.gameFolderArchived.copies.values()].map(({ file }) => file),
   ];
-  const each = [...new Map(paths.map((path): FoldedPath => [path.toLowerCase(), path]))];
+  const each = [...new Map(paths.map((path): FoldedPath => [foldPath(path), path]))];
   folded.set(value, each);
   return each;
 }
 
-// Plugin source holds a path's backslashes escaped, an agent names a path with either separator, and the instance
-// value's paths hold forward slashes.
-const slashed = (held: string): string => held.replace(/\\\\|\\/g, '/');
-const foldedPathOf = (held: string): string => slashed(held).toLowerCase();
+// Plugin source holds a path's backslashes escaped.
+const foldedPathOf = (held: string): string => foldPath(held.replaceAll('\\\\', '\\'));
 
 /** A file as a symbol, named by its path in the Data folder: the records that name it, which mEdit answers (symbols.md,
  *  The symbols). */
@@ -68,7 +66,7 @@ export function fileLanguage({ instance, reporter, client, names, copyOf, reveal
   };
 
   const referencesTo = async ({ path }: FileNamed): Promise<References> => {
-    const { found, unread } = await membersNaming(client, openPluginSourceDocument, names, await client.getFileReferences(slashed(path)));
+    const { found, unread } = await membersNaming(client, openPluginSourceDocument, names, await client.getFileReferences(path));
     return { locations: found, unread };
   };
 
@@ -86,11 +84,11 @@ export function fileLanguage({ instance, reporter, client, names, copyOf, reveal
     }),
     /** The copy the game gets, inside its archive when archived. */
     definitionOf({ path }): Promise<Definition> {
-      const copy = copyOf(slashed(path));
+      const copy = copyOf(foldPath(path));
       return Promise.resolve(holdsCopy(copy) ? { shown: copy } : { refused: copy.none });
     },
     referencesTo,
-    tooltipOf: ({ path }) => Promise.resolve(tooltipLines(tooltip(slashed(path)))),
+    tooltipOf: ({ path }) => Promise.resolve(tooltipLines(tooltip(path))),
     /** Each file of the path's asset type whose path holds the text typed so far, spelled with its folder where the
      *  text starts with it, up to `MOST_FILES_LISTED`; the Output says how many more match. */
     async completionsAt(document, offset, { gesture }) {
@@ -117,7 +115,7 @@ export function fileLanguage({ instance, reporter, client, names, copyOf, reveal
     /** Each file whose path in the Data folder holds `query`, at the copy the game gets, up to `MOST_FILES_LISTED`; the
      *  Output says how many more match. */
     symbolsFor(query, { gesture }) {
-      const wanted = foldedPathOf(query);
+      const wanted = foldPath(query);
       const matching = dataPaths().filter(([path]) => path.includes(wanted));
       const listed: Listed[] = [];
       for (const [, path] of matching) {

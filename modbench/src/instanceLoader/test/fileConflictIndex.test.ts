@@ -119,6 +119,12 @@ describe('case-insensitive conflicts, as Proton/Wine folds case over case-sensit
     expect(entryOtherCasing).toBe(entry);
   });
 
+  it('finds a path spelled with backslashes as the path spelled with forward slashes, as the game reads either', () => {
+    const index = indexOver([mod('ModA'), mod('ModB')], caseConflicting);
+
+    expect(index.files.get('Textures\\Foo.dds')).toBe(index.files.get('textures/foo.dds'));
+  });
+
   it('picks the same winner by priority whether casing matches or varies', () => {
     const top = indexOver([mod('ModA'), mod('ModB')], caseConflicting);
     expect(top.files.get('textures/foo.dds')?.winnerOrigin).toEqual(modOrigin('ModA'));

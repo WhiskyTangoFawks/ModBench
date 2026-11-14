@@ -1422,7 +1422,7 @@ describe('the agent server, reading a record through mEdit', () => {
     expect(await call(client, 'read_record', { name: 'SharedNpc', plugin: { name: 'A.esp' } })).toEqual({ isError: true, text: 'A.esp (Big Rocks) holds no 000800:A.esp.' });
   });
 
-  it('answers references too large for one reply with how many there are, how many files it left out unread, and the SQL view select_rows narrows them in', async () => {
+  it('answers references too large for one reply with how many there are, how many reasons it gives for what it left unread, and the SQL view select_rows narrows them in', async () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', NPC);
     symbolReads.references = {

@@ -15,7 +15,7 @@ vi.mock('vscode', () => ({
 
 import { fileLanguage, type FileClient } from '../fileLanguage';
 import { recordingReporter } from '../../test/surfacingDoubles';
-import { FileConflictLookup, NO_GAME_FOLDER_ARCHIVED, type CopyAt, type StackedFile } from '../../instanceLoader/fileConflictIndex';
+import { FileConflictLookup, foldPath, NO_GAME_FOLDER_ARCHIVED, type CopyAt, type StackedFile } from '../../instanceLoader/fileConflictIndex';
 import type { NamedFile, SourceNames } from '../sourceNames';
 import { sourceNames } from './fakeSourceNames';
 
@@ -62,16 +62,16 @@ function language(answer: Awaited<ReturnType<FileClient['getFileReferences']>>, 
     gameFolderArchived: { ...NO_GAME_FOLDER_ARCHIVED, copies: new Map([['textures/decals/other_d.dds', ARCHIVED]]) },
   };
   const copyOf = vi.fn((path: string) => {
-    if (path.toLowerCase() === FILE) return copy;
+    if (foldPath(path) === FILE) return copy;
     if (path.startsWith('meshes/rocks/')) return { kind: 'loose' as const, path: `/instance/mods/Rocks/${path}` };
-    return path === ARCHIVED.file ? ARCHIVED : NO_COPY;
+    return path.toLowerCase() === ARCHIVED.file ? ARCHIVED : NO_COPY;
   });
   const names = sourceNames({
     fileAt: () => Promise.resolve(named),
     pathTypedAt: () => Promise.resolve(typedAt),
     membersIn: (text, formKey, fieldPaths) => Promise.resolve(formKey === HOLDER && fieldPaths.includes('Diffuse') && text === TEXT ? [SPAN] : []),
   });
-  return { reporter, getFileReferences, reveal, copyOf, stackedCopies, ...fileLanguage({ instance: { value }, reporter, client, names, copyOf, reveal, tooltip: (path) => (path.toLowerCase() === FILE ? tooltip : undefined) }) };
+  return { reporter, getFileReferences, reveal, copyOf, stackedCopies, ...fileLanguage({ instance: { value }, reporter, client, names, copyOf, reveal, tooltip: () => tooltip }) };
 }
 
 describe('a path in plugin source names a file (symbols.md, The symbols, File)', () => {
@@ -102,14 +102,11 @@ describe('where a file is defined, and the records that name it (symbols.md, The
     expect(await language(NONE, { copy }).definitionOf({ kind: 'file', path: FILE })).toEqual(expected);
   });
 
-  it('answers a path spelled with backslashes as the path spelled with forward slashes (symbols.md, A symbol gives one answer wherever I ask)', async () => {
-    const kind = language(NONE, { tooltip: 'Mod' });
-    const backslashed = { kind: 'file', path: 'Textures\\Decals\\Stain_d.dds' } as const;
-
-    expect(await kind.definitionOf(backslashed)).toEqual({ shown: LOOSE });
-    expect(await kind.tooltipOf(backslashed)).toEqual(['Mod']);
-    await kind.referencesTo(backslashed);
-    expect(kind.getFileReferences).toHaveBeenCalledWith('Textures/Decals/Stain_d.dds');
+  it.each([
+    ['in a mod', 'Textures\\Decals\\Stain_d.dds', LOOSE],
+    ['in a game archive', 'Textures\\Decals\\Other_d.dds', ARCHIVED],
+  ])('defines a file %s named with backslashes as the one named with forward slashes (symbols.md, A symbol gives one answer wherever I ask)', async (_case, path, copy) => {
+    expect(await language(NONE).definitionOf({ kind: 'file', path })).toEqual({ shown: copy });
   });
 
   it('lists each record that names it at its member, and each copy it could not read', async () => {
