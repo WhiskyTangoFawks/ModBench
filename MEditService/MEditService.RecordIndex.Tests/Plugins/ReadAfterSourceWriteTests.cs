@@ -1,6 +1,5 @@
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
-using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.RepositoriesLib;
@@ -43,7 +42,6 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
         _checks = new FailingCheck(_gate);
         _index = Indexes.Open(_holder, _checks, timeProvider: _clock, source: _source);
         _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
-        Waits.Reached(() => _index.Status is { State: LoadOrderState.Ready, Validating: false }, "the index at rest");
         _compiledPlugin.HandEdit(_index.DocumentOf(_npc, _compiledPlugin.Key), "\"CompiledPluginNpc\"", "\"Written\"");
     }
 
