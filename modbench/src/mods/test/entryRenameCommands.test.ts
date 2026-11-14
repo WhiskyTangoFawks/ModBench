@@ -86,6 +86,16 @@ describe('rename mod', () => {
     expect(reporter.reports).toEqual([]);
   });
 
+  it('renames the mod Rename Symbol supplies to the name it supplies, asking nothing', async () => {
+    const { fake, reporter } = renamesOver(mods, { selection: [modA] });
+
+    await invoke('modbench.mod.rename', undefined, undefined, { oldName: 'Mod B', newName: 'Renamed' });
+
+    expect(showInputBox).not.toHaveBeenCalled();
+    expect(renamed(fake.calls)[0]).toEqual({ verb: 'renameModFolder', from: 'Mod B', to: 'Renamed' });
+    expect(reporter.reports).toEqual([]);
+  });
+
   it('renames the one selected mod from F2', async () => {
     showInputBox.mockResolvedValueOnce('Renamed');
     const { fake } = renamesOver(mods, { selection: [modA] });
@@ -189,6 +199,15 @@ describe('rename separator', () => {
   const groupA = new SeparatorNode({ kind: 'separator', name: 'Group A', enabled: true }, []);
   const groupB = new SeparatorNode({ kind: 'separator', name: 'Group B', enabled: true }, []);
   const renameLine = { verb: 'changeModOrder', profile: 'Default', changes: [{ kind: 'renameSeparator', from: 'Group B', to: 'Renamed' }] };
+
+  it('renames the separator Rename Symbol supplies to the name it supplies, asking nothing', async () => {
+    const { fake } = renamesOver(entries, { selection: [groupA] });
+
+    await invoke('modbench.separator.rename', undefined, undefined, { oldName: 'Group B', newName: 'Renamed' });
+
+    expect(showInputBox).not.toHaveBeenCalled();
+    expect(renamed(fake.calls)).toEqual([renameLine]);
+  });
 
   it('prompts with the right-clicked separator\'s name and renames it, not the selection around it', async () => {
     showInputBox.mockResolvedValueOnce('Renamed');

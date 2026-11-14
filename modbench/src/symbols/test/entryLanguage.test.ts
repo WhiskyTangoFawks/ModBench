@@ -46,6 +46,7 @@ interface Options {
 }
 
 function language(named: EntryNamed | undefined, options: Options = {}) {
+  const renameEntry = vi.fn(() => Promise.resolve());
   const reporter = recordingReporter();
   const reads = vi.fn();
   const owner: EntryNames = {
@@ -66,8 +67,8 @@ function language(named: EntryNamed | undefined, options: Options = {}) {
   return { reporter, reads, ...entryLanguage({
     instance: { value }, reporter, owners: [owner], rows: () => rows, entryTooltip: () => options.tooltip, downloadedFileTooltip: () => options.downloadedFileTooltip,
     downloadedFileRow: (name) => (options.shown !== false && name === 'Patch-1.7z' ? SHOW_PATCH : undefined),
-    modOrderFileOf: (name) => `/profiles/${name}/modlist.txt`,
-  }) };
+    modOrderFileOf: (name) => `/profiles/${name}/modlist.txt`, renameEntry,
+  }), renameEntry };
 }
 
 describe('the name of a mod, a separator, a downloaded file or a profile where an owner\'s file names it (symbols.md, The symbols)', () => {
@@ -79,6 +80,42 @@ describe('the name of a mod, a separator, a downloaded file or a profile where a
     const none = language(undefined);
 
     expect([await none.nameAt(document, AT_NAME), await none.completionsAt(document, AT_NAME)]).toEqual([undefined, undefined]);
+  });
+});
+
+describe('Rename Symbol on a mod or a separator (symbols.md, The features, story 6)', () => {
+  it.each([
+    ['a mod', mod('base mod'), { kind: 'mod', name: 'Base Mod' }],
+    ['a separator', separator('gear'), { kind: 'separator', name: 'Gear' }],
+  ])('on %s, offers its name as the file spells it and is its rename, by the name the instance spells it', async (_case, spelledAs, listed) => {
+    const { renameRangeAt, renameAt, renameEntry } = language(spelled(spelledAs));
+
+    expect(await renameRangeAt(document, AT_NAME)).toEqual({ ...SPAN, name: spelledAs.name });
+    await renameAt(document, AT_NAME, 'Renamed');
+
+    expect(renameEntry).toHaveBeenCalledWith(listed, 'Renamed');
+  });
+
+  it.each([
+    ['a downloaded file', downloadedFile('Patch-1.7z')],
+    ['a profile', profile('Default')],
+  ])('offers nothing on %s, which has no rename gesture, and renames nothing', async (_case, entry) => {
+    const { renameRangeAt, renameAt, renameEntry } = language(spelled(entry));
+
+    expect(await renameRangeAt(document, AT_NAME)).toBeUndefined();
+    await renameAt(document, AT_NAME, 'Renamed');
+    expect(renameEntry).not.toHaveBeenCalled();
+  });
+
+  it('offers nothing where no owner names an entry', async () => {
+    expect(await language(undefined).renameRangeAt(document, AT_NAME)).toBeUndefined();
+  });
+
+  it('refuses a mod no row lists, and renames nothing', async () => {
+    const { renameAt, renameEntry } = language(spelled(mod('Gone Mod')));
+
+    await expect(renameAt(document, AT_NAME, 'Renamed')).rejects.toThrow('Mods lists no mod named Gone Mod.');
+    expect(renameEntry).not.toHaveBeenCalled();
   });
 });
 

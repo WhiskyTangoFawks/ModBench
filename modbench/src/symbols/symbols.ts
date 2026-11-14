@@ -11,7 +11,7 @@ import { symbolIndex, type SymbolIndex } from './symbolIndex';
 import type { EntryNames, PluginSymbol, SymbolOwner } from '../symbolNames/symbolNames';
 import type { PluginsShown } from '../drivingLib/pluginsShown';
 import { pluginLanguage } from './pluginLanguage';
-import { entryLanguage } from './entryLanguage';
+import { entryLanguage, type RenamableEntry } from './entryLanguage';
 import { scriptLanguage, type ScriptClient } from './scriptLanguage';
 import { fileLanguage, type FileClient, type FileCopies } from './fileLanguage';
 import { recordLanguage, type RecordClient } from './recordLanguage';
@@ -58,9 +58,13 @@ export interface SymbolRows {
   filesHeld: () => FilesHeld;
 }
 
-// Rename Symbol is an entry point to the plugin's `rename`, supplying the plugin and the new name (commands.md).
+// Rename Symbol is an entry point to each `rename`, supplying what is renamed and the new name (commands.md).
 const renamePluginNamed = async (plugin: PluginSymbol, name: string): Promise<void> => {
   await vscode.commands.executeCommand('modbench.plugin.rename', undefined, undefined, { plugin, name });
+};
+
+const renameEntryNamed = async ({ kind, name: oldName }: RenamableEntry, newName: string): Promise<void> => {
+  await vscode.commands.executeCommand(`modbench.${kind}.rename`, undefined, undefined, { oldName, newName });
 };
 
 interface Symbols extends vscode.Disposable {
@@ -83,7 +87,7 @@ export function createSymbols(deps: SymbolsDeps): Symbols {
     tooltip: (shown) => deps.pluginsShown?.tooltipLines(shown) ?? [],
   });
   const { entryTooltip, downloadedFileTooltip, downloadedFileRow, modOrderFileOf } = deps;
-  const entry = entryLanguage({ instance, reporter, owners: deps.entryOwners, rows: () => rows?.mods, entryTooltip, downloadedFileTooltip, downloadedFileRow, modOrderFileOf });
+  const entry = entryLanguage({ instance, reporter, owners: deps.entryOwners, rows: () => rows?.mods, entryTooltip, downloadedFileTooltip, downloadedFileRow, modOrderFileOf, renameEntry: renameEntryNamed });
   const file = fileLanguage({ instance, reporter, client, names, ...fileCopies, tooltip: (path) => rows?.mods.fileTooltip(path) });
   const kinds: SymbolKinds = {
     plugin, entry, file,
@@ -91,7 +95,7 @@ export function createSymbols(deps: SymbolsDeps): Symbols {
     record: recordLanguage({ client, names, reporter, open: openPluginSourceDocument }),
   };
   const rename = renameSymbol({
-    plugin, names, client, plugins: () => instance?.value.plugins ?? [],
+    plugin, entry, names, client, plugins: () => instance?.value.plugins ?? [],
     executeCommand: (command, ...args) => vscode.commands.executeCommand(command, ...args),
   });
   const disposable = vscode.Disposable.from(
