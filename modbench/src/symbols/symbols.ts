@@ -30,7 +30,9 @@ const NO_FILES: FilesHeld = { filesByMod: new Map(), dataFolderFiles: { kind: 'l
 interface SymbolsDeps {
   instance: Pick<Instance, 'value' | 'subscribe'> | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
-  client: Pick<MEditClient, 'getRecordOfFile' | 'getPluginFilePaths' | 'onNotification' | 'onLoadOrderSettled'> & RecordClient & ScriptClient & FileClient & RecordReferencedByDeps['client'];
+  client: Pick<MEditClient, 'getRecordOfFile' | 'onNotification' | 'onLoadOrderSettled'> & RecordClient & ScriptClient & FileClient & RecordReferencedByDeps['client'];
+  /** The file paths and scripts every compiled plugin's source names. */
+  paths: Pick<MEditClient, 'getPluginFilePaths'>;
   /** What mEdit's record index names in plugin source. */
   names: Pick<MEditClient, 'getPluginSourceNames'>;
   focusedRecord: () => string | undefined;
@@ -79,7 +81,7 @@ interface Symbols extends vscode.Disposable {
 
 export function createSymbols(deps: SymbolsDeps): Symbols {
   const { instance, reporter, client, rows, reporterFor, fileCopies, focusedRecord } = deps;
-  const names = sourceNames({ names: deps.names, paths: client, sourceFiles: deps.sourceFiles, reporter });
+  const names = sourceNames({ names: deps.names, paths: deps.paths, sourceFiles: deps.sourceFiles, reporter });
   const plugin = pluginLanguage({
     instance, reporter, client, owners: deps.owners, names, renamePlugin: renamePluginNamed, rows: () => rows?.plugins,
     tooltip: (shown) => deps.pluginsShown?.tooltipLines(shown) ?? [],

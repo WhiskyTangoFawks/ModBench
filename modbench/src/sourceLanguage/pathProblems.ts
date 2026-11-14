@@ -19,7 +19,8 @@ export interface PathStanding {
 }
 
 export interface PathProblemsDeps {
-  client: Pick<MEditClient, 'getPluginFilePaths' | 'onNotification' | 'loadOrderStatus' | 'onLoadOrderSettled'>;
+  client: Pick<MEditClient, 'onNotification' | 'loadOrderStatus' | 'onLoadOrderSettled'>;
+  ask: Pick<MEditClient, 'getPluginFilePaths'>;
   sourceFiles: SourceFilesOf;
   readText: (path: string) => Promise<string>;
   reporter: Pick<Reporter, 'shownOnSurface'>;
@@ -105,7 +106,7 @@ export function feedPathProblems(deps: PathProblemsDeps): () => void {
   const ask = async (plugin?: PluginAddress, atSubscribe = false) => {
     const target = plugin === undefined ? WHOLE_SET : pluginAddressKey(plugin);
     try {
-      const answer = answerOf(await client.getPluginFilePaths(plugin));
+      const answer = answerOf(await deps.ask.getPluginFilePaths(plugin));
       if (atSubscribe) answeredAtSubscribe();
       take(answer, target);
     } catch (error) {

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { PluginAddress } from '../client';
 import { modbenchDiagnostic } from '../drivingLib/modbenchDiagnostic';
+import { bounded, REQUESTS_AT_ONCE } from '../ports/bounded';
 import { coalesced } from '../ports/coalesced';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
@@ -98,12 +99,13 @@ export function registerNamesNothing({ kinds, collection, reporter, savedText, o
     wholeWanted = false;
     asking.clear();
     const held = vscode.workspace.textDocuments.filter(isFile);
+    const inTurn = bounded(REQUESTS_AT_ONCE);
     const files = await filesHolding(only);
     const closed = (files ?? []).filter((file) => !held.some((document) => document.uri.fsPath === file));
     const judging = new Set([...held.map((document) => document.uri.fsPath), ...closed]);
     await Promise.all([
       ...held.map((document) => judged(document.uri.fsPath, () => heldText(document))),
-      ...closed.map((file) => judged(file, () => savedText(file))),
+      ...closed.map((file) => inTurn(() => judged(file, () => savedText(file)))),
     ]);
     if (files === undefined) {
       if (only === undefined) wholeWanted = true;

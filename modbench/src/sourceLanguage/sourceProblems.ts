@@ -17,7 +17,8 @@ export interface ProblemOnFile { message: string; start: Position; end: Position
 export type ProblemsByFile = ReadonlyMap<string, ProblemOnFile[]>;
 
 export interface SourceProblemsDeps {
-  client: Pick<MEditClient, 'getPluginProblems' | 'onNotification' | 'loadOrderStatus' | 'onLoadOrderSettled' | 'onUnsavedHandOver'>;
+  client: Pick<MEditClient, 'onNotification' | 'loadOrderStatus' | 'onLoadOrderSettled' | 'onUnsavedHandOver'>;
+  ask: Pick<MEditClient, 'getPluginProblems'>;
   sourceFiles: SourceFilesOf;
   reporter: Pick<Reporter, 'shownOnSurface'>;
   /** Replaces every problem published before. */
@@ -144,7 +145,7 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
   const ask = async (plugin?: PluginAddress, first = false) => {
     const target = plugin === undefined ? WHOLE_SET : pluginAddressKey(plugin);
     try {
-      const answer = placed(answerOf(await client.getPluginProblems(plugin)), deps);
+      const answer = placed(answerOf(await deps.ask.getPluginProblems(plugin)), deps);
       if (first) answeredAtSubscribe();
       settle(target, answer);
     } catch (error) {

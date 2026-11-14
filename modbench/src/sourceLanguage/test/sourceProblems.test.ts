@@ -33,6 +33,7 @@ function feed(sourceFiles = sourceFolders, answeredAtSubscribe?: PluginProblems[
   const status: (string | undefined)[] = [];
   feedSourceProblems({
     client,
+    ask: client,
     sourceFiles,
     reporter,
     publish: (problems) => published.push(problems),

@@ -35,7 +35,7 @@ function feed(answer: PluginFilePaths[], standing: Partial<PathStanding> = {}) {
     ...standing,
   };
   feedPathProblems({
-    client, sourceFiles: sourceFolders, readText: () => Promise.resolve(TEXT), reporter, paths,
+    client, ask: client, sourceFiles: sourceFolders, readText: () => Promise.resolve(TEXT), reporter, paths,
     publish: (problems) => published.push(problems), languageStatus: (text) => status.push(text),
   });
   const latest = () => published[published.length - 1] ?? new Map();
@@ -163,7 +163,7 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     client.setQueryAnswer('getPluginFilePaths', [answerFor()]);
     const published: ProblemsByFile[] = [];
     feedPathProblems({
-      client, sourceFiles: sourceFolders, readText: () => Promise.resolve(text), reporter: recordingReporter(),
+      client, ask: client, sourceFiles: sourceFolders, readText: () => Promise.resolve(text), reporter: recordingReporter(),
       paths: { judged: () => true, holds: () => false, subscribe: () => ({ dispose: () => undefined }) },
       publish: (problems) => published.push(problems), languageStatus: () => undefined,
     });
@@ -203,7 +203,7 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     const listeners = new Set<() => void>();
     const published: ProblemsByFile[] = [];
     feedPathProblems({
-      client, sourceFiles: sourceFolders, readText: (path) => { reads.push(path); return Promise.resolve(TEXT); }, reporter: recordingReporter(),
+      client, ask: client, sourceFiles: sourceFolders, readText: (path) => { reads.push(path); return Promise.resolve(TEXT); }, reporter: recordingReporter(),
       paths: { judged: () => true, holds: () => false, subscribe: (listener) => { listeners.add(listener); return { dispose: () => undefined }; } },
       publish: (problems) => published.push(problems), languageStatus: () => undefined,
     });
@@ -220,7 +220,7 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     client.setQueryAnswer('getPluginFilePaths', [answerFor()]);
     client.emit(loadOrderStatusEventFixture({ state: 'Reconciling', conflictsComputed: false, version: 1 }));
     feedPathProblems({
-      client, sourceFiles: sourceFolders, readText: () => Promise.resolve(TEXT), reporter: recordingReporter(),
+      client, ask: client, sourceFiles: sourceFolders, readText: () => Promise.resolve(TEXT), reporter: recordingReporter(),
       paths: { judged: () => true, holds: () => false, subscribe: () => ({ dispose: () => undefined }) }, publish: () => undefined, languageStatus: () => undefined,
     });
     client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });

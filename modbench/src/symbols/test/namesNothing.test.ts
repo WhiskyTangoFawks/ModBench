@@ -18,6 +18,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { registerNamesNothing } from '../namesNothing';
+import { REQUESTS_AT_ONCE } from '../../ports/bounded';
 import type { PluginAddress } from '../../client';
 import type { ScriptSymbol } from '../../symbolNames/symbolNames';
 import { fakeKind, fakeKinds } from './fakeKinds';
@@ -85,6 +86,24 @@ describe('the problem a name that names nothing raises (symbols.md, The features
     await settle();
 
     expect([messagesOn(collection, CLOSED), savedText.mock.calls]).toEqual([[], []]);
+  });
+
+  it('judges no more closed files at once than its limit, however many files hold a name', async () => {
+    world.documents = [];
+    const files = Array.from({ length: REQUESTS_AT_ONCE * 3 }, (_, each) => `/closed/${each}.json`);
+    let inFlight = 0;
+    let mostAtOnce = 0;
+    const judgedFiles = vi.fn(async () => {
+      inFlight += 1;
+      mostAtOnce = Math.max(mostAtOnce, inFlight);
+      await settle();
+      inFlight -= 1;
+      return [];
+    });
+    start(script({ filesNamingNothing: () => Promise.resolve(files), namesNothingIn: judgedFiles }), Object.fromEntries(files.map((file) => [file, ''])));
+    await vi.waitFor(() => { expect(judgedFiles).toHaveBeenCalledTimes(files.length); });
+
+    expect(mostAtOnce).toBe(REQUESTS_AT_ONCE);
   });
 
   it('asks each kind once for all its files, however many files hold a name', async () => {
