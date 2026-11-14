@@ -1,5 +1,4 @@
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -49,6 +48,11 @@ public sealed class RealSizeModlist : IDisposable
 
     public IReadOnlyList<LoadOrderEntry> LoadOrder { get; private set; } = [];
 
+    /// <summary>The largest plugin, the master every other plugin names.</summary>
+    public LoadOrderEntry Master => LoadOrder[0];
+
+    public string MastersBigCell { get; private set; } = "";
+
     /// <summary>A plugin read from its source tree, holding a big cell and many records each a document of its own.</summary>
     public LoadOrderEntry BigSourcePlugin => LoadOrder[BigSourceRank];
 
@@ -74,7 +78,7 @@ public sealed class RealSizeModlist : IDisposable
         for (var rank = 0; rank < Plugins; rank++)
         {
             var entry = Write(root, rank);
-            if (IsSourceTree(rank)) InitSource(entry);
+            if (IsSourceTree(rank)) PluginSources.Init(entry.Path, entry.Origin);
             loadOrder.Add(entry);
         }
         LoadOrder = loadOrder;
@@ -107,7 +111,7 @@ public sealed class RealSizeModlist : IDisposable
         var mod = new Fallout4Mod(ModKey.FromFileName(name), Fallout4Release.Fallout4);
         if (records <= LightRecordLimit && rank % 5 != 0) mod.ModHeader.Flags |= Fallout4ModHeader.HeaderFlag.Small;
 
-        var left = records - (rank == 0 ? 0 : Override(mod, rank, records));
+        var left = records - (rank == 0 ? AddMastersBigCell(mod) : Override(mod, rank, records));
         if (rank == BigSourceRank) left -= AddBigCellAndManyDocuments(mod);
         if (left >= RecordsPerCell) left -= AddWorld(mod, left / RecordsPerCell, rank);
         for (var k = 0; k < left; k++) mod.Keywords.Add(new Keyword(mod) { EditorID = $"Keyword{rank:D3}x{k}" });
@@ -115,6 +119,12 @@ public sealed class RealSizeModlist : IDisposable
         var path = Path.Combine(folder, name);
         mod.WriteToBinary(path);
         return new LoadOrderEntry(name, path, origin, rank, IsActive(rank), Winning: true);
+    }
+
+    private int AddMastersBigCell(Fallout4Mod mod)
+    {
+        MastersBigCell = AddBigCell(mod, "MastersBigCell").FormKey.ToString();
+        return 2 + ReferencesInTheBigCell;
     }
 
     private int AddBigCellAndManyDocuments(Fallout4Mod mod)
@@ -156,23 +166,11 @@ public sealed class RealSizeModlist : IDisposable
         var path = Path.Combine(folder, name);
         mod.WriteToBinary(path);
         var entry = new LoadOrderEntry(name, path, "Uncommitted", Plugins, Enabled: true, Winning: true);
-        InitSource(entry);
+        PluginSources.Init(entry.Path, entry.Origin);
         var git = Path.Combine(folder, ".git");
         GitProbe.Run(git, folder, "rm", "-r", "-q", "--cached", PluginSourceRoot.For(name).Replace('\\', '/'));
         GitProbe.Run(git, folder, "commit", "-q", "-m", "The tree untracked");
         return entry;
-    }
-
-    // The source mod made the Source repository's own way: the binary read as the tree it would commit.
-    private static void InitSource(LoadOrderEntry entry)
-    {
-        var source = TestAdapters.Mutagen()
-            .ReadSourceOfAsync(
-                new RegisteredPlugin(entry.Name, PluginOrigin.DataDirectory, entry.Path, PluginProvider.Game, Line: null, HandedStrings.Of(entry.Path)),
-                EmptyLoadOrder.Of(GameRelease.Fallout4))
-            .GetAwaiter().GetResult().Answered();
-        TestAdapters.Source().Init(
-            Path.GetDirectoryName(entry.Path).Require(), [(source.Files, new DecompiledPlugin(new PluginAddress(entry.Name, entry.Origin), source.BinarySha256))]);
     }
 
     private int Override(Fallout4Mod mod, int rank, int records)

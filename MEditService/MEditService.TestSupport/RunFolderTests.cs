@@ -30,6 +30,17 @@ public sealed class RunFolderTests
     }
 
     [Fact]
+    public void ASecondRun_FailsAtOnceAndLeavesTheFirstRunsFolder()
+    {
+        using var first = RunFolder.Written(Name, path => File.WriteAllText(Path.Combine(path, "first.txt"), "the first run's"));
+
+        var second = Assert.Throws<IOException>(() => RunFolder.Written(Name, _ => { }));
+
+        Assert.Contains("Another run holds", second.Message, StringComparison.Ordinal);
+        Assert.True(File.Exists(Path.Combine(first.Path, "first.txt")));
+    }
+
+    [Fact]
     public void Dispose_RemovesTheFolder()
     {
         var folder = RunFolder.Written(Name, path => File.WriteAllText(Path.Combine(path, "written.txt"), "x"));

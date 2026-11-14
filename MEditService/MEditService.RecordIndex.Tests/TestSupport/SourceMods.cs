@@ -14,24 +14,9 @@ internal static class SourceMods
 {
     /// <summary>The source mod of the plugin at <paramref name="pluginPath"/>, a mod named for its folder.</summary>
     internal static void Init(string pluginPath) =>
-        Init(pluginPath, Path.GetFileName(Path.GetDirectoryName(pluginPath)).Require());
+        PluginSources.Init(pluginPath, Path.GetFileName(Path.GetDirectoryName(pluginPath)).Require());
 
-    internal static void Init(LoadOrderEntry entry) => Init(entry.Path, entry.Origin);
-
-    private static void Init(string pluginPath, string origin)
-    {
-        var modFolder = Path.GetDirectoryName(pluginPath)
-            ?? throw new ArgumentException("A plugin path names a file inside a mod folder.", nameof(pluginPath));
-        var pluginName = Path.GetFileName(pluginPath);
-        var read = TestAdapters.Mutagen()
-            .ReadSourceOfAsync(
-                new RegisteredPlugin(pluginName, PluginOrigin.DataDirectory, pluginPath, PluginProvider.Game, Line: null, HandedStrings.Of(pluginPath)),
-                EmptyLoadOrder.Of(GameRelease.Fallout4))
-            .GetAwaiter().GetResult();
-        var source = read.Answered();
-
-        TestAdapters.Source().Init(modFolder, [(source.Files, new DecompiledPlugin(new PluginAddress(pluginName, origin), source.BinarySha256))]);
-    }
+    internal static void Init(LoadOrderEntry entry) => PluginSources.Init(entry.Path, entry.Origin);
 
     /// <summary>Every plugin of the fixture source mod, so the Index reads each from its tree.</summary>
     internal static ScatteredFixtureData CompiledPlugin(this ScatteredFixtureData fixture)

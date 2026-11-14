@@ -61,8 +61,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         }
         finally
         {
-            realSize.Receive(modlist.Snapshot());
-            Waits.Reached(() => index.Status.State == LoadOrderState.Ready, "the load order without the uncommitted plugin");
+            realSize.Restore(() => realSize.Receive(modlist.Snapshot()), () => index.Status.State == LoadOrderState.Ready);
         }
     }
 
@@ -137,35 +136,34 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     private DocumentsPutBack Restoring(string path, Func<bool> restored) => Restoring([path], restored);
 
     private DocumentsPutBack Restoring(IReadOnlyList<string> paths, Func<bool> restored) =>
-        new([.. paths.Select(path => (path, File.ReadAllText(path)))], Index, restored);
+        new([.. paths.Select(path => (path, File.ReadAllText(path)))], realSize, restored);
 
-    private sealed class DocumentsPutBack(IReadOnlyList<(string Path, string Text)> documents, OpenedIndex index, Func<bool> restored) : IDisposable
+    private sealed class DocumentsPutBack(IReadOnlyList<(string Path, string Text)> documents, RealSizeIndex realSize, Func<bool> restored) : IDisposable
     {
-        public void Dispose()
+        public void Dispose() => realSize.Restore(() =>
         {
             foreach (var (path, text) in documents) File.WriteAllText(path, text);
-            index.SignalChange();
-            Waits.Reached(restored, "the documents put back reaching reads");
-        }
+            realSize.Index.SignalChange();
+        }, restored);
     }
 
     [RealSizeFact]
-    public void ABigCell_OpensWithinOneSecond()
+    public void TheMastersBigCell_OpensWithinOneSecond()
     {
         var (queries, modlist) = (Index.Queries, Modlist);
         RenderedDocument? opened = null;
 
-        Budgets.Ran(OneGesture, () => opened = queries.GetRenderedDocument(modlist.BigSourcePlugin.Key, modlist.BigCell).Value(), "Opening a big cell", Runs);
-        Assert.Contains("\"BigCell\"", opened?.Text, StringComparison.Ordinal);
+        Budgets.Ran(OneGesture, () => opened = queries.GetRenderedDocument(modlist.Master.Key, modlist.MastersBigCell).Value(), "Opening the master's big cell", Runs);
+        Assert.Contains("\"MastersBigCell\"", opened?.Text, StringComparison.Ordinal);
     }
 
     [RealSizeFact]
-    public void ABigCell_ListsItsReferencesWithinOneSecond()
+    public void TheMastersBigCell_ListsItsReferencesWithinOneSecond()
     {
         var (queries, modlist) = (Index.Queries, Modlist);
         CellChildRecords? listed = null;
 
-        Budgets.Ran(OneGesture, () => listed = queries.GetCellChildRecords(modlist.BigSourcePlugin.Key, modlist.BigCell).Value(), "Expanding a big cell", Runs);
+        Budgets.Ran(OneGesture, () => listed = queries.GetCellChildRecords(modlist.Master.Key, modlist.MastersBigCell).Value(), "Expanding the master's big cell", Runs);
         Assert.Equal(RealSizeModlist.ReferencesInTheBigCell, listed?.Temporary.Count);
     }
 }
