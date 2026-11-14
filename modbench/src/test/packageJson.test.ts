@@ -192,7 +192,7 @@ const paletteOffers = (command: string, context: Context): boolean =>
 
 const OPEN_DEPLOYMENT_FOLDER_SETTING = 'modbench.settings.openDeploymentFolderHere';
 const OPEN_PINNED = 'modbench.record.openPinned';
-const REFERENCED_BY = 'modbench.record.referencedBy';
+const REFERENCED_BY = 'modbench.symbol.referencedBy';
 const REFERENCES_VIEW = 'modbench.referencesView';
 
 describe('package.json activation', () => {
@@ -694,7 +694,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
   });
 
   const REVEAL_ENTRY: [string, string] = ['modbench.plugin.reveal', '1_open'];
-  const PLUGIN_REFERENCES_ENTRY: [string, string] = ['modbench.plugin.referencedBy', '1_open'];
+  const PLUGIN_REFERENCES_ENTRY: [string, string] = ['modbench.symbol.referencedBy', '1_open'];
   const COPY_VALUE_ENTRY: [string, string] = ['modbench.copyValue', '5_copy'];
   const OPEN_ENTRY: [string, string] = [OPEN_PINNED, '1_open'];
   const REFERENCES_ENTRY: [string, string] = [REFERENCED_BY, '1_open'];
@@ -971,7 +971,7 @@ describe('package.json record tab menus', () => {
     expect(placed(menu())).toEqual([
       ['modbench.record.openReference', '1_open'],
       ['modbench.record.openFieldValue', '1_open'],
-      ['modbench.record.referencedBy', '1_open'],
+      ['modbench.symbol.referencedBy', '1_open'],
       ['modbench.record.addElement', '2_change'],
       ['modbench.record.removeElement', '2_change'],
       ['modbench.record.moveElementUp', '2_change'],
@@ -1191,7 +1191,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
       ['modbench.mod.openFolder', '1_open'],
       ['modbench.mod.openSource', '1_open'],
       ['modbench.mod.openConflicts', '1_open'],
-      ['modbench.mod.referencedBy', '1_open'],
+      ['modbench.symbol.referencedBy', '1_open'],
       ['modbench.mod.viewOnNexus', '1_open'],
       ['modbench.mod.enable', '2_change'],
       ['modbench.mod.disable', '2_change'],
@@ -1358,7 +1358,6 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ['modbench.mod.openSource', { 'modbench.mod.singleOpenSourceRow': true }],
     ['modbench.mod.goToMod', { 'modbench.mod.singleGoToModRow': true }],
     ['modbench.mod.openConflicts', ONE_MOD],
-    ['modbench.mod.referencedBy', { ...ONE_MOD, [REFERENCES_VIEW]: true }],
     ['modbench.mod.compareFile', { 'modbench.mod.singleCompareFileRow': true }],
     ['modbench.mod.excludeFile', { 'modbench.mod.holdsIncludedFile': true }],
     ['modbench.mod.includeFile', { 'modbench.mod.holdsExcludedFile': true }],
@@ -1372,7 +1371,6 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ['modbench.separator.delete', 'mod'],
     ['modbench.mod.uninstall', 'separator'],
     ['modbench.mod.rename', 'separator'],
-    ['modbench.mod.referencedBy', 'separator'],
     ['modbench.mod.openConflicts', 'separator'],
     ['modbench.separator.rename', 'mod'],
   ])('%s is not in the palette on a %s selection', (command, kind) => {

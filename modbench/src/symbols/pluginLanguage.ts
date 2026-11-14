@@ -81,6 +81,13 @@ export function pluginLanguage({ instance, reporter, client, owners, names, rena
   };
 
   const kind: SymbolKind<PluginNamed> = {
+    referencedBy: (named) => {
+      const plugin = pluginNamed(named, plugins());
+      return showReferencedBy({
+        reporter, subject: plugin === undefined ? named.name : pluginRowName(plugin), contextValue: 'modbench.pluginReferencedBy',
+        references: () => referencesTo(named), anchorOf: plugin === undefined ? undefined : anchorOf(plugin),
+      });
+    },
     async nameAt(document, offset): Promise<Named<PluginNamed> | undefined> {
       const found = await nameWithSpan(document, offset);
       return found && { start: found.start, end: found.end, name: found.name, symbol: { kind: 'plugin', ...found.named } };
@@ -121,7 +128,7 @@ export function pluginLanguage({ instance, reporter, client, owners, names, rena
       const placed = await Promise.all(matching.map(async ({ name, origin, path }): Promise<Listed | undefined> => {
         const plugin = { name, origin };
         const listedAt = (location: vscode.Location): Listed => ({
-          name, detail: origin, icon: vscode.SymbolKind.File, location, resolve: selectingItsRow(() => kind.definitionOf({ kind: 'plugin', ...plugin })),
+          symbol: { kind: 'plugin', ...plugin }, name, detail: origin, icon: vscode.SymbolKind.File, location, resolve: selectingItsRow(() => kind.definitionOf({ kind: 'plugin', ...plugin })),
         });
         if (path !== undefined) return listedAt(atFile(path));
         const named = (await read(plugin)).found.find((reference) => 'file' in reference);
@@ -146,10 +153,5 @@ export function pluginLanguage({ instance, reporter, client, owners, names, rena
       if (plugin === undefined) throw new Error(unresolved(named).refused);
       await renamePlugin(plugin, newName);
     },
-    /** Lists each place a file names `plugin`, in VS Code's References view. */
-    referencedBy: (plugin: PluginSymbol): Promise<void> => showReferencedBy({
-      reporter, subject: pluginRowName(plugin), contextValue: 'modbench.pluginReferencedBy',
-      references: () => referencesTo(plugin), anchorOf: anchorOf(plugin),
-    }),
   };
 }

@@ -3,7 +3,6 @@ import { RecordTabs } from './recordTabs';
 import { GRID_VIEW, publishFocusedCell, gridCopyValueText } from './focusedCells';
 import { registerNoConflictLens } from './noConflictLens';
 import { registerEditorCommands, type EditorCommandDeps } from './editorCommands';
-import { pickRecord } from './recordPicker';
 import { selectionInFocusedView } from '../drivingLib/inFocusedView';
 import type { CopyValueAdapter } from '../drivingLib/copyValue';
 import type { FocusedView } from '../drivingLib/focusedView';
@@ -19,7 +18,7 @@ type EditorDeps = Omit<EditorCommandDeps,
 export interface Editor extends vscode.Disposable {
   copyValue: readonly CopyValueAdapter[];
   /** The record of the tab in focus, else the one the user picks; undefined where none is. */
-  focusedOrPickedRecord: () => Promise<string | undefined>;
+  focusedRecord: () => string | undefined;
 }
 
 const setContext = (key: string, value: unknown): void => {
@@ -46,8 +45,7 @@ export function createEditor(deps: EditorDeps): Editor {
     copyValue: [
       { text: gridCopyValueText(() => tabs.focusedCell()), reporterTag: 'recordGrid.copy' },
     ],
-    focusedOrPickedRecord: async () => tabs.activeTab()?.formKey
-      ?? await pickRecord({ meditClient: deps.meditClient, reporter: deps.reporterFor('recordPicker') }, '', []) ?? undefined,
+    focusedRecord: () => tabs.activeTab()?.formKey,
     dispose: () => { owned.splice(0).reverse().forEach((disposable) => { disposable.dispose(); }); },
   };
 }

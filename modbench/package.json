@@ -426,11 +426,6 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.record.referencedBy",
-        "title": "Referenced By Record",
-        "category": "Modbench"
-      },
-      {
         "command": "modbench.record.collapseNoConflict",
         "title": "Collapse No Conflict",
         "icon": "$(fold)",
@@ -702,7 +697,7 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.mod.referencedBy",
+        "command": "modbench.symbol.referencedBy",
         "title": "Referenced By",
         "category": "Modbench"
       },
@@ -851,11 +846,6 @@
       {
         "command": "modbench.plugin.rename",
         "title": "Rename Plugin…",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.plugin.referencedBy",
-        "title": "Referenced By Plugin",
         "category": "Modbench"
       },
       {
@@ -1073,10 +1063,6 @@
           "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.singleGoToModRow"
         },
         {
-          "command": "modbench.mod.referencedBy",
-          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.selectionKind == mod && modbench.mod.singleRow && modbench.referencesView"
-        },
-        {
           "command": "modbench.mod.openConflicts",
           "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.selectionKind == mod && modbench.mod.singleRow"
         },
@@ -1143,10 +1129,6 @@
         {
           "command": "modbench.plugin.reveal",
           "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singlePlugin"
-        },
-        {
-          "command": "modbench.plugin.referencedBy",
-          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singlePlugin && modbench.referencesView"
         },
         {
           "command": "modbench.plugin.rename",
@@ -1389,7 +1371,7 @@
           "when": "modbench.folder == instance"
         },
         {
-          "command": "modbench.record.referencedBy",
+          "command": "modbench.symbol.referencedBy",
           "when": "modbench.folder == instance && modbench.referencesView"
         },
         {
@@ -1420,7 +1402,7 @@
           "group": "modbench@0"
         },
         {
-          "command": "modbench.mod.referencedBy",
+          "command": "modbench.symbol.referencedBy",
           "when": "modbench.folder == instance && resourceScheme == file && !explorerResourceIsFolder && modbench.referencesView",
           "group": "modbench@0"
         },
@@ -1623,7 +1605,7 @@
           "group": "1_open@1"
         },
         {
-          "command": "modbench.record.referencedBy",
+          "command": "modbench.symbol.referencedBy",
           "when": "view == references-view.tree && reference-list.source == modbench.referencedBy && viewItem == referencedByReferrer",
           "group": "1_open@2"
         },
@@ -1638,7 +1620,7 @@
           "group": "1_open@1"
         },
         {
-          "command": "modbench.record.referencedBy",
+          "command": "modbench.symbol.referencedBy",
           "when": "view == references-view.tree && reference-list.source == modbench.referencedBy && viewItem =~ /^referencedByHolder\\b/",
           "group": "1_open@2"
         },
@@ -1683,7 +1665,7 @@
           "group": "1_open@3"
         },
         {
-          "command": "modbench.mod.referencedBy",
+          "command": "modbench.symbol.referencedBy",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && modbench.referencesView",
           "group": "1_open@4"
         },
@@ -1818,7 +1800,7 @@
           "group": "1_open@1"
         },
         {
-          "command": "modbench.mod.referencedBy",
+          "command": "modbench.symbol.referencedBy",
           "when": "view == modbench.modList && (viewItem =~ /\\bfile\\b/ || viewItem == archivedFile) && modbench.referencesView",
           "group": "1_open@2"
         },
@@ -1918,7 +1900,7 @@
           "group": "1_open@1"
         },
         {
-          "command": "modbench.plugin.referencedBy",
+          "command": "modbench.symbol.referencedBy",
           "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && modbench.referencesView",
           "group": "1_open@2"
         },
@@ -1978,7 +1960,7 @@
           "group": "1_open@1"
         },
         {
-          "command": "modbench.plugin.referencedBy",
+          "command": "modbench.symbol.referencedBy",
           "when": "view == modbench.pluginListTree && viewItem == pluginImplicit && modbench.referencesView",
           "group": "1_open@2"
         },
@@ -1998,7 +1980,7 @@
           "group": "1_open@1"
         },
         {
-          "command": "modbench.record.referencedBy",
+          "command": "modbench.symbol.referencedBy",
           "when": "view == modbench.pluginListTree && viewItem =~ /^(record|worldspace|cell|placed)\\b/ && modbench.referencesView",
           "group": "1_open@2"
         },
@@ -2045,7 +2027,7 @@
           "group": "1_open@2"
         },
         {
-          "command": "modbench.record.referencedBy",
+          "command": "modbench.symbol.referencedBy",
           "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && modbench.referencesView",
           "group": "1_open@3"
         },

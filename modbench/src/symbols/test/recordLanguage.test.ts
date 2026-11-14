@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Uri } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, Uri } from '../../test/vscodeMock';
 import { CompletionItemKind, SymbolKind } from './iconsMock';
 
 vi.mock('vscode', () => ({
-  Uri, SymbolKind, CompletionItemKind,
+  Uri, SymbolKind, CompletionItemKind, TreeItem, TreeItemCollapsibleState,
   Position: class { constructor(readonly line: number, readonly character: number) {} },
   Range: class { constructor(readonly start: unknown, readonly end: unknown) {} },
   Location: class { constructor(readonly uri: unknown, readonly range: unknown) {} },

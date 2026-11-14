@@ -2,7 +2,7 @@ import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   commandHandlers, contextKeys, disk, documentChanges, editorProviderDisposals, editorProviderOptions, editorProviders, editorVscode,
-  executeCommand, executed, fakePanel, fileSystems, openedDocuments, pickers, type FakePanel,
+  executeCommand, executed, fakePanel, fileSystems, openedDocuments, type FakePanel,
 } from './editorVscode';
 
 vi.mock('vscode', () => editorVscode);
@@ -64,10 +64,7 @@ function makeEditor(
     });
     return (uri: unknown) => tabs.get(String(uri));
   };
-  const askedFromThePalette = async () => {
-    const pickersBefore = pickers.shown;
-    return { record: await editor.focusedOrPickedRecord(), picked: pickers.shown - pickersBefore };
-  };
+  const askedFromThePalette = () => editor.focusedRecord();
   return { editor, askedFromThePalette, open, openFile, openDocument, focusedView, outputChannel, vsCodeOpensTabs };
 }
 
@@ -76,8 +73,6 @@ beforeEach(() => {
   loadOrder = fakeLoadOrder();
 });
 
-const focused = (record: string) => ({ record, picked: 0 });
-const PICKED = { record: undefined, picked: 1 };
 
 const pageGlobal = (panel: FakePanel, name: string): unknown => {
   const html = panel.webview.html ?? '';
@@ -107,18 +102,18 @@ describe('the record to ask about is the record tab in focus', () => {
     return makeEditor(client);
   }
 
-  it('the record of the tab opened, then of the tab focused', async () => {
+  it('the record of the tab opened, then of the tab focused', () => {
     const { open, askedFromThePalette } = palette();
 
     const first = open('000801:A.esp');
-    expect(await askedFromThePalette()).toEqual(focused('000801:A.esp'));
+    expect(askedFromThePalette()).toBe('000801:A.esp');
     open('000802:A.esp');
-    expect(await askedFromThePalette()).toEqual(focused('000802:A.esp'));
+    expect(askedFromThePalette()).toBe('000802:A.esp');
     first.focus();
-    expect(await askedFromThePalette()).toEqual(focused('000801:A.esp'));
+    expect(askedFromThePalette()).toBe('000801:A.esp');
   });
 
-  it('asks with the record picker once the tab in focus closes, though other record tabs stay open, until another is focused', async () => {
+  it('asks of no record once the tab in focus closes, though other record tabs stay open, until another is focused', () => {
     const { open, askedFromThePalette } = palette();
     const first = open('000801:A.esp');
     const second = open('000802:A.esp');
@@ -126,25 +121,25 @@ describe('the record to ask about is the record tab in focus', () => {
     first.focus();
 
     first.close();
-    expect(await askedFromThePalette()).toEqual(PICKED);
+    expect(askedFromThePalette()).toBeUndefined();
     second.focus();
-    expect(await askedFromThePalette()).toEqual(focused('000802:A.esp'));
+    expect(askedFromThePalette()).toBe('000802:A.esp');
   });
 
-  it('keeps the record in focus when a tab out of focus closes', async () => {
+  it('keeps the record in focus when a tab out of focus closes', () => {
     const { open, askedFromThePalette } = palette();
     const first = open('000801:A.esp');
     open('000802:A.esp');
 
     first.close();
 
-    expect(await askedFromThePalette()).toEqual(focused('000802:A.esp'));
+    expect(askedFromThePalette()).toBe('000802:A.esp');
   });
 
-  it('asks with the record picker with no record tab open', async () => {
+  it('asks of no record with no record tab open', () => {
     const { askedFromThePalette } = palette();
 
-    expect(await askedFromThePalette()).toEqual(PICKED);
+    expect(askedFromThePalette()).toBeUndefined();
   });
 
   it('names the new FormKey for the tab in focus when an edit of its FormID moves it, and keeps the record in focus when another tab moves', async () => {
@@ -161,10 +156,10 @@ describe('the record to ask about is the record tab in focus', () => {
 
     await commandHandlers.get('modbench.record.editField')?.(
       { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin }, { op: 'set', path: [{ kind: 'member', name: 'FormID' }], value: 'x' });
-    expect(await askedFromThePalette()).toEqual(focused(OTHER));
+    expect(askedFromThePalette()).toBe(OTHER);
 
     moving.focus();
-    expect(await askedFromThePalette()).toEqual(focused(MOVED));
+    expect(askedFromThePalette()).toBe(MOVED);
   });
 });
 
@@ -355,7 +350,7 @@ describe('a record file\'s tab', () => {
 
     expect(client.calls).toContainEqual({ method: 'getRecordOfFile', args: [FILE] });
     expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
-    expect(await askedFromThePalette()).toEqual(focused('000801:A.esp'));
+    expect(askedFromThePalette()).toBe('000801:A.esp');
     client.emit(conflictsComputedTick);
     expect(tab.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: GUN }]]);
   });
@@ -699,7 +694,7 @@ describe('a record tab closed', () => {
 
     expect(pageGlobal(tab, 'mEditFormKey')).toBeUndefined();
     expect(tab.webview.postMessage).not.toHaveBeenCalled();
-    expect(await askedFromThePalette()).toEqual(PICKED);
+    expect(askedFromThePalette()).toBeUndefined();
   });
 
   it('lets go of what it listened to: its document\'s changes and the instance\'s mods', async () => {
@@ -1089,7 +1084,7 @@ describe('a non-compiled plugin copy\'s tab', () => {
     const tab = await openDocument(RENDERED);
 
     expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
-    expect(await askedFromThePalette()).toEqual(focused('000801:A.esp'));
+    expect(askedFromThePalette()).toBe('000801:A.esp');
     expect(client.calls.map(({ method }) => method)).not.toContain('getRecordOfFile');
   });
 

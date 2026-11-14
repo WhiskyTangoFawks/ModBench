@@ -1705,7 +1705,7 @@ describe('Referenced By, as VS Code\'s References view takes it', () => {
     const referencesView = await present(
       vscode.extensions.getExtension<{ getInput(): ReferencesViewInput | undefined }>('vscode.references-view'), 'VS Code\'s References view',
     ).activate();
-    await vscode.commands.executeCommand('modbench.record.referencedBy', { argument: { kind: 'record', formKey } });
+    await vscode.commands.executeCommand('modbench.symbol.referencedBy', { argument: { kind: 'record', formKey } });
     return waitFor(`the References view showing ${title}`, () => referencesView.getInput()?.title === title && referencesView.getInput());
   };
   const anchoredAt = async ({ uri, range }: vscode.Location) =>
@@ -2046,7 +2046,7 @@ describe('Referenced By on a plugin, as VS Code\'s References view takes it', ()
       vscode.extensions.getExtension<{ getInput(): ReferencesViewInput | undefined }>('vscode.references-view'), 'VS Code\'s References view',
     ).activate();
 
-    await vscode.commands.executeCommand('modbench.plugin.referencedBy', { argument: { kind: 'plugin', plugin: { name: 'TestMod.esp', origin: 'Data/' } } });
+    await vscode.commands.executeCommand('modbench.symbol.referencedBy', { argument: { kind: 'plugin', plugin: { name: 'TestMod.esp', origin: 'Data/' } } });
 
     const input = await waitFor('the References view showing TestMod.esp', () =>
       referencesView.getInput()?.title === 'Referenced By: TestMod.esp (Data/)' && referencesView.getInput());
@@ -2090,7 +2090,7 @@ describe('Referenced By and Go to on a mod, as VS Code runs them from the Mods v
     ).activate();
 
     const input = await waitFor(`the References view showing ${modName}`, async () => {
-      await vscode.commands.executeCommand('modbench.mod.referencedBy', asked);
+      await vscode.commands.executeCommand('modbench.symbol.referencedBy', asked);
       return referencesView.getInput()?.title === `Referenced By: ${modName}` && referencesView.getInput();
     });
 

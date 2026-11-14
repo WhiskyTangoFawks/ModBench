@@ -37,6 +37,7 @@ export interface Named<Symbol> extends TextSpan {
 /** A symbol as Go to Symbol in Workspace lists it. `resolve`, on the symbol the user picks, says where it opens, or
  *  leaves `location`. */
 export interface Listed {
+  readonly symbol: SymbolName;
   readonly name: string;
   readonly detail: string;
   readonly icon: vscode.SymbolKind;
@@ -49,6 +50,8 @@ export interface SymbolKind<Symbol> {
   nameAt(document: AskedIn, offset: number): Promise<Named<Symbol> | undefined>;
   definitionOf(symbol: Symbol): Promise<Definition>;
   referencesTo(symbol: Symbol): Promise<References>;
+  /** `referenced by`: lists `referencesTo` in VS Code's References view, reporting what it could not list. */
+  referencedBy(symbol: Symbol): Promise<void>;
   /** What its row's tooltip says, a line to each line; none where it has no row or no tooltip. */
   tooltipOf(symbol: Symbol): Promise<readonly string[]>;
   /** What completion offers over the span where a file names a symbol of the kind. */
@@ -70,9 +73,14 @@ export interface SymbolKinds {
 }
 
 /** A symbol, with its kind's answers. */
-export interface Asked {
+interface Asked {
   definition(): Promise<Definition>;
   references(): Promise<References>;
+}
+
+/** A symbol, with its kind's answers and `referenced by`. */
+export interface AskedSymbol extends Asked {
+  referencedBy(): Promise<void>;
 }
 
 /** A symbol's name in a file, with its kind's answers. */
@@ -87,6 +95,11 @@ const namesNothing = (symbol: object): symbol is Refused => 'refused' in symbol;
 const askedOf = <Symbol extends object>(kind: SymbolKind<Symbol>, symbol: Symbol | Refused): Asked => ({
   definition: () => (namesNothing(symbol) ? Promise.resolve(symbol) : kind.definitionOf(symbol)),
   references: () => (namesNothing(symbol) ? Promise.resolve(symbol) : kind.referencesTo(symbol)),
+});
+
+const askedSymbolOf = <Symbol extends object>(kind: SymbolKind<Symbol>, symbol: Symbol): AskedSymbol => ({
+  ...askedOf(kind, symbol),
+  referencedBy: () => kind.referencedBy(symbol),
 });
 
 const claimOf = (kind: SymbolKind<object>) => async (document: AskedIn, offset: number): Promise<AskedAt | undefined> => {
@@ -112,12 +125,19 @@ export async function askedAt(kinds: SymbolKinds, document: AskedIn, offset: num
   return undefined;
 }
 
-export function asked(kinds: SymbolKinds, symbol: SymbolName): Asked {
+export function asked(kinds: SymbolKinds, symbol: SymbolName): AskedSymbol {
   switch (symbol.kind) {
-    case 'plugin': return askedOf(kinds.plugin, symbol);
-    case 'record': return askedOf(kinds.record, symbol);
-    case 'script': return askedOf(kinds.script, symbol);
-    case 'file': return askedOf(kinds.file, symbol);
-    case 'mod': case 'separator': case 'downloadedFile': case 'profile': return askedOf(kinds.entry, symbol);
+    case 'plugin': return askedSymbolOf(kinds.plugin, symbol);
+    case 'record': return askedSymbolOf(kinds.record, symbol);
+    case 'script': return askedSymbolOf(kinds.script, symbol);
+    case 'file': return askedSymbolOf(kinds.file, symbol);
+    case 'mod': case 'separator': case 'downloadedFile': case 'profile': return askedSymbolOf(kinds.entry, symbol);
   }
+}
+
+/** Each symbol, of any kind, whose name holds `query`: what Go to Symbol in Workspace lists. */
+export async function listedSymbols(kinds: SymbolKinds, query: string): Promise<Listed[]> {
+  const wanted = query.trim();
+  if (wanted === '') return [];
+  return (await Promise.all(inOrder(kinds).map((kind) => kind.symbolsFor(wanted)))).flat();
 }

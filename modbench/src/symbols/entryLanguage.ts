@@ -111,6 +111,9 @@ export function entryLanguage({ instance, reporter, owners, rows, entryTooltip, 
       return Promise.resolve(path === undefined ? { refused: 'Mods shows no row for it and no folder holds it.' } : { shown: { kind: 'loose', path } });
     },
     referencesTo,
+    referencedBy: (named) => showReferencedBy({
+      reporter, subject: named.name, contextValue: `modbench.${named.kind}ReferencedBy`, references: () => referencesTo(named),
+    }),
     tooltipOf(named) {
       const shown = entryListed(named);
       return Promise.resolve(tooltipLines(shown && tooltip(shown)));
@@ -148,7 +151,7 @@ export function entryLanguage({ instance, reporter, owners, rows, entryTooltip, 
       const placed = await Promise.all(matching.map(async (entry): Promise<Listed | undefined> => {
         const location = await placeOf(entry);
         return location && {
-          name: entry.name, detail: NOUNS[entry.kind], icon: SHOWN[entry.kind].kind, location, resolve: selectingItsRow(() => kind.definitionOf(entry)),
+          symbol: entry, name: entry.name, detail: NOUNS[entry.kind], icon: SHOWN[entry.kind].kind, location, resolve: selectingItsRow(() => kind.definitionOf(entry)),
         };
       }));
       return placed.filter((symbol) => symbol !== undefined);
@@ -170,9 +173,5 @@ export function entryLanguage({ instance, reporter, owners, rows, entryTooltip, 
       if (entry === undefined || !isRenamable(entry)) throw new Error(unlisted(found.symbol));
       await renameEntry(entry, newName);
     },
-    /** Lists each place a file names `mod`, in VS Code's References view, anchored at the first. */
-    referencedBy: (mod: string): Promise<void> => showReferencedBy({
-      reporter, subject: mod, contextValue: 'modbench.modReferencedBy', references: () => referencesTo({ kind: 'mod', name: mod }),
-    }),
   };
 }
