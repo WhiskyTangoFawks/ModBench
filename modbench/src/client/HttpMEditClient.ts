@@ -22,7 +22,7 @@ import {
   type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginIndexedState, type PluginFilePaths, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument, type DocumentName,
   type RebuildIndexOutcome, type CopyChangesOutcome, type CopyMode,
   type GridPosition, type RecordAt, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument, type RenameSourceChangesOutcome, type RenameSourceAsked,
-  type SourceChanges, type SourceMove, type RecordFilter, type ReferenceResult, type NameQuery, type NamedObject, type PluginAddress, type PluginToRepair, type ModToVersionInGit, type VersionInGitOutcome, type VersionInGitProgress, type KindedOutcome, type DecompileOutcome, type DecompileAndRepairOutcome,
+  type SourceChanges, type SourceMove, type RecordFilter, type ReferenceResult, type PlacedReferences, type NameQuery, type NamedObject, type PluginAddress, type PluginToRepair, type ModToVersionInGit, type VersionInGitOutcome, type VersionInGitProgress, type KindedOutcome, type DecompileOutcome, type DecompileAndRepairOutcome,
   type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, type RowsRead, isRefused,
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
@@ -795,6 +795,11 @@ class HttpMEditClient implements MEditClient {
     return this.read(`getReferencesInActiveOrCompiledPlugins(${formKey})`,
       (api, signal) => api.GET('/records/{formKey}/references-in-active-or-compiled-plugins', { params: { path: { formKey } }, signal }),
       (data) => data ?? []);
+  }
+
+  getPlacedReferences(formKey: string): Promise<PlacedReferences | ReadFailed> {
+    return this.read(`getPlacedReferences(${formKey})`,
+      (api, signal) => api.GET('/records/{formKey}/placed-references', { params: { path: { formKey } }, signal }), noBodyFails);
   }
 
   getPluginNameReferences(name: string): Promise<components['schemas']['CopyNaming'][] | ReadFailed> {

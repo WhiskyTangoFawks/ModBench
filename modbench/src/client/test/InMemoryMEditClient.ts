@@ -11,7 +11,7 @@ import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getPluginIndexing' | 'getPluginProblems' | 'getPluginFilePaths' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'getArchiveContents' | 'getArchiveFile' | 'getArchiveCopies' | 'getFlaggedPluginHashes'
   | 'getRecords' | 'searchRecords'
-  | 'getRecordOwners' | 'getRecordHolders' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getRecordsComparison' | 'getReferencesInActiveOrCompiledPlugins' | 'getPluginNameReferences' | 'getScriptReferences' | 'getFileReferences' | 'getPluginSourceNames' | 'getScriptRenameSourceChanges'
+  | 'getRecordOwners' | 'getRecordHolders' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getRecordsComparison' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlacedReferences' | 'getPluginNameReferences' | 'getScriptReferences' | 'getFileReferences' | 'getPluginSourceNames' | 'getScriptRenameSourceChanges'
   | 'getRenderedDocument' | 'getCopyDocument' | 'getRecordOfFile'
   | 'getEditChanges'
   | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellChildRecords' | 'getInteriorCells'
@@ -430,6 +430,9 @@ export class InMemoryMEditClient implements MEditClient {
     ...args: Parameters<MEditClient['getReferencesInActiveOrCompiledPlugins']>
   ): ReturnType<MEditClient['getReferencesInActiveOrCompiledPlugins']> {
     return this.query('getReferencesInActiveOrCompiledPlugins', args);
+  }
+  getPlacedReferences(...args: Parameters<MEditClient['getPlacedReferences']>): ReturnType<MEditClient['getPlacedReferences']> {
+    return this.query('getPlacedReferences', args);
   }
   getPluginNameReferences(...args: Parameters<MEditClient['getPluginNameReferences']>): ReturnType<MEditClient['getPluginNameReferences']> {
     return this.query('getPluginNameReferences', args);

@@ -130,15 +130,6 @@ function copyDocumentNames(namesIn: (text: string) => Promise<DocumentName[]>) {
       return found && spanOf(found);
     },
 
-    /** Where the record `referrer` references `formKey` in a copy's document: its first reference, else its own FormKey;
-     *  the start of the text when the record is absent. */
-    async referenceIn(text: string, referrer: string, formKey: string): Promise<TextSpan> {
-      const names = await namesIn(text);
-      const found = names.find((name) => name.kind === 'Record' && name.record === referrer && name.value === formKey && name.fieldPath !== OWN)
-        ?? ownFormKey(names, referrer);
-      return found ? spanOf(found) : NOWHERE;
-    },
-
     /** Where the record `formKey` names the plugin `name` in a copy's document: each FormKey of it that names the plugin,
      *  else its own FormKey; the start of the text when the record is absent. */
     async pluginNamesIn(text: string, formKey: string, name: string): Promise<TextSpan[]> {

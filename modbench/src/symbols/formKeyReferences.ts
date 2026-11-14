@@ -1,27 +1,34 @@
 import type { MEditClient } from '../client';
-import { pluginAddressOf } from '../wire/pluginAddress';
-import type { RecordCopy } from '../wire/recordCopy';
-import { locateCopies, type RecordLocation, type RecordLocationDeps } from './recordLocation';
-import { heldText } from '../textDocuments/heldText';
+import { copyDocumentUri } from '../textDocuments/recordDocument';
 import { answerOf } from '../wire/readFailed';
-import type { SourceNames } from './sourceNames';
+import { copyUnread, type LocatedCopies, type RecordLocation, type RecordLocationDeps } from './recordLocation';
 
-interface ReferencesDeps<Document> extends RecordLocationDeps<Document> {
-  client: RecordLocationDeps<Document>['client'] & Pick<MEditClient, 'getReferencesInActiveOrCompiledPlugins'>;
-  spanIn: SourceNames['referenceIn'];
+interface ReferencesDeps<Document> {
+  client: Pick<MEditClient, 'getPlacedReferences'>;
+  open: RecordLocationDeps<Document>['open'];
 }
 
-/** Each copy that references `formKey`, at its document, and why each went unread; a read mEdit fails throws. */
-export function referencesToFormKey<Document extends { getText(): string }>(
-  { client, open, spanIn }: ReferencesDeps<Document>,
-): (formKey: string) => Promise<{ found: RecordLocation<Document>[]; leftOut: string[] }> {
+/** Each place a copy that references `formKey` names it, at the copy's document, and why each copy went unread; a read
+ *  mEdit fails throws. */
+export function referencesToFormKey<Document extends object>(
+  { client, open }: ReferencesDeps<Document>,
+): (formKey: string) => Promise<LocatedCopies<RecordLocation<Document>>> {
   return async (formKey) => {
-    const rows = await client.getReferencesInActiveOrCompiledPlugins(formKey).then(answerOf);
-    const copies = new Map(rows.map((row): [string, RecordCopy] =>
-      [JSON.stringify([row.formKey, row.origin, row.plugin]), { formKey: row.formKey, plugin: pluginAddressOf(row) }]));
-    return locateCopies(client, [...copies.values()], async (copy, uri) => {
-      const document = await open(uri);
-      return { uri, document, ...await spanIn(heldText(document), copy.formKey, formKey) };
-    });
+    const placed = answerOf(await client.getPlacedReferences(formKey));
+    const opened = await Promise.all(placed.copies.map(async ({ formKey: referrer, plugin, document, spans }):
+      Promise<{ found: RecordLocation<Document>[] } | { why: string }> => {
+      const copy = { formKey: referrer, plugin };
+      const uri = copyDocumentUri(copy, document);
+      try {
+        const at = await open(uri);
+        return { found: spans.map(({ start, end }) => ({ uri, document: at, start, end })) };
+      } catch (error) {
+        return { why: copyUnread(copy, error) };
+      }
+    }));
+    return {
+      found: opened.flatMap((result) => 'found' in result ? result.found : []),
+      leftOut: [...placed.leftOut, ...opened.flatMap((result) => 'why' in result ? [result.why] : [])],
+    };
   };
 }

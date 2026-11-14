@@ -249,6 +249,7 @@ export interface CopyChangesOutcome {
 export type NameQuery = components['schemas']['NameQuery'];
 export type NamedObject = components['schemas']['NamedObject'];
 export type ReferenceResult = components['schemas']['ReferenceResult'];
+export type PlacedReferences = components['schemas']['PlacedReferences'];
 /** The record filter mEdit holds: its SQL and the name of the source it came from
  *  (plugins.md, Record filter). */
 export type RecordFilter = components['schemas']['RecordFilter'];
@@ -348,6 +349,9 @@ export interface MEditClient {
   selectRows(sql: string, atMostChars: number): Promise<RowsRead | ReadFailed>;
   /** The referrers of the active plugins and of the inactive compiled ones. */
   getReferencesInActiveOrCompiledPlugins(formKey: string): Promise<ReferenceResult[] | ReadFailed>;
+  /** Each copy, in the active plugins and the compiled ones, that references the record, with its document and each span
+   *  that names it; refused until the record index has read every plugin. */
+  getPlacedReferences(formKey: string): Promise<PlacedReferences | ReadFailed>;
   /** Each copy whose text names the plugin file `name`, and the Plugin Header of each plugin with no plugin source that lists it as a master. */
   getPluginNameReferences(name: string): Promise<components['schemas']['CopyNaming'][] | ReadFailed>;
   getScriptReferences(name: string): Promise<components['schemas']['MemberReferences'] | ReadFailed>;

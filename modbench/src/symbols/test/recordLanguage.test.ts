@@ -63,11 +63,11 @@ describe('where a record is defined (symbols.md, The symbols, Record)', () => {
 });
 
 describe('what references a record, and its hover (symbols.md, The symbols, Record)', () => {
-  it('refuses, rather than list nothing, when mEdit cannot say what references it', async () => {
+  it('refuses, rather than list nothing, while mEdit cannot answer over every plugin', async () => {
     const { client, record } = kind();
-    client.setQueryFailure('getReferencesInActiveOrCompiledPlugins', localFailure('mEdit is down'));
+    client.setQueryFailure('getPlacedReferences', { failed: 'refused', refusal: 'The record index is still reading.' });
 
-    expect(await record.referencesTo(RECORD)).toEqual({ refused: `mEdit cannot list what references ${GUN}: mEdit is down` });
+    expect(await record.referencesTo(RECORD)).toEqual({ refused: `mEdit cannot list what references ${GUN}: The record index is still reading.` });
   });
 
   it('has no tooltip for a FormKey no active plugin holds, so its hover is its name', async () => {

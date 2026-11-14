@@ -493,6 +493,22 @@ function createMockBackend(): http.Server {
       ] : []));
       return;
     }
+    const placed = /^\/records\/([^/?]+)\/placed-references$/.exec(url)?.[1];
+    if (placed !== undefined) {
+      const quoted = `"${HELD_FORM_KEY}"`;
+      const at = (start: number) => [{ start, end: start + quoted.length }];
+      const compiledPlugin = readFileSync(COMPILED_PLUGIN_FILE, 'utf8');
+      const compiled = { name: COMPILED_PLUGIN, origin: COMPILED_PLUGIN_ORIGIN };
+      const fallout4 = { name: 'Fallout4.esm', origin: 'Data/' };
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(decodeURIComponent(placed) === HELD_FORM_KEY ? { leftOut: [], copies: [
+        { formKey: COMPILED_PLUGIN_FORM_KEY, plugin: compiled, document: { kind: 'OwnFile', location: COMPILED_PLUGIN_FILE }, spans: at(compiledPlugin.indexOf(quoted)) },
+        { formKey: CHILD_FORM_KEY, plugin: compiled, document: { kind: 'ContainersFile', location: COMPILED_PLUGIN_FILE }, spans: at(compiledPlugin.lastIndexOf(quoted)) },
+        { formKey: RENDERED_REFERRER_FORM_KEY, plugin: fallout4, document: { kind: 'Rendered', location: renderedName(RENDERED_REFERRER_FORM_KEY) },
+          spans: at(renderedText(RENDERED_REFERRER_FORM_KEY).indexOf(quoted)) },
+      ] } : { leftOut: [], copies: [] }));
+      return;
+    }
     if (url.startsWith('/records?') && new URL(url, 'http://x').searchParams.has('search')) {
       const summary = (formKey: string, editorId: string, plugin: string, origin: string) => ({ formKey, plugin, loadOrderIndex: 1, isWinner: true, editorId,
         origin, workingTreeState: 'None', hasContainerChildren: false, hasParseFailure: false });
@@ -2394,7 +2410,7 @@ describe('A FormKey in plugin source', () => {
     assert.strictEqual(definition.range.start.character, readFileSync(COMPILED_PLUGIN_FILE, 'utf8').indexOf(`"FormKey":"${CHILD_FORM_KEY}"`));
   });
 
-  it('lists every record that references it, one entry for each plugin\'s copy at its reference, a record referencing itself never at its declaration', async () => {
+  it('lists each place mEdit places a reference to it, at the referring copy\'s own file, its tab on its owner\'s file, or its rendering', async () => {
     await activated();
     const found = await vscode.commands.executeCommand<vscode.Location[]>('vscode.executeReferenceProvider', document.uri, positionIn(HELD_FORM_KEY));
     const entries = await Promise.all(found.map(async ({ uri, range }) =>
@@ -2406,7 +2422,6 @@ describe('A FormKey in plugin source', () => {
       [vscode.Uri.file(COMPILED_PLUGIN_FILE).toString(true), compiledPlugin.indexOf(quoted)],
       [compiledPluginChildUri, compiledPlugin.lastIndexOf(quoted)],
       [renderedUri(RENDERED_REFERRER_FORM_KEY), renderedText(RENDERED_REFERRER_FORM_KEY).indexOf(quoted)],
-      [renderedUri(HELD_FORM_KEY), renderedText(HELD_FORM_KEY).lastIndexOf(quoted)],
     ].sort());
   });
 
