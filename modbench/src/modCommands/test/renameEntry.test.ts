@@ -140,6 +140,13 @@ describe('rename separator: its line in each profile, its folder, and each refer
     expect(renamer.fake.calls).toEqual([]);
   });
 
+  it('refuses a separator the modlist does not list, writing nothing', async () => {
+    const renamer = over();
+
+    expect(await renamer.commands.renameSeparator(renamer.editing, 'Missing', 'Renamed')).toEqual({ applied: false, refusal: 'Separator not found in modlist: Missing' });
+    expect(renamer.fake.calls).toEqual([]);
+  });
+
   it('says its line was not renamed when the active profile\'s write failed', async () => {
     const renamer = over({ refusals: refusing('changeModOrder', 'ENOENT: no such file') });
 

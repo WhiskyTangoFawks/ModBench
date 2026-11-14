@@ -7,7 +7,7 @@ import { change, type RenameEditing, type SymbolOwners } from '../coreLib/change
 import type { ChangeResult } from '../ports/changeResult';
 export type { RenameEditing } from '../coreLib/change';
 import { refuse } from '../coreLib/refuse';
-import { sameEntry, type EntryRef, type InstanceAdapter, type ModOrderChange } from '../instanceAdapter/instanceAdapter';
+import { entryNotFound, sameEntry, type EntryRef, type InstanceAdapter, type ModOrderChange } from '../instanceAdapter/instanceAdapter';
 import { manifestEntryReferences, sourceModsOf } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { COMMITTED, NO_FILE_CHANGES, sameName, type Committed, type EntryOwner } from '../symbolNames/symbolNames';
@@ -134,6 +134,8 @@ async function renameEntry(
   try {
     const refusal = await refusalOf(access.adapter, to, entry.name);
     if (refusal !== undefined) return { applied: false, refusal };
+    const { mods } = await access.adapter.modOrder();
+    if (!mods.some((listed) => sameEntry(access.adapter, listed, entry))) return { applied: false, refusal: entryNotFound(entry) };
     owners = await ownersOf();
   } catch (err) {
     return refuse(err);

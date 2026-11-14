@@ -85,4 +85,16 @@ public sealed class ScriptRenameSourceChangesHandlerTests : IDisposable
             ],
             changes.LeftBehind);
     }
+
+    [Fact]
+    public void ACopyWhoseFileFailsOtherThanByIO_IsLeftBehind_SayingWhy_AndTheRestFollow()
+    {
+        var file = Saved(Scripted(Quest, "Ns:Quest"));
+
+        var changes = Changes([InFile(Alias, "bad\0path"), InFile(Quest, file)]);
+
+        Assert.Equal([new DocumentChange(file, Scripted(Quest, "Ns:Renamed"))], changes.Documents);
+        Assert.Single(changes.LeftBehind);
+        Assert.StartsWith($"{Alias} in Mod.esp (Mod): ", changes.LeftBehind[0], StringComparison.Ordinal);
+    }
 }
