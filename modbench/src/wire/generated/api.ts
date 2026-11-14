@@ -1220,6 +1220,10 @@ export interface components {
             size: number;
             hash?: string | null;
         };
+        AssetType: {
+            folder: string;
+            extensions: string[];
+        };
         Ba2VariantRequest: {
             /** Format: int32 */
             version: number;
@@ -1567,6 +1571,7 @@ export interface components {
             isPlacedRotation: boolean;
             isScriptName: boolean;
             isAssetLink: boolean;
+            assetType?: components["schemas"]["AssetType"] | null;
             indexWhen?: string[] | null;
             unheldWhen?: string[] | null;
         };

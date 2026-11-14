@@ -3,6 +3,10 @@ using MEditService.Codec.Serialization;
 
 namespace MEditService.Codec.Schema;
 
+/// <summary>Mutagen's asset type: the folder in the Data folder where it keeps its files, with forward slashes, and the
+/// extensions its files take.</summary>
+public sealed record AssetType(string Folder, IReadOnlyList<string> Extensions);
+
 /// <summary>One file a document names: its path in the Data folder, and the member path that names it.</summary>
 public readonly record struct AssetPath(string DataPath, string FieldPath);
 

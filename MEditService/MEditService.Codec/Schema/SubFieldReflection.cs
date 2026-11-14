@@ -143,6 +143,7 @@ internal static class SubFieldReflection
             IsPlacedRotation: game.Annotations.IsPlacedRotation(prop),
             IsScriptName: game.Annotations.IsScriptName(prop),
             IsAssetLink: leaf.AssetLinkType is not null,
+            AssetType: leaf.AssetType,
             IndexWhen: leaf.IndexWhen)
         { AssetLinkType = leaf.AssetLinkType };
     }
