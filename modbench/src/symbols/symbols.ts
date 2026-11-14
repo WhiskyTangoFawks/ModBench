@@ -98,7 +98,7 @@ export function createSymbols(deps: SymbolsDeps): Symbols {
     registerReferencedBy({
       reporter: reporterFor('symbol.referencedBy'), referencedBy: (symbol) => asked(kinds, symbol).referencedBy(),
       selection: () => rows?.selection() ?? [], dataPathOf: (row) => rows?.mods.dataPathOf(row), filesHeld: () => rows?.filesHeld() ?? NO_FILES,
-      focusedRecord, pick: () => pickSymbol(kinds),
+      focusedRecord, pick: () => pickSymbol(kinds, reporterFor('symbol.referencedBy')),
     }),
   );
   return {

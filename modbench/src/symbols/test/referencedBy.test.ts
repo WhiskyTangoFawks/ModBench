@@ -69,13 +69,21 @@ describe('referenced by lists where files name the symbol a row stands for (comm
     expect(referencedBy.mock.calls).toEqual([[symbol]]);
   });
 
-  it('asks for the one selected row when none is given, and for no symbol when several are selected', async () => {
-    const one = setup({ selection: [pluginRow] });
-    await one.run();
-    const several = setup({ selection: [pluginRow, mod], picked: undefined });
-    await several.run();
+  it('asks for the one selected row when none is given, without asking for a symbol', async () => {
+    const { referencedBy, pick, run } = setup({ selection: [pluginRow] });
 
-    expect([one.referencedBy.mock.calls, one.pick.mock.calls, several.referencedBy.mock.calls, several.pick.mock.calls.length]).toEqual([[[{ kind: 'plugin', ...BASE }]], [], [], 1]);
+    await run();
+
+    expect([referencedBy.mock.calls, pick.mock.calls]).toEqual([[[{ kind: 'plugin', ...BASE }]], []]);
+  });
+
+  it('opens the pick when several rows are selected, and asks about the symbol picked', async () => {
+    const picked: SymbolName = { kind: 'file', path: 'meshes/a.nif' };
+    const { referencedBy, pick, run } = setup({ selection: [pluginRow, mod], picked });
+
+    await run();
+
+    expect([pick.mock.calls.length, referencedBy.mock.calls]).toEqual([1, [[picked]]]);
   });
 
   it('refuses a row that stands for no symbol, saying why', async () => {

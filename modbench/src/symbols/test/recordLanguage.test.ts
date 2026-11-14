@@ -2,7 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, Uri } from '../../test/vscodeMock';
 import { CompletionItemKind, SymbolKind } from './iconsMock';
 
+const setInput = vi.hoisted(() => vi.fn<(input: { location: { uri: { path: string }; range: unknown } }) => void>());
 vi.mock('vscode', () => ({
+  extensions: { getExtension: () => ({ activate: () => Promise.resolve({ setInput }) }) },
   Uri, SymbolKind, CompletionItemKind, TreeItem, TreeItemCollapsibleState,
   Position: class { constructor(readonly line: number, readonly character: number) {} },
   Range: class { constructor(readonly start: unknown, readonly end: unknown) {} },
@@ -27,13 +29,15 @@ function kind({ open = (): Promise<{ getText(): string }> => Promise.resolve({ g
   client.setQueryAnswer('getRecordOwner', modA);
   client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: GUN_FILE });
   const opened: unknown[] = [];
+  const reporter = recordingReporter();
   const record = recordLanguage({
-    client, reporter: recordingReporter(), names: sourceNames({
+    client, reporter, names: sourceNames({
       declarationIn: (text: string, formKey: string) => Promise.resolve(spelledIn(text, `"FormKey": "${formKey}"`)),
+      formKeyIn: (text: string, formKey: string) => Promise.resolve(spelledIn(text, `"${formKey}"`)),
     }),
     open: async (uri: vscode.Uri) => { opened.push(uri); return { ...await open(), positionAt: (offset: number) => new vscode.Position(0, offset) }; },
   });
-  return { client, opened, record };
+  return { client, opened, record, reporter };
 }
 
 describe('where a record is defined (symbols.md, The symbols, Record)', () => {
@@ -68,5 +72,51 @@ describe('what references a record, and its hover (symbols.md, The symbols, Reco
     client.setQueryAnswer('getComparison', null);
 
     expect(await record.tooltipOf(RECORD)).toEqual([]);
+  });
+});
+
+describe('referenced by on a record anchors its list wherever a plugin holds it (symbols.md, The symbols, Record)', () => {
+  const compiled = {
+    ...modA, path: '/mods/ModA/A.esp', isLight: false, isMaster: false, isBlueprint: false, masters: [], isImmutable: false, inLoadOrder: false,
+    hasMatchingRecords: true, isCompiledPlugin: true, hasParseFailure: false, pluginSourceUnreadable: null,
+  };
+  const heldByCompiledPlugin = { formKey: GUN, plugin: modA.name, origin: modA.origin, editorId: 'Gun', loadOrderIndex: 0, isWinner: true, workingTreeState: 'None' as const, hasContainerChildren: false, hasParseFailure: false };
+
+  function asking(arrange: (k: ReturnType<typeof kind>) => void = () => undefined) {
+    const k = kind();
+    k.client.setQueryAnswer('getComparison', null);
+    k.client.setQueryAnswer('getPlugins', [compiled]);
+    k.client.setQueryAnswer('searchRecords', { items: [heldByCompiledPlugin], total: 1 });
+    arrange(k);
+    setInput.mockClear();
+    return k;
+  }
+  const shownLocation = () => setInput.mock.calls.at(-1)?.[0].location;
+
+  it('anchors at the record\'s FormKey in its winning copy', async () => {
+    const { record } = asking();
+
+    await record.referencedBy(RECORD);
+
+    expect(shownLocation()).toMatchObject({ uri: { path: GUN_FILE }, range: { start: { line: 0, character: GUN_TEXT.indexOf(`"${GUN}"`) } } });
+  });
+
+  it('anchors at the top of a compiled plugin\'s copy where no active plugin holds the record', async () => {
+    const { record, reporter } = asking((k) => { k.client.setQueryAnswer('getRecordOwner', undefined); });
+
+    await record.referencedBy(RECORD);
+
+    expect([shownLocation(), reporter.reports]).toMatchObject([{ uri: { path: GUN_FILE }, range: { line: 0, character: 0 } }, []]);
+  });
+
+  it('is refused, saying why, where no plugin holds the record', async () => {
+    const { record, reporter } = asking((k) => {
+      k.client.setQueryAnswer('getRecordOwner', undefined);
+      k.client.setQueryAnswer('searchRecords', { items: [], total: 0 });
+    });
+
+    await record.referencedBy(RECORD);
+
+    expect([setInput.mock.calls, reporter.reports.map(({ severity, detail }) => [severity, detail])]).toEqual([[], [['error', `No active plugin holds ${GUN}.`]]]);
   });
 });

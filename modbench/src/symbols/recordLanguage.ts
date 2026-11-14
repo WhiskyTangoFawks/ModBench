@@ -27,17 +27,23 @@ interface RecordLanguageDeps {
 export function recordLanguage({ client, names, reporter, open }: RecordLanguageDeps): SymbolKind<RecordNamed> {
   const references = referencesToFormKey({ client, open, spanIn: names.referenceIn });
   const workspace = workspaceSymbolsOf({ client, reporter, open, declarationIn: names.declarationIn });
+  const locatedAt = async (formKey: string, spanIn: Parameters<typeof locateRecord>[2]): Promise<vscode.Location | { refused: string }> => {
+    const found = await locateRecord({ client, open }, { formKey }, spanIn);
+    if (found === undefined) return { refused: `No active plugin holds ${formKey}.` };
+    return 'refused' in found ? found : locationOf(found);
+  };
   /** Its winning copy's FormKey member. */
   const definitionOf = async ({ formKey }: RecordNamed): Promise<Definition> => {
-    const located = await locateRecord({ client, open }, { formKey }, names.declarationIn)
+    const located = await locatedAt(formKey, names.declarationIn)
       .catch((error: unknown) => ({ refused: `Where ${formKey} is defined could not be read: ${errorMessage(error)}` }));
-    if (located === undefined) return { refused: `No active plugin holds ${formKey}.` };
-    return 'refused' in located ? located : { at: locationOf(located) };
+    return 'refused' in located ? located : { at: located };
   };
+  /** Its FormKey in its winning copy; with no active plugin holding it, the top of a compiled plugin's copy. */
   const anchorOf = async ({ formKey }: RecordNamed): Promise<vscode.Location | { refused: string }> => {
-    const located = await locateRecord({ client, open }, { formKey }, names.formKeyIn);
-    if (located === undefined) return { refused: `No active plugin holds ${formKey}.` };
-    return 'refused' in located ? located : locationOf(located);
+    const winning = await locatedAt(formKey, names.formKeyIn);
+    if (!('refused' in winning)) return winning;
+    const compiled = (await workspace.symbolsFor(formKey)).find((copy) => copy.formKey === formKey);
+    return compiled ? new vscode.Location(compiled.uri, new vscode.Position(0, 0)) : winning;
   };
   const referencedBy = recordReferencedBy({ client, reporter, anchorOf });
   return {

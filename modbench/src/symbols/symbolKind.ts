@@ -50,7 +50,7 @@ export interface SymbolKind<Symbol> {
   nameAt(document: AskedIn, offset: number): Promise<Named<Symbol> | undefined>;
   definitionOf(symbol: Symbol): Promise<Definition>;
   referencesTo(symbol: Symbol): Promise<References>;
-  /** `referenced by`: lists `referencesTo` in VS Code's References view, reporting what it could not list. */
+  /** `referenced by`: shows what references the symbol in VS Code's References view, reporting what it could not list. */
   referencedBy(symbol: Symbol): Promise<void>;
   /** What its row's tooltip says, a line to each line; none where it has no row or no tooltip. */
   tooltipOf(symbol: Symbol): Promise<readonly string[]>;

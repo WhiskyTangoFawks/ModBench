@@ -17,7 +17,7 @@ type EditorDeps = Omit<EditorCommandDeps,
 
 export interface Editor extends vscode.Disposable {
   copyValue: readonly CopyValueAdapter[];
-  /** The record of the tab in focus, else the one the user picks; undefined where none is. */
+  /** The record of the tab in focus; undefined where none is. */
   focusedRecord: () => string | undefined;
 }
 

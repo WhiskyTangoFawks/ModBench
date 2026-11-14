@@ -6,7 +6,7 @@ type Listener<Value> = (value: Value) => unknown;
 const { quickPick } = vi.hoisted(() => {
   const state = {
     change: undefined as Listener<string> | undefined, accept: undefined as (() => void) | undefined, hide: undefined as (() => void) | undefined,
-    items: [] as { label: string; description?: string; symbol: unknown }[], selectedItems: [] as { symbol: unknown }[], hidden: 0, disposed: 0,
+    items: [] as { label: string; description?: string; symbol: unknown }[], selectedItems: [] as { symbol: unknown }[], hidden: 0, disposed: 0, busy: false,
   };
   return { quickPick: state };
 });
@@ -22,6 +22,7 @@ vi.mock('vscode', () => ({
       show: () => undefined,
       hide: () => { quickPick.hidden++; quickPick.hide?.(); },
       dispose: () => { quickPick.disposed++; },
+      set busy(value: boolean) { quickPick.busy = value; },
       set items(value: typeof quickPick.items) { quickPick.items = value; },
       get selectedItems() { return quickPick.selectedItems; },
     }),
@@ -30,6 +31,7 @@ vi.mock('vscode', () => ({
 
 import * as vscode from 'vscode';
 import { pickSymbol } from '../symbolPick';
+import { recordingReporter } from '../../test/surfacingDoubles';
 import { fakeKind, fakeKinds } from './fakeKinds';
 import type { Listed, SymbolName } from '../symbolKind';
 
@@ -39,7 +41,7 @@ const listed = (symbol: SymbolName, name: string): Listed => ({ symbol, name, de
 describe('pick a symbol as Go to Symbol in Workspace finds it', () => {
   it('lists the symbols of every kind that hold what is typed, and answers the one accepted', async () => {
     const kinds = fakeKinds({ record: fakeKind({ symbolsFor: (query) => Promise.resolve(query === 'gun' ? [listed(GUN, 'Gun')] : []) }) });
-    const picked = pickSymbol(kinds);
+    const picked = pickSymbol(kinds, recordingReporter());
 
     await quickPick.change?.('gun');
     expect(quickPick.items).toEqual([{ symbol: GUN, label: 'Gun', description: 'a detail' }]);
@@ -50,10 +52,20 @@ describe('pick a symbol as Go to Symbol in Workspace finds it', () => {
   });
 
   it('answers no symbol when the user dismisses it', async () => {
-    const picked = pickSymbol(fakeKinds());
+    const picked = pickSymbol(fakeKinds(), recordingReporter());
 
     quickPick.hide?.();
 
     expect(await picked).toBeUndefined();
+  });
+
+  it('reports why the symbols could not be listed, and stops showing busy', async () => {
+    const reporter = recordingReporter();
+    const kinds = fakeKinds({ record: fakeKind({ symbolsFor: () => Promise.reject(new Error('mEdit is down')) }) });
+    void pickSymbol(kinds, reporter);
+
+    await quickPick.change?.('gun');
+
+    expect([reporter.reports.map(({ severity, detail }) => [severity, detail]), quickPick.busy]).toEqual([[['error', 'mEdit is down']], false]);
   });
 });

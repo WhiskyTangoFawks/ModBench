@@ -2,8 +2,8 @@ import * as vscode from 'vscode';
 import type { CopyAt } from '../instanceLoader/fileConflictIndex';
 import type { Reporter } from '../ports/reporter';
 import { showDefinition } from './definitionShown';
-import { nameOf, symbolOfRow } from './rowSymbol';
-import type { SymbolKinds } from './symbolKind';
+import { symbolOfRow } from './rowSymbol';
+import type { SymbolKinds, SymbolName } from './symbolKind';
 import { asked } from './symbolKind';
 
 interface GoToDeps {
@@ -13,6 +13,12 @@ interface GoToDeps {
   selection: () => readonly unknown[];
   dataPathOf: (row: unknown) => string | undefined;
 }
+
+const nameOf = (symbol: SymbolName): string => {
+  if (symbol.kind === 'plugin') return `"${symbol.name}" (${symbol.origin})`;
+  if (symbol.kind === 'record') return symbol.formKey;
+  return `"${'path' in symbol ? symbol.path : symbol.name}"`;
+};
 
 /** `go to` (commands.md). With no row given and none selected, it asks for a symbol as Go to Symbol in Workspace finds
  *  it. */

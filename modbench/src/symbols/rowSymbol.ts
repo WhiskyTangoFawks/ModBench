@@ -14,9 +14,3 @@ export function symbolOfRow(row: unknown, dataPathOf: (row: unknown) => string |
   if (path !== undefined) return { kind: 'file', path };
   return modArgumentOf(row) ?? separatorArgumentOf(row);
 }
-
-export const nameOf = (symbol: SymbolName): string => {
-  if (symbol.kind === 'plugin') return `"${symbol.name}" (${symbol.origin})`;
-  if (symbol.kind === 'record') return symbol.formKey;
-  return `"${'path' in symbol ? symbol.path : symbol.name}"`;
-};
