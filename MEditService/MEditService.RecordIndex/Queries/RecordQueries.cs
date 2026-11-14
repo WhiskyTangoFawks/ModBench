@@ -489,8 +489,8 @@ internal sealed class RecordQueries(
                 return (IReadOnlyList<DocumentName>)[];
             var document = DocumentSpans.Read(text);
             var schemas = RequireSchemas();
-            var typeOf = RequireReads().LinkResolver([.. document.RecordFormKeys]);
-            return DocumentNames.In(document, formKey => typeOf(formKey) is { } entry && schemas.TryGetValue(entry.RecordType, out var schema) ? schema.RecordColumns : null, at);
+            var types = RequireReads().RecordTypesOf([.. document.RecordFormKeys]);
+            return DocumentNames.In(document, formKey => types.TryGetValue(formKey, out var type) && schemas.TryGetValue(type, out var schema) ? schema.RecordColumns : null, at);
         });
 
     public Task<Answer<IReadOnlyList<WorldspaceSummary>, IndexRefused>> GetWorldspaces(PluginAddress plugin, CancellationToken cancel) =>

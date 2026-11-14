@@ -199,6 +199,18 @@ public class RegistrationScopingTests
     }
 
     [Fact]
+    public void AReferenceInACompiledPluginThatIsNotActive_IsNamedInItsCopysDocument()
+    {
+        using var fx = Build("registration-inactive-compiled-plugin-names");
+        SourceMods.Init(fx.Plugins.Plugins.Single(p => p.Name == BetaKey.Name));
+        fx.Reconcile(fx.WithBetaDisabled);
+        var text = fx.Index.Queries.GetRenderedDocument(BetaKey, fx.BetaNpcFk).Value().Require().Text;
+
+        Assert.Contains(fx.Index.Queries.GetPluginSourceNames(null, text, null).Value(),
+            name => name is { Kind: DocumentNameKind.Reference } && name.Value == fx.BetaRaceFk && name.Record == fx.BetaNpcFk);
+    }
+
+    [Fact]
     public void AReferenceInAnActivePluginNotCompiled_IsListedForActiveOrCompiledPlugins()
     {
         using var fx = Build("registration-active-nonCompiledPlugin-references");
