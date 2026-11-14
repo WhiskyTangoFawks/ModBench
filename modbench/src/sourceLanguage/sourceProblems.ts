@@ -6,7 +6,7 @@ import type { Reporter } from '../ports/reporter';
 import type { PathHop } from '../wire/messages';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { locationOf, type Segment } from './sourceText';
-import { lastRead, readiness, tellingOnSurface, type Position, type Told } from './feedShape';
+import { lastRead, readiness, tellingOnSurface, type Asked, type Position, type Told } from './feedShape';
 import { answerOf, failureReason, type ReadFailed } from '../wire/readFailed';
 
 type SourceProblem = PluginProblems['problems'][number];
@@ -17,7 +17,8 @@ export interface ProblemOnFile { message: string; start: Position; end: Position
 export type ProblemsByFile = ReadonlyMap<string, ProblemOnFile[]>;
 
 export interface SourceProblemsDeps {
-  client: Pick<MEditClient, 'getPluginProblems' | 'onNotification' | 'loadOrderStatus' | 'onLoadOrderSettled' | 'onUnsavedHandOver'>;
+  client: Pick<MEditClient, 'loadOrderStatus' | 'onUnsavedHandOver'>;
+  ask: Pick<Asked, 'getPluginProblems' | 'onPluginChanged' | 'onLoadOrderSettled'>;
   sourceFiles: SourceFilesOf;
   reporter: Pick<Reporter, 'shownOnSurface'>;
   /** Replaces every problem published before. */
@@ -144,7 +145,7 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
   const ask = async (plugin?: PluginAddress, first = false) => {
     const target = plugin === undefined ? WHOLE_SET : pluginAddressKey(plugin);
     try {
-      const answer = placed(answerOf(await client.getPluginProblems(plugin)), deps);
+      const answer = placed(answerOf(await deps.ask.getPluginProblems(plugin)), deps);
       if (first) answeredAtSubscribe();
       settle(target, answer);
     } catch (error) {
@@ -166,9 +167,8 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
     askWanted();
   };
   const unsubscribe = [
-    client.onLoadOrderSettled((status) => { if (status.conflictsComputed) { wholeWanted = true; askWanted(); } }),
-    client.onNotification('rows-changed', askPluginWhenReady),
-    client.onNotification('plugin-changed', askPluginWhenReady),
+    deps.ask.onLoadOrderSettled((status) => { if (status.conflictsComputed) { wholeWanted = true; askWanted(); } }),
+    deps.ask.onPluginChanged(askPluginWhenReady),
     client.onUnsavedHandOver(handedOver),
   ];
   askWanted();

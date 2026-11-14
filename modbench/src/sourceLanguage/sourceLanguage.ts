@@ -5,7 +5,7 @@ import type { MEditClient } from '../client';
 import type { Reporter } from '../ports/reporter';
 import { isPluginSourcePath, PLUGIN_SOURCE_GLOB } from '../instanceAdapter/instanceAdapter';
 import { heldText } from '../textDocuments/heldText';
-import { readHeldText } from '../textDocuments/pluginSource';
+import { heldOrSavedText } from '../textDocuments/fileText';
 import { enumCompletionsAt } from './enumCompletion';
 import { handUnsavedPluginSource } from './handUnsaved';
 import { registerBuildEntryPoint } from './buildEntryPoint';
@@ -20,6 +20,7 @@ interface SourceLanguageDeps extends Pick<SourceProblemsDeps, 'sourceFiles'> {
   instance: Pick<Instance, 'value' | 'subscribe'> | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
   client: Pick<MEditClient, 'handUnsavedDocuments' | 'getComparison'> & SourceProblemsDeps['client'] & PathProblemsDeps['client'];
+  ask: SourceProblemsDeps['ask'] & PathProblemsDeps['ask'];
   /** What holds a path a plugin source names. */
   pathStanding: PathStanding;
 }
@@ -81,10 +82,9 @@ function sourceProblems(deps: SourceLanguageDeps): Pick<SourceLanguage, 'dispose
   });
   const linkStatus = languageStatusItem('modbench.sourceProblems');
   const pathStatus = languageStatusItem('modbench.sourcePaths');
-  const readText = readHeldText;
   const unsubscribe = [
     feedSourceProblems({ ...deps, publish: feedOf('links'), languageStatus: linkStatus.show }),
-    feedPathProblems({ ...deps, paths: deps.pathStanding, readText, publish: feedOf('paths'), languageStatus: pathStatus.show }),
+    feedPathProblems({ ...deps, paths: deps.pathStanding, readText: heldOrSavedText, publish: feedOf('paths'), languageStatus: pathStatus.show }),
   ];
   const disposable = new vscode.Disposable(() => { for (const off of unsubscribe) off(); collection.dispose(); linkStatus.dispose(); pathStatus.dispose(); });
   return { dispose: () => { disposable.dispose(); }, messages: () => [...linkStatus.text(), ...pathStatus.text()] };

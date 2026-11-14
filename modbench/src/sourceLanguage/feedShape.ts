@@ -1,6 +1,9 @@
-import type { MEditClient } from '../client';
+import type { MEditClient, PluginFilePaths, PluginProblems } from '../client';
+import type { ProblemsAsker } from '../drivingLib/problemsAsker';
 import type { Reporter } from '../ports/reporter';
 import type { ProblemOnFile, ProblemsByFile } from './sourceProblems';
+
+export type Asked = ProblemsAsker<PluginFilePaths, PluginProblems, NonNullable<MEditClient['loadOrderStatus']>>;
 
 export interface Position { line: number; character: number }
 

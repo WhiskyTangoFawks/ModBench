@@ -9,8 +9,6 @@ export const isPluginSourceDocument = ({ scheme, fsPath }: vscode.Uri, isPluginS
 
 export const openPluginSourceDocument = (uri: vscode.Uri): Thenable<vscode.TextDocument> => vscode.workspace.openTextDocument(uri);
 
-export const readHeldText = async (file: string): Promise<string> => heldText(await openPluginSourceDocument(vscode.Uri.file(file)));
-
 /** A child record's document holds its container's whole text, the one its file's document holds. */
 export function unsavedPluginSource(isPluginSource: IsPluginSource): { path: string; text: string }[] {
   const held = new Map<string, string>();
