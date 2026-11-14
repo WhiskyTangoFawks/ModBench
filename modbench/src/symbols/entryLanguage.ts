@@ -5,7 +5,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { heldTexts, sameName, type EntryNames, type EntrySymbol, type PlaceInFile } from '../symbolNames/symbolNames';
 import { heldText, unsavedTexts } from '../textDocuments/heldText';
-import { atFile, nameHolds, placeLocation, readBy, showReferencedBy, tooltipLines } from './symbolPlaces';
+import { atFile, nameHolds, placeLocation, readBy, showReferencedBy, tooltipLines, type AskedIn } from './symbolPlaces';
 import { selectingItsRow } from './definitionShown';
 import type { Definition, Listed, References, SymbolKind } from './symbolKind';
 
@@ -22,7 +22,13 @@ interface EntryLanguageDeps {
   downloadedFileRow: (name: string) => Reveal | undefined;
   /** The file that holds the profile's mod order; undefined with no instance. */
   modOrderFileOf: (profile: string) => string | undefined;
+  /** The mod's or the separator's `rename`, with the new name an entry point supplies. */
+  renameEntry: (entry: RenamableEntry, newName: string) => Promise<void>;
 }
+
+export type RenamableEntry = EntrySymbol & { readonly kind: 'mod' | 'separator' };
+
+const isRenamable = (entry: EntrySymbol): entry is RenamableEntry => entry.kind === 'mod' || entry.kind === 'separator';
 
 const entryKey = ({ kind, name }: EntrySymbol): string => `${kind}:${name.toLowerCase()}`;
 
@@ -46,7 +52,7 @@ const SHOWN: Record<EntrySymbol['kind'], { readonly kind: vscode.SymbolKind; rea
 
 /** A mod, a separator, a downloaded file and a profile as symbols: wherever an owner's file names them, and the places
  *  files name them (symbols.md). */
-export function entryLanguage({ instance, reporter, owners, rows, entryTooltip, downloadedFileTooltip, downloadedFileRow, modOrderFileOf }: EntryLanguageDeps) {
+export function entryLanguage({ instance, reporter, owners, rows, entryTooltip, downloadedFileTooltip, downloadedFileRow, modOrderFileOf, renameEntry }: EntryLanguageDeps) {
   // A profile has no row.
   const tooltip = ({ kind, name }: EntrySymbol): string | undefined => {
     if (kind === 'downloadedFile') return downloadedFileTooltip(name);
@@ -151,6 +157,19 @@ export function entryLanguage({ instance, reporter, owners, rows, entryTooltip, 
 
   return {
     ...kind,
+    /** The name of the mod or separator at `offset`, which Rename Symbol offers to rename; undefined where none is. */
+    renameRangeAt: async (document: AskedIn, offset: number) => {
+      const found = await kind.nameAt(document, offset);
+      return found && !('refused' in found.symbol) && isRenamable(found.symbol) ? { start: found.start, end: found.end, name: found.name } : undefined;
+    },
+    /** Rename Symbol on the mod or separator whose name is at `offset`: its `rename` (symbols.md, The features, story 6). */
+    renameAt: async (document: AskedIn, offset: number, newName: string): Promise<void> => {
+      const found = await kind.nameAt(document, offset);
+      if (found === undefined || 'refused' in found.symbol || !isRenamable(found.symbol)) return;
+      const entry = entryListed(found.symbol);
+      if (entry === undefined || !isRenamable(entry)) throw new Error(unlisted(found.symbol));
+      await renameEntry(entry, newName);
+    },
     /** Lists each place a file names `mod`, in VS Code's References view, anchored at the first. */
     referencedBy: (mod: string): Promise<void> => showReferencedBy({
       reporter, subject: mod, contextValue: 'modbench.modReferencedBy', references: () => referencesTo({ kind: 'mod', name: mod }),

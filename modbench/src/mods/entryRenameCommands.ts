@@ -34,13 +34,18 @@ function resultOf({ oldName, newName }: Rename, result: EntryRenameResult): Gest
   return renameOutcome(result, { named: `"${oldName}"`, newName: landed, landed, definition: 'its folder and lines' });
 }
 
+// Rename Symbol supplies the entry and the new name (symbols.md, The features, story 6).
+const isSupplied = (option: unknown): option is Rename =>
+  typeof option === 'object' && option !== null && typeof Reflect.get(option, 'oldName') === 'string' && typeof Reflect.get(option, 'newName') === 'string';
+
 function renameGesture(
   kind: 'mod' | 'separator', { commands, renames, source, instance, reporter }: EntryRenameDeps,
 ): AgentGesture<ModlistNode, Rename, GestureResult<string>, { name: string }> {
   const rename = kind === 'mod' ? renames.renameMod : renames.renameSeparator;
   const nameRefusal = (value: string, own: string) => (kind === 'mod' ? commands.renameModNameRefusal(value, own) : commands.separatorNameRefusal(value, own));
   return {
-    fromView: async (entry) => {
+    fromView: async (entry, option) => {
+      if (isSupplied(option)) return { oldName: option.oldName, newName: option.newName };
       const node = singularArgument(entry, kind);
       if (!node) return undefined;
       const oldName = node.kind === 'mod' ? node.mod.name : node.separator.name;

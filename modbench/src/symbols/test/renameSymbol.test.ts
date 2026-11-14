@@ -23,17 +23,19 @@ const MEMBERS: Record<number, RecordMember> = {
 
 type FileAnswer = Awaited<ReturnType<Parameters<typeof renameSymbol>[0]['client']['getRecordOfFile']>>;
 
-function renaming({ pluginNamed, file = { formKey: '000800:Patch.esp', plugin: PATCH } }: { pluginNamed?: string; file?: FileAnswer } = {}) {
+function renaming({ pluginNamed, entryNamed, file = { formKey: '000800:Patch.esp', plugin: PATCH } }: { pluginNamed?: string; entryNamed?: string; file?: FileAnswer } = {}) {
   const executeCommand = vi.fn(() => Promise.resolve());
   const renameAt = vi.fn(() => Promise.resolve());
+  const renameEntryAt = vi.fn(() => Promise.resolve());
   const symbol = renameSymbol({
     plugin: { renameRangeAt: () => Promise.resolve(pluginNamed === undefined ? undefined : { start: 1, end: 9, name: pluginNamed }), renameAt },
+    entry: { renameRangeAt: () => Promise.resolve(entryNamed === undefined ? undefined : { start: 3, end: 7, name: entryNamed }), renameAt: renameEntryAt },
     names: sourceNames({ recordMemberAt: (_file: string, _text: string, offset: number) => Promise.resolve(MEMBERS[offset]) }),
     plugins: () => PLUGINS,
     client: { getRecordOfFile: () => Promise.resolve(file) },
     executeCommand,
   });
-  return { symbol, executeCommand, renameAt };
+  return { symbol, executeCommand, renameAt, renameEntryAt };
 }
 
 describe('Rename Symbol (symbols.md, The features, story 6)', () => {
@@ -44,6 +46,17 @@ describe('Rename Symbol (symbols.md, The features, story 6)', () => {
     await symbol.rename(sourceDocument, at('Base.esm'), 'New.esm');
 
     expect(renameAt).toHaveBeenCalledWith(sourceDocument, at('Base.esm'), 'New.esm');
+    expect(executeCommand).not.toHaveBeenCalled();
+  });
+
+  it('on a mod\'s or a separator\'s name, is the entry\'s rename, before any record\'s edit', async () => {
+    const { symbol, executeCommand, renameAt, renameEntryAt } = renaming({ entryNamed: 'Patch Mod' });
+
+    expect(await symbol.prepare(sourceDocument, at('PatchNpc'))).toEqual({ start: 3, end: 7, placeholder: 'Patch Mod' });
+    await symbol.rename(sourceDocument, at('PatchNpc'), 'New Mod');
+
+    expect(renameEntryAt).toHaveBeenCalledWith(sourceDocument, at('PatchNpc'), 'New Mod');
+    expect(renameAt).not.toHaveBeenCalled();
     expect(executeCommand).not.toHaveBeenCalled();
   });
 
@@ -64,7 +77,7 @@ describe('Rename Symbol (symbols.md, The features, story 6)', () => {
   });
 
   it('offers nothing where plugin source names no FormKey or EditorID', async () => {
-    await expect(renaming().symbol.prepare(sourceDocument, at('"Npc"'))).rejects.toThrow('Rename Symbol renames a plugin, or changes a record\'s FormKey or EditorID, and none is here.');
+    await expect(renaming().symbol.prepare(sourceDocument, at('"Npc"'))).rejects.toThrow('Rename Symbol renames a plugin, a mod or a separator, or changes a record\'s FormKey or EditorID, and none is here.');
   });
 
   it.each([
