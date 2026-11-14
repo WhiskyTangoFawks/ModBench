@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { MEditClient } from '../client';
+import type { MEditClient, PluginAddress } from '../client';
 import { sourceNames } from './sourceNames';
 import type { Reporter } from '../ports/reporter';
 import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
@@ -35,8 +35,8 @@ interface SymbolsDeps {
   names: Pick<MEditClient, 'getPluginSourceNames'>;
   focusedRecord: () => string | undefined;
   sourceFiles: SourceFilesOf;
-  /** The text of a plugin source file that is not open. */
-  readText: (path: string) => Promise<string>;
+  /** The text of a file on disk; undefined where it is gone. */
+  savedText: (path: string) => Promise<string | undefined>;
   fileCopies: FileCopies;
   /** Each box that owns files, saying where they name a symbol (ADR-0028). */
   owners: readonly SymbolOwner[];
@@ -92,18 +92,20 @@ export function createSymbols(deps: SymbolsDeps): Symbols {
     script: scriptLanguage({ instance, names, client, reporter }),
     record: recordLanguage({ client, names, reporter, open: openPluginSourceDocument }),
   };
-  const changed = (listener: () => void): vscode.Disposable => vscode.Disposable.from(
-    instance?.subscribe(listener) ?? { dispose: () => undefined },
-    { dispose: client.onLoadOrderSettled(listener) },
-    { dispose: client.onNotification('rows-changed', listener) },
-    { dispose: client.onNotification('plugin-changed', listener) },
+  const changed = (listener: (plugin?: PluginAddress) => void): vscode.Disposable => vscode.Disposable.from(
+    instance?.subscribe(() => { listener(); }) ?? { dispose: () => undefined },
+    { dispose: client.onLoadOrderSettled(() => { listener(); }) },
+    { dispose: client.onNotification('rows-changed', ({ plugin }) => { listener(plugin); }) },
+    { dispose: client.onNotification('plugin-changed', ({ plugin }) => { listener(plugin); }) },
   );
+  const problems = vscode.languages.createDiagnosticCollection('modbench-names');
   const rename = renameSymbol({
     plugin, entry, names, client, plugins: () => instance?.value.plugins ?? [],
     executeCommand: (command, ...args) => vscode.commands.executeCommand(command, ...args),
   });
   const disposable = vscode.Disposable.from(
-    registerNamesNothing({ kinds, reporter, readText: deps.readText, onChanged: (listener) => changed(listener) }),
+    problems,
+    registerNamesNothing({ kinds, collection: problems, reporter, savedText: deps.savedText, onChanged: changed }),
     registerLanguageFeatures({ kinds, reporter, reveal: fileCopies.reveal, rename }),
     registerGoTo({ kinds, reporter: reporterFor('symbol.goTo'), reveal: fileCopies.reveal, selection: () => rows?.selection() ?? [], dataPathOf: (row) => rows?.mods.dataPathOf(row) }),
     publishReferencesView((key, value) => { void vscode.commands.executeCommand('setContext', key, value); }),

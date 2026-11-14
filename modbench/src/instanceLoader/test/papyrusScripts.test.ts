@@ -36,12 +36,10 @@ describe('papyrusScriptsOf', () => {
     ]);
   });
 
-  it('holds a script an archive holds, with the archive\'s copy to show where no loose file is', () => {
-    const packed = { kind: 'archived', gameRelease: 'Fallout4', archive: '/game/Data/Misc.ba2', file: 'Scripts/Quest.pex' } as const;
-
-    expect(papyrusScriptsOf(filesOf({ Mod: ['Scripts/Actor.pex'] }), NO_DATA_FOLDER, 'Fallout4', new Map([['scripts/quest.pex', packed], ['textures/quest.pex', { ...packed, file: 'Textures/Quest.pex' }]]))).toEqual([
+  it('holds a script only an archive holds, with no file of its own', () => {
+    expect(papyrusScriptsOf(filesOf({ Mod: ['Scripts/Actor.pex'] }), NO_DATA_FOLDER, 'Fallout4', ['Scripts/Quest.pex', 'Textures/Quest.pex'])).toEqual([
       { name: 'Actor', compiled: '/mods/Mod/Scripts/Actor.pex' },
-      { name: 'Quest', archived: packed },
+      { name: 'Quest' },
     ]);
   });
 

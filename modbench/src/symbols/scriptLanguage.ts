@@ -14,7 +14,7 @@ import type { Definition, References, SymbolKind } from './symbolKind';
 export type ScriptClient = Pick<MEditClient, 'getScriptReferences'> & RecordDocumentClient;
 
 interface ScriptLanguageDeps {
-  instance: { readonly value: Pick<InstanceValue, 'papyrusScripts' | 'dataFolderFiles'> } | undefined;
+  instance: { readonly value: Pick<InstanceValue, 'papyrusScripts' | 'dataFolderFiles' | 'gameFolder' | 'gameFolderInWorkspace' | 'archiveContents'> } | undefined;
   names: Pick<SourceNames, 'scriptAt' | 'scriptsIn' | 'scriptsNamed' | 'membersIn' | 'formKeyIn'>;
   client: ScriptClient;
   reporter: Pick<Reporter, 'report' | 'shownOnSurface'>;
@@ -25,8 +25,13 @@ interface ScriptLanguageDeps {
 export function scriptLanguage({ instance, names, client, reporter }: ScriptLanguageDeps): SymbolKind<ScriptSymbol> & Required<Pick<SymbolKind<ScriptSymbol>, 'namesNothingIn' | 'filesNamingNothing'>> {
   const scripts = (): readonly PapyrusScript[] => instance?.value.papyrusScripts ?? [];
 
-  const judged = (): boolean => instance?.value.dataFolderFiles.kind === 'listed';
-  const held = (name: string): boolean => scripts().some((script) => sameName(script.name, name));
+  // A script is held by nothing only once every place that could hold it has answered.
+  const judged = (): boolean => {
+    const value = instance?.value;
+    return value !== undefined && value.dataFolderFiles.kind === 'listed' && value.gameFolder.kind === 'found' && value.gameFolderInWorkspace
+      && [...value.archiveContents.values()].every(({ kind }) => kind === 'read');
+  };
+  const isHeld = (name: string): boolean => scripts().some((script) => sameName(script.name, name));
 
   const nameAt = (document: AskedIn, offset: number) => names.scriptAt(document.uri.fsPath, heldText(document), offset);
 
@@ -42,13 +47,11 @@ export function scriptLanguage({ instance, names, client, reporter }: ScriptLang
       const found = await nameAt(document, offset);
       return found && { start: found.start, end: found.end, name: found.name, symbol: { kind: 'script', name: found.name } };
     },
-    /** Its source, else its compiled script, else the archive's copy. */
+    /** Its source, else its compiled script. */
     definitionOf({ name }): Promise<Definition> {
-      const script = scripts().find((each) => sameName(each.name, name));
-      if (script === undefined) return Promise.resolve({ refused: `No mod, Overwrite or the Data folder holds a source or a compiled script of ${name}.` });
-      const file = fileOf(script);
-      if (file !== undefined) return Promise.resolve({ file });
-      return Promise.resolve(script.archived === undefined ? { refused: `No file holds ${name}.` } : { shown: script.archived });
+      const held = scripts().find((script) => sameName(script.name, name));
+      const file = held && fileOf(held);
+      return Promise.resolve(file === undefined ? { refused: `No mod, Overwrite or the Data folder holds a source or a compiled script of ${name}.` } : { file });
     },
     /** Each member of a record that names it. */
     referencesTo,
@@ -59,13 +62,14 @@ export function scriptLanguage({ instance, names, client, reporter }: ScriptLang
     async namesNothingIn(document) {
       if (!judged()) return [];
       const found = await names.scriptsIn(document.uri.fsPath, heldText(document));
-      return found.filter(({ name }) => !held(name))
-        .map(({ start, end, name }) => ({ start, end, name, why: `No mod, Overwrite or the Data folder holds ${name}.` }));
+      return found.filter(({ name }) => !isHeld(name))
+        .map(({ start, end, name }) => ({ start, end, name, why: `No mod, Overwrite, Data folder file or archive holds ${name}.` }));
     },
-    /** Each file plugin source holds that names a script nothing holds. */
-    async filesNamingNothing() {
-      if (!judged()) return [];
-      return [...new Set((await names.scriptsNamed()).filter(({ name }) => !held(name)).map(({ file }) => file))];
+    /** Each file plugin source holds that names a script nothing holds; undefined where nothing can be said yet. */
+    async filesNamingNothing(only) {
+      if (!judged()) return undefined;
+      const named = await names.scriptsNamed(only);
+      return named && [...new Set(named.filter(({ name }) => !isHeld(name)).map(({ file }) => file))];
     },
     /** None: a script has no row. */
     tooltipOf: () => Promise.resolve([]),

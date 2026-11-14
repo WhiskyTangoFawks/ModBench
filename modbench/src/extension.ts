@@ -21,7 +21,7 @@ import type { FileCopies } from './symbols/fileLanguage';
 import type { Reveal } from './drivingLib/symbolRows';
 import { createSymbols, followRenames, referencedByCopyValueText, registerFollowRename, type SymbolRows } from './symbols';
 import { createSourceLanguage } from './sourceLanguage';
-import { readHeldText } from './textDocuments/pluginSource';
+import { savedText } from './textDocuments/fileText';
 import { saveUnsavedUnder } from './textDocuments/saveUnsavedUnder';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
 import { registerCopyValueCommand, type CopyValueAdapter } from './drivingLib/copyValue';
@@ -418,7 +418,7 @@ function start(context: vscode.ExtensionContext): void {
     client: meditClient, names: sourceNames, instance: views.instance, reporter: makeReporter(outputChannel, 'symbols'), reporterFor, rows: views.symbolRows,
     focusedRecord: editor.focusedRecord,
     sourceFiles: (origin) => views.sourceFiles(origin),
-    readText: readHeldText,
+    savedText: (path) => savedText(vscode.Uri.file(path)),
     pluginsShown: views.pluginsShown,
     fileCopies: views.fileCopies,
     entryTooltip: views.entryTooltip,

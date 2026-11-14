@@ -3,7 +3,8 @@ import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { sameName, type PluginName, type TextSpan } from '../symbolNames/symbolNames';
-import { answerOf, failureReason, isNotYetAnswerable, isReadFailed, ReadFailedError } from '../wire/readFailed';
+import { answerOf, failureReason, isReadFailed } from '../wire/readFailed';
+import { scriptsNamed } from './scriptsNamed';
 
 interface SourceNamesDeps {
   client: Pick<MEditClient, 'searchRecords'>;
@@ -69,19 +70,7 @@ export function sourceNames({ client, names, paths, sourceFiles, reporter }: Sou
       return found && { ...spanOf(found), name: found.value };
     },
 
-    /** Each script the plugin source of every compiled plugin names, with the file that holds it, from one ask of the
-     *  record index; none while it cannot answer yet, and a failure otherwise. */
-    async scriptsNamed(): Promise<{ file: string; name: string }[]> {
-      const answer = await paths.getPluginFilePaths();
-      if (isReadFailed(answer)) {
-        if (isNotYetAnswerable(answer)) return [];
-        throw new ReadFailedError(failureReason(answer));
-      }
-      return answer.flatMap(({ plugin, scripts }) => {
-        const files = sourceFiles(plugin.origin);
-        return files === undefined ? [] : scripts.map(({ name, sourceRelativePath }) => ({ file: files.file(sourceRelativePath), name }));
-      });
-    },
+    scriptsNamed: scriptsNamed({ paths, sourceFiles, reporter }),
 
     /** Each Papyrus script a document names, which fails where mEdit cannot answer. */
     async scriptsIn(file: string, text: string): Promise<(TextSpan & { name: string })[]> {

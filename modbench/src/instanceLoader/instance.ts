@@ -18,7 +18,7 @@ import {
 } from '../instanceAdapter/instanceAdapter';
 import { sourceModsOf, type FlaggedRead, type SourceMods } from '../manifestAdapter/manifestAdapter';
 import { pluginPlacesOf } from './pluginPlacesOf';
-import { archivedCopiesOf, papyrusScriptsOf, type PapyrusScript } from './papyrusScripts';
+import { archivedPathsOf, papyrusScriptsOf, type PapyrusScript } from './papyrusScripts';
 import { errorMessage } from '../ports/errorMessage';
 import { FlaggedHashesHeld, flaggedPluginsIn, type FlaggedReader } from './flaggedHashes';
 import { ArchiveContentsHeld, archivePathsIn, unreadableArchiveLines, type ArchiveRead, type ArchiveReader } from './archiveContents';
@@ -726,7 +726,7 @@ export class Instance implements Subscription {
       foldersByMod: index.foldersByMod,
       ...archives,
       flaggedHashes,
-      papyrusScripts: papyrusScriptsOf(index.files, dataFolderFiles, gameRelease, archivedCopiesOf(archives)),
+      papyrusScripts: papyrusScriptsOf(index.files, dataFolderFiles, gameRelease, archivedPathsOf(archives)),
       plugins,
       downloadedFiles: downloadedFilesOutcome.kind === 'unresolved'
         ? { kind: 'unresolved', reason: downloadedFilesOutcome.reason }
