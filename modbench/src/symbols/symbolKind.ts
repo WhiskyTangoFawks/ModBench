@@ -69,6 +69,8 @@ export interface SymbolKind<Symbol> {
   /** Each name in the document that names nothing (symbols.md, The features, story 8); a kind leaves it out for the names another box
    *  already judges, or while the instance has not read what would hold them. */
   namesNothingIn?(document: AskedIn): Promise<readonly NamesNothing[]>;
+  /** Each file, open or not, that holds a name that names nothing, from one ask of the box that owns the files. */
+  filesNamingNothing?(): Promise<readonly string[]>;
   /** Each symbol of the kind whose name holds `query`, which is trimmed and never empty. */
   symbolsFor(query: string): Promise<readonly Listed[]>;
 }

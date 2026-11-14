@@ -6,7 +6,7 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.RecordIndex.Queries;
 
-/// <summary>The file paths each compiled plugin's source names, with the file that holds each naming record, one plugin's
+/// <summary>The file paths and scripts each compiled plugin's source names, with the file that holds each naming record, one plugin's
 /// records at a time. A record whose paths cannot be read is told as unread, never dropped.</summary>
 internal static class FilePathsPanel
 {
@@ -39,35 +39,38 @@ internal static class FilePathsPanel
         ISourceRepositoryReads repository, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         var paths = new List<NamedFilePath>();
+        var scripts = new List<NamedScript>();
         var unread = new List<string>(stoppedAt.Select(file => $"{file.SourceRelativePath}: {file.Message}"));
         foreach (var copy in copies)
         {
-            var (files, refused) = NamedBy(copy, plugin.Key, schemas);
+            var (files, attached, refused) = NamedBy(copy, plugin.Key, schemas);
             unread.AddRange(refused);
-            if (files.Count == 0) continue;
+            if (files.Count == 0 && attached.Count == 0) continue;
             if (!SourceFilePlacement.Places(plugin.Key, new RecordIdentity(copy.FormKey, copy.RecordType, copy.EditorId), repository, out var file, out var failure))
                 return Failed(plugin, failure, ProblemsFailureKind.Placement);
             paths.AddRange(files.Select(path => new NamedFilePath(copy.FormKey, path.FieldPath, file, path.DataPath)));
+            scripts.AddRange(attached.Select(script => new NamedScript(copy.FormKey, script.FieldPath, file, script.Name)));
         }
-        return new(plugin.Key, paths, unread);
+        return new(plugin.Key, paths, scripts, unread);
     }
 
     // A copy that cannot be read is told as unread and leaves the copies beside it answered.
-    private static (IReadOnlyList<AssetPath> Files, IReadOnlyList<string> Unread) NamedBy(
+    private static (IReadOnlyList<AssetPath> Files, IReadOnlyList<ScriptAttachment> Scripts, IReadOnlyList<string> Unread) NamedBy(
         CopyHoldingText copy, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         var named = ReadFailures.Copy(copy.FormKey, plugin);
         try
         {
-            var found = AssetPaths.Collect(copy.Body, schemas[copy.RecordType].RecordColumns);
-            return (found.Files, [.. found.Refusals.Select(refused => $"{named}: {refused.FieldPath}: {refused.Reason}")]);
+            var columns = schemas[copy.RecordType].RecordColumns;
+            var found = AssetPaths.Collect(copy.Body, columns);
+            return (found.Files, ScriptAttachments.Collect(copy.Body, columns), [.. found.Refusals.Select(refused => $"{named}: {refused.FieldPath}: {refused.Reason}")]);
         }
         catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
         {
-            return ([], [$"{named}: {ex.Message}"]);
+            return ([], [], [$"{named}: {ex.Message}"]);
         }
     }
 
     private static PluginFilePaths Failed(RegisteredPlugin plugin, string failure, ProblemsFailureKind kind) =>
-        new(plugin.Key, [], [], failure, kind);
+        new(plugin.Key, [], [], [], failure, kind);
 }

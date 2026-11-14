@@ -19,7 +19,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { scriptLanguage, type ScriptClient } from '../scriptLanguage';
-import type { InstanceValue } from '../../instanceLoader/instance';
+import type { InstanceValue, PapyrusScript } from '../../instanceLoader/instance';
 import { sourceNames } from './fakeSourceNames';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
@@ -35,12 +35,13 @@ const SCRIPTS = [
   { name: 'Ns:Quest', source: QUEST_SOURCE, compiled: '/instance/mods/Mod/Scripts/Ns/Quest.pex' },
   { name: 'Other', compiled: '/instance/mods/Mod/Scripts/Other.pex' },
 ];
+const PACKED = { kind: 'archived', gameRelease: 'Fallout4', archive: '/game/Data/Misc.ba2', file: 'Scripts/Packed.pex' } as const;
 const NONE = { copies: [], unread: [] };
 type ScriptsValue = Pick<InstanceValue, 'dataFolderFiles'>;
 const LISTED: ScriptsValue['dataFolderFiles'] = { kind: 'listed', files: new Map() };
 const UNLISTED: ScriptsValue['dataFolderFiles'] = { kind: 'unresolved' };
 
-function language(references: Awaited<ReturnType<ScriptClient['getScriptReferences']>> = NONE, scripts: { name: string; source?: string; compiled?: string }[] = SCRIPTS, dataFolderFiles: ScriptsValue['dataFolderFiles'] = LISTED) {
+function language(references: Awaited<ReturnType<ScriptClient['getScriptReferences']>> = NONE, scripts: PapyrusScript[] = SCRIPTS, dataFolderFiles: ScriptsValue['dataFolderFiles'] = LISTED) {
   const client: ScriptClient = {
     getScriptReferences: () => Promise.resolve(references),
     getRecordOwner: () => Promise.resolve(undefined),
@@ -48,6 +49,7 @@ function language(references: Awaited<ReturnType<ScriptClient['getScriptReferenc
   };
   const names = sourceNames({
     scriptAt: (file: string, _text: string, offset: number) => Promise.resolve(file === SOURCE && offset === AT_SCRIPT ? { ...SPAN, name: 'Ns:Quest' } : undefined),
+    scriptsNamed: () => Promise.resolve([{ file: SOURCE, name: 'Gone' }, { file: SOURCE, name: 'Ns:Quest' }, { file: '/instance/source/Other/Npc.json', name: 'gone' }, { file: '/instance/source/Held/Npc.json', name: 'ns:quest' }]),
     scriptsIn: (file: string, text: string) => Promise.resolve(file === SOURCE && text === TEXT ? [{ ...SPAN, name: 'Ns:Quest' }, { start: 0, end: 1, name: 'Gone' }] : []),
     membersIn: (text: string, formKey: string, fieldPaths: readonly string[]) =>
       Promise.resolve(text === TEXT && formKey === QUEST && fieldPaths.includes(PATH) ? [SPAN] : []),
@@ -84,6 +86,11 @@ describe('a script a document names that no mod, Overwrite, Data folder file or 
 
   it('is not judged until the instance has listed the Data folder', async () => {
     expect(await language(NONE, SCRIPTS, UNLISTED).language.namesNothingIn(document())).toEqual([]);
+    expect(await language(NONE, SCRIPTS, UNLISTED).language.filesNamingNothing()).toEqual([]);
+  });
+
+  it('lists each file that holds one, once, whether or not it is open', async () => {
+    expect(await language().language.filesNamingNothing()).toEqual([SOURCE, '/instance/source/Other/Npc.json']);
   });
 });
 
@@ -93,7 +100,7 @@ describe('where a Papyrus script is defined, and the records that attach it', ()
   it.each([
     ['at its source', 'ns:quest', SCRIPTS, { file: QUEST_SOURCE }],
     ['at its compiled script when it has no source', 'Other', SCRIPTS, { file: '/instance/mods/Mod/Scripts/Other.pex' }],
-    ['nowhere to open when only an archive holds it, refusing', 'Packed', [{ name: 'Packed' }], { refused: 'Only an archive holds Packed, so no file opens.' }],
+    ['in its archive when only an archive holds it', 'Packed', [{ name: 'Packed', archived: PACKED }], { shown: PACKED }],
     ['nowhere when no mod holds it, refusing', 'Ns:Quest', [], { refused: 'No mod, Overwrite or the Data folder holds a source or a compiled script of Ns:Quest.' }],
   ])('defines a script %s', async (_case, name, scripts, expected) => {
     expect(await language(NONE, scripts).language.definitionOf({ kind: 'script', name })).toEqual(expected);

@@ -70,6 +70,29 @@ public sealed class PluginFilePathsTests : IDisposable
     }
 
     [Fact]
+    public void ACompiledPlugin_AnswersEachScriptItsSourceAttaches_OnTheFileThatHoldsTheRecord()
+    {
+        FormKey attaching = default;
+        using var fixture = new PluginFixtureBuilder("plugin-file-scripts")
+            .WithPlugin(Compiled.Name, mod =>
+            {
+                var npc = mod.Npcs.AddNew("Holder");
+                npc.VirtualMachineAdapter = new Mutagen.Bethesda.Fallout4.VirtualMachineAdapter();
+                npc.VirtualMachineAdapter.Scripts.Add(new Mutagen.Bethesda.Fallout4.ScriptEntry { Name = "Ns:Attached" });
+                attaching = npc.FormKey;
+            }, origin: Compiled.Origin)
+            .BuildScattered()
+            .CompiledPlugin();
+        using var index = Indexes.Reconciled(fixture);
+
+        var answered = Assert.Single(index.Queries.GetFilePaths(null).Value());
+
+        var script = Assert.Single(answered.Scripts);
+        Assert.Equal((attaching.ToString(), "VirtualMachineAdapter.Scripts[0].Name", "Ns:Attached"), (script.FormKey, script.FieldPath, script.Name));
+        Assert.Contains("Holder", script.SourceRelativePath, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void PlacingARecord_LocatesItOnce()
     {
         Build(compiled: true, Compiled);

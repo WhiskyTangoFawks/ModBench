@@ -1731,6 +1731,12 @@ export interface components {
             formKey?: string | null;
             editorId?: string | null;
         };
+        NamedScript: {
+            formKey: string;
+            fieldPath: string;
+            sourceRelativePath: string;
+            name: string;
+        };
         NotificationEvent: {
             kind: string;
             plugin: string;
@@ -1783,6 +1789,7 @@ export interface components {
         PluginFilePaths: {
             plugin: components["schemas"]["PluginAddress"];
             paths: components["schemas"]["NamedFilePath"][];
+            scripts: components["schemas"]["NamedScript"][];
             unread: string[];
             failure?: string | null;
             failureKind?: components["schemas"]["ProblemsFailureKind"] | null;

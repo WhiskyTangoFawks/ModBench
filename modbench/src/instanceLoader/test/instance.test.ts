@@ -1435,6 +1435,18 @@ describe('Instance — what each archive holds', () => {
       ]);
     });
 
+    it('holds the scripts the game folder\'s archives and a mod\'s archives hold, each at its archive\'s copy', async () => {
+      const { instance, medit } = loader(reading, (adapter) => ({ ...adapter, fileStamp: () => Promise.resolve({ kind: 'read', answer: { size: 1n, modifiedNs: 1n } }) }), fakeWorkspace(true));
+      medit.setQueryAnswer('getArchiveContents', [holding(GAME_ARCHIVE, 'Scripts/Quest.pex'), holding(MOD_ARCHIVE_LATER, 'Scripts/Actor.pex')]);
+
+      await instance.refresh();
+
+      expect(instance.value.papyrusScripts).toEqual([
+        { name: 'Actor', archived: { kind: 'archived', gameRelease: 'Fallout4', archive: MOD_ARCHIVE_LATER, file: 'Scripts/Actor.pex' } },
+        { name: 'Quest', archived: { kind: 'archived', gameRelease: 'Fallout4', archive: GAME_ARCHIVE, file: 'Scripts/Quest.pex' } },
+      ]);
+    });
+
     it('ranks each archive by where the game loads it, a mod\'s with the game folder\'s', async () => {
       const { value } = await read(true);
 

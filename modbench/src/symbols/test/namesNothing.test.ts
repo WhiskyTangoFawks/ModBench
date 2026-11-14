@@ -1,13 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
+import { Uri } from '../../test/vscodeMock';
 
-interface Doc { uri: { scheme: string; fsPath: string }; getText(): string; positionAt(offset: number): { line: number; character: number } }
+interface Doc { uri: { scheme: string; fsPath: string }; getText(): string }
 const world = vi.hoisted(() => ({
   documents: [] as unknown[],
   shown: new Map<string, unknown[]>(),
   onChange: undefined as undefined | ((event: { document: unknown }) => void),
 }));
 vi.mock('vscode', () => ({
-  Range: class { constructor(readonly start: unknown, readonly end: unknown) {} },
+  Uri,
+  Range: class { constructor(readonly startLine: number, readonly startCharacter: number, readonly endLine: number, readonly endCharacter: number) {} },
   DiagnosticSeverity: { Warning: 1 },
   Diagnostic: class { source?: string; constructor(readonly range: unknown, readonly message: string, readonly severity: number) {} },
   Disposable: { from: (...all: { dispose(): unknown }[]) => ({ dispose: () => { for (const each of all) each.dispose(); } }) },
@@ -32,28 +34,32 @@ import { fakeKind, fakeKinds } from './fakeKinds';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
 const FILE = '/instance/source/Mod/plugin-source/Mod.esp/Quest.json';
-const document = (text: string, scheme = 'file'): Doc => ({
-  uri: { scheme, fsPath: FILE }, getText: () => text, positionAt: (offset) => ({ line: 0, character: offset }),
-});
+const CLOSED = '/instance/source/Other/plugin-source/Other.esp/Npc.json';
+const document = (text: string, path = FILE, scheme = 'file'): Doc => ({ uri: { scheme, fsPath: path }, getText: () => text });
 
 const nothing = (start: number, name: string) => ({ start, end: start + name.length, name, why: `Nothing holds ${name}.` });
 const judging = <Symbol>(...names: ReturnType<typeof nothing>[]) => fakeKind<Symbol>({ namesNothingIn: () => Promise.resolve(names) });
+const settle = () => new Promise((resolve) => { setTimeout(resolve, 0); });
+
+function start(kinds: ReturnType<typeof fakeKinds>, files: Record<string, string> = {}) {
+  world.shown.clear();
+  const reporter = recordingReporter();
+  let changed = (): void => undefined;
+  registerNamesNothing({
+    kinds, reporter, readText: (path) => (path in files ? Promise.resolve(files[path] ?? '') : Promise.reject(new Error(`no ${path}`))),
+    onChanged: (listener) => { changed = listener; return { dispose: () => undefined }; },
+  });
+  return { reporter, changed: () => changed() };
+}
 
 describe('the problem a name that names nothing raises (symbols.md, The features, story 8)', () => {
-  const start = (kinds: ReturnType<typeof fakeKinds>, reporter = recordingReporter()) => {
-    let instanceChanged = (): void => undefined;
-    registerNamesNothing({ kinds, reporter, onInstanceChanged: (listener) => { instanceChanged = listener; return { dispose: () => undefined }; } });
-    return { reporter, instanceChanged: () => instanceChanged() };
-  };
-  const settle = () => new Promise((resolve) => { setTimeout(resolve, 0); });
-
   it('sits on the name\'s span, saying which name and why, once for each open file document', async () => {
-    world.documents = [document('x'), document('y', 'untitled')];
+    world.documents = [document('xxxxxxxx'), document('y', '/untitled', 'untitled')];
     start(fakeKinds({ script: judging(nothing(2, 'Gone')) }));
     await settle();
 
     expect([...world.shown.values()].flat()).toEqual([expect.objectContaining({
-      message: 'Gone names nothing. Nothing holds Gone.', range: { start: { line: 0, character: 2 }, end: { line: 0, character: 6 } },
+      message: 'Gone names nothing. Nothing holds Gone.', range: { startLine: 0, startCharacter: 2, endLine: 0, endCharacter: 6 },
     })]);
   });
 
@@ -68,23 +74,61 @@ describe('the problem a name that names nothing raises (symbols.md, The features
     ]);
   });
 
-  it('is judged again when the instance changes, and clears when the name resolves', async () => {
+  it('judges a file no document holds from its text, when a kind says the file holds one', async () => {
+    world.documents = [];
+    start(fakeKinds({ script: fakeKind<ScriptSymbol>({ filesNamingNothing: () => Promise.resolve([CLOSED]), namesNothingIn: ({ getText }) => Promise.resolve(getText() === 'closed text' ? [nothing(7, 'Gone')] : []) }) }), { [CLOSED]: 'closed text' });
+    await settle();
+
+    expect(world.shown.get(CLOSED)).toEqual([expect.objectContaining({ message: 'Gone names nothing. Nothing holds Gone.' })]);
+  });
+
+  it('judges an open file by the text it holds, not by the box\'s ask of the file', async () => {
+    world.documents = [document('unsaved text', CLOSED)];
+    start(fakeKinds({ script: fakeKind<ScriptSymbol>({ filesNamingNothing: () => Promise.resolve([CLOSED]), namesNothingIn: ({ getText }) => Promise.resolve(getText() === 'unsaved text' ? [] : [nothing(0, 'Gone')]) }) }), { [CLOSED]: 'saved text' });
+    await settle();
+
+    expect(world.shown.get(CLOSED)).toEqual([]);
+  });
+
+  it('asks each box once for all its files, however many files hold a name', async () => {
+    world.documents = [];
+    const asked = vi.fn(() => Promise.resolve([CLOSED, FILE]));
+    start(fakeKinds({ script: fakeKind<ScriptSymbol>({ filesNamingNothing: asked }) }), { [CLOSED]: '', [FILE]: '' });
+    await settle();
+
+    expect(asked).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears a file no box says holds one any more, once the instance changes', async () => {
+    world.documents = [];
+    let holding = [CLOSED];
+    const { changed } = start(fakeKinds({ script: fakeKind<ScriptSymbol>({ filesNamingNothing: () => Promise.resolve(holding), namesNothingIn: () => Promise.resolve([nothing(0, 'Gone')]) }) }), { [CLOSED]: 'text' });
+    await settle();
+    holding = [];
+    changed();
+    await settle();
+
+    expect(world.shown.has(CLOSED)).toBe(false);
+  });
+
+  it('judges an open document again as it changes', async () => {
     let held = [nothing(0, 'Gone')];
-    world.documents = [document('x')];
-    const { instanceChanged } = start(fakeKinds({ script: fakeKind<ScriptSymbol>({ namesNothingIn: () => Promise.resolve(held) }) }));
+    const doc = document('x');
+    world.documents = [doc];
+    start(fakeKinds({ script: fakeKind<ScriptSymbol>({ namesNothingIn: () => Promise.resolve(held) }) }));
     await settle();
     held = [];
-    instanceChanged();
+    world.onChange?.({ document: doc });
     await settle();
 
     expect(world.shown.get(FILE)).toEqual([]);
   });
 
-  it('keeps the last problems where a kind cannot answer, and says so once', async () => {
+  it('keeps the last problems where a box cannot answer, and says so once', async () => {
     world.documents = [document('x')];
-    const { reporter, instanceChanged } = start(fakeKinds({ script: fakeKind<ScriptSymbol>({ namesNothingIn: () => Promise.reject(new Error('mEdit is down')) }) }));
+    const { reporter, changed } = start(fakeKinds({ script: fakeKind<ScriptSymbol>({ namesNothingIn: () => Promise.reject(new Error('mEdit is down')) }) }));
     await settle();
-    instanceChanged();
+    changed();
     await settle();
 
     expect(reporter.shownFailures).toEqual([{ severity: 'warning', message: 'The Problems panel shows the last names that name nothing.', detail: 'mEdit is down' }]);
