@@ -44,7 +44,7 @@ function language({ owner = ownerThatCannotReadAFile, plugins = [{ ...BASE, path
   const kind = pluginLanguage({
     instance: { value: { plugins } },
     reporter,
-    client: { getCopyDocument: () => Promise.resolve(null), getRecordOwner: () => Promise.resolve(undefined) },
+    client: { getCopyDocument: () => Promise.resolve(null), getRecordOwners: () => Promise.resolve([]) },
     owners: [owner],
     names: sourceNames(),
     renamePlugin,

@@ -237,7 +237,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
   describe('when mEdit re-derives a plugin whole, a tab waiting for its new FormKey, since no report names its key', () => {
     it('reads it once the Index holds it, and refreshes as usual afterwards', async () => {
       const { client, panel, tab, tabs } = openOn('000800:Mod.esp');
-      client.setQueryAnswer('getRecordOwner', { name: 'Mod.esp', origin: 'ModA' });
+      client.setQueryAnswer('getRecordOwners', [{ name: 'Mod.esp', origin: 'ModA' }]);
       await tab.gate()(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
 
       client.emit(PLUGIN_CHANGED);
@@ -252,15 +252,15 @@ describe('a record tab going with the record to its new FormKey and reading it t
 
     it.each([
       ['while the Index does not hold it yet, since a read before would clear the grid for an error,',
-        (client: InMemoryMEditClient) => { client.setQueryAnswer('getRecordOwner', undefined); }],
-      ['when mEdit cannot say,', (client: InMemoryMEditClient) => { client.setQueryFailure('getRecordOwner', { failed: 'refused', refusal: 'backend down' }); }],
+        (client: InMemoryMEditClient) => { client.setQueryAnswer('getRecordOwners', []); }],
+      ['when mEdit cannot say,', (client: InMemoryMEditClient) => { client.setQueryFailure('getRecordOwners', { failed: 'refused', refusal: 'backend down' }); }],
     ])('keeps what it shows %s and reads it on the report', async (_, answerOwner) => {
       const { client, panel, tab } = openOn('000800:Mod.esp');
       answerOwner(client);
       await tab.gate()(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
 
       client.emit(PLUGIN_CHANGED);
-      await vi.waitFor(() => expect(client.calls.some(c => c.method === 'getRecordOwner')).toBe(true));
+      await vi.waitFor(() => expect(client.calls.some(c => c.method === 'getRecordOwners')).toBe(true));
       client.emit(rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
 
       expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000900:Mod.esp' }]);

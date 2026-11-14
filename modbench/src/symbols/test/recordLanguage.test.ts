@@ -29,7 +29,7 @@ const RECORD = { kind: 'record', formKey: GUN } as const;
 
 function kind({ open = (): Promise<{ getText(): string }> => Promise.resolve({ getText: () => GUN_TEXT }) } = {}) {
   const client = new InMemoryMEditClient();
-  client.setQueryAnswer('getRecordOwner', modA);
+  client.setQueryAnswer('getRecordOwners', [modA]);
   client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: GUN_FILE });
   const opened: unknown[] = [];
   const reporter = recordingReporter();
@@ -54,7 +54,7 @@ describe('where a record is defined (symbols.md, The symbols, Record)', () => {
 
   it.each([
     ['the record\'s document states no FormKey member for it', () => kind({ open: () => Promise.resolve({ getText: () => '{ "EditorID": "Gun" }' }) }), `${GUN_FILE} states no ${GUN} member.`],
-    ['no active plugin holds it', (k: ReturnType<typeof kind>) => { k.client.setQueryAnswer('getRecordOwner', undefined); return k; }, `No active plugin holds ${GUN}.`],
+    ['no active plugin holds it', (k: ReturnType<typeof kind>) => { k.client.setQueryAnswer('getRecordOwners', []); return k; }, `No active plugin holds ${GUN}.`],
     ['the winning plugin holds no copy', (k: ReturnType<typeof kind>) => { k.client.setQueryAnswer('getCopyDocument', null); return k; }, `A.esp (ModA) holds no ${GUN}.`],
     ['its document fails to open', () => kind({ open: () => Promise.reject(new Error('The file is gone.')) }), `Where ${GUN} is defined could not be read: The file is gone.`],
   ])('refuses, saying why, where %s', async (_case, arrange, refused) => {
@@ -172,7 +172,7 @@ describe('referenced by on a record anchors its list wherever a plugin holds it 
   });
 
   it('anchors at the top of a compiled plugin\'s copy where no active plugin holds the record', async () => {
-    const { record, reporter } = asking((k) => { k.client.setQueryAnswer('getRecordOwner', undefined); });
+    const { record, reporter } = asking((k) => { k.client.setQueryAnswer('getRecordOwners', []); });
 
     await record.referencedBy(RECORD);
 
@@ -180,7 +180,7 @@ describe('referenced by on a record anchors its list wherever a plugin holds it 
   });
 
   it('is refused, saying why, where the winning copy cannot be read, though a compiled plugin holds the record', async () => {
-    const { record, reporter } = asking((k) => { k.client.setQueryFailure('getRecordOwner', localFailure('mEdit is down')); });
+    const { record, reporter } = asking((k) => { k.client.setQueryFailure('getRecordOwners', localFailure('mEdit is down')); });
 
     await record.referencedBy(RECORD);
 
@@ -189,7 +189,7 @@ describe('referenced by on a record anchors its list wherever a plugin holds it 
 
   it('names Referenced By where it cannot search the compiled plugins', async () => {
     const { record, reporter } = asking((k) => {
-      k.client.setQueryAnswer('getRecordOwner', undefined);
+      k.client.setQueryAnswer('getRecordOwners', []);
       k.client.setQueryFailure('getPlugins', localFailure('mEdit is down'));
     });
 
@@ -200,7 +200,7 @@ describe('referenced by on a record anchors its list wherever a plugin holds it 
 
   it('is refused, saying why, where no plugin holds the record', async () => {
     const { record, reporter } = asking((k) => {
-      k.client.setQueryAnswer('getRecordOwner', undefined);
+      k.client.setQueryAnswer('getRecordOwners', []);
       k.client.setQueryAnswer('searchRecords', { items: [], total: 0 });
     });
 

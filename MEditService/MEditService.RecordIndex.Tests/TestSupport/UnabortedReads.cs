@@ -18,6 +18,9 @@ internal static class UnabortedReads
     internal static Task<Answer<RecordDetail?, IndexRefused>> GetRecord(this IQueries queries, string formKey) =>
         queries.GetRecord(formKey, Never);
 
+    internal static Task<Answer<IReadOnlyList<PluginAddress>, IndexRefused>> GetRecordOwners(this IQueries queries, string formKey) =>
+        queries.GetRecordOwners(formKey, Never);
+
     internal static Task<Answer<CompareResult?, IndexRefused>> GetCompare(this IQueries queries, string formKey, CopyText? text = null) =>
         queries.GetCompare(formKey, text, Never);
 

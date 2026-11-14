@@ -257,7 +257,7 @@ describe('a record gesture from the palette', () => {
   it('opens the records selected in a view the Editor is handed, while that view has the focus', async () => {
     const plugins = { selection: [{ argument: { kind: 'record', plugin: { name: 'A.esp', origin: 'ModA' }, formKey: '000803:A.esp' } }], onDidChangeSelection: (listener: (event: { selection: unknown[] }) => void) => { listener({ selection: [] }); return { dispose: () => undefined }; } };
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getRecordOwner', COPY_PLUGIN);
+    client.setQueryAnswer('getRecordOwners', [COPY_PLUGIN]);
     client.setQueryAnswer('getCopyDocument', { kind: 'Rendered', location: 'Placed.json' });
     const { focusedView } = makeEditor(client, ['modbench.pluginListTree']);
     focusedView.follow('modbench.pluginListTree', plugins);
@@ -1178,7 +1178,7 @@ describe('several records opened at once', () => {
       { argument: { kind: 'record', formKey: KNIFE, plugin: knifeIn } }]);
   function severalClient(): InMemoryMEditClient {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getRecordOwner', winner);
+    client.setQueryAnswer('getRecordOwners', [winner]);
     client.setQueryAnswer('getCopyDocument', { kind: 'Rendered', location: 'Gun.json' });
     client.setQueryAnswer('getPlugins', activeA);
     client.setQueryAnswer('getComparison', null);

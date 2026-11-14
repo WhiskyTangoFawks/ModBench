@@ -40,7 +40,7 @@ function symbols(plugins: PluginMetadata[], found: RecordSummary[], files: Recor
       const items = found.filter((row) => searched.some((each) => row.plugin === each.name && row.origin === each.origin));
       return Promise.resolve({ items: items.slice(0, atMost ?? 20), total: items.length });
     }),
-    getRecordOwner: () => Promise.reject(new Error('A symbol names its plugin.')),
+    getRecordOwners: () => Promise.reject(new Error('A symbol names its plugin.')),
     getCopyDocument: documentsAsked,
     ...answering,
   };

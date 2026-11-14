@@ -416,12 +416,6 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     expect(result).toEqual([{ name: 'Patch.esp', origin: 'PatchMod' }, { name: 'Patch.esp', origin: 'OtherMod' }]);
   });
 
-  it('getRecordOwner answers the plugin holding the record as a plugin address', async () => {
-    const { result } = await exchange((c) => c.getRecordOwner('000800:Patch.esp'), answers(200, { plugin: 'Patch.esp', origin: 'PatchMod' }));
-
-    expect(result).toEqual(patch);
-  });
-
   describe('a write mEdit refuses, or a request that never reaches it', () => {
     const detail = 'No load order has been received.';
     const writes: { name: string; verb: Verb; status: number; body: unknown; text: string; refusal: string }[] = [

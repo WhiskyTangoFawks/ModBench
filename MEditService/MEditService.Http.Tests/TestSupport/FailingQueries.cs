@@ -19,6 +19,7 @@ internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null)
         throw Failed();
 
     public Task<Answer<RecordDetail?, IndexRefused>> GetRecord(string formKey, CancellationToken cancel) => throw Failed();
+    public Task<Answer<IReadOnlyList<PluginAddress>, IndexRefused>> GetRecordOwners(string formKey, CancellationToken cancel) => throw Failed();
 
     public Task<Answer<CompareResult?, IndexRefused>> GetCompare(string formKey, CopyText? text, CancellationToken cancel) =>
         throw Failed();

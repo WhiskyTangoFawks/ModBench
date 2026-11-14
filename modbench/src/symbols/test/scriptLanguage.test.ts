@@ -48,7 +48,7 @@ const JUDGING: Standing = {
 function language(references: Awaited<ReturnType<ScriptClient['getScriptReferences']>> = NONE, scripts: PapyrusScript[] = SCRIPTS, standing: Partial<Standing> = {}, asking: Partial<Pick<SourceNames, 'scriptsNamed' | 'scriptsIn'>> = {}) {
   const client: ScriptClient = {
     getScriptReferences: () => Promise.resolve(references),
-    getRecordOwner: () => Promise.resolve(undefined),
+    getRecordOwners: () => Promise.resolve([]),
     getCopyDocument: (plugin) => Promise.resolve(plugin.origin === 'Gone' ? null : { kind: 'OwnFile' as const, location: SOURCE }),
   };
   const names = sourceNames({

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { commandHandlers, editorVscode, executeCommand, executed } from './editorVscode';
+import { commandHandlers, editorVscode, executeCommand, executed, showQuickPick } from './editorVscode';
 import { forgetEditor, pickRecord, register, reporter } from './editorHarness';
 
 vi.mock('../recordPicker', () => ({ pickRecord: (...args: unknown[]) => pickRecord(...args) }));
@@ -16,7 +16,7 @@ describe('modbench.record.open from the palette, with no Argument', () => {
   const rowOf = (formKey: string) => ({ argument: { kind: 'record', plugin: winner, formKey } });
   const renderingTheWinner = (): { meditClient: InMemoryMEditClient } => {
     const meditClient = new InMemoryMEditClient();
-    meditClient.setQueryAnswer('getRecordOwner', winner);
+    meditClient.setQueryAnswer('getRecordOwners', [winner]);
     meditClient.setQueryAnswer('getCopyDocument', { kind: 'Rendered', location: 'Gun.json' });
     return { meditClient };
   };
@@ -129,7 +129,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
   it('opens the winning copy\'s document for a record given without a plugin', async () => {
     const meditClient = new InMemoryMEditClient();
     const winner = { name: 'B.esp', origin: 'ModB' };
-    meditClient.setQueryAnswer('getRecordOwner', winner);
+    meditClient.setQueryAnswer('getRecordOwners', [winner]);
     meditClient.setQueryAnswer('getCopyDocument', { kind: 'Rendered', location: 'Gun.json' });
     register({ meditClient });
 
@@ -140,7 +140,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
 
   it('refuses a record given without a plugin that no active plugin holds, naming it, and opens nothing', async () => {
     const meditClient = new InMemoryMEditClient();
-    meditClient.setQueryAnswer('getRecordOwner', undefined);
+    meditClient.setQueryAnswer('getRecordOwners', []);
     register({ meditClient });
 
     await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN } });
@@ -151,7 +151,7 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
 
   it('refuses several records when no active plugin holds one given without a plugin, naming it, and opens nothing', async () => {
     const meditClient = new InMemoryMEditClient();
-    meditClient.setQueryAnswer('getRecordOwner', undefined);
+    meditClient.setQueryAnswer('getRecordOwners', []);
     meditClient.setQueryAnswer('getCopyDocument', { kind: 'Rendered', location: 'Gun.json' });
     register({ meditClient });
 
@@ -159,6 +159,36 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
 
     expect(reporter.report.mock.calls).toEqual([['error', `Failed to open "${GUN}".`, 'No active plugin holds 000802:A.esp.']]);
     expect(opened()).toEqual([]);
+  });
+
+  describe('a record given without a plugin that several compiled plugins hold, none of them active', () => {
+    const other = { name: 'B.esp', origin: 'ModB' };
+    const registerHeldByBoth = () => {
+      const meditClient = new InMemoryMEditClient();
+      meditClient.setQueryAnswer('getRecordOwners', [plugin, other]);
+      meditClient.setQueryAnswer('getCopyDocument', rendered('Gun.json'));
+      register({ meditClient });
+    };
+
+    it('asks which plugin\'s copy to open, and opens the one picked', async () => {
+      registerHeldByBoth();
+      showQuickPick.mockImplementation((items: readonly unknown[]) => Promise.resolve(items[1]));
+
+      await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN } });
+
+      expect(showQuickPick.mock.calls.map(([items]) => (items as { label: string; description: string }[]).map(({ label, description }) => [label, description])))
+        .toEqual([[['A.esp', 'ModA'], ['B.esp', 'ModB']]]);
+      expect(opened()).toEqual([['modbench-rendered:/ModB/B.esp/Gun.json?formKey=000801%3AA.esp&name=B.esp&origin=ModB', 'modbench.record']]);
+    });
+
+    it('opens nothing and says nothing when the pick is dismissed', async () => {
+      registerHeldByBoth();
+      showQuickPick.mockResolvedValue(undefined);
+
+      await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN } });
+
+      expect([opened(), reporter.report.mock.calls]).toEqual([[], []]);
+    });
   });
 
   it('refuses a copy the plugin does not hold, naming it, and opens nothing', async () => {
@@ -174,29 +204,14 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
 describe('modbench.record.openPinned, the menus\' entry point', () => {
   it('fires open with the menu selection, each record pinned', async () => {
     register();
-    const [a, b] = [{ argument: { kind: 'record', formKey: '000801:A.esp' } }, { argument: { kind: 'record', formKey: '000802:A.esp' } }];
+    const plugin = { name: 'A.esp', origin: 'ModA' };
+    const [a, b] = [{ argument: { kind: 'record', formKey: '000801:A.esp', plugin } }, { argument: { kind: 'record', formKey: '000802:A.esp', plugin } }];
 
     await commandHandlers.get('modbench.record.openPinned')?.(a, [a, b]);
 
     expect(executeCommand).toHaveBeenCalledWith('modbench.record.open', [
       { ...a, pinned: true }, { ...b, pinned: true },
     ]);
-  });
-});
-
-describe('modbench.record.open on records two of which cannot open', () => {
-  it('reports the first record\'s failure, not a later column\'s', async () => {
-    const meditClient = new InMemoryMEditClient();
-    meditClient.setQueryAnswer('getCopyDocument', null);
-    meditClient.setQueryAnswer('getRecordOwner', undefined);
-    register({ meditClient });
-
-    await commandHandlers.get('modbench.record.open')?.([
-      { argument: { kind: 'record', formKey: '000801:A.esp', plugin: { name: 'A.esp', origin: 'ModA' } } },
-      { argument: { kind: 'record', formKey: '000802:A.esp' } },
-    ]);
-
-    expect(reporter.report.mock.calls).toEqual([['error', 'Failed to open "000801:A.esp".', expect.stringContaining('000801:A.esp')]]);
   });
 });
 
@@ -242,12 +257,26 @@ describe('modbench.record.open for the agent', () => {
 
   it('opens a winning copy, resolved, when the record names no plugin', async () => {
     const meditClient = openingAs({ kind: 'Rendered', location: 'Gun.json' });
-    meditClient.setQueryAnswer('getRecordOwner', plugin);
+    meditClient.setQueryAnswer('getRecordOwners', [plugin]);
     register({ meditClient });
 
     const answer = await commandHandlers.get('modbench.record.open')?.(new AgentCall([{ kind: 'record', formKey: '000801:A.esp' }], {}));
 
     expect(answer).toMatchObject({ applied: true, outcome: { landed: [{ formKey: '000801:A.esp', plugin }] } });
+  });
+});
+
+describe('modbench.record.open for the agent, on a record given without a plugin that several compiled plugins hold', () => {
+  it('refuses, naming each holder, and asks nothing', async () => {
+    const meditClient = new InMemoryMEditClient();
+    meditClient.setQueryAnswer('getRecordOwners', [{ name: 'A.esp', origin: 'ModA' }, { name: 'B.esp', origin: 'ModB' }]);
+    register({ meditClient });
+
+    const answer = commandHandlers.get('modbench.record.open')?.(new AgentCall([{ kind: 'record', formKey: '000801:A.esp' }], {}));
+
+    await expect(Promise.resolve(answer)).rejects.toThrow(
+      'No active plugin holds 000801:A.esp, and several compiled plugins do: A.esp (ModA), B.esp (ModB). Give the plugin whose copy to open.');
+    expect([showQuickPick.mock.calls, executed()]).toEqual([[], []]);
   });
 });
 

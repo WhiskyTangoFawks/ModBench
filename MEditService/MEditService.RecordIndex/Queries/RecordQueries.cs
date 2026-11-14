@@ -113,6 +113,9 @@ internal sealed class RecordQueries(
             return document == null ? null : ToRecordDetail(document);
         }, cancel);
 
+    public Task<Answer<IReadOnlyList<PluginAddress>, IndexRefused>> GetRecordOwners(string formKey, CancellationToken cancel) =>
+        _answer.Of(() => _index.RequireWholeSetReads().GetOwners(formKey), cancel);
+
     public Task<Answer<CompareResult?, IndexRefused>> GetCompare(string formKey, CopyText? text, CancellationToken cancel) =>
         _answer.Of(() => CompareOf(formKey, text), cancel);
 

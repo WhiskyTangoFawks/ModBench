@@ -54,6 +54,21 @@ internal sealed class RelationReads(
         return OneDocument(context, Located(context, "records", "form_key = $1 AND plugin = $2 AND origin = $3", formKey, plugin.Name, plugin.Origin));
     }
 
+    /// <summary>The plugin of the winning copy of <paramref name="formKey"/>; with no active plugin holding it, each compiled
+    /// plugin that does.</summary>
+    public IReadOnlyList<PluginAddress> GetOwners(string formKey)
+    {
+        using var context = OpenRead();
+        return context.Rows($"""
+            WITH winner AS (SELECT plugin, origin FROM records WHERE form_key = $1 AND is_winner)
+            SELECT plugin, origin FROM winner
+            UNION ALL
+            SELECT r.plugin, r.origin FROM {Copies}
+            WHERE r.form_key = $1 AND {InPluginSource} AND NOT EXISTS (SELECT 1 FROM winner)
+            ORDER BY plugin, origin
+            """, reader => reader.GetPluginAddress(), formKey);
+    }
+
     private RecordDocument? OneDocument(ReadContext context, List<CopySize> located) =>
         located is [var copy]
             ? ReadDocumentFromBody(context, Stored(context, [located]).Single().Single(), LinkResolution.ForLinksOf(context, [copy.FormKey]))
