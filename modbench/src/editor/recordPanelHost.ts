@@ -27,7 +27,7 @@ interface RecordEditorProviderDeps {
   context: Pick<vscode.ExtensionContext, 'extensionUri'>;
   tabs: RecordTabs;
   routerDeps: SharedRecordPanelDeps;
-  client: Pick<MEditClient, 'getRecordOwner' | 'getCopyDocument' | 'getRecordOfFile'>;
+  client: Pick<MEditClient, 'getRecordOwners' | 'getCopyDocument' | 'getRecordOfFile'>;
   channel: Pick<vscode.LogOutputChannel, 'warn'>;
 }
 

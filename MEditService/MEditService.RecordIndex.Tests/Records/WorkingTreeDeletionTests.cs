@@ -73,7 +73,7 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         index.Delete(_base, committed);
 
         Assert.Null(index.CopyIn(_raceA, _baseKey));
-        Assert.Null(index.Queries.GetRecord(_raceA).Value());
+        Assert.Null(index.Queries.GetWinner(_raceA).Value());
 
         index.Create(_base, _raceA, "race", "RaceA", committedBody);
         Assert.Equal(WorkingTreeState.None, index.RowOf(_raceA, _baseKey)?.WorkingTreeState);
@@ -118,11 +118,11 @@ public sealed class WorkingTreeDeletionTests : IDisposable
     public void DeletingTheWinningOverride_PromotesTheNextPluginDown_AtEffective()
     {
         using var index = Indexes.Reconciled(_fixture);
-        Assert.Equal("Winner.esp", index.Queries.GetRecord(_npc).Value()?.Plugin);
+        Assert.Equal("Winner.esp", index.Queries.GetWinner(_npc).Value()?.Plugin);
 
         index.Delete(_winner, index.DocumentOf(_npc, _winnerKey));
 
-        var effectiveWinner = index.Queries.GetRecord(_npc).Value();
+        var effectiveWinner = index.Queries.GetWinner(_npc).Value();
         Assert.NotNull(effectiveWinner);
         Assert.Equal("Base.esm", effectiveWinner.Plugin);
         Assert.True(effectiveWinner.IsWinner);
@@ -136,13 +136,13 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         var winnersBody = index.BodyOf(_npc, _winnerKey);
 
         index.Delete(_winner, index.DocumentOf(_npc, _winnerKey));
-        Assert.Equal("Base.esm", index.Queries.GetRecord(_npc).Value()?.Plugin);
+        Assert.Equal("Base.esm", index.Queries.GetWinner(_npc).Value()?.Plugin);
 
         var edited = winnersBody.Replace("TestNpc", "RestoredByWorkingTree", StringComparison.Ordinal);
         Assert.NotEqual(winnersBody, edited);
         index.Create(_winner, _npc, "npc_", "TestNpc", edited);
 
-        var effectiveWinner = index.Queries.GetRecord(_npc).Value();
+        var effectiveWinner = index.Queries.GetWinner(_npc).Value();
         Assert.NotNull(effectiveWinner);
         Assert.Equal("Winner.esp", effectiveWinner.Plugin);
         Assert.True(effectiveWinner.IsWinner);

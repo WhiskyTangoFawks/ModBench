@@ -21,17 +21,17 @@ import type { Instance } from '../instanceLoader/instance';
 import type { SourceEditing } from '../textDocuments/sourceEditing';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
-import { pinnedArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen } from './recordOpenPlan';
+import { pinnedArgument, recordOpenPlan, type RecordToOpen } from './recordOpenPlan';
 import { recordTitle } from '../drivingLib/recordTitle';
 import { followCopiesIntoDocuments } from './copyFollowers';
 import { RenderedDocuments } from './renderedDocument';
 import { ChildRecordDocuments } from '../textDocuments/childRecordDocument';
 import { holdOneTextPerFile } from '../textDocuments/oneTextPerFile';
-import { copyDocument } from '../textDocuments/recordDocument';
+import { copyDocument, ownerOf, type OwnerRefused } from '../textDocuments/recordDocument';
 import type { RecordCopy } from '../wire/recordCopy';
+import type { PluginAddress } from '../wire/pluginAddress';
 import type { ModFacts } from './modsByOrigin';
 import type { LoadOrderComing } from './loadOrderComing';
-import { failureReason, isReadFailed } from '../wire/readFailed';
 
 export interface EditorCommandDeps {
   loadOrderComing: LoadOrderComing;
@@ -41,7 +41,7 @@ export interface EditorCommandDeps {
     | 'getEditChanges' | 'searchRecords'
     | 'getDeleteChanges' | 'getCopyChanges'
     | 'getPlugins' | 'getRecordHolders'
-    | 'getComparison' | 'getRecordsComparison' | 'onNotification' | 'loadOrderStatus' | 'onLoadOrderSettled' | 'getRecordOwner'
+    | 'getComparison' | 'getRecordsComparison' | 'onNotification' | 'loadOrderStatus' | 'onLoadOrderSettled' | 'getRecordOwners'
     | 'latestLoadOrder' | 'getCopyDocument' | 'getRecordOfFile' | 'getRenderedDocument'>;
   // The rows selected in the view the user last selected in, which a palette entry acts on.
   focusedViewSelection: () => readonly unknown[];
@@ -122,31 +122,43 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   ];
 }
 
-type OpenClient = Pick<MEditClient, 'getRecordOwner' | 'getCopyDocument'>;
+type OpenClient = Pick<MEditClient, 'getRecordOwners' | 'getCopyDocument'>;
+
+interface RecordsToOpen { copies: RecordCopy[]; pinned: boolean }
+
+const failedToOpen = (formKey: string | undefined): string => `Failed to open "${recordTitle(formKey ?? '', undefined)}".`;
 
 function recordOpenGesture(
   client: OpenClient & Pick<MEditClient, 'searchRecords'>, reporter: Reporter, grid: Pick<RecordEditorProvider, 'open'>,
   focusedViewSelection: () => readonly unknown[],
-): AgentGesture<KindedRow, RecordOpenPlan, OpenOutcome, { pinned?: boolean }> {
+): AgentGesture<KindedRow, RecordsToOpen, OpenOutcome, { pinned?: boolean }> {
   return {
     fromView: async (_entry, _option, argument) => {
-      const plan = recordOpenPlan(argument, focusedViewSelection());
-      if (plan.addresses.length > 0) return plan;
-      if (argument !== undefined) {
-        reporter.report('error', 'Could not open a record.', 'What was given names no record.');
+      let plan = recordOpenPlan(argument, focusedViewSelection());
+      if (plan.addresses.length === 0) {
+        if (argument !== undefined) {
+          reporter.report('error', 'Could not open a record.', 'What was given names no record.');
+          return undefined;
+        }
+        const formKey = await pickRecord({ meditClient: client, reporter }, '', []);
+        if (!formKey) return undefined;
+        plan = { addresses: [{ formKey }], pinned: false };
+      }
+      const copies = await copiesToOpen(client, plan.addresses, pickOwner);
+      if ('refused' in copies) {
+        reporter.report('error', failedToOpen(plan.addresses[0]?.formKey), copies.refused);
         return undefined;
       }
-      const formKey = await pickRecord({ meditClient: client, reporter }, '', []);
-      return formKey ? { addresses: [{ formKey }], pinned: false } : undefined;
+      return copies.length > 0 ? { copies, pinned: plan.pinned } : undefined;
     },
-    fromAgent: ({ argument, options }) => {
+    fromAgent: async ({ argument, options }) => {
       if (argument.length === 0) throw new Refusal('modbench.record.open takes at least one record.');
-      return {
-        addresses: argument.map((record) => argumentOfKind(record, 'record')).map(({ formKey, plugin }) => (plugin ? { formKey, plugin } : { formKey })),
-        pinned: options.pinned === true,
-      };
+      const addresses = argument.map((record) => argumentOfKind(record, 'record')).map(({ formKey, plugin }) => (plugin ? { formKey, plugin } : { formKey }));
+      const copies = await copiesToOpen(client, addresses, refuseSeveralOwners);
+      if ('refused' in copies) throw new Refusal(copies.refused);
+      return { copies, pinned: options.pinned === true };
     },
-    run: (plan) => openRecords(client, grid, plan),
+    run: (given) => openRecords(client, grid, given),
     report: (outcome) => {
       if (!outcome.applied) reporter.report('error', outcome.refusal, outcome.detail);
     },
@@ -158,25 +170,16 @@ type OpenOutcome = GestureResult<RecordCopy>;
 // Several records open one grid: the first record's document, with the others as its columns
 // (editor.md, Opening, story 4).
 async function openRecords(
-  client: OpenClient, grid: Pick<RecordEditorProvider, 'open'>, { addresses, pinned }: RecordOpenPlan,
+  client: OpenClient, grid: Pick<RecordEditorProvider, 'open'>, { copies, pinned }: RecordsToOpen,
 ): Promise<OpenOutcome> {
-  const failMessage = `Failed to open "${recordTitle(addresses[0]?.formKey ?? '', undefined)}".`;
-  const refused = (detail: string): OpenOutcome => ({ applied: false, refusal: failMessage, detail });
+  const refused = (detail: string): OpenOutcome => ({ applied: false, refusal: failedToOpen(copies[0]?.formKey), detail });
   try {
-    const [firstCopy, ...others] = addresses;
-    if (!firstCopy) return refused('Nothing was given to open.');
-    const head = await copyToOpen(client, firstCopy);
-    if ('refused' in head) return refused(head.refused);
+    const [head, ...columns] = copies;
+    if (!head) return refused('Nothing was given to open.');
     const tab = await copyDocument(client, head);
     if ('refused' in tab) return refused(tab.refused);
-    const columns: RecordCopy[] = [];
-    for (const other of others) {
-      const copy = await copyToOpen(client, other);
-      if ('refused' in copy) return refused(copy.refused);
-      columns.push(copy);
-    }
     await grid.open(tab.uri, columns, { viewColumn: vscode.ViewColumn.Active, preview: !pinned });
-    return { applied: true, outcome: { landed: [head, ...columns], refused: [] } };
+    return { applied: true, outcome: { landed: copies, refused: [] } };
   } catch (err) {
     return refused(errorMessage(err));
   }
@@ -184,9 +187,27 @@ async function openRecords(
 
 const noActivePluginHolds = (formKey: string) => ({ refused: `No active plugin holds ${formKey}.` });
 
-// A record given without a plugin is its winning copy.
-async function copyToOpen(client: OpenClient, { formKey, plugin }: RecordToOpen): Promise<RecordCopy | { refused: string }> {
-  const owner = plugin ?? await client.getRecordOwner(formKey);
-  if (isReadFailed(owner)) return { refused: failureReason(owner) };
-  return owner ? { formKey, plugin: owner } : noActivePluginHolds(formKey);
+// The owner picked of several, or undefined when the pick is dismissed.
+type ChooseOwner = (formKey: string, several: OwnerRefused) => Promise<PluginAddress | { refused: string } | undefined>;
+
+const pickOwner: ChooseOwner = async (formKey, { owners }) => (await vscode.window.showQuickPick(
+  owners.map((owner) => ({ label: owner.name, description: owner.origin, owner })),
+  { placeHolder: `Open ${formKey} from…` }))?.owner;
+
+const refuseSeveralOwners: ChooseOwner = (_, several) => Promise.resolve(several);
+
+// Of several owners, `choose` says which, as a gesture never guesses (commands.md, Principles). None, when a pick is dismissed.
+async function copiesToOpen(
+  client: OpenClient, addresses: readonly RecordToOpen[], choose: ChooseOwner,
+): Promise<RecordCopy[] | { refused: string }> {
+  const copies: RecordCopy[] = [];
+  for (const { formKey, plugin } of addresses) {
+    const owner = plugin ?? await ownerOf(client, formKey);
+    if (owner === undefined) return noActivePluginHolds(formKey);
+    const chosen = 'refused' in owner && owner.owners.length > 0 ? await choose(formKey, owner) : owner;
+    if (chosen === undefined) return [];
+    if ('refused' in chosen) return chosen;
+    copies.push({ formKey, plugin: chosen });
+  }
+  return copies;
 }

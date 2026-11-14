@@ -73,8 +73,8 @@ internal sealed class RecordQueries(
         source.WhySourceDoesNotRead(plugin) is { } failure ? UnreadableSources.Of(failure)
         : _index.WhyTreeStopped(plugin.Key) ?? UnreadableSources.Unknown;
 
-    // The header is not a browsable record type: it stays a schemas.Keys entry so GetRecord/
-    // GetCompare resolve it by FormKey, but both browse paths below exclude it.
+    // The header is not a browsable record type: it stays a schemas.Keys entry so GetCompare
+    // resolves it by FormKey, but both browse paths below exclude it.
     private static bool IsGroup(string recordType, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
         recordType != PluginHeader.RecordType && schemas.ContainsKey(recordType);
 
@@ -106,12 +106,8 @@ internal sealed class RecordQueries(
     private string? FormKeyOfFormId(string? search, RelationReads reads) =>
         search is null ? null : LoadIndex.FormKeyOf(search, _loadOrder.Require(), reads.OpenedPlugins)?.ToString();
 
-    public Task<Answer<RecordDetail?, IndexRefused>> GetRecord(string formKey, CancellationToken cancel) =>
-        _answer.Of(() =>
-        {
-            var document = _index.RequireWholeSetReads().GetDocument(formKey);
-            return document == null ? null : ToRecordDetail(document);
-        }, cancel);
+    public Task<Answer<IReadOnlyList<PluginAddress>, IndexRefused>> GetRecordOwners(string formKey, CancellationToken cancel) =>
+        _answer.Of(() => _index.RequireWholeSetReads().GetOwners(formKey), cancel);
 
     public Task<Answer<CompareResult?, IndexRefused>> GetCompare(string formKey, CopyText? text, CancellationToken cancel) =>
         _answer.Of(() => CompareOf(formKey, text), cancel);

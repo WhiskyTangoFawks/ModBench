@@ -6,7 +6,7 @@ import { holdsNoCopy, type RecordCopy } from '../wire/recordCopy';
 // What Text documents reads of mEdit's answers, by shape: a box never references a box of its own
 // band (layers.d2), and the mEdit client is a repository too.
 export interface RecordDocumentClient {
-  getRecordOwner(formKey: string): Promise<PluginAddress | undefined | ReadFailed>;
+  getRecordOwners(formKey: string): Promise<PluginAddress[] | ReadFailed>;
   getCopyDocument(plugin: PluginAddress, formKey: string): Promise<
     { kind: 'OwnFile' | 'ContainersFile' | 'Rendered'; location: string } | null | ReadFailed>;
 }
@@ -45,14 +45,31 @@ function renderedDocumentUri(copy: RecordCopy, fileName: string): vscode.Uri {
 const childRecordUri = (copy: RecordCopy, containerFile: string): vscode.Uri =>
   vscode.Uri.file(containerFile).with({ scheme: CHILD_RECORD_SCHEME, query: copyQuery(copy) });
 
-/** The document a record opens as (editor.md, Opening, stories 8 to 10); undefined when no active
- *  plugin holds it. */
+/** Why no one plugin's copy opens: several plugins own the record, none of them active, and a gesture that opens it asks
+ *  which; or mEdit could not say, and `owners` is empty. */
+export interface OwnerRefused { refused: string; owners: readonly PluginAddress[] }
+
+/** The plugin whose copy a record given without a plugin opens as (editor.md, Opening, story 8); undefined when no plugin
+ *  owns it. */
+export async function ownerOf(
+  client: Pick<RecordDocumentClient, 'getRecordOwners'>, formKey: string,
+): Promise<PluginAddress | OwnerRefused | undefined> {
+  const owners = await client.getRecordOwners(formKey);
+  if (isReadFailed(owners)) return { refused: failureReason(owners), owners: [] };
+  const [only, ...others] = owners;
+  if (others.length === 0) return only;
+  const named = owners.map(({ name, origin }) => `${name} (${origin})`).join(', ');
+  return { refused: `No active plugin holds ${formKey}, and several compiled plugins do: ${named}. Give the plugin whose copy to open.`, owners };
+}
+
+/** The document a record opens as (editor.md, Opening, stories 8 to 10); undefined when given without a plugin that no
+ *  plugin owns. */
 export async function recordDocument(
   client: RecordDocumentClient, { formKey, plugin: given }: Pick<RecordCopy, 'formKey'> & Partial<RecordCopy>,
 ): Promise<RecordDocument | undefined> {
-  const plugin = given ?? await client.getRecordOwner(formKey);
-  if (isReadFailed(plugin)) return { refused: failureReason(plugin) };
-  return plugin && copyDocument(client, { formKey, plugin });
+  const owner = given ?? await ownerOf(client, formKey);
+  if (owner === undefined || 'refused' in owner) return owner;
+  return copyDocument(client, { formKey, plugin: owner });
 }
 
 export async function copyDocument(client: RecordDocumentClient, { formKey, plugin }: RecordCopy): Promise<RecordDocument> {

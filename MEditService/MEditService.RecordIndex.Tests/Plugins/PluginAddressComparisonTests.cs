@@ -42,7 +42,7 @@ public sealed class PluginAddressComparisonTests : IDisposable
     [Fact]
     public void APointReadUnderAnotherCase_AnswersTheRecord()
     {
-        Assert.Equal("FromCased", _index.Queries.GetRecord(UnderAnotherCase("FromCased")).Value()?.EditorId);
+        Assert.Equal("FromCased", _index.Queries.GetWinner(UnderAnotherCase("FromCased")).Value()?.EditorId);
     }
 
     [Fact]

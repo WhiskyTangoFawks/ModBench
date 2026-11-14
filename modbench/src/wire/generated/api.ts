@@ -778,14 +778,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/records/{formKey}": {
+    "/records/{formKey}/owners": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["GetRecord"];
+        get: operations["GetRecordOwners"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1924,20 +1924,6 @@ export interface components {
             moves: components["schemas"]["SourceMove"][];
             deletions: string[];
             documents: components["schemas"]["DocumentChange"][];
-        };
-        RecordDetail: {
-            formKey: string;
-            plugin: string;
-            isWinner: boolean;
-            editorId?: string | null;
-            fields: components["schemas"]["FieldValue"][];
-            origin: string;
-            recordType: string;
-            isPartialForm: boolean;
-            parseDiagnosis?: string | null;
-            templated?: {
-                [key: string]: components["schemas"]["TemplatedBy"];
-            } | null;
         };
         RecordEditChangesRequest: {
             edit: components["schemas"]["RecordEditRequest"];
@@ -4293,7 +4279,7 @@ export interface operations {
             };
         };
     };
-    GetRecord: {
+    GetRecordOwners: {
         parameters: {
             query?: never;
             header?: never;
@@ -4310,16 +4296,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RecordDetail"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                    "application/json": components["schemas"]["PluginAddress"][];
                 };
             };
             /** @description Service Unavailable */

@@ -24,7 +24,7 @@ function references(rows: ReferenceResult[], copies: Record<string, CopyOnDisk>,
   const { getCopyDocument, textOnFile } = copyDocumentsOf(copies);
   const client: ReferencesClient = {
     getReferencesInActiveOrCompiledPlugins: () => Promise.resolve(rows),
-    getRecordOwner: () => Promise.reject(new Error('A referrer\'s copy names its plugin.')),
+    getRecordOwners: () => Promise.reject(new Error('A referrer\'s copy names its plugin.')),
     getCopyDocument,
     ...answering,
   };

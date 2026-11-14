@@ -4,7 +4,7 @@ import { isReadFailed } from '../wire/readFailed';
 
 // A plugin re-derived whole is announced with no keys: a tab waiting on a report reads once mEdit holds its record.
 export function subscribeRecordTabsToNotifications(
-  client: Pick<MEditClient, 'onNotification' | 'getRecordOwner'>,
+  client: Pick<MEditClient, 'onNotification' | 'getRecordOwners'>,
   tabs: Iterable<RecordTab>,
 ): () => void {
   const unsubscribeRows = client.onNotification('rows-changed', (event) => {
@@ -15,8 +15,8 @@ export function subscribeRecordTabsToNotifications(
       const formKey = tab.waitingFor();
       if (!formKey) continue;
       // A failed ask leaves the tab waiting, as a missing key does: the report still reads it.
-      client.getRecordOwner(formKey).then(
-        owner => { if (owner && !isReadFailed(owner)) tab.release(formKey); },
+      client.getRecordOwners(formKey).then(
+        owners => { if (!isReadFailed(owners) && owners.length > 0) tab.release(formKey); },
         () => undefined);
     }
   });

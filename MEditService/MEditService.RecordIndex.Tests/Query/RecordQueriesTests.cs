@@ -142,7 +142,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     [Fact]
     public void AReferenceIntoAnAbsentMaster_ReadsUnresolved_RatherThanErroring()
     {
-        var detail = PatchOfAGhostMaster().Queries.GetRecord("000800:Patch.esp").Value();
+        var detail = PatchOfAGhostMaster().Queries.GetWinner("000800:Patch.esp").Value();
 
         Assert.NotNull(detail);
         var raceField = Assert.Single(detail.Fields, f => f.Metadata.Name == "Race");
@@ -322,7 +322,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
                 mod.Npcs.Add(patched);
             }));
 
-        var detail = index.Queries.GetRecord("000800:Base.esm").Value();
+        var detail = index.Queries.GetWinner("000800:Base.esm").Value();
 
         Assert.NotNull(detail);
         Assert.Equal(("Patch.esp", "AsThePatchHasIt", true), (detail.Plugin, detail.EditorId, detail.IsWinner));
@@ -402,7 +402,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     [Fact]
     public void ARecord_CarriesItsRecordType_ForCopyAsNewRecordNeedsTheSchemaTableNameUpFront()
     {
-        Assert.Equal("npc_", _svc.GetRecord(Npc01).Value()?.RecordType);
+        Assert.Equal("npc_", _svc.GetWinner(Npc01).Value()?.RecordType);
     }
 
     [Fact]
