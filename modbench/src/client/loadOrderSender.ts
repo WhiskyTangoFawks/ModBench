@@ -32,7 +32,7 @@ const SIGNAL_WAIT_CAP_MS = 10_000;
 const BACKEND_FAILED: LoadOrderOutcome = { outcome: 'backendFailed' };
 
 interface OwedSignal {
-  readonly since: number;
+  since?: number;
   readonly paths: Set<string>;
   disk: boolean;
 }
@@ -99,6 +99,7 @@ function createSendSlot(wire: LoadOrderWire) {
   // and a stream of snapshots delays it by a bounded time.
   const pumpSignal = (): void => {
     if (owed === undefined || signalling) return;
+    owed.since ??= Date.now();
     const waited = Date.now() - owed.since;
     if ((waiting || unanswered) && waited < SIGNAL_WAIT_CAP_MS) {
       signalTimer ??= setTimeout(() => { signalTimer = undefined; pump(); }, SIGNAL_WAIT_CAP_MS - waited);
@@ -128,7 +129,7 @@ function createSendSlot(wire: LoadOrderWire) {
       return sent;
     },
     oweSignal(paths: readonly string[]): void {
-      owed ??= { since: Date.now(), paths: new Set(), disk: false };
+      owed ??= { paths: new Set(), disk: false };
       owed.disk ||= paths.length === 0;
       for (const path of paths) owed.paths.add(path);
       pump();
