@@ -11,13 +11,14 @@ import type { SourceNames } from './sourceNames';
 import { REFERENCED_BY, type Definition, type RecordNamed, type References, type SymbolKind } from './symbolKind';
 import { recordReferencedBy, type RecordReferencedByDeps } from './recordReferencedBy';
 import { workspaceSymbolsOf } from './workspaceSymbols';
+import { recordLabel } from '../wire/recordLabel';
 
 export type RecordClient = RecordDocumentClient & RecordReferencedByDeps['client']
   & Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlugins'>;
 
 interface RecordLanguageDeps {
   client: RecordClient;
-  names: Pick<SourceNames, 'recordAt' | 'recordsOfferedAt' | 'declarationIn' | 'referenceIn' | 'formKeyIn'>;
+  names: Pick<SourceNames, 'recordAt' | 'referenceTypedAt' | 'declarationIn' | 'referenceIn' | 'formKeyIn'>;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
   open: (uri: vscode.Uri) => PromiseLike<Pick<vscode.TextDocument, 'getText' | 'positionAt'>>;
 }
@@ -63,24 +64,33 @@ export function recordLanguage({ client, names, reporter, open }: RecordLanguage
     referencedBy,
     /** What symbols.md, The symbols, says a record's hover shows; none where no active plugin holds it. */
     tooltipOf: async ({ formKey }) => await hoverOf({ client, reporter }, formKey) ?? [],
-    /** The records a reference field offers for the text typed so far. */
-    async completionsAt(document, offset) {
-      const found = await names.recordsOfferedAt(document.uri.fsPath, heldText(document), offset);
-      return found && { ...found, icon: vscode.CompletionItemKind.Reference, isIncomplete: true };
+    /** The records of the types a reference field allows whose EditorID or FormKey holds the text typed so far, each
+     *  once, found as Go to Symbol in Workspace finds them; nothing before anything is typed. */
+    async completionsAt(document, offset, search) {
+      const found = await names.referenceTypedAt(document.uri.fsPath, heldText(document), offset);
+      if (found === undefined || found.typed === '') return undefined;
+      const { found: records, isIncomplete } = await workspace.recordsFor(found.typed, search, { types: found.types, eachRecordOnce: true });
+      return {
+        start: found.start, end: found.end, icon: vscode.CompletionItemKind.Reference, isIncomplete,
+        items: records.map(({ editorId, formKey }) => ({ label: editorId || formKey, detail: formKey, insertText: formKey })),
+      };
     },
     /** Each copy, in an active or a compiled plugin, of a record whose EditorID or FormKey holds `query`, at its plugin's
      *  file until the user picks it, and then at its document. */
     async symbolsFor(query, search) {
-      return (await workspace.symbolsFor(query, search)).map((record) => ({
-        symbol: { kind: 'record', formKey: record.formKey }, name: record.name, detail: `${record.plugin.name} (${record.plugin.origin})`, icon: vscode.SymbolKind.Object,
-        location: new vscode.Location(vscode.Uri.file(record.pluginFile), new vscode.Position(0, 0)),
-        // A resolve that answers nothing leaves VS Code opening the plugin's file, which is not the record.
-        resolve: async () => {
-          const found = await workspace.locate(record, search.gesture);
-          if (found === undefined) throw new Error(`${search.gesture} cannot open ${record.name}.`);
-          return locationOf(found);
-        },
-      }));
+      return (await workspace.symbolsFor(query, search)).map((record) => {
+        const name = recordLabel(record.editorId, record.formKey);
+        return {
+          symbol: { kind: 'record', formKey: record.formKey }, name, detail: `${record.plugin.name} (${record.plugin.origin})`, icon: vscode.SymbolKind.Object,
+          location: new vscode.Location(vscode.Uri.file(record.pluginFile), new vscode.Position(0, 0)),
+          // A resolve that answers nothing leaves VS Code opening the plugin's file, which is not the record.
+          resolve: async () => {
+            const found = await workspace.locate(record, search.gesture);
+            if (found === undefined) throw new Error(`${search.gesture} cannot open ${name}.`);
+            return locationOf(found);
+          },
+        };
+      });
     },
   };
 }

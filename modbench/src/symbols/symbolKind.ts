@@ -68,8 +68,9 @@ export interface SymbolKind<Symbol> {
   referencedBy(symbol: Symbol): Promise<void>;
   /** What its row's tooltip says, a line to each line; none where it has no row or no tooltip. */
   tooltipOf(symbol: Symbol): Promise<readonly string[]>;
-  /** What completion offers over the span where a file names a symbol of the kind. */
-  completionsAt(document: AskedIn, offset: number): Promise<(TextSpan & {
+  /** What completion offers over the span where a file names a symbol of the kind, asking nothing further once the
+   *  search is cancelled. */
+  completionsAt(document: AskedIn, offset: number, search: SymbolSearch): Promise<(TextSpan & {
     readonly icon: vscode.CompletionItemKind;
     readonly items: readonly { readonly label: string; readonly detail?: string; readonly insertText?: string }[];
     readonly isIncomplete?: boolean;

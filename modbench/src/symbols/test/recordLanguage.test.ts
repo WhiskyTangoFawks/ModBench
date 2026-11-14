@@ -17,7 +17,7 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { localFailure } from '../../wire/readFailed';
 import { sourceNames, spelledIn } from './fakeSourceNames';
-import { SEARCH } from './fakeKinds';
+import { COMPLETION, SEARCH } from './fakeKinds';
 import { present } from '../../ports/present';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 
@@ -106,6 +106,42 @@ describe('Go to Symbol in Workspace on a record (symbols.md, The features, story
     expect([listed?.location.uri.path, await listed?.resolve?.()]).toMatchObject([
       '/mods/ModA/A.esp', { uri: { path: GUN_FILE }, range: { start: { character: member } } },
     ]);
+  });
+});
+
+describe('completion at a reference field (symbols.md, The features, story 5)', () => {
+  const FIELD = '{ "Armor": "Gu" }';
+  const SPAN = { start: FIELD.indexOf('Gu'), end: FIELD.indexOf('Gu') + 2 };
+  const document = { uri: Uri.file(GUN_FILE), getText: () => FIELD };
+  const copy = (formKey: string, editorId: string | null, plugin = modA) => ({
+    formKey, plugin: plugin.name, origin: plugin.origin, editorId, loadOrderIndex: 0, isWinner: true, workingTreeState: 'None' as const,
+    hasContainerChildren: false, hasParseFailure: false,
+  });
+  const completing = (typed: string) => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ ...modA, path: '/mods/ModA/A.esp' }), pluginMetadataFixture({ name: 'B.esp', origin: 'ModB', path: '/mods/ModB/B.esp' })]);
+    client.setQueryAnswer('searchRecords', { items: [copy(GUN, 'Gun'), copy(GUN, 'Gun', { name: 'B.esp', origin: 'ModB' }), copy('000901:A.esp', null)], total: 30 });
+    const record = recordLanguage({
+      client, reporter: recordingReporter(), names: sourceNames({ referenceTypedAt: () => Promise.resolve({ ...SPAN, typed, types: ['ARMO', 'WEAP'] }) }),
+      open: () => Promise.reject(new Error('Completion opens nothing.')),
+    });
+    return { client, offered: record.completionsAt(document, SPAN.end, COMPLETION) };
+  };
+
+  it('offers each record Go to Symbol in Workspace finds once, by EditorID or FormKey, of the types the field allows, for the text typed so far', async () => {
+    const { client, offered } = completing('Gu');
+
+    expect(await offered).toEqual({
+      ...SPAN, icon: CompletionItemKind.Reference, isIncomplete: true,
+      items: [{ label: 'Gun', detail: GUN, insertText: GUN }, { label: '000901:A.esp', detail: '000901:A.esp', insertText: '000901:A.esp' }],
+    });
+    expect(client.calls.filter(({ method }) => method === 'searchRecords').map(({ args }) => args.slice(0, 2))).toEqual([['Gu', ['ARMO', 'WEAP']]]);
+  });
+
+  it('offers nothing before anything is typed, asking mEdit nothing', async () => {
+    const { client, offered } = completing('');
+
+    expect([await offered, client.calls]).toEqual([undefined, []]);
   });
 });
 

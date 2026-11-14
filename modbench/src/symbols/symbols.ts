@@ -79,7 +79,7 @@ interface Symbols extends vscode.Disposable {
 
 export function createSymbols(deps: SymbolsDeps): Symbols {
   const { instance, reporter, client, rows, reporterFor, fileCopies, focusedRecord } = deps;
-  const names = sourceNames({ client, names: deps.names, paths: client, sourceFiles: deps.sourceFiles, reporter });
+  const names = sourceNames({ names: deps.names, paths: client, sourceFiles: deps.sourceFiles, reporter });
   const plugin = pluginLanguage({
     instance, reporter, client, owners: deps.owners, names, renamePlugin: renamePluginNamed, rows: () => rows?.plugins,
     tooltip: (shown) => deps.pluginsShown?.tooltipLines(shown) ?? [],

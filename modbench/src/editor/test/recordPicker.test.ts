@@ -88,16 +88,32 @@ describe('pickRecord', () => {
     await dispatchPromise;
   });
 
-  it('leaves the quick pick untitled when the search is cut', async () => {
+  it('says nothing in the Output when every copy is listed', async () => {
+    const { deps, shownOnSurface } = fakeDeps(vi.fn().mockResolvedValue({ items: [makeRecord(1)], total: 1 }));
+    const { qp } = makeFakeQuickPick();
+    createQuickPick.mockReturnValue(qp);
+
+    const dispatchPromise = pickRecord(deps, 'Record', []);
+    await vi.waitFor(() => expect(qp.items).toHaveLength(1));
+
+    expect(shownOnSurface).not.toHaveBeenCalled();
+
+    qp.hide();
+    await dispatchPromise;
+  });
+
+  it('leaves the quick pick untitled when the search is cut, and says in the Output how many match (principles.md, Never silently wrong)', async () => {
     const shown = Array.from({ length: 20 }, (_, i) => makeRecord(i));
-    const { deps } = fakeDeps(vi.fn().mockResolvedValue({ items: shown, total: 1234 }));
+    const { deps, shownOnSurface } = fakeDeps(vi.fn().mockResolvedValue({ items: shown, total: 1234 }));
     const { qp } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
     const dispatchPromise = pickRecord(deps, 'Record', []);
     await vi.waitFor(() => expect(qp.items).toHaveLength(20));
 
-    expect(qp.title).toBeUndefined();
+    expect([qp.title, shownOnSurface.mock.calls]).toEqual([undefined, [[
+      'warning', 'The record picker lists 20 of the 1234 copies of records that match "Record".', 'Type more of the EditorID, FormID or FormKey to narrow the list.',
+    ]]]);
 
     qp.hide();
     await dispatchPromise;
