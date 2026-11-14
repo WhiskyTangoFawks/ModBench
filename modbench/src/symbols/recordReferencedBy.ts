@@ -10,7 +10,6 @@ import { referencesView, type ReferencesViewInput } from '../drivingLib/referenc
 
 const REFERENCED_BY_SOURCE = 'modbench.referencedBy';
 
-/** Where a record sits in its document: its FormKey, in its copy's document, or its winning copy's. */
 type LocateRecord = (record: RecordArgument) => Promise<vscode.Location | { refused: string } | undefined>;
 
 export interface RecordReferencedByDeps {

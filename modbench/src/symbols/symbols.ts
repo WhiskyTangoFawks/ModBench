@@ -64,7 +64,6 @@ interface Symbols extends vscode.Disposable {
   symbols: SymbolIndex;
 }
 
-/** A record's FormKey in its document, where Referenced By anchors its list. */
 function formKeyLocation(client: RecordDocumentClient) {
   return async (record: Parameters<typeof locateRecord>[1]): Promise<vscode.Location | { refused: string } | undefined> => {
     const found = await locateRecord({ client, open: openPluginSourceDocument }, record, formKeyValue);
