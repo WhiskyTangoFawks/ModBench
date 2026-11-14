@@ -2,7 +2,7 @@
 // with VS Code, and decides nothing: eslint.config.mjs holds that.
 
 import * as vscode from 'vscode';
-import { attachPortOf, createMEditClient, pluginSourceNames, recordIndexReferences, scriptSourceRename, stopMEditClient, type MEditClient } from './client';
+import { attachPortOf, createMEditClient, pluginSourceNames, recordIndexReferences, scriptSourceRename, stopMEditClient, type MEditClient, type PluginFilePaths, type PluginProblems } from './client';
 import { manifestFileReferences, manifestEntryNames } from './manifestAdapter/manifestAdapter';
 import type { EntryNames, SymbolOwner } from './symbolNames/symbolNames';
 import { makeReporter } from './drivingLib/reporter';
@@ -21,6 +21,7 @@ import type { FileCopies } from './symbols/fileLanguage';
 import type { Reveal } from './drivingLib/symbolRows';
 import { createSymbols, followRenames, referencedByCopyValue, registerFollowRename, type SymbolRows } from './symbols';
 import { createSourceLanguage } from './sourceLanguage';
+import { problemsAsker } from './drivingLib/problemsAsker';
 import { savedText } from './textDocuments/fileText';
 import { saveUnsavedUnder } from './textDocuments/saveUnsavedUnder';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
@@ -352,6 +353,7 @@ function buildViews(opened: Opened, { own, dispose }: ReturnType<typeof ownershi
 
 interface SymbolsDeps {
   meditClient: MEditClient;
+  asker: Parameters<typeof createSymbols>[0]['asker'];
   outputChannel: vscode.LogOutputChannel;
   reporterFor: (tag: string) => Reporter;
   opened: Opened;
@@ -359,10 +361,10 @@ interface SymbolsDeps {
   focusedRecord: Parameters<typeof createSymbols>[0]['focusedRecord'];
 }
 
-function symbolsOver({ meditClient, outputChannel, reporterFor, opened, views, focusedRecord }: SymbolsDeps) {
+function symbolsOver({ meditClient, asker, outputChannel, reporterFor, opened, views, focusedRecord }: SymbolsDeps) {
   const sourceNames = pluginSourceNames(meditClient, isPluginSourcePath);
   return createSymbols({
-    client: meditClient, names: sourceNames, instance: views.instance, reporter: makeReporter(outputChannel, 'symbols'), reporterFor, rows: views.symbolRows,
+    client: meditClient, asker, names: sourceNames, instance: views.instance, reporter: makeReporter(outputChannel, 'symbols'), reporterFor, rows: views.symbolRows,
     focusedRecord,
     sourceFiles: (origin) => views.sourceFiles(origin),
     savedText: (path) => savedText(vscode.Uri.file(path)),
@@ -436,11 +438,12 @@ function start(context: vscode.ExtensionContext): void {
   });
   const scriptEnvironmentFailures = toastOncePerFailure(reporterFor('scriptEnvironment'));
   const scriptsPath = vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath;
+  const asker = problemsAsker<PluginFilePaths, PluginProblems, NonNullable<MEditClient['loadOrderStatus']>>(meditClient);
   const sourceLanguage = createSourceLanguage({
-    client: meditClient, instance: views.instance, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
+    client: meditClient, ask: asker, instance: views.instance, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
     pathStanding: views.pathStanding,
   });
-  const symbols = symbolsOver({ meditClient, outputChannel, reporterFor, opened, views, focusedRecord: editor.focusedRecord });
+  const symbols = symbolsOver({ meditClient, asker, outputChannel, reporterFor, opened, views, focusedRecord: editor.focusedRecord });
   const agentServer = serveAgent({ port: agentPort(), instance: views.instance, copyReads: views.copyReads, symbols: symbols.symbols, statuses: views.statuses, deployment: views.deployment, pluginsShown: views.pluginsShown, standing: { mEdit: () => plugins.standing.mEdit(), plugins: () => plugins.standing.plugins(), sortingRules: () => plugins.standing.sortingRules(), modList: () => views.modsLines(), sourceLanguage: () => sourceLanguage.messages() }, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
   context.subscriptions.push(
     views,
