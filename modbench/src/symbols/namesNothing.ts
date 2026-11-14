@@ -52,6 +52,7 @@ function judgingOpenDocuments(judged: (file: string, text: () => string) => Prom
 
 /** A reference that names nothing is a problem on its place in its file, open or not (symbols.md, The features, story 8). */
 export function registerNamesNothing({ kinds, collection, reporter, savedText, onChanged }: NamesNothingDeps): vscode.Disposable {
+  const inTurn = bounded(REQUESTS_AT_ONCE);
   const told = new Set<string>();
   const latest = new Map<string, number>();
   let shown = new Set<string>();
@@ -99,12 +100,11 @@ export function registerNamesNothing({ kinds, collection, reporter, savedText, o
     wholeWanted = false;
     asking.clear();
     const held = vscode.workspace.textDocuments.filter(isFile);
-    const inTurn = bounded(REQUESTS_AT_ONCE);
     const files = await filesHolding(only);
     const closed = (files ?? []).filter((file) => !held.some((document) => document.uri.fsPath === file));
     const judging = new Set([...held.map((document) => document.uri.fsPath), ...closed]);
     await Promise.all([
-      ...held.map((document) => judged(document.uri.fsPath, () => heldText(document))),
+      ...held.map((document) => inTurn(() => judged(document.uri.fsPath, () => heldText(document)))),
       ...closed.map((file) => inTurn(() => judged(file, () => savedText(file)))),
     ]);
     if (files === undefined) {
@@ -117,7 +117,7 @@ export function registerNamesNothing({ kinds, collection, reporter, savedText, o
     shown = judging;
   });
 
-  const open = judgingOpenDocuments(judged);
+  const open = judgingOpenDocuments((file, text) => inTurn(() => judged(file, text)));
 
   judgeAll();
   return vscode.Disposable.from(

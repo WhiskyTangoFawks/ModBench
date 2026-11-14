@@ -106,6 +106,24 @@ describe('the problem a name that names nothing raises (symbols.md, The features
     expect(mostAtOnce).toBe(REQUESTS_AT_ONCE);
   });
 
+  it('judges no more open documents at once than its limit', async () => {
+    const files = Array.from({ length: REQUESTS_AT_ONCE * 3 }, (_, each) => `/open/${each}.json`);
+    world.documents = files.map((file) => document('text', file));
+    let inFlight = 0;
+    let mostAtOnce = 0;
+    const judgedFiles = vi.fn(async () => {
+      inFlight += 1;
+      mostAtOnce = Math.max(mostAtOnce, inFlight);
+      await settle();
+      inFlight -= 1;
+      return [];
+    });
+    start(script({ namesNothingIn: judgedFiles }));
+    await vi.waitFor(() => { expect(judgedFiles).toHaveBeenCalledTimes(files.length); });
+
+    expect(mostAtOnce).toBe(REQUESTS_AT_ONCE);
+  });
+
   it('asks each kind once for all its files, however many files hold a name', async () => {
     world.documents = [];
     const asked = vi.fn(() => Promise.resolve([CLOSED, FILE]));
