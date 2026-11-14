@@ -36,6 +36,9 @@ export function problemsAsker<Paths extends Answered, Problems, Status>(client: 
   let held = new Map<string, Promise<Paths[] | ReadFailed>>();
   const listeners: Record<Read, Set<(plugin?: PluginAddress) => void>> = { getPluginFilePaths: new Set(), getPluginProblems: new Set() };
   const pending = new Map<string, ReturnType<typeof setTimeout>>();
+  const allForgotten = { count: 0 };
+  const forgotten = new Map<string, number>();
+  const versionOf = (plugin?: PluginAddress) => `${allForgotten.count}:${forgotten.get(keyOf(plugin)) ?? 0}`;
   const retryId = (read: Read, plugin?: PluginAddress) => `${read}\n${keyOf(plugin)}`;
 
   const stopRetrying = (id: string) => {
@@ -46,7 +49,8 @@ export function problemsAsker<Paths extends Answered, Problems, Status>(client: 
   const forget = (plugin?: PluginAddress) => {
     const gone = plugin === undefined ? () => true : (id: string) => id.endsWith(`\n${WHOLE_SET}`) || id.endsWith(`\n${keyOf(plugin)}`);
     for (const id of [...pending.keys()].filter(gone)) stopRetrying(id);
-    if (plugin === undefined) { held = new Map(); return; }
+    if (plugin === undefined) { allForgotten.count += 1; held = new Map(); return; }
+    for (const key of [WHOLE_SET, keyOf(plugin)]) forgotten.set(key, (forgotten.get(key) ?? 0) + 1);
     held.delete(WHOLE_SET);
     held.delete(keyOf(plugin));
   };
@@ -61,7 +65,9 @@ export function problemsAsker<Paths extends Answered, Problems, Status>(client: 
   };
 
   const askedAgainIfFailed = <T>(read: Read, plugin: PluginAddress | undefined, asked: Promise<T[] | ReadFailed>) => {
-    asked.then((answer) => { if (isReadFailed(answer)) retryFailed(read, plugin); else stopRetrying(retryId(read, plugin)); }, () => { retryFailed(read, plugin); });
+    const version = versionOf(plugin);
+    const failed = () => { if (version === versionOf(plugin)) retryFailed(read, plugin); };
+    asked.then((answer) => { if (isReadFailed(answer)) failed(); else stopRetrying(retryId(read, plugin)); }, failed);
   };
 
   const filePathsOf = (plugin?: PluginAddress): Promise<Paths[] | ReadFailed> => {

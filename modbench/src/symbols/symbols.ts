@@ -24,6 +24,7 @@ import { registerGoTo } from './goTo';
 import { asked, REFERENCED_BY, type SymbolKinds } from './symbolKind';
 import type { RecordReferencedByDeps } from './recordReferencedBy';
 import { registerNamesNothing } from './namesNothing';
+import { heardChanges } from './heardChanges';
 import { publishReferencesView } from '../drivingLib/referencesView';
 
 const NO_FILES: FilesHeld = { filesByMod: new Map(), dataFolderFiles: { kind: 'listed', files: new Map() } };
@@ -94,11 +95,7 @@ export function createSymbols(deps: SymbolsDeps): Symbols {
     script: scriptLanguage({ instance, names, client, reporter }),
     record: recordLanguage({ client, names, reporter, open: openPluginSourceDocument }),
   };
-  const changed = (listener: (plugin?: PluginAddress) => void): vscode.Disposable => vscode.Disposable.from(
-    instance?.subscribe(() => { deps.asker.forget(); listener(); }) ?? { dispose: () => undefined },
-    { dispose: deps.asker.onLoadOrderSettled(() => { listener(); }) },
-    { dispose: deps.asker.onPluginChanged(({ plugin }) => { listener(plugin); }) },
-  );
+  const changed = (listener: (plugin?: PluginAddress) => void) => ({ dispose: heardChanges({ asker: deps.asker, instance }, listener) });
   const problems = vscode.languages.createDiagnosticCollection('modbench-names');
   const rename = renameSymbol({
     plugin, entry, names, client, plugins: () => instance?.value.plugins ?? [],

@@ -257,7 +257,7 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
       expect([atOnce, asked(client).at(-1), await settled(2)]).toEqual([2, [target], new Map()]);
     });
 
-    it('says the panel shows the last good read until the retry is answered, and no longer', async () => {
+    it('says the panel shows the last good read until the retry is answered, then says nothing', async () => {
       const { client, status } = await failedOnce();
       const whileWaiting = status.at(-1);
       client.setQueryAnswer('getPluginFilePaths', [answerFor()]);

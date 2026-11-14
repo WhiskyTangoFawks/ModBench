@@ -274,7 +274,7 @@ describe('problemsAsker', () => {
       expect(again).toEqual([]);
     });
 
-    it('is asked again until it is answered, and no longer', async () => {
+    it('is asked again until it is answered, then not at all', async () => {
       const { client, asker, again } = failing('getPluginFilePaths');
       client.answerNext('getPluginFilePaths', () => Promise.resolve(TIMED_OUT));
       asker.onAskedAgain('getPluginFilePaths', () => { void asker.getPluginFilePaths(); });
@@ -285,6 +285,24 @@ describe('problemsAsker', () => {
       await vi.advanceTimersByTimeAsync(RETRY_AFTER_MS * 3);
 
       expect([client.asked(), again]).toEqual([[undefined, undefined, undefined], [undefined, undefined]]);
+    });
+
+    it.each(['getPluginFilePaths', 'getPluginProblems'] as const)('is not asked again of a %s that failed after the change that asks again itself', async (method) => {
+      vi.useFakeTimers();
+      const client = fakeClient();
+      const [late] = client.gate(method, 1, TIMED_OUT);
+      const asker = problemsAsker(client, RETRY_AFTER_MS);
+      const again: unknown[] = [];
+      asker.onAskedAgain(method, (each) => { again.push(each); });
+      const before = asker[method](A);
+      await vi.advanceTimersByTimeAsync(0);
+      asker.forget(A);
+
+      late?.now();
+      await before;
+      await vi.advanceTimersByTimeAsync(RETRY_AFTER_MS * 2);
+
+      expect(again).toEqual([]);
     });
   });
 });
