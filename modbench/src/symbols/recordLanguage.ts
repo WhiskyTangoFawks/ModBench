@@ -29,7 +29,7 @@ const noActivePluginHolds = (formKey: string): string => `No active plugin holds
 /** A record as a symbol: its FormKey in plugin source, and every answer from the active and the compiled plugins mEdit
  *  reads (symbols.md, The symbols, Record). */
 export function recordLanguage({ client, names, reporter, open }: RecordLanguageDeps): SymbolKind<RecordNamed> {
-  const references = referencesToFormKey({ client, open });
+  const references = referencesToFormKey(client);
   const workspace = workspaceSymbolsOf({ client, reporter, open, declarationIn: names.declarationIn });
   /** Its FormKey member in the document it opens as. */
   const definitionOf = async ({ formKey }: RecordNamed): Promise<Definition> => {
@@ -60,8 +60,8 @@ export function recordLanguage({ client, names, reporter, open }: RecordLanguage
     definitionOf,
     async referencesTo({ formKey }): Promise<References> {
       try {
-        const { found, leftOut } = await references(formKey);
-        return { locations: found.map(locationOf), unread: leftOut };
+        const { locations, leftOut } = await references(formKey);
+        return { locations, unread: leftOut };
       } catch (error) {
         return { refused: `mEdit cannot list what references ${formKey}: ${errorMessage(error)}` };
       }

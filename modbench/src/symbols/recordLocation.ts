@@ -28,10 +28,7 @@ export async function locateRecord<Document extends { getText(): string }>(
   return span ? { uri: opened.uri, document, ...span } : { refused: `${opened.uri.path} states no ${record.formKey} member.` };
 }
 
-export interface LocatedCopies<T> { found: T[]; leftOut: string[] }
-
-export const copyUnread = ({ formKey, plugin }: RecordCopy, error: unknown): string =>
-  `${formKey} in ${plugin.name} (${plugin.origin}): ${errorMessage(error)}`;
+interface LocatedCopies<T> { found: T[]; leftOut: string[] }
 
 /** `located` for each copy at its document; a copy refused or failing is left out, saying why. */
 export async function locateCopies<Copy extends RecordCopy, T>(
@@ -42,7 +39,7 @@ export async function locateCopies<Copy extends RecordCopy, T>(
       const opened = await copyDocument(client, copy);
       return 'refused' in opened ? { why: opened.refused } : { found: await located(copy, opened.uri) };
     } catch (error) {
-      return { why: copyUnread(copy, error) };
+      return { why: `${copy.formKey} in ${copy.plugin.name} (${copy.plugin.origin}): ${errorMessage(error)}` };
     }
   }));
   return {

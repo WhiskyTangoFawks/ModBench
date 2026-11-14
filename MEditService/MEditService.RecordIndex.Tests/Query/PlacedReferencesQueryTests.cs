@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
@@ -54,8 +55,16 @@ public sealed class PlacedReferencesQueryTests : IDisposable
     private static PlacedCopy CopyOf(PlacedReferences placed, string formKey) =>
         Assert.Single(placed.Copies, copy => copy.FormKey == formKey);
 
-    private void AssertEachSpanIsTheTarget(string text, PlacedCopy copy) =>
-        Assert.All(copy.Spans, span => Assert.Equal($"\"{_target}\"", text[span.Start..span.End]));
+    private static readonly Regex VSCodeLineEnd = new("\r\n|\r|\n");
+
+    private static string TextAt(string text, SourceRange range)
+    {
+        Assert.Equal(range.Start.Line, range.End.Line);
+        return VSCodeLineEnd.Split(text)[range.Start.Line][range.Start.Character..range.End.Character];
+    }
+
+    private void AssertEachRangeIsTheTarget(string text, PlacedCopy copy) =>
+        Assert.All(copy.Ranges, range => Assert.Equal($"\"{_target}\"", TextAt(text, range)));
 
     [Fact]
     public void ACopyInPluginSource_IsPlacedAtEachPlaceItsFileNamesTheRecord()
@@ -65,8 +74,8 @@ public sealed class PlacedReferencesQueryTests : IDisposable
         var placed = CopyOf(index.Queries.GetPlacedReferences(_target).Value(), _npc);
 
         Assert.Equal(index.Queries.GetCopyDocument(Compiled, _npc).Value(), placed.Document);
-        Assert.Equal(2, placed.Spans.Count);
-        AssertEachSpanIsTheTarget(File.ReadAllText(placed.Document.Location), placed);
+        Assert.Equal(2, placed.Ranges.Count);
+        AssertEachRangeIsTheTarget(File.ReadAllText(placed.Document.Location), placed);
     }
 
     [Fact]
@@ -77,8 +86,8 @@ public sealed class PlacedReferencesQueryTests : IDisposable
         var placed = CopyOf(index.Queries.GetPlacedReferences(_target).Value(), _topic);
 
         Assert.Equal(new CopyDocument(CopyDocumentKind.ContainersFile, index.Queries.GetCopyDocument(Compiled, _topic).Value().Require().Location), placed.Document);
-        Assert.Single(placed.Spans);
-        AssertEachSpanIsTheTarget(File.ReadAllText(placed.Document.Location), placed);
+        Assert.Single(placed.Ranges);
+        AssertEachRangeIsTheTarget(File.ReadAllText(placed.Document.Location), placed);
     }
 
     [Fact]
@@ -89,8 +98,8 @@ public sealed class PlacedReferencesQueryTests : IDisposable
         var placed = CopyOf(index.Queries.GetPlacedReferences(_target).Value(), _renderedNpc);
 
         Assert.Equal(index.Queries.GetCopyDocument(Rendered, _renderedNpc).Value(), placed.Document);
-        Assert.Single(placed.Spans);
-        AssertEachSpanIsTheTarget(index.Queries.GetRenderedDocument(Rendered, _renderedNpc).Value().Require().Text, placed);
+        Assert.Single(placed.Ranges);
+        AssertEachRangeIsTheTarget(index.Queries.GetRenderedDocument(Rendered, _renderedNpc).Value().Require().Text, placed);
     }
 
     [Fact]
@@ -113,14 +122,30 @@ public sealed class PlacedReferencesQueryTests : IDisposable
     {
         using var index = Indexes.Reconciled(_fixture);
         var file = index.Queries.GetCopyDocument(Compiled, _npc).Value().Require().Location;
-        var saved = File.ReadAllText(file);
-        var unsaved = "\n\n" + saved;
+        var onDisk = CopyOf(index.Queries.GetPlacedReferences(_target).Value(), _npc).Ranges.Select(range => range.Start.Line);
+        var unsaved = "\n\n" + File.ReadAllText(file);
         index.Unsaved.Apply([new DocumentChange(file, unsaved)]);
 
         var placed = CopyOf(index.Queries.GetPlacedReferences(_target).Value(), _npc);
 
-        AssertEachSpanIsTheTarget(unsaved, placed);
-        Assert.All(placed.Spans, span => Assert.NotEqual($"\"{_target}\"", saved[span.Start..span.End]));
+        AssertEachRangeIsTheTarget(unsaved, placed);
+        Assert.Equal(onDisk.Select(line => line + 2), placed.Ranges.Select(range => range.Start.Line));
+    }
+
+    [Theory]
+    [InlineData("\r\n")]
+    [InlineData("\r")]
+    public void ACopyInPluginSource_IsPlacedOnTheLinesVSCodeShows_WhateverEndsThem(string lineEnd)
+    {
+        using var index = Indexes.Reconciled(_fixture);
+        var file = index.Queries.GetCopyDocument(Compiled, _npc).Value().Require().Location;
+        var text = VSCodeLineEnd.Replace(File.ReadAllText(file), lineEnd);
+        index.Unsaved.Apply([new DocumentChange(file, text)]);
+
+        var placed = CopyOf(index.Queries.GetPlacedReferences(_target).Value(), _npc);
+
+        Assert.Equal(2, placed.Ranges.Count);
+        AssertEachRangeIsTheTarget(text, placed);
     }
 
     [Fact]
@@ -159,8 +184,7 @@ public sealed class PlacedReferencesQueryTests : IDisposable
         var placed = CopyOf(index.Queries.GetPlacedReferences(_target).Value(), _renderedNpc);
 
         var text = index.Queries.GetRenderedDocument(Rendered, _renderedNpc).Value().Require().Text;
-        var span = Assert.Single(placed.Spans);
-        Assert.Equal($"\"{_renderedNpc}\"", text[span.Start..span.End]);
+        Assert.Equal($"\"{_renderedNpc}\"", TextAt(text, Assert.Single(placed.Ranges)));
     }
 
     [Fact]

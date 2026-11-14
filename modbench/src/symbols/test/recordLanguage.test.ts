@@ -63,6 +63,21 @@ describe('where a record is defined (symbols.md, The symbols, Record)', () => {
 });
 
 describe('what references a record, and its hover (symbols.md, The symbols, Record)', () => {
+  it('lists its references over plugin source and rendered copies, asking mEdit once and opening no document', async () => {
+    const { client, opened, record } = kind();
+    const range = { start: { line: 1, character: 2 }, end: { line: 1, character: 18 } };
+    client.setQueryAnswer('getPlacedReferences', { leftOut: [], copies: [
+      { formKey: '000700:A.esp', plugin: modA, document: { kind: 'OwnFile', location: GUN_FILE }, ranges: [range] },
+      { formKey: '000700:A.esp', plugin: { name: 'B.esp', origin: 'ModB' }, document: { kind: 'Rendered', location: 'Stand.json' }, ranges: [range] },
+    ] });
+
+    const found = await record.referencesTo(RECORD);
+
+    expect([found, client.calls.map(({ method }) => method), opened]).toMatchObject([
+      { locations: [{ uri: { scheme: 'file' } }, { uri: { scheme: 'modbench-rendered' } }], unread: [] }, ['getPlacedReferences'], [],
+    ]);
+  });
+
   it('refuses, rather than list nothing, while mEdit cannot answer over every plugin', async () => {
     const { client, record } = kind();
     client.setQueryFailure('getPlacedReferences', { failed: 'refused', refusal: 'The record index is still reading.' });

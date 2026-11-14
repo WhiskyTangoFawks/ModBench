@@ -42,7 +42,7 @@ internal static class ReferencePlacement
     {
         private readonly List<PlacedCopy> _placed = [];
         private readonly List<string> _leftOut = [];
-        private readonly Dictionary<string, IReadOnlyList<DocumentName>> _files = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, Named> _files = new(StringComparer.Ordinal);
 
         public PlacedReferences Placed => new(_placed, _leftOut);
 
@@ -54,21 +54,21 @@ internal static class ReferencePlacement
                 LeaveOut(copy, "its plugin source holds no file for it.");
                 return;
             }
-            if (!_files.TryGetValue(file.Path, out var names))
+            if (!_files.TryGetValue(file.Path, out var named))
             {
                 try
                 {
-                    names = NamesIn(textAt(file.Path));
+                    named = Named.In(textAt(file.Path));
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
                     LeaveOut(copy, $"{file.Path} could not be read: {ex.Message}");
                     return;
                 }
-                _files[file.Path] = names;
+                _files[file.Path] = named;
             }
-            var spans = Naming(names, copy);
-            if (spans.Count > 0) _placed.Add(new PlacedCopy(copy.FormKey, copy.Plugin, RecordQueries.CopyDocumentAt(file), spans));
+            var ranges = named.RangesOf(Naming(named.Names, copy));
+            if (ranges.Count > 0) _placed.Add(new PlacedCopy(copy.FormKey, copy.Plugin, RecordQueries.CopyDocumentAt(file), ranges));
             else LeaveOut(copy, $"its text in {file.Path} names {target} nowhere.");
         }
 
@@ -76,10 +76,11 @@ internal static class ReferencePlacement
         public void Rendered(RecordAt copy, Answer<string, SourceFailure> fileName, string text)
         {
             if (!Answered(copy, fileName, out var name)) return;
-            var names = NamesIn(text);
-            var spans = Naming(names, copy);
-            if (spans.Count == 0 && Own(names, copy).Find(found => found.FieldPath == RecordMembers.FormKey) is { } declared) spans.Add(SpanOf(declared));
-            if (spans.Count > 0) _placed.Add(new PlacedCopy(copy.FormKey, copy.Plugin, new CopyDocument(CopyDocumentKind.Rendered, name), spans));
+            var named = Named.In(text);
+            var naming = Naming(named.Names, copy);
+            if (naming.Count == 0 && Own(named.Names, copy).Find(found => found.FieldPath == RecordMembers.FormKey) is { } declared) naming.Add(declared);
+            var ranges = named.RangesOf(naming);
+            if (ranges.Count > 0) _placed.Add(new PlacedCopy(copy.FormKey, copy.Plugin, new CopyDocument(CopyDocumentKind.Rendered, name), ranges));
             else LeaveOut(copy, $"its rendered document {name} states no {copy.FormKey}.");
         }
 
@@ -92,16 +93,19 @@ internal static class ReferencePlacement
             return false;
         }
 
-        private List<TextSpan> Naming(IReadOnlyList<DocumentName> names, RecordAt copy) =>
-            [.. Own(names, copy).Where(name => name.FieldPath != RecordMembers.FormKey && SameFormKey(name.Value, target)).Select(SpanOf)];
+        private List<DocumentName> Naming(IReadOnlyList<DocumentName> names, RecordAt copy) =>
+            [.. Own(names, copy).Where(name => name.FieldPath != RecordMembers.FormKey && SameFormKey(name.Value, target))];
 
         private static List<DocumentName> Own(IReadOnlyList<DocumentName> names, RecordAt copy) =>
             [.. names.Where(name => name.Kind == DocumentNameKind.Record && SameFormKey(name.Record, copy.FormKey))];
 
-        private static IReadOnlyList<DocumentName> NamesIn(string text) => DocumentNames.In(DocumentSpans.Read(text), _ => null, null);
-
         private static bool SameFormKey(string? name, string formKey) => string.Equals(name, formKey, StringComparison.OrdinalIgnoreCase);
+    }
 
-        private static TextSpan SpanOf(DocumentName name) => new(name.Start, name.End);
+    private sealed record Named(IReadOnlyList<DocumentName> Names, TextLines Lines)
+    {
+        public static Named In(string text) => new(DocumentNames.In(DocumentSpans.Read(text), _ => null, null), new TextLines(text));
+
+        public List<SourceRange> RangesOf(IEnumerable<DocumentName> names) => [.. names.Select(name => Lines.RangeOf(name.Start, name.End))];
     }
 }

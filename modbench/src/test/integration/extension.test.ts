@@ -496,16 +496,18 @@ function createMockBackend(): http.Server {
     const placed = /^\/records\/([^/?]+)\/placed-references$/.exec(url)?.[1];
     if (placed !== undefined) {
       const quoted = `"${HELD_FORM_KEY}"`;
-      const at = (start: number) => [{ start, end: start + quoted.length }];
+      const onFirstLine = (character: number) => [{ start: { line: 0, character }, end: { line: 0, character: character + quoted.length } }];
       const compiledPlugin = readFileSync(COMPILED_PLUGIN_FILE, 'utf8');
       const compiled = { name: COMPILED_PLUGIN, origin: COMPILED_PLUGIN_ORIGIN };
       const fallout4 = { name: 'Fallout4.esm', origin: 'Data/' };
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(decodeURIComponent(placed) === HELD_FORM_KEY ? { leftOut: [], copies: [
-        { formKey: COMPILED_PLUGIN_FORM_KEY, plugin: compiled, document: { kind: 'OwnFile', location: COMPILED_PLUGIN_FILE }, spans: at(compiledPlugin.indexOf(quoted)) },
-        { formKey: CHILD_FORM_KEY, plugin: compiled, document: { kind: 'ContainersFile', location: COMPILED_PLUGIN_FILE }, spans: at(compiledPlugin.lastIndexOf(quoted)) },
+        { formKey: COMPILED_PLUGIN_FORM_KEY, plugin: compiled, document: { kind: 'OwnFile', location: COMPILED_PLUGIN_FILE },
+          ranges: onFirstLine(compiledPlugin.indexOf(quoted)) },
+        { formKey: CHILD_FORM_KEY, plugin: compiled, document: { kind: 'ContainersFile', location: COMPILED_PLUGIN_FILE },
+          ranges: onFirstLine(compiledPlugin.lastIndexOf(quoted)) },
         { formKey: RENDERED_REFERRER_FORM_KEY, plugin: fallout4, document: { kind: 'Rendered', location: renderedName(RENDERED_REFERRER_FORM_KEY) },
-          spans: at(renderedText(RENDERED_REFERRER_FORM_KEY).indexOf(quoted)) },
+          ranges: onFirstLine(renderedText(RENDERED_REFERRER_FORM_KEY).indexOf(quoted)) },
       ] } : { leftOut: [], copies: [] }));
       return;
     }

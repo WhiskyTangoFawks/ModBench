@@ -166,12 +166,9 @@ public enum CopyDocumentKind { OwnFile, ContainersFile, Rendered }
 /// file of the record carrying it, or the name of its rendered document, as <paramref name="Kind"/> says.</summary>
 public record CopyDocument(CopyDocumentKind Kind, string Location);
 
-/// <summary>A span of a document's text, by its own character offsets.</summary>
-public sealed record TextSpan(int Start, int End);
-
-/// <summary>A copy that references a record, at its document: each span that names the record, with its quotes; where a
+/// <summary>A copy that references a record, at its document: each range that names the record, with its quotes; where a
 /// rendered document names it nowhere, the copy's own FormKey's.</summary>
-public sealed record PlacedCopy(string FormKey, PluginAddress Plugin, CopyDocument Document, IReadOnlyList<TextSpan> Spans);
+public sealed record PlacedCopy(string FormKey, PluginAddress Plugin, CopyDocument Document, IReadOnlyList<SourceRange> Ranges);
 
 /// <summary>The copies that reference a record, placed, and why each copy that could not be placed was left out.</summary>
 public sealed record PlacedReferences(IReadOnlyList<PlacedCopy> Copies, IReadOnlyList<string> LeftOut);
