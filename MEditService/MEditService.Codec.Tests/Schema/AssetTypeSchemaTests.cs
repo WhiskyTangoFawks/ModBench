@@ -3,7 +3,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Codec.Tests.Schema;
 
-public class AssetFolderSchemaTests
+public class AssetTypeSchemaTests
 {
     [Theory]
     [InlineData(GameRelease.Fallout4, "txst", "Diffuse", "Textures", new[] { ".dds" })]
@@ -13,18 +13,16 @@ public class AssetFolderSchemaTests
     [InlineData(GameRelease.Starfield, "stat", "Model.File", "Meshes", new[] { ".nif" })]
     public void APathField_NamesItsAssetTypesFolderAndExtensions(GameRelease game, string table, string path, string folder, string[] extensions)
     {
-        var field = SchemaFields.At(game, table, path);
+        var assetType = SchemaFields.At(game, table, path).AssetType;
 
-        Assert.Equal(folder, field.AssetFolder);
-        Assert.Equal(extensions, field.AssetExtensions);
+        Assert.NotNull(assetType);
+        Assert.Equal(folder, assetType.Folder);
+        Assert.Equal(extensions, assetType.Extensions);
     }
 
     [Fact]
-    public void AFieldThatHoldsNoPath_NamesNoFolderAndNoExtensions()
+    public void AFieldThatHoldsNoPath_NamesNoAssetType()
     {
-        var field = SchemaFields.At(GameRelease.SkyrimSE, "stat", "EditorID");
-
-        Assert.Null(field.AssetFolder);
-        Assert.Null(field.AssetExtensions);
+        Assert.Null(SchemaFields.At(GameRelease.SkyrimSE, "stat", "EditorID").AssetType);
     }
 }

@@ -28,7 +28,7 @@ internal static class ListLeaves
         // data error, which the element type cannot say on its own.
         return new("", leaf.ApiType, false, leaf.ValidFormKeyTypes, leaf.EnumMembers,
             AllowsNull: leaf.ApiType == "formKey", Default: leaf.Default, HoldsAlpha: leaf.HoldsAlpha,
-            IsAssetLink: leaf.AssetLinkType is not null, AssetFolder: leaf.AssetFolder, AssetExtensions: leaf.AssetExtensions)
+            IsAssetLink: leaf.AssetLinkType is not null, AssetType: leaf.AssetType)
         { AssetLinkType = leaf.AssetLinkType };
     }
 

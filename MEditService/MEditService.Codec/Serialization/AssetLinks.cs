@@ -1,4 +1,5 @@
 using System.Reflection;
+using MEditService.Codec.Schema;
 using Mutagen.Bethesda.Plugins.Assets;
 using Mutagen.Bethesda.Plugins.Exceptions;
 
@@ -10,11 +11,11 @@ internal readonly record struct AssetLinkPath(string? DataPath, string? Refusal)
 /// <summary>Mutagen places a path under its asset type's folder.</summary>
 internal static class AssetLinks
 {
-    internal static string FolderOf(Type assetLinkType) =>
-        LinkOf(assetLinkType).AssetTypeInstance.BaseFolder.Replace('\\', '/');
-
-    internal static IReadOnlyList<string> ExtensionsOf(Type assetLinkType) =>
-        [.. LinkOf(assetLinkType).AssetTypeInstance.FileExtensions];
+    internal static AssetType TypeOf(Type assetLinkType)
+    {
+        var assetType = LinkOf(assetLinkType).AssetTypeInstance;
+        return new(assetType.BaseFolder.Replace('\\', '/'), [.. assetType.FileExtensions]);
+    }
 
     internal static AssetLinkPath DataPathOf(Type assetLinkType, string given)
     {

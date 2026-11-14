@@ -23,7 +23,5 @@ internal sealed record LeafSpec(
     /// <summary>A leaf with no closed domain — every leaf but an enum.</summary>
     public static readonly EnumMember[] NoEnumMembers = [];
 
-    public string? AssetFolder => AssetLinkType is { } linkType ? AssetLinks.FolderOf(linkType) : null;
-
-    public IReadOnlyList<string>? AssetExtensions => AssetLinkType is { } linkType ? AssetLinks.ExtensionsOf(linkType) : null;
+    public AssetType? AssetType => AssetLinkType is { } linkType ? AssetLinks.TypeOf(linkType) : null;
 }
