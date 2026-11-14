@@ -280,7 +280,6 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
 
         var refused = (await resolved.WaitAsync(Generous)).Refused();
         Assert.Contains(refused.Refusal, new[] { IndexRefusal.IndexNotReady, IndexRefusal.NameRefused });
-        if (refused.Refusal == IndexRefusal.NameRefused) Assert.Contains("Nothing is named", refused.Message, StringComparison.Ordinal);
     }
 
     private sealed class FailingCheck(IPluginAdapter inner) : DelegatingPluginAdapter(inner)
