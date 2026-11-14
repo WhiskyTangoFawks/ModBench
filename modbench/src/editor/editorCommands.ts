@@ -27,12 +27,11 @@ import { followCopiesIntoDocuments } from './copyFollowers';
 import { RenderedDocuments } from './renderedDocument';
 import { ChildRecordDocuments } from '../textDocuments/childRecordDocument';
 import { holdOneTextPerFile } from '../textDocuments/oneTextPerFile';
-import { copyDocument, ownerOf, type SeveralOwners } from '../textDocuments/recordDocument';
+import { copyDocument, ownerOf, type OwnerRefused } from '../textDocuments/recordDocument';
 import type { RecordCopy } from '../wire/recordCopy';
 import type { PluginAddress } from '../wire/pluginAddress';
 import type { ModFacts } from './modsByOrigin';
 import type { LoadOrderComing } from './loadOrderComing';
-import { failureReason, isReadFailed } from '../wire/readFailed';
 
 export interface EditorCommandDeps {
   loadOrderComing: LoadOrderComing;
@@ -188,8 +187,8 @@ async function openRecords(
 
 const noActivePluginHolds = (formKey: string) => ({ refused: `No active plugin holds ${formKey}.` });
 
-/** The owner picked of several, or undefined when the pick is dismissed. */
-type ChooseOwner = (formKey: string, several: SeveralOwners) => Promise<PluginAddress | { refused: string } | undefined>;
+// The owner picked of several, or undefined when the pick is dismissed.
+type ChooseOwner = (formKey: string, several: OwnerRefused) => Promise<PluginAddress | { refused: string } | undefined>;
 
 const pickOwner: ChooseOwner = async (formKey, { owners }) => (await vscode.window.showQuickPick(
   owners.map((owner) => ({ label: owner.name, description: owner.origin, owner })),
@@ -205,7 +204,7 @@ async function copiesToOpen(
   for (const { formKey, plugin } of addresses) {
     const owner = plugin ?? await ownerOf(client, formKey);
     if (owner === undefined) return noActivePluginHolds(formKey);
-    const chosen = 'owners' in owner ? await choose(formKey, owner) : owner;
+    const chosen = 'refused' in owner && owner.owners.length > 0 ? await choose(formKey, owner) : owner;
     if (chosen === undefined) return [];
     if ('refused' in chosen) return chosen;
     copies.push({ formKey, plugin: chosen });

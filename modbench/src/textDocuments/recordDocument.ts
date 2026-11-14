@@ -45,16 +45,17 @@ function renderedDocumentUri(copy: RecordCopy, fileName: string): vscode.Uri {
 const childRecordUri = (copy: RecordCopy, containerFile: string): vscode.Uri =>
   vscode.Uri.file(containerFile).with({ scheme: CHILD_RECORD_SCHEME, query: copyQuery(copy) });
 
-/** Several plugins own a record, none of them active; the gesture that opens it asks which. */
-export interface SeveralOwners { refused: string; owners: readonly PluginAddress[] }
+/** Why no one plugin's copy opens: several plugins own the record, none of them active, and a gesture that opens it asks
+ *  which; or mEdit could not say, and `owners` is empty. */
+export interface OwnerRefused { refused: string; owners: readonly PluginAddress[] }
 
 /** The plugin whose copy a record given without a plugin opens as (editor.md, Opening, story 8); undefined when no plugin
  *  owns it. */
 export async function ownerOf(
   client: Pick<RecordDocumentClient, 'getRecordOwners'>, formKey: string,
-): Promise<PluginAddress | SeveralOwners | { refused: string } | undefined> {
+): Promise<PluginAddress | OwnerRefused | undefined> {
   const owners = await client.getRecordOwners(formKey);
-  if (isReadFailed(owners)) return { refused: failureReason(owners) };
+  if (isReadFailed(owners)) return { refused: failureReason(owners), owners: [] };
   const [only, ...others] = owners;
   if (others.length === 0) return only;
   const named = owners.map(({ name, origin }) => `${name} (${origin})`).join(', ');
