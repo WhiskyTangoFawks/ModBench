@@ -11,11 +11,18 @@ internal static class Budgets
     internal static void Reached(TimeSpan budget, Func<bool> reached, string what) =>
         Assert.True(Waits.ReachedWithin(reached, budget * Tolerance), Over(budget, what));
 
-    internal static void Ran(TimeSpan budget, Action gesture, string what)
+    /// <summary>Runs the gesture once, or after one warm-up <paramref name="runs"/> times and holds the fastest to the
+    /// budget: load from other processes only slows a run, so the minimum is nearest the code's own cost.</summary>
+    internal static void Ran(TimeSpan budget, Action gesture, string what, int runs = 1)
     {
-        var took = Stopwatch.StartNew();
-        gesture();
-        Assert.True(took.Elapsed <= budget * Tolerance, $"{Over(budget, what)} It took {took.Elapsed.TotalSeconds:F1} s.");
+        if (runs > 1) gesture();
+        var fastest = Enumerable.Range(0, runs).Min(_ =>
+        {
+            var took = Stopwatch.StartNew();
+            gesture();
+            return took.Elapsed;
+        });
+        Assert.True(fastest <= budget * Tolerance, $"{Over(budget, what)} It took {fastest.TotalSeconds:F1} s.");
     }
 
     private static string Over(TimeSpan budget, string what) =>

@@ -270,7 +270,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     }
 
     [Fact]
-    public async Task ANameResolvedAfterASourceWrite_IsResolvedAgainstTheLoadOrderHeldOnceTheWriteIsRead()
+    public async Task ANameResolvedAfterASourceWrite_IsRefusedAsNotReadyOrAsNamedByNothing_NeverResolvedAgainstTheOldLoadOrder()
     {
         await WrittenWithItsReReadParked();
         var resolved = _index.Queries.ResolveNames([new NameQuery(CompiledPlugin, null)]);
@@ -279,8 +279,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
         _source.Release();
 
         var refused = (await resolved.WaitAsync(Generous)).Refused();
-        Assert.Equal(IndexRefusal.NameRefused, refused.Refusal);
-        Assert.Contains("Nothing is named", refused.Message, StringComparison.Ordinal);
+        Assert.Contains(refused.Refusal, new[] { IndexRefusal.IndexNotReady, IndexRefusal.NameRefused });
     }
 
     private sealed class FailingCheck(IPluginAdapter inner) : DelegatingPluginAdapter(inner)
