@@ -7,9 +7,10 @@ import { holdsNoCopy, type RecordCopy } from '../wire/recordCopy';
 // band (layers.d2), and the mEdit client is a repository too.
 export interface RecordDocumentClient {
   getRecordOwners(formKey: string): Promise<PluginAddress[] | ReadFailed>;
-  getCopyDocument(plugin: PluginAddress, formKey: string): Promise<
-    { kind: 'OwnFile' | 'ContainersFile' | 'Rendered'; location: string } | null | ReadFailed>;
+  getCopyDocument(plugin: PluginAddress, formKey: string): Promise<CopyDocumentAt | null | ReadFailed>;
 }
+
+export interface CopyDocumentAt { kind: 'OwnFile' | 'ContainersFile' | 'Rendered'; location: string }
 
 export type RecordDocument = { uri: vscode.Uri } | { refused: string };
 
@@ -76,9 +77,13 @@ export async function copyDocument(client: RecordDocumentClient, { formKey, plug
   const document = await client.getCopyDocument(plugin, formKey);
   if (isReadFailed(document)) return { refused: failureReason(document) };
   if (document === null) return { refused: holdsNoCopy({ formKey, plugin }) };
-  switch (document.kind) {
-    case 'OwnFile': return { uri: vscode.Uri.file(document.location) };
-    case 'ContainersFile': return { uri: childRecordUri({ formKey, plugin }, document.location) };
-    case 'Rendered': return { uri: renderedDocumentUri({ formKey, plugin }, document.location) };
+  return { uri: copyDocumentUri({ formKey, plugin }, document) };
+}
+
+export function copyDocumentUri(copy: RecordCopy, { kind, location }: CopyDocumentAt): vscode.Uri {
+  switch (kind) {
+    case 'OwnFile': return vscode.Uri.file(location);
+    case 'ContainersFile': return childRecordUri(copy, location);
+    case 'Rendered': return renderedDocumentUri(copy, location);
   }
 }

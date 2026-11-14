@@ -14,7 +14,6 @@ export const sourceNames = (answers: Partial<SourceNames> = {}): SourceNames => 
   recordMemberAt: () => Promise.resolve(undefined),
   declarationIn: () => Promise.resolve(undefined),
   formKeyIn: () => Promise.resolve(undefined),
-  referenceIn: () => Promise.resolve(NOWHERE),
   pluginNamesIn: () => Promise.resolve([NOWHERE]),
   membersIn: () => Promise.resolve([]),
   ...answers,

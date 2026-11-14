@@ -911,7 +911,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Each copy, in an active or compiled plugin, that references the record, at its document: its file in plugin source, with VS Code's unsaved text in its place, else its rendered document. Each span names the record, with its quotes; where a rendered document names it nowhere, the span is the copy's own FormKey. Why each copy that could not be placed was left out. Answers only once the record index is ready. */
+        /** @description Each copy, in an active or compiled plugin, that references the record, at its document: its file in plugin source, with VS Code's unsaved text in its place, else its rendered document. Each range names the record, with its quotes, by line and character as VS Code counts them; where a rendered document names it nowhere, the range is the copy's own FormKey. Why each copy that could not be placed was left out. Answers only once the record index is ready. */
         get: operations["GetPlacedReferences"];
         put?: never;
         post?: never;
@@ -1777,7 +1777,7 @@ export interface components {
             formKey: string;
             plugin: components["schemas"]["PluginAddress"];
             document: components["schemas"]["CopyDocument"];
-            spans: components["schemas"]["TextSpan"][];
+            ranges: components["schemas"]["SourceRange"][];
         };
         PlacedReferences: {
             copies: components["schemas"]["PlacedCopy"][];
@@ -2149,12 +2149,6 @@ export interface components {
             flag: string;
             template: string;
             resolution: components["schemas"]["FormKeyResolution"];
-        };
-        TextSpan: {
-            /** Format: int32 */
-            start: number;
-            /** Format: int32 */
-            end: number;
         };
         UnreadableSource: {
             reason: string;

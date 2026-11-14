@@ -156,26 +156,6 @@ describe('the FormKey or EditorID Rename Symbol changes (symbols.md, The symbols
 });
 
 describe('where a copy\'s document names a symbol, asked of its text alone', () => {
-  const REFERENCE = named('Record', 40, 56, GUN);
-  const OTHER = named('Record', 60, 76, GUN, { record: '000802:Mod.esp' });
-
-  it.each([
-    ['at its reference, past another record\'s', [OWN, OTHER, REFERENCE], { start: 40, end: 56 }],
-    ['at the referrer\'s own FormKey where it holds no reference', [OWN, OTHER], { start: 13, end: 29 }],
-    ['at the start of the text where the referrer is absent', [OTHER], { start: 0, end: 0 }],
-  ])('a record references one %s', async (_case, answer, expected) => {
-    const { owner, client } = names(answer);
-
-    expect(await owner.referenceIn(TEXT, NPC, GUN)).toEqual(expected);
-    expect(client.getPluginSourceNames.mock.calls).toEqual([[TEXT]]);
-  });
-
-  it('lists a record that references itself at the field that holds the reference, never at its own FormKey', async () => {
-    const { owner } = names([OWN, named('Record', 40, 56, NPC, { fieldPath: 'Template' })]);
-
-    expect(await owner.referenceIn(TEXT, NPC, NPC)).toEqual({ start: 40, end: 56 });
-  });
-
   it.each([
     ['at each FormKey of it that names the plugin', [OWN, named('Plugin', 48, 55, 'base.ESM'), named('Plugin', 70, 77, 'Base.esm', { record: GUN })], [{ start: 48, end: 55 }]],
     ['at its own FormKey where none does', [OWN], [{ start: 13, end: 29 }]],

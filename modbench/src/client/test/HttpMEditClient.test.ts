@@ -1039,6 +1039,36 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     expect(requests).toHaveLength(1);
   });
 
+  const readsOverUnsaved: [string, (client: MEditClient) => Promise<unknown>, route: string][] = [
+    ['where a record\'s references are placed', (client) => client.getPlacedReferences(record.formKey), '/placed-references'],
+    ['the records side by side', (client) => client.getRecordsComparison([{ formKey: record.formKey, plugin }]), '/records/compare'],
+    ['what renaming a script changes', (client) => client.getScriptRenameSourceChanges('Old', 'New'), '/script-names/rename-source-changes'],
+  ];
+
+  it.each(readsOverUnsaved)('reads %s only once the pending hand-over has answered, so it reads the text VS Code shows', async (_name, reading, route) => {
+    let answerHandOver!: () => void;
+    const answered = new Promise<void>((resolve) => { answerHandOver = resolve; });
+    const handedOver = vi.fn();
+    const requests: string[] = [];
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/unsaved-documents', () => { handedOver(); return answered.then(() => new Response(null, { status: 204 })); }],
+      [route, (req) => { requests.push(new URL(req.url).pathname); return Promise.resolve(jsonResponse(200, {})); }],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+    client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]);
+    await vi.waitFor(() => expect(handedOver).toHaveBeenCalled());
+
+    const asking = reading(client);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(requests).toEqual([]);
+
+    answerHandOver();
+    await asking;
+    expect(requests).toHaveLength(1);
+  });
+
   it.each(gestures)('sends the %s request only once the load order sent before it has settled', async (_name, gesture, route) => {
     const { response, push } = pushableStreamResponse();
     let putLoadOrder = false;

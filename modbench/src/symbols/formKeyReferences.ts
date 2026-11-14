@@ -1,27 +1,19 @@
+import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
-import { pluginAddressOf } from '../wire/pluginAddress';
-import type { RecordCopy } from '../wire/recordCopy';
-import { locateCopies, type RecordLocation, type RecordLocationDeps } from './recordLocation';
-import { heldText } from '../textDocuments/heldText';
+import { copyDocumentUri } from '../textDocuments/recordDocument';
 import { answerOf } from '../wire/readFailed';
-import type { SourceNames } from './sourceNames';
 
-interface ReferencesDeps<Document> extends RecordLocationDeps<Document> {
-  client: RecordLocationDeps<Document>['client'] & Pick<MEditClient, 'getReferencesInActiveOrCompiledPlugins'>;
-  spanIn: SourceNames['referenceIn'];
-}
-
-/** Each copy that references `formKey`, at its document, and why each went unread; a read mEdit fails throws. */
-export function referencesToFormKey<Document extends { getText(): string }>(
-  { client, open, spanIn }: ReferencesDeps<Document>,
-): (formKey: string) => Promise<{ found: RecordLocation<Document>[]; leftOut: string[] }> {
+/** Each place a copy that references `formKey` names it, at the copy's document, and why each copy went unread; a read
+ *  mEdit fails throws. */
+export function referencesToFormKey(
+  client: Pick<MEditClient, 'getPlacedReferences'>,
+): (formKey: string) => Promise<{ locations: vscode.Location[]; leftOut: string[] }> {
   return async (formKey) => {
-    const rows = await client.getReferencesInActiveOrCompiledPlugins(formKey).then(answerOf);
-    const copies = new Map(rows.map((row): [string, RecordCopy] =>
-      [JSON.stringify([row.formKey, row.origin, row.plugin]), { formKey: row.formKey, plugin: pluginAddressOf(row) }]));
-    return locateCopies(client, [...copies.values()], async (copy, uri) => {
-      const document = await open(uri);
-      return { uri, document, ...await spanIn(heldText(document), copy.formKey, formKey) };
+    const { copies, leftOut } = answerOf(await client.getPlacedReferences(formKey));
+    const locations = copies.flatMap(({ formKey: referrer, plugin, document, ranges }) => {
+      const uri = copyDocumentUri({ formKey: referrer, plugin }, document);
+      return ranges.map(({ start, end }) => new vscode.Location(uri, new vscode.Range(start.line, start.character, end.line, end.character)));
     });
+    return { locations, leftOut };
   };
 }

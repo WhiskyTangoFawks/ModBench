@@ -63,11 +63,24 @@ describe('where a record is defined (symbols.md, The symbols, Record)', () => {
 });
 
 describe('what references a record, and its hover (symbols.md, The symbols, Record)', () => {
-  it('refuses, rather than list nothing, when mEdit cannot say what references it', async () => {
-    const { client, record } = kind();
-    client.setQueryFailure('getReferencesInActiveOrCompiledPlugins', localFailure('mEdit is down'));
+  it('lists the places mEdit gives, reporting what it left out as unread, and opens no document', async () => {
+    const { client, opened, record } = kind();
+    const range = { start: { line: 1, character: 2 }, end: { line: 1, character: 18 } };
+    const leftOut = `000701:A.esp in B.esp (ModB): its text names ${GUN} nowhere.`;
+    client.setQueryAnswer('getPlacedReferences', { leftOut: [leftOut], copies: [
+      { formKey: '000700:A.esp', plugin: modA, document: { kind: 'OwnFile', location: GUN_FILE }, ranges: [range] },
+    ] });
 
-    expect(await record.referencesTo(RECORD)).toEqual({ refused: `mEdit cannot list what references ${GUN}: mEdit is down` });
+    const found = await record.referencesTo(RECORD);
+
+    expect([found, opened]).toMatchObject([{ locations: [{ uri: { path: GUN_FILE } }], unread: [leftOut] }, []]);
+  });
+
+  it('refuses, rather than list nothing, while mEdit cannot answer over every plugin', async () => {
+    const { client, record } = kind();
+    client.setQueryFailure('getPlacedReferences', { failed: 'refused', refusal: 'The record index is still reading.' });
+
+    expect(await record.referencesTo(RECORD)).toEqual({ refused: `mEdit cannot list what references ${GUN}: The record index is still reading.` });
   });
 
   it('has no tooltip for a FormKey no active plugin holds, so its hover is its name', async () => {

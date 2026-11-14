@@ -22,7 +22,7 @@ import {
   type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginIndexedState, type PluginFilePaths, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument, type DocumentName,
   type RebuildIndexOutcome, type CopyChangesOutcome, type CopyMode,
   type GridPosition, type RecordAt, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument, type RenameSourceChangesOutcome, type RenameSourceAsked,
-  type SourceChanges, type SourceMove, type RecordFilter, type ReferenceResult, type NameQuery, type NamedObject, type PluginAddress, type PluginToRepair, type ModToVersionInGit, type VersionInGitOutcome, type VersionInGitProgress, type KindedOutcome, type DecompileOutcome, type DecompileAndRepairOutcome,
+  type SourceChanges, type SourceMove, type RecordFilter, type ReferenceResult, type PlacedReferences, type NameQuery, type NamedObject, type PluginAddress, type PluginToRepair, type ModToVersionInGit, type VersionInGitOutcome, type VersionInGitProgress, type KindedOutcome, type DecompileOutcome, type DecompileAndRepairOutcome,
   type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, type RowsRead, isRefused,
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
@@ -787,7 +787,8 @@ class HttpMEditClient implements MEditClient {
     noBodyFails, { absent: { status: 404, answers: null } });
   }
 
-  getRecordsComparison(copies: components['schemas']['RecordCopy'][]): Promise<CompareRecordsAnswer | ReadFailed> {
+  async getRecordsComparison(copies: components['schemas']['RecordCopy'][]): Promise<CompareRecordsAnswer | ReadFailed> {
+    await this.handOver.sent();
     return this.read('getRecordsComparison', (api, signal) => api.POST('/records/compare', { body: { copies }, signal }), noBodyFails);
   }
 
@@ -795,6 +796,12 @@ class HttpMEditClient implements MEditClient {
     return this.read(`getReferencesInActiveOrCompiledPlugins(${formKey})`,
       (api, signal) => api.GET('/records/{formKey}/references-in-active-or-compiled-plugins', { params: { path: { formKey } }, signal }),
       (data) => data ?? []);
+  }
+
+  async getPlacedReferences(formKey: string): Promise<PlacedReferences | ReadFailed> {
+    await this.handOver.sent();
+    return this.read(`getPlacedReferences(${formKey})`,
+      (api, signal) => api.GET('/records/{formKey}/placed-references', { params: { path: { formKey } }, signal }), noBodyFails);
   }
 
   getPluginNameReferences(name: string): Promise<components['schemas']['CopyNaming'][] | ReadFailed> {
@@ -813,7 +820,8 @@ class HttpMEditClient implements MEditClient {
       (api, signal) => api.GET('/file-paths/references', { params: { query: { path } }, signal }), noBodyFails);
   }
 
-  getScriptRenameSourceChanges(name: string, newName: string): Promise<components['schemas']['ScriptRenameSourceChanges'] | ReadFailed> {
+  async getScriptRenameSourceChanges(name: string, newName: string): Promise<components['schemas']['ScriptRenameSourceChanges'] | ReadFailed> {
+    await this.handOver.sent();
     return this.read(`getScriptRenameSourceChanges(${name}, ${newName})`,
       (api, signal) => api.POST('/script-names/rename-source-changes', { body: { name, newName }, signal }), noBodyFails);
   }
