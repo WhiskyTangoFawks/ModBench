@@ -73,8 +73,8 @@ internal sealed class RecordQueries(
         source.WhySourceDoesNotRead(plugin) is { } failure ? UnreadableSources.Of(failure)
         : _index.WhyTreeStopped(plugin.Key) ?? UnreadableSources.Unknown;
 
-    // The header is not a browsable record type: it stays a schemas.Keys entry so GetRecord/
-    // GetCompare resolve it by FormKey, but both browse paths below exclude it.
+    // The header is not a browsable record type: it stays a schemas.Keys entry so GetCompare
+    // resolves it by FormKey, but both browse paths below exclude it.
     private static bool IsGroup(string recordType, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
         recordType != PluginHeader.RecordType && schemas.ContainsKey(recordType);
 

@@ -45,15 +45,30 @@ function renderedDocumentUri(copy: RecordCopy, fileName: string): vscode.Uri {
 const childRecordUri = (copy: RecordCopy, containerFile: string): vscode.Uri =>
   vscode.Uri.file(containerFile).with({ scheme: CHILD_RECORD_SCHEME, query: copyQuery(copy) });
 
-/** The document a record opens as (editor.md, Opening, stories 8 to 10); undefined when given without a plugin and no
- *  one plugin owns it. */
+/** Several plugins own a record, none of them active; the gesture that opens it asks which. */
+export interface SeveralOwners { refused: string; owners: readonly PluginAddress[] }
+
+/** The plugin whose copy a record given without a plugin opens as (editor.md, Opening, story 8); undefined when no plugin
+ *  owns it. */
+export async function ownerOf(
+  client: Pick<RecordDocumentClient, 'getRecordOwners'>, formKey: string,
+): Promise<PluginAddress | SeveralOwners | { refused: string } | undefined> {
+  const owners = await client.getRecordOwners(formKey);
+  if (isReadFailed(owners)) return { refused: failureReason(owners) };
+  const [only, ...others] = owners;
+  if (others.length === 0) return only;
+  const named = owners.map(({ name, origin }) => `${name} (${origin})`).join(', ');
+  return { refused: `No active plugin holds ${formKey}, and several compiled plugins do: ${named}. Give the plugin whose copy to open.`, owners };
+}
+
+/** The document a record opens as (editor.md, Opening, stories 8 to 10); undefined when given without a plugin that no
+ *  plugin owns. */
 export async function recordDocument(
   client: RecordDocumentClient, { formKey, plugin: given }: Pick<RecordCopy, 'formKey'> & Partial<RecordCopy>,
 ): Promise<RecordDocument | undefined> {
-  const owners = given ? [given] : await client.getRecordOwners(formKey);
-  if (isReadFailed(owners)) return { refused: failureReason(owners) };
-  const [plugin, ...others] = owners;
-  return plugin && others.length === 0 ? copyDocument(client, { formKey, plugin }) : undefined;
+  const owner = given ?? await ownerOf(client, formKey);
+  if (owner === undefined || 'refused' in owner) return owner;
+  return copyDocument(client, { formKey, plugin: owner });
 }
 
 export async function copyDocument(client: RecordDocumentClient, { formKey, plugin }: RecordCopy): Promise<RecordDocument> {

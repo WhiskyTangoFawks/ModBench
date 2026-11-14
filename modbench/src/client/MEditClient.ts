@@ -330,7 +330,6 @@ export interface MEditClient {
   getRecords(plugin: PluginAddress, type: string, offset: number, limit: number): Promise<RecordPage | ReadFailed>;
   /** Every active plugin's copies, or one plugin's: at most `atMost`, 20 unless told, and how many match. */
   searchRecords(query: string, validTypes: string[], plugin?: PluginAddress, atMost?: number): Promise<RecordPage | ReadFailed>;
-  /** The plugin of the record's winning copy; with no active plugin holding it, each compiled plugin that does. */
   getRecordOwners(formKey: string): Promise<PluginAddress[] | ReadFailed>;
   /** Every plugin that holds a copy of the record, its own included. */
   getRecordHolders(formKey: string): Promise<PluginAddress[] | ReadFailed>;

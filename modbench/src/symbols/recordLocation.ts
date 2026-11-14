@@ -15,8 +15,7 @@ export interface RecordLocation<Document> extends TextSpan { uri: vscode.Uri; do
 export const locationOf = ({ uri, document, start, end }: RecordLocation<Pick<vscode.TextDocument, 'positionAt'>>): vscode.Location =>
   new vscode.Location(uri, new vscode.Range(document.positionAt(start), document.positionAt(end)));
 
-/** The span `spanIn` finds of a record in the document it opens as; a copy when it names its plugin,
- *  else its winning copy. */
+/** The span `spanIn` finds of a record in the document it opens as (recordDocument). */
 export async function locateRecord<Document extends { getText(): string }>(
   { client, open }: RecordLocationDeps<Document>,
   record: Pick<RecordCopy, 'formKey'> & Partial<RecordCopy>,

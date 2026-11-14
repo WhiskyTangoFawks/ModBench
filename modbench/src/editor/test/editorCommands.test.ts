@@ -274,8 +274,7 @@ describe('modbench.record.open for the agent, on a record given without a plugin
 
     const answer = commandHandlers.get('modbench.record.open')?.(new AgentCall([{ kind: 'record', formKey: '000801:A.esp' }], {}));
 
-    await expect(Promise.resolve(answer)).rejects.toThrow(
-      'No active plugin holds 000801:A.esp, and several compiled plugins do: A.esp (ModA), B.esp (ModB). Give the plugin whose copy to open.');
+    await expect(Promise.resolve(answer)).rejects.toThrow('A.esp (ModA), B.esp (ModB)');
     expect([showQuickPick.mock.calls, executed()]).toEqual([[], []]);
   });
 });

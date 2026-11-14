@@ -27,7 +27,7 @@ import { followCopiesIntoDocuments } from './copyFollowers';
 import { RenderedDocuments } from './renderedDocument';
 import { ChildRecordDocuments } from '../textDocuments/childRecordDocument';
 import { holdOneTextPerFile } from '../textDocuments/oneTextPerFile';
-import { copyDocument } from '../textDocuments/recordDocument';
+import { copyDocument, ownerOf, type SeveralOwners } from '../textDocuments/recordDocument';
 import type { RecordCopy } from '../wire/recordCopy';
 import type { PluginAddress } from '../wire/pluginAddress';
 import type { ModFacts } from './modsByOrigin';
@@ -146,17 +146,16 @@ function recordOpenGesture(
         plan = { addresses: [{ formKey }], pinned: false };
       }
       const copies = await copiesToOpen(client, plan.addresses, pickOwner);
-      if (copies === undefined) return undefined;
       if ('refused' in copies) {
         reporter.report('error', failedToOpen(plan.addresses[0]?.formKey), copies.refused);
         return undefined;
       }
-      return { copies, pinned: plan.pinned };
+      return copies.length > 0 ? { copies, pinned: plan.pinned } : undefined;
     },
     fromAgent: async ({ argument, options }) => {
       if (argument.length === 0) throw new Refusal('modbench.record.open takes at least one record.');
       const addresses = argument.map((record) => argumentOfKind(record, 'record')).map(({ formKey, plugin }) => (plugin ? { formKey, plugin } : { formKey }));
-      const copies = await copiesToOpen<never>(client, addresses, refuseSeveralOwners);
+      const copies = await copiesToOpen(client, addresses, refuseSeveralOwners);
       if ('refused' in copies) throw new Refusal(copies.refused);
       return { copies, pinned: options.pinned === true };
     },
@@ -189,29 +188,27 @@ async function openRecords(
 
 const noActivePluginHolds = (formKey: string) => ({ refused: `No active plugin holds ${formKey}.` });
 
-const pickOwner = async (formKey: string, owners: readonly PluginAddress[]): Promise<PluginAddress | undefined> => (await vscode.window.showQuickPick(
+/** The owner picked of several, or undefined when the pick is dismissed. */
+type ChooseOwner = (formKey: string, several: SeveralOwners) => Promise<PluginAddress | { refused: string } | undefined>;
+
+const pickOwner: ChooseOwner = async (formKey, { owners }) => (await vscode.window.showQuickPick(
   owners.map((owner) => ({ label: owner.name, description: owner.origin, owner })),
   { placeHolder: `Open ${formKey} from…` }))?.owner;
 
-const refuseSeveralOwners = (formKey: string, owners: readonly PluginAddress[]): Promise<{ refused: string }> => Promise.resolve({
-  refused: `No active plugin holds ${formKey}, and several compiled plugins do: ${owners.map(({ name, origin }) => `${name} (${origin})`).join(', ')}. Give the plugin whose copy to open.`,
-});
+const refuseSeveralOwners: ChooseOwner = (_, several) => Promise.resolve(several);
 
-// A record given without a plugin is its owner's copy (editor.md, Opening, story 8); of several owners, `choose` says which,
-// as a gesture never guesses (commands.md, Principles).
-async function copiesToOpen<Unchosen extends undefined>(
-  client: OpenClient, addresses: readonly RecordToOpen[],
-  choose: (formKey: string, owners: readonly PluginAddress[]) => Promise<PluginAddress | { refused: string } | Unchosen>,
-): Promise<RecordCopy[] | { refused: string } | Unchosen> {
+// Of several owners, `choose` says which, as a gesture never guesses (commands.md, Principles). None, when a pick is dismissed.
+async function copiesToOpen(
+  client: OpenClient, addresses: readonly RecordToOpen[], choose: ChooseOwner,
+): Promise<RecordCopy[] | { refused: string }> {
   const copies: RecordCopy[] = [];
   for (const { formKey, plugin } of addresses) {
-    const owners = plugin ? [plugin] : await client.getRecordOwners(formKey);
-    if (isReadFailed(owners)) return { refused: failureReason(owners) };
-    const [only, ...others] = owners;
-    if (only === undefined) return noActivePluginHolds(formKey);
-    const owner = others.length === 0 ? only : await choose(formKey, owners);
-    if (owner === undefined || 'refused' in owner) return owner;
-    copies.push({ formKey, plugin: owner });
+    const owner = plugin ?? await ownerOf(client, formKey);
+    if (owner === undefined) return noActivePluginHolds(formKey);
+    const chosen = 'owners' in owner ? await choose(formKey, owner) : owner;
+    if (chosen === undefined) return [];
+    if ('refused' in chosen) return chosen;
+    copies.push({ formKey, plugin: chosen });
   }
   return copies;
 }

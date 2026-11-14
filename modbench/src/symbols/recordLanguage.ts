@@ -30,7 +30,7 @@ const noActivePluginHolds = (formKey: string): string => `No active plugin holds
 export function recordLanguage({ client, names, reporter, open }: RecordLanguageDeps): SymbolKind<RecordNamed> {
   const references = referencesToFormKey({ client, open, spanIn: names.referenceIn });
   const workspace = workspaceSymbolsOf({ client, reporter, open, declarationIn: names.declarationIn });
-  /** Its winning copy's FormKey member. */
+  /** Its FormKey member in the document it opens as. */
   const definitionOf = async ({ formKey }: RecordNamed): Promise<Definition> => {
     const located = await locateRecord({ client, open }, { formKey }, names.declarationIn)
       .catch((error: unknown) => ({ refused: `Where ${formKey} is defined could not be read: ${errorMessage(error)}` }));

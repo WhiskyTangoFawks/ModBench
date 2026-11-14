@@ -108,10 +108,13 @@ describe('the document of a record given without a plugin', () => {
     expect(await recordDocument(ownedBy(modA), { formKey: GUN })).toEqual({ uri: vscode.Uri.file(CELL_FILE) });
   });
 
-  it.each([
-    ['no plugin owns it', ownedBy()],
-    ['several plugins own it, none of them active', ownedBy(modA, { name: 'B.esp', origin: 'ModB' })],
-  ])('is none when %s', async (_, client) => {
-    expect(await recordDocument(client, { formKey: GUN })).toBeUndefined();
+  it('is none when no plugin owns it', async () => {
+    expect(await recordDocument(ownedBy(), { formKey: GUN })).toBeUndefined();
+  });
+
+  it('is a refusal naming each owner when several own it, none of them active', async () => {
+    expect(await recordDocument(ownedBy(modA, { name: 'B.esp', origin: 'ModB' }), { formKey: GUN })).toMatchObject({
+      refused: 'No active plugin holds 000801:A.esp, and several compiled plugins do: A.esp (ModA), B.esp (ModB). Give the plugin whose copy to open.',
+    });
   });
 });

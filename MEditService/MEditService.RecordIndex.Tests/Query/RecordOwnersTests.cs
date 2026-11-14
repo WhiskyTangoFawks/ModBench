@@ -32,27 +32,16 @@ public sealed class RecordOwnersTests
         return index.Queries.GetRecordOwners(npc.ToString()).Value();
     }
 
-    [Fact]
-    public void AnActiveWinner_IsTheOneOwner_OverACompiledPluginThatIsNotActive()
+    [Theory]
+    [InlineData(true, false, false, true, new[] { "Base.esp" })]
+    [InlineData(false, true, false, false, new[] { "Base.esp" })]
+    [InlineData(false, true, false, true, new[] { "Base.esp", "Over.esp" })]
+    [InlineData(false, false, false, false, new string[0])]
+    public void TheOwners_AreTheActiveWinner_ElseEachCompiledHolder(
+        bool baseActive, bool baseCompiled, bool overActive, bool overCompiled, string[] owners)
     {
-        Assert.Equal([Base], OwnersOfTheNpc(new Holder(Active: true, Compiled: false), new Holder(Active: false, Compiled: true)));
-    }
-
-    [Fact]
-    public void WithNoActiveHolder_TheCompiledHolderIsTheOwner_AndAHolderNotCompiledIsNone()
-    {
-        Assert.Equal([Base], OwnersOfTheNpc(new Holder(Active: false, Compiled: true), new Holder(Active: false, Compiled: false)));
-    }
-
-    [Fact]
-    public void WithNoActiveHolder_EveryCompiledHolderIsAnOwner()
-    {
-        Assert.Equal([Base, Over], OwnersOfTheNpc(new Holder(Active: false, Compiled: true), new Holder(Active: false, Compiled: true)));
-    }
-
-    [Fact]
-    public void WithNoActiveOrCompiledHolder_NothingOwnsIt()
-    {
-        Assert.Empty(OwnersOfTheNpc(new Holder(Active: false, Compiled: false), new Holder(Active: false, Compiled: false)));
+        Assert.Equal(
+            owners.Select(name => name == Base.Name ? Base : Over),
+            OwnersOfTheNpc(new Holder(baseActive, baseCompiled), new Holder(overActive, overCompiled)));
     }
 }
