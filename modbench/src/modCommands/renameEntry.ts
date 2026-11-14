@@ -57,7 +57,7 @@ async function linesRenamed(adapter: InstanceAdapter, entry: EntryRef, to: strin
       cannotFollow.push(`profile "${profile}"'s ${adapter.names.modOrderFile}: ${errorMessage(err)}`);
     }
   }
-  return { cannotFollow };
+  return folderMoved ? { cannotFollow } : { failed: entryNotFound(entry) };
 }
 
 async function profilesActiveFirst(adapter: InstanceAdapter): Promise<string[]> {
@@ -134,8 +134,6 @@ async function renameEntry(
   try {
     const refusal = await refusalOf(access.adapter, to, entry.name);
     if (refusal !== undefined) return { applied: false, refusal };
-    const { mods } = await access.adapter.modOrder();
-    if (!mods.some((listed) => sameEntry(access.adapter, listed, entry))) return { applied: false, refusal: entryNotFound(entry) };
     owners = await ownersOf();
   } catch (err) {
     return refuse(err);
