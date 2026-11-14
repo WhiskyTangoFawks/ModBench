@@ -24,4 +24,6 @@ internal sealed record LeafSpec(
     public static readonly EnumMember[] NoEnumMembers = [];
 
     public string? AssetFolder => AssetLinkType is { } linkType ? AssetLinks.FolderOf(linkType) : null;
+
+    public IReadOnlyList<string>? AssetExtensions => AssetLinkType is { } linkType ? AssetLinks.ExtensionsOf(linkType) : null;
 }

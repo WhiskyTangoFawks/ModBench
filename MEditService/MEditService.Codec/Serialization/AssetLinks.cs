@@ -13,6 +13,9 @@ internal static class AssetLinks
     internal static string FolderOf(Type assetLinkType) =>
         LinkOf(assetLinkType).AssetTypeInstance.BaseFolder.Replace('\\', '/');
 
+    internal static IReadOnlyList<string> ExtensionsOf(Type assetLinkType) =>
+        [.. LinkOf(assetLinkType).AssetTypeInstance.FileExtensions];
+
     internal static AssetLinkPath DataPathOf(Type assetLinkType, string given)
     {
         try

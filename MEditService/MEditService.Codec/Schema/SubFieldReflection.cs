@@ -144,6 +144,7 @@ internal static class SubFieldReflection
             IsScriptName: game.Annotations.IsScriptName(prop),
             IsAssetLink: leaf.AssetLinkType is not null,
             AssetFolder: leaf.AssetFolder,
+            AssetExtensions: leaf.AssetExtensions,
             IndexWhen: leaf.IndexWhen)
         { AssetLinkType = leaf.AssetLinkType };
     }

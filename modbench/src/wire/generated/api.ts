@@ -1568,6 +1568,7 @@ export interface components {
             isScriptName: boolean;
             isAssetLink: boolean;
             assetFolder?: string | null;
+            assetExtensions?: string[] | null;
             indexWhen?: string[] | null;
             unheldWhen?: string[] | null;
         };
