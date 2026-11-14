@@ -1,26 +1,20 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
+import type { SourceNames } from './sourceNames';
 import type { CopyAt } from '../instanceLoader/fileConflictIndex';
 import type { InstanceValue } from '../instanceLoader/instance';
-import { errorMessage } from '../ports/errorMessage';
 import { heldText } from '../textDocuments/heldText';
-import { isPluginSourcePath } from '../instanceAdapter/instanceAdapter';
-import { failureReason, isReadFailed } from '../wire/readFailed';
 import type { Reporter } from '../ports/reporter';
 import type { RecordDocumentClient } from '../textDocuments/recordDocument';
 import { openPluginSourceDocument } from '../textDocuments/pluginSource';
-import { fieldAt } from '../drivingLib/sourceText';
-import { fieldPathOf, formKeyAt } from './formKeyText';
-import { recordTypeOfPathField } from '../drivingLib/fieldMetadata';
 import { membersNaming } from './memberReferences';
 import { atFile, showReferencedBy, tooltipLines, type AskedIn } from './symbolPlaces';
 import type { Definition, FileNamed, Listed, Named, References, SymbolKind } from './symbolKind';
 
-export type FileClient = Pick<MEditClient, 'getFileReferences' | 'getComparison' | 'resolveFilePath'> & RecordDocumentClient;
+export type FileClient = Pick<MEditClient, 'getFileReferences'> & RecordDocumentClient;
 
 /** What the box that owns the instance's files says of one: which copy the game gets, and where it is shown. */
 export interface FileCopies {
-  gameRelease: () => Promise<string>;
   /** The copy of the file at its path in the Data folder that the game gets. */
   copyOf: (path: string) => CopyAt | { none: string };
   reveal: (copy: CopyAt) => Promise<void>;
@@ -30,6 +24,7 @@ interface FileLanguageDeps extends FileCopies {
   instance: { readonly value: FilesValue } | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
   client: FileClient;
+  names: Pick<SourceNames, 'fileAt' | 'membersIn' | 'formKeyIn'>;
   /** The tooltip of the row Mods shows for the copy the game gets of the file at `path`; undefined where it shows none. */
   tooltip: (path: string) => string | undefined;
 }
@@ -59,27 +54,16 @@ function foldedPathsOf(value: FilesValue): readonly FoldedPath[] {
 
 /** A file as a symbol, named by its path in the Data folder: the records that name it, which mEdit answers (symbols.md,
  *  The symbols). */
-export function fileLanguage({ instance, reporter, client, gameRelease, copyOf, reveal, tooltip }: FileLanguageDeps) {
+export function fileLanguage({ instance, reporter, client, names, copyOf, reveal, tooltip }: FileLanguageDeps) {
   const pathAt = async (document: AskedIn, offset: number): Promise<Named<FileNamed> | undefined> => {
-    if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
-    const text = heldText(document);
-    const found = fieldAt(text, offset);
-    if (found === undefined || formKeyAt(text, offset) !== undefined) return undefined;
-    try {
-      const recordType = await recordTypeOfPathField(client, found);
-      const given: unknown = JSON.parse(text.slice(found.start, found.end));
-      if (recordType === undefined || typeof given !== 'string') return undefined;
-      const path = await client.resolveFilePath(await gameRelease(), recordType, JSON.stringify(found.record), fieldPathOf(found.path));
-      const span = { start: found.start + 1, end: found.end - 1 };
-      return isReadFailed(path) ? { ...span, name: given, symbol: { refused: failureReason(path) } } : { ...span, name: path, symbol: { kind: 'file', path } };
-    } catch (error) {
-      reporter.shownOnSurface('error', `Cannot tell whether ${found.recordFormKey} names a file here.`, errorMessage(error));
-      return undefined;
-    }
+    const found = await names.fileAt(document.uri.fsPath, heldText(document), offset);
+    if (found === undefined) return undefined;
+    const span = { start: found.start, end: found.end };
+    return 'refused' in found ? { ...span, name: found.given, symbol: { refused: found.refused } } : { ...span, name: found.path, symbol: { kind: 'file', path: found.path } };
   };
 
   const referencesTo = async ({ path }: FileNamed): Promise<References> => {
-    const { found, unread } = await membersNaming(client, openPluginSourceDocument, await client.getFileReferences(path));
+    const { found, unread } = await membersNaming(client, openPluginSourceDocument, names, await client.getFileReferences(path));
     return { locations: found, unread };
   };
 

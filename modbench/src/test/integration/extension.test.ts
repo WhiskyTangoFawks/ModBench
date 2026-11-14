@@ -178,6 +178,38 @@ function pushLoadOrderStatus(): void {
   for (const res of sseClients) writeSseFrame(res, 'load-order-status', { loadOrderStatus });
 }
 
+const fixtureFormKeys = (): readonly string[] => [
+  COMPILED_PLUGIN_FORM_KEY, CHILD_FORM_KEY, SECOND_CHILD_FORM_KEY, HELD_FORM_KEY, NOT_HELD_FORM_KEY, RENDERED_REFERRER_FORM_KEY, NON_COMPILED_PLUGIN_FORM_KEY,
+];
+
+interface CannedName { name: Record<string, unknown>; from: number; to: number }
+
+function cannedNamesOfMember(member: string, value: string, start: number, end: number, record: string | undefined): CannedName[] {
+  const placed = { record: record ?? null, fieldPath: member };
+  const names: CannedName[] = [];
+  if (fixtureFormKeys().includes(value)) {
+    names.push({ name: { kind: 'Record', start, end, value, ...placed }, from: start, to: end });
+    names.push({ name: { kind: 'Plugin', start: start + 8, end: end - 1, value: value.slice(7), ...placed }, from: start + 8, to: end });
+  }
+  if (member === 'Armor') names.push({ name: { kind: 'Reference', start: start + 1, end: end - 1, value, ...placed, validFormKeyTypes: ['WEAP'] }, from: start, to: end });
+  return names;
+}
+
+function cannedSourceNames(text: string, at: number | undefined): unknown[] {
+  const names: CannedName[] = [];
+  let record: string | undefined;
+  for (const member of text.matchAll(/"(\w+)": ?"([^"]*)"/g)) {
+    const [spelled, name = '', value = ''] = member;
+    const [start, end] = [member.index + spelled.length - value.length - 2, member.index + spelled.length];
+    if (name === 'FormKey' && fixtureFormKeys().includes(value)) {
+      record = value;
+      names.push({ name: { kind: 'Declaration', start: member.index, end, value, record, fieldPath: 'FormKey' }, from: member.index, to: end });
+    }
+    names.push(...cannedNamesOfMember(name, value, start, end, record));
+  }
+  return names.filter(({ from, to }) => at === undefined || (at >= from && at < to)).map(({ name }) => name).sort((a, b) => Number(a.start) - Number(b.start));
+}
+
 function createMockBackend(): http.Server {
   return http.createServer((req, res) => {
     const url = req.url ?? '';
@@ -359,6 +391,17 @@ function createMockBackend(): http.Server {
       res.end(JSON.stringify(formKey === NON_COMPILED_PLUGIN_FORM_KEY
         ? { fileName: NON_COMPILED_PLUGIN_FILE_NAME, text: nonCompiledPluginText }
         : { fileName: renderedName(formKey), text: renderedText(formKey) }));
+      return;
+    }
+    if (method === 'POST' && url === '/plugin-source/names') {
+      let body = '';
+      req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+      req.on('end', () => {
+        const asked: unknown = JSON.parse(body);
+        const { text, at } = isRecord(asked) ? asked : {};
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(cannedSourceNames(String(text), typeof at === 'number' ? at : undefined)));
+      });
       return;
     }
     if (url.startsWith('/plugin-source/record?')) {
@@ -2305,6 +2348,12 @@ describe('A FormKey in plugin source', () => {
 
   it('shows its record on hover: EditorID, FormKey, record type and the winning plugin', async () => {
     assert.deepStrictEqual(await activated(), heldHover);
+  });
+
+  it('shows the plugin, not the record, on hover over the plugin\'s name inside a FormKey', async () => {
+    await activated();
+
+    assert.deepStrictEqual(await hoverTexts('Nobody.esp'), ['Nobody.esp']);
   });
 
   it('shows no hover in JSON outside the plugin source folder', async () => {

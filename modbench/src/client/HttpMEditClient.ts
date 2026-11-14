@@ -19,7 +19,7 @@ import {
   type Submodule, type SubmodulesCloned, type PluginFilesFlagged, type PluginFileToFlag,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
-  type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginIndexedState, type PluginFilePaths, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
+  type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginIndexedState, type PluginFilePaths, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument, type DocumentName,
   type RebuildIndexOutcome, type CopyChangesOutcome, type CopyMode,
   type GridPosition, type RecordAt, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument, type RenameSourceChangesOutcome, type RenameSourceAsked,
   type SourceChanges, type SourceMove, type RecordFilter, type ReferenceResult, type NameQuery, type NamedObject, type PluginAddress, type PluginToRepair, type ModToVersionInGit, type VersionInGitOutcome, type VersionInGitProgress, type KindedOutcome, type DecompileOutcome, type DecompileAndRepairOutcome,
@@ -813,9 +813,14 @@ class HttpMEditClient implements MEditClient {
       (api, signal) => api.GET('/file-paths/references', { params: { query: { path } }, signal }), noBodyFails);
   }
 
-  resolveFilePath(gameRelease: string, recordType: string, text: string, fieldPath: string): Promise<string | ReadFailed> {
-    return this.read(`resolveFilePath(${recordType}, ${fieldPath})`,
-      (api, signal) => api.POST('/file-paths/resolve', { body: { gameRelease, recordType, text, fieldPath }, signal }), (data) => data === undefined ? NO_ANSWER : data.dataPath);
+  getScriptRenameSourceChanges(name: string, newName: string): Promise<components['schemas']['ScriptRenameSourceChanges'] | ReadFailed> {
+    return this.read(`getScriptRenameSourceChanges(${name}, ${newName})`,
+      (api, signal) => api.POST('/script-names/rename-source-changes', { body: { name, newName }, signal }), noBodyFails);
+  }
+
+  getPluginSourceNames(text: string, path?: string, at?: number): Promise<DocumentName[] | ReadFailed> {
+    return this.read(`getPluginSourceNames(${path ?? 'a document with no file'})`,
+      (api, signal) => api.POST('/plugin-source/names', { body: { text, path, at }, signal }), (data) => data ?? []);
   }
 
   getRenderedDocument({ name: plugin, origin }: PluginAddress, formKey: string): Promise<RenderedDocument | null | ReadFailed> {

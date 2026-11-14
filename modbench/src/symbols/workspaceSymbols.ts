@@ -6,20 +6,21 @@ import { pluginAddressOf } from '../wire/pluginAddress';
 import type { RecordCopy } from '../wire/recordCopy';
 import { heldText } from '../textDocuments/heldText';
 import { locateCopies, type RecordLocation, type RecordLocationDeps } from './recordLocation';
-import { formKeyMember } from './formKeyText';
 import { recordLabel } from '../wire/recordLabel';
 import { answerOf } from '../wire/readFailed';
+import type { SourceNames } from './sourceNames';
 
 interface WorkspaceSymbolDeps<Document> extends RecordLocationDeps<Document> {
   client: RecordLocationDeps<Document>['client'] & Pick<MEditClient, 'getPlugins' | 'searchRecords'>;
   reporter: Pick<Reporter, 'shownOnSurface'>;
+  declarationIn: SourceNames['declarationIn'];
 }
 
 export interface RecordSymbol extends RecordCopy { name: string; uri: vscode.Uri }
 
 const GESTURE = 'Go to Symbol in Workspace';
 
-export function workspaceSymbolsOf<Document extends { getText(): string }>({ client, reporter, open }: WorkspaceSymbolDeps<Document>) {
+export function workspaceSymbolsOf<Document extends { getText(): string }>({ client, reporter, open, declarationIn }: WorkspaceSymbolDeps<Document>) {
   const searched = async (query: string, plugin: PluginMetadata): Promise<RecordSummary[] | string> => {
     try {
       return answerOf(await client.searchRecords(query, [], plugin)).items;
@@ -49,7 +50,7 @@ export function workspaceSymbolsOf<Document extends { getText(): string }>({ cli
   const locate = async ({ name, formKey, uri }: RecordSymbol): Promise<RecordLocation<Document> | undefined> => {
     try {
       const document = await open(uri);
-      const member = formKeyMember(heldText(document), formKey);
+      const member = await declarationIn(heldText(document), formKey);
       if (!member) {
         reporter.shownOnSurface('warning', `${GESTURE} cannot open ${name}.`, `${uri.path} states no ${formKey} member.`);
         return undefined;

@@ -4,8 +4,8 @@ import { Uri } from '../../test/vscodeMock';
 vi.mock('vscode', () => ({ Uri }));
 
 import { locateRecord } from '../recordLocation';
-import { formKeyValue } from '../formKeyText';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { spelledIn } from './fakeSourceNames';
 
 const GUN = '000801:A.esp';
 const modA = { name: 'A.esp', origin: 'ModA' };
@@ -17,12 +17,12 @@ function located(text = GUN_TEXT) {
   client.setQueryAnswer('getRecordOwner', modA);
   client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: GUN_FILE });
   const at = (record: { formKey: string }) =>
-    locateRecord({ client, open: () => Promise.resolve({ getText: () => text }) }, record, formKeyValue);
+    locateRecord({ client, open: () => Promise.resolve({ getText: () => text }) }, record, (held, formKey) => Promise.resolve(spelledIn(held, `"${formKey}"`)));
   return { at };
 }
 
 describe('a record\'s place in its document, where Referenced By anchors its list', () => {
-  it('is its own FormKey value in its document, not a field that references it', async () => {
+  it('is where the names of the document it opens as place it', async () => {
     expect(await located().at({ formKey: GUN })).toMatchObject({ uri: { path: GUN_FILE }, start: 15, end: 29 });
   });
 

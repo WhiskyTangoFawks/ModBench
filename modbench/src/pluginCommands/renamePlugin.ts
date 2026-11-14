@@ -14,7 +14,7 @@ import { errorMessage } from '../ports/errorMessage';
 import { pluginNameRefusal } from './pluginName';
 import { answerOf } from '../wire/readFailed';
 
-export type PluginRenameClient = Pick<MEditClient, 'getRenameSourceChanges' | 'moveLastWritten' | 'getCreatablePluginExtensions' | 'getPluginNameReferences'>;
+export type PluginRenameClient = Pick<MEditClient, 'getRenameSourceChanges' | 'moveLastWritten' | 'getCreatablePluginExtensions' | 'getPluginNameReferences' | 'getPluginSourceNames'>;
 
 interface PluginRenameAccess {
   readonly adapter: InstanceAdapter;
@@ -39,7 +39,7 @@ async function ownersOf({ adapter, client }: PluginRenameAccess): Promise<Symbol
     modFolderOf: (mod) => adapter.modFolderPath(mod),
     companions: async () => pluginCompanionRule(await adapter.gameRelease()),
   });
-  return { definition: adapter.pluginReferences, references: [recordIndexReferences(client, manifestFiles.sourceFilesOf), manifestFiles] };
+  return { definition: adapter.pluginReferences, references: [recordIndexReferences(client, manifestFiles.sourceFilesOf, client), manifestFiles] };
 }
 
 const originName = (origin: RankedOrigin): string => (origin.kind === 'mod' ? origin.name : OVERWRITE_ORIGIN);

@@ -9,4 +9,7 @@ public static class CanonicalFormKey
     public static string? Of(string text) => FormKey.TryFactory(text, out var parsed) ? parsed.ToString() : null;
 
     internal static string OfOrAsWritten(string text) => Of(text) ?? text;
+
+    /// <summary>The FormKey a link names; null for text that names no record, an unset link's "Null" among it.</summary>
+    internal static string? OfLink(string text) => Of(text) is { } formKey && FormReferences.IsRealRef(formKey) ? formKey : null;
 }

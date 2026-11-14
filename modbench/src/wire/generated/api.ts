@@ -730,23 +730,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/file-paths/resolve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description The path in the Data folder that the member at a field path of a record names, as Mutagen's asset type places it, the folder it keeps the files of its kind in included, with forward slashes. The record is the text the caller holds, and the answer needs no index. 400 when the record type is unknown, the text is no JSON, the member holds no path to a file, or its asset type cannot hold the path. */
-        post: operations["ResolveFilePath"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/records": {
         parameters: {
             query?: never;
@@ -888,6 +871,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugin-source/names": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The names a document's text holds, and where each sits, by the text's own character offsets: each record's FormKey, the plugin inside it, and the Papyrus scripts, files, references and EditorID it names. With an offset, the names at it. The text is the caller's, saved or not; with a path, the text is that file's, and a file no plugin's source holds holds none. */
+        post: operations["GetPluginSourceNames"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/records/{formKey}/references-in-active-or-compiled-plugins": {
         parameters: {
             query?: never;
@@ -915,6 +915,23 @@ export interface paths {
         get: operations["GetScriptReferences"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/script-names/rename-source-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Over the unsaved documents mEdit holds, the text of each plugin source document renaming the Papyrus script changes: every member that names the script takes the new name, writing nothing. Each copy that cannot follow, in a plugin with no plugin source or whose document does not name the script where the record index says, is left behind, saying why. */
+        post: operations["ScriptRenameSourceChanges"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1481,6 +1498,21 @@ export interface components {
             path: string;
             text: string;
         };
+        DocumentName: {
+            kind: components["schemas"]["DocumentNameKind"];
+            /** Format: int32 */
+            start: number;
+            /** Format: int32 */
+            end: number;
+            value: string;
+            record?: string | null;
+            fieldPath?: string | null;
+            dataPath?: string | null;
+            refusal?: string | null;
+            validFormKeyTypes?: string[] | null;
+        };
+        /** @enum {string} */
+        DocumentNameKind: "Declaration" | "Record" | "Plugin" | "Script" | "File" | "EditorId" | "Reference";
         EditRecordChanges: {
             formKey: string;
             path: string;
@@ -1814,6 +1846,12 @@ export interface components {
             laterReadFailure?: components["schemas"]["SourceProblem"][] | null;
             description?: string | null;
         };
+        PluginSourceNamesRequest: {
+            text: string;
+            path?: string | null;
+            /** Format: int32 */
+            at?: number | null;
+        };
         PluginToRepairRequest: {
             plugin: components["schemas"]["PluginAddress"];
             sourceFolder?: components["schemas"]["SourceFolderRequest"] | null;
@@ -1977,23 +2015,23 @@ export interface components {
             aside: string;
             path: string;
         };
-        ResolveFilePathRequest: {
-            gameRelease: string;
-            recordType: string;
-            text: string;
-            fieldPath: string;
-        };
         ResolveNamesRequest: {
             names: components["schemas"]["NameQuery"][];
-        };
-        ResolvedFilePath: {
-            dataPath: string;
         };
         ScriptCopyRequest: {
             record: components["schemas"]["RecordAt"];
             mode: components["schemas"]["CopyMode"];
             destination: components["schemas"]["PluginAddress"];
             replace: boolean;
+        };
+        ScriptRenameRequest: {
+            name: string;
+            newName: string;
+        };
+        ScriptRenameSourceChanges: {
+            documents: components["schemas"]["DocumentChange"][];
+            plugins: components["schemas"]["PluginAddress"][];
+            leftBehind: string[];
         };
         SelectRequest: {
             sql: string;
@@ -4119,39 +4157,6 @@ export interface operations {
             };
         };
     };
-    ResolveFilePath: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ResolveFilePathRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResolvedFilePath"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
     GetRecords: {
         parameters: {
             query?: {
@@ -4554,6 +4559,48 @@ export interface operations {
             };
         };
     };
+    GetPluginSourceNames: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PluginSourceNamesRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentName"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     GetReferencesInActiveOrCompiledPlugins: {
         parameters: {
             query?: never;
@@ -4612,6 +4659,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MemberReferences"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ScriptRenameSourceChanges: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScriptRenameRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScriptRenameSourceChanges"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Service Unavailable */

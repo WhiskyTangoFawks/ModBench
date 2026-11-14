@@ -14,9 +14,9 @@ vi.mock('vscode', () => ({
 
 import { fileLanguage, type FileClient } from '../fileLanguage';
 import { recordingReporter } from '../../test/surfacingDoubles';
-import { comparisonOf, fieldOf } from '../../test/comparison';
-import { localFailure } from '../../wire/readFailed';
 import { FileConflictLookup, NO_GAME_FOLDER_ARCHIVED, type CopyAt, type StackedFile } from '../../instanceLoader/fileConflictIndex';
+import type { NamedFile } from '../sourceNames';
+import { sourceNames } from './fakeSourceNames';
 
 const HOLDER = '000801:Mod.esp';
 const SOURCE = '/instance/source/Mod/plugin-source/Mod.esp/TextureSet.json';
@@ -24,9 +24,8 @@ const NAMED = TEXT.indexOf('Decals');
 const FILE = 'textures/decals/stain_d.dds';
 const UNREAD = '000802:Mod.esp in Mod.esp (Mod): mEdit has no schema for its record type xxxx';
 const ARCHIVE = '/instance/mods/Mod/Mod - Textures.ba2';
+const SPAN = { start: NAMED, end: NAMED + 'Decals\\\\Stain_d.dds'.length };
 
-const diffuse = fieldOf({ name: 'Diffuse', type: 'string', isAssetLink: true });
-const editorId = fieldOf({ name: 'EditorID', type: 'string' });
 const LOOSE: CopyAt = { kind: 'loose', path: '/instance/mods/Mod/Textures/Decals/Stain_d.dds' };
 const ARCHIVED = { kind: 'archived', gameRelease: 'Fallout4', archive: ARCHIVE, file: 'textures/decals/other_d.dds' } as const satisfies CopyAt;
 
@@ -35,21 +34,17 @@ const NONE = { copies: [], unread: [] };
 
 interface Doubles {
   copy?: CopyAt | { none: string };
-  resolve?: () => ReturnType<FileClient['resolveFilePath']>;
-  compare?: FileClient['getComparison'];
+  named?: NamedFile;
   tooltip?: string;
   rocks?: number;
 }
 
-function language(answer: Awaited<ReturnType<FileClient['getFileReferences']>>, { copy = LOOSE, resolve = () => Promise.resolve(FILE), compare, tooltip, rocks = 0 }: Doubles = {}) {
+function language(answer: Awaited<ReturnType<FileClient['getFileReferences']>>, { copy = LOOSE, named, tooltip, rocks = 0 }: Doubles = {}) {
   const reporter = recordingReporter();
   const getFileReferences = vi.fn(() => Promise.resolve(answer));
-  const resolveFilePath = vi.fn(resolve);
   const reveal = vi.fn(() => Promise.resolve());
   const client: FileClient = {
     getFileReferences,
-    resolveFilePath,
-    getComparison: compare ?? (() => Promise.resolve(comparisonOf(HOLDER, [{ plugin: 'Mod.esp', recordType: 'txst', isWinner: true, fields: [diffuse, editorId] }]))),
     getRecordOwner: () => Promise.resolve(undefined),
     getCopyDocument: () => Promise.resolve({ kind: 'OwnFile' as const, location: SOURCE }),
   };
@@ -66,41 +61,22 @@ function language(answer: Awaited<ReturnType<FileClient['getFileReferences']>>, 
     if (path.startsWith('meshes/rocks/')) return { kind: 'loose' as const, path: `/instance/mods/Rocks/${path}` };
     return path === ARCHIVED.file ? ARCHIVED : NO_COPY;
   });
-  return { reporter, getFileReferences, resolveFilePath, reveal, copyOf, stackedCopies, ...fileLanguage({ instance: { value }, reporter, client, gameRelease: () => Promise.resolve('Fallout4'), copyOf, reveal, tooltip: () => tooltip }) };
+  const names = sourceNames({
+    fileAt: () => Promise.resolve(named),
+    membersIn: (text, formKey, fieldPaths) => Promise.resolve(formKey === HOLDER && fieldPaths.includes('Diffuse') && text === TEXT ? [SPAN] : []),
+  });
+  return { reporter, getFileReferences, reveal, copyOf, stackedCopies, ...fileLanguage({ instance: { value }, reporter, client, names, copyOf, reveal, tooltip: () => tooltip }) };
 }
 
 describe('a path in plugin source names a file (symbols.md, The symbols, File)', () => {
-  const document = (path = SOURCE) => ({ uri: Uri.file(path), getText: () => TEXT });
-  const SPAN = { start: NAMED, end: NAMED + 'Decals\\\\Stain_d.dds'.length };
-
-  it('names the file by its path in the Data folder, asking mEdit which file the record\'s path names', async () => {
-    const { resolveFilePath, ...kind } = language(NONE);
-
-    expect(await kind.nameAt(document(), NAMED + 2)).toEqual({ ...SPAN, name: FILE, symbol: { kind: 'file', path: FILE } });
-    expect(resolveFilePath.mock.calls).toEqual([['Fallout4', 'txst', JSON.stringify(JSON.parse(TEXT)), 'Diffuse']]);
-  });
-
-  it('names nothing, saying why, where mEdit could not tell which file the path names', async () => {
-    const kind = language(NONE, { resolve: () => Promise.resolve(localFailure('Data/Stain_d.dds is no path its asset type holds')) });
-
-    expect(await kind.nameAt(document(), NAMED + 2)).toEqual({ ...SPAN, name: 'Decals\\Stain_d.dds', symbol: { refused: 'Data/Stain_d.dds is no path its asset type holds' } });
-  });
-
-  it('says why it cannot tell whether the field is a path, when mEdit cannot answer for the record', async () => {
-    const { resolveFilePath, reporter, ...kind } = language(NONE, { compare: () => Promise.reject(new Error('mEdit is down')) });
-
-    expect(await kind.nameAt(document(), NAMED + 2)).toBeUndefined();
-    expect([resolveFilePath.mock.calls, reporter.shownFailures]).toEqual([[], [{ severity: 'error', message: `Cannot tell whether ${HOLDER} names a file here.`, detail: 'mEdit is down' }]]);
-  });
+  const document = { uri: Uri.file(SOURCE), getText: () => TEXT };
 
   it.each([
-    ['a field that is no path', TEXT.lastIndexOf('Stain') + 2, SOURCE],
-    ['a path in a file that is no plugin source', NAMED + 2, '/instance/notes.json'],
-  ])('is not %s', async (_case, offset, file) => {
-    const { resolveFilePath, ...kind } = language(NONE);
-
-    expect(await kind.nameAt(document(file), offset)).toBeUndefined();
-    expect(resolveFilePath).not.toHaveBeenCalled();
+    ['the file by its path in the Data folder', { ...SPAN, given: 'Decals\\Stain_d.dds', path: FILE }, { ...SPAN, name: FILE, symbol: { kind: 'file', path: FILE } }],
+    ['nothing, saying why, by the path as given, where mEdit could not tell which file it names', { ...SPAN, given: 'Decals\\Stain_d.dds', refused: 'Data/Stain_d.dds is no path its asset type holds' },
+      { ...SPAN, name: 'Decals\\Stain_d.dds', symbol: { refused: 'Data/Stain_d.dds is no path its asset type holds' } }],
+  ])('names %s', async (_case, named, expected) => {
+    expect(await language(NONE, { named }).nameAt(document, NAMED + 2)).toEqual(expected);
   });
 
   it.each([

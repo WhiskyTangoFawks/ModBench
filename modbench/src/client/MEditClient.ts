@@ -151,6 +151,7 @@ export type WorkingTreeStatesBeneath = components['schemas']['WorkingTreeStatesB
 export type RecordTypeChoice = components['schemas']['RecordTypeChoice'];
 export type RenderedDocument = components['schemas']['RenderedDocument'];
 export type CopyDocument = components['schemas']['CopyDocument'];
+export type DocumentName = components['schemas']['DocumentName'];
 export type RecordPage = components['schemas']['RecordSummaryPagedResult'];
 export type InteriorCellBlock = components['schemas']['InteriorCellBlock'];
 export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock'];
@@ -352,8 +353,12 @@ export interface MEditClient {
   getScriptReferences(name: string): Promise<components['schemas']['MemberReferences'] | ReadFailed>;
   /** Each copy that names the file at `path` in the Data folder. */
   getFileReferences(path: string): Promise<components['schemas']['MemberReferences'] | ReadFailed>;
-  /** The path in the Data folder that the member at `fieldPath` of the record `text` names, as Mutagen places it. */
-  resolveFilePath(gameRelease: string, recordType: string, text: string, fieldPath: string): Promise<string | ReadFailed>;
+  /** The names a document's `text` holds, and where each sits; with `at`, those at that offset. With the `path` of its
+   *  file, none when no plugin's source holds the file. */
+  getPluginSourceNames(text: string, path?: string, at?: number): Promise<DocumentName[] | ReadFailed>;
+  /** The text of each plugin source document renaming the Papyrus script `name` changes, over the unsaved documents
+   *  mEdit holds, the plugins whose source changes, and each reference left behind. */
+  getScriptRenameSourceChanges(name: string, newName: string): Promise<components['schemas']['ScriptRenameSourceChanges'] | ReadFailed>;
   /** Null: the plugin holds no such record. */
   getRenderedDocument(plugin: PluginAddress, formKey: string): Promise<RenderedDocument | null | ReadFailed>;
   /** Null: the plugin holds no such record. `location` is the path of the copy's own file, of the file of the

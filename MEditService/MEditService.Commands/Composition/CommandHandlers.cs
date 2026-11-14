@@ -132,6 +132,8 @@ public static class CommandHandlers
         services.AddSingleton(sp => new RenameSourceChangesHandler(
             sp.GetRequiredService<LoadOrderHolder>(), sp.GetRequiredService<ISourceAdapter>(), sp.GetRequiredService<UnsavedDocuments>()));
 
+        services.AddSingleton(sp => new ScriptRenameSourceChangesHandler(sp.GetRequiredService<ISourceAdapter>()));
+
         services.AddSingleton(sp => new MoveLastWrittenHandler(sp.GetRequiredService<LoadOrderHolder>(), sp.GetRequiredService<ISourceAdapter>()));
 
         services.AddSingleton(sp => new CompilePluginHandler(

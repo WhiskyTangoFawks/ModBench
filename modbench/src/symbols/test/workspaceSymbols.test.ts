@@ -8,6 +8,7 @@ import { workspaceSymbolsOf } from '../workspaceSymbols';
 import type { PluginMetadata, RecordSummary } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { copyDocumentsOf, copyKey as key, type CopyOnDisk } from './copyDocuments';
+import { spelledIn } from './fakeSourceNames';
 
 const modA = { name: 'A.esp', origin: 'ModA' };
 const modB = { name: 'B.esp', origin: 'ModB' };
@@ -46,7 +47,9 @@ function symbols(plugins: PluginMetadata[], found: RecordSummary[], files: Recor
     resolve({ getText: () => text });
   });
   const reporter = recordingReporter();
-  const workspace = workspaceSymbolsOf({ client, reporter, open });
+  const workspace = workspaceSymbolsOf({
+    client, reporter, open, declarationIn: (text, formKey) => Promise.resolve(spelledIn(text, `"FormKey": "${formKey}"`)),
+  });
   return { client, reporter, ...workspace };
 }
 

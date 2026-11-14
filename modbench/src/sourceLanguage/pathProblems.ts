@@ -7,7 +7,7 @@ import { answerOf } from '../wire/readFailed';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { lastRead, positionAt, readiness, tellingOnSurface, type Told } from './feedShape';
 import type { ProblemOnFile, ProblemsByFile } from './sourceProblems';
-import { stringsAt } from '../drivingLib/sourceText';
+import { stringsAt } from './sourceText';
 
 /** What the instance says of a file the plugin source names. */
 export interface PathStanding {

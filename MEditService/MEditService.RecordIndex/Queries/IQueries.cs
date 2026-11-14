@@ -1,3 +1,4 @@
+using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.RepositoriesLib;
@@ -47,6 +48,9 @@ public interface IQueries
     // Null when the plugin holds no such record; a source stop when its source tree cannot say.
     Task<Answer<CopyDocument?, IndexRefused>> GetCopyDocument(PluginAddress plugin, string formKey, CancellationToken cancel);
     Answer<RecordOfFileAnswer, IndexRefused> GetRecordOfFile(string path);
+    /// <summary>The names a document's text holds, and where each sits; with <paramref name="at"/>, those at that offset.
+    /// Given the <paramref name="path"/> of a file no plugin's source holds, none.</summary>
+    Answer<IReadOnlyList<DocumentName>, IndexRefused> GetPluginSourceNames(string? path, string text, int? at);
 
     Task<Answer<IReadOnlyList<WorldspaceSummary>, IndexRefused>> GetWorldspaces(PluginAddress plugin, CancellationToken cancel);
     Task<Answer<WorldspaceBlocks, IndexRefused>> GetWorldspaceBlocks(

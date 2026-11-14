@@ -5,7 +5,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import type { PathHop } from '../wire/messages';
 import { pluginAddressKey } from '../wire/pluginAddress';
-import { locationOf, type Segment } from '../drivingLib/sourceText';
+import { locationOf, type Segment } from './sourceText';
 import { lastRead, readiness, tellingOnSurface, type Position, type Told } from './feedShape';
 import { answerOf, failureReason, type ReadFailed } from '../wire/readFailed';
 

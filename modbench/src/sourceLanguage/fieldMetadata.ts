@@ -21,9 +21,8 @@ function memberOf(owner: Pick<FieldMetadata, 'fields'>, ownerValue: unknown, nam
   return shape && shapeUnderOwner(shape, ownerValue);
 }
 
-/** The metadata of the field at `path` of a record, from the fields mEdit answers for it; an object's
- *  members take the shape of the leaf its discriminator names. */
-export function metadataAt(fields: Field[], record: unknown, path: Segment[]): FieldMetadata | undefined {
+// An object's members take the shape of the leaf its discriminator names.
+function metadataAt(fields: Field[], record: unknown, path: Segment[]): FieldMetadata | undefined {
   let shape: Pick<FieldMetadata, 'fields'> = { fields: fields.map((field) => field.metadata) };
   let current: FieldMetadata | undefined;
   for (const [depth, segment] of path.entries()) {
@@ -44,11 +43,4 @@ async function winningCopy(client: ComparisonClient, formKey: string) {
 export async function fieldOfRecord(client: ComparisonClient, found: FieldAtOffset): Promise<FieldMetadata | undefined> {
   const copy = await winningCopy(client, found.recordFormKey);
   return copy && metadataAt(copy.fields, found.record, found.path);
-}
-
-/** The record type of the winning copy, when the field `found` sits in holds a path to a file; rejects when mEdit cannot
- *  answer. */
-export async function recordTypeOfPathField(client: ComparisonClient, found: FieldAtOffset): Promise<string | undefined> {
-  const copy = await winningCopy(client, found.recordFormKey);
-  return copy && metadataAt(copy.fields, found.record, found.path)?.isAssetLink ? copy.recordType : undefined;
 }

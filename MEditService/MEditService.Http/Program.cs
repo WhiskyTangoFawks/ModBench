@@ -121,7 +121,6 @@ try
     app.MapModEndpoints();
     app.MapArchiveEndpoints();
     app.MapArchiveCopiesEndpoints();
-    app.MapFilePathEndpoints();
     app.MapRecordEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapWorldspaceEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapContainerChildEndpoints(app.Services.GetRequiredService<ILoggerFactory>());

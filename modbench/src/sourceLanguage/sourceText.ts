@@ -1,6 +1,5 @@
 import { findNodeAtLocation, findNodeAtOffset, getNodePath, getNodeValue, parseTree, type Node } from 'jsonc-parser';
-
-export interface TextSpan { start: number; end: number }
+import type { TextSpan } from '../symbolNames/symbolNames';
 
 export type Segment = string | number;
 
@@ -12,17 +11,17 @@ export interface FieldAtOffset extends TextSpan {
   path: Segment[];
 }
 
-export const FORM_KEY = /^[0-9A-F]{6}[:_].+\.(esm|esp|esl)$/i;
+const FORM_KEY = /^[0-9A-F]{6}[:_].+\.(esm|esp|esl)$/i;
 
 // Mutagen reads either delimiter and either hex case as one FormKey; the Index names it by the colon and upper case.
-export const canonicalFormKey = (text: string): string => FORM_KEY.test(text) ? `${text.slice(0, 6).toUpperCase()}:${text.slice(7)}` : text;
+const canonicalFormKey = (text: string): string => FORM_KEY.test(text) ? `${text.slice(0, 6).toUpperCase()}:${text.slice(7)}` : text;
 
-export const spanOf = (node: Node): TextSpan => ({ start: node.offset, end: node.offset + node.length });
+const spanOf = (node: Node): TextSpan => ({ start: node.offset, end: node.offset + node.length });
 
-export const isStringValue = (node: Node): boolean =>
+const isStringValue = (node: Node): boolean =>
   node.type === 'string' && !(node.parent?.type === 'property' && node.parent.children?.[0] === node);
 
-export const ownFormKey = (node: Node): Node | undefined =>
+const ownFormKey = (node: Node): Node | undefined =>
   node.type === 'object' ? findNodeAtLocation(node, ['FormKey']) : undefined;
 
 function find(node: Node, matches: (candidate: Node) => boolean): Node | undefined {
@@ -34,15 +33,15 @@ function find(node: Node, matches: (candidate: Node) => boolean): Node | undefin
   return undefined;
 }
 
-export const stringNodeAt = (root: Node | undefined, offset: number): Node | undefined => {
+const stringNodeAt = (root: Node | undefined, offset: number): Node | undefined => {
   const node = root && findNodeAtOffset(root, offset);
   return node && isStringValue(node) ? node : undefined;
 };
 
-export const isStringOf = (value: string) => (node: Node): boolean =>
+const isStringOf = (value: string) => (node: Node): boolean =>
   isStringValue(node) && typeof node.value === 'string' && canonicalFormKey(node.value) === canonicalFormKey(value);
 
-export const recordOf = (root: Node, formKey: string): Node | undefined =>
+const recordOf =(root: Node, formKey: string): Node | undefined =>
   find(root, (node) => {
     const own = ownFormKey(node);
     return own !== undefined && isStringOf(formKey)(own);

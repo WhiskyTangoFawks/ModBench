@@ -11,7 +11,7 @@ import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getPluginIndexing' | 'getPluginProblems' | 'getPluginFilePaths' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'getArchiveContents' | 'getArchiveFile' | 'getArchiveCopies' | 'getFlaggedPluginHashes'
   | 'getRecords' | 'searchRecords'
-  | 'getRecordOwner' | 'getRecordHolders' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getRecordsComparison' | 'getReferencesInActiveOrCompiledPlugins' | 'getPluginNameReferences' | 'getScriptReferences' | 'getFileReferences' | 'resolveFilePath'
+  | 'getRecordOwner' | 'getRecordHolders' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getRecordsComparison' | 'getReferencesInActiveOrCompiledPlugins' | 'getPluginNameReferences' | 'getScriptReferences' | 'getFileReferences' | 'getPluginSourceNames' | 'getScriptRenameSourceChanges'
   | 'getRenderedDocument' | 'getCopyDocument' | 'getRecordOfFile'
   | 'getEditChanges'
   | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellChildRecords' | 'getInteriorCells'
@@ -440,8 +440,11 @@ export class InMemoryMEditClient implements MEditClient {
   getFileReferences(...args: Parameters<MEditClient['getFileReferences']>): ReturnType<MEditClient['getFileReferences']> {
     return this.query('getFileReferences', args);
   }
-  resolveFilePath(...args: Parameters<MEditClient['resolveFilePath']>): ReturnType<MEditClient['resolveFilePath']> {
-    return this.query('resolveFilePath', args);
+  getPluginSourceNames(...args: Parameters<MEditClient['getPluginSourceNames']>): ReturnType<MEditClient['getPluginSourceNames']> {
+    return this.query('getPluginSourceNames', args);
+  }
+  getScriptRenameSourceChanges(...args: Parameters<MEditClient['getScriptRenameSourceChanges']>): ReturnType<MEditClient['getScriptRenameSourceChanges']> {
+    return this.query('getScriptRenameSourceChanges', args);
   }
   getEditChanges(...args: Parameters<MEditClient['getEditChanges']>): ReturnType<MEditClient['getEditChanges']> {
     return this.query('getEditChanges', args);

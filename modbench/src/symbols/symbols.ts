@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
+import { sourceNames, type SourceNames } from './sourceNames';
 import type { Reporter } from '../ports/reporter';
 import type { EntryRef } from '../instanceAdapter/instanceAdapter';
 import type { RecordDocumentClient } from '../textDocuments/recordDocument';
 import { openPluginSourceDocument } from '../textDocuments/pluginSource';
 import { locateRecord, locationOf } from './recordLocation';
-import { formKeyValue } from './formKeyText';
 import type { Instance } from '../instanceLoader/instance';
 import { symbolIndex, type SymbolIndex } from './symbolIndex';
 import type { EntryNames, PluginSymbol, SymbolOwner } from '../symbolNames/symbolNames';
@@ -28,6 +28,8 @@ interface SymbolsDeps {
   instance: Pick<Instance, 'value' | 'subscribe'> | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
   client: Pick<MEditClient, 'getRecordOfFile'> & RecordClient & ScriptClient & FileClient & RecordReferencedByDeps['client'];
+  /** What mEdit's record index names in plugin source. */
+  names: Pick<MEditClient, 'getPluginSourceNames'>;
   focusedOrPickedRecord: () => Promise<string | undefined>;
   fileCopies: FileCopies;
   /** Each box that owns files, saying where they name a symbol (ADR-0028). */
@@ -63,36 +65,37 @@ interface Symbols extends vscode.Disposable {
   symbols: SymbolIndex;
 }
 
-function formKeyLocation(client: RecordDocumentClient) {
+function formKeyLocation(client: RecordDocumentClient, names: Pick<SourceNames, 'formKeyIn'>) {
   return async (record: Parameters<typeof locateRecord>[1]): Promise<vscode.Location | { refused: string } | undefined> => {
-    const found = await locateRecord({ client, open: openPluginSourceDocument }, record, formKeyValue);
+    const found = await locateRecord({ client, open: openPluginSourceDocument }, record, names.formKeyIn);
     return found && ('refused' in found ? found : locationOf(found));
   };
 }
 
 export function createSymbols(deps: SymbolsDeps): Symbols {
   const { instance, reporter, client, rows, reporterFor, fileCopies, focusedOrPickedRecord } = deps;
+  const names = sourceNames({ client, names: deps.names, reporter });
   const plugin = pluginLanguage({
-    instance, reporter, client, owners: deps.owners, renamePlugin: renamePluginNamed, rows: () => rows?.plugins,
+    instance, reporter, client, owners: deps.owners, names, renamePlugin: renamePluginNamed, rows: () => rows?.plugins,
     tooltip: (shown) => deps.pluginsShown?.tooltipLines(shown) ?? [],
   });
   const { entryTooltip, downloadedFileTooltip, modOrderFileOf } = deps;
   const entry = entryLanguage({ instance, reporter, owners: deps.entryOwners, rows: () => rows?.mods, entryTooltip, downloadedFileTooltip, modOrderFileOf });
-  const file = fileLanguage({ instance, reporter, client, ...fileCopies, tooltip: (path) => rows?.mods.fileTooltip(path) });
+  const file = fileLanguage({ instance, reporter, client, names, ...fileCopies, tooltip: (path) => rows?.mods.fileTooltip(path) });
   const kinds: SymbolKinds = {
     plugin, entry, file,
-    script: scriptLanguage({ instance, reporter, client }),
-    record: recordLanguage({ client, reporter, open: openPluginSourceDocument }),
+    script: scriptLanguage({ instance, names, client }),
+    record: recordLanguage({ client, names, reporter, open: openPluginSourceDocument }),
   };
   const rename = renameSymbol({
-    plugin, client, plugins: () => instance?.value.plugins ?? [],
+    plugin, names, client, plugins: () => instance?.value.plugins ?? [],
     executeCommand: (command, ...args) => vscode.commands.executeCommand(command, ...args),
   });
   const goTo = { kinds, reveal: fileCopies.reveal };
   const disposable = vscode.Disposable.from(
     registerLanguageFeatures({ kinds, reporter, reveal: fileCopies.reveal, rename }),
     publishReferencesView((key, value) => { void vscode.commands.executeCommand('setContext', key, value); }),
-    registerRecordReferencedBy({ client, reporter: reporterFor('referencedBy'), locateRecord: formKeyLocation(client), focusedOrPickedRecord }),
+    registerRecordReferencedBy({ client, reporter: reporterFor('referencedBy'), locateRecord: formKeyLocation(client, names), focusedOrPickedRecord }),
     ...(rows ? [
       registerGoToMod({ ...goTo, rows: rows.mods, reporter: reporterFor('mod.goTo') }),
       registerModReferencedBy({ referencedBy: { mod: entry.referencedBy, file: file.referencedBy }, rows: rows.mods, value: rows.filesHeld, reporter: reporterFor('mod.referencedBy') }),

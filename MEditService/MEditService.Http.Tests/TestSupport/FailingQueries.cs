@@ -1,3 +1,4 @@
+using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
@@ -58,6 +59,8 @@ internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null)
         throw Failed();
 
     public Answer<RecordOfFileAnswer, IndexRefused> GetRecordOfFile(string path) => throw Failed();
+
+    public Answer<IReadOnlyList<DocumentName>, IndexRefused> GetPluginSourceNames(string? path, string text, int? at) => throw Failed();
 
     public LoadOrderStatus GetStatus() => throw Failed();
 

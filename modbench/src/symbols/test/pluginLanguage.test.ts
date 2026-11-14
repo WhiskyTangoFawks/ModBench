@@ -15,6 +15,7 @@ import type { InstanceValue } from '../../instanceLoader/instance';
 import type { PluginName, SymbolOwner } from '../../symbolNames/symbolNames';
 import type { ReferencesViewInput } from '../../drivingLib/referencesView';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { sourceNames } from './fakeSourceNames';
 
 const BASE = { name: 'Base.esm', origin: 'Base Mod' };
 const PLUGINS_TXT = '/profiles/Default/plugins.txt';
@@ -44,6 +45,7 @@ function language({ owner = ownerThatCannotReadAFile, plugins = [{ ...BASE, path
     reporter,
     client: { getCopyDocument: () => Promise.resolve(null), getRecordOwner: () => Promise.resolve(undefined) },
     owners: [owner],
+    names: sourceNames(),
     renamePlugin,
     rows: () => ({ show, fileOf: () => undefined }),
     tooltip,

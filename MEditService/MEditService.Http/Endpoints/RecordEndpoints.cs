@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using MEditService.Codec.Schema;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
@@ -162,6 +163,25 @@ internal static class RecordEndpoints
         .ProducesProblem(422)
         .ProducesProblem(503);
 
+        app.MapPost("/plugin-source/names", (PluginSourceNamesRequest request, IQueries svc) =>
+        {
+            if (request.Path is { } path && !Path.IsPathFullyQualified(path))
+                return EndpointMapping.BadRequest("Name the file by its absolute path.");
+            if (request.At is < 0 || request.At > request.Text.Length)
+                return EndpointMapping.BadRequest($"The offset {request.At} is outside the text.");
+            return EndpointMapping.Ok(svc.GetPluginSourceNames(request.Path, request.Text, request.At));
+        })
+        .WithName("GetPluginSourceNames")
+        .WithDescription(
+            "The names a document's text holds, and where each sits, by the text's own character offsets: each record's " +
+            "FormKey, the plugin inside it, and the Papyrus scripts, files, references and EditorID it names. With an " +
+            "offset, the names at it. The text is the caller's, saved or not; with a path, the text is that file's, and a " +
+            "file no plugin's source holds holds none.")
+        .WithTags("Records")
+        .Produces<IReadOnlyList<DocumentName>>()
+        .ProducesProblem(400)
+        .ProducesProblem(503);
+
         app.MapGet("/records/{formKey}/references-in-active-or-compiled-plugins", (string formKey, IQueries svc, CancellationToken aborted) =>
             GetReferences(
                 nameof(IQueries.GetReferencesInActiveOrCompiledPlugins), formKey,
@@ -181,6 +201,18 @@ internal static class RecordEndpoints
             "case, with the member paths that name it. Answers only once the record index is ready. Each says whether its " +
             "plugin has plugin source, which a rename changes, and why each copy that may attach it went unread.")
         .Produces<MemberReferences>()
+        .ProducesProblem(503);
+
+        app.MapPost("/script-names/rename-source-changes", ScriptRenameSourceChanges)
+        .WithName("ScriptRenameSourceChanges")
+        .WithTags("Records")
+        .WithDescription(
+            "Over the unsaved documents mEdit holds, the text of each plugin source document renaming the Papyrus script " +
+            "changes: every member that names the script takes the new name, writing nothing. Each copy that cannot follow, " +
+            "in a plugin with no plugin source or whose document does not name the script where the record index says, is " +
+            "left behind, saying why.")
+        .Produces<ScriptRenameSourceChanges>()
+        .ProducesProblem(400)
         .ProducesProblem(503);
 
         app.MapGet("/file-paths/references", async (string path, IQueries svc, CancellationToken aborted) =>
@@ -337,6 +369,38 @@ internal static class RecordEndpoints
             "EditRecord", logger, edits.Edit(plugin, decoded, envelope, CopiesWithNoPluginSource(svc, plugin, decoded)), Results.Ok);
     }
 
+    internal static async Task<IResult> ScriptRenameSourceChanges(
+        ScriptRenameRequest request, IQueries svc, ScriptRenameSourceChangesHandler rename, CancellationToken aborted)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.NewName))
+            return EndpointMapping.BadRequest("The script's name and its new name are required.");
+        var references = await svc.GetScriptReferences(request.Name, aborted);
+        var copies = references.Holds(out var held, out _) ? await ScriptCopyFiles(svc, held, aborted) : [];
+        return EndpointMapping.Answered(references, answered => Results.Ok(rename.Changes(request.Name, request.NewName, copies, answered.Unread)));
+    }
+
+    private static async Task<List<ScriptCopyFile>> ScriptCopyFiles(IQueries svc, MemberReferences references, CancellationToken aborted)
+    {
+        var copies = new List<ScriptCopyFile>();
+        foreach (var copy in references.Copies)
+        {
+            var (place, at) = copy.InPluginSource ? PlaceOf(await svc.GetCopyDocument(copy.Plugin, copy.FormKey, aborted)) : (ScriptCopyPlace.NoPluginSource, null);
+            copies.Add(new(copy.FormKey, copy.Plugin, copy.FieldPaths, place, at));
+        }
+        return copies;
+    }
+
+    private static (ScriptCopyPlace Place, string? At) PlaceOf(Answer<CopyDocument?, IndexRefused> document)
+    {
+        if (!document.Holds(out var held, out var refused)) return (ScriptCopyPlace.Unread, refused.Message);
+        return held switch
+        {
+            null => (ScriptCopyPlace.NoCopy, null),
+            { Kind: CopyDocumentKind.Rendered } => (ScriptCopyPlace.Rendered, null),
+            _ => (ScriptCopyPlace.File, held.Location),
+        };
+    }
+
     private static RecordEditEnvelope EnvelopeOf(RecordEditRequest edit) => new(edit.Op, edit.Path ?? [], edit.EditedValue);
 
     private static Func<Answer<RecordAt[], string>> CopiesWithNoPluginSource(IQueries svc, PluginAddress plugin, string formKey) =>
@@ -473,6 +537,11 @@ internal static class RecordEndpoints
 }
 
 internal sealed record SelectRequest(string Sql);
+
+internal sealed record ScriptRenameRequest(string Name, string NewName);
+
+/// <summary>A document's text, the absolute path of its file when it is one, and the offset whose names are asked.</summary>
+internal sealed record PluginSourceNamesRequest(string Text, string? Path = null, int? At = null);
 
 internal sealed record ResolveNamesRequest(IReadOnlyList<NameQuery> Names);
 

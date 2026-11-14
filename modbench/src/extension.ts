@@ -2,7 +2,7 @@
 // with VS Code, and decides nothing: eslint.config.mjs holds that.
 
 import * as vscode from 'vscode';
-import { attachPortOf, createMEditClient, recordIndexReferences, stopMEditClient, type MEditClient } from './client';
+import { attachPortOf, createMEditClient, pluginSourceNames, recordIndexReferences, scriptSourceRename, stopMEditClient, type MEditClient } from './client';
 import { manifestFileReferences, manifestEntryNames } from './manifestAdapter/manifestAdapter';
 import type { EntryNames, SymbolOwner } from './symbolNames/symbolNames';
 import { makeReporter } from './drivingLib/reporter';
@@ -18,7 +18,7 @@ import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, loadOrderComing, sourceModRepositoriesOver } from './editor';
 import { quickFixes } from './drivingLib/quickFixes';
 import type { FileCopies } from './symbols/fileLanguage';
-import { createSymbols, followRenames, referencedByCopyValueText, registerFollowRename, scriptReferences, type SymbolRows } from './symbols';
+import { createSymbols, followRenames, referencedByCopyValueText, registerFollowRename, type SymbolRows } from './symbols';
 import { createSourceLanguage } from './sourceLanguage';
 import { saveUnsavedUnder } from './textDocuments/saveUnsavedUnder';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
@@ -26,11 +26,10 @@ import { registerCopyValueCommand, type CopyValueAdapter } from './drivingLib/co
 import type { SourceEditing } from './textDocuments/sourceEditing';
 import { applyWorkspaceChanges } from './textDocuments/applyWorkspaceChanges';
 import { oneAtATime } from './textDocuments/oneAtATime';
-import { openPluginSourceDocument, readHeldText } from './textDocuments/pluginSource';
 import { Instance } from './instanceLoader/instance';
 import { factsOf, NO_INSTANCE_FACTS, type InstanceFacts } from './instanceLoader/instanceFacts';
 import { sourceFiles, NO_SOURCE_FILES, type SourceFilesOf } from './instanceLoader/loadOrderSnapshot';
-import { downloadedFileReader, type InstanceAdapter, type EntryRef } from './instanceAdapter/instanceAdapter';
+import { downloadedFileReader, isPluginSourcePath, type InstanceAdapter, type EntryRef } from './instanceAdapter/instanceAdapter';
 import type { CopyReads } from './mods/sameCopies';
 import { adapterForInstance, isInstance } from './instanceAdapter/openInstance';
 import { serveAgent } from './agent/agentServer';
@@ -109,7 +108,7 @@ type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
   'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'signalChange' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
-  | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'getPluginNameReferences' | 'getScriptReferences' | 'getFileReferences' | 'getCopyDocument' | 'getRecordOwner' | 'moveLastWritten' | 'getSourceFolderMoveChanges' | 'followSourceFolderMove' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'getFlaggedPluginHashes' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'getPluginIndexing' | 'getArchiveCopies'>;
+  | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'getPluginNameReferences' | 'getScriptReferences' | 'getFileReferences' | 'getPluginSourceNames' | 'getScriptRenameSourceChanges' | 'getCopyDocument' | 'getRecordOwner' | 'moveLastWritten' | 'getSourceFolderMoveChanges' | 'followSourceFolderMove' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'getFlaggedPluginHashes' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'getPluginIndexing' | 'getArchiveCopies'>;
 
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -162,7 +161,7 @@ function buildBareSide(own: Own): InstanceSide {
     entryTooltip: () => undefined,
     downloadedFileTooltip: () => undefined,
     modOrderFileOf: () => undefined,
-    fileCopies: { gameRelease: () => Promise.reject(new Error('No instance is open.')), copyOf: (path) => ({ none: `No instance is open to hold ${path}.` }), reveal: revealCopy },
+    fileCopies: { copyOf: (path) => ({ none: `No instance is open to hold ${path}.` }), reveal: revealCopy },
     pathStanding: NO_PATH_STANDING,
     sourceFiles: NO_SOURCE_FILES,
     copyValue: [],
@@ -236,7 +235,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const entryRenames = entryRenameCommands({ adapter, client });
   own(registerFollowRename(followRenames({
     adapter, plugins: commandsOfPlugins, entries: entryRenames, downloads: downloadedFileCommands(adapter), profiles: commands, source: deps.sourceEditing, instance,
-    scripts: scriptRenameCommands({ adapter, client, references: scriptReferences({ client, open: openPluginSourceDocument, readText: readHeldText }).owner(deps.sourceEditing.refreshSourceControlFor) }),
+    scripts: scriptRenameCommands({ adapter, client, references: scriptSourceRename({ client, refreshSourceControlFor: deps.sourceEditing.refreshSourceControlFor }) }),
     reporter: reporterFor('symbol.followRename'),
   })));
   const plugins = own(pluginsBox.onInstance({
@@ -305,7 +304,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     entryTooltip: (entry) => mods.tooltipOf(entry),
     downloadedFileTooltip: (name) => downloads.tooltipOf(name),
     modOrderFileOf: (profile) => adapter.modOrderFileOf(profile),
-    fileCopies: { gameRelease: () => adapter.gameRelease(), copyOf: (path) => copyTheGameGets(instance.value, path), reveal: revealCopy },
+    fileCopies: { copyOf: (path) => copyTheGameGets(instance.value, path), reveal: revealCopy },
     deployment: { folder: () => deploymentFolderOf(deploymentFolderSetting), pluginsTxtPlace: placeForGame },
     pathStanding: pathStandingOf(instance),
     sourceFiles: (origin) => sourceFiles(instance.value, origin),
@@ -406,15 +405,16 @@ function start(context: vscode.ExtensionContext): void {
     client: meditClient, instance: views.instance, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
     pathStanding: views.pathStanding,
   });
+  const sourceNames = pluginSourceNames(meditClient, isPluginSourcePath);
   const symbols = createSymbols({
-    client: meditClient, instance: views.instance, reporter: makeReporter(outputChannel, 'symbols'), reporterFor, rows: views.symbolRows,
+    client: meditClient, names: sourceNames, instance: views.instance, reporter: makeReporter(outputChannel, 'symbols'), reporterFor, rows: views.symbolRows,
     focusedOrPickedRecord: editor.focusedOrPickedRecord,
     pluginsShown: views.pluginsShown,
     fileCopies: views.fileCopies,
     entryTooltip: views.entryTooltip,
     downloadedFileTooltip: views.downloadedFileTooltip,
     modOrderFileOf: views.modOrderFileOf,
-    owners: [recordIndexReferences(meditClient, () => Promise.resolve([])), ...opened.owners],
+    owners: [recordIndexReferences(meditClient, () => Promise.resolve([]), sourceNames), ...opened.owners],
     entryOwners: opened.entryOwners,
   });
   const agentServer = serveAgent({ port: agentPort(), instance: views.instance, copyReads: views.copyReads, symbols: symbols.symbols, statuses: views.statuses, deployment: views.deployment, pluginsShown: views.pluginsShown, standing: { mEdit: () => plugins.standing.mEdit(), plugins: () => plugins.standing.plugins(), sortingRules: () => plugins.standing.sortingRules(), modList: () => views.modsLines(), sourceLanguage: () => sourceLanguage.messages() }, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
