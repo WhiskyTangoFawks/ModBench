@@ -32,7 +32,7 @@ import { fomodDialog } from './fomodDialog';
 import { registerCompareFileCommand } from './compareFile';
 import { registerGoToModCommand } from './goToMod';
 import type { ModRows } from '../drivingLib/symbolRows';
-import { ArchivedFileNode, FileNode } from './modFiles';
+import { ArchivedFileNode, FileNode, winningCopyTooltip } from './modFiles';
 import { registerBuildCommand } from './buildCommand';
 import { registerBuildTask } from './buildTask';
 import { ModProblems } from './modProblems';
@@ -223,6 +223,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
       show: (mod) => { const row = provider.entryRow({ kind: 'mod', name: mod }); return row && (() => view.reveal(row, { select: true, focus: true })); },
       folderOf: (mod) => instance.value.paths.modDirs.get(mod),
       dataPathOf: (clicked) => clicked instanceof FileNode ? clicked.file.relativePath : clicked instanceof ArchivedFileNode ? clicked.path : undefined,
+      fileTooltip: (path) => winningCopyTooltip(instance.value, path),
     },
     standingLines: () => [modSync.message(), statusMessage()].filter((line) => line !== undefined),
     tooltipOf: (entry) => { const { tooltip } = provider.entryRow(entry) ?? {}; return typeof tooltip === 'string' ? tooltip : undefined; },

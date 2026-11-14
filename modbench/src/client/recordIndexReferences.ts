@@ -1,8 +1,6 @@
-import { COMMITTED, namesPlugin, sameName, type HeldTexts, type PluginSymbol, type SymbolOwner } from '../symbolNames/symbolNames';
+import { COMMITTED, namesPlugin, samePlugin, type HeldTexts, type PluginSymbol, type SymbolOwner } from '../symbolNames/symbolNames';
 import { failureReason, isReadFailed } from '../wire/readFailed';
 import { isRefused, type MEditClient, type RenameSourceAsked } from './MEditClient';
-
-const isThePlugin = (plugin: PluginSymbol, symbol: PluginSymbol): boolean => sameName(plugin.name, symbol.name) && sameName(plugin.origin, symbol.origin);
 
 const MEDIT_READS = 'the plugins mEdit reads';
 
@@ -30,7 +28,7 @@ export function recordIndexReferences(
       // The renamed plugin's own copies follow its file.
       const inNoSource = isReadFailed(copies)
         ? [`${MEDIT_READS}: ${failureReason(copies)}`]
-        : copies.filter(({ plugin, inPluginSource }) => !inPluginSource && !isThePlugin(plugin, symbol))
+        : copies.filter(({ plugin, inPluginSource }) => !inPluginSource && !samePlugin(plugin, symbol))
           .map(({ formKey, plugin }) => `${formKey} in ${plugin.name} (${plugin.origin})`);
       const { treeName, moves, deletions, documents, leftBehind } = changes;
       return {

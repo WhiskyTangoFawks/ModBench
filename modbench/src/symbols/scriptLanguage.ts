@@ -4,29 +4,28 @@ import type { InstanceValue, PapyrusScript } from '../instanceLoader/instance';
 import { isPluginSourcePath } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
-import { sameName } from '../symbolNames/symbolNames';
-import type { Definition, SymbolReferences } from './symbolIndex';
+import { sameName, type ScriptSymbol } from '../symbolNames/symbolNames';
 import { heldText } from '../textDocuments/heldText';
 import { openPluginSourceDocument, readHeldText } from '../textDocuments/pluginSource';
 import { fieldOfRecord } from '../drivingLib/fieldMetadata';
 import { scriptReferences, type ScriptReferencesClient } from './scriptReferences';
 import { fieldAt } from '../drivingLib/sourceText';
 import { formKeyAt } from './formKeyText';
-import { referenceOf, reportedForFeature, type AskedIn } from './symbolPlaces';
+import { atFile, nameHolds, type AskedIn } from './symbolPlaces';
+import type { Definition, SymbolKind } from './symbolKind';
 
 export type ScriptClient = Pick<MEditClient, 'getComparison'> & ScriptReferencesClient;
 
 interface ScriptLanguageDeps {
   instance: { readonly value: Pick<InstanceValue, 'papyrusScripts'> } | undefined;
-  reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
+  reporter: Pick<Reporter, 'shownOnSurface'>;
   client: ScriptClient;
 }
 
-const atFile = (file: string): vscode.Location => new vscode.Location(vscode.Uri.file(file), new vscode.Range(0, 0, 0, 0));
 
-/** A Papyrus script as a symbol in the text editor: where plugin source names one a record attaches, and the records
- *  that attach it, which mEdit answers (symbols.md). */
-export function scriptLanguage({ instance, reporter, client }: ScriptLanguageDeps) {
+/** A Papyrus script as a symbol: where plugin source names one a record attaches, and the records that attach it, which
+ *  mEdit answers (symbols.md). */
+export function scriptLanguage({ instance, reporter, client }: ScriptLanguageDeps): SymbolKind<ScriptSymbol> {
   const scripts = (): readonly PapyrusScript[] => instance?.value.papyrusScripts ?? [];
 
   const nameAt = async (document: AskedIn, offset: number): Promise<{ name: string; start: number; end: number } | undefined> => {
@@ -46,51 +45,34 @@ export function scriptLanguage({ instance, reporter, client }: ScriptLanguageDep
   const references = scriptReferences({ client, open: openPluginSourceDocument, readText: readHeldText });
   const fileOf = ({ source, compiled }: PapyrusScript): string | undefined => source ?? compiled;
 
-  const definitionOf = (name: string): Definition => {
-    const held = scripts().find((script) => sameName(script.name, name));
-    const file = held && fileOf(held);
-    return file === undefined ? { refused: `No mod, Overwrite or the Data folder holds a source or a compiled script of ${name}.` } : { file };
-  };
-
   return {
-    /** Where the script `name` is defined: its source, else its compiled script. */
-    definitionOf,
-    /** Each member of a record that names the script `name`, and why each copy went unread. */
-    placesNaming: async (name: string): Promise<SymbolReferences> => {
+    async nameAt(document, offset) {
+      const found = await nameAt(document, offset);
+      return found && { start: found.start, end: found.end, name: found.name, symbol: { kind: 'script', name: found.name } };
+    },
+    /** Its source, else its compiled script. */
+    definitionOf({ name }): Promise<Definition> {
+      const held = scripts().find((script) => sameName(script.name, name));
+      const file = held && fileOf(held);
+      return Promise.resolve(file === undefined ? { refused: `No mod, Overwrite or the Data folder holds a source or a compiled script of ${name}.` } : { file });
+    },
+    /** Each member of a record that names it. */
+    async referencesTo({ name }) {
       const { found, unread } = await references.read(name);
-      return { references: found.map(referenceOf), leftOut: unread };
+      return { locations: found, unread };
     },
-    /** Go to Definition on the script whose name is at `offset`: its source, else its compiled script. Undefined where no
-     *  script's name is. */
-    definitionAt: async (document: AskedIn, offset: number): Promise<{ start: number; end: number; file: string | undefined } | undefined> => {
+    /** None: a script has no row. */
+    tooltipOf: () => Promise.resolve([]),
+    async completionsAt(document, offset) {
       const found = await nameAt(document, offset);
-      if (found === undefined) return undefined;
-      const definition = definitionOf(found.name);
-      if ('refused' in definition) reporter.shownOnSurface('warning', `Go to Definition cannot go to ${found.name}.`, definition.refused);
-      return { start: found.start, end: found.end, file: 'file' in definition ? definition.file : undefined };
+      return found && { start: found.start, end: found.end, icon: vscode.CompletionItemKind.Class, items: scripts().map(({ name }) => ({ label: name })) };
     },
-    /** What a hover on the script's name at `offset` says: its name, since a script has no row. */
-    hoverAt: async (document: AskedIn, offset: number): Promise<{ start: number; end: number; lines: readonly string[] } | undefined> => {
-      const found = await nameAt(document, offset);
-      return found && { start: found.start, end: found.end, lines: [found.name] };
-    },
-    /** Completion where plugin source names a script: each script, over the name so far. */
-    completionsAt: async (document: AskedIn, offset: number): Promise<{ start: number; end: number; items: readonly string[] } | undefined> => {
-      const found = await nameAt(document, offset);
-      return found && { start: found.start, end: found.end, items: scripts().map(({ name }) => name) };
-    },
-    /** Go to Symbol in Workspace: each script whose name holds `query`, at its source, else its compiled script. */
-    symbolsFor: (query: string): { name: string; location: vscode.Location }[] => {
-      const wanted = query.trim().toLowerCase();
-      if (wanted === '') return [];
-      return scripts().filter(({ name }) => name.toLowerCase().includes(wanted))
-        .flatMap((script) => { const file = fileOf(script); return file === undefined ? [] : [{ name: script.name, location: atFile(file) }]; });
-    },
-    /** Find All References on the script whose name is at `offset`: each member of a record that names it; undefined
-     *  where no script's name is. */
-    referencesAt: async (document: AskedIn, offset: number): Promise<vscode.Location[] | undefined> => {
-      const found = await nameAt(document, offset);
-      return found && reportedForFeature(reporter, found.name, await references.read(found.name)).found;
+    /** Each script whose name holds `query`, at its source, else its compiled script. */
+    symbolsFor(query) {
+      return Promise.resolve(scripts().filter(({ name }) => nameHolds(name, query)).flatMap((script) => {
+        const file = fileOf(script);
+        return file === undefined ? [] : [{ name: script.name, detail: 'Papyrus script', icon: vscode.SymbolKind.Class, location: atFile(file) }];
+      }));
     },
   };
 }

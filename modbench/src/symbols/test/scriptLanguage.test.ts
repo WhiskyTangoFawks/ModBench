@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, Uri } from '../../test/vscodeMock';
+import { CompletionItemKind, SymbolKind } from './iconsMock';
 
 const opened = vi.hoisted(() => new Map<string, string>());
 const Range = vi.hoisted(() => class { readonly args: unknown[]; constructor(...args: unknown[]) { this.args = args; } get start() { return this.args[0]; } get end() { return this.args[1]; } });
 vi.mock('vscode', () => ({
-  Uri, Range, TreeItem, TreeItemCollapsibleState,
+  Uri, Range, TreeItem, TreeItemCollapsibleState, SymbolKind, CompletionItemKind,
   Location: class { constructor(readonly uri: unknown, readonly range: unknown) {} },
   workspace: {
     textDocuments: [],
@@ -60,8 +61,8 @@ function language(references: Awaited<ReturnType<ScriptClient['getScriptReferenc
 const document = (path = SOURCE) => ({ uri: Uri.file(path), getText: () => TEXT });
 
 describe('a Papyrus script\'s name in plugin source (symbols.md, The symbols)', () => {
-  it('is a hover that says its name, over the name between its quotes', async () => {
-    expect(await language().language.hoverAt(document(), AT_SCRIPT)).toEqual({ ...SPAN, lines: ['Ns:Quest'] });
+  it('spans its name between its quotes', async () => {
+    expect(await language().language.nameAt(document(), AT_SCRIPT)).toEqual({ ...SPAN, name: 'Ns:Quest', symbol: { kind: 'script', name: 'Ns:Quest' } });
   });
 
   it.each([
@@ -69,77 +70,54 @@ describe('a Papyrus script\'s name in plugin source (symbols.md, The symbols)', 
     ['a record\'s FormKey', document(), TEXT.indexOf(QUEST) + 2],
     ['a file that is no plugin source', document('/instance/notes.json'), AT_SCRIPT],
   ])('is not %s', async (_case, at, offset) => {
-    expect(await language().language.hoverAt(at, offset)).toBeUndefined();
+    expect(await language().language.nameAt(at, offset)).toBeUndefined();
   });
 
-  it('goes to its source, else its compiled script, as the instance holds them', async () => {
-    expect(await language().language.definitionAt(document(), AT_SCRIPT)).toEqual({ ...SPAN, file: QUEST_SOURCE });
-  });
-
-  it('says why Go to Definition cannot go to a script no mod holds', async () => {
-    const { language: unheld, reporter } = language(NONE, []);
-
-    expect(await unheld.definitionAt(document(), AT_SCRIPT)).toEqual({ ...SPAN, file: undefined });
-    expect(reporter.shownFailures).toEqual([{
-      severity: 'warning', message: 'Go to Definition cannot go to Ns:Quest.', detail: 'No mod, Overwrite or the Data folder holds a source or a compiled script of Ns:Quest.',
-    }]);
+  it('has no tooltip, since a script has no row', async () => {
+    expect(await language().language.tooltipOf({ kind: 'script', name: 'Ns:Quest' })).toEqual([]);
   });
 
   it('completes to each script', async () => {
-    expect(await language().language.completionsAt(document(), AT_SCRIPT)).toEqual({ ...SPAN, items: ['Ns:Quest', 'Other'] });
+    expect(await language().language.completionsAt(document(), AT_SCRIPT)).toEqual({ ...SPAN, icon: CompletionItemKind.Class, items: [{ label: 'Ns:Quest' }, { label: 'Other' }] });
   });
 
-  it('is found by Go to Symbol at its source, else its compiled script', () => {
+  it('is found by Go to Symbol at its source, else its compiled script', async () => {
     const { language: symbols } = language();
 
-    expect([...symbols.symbolsFor('QUEST'), ...symbols.symbolsFor('other')].map(({ name, location }) => [name, location])).toEqual([
+    expect([...await symbols.symbolsFor('QUEST'), ...await symbols.symbolsFor('other')].map(({ name, location }) => [name, location])).toEqual([
       ['Ns:Quest', { uri: Uri.file(QUEST_SOURCE), range: new Range(0, 0, 0, 0) }],
       ['Other', { uri: Uri.file('/instance/mods/Mod/Scripts/Other.pex'), range: new Range(0, 0, 0, 0) }],
     ]);
   });
 });
 
-describe('Find All References on a Papyrus script', () => {
+describe('where a Papyrus script is defined, and the records that attach it', () => {
   const copy = (origin: string) => ({ formKey: QUEST, plugin: { name: 'Mod.esp', origin }, inPluginSource: true, fieldPaths: [PATH] });
-
-  it('lists each member of a record mEdit says attaches it, and says in the Output why it left out a copy', async () => {
-    opened.set(SOURCE, TEXT);
-    const { language: answering, reporter } = language({ copies: [copy('Mod'), copy('Gone')], unread: ['000802:Mod.esp in Mod.esp (Mod): mEdit has no schema for its record type xxxx'] });
-
-    const found = await answering.referencesAt(document(), AT_SCRIPT);
-
-    expect(found?.map(({ uri, range }) => [uri, range])).toEqual([[Uri.file(SOURCE), new Range({ line: 0, character: SPAN.start }, { line: 0, character: SPAN.end })]]);
-    expect(reporter.shownFailures.map(({ detail }) => detail)).toEqual([
-      '000802:Mod.esp in Mod.esp (Mod): mEdit has no schema for its record type xxxx', 'Mod.esp (Gone) holds no 000801:Mod.esp.',
-    ]);
-  });
-
-  it('says in the Output why it could not read what mEdit reads', async () => {
-    const { language: failing, reporter } = language({ failed: 'refused', refusal: 'the record index is not ready' });
-
-    expect(await failing.referencesAt(document(), AT_SCRIPT)).toEqual([]);
-    expect(reporter.shownFailures.map(({ detail }) => detail)).toEqual(['the plugins mEdit reads: the record index is not ready']);
-  });
-});
-
-describe('the symbol index on a Papyrus script', () => {
-  const copy = { formKey: QUEST, plugin: { name: 'Mod.esp', origin: 'Mod' }, inPluginSource: true, fieldPaths: [PATH] };
 
   it.each([
     ['at its source', 'ns:quest', SCRIPTS, { file: QUEST_SOURCE }],
     ['at its compiled script when it has no source', 'Other', SCRIPTS, { file: '/instance/mods/Mod/Scripts/Other.pex' }],
     ['nowhere when no mod holds it, refusing', 'Ns:Quest', [], { refused: 'No mod, Overwrite or the Data folder holds a source or a compiled script of Ns:Quest.' }],
-  ])('defines a script %s', (_case, name, scripts, expected) => {
-    expect(language(NONE, scripts).language.definitionOf(name)).toEqual(expected);
+  ])('defines a script %s', async (_case, name, scripts, expected) => {
+    expect(await language(NONE, scripts).language.definitionOf({ kind: 'script', name })).toEqual(expected);
   });
 
-  it('lists each member that attaches it as a place, and each copy it could not read as left out', async () => {
+  it('lists each member of a record mEdit says attaches it, and why it left out each copy it could not read', async () => {
     opened.set(SOURCE, TEXT);
-    const { language: answering } = language({ copies: [copy], unread: ['000802:Mod.esp: unreadable'] });
+    const { language: answering } = language({ copies: [copy('Mod'), copy('Gone')], unread: ['000802:Mod.esp in Mod.esp (Mod): mEdit has no schema for its record type xxxx'] });
 
-    expect(await answering.placesNaming('Ns:Quest')).toEqual({
-      references: [{ file: SOURCE, start: { line: 0, character: SPAN.start }, end: { line: 0, character: SPAN.end } }],
-      leftOut: ['000802:Mod.esp: unreadable'],
-    });
+    const found = await answering.referencesTo({ kind: 'script', name: 'Ns:Quest' });
+
+    expect('locations' in found && [found.locations.map(({ uri, range }) => [uri, range]), found.unread]).toEqual([
+      [[Uri.file(SOURCE), new Range({ line: 0, character: SPAN.start }, { line: 0, character: SPAN.end })]],
+      ['000802:Mod.esp in Mod.esp (Mod): mEdit has no schema for its record type xxxx', 'Mod.esp (Gone) holds no 000801:Mod.esp.'],
+    ]);
+  });
+
+  it('says why it could not read what mEdit reads', async () => {
+    const { language: failing } = language({ failed: 'refused', refusal: 'the record index is not ready' });
+
+    expect(await failing.referencesTo({ kind: 'script', name: 'Ns:Quest' })).toEqual({ locations: [], unread: ['the plugins mEdit reads: the record index is not ready'] });
   });
 });
+

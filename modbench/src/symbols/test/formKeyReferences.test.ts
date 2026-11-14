@@ -4,9 +4,8 @@ import { Uri } from '../../test/vscodeMock';
 vi.mock('vscode', () => ({ Uri }));
 
 import type * as vscode from 'vscode';
-import { referencesOf } from '../formKeyReferences';
+import { referencesToFormKey } from '../formKeyReferences';
 import type { ReferenceResult } from '../../client';
-import { recordingReporter } from '../../test/surfacingDoubles';
 import { copyDocumentsOf, copyKey as key, type CopyOnDisk } from './copyDocuments';
 
 const GUN = '000900:A.esp';
@@ -15,13 +14,11 @@ const modA = { name: 'A.esp', origin: 'ModA' };
 const modB = { name: 'B.esp', origin: 'ModB' };
 const STAND_FILE = '/source/ModA/plugin-source/A.esp/Stand.json';
 const STAND_RENDERED = 'Stand - 000700_A.esp.json';
-const AT_GUN = (text: string) => text.indexOf(GUN) + 1;
-const ASKING = `{ "FormKey": "000600:A.esp", "Template": "${GUN}" }`;
 
 const row = (formKey: string, plugin: typeof modA, fieldPath: string): ReferenceResult =>
   ({ formKey, plugin: plugin.name, origin: plugin.origin, fieldPath, recordType: 'STAT', recordTypeName: 'Static' });
 
-type ReferencesClient = Parameters<typeof referencesOf<{ getText(): string }>>[0]['client'];
+type ReferencesClient = Parameters<typeof referencesToFormKey<{ getText(): string }>>[0]['client'];
 
 function references(rows: ReferenceResult[], copies: Record<string, CopyOnDisk>, answering: Partial<ReferencesClient> = {}) {
   const { getCopyDocument, textOnFile } = copyDocumentsOf(copies);
@@ -39,9 +36,8 @@ function references(rows: ReferenceResult[], copies: Record<string, CopyOnDisk>,
     if (found === undefined) throw new Error('The file is gone.');
     return found;
   };
-  const reporter = recordingReporter();
-  const referencesAt = referencesOf({ client, reporter, open: (uri) => new Promise<{ getText(): string }>((resolve) => { const text = textAt(uri); resolve({ getText: () => text }); }) });
-  return { reporter, referencesAt };
+  const read = referencesToFormKey({ client, open: (uri) => new Promise<{ getText(): string }>((resolve) => { const text = textAt(uri); resolve({ getText: () => text }); }) });
+  return { read, referencesAt: async (formKey: string) => (await read(formKey)).found };
 }
 
 const listed = (found: Awaited<ReturnType<ReturnType<typeof references>['referencesAt']>>) =>
@@ -56,7 +52,7 @@ describe('Find All References on a FormKey (symbols.md, The features, story 2)',
       { [key(STAND, modA)]: { file: STAND_FILE, text: compiledPlugin }, [key(STAND, modB)]: { rendered: STAND_RENDERED, text: rendered } },
     );
 
-    expect(listed(await referencesAt(ASKING, AT_GUN(ASKING)))).toEqual([
+    expect(listed(await referencesAt(GUN))).toEqual([
       { uri: `file:${STAND_FILE}`, text: `"${GUN}"`, start: compiledPlugin.indexOf(GUN) - 1 },
       { uri: `modbench-rendered:/ModB/B.esp/${STAND_RENDERED}`, text: `"${GUN}"`, start: rendered.indexOf(GUN) - 1 },
     ]);
@@ -74,7 +70,7 @@ describe('Find All References on a FormKey (symbols.md, The features, story 2)',
     it('lists a child record at the reference in its own object, on its own tab of its owner\'s file', async () => {
       const { referencesAt } = onCell(row(PERSISTENT, modA, 'Base'));
 
-      expect(listed(await referencesAt(ASKING, AT_GUN(ASKING)))).toEqual([
+      expect(listed(await referencesAt(GUN))).toEqual([
         { uri: `modbench-child-record:${CELL_FILE}`, text: `"${GUN}"`, start: cell.lastIndexOf(GUN) - 1 },
       ]);
     });
@@ -82,7 +78,7 @@ describe('Find All References on a FormKey (symbols.md, The features, story 2)',
     it('lists the owner at its own reference, past the references its child records hold', async () => {
       const { referencesAt } = onCell(row(CELL, modA, 'Owner'));
 
-      expect(listed(await referencesAt(ASKING, AT_GUN(ASKING)))).toEqual([
+      expect(listed(await referencesAt(GUN))).toEqual([
         { uri: `file:${CELL_FILE}`, text: `"${GUN}"`, start: cell.indexOf(`"Owner": "${GUN}"`) + '"Owner": '.length },
       ]);
     });
@@ -92,7 +88,7 @@ describe('Find All References on a FormKey (symbols.md, The features, story 2)',
     const edited = `{ "Model": "", "FormKey": "${STAND}" }`;
     const { referencesAt } = references([row(STAND, modA, 'Model')], { [key(STAND, modA)]: { file: STAND_FILE, text: edited } });
 
-    expect(listed(await referencesAt(ASKING, AT_GUN(ASKING)))).toEqual([
+    expect(listed(await referencesAt(GUN))).toEqual([
       { uri: `file:${STAND_FILE}`, text: `"${STAND}"`, start: edited.indexOf(STAND) - 1 },
     ]);
   });
@@ -100,14 +96,14 @@ describe('Find All References on a FormKey (symbols.md, The features, story 2)',
   it('lists a copy whose unsaved document lacks its record at the document\'s start', async () => {
     const { referencesAt } = references([row(STAND, modA, 'Model')], { [key(STAND, modA)]: { file: STAND_FILE, text: '{}' } });
 
-    expect(listed(await referencesAt(ASKING, AT_GUN(ASKING)))).toEqual([{ uri: `file:${STAND_FILE}`, text: '', start: 0 }]);
+    expect(listed(await referencesAt(GUN))).toEqual([{ uri: `file:${STAND_FILE}`, text: '', start: 0 }]);
   });
 
   it('lists a record that references itself at the field that holds the reference, never at its own FormKey member', async () => {
     const own = `{ "FormKey": "${GUN}", "Template": "${GUN}" }`;
     const { referencesAt } = references([row(GUN, modA, 'Template')], { [key(GUN, modA)]: { file: STAND_FILE, text: own } });
 
-    expect(listed(await referencesAt(own, AT_GUN(own)))).toEqual([
+    expect(listed(await referencesAt(GUN))).toEqual([
       { uri: `file:${STAND_FILE}`, text: `"${GUN}"`, start: own.lastIndexOf(GUN) - 1 },
     ]);
   });
@@ -116,64 +112,37 @@ describe('Find All References on a FormKey (symbols.md, The features, story 2)',
     const keyed = `{ "FormKey": "${STAND}", "${GUN}": 1, "Model": "${GUN}" }`;
     const { referencesAt } = references([row(STAND, modA, 'Model')], { [key(STAND, modA)]: { file: STAND_FILE, text: keyed } });
 
-    expect(listed(await referencesAt(ASKING, AT_GUN(ASKING)))).toEqual([
+    expect(listed(await referencesAt(GUN))).toEqual([
       { uri: `file:${STAND_FILE}`, text: `"${GUN}"`, start: keyed.lastIndexOf(GUN) - 1 },
     ]);
   });
 
   describe('when a copy cannot be listed', () => {
-    const LEFT_OUT = `Find All References on ${GUN} left out a copy it could not open.`;
     const compiledPlugin = { [key(STAND, modA)]: { file: STAND_FILE, text: `{ "FormKey": "${STAND}", "Model": "${GUN}" }` } };
-    const uris = (found: Parameters<typeof listed>[0]) => listed(found).map(({ uri }) => uri);
+    const uris = ({ found }: Awaited<ReturnType<ReturnType<typeof references>['read']>>) => listed(found).map(({ uri }) => uri);
 
-    it('writes nothing when every copy is listed', async () => {
-      const { reporter, referencesAt } = references([row(STAND, modA, 'Model')], compiledPlugin);
-
-      await referencesAt(ASKING, AT_GUN(ASKING));
-
-      expect(reporter.shownFailures).toEqual([]);
+    it('leaves out nothing when every copy is listed', async () => {
+      expect((await references([row(STAND, modA, 'Model')], compiledPlugin).read(GUN)).leftOut).toEqual([]);
     });
 
-    it('lists the copies it can, and writes the copy left out, when a plugin holds no copy mEdit counted', async () => {
-      const { reporter, referencesAt } = references([row(STAND, modA, 'Model'), row(STAND, modB, 'Model')], compiledPlugin);
+    it('lists the copies it can, and says why it left out one a plugin holds no copy of', async () => {
+      const found = await references([row(STAND, modA, 'Model'), row(STAND, modB, 'Model')], compiledPlugin).read(GUN);
 
-      expect(uris(await referencesAt(ASKING, AT_GUN(ASKING)))).toEqual([`file:${STAND_FILE}`]);
-      expect(reporter.shownFailures).toEqual([{ severity: 'warning', message: LEFT_OUT, detail: `B.esp (ModB) holds no ${STAND}.` }]);
+      expect([uris(found), found.leftOut]).toEqual([[`file:${STAND_FILE}`], [`B.esp (ModB) holds no ${STAND}.`]]);
     });
 
-    it('lists the copies it can, and writes the copy left out and why, when a copy\'s document fails to open', async () => {
-      const { reporter, referencesAt } = references(
+    it('lists the copies it can, and says why it left out one whose document fails to open', async () => {
+      const found = await references(
         [row(STAND, modA, 'Model'), row(STAND, modB, 'Model')], { ...compiledPlugin, [key(STAND, modB)]: { rendered: STAND_RENDERED } },
-      );
+      ).read(GUN);
 
-      expect(uris(await referencesAt(ASKING, AT_GUN(ASKING)))).toEqual([`file:${STAND_FILE}`]);
-      expect(reporter.shownFailures).toEqual([{ severity: 'warning', message: LEFT_OUT, detail: `${STAND} in B.esp (ModB): The file is gone.` }]);
+      expect([uris(found), found.leftOut]).toEqual([[`file:${STAND_FILE}`], [`${STAND} in B.esp (ModB): The file is gone.`]]);
     });
 
-    it('lists nothing, and writes to the Output why, when mEdit cannot answer what references it', async () => {
-      const { reporter, referencesAt } = references([], {}, { getReferencesInActiveOrCompiledPlugins: () => Promise.reject(new Error('mEdit is gone.')) });
+    it('throws when mEdit cannot answer what references it', async () => {
+      const { read } = references([], {}, { getReferencesInActiveOrCompiledPlugins: () => Promise.reject(new Error('mEdit is gone.')) });
 
-      expect(await referencesAt(ASKING, AT_GUN(ASKING))).toEqual([]);
-      expect(reporter.shownFailures).toEqual([{ severity: 'error', message: `Find All References cannot list what references ${GUN}.`, detail: 'mEdit is gone.' }]);
+      await expect(read(GUN)).rejects.toThrow('mEdit is gone.');
     });
-
-    it('writes a line for each copy left out, each time it is asked', async () => {
-      const { reporter, referencesAt } = references([row(STAND, modB, 'Model'), row(GUN, modB, 'Template')], {});
-      const line = (formKey: string) => ({ severity: 'warning', message: LEFT_OUT, detail: `B.esp (ModB) holds no ${formKey}.` });
-
-      await referencesAt(ASKING, AT_GUN(ASKING));
-      await referencesAt(ASKING, AT_GUN(ASKING));
-
-      expect(reporter.shownFailures).toEqual([line(STAND), line(GUN), line(STAND), line(GUN)]);
-    });
-  });
-
-  it('asks nothing for a string that is not a FormKey', async () => {
-    const getReferencesInActiveOrCompiledPlugins = vi.fn(() => Promise.resolve([]));
-    const { referencesAt } = references([], {}, { getReferencesInActiveOrCompiledPlugins });
-    const text = '{ "Name": "Rusty Gun" }';
-
-    expect(await referencesAt(text, text.indexOf('Rusty'))).toEqual([]);
-    expect(getReferencesInActiveOrCompiledPlugins).not.toHaveBeenCalled();
   });
 });

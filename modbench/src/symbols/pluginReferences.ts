@@ -1,17 +1,14 @@
-import type { Reporter } from '../ports/reporter';
 import { namesPlugin, type CopyNaming, type HeldTexts, type PlaceInFile, type PluginSymbol, type ResolvedPlugin, type SymbolOwner } from '../symbolNames/symbolNames';
 import { heldText } from '../textDocuments/heldText';
-import { pluginRowName } from '../wire/pluginAddress';
 import { locateCopies, type RecordLocation, type RecordLocationDeps } from './recordLocation';
 import { pluginNameSpans } from './formKeyText';
-import { readBy, reportedForFeature, reportedForGesture } from './symbolPlaces';
+import { readBy } from './symbolPlaces';
 
 interface PluginReferencesDeps<Document> extends RecordLocationDeps<Document> {
   owners: readonly SymbolOwner[];
   /** The instance's plugin rows, which a file name alone resolves through. */
   plugins: () => readonly ResolvedPlugin[];
   held: () => HeldTexts;
-  reporter: Pick<Reporter, 'report' | 'shownOnSurface'>;
 }
 
 export type PluginReference<Document> = PlaceInFile | RecordLocation<Document>;
@@ -21,24 +18,10 @@ interface PluginReferences<Document> {
   readonly unread: readonly string[];
 }
 
-
 type Read<Document> = (symbol: PluginSymbol) => Promise<PluginReferences<Document>>;
 
-/** Each place a file names the plugin, as each owner of files says (ADR-0028). What went unread is a notification for
- *  the gesture, and a line in the Output each for Find All References (common.md, Reporting). */
+/** Each place a file names the plugin, as each owner of files says (ADR-0028), and why each file went unread. */
 export function pluginReferencesOf<Document extends { getText(): string }>(
-  deps: PluginReferencesDeps<Document>,
-): { read: Read<Document>; forGesture: Read<Document>; forFeature: Read<Document> } {
-  const read = readReferences(deps);
-  const { reporter } = deps;
-  return {
-    read,
-    forGesture: async (symbol) => reportedForGesture(reporter, pluginRowName(symbol), await read(symbol)),
-    forFeature: async (symbol) => reportedForFeature(reporter, pluginRowName(symbol), await read(symbol)),
-  };
-}
-
-function readReferences<Document extends { getText(): string }>(
   { owners, plugins, held, client, open }: PluginReferencesDeps<Document>,
 ): Read<Document> {
   return async (symbol) => {

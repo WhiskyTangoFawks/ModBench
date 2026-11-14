@@ -24,7 +24,7 @@ vi.mock('vscode', () => ({
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
 import { OpenRows } from '../openRows';
 import { NO_MOD_STATUSES } from '../../test/noModStatuses';
-import { ArchivedFileNode, FileNode, FolderNode } from '../modFiles';
+import { ArchivedFileNode, FileNode, FolderNode, winningCopyTooltip } from '../modFiles';
 import { FileConflictLookup, RUNTIME_OUTPUT, modOrigin } from '../../instanceLoader/fileConflictIndex';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -712,5 +712,52 @@ describe('an archived file\'s tooltip names the game folder\'s file that wins ov
 
   it('is the path alone when a mod\'s loose file covers the game folder\'s', async () => {
     expect(await tooltipOf(['meshes/a.nif'], [file('meshes/a.nif')])).toBe('Armour - Main.ba2/meshes/a.nif');
+  });
+});
+
+describe('the tooltip Symbols reads for a file is its winning copy\'s row\'s (symbols.md, The symbols)', () => {
+  const ARCHIVE = file('Armour - Main.ba2', '/instance/mods/Armour/Armour - Main.ba2');
+  const LOOSE = file('b.nif', '/instance/mods/Armour/b.nif');
+  const OLD_LOOSE = file('b.nif', '/instance/mods/Old Armour/b.nif');
+  const shown = async (archive: ArchiveRead, gameFolderFiles: string[]) => {
+    const value = {
+      ...await indexedValueOf(
+        [mod('Armour'), mod('Old Armour')], { 'Armour': { files: [ARCHIVE, LOOSE] }, 'Old Armour': { files: [OLD_LOOSE] } }, { files: [] },
+        [{ origin: modOrigin('Armour'), archive: ARCHIVE.sourcePath, files: archive.kind === 'read' ? archive.answer : undefined }],
+      ),
+      archiveContents: new Map<string, ArchiveRead>([[ARCHIVE.sourcePath, archive]]),
+      dataFolderFiles: { kind: 'listed' as const, files: new Map(gameFolderFiles.map((relativePath) => [relativePath.toLowerCase(), { relativePath, path: `/game/Data/${relativePath}` }])) },
+    };
+    const provider = providerAt(new FakeInstance(value));
+    const armour = await rootOf(provider, ModNode, 'Armour');
+    return { value, provider, armour };
+  };
+
+  it('is a loose file\'s row\'s, whatever the case of the path asked', async () => {
+    const { value, provider, armour } = await shown({ kind: 'read', answer: [] }, []);
+    const row = await childNamed(provider, armour, 'b.nif');
+
+    expect([winningCopyTooltip(value, 'B.nif'), row.tooltip]).toEqual(['b.nif', 'b.nif']);
+  });
+
+  it('is an archived file\'s row\'s, naming the game folder\'s file that wins over it', async () => {
+    const { value, provider, armour } = await shown({ kind: 'read', answer: ['meshes/a.nif'] }, ['meshes/a.nif']);
+    const row = await childNamed(provider, await childNamed(provider, await childNamed(provider, armour, 'Armour - Main.ba2'), 'meshes'), 'a.nif');
+
+    expect(winningCopyTooltip(value, 'meshes/a.nif')).toBe(row.tooltip);
+    expect(row.tooltip).toBe('Armour - Main.ba2/meshes/a.nif\nwon by the game folder: /game/Data/meshes/a.nif');
+  });
+
+  it('is an unreadable archive\'s row\'s, saying why', async () => {
+    const { value, provider, armour } = await shown({ kind: 'unreadable', reason: 'it is no BA2' }, []);
+    const row = await childNamed(provider, armour, 'Armour - Main.ba2');
+
+    expect([winningCopyTooltip(value, 'Armour - Main.ba2'), row.tooltip]).toEqual(Array.from({ length: 2 }, () => 'Armour - Main.ba2\ncannot be read: it is no BA2'));
+  });
+
+  it('is none for a path no mod or Overwrite holds', async () => {
+    const { value } = await shown({ kind: 'read', answer: [] }, ['meshes/c.nif']);
+
+    expect(winningCopyTooltip(value, 'meshes/c.nif')).toBeUndefined();
   });
 });

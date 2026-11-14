@@ -81,10 +81,13 @@ describe('the record index plans a rename of a plugin (ADR-0028)', () => {
         { formKey: '000000:Child.esp', plugin: child, inPluginSource: false },
         { formKey: '000801:Patch.esp', plugin: { name: 'Patch.esp', origin: 'SourceMod' }, inPluginSource: true },
         { formKey: '000800:Base.esm', plugin: { name: 'base.ESM', origin: 'BaseMod' }, inPluginSource: false },
+        { formKey: '000802:Base.esm', plugin: { name: 'Base.esm', origin: 'Other Mod' }, inPluginSource: false },
       ]),
     }));
 
-    expect(plan.cannotFollow).toEqual(["Broken.esp (SourceMod): 'Npc.json' is no JSON document.", '000000:Child.esp in Child.esp (ChildMod)']);
+    expect(plan.cannotFollow).toEqual([
+      "Broken.esp (SourceMod): 'Npc.json' is no JSON document.", '000000:Child.esp in Child.esp (ChildMod)', '000802:Base.esm in Base.esm (Other Mod)',
+    ]);
   });
 
   it('carries no name a copy\'s file name gives it when mod order resolves that name to another copy', async () => {

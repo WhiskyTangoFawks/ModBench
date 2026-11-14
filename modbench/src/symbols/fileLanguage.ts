@@ -1,10 +1,11 @@
+import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import type { CopyAt } from '../instanceLoader/fileConflictIndex';
+import type { InstanceValue } from '../instanceLoader/instance';
 import { errorMessage } from '../ports/errorMessage';
 import { heldText } from '../textDocuments/heldText';
 import { isPluginSourcePath } from '../instanceAdapter/instanceAdapter';
 import { failureReason, isReadFailed } from '../wire/readFailed';
-import { referencesView } from '../drivingLib/referencesView';
 import type { Reporter } from '../ports/reporter';
 import type { RecordDocumentClient } from '../textDocuments/recordDocument';
 import { openPluginSourceDocument } from '../textDocuments/pluginSource';
@@ -12,12 +13,12 @@ import { fieldAt } from '../drivingLib/sourceText';
 import { fieldPathOf, formKeyAt } from './formKeyText';
 import { recordTypeOfPathField } from '../drivingLib/fieldMetadata';
 import { membersNaming } from './memberReferences';
-import type { Definition, SymbolReferences } from './symbolIndex';
-import { referenceOf, referencedByInput, reportedForGesture, type AskedIn, type ListedLocations } from './symbolPlaces';
+import { atFile, showReferencedBy, tooltipLines, type AskedIn } from './symbolPlaces';
+import type { Definition, FileNamed, Listed, Named, References, SymbolKind } from './symbolKind';
 
 export type FileClient = Pick<MEditClient, 'getFileReferences' | 'getComparison' | 'resolveFilePath'> & RecordDocumentClient;
 
-/** What the box that owns the instance's files says of one: which copy the game gets, and showing it in the Explorer. */
+/** What the box that owns the instance's files says of one: which copy the game gets, and where it is shown. */
 export interface FileCopies {
   gameRelease: () => Promise<string>;
   /** The copy of the file at its path in the Data folder that the game gets. */
@@ -26,21 +27,40 @@ export interface FileCopies {
 }
 
 interface FileLanguageDeps extends FileCopies {
+  instance: { readonly value: FilesValue } | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
   client: FileClient;
+  /** The tooltip of the row Mods shows for the copy the game gets of the file at `path`; undefined where it shows none. */
+  tooltip: (path: string) => string | undefined;
 }
 
 const holdsCopy = (found: CopyAt | { none: string }): found is CopyAt => !('none' in found);
 
+type FilesValue = Pick<InstanceValue, 'stackedCopies' | 'dataFolderFiles' | 'gameFolderArchived'>;
+type FoldedPath = readonly [folded: string, path: string];
+
+// A modlist holds hundreds of thousands of files, and VS Code asks again at each keystroke: an instance value's paths
+// are folded once, and a query lists no more than a person reads down, since typing more narrows it.
+const MOST_FILES_LISTED = 1000;
+const folded = new WeakMap<FilesValue, readonly FoldedPath[]>();
+
+function foldedPathsOf(value: FilesValue): readonly FoldedPath[] {
+  const known = folded.get(value);
+  if (known !== undefined) return known;
+  const paths = [
+    ...[...value.stackedCopies].map(({ relativePath }) => relativePath),
+    ...value.dataFolderFiles.kind === 'listed' ? [...value.dataFolderFiles.files.values()].map(({ relativePath }) => relativePath) : [],
+    ...[...value.gameFolderArchived.copies.values()].map(({ file }) => file),
+  ];
+  const each = [...new Map(paths.map((path): FoldedPath => [path.toLowerCase(), path]))];
+  folded.set(value, each);
+  return each;
+}
+
 /** A file as a symbol, named by its path in the Data folder: the records that name it, which mEdit answers (symbols.md,
  *  The symbols). */
-export function fileLanguage({ reporter, client, gameRelease, copyOf, reveal }: FileLanguageDeps) {
-  const listed = async (path: string): Promise<ListedLocations> => {
-    const { found, unread } = reportedForGesture(reporter, path, await membersNaming(client, openPluginSourceDocument, await client.getFileReferences(path)));
-    return { locations: found, unread: unread.length };
-  };
-
-  const pathAt = async (document: AskedIn, offset: number): Promise<{ start: number; end: number; given: string; field: string; recordType: string; release: string; record: string } | undefined> => {
+export function fileLanguage({ instance, reporter, client, gameRelease, copyOf, reveal, tooltip }: FileLanguageDeps) {
+  const pathAt = async (document: AskedIn, offset: number): Promise<Named<FileNamed> | undefined> => {
     if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
     const text = heldText(document);
     const found = fieldAt(text, offset);
@@ -48,63 +68,64 @@ export function fileLanguage({ reporter, client, gameRelease, copyOf, reveal }: 
     try {
       const recordType = await recordTypeOfPathField(client, found);
       const given: unknown = JSON.parse(text.slice(found.start, found.end));
-      return recordType === undefined || typeof given !== 'string' ? undefined : {
-        start: found.start + 1, end: found.end - 1, given, field: fieldPathOf(found.path), recordType, release: await gameRelease(), record: JSON.stringify(found.record),
-      };
+      if (recordType === undefined || typeof given !== 'string') return undefined;
+      const path = await client.resolveFilePath(await gameRelease(), recordType, JSON.stringify(found.record), fieldPathOf(found.path));
+      const span = { start: found.start + 1, end: found.end - 1 };
+      return isReadFailed(path) ? { ...span, name: given, symbol: { refused: failureReason(path) } } : { ...span, name: path, symbol: { kind: 'file', path } };
     } catch (error) {
       reporter.shownOnSurface('error', `Cannot tell whether ${found.recordFormKey} names a file here.`, errorMessage(error));
       return undefined;
     }
   };
 
-  return {
-    /** Where the file at `path` in the Data folder is defined: the copy the game gets, inside its archive when archived. */
-    definitionOf: (path: string): Definition => {
+  const referencesTo = async ({ path }: FileNamed): Promise<References> => {
+    const { found, unread } = await membersNaming(client, openPluginSourceDocument, await client.getFileReferences(path));
+    return { locations: found, unread };
+  };
+
+  const dataPaths = (): readonly FoldedPath[] => (instance === undefined ? [] : foldedPathsOf(instance.value));
+
+  const listedAt = (path: string, copy: CopyAt): Listed => ({
+    name: path, detail: 'file', icon: vscode.SymbolKind.File, location: atFile(copy.kind === 'loose' ? copy.path : copy.archive),
+    resolve: async () => { await reveal(copy); return undefined; },
+  });
+
+  const kind: SymbolKind<FileNamed> = {
+    nameAt: pathAt,
+    /** The copy the game gets, inside its archive when archived. */
+    definitionOf({ path }): Promise<Definition> {
       const copy = copyOf(path);
-      if (!holdsCopy(copy)) return { refused: copy.none };
-      return copy.kind === 'loose' ? { file: copy.path } : { archived: { archive: copy.archive, file: copy.file } };
+      return Promise.resolve(holdsCopy(copy) ? { shown: copy } : { refused: copy.none });
     },
-    /** Each member of a record that names the file at `path`, and why each copy went unread. */
-    placesNaming: async (path: string): Promise<SymbolReferences> => {
-      const { found, unread } = await membersNaming(client, openPluginSourceDocument, await client.getFileReferences(path));
-      return { references: found.map(referenceOf), leftOut: unread };
+    referencesTo,
+    tooltipOf: ({ path }) => Promise.resolve(tooltipLines(tooltip(path))),
+    completionsAt: () => Promise.resolve(undefined),
+    /** Each file whose path in the Data folder holds `query`, at the copy the game gets, up to `MOST_FILES_LISTED`; the
+     *  Output says how many more match. */
+    symbolsFor(query) {
+      const wanted = query.toLowerCase();
+      const matching = dataPaths().filter(([path]) => path.includes(wanted));
+      const listed: Listed[] = [];
+      for (const [, path] of matching) {
+        if (listed.length === MOST_FILES_LISTED) break;
+        const copy = copyOf(path);
+        if (holdsCopy(copy)) listed.push(listedAt(path, copy));
+      }
+      if (listed.length < matching.length) {
+        reporter.shownOnSurface(
+          'warning', `Go to Symbol in Workspace lists ${listed.length} of the ${matching.length} files whose path holds "${query}".`,
+          `It lists at most ${MOST_FILES_LISTED}, and none whose copy the game gets is outside the workspace. Type more of the path to narrow the list.`,
+        );
+      }
+      return Promise.resolve(listed);
     },
-    /** Go to Definition on the path at `offset`: the copy of its file the game gets, shown in the Explorer. Undefined where no
-     *  path is; `resolved` is false where it could not go, and says why. */
-    definitionAt: async (document: AskedIn, offset: number): Promise<{ start: number; end: number; resolved: boolean } | undefined> => {
-      const found = await pathAt(document, offset);
-      if (found === undefined) return undefined;
-      const { start, end } = found;
-      const file = await client.resolveFilePath(found.release, found.recordType, found.record, found.field);
-      if (isReadFailed(file)) {
-        reporter.shownOnSurface('warning', `Go to Definition cannot go to ${found.given}.`, failureReason(file));
-        return { start, end, resolved: false };
-      }
-      const copy = copyOf(file);
-      if (!holdsCopy(copy)) {
-        reporter.shownOnSurface('warning', `Go to Definition cannot go to ${file}.`, copy.none);
-        return { start, end, resolved: false };
-      }
-      try {
-        await reveal(copy);
-      } catch (error) {
-        reporter.shownOnSurface('warning', `Go to Definition cannot show ${file}.`, errorMessage(error));
-        return { start, end, resolved: false };
-      }
-      return { start, end, resolved: true };
-    },
-    /** Lists each record that names the file at `path` in the Data folder, in VS Code's References view, anchored at the
-     *  first. */
-    referencedBy: async (path: string): Promise<void> => {
-      const view = await referencesView();
-      if (!view) return;
-      const first = await listed(path);
-      const [anchor] = first.locations;
-      if (anchor === undefined) {
-        reporter.report('error', `Could not list where files name ${path}.`, first.unread > 0 ? 'No record that could be read names it.' : 'No record names it.');
-        return;
-      }
-      view.setInput(referencedByInput(`Referenced By: ${path}`, 'modbench.fileReferencedBy', anchor, () => listed(path), first));
-    },
+  };
+
+  return {
+    ...kind,
+    /** Lists each record that names the file at `path` in the Data folder, in VS Code's References view. */
+    referencedBy: (path: string): Promise<void> => showReferencedBy({
+      reporter, subject: path, contextValue: 'modbench.fileReferencedBy', references: () => referencesTo({ kind: 'file', path }),
+    }),
   };
 }
