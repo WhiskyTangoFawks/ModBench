@@ -62,7 +62,7 @@ const document = (path = SOURCE) => ({ uri: Uri.file(path), getText: () => TEXT 
 
 describe('a Papyrus script\'s name in plugin source (symbols.md, The symbols)', () => {
   it('spans its name between its quotes', async () => {
-    expect(await language().language.nameAt(document(), AT_SCRIPT)).toEqual({ ...SPAN, spelled: 'Ns:Quest', symbol: { kind: 'script', name: 'Ns:Quest' } });
+    expect(await language().language.nameAt(document(), AT_SCRIPT)).toEqual({ ...SPAN, name: 'Ns:Quest', symbol: { kind: 'script', name: 'Ns:Quest' } });
   });
 
   it.each([
@@ -73,8 +73,8 @@ describe('a Papyrus script\'s name in plugin source (symbols.md, The symbols)', 
     expect(await language().language.nameAt(at, offset)).toBeUndefined();
   });
 
-  it('is a hover that says its name', async () => {
-    expect(await language().language.hoverOf({ ...SPAN, spelled: 'Ns:Quest', symbol: { kind: 'script', name: 'Ns:Quest' } })).toEqual(['Ns:Quest']);
+  it('has no tooltip, since a script has no row', async () => {
+    expect(await language().language.tooltipOf({ kind: 'script', name: 'Ns:Quest' })).toEqual([]);
   });
 
   it('completes to each script', async () => {

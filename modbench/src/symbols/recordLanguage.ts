@@ -10,7 +10,7 @@ import { hoverOf } from './formKeyHover';
 import { referencesToFormKey } from './formKeyReferences';
 import { formKeyAt, formKeyMember } from './formKeyText';
 import { locateRecord, locationOf } from './recordLocation';
-import type { Definition, References, SymbolKind } from './symbolKind';
+import type { Definition, RecordNamed, References, SymbolKind } from './symbolKind';
 import { workspaceSymbolsOf } from './workspaceSymbols';
 
 export type RecordClient = RecordDocumentClient & Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlugins'>;
@@ -21,8 +21,6 @@ interface RecordLanguageDeps {
   open: (uri: vscode.Uri) => PromiseLike<Pick<vscode.TextDocument, 'getText' | 'positionAt'>>;
 }
 
-type RecordNamed = { readonly kind: 'record'; readonly formKey: string };
-
 /** A record as a symbol: its FormKey in plugin source, and every answer from the active and the compiled plugins mEdit
  *  reads (symbols.md, The symbols, Record). */
 export function recordLanguage({ client, reporter, open }: RecordLanguageDeps): SymbolKind<RecordNamed> {
@@ -31,7 +29,7 @@ export function recordLanguage({ client, reporter, open }: RecordLanguageDeps): 
   return {
     nameAt(document, offset) {
       const found = isPluginSourcePath(document.uri.fsPath) ? formKeyAt(heldText(document), offset) : undefined;
-      return Promise.resolve(found && { start: found.start, end: found.end, spelled: found.formKey, symbol: { kind: 'record', formKey: found.formKey } });
+      return Promise.resolve(found && { start: found.start, end: found.end, name: found.formKey, symbol: { kind: 'record', formKey: found.formKey } });
     },
     /** Its winning copy's FormKey member. */
     async definitionOf({ formKey }): Promise<Definition> {
@@ -48,7 +46,8 @@ export function recordLanguage({ client, reporter, open }: RecordLanguageDeps): 
         return { refused: `mEdit cannot list what references ${formKey}: ${errorMessage(error)}` };
       }
     },
-    hoverOf: ({ symbol }) => ('refused' in symbol ? Promise.resolve(undefined) : hoverOf({ client, reporter }, symbol.formKey)),
+    /** What symbols.md, The symbols, says a record's hover shows; none where no active plugin holds it. */
+    tooltipOf: async ({ formKey }) => await hoverOf({ client, reporter }, formKey) ?? [],
     /** The records a reference field offers for the text typed so far. */
     async completionsAt(document, offset) {
       if (!isPluginSourcePath(document.uri.fsPath)) return undefined;

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Uri } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, Uri } from '../../test/vscodeMock';
 
 const { handlers, executeCommand } = vi.hoisted(() => ({
   handlers: new Map<string, (clicked?: unknown) => Promise<void>>(),
@@ -11,7 +11,7 @@ vi.mock('vscode', () => ({
     registerCommand: (command: string, handler: (clicked?: unknown) => Promise<void>) => { handlers.set(command, handler); return { dispose: vi.fn() }; },
     executeCommand,
   },
-  Uri,
+  Uri, TreeItem, TreeItemCollapsibleState,
 }));
 
 import { registerGoToMod, registerGoToPlugin, registerModReferencedBy, registerPluginReferencedBy } from '../symbolCommands';

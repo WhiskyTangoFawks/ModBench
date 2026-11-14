@@ -10,11 +10,12 @@ import { openPluginSourceDocument } from '../textDocuments/pluginSource';
 import type { RecordDocumentClient } from '../textDocuments/recordDocument';
 import { headerFormKeyOf } from '../wire/headerFormKey';
 import { pluginRowName } from '../wire/pluginAddress';
-import { placeLocation, showReferencedBy, spelledAround, type AskedIn, type ListedLocations } from './symbolPlaces';
+import { atFile, nameHolds, placeLocation, showReferencedBy, spelledAround, type AskedIn, type ListedLocations } from './symbolPlaces';
 import { pluginReferencesOf, type PluginReference } from './pluginReferences';
 import { locateRecord, locationOf } from './recordLocation';
 import { formKeyPluginAt, formKeyValue } from './formKeyText';
-import type { Definition, Listed, Named, References, SymbolKind } from './symbolKind';
+import { selectingItsRow } from './definitionShown';
+import type { Definition, Listed, Named, PluginNamed, References, SymbolKind } from './symbolKind';
 
 interface PluginLanguageDeps {
   instance: { readonly value: Pick<InstanceValue, 'plugins'> } | undefined;
@@ -29,12 +30,8 @@ interface PluginLanguageDeps {
   tooltip: (plugin: PluginSymbol) => readonly string[];
 }
 
-type PluginNamed = { readonly kind: 'plugin' } & PluginName;
-
 const locationOfReference = (found: PluginReference<vscode.TextDocument>): vscode.Location =>
   ('file' in found ? placeLocation(found) : locationOf(found));
-
-const atFile = (file: string): vscode.Location => new vscode.Location(vscode.Uri.file(file), new vscode.Range(0, 0, 0, 0));
 
 /** A plugin as a symbol: inside a FormKey, and wherever an owner's file names it (symbols.md, The symbols, Plugin). */
 export function pluginLanguage({ instance, reporter, client, owners, renamePlugin, rows, tooltip }: PluginLanguageDeps) {
@@ -87,7 +84,7 @@ export function pluginLanguage({ instance, reporter, client, owners, renamePlugi
   const kind: SymbolKind<PluginNamed> = {
     async nameAt(document, offset): Promise<Named<PluginNamed> | undefined> {
       const found = await nameWithSpan(document, offset);
-      return found && { start: found.start, end: found.end, spelled: found.name, symbol: { kind: 'plugin', ...found.named } };
+      return found && { start: found.start, end: found.end, name: found.name, symbol: { kind: 'plugin', ...found.named } };
     },
     /** Its row in Plugins, else its file. */
     definitionOf(named): Promise<Definition> {
@@ -101,10 +98,9 @@ export function pluginLanguage({ instance, reporter, client, owners, renamePlugi
       return Promise.resolve({ refused: held === undefined ? `The instance holds no plugin ${named.name} from ${plugin.origin}.` : 'Plugins shows no row for it and no file holds it.' });
     },
     referencesTo,
-    hoverOf({ symbol, spelled }) {
-      const plugin = 'refused' in symbol ? undefined : pluginNamed(symbol, plugins());
-      const lines = plugin ? tooltip(plugin) : [];
-      return Promise.resolve(lines.length > 0 ? lines : [spelled]);
+    tooltipOf(named) {
+      const plugin = pluginNamed(named, plugins());
+      return Promise.resolve(plugin ? tooltip(plugin) : []);
     },
     /** Each plugin file name with the mods that hold it, over the name so far. */
     async completionsAt(document, offset) {
@@ -122,18 +118,11 @@ export function pluginLanguage({ instance, reporter, client, owners, renamePlugi
     /** Each plugin copy whose file name holds `query`, at its file, else at a place a file names it. A copy with neither
      *  has no place to be listed at. */
     async symbolsFor(query) {
-      const wanted = query.trim().toLowerCase();
-      if (wanted === '') return [];
-      const matching = plugins().filter(({ name }) => name.toLowerCase().includes(wanted));
+      const matching = plugins().filter(({ name }) => nameHolds(name, query));
       const placed = await Promise.all(matching.map(async ({ name, origin, path }): Promise<Listed | undefined> => {
         const plugin = { name, origin };
         const listedAt = (location: vscode.Location): Listed => ({
-          name, detail: origin, icon: vscode.SymbolKind.File, location,
-          resolve: async () => {
-            const definition = await kind.definitionOf({ kind: 'plugin', ...plugin });
-            if ('row' in definition) await definition.show();
-            return undefined;
-          },
+          name, detail: origin, icon: vscode.SymbolKind.File, location, resolve: selectingItsRow(() => kind.definitionOf({ kind: 'plugin', ...plugin })),
         });
         if (path !== undefined) return listedAt(atFile(path));
         const named = (await read(plugin)).found.find((reference) => 'file' in reference);

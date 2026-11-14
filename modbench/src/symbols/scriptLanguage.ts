@@ -11,7 +11,7 @@ import { fieldOfRecord } from '../drivingLib/fieldMetadata';
 import { scriptReferences, type ScriptReferencesClient } from './scriptReferences';
 import { fieldAt } from '../drivingLib/sourceText';
 import { formKeyAt } from './formKeyText';
-import type { AskedIn } from './symbolPlaces';
+import { atFile, nameHolds, type AskedIn } from './symbolPlaces';
 import type { Definition, SymbolKind } from './symbolKind';
 
 export type ScriptClient = Pick<MEditClient, 'getComparison'> & ScriptReferencesClient;
@@ -22,7 +22,6 @@ interface ScriptLanguageDeps {
   client: ScriptClient;
 }
 
-const atFile = (file: string): vscode.Location => new vscode.Location(vscode.Uri.file(file), new vscode.Range(0, 0, 0, 0));
 
 /** A Papyrus script as a symbol: where plugin source names one a record attaches, and the records that attach it, which
  *  mEdit answers (symbols.md). */
@@ -49,7 +48,7 @@ export function scriptLanguage({ instance, reporter, client }: ScriptLanguageDep
   return {
     async nameAt(document, offset) {
       const found = await nameAt(document, offset);
-      return found && { start: found.start, end: found.end, spelled: found.name, symbol: { kind: 'script', name: found.name } };
+      return found && { start: found.start, end: found.end, name: found.name, symbol: { kind: 'script', name: found.name } };
     },
     /** Its source, else its compiled script. */
     definitionOf({ name }): Promise<Definition> {
@@ -62,17 +61,15 @@ export function scriptLanguage({ instance, reporter, client }: ScriptLanguageDep
       const { found, unread } = await references.read(name);
       return { locations: found, unread };
     },
-    /** Its name, since a script has no row. */
-    hoverOf: ({ spelled }) => Promise.resolve([spelled]),
+    /** None: a script has no row. */
+    tooltipOf: () => Promise.resolve([]),
     async completionsAt(document, offset) {
       const found = await nameAt(document, offset);
       return found && { start: found.start, end: found.end, icon: vscode.CompletionItemKind.Class, items: scripts().map(({ name }) => ({ label: name })) };
     },
     /** Each script whose name holds `query`, at its source, else its compiled script. */
     symbolsFor(query) {
-      const wanted = query.trim().toLowerCase();
-      if (wanted === '') return Promise.resolve([]);
-      return Promise.resolve(scripts().filter(({ name }) => name.toLowerCase().includes(wanted)).flatMap((script) => {
+      return Promise.resolve(scripts().filter(({ name }) => nameHolds(name, query)).flatMap((script) => {
         const file = fileOf(script);
         return file === undefined ? [] : [{ name: script.name, detail: 'Papyrus script', icon: vscode.SymbolKind.Class, location: atFile(file) }];
       }));

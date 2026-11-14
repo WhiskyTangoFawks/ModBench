@@ -12,10 +12,9 @@ vi.mock('vscode', () => ({
 
 import { pluginLanguage } from '../pluginLanguage';
 import type { InstanceValue } from '../../instanceLoader/instance';
-import type { PluginName, SymbolOwner, SymbolReading } from '../../symbolNames/symbolNames';
+import type { PluginName, SymbolOwner } from '../../symbolNames/symbolNames';
 import type { ReferencesViewInput } from '../../drivingLib/referencesView';
 import { recordingReporter } from '../../test/surfacingDoubles';
-import { present } from '../../ports/present';
 
 const BASE = { name: 'Base.esm', origin: 'Base Mod' };
 const PLUGINS_TXT = '/profiles/Default/plugins.txt';
@@ -81,28 +80,12 @@ describe('Rename Symbol on a plugin\'s name is the plugin\'s rename (symbols.md,
 describe('referenced by on a plugin (commands.md, `referenced by` under Symbol)', () => {
   beforeEach(() => { setInput.mockClear(); });
 
-  it('notifies of a file it could not read, a gesture that landed in part (common.md, Reporting)', async () => {
-    const { kind, reporter } = language();
+  it('lists what names the plugin, titled with its row name, anchored at a place a file names it where no active plugin holds its header', async () => {
+    await language().kind.referencedBy(BASE);
 
-    await kind.referencedBy(BASE);
-
-    expect(setInput).toHaveBeenCalled();
-    expect([reporter.reports.map(({ severity, detail }) => [severity, detail]), reporter.shownFailures]).toEqual([[['warning', UNREAD]], []]);
-  });
-
-  it.each([
-    { found: [], unread: [], message: 'No references found.' },
-    { found: [], unread: [UNREAD], message: 'No references found in the files that could be read.' },
-    { found: [namedAt(0), namedAt(1)], unread: [UNREAD], message: undefined },
-  ])('says $message above the list read again, where $found.length places are found and $unread.length files are unread (common.md, States, story 3)', async ({ found, unread, message }) => {
-    let reading: SymbolReading = { references: [namedAt(0)], leftOut: [] };
-    const { kind } = language({ owner: { ...ownerThatCannotReadAFile, read: () => Promise.resolve(reading) } });
-    await kind.referencedBy(BASE);
-    const shown = present(setInput.mock.lastCall?.[0], 'the list shown');
-    await shown.resolve();
-    reading = { references: found, leftOut: unread };
-
-    expect((await shown.resolve()).message).toBe(message);
+    expect(setInput).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Referenced By: Base.esm (Base Mod)', contextValue: 'modbench.pluginReferencedBy', location: { uri: Uri.file(PLUGINS_TXT), range: new Range(0, 1, 0, 9) },
+    }));
   });
 });
 
@@ -116,19 +99,19 @@ describe('a plugin\'s name, hover, completion and Go to Symbol (symbols.md, The 
   const document = { uri: Uri.file(PLUGINS_TXT), getText: () => '*Mid.esp\r\n*base.ESM\r\n' };
 
   it('spans the name under the place, as the file spells it', async () => {
-    expect(await naming('base.ESM').nameAt(document, 14)).toEqual({ start: 11, end: 19, spelled: 'base.ESM', symbol: plugin({ name: 'base.ESM' }) });
+    expect(await naming('base.ESM').nameAt(document, 14)).toEqual({ start: 11, end: 19, name: 'base.ESM', symbol: plugin({ name: 'base.ESM' }) });
   });
 
   it('is none where no plugin is named, so another kind may claim the place', async () => {
     expect([await naming().nameAt(document, 3), await naming().completionsAt(document, 3)]).toEqual([undefined, undefined]);
   });
 
-  it('hovers with the row\'s tooltip', async () => {
-    expect(await naming().hoverOf({ start: 11, end: 19, spelled: 'base.ESM', symbol: plugin({ name: 'base.ESM' }) })).toEqual(['Base.esm', 'Base Mod', 'read-only']);
+  it('has the tooltip of the row of the plugin mod order resolves the name to', async () => {
+    expect(await naming().tooltipOf(plugin({ name: 'base.ESM' }))).toEqual(['Base.esm', 'Base Mod', 'read-only']);
   });
 
-  it('hovers with the name alone when mod order resolves it to no plugin', async () => {
-    expect(await naming().hoverOf({ start: 1, end: 9, spelled: 'Gone.esp', symbol: plugin({ name: 'Gone.esp' }) })).toEqual(['Gone.esp']);
+  it('has no tooltip when mod order resolves the name to no plugin', async () => {
+    expect(await naming().tooltipOf(plugin({ name: 'Gone.esp' }))).toEqual([]);
   });
 
   it('completes where a file names a plugin with every plugin, over the name typed so far', async () => {
@@ -149,7 +132,6 @@ describe('a plugin\'s name, hover, completion and Go to Symbol (symbols.md, The 
       ['Base.esm', 'Base Mod', { uri: Uri.file('/data/Base.esm'), range: new Range(0, 0, 0, 0) }],
       ['Base.esm', 'Other Mod', { uri: Uri.file('/data/Base.esm'), range: new Range(0, 0, 0, 0) }],
     ]);
-    expect(await naming().symbolsFor('  ')).toEqual([]);
   });
 
   it('places a line that names no file at a place a file names it', async () => {

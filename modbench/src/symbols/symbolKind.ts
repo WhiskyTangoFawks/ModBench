@@ -5,9 +5,9 @@ import type { CopyAt } from '../instanceLoader/fileConflictIndex';
 import type { EntrySymbol, PluginName, ScriptSymbol } from '../symbolNames/symbolNames';
 import type { AskedIn } from './symbolPlaces';
 
-type PluginNamed = { readonly kind: 'plugin' } & PluginName;
-type RecordNamed = { readonly kind: 'record'; readonly formKey: string };
-type FileNamed = { readonly kind: 'file'; readonly path: string };
+export type PluginNamed = { readonly kind: 'plugin' } & PluginName;
+export type RecordNamed = { readonly kind: 'record'; readonly formKey: string };
+export type FileNamed = { readonly kind: 'file'; readonly path: string };
 
 /** A symbol by its name: a record by its FormKey, a file by its path in the Data folder. */
 export type SymbolName = PluginNamed | RecordNamed | EntrySymbol | ScriptSymbol | FileNamed;
@@ -29,9 +29,9 @@ export type References =
 
 type Refused = { readonly refused: string };
 
-/** The span of a file's text that names a symbol, as the text spells it, and the symbol, or why it names none. */
+/** The span of a file's text that names a symbol, the symbol's name, and the symbol, or why it names none. */
 export interface Named<Symbol> extends TextSpan {
-  readonly spelled: string;
+  readonly name: string;
   readonly symbol: Symbol | Refused;
 }
 
@@ -50,14 +50,15 @@ export interface SymbolKind<Symbol> {
   nameAt(document: AskedIn, offset: number): Promise<Named<Symbol> | undefined>;
   definitionOf(symbol: Symbol): Promise<Definition>;
   referencesTo(symbol: Symbol): Promise<References>;
-  /** The hover's lines; undefined offers no hover. */
-  hoverOf(named: Named<Symbol>): Promise<readonly string[] | undefined>;
+  /** What its row's tooltip says, a line to each line; none where it has no row or no tooltip. */
+  tooltipOf(symbol: Symbol): Promise<readonly string[]>;
   /** What completion offers over the span where a file names a symbol of the kind. */
   completionsAt(document: AskedIn, offset: number): Promise<(TextSpan & {
     readonly icon: vscode.CompletionItemKind;
     readonly items: readonly { readonly label: string; readonly detail?: string; readonly insertText?: string }[];
     readonly isIncomplete?: boolean;
   }) | undefined>;
+  /** Each symbol of the kind whose name holds `query`, which is trimmed and never empty. */
   symbolsFor(query: string): Promise<readonly Listed[]>;
 }
 
@@ -77,8 +78,9 @@ export interface Asked {
 
 /** A symbol's name in a file, with its kind's answers. */
 export interface AskedAt extends Asked, TextSpan {
-  readonly spelled: string;
-  hover(): Promise<readonly string[] | undefined>;
+  readonly name: string;
+  /** What a hover says: its row's tooltip, and with no row or no tooltip, its name (symbols.md, The symbols). */
+  hover(): Promise<readonly string[]>;
 }
 
 const namesNothing = (symbol: object): symbol is Refused => 'refused' in symbol;
@@ -90,7 +92,13 @@ const askedOf = <Symbol extends object>(kind: SymbolKind<Symbol>, symbol: Symbol
 
 const claimOf = (kind: SymbolKind<object>) => async (document: AskedIn, offset: number): Promise<AskedAt | undefined> => {
   const named = await kind.nameAt(document, offset);
-  return named && { ...askedOf(kind, named.symbol), start: named.start, end: named.end, spelled: named.spelled, hover: () => kind.hoverOf(named) };
+  if (named === undefined) return undefined;
+  const { start, end, name, symbol } = named;
+  const hover = async (): Promise<readonly string[]> => {
+    const tooltip = namesNothing(symbol) ? [] : await kind.tooltipOf(symbol);
+    return tooltip.length > 0 ? tooltip : [name];
+  };
+  return { ...askedOf(kind, symbol), start, end, name, hover };
 };
 
 /** The kinds in the order they claim a span: a plugin's name inside a FormKey is the plugin's, not the record's. */

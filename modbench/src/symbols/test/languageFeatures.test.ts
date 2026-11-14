@@ -59,21 +59,23 @@ const document: FakeDocument = {
   offsetAt: ({ character }) => character, positionAt: (offset) => ({ line: 0, character: offset }),
 };
 const AT = { line: 0, character: 14 };
-const SPAN = { start: 12, end: 26, spelled: 'Actors\\Npc.nif' };
+const SPAN = { start: 12, end: 26, name: 'Actors\\Npc.nif' };
 const NAMED = { ...SPAN, symbol: { kind: 'file' as const, path: 'meshes/actors/npc.nif' } };
 const ELSEWHERE = new vscode.Location(vscode.Uri.file('/elsewhere.json'), new vscode.Position(0, 0));
 
-type Answers = Pick<Partial<Kind<never>>, 'definitionOf' | 'referencesTo' | 'hoverOf'>;
+type Answers = Pick<Partial<Kind<never>>, 'definitionOf' | 'referencesTo' | 'tooltipOf'>;
 
-function claimedBy(claiming: keyof SymbolKinds, answers: Answers = {}): SymbolKinds {
-  switch (claiming) {
-    case 'plugin': return fakeKinds({ plugin: fakeKind({ ...answers, nameAt: () => Promise.resolve({ ...SPAN, symbol: { kind: 'plugin' as const, name: 'A.esp' } }) }) });
-    case 'entry': return fakeKinds({ entry: fakeKind({ ...answers, nameAt: () => Promise.resolve({ ...SPAN, symbol: { kind: 'mod' as const, name: 'A' } }) }) });
-    case 'script': return fakeKinds({ script: fakeKind({ ...answers, nameAt: () => Promise.resolve({ ...SPAN, symbol: { kind: 'script' as const, name: 'A' } }) }) });
-    case 'file': return fakeKinds({ file: fakeKind({ ...answers, nameAt: () => Promise.resolve(NAMED) }) });
-    case 'record': return fakeKinds({ record: fakeKind({ ...answers, nameAt: () => Promise.resolve({ ...SPAN, symbol: { kind: 'record' as const, formKey: '000801:A.esp' } }) }) });
-  }
-}
+const naming = <Symbol>(symbol: Symbol) => () => Promise.resolve({ ...SPAN, symbol });
+
+const CLAIMING: { readonly [Claiming in keyof SymbolKinds]: (answers: Answers) => SymbolKinds } = {
+  plugin: (answers) => fakeKinds({ plugin: fakeKind({ ...answers, nameAt: naming({ kind: 'plugin' as const, name: 'A.esp' }) }) }),
+  entry: (answers) => fakeKinds({ entry: fakeKind({ ...answers, nameAt: naming({ kind: 'mod' as const, name: 'A' }) }) }),
+  script: (answers) => fakeKinds({ script: fakeKind({ ...answers, nameAt: naming({ kind: 'script' as const, name: 'A' }) }) }),
+  file: (answers) => fakeKinds({ file: fakeKind({ ...answers, nameAt: naming(NAMED.symbol) }) }),
+  record: (answers) => fakeKinds({ record: fakeKind({ ...answers, nameAt: naming({ kind: 'record' as const, formKey: '000801:A.esp' }) }) }),
+};
+
+const claimedBy = (claiming: keyof SymbolKinds, answers: Answers = {}): SymbolKinds => CLAIMING[claiming](answers);
 
 function features(kinds: SymbolKinds) {
   const reporter = recordingReporter();
@@ -97,7 +99,7 @@ describe('each language feature asks the symbol under the place, of whatever kin
 
   it.each(['plugin', 'entry', 'script', 'file', 'record'] as const)('Go to Definition, Find All References and hover each ask the %s kind that names the place', async (claiming) => {
     const asked = features(claimedBy(claiming, {
-      definitionOf: () => Promise.resolve({ at: ELSEWHERE }), referencesTo: () => Promise.resolve(ANSWERED), hoverOf: () => Promise.resolve([claiming]),
+      definitionOf: () => Promise.resolve({ at: ELSEWHERE }), referencesTo: () => Promise.resolve(ANSWERED), tooltipOf: () => Promise.resolve([claiming]),
     }));
 
     expect([await asked.definition(), await asked.references(), (await asked.hover())?.contents]).toEqual([ELSEWHERE, [ELSEWHERE], { value: claiming }]);
@@ -105,8 +107,8 @@ describe('each language feature asks the symbol under the place, of whatever kin
 
   it('asks a plugin\'s name inside a FormKey of the plugin, not the record', async () => {
     const asked = features({
-      ...claimedBy('plugin', { hoverOf: () => Promise.resolve(['the plugin']) }),
-      record: claimedBy('record', { hoverOf: () => Promise.resolve(['the record']) }).record,
+      ...claimedBy('plugin', { tooltipOf: () => Promise.resolve(['the plugin']) }),
+      record: claimedBy('record', { tooltipOf: () => Promise.resolve(['the record']) }).record,
     });
 
     expect((await asked.hover())?.contents).toEqual({ value: 'the plugin' });
@@ -119,6 +121,24 @@ describe('each language feature asks the symbol under the place, of whatever kin
   });
 });
 
+describe('a hover says what the symbol\'s row\'s tooltip says, and with no row or no tooltip, its name (symbols.md, The symbols)', () => {
+  it('is the tooltip, a paragraph to each of its lines', async () => {
+    expect((await features(claimedBy('file', { tooltipOf: () => Promise.resolve(['a', 'b']) })).hover())?.contents).toEqual({ value: 'a\n\nb' });
+  });
+
+  it('is its name where its kind has no tooltip for it', async () => {
+    expect((await features(claimedBy('file')).hover())?.contents).toEqual({ value: 'Actors\\Npc.nif' });
+  });
+
+  it('is its name, asking its kind nothing, where it names nothing', async () => {
+    const asked = features(fakeKinds({ file: fakeKind<never>({
+      nameAt: () => Promise.resolve({ ...SPAN, symbol: { refused: 'no path its asset type holds' } }), tooltipOf: () => Promise.reject(new Error('Not asked.')),
+    }) }));
+
+    expect((await asked.hover())?.contents).toEqual({ value: 'Actors\\Npc.nif' });
+  });
+});
+
 describe('Go to Definition presents the symbol\'s definition (symbols.md, The symbols)', () => {
   const OWN = { uri: document.uri, range: { start: { line: 0, character: NAMED.start }, end: { line: 0, character: NAMED.end } } };
 
@@ -127,7 +147,7 @@ describe('Go to Definition presents the symbol\'s definition (symbols.md, The sy
   });
 
   it('opens a file at its start', async () => {
-    expect(await defining({ file: '/scripts/Quest.psc' }).definition()).toEqual({ uri: Uri.file('/scripts/Quest.psc'), range: { line: 0, character: 0 } });
+    expect(await defining({ file: '/scripts/Quest.psc' }).definition()).toEqual({ uri: Uri.file('/scripts/Quest.psc'), range: { start: 0, end: 0 } });
   });
 
   it('selects a row, leaving the editor at the name asked about', async () => {
@@ -237,13 +257,19 @@ describe('Go to Symbol in Workspace lists every kind\'s symbols (symbols.md, The
       file: fakeKind({ symbolsFor: (query) => Promise.resolve([listed(query)]) }),
     }));
 
-    expect((await asked.workspaceSymbols('gun')).map(({ name }) => name)).toEqual(['Gun.esp', 'gun', 'Gun']);
+    expect((await asked.workspaceSymbols(' gun ')).map(({ name }) => name)).toEqual(['Gun.esp', 'gun', 'Gun']);
+  });
+
+  it('lists nothing for an empty query, asking no kind', async () => {
+    const symbolsFor = vi.fn(() => Promise.resolve([listed('Gun')]));
+
+    expect([await features(fakeKinds({ record: fakeKind({ symbolsFor }) })).workspaceSymbols('  '), symbolsFor.mock.calls]).toEqual([[], []]);
   });
 
   it('moves the symbol the user picks to where its kind resolves it, and leaves one its kind does not move', async () => {
     const moved = new vscode.Location(vscode.Uri.file('/moved.json'), new vscode.Position(0, 1));
     const asked = features(fakeKinds({ record: fakeKind({ symbolsFor: () => Promise.resolve([listed('Gun', () => Promise.resolve(moved)), listed('Stand')]) }) }));
-    const [gun, stand] = await asked.workspaceSymbols('');
+    const [gun, stand] = await asked.workspaceSymbols('g');
 
     expect([(await asked.resolve(present(gun, 'Gun'))).location, (await asked.resolve(present(stand, 'Stand'))).location]).toEqual([moved, ELSEWHERE]);
   });

@@ -14,6 +14,7 @@ import { recordLanguage } from '../recordLanguage';
 import { formKeyMember } from '../formKeyText';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { localFailure } from '../../wire/readFailed';
 
 const GUN = '000801:A.esp';
 const modA = { name: 'A.esp', origin: 'ModA' };
@@ -99,5 +100,21 @@ describe('where a record is defined (symbols.md, The symbols, Record)', () => {
     ['its document fails to open', () => kind({ open: () => Promise.reject(new Error('The file is gone.')) }), `Where ${GUN} is defined could not be read: The file is gone.`],
   ])('refuses, saying why, where %s', async (_case, arrange, refused) => {
     expect(await arrange(kind()).record.definitionOf(RECORD)).toEqual({ refused });
+  });
+});
+
+describe('what references a record, and its hover (symbols.md, The symbols, Record)', () => {
+  it('refuses, rather than list nothing, when mEdit cannot say what references it', async () => {
+    const { client, record } = kind();
+    client.setQueryFailure('getReferencesInActiveOrCompiledPlugins', localFailure('mEdit is down'));
+
+    expect(await record.referencesTo(RECORD)).toEqual({ refused: `mEdit cannot list what references ${GUN}: mEdit is down` });
+  });
+
+  it('has no tooltip for a FormKey no active plugin holds, so its hover is its name', async () => {
+    const { client, record } = kind();
+    client.setQueryAnswer('getComparison', null);
+
+    expect(await record.tooltipOf(RECORD)).toEqual([]);
   });
 });

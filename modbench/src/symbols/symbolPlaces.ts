@@ -56,6 +56,14 @@ export interface ListedLocations {
   readonly unread: number;
 }
 
+export const atFile = (file: string): vscode.Location => new vscode.Location(vscode.Uri.file(file), new vscode.Range(0, 0, 0, 0));
+
+/** Whether a symbol's name holds a Go to Symbol in Workspace query, whatever the case. */
+export const nameHolds = (name: string, query: string): boolean => name.toLowerCase().includes(query.toLowerCase());
+
+/** A row's tooltip, a line to each of its lines; none where the row shows no tooltip. */
+export const tooltipLines = (tooltip: string | undefined): readonly string[] => tooltip?.split('\n').filter((line) => line !== '') ?? [];
+
 export const placeLocation = ({ file, start, end }: PlaceInFile): vscode.Location =>
   new vscode.Location(vscode.Uri.file(file), new vscode.Range(start.line, start.character, end.line, end.character));
 

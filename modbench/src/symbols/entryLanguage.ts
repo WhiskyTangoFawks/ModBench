@@ -5,7 +5,8 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { heldTexts, sameName, type EntryNames, type EntrySymbol, type PlaceInFile } from '../symbolNames/symbolNames';
 import { heldText, unsavedTexts } from '../textDocuments/heldText';
-import { placeLocation, readBy, showReferencedBy } from './symbolPlaces';
+import { atFile, nameHolds, placeLocation, readBy, showReferencedBy, tooltipLines } from './symbolPlaces';
+import { selectingItsRow } from './definitionShown';
 import type { Definition, Listed, References, SymbolKind } from './symbolKind';
 
 interface EntryLanguageDeps {
@@ -83,7 +84,7 @@ export function entryLanguage({ instance, reporter, owners, rows, entryTooltip, 
     async nameAt(document, offset) {
       for (const owner of owners) {
         const found = await owner.nameAt(document.uri.fsPath, heldText(document), offset);
-        if (found !== undefined) return { start: found.start, end: found.end, spelled: found.entry.name, symbol: found.entry };
+        if (found !== undefined) return { start: found.start, end: found.end, name: found.entry.name, symbol: found.entry };
       }
       return undefined;
     },
@@ -98,11 +99,9 @@ export function entryLanguage({ instance, reporter, owners, rows, entryTooltip, 
       return Promise.resolve(path === undefined ? { refused: 'Mods shows no row for it and no folder holds it.' } : { shown: { kind: 'loose', path } });
     },
     referencesTo,
-    /** Its row's tooltip, or its name when its view shows none. */
-    hoverOf({ symbol, spelled }) {
-      const shown = 'refused' in symbol ? undefined : entryListed(symbol);
-      const lines = (shown && tooltip(shown))?.split('\n').filter((line) => line !== '') ?? [];
-      return Promise.resolve(lines.length > 0 ? lines : [spelled]);
+    tooltipOf(named) {
+      const shown = entryListed(named);
+      return Promise.resolve(tooltipLines(shown && tooltip(shown)));
     },
     /** Each of its kind, over the name so far. */
     async completionsAt(document, offset) {
@@ -114,10 +113,8 @@ export function entryLanguage({ instance, reporter, owners, rows, entryTooltip, 
     /** Each symbol whose name holds `query`, at its own file, else at its line in the owners' list, else at the first
      *  place a file names it. An entry no file names is left out. */
     async symbolsFor(query) {
-      const wanted = query.trim().toLowerCase();
-      if (wanted === '') return [];
       const matching = KINDS.flatMap((each) =>
-        listed(each).filter((name) => name.toLowerCase().includes(wanted)).map((name): EntrySymbol => ({ kind: each, name })));
+        listed(each).filter((name) => nameHolds(name, query)).map((name): EntrySymbol => ({ kind: each, name })));
       const lists = await Promise.all(owners.map((owner) => owner.listed(heldTexts(unsavedTexts())).catch((error: unknown) => {
         reporter.shownOnSurface('warning', 'Go to Symbol in Workspace could not read an owner\'s list of mods and separators.', errorMessage(error));
         return [];
@@ -129,7 +126,7 @@ export function entryLanguage({ instance, reporter, owners, rows, entryTooltip, 
       }
       const placeOf = async (entry: EntrySymbol): Promise<vscode.Location | undefined> => {
         const own = ownFile(entry);
-        if (own !== undefined) return new vscode.Location(vscode.Uri.file(own), new vscode.Range(0, 0, 0, 0));
+        if (own !== undefined) return atFile(own);
         const line = lines.get(entryKey(entry));
         if (line !== undefined) return placeLocation(line);
         const { found, unread } = await read(entry);
@@ -139,12 +136,7 @@ export function entryLanguage({ instance, reporter, owners, rows, entryTooltip, 
       const placed = await Promise.all(matching.map(async (entry): Promise<Listed | undefined> => {
         const location = await placeOf(entry);
         return location && {
-          name: entry.name, detail: NOUNS[entry.kind], icon: SHOWN[entry.kind].kind, location,
-          resolve: async () => {
-            const definition = await kind.definitionOf(entry);
-            if ('row' in definition) await definition.show();
-            return undefined;
-          },
+          name: entry.name, detail: NOUNS[entry.kind], icon: SHOWN[entry.kind].kind, location, resolve: selectingItsRow(() => kind.definitionOf(entry)),
         };
       }));
       return placed.filter((symbol) => symbol !== undefined);

@@ -68,7 +68,7 @@ function language(named: EntryNamed | undefined, options: Options = {}) {
 
 describe('the name of a mod, a separator, a downloaded file or a profile where an owner\'s file names it (symbols.md, The symbols)', () => {
   it('spans the name the owner answers', async () => {
-    expect(await language(spelled(mod('base mod'))).nameAt(document, AT_NAME)).toEqual({ ...SPAN, spelled: 'base mod', symbol: mod('base mod') });
+    expect(await language(spelled(mod('base mod'))).nameAt(document, AT_NAME)).toEqual({ ...SPAN, name: 'base mod', symbol: mod('base mod') });
   });
 
   it('is none where the owner names none, so another kind may claim the place', async () => {
@@ -130,20 +130,20 @@ describe('the places files name a mod, a separator, a downloaded file or a profi
 });
 
 describe('hover and completion on a mod, a separator, a downloaded file or a profile (symbols.md, The features, stories 3 and 5)', () => {
-  const hovered = (entry: EntrySymbol, options: Options = {}) => language(undefined, options).hoverOf({ ...SPAN, spelled: entry.name, symbol: entry });
+  const hovered = (entry: EntrySymbol, options: Options = {}) => language(undefined, options).tooltipOf(entry);
 
   it.each([
     ['the row\'s tooltip, a line to each of its lines', mod('base mod'), 'Base Mod · 1.0\nbuilt from source/Base Mod', ['Base Mod · 1.0', 'built from source/Base Mod']],
-    ['the name alone when its row shows no tooltip, as a separator\'s does not', separator('Gear'), undefined, ['Gear']],
-    ['the name alone when Mods lists no such mod', mod('Gone Mod'), undefined, ['Gone Mod']],
-  ])('hover says %s', async (_case, entry, tooltip, lines) => {
+    ['none when its row shows no tooltip, as a separator\'s does not', separator('Gear'), undefined, []],
+    ['none when Mods lists no such mod', mod('Gone Mod'), undefined, []],
+  ])('its tooltip is %s', async (_case, entry, tooltip, lines) => {
     expect(await hovered(entry, { tooltip })).toEqual(lines);
   });
 
   it.each([
-    ['a downloaded file\'s row\'s tooltip, never a mod\'s', downloadedFile('patch-1.7z'), ['Patch-1.7z', 'size 1 KB']],
-    ['a profile\'s name, which no row shows, never a mod\'s tooltip', profile('Default'), ['Default']],
-  ])('hover says %s', async (_case, entry, lines) => {
+    ['a downloaded file\'s row\'s, never a mod\'s', downloadedFile('patch-1.7z'), ['Patch-1.7z', 'size 1 KB']],
+    ['none for a profile, which no row shows, never a mod\'s', profile('Default'), []],
+  ])('its tooltip is %s', async (_case, entry, lines) => {
     expect(await hovered(entry, { tooltip: 'a mod\'s tooltip', downloadedFileTooltip: 'Patch-1.7z\nsize 1 KB' })).toEqual(lines);
   });
 
@@ -163,9 +163,8 @@ describe('Go to Symbol in Workspace on a mod, a separator, a downloaded file or 
   it('lists each mod and separator whose name holds the query, whatever the case, at the first place a file names it', async () => {
     const kind = language(undefined);
 
-    expect(names(await kind.symbolsFor('  ge '))).toEqual([['mod separator', 'Gear']]);
+    expect(names(await kind.symbolsFor('ge'))).toEqual([['mod separator', 'Gear']]);
     expect(names(await kind.symbolsFor('MOD'))).toEqual([['mod', 'Base Mod'], ['mod', 'Other Mod']]);
-    expect(await kind.symbolsFor(' ')).toEqual([]);
   });
 
   it('places an entry its owners\' list names at its line there, and asks the owners for no other entry than one the list leaves out', async () => {
@@ -221,20 +220,9 @@ describe('Go to Symbol in Workspace on a mod, a separator, a downloaded file or 
 describe('referenced by on a mod (commands.md, `referenced by` under Symbol)', () => {
   beforeEach(() => { setInput.mockClear(); });
 
-  it('lists the places in the References view, titled with the mod and anchored at the first, and notifies of a file it could not read', async () => {
-    const { referencedBy, reporter } = language(undefined, { leftOut: [UNREAD] });
-
-    await referencedBy('Base Mod');
+  it('lists the places the owners report, titled with the mod', async () => {
+    await language(undefined).referencedBy('Base Mod');
 
     expect(setInput).toHaveBeenCalledWith(expect.objectContaining({ title: 'Referenced By: Base Mod', contextValue: 'modbench.modReferencedBy', location: expect.objectContaining(locationAt(1)) as unknown }));
-    expect(reporter.reports.map(({ severity, detail }) => [severity, detail])).toEqual([['warning', UNREAD]]);
-  });
-
-  it('says that no file names the mod, which leaves the view where it was', async () => {
-    const { referencedBy, reporter } = language(undefined, { places: [] });
-
-    await referencedBy('Base Mod');
-
-    expect([setInput.mock.calls, reporter.reports.map(({ severity, detail }) => [severity, detail])]).toEqual([[], [['error', 'No file names it.']]]);
   });
 });

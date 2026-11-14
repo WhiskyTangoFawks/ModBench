@@ -35,7 +35,9 @@ export function registerLanguageFeatures({ kinds, reporter, reveal, rename }: La
   const at = (document: vscode.TextDocument, position: vscode.Position) => askedAt(kinds, document, document.offsetAt(position));
   const workspaceSymbols: vscode.WorkspaceSymbolProvider<ListedSymbol> = {
     async provideWorkspaceSymbols(query) {
-      const listed = await Promise.all(inOrder(kinds).map((kind) => kind.symbolsFor(query)));
+      const wanted = query.trim();
+      if (wanted === '') return [];
+      const listed = await Promise.all(inOrder(kinds).map((kind) => kind.symbolsFor(wanted)));
       return listed.flat().map((symbol) => new ListedSymbol(symbol));
     },
     async resolveWorkspaceSymbol(symbol) {
@@ -48,8 +50,7 @@ export function registerLanguageFeatures({ kinds, reporter, reveal, rename }: La
     vscode.languages.registerHoverProvider(ownedFiles, {
       async provideHover(document, position) {
         const asked = await at(document, position);
-        const lines = await asked?.hover();
-        return asked && lines && new vscode.Hover(new vscode.MarkdownString(lines.join('\n\n')), rangeIn(document, asked));
+        return asked && new vscode.Hover(new vscode.MarkdownString((await asked.hover()).join('\n\n')), rangeIn(document, asked));
       },
     }),
     vscode.languages.registerCompletionItemProvider(ownedFiles, {
@@ -71,7 +72,6 @@ export function registerLanguageFeatures({ kinds, reporter, reveal, rename }: La
         return undefined;
       },
     }),
-    // A definition shown in a view or the Explorer leaves the editor where it is: the definition is the name asked about.
     vscode.languages.registerDefinitionProvider(ownedFiles, {
       async provideDefinition(document, position) {
         const asked = await at(document, position);
@@ -79,13 +79,14 @@ export function registerLanguageFeatures({ kinds, reporter, reveal, rename }: La
         const definition = await asked.definition();
         if ('none' in definition) return undefined;
         if ('refused' in definition) {
-          reporter.shownOnSurface('warning', `Go to Definition cannot go to ${asked.spelled}.`, definition.refused);
+          reporter.shownOnSurface('warning', `Go to Definition cannot go to ${asked.name}.`, definition.refused);
           return undefined;
         }
         try {
-          return await showDefinition(definition, reveal) ?? new vscode.Location(document.uri, rangeIn(document, asked));
+          const theNameAskedAbout = new vscode.Location(document.uri, rangeIn(document, asked));
+          return await showDefinition(definition, reveal) ?? theNameAskedAbout;
         } catch (error) {
-          reporter.shownOnSurface('warning', `Go to Definition cannot show ${asked.spelled}.`, errorMessage(error));
+          reporter.shownOnSurface('warning', `Go to Definition cannot show ${asked.name}.`, errorMessage(error));
           return undefined;
         }
       },
@@ -96,10 +97,10 @@ export function registerLanguageFeatures({ kinds, reporter, reveal, rename }: La
         if (asked === undefined) return undefined;
         const found = await asked.references();
         if ('refused' in found) {
-          reporter.shownOnSurface('warning', `Find All References cannot list what names ${asked.spelled}.`, found.refused);
+          reporter.shownOnSurface('warning', `Find All References cannot list what names ${asked.name}.`, found.refused);
           return [];
         }
-        return [...reportedForFeature(reporter, asked.spelled, found).locations];
+        return [...reportedForFeature(reporter, asked.name, found).locations];
       },
     }),
     vscode.languages.registerWorkspaceSymbolProvider(workspaceSymbols),

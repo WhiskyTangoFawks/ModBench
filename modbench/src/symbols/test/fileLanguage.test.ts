@@ -73,17 +73,17 @@ describe('a path in plugin source names a file (symbols.md, The symbols, File)',
   const document = (path = SOURCE) => ({ uri: Uri.file(path), getText: () => TEXT });
   const SPAN = { start: NAMED, end: NAMED + 'Decals\\\\Stain_d.dds'.length };
 
-  it('names the file at its path in the Data folder, asking mEdit which file the record\'s path names', async () => {
+  it('names the file by its path in the Data folder, asking mEdit which file the record\'s path names', async () => {
     const { resolveFilePath, ...kind } = language(NONE);
 
-    expect(await kind.nameAt(document(), NAMED + 2)).toEqual({ ...SPAN, spelled: 'Decals\\Stain_d.dds', symbol: { kind: 'file', path: FILE } });
+    expect(await kind.nameAt(document(), NAMED + 2)).toEqual({ ...SPAN, name: FILE, symbol: { kind: 'file', path: FILE } });
     expect(resolveFilePath.mock.calls).toEqual([['Fallout4', 'txst', JSON.stringify(JSON.parse(TEXT)), 'Diffuse']]);
   });
 
   it('names nothing, saying why, where mEdit could not tell which file the path names', async () => {
     const kind = language(NONE, { resolve: () => Promise.resolve(localFailure('Data/Stain_d.dds is no path its asset type holds')) });
 
-    expect(await kind.nameAt(document(), NAMED + 2)).toEqual({ ...SPAN, spelled: 'Decals\\Stain_d.dds', symbol: { refused: 'Data/Stain_d.dds is no path its asset type holds' } });
+    expect(await kind.nameAt(document(), NAMED + 2)).toEqual({ ...SPAN, name: 'Decals\\Stain_d.dds', symbol: { refused: 'Data/Stain_d.dds is no path its asset type holds' } });
   });
 
   it('says why it cannot tell whether the field is a path, when mEdit cannot answer for the record', async () => {
@@ -104,11 +104,10 @@ describe('a path in plugin source names a file (symbols.md, The symbols, File)',
   });
 
   it.each([
-    ['its row\'s tooltip, a line to each of its lines', 'Main.ba2/textures/decals/stain_d.dds\nwon by the game folder: /game/Data/textures/decals/stain_d.dds', { kind: 'file' as const, path: FILE }, ['Main.ba2/textures/decals/stain_d.dds', 'won by the game folder: /game/Data/textures/decals/stain_d.dds']],
-    ['its path in the Data folder where Mods shows no row for it', undefined, { kind: 'file' as const, path: FILE }, [FILE]],
-    ['the path as the field spells it where it names no file', 'a tooltip', { refused: 'no path' }, ['Decals\\Stain_d.dds']],
-  ])('hovers with %s', async (_case, tooltip, symbol, lines) => {
-    expect(await language(NONE, { tooltip }).hoverOf({ ...SPAN, spelled: 'Decals\\Stain_d.dds', symbol })).toEqual(lines);
+    ['its row\'s, a line to each of its lines', 'Main.ba2/textures/decals/stain_d.dds\nwon by the game folder: /game/Data/textures/decals/stain_d.dds', ['Main.ba2/textures/decals/stain_d.dds', 'won by the game folder: /game/Data/textures/decals/stain_d.dds']],
+    ['none where Mods shows no row for it', undefined, []],
+  ])('its tooltip is %s', async (_case, tooltip, lines) => {
+    expect(await language(NONE, { tooltip }).tooltipOf({ kind: 'file', path: FILE })).toEqual(lines);
   });
 });
 
@@ -135,18 +134,12 @@ describe('where a file is defined, and the records that name it (symbols.md, The
 
 describe('Go to Symbol in Workspace on a file (symbols.md, The features, story 4)', () => {
   it('lists each file of a mod, the Data folder or a game archive whose path holds the query, whatever the case, at the copy the game gets', async () => {
-    const found = await language(NONE).symbolsFor(' DECALS ');
+    const found = await language(NONE).symbolsFor('DECALS');
 
     expect(found.map(({ name, location }) => [name, location])).toEqual([
-      ['Textures/Decals/Stain_d.dds', { uri: Uri.file(LOOSE.path), range: { line: 0, character: 0 } }],
-      ['textures/decals/other_d.dds', { uri: Uri.file(ARCHIVE), range: { line: 0, character: 0 } }],
+      ['Textures/Decals/Stain_d.dds', { uri: Uri.file(LOOSE.path), range: { start: 0, end: 0 } }],
+      ['textures/decals/other_d.dds', { uri: Uri.file(ARCHIVE), range: { start: 0, end: 0 } }],
     ]);
-  });
-
-  it('lists nothing for an empty query, saying nothing', async () => {
-    const { reporter, ...kind } = language(NONE);
-
-    expect([await kind.symbolsFor(' '), reporter.shownFailures]).toEqual([[], []]);
   });
 
   it('lists no file the game gets no copy of, and says in the Output that it matched and went unlisted', async () => {
@@ -195,25 +188,17 @@ describe('Go to Symbol in Workspace on a file (symbols.md, The features, story 4
 describe('referenced by on a file (commands.md, `referenced by` under Symbol)', () => {
   beforeEach(() => { setInput.mockClear(); });
 
-  it('lists the records that name its path in the Data folder, at the member that names it, and notifies of a record it could not read', async () => {
-    const { referencedBy, reporter, getFileReferences } = language({
-      copies: [{ formKey: HOLDER, plugin: { name: 'Mod.esp', origin: 'Mod' }, inPluginSource: true, fieldPaths: ['Diffuse'] }], unread: [UNREAD],
+  it('lists the records that name its path in the Data folder, titled with the path', async () => {
+    const { referencedBy, getFileReferences } = language({
+      copies: [{ formKey: HOLDER, plugin: { name: 'Mod.esp', origin: 'Mod' }, inPluginSource: true, fieldPaths: ['Diffuse'] }], unread: [],
     });
 
     await referencedBy(FILE);
 
     expect(getFileReferences.mock.calls).toEqual([[FILE]]);
     expect(setInput).toHaveBeenCalledWith(expect.objectContaining({
-      title: `Referenced By: ${FILE}`, location: { uri: Uri.file(SOURCE), range: { start: { line: 0, character: NAMED }, end: { line: 0, character: NAMED + 'Decals\\\\Stain_d.dds'.length } } },
+      title: `Referenced By: ${FILE}`, contextValue: 'modbench.fileReferencedBy',
+      location: { uri: Uri.file(SOURCE), range: { start: { line: 0, character: NAMED }, end: { line: 0, character: NAMED + 'Decals\\\\Stain_d.dds'.length } } },
     }));
-    expect(reporter.reports.map(({ severity, detail }) => [severity, detail])).toEqual([['warning', UNREAD]]);
-  });
-
-  it('says that no file names it, which leaves the view where it was', async () => {
-    const { referencedBy, reporter } = language(NONE);
-
-    await referencedBy(FILE);
-
-    expect([setInput.mock.calls, reporter.reports.map(({ severity, detail }) => [severity, detail])]).toEqual([[], [['error', 'No file names it.']]]);
   });
 });
