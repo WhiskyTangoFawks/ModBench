@@ -97,7 +97,6 @@ function entryDefinition(adapter: InstanceAdapter, sourceFolder: FolderMove | un
           const lines = await linesRenamed(adapter, entry, to, ordered);
           if ('failed' in lines) return lines;
           const moved = await folderOf(adapter, { kind: entry.kind, name: to });
-          // An entry no profile lists and no folder now holds under the new name was never there.
           if (!lines.listed && moved === undefined) return { failed: entryNotFound(entry) };
           const folders = from === undefined || moved === undefined ? [] : [{ from, to: moved }];
           const cannotFollow = [
