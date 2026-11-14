@@ -787,7 +787,8 @@ class HttpMEditClient implements MEditClient {
     noBodyFails, { absent: { status: 404, answers: null } });
   }
 
-  getRecordsComparison(copies: components['schemas']['RecordCopy'][]): Promise<CompareRecordsAnswer | ReadFailed> {
+  async getRecordsComparison(copies: components['schemas']['RecordCopy'][]): Promise<CompareRecordsAnswer | ReadFailed> {
+    await this.handOver.sent();
     return this.read('getRecordsComparison', (api, signal) => api.POST('/records/compare', { body: { copies }, signal }), noBodyFails);
   }
 
@@ -819,7 +820,8 @@ class HttpMEditClient implements MEditClient {
       (api, signal) => api.GET('/file-paths/references', { params: { query: { path } }, signal }), noBodyFails);
   }
 
-  getScriptRenameSourceChanges(name: string, newName: string): Promise<components['schemas']['ScriptRenameSourceChanges'] | ReadFailed> {
+  async getScriptRenameSourceChanges(name: string, newName: string): Promise<components['schemas']['ScriptRenameSourceChanges'] | ReadFailed> {
+    await this.handOver.sent();
     return this.read(`getScriptRenameSourceChanges(${name}, ${newName})`,
       (api, signal) => api.POST('/script-names/rename-source-changes', { body: { name, newName }, signal }), noBodyFails);
   }
