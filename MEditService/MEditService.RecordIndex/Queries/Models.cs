@@ -387,8 +387,8 @@ public sealed record NamedFilePath(string FormKey, string FieldPath, string Sour
 /// <paramref name="SourceRelativePath"/> that holds the record.</summary>
 public sealed record NamedScript(string FormKey, string FieldPath, string SourceRelativePath, string Name);
 
-/// <summary>The file paths and scripts a compiled plugin's source names. <paramref name="Unread"/>: the files its read stopped at and
-/// the copies mEdit could not read. <paramref name="Failure"/>: the paths are not the whole answer (ADR-0019).</summary>
+/// <summary>The paths and scripts a compiled plugin's source names. <paramref name="Unread"/>: the files its read stopped
+/// at and the copies mEdit could not read. <paramref name="Failure"/>: not the whole answer (ADR-0019).</summary>
 public sealed record PluginFilePaths(
     PluginAddress Plugin, IReadOnlyList<NamedFilePath> Paths, IReadOnlyList<NamedScript> Scripts, IReadOnlyList<string> Unread, string? Failure = null, ProblemsFailureKind? FailureKind = null);
 

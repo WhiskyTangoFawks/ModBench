@@ -6,8 +6,8 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.RecordIndex.Queries;
 
-/// <summary>The file paths and scripts each compiled plugin's source names, with the file that holds each naming record, one plugin's
-/// records at a time. A record whose paths cannot be read is told as unread, never dropped.</summary>
+/// <summary>The paths and scripts each compiled plugin's source names, with the file holding each naming record, one
+/// plugin's records at a time. A record that cannot be read is told as unread, never dropped.</summary>
 internal static class FilePathsPanel
 {
     public static IReadOnlyList<PluginFilePaths> Of(

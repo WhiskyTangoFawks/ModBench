@@ -83,7 +83,6 @@ export interface SymbolKinds {
   readonly file: SymbolKind<FileNamed>;
 }
 
-/** A symbol, with its kind's answers. */
 interface Asked {
   definition(): Promise<Definition>;
   references(): Promise<References>;
