@@ -91,8 +91,7 @@ describe('Rename Symbol on a mod or a separator (symbols.md, The features, story
     const { renameRangeAt, renameAt, renameEntry } = language(spelled(spelledAs));
 
     expect(await renameRangeAt(document, AT_NAME)).toEqual({ ...SPAN, name: spelledAs.name });
-    await renameAt(document, AT_NAME, 'Renamed');
-
+    expect(await renameAt(document, AT_NAME, 'Renamed')).toBe(true);
     expect(renameEntry).toHaveBeenCalledWith(listed, 'Renamed');
   });
 
@@ -103,7 +102,7 @@ describe('Rename Symbol on a mod or a separator (symbols.md, The features, story
     const { renameRangeAt, renameAt, renameEntry } = language(spelled(entry));
 
     expect(await renameRangeAt(document, AT_NAME)).toBeUndefined();
-    await renameAt(document, AT_NAME, 'Renamed');
+    expect(await renameAt(document, AT_NAME, 'Renamed')).toBe(false);
     expect(renameEntry).not.toHaveBeenCalled();
   });
 

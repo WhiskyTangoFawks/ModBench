@@ -158,20 +158,27 @@ export function entryLanguage({ instance, reporter, owners, rows, entryTooltip, 
     },
   };
 
+  const renamableAt = async (document: AskedIn, offset: number) => {
+    const found = await kind.nameAt(document, offset);
+    return found && !('refused' in found.symbol) && isRenamable(found.symbol) ? { ...found, symbol: found.symbol } : undefined;
+  };
+
   return {
     ...kind,
     /** The name of the mod or separator at `offset`, which Rename Symbol offers to rename; undefined where none is. */
     renameRangeAt: async (document: AskedIn, offset: number) => {
-      const found = await kind.nameAt(document, offset);
-      return found && !('refused' in found.symbol) && isRenamable(found.symbol) ? { start: found.start, end: found.end, name: found.name } : undefined;
+      const found = await renamableAt(document, offset);
+      return found && { start: found.start, end: found.end, name: found.name };
     },
-    /** Rename Symbol on the mod or separator whose name is at `offset`: its `rename` (symbols.md, The features, story 6). */
-    renameAt: async (document: AskedIn, offset: number, newName: string): Promise<void> => {
-      const found = await kind.nameAt(document, offset);
-      if (found === undefined || 'refused' in found.symbol || !isRenamable(found.symbol)) return;
+    /** Rename Symbol on the mod or separator whose name is at `offset`: its `rename` (symbols.md, The features, story 6);
+     *  false where none is. */
+    renameAt: async (document: AskedIn, offset: number, newName: string): Promise<boolean> => {
+      const found = await renamableAt(document, offset);
+      if (found === undefined) return false;
       const entry = entryListed(found.symbol);
       if (entry === undefined || !isRenamable(entry)) throw new Error(unlisted(found.symbol));
       await renameEntry(entry, newName);
+      return true;
     },
   };
 }

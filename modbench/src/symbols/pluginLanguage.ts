@@ -145,13 +145,15 @@ export function pluginLanguage({ instance, reporter, client, owners, names, rena
       const found = await nameWithSpan(document, offset);
       return found && { start: found.start, end: found.end, name: found.name };
     },
-    /** Rename Symbol on the plugin whose name is at `offset`: the plugin's `rename` (symbols.md, The features, story 6). */
-    renameAt: async (document: AskedIn, offset: number, newName: string): Promise<void> => {
+    /** Rename Symbol on the plugin whose name is at `offset`: the plugin's `rename` (symbols.md, The features, story 6);
+     *  false where no plugin's name is. */
+    renameAt: async (document: AskedIn, offset: number, newName: string): Promise<boolean> => {
       const named = await nameAt(document, offset);
-      if (named === undefined) return;
+      if (named === undefined) return false;
       const plugin = pluginNamed(named, plugins());
       if (plugin === undefined) throw new Error(unresolved(named).refused);
       await renamePlugin(plugin, newName);
+      return true;
     },
   };
 }

@@ -41,7 +41,7 @@ const stringNodeAt = (root: Node | undefined, offset: number): Node | undefined 
 const isStringOf = (value: string) => (node: Node): boolean =>
   isStringValue(node) && typeof node.value === 'string' && canonicalFormKey(node.value) === canonicalFormKey(value);
 
-const recordOf =(root: Node, formKey: string): Node | undefined =>
+const recordOf = (root: Node, formKey: string): Node | undefined =>
   find(root, (node) => {
     const own = ownFormKey(node);
     return own !== undefined && isStringOf(formKey)(own);

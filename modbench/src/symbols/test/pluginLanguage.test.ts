@@ -60,8 +60,7 @@ describe('Rename Symbol on a plugin\'s name is the plugin\'s rename (symbols.md,
   it('renames the plugin mod order resolves the name to, with the name VS Code asked for', async () => {
     const { kind, renamePlugin } = naming('base.ESM');
 
-    await kind.renameAt(document, 14, 'New.esm');
-
+    expect(await kind.renameAt(document, 14, 'New.esm')).toBe(true);
     expect(renamePlugin).toHaveBeenCalledWith(BASE, 'New.esm');
   });
 
@@ -74,6 +73,7 @@ describe('Rename Symbol on a plugin\'s name is the plugin\'s rename (symbols.md,
     const { kind, renamePlugin } = naming('Gone.esp');
 
     expect(await naming().kind.renameRangeAt(gone, 3)).toBeUndefined();
+    expect(await naming().kind.renameAt(gone, 3, 'New.esp')).toBe(false);
     await expect(kind.renameAt(gone, 3, 'New.esp')).rejects.toThrow('Mod order resolves Gone.esp to no plugin.');
     expect(renamePlugin).not.toHaveBeenCalled();
   });

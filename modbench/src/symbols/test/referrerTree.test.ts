@@ -68,20 +68,13 @@ describe('the Referenced By list — states', () => {
     expect(error?.tooltip).toBe('boom');
   });
 
-  it('reads the references in the active and compiled plugins, the set Find All References reads', async () => {
-    const client = indexed([reference({ formKey: '000002:Fallout4.esm' })]);
-    await readReferencedBy(client, TARGET, 'a list');
-    expect(client.calls.map(({ method }) => method).filter((method) => method.startsWith('getReferences')))
-      .toEqual(['getReferencesInActiveOrCompiledPlugins']);
-  });
-
-  it('is a snapshot: mEdit is asked once, however often the view asks for rows and whatever changes after', async () => {
+  it('is a snapshot of the references in the active and compiled plugins: mEdit is asked once, however often the view asks for rows and whatever changes after', async () => {
     const client = indexed([reference({ formKey: '000002:Fallout4.esm' })]);
     const { provider } = await readReferencedBy(client, TARGET, 'a list');
     client.emit({ kind: 'rows-changed', plugin: '', origin: '', keys: [], sequence: 0 });
     provider.getChildren();
     provider.getChildren();
-    expect(client.calls.filter((c) => c.method === 'getReferencesInActiveOrCompiledPlugins')).toEqual([{ method: 'getReferencesInActiveOrCompiledPlugins', args: [TARGET] }]);
+    expect(client.calls.filter((c) => c.method.startsWith('getReferences'))).toEqual([{ method: 'getReferencesInActiveOrCompiledPlugins', args: [TARGET] }]);
   });
 });
 

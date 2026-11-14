@@ -8,11 +8,11 @@ interface WorkspaceNoticeDeps {
 }
 
 /** Says, while the game gets files from a game folder outside the workspace, that paths are checked only against the
- *  instance (ADR-0001). */
+ *  instance and scripts not at all (ADR-0001). */
 export function feedWorkspaceNotice({ instance, languageStatus }: WorkspaceNoticeDeps): () => void {
   const say = () => {
     const outside = outsideGameFolder(instance.value);
-    languageStatus(outside && `Paths are checked only against the instance: the game also gets files from ${outside.root}, outside the workspace.`);
+    languageStatus(outside && `Paths are checked only against the instance, and scripts are not checked: the game also gets files from ${outside.root}, outside the workspace.`);
   };
   const subscription = instance.subscribe(say);
   say();

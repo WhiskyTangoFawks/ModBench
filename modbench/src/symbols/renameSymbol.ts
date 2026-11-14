@@ -46,14 +46,7 @@ export function renameSymbol({ plugin, entry, names, plugins, client, executeCom
       return { start: record.start, end: record.end, placeholder: heldText(document).slice(record.start, record.end) };
     },
     async rename(document: AskedIn, offset: number, newName: string): Promise<void> {
-      if (await plugin.renameRangeAt(document, offset) !== undefined) {
-        await plugin.renameAt(document, offset, newName);
-        return;
-      }
-      if (await entry.renameRangeAt(document, offset) !== undefined) {
-        await entry.renameAt(document, offset, newName);
-        return;
-      }
+      if (await plugin.renameAt(document, offset, newName) || await entry.renameAt(document, offset, newName)) return;
       const record = await recordNamedAt(document, offset);
       if (record === undefined) return;
       const copy = await copyEdited(record, document.uri.fsPath);

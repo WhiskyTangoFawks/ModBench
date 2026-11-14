@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { MEditClient, PluginAddress, ReferenceResult } from '../client';
+import type { CopyValueAdapter } from '../drivingLib/copyValue';
 import { ErrorNode } from '../drivingLib/errorNode';
 import type { RecordArgument } from '../drivingLib/recordArgument';
 import { recordLabel } from '../wire/recordLabel';
@@ -83,6 +84,8 @@ export function referencedByCopyValueText(clicked: unknown, allSelected: readonl
   const selected = allSelected?.filter(isReferencedByRow) ?? [];
   return (selected.length ? selected : [clicked]).map(row => row.copyText).join('\n');
 }
+
+export const referencedByCopyValue: CopyValueAdapter = { text: referencedByCopyValueText, reporterTag: 'referencedBy.copy' };
 
 function groupBy<T>(items: readonly T[], keyOf: (item: T) => string): T[][] {
   const groups = new Map<string, T[]>();

@@ -109,6 +109,25 @@ describe('referenced by on a record anchors its list wherever a plugin holds it 
     expect([shownLocation(), reporter.reports]).toMatchObject([{ uri: { path: GUN_FILE }, range: { line: 0, character: 0 } }, []]);
   });
 
+  it('is refused, saying why, where the winning copy cannot be read, though a compiled plugin holds the record', async () => {
+    const { record, reporter } = asking((k) => { k.client.setQueryFailure('getRecordOwner', localFailure('mEdit is down')); });
+
+    await record.referencedBy(RECORD);
+
+    expect([setInput.mock.calls, reporter.reports.map(({ severity, detail }) => [severity, detail])]).toEqual([[], [['error', 'mEdit is down']]]);
+  });
+
+  it('names Referenced By where it cannot search the compiled plugins', async () => {
+    const { record, reporter } = asking((k) => {
+      k.client.setQueryAnswer('getRecordOwner', undefined);
+      k.client.setQueryFailure('getPlugins', localFailure('mEdit is down'));
+    });
+
+    await record.referencedBy(RECORD);
+
+    expect(reporter.shownFailures.map(({ message }) => message)).toEqual(['Referenced By cannot list the compiled plugins.']);
+  });
+
   it('is refused, saying why, where no plugin holds the record', async () => {
     const { record, reporter } = asking((k) => {
       k.client.setQueryAnswer('getRecordOwner', undefined);
