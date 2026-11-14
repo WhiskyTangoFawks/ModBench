@@ -9,6 +9,7 @@ export const sourceNames = (answers: Partial<SourceNames> = {}): SourceNames => 
   scriptsNamed: () => Promise.resolve([]),
   scriptsIn: () => Promise.resolve([]),
   fileAt: () => Promise.resolve(undefined),
+  pathTypedAt: () => Promise.resolve(undefined),
   recordsOfferedAt: () => Promise.resolve(undefined),
   recordMemberAt: () => Promise.resolve(undefined),
   declarationIn: () => Promise.resolve(undefined),

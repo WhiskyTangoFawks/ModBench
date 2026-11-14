@@ -18,7 +18,10 @@ interface SourceNamesDeps {
 
 interface RecordsOffered extends TextSpan {
   readonly items: readonly { readonly label: string; readonly detail: string; readonly insertText: string }[];
+  readonly isIncomplete: boolean;
 }
+
+type AssetType = NonNullable<DocumentName['assetType']>;
 
 /** A FormKey, with the plugin it names, or an EditorID, which Rename Symbol changes on its record. */
 export type RecordMember = TextSpan & { readonly formKey: string } & (
@@ -79,24 +82,39 @@ export function sourceNames({ client, names, paths, sourceFiles, reporter }: Sou
         .map((found) => ({ ...spanOf(found), name: found.value }));
     },
 
-    /** The file a record's path at `offset` names. */
+    /** The file a record's path at `offset` names; undefined at an empty path, which names none. */
     async fileAt(file: string, text: string, offset: number): Promise<NamedFile | undefined> {
       const found = await nameAt(file, text, offset, 'File');
       if (found === undefined) return undefined;
       const given = { ...spanOf(found), given: found.value };
-      return found.dataPath ? { ...given, path: found.dataPath } : { ...given, refused: found.refusal ?? `${found.value} names no file.` };
+      if (found.dataPath) return { ...given, path: found.dataPath };
+      return found.refusal ? { ...given, refused: found.refusal } : undefined;
+    },
+
+    /** The span of a record's path at `offset`, however much of it is typed, and the asset type of its field. */
+    async pathTypedAt(file: string, text: string, offset: number): Promise<(TextSpan & { assetType: AssetType }) | undefined> {
+      const found = await nameAt(file, text, offset, 'File');
+      return found?.assetType ? { ...spanOf(found), assetType: found.assetType } : undefined;
     },
 
     /** The records a reference field at `offset` offers for the text typed so far, over the field's text; undefined
-     *  elsewhere, and where mEdit cannot answer, which the Output says. */
+     *  elsewhere. The Output says where mEdit cannot answer, or found more than it answered. */
     async recordsOfferedAt(file: string, text: string, offset: number): Promise<RecordsOffered | undefined> {
       const found = await nameAt(file, text, offset, 'Reference');
       const typed = found && offset >= found.start ? text.slice(found.start, offset) : '';
       if (found === undefined || typed === '') return undefined;
       try {
-        const { items } = answerOf(await client.searchRecords(typed, [...found.validFormKeyTypes ?? []]));
+        const { items, total } = answerOf(await client.searchRecords(typed, [...found.validFormKeyTypes ?? []]));
         const records = [...new Map(items.map((record) => [record.formKey, record])).values()];
-        return { ...spanOf(found), items: records.map(({ editorId, formKey }) => ({ label: editorId || formKey, detail: formKey, insertText: formKey })) };
+        const isIncomplete = items.length < total;
+        if (isIncomplete) {
+          reporter.shownOnSurface('warning', `Completion offers the records of ${items.length} of the ${total} copies whose EditorID or FormKey holds "${typed}".`,
+            'Type more of the EditorID or FormKey to narrow the list.');
+        }
+        return {
+          ...spanOf(found), isIncomplete,
+          items: records.map(({ editorId, formKey }) => ({ label: editorId || formKey, detail: formKey, insertText: formKey })),
+        };
       } catch (error) {
         reporter.shownOnSurface('error', `Completion cannot list what ${found.record ?? 'this record'} offers here.`, errorMessage(error));
         return undefined;

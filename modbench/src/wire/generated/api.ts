@@ -1510,6 +1510,7 @@ export interface components {
             dataPath?: string | null;
             refusal?: string | null;
             validFormKeyTypes?: string[] | null;
+            assetType?: components["schemas"]["AssetType"] | null;
         };
         /** @enum {string} */
         DocumentNameKind: "Declaration" | "Record" | "Plugin" | "Script" | "File" | "EditorId" | "Reference";
@@ -1586,7 +1587,6 @@ export interface components {
             holdsAlpha: boolean;
             isPlacedRotation: boolean;
             isScriptName: boolean;
-            isAssetLink: boolean;
             assetType?: components["schemas"]["AssetType"] | null;
             indexWhen?: string[] | null;
             unheldWhen?: string[] | null;

@@ -24,7 +24,7 @@ interface FileLanguageDeps extends FileCopies {
   instance: { readonly value: FilesValue } | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
   client: FileClient;
-  names: Pick<SourceNames, 'fileAt' | 'membersIn' | 'formKeyIn'>;
+  names: Pick<SourceNames, 'fileAt' | 'pathTypedAt' | 'membersIn' | 'formKeyIn'>;
   /** The tooltip of the row Mods shows for the copy the game gets of the file at `path`; undefined where it shows none. */
   tooltip: (path: string) => string | undefined;
 }
@@ -51,6 +51,9 @@ function foldedPathsOf(value: FilesValue): readonly FoldedPath[] {
   folded.set(value, each);
   return each;
 }
+
+// Plugin source holds a path's backslashes escaped, and the instance value's paths hold forward slashes.
+const asTyped = (held: string): string => held.toLowerCase().replace(/\\\\|\\/g, '/');
 
 /** A file as a symbol, named by its path in the Data folder: the records that name it, which mEdit answers (symbols.md,
  *  The symbols). */
@@ -86,7 +89,27 @@ export function fileLanguage({ instance, reporter, client, names, copyOf, reveal
     },
     referencesTo,
     tooltipOf: ({ path }) => Promise.resolve(tooltipLines(tooltip(path))),
-    completionsAt: () => Promise.resolve(undefined),
+    /** Each file of the path's asset type whose path in its folder holds the text typed so far, up to
+     *  `MOST_FILES_LISTED`; the Output says how many more match. */
+    async completionsAt(document, offset) {
+      const found = await names.pathTypedAt(document.uri.fsPath, heldText(document), offset);
+      if (found === undefined) return undefined;
+      const typed = asTyped(heldText(document).slice(found.start, Math.max(found.start, offset)));
+      const folder = `${found.assetType.folder.toLowerCase()}/`;
+      const extensions = found.assetType.extensions.map((extension) => extension.toLowerCase());
+      const offered = dataPaths().filter(([path]) =>
+        path.startsWith(folder) && extensions.some((extension) => path.endsWith(extension)) && path.slice(folder.length).includes(typed));
+      const items = offered.slice(0, MOST_FILES_LISTED).map(([, path]) => {
+        const held = path.slice(folder.length).replaceAll('/', '\\');
+        return { label: held, insertText: JSON.stringify(held).slice(1, -1) };
+      });
+      const isIncomplete = items.length < offered.length;
+      if (isIncomplete) {
+        reporter.shownOnSurface('warning', `Completion lists ${items.length} of the ${offered.length} files in ${found.assetType.folder} whose path holds "${typed}".`,
+          `It lists at most ${MOST_FILES_LISTED}. Type more of the path to narrow the list.`);
+      }
+      return { start: found.start, end: found.end, icon: vscode.CompletionItemKind.File, items, isIncomplete };
+    },
     /** Each file whose path in the Data folder holds `query`, at the copy the game gets, up to `MOST_FILES_LISTED`; the
      *  Output says how many more match. */
     symbolsFor(query, { gesture }) {

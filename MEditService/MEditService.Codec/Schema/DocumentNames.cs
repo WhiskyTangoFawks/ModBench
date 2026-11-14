@@ -19,7 +19,7 @@ public enum DocumentNameKind
 }
 
 /// <summary>A name a document holds and its span: a record's FormKey with its quotes, any other name between them.
-/// A file's carries its path in the Data folder, or why it has none.</summary>
+/// A file's carries its asset type, and its Data folder path or why it has none.</summary>
 public sealed record DocumentName(
     DocumentNameKind Kind,
     int Start,
@@ -29,7 +29,8 @@ public sealed record DocumentName(
     string? FieldPath,
     string? DataPath = null,
     string? Refusal = null,
-    IReadOnlyList<string>? ValidFormKeyTypes = null);
+    IReadOnlyList<string>? ValidFormKeyTypes = null,
+    AssetType? AssetType = null);
 
 /// <summary>The names a document's text holds, and where each sits (ADR-0028). A FormKey is read off the text alone;
 /// the schema for its record's type names its scripts, files and references.</summary>
@@ -93,16 +94,22 @@ public static class DocumentNames
         return names;
     }
 
-    // A FormKey is a record's name, never a script's or a file's.
+    // A FormKey is a record's name, never a script's or a file's. An empty path is named, for completion, and names no
+    // file.
     private static DocumentName? NameAt(FieldMetadata leaf, string given, string record, string path)
     {
         if (leaf.Type == "formKey") return new(DocumentNameKind.Reference, 0, 0, given, record, path, ValidFormKeyTypes: leaf.ValidFormKeyTypes);
-        if (given.Length == 0 || CanonicalFormKey.OfLink(given) is not null) return null;
-        if (leaf.IsScriptName) return new(DocumentNameKind.Script, 0, 0, given, record, path);
-        if (leaf.AssetLinkType is not { } linkType) return null;
+        if (CanonicalFormKey.OfLink(given) is not null) return null;
+        if (leaf.AssetLinkType is { } linkType) return FileAt(linkType, leaf.AssetType, given, record, path);
+        return leaf.IsScriptName && given.Length > 0 ? new(DocumentNameKind.Script, 0, 0, given, record, path) : null;
+    }
+
+    private static DocumentName FileAt(Type linkType, AssetType? assetType, string given, string record, string path)
+    {
+        var file = new DocumentName(DocumentNameKind.File, 0, 0, given, record, path, AssetType: assetType);
+        if (given.Length == 0) return file;
         var placed = AssetLinks.DataPathOf(linkType, given);
-        return new(DocumentNameKind.File, 0, 0, given, record, path, placed.DataPath,
-            placed.DataPath is null ? placed.Refusal ?? $"{given} is no path its asset type holds." : null);
+        return file with { DataPath = placed.DataPath, Refusal = placed.DataPath is null ? placed.Refusal ?? $"{given} is no path its asset type holds." : null };
     }
 
     // A string still being typed reaches to the end of its text, where the cursor sits.

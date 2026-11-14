@@ -16,7 +16,7 @@ vi.mock('vscode', () => ({
 import { fileLanguage, type FileClient } from '../fileLanguage';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { FileConflictLookup, NO_GAME_FOLDER_ARCHIVED, type CopyAt, type StackedFile } from '../../instanceLoader/fileConflictIndex';
-import type { NamedFile } from '../sourceNames';
+import type { NamedFile, SourceNames } from '../sourceNames';
 import { sourceNames } from './fakeSourceNames';
 
 const HOLDER = '000801:Mod.esp';
@@ -36,11 +36,12 @@ const NONE = { copies: [], unread: [] };
 interface Doubles {
   copy?: CopyAt | { none: string };
   named?: NamedFile;
+  typedAt?: Awaited<ReturnType<SourceNames['pathTypedAt']>>;
   tooltip?: string;
   rocks?: number;
 }
 
-function language(answer: Awaited<ReturnType<FileClient['getFileReferences']>>, { copy = LOOSE, named, tooltip, rocks = 0 }: Doubles = {}) {
+function language(answer: Awaited<ReturnType<FileClient['getFileReferences']>>, { copy = LOOSE, named, typedAt, tooltip, rocks = 0 }: Doubles = {}) {
   const reporter = recordingReporter();
   const getFileReferences = vi.fn(() => Promise.resolve(answer));
   const reveal = vi.fn(() => Promise.resolve());
@@ -54,7 +55,10 @@ function language(answer: Awaited<ReturnType<FileClient['getFileReferences']>>, 
   for (let rock = 0; rock < rocks; rock += 1) stackedCopies.set({ relativePath: `meshes/rocks/rock${rock}.nif`, copies: [] });
   const value = {
     stackedCopies,
-    dataFolderFiles: { kind: 'listed' as const, files: new Map([['meshes/rock.nif', { path: '/game/Data/meshes/rock.nif', relativePath: 'meshes/rock.nif' }]]) },
+    dataFolderFiles: {
+      kind: 'listed' as const,
+      files: new Map(['meshes/rock.nif', 'meshes/textures/stray.dds', 'textures/readme.txt'].map((path) => [path, { path: `/game/Data/${path}`, relativePath: path }])),
+    },
     gameFolderArchived: { ...NO_GAME_FOLDER_ARCHIVED, copies: new Map([['textures/decals/other_d.dds', ARCHIVED]]) },
   };
   const copyOf = vi.fn((path: string) => {
@@ -64,6 +68,7 @@ function language(answer: Awaited<ReturnType<FileClient['getFileReferences']>>, 
   });
   const names = sourceNames({
     fileAt: () => Promise.resolve(named),
+    pathTypedAt: () => Promise.resolve(typedAt),
     membersIn: (text, formKey, fieldPaths) => Promise.resolve(formKey === HOLDER && fieldPaths.includes('Diffuse') && text === TEXT ? [SPAN] : []),
   });
   return { reporter, getFileReferences, reveal, copyOf, stackedCopies, ...fileLanguage({ instance: { value }, reporter, client, names, copyOf, reveal, tooltip: () => tooltip }) };
@@ -159,6 +164,40 @@ describe('Go to Symbol in Workspace on a file (symbols.md, The features, story 4
 
     expect(await picked?.resolve?.()).toBeUndefined();
     expect(reveal.mock.calls).toEqual([[LOOSE]]);
+  });
+});
+
+describe('completion at a path (symbols.md, The features, story 5)', () => {
+  const document = { uri: Uri.file(SOURCE), getText: () => TEXT };
+  const TEXTURES = { start: SPAN.start, end: SPAN.end, assetType: { folder: 'Textures', extensions: ['.DDS'] } };
+  const MESHES = { start: SPAN.start, end: SPAN.end, assetType: { folder: 'Meshes', extensions: ['.nif'] } };
+
+  it('offers each file in its asset type\'s folder, whatever the case, that takes one of its extensions, as plugin source spells it', async () => {
+    expect(await language(NONE, { typedAt: TEXTURES }).completionsAt(document, NAMED)).toEqual({
+      ...SPAN, icon: CompletionItemKind.File, isIncomplete: false,
+      items: [{ label: 'Decals\\Stain_d.dds', insertText: 'Decals\\\\Stain_d.dds' }, { label: 'decals\\other_d.dds', insertText: 'decals\\\\other_d.dds' }],
+    });
+  });
+
+  it('offers only the files whose path in the folder holds the text typed so far, its backslashes escaped', async () => {
+    const found = await language(NONE, { typedAt: TEXTURES }).completionsAt(document, NAMED + 'Decals\\\\St'.length);
+
+    expect(found?.items.map(({ label }) => label)).toEqual(['Decals\\Stain_d.dds']);
+  });
+
+  it('offers nothing where no path is', async () => {
+    expect(await language(NONE).completionsAt(document, NAMED)).toBeUndefined();
+  });
+
+  it('offers at most a thousand files, so VS Code asks again as the user types, and says in the Output how many more match (principles.md, Never silently wrong)', async () => {
+    const { reporter, ...kind } = language(NONE, { typedAt: MESHES, rocks: 200_000 });
+
+    const found = await kind.completionsAt(document, NAMED);
+
+    expect([found?.items.length, found?.isIncomplete]).toEqual([1000, true]);
+    expect(reporter.shownFailures.map(({ message, detail }) => [message, detail])).toEqual([[
+      'Completion lists 1000 of the 200001 files in Meshes whose path holds "".', 'It lists at most 1000. Type more of the path to narrow the list.',
+    ]]);
   });
 });
 

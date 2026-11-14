@@ -112,6 +112,21 @@ public sealed class DocumentNamesTests
     }
 
     [Theory]
+    [InlineData("""{ "FormKey": "000802:Mod.esp", "Diffuse": "" }""", "", null)]
+    [InlineData("""{ "FormKey": "000802:Mod.esp", "Diffuse": "Deca""", "Deca", "Textures/Deca")]
+    public void APathBeingTyped_IsNamedAtTheCursor_WithTheFolderAndExtensionsOfItsAssetType(string text, string typed, string? dataPath)
+    {
+        const string field = "\"Diffuse\": \"";
+        var cursor = text.IndexOf(field, StringComparison.Ordinal) + field.Length + typed.Length;
+
+        var file = Assert.Single(DocumentNames.In(DocumentSpans.Read(text), ColumnsOf, cursor));
+
+        Assert.Equal(
+            (DocumentNameKind.File, typed, dataPath, (string?)null, "Textures", ".dds"),
+            (file.Kind, text[file.Start..file.End], file.DataPath, file.Refusal, file.AssetType?.Folder, string.Join(",", file.AssetType?.Extensions ?? [])));
+    }
+
+    [Theory]
     [InlineData("an unclosed string at the end", """{ "FormKey": "000801:Mod.esp", "Race": "Hu""")]
     [InlineData("an unclosed string at a line break", "{ \"FormKey\": \"000801:Mod.esp\", \"Race\": \"Hu\n}")]
     [InlineData("a member with no comma before it", """{ "FormKey": "000801:Mod.esp" "Race": "Hu" }""")]

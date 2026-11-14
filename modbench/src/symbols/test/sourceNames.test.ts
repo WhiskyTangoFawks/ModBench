@@ -50,8 +50,15 @@ describe('the names at a place in plugin source, as mEdit answers them (target-a
   it.each([
     ['the file, by its path in the Data folder', named('File', 1, 4, 'a.dds', { dataPath: 'Textures/a.dds' }), { start: 1, end: 4, given: 'a.dds', path: 'Textures/a.dds' }],
     ['no file, saying why', named('File', 1, 4, 'Data/a.dds', { refusal: 'It is no path a texture holds.' }), { start: 1, end: 4, given: 'Data/a.dds', refused: 'It is no path a texture holds.' }],
+    ['nothing where the path is empty', named('File', 1, 1, ''), undefined],
   ])('names, at a path, %s', async (_case, name, expected) => {
     expect(await names([name]).owner.fileAt(FILE, TEXT, 2)).toEqual(expected);
+  });
+
+  it('answers, at a path however much of it is typed, its span and its field\'s asset type', async () => {
+    const assetType = { folder: 'Textures', extensions: ['.dds'] };
+
+    expect(await names([named('File', 1, 1, '', { assetType })]).owner.pathTypedAt(FILE, TEXT, 1)).toEqual({ start: 1, end: 1, assetType });
   });
 
   it('names nothing where mEdit cannot answer, and the Output says why', async () => {
@@ -144,9 +151,20 @@ describe('the records a reference field offers (symbols.md, The features, story 
     const { owner, client } = names([REFERENCE], [record('Gun', GUN), record('Gun', GUN), record(null, '000901:Mod.esp')]);
 
     expect(await owner.recordsOfferedAt(FILE, TEXT, 43)).toEqual({
-      start: 41, end: 43, items: [{ label: 'Gun', detail: GUN, insertText: GUN }, { label: '000901:Mod.esp', detail: '000901:Mod.esp', insertText: '000901:Mod.esp' }],
+      start: 41, end: 43, isIncomplete: false,
+      items: [{ label: 'Gun', detail: GUN, insertText: GUN }, { label: '000901:Mod.esp', detail: '000901:Mod.esp', insertText: '000901:Mod.esp' }],
     });
     expect(client.searchRecords.mock.calls).toEqual([['Gu', ['ARMO', 'WEAP']]]);
+  });
+
+  it('is incomplete where mEdit finds more copies than it answers, so VS Code asks again, and the Output says how many (principles.md, Never silently wrong)', async () => {
+    const { owner, client, reporter } = names([REFERENCE]);
+    client.searchRecords.mockResolvedValue({ items: [record('Gun', GUN)], total: 31 });
+
+    expect((await owner.recordsOfferedAt(FILE, TEXT, 43))?.isIncomplete).toBe(true);
+    expect(reporter.shownFailures.map(({ message, detail }) => [message, detail])).toEqual([[
+      'Completion offers the records of 1 of the 31 copies whose EditorID or FormKey holds "Gu".', 'Type more of the EditorID or FormKey to narrow the list.',
+    ]]);
   });
 
   it('offers nothing before anything is typed', async () => {

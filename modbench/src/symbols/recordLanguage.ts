@@ -66,7 +66,7 @@ export function recordLanguage({ client, names, reporter, open }: RecordLanguage
     /** The records a reference field offers for the text typed so far. */
     async completionsAt(document, offset) {
       const found = await names.recordsOfferedAt(document.uri.fsPath, heldText(document), offset);
-      return found && { ...found, icon: vscode.CompletionItemKind.Reference, isIncomplete: true };
+      return found && { ...found, icon: vscode.CompletionItemKind.Reference };
     },
     /** Each copy, in an active or a compiled plugin, of a record whose EditorID or FormKey holds `query`, at its plugin's
      *  file until the user picks it, and then at its document. */
