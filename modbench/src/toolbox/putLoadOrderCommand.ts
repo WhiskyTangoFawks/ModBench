@@ -15,7 +15,10 @@ export function registerPutLoadOrder(editing: Editing, instance: Pick<Instance, 
   const put = (value: InstanceValue): void => {
     editing.onRecompute(value.loadOrderSnapshot, vscode.workspace.getConfiguration('modbench').get<string>(STRINGS_LANGUAGE_SETTING));
   };
-  const signalChange = ({ named, disk }: Reread): void => { editing.signalChange(disk ? [] : named); };
+  const signalChange = ({ named, disk }: Reread): void => {
+    if (disk) editing.signalChange([]);
+    else if (named.length > 0) editing.signalChange(named);
+  };
   return vscode.Disposable.from(
     instance.subscribe((value, _sequence, reread) => {
       put(value);
