@@ -14,15 +14,15 @@ import type { Definition, References, SymbolKind } from './symbolKind';
 export type ScriptClient = Pick<MEditClient, 'getScriptReferences'> & RecordDocumentClient;
 
 interface ScriptLanguageDeps {
-  instance: { readonly value: Pick<InstanceValue, 'papyrusScripts'> } | undefined;
-  names: Pick<SourceNames, 'scriptAt' | 'membersIn' | 'formKeyIn'>;
+  instance: { readonly value: Pick<InstanceValue, 'papyrusScripts' | 'dataFolderFiles'> } | undefined;
+  names: Pick<SourceNames, 'scriptAt' | 'scriptsIn' | 'membersIn' | 'formKeyIn'>;
   client: ScriptClient;
   reporter: Pick<Reporter, 'report' | 'shownOnSurface'>;
 }
 
 /** A Papyrus script as a symbol: where plugin source names one a record attaches, and the records that attach it, which
  *  mEdit answers (symbols.md). */
-export function scriptLanguage({ instance, names, client, reporter }: ScriptLanguageDeps): SymbolKind<ScriptSymbol> {
+export function scriptLanguage({ instance, names, client, reporter }: ScriptLanguageDeps): SymbolKind<ScriptSymbol> & Required<Pick<SymbolKind<ScriptSymbol>, 'namesNothingIn'>> {
   const scripts = (): readonly PapyrusScript[] => instance?.value.papyrusScripts ?? [];
 
   const nameAt = (document: AskedIn, offset: number) => names.scriptAt(document.uri.fsPath, heldText(document), offset);
@@ -43,13 +43,21 @@ export function scriptLanguage({ instance, names, client, reporter }: ScriptLang
     definitionOf({ name }): Promise<Definition> {
       const held = scripts().find((script) => sameName(script.name, name));
       const file = held && fileOf(held);
-      return Promise.resolve(file === undefined ? { refused: `No mod, Overwrite or the Data folder holds a source or a compiled script of ${name}.` } : { file });
+      if (held === undefined) return Promise.resolve({ refused: `No mod, Overwrite or the Data folder holds a source or a compiled script of ${name}.` });
+      return Promise.resolve(file === undefined ? { refused: `Only an archive holds ${name}, so no file opens.` } : { file });
     },
     /** Each member of a record that names it. */
     referencesTo,
     referencedBy: (script) => showReferencedBy({
       reporter, subject: script.name, contextValue: 'modbench.scriptReferencedBy', references: () => referencesTo(script),
     }),
+    /** Each script plugin source names that nothing holds, once the Data folder is listed. */
+    async namesNothingIn(document) {
+      if (instance?.value.dataFolderFiles.kind !== 'listed') return [];
+      const found = await names.scriptsIn(document.uri.fsPath, heldText(document));
+      return found.filter(({ name }) => !scripts().some((script) => sameName(script.name, name)))
+        .map(({ start, end, name }) => ({ start, end, name, why: `No mod, Overwrite or the Data folder holds ${name}.` }));
+    },
     /** None: a script has no row. */
     tooltipOf: () => Promise.resolve([]),
     async completionsAt(document, offset) {

@@ -62,6 +62,19 @@ describe('the names at a place in plugin source, as mEdit answers them (target-a
   });
 });
 
+describe('every script a document names, with its span', () => {
+  it('asks for the whole document and answers each script in it', async () => {
+    const { owner, client } = names([named('Record', 13, 29, NPC), named('Script', 40, 42, 'Gu'), named('Script', 50, 53, 'Other')]);
+
+    expect(await owner.scriptsIn(FILE, TEXT)).toEqual([{ start: 40, end: 42, name: 'Gu' }, { start: 50, end: 53, name: 'Other' }]);
+    expect(client.getPluginSourceNames.mock.calls).toEqual([[TEXT, FILE]]);
+  });
+
+  it('fails where mEdit cannot answer, for its caller to say', async () => {
+    await expect(names(localFailure('mEdit is down')).owner.scriptsIn(FILE, TEXT)).rejects.toThrow('mEdit is down');
+  });
+});
+
 describe('the records a reference field offers (symbols.md, The features, story 5)', () => {
   const REFERENCE = named('Reference', 41, 43, 'Gu', { validFormKeyTypes: ['ARMO', 'WEAP'] });
 

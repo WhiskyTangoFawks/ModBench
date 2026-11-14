@@ -726,7 +726,7 @@ export class Instance implements Subscription {
       foldersByMod: index.foldersByMod,
       ...archives,
       flaggedHashes,
-      papyrusScripts: papyrusScriptsOf(index.files, dataFolderFiles, gameRelease),
+      papyrusScripts: papyrusScriptsOf(index.files, dataFolderFiles, gameRelease, [...[...archives.stackedCopies].map(({ relativePath }) => relativePath), ...[...archives.gameFolderArchived.copies.values()].map(({ file }) => file)]),
       plugins,
       downloadedFiles: downloadedFilesOutcome.kind === 'unresolved'
         ? { kind: 'unresolved', reason: downloadedFilesOutcome.reason }

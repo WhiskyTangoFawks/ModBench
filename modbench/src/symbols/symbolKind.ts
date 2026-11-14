@@ -34,6 +34,12 @@ export interface Named<Symbol> extends TextSpan {
   readonly symbol: Symbol | Refused;
 }
 
+/** A name a document holds that names nothing, over its span, and why. */
+export interface NamesNothing extends TextSpan {
+  readonly name: string;
+  readonly why: string;
+}
+
 /** A symbol as Go to Symbol in Workspace lists it. `resolve`, on the symbol the user picks, says where it opens, or
  *  leaves `location`. */
 export interface Listed {
@@ -60,6 +66,9 @@ export interface SymbolKind<Symbol> {
     readonly items: readonly { readonly label: string; readonly detail?: string; readonly insertText?: string }[];
     readonly isIncomplete?: boolean;
   }) | undefined>;
+  /** Each name in the document that names nothing (symbols.md, The features, story 8); a kind leaves it out for the names another box
+   *  already judges, or while the instance has not read what would hold them. */
+  namesNothingIn?(document: AskedIn): Promise<readonly NamesNothing[]>;
   /** Each symbol of the kind whose name holds `query`, which is trimmed and never empty. */
   symbolsFor(query: string): Promise<readonly Listed[]>;
 }

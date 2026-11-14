@@ -65,6 +65,13 @@ export function sourceNames({ client, names, reporter }: SourceNamesDeps) {
       return found && { ...spanOf(found), name: found.value };
     },
 
+    /** Each Papyrus script a document names, which fails where mEdit cannot answer. */
+    async scriptsIn(file: string, text: string): Promise<(TextSpan & { name: string })[]> {
+      return answerOf(await names.getPluginSourceNames(text, file))
+        .filter(({ kind }) => kind === 'Script')
+        .map((found) => ({ ...spanOf(found), name: found.value }));
+    },
+
     /** The file a record's path at `offset` names. */
     async fileAt(file: string, text: string, offset: number): Promise<NamedFile | undefined> {
       const found = await nameAt(file, text, offset, 'File');

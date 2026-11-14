@@ -6,6 +6,7 @@ const NOWHERE = { start: 0, end: 0 };
 export const sourceNames = (answers: Partial<SourceNames> = {}): SourceNames => ({
   recordAt: () => Promise.resolve(undefined),
   scriptAt: () => Promise.resolve(undefined),
+  scriptsIn: () => Promise.resolve([]),
   fileAt: () => Promise.resolve(undefined),
   recordsOfferedAt: () => Promise.resolve(undefined),
   recordMemberAt: () => Promise.resolve(undefined),

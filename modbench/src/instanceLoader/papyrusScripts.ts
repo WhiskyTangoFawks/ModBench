@@ -10,12 +10,13 @@ export interface PapyrusScript {
   readonly compiled?: string;
 }
 
-/** Each Papyrus script an enabled mod, Overwrite or the Data folder holds, by name. */
-export function papyrusScriptsOf(files: FileWinners, dataFolderFiles: DataFolderFiles, release: string | undefined): PapyrusScript[] {
+/** Each Papyrus script an enabled mod, Overwrite, the Data folder or an archive holds, by name. A script only an archive
+ *  holds has no file to open. */
+export function papyrusScriptsOf(files: FileWinners, dataFolderFiles: DataFolderFiles, release: string | undefined, archivedPaths: Iterable<string> = []): PapyrusScript[] {
   const inData = dataFolderFiles.kind === 'listed' ? dataFolderFiles.files : new Map<string, { relativePath: string; path: string }>();
   const copyOf = (relativePath: string): string | undefined => files.get(relativePath)?.winner ?? inData.get(relativePath.toLowerCase())?.path;
   const names = new Map<string, string>();
-  for (const relativePath of [...files.values(), ...inData.values()].map((file) => file.relativePath)) {
+  for (const relativePath of [...[...files.values(), ...inData.values()].map((file) => file.relativePath), ...archivedPaths]) {
     const script = papyrusScriptAt(release, relativePath);
     if (script !== undefined && !names.has(script.name.toLowerCase())) names.set(script.name.toLowerCase(), script.name);
   }

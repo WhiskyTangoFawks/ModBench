@@ -21,6 +21,7 @@ import { pickSymbol } from './symbolPick';
 import { registerGoTo } from './goTo';
 import { asked, type SymbolKinds } from './symbolKind';
 import type { RecordReferencedByDeps } from './recordReferencedBy';
+import { registerNamesNothing } from './namesNothing';
 import { publishReferencesView } from '../drivingLib/referencesView';
 
 const NO_FILES: FilesHeld = { filesByMod: new Map(), dataFolderFiles: { kind: 'listed', files: new Map() } };
@@ -92,6 +93,7 @@ export function createSymbols(deps: SymbolsDeps): Symbols {
     executeCommand: (command, ...args) => vscode.commands.executeCommand(command, ...args),
   });
   const disposable = vscode.Disposable.from(
+    registerNamesNothing({ kinds, reporter, onInstanceChanged: (listener) => instance?.subscribe(listener) ?? { dispose: () => undefined } }),
     registerLanguageFeatures({ kinds, reporter, reveal: fileCopies.reveal, rename }),
     registerGoTo({ kinds, reporter: reporterFor('symbol.goTo'), reveal: fileCopies.reveal, selection: () => rows?.selection() ?? [], dataPathOf: (row) => rows?.mods.dataPathOf(row) }),
     publishReferencesView((key, value) => { void vscode.commands.executeCommand('setContext', key, value); }),
