@@ -1,3 +1,4 @@
+using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -42,6 +43,7 @@ public sealed class ReadOutOfMemoryTests : IDisposable
     public void ASelectThatRunsOutOfMemoryBeforeItsFirstRow_IsRefusedSayingHowToSelectBodies()
     {
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
+        Waits.Reached(() => index.Status is { State: LoadOrderState.Ready, Validating: false }, "the index at rest");
         index.Settled();
         using var fullPool = new FilledMemory(IndexFiles.In(_fixture.InstanceRoot));
 

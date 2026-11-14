@@ -1,5 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
+using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -48,6 +49,16 @@ public sealed class PluginSourceNamesQueryTests : IDisposable
         var loose = Path.Combine(Entry.ModFolderOf(), "Loose.json");
 
         Assert.Empty(index.Queries.GetPluginSourceNames(loose, File.ReadAllText(NpcFile), null).Value());
+    }
+
+    [Fact]
+    public void AFile_WithNoLoadOrder_IsRefused_ForNoPluginSourceCanBeSaidToHoldIt()
+    {
+        using var index = Indexes.Open(new LoadOrderHolder());
+
+        var refused = index.Queries.GetPluginSourceNames(Path.GetFullPath("Loose.json"), "{}", null).Refused();
+
+        Assert.Equal(IndexRefusal.NoLoadOrder, refused.Refusal);
     }
 
     [Fact]

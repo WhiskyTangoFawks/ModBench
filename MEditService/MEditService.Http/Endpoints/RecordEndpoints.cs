@@ -182,10 +182,14 @@ internal static class RecordEndpoints
         .ProducesProblem(400)
         .ProducesProblem(503);
 
-        app.MapGet("/records/{formKey}/references-in-active-or-compiled-plugins", (string formKey, IQueries svc, CancellationToken aborted) =>
-            GetReferences(
-                nameof(IQueries.GetReferencesInActiveOrCompiledPlugins), formKey,
-                key => svc.GetReferencesInActiveOrCompiledPlugins(key, aborted), logger))
+        app.MapGet("/records/{formKey}/references-in-active-or-compiled-plugins", async (string formKey, IQueries svc, CancellationToken aborted) =>
+        {
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("Received {Operation} for {FormKey}", nameof(IQueries.GetReferencesInActiveOrCompiledPlugins), formKey);
+            }
+            return EndpointMapping.Ok(await svc.GetReferencesInActiveOrCompiledPlugins(Uri.UnescapeDataString(formKey), aborted));
+        })
         .WithName("GetReferencesInActiveOrCompiledPlugins")
         .WithTags("Records")
         .Produces<IReadOnlyList<ReferenceResult>>()
@@ -523,16 +527,6 @@ internal static class RecordEndpoints
         return EndpointMapping.Answered(
             await svc.GetCompare(formKey, copy, aborted),
             result => result is not null ? Results.Ok(result) : Results.Problem("No plugin indexes this record.", statusCode: 404));
-    }
-
-    internal static async Task<IResult> GetReferences(
-        string operation, string formKey, Func<string, Task<Answer<IReadOnlyList<ReferenceResult>, IndexRefused>>> read, ILogger logger)
-    {
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation("Received {Operation} for {FormKey}", operation, formKey);
-        }
-        return EndpointMapping.Ok(await read(Uri.UnescapeDataString(formKey)));
     }
 }
 

@@ -471,7 +471,16 @@ internal sealed class RelationReads(
     public IReadOnlyList<ReferenceRow> GetReferencedByInActiveOrCompiledPlugins(string targetFormKey)
     {
         using var context = OpenRead();
-        return GetReferences(context, ActiveOrCompiledPluginReferrers, $"AND {ActiveOrCompiled}", targetFormKey);
+        // WorkingTreeOverlay keeps form_references rewritten as the working tree changes, so this
+        // already sees every edit without applying anything itself.
+        return context.Rows($"""
+            SELECT fr.source_form_key, fr.source_plugin, fr.field_path, fr.record_type, fr.editor_id, fr.source_origin
+            FROM {ActiveOrCompiledPluginReferrers}
+            WHERE fr.target_form_key = $1 AND {ActiveOrCompiled}
+            """, reader => new ReferenceRow(
+                reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+                reader.GetStringOrNull(4), reader.GetString(5)),
+            targetFormKey);
     }
 
     // SQL's 1-based position of a FormKey's plugin name, after its six-digit object ID and its colon.
@@ -828,20 +837,6 @@ internal sealed class RelationReads(
     // Inactive plugins are indexed too (ADR-0012): any plugin's row gives the type.
     private static string? FindRecordTypeInAnyPlugin(ReadContext context, string formKey) =>
         context.ScalarString($"SELECT record_type FROM {TableDdlBuilder.MirrorSchema}.records WHERE form_key = $1 LIMIT 1", formKey);
-
-    private static List<ReferenceRow> GetReferences(ReadContext context, string referrers, string restriction, string targetFormKey)
-    {
-        // WorkingTreeOverlay keeps form_references rewritten as the working tree changes, so this
-        // already sees every edit without applying anything itself.
-        return context.Rows($"""
-            SELECT fr.source_form_key, fr.source_plugin, fr.field_path, fr.record_type, fr.editor_id, fr.source_origin
-            FROM {referrers}
-            WHERE fr.target_form_key = $1 {restriction}
-            """, reader => new ReferenceRow(
-                reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
-                reader.GetStringOrNull(4), reader.GetString(5)),
-            targetFormKey);
-    }
 
     private static CellStructure? GetCellLocation(ReadContext context, string cellFormKey, string plugin, string origin)
     {

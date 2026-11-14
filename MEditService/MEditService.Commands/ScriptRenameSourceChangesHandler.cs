@@ -82,7 +82,7 @@ public sealed class ScriptRenameSourceChangesHandler
             texts[file] = _source.TextAt(file);
             return null;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
         {
             return $"{Named(copy)}: {ex.Message}";
         }

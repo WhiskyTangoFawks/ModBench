@@ -13,6 +13,7 @@ public sealed class LoadOrderAtScaleTests
 {
     private static readonly TimeSpan OneGesture = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan Navigating = TimeSpan.FromSeconds(0.1);
+    private const int RunsOfTheComparison = 5;
     private static readonly TimeSpan LitRsSevenHundredPluginsInTenSeconds = TimeSpan.FromSeconds(10) / 700;
 
     [Fact]
@@ -151,7 +152,7 @@ public sealed class LoadOrderAtScaleTests
         var stack = scale.PluginsHoldingTheOverriddenRecord.Select(p => new RecordCopy(scale.AnOverriddenRecord, p.Key)).ToList();
         CompareRecordsAnswer? compared = null;
 
-        Budgets.Ran(Navigating, () => compared = scale.Index.Queries.GetCompareRecords(stack).Value(), "Comparing a record of 200 copies");
+        Budgets.Ran(Navigating, () => compared = scale.Index.Queries.GetCompareRecords(stack).Value(), "Comparing a record of 200 copies", RunsOfTheComparison);
         Assert.Equal(copies, compared?.Compare?.Overrides.Count);
     }
 }
