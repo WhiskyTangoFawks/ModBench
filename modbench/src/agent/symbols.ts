@@ -50,8 +50,9 @@ export const LIST_REFERENCES = {
     const symbol = await symbolNamed(naming, args);
     const found = await symbols.referencesTo(symbol);
     if ('refused' in found) throw new Refusal(found.refused);
-    return fitting(found, ({ references }) => ({
+    return fitting(found, ({ references, leftOut }) => ({
       references: references.length,
+      leftOut: leftOut.length,
       ...symbol.kind === 'record' && { narrow: `select_rows reads the rows of the form_references view whose target_form_key is ${symbol.formKey}, which hold every plugin the record index holds, active or not, where this list holds the active and the compiled plugins. Its WHERE narrows them further.` },
     }));
   },

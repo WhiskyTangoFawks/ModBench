@@ -1,5 +1,5 @@
 import type { Covering, FileOrigin, InstanceValue, Mod, OriginFile, OriginFolder, PublisherTag } from '../instanceLoader/instance';
-import { copyStandingOf, fileOrderConflictOf, modOrigin, sameOrigin } from '../instanceLoader/fileConflictIndex';
+import { copyStandingOf, fileOrderConflictOf, foldPath, modOrigin, sameOrigin } from '../instanceLoader/fileConflictIndex';
 
 /** Each indicator in the order mods.md's table lists them, with its name there.
  *  @public Read by packageJson.test, which holds package.json to it. */
@@ -46,7 +46,7 @@ export function gameFolderFileOver(value: Pick<InstanceValue, 'dataFolderFiles' 
 
 /** The path of the loose file `entry` in the game folder's Data folder, if it holds one. */
 export function gameFolderFile(value: Pick<InstanceValue, 'dataFolderFiles'>, entry: string): string | undefined {
-  return value.dataFolderFiles.kind === 'listed' ? value.dataFolderFiles.files.get(entry.toLowerCase())?.path : undefined;
+  return value.dataFolderFiles.kind === 'listed' ? value.dataFolderFiles.files.get(foldPath(entry))?.path : undefined;
 }
 
 export interface ArchivedFileStanding {

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import type { SourceNames } from './sourceNames';
-import type { CopyAt } from '../instanceLoader/fileConflictIndex';
+import { foldPath, type CopyAt } from '../instanceLoader/fileConflictIndex';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { heldText } from '../textDocuments/heldText';
 import type { Reporter } from '../ports/reporter';
@@ -47,13 +47,13 @@ function foldedPathsOf(value: FilesValue): readonly FoldedPath[] {
     ...value.dataFolderFiles.kind === 'listed' ? [...value.dataFolderFiles.files.values()].map(({ relativePath }) => relativePath) : [],
     ...[...value.gameFolderArchived.copies.values()].map(({ file }) => file),
   ];
-  const each = [...new Map(paths.map((path): FoldedPath => [path.toLowerCase(), path]))];
+  const each = [...new Map(paths.map((path): FoldedPath => [foldPath(path), path]))];
   folded.set(value, each);
   return each;
 }
 
-// Plugin source holds a path's backslashes escaped, and the instance value's paths hold forward slashes.
-const foldedPathOf = (held: string): string => held.toLowerCase().replace(/\\\\|\\/g, '/');
+// Plugin source holds a path's backslashes escaped.
+const foldedPathOf = (held: string): string => foldPath(held.replaceAll('\\\\', '\\'));
 
 /** A file as a symbol, named by its path in the Data folder: the records that name it, which mEdit answers (symbols.md,
  *  The symbols). */
@@ -115,7 +115,7 @@ export function fileLanguage({ instance, reporter, client, names, copyOf, reveal
     /** Each file whose path in the Data folder holds `query`, at the copy the game gets, up to `MOST_FILES_LISTED`; the
      *  Output says how many more match. */
     symbolsFor(query, { gesture }) {
-      const wanted = query.toLowerCase();
+      const wanted = foldPath(query);
       const matching = dataPaths().filter(([path]) => path.includes(wanted));
       const listed: Listed[] = [];
       for (const [, path] of matching) {
