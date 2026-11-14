@@ -20,4 +20,17 @@ public readonly record struct PluginAddress(string Name, string Origin)
 }
 
 /// <summary>A record and the plugin holding it (ADR-0012).</summary>
-public readonly record struct RecordAt(PluginAddress Plugin, string FormKey);
+public readonly record struct RecordAt(PluginAddress Plugin, string FormKey)
+{
+    /// <summary>Matches <see cref="PluginAddress.Comparer"/>, and a FormKey in any case.</summary>
+    public static readonly IEqualityComparer<RecordAt> Comparer = new CaseInsensitiveComparer();
+
+    private sealed class CaseInsensitiveComparer : IEqualityComparer<RecordAt>
+    {
+        public bool Equals(RecordAt x, RecordAt y) =>
+            PluginAddress.Comparer.Equals(x.Plugin, y.Plugin) && string.Equals(x.FormKey, y.FormKey, StringComparison.OrdinalIgnoreCase);
+
+        public int GetHashCode(RecordAt key) =>
+            HashCode.Combine(PluginAddress.Comparer.GetHashCode(key.Plugin), StringComparer.OrdinalIgnoreCase.GetHashCode(key.FormKey));
+    }
+}

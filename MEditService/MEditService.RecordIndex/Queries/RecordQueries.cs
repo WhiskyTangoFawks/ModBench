@@ -351,6 +351,13 @@ internal sealed class RecordQueries(
         string targetFormKey, CancellationToken cancel) =>
         _answer.Of(() => Referrers(RequireReads().GetReferencedByInActiveOrCompiledPlugins(targetFormKey)), cancel);
 
+    public Task<Answer<PlacedReferences, IndexRefused>> GetPlacedReferences(string targetFormKey, CancellationToken cancel) =>
+        _answer.Of(() =>
+        {
+            using var reads = _index.RequireWholeSetReads().InOneSnapshot();
+            return ReferencePlacement.Of(reads, targetFormKey, TreeOf, RenderedFileName, source.TextAt);
+        }, cancel);
+
     // A plugin the record index has not reached would read as naming nothing.
     public Task<Answer<IReadOnlyList<CopyNaming>, IndexRefused>> GetPluginNameReferences(string name, CancellationToken cancel) =>
         _answer.Of(() => _index.RequireWholeSetReads().GetCopiesNaming(name), cancel);
@@ -451,7 +458,7 @@ internal sealed class RecordQueries(
         return tree.DocumentOf(plugin, identity).Then(file => SourceAnswer.Of(file is null ? null : CopyDocumentAt(file)));
     }
 
-    private static CopyDocument CopyDocumentAt(DocumentFile file) =>
+    internal static CopyDocument CopyDocumentAt(DocumentFile file) =>
         new(file.IsContainersDocument ? CopyDocumentKind.ContainersFile : CopyDocumentKind.OwnFile, file.Path);
 
     // A compiled plugin copy's file may have been renamed outside Modbench (ADR-0003), so its name is the tree's.

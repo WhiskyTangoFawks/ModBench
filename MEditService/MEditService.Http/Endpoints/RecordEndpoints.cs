@@ -194,6 +194,19 @@ internal static class RecordEndpoints
         .ProducesProblem(503)
         .ProducesProblem(500);
 
+        app.MapGet("/records/{formKey}/placed-references", async (string formKey, IQueries svc, CancellationToken aborted) =>
+            EndpointMapping.Ok(await svc.GetPlacedReferences(Uri.UnescapeDataString(formKey), aborted)))
+        .WithName("GetPlacedReferences")
+        .WithTags("Records")
+        .WithDescription(
+            "Each copy, in an active or compiled plugin, that references the record, at its document: its file in plugin source, " +
+            "with VS Code's unsaved text in its place, else its rendered document. Each span names the record, with its quotes; " +
+            "where a rendered document names it nowhere, the span is the copy's own FormKey. Why each copy that could not be placed " +
+            "was left out. Answers only once the record index is ready.")
+        .Produces<PlacedReferences>()
+        .ProducesProblem(503)
+        .ProducesProblem(500);
+
         app.MapGet("/script-names/{name}/references", async (string name, IQueries svc, CancellationToken aborted) =>
             EndpointMapping.Ok(await svc.GetScriptReferences(name, aborted)))
         .WithName("GetScriptReferences")

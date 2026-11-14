@@ -23,4 +23,15 @@ public sealed class ReferenceApiTests(LoadedApiFixture<TestPluginFixture> loaded
         Assert.NotNull(results);
         Assert.Empty(results);
     }
+
+    [Fact]
+    public async Task GetPlacedReferences_UnreferencedFormKey_Returns200PlacingNone()
+    {
+        var resp = await _client.GetAsync($"/records/{Uri.EscapeDataString("FFFFFF:Unknown.esp")}/placed-references");
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var placed = await resp.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Empty(placed.GetProperty("copies").EnumerateArray());
+        Assert.Empty(placed.GetProperty("leftOut").EnumerateArray());
+    }
 }
