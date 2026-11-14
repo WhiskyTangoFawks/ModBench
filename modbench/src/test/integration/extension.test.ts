@@ -502,7 +502,7 @@ function createMockBackend(): http.Server {
         origin, workingTreeState: 'None', hasContainerChildren: false, hasParseFailure: false });
       const items = new URL(url, 'http://x').searchParams.get('search') === 'CompiledPlugin'
         ? [summary(COMPILED_PLUGIN_FORM_KEY, 'CompiledPluginGun', COMPILED_PLUGIN, COMPILED_PLUGIN_ORIGIN), summary(CHILD_FORM_KEY, 'CompiledPluginRef', COMPILED_PLUGIN, COMPILED_PLUGIN_ORIGIN)]
-        : [summary(HELD_FORM_KEY, 'NewGun', 'Patch.esp', 'Data/')];
+        : [summary(HELD_FORM_KEY, 'NewGun', 'TestMod.esp', 'Data/')];
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ items, total: items.length }));
       return;
