@@ -353,7 +353,7 @@ internal sealed class RecordQueries(
 
     public Task<Answer<IReadOnlyList<ReferenceResult>, IndexRefused>> GetReferencesInActiveOrCompiledPlugins(
         string targetFormKey, CancellationToken cancel) =>
-        _answer.Of(() => Referrers(_index.RequireWholeSetReads().GetReferencedByInActiveOrCompiledPlugins(targetFormKey)), cancel);
+        _answer.Of(() => Referrers(RequireReads().GetReferencedByInActiveOrCompiledPlugins(targetFormKey)), cancel);
 
     public Task<Answer<PlacedReferences, IndexRefused>> GetPlacedReferences(string targetFormKey, CancellationToken cancel) =>
         _answer.Of(() =>

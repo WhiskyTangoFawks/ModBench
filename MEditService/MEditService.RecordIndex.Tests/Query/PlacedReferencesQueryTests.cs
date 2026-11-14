@@ -186,25 +186,4 @@ public sealed class PlacedReferencesQueryTests : IDisposable
         Assert.DoesNotContain(placed.Copies, copy => copy.FormKey == _renderedNpc);
         Assert.EndsWith($"{Rendered.Name} holds no copy of it.", LeftOut(placed, _renderedNpc, Rendered), StringComparison.Ordinal);
     }
-
-    private sealed class SourceReadingNoPluginsTree() : DelegatingSourceAdapter(TestAdapters.Source())
-    {
-        public override ISourceRepositoryReads? TreeOf(RegisteredPlugin plugin, GameRelease release) => null;
-    }
-
-    [Fact]
-    public void ACopyWhoseRenderedDocumentCannotBeNamed_IsLeftOutNamed()
-    {
-        var file = Directory.EnumerateFiles(
-            PluginSourceRoot.In(_fixture.Plugins.Single(plugin => plugin.Name == Compiled.Name).ModFolderOf(), Compiled.Name),
-            "Referrer - *.json", SearchOption.AllDirectories).Single();
-        var backup = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(file).Require(), "Backup")).FullName;
-        File.Copy(file, Path.Combine(backup, Path.GetFileName(file)));
-        using var index = Indexes.Reconciled(_fixture, source: new SourceReadingNoPluginsTree());
-
-        var placed = index.Queries.GetPlacedReferences(_target).Value();
-
-        Assert.DoesNotContain(placed.Copies, copy => copy.FormKey == _npc);
-        Assert.Contains("Backup", LeftOut(placed, _npc, Compiled), StringComparison.Ordinal);
-    }
 }

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -47,11 +48,7 @@ internal static class ReferencePlacement
 
         public void InFile(RecordAt copy, Answer<DocumentFile?, SourceFailure> located, Func<string, string> textAt)
         {
-            if (!located.Holds(out var file, out var failure))
-            {
-                LeaveOut(copy, failure.Reason);
-                return;
-            }
+            if (!Answered(copy, located, out var file)) return;
             if (file is null)
             {
                 LeaveOut(copy, "its plugin source holds no file for it.");
@@ -78,11 +75,7 @@ internal static class ReferencePlacement
         // A copy with no plugin source sits at the record that holds it (symbols.md, story 10).
         public void Rendered(RecordAt copy, Answer<string, SourceFailure> fileName, string text)
         {
-            if (!fileName.Holds(out var name, out var failure))
-            {
-                LeaveOut(copy, failure.Reason);
-                return;
-            }
+            if (!Answered(copy, fileName, out var name)) return;
             var names = NamesIn(text);
             var spans = Naming(names, copy);
             if (spans.Count == 0 && Own(names, copy).Find(found => found.FieldPath == RecordMembers.FormKey) is { } declared) spans.Add(SpanOf(declared));
@@ -91,6 +84,13 @@ internal static class ReferencePlacement
         }
 
         public void LeaveOut(RecordAt copy, string why) => _leftOut.Add($"{ReadFailures.Copy(copy.FormKey, copy.Plugin)}: {why}");
+
+        private bool Answered<T>(RecordAt copy, Answer<T, SourceFailure> answer, [MaybeNullWhen(false)] out T value)
+        {
+            if (answer.Holds(out value, out var failure)) return true;
+            LeaveOut(copy, failure.Reason);
+            return false;
+        }
 
         private List<TextSpan> Naming(IReadOnlyList<DocumentName> names, RecordAt copy) =>
             [.. Own(names, copy).Where(name => name.FieldPath != RecordMembers.FormKey && SameFormKey(name.Value, target)).Select(SpanOf)];
