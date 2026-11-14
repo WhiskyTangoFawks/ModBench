@@ -165,13 +165,13 @@ describe('referenced by on a file (commands.md, `referenced by` under Symbol)', 
   beforeEach(() => { setInput.mockClear(); });
 
   it('lists the records that name its path in the Data folder, titled with the path', async () => {
-    const { referencedBy, getFileReferences } = language({
+    const files = language({
       copies: [{ formKey: HOLDER, plugin: { name: 'Mod.esp', origin: 'Mod' }, inPluginSource: true, fieldPaths: ['Diffuse'] }], unread: [],
     });
 
-    await referencedBy(FILE);
+    await files.referencedBy({ kind: 'file', path: FILE });
 
-    expect(getFileReferences.mock.calls).toEqual([[FILE]]);
+    expect(files.getFileReferences.mock.calls).toEqual([[FILE]]);
     expect(setInput).toHaveBeenCalledWith(expect.objectContaining({
       title: `Referenced By: ${FILE}`, contextValue: 'modbench.fileReferencedBy',
       location: { uri: Uri.file(SOURCE), range: { start: { line: 0, character: NAMED }, end: { line: 0, character: NAMED + 'Decals\\\\Stain_d.dds'.length } } },

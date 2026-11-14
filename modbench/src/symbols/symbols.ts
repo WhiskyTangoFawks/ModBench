@@ -1,11 +1,9 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
-import { sourceNames, type SourceNames } from './sourceNames';
+import { sourceNames } from './sourceNames';
 import type { Reporter } from '../ports/reporter';
 import type { EntryRef } from '../instanceAdapter/instanceAdapter';
-import type { RecordDocumentClient } from '../textDocuments/recordDocument';
 import { openPluginSourceDocument } from '../textDocuments/pluginSource';
-import { locateRecord, locationOf } from './recordLocation';
 import type { Instance } from '../instanceLoader/instance';
 import { symbolIndex, type SymbolIndex } from './symbolIndex';
 import type { EntryNames, PluginSymbol, SymbolOwner } from '../symbolNames/symbolNames';
@@ -18,12 +16,14 @@ import { recordLanguage, type RecordClient } from './recordLanguage';
 import { renameSymbol } from './renameSymbol';
 import { registerLanguageFeatures } from './languageFeatures';
 import type { ModRows, PluginRows, Reveal } from '../drivingLib/symbolRows';
-import type { FilesHeld } from './symbolCommands';
-import { registerModReferencedBy, registerPluginReferencedBy } from './symbolCommands';
+import { registerReferencedBy, type FilesHeld } from './referencedBy';
+import { pickSymbol } from './symbolPick';
 import { registerGoTo } from './goTo';
-import type { SymbolKinds } from './symbolKind';
-import { registerRecordReferencedBy, type RecordReferencedByDeps } from './recordReferencedBy';
+import { asked, type SymbolKinds } from './symbolKind';
+import type { RecordReferencedByDeps } from './recordReferencedBy';
 import { publishReferencesView } from '../drivingLib/referencesView';
+
+const NO_FILES: FilesHeld = { filesByMod: new Map(), dataFolderFiles: { kind: 'listed', files: new Map() } };
 
 interface SymbolsDeps {
   instance: Pick<Instance, 'value' | 'subscribe'> | undefined;
@@ -31,7 +31,7 @@ interface SymbolsDeps {
   client: Pick<MEditClient, 'getRecordOfFile'> & RecordClient & ScriptClient & FileClient & RecordReferencedByDeps['client'];
   /** What mEdit's record index names in plugin source. */
   names: Pick<MEditClient, 'getPluginSourceNames'>;
-  focusedOrPickedRecord: () => Promise<string | undefined>;
+  focusedRecord: () => string | undefined;
   fileCopies: FileCopies;
   /** Each box that owns files, saying where they name a symbol (ADR-0028). */
   owners: readonly SymbolOwner[];
@@ -72,15 +72,8 @@ interface Symbols extends vscode.Disposable {
   symbols: SymbolIndex;
 }
 
-function formKeyLocation(client: RecordDocumentClient, names: Pick<SourceNames, 'formKeyIn'>) {
-  return async (record: Parameters<typeof locateRecord>[1]): Promise<vscode.Location | { refused: string } | undefined> => {
-    const found = await locateRecord({ client, open: openPluginSourceDocument }, record, names.formKeyIn);
-    return found && ('refused' in found ? found : locationOf(found));
-  };
-}
-
 export function createSymbols(deps: SymbolsDeps): Symbols {
-  const { instance, reporter, client, rows, reporterFor, fileCopies, focusedOrPickedRecord } = deps;
+  const { instance, reporter, client, rows, reporterFor, fileCopies, focusedRecord } = deps;
   const names = sourceNames({ client, names: deps.names, reporter });
   const plugin = pluginLanguage({
     instance, reporter, client, owners: deps.owners, names, renamePlugin: renamePluginNamed, rows: () => rows?.plugins,
@@ -91,7 +84,7 @@ export function createSymbols(deps: SymbolsDeps): Symbols {
   const file = fileLanguage({ instance, reporter, client, names, ...fileCopies, tooltip: (path) => rows?.mods.fileTooltip(path) });
   const kinds: SymbolKinds = {
     plugin, entry, file,
-    script: scriptLanguage({ instance, names, client }),
+    script: scriptLanguage({ instance, names, client, reporter }),
     record: recordLanguage({ client, names, reporter, open: openPluginSourceDocument }),
   };
   const rename = renameSymbol({
@@ -102,11 +95,11 @@ export function createSymbols(deps: SymbolsDeps): Symbols {
     registerLanguageFeatures({ kinds, reporter, reveal: fileCopies.reveal, rename }),
     registerGoTo({ kinds, reporter: reporterFor('symbol.goTo'), reveal: fileCopies.reveal, selection: () => rows?.selection() ?? [], dataPathOf: (row) => rows?.mods.dataPathOf(row) }),
     publishReferencesView((key, value) => { void vscode.commands.executeCommand('setContext', key, value); }),
-    registerRecordReferencedBy({ client, reporter: reporterFor('referencedBy'), locateRecord: formKeyLocation(client, names), focusedOrPickedRecord }),
-    ...(rows ? [
-      registerModReferencedBy({ referencedBy: { mod: entry.referencedBy, file: file.referencedBy }, rows: rows.mods, value: rows.filesHeld, reporter: reporterFor('mod.referencedBy') }),
-      registerPluginReferencedBy({ referencedBy: plugin.referencedBy, rows: rows.plugins }),
-    ] : []),
+    registerReferencedBy({
+      reporter: reporterFor('symbol.referencedBy'), referencedBy: (symbol) => asked(kinds, symbol).referencedBy(),
+      selection: () => rows?.selection() ?? [], dataPathOf: (row) => rows?.mods.dataPathOf(row), filesHeld: () => rows?.filesHeld() ?? NO_FILES,
+      focusedRecord, pick: () => pickSymbol(kinds, reporterFor('symbol.referencedBy')),
+    }),
   );
   return {
     dispose: () => { disposable.dispose(); },

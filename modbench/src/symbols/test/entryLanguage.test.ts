@@ -269,9 +269,12 @@ describe('Go to Symbol in Workspace on a mod, a separator, a downloaded file or 
 describe('referenced by on a mod (commands.md, `referenced by` under Symbol)', () => {
   beforeEach(() => { setInput.mockClear(); });
 
-  it('lists the places the owners report, titled with the mod', async () => {
-    await language(undefined).referencedBy('Base Mod');
+  it.each<[string, EntrySymbol, string]>([
+    ['a mod', mod('Base Mod'), 'modbench.modReferencedBy'],
+    ['a separator', separator('Gear'), 'modbench.separatorReferencedBy'],
+  ])('lists the places the owners report for %s, titled with its name', async (_what, entry, contextValue) => {
+    await language(undefined).referencedBy(entry);
 
-    expect(setInput).toHaveBeenCalledWith(expect.objectContaining({ title: 'Referenced By: Base Mod', contextValue: 'modbench.modReferencedBy', location: expect.objectContaining(locationAt(1)) as unknown }));
+    expect(setInput).toHaveBeenCalledWith(expect.objectContaining({ title: `Referenced By: ${entry.name}`, contextValue, location: expect.objectContaining(locationAt(1)) as unknown }));
   });
 });

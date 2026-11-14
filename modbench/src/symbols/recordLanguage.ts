@@ -9,14 +9,16 @@ import { referencesToFormKey } from './formKeyReferences';
 import { locateRecord, locationOf } from './recordLocation';
 import type { SourceNames } from './sourceNames';
 import type { Definition, RecordNamed, References, SymbolKind } from './symbolKind';
+import { recordReferencedBy, type RecordReferencedByDeps } from './recordReferencedBy';
 import { workspaceSymbolsOf } from './workspaceSymbols';
 
-export type RecordClient = RecordDocumentClient & Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlugins'>;
+export type RecordClient = RecordDocumentClient & RecordReferencedByDeps['client']
+  & Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlugins'>;
 
 interface RecordLanguageDeps {
   client: RecordClient;
-  names: Pick<SourceNames, 'recordAt' | 'recordsOfferedAt' | 'declarationIn' | 'referenceIn'>;
-  reporter: Pick<Reporter, 'shownOnSurface'>;
+  names: Pick<SourceNames, 'recordAt' | 'recordsOfferedAt' | 'declarationIn' | 'referenceIn' | 'formKeyIn'>;
+  reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
   open: (uri: vscode.Uri) => PromiseLike<Pick<vscode.TextDocument, 'getText' | 'positionAt'>>;
 }
 
@@ -25,18 +27,31 @@ interface RecordLanguageDeps {
 export function recordLanguage({ client, names, reporter, open }: RecordLanguageDeps): SymbolKind<RecordNamed> {
   const references = referencesToFormKey({ client, open, spanIn: names.referenceIn });
   const workspace = workspaceSymbolsOf({ client, reporter, open, declarationIn: names.declarationIn });
+  const locatedAt = async (formKey: string, spanIn: Parameters<typeof locateRecord>[2]): Promise<vscode.Location | { refused: string }> => {
+    const found = await locateRecord({ client, open }, { formKey }, spanIn);
+    if (found === undefined) return { refused: `No active plugin holds ${formKey}.` };
+    return 'refused' in found ? found : locationOf(found);
+  };
+  /** Its winning copy's FormKey member. */
+  const definitionOf = async ({ formKey }: RecordNamed): Promise<Definition> => {
+    const located = await locatedAt(formKey, names.declarationIn)
+      .catch((error: unknown) => ({ refused: `Where ${formKey} is defined could not be read: ${errorMessage(error)}` }));
+    return 'refused' in located ? located : { at: located };
+  };
+  /** Its FormKey in its winning copy; with no active plugin holding it, the top of a compiled plugin's copy. */
+  const anchorOf = async ({ formKey }: RecordNamed): Promise<vscode.Location | { refused: string }> => {
+    const winning = await locatedAt(formKey, names.formKeyIn);
+    if (!('refused' in winning)) return winning;
+    const compiled = (await workspace.symbolsFor(formKey)).find((copy) => copy.formKey === formKey);
+    return compiled ? new vscode.Location(compiled.uri, new vscode.Position(0, 0)) : winning;
+  };
+  const referencedBy = recordReferencedBy({ client, reporter, anchorOf });
   return {
     async nameAt(document, offset) {
       const found = await names.recordAt(document.uri.fsPath, heldText(document), offset);
       return found && { start: found.start, end: found.end, name: found.formKey, symbol: { kind: 'record', formKey: found.formKey } };
     },
-    /** Its winning copy's FormKey member. */
-    async definitionOf({ formKey }): Promise<Definition> {
-      const located = await locateRecord({ client, open }, { formKey }, names.declarationIn)
-        .catch((error: unknown) => ({ refused: `Where ${formKey} is defined could not be read: ${errorMessage(error)}` }));
-      if (located === undefined) return { refused: `No active plugin holds ${formKey}.` };
-      return 'refused' in located ? located : { at: locationOf(located) };
-    },
+    definitionOf,
     async referencesTo({ formKey }): Promise<References> {
       try {
         const { found, leftOut } = await references(formKey);
@@ -45,6 +60,7 @@ export function recordLanguage({ client, names, reporter, open }: RecordLanguage
         return { refused: `mEdit cannot list what references ${formKey}: ${errorMessage(error)}` };
       }
     },
+    referencedBy,
     /** What symbols.md, The symbols, says a record's hover shows; none where no active plugin holds it. */
     tooltipOf: async ({ formKey }) => await hoverOf({ client, reporter }, formKey) ?? [],
     /** The records a reference field offers for the text typed so far. */
@@ -55,7 +71,7 @@ export function recordLanguage({ client, names, reporter, open }: RecordLanguage
     /** Each compiled plugin's copy of a record whose EditorID or FormKey holds `query`, at its document. */
     async symbolsFor(query) {
       return (await workspace.symbolsFor(query)).map((record) => ({
-        name: record.name, detail: `${record.plugin.name} (${record.plugin.origin})`, icon: vscode.SymbolKind.Object,
+        symbol: { kind: 'record', formKey: record.formKey }, name: record.name, detail: `${record.plugin.name} (${record.plugin.origin})`, icon: vscode.SymbolKind.Object,
         location: new vscode.Location(record.uri, new vscode.Position(0, 0)),
         resolve: async () => {
           const found = await workspace.locate(record);

@@ -54,7 +54,7 @@ function foldedPathsOf(value: FilesValue): readonly FoldedPath[] {
 
 /** A file as a symbol, named by its path in the Data folder: the records that name it, which mEdit answers (symbols.md,
  *  The symbols). */
-export function fileLanguage({ instance, reporter, client, names, copyOf, reveal, tooltip }: FileLanguageDeps) {
+export function fileLanguage({ instance, reporter, client, names, copyOf, reveal, tooltip }: FileLanguageDeps): SymbolKind<FileNamed> {
   const pathAt = async (document: AskedIn, offset: number): Promise<Named<FileNamed> | undefined> => {
     const found = await names.fileAt(document.uri.fsPath, heldText(document), offset);
     if (found === undefined) return undefined;
@@ -70,12 +70,15 @@ export function fileLanguage({ instance, reporter, client, names, copyOf, reveal
   const dataPaths = (): readonly FoldedPath[] => (instance === undefined ? [] : foldedPathsOf(instance.value));
 
   const listedAt = (path: string, copy: CopyAt): Listed => ({
-    name: path, detail: 'file', icon: vscode.SymbolKind.File, location: atFile(copy.kind === 'loose' ? copy.path : copy.archive),
+    symbol: { kind: 'file', path }, name: path, detail: 'file', icon: vscode.SymbolKind.File, location: atFile(copy.kind === 'loose' ? copy.path : copy.archive),
     resolve: async () => { await reveal(copy); return undefined; },
   });
 
   const kind: SymbolKind<FileNamed> = {
     nameAt: pathAt,
+    referencedBy: (named) => showReferencedBy({
+      reporter, subject: named.path, contextValue: 'modbench.fileReferencedBy', references: () => referencesTo(named),
+    }),
     /** The copy the game gets, inside its archive when archived. */
     definitionOf({ path }): Promise<Definition> {
       const copy = copyOf(path);
@@ -105,11 +108,5 @@ export function fileLanguage({ instance, reporter, client, names, copyOf, reveal
     },
   };
 
-  return {
-    ...kind,
-    /** Lists each record that names the file at `path` in the Data folder, in VS Code's References view. */
-    referencedBy: (path: string): Promise<void> => showReferencedBy({
-      reporter, subject: path, contextValue: 'modbench.fileReferencedBy', references: () => referencesTo({ kind: 'file', path }),
-    }),
-  };
+  return kind;
 }

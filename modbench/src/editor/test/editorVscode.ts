@@ -14,7 +14,6 @@ export const fileSystems = new Map<string, unknown>();
 export const openedDocuments: unknown[] = [];
 export const documentChanges = new Set<(event: { document: unknown; contentChanges: unknown[] }) => void>();
 export const disk = new Map<string, string | Uint8Array>();
-export const pickers = { shown: 0 };
 export const tabGroups: { viewColumn: number; tabs: unknown[] }[] = [];
 export const applyEdit = vi.fn<() => Promise<boolean>>(() => Promise.resolve(true));
 
@@ -98,7 +97,6 @@ export const editorVscode = {
     registerFileDecorationProvider: () => ({ dispose: () => undefined }),
     createTreeView: () => ({ selection: [], onDidChangeSelection: () => ({ dispose: () => undefined }), dispose: () => undefined }),
     createQuickPick: () => {
-      pickers.shown++;
       const hidden: (() => void)[] = [];
       return {
         show: () => { hidden.forEach((listener) => { listener(); }); }, dispose: () => undefined,
@@ -152,7 +150,6 @@ export function forgetVscode(): void {
   fileSystems.clear();
   openedDocuments.length = 0;
   disk.clear();
-  pickers.shown = 0;
   tabGroups.length = 0;
   executeCommand.mockReset();
   executeCommand.mockImplementation(dispatch);

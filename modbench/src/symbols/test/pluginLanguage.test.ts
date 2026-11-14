@@ -83,7 +83,7 @@ describe('referenced by on a plugin (commands.md, `referenced by` under Symbol)'
   beforeEach(() => { setInput.mockClear(); });
 
   it('lists what names the plugin, titled with its row name, anchored at a place a file names it where no active plugin holds its header', async () => {
-    await language().kind.referencedBy(BASE);
+    await language().kind.referencedBy({ kind: 'plugin', ...BASE });
 
     expect(setInput).toHaveBeenCalledWith(expect.objectContaining({
       title: 'Referenced By: Base.esm (Base Mod)', contextValue: 'modbench.pluginReferencedBy', location: { uri: Uri.file(PLUGINS_TXT), range: new Range(0, 1, 0, 9) },

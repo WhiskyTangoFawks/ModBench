@@ -3,10 +3,12 @@ import { TreeItem, TreeItemCollapsibleState, Uri } from '../../test/vscodeMock';
 import { CompletionItemKind, SymbolKind } from './iconsMock';
 
 const opened = vi.hoisted(() => new Map<string, string>());
+const setInput = vi.hoisted(() => vi.fn());
 const Range = vi.hoisted(() => class { readonly args: unknown[]; constructor(...args: unknown[]) { this.args = args; } get start() { return this.args[0]; } get end() { return this.args[1]; } });
 vi.mock('vscode', () => ({
   Uri, Range, TreeItem, TreeItemCollapsibleState, SymbolKind, CompletionItemKind,
   Location: class { constructor(readonly uri: unknown, readonly range: unknown) {} },
+  extensions: { getExtension: () => ({ activate: () => Promise.resolve({ setInput }) }) },
   workspace: {
     textDocuments: [],
     openTextDocument: (uri: { fsPath: string }) => {
@@ -18,6 +20,7 @@ vi.mock('vscode', () => ({
 
 import { scriptLanguage, type ScriptClient } from '../scriptLanguage';
 import { sourceNames } from './fakeSourceNames';
+import { recordingReporter } from '../../test/surfacingDoubles';
 
 const QUEST = '000801:Mod.esp';
 const SOURCE = '/instance/source/Mod/plugin-source/Mod.esp/Quest.json';
@@ -44,7 +47,7 @@ function language(references: Awaited<ReturnType<ScriptClient['getScriptReferenc
     membersIn: (text: string, formKey: string, fieldPaths: readonly string[]) =>
       Promise.resolve(text === TEXT && formKey === QUEST && fieldPaths.includes(PATH) ? [SPAN] : []),
   });
-  return { language: scriptLanguage({ instance: { value: { papyrusScripts: scripts } }, names, client }) };
+  return { language: scriptLanguage({ instance: { value: { papyrusScripts: scripts } }, names, client, reporter: recordingReporter() }) };
 }
 
 const document = (path = SOURCE) => ({ uri: Uri.file(path), getText: () => TEXT });
@@ -97,5 +100,13 @@ describe('where a Papyrus script is defined, and the records that attach it', ()
 
     expect(await failing.referencesTo({ kind: 'script', name: 'Ns:Quest' })).toEqual({ locations: [], unread: ['the plugins mEdit reads: the record index is not ready'] });
   });
-});
 
+  it('lists where plugin source attaches it in VS Code\'s References view, titled with its name', async () => {
+    opened.set(SOURCE, TEXT);
+    setInput.mockClear();
+
+    await language({ copies: [copy('Mod')], unread: [] }).language.referencedBy({ kind: 'script', name: 'Ns:Quest' });
+
+    expect(setInput).toHaveBeenCalledWith(expect.objectContaining({ title: 'Referenced By: Ns:Quest', contextValue: 'modbench.scriptReferencedBy' }));
+  });
+});

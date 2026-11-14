@@ -4,7 +4,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { showDefinition } from './definitionShown';
 import type { renameSymbol } from './renameSymbol';
-import { askedAt, inOrder, type Listed, type SymbolKinds } from './symbolKind';
+import { askedAt, inOrder, listedSymbols, type Listed, type SymbolKinds } from './symbolKind';
 import { reportedForFeature } from './symbolPlaces';
 
 interface LanguageFeaturesDeps {
@@ -35,10 +35,7 @@ export function registerLanguageFeatures({ kinds, reporter, reveal, rename }: La
   const at = (document: vscode.TextDocument, position: vscode.Position) => askedAt(kinds, document, document.offsetAt(position));
   const workspaceSymbols: vscode.WorkspaceSymbolProvider<ListedSymbol> = {
     async provideWorkspaceSymbols(query) {
-      const wanted = query.trim();
-      if (wanted === '') return [];
-      const listed = await Promise.all(inOrder(kinds).map((kind) => kind.symbolsFor(wanted)));
-      return listed.flat().map((symbol) => new ListedSymbol(symbol));
+      return (await listedSymbols(kinds, query)).map((symbol) => new ListedSymbol(symbol));
     },
     async resolveWorkspaceSymbol(symbol) {
       const location = await symbol.listed.resolve?.();

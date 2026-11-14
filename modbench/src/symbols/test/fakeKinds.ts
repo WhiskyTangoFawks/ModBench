@@ -6,6 +6,7 @@ export function fakeKind<Symbol>(over: Partial<SymbolKind<Symbol>> = {}): Symbol
     nameAt: () => Promise.resolve(undefined),
     definitionOf: () => Promise.resolve({ none: 'Not defined here.' }),
     referencesTo: () => Promise.resolve({ locations: [], unread: [] }),
+    referencedBy: () => Promise.resolve(),
     tooltipOf: () => Promise.resolve([]),
     completionsAt: () => Promise.resolve(undefined),
     symbolsFor: () => Promise.resolve([]),

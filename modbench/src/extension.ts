@@ -415,7 +415,7 @@ function start(context: vscode.ExtensionContext): void {
   const sourceNames = pluginSourceNames(meditClient, isPluginSourcePath);
   const symbols = createSymbols({
     client: meditClient, names: sourceNames, instance: views.instance, reporter: makeReporter(outputChannel, 'symbols'), reporterFor, rows: views.symbolRows,
-    focusedOrPickedRecord: editor.focusedOrPickedRecord,
+    focusedRecord: editor.focusedRecord,
     pluginsShown: views.pluginsShown,
     fileCopies: views.fileCopies,
     entryTooltip: views.entryTooltip,

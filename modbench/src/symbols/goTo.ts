@@ -1,9 +1,8 @@
 import * as vscode from 'vscode';
-import { downloadedFileArgumentOf, modArgumentOf, pluginArgumentOf, separatorArgumentOf } from '../drivingLib/argument';
-import { recordArgumentOf } from '../drivingLib/recordArgument';
 import type { CopyAt } from '../instanceLoader/fileConflictIndex';
 import type { Reporter } from '../ports/reporter';
 import { showDefinition } from './definitionShown';
+import { symbolOfRow } from './rowSymbol';
 import type { SymbolKinds, SymbolName } from './symbolKind';
 import { asked } from './symbolKind';
 
@@ -13,16 +12,6 @@ interface GoToDeps {
   reveal: (copy: CopyAt) => Promise<void>;
   selection: () => readonly unknown[];
   dataPathOf: (row: unknown) => string | undefined;
-}
-
-function symbolOf(row: unknown, dataPathOf: GoToDeps['dataPathOf']): SymbolName | undefined {
-  const plugin = pluginArgumentOf(row)?.plugin;
-  const downloaded = downloadedFileArgumentOf(row)?.row.name;
-  const path = dataPathOf(row);
-  if (plugin !== undefined) return { kind: 'plugin', ...plugin };
-  if (downloaded !== undefined) return { kind: 'downloadedFile', name: downloaded };
-  if (path !== undefined) return { kind: 'file', path };
-  return modArgumentOf(row) ?? separatorArgumentOf(row);
 }
 
 const nameOf = (symbol: SymbolName): string => {
@@ -37,11 +26,11 @@ export function registerGoTo({ kinds, reporter, reveal, selection, dataPathOf }:
   return vscode.commands.registerCommand('modbench.symbol.goTo', async (clicked?: unknown) => {
     const [only, ...rest] = selection();
     const row = clicked ?? (rest.length === 0 ? only : undefined);
-    if (recordArgumentOf(row) !== undefined) {
+    const symbol = symbolOfRow(row, dataPathOf);
+    if (symbol?.kind === 'record') {
       reporter.report('error', 'Could not go to a record: go to takes no record, and open shows it.');
       return;
     }
-    const symbol = symbolOf(row, dataPathOf);
     if (symbol === undefined) {
       await vscode.commands.executeCommand('workbench.action.showAllSymbols');
       return;

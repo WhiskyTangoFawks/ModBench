@@ -248,7 +248,7 @@ describe('completion offers the symbols of the kind a file names at the place (s
 });
 
 describe('Go to Symbol in Workspace lists every kind\'s symbols (symbols.md, The features, story 4)', () => {
-  const listed = (name: string, resolve?: () => Promise<vscode.Location | undefined>) => ({ name, detail: 'a detail', icon: SymbolKind.File, location: ELSEWHERE, resolve });
+  const listed = (name: string, resolve?: () => Promise<vscode.Location | undefined>) => ({ symbol: { kind: 'file' as const, path: name }, name, detail: 'a detail', icon: SymbolKind.File, location: ELSEWHERE, resolve });
 
   it('lists each kind\'s symbols whose name holds the query, the kinds in order', async () => {
     const asked = features(fakeKinds({
