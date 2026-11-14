@@ -52,9 +52,10 @@ export function registerLanguageFeatures({ kinds, reporter, reveal, rename }: La
       },
     }),
     vscode.languages.registerCompletionItemProvider(ownedFiles, {
-      async provideCompletionItems(document, position) {
+      async provideCompletionItems(document, position, token) {
+        const search = { gesture: 'Completion', cancelled: () => token.isCancellationRequested };
         for (const kind of inOrder(kinds)) {
-          const found = await kind.completionsAt(document, document.offsetAt(position));
+          const found = await kind.completionsAt(document, document.offsetAt(position), search);
           if (found === undefined) continue;
           const items = found.items.map(({ label, detail, insertText }) => {
             const item = new vscode.CompletionItem({ label, description: detail }, found.icon);

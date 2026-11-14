@@ -11,7 +11,7 @@ interface FakeDocument {
 interface FakePosition { readonly line: number; readonly character: number }
 interface Captured {
   hover?: { provideHover(document: FakeDocument, position: FakePosition): Promise<{ contents: unknown } | undefined> };
-  completion?: { provideCompletionItems(document: FakeDocument, position: FakePosition): Promise<unknown> };
+  completion?: { provideCompletionItems(document: FakeDocument, position: FakePosition, token: { isCancellationRequested: boolean }): Promise<unknown> };
   definition?: { provideDefinition(document: FakeDocument, position: FakePosition): Promise<unknown> };
   references?: { provideReferences(document: FakeDocument, position: FakePosition): Promise<unknown> };
   workspaceSymbols?: {
@@ -86,7 +86,7 @@ function features(kinds: SymbolKinds) {
     definition: () => present(captured.definition, 'definition').provideDefinition(document, AT),
     references: () => present(captured.references, 'references').provideReferences(document, AT),
     hover: () => present(captured.hover, 'hover').provideHover(document, AT),
-    completion: () => present(captured.completion, 'completion').provideCompletionItems(document, AT),
+    completion: (isCancellationRequested = false) => present(captured.completion, 'completion').provideCompletionItems(document, AT, { isCancellationRequested }),
     workspaceSymbols: (query: string, isCancellationRequested = false) =>
       present(captured.workspaceSymbols, 'workspace symbols').provideWorkspaceSymbols(query, { isCancellationRequested }),
     resolve: (symbol: { name: string; location: unknown }) => present(captured.workspaceSymbols, 'workspace symbols').resolveWorkspaceSymbol(symbol),
@@ -245,6 +245,14 @@ describe('completion offers the symbols of the kind a file names at the place (s
       isIncomplete: true,
       items: [{ label: { label: 'Gun', description: '000801:Mod.esp' }, kind: 5, insertText: '000801:Mod.esp', filterText: 'Gun 000801:Mod.esp', range: { start: { line: 0, character: 12 }, end: { line: 0, character: 14 } } }],
     });
+  });
+
+  it.each([[false], [true]])('tells each kind it asks the gesture, and whether VS Code has cancelled it (cancelled: %s)', async (cancelled) => {
+    const told = vi.fn<Kind<never>['completionsAt']>(() => Promise.resolve(undefined));
+
+    await features(fakeKinds({ record: fakeKind({ completionsAt: told }) })).completion(cancelled);
+
+    expect(told.mock.calls.map(([, , search]) => [search.gesture, search.cancelled()])).toEqual([['Completion', cancelled]]);
   });
 });
 

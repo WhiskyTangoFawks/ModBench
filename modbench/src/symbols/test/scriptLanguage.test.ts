@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, Uri } from '../../test/vscodeMock';
 import { CompletionItemKind, SymbolKind } from './iconsMock';
-import { SEARCH } from './fakeKinds';
+import { COMPLETION, SEARCH } from './fakeKinds';
 
 const opened = vi.hoisted(() => new Map<string, string>());
 const setInput = vi.hoisted(() => vi.fn());
@@ -73,7 +73,7 @@ describe('a Papyrus script\'s name in plugin source (symbols.md, The symbols)', 
   });
 
   it('completes to each script', async () => {
-    expect(await language().language.completionsAt(document(), AT_SCRIPT)).toEqual({ ...SPAN, icon: CompletionItemKind.Class, items: [{ label: 'Ns:Quest' }, { label: 'Other' }] });
+    expect(await language().language.completionsAt(document(), AT_SCRIPT, COMPLETION)).toEqual({ ...SPAN, icon: CompletionItemKind.Class, items: [{ label: 'Ns:Quest' }, { label: 'Other' }] });
   });
 
   it('is found by Go to Symbol at its source, else its compiled script', async () => {

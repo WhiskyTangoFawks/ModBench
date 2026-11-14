@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Range, TreeItem, TreeItemCollapsibleState, Uri } from '../../test/vscodeMock';
 import { CompletionItemKind, SymbolKind } from './iconsMock';
-import { SEARCH } from './fakeKinds';
+import { COMPLETION, SEARCH } from './fakeKinds';
 
 const setInput = vi.hoisted(() => vi.fn());
 vi.mock('vscode', () => ({
@@ -80,7 +80,7 @@ describe('the name of a mod, a separator, a downloaded file or a profile where a
   it('is none where the owner names none, so another kind may claim the place', async () => {
     const none = language(undefined);
 
-    expect([await none.nameAt(document, AT_NAME), await none.completionsAt(document, AT_NAME)]).toEqual([undefined, undefined]);
+    expect([await none.nameAt(document, AT_NAME), await none.completionsAt(document, AT_NAME, COMPLETION)]).toEqual([undefined, undefined]);
   });
 });
 
@@ -202,7 +202,7 @@ describe('hover and completion on a mod, a separator, a downloaded file or a pro
     ['a downloaded file, every downloaded file', downloadedFile('P'), ['Patch-1.7z', 'Armor-2.zip'], CompletionItemKind.File],
     ['a profile, every profile', profile('D'), ['Default', 'Armor Test'], CompletionItemKind.Folder],
   ])('completes where a file names %s, over the name so far', async (_case, entry, items, icon) => {
-    expect(await language(spelled(entry)).completionsAt(document, AT_NAME)).toEqual({ ...SPAN, icon, items: items.map((label) => ({ label })) });
+    expect(await language(spelled(entry)).completionsAt(document, AT_NAME, COMPLETION)).toEqual({ ...SPAN, icon, items: items.map((label) => ({ label })) });
   });
 });
 

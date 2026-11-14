@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Range, TreeItem, TreeItemCollapsibleState, Uri } from '../../test/vscodeMock';
 import { CompletionItemKind, SymbolKind } from './iconsMock';
-import { SEARCH } from './fakeKinds';
+import { COMPLETION, SEARCH } from './fakeKinds';
 
 const setInput = vi.hoisted(() => vi.fn<(input: ReferencesViewInput) => void>());
 vi.mock('vscode', () => ({
@@ -106,7 +106,7 @@ describe('a plugin\'s name, hover, completion and Go to Symbol (symbols.md, The 
   });
 
   it('is none where no plugin is named, so another kind may claim the place', async () => {
-    expect([await naming().nameAt(document, 3), await naming().completionsAt(document, 3)]).toEqual([undefined, undefined]);
+    expect([await naming().nameAt(document, 3), await naming().completionsAt(document, 3, COMPLETION)]).toEqual([undefined, undefined]);
   });
 
   it('has the tooltip of the row of the plugin mod order resolves the name to', async () => {
@@ -118,7 +118,7 @@ describe('a plugin\'s name, hover, completion and Go to Symbol (symbols.md, The 
   });
 
   it('completes where a file names a plugin with every plugin, over the name typed so far', async () => {
-    const found = await naming('Ba').completionsAt({ uri: Uri.file(PLUGINS_TXT), getText: () => '*Ba' }, 3);
+    const found = await naming('Ba').completionsAt({ uri: Uri.file(PLUGINS_TXT), getText: () => '*Ba' }, 3, COMPLETION);
 
     expect(found).toEqual({
       start: 1, end: 3, icon: CompletionItemKind.File,

@@ -3,6 +3,9 @@ import type { SymbolKind, SymbolKinds, SymbolSearch } from '../symbolKind';
 /** Go to Symbol in Workspace's search, which nothing cancels. */
 export const SEARCH: SymbolSearch = { gesture: 'Go to Symbol in Workspace', cancelled: () => false };
 
+/** Completion's search, which nothing cancels. */
+export const COMPLETION: SymbolSearch = { gesture: 'Completion', cancelled: () => false };
+
 /** A kind that names nothing and answers nothing but what `over` answers. */
 export function fakeKind<Symbol>(over: Partial<SymbolKind<Symbol>> = {}): SymbolKind<Symbol> {
   return {

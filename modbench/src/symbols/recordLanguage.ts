@@ -17,7 +17,7 @@ export type RecordClient = RecordDocumentClient & RecordReferencedByDeps['client
 
 interface RecordLanguageDeps {
   client: RecordClient;
-  names: Pick<SourceNames, 'recordAt' | 'recordsOfferedAt' | 'declarationIn' | 'referenceIn' | 'formKeyIn'>;
+  names: Pick<SourceNames, 'recordAt' | 'referenceTypedAt' | 'declarationIn' | 'referenceIn' | 'formKeyIn'>;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
   open: (uri: vscode.Uri) => PromiseLike<Pick<vscode.TextDocument, 'getText' | 'positionAt'>>;
 }
@@ -63,10 +63,19 @@ export function recordLanguage({ client, names, reporter, open }: RecordLanguage
     referencedBy,
     /** What symbols.md, The symbols, says a record's hover shows; none where no active plugin holds it. */
     tooltipOf: async ({ formKey }) => await hoverOf({ client, reporter }, formKey) ?? [],
-    /** The records a reference field offers for the text typed so far. */
-    async completionsAt(document, offset) {
-      const found = await names.recordsOfferedAt(document.uri.fsPath, heldText(document), offset);
-      return found && { ...found, icon: vscode.CompletionItemKind.Reference };
+    /** The records of the types a reference field allows whose EditorID or FormKey holds the text typed so far, each
+     *  once, found as Go to Symbol in Workspace finds them; nothing before anything is typed. */
+    async completionsAt(document, offset, search) {
+      const text = heldText(document);
+      const found = await names.referenceTypedAt(document.uri.fsPath, text, offset);
+      const typed = found && offset > found.start ? text.slice(found.start, offset) : '';
+      if (found === undefined || typed === '') return undefined;
+      const { found: copies, isIncomplete } = await workspace.recordsFor(typed, search, found.types);
+      const records = [...new Map(copies.map((copy) => [copy.formKey, copy])).values()];
+      return {
+        start: found.start, end: found.end, icon: vscode.CompletionItemKind.Reference, isIncomplete,
+        items: records.map(({ editorId, formKey }) => ({ label: editorId || formKey, detail: formKey, insertText: formKey })),
+      };
     },
     /** Each copy, in an active or a compiled plugin, of a record whose EditorID or FormKey holds `query`, at its plugin's
      *  file until the user picks it, and then at its document. */

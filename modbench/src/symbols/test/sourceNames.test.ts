@@ -1,8 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { sourceNames } from '../sourceNames';
-import type { DocumentName, MEditClient, RecordSummary } from '../../client';
+import type { DocumentName, MEditClient } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
-import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
 import { localFailure, type ReadFailed } from '../../wire/readFailed';
 
 const NPC = '000801:Mod.esp';
@@ -15,18 +14,10 @@ const named = (kind: DocumentName['kind'], start: number, end: number, value: st
 
 const OWN = named('Record', 13, 29, NPC, { fieldPath: 'FormKey' });
 
-const record = (editorId: string | null, formKey: string): RecordSummary => ({
-  formKey, plugin: 'Mod.esp', loadOrderIndex: 0, isWinner: true, editorId, origin: DATA_DIRECTORY_ORIGIN, workingTreeState: 'None',
-  hasContainerChildren: false, hasParseFailure: false,
-});
-
-function names(answer: DocumentName[] | ReadFailed, found: RecordSummary[] = [record('Gun', GUN)]) {
+function names(answer: DocumentName[] | ReadFailed) {
   const reporter = recordingReporter();
-  const client = {
-    getPluginSourceNames: vi.fn<MEditClient['getPluginSourceNames']>(() => Promise.resolve(answer)),
-    searchRecords: vi.fn<MEditClient['searchRecords']>(() => Promise.resolve({ items: found, total: found.length })),
-  };
-  return { owner: sourceNames({ client, names: client, paths: { getPluginFilePaths: () => Promise.resolve([]) }, sourceFiles: () => undefined, reporter }), client, reporter };
+  const client = { getPluginSourceNames: vi.fn<MEditClient['getPluginSourceNames']>(() => Promise.resolve(answer)) };
+  return { owner: sourceNames({ names: client, paths: { getPluginFilePaths: () => Promise.resolve([]) }, sourceFiles: () => undefined, reporter }), client, reporter };
 }
 
 describe('the names at a place in plugin source, as mEdit answers them (target-architecture.md)', () => {
@@ -95,7 +86,7 @@ describe('every script the plugin source of the compiled plugins names', () => {
     const files = (origin: string) => (origin === ORIGIN ? { file: FILE_OF } : undefined);
     const paths = { getPluginFilePaths: vi.fn<MEditClient['getPluginFilePaths']>((asked) => Promise.resolve(answer(asked))) };
     const reporter = recordingReporter();
-    return { owner: sourceNames({ client: { searchRecords: vi.fn() }, names: { getPluginSourceNames: vi.fn() }, paths, sourceFiles: files, reporter }), paths, reporter };
+    return { owner: sourceNames({ names: { getPluginSourceNames: vi.fn() }, paths, sourceFiles: files, reporter }), paths, reporter };
   };
 
   it('asks once for every plugin and answers each script with the file that holds it, the plugins of no mod left out', async () => {
@@ -144,39 +135,12 @@ describe('every script the plugin source of the compiled plugins names', () => {
   });
 });
 
-describe('the records a reference field offers (symbols.md, The features, story 5)', () => {
-  const REFERENCE = named('Reference', 41, 43, 'Gu', { validFormKeyTypes: ['ARMO', 'WEAP'] });
-
-  it('searches the text typed so far among the types the field allows, offering each record once, by EditorID or FormKey', async () => {
-    const { owner, client } = names([REFERENCE], [record('Gun', GUN), record('Gun', GUN), record(null, '000901:Mod.esp')]);
-
-    expect(await owner.recordsOfferedAt(FILE, TEXT, 43)).toEqual({
-      start: 41, end: 43, isIncomplete: false,
-      items: [{ label: 'Gun', detail: GUN, insertText: GUN }, { label: '000901:Mod.esp', detail: '000901:Mod.esp', insertText: '000901:Mod.esp' }],
-    });
-    expect(client.searchRecords.mock.calls).toEqual([['Gu', ['ARMO', 'WEAP']]]);
-  });
-
-  it('is incomplete where mEdit finds more copies than it answers, so VS Code asks again, and the Output says how many (principles.md, Never silently wrong)', async () => {
-    const { owner, client, reporter } = names([REFERENCE]);
-    client.searchRecords.mockResolvedValue({ items: [record('Gun', GUN)], total: 31 });
-
-    expect((await owner.recordsOfferedAt(FILE, TEXT, 43))?.isIncomplete).toBe(true);
-    expect(reporter.shownFailures.map(({ message, detail }) => [message, detail])).toEqual([[
-      'Completion offers the records of 1 of the 31 copies whose EditorID or FormKey holds "Gu".', 'Type more of the EditorID or FormKey to narrow the list.',
-    ]]);
-  });
-
-  it('offers nothing before anything is typed', async () => {
-    expect(await names([REFERENCE]).owner.recordsOfferedAt(FILE, TEXT, 41)).toBeUndefined();
-  });
-
-  it('offers nothing where mEdit cannot search, and the Output says why', async () => {
-    const { owner, client, reporter } = names([REFERENCE]);
-    client.searchRecords.mockRejectedValue(new Error('mEdit is down.'));
-
-    expect(await owner.recordsOfferedAt(FILE, TEXT, 43)).toBeUndefined();
-    expect(reporter.shownFailures).toEqual([{ severity: 'error', message: `Completion cannot list what ${NPC} offers here.`, detail: 'mEdit is down.' }]);
+describe('a reference field (symbols.md, The features, story 5)', () => {
+  it.each([
+    ['the record types it allows', { validFormKeyTypes: ['ARMO', 'WEAP'] }, ['ARMO', 'WEAP']],
+    ['none where it allows any', {}, []],
+  ])('answers, however much of it is typed, its span and %s', async (_case, over, types) => {
+    expect(await names([named('Reference', 41, 43, 'Gu', over)]).owner.referenceTypedAt(FILE, TEXT, 42)).toEqual({ start: 41, end: 43, types });
   });
 });
 

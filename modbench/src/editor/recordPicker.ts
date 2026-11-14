@@ -49,10 +49,14 @@ export async function pickRecord(
     if (!query.trim()) { show([]); return; }
     quickPick.busy = true;
     try {
-      const { items } = answerOf(await deps.meditClient.searchRecords(normalizeFormKeyQuery(query), validTypes));
+      const { items, total } = answerOf(await deps.meditClient.searchRecords(normalizeFormKeyQuery(query), validTypes));
       if (mySeq !== seq) return;
       const qpItems = items.map(toPickItem);
       show(qpItems);
+      if (items.length < total) {
+        deps.reporter.shownOnSurface('warning', `The record picker lists ${items.length} of the ${total} copies of records that match "${query}".`,
+          'Type more of the EditorID, FormID or FormKey to narrow the list.');
+      }
       answeredValue = query;
       // Normalized, because the seed is the composite the cell displays — comparing
       // the raw seed against a bare formKey would match only when the reference is unresolved.

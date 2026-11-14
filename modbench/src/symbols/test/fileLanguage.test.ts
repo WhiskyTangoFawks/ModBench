@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, Uri } from '../../test/vscodeMock';
 import { CompletionItemKind, SymbolKind } from './iconsMock';
-import { SEARCH } from './fakeKinds';
+import { COMPLETION, SEARCH } from './fakeKinds';
 
 const { setInput, TEXT } = vi.hoisted(() => ({ setInput: vi.fn(), TEXT: '{ "FormKey": "000801:Mod.esp", "Diffuse": "Decals\\\\Stain_d.dds", "EditorID": "Stain" }' }));
 vi.mock('vscode', () => ({
@@ -171,33 +171,37 @@ describe('completion at a path (symbols.md, The features, story 5)', () => {
   const document = { uri: Uri.file(SOURCE), getText: () => TEXT };
   const TEXTURES = { start: SPAN.start, end: SPAN.end, assetType: { folder: 'Textures', extensions: ['.DDS'] } };
   const MESHES = { start: SPAN.start, end: SPAN.end, assetType: { folder: 'Meshes', extensions: ['.nif'] } };
+  const at = (offset: number, typedAt?: typeof TEXTURES) => language(NONE, { typedAt }).completionsAt(document, offset, COMPLETION);
 
   it('offers each file in its asset type\'s folder, whatever the case, that takes one of its extensions, as plugin source spells it', async () => {
-    expect(await language(NONE, { typedAt: TEXTURES }).completionsAt(document, NAMED)).toEqual({
+    expect(await at(NAMED, TEXTURES)).toEqual({
       ...SPAN, icon: CompletionItemKind.File, isIncomplete: false,
       items: [{ label: 'Decals\\Stain_d.dds', insertText: 'Decals\\\\Stain_d.dds' }, { label: 'decals\\other_d.dds', insertText: 'decals\\\\other_d.dds' }],
     });
   });
 
   it('offers only the files whose path in the folder holds the text typed so far, its backslashes escaped', async () => {
-    const found = await language(NONE, { typedAt: TEXTURES }).completionsAt(document, NAMED + 'Decals\\\\St'.length);
+    const found = await at(NAMED + 'Decals\\\\St'.length, TEXTURES);
 
     expect(found?.items.map(({ label }) => label)).toEqual(['Decals\\Stain_d.dds']);
   });
 
   it('offers nothing where no path is', async () => {
-    expect(await language(NONE).completionsAt(document, NAMED)).toBeUndefined();
+    expect(await at(NAMED)).toBeUndefined();
   });
 
-  it('offers at most a thousand files, so VS Code asks again as the user types, and says in the Output how many more match (principles.md, Never silently wrong)', async () => {
-    const { reporter, ...kind } = language(NONE, { typedAt: MESHES, rocks: 200_000 });
+  const STAIN = TEXT.indexOf('Stain');
 
-    const found = await kind.completionsAt(document, NAMED);
+  it.each([
+    ['nothing is typed', STAIN, 'Completion lists 1000 of the 200001 files in Meshes.'],
+    ['some of the path is typed', STAIN + 1, 'Completion lists 1000 of the 200000 files in Meshes whose path holds "s".'],
+  ])('offers at most a thousand files where %s, so VS Code asks again as the user types, and says in the Output how many more match (principles.md, Never silently wrong)', async (_case, at, message) => {
+    const { reporter, ...kind } = language(NONE, { typedAt: { ...MESHES, start: STAIN }, rocks: 200_000 });
+
+    const found = await kind.completionsAt(document, at, COMPLETION);
 
     expect([found?.items.length, found?.isIncomplete]).toEqual([1000, true]);
-    expect(reporter.shownFailures.map(({ message, detail }) => [message, detail])).toEqual([[
-      'Completion lists 1000 of the 200001 files in Meshes whose path holds "".', 'It lists at most 1000. Type more of the path to narrow the list.',
-    ]]);
+    expect(reporter.shownFailures.map(({ message, detail }) => [message, detail])).toEqual([[message, 'It lists at most 1000. Type more of the path to narrow the list.']]);
   });
 });
 

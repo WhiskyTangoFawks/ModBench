@@ -91,7 +91,7 @@ export function fileLanguage({ instance, reporter, client, names, copyOf, reveal
     tooltipOf: ({ path }) => Promise.resolve(tooltipLines(tooltip(path))),
     /** Each file of the path's asset type whose path in its folder holds the text typed so far, up to
      *  `MOST_FILES_LISTED`; the Output says how many more match. */
-    async completionsAt(document, offset) {
+    async completionsAt(document, offset, { gesture }) {
       const found = await names.pathTypedAt(document.uri.fsPath, heldText(document), offset);
       if (found === undefined) return undefined;
       const typed = asTyped(heldText(document).slice(found.start, Math.max(found.start, offset)));
@@ -105,7 +105,8 @@ export function fileLanguage({ instance, reporter, client, names, copyOf, reveal
       });
       const isIncomplete = items.length < offered.length;
       if (isIncomplete) {
-        reporter.shownOnSurface('warning', `Completion lists ${items.length} of the ${offered.length} files in ${found.assetType.folder} whose path holds "${typed}".`,
+        const matching = typed === '' ? '' : ` whose path holds "${typed}"`;
+        reporter.shownOnSurface('warning', `${gesture} lists ${items.length} of the ${offered.length} files in ${found.assetType.folder}${matching}.`,
           `It lists at most ${MOST_FILES_LISTED}. Type more of the path to narrow the list.`);
       }
       return { start: found.start, end: found.end, icon: vscode.CompletionItemKind.File, items, isIncomplete };

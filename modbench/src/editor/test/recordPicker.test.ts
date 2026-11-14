@@ -32,13 +32,14 @@ describe('pickRecord', () => {
 
   it('seeds the QuickPick value and immediately searches on the seed', async () => {
     const record = makeRecord(1, 'Seeded');
-    const { deps, searchRecords } = fakeDeps(vi.fn().mockResolvedValue({ items: [record], total: 1 }));
+    const { deps, searchRecords, shownOnSurface } = fakeDeps(vi.fn().mockResolvedValue({ items: [record], total: 1 }));
     const { qp } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
     const dispatchPromise = pickRecord(deps, record.formKey, ['npc_']);
     await vi.waitFor(() => expect(qp.items).toHaveLength(1));
 
+    expect(shownOnSurface).not.toHaveBeenCalled();
     expect(qp.value).toBe(record.formKey);
     expect(searchRecords).toHaveBeenCalledWith(record.formKey, ['npc_']);
     expect(qp.items).toEqual([{ label: `Seeded [${record.formKey}]`, formKey: record.formKey, alwaysShow: true }]);
@@ -88,16 +89,18 @@ describe('pickRecord', () => {
     await dispatchPromise;
   });
 
-  it('leaves the quick pick untitled when the search is cut', async () => {
+  it('leaves the quick pick untitled when the search is cut, and says in the Output how many match (principles.md, Never silently wrong)', async () => {
     const shown = Array.from({ length: 20 }, (_, i) => makeRecord(i));
-    const { deps } = fakeDeps(vi.fn().mockResolvedValue({ items: shown, total: 1234 }));
+    const { deps, shownOnSurface } = fakeDeps(vi.fn().mockResolvedValue({ items: shown, total: 1234 }));
     const { qp } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
     const dispatchPromise = pickRecord(deps, 'Record', []);
     await vi.waitFor(() => expect(qp.items).toHaveLength(20));
 
-    expect(qp.title).toBeUndefined();
+    expect([qp.title, shownOnSurface.mock.calls]).toEqual([undefined, [[
+      'warning', 'The record picker lists 20 of the 1234 copies of records that match "Record".', 'Type more of the EditorID, FormID or FormKey to narrow the list.',
+    ]]]);
 
     qp.hide();
     await dispatchPromise;

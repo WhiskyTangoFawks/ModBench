@@ -1,24 +1,17 @@
 import type { DocumentName, MEditClient } from '../client';
 import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
-import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { sameName, type PluginName, type TextSpan } from '../symbolNames/symbolNames';
 import { answerOf, failureReason, isReadFailed } from '../wire/readFailed';
 import { scriptsNamed } from './scriptsNamed';
 
 interface SourceNamesDeps {
-  client: Pick<MEditClient, 'searchRecords'>;
   /** What mEdit's record index names in plugin source. */
   names: Pick<MEditClient, 'getPluginSourceNames'>;
   /** What mEdit's record index names across every compiled plugin's source. */
   paths: Pick<MEditClient, 'getPluginFilePaths'>;
   sourceFiles: SourceFilesOf;
   reporter: Pick<Reporter, 'shownOnSurface'>;
-}
-
-interface RecordsOffered extends TextSpan {
-  readonly items: readonly { readonly label: string; readonly detail: string; readonly insertText: string }[];
-  readonly isIncomplete: boolean;
 }
 
 type AssetType = NonNullable<DocumentName['assetType']>;
@@ -41,7 +34,7 @@ const betweenQuotes = ({ start, end }: TextSpan): TextSpan => ({ start: start + 
 
 /** The names plugin source holds, and where each sits, as mEdit's record index answers them (target-architecture.md).
  *  A place is asked of with its file; a copy's document by its text alone. */
-export function sourceNames({ client, names, paths, sourceFiles, reporter }: SourceNamesDeps) {
+export function sourceNames({ names, paths, sourceFiles, reporter }: SourceNamesDeps) {
   let told: string | undefined;
 
   // Every kind asks of one place in turn, so a place mEdit cannot answer for is told once.
@@ -97,28 +90,11 @@ export function sourceNames({ client, names, paths, sourceFiles, reporter }: Sou
       return found?.assetType ? { ...spanOf(found), assetType: found.assetType } : undefined;
     },
 
-    /** The records a reference field at `offset` offers for the text typed so far, over the field's text; undefined
-     *  elsewhere. The Output says where mEdit cannot answer, or found more than it answered. */
-    async recordsOfferedAt(file: string, text: string, offset: number): Promise<RecordsOffered | undefined> {
+    /** The span of a reference field's text at `offset`, however much of it is typed, and the record types it allows;
+     *  none where it allows any. */
+    async referenceTypedAt(file: string, text: string, offset: number): Promise<(TextSpan & { types: readonly string[] }) | undefined> {
       const found = await nameAt(file, text, offset, 'Reference');
-      const typed = found && offset >= found.start ? text.slice(found.start, offset) : '';
-      if (found === undefined || typed === '') return undefined;
-      try {
-        const { items, total } = answerOf(await client.searchRecords(typed, [...found.validFormKeyTypes ?? []]));
-        const records = [...new Map(items.map((record) => [record.formKey, record])).values()];
-        const isIncomplete = items.length < total;
-        if (isIncomplete) {
-          reporter.shownOnSurface('warning', `Completion offers the records of ${items.length} of the ${total} copies whose EditorID or FormKey holds "${typed}".`,
-            'Type more of the EditorID or FormKey to narrow the list.');
-        }
-        return {
-          ...spanOf(found), isIncomplete,
-          items: records.map(({ editorId, formKey }) => ({ label: editorId || formKey, detail: formKey, insertText: formKey })),
-        };
-      } catch (error) {
-        reporter.shownOnSurface('error', `Completion cannot list what ${found.record ?? 'this record'} offers here.`, errorMessage(error));
-        return undefined;
-      }
+      return found && { ...spanOf(found), types: found.validFormKeyTypes ?? [] };
     },
 
     /** The FormKey or the EditorID at `offset`, between its quotes. */
