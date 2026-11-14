@@ -46,10 +46,10 @@ describe('the names at a place in plugin source, as mEdit answers them (target-a
     expect(await names([name]).owner.fileAt(FILE, TEXT, 2)).toEqual(expected);
   });
 
-  it('answers, at a path however much of it is typed, its span and its field\'s asset type', async () => {
+  it('answers, at a path, its span, the text typed in it before the cursor, and its field\'s asset type', async () => {
     const assetType = { folder: 'Textures', extensions: ['.dds'] };
 
-    expect(await names([named('File', 1, 1, '', { assetType })]).owner.pathTypedAt(FILE, TEXT, 1)).toEqual({ start: 1, end: 1, assetType });
+    expect(await names([named('File', 41, 43, 'Gu', { assetType })]).owner.pathTypedAt(FILE, TEXT, 42)).toEqual({ start: 41, end: 43, typed: 'G', assetType });
   });
 
   it('names nothing where mEdit cannot answer, and the Output says why', async () => {
@@ -139,8 +139,8 @@ describe('a reference field (symbols.md, The features, story 5)', () => {
   it.each([
     ['the record types it allows', { validFormKeyTypes: ['ARMO', 'WEAP'] }, ['ARMO', 'WEAP']],
     ['none where it allows any', {}, []],
-  ])('answers, however much of it is typed, its span and %s', async (_case, over, types) => {
-    expect(await names([named('Reference', 41, 43, 'Gu', over)]).owner.referenceTypedAt(FILE, TEXT, 42)).toEqual({ start: 41, end: 43, types });
+  ])('answers its span, the text typed in it before the cursor, and %s', async (_case, over, types) => {
+    expect(await names([named('Reference', 41, 43, 'Gu', over)]).owner.referenceTypedAt(FILE, TEXT, 42)).toEqual({ start: 41, end: 43, typed: 'G', types });
   });
 });
 

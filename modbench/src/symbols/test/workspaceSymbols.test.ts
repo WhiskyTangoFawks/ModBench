@@ -4,7 +4,7 @@ import { Uri } from '../../test/vscodeMock';
 vi.mock('vscode', () => ({ Uri }));
 
 import type * as vscode from 'vscode';
-import { workspaceSymbolsOf, type RecordSymbol } from '../workspaceSymbols';
+import { workspaceSymbolsOf, type RecordSearch, type RecordSymbol } from '../workspaceSymbols';
 import type { PluginMetadata, RecordSummary } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { copyDocumentsOf, copyKey as key, type CopyOnDisk } from './copyDocuments';
@@ -56,20 +56,22 @@ function symbols(plugins: PluginMetadata[], found: RecordSummary[], files: Recor
   return {
     client, reporter, documentsAsked,
     symbolsFor: (query: string, cancelled = () => false) => workspace.symbolsFor(query, { gesture: GO_TO_SYMBOL, cancelled }),
+    recordsFor: (query: string, search: RecordSearch) => workspace.recordsFor(query, { gesture: 'Completion', cancelled: () => false }, search),
     compiledCopiesOf: (formKey: string) => workspace.compiledCopiesOf(formKey, 'Referenced By'),
     locate: (symbol: RecordSymbol) => workspace.locate(symbol, GO_TO_SYMBOL),
   };
 }
 
-const listed = (found: readonly RecordSymbol[]) => found.map(({ name, plugin: { name: pluginName }, pluginFile }) => ({ name, plugin: pluginName, pluginFile }));
+const listed = (found: readonly RecordSymbol[]) =>
+  found.map(({ editorId, formKey, plugin: { name: pluginName }, pluginFile }) => ({ editorId, formKey, plugin: pluginName, pluginFile }));
 
 describe('Go to Symbol in Workspace (symbols.md, The features, story 4)', () => {
-  it('lists each copy of a record it finds, named by its EditorID and FormKey, at its plugin\'s file, asking for no copy\'s document', async () => {
+  it('lists each copy of a record it finds, with its EditorID and FormKey, at its plugin\'s file, asking for no copy\'s document', async () => {
     const { documentsAsked, symbolsFor } = symbols([plugin(modA), plugin(modB)], [summary(GUN, modA, 'RustyGun'), summary(STAND, modB)]);
 
     expect(listed(await symbolsFor('Rusty'))).toEqual([
-      { name: `RustyGun [${GUN}]`, plugin: 'A.esp', pluginFile: '/mods/ModA/A.esp' },
-      { name: STAND, plugin: 'B.esp', pluginFile: '/mods/ModB/B.esp' },
+      { editorId: 'RustyGun', formKey: GUN, plugin: 'A.esp', pluginFile: '/mods/ModA/A.esp' },
+      { editorId: undefined, formKey: STAND, plugin: 'B.esp', pluginFile: '/mods/ModB/B.esp' },
     ]);
     expect(documentsAsked).not.toHaveBeenCalled();
   });
@@ -127,7 +129,7 @@ describe('Go to Symbol in Workspace (symbols.md, The features, story 4)', () => 
       [plugin(modA), plugin(inactive, { inLoadOrder: false })], [summary(GUN, modA, 'RustyGun'), summary(GUN, inactive, 'RustyGun')],
     );
 
-    expect(listed(await compiledCopiesOf(GUN))).toEqual([{ name: `RustyGun [${GUN}]`, plugin: 'D.esp', pluginFile: '/mods/ModD/D.esp' }]);
+    expect(listed(await compiledCopiesOf(GUN))).toEqual([{ editorId: 'RustyGun', formKey: GUN, plugin: 'D.esp', pluginFile: '/mods/ModD/D.esp' }]);
   });
 
   it('lists what it found and writes a line for each search that failed and each copy of a plugin mEdit does not list', async () => {
@@ -140,7 +142,7 @@ describe('Go to Symbol in Workspace (symbols.md, The features, story 4)', () => 
         : Promise.reject(new Error('mEdit is down.')) },
     );
 
-    expect(listed(await symbolsFor('Rusty')).map(({ name }) => name)).toEqual([`RustyGun [${GUN}]`]);
+    expect(listed(await symbolsFor('Rusty')).map(({ formKey }) => formKey)).toEqual([GUN]);
     const message = 'Go to Symbol in Workspace left out what it could not search or open.';
     expect(reporter.shownFailures).toEqual([
       { severity: 'warning', message, detail: 'E.esp (ModE): mEdit is down.' },
@@ -164,6 +166,36 @@ describe('Go to Symbol in Workspace (symbols.md, The features, story 4)', () => 
     expect(reporter.shownFailures).toEqual([
       { severity: 'error', message: 'Go to Symbol in Workspace cannot list the compiled plugins.', detail: 'mEdit is down.' },
     ]);
+  });
+});
+
+describe('a search for the records of some types, each once (symbols.md, The features, story 5)', () => {
+  const OF_TYPES = { types: ['ARMO', 'WEAP'], eachRecordOnce: true };
+
+  it('asks every search for the types', async () => {
+    const outside = plugin(inactive, { inLoadOrder: false });
+    const { client, recordsFor } = symbols([plugin(modA), outside], []);
+
+    await recordsFor('Rusty', OF_TYPES);
+
+    expect(vi.mocked(client.searchRecords).mock.calls.map(([, types, scope]) => [types, scope])).toEqual([[['ARMO', 'WEAP'], undefined], [['ARMO', 'WEAP'], outside]]);
+  });
+
+  it.each([
+    ['each copy, complete', { types: [], eachRecordOnce: false }, 3, [GUN, GUN, STAND], false, []],
+    ['each copy, cut', { types: [], eachRecordOnce: false }, 31, [GUN, GUN, STAND], true,
+      ['Completion lists 3 of the 31 copies of records whose EditorID or FormKey holds "Rusty".']],
+    ['each record once, complete', OF_TYPES, 3, [GUN, STAND], false, []],
+    ['each record once, cut, counting the records it lists', OF_TYPES, 31, [GUN, STAND], true,
+      ['Completion lists 2 records, from 3 of the 31 copies whose EditorID or FormKey holds "Rusty".']],
+  ])('lists %s, and says in the Output what it cut', async (_case, search: RecordSearch, total, formKeys, isIncomplete, messages) => {
+    const { reporter, recordsFor } = symbols([plugin(modA), plugin(modB)], [], {}, {
+      searchRecords: () => Promise.resolve({ items: [summary(GUN, modA, 'RustyGun'), summary(GUN, modB, 'RustyGun'), summary(STAND, modB)], total }),
+    });
+
+    const { found, isIncomplete: cut } = await recordsFor('Rusty', search);
+
+    expect([found.map(({ formKey }) => formKey), cut, reporter.shownFailures.map(({ message }) => message)]).toEqual([formKeys, isIncomplete, messages]);
   });
 });
 

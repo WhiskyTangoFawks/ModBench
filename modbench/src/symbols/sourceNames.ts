@@ -29,6 +29,10 @@ const OWN = 'FormKey';
 
 const spanOf = ({ start, end }: TextSpan): TextSpan => ({ start, end });
 
+type Typed = TextSpan & { readonly typed: string };
+
+const typedIn = (text: string, found: TextSpan, offset: number): Typed => ({ ...spanOf(found), typed: text.slice(found.start, Math.max(found.start, offset)) });
+
 // mEdit spans a record's FormKey with its quotes, and every other name between them.
 const betweenQuotes = ({ start, end }: TextSpan): TextSpan => ({ start: start + 1, end: end - 1 });
 
@@ -78,23 +82,22 @@ export function sourceNames({ names, paths, sourceFiles, reporter }: SourceNames
     /** The file a record's path at `offset` names; undefined at an empty path, which names none. */
     async fileAt(file: string, text: string, offset: number): Promise<NamedFile | undefined> {
       const found = await nameAt(file, text, offset, 'File');
-      if (found === undefined) return undefined;
+      if (found === undefined || found.value === '') return undefined;
       const given = { ...spanOf(found), given: found.value };
-      if (found.dataPath) return { ...given, path: found.dataPath };
-      return found.refusal ? { ...given, refused: found.refusal } : undefined;
+      return found.dataPath ? { ...given, path: found.dataPath } : { ...given, refused: found.refusal ?? `${found.value} names no file.` };
     },
 
-    /** The span of a record's path at `offset`, however much of it is typed, and the asset type of its field. */
-    async pathTypedAt(file: string, text: string, offset: number): Promise<(TextSpan & { assetType: AssetType }) | undefined> {
+    /** The span of a record's path at `offset`, the text typed in it up to `offset`, and the asset type of its field. */
+    async pathTypedAt(file: string, text: string, offset: number): Promise<(Typed & { assetType: AssetType }) | undefined> {
       const found = await nameAt(file, text, offset, 'File');
-      return found?.assetType ? { ...spanOf(found), assetType: found.assetType } : undefined;
+      return found?.assetType ? { ...typedIn(text, found, offset), assetType: found.assetType } : undefined;
     },
 
-    /** The span of a reference field's text at `offset`, however much of it is typed, and the record types it allows;
-     *  none where it allows any. */
-    async referenceTypedAt(file: string, text: string, offset: number): Promise<(TextSpan & { types: readonly string[] }) | undefined> {
+    /** The span of a reference field's text at `offset`, the text typed in it up to `offset`, and the record types it
+     *  allows; none where it allows any. */
+    async referenceTypedAt(file: string, text: string, offset: number): Promise<(Typed & { types: readonly string[] }) | undefined> {
       const found = await nameAt(file, text, offset, 'Reference');
-      return found && { ...spanOf(found), types: found.validFormKeyTypes ?? [] };
+      return found && { ...typedIn(text, found, offset), types: found.validFormKeyTypes ?? [] };
     },
 
     /** The FormKey or the EditorID at `offset`, between its quotes. */

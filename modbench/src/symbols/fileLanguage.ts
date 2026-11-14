@@ -53,7 +53,7 @@ function foldedPathsOf(value: FilesValue): readonly FoldedPath[] {
 }
 
 // Plugin source holds a path's backslashes escaped, and the instance value's paths hold forward slashes.
-const asTyped = (held: string): string => held.toLowerCase().replace(/\\\\|\\/g, '/');
+const foldedPathOf = (held: string): string => held.toLowerCase().replace(/\\\\|\\/g, '/');
 
 /** A file as a symbol, named by its path in the Data folder: the records that name it, which mEdit answers (symbols.md,
  *  The symbols). */
@@ -89,18 +89,19 @@ export function fileLanguage({ instance, reporter, client, names, copyOf, reveal
     },
     referencesTo,
     tooltipOf: ({ path }) => Promise.resolve(tooltipLines(tooltip(path))),
-    /** Each file of the path's asset type whose path in its folder holds the text typed so far, up to
-     *  `MOST_FILES_LISTED`; the Output says how many more match. */
+    /** Each file of the path's asset type whose path holds the text typed so far, spelled with its folder where the
+     *  text starts with it, up to `MOST_FILES_LISTED`; the Output says how many more match. */
     async completionsAt(document, offset, { gesture }) {
       const found = await names.pathTypedAt(document.uri.fsPath, heldText(document), offset);
       if (found === undefined) return undefined;
-      const typed = asTyped(heldText(document).slice(found.start, Math.max(found.start, offset)));
+      const typed = foldedPathOf(found.typed);
       const folder = `${found.assetType.folder.toLowerCase()}/`;
+      const spelledFrom = typed.startsWith(folder) ? 0 : folder.length;
       const extensions = found.assetType.extensions.map((extension) => extension.toLowerCase());
       const offered = dataPaths().filter(([path]) =>
-        path.startsWith(folder) && extensions.some((extension) => path.endsWith(extension)) && path.slice(folder.length).includes(typed));
+        path.startsWith(folder) && extensions.some((extension) => path.endsWith(extension)) && path.slice(spelledFrom).includes(typed));
       const items = offered.slice(0, MOST_FILES_LISTED).map(([, path]) => {
-        const held = path.slice(folder.length).replaceAll('/', '\\');
+        const held = path.slice(spelledFrom).replaceAll('/', '\\');
         return { label: held, insertText: JSON.stringify(held).slice(1, -1) };
       });
       const isIncomplete = items.length < offered.length;

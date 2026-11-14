@@ -11,6 +11,7 @@ import type { SourceNames } from './sourceNames';
 import { REFERENCED_BY, type Definition, type RecordNamed, type References, type SymbolKind } from './symbolKind';
 import { recordReferencedBy, type RecordReferencedByDeps } from './recordReferencedBy';
 import { workspaceSymbolsOf } from './workspaceSymbols';
+import { recordLabel } from '../wire/recordLabel';
 
 export type RecordClient = RecordDocumentClient & RecordReferencedByDeps['client']
   & Pick<MEditClient, 'getComparison' | 'searchRecords' | 'getReferencesInActiveOrCompiledPlugins' | 'getPlugins'>;
@@ -66,12 +67,9 @@ export function recordLanguage({ client, names, reporter, open }: RecordLanguage
     /** The records of the types a reference field allows whose EditorID or FormKey holds the text typed so far, each
      *  once, found as Go to Symbol in Workspace finds them; nothing before anything is typed. */
     async completionsAt(document, offset, search) {
-      const text = heldText(document);
-      const found = await names.referenceTypedAt(document.uri.fsPath, text, offset);
-      const typed = found && offset > found.start ? text.slice(found.start, offset) : '';
-      if (found === undefined || typed === '') return undefined;
-      const { found: copies, isIncomplete } = await workspace.recordsFor(typed, search, found.types);
-      const records = [...new Map(copies.map((copy) => [copy.formKey, copy])).values()];
+      const found = await names.referenceTypedAt(document.uri.fsPath, heldText(document), offset);
+      if (found === undefined || found.typed === '') return undefined;
+      const { found: records, isIncomplete } = await workspace.recordsFor(found.typed, search, { types: found.types, eachRecordOnce: true });
       return {
         start: found.start, end: found.end, icon: vscode.CompletionItemKind.Reference, isIncomplete,
         items: records.map(({ editorId, formKey }) => ({ label: editorId || formKey, detail: formKey, insertText: formKey })),
@@ -80,16 +78,19 @@ export function recordLanguage({ client, names, reporter, open }: RecordLanguage
     /** Each copy, in an active or a compiled plugin, of a record whose EditorID or FormKey holds `query`, at its plugin's
      *  file until the user picks it, and then at its document. */
     async symbolsFor(query, search) {
-      return (await workspace.symbolsFor(query, search)).map((record) => ({
-        symbol: { kind: 'record', formKey: record.formKey }, name: record.name, detail: `${record.plugin.name} (${record.plugin.origin})`, icon: vscode.SymbolKind.Object,
-        location: new vscode.Location(vscode.Uri.file(record.pluginFile), new vscode.Position(0, 0)),
-        // A resolve that answers nothing leaves VS Code opening the plugin's file, which is not the record.
-        resolve: async () => {
-          const found = await workspace.locate(record, search.gesture);
-          if (found === undefined) throw new Error(`${search.gesture} cannot open ${record.name}.`);
-          return locationOf(found);
-        },
-      }));
+      return (await workspace.symbolsFor(query, search)).map((record) => {
+        const name = recordLabel(record.editorId, record.formKey);
+        return {
+          symbol: { kind: 'record', formKey: record.formKey }, name, detail: `${record.plugin.name} (${record.plugin.origin})`, icon: vscode.SymbolKind.Object,
+          location: new vscode.Location(vscode.Uri.file(record.pluginFile), new vscode.Position(0, 0)),
+          // A resolve that answers nothing leaves VS Code opening the plugin's file, which is not the record.
+          resolve: async () => {
+            const found = await workspace.locate(record, search.gesture);
+            if (found === undefined) throw new Error(`${search.gesture} cannot open ${name}.`);
+            return locationOf(found);
+          },
+        };
+      });
     },
   };
 }

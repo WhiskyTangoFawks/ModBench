@@ -111,56 +111,37 @@ describe('Go to Symbol in Workspace on a record (symbols.md, The features, story
 
 describe('completion at a reference field (symbols.md, The features, story 5)', () => {
   const FIELD = '{ "Armor": "Gu" }';
-  const TYPED = { start: FIELD.indexOf('Gu'), end: FIELD.indexOf('Gu') + 2, types: ['ARMO', 'WEAP'] };
+  const SPAN = { start: FIELD.indexOf('Gu'), end: FIELD.indexOf('Gu') + 2 };
   const document = { uri: Uri.file(GUN_FILE), getText: () => FIELD };
-  const COMPILED = pluginMetadataFixture({ name: 'D.esp', origin: 'ModD', path: '/mods/ModD/D.esp', inLoadOrder: false, isCompiledPlugin: true });
   const copy = (formKey: string, editorId: string | null, plugin = modA) => ({
     formKey, plugin: plugin.name, origin: plugin.origin, editorId, loadOrderIndex: 0, isWinner: true, workingTreeState: 'None' as const,
     hasContainerChildren: false, hasParseFailure: false,
   });
-  const completing = (items: ReturnType<typeof copy>[], total = items.length) => {
+  const completing = (typed: string) => {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getPlugins', [
-      pluginMetadataFixture({ ...modA, path: '/mods/ModA/A.esp' }), pluginMetadataFixture({ name: 'B.esp', origin: 'ModB', path: '/mods/ModB/B.esp' }), COMPILED,
-    ]);
-    client.setQueryAnswer('searchRecords', { items, total });
-    const reporter = recordingReporter();
+    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ ...modA, path: '/mods/ModA/A.esp' }), pluginMetadataFixture({ name: 'B.esp', origin: 'ModB', path: '/mods/ModB/B.esp' })]);
+    client.setQueryAnswer('searchRecords', { items: [copy(GUN, 'Gun'), copy(GUN, 'Gun', { name: 'B.esp', origin: 'ModB' }), copy('000901:A.esp', null)], total: 30 });
     const record = recordLanguage({
-      client, reporter, names: sourceNames({ referenceTypedAt: () => Promise.resolve(TYPED) }),
+      client, reporter: recordingReporter(), names: sourceNames({ referenceTypedAt: () => Promise.resolve({ ...SPAN, typed, types: ['ARMO', 'WEAP'] }) }),
       open: () => Promise.reject(new Error('Completion opens nothing.')),
     });
-    return { client, reporter, at: (offset: number) => record.completionsAt(document, offset, COMPLETION) };
+    return { client, offered: record.completionsAt(document, SPAN.end, COMPLETION) };
   };
 
-  it('offers each record once, by EditorID or FormKey, that Go to Symbol in Workspace finds among the types the field allows for the text typed so far', async () => {
-    const { at } = completing([copy(GUN, 'Gun'), copy(GUN, 'Gun', { name: 'B.esp', origin: 'ModB' }), copy('000901:A.esp', null)]);
+  it('offers each record Go to Symbol in Workspace finds once, by EditorID or FormKey, of the types the field allows, for the text typed so far', async () => {
+    const { client, offered } = completing('Gu');
 
-    expect(await at(TYPED.end)).toEqual({
-      start: TYPED.start, end: TYPED.end, icon: CompletionItemKind.Reference, isIncomplete: false,
+    expect(await offered).toEqual({
+      ...SPAN, icon: CompletionItemKind.Reference, isIncomplete: true,
       items: [{ label: 'Gun', detail: GUN, insertText: GUN }, { label: '000901:A.esp', detail: '000901:A.esp', insertText: '000901:A.esp' }],
     });
-  });
-
-  it('searches the active plugins and each compiled plugin outside them, for enough copies to fill a list of records (ADR-0012)', async () => {
-    const { client, at } = completing([]);
-
-    await at(TYPED.end);
-
-    expect(client.calls.filter(({ method }) => method === 'searchRecords').map(({ args }) => args))
-      .toEqual([['Gu', ['ARMO', 'WEAP'], undefined, 200], ['Gu', ['ARMO', 'WEAP'], COMPILED, 200]]);
-  });
-
-  it('is incomplete where mEdit finds more copies than it lists, so VS Code asks again, and the Output says how many (principles.md, Never silently wrong)', async () => {
-    const { reporter, at } = completing([copy(GUN, 'Gun')], 300);
-
-    expect((await at(TYPED.end))?.isIncomplete).toBe(true);
-    expect(reporter.shownFailures.map(({ message }) => message)).toEqual(['Completion lists 2 of the 600 copies of records whose EditorID or FormKey holds "Gu".']);
+    expect(client.calls.filter(({ method }) => method === 'searchRecords').map(({ args }) => args.slice(0, 2))).toEqual([['Gu', ['ARMO', 'WEAP']]]);
   });
 
   it('offers nothing before anything is typed, asking mEdit nothing', async () => {
-    const { client, at } = completing([copy(GUN, 'Gun')]);
+    const { client, offered } = completing('');
 
-    expect([await at(TYPED.start), client.calls]).toEqual([undefined, []]);
+    expect([await offered, client.calls]).toEqual([undefined, []]);
   });
 });
 

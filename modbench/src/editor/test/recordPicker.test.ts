@@ -32,14 +32,13 @@ describe('pickRecord', () => {
 
   it('seeds the QuickPick value and immediately searches on the seed', async () => {
     const record = makeRecord(1, 'Seeded');
-    const { deps, searchRecords, shownOnSurface } = fakeDeps(vi.fn().mockResolvedValue({ items: [record], total: 1 }));
+    const { deps, searchRecords } = fakeDeps(vi.fn().mockResolvedValue({ items: [record], total: 1 }));
     const { qp } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
     const dispatchPromise = pickRecord(deps, record.formKey, ['npc_']);
     await vi.waitFor(() => expect(qp.items).toHaveLength(1));
 
-    expect(shownOnSurface).not.toHaveBeenCalled();
     expect(qp.value).toBe(record.formKey);
     expect(searchRecords).toHaveBeenCalledWith(record.formKey, ['npc_']);
     expect(qp.items).toEqual([{ label: `Seeded [${record.formKey}]`, formKey: record.formKey, alwaysShow: true }]);
@@ -84,6 +83,20 @@ describe('pickRecord', () => {
     await vi.waitFor(() => expect(qp.items).toHaveLength(1));
 
     expect(qp.visibleItems).toHaveLength(1);
+
+    qp.hide();
+    await dispatchPromise;
+  });
+
+  it('says nothing in the Output when every copy is listed', async () => {
+    const { deps, shownOnSurface } = fakeDeps(vi.fn().mockResolvedValue({ items: [makeRecord(1)], total: 1 }));
+    const { qp } = makeFakeQuickPick();
+    createQuickPick.mockReturnValue(qp);
+
+    const dispatchPromise = pickRecord(deps, 'Record', []);
+    await vi.waitFor(() => expect(qp.items).toHaveLength(1));
+
+    expect(shownOnSurface).not.toHaveBeenCalled();
 
     qp.hide();
     await dispatchPromise;
