@@ -46,7 +46,7 @@ public sealed class ReferencePlacementMemoryTests : IDisposable
         var placed = index.Queries.GetPlacedReferences(Target).Value();
 
         Assert.Equal(Referrers, placed.Copies.Count);
-        Assert.InRange(IndexFiles.StartedCount(_fixture.InstanceRoot, "body"), 1, 2);
+        Assert.Equal(2L, IndexFiles.StartedCount(_fixture.InstanceRoot, "body"));
     }
 
     private static IEnumerable<(string, IEnumerable<string>)> Records()

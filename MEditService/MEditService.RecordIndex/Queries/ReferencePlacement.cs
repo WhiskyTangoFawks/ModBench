@@ -15,18 +15,18 @@ internal static class ReferencePlacement
         Func<PluginAddress, RecordIdentity, Answer<string, SourceFailure>> renderedFileName, Func<string, string> textAt)
     {
         var referrers = reads.GetReferencedByInActiveOrCompiledPlugins(target)
-            .Select(row => (Plugin: new PluginAddress(row.Plugin, row.Origin), Identity: new RecordIdentity(row.FormKey, row.RecordType, row.EditorId)))
-            .Distinct()
+            .Select(row => (At: new RecordAt(new PluginAddress(row.Plugin, row.Origin), row.FormKey), Identity: new RecordIdentity(row.FormKey, row.RecordType, row.EditorId)))
+            .DistinctBy(referrer => referrer.At, RecordAt.Comparer)
             .ToList();
-        var trees = referrers.Select(referrer => referrer.Plugin).Distinct(PluginAddress.Comparer).ToDictionary(plugin => plugin, treeOf, PluginAddress.Comparer);
+        var trees = referrers.Select(referrer => referrer.At.Plugin).Distinct(PluginAddress.Comparer).ToDictionary(plugin => plugin, treeOf, PluginAddress.Comparer);
         var placing = new Placing(target);
-        foreach (var (plugin, identity) in referrers)
+        foreach (var (at, identity) in referrers)
         {
-            if (trees[plugin] is { } tree) placing.InFile(new RecordAt(plugin, identity.FormKey), tree.DocumentOf(plugin, identity), textAt);
+            if (trees[at.Plugin] is { } tree) placing.InFile(at, tree.DocumentOf(at.Plugin, identity), textAt);
         }
 
-        List<RecordAt> rendered = [.. referrers.Where(referrer => trees[referrer.Plugin] is null).Select(referrer => new RecordAt(referrer.Plugin, referrer.Identity.FormKey))];
-        var held = new HashSet<RecordAt>();
+        List<RecordAt> rendered = [.. referrers.Select(referrer => referrer.At).Where(at => trees[at.Plugin] is null)];
+        var held = new HashSet<RecordAt>(RecordAt.Comparer);
         foreach (var copy in reads.GetCopies(rendered))
         {
             var at = new RecordAt(copy.Plugin, copy.FormKey);
@@ -70,25 +70,33 @@ internal static class ReferencePlacement
                 }
                 _files[file.Path] = names;
             }
-            Place(copy, new CopyDocument(file.IsContainersDocument ? CopyDocumentKind.ContainersFile : CopyDocumentKind.OwnFile, file.Path), names);
+            var spans = Naming(names, copy);
+            if (spans.Count > 0) _placed.Add(new PlacedCopy(copy.FormKey, copy.Plugin, RecordQueries.CopyDocumentAt(file), spans));
+            else LeaveOut(copy, $"its text in {file.Path} names {target} nowhere.");
         }
 
+        // A copy with no plugin source sits at the record that holds it (symbols.md, story 10).
         public void Rendered(RecordAt copy, Answer<string, SourceFailure> fileName, string text)
         {
-            if (fileName.Holds(out var name, out var failure)) Place(copy, new CopyDocument(CopyDocumentKind.Rendered, name), NamesIn(text));
-            else LeaveOut(copy, failure.Reason);
+            if (!fileName.Holds(out var name, out var failure))
+            {
+                LeaveOut(copy, failure.Reason);
+                return;
+            }
+            var names = NamesIn(text);
+            var spans = Naming(names, copy);
+            if (spans.Count == 0 && Own(names, copy).Find(found => found.FieldPath == RecordMembers.FormKey) is { } declared) spans.Add(SpanOf(declared));
+            if (spans.Count > 0) _placed.Add(new PlacedCopy(copy.FormKey, copy.Plugin, new CopyDocument(CopyDocumentKind.Rendered, name), spans));
+            else LeaveOut(copy, $"its rendered document {name} states no {copy.FormKey}.");
         }
 
         public void LeaveOut(RecordAt copy, string why) => _leftOut.Add($"{ReadFailures.Copy(copy.FormKey, copy.Plugin)}: {why}");
 
-        private void Place(RecordAt copy, CopyDocument document, IReadOnlyList<DocumentName> names)
-        {
-            var own = names.Where(name => name.Kind == DocumentNameKind.Record && SameFormKey(name.Record, copy.FormKey)).ToList();
-            List<TextSpan> spans = [.. own.Where(name => name.FieldPath != RecordMembers.FormKey && SameFormKey(name.Value, target)).Select(SpanOf)];
-            if (spans.Count == 0 && own.Find(name => name.FieldPath == RecordMembers.FormKey) is { } declared) spans.Add(SpanOf(declared));
-            if (spans.Count == 0) LeaveOut(copy, $"{document.Location} states no {copy.FormKey}.");
-            else _placed.Add(new PlacedCopy(copy.FormKey, copy.Plugin, document, spans));
-        }
+        private List<TextSpan> Naming(IReadOnlyList<DocumentName> names, RecordAt copy) =>
+            [.. Own(names, copy).Where(name => name.FieldPath != RecordMembers.FormKey && SameFormKey(name.Value, target)).Select(SpanOf)];
+
+        private static List<DocumentName> Own(IReadOnlyList<DocumentName> names, RecordAt copy) =>
+            [.. names.Where(name => name.Kind == DocumentNameKind.Record && SameFormKey(name.Record, copy.FormKey))];
 
         private static IReadOnlyList<DocumentName> NamesIn(string text) => DocumentNames.In(DocumentSpans.Read(text), _ => null, null);
 

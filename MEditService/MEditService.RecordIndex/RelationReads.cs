@@ -376,7 +376,7 @@ internal sealed class RelationReads(
         return LinkResolution.ForLinksOf(context, formKeys, Resolve);
     }
 
-    // It joins no winners, so its memory grows with the FormKeys asked, not the index.
+    // A join of winners would hold the whole index in memory.
     public IReadOnlyDictionary<string, string> RecordTypesOf(List<string> formKeys)
     {
         using var context = OpenRead();
@@ -556,15 +556,11 @@ internal sealed class RelationReads(
         CopiesWhere("plugin = $1 AND origin = $2", "TRUE", plugin.Name, plugin.Origin);
 
     /// <summary>Each of <paramref name="copies"/> a registered plugin holds, read in batches as the caller takes them.</summary>
-    // Keys from a subquery would not narrow the scan, which would carry every body. No FormKey or filename holds a '/'.
     public IEnumerable<CopyHoldingText> GetCopies(IReadOnlyList<RecordAt> copies)
     {
         if (copies.Count == 0) return [];
-        var formKeys = copies.Select(copy => copy.FormKey).Distinct().ToList();
-        List<string> named = [.. copies.Select(copy => $"{copy.FormKey}/{copy.Plugin.Name}/{copy.Plugin.Origin}")];
-        return CopiesWhere(
-            $"form_key IN ({string.Join(", ", formKeys.Select((_, i) => $"${i + 2}"))}) AND list_contains($1::VARCHAR[], form_key || '/' || plugin || '/' || origin)",
-            "TRUE", [named, .. formKeys]);
+        var (filter, values) = CopyBodies.Naming(copies);
+        return CopiesWhere(filter, "TRUE", values);
     }
 
     private IEnumerable<CopyHoldingText> CopiesWhere(string recordFilter, string pluginFilter, params object[] values)

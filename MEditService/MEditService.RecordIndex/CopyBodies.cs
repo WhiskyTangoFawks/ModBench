@@ -47,22 +47,28 @@ internal static class CopyBodies
 
     // An OR naming each copy takes ten times as long as lists of keys, plugins and origins, which narrow the scan.
     // The list of copies drops a key the batch asked of another plugin. No FormKey or filename holds a '/'.
-    private static ILookup<string, StoredCopy> Bodies(ReadContext context, List<IReadOnlyList<CopySize>> batch)
+    internal static (string Filter, object[] Values) Naming(IReadOnlyList<RecordAt> copies)
     {
-        var copies = batch.SelectMany(record => record).ToList();
         var formKeys = copies.Select(copy => copy.FormKey).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var plugins = copies.Select(copy => copy.Plugin.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var origins = copies.Select(copy => copy.Plugin.Origin).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         List<string> named = [.. copies.Select(copy => $"{copy.FormKey}/{copy.Plugin.Name}/{copy.Plugin.Origin}")];
-        object[] values = [named, .. formKeys, .. plugins, .. origins];
         static string Parameters(int from, int count) => string.Join(", ", Enumerable.Range(from + 2, count).Select(i => $"${i}"));
-        return context.Rows($"""
-            SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, parse_diagnosis, record_type, working_tree_state
-            FROM {TableDdlBuilder.PluginRecordsView}
-            WHERE form_key IN ({Parameters(0, formKeys.Count)})
+        return ($"""
+            form_key IN ({Parameters(0, formKeys.Count)})
               AND plugin IN ({Parameters(formKeys.Count, plugins.Count)})
               AND origin IN ({Parameters(formKeys.Count + plugins.Count, origins.Count)})
               AND list_contains($1::VARCHAR[], form_key || '/' || plugin || '/' || origin)
+            """, [named, .. formKeys, .. plugins, .. origins]);
+    }
+
+    private static ILookup<string, StoredCopy> Bodies(ReadContext context, List<IReadOnlyList<CopySize>> batch)
+    {
+        var (filter, values) = Naming([.. batch.SelectMany(record => record).Select(copy => new RecordAt(copy.Plugin, copy.FormKey))]);
+        return context.Rows($"""
+            SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, parse_diagnosis, record_type, working_tree_state
+            FROM {TableDdlBuilder.PluginRecordsView}
+            WHERE {filter}
             """, reader => new StoredCopy(
                 reader.GetString(0), new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.IsDBNull(3) ? null : reader.GetInt32(3), reader.GetBoolean(4),
                 reader.GetStringOrNull(5), reader.GetString(6), reader.GetStringOrNull(7), reader.GetString(8), reader.GetString(9)),
