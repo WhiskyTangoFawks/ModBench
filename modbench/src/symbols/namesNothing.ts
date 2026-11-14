@@ -21,8 +21,16 @@ interface NamesNothingDeps {
 
 const isFile = (document: vscode.TextDocument): boolean => document.uri.scheme === 'file';
 
-const namesNothingIn = async (kinds: SymbolKinds, file: string, text: string): Promise<NamesNothing[]> =>
-  (await Promise.all(inOrder(kinds).map((kind) => kind.namesNothingIn?.({ uri: { fsPath: file }, getText: () => text }) ?? Promise.resolve([])))).flat();
+const namesNothingIn = async (kinds: SymbolKinds, file: string, text: string): Promise<NamesNothing[] | undefined> => {
+  const found = await Promise.all(inOrder(kinds).map((kind) => kind.namesNothingIn?.({ uri: { fsPath: file }, getText: () => text }) ?? Promise.resolve([])));
+  return found.every((names) => names !== undefined) ? found.flat() : undefined;
+};
+
+const diagnosticsOf = (file: string, text: string, found: readonly NamesNothing[]): vscode.Diagnostic[] =>
+  [...found].sort((a, b) => a.start - b.start).map(({ start, end, name, why }) => {
+    const { start: from, end: to } = placeIn(file, text, start, end);
+    return modbenchDiagnostic(new vscode.Range(from.line, from.character, to.line, to.character), `${name} names nothing. ${why}`, vscode.DiagnosticSeverity.Warning);
+  });
 
 interface OpenDocument { latest: vscode.TextDocument; turn: () => void }
 
@@ -59,11 +67,8 @@ export function registerNamesNothing({ kinds, collection, reporter, savedText, o
     try {
       const text = await textOf();
       const found = text === undefined ? [] : await namesNothingIn(kinds, file, text);
-      if (latest.get(file) !== mine) return;
-      collection.set(vscode.Uri.file(file), found.sort((a, b) => a.start - b.start).map(({ start, end, name, why }) => {
-        const { start: from, end: to } = placeIn(file, text ?? '', start, end);
-        return modbenchDiagnostic(new vscode.Range(from.line, from.character, to.line, to.character), `${name} names nothing. ${why}`, vscode.DiagnosticSeverity.Warning);
-      }));
+      if (found === undefined || latest.get(file) !== mine) return;
+      collection.set(vscode.Uri.file(file), diagnosticsOf(file, text ?? '', found));
       told.delete(file);
     } catch (error) {
       tellOnce(file, error);
@@ -101,6 +106,8 @@ export function registerNamesNothing({ kinds, collection, reporter, savedText, o
       ...closed.map((file) => judged(file, () => savedText(file))),
     ]);
     if (files === undefined) {
+      if (only === undefined) wholeWanted = true;
+      for (const plugin of only ?? []) asking.set(pluginAddressKey(plugin), plugin);
       shown = new Set([...shown, ...judging]);
       return;
     }

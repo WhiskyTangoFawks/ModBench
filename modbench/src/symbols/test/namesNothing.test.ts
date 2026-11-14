@@ -142,6 +142,38 @@ describe('the problem a name that names nothing raises (symbols.md, The features
     expect([messagesOn(collection, CLOSED), reporter.shownFailures.map(({ detail }) => detail)]).toEqual([['Gone names nothing. Nothing holds Gone.'], told]);
   });
 
+  it('keeps the problems of an open document while a kind cannot judge yet', async () => {
+    let answer: ReturnType<typeof nothing>[] | undefined = [nothing(0, 'Gone')];
+    const doc = document('xxxxxxxx');
+    world.documents = [doc];
+    const { collection, changed } = start(script({ namesNothingIn: () => Promise.resolve(answer) }));
+    await settle();
+    answer = undefined;
+    changed();
+    world.handlers.get('change')?.({ document: doc });
+    await settle();
+
+    expect(messagesOn(collection, FILE)).toEqual(['Gone names nothing. Nothing holds Gone.']);
+  });
+
+  it.each([
+    ['fails', () => Promise.reject(new Error('mEdit is down'))],
+    ['cannot answer yet', () => Promise.resolve(undefined)],
+  ])('asks for every plugin again after a whole-set ask that %s, even when one plugin\'s files changed', async (_case, failing) => {
+    world.documents = [];
+    let ask: (only?: readonly PluginAddress[]) => Promise<string[] | undefined> = failing;
+    const asked = vi.fn((only?: readonly PluginAddress[]) => ask(only));
+    const { changed } = start(script({ filesNamingNothing: asked }));
+    await settle();
+    ask = () => Promise.resolve([]);
+    changed(PLUGIN);
+    await settle();
+    changed(PLUGIN);
+    await settle();
+
+    expect(asked.mock.calls).toEqual([[undefined], [undefined], [[PLUGIN]]]);
+  });
+
   it('judges an open document again as it changes, and drops a judgement that a later one overtook', async () => {
     let release: (names: ReturnType<typeof nothing>[]) => void = () => undefined;
     const slow = new Promise<ReturnType<typeof nothing>[]>((resolve) => { release = resolve; });

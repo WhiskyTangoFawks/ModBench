@@ -57,7 +57,9 @@ function language(references: Awaited<ReturnType<ScriptClient['getScriptReferenc
     membersIn: (text: string, formKey: string, fieldPaths: readonly string[]) =>
       Promise.resolve(text === TEXT && formKey === QUEST && fieldPaths.includes(PATH) ? [SPAN] : []),
   });
-  return { language: scriptLanguage({ instance: { value: { papyrusScripts: scripts, ...JUDGING, ...standing } }, names, client, reporter: recordingReporter() }) };
+  const instance = { value: { papyrusScripts: scripts, ...JUDGING, ...standing } };
+  const reporter = recordingReporter();
+  return { language: scriptLanguage({ instance, names, client, reporter }), instance, reporter };
 }
 
 const document = (path = SOURCE) => ({ uri: Uri.file(path), getText: () => TEXT });
@@ -87,16 +89,42 @@ describe('a script a document names that no mod, Overwrite, Data folder file or 
     expect(await language().language.namesNothingIn(document())).toEqual([{ start: 0, end: 1, name: 'Gone', why: 'No mod, Overwrite, Data folder file or archive holds Gone.' }]);
   });
 
-  it.each([
-    ['the Data folder is not listed', { dataFolderFiles: { kind: 'unresolved' } }],
-    ['the game folder is not found', { gameFolder: { kind: 'notFound', looked: [], setting: 'gameFolder' } }],
-    ['the game folder is outside the workspace, so its archives are unread', { gameFolderInWorkspace: false }],
-    ['an archive has not answered', { archiveContents: new Map([['/a.ba2', { kind: 'unanswered' }]]) }],
-    ['an archive cannot be read', { archiveContents: new Map([['/a.ba2', { kind: 'unreadable', reason: 'it is no BA2' }]]) }],
-  ] satisfies [string, Partial<Standing>][])('is not judged while %s', async (_case, standing) => {
-    const { language: unjudged } = language(NONE, SCRIPTS, standing);
+  const OUTSIDE = 'The game folder /game is outside the workspace, so its archives are not read.';
+  const UNREADABLE = '/a.ba2 cannot be read: it is no BA2';
+  const NOT_JUDGED = 'The Problems panel does not check the scripts plugin source names.';
 
-    expect([await unjudged.namesNothingIn(document()), await unjudged.filesNamingNothing()]).toEqual([[], undefined]);
+  it.each([
+    ['the Data folder is not listed', { dataFolderFiles: { kind: 'unresolved' } }, undefined],
+    ['the game folder is not found', { gameFolder: { kind: 'notFound', looked: [], setting: 'gameFolder' } }, 'The game folder is not found.'],
+    ['the game folder is outside the workspace, so its archives are unread', { gameFolderInWorkspace: false }, OUTSIDE],
+    ['an archive has not answered', { archiveContents: new Map([['/a.ba2', { kind: 'unanswered' }]]) }, undefined],
+    ['an archive cannot be read', { archiveContents: new Map([['/a.ba2', { kind: 'unreadable', reason: 'it is no BA2' }]]) }, UNREADABLE],
+  ] satisfies [string, Partial<Standing>, string | undefined][])('judges nothing while %s, and says why where the state lasts', async (_case, standing, why) => {
+    const { language: unjudged, reporter } = language(NONE, SCRIPTS, standing);
+
+    expect([await unjudged.namesNothingIn(document()), await unjudged.filesNamingNothing()]).toEqual([undefined, undefined]);
+    expect(reporter.shownFailures).toEqual(why === undefined ? [] : [{ severity: 'warning', message: NOT_JUDGED, detail: why }]);
+  });
+
+  it('says it once, again only when the reason changes, and again when judging stopped after it resumed', async () => {
+    const { language: judging, instance, reporter } = language(NONE, SCRIPTS, { gameFolderInWorkspace: false });
+    const ask = () => judging.namesNothingIn(document());
+    await ask();
+    await ask();
+    instance.value = { ...instance.value, ...JUDGING, archiveContents: new Map([['/a.ba2', { kind: 'unreadable', reason: 'it is no BA2' }]]) };
+    await ask();
+    instance.value = { ...instance.value, ...JUDGING };
+    await ask();
+    instance.value = { ...instance.value, gameFolderInWorkspace: false };
+    await ask();
+
+    expect(reporter.shownFailures.map(({ detail }) => detail)).toEqual([OUTSIDE, UNREADABLE, OUTSIDE]);
+  });
+
+  it('says nothing of a document that names no script, nor of plugin source that names none', async () => {
+    const { language: judging, reporter } = language(NONE, SCRIPTS, { gameFolderInWorkspace: false }, () => Promise.resolve([]));
+
+    expect([await judging.namesNothingIn(document('/instance/none.json')), await judging.filesNamingNothing(), reporter.shownFailures]).toEqual([[], [], []]);
   });
 
   it('lists each file that holds one, once, whether or not it is open', async () => {

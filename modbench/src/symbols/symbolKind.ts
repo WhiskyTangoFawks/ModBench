@@ -67,9 +67,9 @@ export interface SymbolKind<Symbol> {
     readonly items: readonly { readonly label: string; readonly detail?: string; readonly insertText?: string }[];
     readonly isIncomplete?: boolean;
   }) | undefined>;
-  /** Each name in the document that names nothing (symbols.md, The features, story 8); a kind leaves it out for the names another box
-   *  already judges, or while the instance has not read what would hold them. */
-  namesNothingIn?(document: AskedIn): Promise<readonly NamesNothing[]>;
+  /** Each name in the document that names nothing (symbols.md, The features, story 8); a kind leaves it out for the names
+   *  another box already judges. Undefined while the instance has not read what would hold them. */
+  namesNothingIn?(document: AskedIn): Promise<readonly NamesNothing[] | undefined>;
   /** Each file, open or not, that holds a name that names nothing, from one ask of the box that owns the files; `only`
    *  asks of those plugins' files alone. Undefined where nothing can be said yet. */
   filesNamingNothing?(only?: readonly PluginAddress[]): Promise<readonly string[] | undefined>;
