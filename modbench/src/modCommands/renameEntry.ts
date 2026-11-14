@@ -10,7 +10,7 @@ import { refuse } from '../coreLib/refuse';
 import { entryNotFound, sameEntry, type EntryRef, type InstanceAdapter, type ModOrderChange } from '../instanceAdapter/instanceAdapter';
 import { manifestEntryReferences, sourceModsOf } from '../manifestAdapter/manifestAdapter';
 import { errorMessage } from '../ports/errorMessage';
-import { COMMITTED, NO_FILE_CHANGES, sameName, type Committed, type EntryOwner } from '../symbolNames/symbolNames';
+import { COMMITTED, NO_FILE_CHANGES, sameName, type EntryOwner } from '../symbolNames/symbolNames';
 import { sourceFolderMove, type MEditClient } from '../client';
 import { renameModNameRefusal, separatorNameRefusal } from './modCommands';
 import { EMPTY_MOD_NAME } from './nameRefusals';
