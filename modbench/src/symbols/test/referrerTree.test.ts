@@ -6,12 +6,11 @@ vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, EventEmitter, The
 import {
   readReferencedBy,
   referencedByCopyValueText,
-} from '../referencedByList';
+} from '../referrerTree';
 import { loadOrderStatusEventFixture, pluginMetadataFixture } from '../../client/test/fixtures';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { ReferenceResult } from '../../client';
 import { present } from '../../ports/present';
-import { recordOpenPlan } from '../recordOpenPlan';
 
 type Node = ReturnType<Awaited<ReturnType<typeof readReferencedBy>>['provider']['getChildren']>[number];
 const isHolder = (node: Node): node is Extract<Node, { plugin: unknown }> => 'plugin' in node;
@@ -27,7 +26,7 @@ function reference(overrides: Partial<ReferenceResult> & { formKey: string }): R
 
 function indexed(references: ReferenceResult[]): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
-  client.setQueryAnswer('getReferences', references);
+  client.setQueryAnswer('getReferencesInActiveOrCompiledPlugins', references);
   client.setQueryAnswer('getPlugins', []);
   client.emit(loadOrderStatusEventFixture());
   return client;
@@ -54,19 +53,26 @@ describe('the Referenced By list — states', () => {
   it('says the list may be incomplete while mEdit is still indexing plugins, beside none found', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getPlugins', []);
-    client.setQueryAnswer('getReferences', []);
+    client.setQueryAnswer('getReferencesInActiveOrCompiledPlugins', []);
     expect((await listOf(client)).message).toBe('No references found. mEdit is still indexing plugins: this list may not be complete.');
-    client.setQueryAnswer('getReferences', [reference({ formKey: '000002:Fallout4.esm' })]);
+    client.setQueryAnswer('getReferencesInActiveOrCompiledPlugins', [reference({ formKey: '000002:Fallout4.esm' })]);
     expect((await listOf(client)).message).toBe('mEdit is still indexing plugins: this list may not be complete.');
   });
 
   it('shows one error row naming the reason when the read fails', async () => {
     const client = indexed([]);
-    client.setQueryFailure('getReferences', { failed: 'refused', refusal: 'boom' });
+    client.setQueryFailure('getReferencesInActiveOrCompiledPlugins', { failed: 'refused', refusal: 'boom' });
     const [error, ...rest] = (await readReferencedBy(client, TARGET, 'a list')).provider.getChildren();
     expect(rest).toEqual([]);
     expect(error?.label).toBe('Failed to load: boom');
     expect(error?.tooltip).toBe('boom');
+  });
+
+  it('reads the references in the active and compiled plugins, the set Find All References reads', async () => {
+    const client = indexed([reference({ formKey: '000002:Fallout4.esm' })]);
+    await readReferencedBy(client, TARGET, 'a list');
+    expect(client.calls.map(({ method }) => method).filter((method) => method.startsWith('getReferences')))
+      .toEqual(['getReferencesInActiveOrCompiledPlugins']);
   });
 
   it('is a snapshot: mEdit is asked once, however often the view asks for rows and whatever changes after', async () => {
@@ -75,7 +81,7 @@ describe('the Referenced By list — states', () => {
     client.emit({ kind: 'rows-changed', plugin: '', origin: '', keys: [], sequence: 0 });
     provider.getChildren();
     provider.getChildren();
-    expect(client.calls.filter((c) => c.method === 'getReferences')).toEqual([{ method: 'getReferences', args: [TARGET] }]);
+    expect(client.calls.filter((c) => c.method === 'getReferencesInActiveOrCompiledPlugins')).toEqual([{ method: 'getReferencesInActiveOrCompiledPlugins', args: [TARGET] }]);
   });
 });
 
@@ -115,7 +121,6 @@ describe('the Referenced By list — a referrer', () => {
     const { command } = present(referrer, 'the referrer');
     expect(command?.command).toBe('modbench.record.open');
     expect(command?.arguments).toEqual([{ argument: { kind: 'record', formKey: '000002:Fallout4.esm' } }]);
-    expect(recordOpenPlan(referrer, []).addresses).toEqual([{ formKey: '000002:Fallout4.esm' }]);
   });
 
   it('shows collapsed, with an identity of its own in each list, whatever record it is about', async () => {

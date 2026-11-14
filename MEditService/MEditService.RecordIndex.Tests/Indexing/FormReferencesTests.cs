@@ -8,7 +8,7 @@ namespace MEditService.RecordIndex.Tests.Indexing;
 public class FormReferencesTests
 {
     private static List<(string Source, string FieldPath, string RecordType)> ReferencesTo(OpenedIndex index, FormKey target) =>
-        [.. index.Queries.GetReferences(target.ToString()).Value().Select(r => (r.FormKey, r.FieldPath, r.RecordType))];
+        [.. index.Queries.GetReferencesInActiveOrCompiledPlugins(target.ToString()).Value().Select(r => (r.FormKey, r.FieldPath, r.RecordType))];
 
     [Fact]
     public void ScalarFormKeyField_IsIndexedInFormReferences()

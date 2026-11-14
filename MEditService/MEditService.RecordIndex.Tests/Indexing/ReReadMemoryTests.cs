@@ -35,7 +35,7 @@ public sealed class ReReadMemoryTests : IDisposable
             "the plugin read again");
 
         Assert.Equal((LoadOrderState.Ready, null, ""), Answer(index));
-        Assert.Equal(ReferencesPerRecord, index.Queries.GetReferences(Target(0)).Value().Count);
+        Assert.Equal(ReferencesPerRecord, index.Queries.GetReferencesInActiveOrCompiledPlugins(Target(0)).Value().Count);
     }
 
     private static (LoadOrderState, string?, string) Answer(OpenedIndex index) =>

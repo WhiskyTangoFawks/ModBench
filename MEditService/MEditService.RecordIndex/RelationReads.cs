@@ -446,12 +446,6 @@ internal sealed class RelationReads(
             .ToLookup(row => row.Plugin, row => row.Linked, PluginAddress.Comparer);
     }
 
-    public IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey)
-    {
-        using var context = OpenRead();
-        return GetReferences(context, "form_references fr", "", targetFormKey);
-    }
-
     private static readonly string ActiveOrCompiledPluginReferrers = $"""
         {TableDdlBuilder.MirrorSchema}.form_references fr
         {TableDdlBuilder.RegisteredJoin("fr", "source_plugin", "source_origin")}

@@ -106,7 +106,7 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture)
         var captured = new
         {
             ReferencedBy = allFormKeys
-                .Select(fk => (FormKey: fk, Refs: _index.Queries.GetReferences(fk).Value()))
+                .Select(fk => (FormKey: fk, Refs: _index.Queries.GetReferencesInActiveOrCompiledPlugins(fk).Value()))
                 .Where(r => r.Refs.Count > 0)
                 .ToDictionary(r => r.FormKey, r => new
                 {

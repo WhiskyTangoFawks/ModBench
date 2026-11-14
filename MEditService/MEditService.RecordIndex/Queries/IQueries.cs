@@ -32,7 +32,6 @@ public interface IQueries
     // Null when the plugin holds no such record.
     Task<Answer<IReadOnlyList<RecordTypeChoice>?, IndexRefused>> GetChildRecordTypes(
         PluginAddress plugin, string formKey, CancellationToken cancel);
-    Task<Answer<IReadOnlyList<ReferenceResult>, IndexRefused>> GetReferences(string targetFormKey, CancellationToken cancel);
     Task<Answer<IReadOnlyList<ReferenceResult>, IndexRefused>> GetReferencesInActiveOrCompiledPlugins(
         string targetFormKey, CancellationToken cancel);
     Task<Answer<IReadOnlyList<CopyNaming>, IndexRefused>> GetPluginNameReferences(string name, CancellationToken cancel);

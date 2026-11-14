@@ -43,8 +43,6 @@ internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null)
     public Task<Answer<IReadOnlyList<RecordTypeChoice>?, IndexRefused>> GetChildRecordTypes(
         PluginAddress plugin, string formKey, CancellationToken cancel) => throw Failed();
 
-    public Task<Answer<IReadOnlyList<ReferenceResult>, IndexRefused>> GetReferences(string targetFormKey, CancellationToken cancel) =>
-        throw Failed();
     public Task<Answer<IReadOnlyList<ReferenceResult>, IndexRefused>> GetReferencesInActiveOrCompiledPlugins(
         string targetFormKey, CancellationToken cancel) => throw Failed();
     public Task<Answer<IReadOnlyList<CopyNaming>, IndexRefused>> GetPluginNameReferences(string name, CancellationToken cancel) =>

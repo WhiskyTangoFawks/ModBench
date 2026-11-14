@@ -2,7 +2,7 @@ import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   commandHandlers, contextKeys, disk, documentChanges, editorProviderDisposals, editorProviderOptions, editorProviders, editorVscode,
-  executeCommand, executed, fakePanel, fileSystems, openedDocuments, pickers, referencesView, type FakePanel, type ReferencedByInput as ReferencesViewInput,
+  executeCommand, executed, fakePanel, fileSystems, openedDocuments, pickers, type FakePanel,
 } from './editorVscode';
 
 vi.mock('vscode', () => editorVscode);
@@ -10,7 +10,7 @@ vi.mock('vscode', () => editorVscode);
 import * as vscode from 'vscode';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { ModFacts } from '../modsByOrigin';
-import { fakeLoadOrder, forgetEditor, NO_MODS, register, reporter } from './editorHarness';
+import { fakeLoadOrder, forgetEditor, NO_MODS, register } from './editorHarness';
 import { WEBVIEW_TO_EXTENSION } from '../../wire/messages';
 import { present } from '../../ports/present';
 import { comparisonOf } from '../../test/comparison';
@@ -34,15 +34,12 @@ interface RecordEditorProvider {
 const isRecordEditorProvider = (value: unknown): value is RecordEditorProvider =>
   typeof value === 'object' && value !== null && 'resolveCustomTextEditor' in value;
 
-const inItsDocument = () => new vscode.Location(vscode.Uri.file('/its/document.json'), new vscode.Position(3, 15));
-
 let loadOrder = fakeLoadOrder();
 
 function makeEditor(
   client = new InMemoryMEditClient(), recordViewIds = [] as readonly string[], modFacts = NO_MODS,
-  locateRecord = vi.fn((_record: object) => Promise.resolve<vscode.Location | { refused: string } | undefined>(inItsDocument())),
 ) {
-  const { editor, focusedView, outputChannel } = register({ meditClient: client, recordViewIds, modFacts, locateRecord, loadOrder });
+  const { editor, focusedView, outputChannel } = register({ meditClient: client, recordViewIds, modFacts, loadOrder });
   const provider = editorProviders.get('modbench.record');
   if (!isRecordEditorProvider(provider)) throw new Error('no record editor registered');
   const open = (formKey: string): FakePanel => {
@@ -67,7 +64,11 @@ function makeEditor(
     });
     return (uri: unknown) => tabs.get(String(uri));
   };
-  return { editor, open, openFile, openDocument, focusedView, outputChannel, vsCodeOpensTabs };
+  const askedFromThePalette = async () => {
+    const pickersBefore = pickers.shown;
+    return { record: await editor.focusedOrPickedRecord(), picked: pickers.shown - pickersBefore };
+  };
+  return { editor, askedFromThePalette, open, openFile, openDocument, focusedView, outputChannel, vsCodeOpensTabs };
 }
 
 beforeEach(() => {
@@ -75,19 +76,8 @@ beforeEach(() => {
   loadOrder = fakeLoadOrder();
 });
 
-const askReferencedBy = async (...args: unknown[]): Promise<ReferencesViewInput | undefined> => {
-  const shown = referencesView.inputs.length;
-  await commandHandlers.get('modbench.record.referencedBy')?.(...args);
-  return referencesView.inputs.slice(shown).at(-1);
-};
-
-const askedFromThePalette = async () => {
-  const [inputs, pickersBefore] = [referencesView.inputs.length, pickers.shown];
-  await askReferencedBy();
-  return { listed: referencesView.inputs.slice(inputs).map((input) => input.title), picked: pickers.shown - pickersBefore };
-};
-const listing = (record: string) => ({ listed: [`Referenced By: ${record}`], picked: 0 });
-const PICKED = { listed: [], picked: 1 };
+const focused = (record: string) => ({ record, picked: 0 });
+const PICKED = { record: undefined, picked: 1 };
 
 const pageGlobal = (panel: FakePanel, name: string): unknown => {
   const html = panel.webview.html ?? '';
@@ -110,27 +100,26 @@ const inactiveA = [pluginMetadataFixture({ name: 'A.esp', origin: 'ModA', loadOr
 
 const opened = () => executed().filter(([id]) => id === 'vscode.openWith').map(([, uri]) => uri);
 
-describe('Referenced By from the palette asks about the record tab in focus', () => {
+describe('the record to ask about is the record tab in focus', () => {
   function palette() {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getReferences', []);
     client.setQueryAnswer('getComparison', null);
     return makeEditor(client);
   }
 
   it('the record of the tab opened, then of the tab focused', async () => {
-    const { open } = palette();
+    const { open, askedFromThePalette } = palette();
 
     const first = open('000801:A.esp');
-    expect(await askedFromThePalette()).toEqual(listing('000801:A.esp'));
+    expect(await askedFromThePalette()).toEqual(focused('000801:A.esp'));
     open('000802:A.esp');
-    expect(await askedFromThePalette()).toEqual(listing('000802:A.esp'));
+    expect(await askedFromThePalette()).toEqual(focused('000802:A.esp'));
     first.focus();
-    expect(await askedFromThePalette()).toEqual(listing('000801:A.esp'));
+    expect(await askedFromThePalette()).toEqual(focused('000801:A.esp'));
   });
 
   it('asks with the record picker once the tab in focus closes, though other record tabs stay open, until another is focused', async () => {
-    const { open } = palette();
+    const { open, askedFromThePalette } = palette();
     const first = open('000801:A.esp');
     const second = open('000802:A.esp');
     second.focus();
@@ -139,21 +128,21 @@ describe('Referenced By from the palette asks about the record tab in focus', ()
     first.close();
     expect(await askedFromThePalette()).toEqual(PICKED);
     second.focus();
-    expect(await askedFromThePalette()).toEqual(listing('000802:A.esp'));
+    expect(await askedFromThePalette()).toEqual(focused('000802:A.esp'));
   });
 
   it('keeps the record in focus when a tab out of focus closes', async () => {
-    const { open } = palette();
+    const { open, askedFromThePalette } = palette();
     const first = open('000801:A.esp');
     open('000802:A.esp');
 
     first.close();
 
-    expect(await askedFromThePalette()).toEqual(listing('000802:A.esp'));
+    expect(await askedFromThePalette()).toEqual(focused('000802:A.esp'));
   });
 
   it('asks with the record picker with no record tab open', async () => {
-    palette();
+    const { askedFromThePalette } = palette();
 
     expect(await askedFromThePalette()).toEqual(PICKED);
   });
@@ -161,112 +150,21 @@ describe('Referenced By from the palette asks about the record tab in focus', ()
   it('names the new FormKey for the tab in focus when an edit of its FormID moves it, and keeps the record in focus when another tab moves', async () => {
     const [OLD, MOVED, OTHER] = ['000800:A.esp', '000900:A.esp', '000802:A.esp'];
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getReferences', []);
     client.setQueryAnswer('getComparison', null);
     client.setQueryAnswer('getPlugins', activeA);
     client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/source/ModA/plugin-source/A.esp/Npcs/Npc.json' });
     client.setQueryAnswer('getRecordOfFile', { formKey: OLD, plugin: COPY_PLUGIN });
     client.setQueryAnswer('getEditChanges', { applied: true, newFormKey: MOVED, plugins: [], leftBehind: [], copiesLeftBehind: [], copiesUnread: null, moves: [], deletions: [], documents: [] });
-    const { open } = makeEditor(client);
+    const { open, askedFromThePalette } = makeEditor(client);
     const moving = open(OLD);
     open(OTHER);
 
     await commandHandlers.get('modbench.record.editField')?.(
       { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin }, { op: 'set', path: [{ kind: 'member', name: 'FormID' }], value: 'x' });
-    expect(await askedFromThePalette()).toEqual(listing(OTHER));
+    expect(await askedFromThePalette()).toEqual(focused(OTHER));
 
     moving.focus();
-    expect(await askedFromThePalette()).toEqual(listing(MOVED));
-  });
-});
-
-describe('Referenced By on a record, answered in VS Code\'s References view', () => {
-  const GUN = '000801:A.esp';
-  const recordRow = { argument: { kind: 'record', formKey: GUN, plugin: COPY_PLUGIN } };
-  function asking() {
-    const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', isWinner: true, editorId: 'Gun' }]));
-    client.setQueryAnswer('getPlugins', []);
-    client.setQueryAnswer('getReferences', [{
-      formKey: '000900:A.esp', plugin: 'A.esp', origin: 'ModA', fieldPath: 'Keywords[0]', recordType: 'weap', recordTypeName: 'Weapon', editorId: 'Rifle',
-    }]);
-    const anchor = inItsDocument();
-    const locateRecord = vi.fn((_record: object) => Promise.resolve<vscode.Location | { refused: string } | undefined>(anchor));
-    makeEditor(client, [], NO_MODS, locateRecord);
-    const referencesAsked = () => client.calls.filter(({ method }) => method === 'getReferences').map(({ args }) => args);
-    return { client, anchor, locateRecord, referencesAsked };
-  }
-  const rowsOf = async (input: ReferencesViewInput | undefined) => (await present(input, 'the list shown').resolve()).provider.getChildren();
-  const labelsOf = async (input: ReferencesViewInput | undefined) => (await rowsOf(input)).map((row) => row.label);
-  const idsOf = async (input: ReferencesViewInput | undefined) => (await rowsOf(input)).map((row) => row.id);
-
-  it('shows the clicked record\'s list, titled by its EditorID and anchored at its FormKey in that copy\'s document', async () => {
-    const { anchor, locateRecord } = asking();
-
-    const input = await askReferencedBy(recordRow, [recordRow]);
-
-    expect(input?.title).toBe('Referenced By: Gun');
-    expect(locateRecord).toHaveBeenCalledWith({ kind: 'record', formKey: GUN, plugin: COPY_PLUGIN });
-    expect(input?.location).toBe(anchor);
-    expect(await labelsOf(input)).toEqual(['Rifle']);
-  });
-
-  it('reads the list only when the view resolves it, and again on each refresh, wherever the view moves its anchor', async () => {
-    const { referencesAsked } = asking();
-    const input = present(await askReferencedBy(recordRow), 'the list shown');
-    expect(referencesAsked()).toEqual([]);
-
-    await input.resolve();
-    const moved = input.with(new vscode.Location(vscode.Uri.file('/its/document.json'), new vscode.Position(9, 15)));
-    await moved.resolve();
-
-    expect(referencesAsked()).toEqual([[GUN], [GUN]]);
-    expect(moved.title).toBe(input.title);
-  });
-
-  it('gives each list its own rows, so the same record asked about again shows collapsed, and the view\'s refresh keeps what was expanded', async () => {
-    asking();
-    const first = present(await askReferencedBy(recordRow), 'the first list');
-    const again = present(await askReferencedBy(recordRow), 'the list asked for again');
-    const refreshed = first.with(new vscode.Location(vscode.Uri.file('/its/document.json'), new vscode.Position(9, 15)));
-
-    expect(await idsOf(again)).not.toEqual(await idsOf(first));
-    expect(await idsOf(refreshed)).toEqual(await idsOf(first));
-  });
-
-  it.each([[true], [false]])('publishes whether VS Code\'s References view is enabled (%s), for the menus that offer the gesture', (enabled) => {
-    referencesView.enabled = enabled;
-
-    asking();
-
-    expect(contextKeys.get('modbench.referencesView')).toBe(enabled);
-  });
-
-  it('publishes the References view enabled or disabled again when the extensions change', () => {
-    asking();
-    referencesView.enabled = false;
-
-    referencesView.changed.forEach((listener) => { listener(); });
-
-    expect(contextKeys.get('modbench.referencesView')).toBe(false);
-  });
-
-  it('is refused for what names no record', async () => {
-    asking();
-
-    expect(await askReferencedBy({ argument: { kind: 'mod', name: 'ModA' } })).toBeUndefined();
-    expect(reporter.report.mock.calls).toEqual([['error', 'Could not list what references a record.', 'What was given names no record.']]);
-  });
-
-  it.each([
-    [{ refused: 'A.esp (ModA) holds no 000801:A.esp.' }, 'A.esp (ModA) holds no 000801:A.esp.'],
-    [undefined, 'No active plugin holds 000801:A.esp.'],
-  ])('is refused, saying why, when the record has no place in a document: %j', async (located, why) => {
-    const { locateRecord } = asking();
-    locateRecord.mockResolvedValue(located);
-
-    expect(await askReferencedBy(recordRow)).toBeUndefined();
-    expect(reporter.report.mock.calls).toEqual([['error', `Could not list what references ${GUN}.`, why]]);
+    expect(await askedFromThePalette()).toEqual(focused(MOVED));
   });
 });
 
@@ -279,7 +177,7 @@ describe('the focused cell of the record tab in focus', () => {
 
     expect(contextKeys.get('modbench.record.focusedCellSection')).toBe('field');
     expect(focusedView.id()).toBe('modbench.recordGrid');
-    expect(editor.copyValue.map(({ text }) => text({ view: 'modbench.recordGrid' }, undefined))).toEqual(['Iron', undefined]);
+    expect(editor.copyValue.map(({ text }) => text({ view: 'modbench.recordGrid' }, undefined))).toEqual(['Iron']);
   });
 
   const cell = (webviewSection: string) => ({ webviewSection });
@@ -344,7 +242,6 @@ describe('an edit of a FormID, fired with no panel', () => {
 
   it('moves the tab showing the record to its new FormKey', async () => {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getReferences', []);
     client.setQueryAnswer('getComparison', null);
     client.setQueryAnswer('getRecordsComparison', { compare: null, missing: [{ formKey: OLD, plugin: COPY_PLUGIN, reason: 'RecordGone', message: 'gone' }] });
     client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/source/ModA/plugin-source/A.esp/Npcs/Npc.json' });
@@ -444,22 +341,21 @@ describe('a record file\'s tab', () => {
   const holding = (formKey: string) => ({ formKey, plugin: { name: 'A.esp', origin: 'ModA' } });
   function fileClient(): InMemoryMEditClient {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getReferences', []);
     client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', isWinner: true, editorId: 'Gun' }]));
     client.setQueryAnswer('getPlugins', []);
     return client;
   }
 
-  it('shows the record mEdit says the file holds, asked about by Referenced By and read again as any record tab is', async () => {
+  it('shows the record mEdit says the file holds, in focus and read again as any record tab is', async () => {
     const client = fileClient();
     client.setQueryAnswer('getRecordOfFile', holding(GUN));
-    const { openFile } = makeEditor(client);
+    const { openFile, askedFromThePalette } = makeEditor(client);
 
     const tab = await openFile(FILE);
 
     expect(client.calls).toContainEqual({ method: 'getRecordOfFile', args: [FILE] });
     expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
-    expect(await askedFromThePalette()).toEqual(listing('Gun'));
+    expect(await askedFromThePalette()).toEqual(focused('000801:A.esp'));
     client.emit(conflictsComputedTick);
     expect(tab.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: GUN }]]);
   });
@@ -658,7 +554,6 @@ describe('a file whose plugin is disabled, or in a disabled mod', () => {
   async function loaded(modFacts: ModFacts, { plugins = inactiveA, columns = [] as unknown[], open = openTyped } = {}) {
     const client = new InMemoryMEditClient();
     const copy = comparisonOf(GUN, [{ plugin: 'A.esp', origin: 'ModA', isWinner: false, editorId: 'Gun' }]);
-    client.setQueryAnswer('getReferences', []);
     client.setQueryAnswer('getRecordOfFile', { formKey: GUN, plugin: { name: 'A.esp', origin: 'ModA' } });
     client.setQueryAnswer('getComparison', copy);
     client.setQueryAnswer('getRecordsComparison', { compare: copy, missing: [] });
@@ -688,7 +583,6 @@ describe('a file whose plugin is disabled, or in a disabled mod', () => {
 
   it('is read again when the instance changes whether its plugin is disabled, and not when the instance changes otherwise', async () => {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getReferences', []);
     client.setQueryAnswer('getRecordOfFile', { formKey: GUN, plugin: { name: 'A.esp', origin: 'ModA' } });
     client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', origin: 'ModA', isWinner: false, editorId: 'Gun' }]));
     client.setQueryAnswer('getPlugins', inactiveA);
@@ -718,7 +612,6 @@ describe('a file whose plugin is overridden', () => {
 
   function clientFor(plugins: typeof inactiveA) {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getReferences', []);
     client.setQueryAnswer('getRecordOfFile', { formKey: GUN, plugin: { name: 'A.esp', origin: 'ModA' } });
     client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', origin: 'ModA', isWinner: false, editorId: 'Gun' }]));
     client.setQueryAnswer('getPlugins', plugins);
@@ -791,10 +684,9 @@ describe('a record tab closed', () => {
 
   it('before mEdit says which record its file holds shows nothing when the answer lands, nor is the record tab in focus', async () => {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getReferences', []);
     let land: (answer: typeof holding) => void = () => undefined;
     client.setQueryAnswerOnce('getRecordOfFile', new Promise<typeof holding>((resolve) => { land = resolve; }));
-    makeEditor(client);
+    const { askedFromThePalette } = makeEditor(client);
     const provider = editorProviders.get('modbench.record');
     if (!isRecordEditorProvider(provider)) throw new Error('no record editor registered');
     const tab = fakePanel();
@@ -839,7 +731,6 @@ describe('what a record tab\'s webview posts', () => {
 
   function client(): InMemoryMEditClient {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getReferences', []);
     client.setQueryAnswer('getComparison', compare);
     client.setQueryAnswer('getPlugins', activeA);
     return client;
@@ -1190,16 +1081,15 @@ describe('a non-compiled plugin copy\'s tab', () => {
   const GUN = '000801:A.esp';
   const RENDERED = renderedUri(GUN, 'Gun.json');
 
-  it('shows the copy\'s record, asked about by Referenced By, with no file for mEdit to name it by', async () => {
+  it('shows the copy\'s record, in focus, with no file for mEdit to name it by', async () => {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getReferences', []);
     client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', isWinner: true, editorId: 'Gun' }]));
-    const { openDocument } = makeEditor(client);
+    const { openDocument, askedFromThePalette } = makeEditor(client);
 
     const tab = await openDocument(RENDERED);
 
     expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
-    expect(await askedFromThePalette()).toEqual(listing('Gun'));
+    expect(await askedFromThePalette()).toEqual(focused('000801:A.esp'));
     expect(client.calls.map(({ method }) => method)).not.toContain('getRecordOfFile');
   });
 
@@ -1230,7 +1120,6 @@ describe('a child record\'s tab', () => {
 
   it('shows the child\'s record, not its container\'s, titled with the opened copy\'s name once its read is answered', async () => {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getReferences', []);
     client.setQueryAnswer('getComparison', comparisonOf(PLACED, [
       { plugin: 'A.esp', origin: 'ModA', isWinner: false, editorId: 'SharedRef' },
       { plugin: 'B.esp', origin: 'ModB', isWinner: true, editorId: 'RenamedRef' },
@@ -1294,7 +1183,6 @@ describe('several records opened at once', () => {
       { argument: { kind: 'record', formKey: KNIFE, plugin: knifeIn } }]);
   function severalClient(): InMemoryMEditClient {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getReferences', []);
     client.setQueryAnswer('getRecordOwner', winner);
     client.setQueryAnswer('getCopyDocument', { kind: 'Rendered', location: 'Gun.json' });
     client.setQueryAnswer('getPlugins', activeA);

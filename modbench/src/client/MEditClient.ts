@@ -345,7 +345,6 @@ export interface MEditClient {
   /** The rows one SQL SELECT over the record index selects, read until their JSON text passes `atMostChars`. A statement
    *  that is not a SELECT, or cannot run, fails with the database's reason. */
   selectRows(sql: string, atMostChars: number): Promise<RowsRead | ReadFailed>;
-  getReferences(formKey: string): Promise<ReferenceResult[] | ReadFailed>;
   /** The referrers of the active plugins and of the inactive compiled ones. */
   getReferencesInActiveOrCompiledPlugins(formKey: string): Promise<ReferenceResult[] | ReadFailed>;
   /** Each copy whose text names the plugin file `name`, and the Plugin Header of each plugin with no plugin source that lists it as a master. */

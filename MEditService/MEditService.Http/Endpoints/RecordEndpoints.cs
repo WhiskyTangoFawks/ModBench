@@ -162,14 +162,6 @@ internal static class RecordEndpoints
         .ProducesProblem(422)
         .ProducesProblem(503);
 
-        app.MapGet("/records/{formKey}/references", (string formKey, IQueries svc, CancellationToken aborted) =>
-            GetReferences(nameof(IQueries.GetReferences), formKey, key => svc.GetReferences(key, aborted), logger))
-        .WithName("GetReferences")
-        .WithTags("Records")
-        .Produces<IReadOnlyList<ReferenceResult>>()
-        .ProducesProblem(503)
-        .ProducesProblem(500);
-
         app.MapGet("/records/{formKey}/references-in-active-or-compiled-plugins", (string formKey, IQueries svc, CancellationToken aborted) =>
             GetReferences(
                 nameof(IQueries.GetReferencesInActiveOrCompiledPlugins), formKey,

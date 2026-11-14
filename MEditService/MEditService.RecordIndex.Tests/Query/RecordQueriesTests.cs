@@ -458,7 +458,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     [Fact]
     public void AReference_NamesItsRecordTypeAsXEditDoes()
     {
-        var references = KeywordReferredToFromBaseAndPatch().Queries.GetReferences("000800:Target.esp").Value();
+        var references = KeywordReferredToFromBaseAndPatch().Queries.GetReferencesInActiveOrCompiledPlugins("000800:Target.esp").Value();
 
         Assert.NotEmpty(references);
         Assert.All(references, reference => Assert.Equal(("npc_", "Non-Player Character"), (reference.RecordType, reference.RecordTypeName)));
@@ -467,7 +467,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     [Fact]
     public void TheReferencesToARecord_AreInLoadOrder()
     {
-        var plugins = KeywordReferredToFromBaseAndPatch().Queries.GetReferences("000800:Target.esp").Value().Select(r => r.Plugin);
+        var plugins = KeywordReferredToFromBaseAndPatch().Queries.GetReferencesInActiveOrCompiledPlugins("000800:Target.esp").Value().Select(r => r.Plugin);
 
         Assert.Equal(["Base.esp", "Patch.esp"], plugins);
     }

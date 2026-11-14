@@ -146,7 +146,7 @@ public class RegistrationScopingTests
         Assert.DoesNotContain(fx.EveryListedRecord(), r => r.Plugin == BetaKey.Name);
         Assert.Empty(index.Queries.GetPluginRecordTypes(BetaKey).Value());
         Assert.Equal(FormKeyResolutionState.Unresolved, fx.ResolutionOfBetasNpc());
-        Assert.Empty(index.Queries.GetReferences(fx.BetaRaceFk).Value());
+        Assert.Empty(index.Queries.GetReferencesInActiveOrCompiledPlugins(fx.BetaRaceFk).Value());
         Assert.Empty(index.Queries.GetInteriorCells(BetaKey).Value());
         Assert.Null(index.PlacementGroupIn(BetaKey, fx.BetaCellFk, fx.BetaPlacedFk));
         Assert.Empty(index.Queries.GetContainerChildren(BetaKey, fx.BetaQuestFk).Value());
@@ -196,7 +196,6 @@ public class RegistrationScopingTests
 
         var reference = Assert.Single(fx.Index.Queries.GetReferencesInActiveOrCompiledPlugins(fx.BetaRaceFk).Value(), r => r.FormKey == fx.BetaNpcFk);
         Assert.Equal(BetaKey, new PluginAddress(reference.Plugin, reference.Origin));
-        Assert.Empty(fx.Index.Queries.GetReferences(fx.BetaRaceFk).Value());
     }
 
     [Fact]

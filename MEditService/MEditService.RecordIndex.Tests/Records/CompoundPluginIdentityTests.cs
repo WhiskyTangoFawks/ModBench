@@ -138,7 +138,7 @@ public class CompoundPluginIdentityTests
             Assert.Null(index.PlacementGroupIn(other, cell, placed));
             Assert.False(CellIsLocatedIn(ModC));
             Assert.Null(index.PlacementGroupIn(ModC, cell, placed));
-            Assert.Single(index.Queries.GetReferences(raceKey.ToString()).Value(), r => r.FieldPath == "Race");
+            Assert.Single(index.Queries.GetReferencesInActiveOrCompiledPlugins(raceKey.ToString()).Value(), r => r.FieldPath == "Race");
         }
 
         AssertOnlyTheWinningOriginHoldsTheRows(winner: ModA, other: ModB);
@@ -153,7 +153,7 @@ public class CompoundPluginIdentityTests
 
         void AssertTheReferenceCarriesTheWinningOrigin(PluginAddress winner)
         {
-            var reference = Assert.Single(WithWinner(index, fixture, winner).Queries.GetReferences(raceKey.ToString()).Value());
+            var reference = Assert.Single(WithWinner(index, fixture, winner).Queries.GetReferencesInActiveOrCompiledPlugins(raceKey.ToString()).Value());
             Assert.Equal(winner.Origin, reference.Origin);
         }
 

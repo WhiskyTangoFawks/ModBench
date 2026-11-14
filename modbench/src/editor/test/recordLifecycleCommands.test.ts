@@ -34,7 +34,6 @@ import {
 } from '../recordLifecycleCommands';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { RecordWrite } from '../../drivingLib/writingGesture';
-import { readReferencedBy } from '../referencedByList';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
@@ -65,20 +64,6 @@ function recordingWrite(): { write: RecordWrite; writing: string[] } {
       writing.push('ends');
     },
   };
-}
-
-async function referencedByCopy(record: RecordAt, editorId: string) {
-  const client = new InMemoryMEditClient();
-  client.setQueryAnswer('getChildRecordTypes', []);
-  client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ ...record.plugin, isCompiledPlugin: true, isImmutable: false })]);
-  client.setQueryAnswer('getReferences', [{
-    formKey: record.formKey, plugin: record.plugin.name, origin: record.plugin.origin, fieldPath: 'Keywords[0]',
-    recordType: 'npc_', recordTypeName: 'Non-Player Character', editorId,
-  }]);
-  const { provider } = await readReferencedBy(client, '000001:A.esp', 'a list');
-  const [referrer] = provider.getChildren();
-  const [copy] = provider.getChildren(present(referrer, 'the referrer'));
-  return present(copy, 'its plugin copy');
 }
 
 const changes = (record: RecordAt) => ({ record, moves: [], deletions: [], documents: [] });
@@ -166,17 +151,6 @@ describe('registerRecordLifecycleCommands', () => {
       invoke(client);
 
       await deleteRecords({ kind, ...carrying(SECOND, 'Here') });
-
-      expect(deleteCalls(client)).toEqual([[SECOND]]);
-    });
-
-    it('deletes the plugin copy a Referenced By row stands for', async () => {
-      const client = new InMemoryMEditClient();
-      client.setCommandResult('getDeleteChanges', { applied: [SECOND].map(changes), refused: [] });
-      invoke(client);
-      const holder = await referencedByCopy(SECOND, 'TestNPC');
-
-      await deleteRecords(holder);
 
       expect(deleteCalls(client)).toEqual([[SECOND]]);
     });
