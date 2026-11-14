@@ -286,23 +286,55 @@ describe('problemsAsker', () => {
       expect(again).toEqual([A]);
     });
 
-    it('is not asked again once the whole set is answered, which answers every plugin', async () => {
-      const { asker, again, ask } = failing('getPluginFilePaths', A);
+    it.each([
+      ['the whole set is answered, which answers every plugin', A, undefined, (asker: Asker) => asker.getPluginFilePaths()],
+      ['another ask of the plugin is answered', A, A, (asker: Asker) => asker.getPluginFilePaths(A)],
+      ['another ask of the whole set is answered', undefined, undefined, (asker: Asker) => asker.getPluginFilePaths()],
+    ])('tells every listener at once, and not again, when %s', async (_when, failed, told, answer) => {
+      const { asker, again, ask } = failing('getPluginFilePaths', failed);
+      const second: unknown[] = [];
+      asker.onAskedAgain('getPluginFilePaths', (each) => { second.push(each); });
       await ask();
 
-      await asker.getPluginFilePaths();
-      await vi.advanceTimersByTimeAsync(RETRY_AFTER_MS);
+      asker.forget();
+      await answer(asker);
+      const atOnce = [[...again], [...second]];
+      await vi.advanceTimersByTimeAsync(RETRY_AFTER_MS * 2);
+
+      expect([atOnce, again, second]).toEqual([[[told], [told]], [told], [told]]);
+    });
+
+    it('tells no one of an answer to a read of the Problems panel, which each feed takes for itself', async () => {
+      const { asker, again, ask } = failing('getPluginProblems', A);
+      await ask();
+
+      await asker.getPluginProblems(A);
 
       expect(again).toEqual([]);
     });
 
-    it('is not asked again once a newer ask of it is answered', async () => {
-      const { asker, again, ask } = failing('getPluginFilePaths', A);
-      await ask();
+    it('tells no one of an answer when no ask of it failed', async () => {
+      const { asker, again } = failing('getPluginFilePaths', A);
 
-      asker.forget(A);
-      await asker.getPluginFilePaths(A);
-      await vi.advanceTimersByTimeAsync(RETRY_AFTER_MS);
+      await asker.getPluginFilePaths();
+
+      expect(again).toEqual([]);
+    });
+
+    it('schedules no retry for an ask that fails after the asker is disposed', async () => {
+      vi.useFakeTimers();
+      const client = fakeClient();
+      const [late] = client.gate('getPluginFilePaths', 1, TIMED_OUT);
+      const asker = problemsAsker(client, RETRY_AFTER_MS);
+      const again: unknown[] = [];
+      asker.onAskedAgain('getPluginFilePaths', (each) => { again.push(each); });
+      const inFlight = asker.getPluginFilePaths();
+      await vi.advanceTimersByTimeAsync(0);
+
+      asker.dispose();
+      late?.now();
+      await inFlight;
+      await vi.advanceTimersByTimeAsync(RETRY_AFTER_MS * 2);
 
       expect(again).toEqual([]);
     });

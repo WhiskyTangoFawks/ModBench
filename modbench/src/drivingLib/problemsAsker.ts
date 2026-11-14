@@ -18,7 +18,7 @@ export interface ProblemsAsker<Paths extends Answered, Problems, Status> {
   onPluginChanged(listener: (event: { plugin: PluginAddress }) => void): () => void;
   /** Told after the asker dropped everything it held. */
   onLoadOrderSettled(listener: (status: Status) => void): () => void;
-  /** Told, after a delay, to ask again of a read that failed, until its own ask is answered. */
+  /** Told to ask again of a read that failed: after a delay, and, for the file paths the asker holds, at once when another ask of them is answered. */
   onAskedAgain(read: Read, listener: (plugin?: PluginAddress) => void): () => void;
   forget(plugin?: PluginAddress): void;
   dispose(): void;
@@ -37,7 +37,9 @@ export function problemsAsker<Paths extends Answered, Problems, Status>(client: 
   let held = new Map<string, Promise<Paths[] | ReadFailed>>();
   const listeners: Record<Read, Set<(plugin?: PluginAddress) => void>> = { getPluginFilePaths: new Set(), getPluginProblems: new Set() };
   const pending = new Map<string, ReturnType<typeof setTimeout>>();
-  const latest = new Map<string, Promise<unknown>>();
+  const latest = new Map<string, number>();
+  let asks = 0;
+  let disposed = false;
   const retryId = (read: Read, plugin?: PluginAddress) => `${read}\n${keyOf(plugin)}`;
 
   const stopRetrying = (id: string) => {
@@ -51,21 +53,28 @@ export function problemsAsker<Paths extends Answered, Problems, Status>(client: 
     held.delete(keyOf(plugin));
   };
 
+  const tell = (read: Read, plugin?: PluginAddress) => { for (const listener of listeners[read]) listener(plugin); };
+
   const retryFailed = (id: string, read: Read, plugin?: PluginAddress) => {
-    if (pending.has(id)) return;
+    if (disposed || pending.has(id)) return;
     pending.set(id, setTimeout(() => {
       pending.delete(id);
-      for (const listener of listeners[read]) listener(plugin);
+      tell(read, plugin);
     }, retryAfterMs));
   };
 
   const askedAgainIfFailed = <T>(read: Read, plugin: PluginAddress | undefined, asked: Promise<T[] | ReadFailed>) => {
     const id = retryId(read, plugin);
-    latest.set(id, asked);
+    asks += 1;
+    const mine = asks;
+    latest.set(id, mine);
     const settled = (failed: boolean) => {
-      if (latest.get(id) !== asked) return;
-      if (failed) retryFailed(id, read, plugin);
-      else for (const each of [...pending.keys()].filter((key) => plugin === undefined ? key.startsWith(`${read}\n`) : key === id)) stopRetrying(each);
+      if (latest.get(id) !== mine) return;
+      latest.delete(id);
+      if (failed) { retryFailed(id, read, plugin); return; }
+      const ended = [...pending.keys()].filter((key) => plugin === undefined ? key.startsWith(`${read}\n`) : key === id);
+      for (const each of ended) stopRetrying(each);
+      if (ended.length > 0 && read === 'getPluginFilePaths') tell(read, plugin);
     };
     asked.then((answer) => { settled(isReadFailed(answer)); }, () => { settled(true); });
   };
@@ -95,6 +104,7 @@ export function problemsAsker<Paths extends Answered, Problems, Status>(client: 
       return asked;
     },
     dispose: () => {
+      disposed = true;
       for (const id of [...pending.keys()]) stopRetrying(id);
     },
     onAskedAgain: (read, listener) => {
