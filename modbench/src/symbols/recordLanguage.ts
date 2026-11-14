@@ -43,8 +43,7 @@ export function recordLanguage({ client, names, reporter, open }: RecordLanguage
     if (located === undefined) return { refused: noActivePluginHolds(formKey) };
     return 'refused' in located ? located : locationOf(located);
   };
-  /** Its FormKey in the copy it opens as; of several owners, in the first one's, since the anchor only places the view
-   *  (#2275). */
+  /** Its FormKey in the copy it opens as; of several owners, in the first one's, since the anchor only places the view. */
   const anchorOf = async ({ formKey }: RecordNamed): Promise<vscode.Location | { refused: string }> => {
     const owner = await ownerOf(client, formKey);
     if (owner === undefined) return { refused: noActivePluginHolds(formKey) };
