@@ -904,6 +904,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/records/{formKey}/placed-references": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Each copy, in an active or compiled plugin, that references the record, at its document: its file in plugin source, with VS Code's unsaved text in its place, else its rendered document. Each span names the record, with its quotes; where the document names it nowhere, the span is the copy's own FormKey. Why each copy that could not be placed was left out. */
+        get: operations["GetPlacedReferences"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/script-names/{name}/references": {
         parameters: {
             query?: never;
@@ -1756,6 +1773,16 @@ export interface components {
             /** Format: int32 */
             index?: number | null;
         };
+        PlacedCopy: {
+            formKey: string;
+            plugin: components["schemas"]["PluginAddress"];
+            document: components["schemas"]["CopyDocument"];
+            spans: components["schemas"]["TextSpan"][];
+        };
+        PlacedReferences: {
+            copies: components["schemas"]["PlacedCopy"][];
+            leftOut: string[];
+        };
         PluginAddress: {
             name: string;
             origin: string;
@@ -2136,6 +2163,12 @@ export interface components {
             flag: string;
             template: string;
             resolution: components["schemas"]["FormKeyResolution"];
+        };
+        TextSpan: {
+            /** Format: int32 */
+            start: number;
+            /** Format: int32 */
+            end: number;
         };
         UnreadableSource: {
             reason: string;
@@ -4626,6 +4659,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReferenceResult"][];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetPlacedReferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                formKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlacedReferences"];
                 };
             };
             /** @description Internal Server Error */

@@ -355,6 +355,13 @@ internal sealed class RecordQueries(
         string targetFormKey, CancellationToken cancel) =>
         _answer.Of(() => Referrers(RequireReads().GetReferencedByInActiveOrCompiledPlugins(targetFormKey)), cancel);
 
+    public Task<Answer<PlacedReferences, IndexRefused>> GetPlacedReferences(string targetFormKey, CancellationToken cancel) =>
+        _answer.Of(() =>
+        {
+            using var reads = RequireReads().InOneSnapshot();
+            return ReferencePlacement.Of(reads, targetFormKey, TreeOf, RenderedFileName, source.TextAt);
+        }, cancel);
+
     // A plugin the record index has not reached would read as naming nothing.
     public Task<Answer<IReadOnlyList<CopyNaming>, IndexRefused>> GetPluginNameReferences(string name, CancellationToken cancel) =>
         _answer.Of(() => _index.RequireWholeSetReads().GetCopiesNaming(name), cancel);

@@ -230,6 +230,19 @@ public class RegistrationScopingTests
         Assert.Empty(fx.Index.Queries.GetReferencesInActiveOrCompiledPlugins(fx.BetaRaceFk).Value());
     }
 
+    [Theory]
+    [InlineData(BetaDisabled)]
+    [InlineData(BetaAbsent)]
+    public void AReferenceInAPluginNotCompiledTheSnapshotLeavesInactive_IsNamedInNoCopysDocument(string snapshot)
+    {
+        using var fx = Build("registration-inactive-nonCompiledPlugin-names");
+        var text = fx.Index.Queries.GetRenderedDocument(BetaKey, fx.BetaNpcFk).Value().Require().Text;
+
+        fx.Reconcile(fx.Snapshot(snapshot));
+
+        Assert.DoesNotContain(fx.Index.Queries.GetPluginSourceNames(null, text, null).Value(), name => name is { Kind: DocumentNameKind.Reference });
+    }
+
     private const string Base = "Base.esm";
 
     private static ScatteredFixtureData TwoCopiesOfBaseAndAChild(string prefix, out string race, out string childNpc)

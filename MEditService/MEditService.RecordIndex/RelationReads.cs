@@ -376,9 +376,8 @@ internal sealed class RelationReads(
         return LinkResolution.ForLinksOf(context, formKeys, Resolve);
     }
 
-    /// <summary>The record type of each of <paramref name="formKeys"/> an active or compiled plugin holds, read off its
-    /// copy latest in load order. It joins no winners, so its memory grows with the FormKeys asked, not the index.</summary>
-    public IReadOnlyDictionary<string, string> RecordTypesOf(IReadOnlyList<string> formKeys)
+    // It joins no winners, so its memory grows with the FormKeys asked, not the index.
+    public IReadOnlyDictionary<string, string> RecordTypesOf(List<string> formKeys)
     {
         using var context = OpenRead();
         return context.Rows($"""
@@ -386,7 +385,7 @@ internal sealed class RelationReads(
             FROM {Copies}
             WHERE r.form_key IN (SELECT unnest($1::VARCHAR[])) AND {ActiveOrCompiled}
             QUALIFY row_number() OVER (PARTITION BY r.form_key ORDER BY p.load_order_idx DESC NULLS LAST, r.plugin, r.origin) = 1
-            """, reader => KeyValuePair.Create(reader.GetString(0), reader.GetString(1)), formKeys.ToList())
+            """, reader => KeyValuePair.Create(reader.GetString(0), reader.GetString(1)), formKeys)
             .ToDictionary(StringComparer.OrdinalIgnoreCase);
     }
 
@@ -555,6 +554,18 @@ internal sealed class RelationReads(
     /// <summary>Each copy <paramref name="plugin"/> holds, read in batches of whole records as the caller takes them.</summary>
     public IEnumerable<CopyHoldingText> GetCopiesOf(PluginAddress plugin) =>
         CopiesWhere("plugin = $1 AND origin = $2", "TRUE", plugin.Name, plugin.Origin);
+
+    /// <summary>Each of <paramref name="copies"/> a registered plugin holds, read in batches as the caller takes them.</summary>
+    // Keys from a subquery would not narrow the scan, which would carry every body. No FormKey or filename holds a '/'.
+    public IEnumerable<CopyHoldingText> GetCopies(IReadOnlyList<RecordAt> copies)
+    {
+        if (copies.Count == 0) return [];
+        var formKeys = copies.Select(copy => copy.FormKey).Distinct().ToList();
+        List<string> named = [.. copies.Select(copy => $"{copy.FormKey}/{copy.Plugin.Name}/{copy.Plugin.Origin}")];
+        return CopiesWhere(
+            $"form_key IN ({string.Join(", ", formKeys.Select((_, i) => $"${i + 2}"))}) AND list_contains($1::VARCHAR[], form_key || '/' || plugin || '/' || origin)",
+            "TRUE", [named, .. formKeys]);
+    }
 
     private IEnumerable<CopyHoldingText> CopiesWhere(string recordFilter, string pluginFilter, params object[] values)
     {

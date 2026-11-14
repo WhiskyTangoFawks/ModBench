@@ -35,6 +35,7 @@ public interface IQueries
         PluginAddress plugin, string formKey, CancellationToken cancel);
     Task<Answer<IReadOnlyList<ReferenceResult>, IndexRefused>> GetReferencesInActiveOrCompiledPlugins(
         string targetFormKey, CancellationToken cancel);
+    Task<Answer<PlacedReferences, IndexRefused>> GetPlacedReferences(string targetFormKey, CancellationToken cancel);
     Task<Answer<IReadOnlyList<CopyNaming>, IndexRefused>> GetPluginNameReferences(string name, CancellationToken cancel);
     /// <summary>Each copy, in an active plugin with no plugin source, that copies or links the record <paramref name="plugin"/> holds.
     /// No source write of mEdit's changes such a copy, so it waits for none.</summary>

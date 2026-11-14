@@ -39,6 +39,9 @@ internal static class UnabortedReads
     internal static Task<Answer<IReadOnlyList<ReferenceResult>, IndexRefused>> GetReferencesInActiveOrCompiledPlugins(
         this IQueries queries, string targetFormKey) => queries.GetReferencesInActiveOrCompiledPlugins(targetFormKey, Never);
 
+    internal static Task<Answer<PlacedReferences, IndexRefused>> GetPlacedReferences(this IQueries queries, string targetFormKey) =>
+        queries.GetPlacedReferences(targetFormKey, Never);
+
     internal static Task<Answer<IReadOnlyList<CopyNaming>, IndexRefused>> GetPluginNameReferences(this IQueries queries, string name) =>
         queries.GetPluginNameReferences(name, Never);
 

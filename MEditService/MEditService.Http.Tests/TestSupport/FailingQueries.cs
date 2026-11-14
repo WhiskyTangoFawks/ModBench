@@ -46,6 +46,7 @@ internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null)
 
     public Task<Answer<IReadOnlyList<ReferenceResult>, IndexRefused>> GetReferencesInActiveOrCompiledPlugins(
         string targetFormKey, CancellationToken cancel) => throw Failed();
+    public Task<Answer<PlacedReferences, IndexRefused>> GetPlacedReferences(string targetFormKey, CancellationToken cancel) => throw Failed();
     public Task<Answer<IReadOnlyList<CopyNaming>, IndexRefused>> GetPluginNameReferences(string name, CancellationToken cancel) =>
         throw Failed();
     public Answer<IReadOnlyList<RecordAt>, IndexRefused> GetCopiesWithNoPluginSourceNaming(PluginAddress plugin, string formKey) => throw Failed();
