@@ -121,5 +121,46 @@ class SelectedByChange(GateRepo):
         self.assertEqual(self.selected(), self.slot_line("--frontend"))
 
 
+class RealSizeBudgets(GateRepo):
+    REAL_SIZE_RUN = "MEDIT_REAL_SIZE=1 test --no-build -v minimal MEditService.RecordIndex.Tests --filter FullyQualifiedName~.RealSize."
+
+    def setUp(self):
+        super().setUp()
+        shutil.copy(SCRIPT.parent / "select_backend_tests.py", self.validate)
+        shutil.copy(SCRIPT.parent / "check_test_times.py", self.validate)
+        self.write("MEditService/MEditService.RecordIndex/MEditService.RecordIndex.csproj", "<Project />")
+        self.write("MEditService/MEditService.RecordIndex.Tests/MEditService.RecordIndex.Tests.csproj",
+                   '<PackageReference Include="Microsoft.NET.Test.Sdk" />'
+                   '<ProjectReference Include="..\\MEditService.RecordIndex\\MEditService.RecordIndex.csproj" />')
+        self.write("MEditService/MEditService.Http/MEditService.Http.csproj", "<Project />")
+        self.write("MEditService/MEditService.Http.Tests/MEditService.Http.Tests.csproj",
+                   '<PackageReference Include="Microsoft.NET.Test.Sdk" />'
+                   '<ProjectReference Include="..\\MEditService.Http\\MEditService.Http.csproj" />')
+        self.calls = pathlib.Path(self.repo, "dotnet-calls")
+        self.bin = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.bin)
+        dotnet = self.bin / "dotnet"
+        dotnet.write_text(f'#!/bin/sh\necho "MEDIT_REAL_SIZE=$MEDIT_REAL_SIZE $*" >> {self.calls}\n')
+        dotnet.chmod(0o755)
+        git(self.repo, "add", ".")
+        git(self.repo, "commit", "-q", "-m", "projects")
+        git(self.repo, "checkout", "-q", "-b", "feature")
+
+    def dotnet_calls_after_changing(self, path):
+        self.write(path, "edited")
+        git(self.repo, "add", ".")
+        git(self.repo, "commit", "-q", "-m", "edit")
+        self.gates("--backend", BUILD_SLOT_HELD="1", PATH=f"{self.bin}:{os.environ['PATH']}")
+        return self.calls.read_text().splitlines()
+
+    def test_a_change_the_record_index_tests_can_break_runs_the_budgets_of_real_size(self):
+        self.assertIn(self.REAL_SIZE_RUN, self.dotnet_calls_after_changing("MEditService/MEditService.RecordIndex/a.cs"))
+
+    def test_a_change_they_cannot_break_runs_no_budget_of_real_size(self):
+        calls = self.dotnet_calls_after_changing("MEditService/MEditService.Http/a.cs")
+        self.assertTrue(any(call.endswith("selected.slnf") for call in calls), calls)
+        self.assertNotIn(self.REAL_SIZE_RUN, calls)
+
+
 if __name__ == '__main__':
     unittest.main()

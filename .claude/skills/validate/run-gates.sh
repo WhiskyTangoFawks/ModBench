@@ -124,7 +124,13 @@ backend_tests() {
     (cd "$ROOT/MEditService" && "${dotnet_test[@]}" "${ARCHITECTURE_SCANS[@]}") || return
   fi
   echo "=== Gate 3: Backend test times ==="
-  python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$results"
+  python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$results" || return
+  # Building the record index of real size takes minutes, so its budgets run apart from the box's own tests.
+  if grep -qx MEditService.RecordIndex.Tests <<< "$selected"; then
+    echo "=== Gate 3: Budgets on the record index of real size ==="
+    (cd "$ROOT/MEditService" && MEDIT_REAL_SIZE=1 dotnet test --no-build -v minimal MEditService.RecordIndex.Tests \
+      --filter "FullyQualifiedName~.RealSize.")
+  fi
 }
 
 if $BACKEND; then
