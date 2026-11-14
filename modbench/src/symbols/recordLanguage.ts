@@ -8,7 +8,7 @@ import { hoverOf } from './formKeyHover';
 import { referencesToFormKey } from './formKeyReferences';
 import { locateRecord, locationOf } from './recordLocation';
 import type { SourceNames } from './sourceNames';
-import type { Definition, RecordNamed, References, SymbolKind } from './symbolKind';
+import { REFERENCED_BY, type Definition, type RecordNamed, type References, type SymbolKind } from './symbolKind';
 import { recordReferencedBy, type RecordReferencedByDeps } from './recordReferencedBy';
 import { workspaceSymbolsOf } from './workspaceSymbols';
 
@@ -40,7 +40,7 @@ export function recordLanguage({ client, names, reporter, open }: RecordLanguage
   const anchorOf = async ({ formKey }: RecordNamed): Promise<vscode.Location | { refused: string }> => {
     const winning = await locateRecord({ client, open }, { formKey }, names.formKeyIn);
     if (winning !== undefined) return 'refused' in winning ? winning : locationOf(winning);
-    const compiled = (await workspace.symbolsFor(formKey, 'Referenced By')).find((copy) => copy.formKey === formKey);
+    const [compiled] = await workspace.compiledCopiesOf(formKey, REFERENCED_BY);
     return compiled ? new vscode.Location(compiled.uri, new vscode.Position(0, 0)) : { refused: noActivePluginHolds(formKey) };
   };
   const referencedBy = recordReferencedBy({ client, reporter, anchorOf });
@@ -67,12 +67,12 @@ export function recordLanguage({ client, names, reporter, open }: RecordLanguage
       return found && { ...found, icon: vscode.CompletionItemKind.Reference, isIncomplete: true };
     },
     /** Each copy, in an active or a compiled plugin, of a record whose EditorID or FormKey holds `query`, at its document. */
-    async symbolsFor(query) {
-      return (await workspace.symbolsFor(query, 'Go to Symbol in Workspace')).map((record) => ({
+    async symbolsFor(query, gesture) {
+      return (await workspace.symbolsFor(query, gesture)).map((record) => ({
         symbol: { kind: 'record', formKey: record.formKey }, name: record.name, detail: `${record.plugin.name} (${record.plugin.origin})`, icon: vscode.SymbolKind.Object,
         location: new vscode.Location(record.uri, new vscode.Position(0, 0)),
         resolve: async () => {
-          const found = await workspace.locate(record);
+          const found = await workspace.locate(record, gesture);
           return found && locationOf(found);
         },
       }));

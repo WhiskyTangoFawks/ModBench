@@ -91,6 +91,8 @@ describe('referenced by on a plugin (commands.md, `referenced by` under Symbol)'
   });
 });
 
+const GESTURE = 'Go to Symbol in Workspace';
+
 describe('a plugin\'s name, hover, completion and Go to Symbol (symbols.md, The features)', () => {
   const MID = { name: 'Mid.esp', origin: 'Mid Mod' };
   const rows = [BASE, { name: 'Base.esm', origin: 'Other Mod' }, MID].map((row, line) => ({ ...row, path: `/data/${row.name}`, line, enabled: true, winning: row.origin !== 'Other Mod' }));
@@ -128,7 +130,7 @@ describe('a plugin\'s name, hover, completion and Go to Symbol (symbols.md, The 
   const located = (found: readonly { name: string; detail: string; location: unknown }[]) => found.map(({ name, detail, location }) => [name, detail, location]);
 
   it('lists each plugin copy whose name holds the query, whatever the case, at its file', async () => {
-    const found = await naming().symbolsFor('BASE');
+    const found = await naming().symbolsFor('BASE', GESTURE);
 
     expect(located(found)).toEqual([
       ['Base.esm', 'Base Mod', { uri: Uri.file('/data/Base.esm'), range: new Range(0, 0, 0, 0) }],
@@ -139,11 +141,11 @@ describe('a plugin\'s name, hover, completion and Go to Symbol (symbols.md, The 
   it('places a line that names no file at a place a file names it', async () => {
     const kind = naming(undefined, [{ ...BASE, path: undefined, line: 0, enabled: true, winning: true }]);
 
-    expect(located(await kind.symbolsFor('base'))).toEqual([['Base.esm', 'Base Mod', { uri: Uri.file(PLUGINS_TXT), range: new Range(0, 1, 0, 9) }]]);
+    expect(located(await kind.symbolsFor('base', GESTURE))).toEqual([['Base.esm', 'Base Mod', { uri: Uri.file(PLUGINS_TXT), range: new Range(0, 1, 0, 9) }]]);
   });
 
   it('lists no plugin that has no file and that no file names', async () => {
-    expect(await naming(undefined, [{ ...MID, path: undefined, line: 0, enabled: true, winning: true }]).symbolsFor('mid')).toEqual([]);
+    expect(await naming(undefined, [{ ...MID, path: undefined, line: 0, enabled: true, winning: true }]).symbolsFor('mid', GESTURE)).toEqual([]);
   });
 });
 

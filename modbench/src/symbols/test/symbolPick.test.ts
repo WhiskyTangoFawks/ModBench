@@ -39,12 +39,12 @@ const GUN: SymbolName = { kind: 'record', formKey: '000801:A.esp' };
 const listed = (symbol: SymbolName, name: string): Listed => ({ symbol, name, detail: 'a detail', icon: 0, location: new vscode.Location(Uri.file('/a.json'), new vscode.Range(0, 0, 0, 0)) });
 
 describe('pick a symbol as Go to Symbol in Workspace finds it', () => {
-  it('lists the symbols of every kind that hold what is typed, and answers the one accepted', async () => {
-    const kinds = fakeKinds({ record: fakeKind({ symbolsFor: (query) => Promise.resolve(query === 'gun' ? [listed(GUN, 'Gun')] : []) }) });
-    const picked = pickSymbol(kinds, recordingReporter());
+  it('lists the symbols of every kind that hold what is typed, each kind told the gesture it picks for, and answers the one accepted', async () => {
+    const kinds = fakeKinds({ record: fakeKind({ symbolsFor: (query, gesture) => Promise.resolve(query === 'gun' ? [listed(GUN, `Gun for ${gesture}`)] : []) }) });
+    const picked = pickSymbol(kinds, recordingReporter(), 'Referenced By');
 
     await quickPick.change?.('gun');
-    expect(quickPick.items).toEqual([{ symbol: GUN, label: 'Gun', description: 'a detail' }]);
+    expect(quickPick.items).toEqual([{ symbol: GUN, label: 'Gun for Referenced By', description: 'a detail' }]);
     quickPick.selectedItems = [{ symbol: GUN }];
     quickPick.accept?.();
 
@@ -52,7 +52,7 @@ describe('pick a symbol as Go to Symbol in Workspace finds it', () => {
   });
 
   it('answers no symbol when the user dismisses it', async () => {
-    const picked = pickSymbol(fakeKinds(), recordingReporter());
+    const picked = pickSymbol(fakeKinds(), recordingReporter(), 'Referenced By');
 
     quickPick.hide?.();
 
@@ -62,7 +62,7 @@ describe('pick a symbol as Go to Symbol in Workspace finds it', () => {
   it('reports why the symbols could not be listed, and stops showing busy', async () => {
     const reporter = recordingReporter();
     const kinds = fakeKinds({ record: fakeKind({ symbolsFor: () => Promise.reject(new Error('mEdit is down')) }) });
-    void pickSymbol(kinds, reporter);
+    void pickSymbol(kinds, reporter, 'Referenced By');
 
     await quickPick.change?.('gun');
 

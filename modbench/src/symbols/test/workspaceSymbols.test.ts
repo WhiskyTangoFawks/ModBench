@@ -4,7 +4,7 @@ import { Uri } from '../../test/vscodeMock';
 vi.mock('vscode', () => ({ Uri }));
 
 import type * as vscode from 'vscode';
-import { workspaceSymbolsOf } from '../workspaceSymbols';
+import { workspaceSymbolsOf, type RecordSymbol } from '../workspaceSymbols';
 import type { PluginMetadata, RecordSummary } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { copyDocumentsOf, copyKey as key, type CopyOnDisk } from './copyDocuments';
@@ -33,10 +33,10 @@ function symbols(plugins: PluginMetadata[], found: RecordSummary[], files: Recor
   const { getCopyDocument, textOnFile } = copyDocumentsOf(files);
   const client: Client = {
     getPlugins: () => Promise.resolve(plugins),
-    searchRecords: vi.fn((_query: string, _types: string[], scope?: typeof modA) => {
+    searchRecords: vi.fn((_query: string, _types: string[], scope?: typeof modA, atMost?: number) => {
       const searched = scope ? [scope] : plugins.filter((each) => each.inLoadOrder);
       const items = found.filter((row) => searched.some((each) => row.plugin === each.name && row.origin === each.origin));
-      return Promise.resolve({ items, total: items.length });
+      return Promise.resolve({ items: items.slice(0, atMost ?? 20), total: items.length });
     }),
     getRecordOwner: () => Promise.reject(new Error('A symbol names its plugin.')),
     getCopyDocument,
@@ -51,7 +51,12 @@ function symbols(plugins: PluginMetadata[], found: RecordSummary[], files: Recor
   const workspace = workspaceSymbolsOf({
     client, reporter, open, declarationIn: (text, formKey) => Promise.resolve(spelledIn(text, `"FormKey": "${formKey}"`)),
   });
-  return { client, reporter, locate: workspace.locate, symbolsFor: (query: string) => workspace.symbolsFor(query, 'Go to Symbol in Workspace') };
+  return {
+    client, reporter,
+    symbolsFor: (query: string) => workspace.symbolsFor(query, 'Go to Symbol in Workspace'),
+    compiledCopiesOf: (formKey: string) => workspace.compiledCopiesOf(formKey, 'Referenced By'),
+    locate: (symbol: RecordSymbol) => workspace.locate(symbol, 'Go to Symbol in Workspace'),
+  };
 }
 
 const listed = (found: Awaited<ReturnType<ReturnType<typeof symbols>['symbolsFor']>>) =>
@@ -96,19 +101,41 @@ describe('Go to Symbol in Workspace (symbols.md, The features, story 4)', () => 
 
     await symbolsFor('Rusty');
 
-    expect(vi.mocked(client.searchRecords).mock.calls).toEqual([['Rusty', [], undefined], ['Rusty', [], inactive]]);
+    expect(vi.mocked(client.searchRecords).mock.calls.map(([query, types, scope]) => [query, types, scope])).toEqual([['Rusty', [], undefined], ['Rusty', [], inactive]]);
   });
 
-  it('says how many copies it lists of how many mEdit finds, when mEdit answers fewer', async () => {
+  it('lists at most 200 copies a search, and says how many of how many match', async () => {
+    const guns = Array.from({ length: 201 }, (_, index) => summary(`${(0x900 + index).toString(16).padStart(6, '0').toUpperCase()}:A.esp`, modA, `Gun${index}`));
+    const files = Object.fromEntries(guns.map(({ formKey }) => [key(formKey, modA), { file: `/source/ModA/plugin-source/A.esp/${formKey}.json`, text: '' }]));
+    const { reporter, symbolsFor } = symbols([plugin(modA)], guns, files);
+
+    expect([(await symbolsFor('Gun')).length, reporter.shownFailures.map(({ message }) => message)])
+      .toEqual([200, ['Go to Symbol in Workspace lists 200 of the 201 copies of records whose EditorID or FormKey holds "Gun".']]);
+  });
+
+  it.each([
+    ['an EditorID', 'Rusty', 'Type more of the EditorID or FormKey to narrow the list.'],
+    ['a whole FormKey, which typing more cannot narrow', GUN.toLowerCase(), undefined],
+  ])('when it lists fewer than match for %s, says what typing more does', async (_case, query, detail) => {
     const { reporter, symbolsFor } = symbols([plugin(modA)], [], { [key(GUN, modA)]: { file: GUN_FILE, text: '' } }, {
       searchRecords: () => Promise.resolve({ items: [summary(GUN, modA, 'RustyGun')], total: 31 }),
     });
 
-    expect(await symbolsFor('Rusty')).toHaveLength(1);
-    expect(reporter.shownFailures).toEqual([{
-      severity: 'warning', message: 'Go to Symbol in Workspace lists 1 of the 31 copies of records whose EditorID or FormKey holds "Rusty".',
-      detail: 'Type more of the EditorID or FormKey to narrow the list.',
-    }]);
+    await symbolsFor(query);
+
+    expect(reporter.shownFailures.map((shown) => shown.detail)).toEqual([detail]);
+  });
+
+  it('finds a record\'s copies for Referenced By in the compiled plugins outside the load order alone', async () => {
+    const inactive = { name: 'D.esp', origin: 'ModD' };
+    const INACTIVE_FILE = '/source/ModD/plugin-source/D.esp/Gun.json';
+    const { compiledCopiesOf } = symbols(
+      [plugin(modA), plugin(inactive, { inLoadOrder: false })],
+      [summary(GUN, modA, 'RustyGun'), summary(GUN, inactive, 'RustyGun')],
+      { [key(GUN, modA)]: { file: GUN_FILE, text: '' }, [key(GUN, inactive)]: { file: INACTIVE_FILE, text: '' } },
+    );
+
+    expect(listed(await compiledCopiesOf(GUN))).toEqual([{ name: `RustyGun [${GUN}]`, plugin: 'D.esp', uri: `file:${INACTIVE_FILE}` }]);
   });
 
   it('lists what it found and writes a line for each search that failed and each copy it could not open', async () => {

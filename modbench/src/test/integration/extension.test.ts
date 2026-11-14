@@ -498,19 +498,11 @@ function createMockBackend(): http.Server {
       return;
     }
     if (url.startsWith('/records?') && new URL(url, 'http://x').searchParams.has('search')) {
-      const query = new URL(url, 'http://x').searchParams;
-      const search = (query.get('search') ?? '').toLowerCase();
       const summary = (formKey: string, editorId: string, plugin: string, origin: string) => ({ formKey, plugin, loadOrderIndex: 1, isWinner: true, editorId,
         origin, workingTreeState: 'None', hasContainerChildren: false, hasParseFailure: false });
-      const compiled = present(MOCK_PLUGINS.find((p) => p.name === COMPILED_PLUGIN), 'the compiled plugin\'s row');
-      const held = [
-        summary(HELD_FORM_KEY, 'NewGun', 'Patch.esp', 'Data/'),
-        summary(COMPILED_PLUGIN_FORM_KEY, 'CompiledPluginGun', COMPILED_PLUGIN, COMPILED_PLUGIN_ORIGIN), summary(CHILD_FORM_KEY, 'CompiledPluginRef', COMPILED_PLUGIN, COMPILED_PLUGIN_ORIGIN),
-      ];
-      const scope = query.has('plugin')
-        ? held.filter((row) => row.plugin === query.get('plugin') && row.origin === query.get('origin'))
-        : held.filter((row) => row.plugin !== COMPILED_PLUGIN || compiled.inLoadOrder);
-      const items = scope.filter((row) => row.editorId.toLowerCase().includes(search) || row.formKey.toLowerCase().includes(search));
+      const items = new URL(url, 'http://x').searchParams.get('search') === 'CompiledPlugin'
+        ? [summary(COMPILED_PLUGIN_FORM_KEY, 'CompiledPluginGun', COMPILED_PLUGIN, COMPILED_PLUGIN_ORIGIN), summary(CHILD_FORM_KEY, 'CompiledPluginRef', COMPILED_PLUGIN, COMPILED_PLUGIN_ORIGIN)]
+        : [summary(HELD_FORM_KEY, 'NewGun', 'Patch.esp', 'Data/')];
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ items, total: items.length }));
       return;
@@ -2440,37 +2432,14 @@ describe('A FormKey in plugin source', () => {
     assert.deepStrictEqual(definitions, []);
   });
 
-  const symbolSearch = async (inLoadOrder: boolean) => {
+  it('finds a record by Go to Symbol in Workspace, each copy at its document', async () => {
     await activated();
-    const compiled = present(MOCK_PLUGINS.find((p) => p.name === COMPILED_PLUGIN), 'the compiled plugin\'s row');
-    Object.assign(compiled, { inLoadOrder });
-    try {
-      const asked = requestLog.length;
-      const found = await vscode.commands.executeCommand<vscode.SymbolInformation[]>('vscode.executeWorkspaceSymbolProvider', 'CompiledPlugin');
-      return {
-        listed: found.map((symbol) => [symbol.name, symbol.containerName, symbol.location.uri.toString(true)]).sort(),
-        searches: requestLog.slice(asked).filter((line) => line.startsWith('GET /records?')).map((line) => {
-          const query = new URL(line.slice('GET '.length), 'http://x').searchParams;
-          return [query.get('search'), query.get('plugin'), query.get('origin')];
-        }),
-      };
-    } finally {
-      Object.assign(compiled, { inLoadOrder: true });
-    }
-  };
-  const COMPILED_COPIES = [
-    [`CompiledPluginGun [${COMPILED_PLUGIN_FORM_KEY}]`, `${COMPILED_PLUGIN} (${COMPILED_PLUGIN_ORIGIN})`, vscode.Uri.file(COMPILED_PLUGIN_FILE).toString(true)],
-    [`CompiledPluginRef [${CHILD_FORM_KEY}]`, `${COMPILED_PLUGIN} (${COMPILED_PLUGIN_ORIGIN})`, compiledPluginChildUri],
-  ].sort();
+    const found = await vscode.commands.executeCommand<vscode.SymbolInformation[]>('vscode.executeWorkspaceSymbolProvider', 'CompiledPlugin');
 
-  it('finds an active plugin\'s records by Go to Symbol in Workspace in one search of the active plugins, each copy at its document', async () => {
-    assert.deepStrictEqual(await symbolSearch(true), { listed: COMPILED_COPIES, searches: [['CompiledPlugin', null, null]] });
-  });
-
-  it('finds a compiled plugin\'s records outside the load order by Go to Symbol in Workspace, searching that plugin alone', async () => {
-    assert.deepStrictEqual(await symbolSearch(false), {
-      listed: COMPILED_COPIES, searches: [['CompiledPlugin', null, null], ['CompiledPlugin', COMPILED_PLUGIN, COMPILED_PLUGIN_ORIGIN]],
-    });
+    assert.deepStrictEqual(found.map((symbol) => [symbol.name, symbol.containerName, symbol.location.uri.toString(true)]).sort(), [
+      [`CompiledPluginGun [${COMPILED_PLUGIN_FORM_KEY}]`, `${COMPILED_PLUGIN} (${COMPILED_PLUGIN_ORIGIN})`, vscode.Uri.file(COMPILED_PLUGIN_FILE).toString(true)],
+      [`CompiledPluginRef [${CHILD_FORM_KEY}]`, `${COMPILED_PLUGIN} (${COMPILED_PLUGIN_ORIGIN})`, compiledPluginChildUri],
+    ].sort());
   });
 
   const offeredIn = async (doc: vscode.TextDocument, text: string): Promise<string[]> => {

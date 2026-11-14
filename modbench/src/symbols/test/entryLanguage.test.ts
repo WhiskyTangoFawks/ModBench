@@ -205,20 +205,22 @@ describe('hover and completion on a mod, a separator, a downloaded file or a pro
   });
 });
 
+const GESTURE = 'Go to Symbol in Workspace';
+
 describe('Go to Symbol in Workspace on a mod, a separator, a downloaded file or a profile (symbols.md, The features, story 4)', () => {
   const names = (found: readonly { name: string; detail: string }[]) => found.map(({ name, detail }) => [detail, name]);
 
   it('lists each mod and separator whose name holds the query, whatever the case, at the first place a file names it', async () => {
     const kind = language(undefined);
 
-    expect(names(await kind.symbolsFor('ge'))).toEqual([['mod separator', 'Gear']]);
-    expect(names(await kind.symbolsFor('MOD'))).toEqual([['mod', 'Base Mod'], ['mod', 'Other Mod']]);
+    expect(names(await kind.symbolsFor('ge', GESTURE))).toEqual([['mod separator', 'Gear']]);
+    expect(names(await kind.symbolsFor('MOD', GESTURE))).toEqual([['mod', 'Base Mod'], ['mod', 'Other Mod']]);
   });
 
   it('places an entry its owners\' list names at its line there, and asks the owners for no other entry than one the list leaves out', async () => {
     const { reads, ...kind } = language(undefined, { listed: [{ entry: mod('base mod'), place: place(MODLIST, 4) }, { entry: separator('Gear'), place: place(MODLIST, 5) }] });
 
-    const found = await kind.symbolsFor('mod');
+    const found = await kind.symbolsFor('mod', GESTURE);
 
     expect(names(found)).toEqual([['mod', 'Base Mod'], ['mod', 'Other Mod']]);
     expect(located(found.map(({ location }) => location))).toEqual([locationAt(4), locationAt(1)]);
@@ -228,7 +230,7 @@ describe('Go to Symbol in Workspace on a mod, a separator, a downloaded file or 
   it('places a downloaded file at its own file and a profile at its mod order file, even where no file names them, reading no file', async () => {
     const { reads, ...kind } = language(undefined, { places: [] });
 
-    const found = await kind.symbolsFor('ARMOR');
+    const found = await kind.symbolsFor('ARMOR', GESTURE);
 
     expect(names(found)).toEqual([['downloaded file', 'Armor-2.zip'], ['profile', 'Armor Test']]);
     expect(located(found.map(({ location }) => location))).toEqual([
@@ -241,24 +243,24 @@ describe('Go to Symbol in Workspace on a mod, a separator, a downloaded file or 
     const listed = [mod('Base Mod'), mod('Other Mod'), separator('Gear'), downloadedFile('Patch-1.7z'), downloadedFile('Armor-2.zip'), profile('Default'), profile('Armor Test')];
     const { reads, ...kind } = language(undefined, { listed: listed.map((entry, line) => ({ entry, place: place(MODLIST, line) })) });
 
-    expect(await kind.symbolsFor('e')).toHaveLength(5);
+    expect(await kind.symbolsFor('e', GESTURE)).toHaveLength(5);
     expect(reads).not.toHaveBeenCalled();
   });
 
   it('says in the Output why a list could not be read, and asks the owners for each entry instead', async () => {
     const { reads, reporter, ...kind } = language(undefined, { listedFails: true });
 
-    expect(names(await kind.symbolsFor('gear'))).toEqual([['mod separator', 'Gear']]);
+    expect(names(await kind.symbolsFor('gear', GESTURE))).toEqual([['mod separator', 'Gear']]);
     expect([reads.mock.calls, reporter.shownFailures.map(({ severity, detail }) => [severity, detail])]).toEqual([[[separator('Gear')]], [['warning', 'the list is gone']]]);
   });
 
   it('lists no entry that no file names', async () => {
-    expect(await language(undefined, { places: [] }).symbolsFor('mod')).toEqual([]);
+    expect(await language(undefined, { places: [] }).symbolsFor('mod', GESTURE)).toEqual([]);
   });
 
   it('selects a mod\'s row in Mods when the user picks it, as its definition is', async () => {
     SHOW_BASE_MOD.mockClear();
-    const [picked] = await language(undefined).symbolsFor('base');
+    const [picked] = await language(undefined).symbolsFor('base', GESTURE);
 
     expect(await picked?.resolve?.()).toBeUndefined();
     expect(SHOW_BASE_MOD).toHaveBeenCalledOnce();

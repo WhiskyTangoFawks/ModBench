@@ -35,7 +35,7 @@ export function registerLanguageFeatures({ kinds, reporter, reveal, rename }: La
   const at = (document: vscode.TextDocument, position: vscode.Position) => askedAt(kinds, document, document.offsetAt(position));
   const workspaceSymbols: vscode.WorkspaceSymbolProvider<ListedSymbol> = {
     async provideWorkspaceSymbols(query) {
-      return (await listedSymbols(kinds, query)).map((symbol) => new ListedSymbol(symbol));
+      return (await listedSymbols(kinds, query, 'Go to Symbol in Workspace')).map((symbol) => new ListedSymbol(symbol));
     },
     async resolveWorkspaceSymbol(symbol) {
       const location = await symbol.listed.resolve?.();

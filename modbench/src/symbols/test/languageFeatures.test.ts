@@ -250,14 +250,14 @@ describe('completion offers the symbols of the kind a file names at the place (s
 describe('Go to Symbol in Workspace lists every kind\'s symbols (symbols.md, The features, story 4)', () => {
   const listed = (name: string, resolve?: () => Promise<vscode.Location | undefined>) => ({ symbol: { kind: 'file' as const, path: name }, name, detail: 'a detail', icon: SymbolKind.File, location: ELSEWHERE, resolve });
 
-  it('lists each kind\'s symbols whose name holds the query, the kinds in order', async () => {
+  it('lists each kind\'s symbols whose name holds the query, the kinds in order, each kind told the gesture', async () => {
     const asked = features(fakeKinds({
       record: fakeKind({ symbolsFor: () => Promise.resolve([listed('Gun')]) }),
       plugin: fakeKind({ symbolsFor: () => Promise.resolve([listed('Gun.esp')]) }),
-      file: fakeKind({ symbolsFor: (query) => Promise.resolve([listed(query)]) }),
+      file: fakeKind({ symbolsFor: (query, gesture) => Promise.resolve([listed(`${query} for ${gesture}`)]) }),
     }));
 
-    expect((await asked.workspaceSymbols(' gun ')).map(({ name }) => name)).toEqual(['Gun.esp', 'gun', 'Gun']);
+    expect((await asked.workspaceSymbols(' gun ')).map(({ name }) => name)).toEqual(['Gun.esp', 'gun for Go to Symbol in Workspace', 'Gun']);
   });
 
   it('lists nothing for an empty query, asking no kind', async () => {

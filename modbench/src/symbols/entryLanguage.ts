@@ -127,11 +127,11 @@ export function entryLanguage({ instance, reporter, owners, rows, entryTooltip, 
     },
     /** Each symbol whose name holds `query`, at its own file, else at its line in the owners' list, else at the first
      *  place a file names it. An entry no file names is left out. */
-    async symbolsFor(query) {
+    async symbolsFor(query, gesture) {
       const matching = KINDS.flatMap((each) =>
         listed(each).filter((name) => nameHolds(name, query)).map((name): EntrySymbol => ({ kind: each, name })));
       const lists = await Promise.all(owners.map((owner) => owner.listed(heldTexts(unsavedTexts())).catch((error: unknown) => {
-        reporter.shownOnSurface('warning', 'Go to Symbol in Workspace could not read an owner\'s list of mods and separators.', errorMessage(error));
+        reporter.shownOnSurface('warning', `${gesture} could not read an owner's list of mods and separators.`, errorMessage(error));
         return [];
       })));
       const lines = new Map<string, PlaceInFile>();
@@ -145,7 +145,7 @@ export function entryLanguage({ instance, reporter, owners, rows, entryTooltip, 
         const line = lines.get(entryKey(entry));
         if (line !== undefined) return placeLocation(line);
         const { found, unread } = await read(entry);
-        for (const why of unread) reporter.shownOnSurface('warning', `Go to Symbol in Workspace on ${entry.name} could not read a file that may name it.`, why);
+        for (const why of unread) reporter.shownOnSurface('warning', `${gesture} on ${entry.name} could not read a file that may name it.`, why);
         return found[0] && placeLocation(found[0]);
       };
       const placed = await Promise.all(matching.map(async (entry): Promise<Listed | undefined> => {

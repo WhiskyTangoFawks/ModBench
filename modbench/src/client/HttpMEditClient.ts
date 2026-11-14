@@ -742,10 +742,10 @@ class HttpMEditClient implements MEditClient {
     }), (data) => data ?? { items: [], total: 0 }, { timed: true });
   }
 
-  searchRecords(query: string, validTypes: string[], plugin?: PluginAddress): Promise<RecordPage | ReadFailed> {
+  searchRecords(query: string, validTypes: string[], plugin?: PluginAddress, atMost = 20): Promise<RecordPage | ReadFailed> {
     return this.read(`searchRecords(${query})`, (api, signal) => api.GET('/records', {
       params: { query: {
-        search: query, ...(validTypes.length > 0 ? { type: validTypes } : {}), limit: 20,
+        search: query, ...(validTypes.length > 0 ? { type: validTypes } : {}), limit: atMost,
         ...(plugin && { plugin: plugin.name, origin: plugin.origin }),
       } },
       signal,

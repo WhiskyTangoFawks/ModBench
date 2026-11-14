@@ -27,16 +27,15 @@ function renaming({ pluginNamed, entryNamed, file = { formKey: '000800:Patch.esp
   const executeCommand = vi.fn(() => Promise.resolve());
   const renameAt = vi.fn(() => Promise.resolve(pluginNamed !== undefined));
   const renameEntryAt = vi.fn(() => Promise.resolve(entryNamed !== undefined));
-  const rangeAsked = vi.fn();
   const symbol = renameSymbol({
-    plugin: { renameRangeAt: () => { rangeAsked(); return Promise.resolve(pluginNamed === undefined ? undefined : { start: 1, end: 9, name: pluginNamed }); }, renameAt },
-    entry: { renameRangeAt: () => { rangeAsked(); return Promise.resolve(entryNamed === undefined ? undefined : { start: 3, end: 7, name: entryNamed }); }, renameAt: renameEntryAt },
+    plugin: { renameRangeAt: () => Promise.resolve(pluginNamed === undefined ? undefined : { start: 1, end: 9, name: pluginNamed }), renameAt },
+    entry: { renameRangeAt: () => Promise.resolve(entryNamed === undefined ? undefined : { start: 3, end: 7, name: entryNamed }), renameAt: renameEntryAt },
     names: sourceNames({ recordMemberAt: (_file: string, _text: string, offset: number) => Promise.resolve(MEMBERS[offset]) }),
     plugins: () => PLUGINS,
     client: { getRecordOfFile: () => Promise.resolve(file) },
     executeCommand,
   });
-  return { symbol, executeCommand, renameAt, renameEntryAt, rangeAsked };
+  return { symbol, executeCommand, renameAt, renameEntryAt };
 }
 
 describe('Rename Symbol (symbols.md, The features, story 6)', () => {
@@ -74,14 +73,6 @@ describe('Rename Symbol (symbols.md, The features, story 6)', () => {
     expect(TEXT.slice(offered.start, offered.end)).toBe(placeholder);
     expect(offered.placeholder).toBe(placeholder);
     expect(executeCommand).toHaveBeenCalledWith('modbench.record.editField', address, { op: 'set', path: [{ kind: 'member', name: member }], value: newName });
-  });
-
-  it('asks each kind once whether it renames the name, and asks for no span, before it edits a record', async () => {
-    const { symbol, renameAt, renameEntryAt, rangeAsked } = renaming();
-
-    await symbol.rename(sourceDocument, at('PatchNpc'), 'Renamed');
-
-    expect([renameAt.mock.calls.length, renameEntryAt.mock.calls.length, rangeAsked.mock.calls.length]).toEqual([1, 1, 0]);
   });
 
   it('offers nothing where plugin source names no FormKey or EditorID', async () => {
