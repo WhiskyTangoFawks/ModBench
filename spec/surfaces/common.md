@@ -22,6 +22,8 @@ As a user, I want:
 10. Every page Modbench draws to take VS Code's theme, so they look as the rest of VS Code does. Cites: VS Code's interaction
 11. A collapsed row to carry the badges of the rows beneath it, and an expanded row only its own, so each change shows once, on the row I can see.
 12. Ctrl+F in a page Modbench draws to find text as in any editor, among what the page shows. Cites: VS Code's interaction
+13. What I open, expand or search to take as long as what it shows, whatever the size of my modlist. Cites: Usable first
+14. A view to keep answering whatever else Modbench is doing. Cites: Usable first
 
 ## The name filter
 
@@ -59,6 +61,7 @@ By commands.md, A gesture that writes ends when the read model shows it. As a us
 1. The view's progress bar from my click until the read that follows the gesture's write lands, and nothing in the view to change until then but what VS Code's own control changes as I click it, such as a check box. Cites: Mutagen's data, the reference's behaviour, VS Code's interaction
 2. Every value I see to be the read model's, whoever wrote it. Cites: ADR-0001; ADR-0003
 3. A gesture whose read fails to end with it: the rows I had stay and the message line says so (States, story 6). Cites: ADR-0019
+4. A gesture to take as long as what it changes, whatever the size of my modlist. Cites: Usable first
 
 ## The status bar
 

@@ -3,7 +3,7 @@
 The maintainer's north star. Order is rank: when two principles pull apart, the higher one wins. Modbench is an IDE for a power user, fluent in VS Code, git and software development.
 
 ## Usable first
-Every decision weighs what the user lives through in their everyday work, such as a deploy or a purge on a modlist of hundreds of gigabytes. A design that is correct but unusable there has failed. A tool the user cannot use serves no principle.
+Modbench is for the user's everyday work on their real modlist: hundreds of plugins, hundreds of gigabytes. A design is judged there, by what the user lives through. A design that is correct but unusable there has failed. A tool the user cannot use serves no principle.
 
 ## Orthogonality
 Each module owns one responsibility and hides how it does it behind its boundary. A change to one concern stays inside its module. A game, a mod manager or a deployment model is an implementation behind a boundary, never the shape of the design. Modbench grows by adding an implementation, such as a Vortex load order or MO2's deployment model, and the modules around it stay as they are.
