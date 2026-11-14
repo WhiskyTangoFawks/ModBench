@@ -71,7 +71,7 @@ function language(answer: Awaited<ReturnType<FileClient['getFileReferences']>>, 
     pathTypedAt: () => Promise.resolve(typedAt),
     membersIn: (text, formKey, fieldPaths) => Promise.resolve(formKey === HOLDER && fieldPaths.includes('Diffuse') && text === TEXT ? [SPAN] : []),
   });
-  return { reporter, getFileReferences, reveal, copyOf, stackedCopies, ...fileLanguage({ instance: { value }, reporter, client, names, copyOf, reveal, tooltip: () => tooltip }) };
+  return { reporter, getFileReferences, reveal, copyOf, stackedCopies, ...fileLanguage({ instance: { value }, reporter, client, names, copyOf, reveal, tooltip: (path) => (path.toLowerCase() === FILE ? tooltip : undefined) }) };
 }
 
 describe('a path in plugin source names a file (symbols.md, The symbols, File)', () => {
@@ -102,6 +102,16 @@ describe('where a file is defined, and the records that name it (symbols.md, The
     expect(await language(NONE, { copy }).definitionOf({ kind: 'file', path: FILE })).toEqual(expected);
   });
 
+  it('answers a path spelled with backslashes as the path spelled with forward slashes (symbols.md, A symbol gives one answer wherever I ask)', async () => {
+    const kind = language(NONE, { tooltip: 'Mod' });
+    const backslashed = { kind: 'file', path: 'Textures\\Decals\\Stain_d.dds' } as const;
+
+    expect(await kind.definitionOf(backslashed)).toEqual({ shown: LOOSE });
+    expect(await kind.tooltipOf(backslashed)).toEqual(['Mod']);
+    await kind.referencesTo(backslashed);
+    expect(kind.getFileReferences).toHaveBeenCalledWith('Textures/Decals/Stain_d.dds');
+  });
+
   it('lists each record that names it at its member, and each copy it could not read', async () => {
     const kind = language({
       copies: [{ formKey: HOLDER, plugin: { name: 'Mod.esp', origin: 'Mod' }, inPluginSource: true, fieldPaths: ['Diffuse'] }], unread: [UNREAD],
@@ -122,6 +132,12 @@ describe('Go to Symbol in Workspace on a file (symbols.md, The features, story 4
       ['Textures/Decals/Stain_d.dds', { uri: Uri.file(LOOSE.path), range: { start: 0, end: 0 } }],
       ['textures/decals/other_d.dds', { uri: Uri.file(ARCHIVE), range: { start: 0, end: 0 } }],
     ]);
+  });
+
+  it('reads a query spelled with backslashes as one spelled with forward slashes', async () => {
+    const found = await language(NONE).symbolsFor('Decals\\Stain', SEARCH);
+
+    expect(found.map(({ name }) => name)).toEqual(['Textures/Decals/Stain_d.dds']);
   });
 
   it('lists no file the game gets no copy of, and says in the Output that it matched and went unlisted', async () => {

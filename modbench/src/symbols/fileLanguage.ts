@@ -52,8 +52,10 @@ function foldedPathsOf(value: FilesValue): readonly FoldedPath[] {
   return each;
 }
 
-// Plugin source holds a path's backslashes escaped, and the instance value's paths hold forward slashes.
-const foldedPathOf = (held: string): string => held.toLowerCase().replace(/\\\\|\\/g, '/');
+// Plugin source holds a path's backslashes escaped, an agent names a path with either separator, and the instance
+// value's paths hold forward slashes.
+const slashed = (held: string): string => held.replace(/\\\\|\\/g, '/');
+const foldedPathOf = (held: string): string => slashed(held).toLowerCase();
 
 /** A file as a symbol, named by its path in the Data folder: the records that name it, which mEdit answers (symbols.md,
  *  The symbols). */
@@ -66,7 +68,7 @@ export function fileLanguage({ instance, reporter, client, names, copyOf, reveal
   };
 
   const referencesTo = async ({ path }: FileNamed): Promise<References> => {
-    const { found, unread } = await membersNaming(client, openPluginSourceDocument, names, await client.getFileReferences(path));
+    const { found, unread } = await membersNaming(client, openPluginSourceDocument, names, await client.getFileReferences(slashed(path)));
     return { locations: found, unread };
   };
 
@@ -84,11 +86,11 @@ export function fileLanguage({ instance, reporter, client, names, copyOf, reveal
     }),
     /** The copy the game gets, inside its archive when archived. */
     definitionOf({ path }): Promise<Definition> {
-      const copy = copyOf(path);
+      const copy = copyOf(slashed(path));
       return Promise.resolve(holdsCopy(copy) ? { shown: copy } : { refused: copy.none });
     },
     referencesTo,
-    tooltipOf: ({ path }) => Promise.resolve(tooltipLines(tooltip(path))),
+    tooltipOf: ({ path }) => Promise.resolve(tooltipLines(tooltip(slashed(path)))),
     /** Each file of the path's asset type whose path holds the text typed so far, spelled with its folder where the
      *  text starts with it, up to `MOST_FILES_LISTED`; the Output says how many more match. */
     async completionsAt(document, offset, { gesture }) {
@@ -115,7 +117,7 @@ export function fileLanguage({ instance, reporter, client, names, copyOf, reveal
     /** Each file whose path in the Data folder holds `query`, at the copy the game gets, up to `MOST_FILES_LISTED`; the
      *  Output says how many more match. */
     symbolsFor(query, { gesture }) {
-      const wanted = query.toLowerCase();
+      const wanted = foldedPathOf(query);
       const matching = dataPaths().filter(([path]) => path.includes(wanted));
       const listed: Listed[] = [];
       for (const [, path] of matching) {
