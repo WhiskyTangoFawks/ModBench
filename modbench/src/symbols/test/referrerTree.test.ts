@@ -5,7 +5,7 @@ vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, EventEmitter, The
 
 import {
   readReferencedBy,
-  referencedByCopyValueText,
+  referencedByCopyValue,
 } from '../referrerTree';
 import { loadOrderStatusEventFixture, pluginMetadataFixture } from '../../client/test/fixtures';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
@@ -238,7 +238,8 @@ describe('the Referenced By list — what a plugin copy offers', () => {
   });
 });
 
-describe('referencedByCopyValueText — the text of the selected rows', () => {
+describe('Referenced By\'s copy value — the text of the selected rows', () => {
+  const referencedByCopyValueText = referencedByCopyValue.text;
   const copiedFrom = (selected: readonly unknown[]) => referencedByCopyValueText(selected[0], selected);
 
   it('copies a referrer by its record label', async () => {

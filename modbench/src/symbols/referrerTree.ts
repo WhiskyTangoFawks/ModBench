@@ -78,14 +78,15 @@ const isReferrer = (node: unknown): node is ReferencedByReferrerNode => node ins
 
 const isReferencedByRow = (node: unknown): node is ReferencedByRow => isReferrer(node) || node instanceof ReferencedByHolderNode;
 
-/** Referenced By's own text for copy value, or `undefined` unless the invocation is one of its rows. */
-export function referencedByCopyValueText(clicked: unknown, allSelected: readonly unknown[] | undefined): string | undefined {
-  if (!isReferencedByRow(clicked)) return undefined;
-  const selected = allSelected?.filter(isReferencedByRow) ?? [];
-  return (selected.length ? selected : [clicked]).map(row => row.copyText).join('\n');
-}
-
-export const referencedByCopyValue: CopyValueAdapter = { text: referencedByCopyValueText, reporterTag: 'referencedBy.copy' };
+/** Referenced By's copy value: its own text, or `undefined` unless the invocation is one of its rows. */
+export const referencedByCopyValue: CopyValueAdapter = {
+  text(clicked, allSelected) {
+    if (!isReferencedByRow(clicked)) return undefined;
+    const selected = allSelected?.filter(isReferencedByRow) ?? [];
+    return (selected.length ? selected : [clicked]).map(row => row.copyText).join('\n');
+  },
+  reporterTag: 'referencedBy.copy',
+};
 
 function groupBy<T>(items: readonly T[], keyOf: (item: T) => string): T[][] {
   const groups = new Map<string, T[]>();
