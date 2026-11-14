@@ -3,25 +3,23 @@ import { RecordTabs } from './recordTabs';
 import { GRID_VIEW, publishFocusedCell, gridCopyValueText } from './focusedCells';
 import { registerNoConflictLens } from './noConflictLens';
 import { registerEditorCommands, type EditorCommandDeps } from './editorCommands';
-import { referencedByCopyValueText } from './referencedByList';
-import { publishReferencesView } from '../drivingLib/referencesView';
-import { registerReferencedBy, type LocateRecord, type ReferencedByDeps } from './referencedBy';
+import { pickRecord } from './recordPicker';
 import { selectionInFocusedView } from '../drivingLib/inFocusedView';
 import type { CopyValueAdapter } from '../drivingLib/copyValue';
 import type { FocusedView } from '../drivingLib/focusedView';
 
 type EditorDeps = Omit<EditorCommandDeps,
-  'tabs' | 'focusedViewSelection' | 'selectionOf' | 'meditClient'
+  'tabs' | 'focusedViewSelection' | 'selectionOf'
 > & {
-  meditClient: EditorCommandDeps['meditClient'] & ReferencedByDeps['client'];
   focusedView: FocusedView;
   /** The other views whose selected rows carry a record Argument. */
   recordViewIds: readonly string[];
-  locateRecord: LocateRecord;
 };
 
 export interface Editor extends vscode.Disposable {
   copyValue: readonly CopyValueAdapter[];
+  /** The record of the tab in focus, else the one the user picks; undefined where none is. */
+  focusedOrPickedRecord: () => Promise<string | undefined>;
 }
 
 const setContext = (key: string, value: unknown): void => {
@@ -37,12 +35,6 @@ export function createEditor(deps: EditorDeps): Editor {
   };
   const tabs = new RecordTabs((cell) => { publishFocusedCell(cell, setContext); }, () => focusedView.enter(GRID_VIEW));
 
-  own(publishReferencesView(setContext));
-  own(registerReferencedBy({
-    client: deps.meditClient, reporter: deps.reporterFor('referencedBy'),
-    locateRecord: deps.locateRecord, recordInFocus: () => tabs.activeTab()?.formKey,
-  }));
-
   registerNoConflictLens(tabs).forEach(own);
 
   registerEditorCommands({
@@ -53,8 +45,9 @@ export function createEditor(deps: EditorDeps): Editor {
   return {
     copyValue: [
       { text: gridCopyValueText(() => tabs.focusedCell()), reporterTag: 'recordGrid.copy' },
-      { text: referencedByCopyValueText, reporterTag: 'referencedBy.copy' },
     ],
+    focusedOrPickedRecord: async () => tabs.activeTab()?.formKey
+      ?? await pickRecord({ meditClient: deps.meditClient, reporter: deps.reporterFor('recordPicker') }, '', []) ?? undefined,
     dispose: () => { owned.splice(0).reverse().forEach((disposable) => { disposable.dispose(); }); },
   };
 }

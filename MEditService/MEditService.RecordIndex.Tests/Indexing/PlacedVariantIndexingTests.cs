@@ -117,7 +117,7 @@ public sealed class PlacedVariantIndexingTests(PlacedVariantIndexingTests.Built 
     public void AVariant_ReferencesTheRecordItPlaces(string table)
     {
         Assert.Contains(
-            built.Index.Queries.GetReferences(Of(table).Base.ToString()).Value(),
+            built.Index.Queries.GetReferencesInActiveOrCompiledPlugins(Of(table).Base.ToString()).Value(),
             r => r.FormKey == Of(table).FormKey.ToString() && r.RecordType == table);
     }
 }

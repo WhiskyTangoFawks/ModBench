@@ -149,7 +149,7 @@ export interface ReferencedByList {
   message: string | undefined;
 }
 
-export type ReferencedByClient = Pick<MEditClient, 'getReferences' | 'getChildRecordTypes' | 'getPlugins' | 'loadOrderStatus'>;
+export type ReferencedByClient = Pick<MEditClient, 'getReferencesInActiveOrCompiledPlugins' | 'getChildRecordTypes' | 'getPlugins' | 'loadOrderStatus'>;
 
 async function editabilityFromPlugins(client: Pick<MEditClient, 'getPlugins'>): Promise<ConditionsOf> {
   const plugins = await client.getPlugins();
@@ -158,11 +158,11 @@ async function editabilityFromPlugins(client: Pick<MEditClient, 'getPlugins'>): 
   return (plugin) => ({ editable: editable.has(pluginAddressKey(plugin)) });
 }
 
-/** What references `target`, read once (editor-referenced-by.md, Asking, story 4); `list` tells this list from every other asked for. */
+/** What references `target` in the active and compiled plugins, read once (editor-referenced-by.md, Asking, story 4); `list` tells this list from every other asked for. */
 export async function readReferencedBy(
   client: ReferencedByClient, target: string, list: string,
 ): Promise<ReferencedByList> {
-  const read = await client.getReferences(target);
+  const read = await client.getReferencesInActiveOrCompiledPlugins(target);
   const indexing = client.loadOrderStatus?.conflictsComputed ? undefined : INDEXING_MESSAGE;
   if (isReadFailed(read)) {
     return { provider: new ReferencedByTreeProvider([new ErrorNode(failureReason(read))]), message: indexing };

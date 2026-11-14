@@ -6,7 +6,7 @@ import { routeRecordPanelMessage, routerDepsForTab, type SharedRecordPanelDeps, 
 import type { EditAddress, RecordTab } from './recordTab';
 import type { RecordTabs } from './recordTabs';
 import type { FileMove } from '../textDocuments/applyWorkspaceChanges';
-import { recordTitle } from './recordTitle';
+import { recordTitle } from '../drivingLib/recordTitle';
 import { inTabsStead, type TabShowOptions } from './inTabsStead';
 import type { CopyChanged } from '../wire/recordCopy';
 import { savedText } from '../textDocuments/fileText';

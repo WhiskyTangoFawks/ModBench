@@ -4,24 +4,22 @@ import type { Reporter } from '../ports/reporter';
 import { reportFailure } from '../drivingLib/reportFailure';
 import { recordArgumentOf, type RecordArgument } from '../drivingLib/recordArgument';
 import { isReadFailed } from '../wire/readFailed';
-import { pickRecord } from './recordPicker';
-import { recordTitle } from './recordTitle';
-import { readReferencedBy, type ReferencedByClient, type ReferencedByList } from './referencedByList';
+import { recordTitle } from '../drivingLib/recordTitle';
+import { readReferencedBy, type ReferencedByClient, type ReferencedByList } from './referrerTree';
 import { referencesView, type ReferencesViewInput } from '../drivingLib/referencesView';
 
 const REFERENCED_BY_SOURCE = 'modbench.referencedBy';
 
-/** Where a record sits in its document: its FormKey, in its copy's document, or its winning copy's. */
-export type LocateRecord = (record: RecordArgument) => Promise<vscode.Location | { refused: string } | undefined>;
+type LocateRecord = (record: RecordArgument) => Promise<vscode.Location | { refused: string } | undefined>;
 
-export interface ReferencedByDeps {
-  client: ReferencedByClient & Pick<MEditClient, 'getComparison' | 'searchRecords'>;
+export interface RecordReferencedByDeps {
+  client: ReferencedByClient & Pick<MEditClient, 'getComparison'>;
   reporter: Reporter;
   locateRecord: LocateRecord;
-  recordInFocus: () => string | undefined;
+  focusedOrPickedRecord: () => Promise<string | undefined>;
 }
 
-async function titleOf(client: ReferencedByDeps['client'], formKey: string): Promise<string> {
+async function titleOf(client: RecordReferencedByDeps['client'], formKey: string): Promise<string> {
   const comparison = await client.getComparison(formKey);
   const overrides = comparison && !isReadFailed(comparison) ? comparison.overrides : undefined;
   return `Referenced By: ${recordTitle(formKey, overrides)}`;
@@ -34,13 +32,13 @@ function referencedByInput(title: string, location: vscode.Location, resolve: ()
   };
 }
 
-async function recordAskedAbout(deps: ReferencedByDeps, argument: unknown): Promise<RecordArgument | 'none' | undefined> {
+async function recordAskedAbout(deps: RecordReferencedByDeps, argument: unknown): Promise<RecordArgument | 'none' | undefined> {
   if (argument !== undefined) return recordArgumentOf(argument) ?? 'none';
-  const formKey = deps.recordInFocus() ?? await pickRecord({ meditClient: deps.client, reporter: deps.reporter }, '', []);
+  const formKey = await deps.focusedOrPickedRecord();
   return formKey ? { kind: 'record', formKey } : undefined;
 }
 
-export function registerReferencedBy(deps: ReferencedByDeps): vscode.Disposable {
+export function registerRecordReferencedBy(deps: RecordReferencedByDeps): vscode.Disposable {
   const { reporter } = deps;
   let lists = 0;
   return vscode.commands.registerCommand('modbench.record.referencedBy', async (argument?: unknown) => {

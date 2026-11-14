@@ -38,14 +38,13 @@ interface Registered {
   meditClient?: InMemoryMEditClient;
   recordViewIds?: readonly string[];
   modFacts?: ModFacts;
-  locateRecord?: Parameters<typeof createEditor>[0]['locateRecord'];
   loadOrder?: Parameters<typeof createEditor>[0]['loadOrderComing'];
 }
 
 /** Creates the Editor with the view `test.view` selecting `selection`. */
 export function register({
   selection = () => [], meditClient = new InMemoryMEditClient(),
-  recordViewIds = ['test.view'], modFacts = NO_MODS, locateRecord = () => Promise.resolve(undefined),
+  recordViewIds = ['test.view'], modFacts = NO_MODS,
   loadOrder = { now: () => true, onChanged: () => ({ dispose: () => undefined }) },
 }: Registered = {}) {
   const focusedView = createFocusedView();
@@ -63,7 +62,6 @@ export function register({
     recordWriteProgressView: 'test.view',
     instance: { refresh: () => Promise.resolve(undefined) },
     sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
-    locateRecord,
   });
   focusedView.follow('test.view', {
     get selection() { return selection(); },

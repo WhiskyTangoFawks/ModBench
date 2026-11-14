@@ -224,7 +224,7 @@ def window_of(url: str) -> Generator[None]:
 
 
 @contextlib.contextmanager
-def medit_answering(status: int, body: object, put_delay_s: float = 0) -> Generator[str]:
+def medit_answering(status: int, body: object, put_delay_s: float = 0, requested: list[str] | None = None) -> Generator[str]:
     payload = body if isinstance(body, bytes) else json.dumps(body).encode()
     stopped = threading.Event()
 
@@ -242,6 +242,8 @@ def medit_answering(status: int, body: object, put_delay_s: float = 0) -> Genera
                 self.answer()
 
         def answer(self) -> None:
+            if requested is not None:
+                requested.append(self.path)
             self.send_response(status)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Content-Length', str(len(payload)))

@@ -14,7 +14,7 @@ import type { RecordTab } from './recordTab';
 import type { RecordTabs } from './recordTabs';
 import type { FocusedCellContext } from '../wire/messages';
 import { errorMessage } from '../ports/errorMessage';
-import type { TitledColumn } from './recordTitle';
+import type { TitledColumn } from '../drivingLib/recordTitle';
 import { modsByOrigin, type ModFacts } from './modsByOrigin';
 import { fileStanding } from './fileStanding';
 import { columnStatuses } from './columnStatus';

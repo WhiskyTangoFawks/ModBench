@@ -29,7 +29,7 @@ public sealed class IngestRetentionTests : IDisposable
 
         using var index = Indexes.Reconciled(_fixture, adapter: new StreamedAdapter(documents));
 
-        Assert.Equal(MegabyteRecordCount, index.Queries.GetReferences(Target).Value().Count);
+        Assert.Equal(MegabyteRecordCount, index.Queries.GetReferencesInActiveOrCompiledPlugins(Target).Value().Count);
         Assert.False(documents.FirstHeldAtTheLast);
     }
 

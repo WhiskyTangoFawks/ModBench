@@ -89,7 +89,7 @@ public sealed class CompareGoldenTests(CompareGoldenFixture fixture) : IClassFix
             WinningRecords = winningRecords,
             AllNpcs = Index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 50, offset: 0).Value().Items
                 .OrderBy(r => r.FormKey, StringComparer.Ordinal).ThenBy(r => r.Plugin, StringComparer.Ordinal).ToList(),
-            References = Index.Queries.GetReferences(new FormKey(ModKey.FromFileName("Base.esm"), 0x900).ToString()).Value()
+            References = Index.Queries.GetReferencesInActiveOrCompiledPlugins(new FormKey(ModKey.FromFileName("Base.esm"), 0x900).ToString()).Value()
                 .OrderBy(r => r.FormKey, StringComparer.Ordinal).ToList(),
         };
 

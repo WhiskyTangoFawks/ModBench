@@ -15,10 +15,10 @@ import { ambientWrites } from './instanceLoader/ambientWrites';
 import { leaveWritesUnnamed, writesNamedTo } from './repositoriesLib/writeNaming';
 import { highlightFollowingFocus } from './drivingLib/highlightFollowsFocus';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
-import { createEditor, loadOrderComing, sourceModRepositoriesOver, type Editor } from './editor';
+import { createEditor, loadOrderComing, sourceModRepositoriesOver } from './editor';
 import { quickFixes } from './drivingLib/quickFixes';
 import type { FileCopies } from './symbols/fileLanguage';
-import { createSymbols, followRenames, formKeyLocation, registerFollowRename, scriptReferences, type SymbolRows } from './symbols';
+import { createSymbols, followRenames, referencedByCopyValueText, registerFollowRename, scriptReferences, type SymbolRows } from './symbols';
 import { createSourceLanguage } from './sourceLanguage';
 import { saveUnsavedUnder } from './textDocuments/saveUnsavedUnder';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
@@ -126,7 +126,7 @@ interface ViewsDeps {
   nexus: Nexus;
   lootMetadata: LootMetadata;
   focusedView: FocusedView;
-  editor: Pick<Editor, 'copyValue'>;
+  copyValue: readonly CopyValueAdapter[];
   sourceEditing: SourceEditing;
 }
 
@@ -331,7 +331,7 @@ function buildViews(opened: Opened, { own, dispose }: ReturnType<typeof ownershi
   own(registerCopyValueCommand(
     [
       ...side.copyValue,
-      ...deps.editor.copyValue,
+      ...deps.copyValue,
     ],
     reporterFor,
     () => deps.focusedView.id(),
@@ -384,7 +384,6 @@ function start(context: vscode.ExtensionContext): void {
     instance: opened.facts,
     sourceEditing,
     modFacts: opened.facts,
-    locateRecord: formKeyLocation(meditClient),
   });
   const views = buildViews(opened, ownedByViews, {
     outputChannel, client: meditClient,
@@ -398,7 +397,7 @@ function start(context: vscode.ExtensionContext): void {
     nexus: createHttpNexus(context.secrets, context.extension.packageJSON),
     lootMetadata: createHttpLootMetadata(),
     focusedView,
-    editor,
+    copyValue: [...editor.copyValue, { text: referencedByCopyValueText, reporterTag: 'referencedBy.copy' }],
     sourceEditing,
   });
   const scriptEnvironmentFailures = toastOncePerFailure(reporterFor('scriptEnvironment'));
@@ -409,6 +408,7 @@ function start(context: vscode.ExtensionContext): void {
   });
   const symbols = createSymbols({
     client: meditClient, instance: views.instance, reporter: makeReporter(outputChannel, 'symbols'), reporterFor, rows: views.symbolRows,
+    focusedOrPickedRecord: editor.focusedOrPickedRecord,
     pluginsShown: views.pluginsShown,
     fileCopies: views.fileCopies,
     entryTooltip: views.entryTooltip,

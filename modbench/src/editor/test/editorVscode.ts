@@ -2,10 +2,6 @@ import { vi } from 'vitest';
 import {
   Range, EventEmitter, TreeItem, TreeItemCollapsibleState, ThemeIcon,
 } from '../../test/vscodeMock';
-import type { ReferencesViewInput as ViewInput } from '../../drivingLib/referencesView';
-import type { ReferencedByList } from '../referencedByList';
-
-export type ReferencedByInput = ViewInput<ReferencedByList>;
 
 /** The VS Code the Editor runs against, for a test's `vi.mock('vscode', () => editorVscode)`, and the state it keeps.
  *  This module loads nothing that imports `vscode`, so the hoisted mock can read it. */
@@ -18,7 +14,6 @@ export const fileSystems = new Map<string, unknown>();
 export const openedDocuments: unknown[] = [];
 export const documentChanges = new Set<(event: { document: unknown; contentChanges: unknown[] }) => void>();
 export const disk = new Map<string, string | Uint8Array>();
-export const referencesView = { enabled: true, inputs: [] as ReferencedByInput[], changed: [] as (() => void)[] };
 export const pickers = { shown: 0 };
 export const tabGroups: { viewColumn: number; tabs: unknown[] }[] = [];
 export const applyEdit = vi.fn<() => Promise<boolean>>(() => Promise.resolve(true));
@@ -116,12 +111,6 @@ export const editorVscode = {
       return { dispose: () => { editorProviderDisposals.count++; } };
     },
   },
-  extensions: {
-    onDidChange: (listener: () => void) => { referencesView.changed.push(listener); return { dispose: () => undefined }; },
-    getExtension: (id: string) => (id === 'vscode.references-view' && referencesView.enabled
-      ? { activate: () => Promise.resolve({ setInput: (input: ReferencedByInput) => { referencesView.inputs.push(input); } }) }
-      : undefined),
-  },
 };
 
 export interface FakePanel {
@@ -163,9 +152,6 @@ export function forgetVscode(): void {
   fileSystems.clear();
   openedDocuments.length = 0;
   disk.clear();
-  referencesView.enabled = true;
-  referencesView.inputs.length = 0;
-  referencesView.changed.length = 0;
   pickers.shown = 0;
   tabGroups.length = 0;
   executeCommand.mockReset();

@@ -446,12 +446,6 @@ internal sealed class RelationReads(
             .ToLookup(row => row.Plugin, row => row.Linked, PluginAddress.Comparer);
     }
 
-    public IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey)
-    {
-        using var context = OpenRead();
-        return GetReferences(context, "form_references fr", "", targetFormKey);
-    }
-
     private static readonly string ActiveOrCompiledPluginReferrers = $"""
         {TableDdlBuilder.MirrorSchema}.form_references fr
         {TableDdlBuilder.RegisteredJoin("fr", "source_plugin", "source_origin")}
@@ -473,7 +467,7 @@ internal sealed class RelationReads(
     private static CopyNaming CopyNamingOf(System.Data.Common.DbDataReader reader) =>
         new(reader.GetString(0), new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.GetBoolean(3));
 
-    /// <summary>The same read over the active plugins and the inactive compiled ones (ADR-0012).</summary>
+    /// <summary>Each copy that references the record, in an active plugin or a compiled one (ADR-0012).</summary>
     public IReadOnlyList<ReferenceRow> GetReferencedByInActiveOrCompiledPlugins(string targetFormKey)
     {
         using var context = OpenRead();

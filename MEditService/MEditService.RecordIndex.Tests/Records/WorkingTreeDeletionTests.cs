@@ -61,7 +61,7 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         index.ResolutionOf(_loneNpcWhoseOneCopyAnswersTheLink, _baseKey, target).State;
 
     private static bool ReferencedFromBase(OpenedIndex index, string target, string formKey) =>
-        index.Queries.GetReferences(target).Value().Any(r => r.FormKey == formKey && r.Plugin == "Base.esm");
+        index.Queries.GetReferencesInActiveOrCompiledPlugins(target).Value().Any(r => r.FormKey == formKey && r.Plugin == "Base.esm");
 
     [Fact]
     public void DeletingARecord_RemovesItFromEffective_AndRestoringItsCommittedBytesConvergesToClean()
@@ -168,8 +168,8 @@ public sealed class WorkingTreeDeletionTests : IDisposable
     public void EditingAFormLink_MovesTheRecordInTheReferenceGraph()
     {
         using var index = Indexes.Reconciled(_fixture);
-        Assert.Contains(index.Queries.GetReferences(_raceA).Value(), r => r.FormKey == _npc);
-        Assert.DoesNotContain(index.Queries.GetReferences(_raceB).Value(), r => r.FormKey == _npc);
+        Assert.Contains(index.Queries.GetReferencesInActiveOrCompiledPlugins(_raceA).Value(), r => r.FormKey == _npc);
+        Assert.DoesNotContain(index.Queries.GetReferencesInActiveOrCompiledPlugins(_raceB).Value(), r => r.FormKey == _npc);
 
         var body = index.BodyOf(_npc, _baseKey);
         Assert.Contains(_raceA, body, StringComparison.Ordinal);

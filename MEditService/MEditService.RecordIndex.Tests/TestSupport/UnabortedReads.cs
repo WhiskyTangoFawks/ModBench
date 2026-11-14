@@ -36,9 +36,6 @@ internal static class UnabortedReads
     internal static Task<Answer<IReadOnlyList<RecordTypeChoice>?, IndexRefused>> GetChildRecordTypes(
         this IQueries queries, PluginAddress plugin, string formKey) => queries.GetChildRecordTypes(plugin, formKey, Never);
 
-    internal static Task<Answer<IReadOnlyList<ReferenceResult>, IndexRefused>> GetReferences(this IQueries queries, string targetFormKey) =>
-        queries.GetReferences(targetFormKey, Never);
-
     internal static Task<Answer<IReadOnlyList<ReferenceResult>, IndexRefused>> GetReferencesInActiveOrCompiledPlugins(
         this IQueries queries, string targetFormKey) => queries.GetReferencesInActiveOrCompiledPlugins(targetFormKey, Never);
 

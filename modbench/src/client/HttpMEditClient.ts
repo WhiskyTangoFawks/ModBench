@@ -791,11 +791,6 @@ class HttpMEditClient implements MEditClient {
     return this.read('getRecordsComparison', (api, signal) => api.POST('/records/compare', { body: { copies }, signal }), noBodyFails);
   }
 
-  getReferences(formKey: string): Promise<ReferenceResult[] | ReadFailed> {
-    return this.read(`getReferences(${formKey})`, (api, signal) => api.GET('/records/{formKey}/references', { params: { path: { formKey } }, signal }),
-      (data) => data ?? []);
-  }
-
   getReferencesInActiveOrCompiledPlugins(formKey: string): Promise<ReferenceResult[] | ReadFailed> {
     return this.read(`getReferencesInActiveOrCompiledPlugins(${formKey})`,
       (api, signal) => api.GET('/records/{formKey}/references-in-active-or-compiled-plugins', { params: { path: { formKey } }, signal }),

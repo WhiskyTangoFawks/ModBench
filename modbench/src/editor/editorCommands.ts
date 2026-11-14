@@ -22,7 +22,7 @@ import type { SourceEditing } from '../textDocuments/sourceEditing';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import { pinnedArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen } from './recordOpenPlan';
-import { recordTitle } from './recordTitle';
+import { recordTitle } from '../drivingLib/recordTitle';
 import { followCopiesIntoDocuments } from './copyFollowers';
 import { RenderedDocuments } from './renderedDocument';
 import { ChildRecordDocuments } from '../textDocuments/childRecordDocument';
@@ -36,8 +36,6 @@ import { failureReason, isReadFailed } from '../wire/readFailed';
 export interface EditorCommandDeps {
   loadOrderComing: LoadOrderComing;
   context: Pick<vscode.ExtensionContext, 'extensionUri'>;
-  // The open record tabs and the one in focus, whose record the Referenced By view retargets from,
-  // not from a command argument.
   tabs: RecordTabs;
   meditClient: Pick<MEditClient,
     | 'getEditChanges' | 'searchRecords'

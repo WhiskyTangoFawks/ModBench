@@ -21,11 +21,14 @@ import type { ModRows, PluginRows } from '../drivingLib/symbolRows';
 import type { FilesHeld } from './symbolCommands';
 import { registerGoToMod, registerGoToPlugin, registerModReferencedBy, registerPluginReferencedBy } from './symbolCommands';
 import type { SymbolKinds } from './symbolKind';
+import { registerRecordReferencedBy, type RecordReferencedByDeps } from './recordReferencedBy';
+import { publishReferencesView } from '../drivingLib/referencesView';
 
 interface SymbolsDeps {
   instance: Pick<Instance, 'value' | 'subscribe'> | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
-  client: Pick<MEditClient, 'getRecordOfFile'> & RecordClient & ScriptClient & FileClient;
+  client: Pick<MEditClient, 'getRecordOfFile'> & RecordClient & ScriptClient & FileClient & RecordReferencedByDeps['client'];
+  focusedOrPickedRecord: () => Promise<string | undefined>;
   fileCopies: FileCopies;
   /** Each box that owns files, saying where they name a symbol (ADR-0028). */
   owners: readonly SymbolOwner[];
@@ -39,7 +42,7 @@ interface SymbolsDeps {
   modOrderFileOf: (profile: string) => string | undefined;
   /** What Plugins shows of a plugin's row; absent with no instance. */
   pluginsShown: Pick<PluginsShown, 'tooltipLines'> | undefined;
-  reporterFor: (tag: string) => Pick<Reporter, 'report'>;
+  reporterFor: (tag: string) => Reporter;
   /** What the views say of their rows; absent with no instance. */
   rows: SymbolRows | undefined;
 }
@@ -60,8 +63,7 @@ interface Symbols extends vscode.Disposable {
   symbols: SymbolIndex;
 }
 
-/** A record's FormKey in its document, where Referenced By anchors its list. */
-export function formKeyLocation(client: RecordDocumentClient) {
+function formKeyLocation(client: RecordDocumentClient) {
   return async (record: Parameters<typeof locateRecord>[1]): Promise<vscode.Location | { refused: string } | undefined> => {
     const found = await locateRecord({ client, open: openPluginSourceDocument }, record, formKeyValue);
     return found && ('refused' in found ? found : locationOf(found));
@@ -69,7 +71,7 @@ export function formKeyLocation(client: RecordDocumentClient) {
 }
 
 export function createSymbols(deps: SymbolsDeps): Symbols {
-  const { instance, reporter, client, rows, reporterFor, fileCopies } = deps;
+  const { instance, reporter, client, rows, reporterFor, fileCopies, focusedOrPickedRecord } = deps;
   const plugin = pluginLanguage({
     instance, reporter, client, owners: deps.owners, renamePlugin: renamePluginNamed, rows: () => rows?.plugins,
     tooltip: (shown) => deps.pluginsShown?.tooltipLines(shown) ?? [],
@@ -89,6 +91,8 @@ export function createSymbols(deps: SymbolsDeps): Symbols {
   const goTo = { kinds, reveal: fileCopies.reveal };
   const disposable = vscode.Disposable.from(
     registerLanguageFeatures({ kinds, reporter, reveal: fileCopies.reveal, rename }),
+    publishReferencesView((key, value) => { void vscode.commands.executeCommand('setContext', key, value); }),
+    registerRecordReferencedBy({ client, reporter: reporterFor('referencedBy'), locateRecord: formKeyLocation(client), focusedOrPickedRecord }),
     ...(rows ? [
       registerGoToMod({ ...goTo, rows: rows.mods, reporter: reporterFor('mod.goTo') }),
       registerModReferencedBy({ referencedBy: { mod: entry.referencedBy, file: file.referencedBy }, rows: rows.mods, value: rows.filesHeld, reporter: reporterFor('mod.referencedBy') }),
