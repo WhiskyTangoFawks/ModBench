@@ -92,6 +92,10 @@ public record FieldMetadata(
     // A path to a file in the Data folder, which Mutagen models as an asset link (symbols.md, The symbols, File).
     bool IsAssetLink = false,
 
+    // The folder in the Data folder where an asset link's asset type keeps its files, with forward slashes (symbols.md,
+    // The features, story 5).
+    string? AssetFolder = null,
+
     // A reference Mutagen holds as an index instead while one of these boolean siblings is set (an
     // alias or package-data parameter), when DocumentNodes.VariantFor shapes it an integer.
     IReadOnlyList<string>? IndexWhen = null,

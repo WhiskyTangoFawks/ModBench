@@ -10,19 +10,26 @@ internal readonly record struct AssetLinkPath(string? DataPath, string? Refusal)
 /// <summary>Mutagen places a path under its asset type's folder.</summary>
 internal static class AssetLinks
 {
+    internal static string FolderOf(Type assetLinkType) =>
+        LinkOf(assetLinkType).AssetTypeInstance.BaseFolder.Replace('\\', '/');
+
     internal static AssetLinkPath DataPathOf(Type assetLinkType, string given)
     {
-        var assetType = assetLinkType.GetInterfaces().Prepend(assetLinkType)
-            .Single(candidate => candidate.IsGenericType && candidate.GetGenericTypeDefinition() == typeof(IAssetLinkGetter<>)).GenericTypeArguments[0];
         try
         {
-            return Activator.CreateInstance(typeof(AssetLinkGetter<>).MakeGenericType(assetType), given) is IAssetLinkGetter link
-                ? new(link.DataRelativePath.Path.Replace('\\', '/'), null)
-                : throw new InvalidOperationException($"Mutagen holds no asset link of {assetType.Name}.");
+            return new(LinkOf(assetLinkType, given).DataRelativePath.Path.Replace('\\', '/'), null);
         }
         catch (TargetInvocationException e) when (e.InnerException is AssetPathMisalignedException misaligned)
         {
             return new(null, misaligned.Message);
         }
+    }
+
+    private static IAssetLinkGetter LinkOf(Type assetLinkType, params object[] arguments)
+    {
+        var assetType = assetLinkType.GetInterfaces().Prepend(assetLinkType)
+            .Single(candidate => candidate.IsGenericType && candidate.GetGenericTypeDefinition() == typeof(IAssetLinkGetter<>)).GenericTypeArguments[0];
+        return Activator.CreateInstance(typeof(AssetLinkGetter<>).MakeGenericType(assetType), arguments) as IAssetLinkGetter
+            ?? throw new InvalidOperationException($"Mutagen holds no asset link of {assetType.Name}.");
     }
 }

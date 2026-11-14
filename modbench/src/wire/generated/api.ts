@@ -1567,6 +1567,7 @@ export interface components {
             isPlacedRotation: boolean;
             isScriptName: boolean;
             isAssetLink: boolean;
+            assetFolder?: string | null;
             indexWhen?: string[] | null;
             unheldWhen?: string[] | null;
         };

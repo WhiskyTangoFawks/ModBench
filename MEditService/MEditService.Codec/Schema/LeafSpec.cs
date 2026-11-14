@@ -1,3 +1,4 @@
+using MEditService.Codec.Serialization;
 
 namespace MEditService.Codec.Schema;
 
@@ -21,4 +22,6 @@ internal sealed record LeafSpec(
 
     /// <summary>A leaf with no closed domain — every leaf but an enum.</summary>
     public static readonly EnumMember[] NoEnumMembers = [];
+
+    public string? AssetFolder => AssetLinkType is { } linkType ? AssetLinks.FolderOf(linkType) : null;
 }
