@@ -2,6 +2,7 @@ import { INSTANCE_REPOSITORY_GUIDE } from './guides/instanceRepository';
 import { MO2_INSTANCE_GUIDE } from './guides/instance/mo2';
 import { NEXUS_GUIDE } from './guides/nexus';
 import { RECORDS_GUIDE } from './guides/records';
+import { REPORTING_ISSUES_GUIDE } from './guides/reportingIssues';
 import { SCRIPTING_AND_QUERIES_GUIDE } from './guides/scriptingAndQueries';
 import { SETUP_GUIDE } from './guides/setup';
 import { SOURCE_MODS_GUIDE } from './guides/sourceMods';
@@ -21,6 +22,7 @@ export const GUIDES = {
   nexus: NEXUS_GUIDE,
   'scripting-and-queries': SCRIPTING_AND_QUERIES_GUIDE,
   symbols: SYMBOLS_GUIDE,
+  'reporting-issues': REPORTING_ISSUES_GUIDE,
 } as const;
 
 export const INSTANCE_GUIDE_BY_MANAGER: Readonly<Record<string, string>> = {
