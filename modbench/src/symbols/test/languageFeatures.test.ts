@@ -276,6 +276,13 @@ describe('Go to Symbol in Workspace lists every kind\'s symbols (symbols.md, The
     expect([await features(fakeKinds({ record: fakeKind({ symbolsFor }) })).workspaceSymbols('  '), symbolsFor.mock.calls]).toEqual([[], []]);
   });
 
+  it('refuses the symbol the user picks where its kind cannot open it, so VS Code opens nothing', async () => {
+    const asked = features(fakeKinds({ record: fakeKind({ symbolsFor: () => Promise.resolve([listed('Gun', () => Promise.reject(new Error('Gun opens nowhere.')))]) }) }));
+    const [gun] = await asked.workspaceSymbols('g');
+
+    await expect(asked.resolve(present(gun, 'Gun'))).rejects.toThrow('Gun opens nowhere.');
+  });
+
   it('moves the symbol the user picks to where its kind resolves it, and leaves one its kind does not move', async () => {
     const moved = new vscode.Location(vscode.Uri.file('/moved.json'), new vscode.Position(0, 1));
     const asked = features(fakeKinds({ record: fakeKind({ symbolsFor: () => Promise.resolve([listed('Gun', () => Promise.resolve(moved)), listed('Stand')]) }) }));

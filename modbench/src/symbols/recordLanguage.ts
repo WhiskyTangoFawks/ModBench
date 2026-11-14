@@ -74,9 +74,11 @@ export function recordLanguage({ client, names, reporter, open }: RecordLanguage
       return (await workspace.symbolsFor(query, search)).map((record) => ({
         symbol: { kind: 'record', formKey: record.formKey }, name: record.name, detail: `${record.plugin.name} (${record.plugin.origin})`, icon: vscode.SymbolKind.Object,
         location: new vscode.Location(vscode.Uri.file(record.pluginFile), new vscode.Position(0, 0)),
+        // A resolve that answers nothing leaves VS Code opening the plugin's file, which is not the record.
         resolve: async () => {
           const found = await workspace.locate(record, search.gesture);
-          return found && locationOf(found);
+          if (found === undefined) throw new Error(`${search.gesture} cannot open ${record.name}.`);
+          return locationOf(found);
         },
       }));
     },

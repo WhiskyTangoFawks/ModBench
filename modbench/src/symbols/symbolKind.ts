@@ -49,7 +49,7 @@ export interface SymbolSearch {
 }
 
 /** A symbol as Go to Symbol in Workspace lists it. `resolve`, on the symbol the user picks, says where it opens, or
- *  leaves `location`. */
+ *  leaves `location`; it rejects where the symbol opens nowhere, having said why, so VS Code opens nothing. */
 export interface Listed {
   readonly symbol: SymbolName;
   readonly name: string;

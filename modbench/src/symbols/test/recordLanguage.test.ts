@@ -18,6 +18,7 @@ import { recordingReporter } from '../../test/surfacingDoubles';
 import { localFailure } from '../../wire/readFailed';
 import { sourceNames, spelledIn } from './fakeSourceNames';
 import { SEARCH } from './fakeKinds';
+import { present } from '../../ports/present';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 
 const GUN = '000801:A.esp';
@@ -78,13 +79,27 @@ describe('what references a record, and its hover (symbols.md, The symbols, Reco
 });
 
 describe('Go to Symbol in Workspace on a record (symbols.md, The features, story 4)', () => {
-  it('lists a copy at its plugin\'s file, and opens it at its FormKey member in its document once picked', async () => {
-    const { client, record } = kind();
-    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ ...modA, path: '/mods/ModA/A.esp', isCompiledPlugin: true })]);
-    client.setQueryAnswer('searchRecords', {
+  const searching = () => {
+    const k = kind();
+    k.client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ ...modA, path: '/mods/ModA/A.esp', isCompiledPlugin: true })]);
+    k.client.setQueryAnswer('searchRecords', {
       items: [{ formKey: GUN, plugin: modA.name, origin: modA.origin, editorId: 'Gun', loadOrderIndex: 0, isWinner: true, workingTreeState: 'None', hasContainerChildren: false, hasParseFailure: false }],
       total: 1,
     });
+    return k;
+  };
+
+  it('refuses a pick it cannot open, saying why, so VS Code opens nothing', async () => {
+    const { client, record, reporter } = searching();
+    client.setQueryAnswer('getCopyDocument', null);
+    const [listed] = await record.symbolsFor('Gun', SEARCH);
+
+    await expect(present(listed?.resolve, 'its resolve')()).rejects.toThrow(`Go to Symbol in Workspace cannot open Gun [${GUN}].`);
+    expect(reporter.shownFailures.map(({ detail }) => detail)).toEqual([`A.esp (ModA) holds no ${GUN}.`]);
+  });
+
+  it('lists a copy at its plugin\'s file, and opens it at its FormKey member in its document once picked', async () => {
+    const { record } = searching();
     const [listed] = await record.symbolsFor('Gun', SEARCH);
     const member = GUN_TEXT.indexOf(`"FormKey": "${GUN}"`);
 
