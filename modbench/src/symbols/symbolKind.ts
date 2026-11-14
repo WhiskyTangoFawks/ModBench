@@ -71,7 +71,7 @@ export interface SymbolKind<Symbol> {
    *  already judges, or while the instance has not read what would hold them. */
   namesNothingIn?(document: AskedIn): Promise<readonly NamesNothing[]>;
   /** Each file, open or not, that holds a name that names nothing, from one ask of the box that owns the files; `only`
-   *  asks of those plugins' files alone. Undefined where nothing can be said yet, which leaves what is shown. */
+   *  asks of those plugins' files alone. Undefined where nothing can be said yet. */
   filesNamingNothing?(only?: readonly PluginAddress[]): Promise<readonly string[] | undefined>;
   /** Each symbol of the kind whose name holds `query`, which is trimmed and never empty. */
   symbolsFor(query: string): Promise<readonly Listed[]>;

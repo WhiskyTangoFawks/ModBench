@@ -26,7 +26,6 @@ const namesNothingIn = async (kinds: SymbolKinds, file: string, text: string): P
 
 interface OpenDocument { latest: vscode.TextDocument; turn: () => void }
 
-/** One judgement of a document at a time, of the text it holds when its turn comes. */
 function judgingOpenDocuments(judged: (file: string, text: () => string) => Promise<void>) {
   const documents = new Map<string, OpenDocument>();
   return {
