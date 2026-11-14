@@ -146,17 +146,9 @@ describe('completion at a reference field (symbols.md, The features, story 5)', 
 });
 
 describe('referenced by on a record anchors its list wherever a plugin holds it (symbols.md, The symbols, Record)', () => {
-  const compiled = {
-    ...modA, path: '/mods/ModA/A.esp', isLight: false, isMaster: false, isBlueprint: false, masters: [], isImmutable: false, inLoadOrder: false,
-    hasMatchingRecords: true, isCompiledPlugin: true, hasParseFailure: false, pluginSourceUnreadable: null,
-  };
-  const heldByCompiledPlugin = { formKey: GUN, plugin: modA.name, origin: modA.origin, editorId: 'Gun', loadOrderIndex: 0, isWinner: true, workingTreeState: 'None' as const, hasContainerChildren: false, hasParseFailure: false };
-
   function asking(arrange: (k: ReturnType<typeof kind>) => void = () => undefined) {
     const k = kind();
     k.client.setQueryAnswer('getComparison', null);
-    k.client.setQueryAnswer('getPlugins', [compiled]);
-    k.client.setQueryAnswer('searchRecords', { items: [heldByCompiledPlugin], total: 1 });
     arrange(k);
     setInput.mockClear();
     return k;
@@ -171,15 +163,17 @@ describe('referenced by on a record anchors its list wherever a plugin holds it 
     expect(shownLocation()).toMatchObject({ uri: { path: GUN_FILE }, range: { start: { line: 0, character: GUN_TEXT.indexOf(`"${GUN}"`) } } });
   });
 
-  it('anchors at the top of a compiled plugin\'s copy where no active plugin holds the record', async () => {
-    const { record, reporter } = asking((k) => { k.client.setQueryAnswer('getRecordOwners', []); });
+  it('lists its referrers where several compiled plugins hold the record, anchored at the first one\'s copy', async () => {
+    const { client, record, reporter } = asking((k) => { k.client.setQueryAnswer('getRecordOwners', [modA, { name: 'B.esp', origin: 'ModB' }]); });
 
     await record.referencedBy(RECORD);
 
-    expect([shownLocation(), reporter.reports]).toMatchObject([{ uri: { path: GUN_FILE }, range: { line: 0, character: 0 } }, []]);
+    expect([shownLocation(), client.calls.filter((c) => c.method === 'getCopyDocument').map((c) => c.args), reporter.reports]).toMatchObject([
+      { uri: { path: GUN_FILE }, range: { start: { line: 0, character: GUN_TEXT.indexOf(`"${GUN}"`) } } }, [[modA, GUN]], [],
+    ]);
   });
 
-  it('is refused, saying why, where the winning copy cannot be read, though a compiled plugin holds the record', async () => {
+  it('is refused, saying why, where mEdit cannot say which plugin owns the record', async () => {
     const { record, reporter } = asking((k) => { k.client.setQueryFailure('getRecordOwners', localFailure('mEdit is down')); });
 
     await record.referencedBy(RECORD);
@@ -187,22 +181,8 @@ describe('referenced by on a record anchors its list wherever a plugin holds it 
     expect([setInput.mock.calls, reporter.reports.map(({ severity, detail }) => [severity, detail])]).toEqual([[], [['error', 'mEdit is down']]]);
   });
 
-  it('names Referenced By where it cannot search the compiled plugins', async () => {
-    const { record, reporter } = asking((k) => {
-      k.client.setQueryAnswer('getRecordOwners', []);
-      k.client.setQueryFailure('getPlugins', localFailure('mEdit is down'));
-    });
-
-    await record.referencedBy(RECORD);
-
-    expect(reporter.shownFailures.map(({ message }) => message)).toEqual(['Referenced By cannot list the compiled plugins.']);
-  });
-
   it('is refused, saying why, where no plugin holds the record', async () => {
-    const { record, reporter } = asking((k) => {
-      k.client.setQueryAnswer('getRecordOwners', []);
-      k.client.setQueryAnswer('searchRecords', { items: [], total: 0 });
-    });
+    const { record, reporter } = asking((k) => { k.client.setQueryAnswer('getRecordOwners', []); });
 
     await record.referencedBy(RECORD);
 
