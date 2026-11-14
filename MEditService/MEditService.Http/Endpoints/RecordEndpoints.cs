@@ -375,38 +375,30 @@ internal static class RecordEndpoints
         if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.NewName))
             return EndpointMapping.BadRequest("The script's name and its new name are required.");
         var references = await svc.GetScriptReferences(request.Name, aborted);
-        var (located, leftBehind) = references.Holds(out var held, out _) ? await ScriptCopyFiles(svc, held, aborted) : ([], []);
-        return EndpointMapping.Answered(references, _ =>
-        {
-            var changes = rename.Changes(request.Name, request.NewName, located);
-            return Results.Ok(changes with { LeftBehind = [.. leftBehind, .. changes.LeftBehind] });
-        });
+        var copies = references.Holds(out var held, out _) ? await ScriptCopyFiles(svc, held, aborted) : [];
+        return EndpointMapping.Answered(references, answered => Results.Ok(rename.Changes(request.Name, request.NewName, copies, answered.Unread)));
     }
 
-    // A copy follows only from the file of its record in plugin source.
-    private static async Task<(List<ScriptCopyFile> Located, List<string> LeftBehind)> ScriptCopyFiles(
-        IQueries svc, MemberReferences references, CancellationToken aborted)
+    private static async Task<List<ScriptCopyFile>> ScriptCopyFiles(IQueries svc, MemberReferences references, CancellationToken aborted)
     {
-        var located = new List<ScriptCopyFile>();
-        var leftBehind = new List<string>();
+        var copies = new List<ScriptCopyFile>();
         foreach (var copy in references.Copies)
         {
-            var named = $"{copy.FormKey} in {copy.Plugin.Name} ({copy.Plugin.Origin})";
-            if (!copy.InPluginSource)
-            {
-                leftBehind.Add(named);
-                continue;
-            }
-            if (!(await svc.GetCopyDocument(copy.Plugin, copy.FormKey, aborted)).Holds(out var document, out var refused))
-                leftBehind.Add($"{named}: {refused.Message}");
-            else if (document is null)
-                leftBehind.Add($"{copy.Plugin.Name} ({copy.Plugin.Origin}) holds no {copy.FormKey}.");
-            else if (document.Kind == CopyDocumentKind.Rendered)
-                leftBehind.Add($"{named}: its plugin source holds no file of it");
-            else
-                located.Add(new(copy.FormKey, copy.Plugin, copy.FieldPaths, document.Location));
+            var (place, at) = copy.InPluginSource ? PlaceOf(await svc.GetCopyDocument(copy.Plugin, copy.FormKey, aborted)) : (ScriptCopyPlace.NoPluginSource, null);
+            copies.Add(new(copy.FormKey, copy.Plugin, copy.FieldPaths, place, at));
         }
-        return (located, [.. references.Unread, .. leftBehind]);
+        return copies;
+    }
+
+    private static (ScriptCopyPlace Place, string? At) PlaceOf(Answer<CopyDocument?, IndexRefused> document)
+    {
+        if (!document.Holds(out var held, out var refused)) return (ScriptCopyPlace.Unread, refused.Message);
+        return held switch
+        {
+            null => (ScriptCopyPlace.NoCopy, null),
+            { Kind: CopyDocumentKind.Rendered } => (ScriptCopyPlace.Rendered, null),
+            _ => (ScriptCopyPlace.File, held.Location),
+        };
     }
 
     private static RecordEditEnvelope EnvelopeOf(RecordEditRequest edit) => new(edit.Op, edit.Path ?? [], edit.EditedValue);
