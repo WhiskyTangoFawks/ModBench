@@ -509,6 +509,29 @@ describe('a change signalled', () => {
     }
   });
 
+  it('waits for the snapshot handed before it even when it was owed more than the cap before mEdit ran', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    try {
+      const client = new InMemoryMEditClient();
+      client.setStatus('starting');
+      let answer!: () => void;
+      client.answerPuts((_sent, _signal, answered) => { answer = answered; return pending<LoadOrderOutcome>().promise; });
+      void client.sendLoadOrder(snapshot('A.esp'));
+      client.signalChange([]);
+      await vi.advanceTimersByTimeAsync(SIGNAL_WAIT_CAP_MS + 1);
+
+      client.setStatus('running');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(methods(client)).toEqual(['put']);
+      answer();
+
+      await vi.advanceTimersByTimeAsync(0);
+      expect(methods(client)).toEqual(['put', 'signalChange']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('folds the signals handed while one is in flight into one more', async () => {
     const client = running();
     const released = pending<undefined>();
