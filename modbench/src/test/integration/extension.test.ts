@@ -497,17 +497,12 @@ function createMockBackend(): http.Server {
       ] : []));
       return;
     }
-    if (url.startsWith('/records?') && new URL(url, 'http://x').searchParams.get('plugin') === COMPILED_PLUGIN) {
-      const summary = (formKey: string, editorId: string) => ({ formKey, plugin: COMPILED_PLUGIN, loadOrderIndex: 4, isWinner: true, editorId,
-        origin: COMPILED_PLUGIN_ORIGIN, workingTreeState: 'None', hasContainerChildren: false, hasParseFailure: false });
-      const items = [summary(COMPILED_PLUGIN_FORM_KEY, 'CompiledPluginGun'), summary(CHILD_FORM_KEY, 'CompiledPluginRef')];
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ items, total: items.length }));
-      return;
-    }
     if (url.startsWith('/records?') && new URL(url, 'http://x').searchParams.has('search')) {
-      const items = [{ formKey: HELD_FORM_KEY, plugin: 'Patch.esp', loadOrderIndex: 1, isWinner: true, editorId: 'NewGun', origin: 'Data/',
-        workingTreeState: 'None', hasContainerChildren: false, hasParseFailure: false }];
+      const summary = (formKey: string, editorId: string, plugin: string, origin: string) => ({ formKey, plugin, loadOrderIndex: 1, isWinner: true, editorId,
+        origin, workingTreeState: 'None', hasContainerChildren: false, hasParseFailure: false });
+      const items = new URL(url, 'http://x').searchParams.get('search') === 'CompiledPlugin'
+        ? [summary(COMPILED_PLUGIN_FORM_KEY, 'CompiledPluginGun', COMPILED_PLUGIN, COMPILED_PLUGIN_ORIGIN), summary(CHILD_FORM_KEY, 'CompiledPluginRef', COMPILED_PLUGIN, COMPILED_PLUGIN_ORIGIN)]
+        : [summary(HELD_FORM_KEY, 'NewGun', 'Patch.esp', 'Data/')];
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ items, total: items.length }));
       return;
@@ -2437,19 +2432,15 @@ describe('A FormKey in plugin source', () => {
     assert.deepStrictEqual(definitions, []);
   });
 
-  it('finds a record across the compiled plugins by Go to Symbol in Workspace, each copy at its document', async () => {
+  it('finds a record by Go to Symbol in Workspace, each copy at its plugin\'s file until it is picked', async () => {
     await activated();
-    const asked = requestLog.length;
     const found = await vscode.commands.executeCommand<vscode.SymbolInformation[]>('vscode.executeWorkspaceSymbolProvider', 'CompiledPlugin');
 
+    const pluginFile = vscode.Uri.file(`/mods/${COMPILED_PLUGIN_ORIGIN}/${COMPILED_PLUGIN}`).toString(true);
     assert.deepStrictEqual(found.map((symbol) => [symbol.name, symbol.containerName, symbol.location.uri.toString(true)]).sort(), [
-      [`CompiledPluginGun [${COMPILED_PLUGIN_FORM_KEY}]`, `${COMPILED_PLUGIN} (${COMPILED_PLUGIN_ORIGIN})`, vscode.Uri.file(COMPILED_PLUGIN_FILE).toString(true)],
-      [`CompiledPluginRef [${CHILD_FORM_KEY}]`, `${COMPILED_PLUGIN} (${COMPILED_PLUGIN_ORIGIN})`, compiledPluginChildUri],
+      [`CompiledPluginGun [${COMPILED_PLUGIN_FORM_KEY}]`, `${COMPILED_PLUGIN} (${COMPILED_PLUGIN_ORIGIN})`, pluginFile],
+      [`CompiledPluginRef [${CHILD_FORM_KEY}]`, `${COMPILED_PLUGIN} (${COMPILED_PLUGIN_ORIGIN})`, pluginFile],
     ].sort());
-    assert.deepStrictEqual(requestLog.slice(asked).filter((line) => line.startsWith('GET /records?')).map((line) => {
-      const query = new URL(line.slice('GET '.length), 'http://x').searchParams;
-      return [query.get('search'), query.get('plugin'), query.get('origin')];
-    }), [['CompiledPlugin', COMPILED_PLUGIN, COMPILED_PLUGIN_ORIGIN]]);
   });
 
   const offeredIn = async (doc: vscode.TextDocument, text: string): Promise<string[]> => {

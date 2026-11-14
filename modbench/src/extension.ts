@@ -19,7 +19,7 @@ import { createEditor, loadOrderComing, sourceModRepositoriesOver } from './edit
 import { quickFixes } from './drivingLib/quickFixes';
 import type { FileCopies } from './symbols/fileLanguage';
 import type { Reveal } from './drivingLib/symbolRows';
-import { createSymbols, followRenames, referencedByCopyValueText, registerFollowRename, type SymbolRows } from './symbols';
+import { createSymbols, followRenames, referencedByCopyValue, registerFollowRename, type SymbolRows } from './symbols';
 import { createSourceLanguage } from './sourceLanguage';
 import { savedText } from './textDocuments/fileText';
 import { saveUnsavedUnder } from './textDocuments/saveUnsavedUnder';
@@ -350,6 +350,33 @@ function buildViews(opened: Opened, { own, dispose }: ReturnType<typeof ownershi
   };
 }
 
+interface SymbolsDeps {
+  meditClient: MEditClient;
+  outputChannel: vscode.LogOutputChannel;
+  reporterFor: (tag: string) => Reporter;
+  opened: Opened;
+  views: Views;
+  focusedRecord: Parameters<typeof createSymbols>[0]['focusedRecord'];
+}
+
+function symbolsOver({ meditClient, outputChannel, reporterFor, opened, views, focusedRecord }: SymbolsDeps) {
+  const sourceNames = pluginSourceNames(meditClient, isPluginSourcePath);
+  return createSymbols({
+    client: meditClient, names: sourceNames, instance: views.instance, reporter: makeReporter(outputChannel, 'symbols'), reporterFor, rows: views.symbolRows,
+    focusedRecord,
+    sourceFiles: (origin) => views.sourceFiles(origin),
+    savedText: (path) => savedText(vscode.Uri.file(path)),
+    pluginsShown: views.pluginsShown,
+    fileCopies: views.fileCopies,
+    entryTooltip: views.entryTooltip,
+    downloadedFileTooltip: views.downloadedFileTooltip,
+    downloadedFileRow: views.downloadedFileRow,
+    modOrderFileOf: views.modOrderFileOf,
+    owners: [recordIndexReferences(meditClient, () => Promise.resolve([]), sourceNames), ...opened.owners],
+    entryOwners: opened.entryOwners,
+  });
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(afterTrust(isInstance, () => { start(context); }));
 }
@@ -404,7 +431,7 @@ function start(context: vscode.ExtensionContext): void {
     nexus: createHttpNexus(context.secrets, context.extension.packageJSON),
     lootMetadata: createHttpLootMetadata(),
     focusedView,
-    copyValue: [...editor.copyValue, { text: referencedByCopyValueText, reporterTag: 'referencedBy.copy' }],
+    copyValue: [...editor.copyValue, referencedByCopyValue],
     sourceEditing,
   });
   const scriptEnvironmentFailures = toastOncePerFailure(reporterFor('scriptEnvironment'));
@@ -413,21 +440,7 @@ function start(context: vscode.ExtensionContext): void {
     client: meditClient, instance: views.instance, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
     pathStanding: views.pathStanding,
   });
-  const sourceNames = pluginSourceNames(meditClient, isPluginSourcePath);
-  const symbols = createSymbols({
-    client: meditClient, names: sourceNames, instance: views.instance, reporter: makeReporter(outputChannel, 'symbols'), reporterFor, rows: views.symbolRows,
-    focusedRecord: editor.focusedRecord,
-    sourceFiles: (origin) => views.sourceFiles(origin),
-    savedText: (path) => savedText(vscode.Uri.file(path)),
-    pluginsShown: views.pluginsShown,
-    fileCopies: views.fileCopies,
-    entryTooltip: views.entryTooltip,
-    downloadedFileTooltip: views.downloadedFileTooltip,
-    downloadedFileRow: views.downloadedFileRow,
-    modOrderFileOf: views.modOrderFileOf,
-    owners: [recordIndexReferences(meditClient, () => Promise.resolve([]), sourceNames), ...opened.owners],
-    entryOwners: opened.entryOwners,
-  });
+  const symbols = symbolsOver({ meditClient, outputChannel, reporterFor, opened, views, focusedRecord: editor.focusedRecord });
   const agentServer = serveAgent({ port: agentPort(), instance: views.instance, copyReads: views.copyReads, symbols: symbols.symbols, statuses: views.statuses, deployment: views.deployment, pluginsShown: views.pluginsShown, standing: { mEdit: () => plugins.standing.mEdit(), plugins: () => plugins.standing.plugins(), sortingRules: () => plugins.standing.sortingRules(), modList: () => views.modsLines(), sourceLanguage: () => sourceLanguage.messages() }, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
   context.subscriptions.push(
     views,

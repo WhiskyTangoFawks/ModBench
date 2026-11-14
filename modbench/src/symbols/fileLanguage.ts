@@ -89,7 +89,7 @@ export function fileLanguage({ instance, reporter, client, names, copyOf, reveal
     completionsAt: () => Promise.resolve(undefined),
     /** Each file whose path in the Data folder holds `query`, at the copy the game gets, up to `MOST_FILES_LISTED`; the
      *  Output says how many more match. */
-    symbolsFor(query) {
+    symbolsFor(query, { gesture }) {
       const wanted = query.toLowerCase();
       const matching = dataPaths().filter(([path]) => path.includes(wanted));
       const listed: Listed[] = [];
@@ -100,7 +100,7 @@ export function fileLanguage({ instance, reporter, client, names, copyOf, reveal
       }
       if (listed.length < matching.length) {
         reporter.shownOnSurface(
-          'warning', `Go to Symbol in Workspace lists ${listed.length} of the ${matching.length} files whose path holds "${query}".`,
+          'warning', `${gesture} lists ${listed.length} of the ${matching.length} files whose path holds "${query}".`,
           `It lists at most ${MOST_FILES_LISTED}, and none whose copy the game gets is outside the workspace. Type more of the path to narrow the list.`,
         );
       }

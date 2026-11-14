@@ -25,8 +25,8 @@ type FileAnswer = Awaited<ReturnType<Parameters<typeof renameSymbol>[0]['client'
 
 function renaming({ pluginNamed, entryNamed, file = { formKey: '000800:Patch.esp', plugin: PATCH } }: { pluginNamed?: string; entryNamed?: string; file?: FileAnswer } = {}) {
   const executeCommand = vi.fn(() => Promise.resolve());
-  const renameAt = vi.fn(() => Promise.resolve());
-  const renameEntryAt = vi.fn(() => Promise.resolve());
+  const renameAt = vi.fn(() => Promise.resolve(pluginNamed !== undefined));
+  const renameEntryAt = vi.fn(() => Promise.resolve(entryNamed !== undefined));
   const symbol = renameSymbol({
     plugin: { renameRangeAt: () => Promise.resolve(pluginNamed === undefined ? undefined : { start: 1, end: 9, name: pluginNamed }), renameAt },
     entry: { renameRangeAt: () => Promise.resolve(entryNamed === undefined ? undefined : { start: 3, end: 7, name: entryNamed }), renameAt: renameEntryAt },
@@ -50,13 +50,12 @@ describe('Rename Symbol (symbols.md, The features, story 6)', () => {
   });
 
   it('on a mod\'s or a separator\'s name, is the entry\'s rename, before any record\'s edit', async () => {
-    const { symbol, executeCommand, renameAt, renameEntryAt } = renaming({ entryNamed: 'Patch Mod' });
+    const { symbol, executeCommand, renameEntryAt } = renaming({ entryNamed: 'Patch Mod' });
 
     expect(await symbol.prepare(sourceDocument, at('PatchNpc'))).toEqual({ start: 3, end: 7, placeholder: 'Patch Mod' });
     await symbol.rename(sourceDocument, at('PatchNpc'), 'New Mod');
 
     expect(renameEntryAt).toHaveBeenCalledWith(sourceDocument, at('PatchNpc'), 'New Mod');
-    expect(renameAt).not.toHaveBeenCalled();
     expect(executeCommand).not.toHaveBeenCalled();
   });
 

@@ -20,7 +20,7 @@ import type { ModRows, PluginRows, Reveal } from '../drivingLib/symbolRows';
 import { registerReferencedBy, type FilesHeld } from './referencedBy';
 import { pickSymbol } from './symbolPick';
 import { registerGoTo } from './goTo';
-import { asked, type SymbolKinds } from './symbolKind';
+import { asked, REFERENCED_BY, type SymbolKinds } from './symbolKind';
 import type { RecordReferencedByDeps } from './recordReferencedBy';
 import { registerNamesNothing } from './namesNothing';
 import { publishReferencesView } from '../drivingLib/referencesView';
@@ -112,7 +112,7 @@ export function createSymbols(deps: SymbolsDeps): Symbols {
     registerReferencedBy({
       reporter: reporterFor('symbol.referencedBy'), referencedBy: (symbol) => asked(kinds, symbol).referencedBy(),
       selection: () => rows?.selection() ?? [], dataPathOf: (row) => rows?.mods.dataPathOf(row), filesHeld: () => rows?.filesHeld() ?? NO_FILES,
-      focusedRecord, pick: () => pickSymbol(kinds, reporterFor('symbol.referencedBy')),
+      focusedRecord, pick: () => pickSymbol(kinds, reporterFor('symbol.referencedBy'), REFERENCED_BY),
     }),
   );
   return {

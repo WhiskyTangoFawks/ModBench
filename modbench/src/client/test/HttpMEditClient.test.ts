@@ -657,6 +657,17 @@ describe('HttpMEditClient — searchRecords', () => {
     const params = new URL(request?.url ?? '').searchParams;
     expect([params.get('search'), params.get('plugin'), params.get('origin')]).toEqual(['Lever', 'A.esp', 'ModA']);
   });
+
+  it.each([
+    ['20, unless told', undefined, '20'],
+    ['as many as it is told', 200, '200'],
+  ])('asks for at most %s', async (_case, atMost, limit) => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { items: [], total: 0 })));
+
+    await makeClient(fetch).searchRecords('Lever', [], undefined, atMost);
+
+    expect(new URL(fetch.mock.calls[0]?.[0].url ?? '').searchParams.get('limit')).toBe(limit);
+  });
 });
 
 describe('HttpMEditClient — sendLoadOrder', () => {

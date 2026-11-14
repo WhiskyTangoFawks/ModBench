@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, Uri } from '../../test/vscodeMock';
 import { CompletionItemKind, SymbolKind } from './iconsMock';
+import { SEARCH } from './fakeKinds';
 
 const opened = vi.hoisted(() => new Map<string, string>());
 const setInput = vi.hoisted(() => vi.fn());
@@ -78,7 +79,7 @@ describe('a Papyrus script\'s name in plugin source (symbols.md, The symbols)', 
   it('is found by Go to Symbol at its source, else its compiled script', async () => {
     const { language: symbols } = language();
 
-    expect([...await symbols.symbolsFor('QUEST'), ...await symbols.symbolsFor('other')].map(({ name, location }) => [name, location])).toEqual([
+    expect([...await symbols.symbolsFor('QUEST', SEARCH), ...await symbols.symbolsFor('other', SEARCH)].map(({ name, location }) => [name, location])).toEqual([
       ['Ns:Quest', { uri: Uri.file(QUEST_SOURCE), range: new Range(0, 0, 0, 0) }],
       ['Other', { uri: Uri.file('/instance/mods/Mod/Scripts/Other.pex'), range: new Range(0, 0, 0, 0) }],
     ]);
