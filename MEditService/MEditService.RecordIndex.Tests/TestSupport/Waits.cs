@@ -12,9 +12,9 @@ internal static class Waits
     internal static Task<bool> Until(Func<bool> condition) =>
         Task.Run(() => ReachedWithin(condition, TimeSpan.FromSeconds(10)));
 
-    internal static void Reached(Func<bool> condition, string what)
+    internal static void Reached(Func<bool> condition, string what, TimeSpan? patience = null)
     {
-        if (!ReachedWithin(condition, Patience)) throw new TimeoutException($"Never reached {what}.");
+        if (!ReachedWithin(condition, patience ?? Patience)) throw new TimeoutException($"Never reached {what}.");
     }
 
     internal static bool ReachedWithin(Func<bool> condition, TimeSpan timeout)
