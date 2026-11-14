@@ -56,12 +56,13 @@ export function fileOrderConflictOf(entry: ConflictEntry | undefined, own: FileO
 }
 
 /** Comparison keys only — never display, never written back to disk. Locale-independent,
- *  since a case-variant collision is a filesystem fact rather than a locale one. */
+ *  since a case-variant collision is a filesystem fact rather than a locale one. The game reads
+ *  either separator. */
 export function foldPath(relativePath: string): string {
-  return relativePath.toLowerCase();
+  return relativePath.toLowerCase().replaceAll('\\', '/');
 }
 
-/** Keyed by case-folded path, so a case-variant pair resolves to one entry. No raw Map is
+/** Keyed by folded path, so a case-variant pair resolves to one entry. No raw Map is
  *  exposed: a caller cannot look up with an unfolded path and silently miss. */
 export class FileConflictLookup<E extends { readonly relativePath: string } = ConflictEntry> {
   private readonly byFoldedPath = new Map<string, E>();

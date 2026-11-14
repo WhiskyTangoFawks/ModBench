@@ -15,7 +15,7 @@ vi.mock('vscode', () => ({
 
 import { fileLanguage, type FileClient } from '../fileLanguage';
 import { recordingReporter } from '../../test/surfacingDoubles';
-import { FileConflictLookup, NO_GAME_FOLDER_ARCHIVED, type CopyAt, type StackedFile } from '../../instanceLoader/fileConflictIndex';
+import { FileConflictLookup, foldPath, NO_GAME_FOLDER_ARCHIVED, type CopyAt, type StackedFile } from '../../instanceLoader/fileConflictIndex';
 import type { NamedFile, SourceNames } from '../sourceNames';
 import { sourceNames } from './fakeSourceNames';
 
@@ -62,9 +62,9 @@ function language(answer: Awaited<ReturnType<FileClient['getFileReferences']>>, 
     gameFolderArchived: { ...NO_GAME_FOLDER_ARCHIVED, copies: new Map([['textures/decals/other_d.dds', ARCHIVED]]) },
   };
   const copyOf = vi.fn((path: string) => {
-    if (path.toLowerCase() === FILE) return copy;
+    if (foldPath(path) === FILE) return copy;
     if (path.startsWith('meshes/rocks/')) return { kind: 'loose' as const, path: `/instance/mods/Rocks/${path}` };
-    return path === ARCHIVED.file ? ARCHIVED : NO_COPY;
+    return foldPath(path) === ARCHIVED.file ? ARCHIVED : NO_COPY;
   });
   const names = sourceNames({
     fileAt: () => Promise.resolve(named),
@@ -122,6 +122,12 @@ describe('Go to Symbol in Workspace on a file (symbols.md, The features, story 4
       ['Textures/Decals/Stain_d.dds', { uri: Uri.file(LOOSE.path), range: { start: 0, end: 0 } }],
       ['textures/decals/other_d.dds', { uri: Uri.file(ARCHIVE), range: { start: 0, end: 0 } }],
     ]);
+  });
+
+  it('reads a query spelled with backslashes as one spelled with forward slashes', async () => {
+    const found = await language(NONE).symbolsFor('Decals\\Stain', SEARCH);
+
+    expect(found.map(({ name }) => name)).toEqual(['Textures/Decals/Stain_d.dds']);
   });
 
   it('lists no file the game gets no copy of, and says in the Output that it matched and went unlisted', async () => {
