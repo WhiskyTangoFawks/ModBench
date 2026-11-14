@@ -1,11 +1,10 @@
 import * as vscode from 'vscode';
-import type { MEditClient } from '../client';
+import { formKeyValue, type MEditClient, type PluginSourceNames } from '../client';
 import type { Reporter } from '../ports/reporter';
 import type { EntryRef } from '../instanceAdapter/instanceAdapter';
 import type { RecordDocumentClient } from '../textDocuments/recordDocument';
 import { openPluginSourceDocument } from '../textDocuments/pluginSource';
 import { locateRecord, locationOf } from './recordLocation';
-import { formKeyValue } from './formKeyText';
 import type { Instance } from '../instanceLoader/instance';
 import { symbolIndex, type SymbolIndex } from './symbolIndex';
 import type { EntryNames, PluginSymbol, SymbolOwner } from '../symbolNames/symbolNames';
@@ -32,6 +31,8 @@ interface SymbolsDeps {
   fileCopies: FileCopies;
   /** Each box that owns files, saying where they name a symbol (ADR-0028). */
   owners: readonly SymbolOwner[];
+  /** The names plugin source holds, and where each sits. */
+  sourceNames: PluginSourceNames;
   /** Each box that owns files, saying where they name a symbol its name alone names. */
   entryOwners: readonly EntryNames[];
   /** The tooltip of the row Mods shows for a mod or a separator; undefined where it shows none. */
@@ -71,21 +72,21 @@ function formKeyLocation(client: RecordDocumentClient) {
 }
 
 export function createSymbols(deps: SymbolsDeps): Symbols {
-  const { instance, reporter, client, rows, reporterFor, fileCopies, focusedOrPickedRecord } = deps;
+  const { instance, reporter, client, rows, reporterFor, fileCopies, focusedOrPickedRecord, sourceNames: names } = deps;
   const plugin = pluginLanguage({
     instance, reporter, client, owners: deps.owners, renamePlugin: renamePluginNamed, rows: () => rows?.plugins,
     tooltip: (shown) => deps.pluginsShown?.tooltipLines(shown) ?? [],
   });
   const { entryTooltip, downloadedFileTooltip, modOrderFileOf } = deps;
   const entry = entryLanguage({ instance, reporter, owners: deps.entryOwners, rows: () => rows?.mods, entryTooltip, downloadedFileTooltip, modOrderFileOf });
-  const file = fileLanguage({ instance, reporter, client, ...fileCopies, tooltip: (path) => rows?.mods.fileTooltip(path) });
+  const file = fileLanguage({ instance, reporter, client, names, ...fileCopies, tooltip: (path) => rows?.mods.fileTooltip(path) });
   const kinds: SymbolKinds = {
     plugin, entry, file,
-    script: scriptLanguage({ instance, reporter, client }),
-    record: recordLanguage({ client, reporter, open: openPluginSourceDocument }),
+    script: scriptLanguage({ instance, names, client }),
+    record: recordLanguage({ client, names, reporter, open: openPluginSourceDocument }),
   };
   const rename = renameSymbol({
-    plugin, client, plugins: () => instance?.value.plugins ?? [],
+    plugin, names, client, plugins: () => instance?.value.plugins ?? [],
     executeCommand: (command, ...args) => vscode.commands.executeCommand(command, ...args),
   });
   const goTo = { kinds, reveal: fileCopies.reveal };

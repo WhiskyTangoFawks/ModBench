@@ -1,7 +1,7 @@
+import { pluginNameSpans } from '../client';
 import { namesPlugin, type CopyNaming, type HeldTexts, type PlaceInFile, type PluginSymbol, type ResolvedPlugin, type SymbolOwner } from '../symbolNames/symbolNames';
 import { heldText } from '../textDocuments/heldText';
 import { locateCopies, type RecordLocation, type RecordLocationDeps } from './recordLocation';
-import { pluginNameSpans } from './formKeyText';
 import { readBy } from './symbolPlaces';
 
 interface PluginReferencesDeps<Document> extends RecordLocationDeps<Document> {

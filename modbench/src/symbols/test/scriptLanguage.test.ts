@@ -17,28 +17,14 @@ vi.mock('vscode', () => ({
 }));
 
 import { scriptLanguage, type ScriptClient } from '../scriptLanguage';
-import type { CompareResult } from '../../client';
-import { comparisonOf, fieldOf } from '../../test/comparison';
-import { recordingReporter } from '../../test/surfacingDoubles';
+import { sourceNames } from './fakeSourceNames';
 
 const QUEST = '000801:Mod.esp';
 const SOURCE = '/instance/source/Mod/plugin-source/Mod.esp/Quest.json';
 const TEXT = `{ "FormKey": "${QUEST}", "VirtualMachineAdapter": { "Scripts": [ { "Name": "Ns:Quest", "Properties": [ { "Name": "Count" } ] } ] } }`;
 const AT_SCRIPT = TEXT.indexOf('Ns:Quest') + 2;
-const AT_PROPERTY = TEXT.indexOf('Count') + 2;
 const SPAN = { start: TEXT.indexOf('Ns:Quest'), end: TEXT.indexOf('Ns:Quest') + 'Ns:Quest'.length };
 const PATH = 'VirtualMachineAdapter.Scripts[0].Name';
-
-const adapter = fieldOf({
-  name: 'VirtualMachineAdapter', type: 'struct', fields: [fieldOf({
-    name: 'Scripts', type: 'array', isArray: true, elementType: fieldOf({
-      name: 'Script', type: 'struct', fields: [
-        fieldOf({ name: 'Name', type: 'string', isScriptName: true }).metadata,
-        fieldOf({ name: 'Properties', type: 'array', isArray: true, elementType: fieldOf({ name: 'Property', type: 'struct', fields: [fieldOf({ name: 'Name', type: 'string' }).metadata] }).metadata }).metadata,
-      ],
-    }).metadata,
-  }).metadata],
-});
 
 const QUEST_SOURCE = '/instance/mods/Mod/Scripts/Source/User/Ns/Quest.psc';
 const SCRIPTS = [
@@ -48,30 +34,22 @@ const SCRIPTS = [
 const NONE = { copies: [], unread: [] };
 
 function language(references: Awaited<ReturnType<ScriptClient['getScriptReferences']>> = NONE, scripts: { name: string; source?: string; compiled?: string }[] = SCRIPTS) {
-  const reporter = recordingReporter();
   const client: ScriptClient = {
-    getComparison: () => Promise.resolve<CompareResult | null>(comparisonOf(QUEST, [{ plugin: 'Mod.esp', isWinner: true, fields: [adapter] }])),
     getScriptReferences: () => Promise.resolve(references),
     getRecordOwner: () => Promise.resolve(undefined),
     getCopyDocument: (plugin) => Promise.resolve(plugin.origin === 'Gone' ? null : { kind: 'OwnFile' as const, location: SOURCE }),
   };
-  return { language: scriptLanguage({ instance: { value: { papyrusScripts: scripts } }, reporter, client }), reporter };
+  const names = sourceNames({ scriptAt: (file, _text, offset) => Promise.resolve(file === SOURCE && offset === AT_SCRIPT ? { ...SPAN, name: 'Ns:Quest' } : undefined) });
+  return { language: scriptLanguage({ instance: { value: { papyrusScripts: scripts } }, names, client }) };
 }
 
 const document = (path = SOURCE) => ({ uri: Uri.file(path), getText: () => TEXT });
 
 describe('a Papyrus script\'s name in plugin source (symbols.md, The symbols)', () => {
-  it('spans its name between its quotes', async () => {
+  it('names the script plugin source names there, at its span', async () => {
     expect(await language().language.nameAt(document(), AT_SCRIPT)).toEqual({ ...SPAN, name: 'Ns:Quest', symbol: { kind: 'script', name: 'Ns:Quest' } });
   });
 
-  it.each([
-    ['a property\'s name', document(), AT_PROPERTY],
-    ['a record\'s FormKey', document(), TEXT.indexOf(QUEST) + 2],
-    ['a file that is no plugin source', document('/instance/notes.json'), AT_SCRIPT],
-  ])('is not %s', async (_case, at, offset) => {
-    expect(await language().language.nameAt(at, offset)).toBeUndefined();
-  });
 
   it('has no tooltip, since a script has no row', async () => {
     expect(await language().language.tooltipOf({ kind: 'script', name: 'Ns:Quest' })).toEqual([]);

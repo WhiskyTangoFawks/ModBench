@@ -1,12 +1,11 @@
 import type * as vscode from 'vscode';
-import type { MEditClient, PluginMetadata, RecordSummary } from '../client';
+import { formKeyMember, type MEditClient, type PluginMetadata, type RecordSummary } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { pluginAddressOf } from '../wire/pluginAddress';
 import type { RecordCopy } from '../wire/recordCopy';
 import { heldText } from '../textDocuments/heldText';
 import { locateCopies, type RecordLocation, type RecordLocationDeps } from './recordLocation';
-import { formKeyMember } from './formKeyText';
 import { recordLabel } from '../wire/recordLabel';
 import { answerOf } from '../wire/readFailed';
 

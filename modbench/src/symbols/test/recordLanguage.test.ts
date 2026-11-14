@@ -11,44 +11,18 @@ vi.mock('vscode', () => ({
 
 import * as vscode from 'vscode';
 import { recordLanguage } from '../recordLanguage';
-import { formKeyMember } from '../formKeyText';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { localFailure } from '../../wire/readFailed';
+import { sourceNames } from './fakeSourceNames';
 
 const GUN = '000801:A.esp';
 const modA = { name: 'A.esp', origin: 'ModA' };
 const GUN_FILE = '/source/ModA/plugin-source/A.esp/Weapons/Gun.json';
 const GUN_TEXT = `{\n  "FormKey": "${GUN}",\n  "EditorID": "Gun"\n}`;
 const REFERENCING = `{ "FormKey": "000700:A.esp", "Armor": "${GUN}" }`;
+const NAMED = { start: REFERENCING.indexOf(GUN) - 1, end: REFERENCING.indexOf(GUN) + GUN.length + 1 };
 const RECORD = { kind: 'record', formKey: GUN } as const;
-
-const spanned = (text: string, formKey: string): string | undefined => {
-  const member = formKeyMember(text, formKey);
-  return member && text.slice(member.start, member.end);
-};
-
-describe('a definition\'s place in its record\'s document (symbols.md, The symbols, Record)', () => {
-  it('is the record\'s own FormKey member', () => {
-    expect(spanned(GUN_TEXT, GUN)).toBe(`"FormKey": "${GUN}"`);
-  });
-
-  it('is a child record\'s FormKey member in its own object, in its owner\'s file', () => {
-    const text = `{ "FormKey": "000700:A.esp", "Temporary": [{ "FormKey": "000802:A.esp" }, { "FormKey": "${GUN}", "EditorID": "Ref" }] }`;
-
-    expect(formKeyMember(text, GUN)?.start).toBe(text.indexOf(`"FormKey": "${GUN}"`));
-  });
-
-  it('passes over a field that references the record', () => {
-    const text = `{ "FormKey": "000700:A.esp", "Base": "${GUN}", "Temporary": [{ "FormKey": "${GUN}" }] }`;
-
-    expect(formKeyMember(text, GUN)?.start).toBe(text.indexOf(`"FormKey": "${GUN}"`));
-  });
-
-  it('is nowhere in a document that states no such member', () => {
-    expect(formKeyMember(`{ "Base": "${GUN}" }`, GUN)).toBeUndefined();
-  });
-});
 
 function kind({ open = (): Promise<{ getText(): string }> => Promise.resolve({ getText: () => GUN_TEXT }) } = {}) {
   const client = new InMemoryMEditClient();
@@ -56,31 +30,17 @@ function kind({ open = (): Promise<{ getText(): string }> => Promise.resolve({ g
   client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: GUN_FILE });
   const opened: unknown[] = [];
   const record = recordLanguage({
-    client, reporter: recordingReporter(),
+    client, reporter: recordingReporter(), names: sourceNames({ recordAt: () => ({ ...NAMED, formKey: GUN }) }),
     open: async (uri: vscode.Uri) => { opened.push(uri); return { ...await open(), positionAt: (offset: number) => new vscode.Position(0, offset) }; },
   });
   return { client, opened, record };
 }
 
 describe('a record\'s FormKey in plugin source (symbols.md, The symbols, Record)', () => {
-  const document = (text: string, path = GUN_FILE) => ({ uri: Uri.file(path), getText: () => text });
+  it('names the record plugin source names there, at its span', async () => {
+    const found = await kind().record.nameAt({ uri: Uri.file(GUN_FILE), getText: () => REFERENCING }, REFERENCING.indexOf(GUN));
 
-  it('names the record, spanning the FormKey string, quotes included', async () => {
-    const found = await kind().record.nameAt(document(REFERENCING), REFERENCING.indexOf(GUN));
-
-    expect([found?.symbol, REFERENCING.slice(found?.start, found?.end)]).toEqual([RECORD, `"${GUN}"`]);
-  });
-
-  it.each([
-    ['a string that is not a FormKey', '{ "Name": "Rusty Gun" }', 'Rusty', GUN_FILE],
-    ['a FormKey spelled as a property name', `{ "${GUN}": 1 }`, '000801', GUN_FILE],
-    ['a place outside a string', `{ "A": "${GUN}" }`, '{', GUN_FILE],
-    ['a FormKey in a file that is no plugin source', REFERENCING, '000801', '/instance/notes.json'],
-  ])('names nothing at %s, asking mEdit nothing', async (_case, text, at, path) => {
-    const { record, client } = kind();
-
-    expect(await record.nameAt(document(text, path), text.indexOf(at))).toBeUndefined();
-    expect(client.calls).toEqual([]);
+    expect(found).toEqual({ ...NAMED, name: GUN, symbol: RECORD });
   });
 });
 

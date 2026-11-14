@@ -1,8 +1,7 @@
 import type * as vscode from 'vscode';
 import type { Reveal } from '../drivingLib/symbolRows';
-import type { TextSpan } from '../drivingLib/sourceText';
 import type { CopyAt } from '../instanceLoader/fileConflictIndex';
-import type { EntrySymbol, PluginName, ScriptSymbol } from '../symbolNames/symbolNames';
+import type { EntrySymbol, PluginName, ScriptSymbol, TextSpan } from '../symbolNames/symbolNames';
 import type { AskedIn } from './symbolPlaces';
 
 export type PluginNamed = { readonly kind: 'plugin' } & PluginName;

@@ -1,11 +1,9 @@
 import type * as vscode from 'vscode';
-import type { MEditClient } from '../client';
+import { formKeyValue, stringsAt, type MEditClient } from '../client';
 import { heldText } from '../textDocuments/heldText';
 import type { RecordDocumentClient } from '../textDocuments/recordDocument';
 import { failureReason, isReadFailed } from '../wire/readFailed';
 import { locateCopies, locationOf } from './recordLocation';
-import { stringsAt } from '../drivingLib/sourceText';
-import { formKeyValue } from './formKeyText';
 
 type MemberReferences = Awaited<ReturnType<MEditClient['getFileReferences']>>;
 

@@ -1,4 +1,4 @@
-import type { FieldAtOffset, Segment } from './sourceText';
+import type { FieldAtOffset, Segment } from './pluginSourceText';
 import type { CompareResult } from '../wire/messages';
 import { shapeUnderOwner } from '../wire/indexShape';
 import { answerOf, type ReadFailed } from '../wire/readFailed';

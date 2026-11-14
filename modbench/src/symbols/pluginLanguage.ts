@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { PluginRows } from '../drivingLib/symbolRows';
+import { formKeyValue } from '../client';
 import type { InstanceValue } from '../instanceLoader/instance';
-import { isPluginSourcePath } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { heldTexts, pluginNamed, samePlugin, type PluginName, type PluginSymbol, type SymbolOwner } from '../symbolNames/symbolNames';
@@ -13,7 +13,6 @@ import { pluginRowName } from '../wire/pluginAddress';
 import { atFile, nameHolds, placeLocation, showReferencedBy, spelledAround, type AskedIn, type ListedLocations } from './symbolPlaces';
 import { pluginReferencesOf, type PluginReference } from './pluginReferences';
 import { locateRecord, locationOf } from './recordLocation';
-import { formKeyPluginAt, formKeyValue } from './formKeyText';
 import { selectingItsRow } from './definitionShown';
 import type { Definition, Listed, Named, PluginNamed, References, SymbolKind } from './symbolKind';
 
@@ -33,7 +32,7 @@ interface PluginLanguageDeps {
 const locationOfReference = (found: PluginReference<vscode.TextDocument>): vscode.Location =>
   ('file' in found ? placeLocation(found) : locationOf(found));
 
-/** A plugin as a symbol: inside a FormKey, and wherever an owner's file names it (symbols.md, The symbols, Plugin). */
+/** A plugin as a symbol, wherever an owner's file names it (symbols.md, The symbols, Plugin). */
 export function pluginLanguage({ instance, reporter, client, owners, renamePlugin, rows, tooltip }: PluginLanguageDeps) {
   const read = pluginReferencesOf({
     owners, client, open: openPluginSourceDocument,
@@ -44,7 +43,6 @@ export function pluginLanguage({ instance, reporter, client, owners, renamePlugi
 
   const nameAt = async (document: AskedIn, offset: number): Promise<PluginName | undefined> => {
     const text = heldText(document);
-    if (isPluginSourcePath(document.uri.fsPath)) return formKeyPluginAt(text, offset);
     for (const owner of owners) {
       const named = await owner.nameAt(document.uri.fsPath, text, offset);
       if (named !== undefined) return named;

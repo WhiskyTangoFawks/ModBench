@@ -42,6 +42,12 @@ export function namesPlugin(named: PluginName, symbol: PluginSymbol, plugins: re
   return resolved !== undefined && samePlugin(resolved, symbol);
 }
 
+/** A span of a file's text, by offset. */
+export interface TextSpan {
+  readonly start: number;
+  readonly end: number;
+}
+
 export interface TextPosition {
   readonly line: number;
   readonly character: number;

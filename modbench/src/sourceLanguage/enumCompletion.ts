@@ -1,6 +1,4 @@
-import type { MEditClient } from '../client';
-import { fieldOfRecord } from '../drivingLib/fieldMetadata';
-import { fieldAt } from '../drivingLib/sourceText';
+import { fieldAt, fieldOfRecord, type MEditClient } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 

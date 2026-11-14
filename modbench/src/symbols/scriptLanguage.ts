@@ -1,48 +1,29 @@
 import * as vscode from 'vscode';
-import type { MEditClient } from '../client';
+import type { MEditClient, PluginSourceNames } from '../client';
 import type { InstanceValue, PapyrusScript } from '../instanceLoader/instance';
-import { isPluginSourcePath } from '../instanceAdapter/instanceAdapter';
-import { errorMessage } from '../ports/errorMessage';
-import type { Reporter } from '../ports/reporter';
 import { sameName, type ScriptSymbol } from '../symbolNames/symbolNames';
 import { heldText } from '../textDocuments/heldText';
-import { openPluginSourceDocument, readHeldText } from '../textDocuments/pluginSource';
-import { fieldOfRecord } from '../drivingLib/fieldMetadata';
-import { scriptReferences, type ScriptReferencesClient } from './scriptReferences';
-import { fieldAt } from '../drivingLib/sourceText';
-import { formKeyAt } from './formKeyText';
+import { openPluginSourceDocument } from '../textDocuments/pluginSource';
+import type { RecordDocumentClient } from '../textDocuments/recordDocument';
+import { membersNaming } from './memberReferences';
 import { atFile, nameHolds, type AskedIn } from './symbolPlaces';
 import type { Definition, SymbolKind } from './symbolKind';
 
-export type ScriptClient = Pick<MEditClient, 'getComparison'> & ScriptReferencesClient;
+export type ScriptClient = Pick<MEditClient, 'getScriptReferences'> & RecordDocumentClient;
 
 interface ScriptLanguageDeps {
   instance: { readonly value: Pick<InstanceValue, 'papyrusScripts'> } | undefined;
-  reporter: Pick<Reporter, 'shownOnSurface'>;
+  names: Pick<PluginSourceNames, 'scriptAt'>;
   client: ScriptClient;
 }
 
-
 /** A Papyrus script as a symbol: where plugin source names one a record attaches, and the records that attach it, which
  *  mEdit answers (symbols.md). */
-export function scriptLanguage({ instance, reporter, client }: ScriptLanguageDeps): SymbolKind<ScriptSymbol> {
+export function scriptLanguage({ instance, names, client }: ScriptLanguageDeps): SymbolKind<ScriptSymbol> {
   const scripts = (): readonly PapyrusScript[] => instance?.value.papyrusScripts ?? [];
 
-  const nameAt = async (document: AskedIn, offset: number): Promise<{ name: string; start: number; end: number } | undefined> => {
-    if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
-    const text = heldText(document);
-    const found = fieldAt(text, offset);
-    if (found === undefined || found.end - found.start <= 2 || formKeyAt(text, offset) !== undefined) return undefined;
-    try {
-      if (!(await fieldOfRecord(client, found))?.isScriptName) return undefined;
-    } catch (error) {
-      reporter.shownOnSurface('error', `Cannot tell whether ${found.recordFormKey} names a Papyrus script here.`, errorMessage(error));
-      return undefined;
-    }
-    return { name: text.slice(found.start + 1, found.end - 1), start: found.start + 1, end: found.end - 1 };
-  };
+  const nameAt = (document: AskedIn, offset: number) => names.scriptAt(document.uri.fsPath, heldText(document), offset);
 
-  const references = scriptReferences({ client, open: openPluginSourceDocument, readText: readHeldText });
   const fileOf = ({ source, compiled }: PapyrusScript): string | undefined => source ?? compiled;
 
   return {
@@ -58,7 +39,7 @@ export function scriptLanguage({ instance, reporter, client }: ScriptLanguageDep
     },
     /** Each member of a record that names it. */
     async referencesTo({ name }) {
-      const { found, unread } = await references.read(name);
+      const { found, unread } = await membersNaming(client, openPluginSourceDocument, await client.getScriptReferences(name));
       return { locations: found, unread };
     },
     /** None: a script has no row. */

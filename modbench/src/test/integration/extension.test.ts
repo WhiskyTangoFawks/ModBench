@@ -2307,6 +2307,12 @@ describe('A FormKey in plugin source', () => {
     assert.deepStrictEqual(await activated(), heldHover);
   });
 
+  it('shows the plugin, not the record, on hover over the plugin\'s name inside a FormKey', async () => {
+    await activated();
+
+    assert.deepStrictEqual(await hoverTexts('Nobody.esp'), ['Nobody.esp']);
+  });
+
   it('shows no hover in JSON outside the plugin source folder', async () => {
     await activated();
     const other = await documentAt('Other.json');

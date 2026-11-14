@@ -1,9 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Uri } from '../../test/vscodeMock';
-
-vi.mock('vscode', () => ({ Uri }));
-
-import { scriptReferences, type ScriptReferencesClient } from '../scriptReferences';
+import { scriptSourceRename, type ScriptSourceClient } from '../scriptSourceRename';
 import { heldTexts } from '../../symbolNames/symbolNames';
 
 const QUEST = '000801:Mod.esp';
@@ -15,17 +11,16 @@ const PATH = 'VirtualMachineAdapter.Scripts[0].Name';
 const MOD = { name: 'Mod.esp', origin: 'Mod' };
 const COMPILED = { name: 'Other.esp', origin: 'Other' };
 
-type Answer = Awaited<ReturnType<ScriptReferencesClient['getScriptReferences']>>;
+type Answer = Awaited<ReturnType<ScriptSourceClient['getScriptReferences']>>;
 
-const planning = (answer: Answer, unsaved?: string, refreshSourceControlFor = vi.fn()) => scriptReferences({
+const planning = (answer: Answer, unsaved?: string, refreshSourceControlFor = vi.fn()) => scriptSourceRename({
   client: {
     getScriptReferences: () => Promise.resolve(answer),
-    getRecordOwner: () => Promise.resolve(undefined),
-    getCopyDocument: () => Promise.resolve({ kind: 'ContainersFile' as const, location: CONTAINER }),
+    getCopyDocument: (plugin) => Promise.resolve(plugin.origin === 'Gone' ? null : { kind: plugin.origin === 'Rendered' ? 'Rendered' as const : 'ContainersFile' as const, location: CONTAINER }),
   },
-  open: () => Promise.reject(new Error('Not opened here.')),
   readText: () => Promise.resolve(TEXT),
-}).owner(refreshSourceControlFor).plan({ kind: 'script', name: 'Ns:Quest' }, 'Ns:Renamed', heldTexts(unsaved === undefined ? [] : [[CONTAINER, unsaved]]));
+  refreshSourceControlFor,
+}).plan({ kind: 'script', name: 'Ns:Quest' }, 'Ns:Renamed', heldTexts(unsaved === undefined ? [] : [[CONTAINER, unsaved]]));
 
 const planned = async (answer: Answer, unsaved?: string) => {
   const plan = await planning(answer, unsaved);
@@ -84,6 +79,19 @@ describe('plugin source\'s part in renaming a Papyrus script (symbols.md, The fe
         `${ALIAS} in Mod.esp (Mod): mEdit has no schema for its record type xxxx`,
         `${QUEST} in Mod.esp (Mod): its plugin source does not name Ns:Quest at VirtualMachineAdapter.Scripts[1].Name`,
       ],
+    });
+  });
+
+  it('edits no copy mEdit says is in plugin source where no plugin source file holds it, and names each', async () => {
+    expect(await planned({
+      copies: [
+        { formKey: QUEST, plugin: { name: 'Mod.esp', origin: 'Gone' }, inPluginSource: true, fieldPaths: [PATH] },
+        { formKey: QUEST, plugin: { name: 'Mod.esp', origin: 'Rendered' }, inPluginSource: true, fieldPaths: [PATH] },
+      ],
+      unread: [],
+    })).toEqual({
+      changes: { moves: [], deletions: [], documents: [] },
+      cannotFollow: [`Mod.esp (Gone) holds no ${QUEST}.`, `${QUEST} in Mod.esp (Rendered): its plugin source holds no file of it`],
     });
   });
 

@@ -7,8 +7,8 @@ const MEDIT_READS = 'the plugins mEdit reads';
 /** Each file of a source folder a build reads by the renamed plugin's name, and the name it takes, relative to the folder. */
 export type SourceFilesOf = (symbol: PluginSymbol, newName: string, held: HeldTexts) => Promise<readonly NonNullable<RenameSourceAsked['sourceFiles']>[number][]>;
 
-/** The plugins mEdit reads, as an owner of files that name a plugin: by a FormKey, or a master. Source reads the FormKey
- *  under a place itself. A rename moves the files `sourceFilesOf` names too. */
+/** The plugins mEdit reads, as an owner of files that name a plugin: by a FormKey, or a master. `pluginSourceNames`
+ *  answers the plugin under a place. A rename moves the files `sourceFilesOf` names too. */
 export function recordIndexReferences(
   client: Pick<MEditClient, 'getPluginNameReferences' | 'getRenameSourceChanges' | 'moveLastWritten'>, sourceFilesOf: SourceFilesOf,
 ): SymbolOwner {

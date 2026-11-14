@@ -1,9 +1,8 @@
-import type { MEditClient } from '../client';
+import { referenceSpan, type MEditClient } from '../client';
 import { pluginAddressOf } from '../wire/pluginAddress';
 import type { RecordCopy } from '../wire/recordCopy';
 import { locateCopies, type RecordLocation, type RecordLocationDeps } from './recordLocation';
 import { heldText } from '../textDocuments/heldText';
-import { referenceSpan } from './formKeyText';
 import { answerOf } from '../wire/readFailed';
 
 interface ReferencesDeps<Document> extends RecordLocationDeps<Document> {
