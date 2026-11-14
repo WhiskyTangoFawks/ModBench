@@ -60,8 +60,9 @@ internal static class Indexes
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
         ISourceAdapter? source = null,
-        long? memoryLimit = null) =>
-        Reconciled(fixture.DataFolder, fixture.Plugins, instanceRoot, adapter, loggerFactory, notifications, source, memoryLimit);
+        long? memoryLimit = null,
+        TimeSpan? patience = null) =>
+        Reconciled(fixture.DataFolder, fixture.Plugins, instanceRoot, adapter, loggerFactory, notifications, source, memoryLimit, patience);
 
     internal static OpenedIndex Reconciled(
         ScatteredFixtureData fixture,
@@ -81,19 +82,24 @@ internal static class Indexes
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
         ISourceAdapter? source = null,
-        long? memoryLimit = null)
+        long? memoryLimit = null,
+        TimeSpan? patience = null)
     {
         var holder = new LoadOrderHolder();
         var index = Open(holder, adapter, loggerFactory, notifications, source: source, memoryLimit: memoryLimit);
-        index.Reconcile(holder, dataFolder, plugins, GameRelease.Fallout4, instanceRoot);
-        // The door turns a refusal into status; a fixture built over one is not the fixture asked for.
-        if (index.Status.State is LoadOrderState.HeldElsewhere or LoadOrderState.Failed)
+        try
         {
-            var message = index.Status.Message;
-            index.Dispose();
-            throw new InvalidOperationException($"The fixture's reconcile was refused: {message}");
+            index.Receive(holder, SnapshotPlugins.Snapshot(dataFolder, instanceRoot, GameRelease.Fallout4, plugins), patience);
+            // The door turns a refusal into status; a fixture built over one is not the fixture asked for.
+            if (index.Status.State is LoadOrderState.HeldElsewhere or LoadOrderState.Failed)
+                throw new InvalidOperationException($"The fixture's reconcile was refused: {index.Status.Message}");
+            return index;
         }
-        return index;
+        catch
+        {
+            index.Dispose();
+            throw;
+        }
     }
 
     /// <summary>A change signalled, answered once <paramref name="announced"/> holds, its status is out and its
