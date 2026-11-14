@@ -63,19 +63,17 @@ describe('where a record is defined (symbols.md, The symbols, Record)', () => {
 });
 
 describe('what references a record, and its hover (symbols.md, The symbols, Record)', () => {
-  it('lists its references over plugin source and rendered copies, asking mEdit once and opening no document', async () => {
+  it('lists the places mEdit gives, reporting what it left out as unread, and opens no document', async () => {
     const { client, opened, record } = kind();
     const range = { start: { line: 1, character: 2 }, end: { line: 1, character: 18 } };
-    client.setQueryAnswer('getPlacedReferences', { leftOut: [], copies: [
+    const leftOut = `000701:A.esp in B.esp (ModB): its text names ${GUN} nowhere.`;
+    client.setQueryAnswer('getPlacedReferences', { leftOut: [leftOut], copies: [
       { formKey: '000700:A.esp', plugin: modA, document: { kind: 'OwnFile', location: GUN_FILE }, ranges: [range] },
-      { formKey: '000700:A.esp', plugin: { name: 'B.esp', origin: 'ModB' }, document: { kind: 'Rendered', location: 'Stand.json' }, ranges: [range] },
     ] });
 
     const found = await record.referencesTo(RECORD);
 
-    expect([found, client.calls.map(({ method }) => method), opened]).toMatchObject([
-      { locations: [{ uri: { scheme: 'file' } }, { uri: { scheme: 'modbench-rendered' } }], unread: [] }, ['getPlacedReferences'], [],
-    ]);
+    expect([found, opened]).toMatchObject([{ locations: [{ uri: { path: GUN_FILE } }], unread: [leftOut] }, []]);
   });
 
   it('refuses, rather than list nothing, while mEdit cannot answer over every plugin', async () => {

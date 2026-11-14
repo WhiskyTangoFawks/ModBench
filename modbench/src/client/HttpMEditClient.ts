@@ -797,7 +797,8 @@ class HttpMEditClient implements MEditClient {
       (data) => data ?? []);
   }
 
-  getPlacedReferences(formKey: string): Promise<PlacedReferences | ReadFailed> {
+  async getPlacedReferences(formKey: string): Promise<PlacedReferences | ReadFailed> {
+    await this.handOver.sent();
     return this.read(`getPlacedReferences(${formKey})`,
       (api, signal) => api.GET('/records/{formKey}/placed-references', { params: { path: { formKey } }, signal }), noBodyFails);
   }

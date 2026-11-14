@@ -21,10 +21,11 @@ public sealed class PlacedReferencesQueryTests : IDisposable
     private readonly string _npc;
     private readonly string _topic;
     private readonly string _renderedNpc;
+    private readonly string _selfReferrer;
 
     public PlacedReferencesQueryTests()
     {
-        FormKey target = default, npc = default, topic = default, renderedNpc = default;
+        FormKey target = default, npc = default, topic = default, renderedNpc = default, selfReferrer = default;
         _fixture = new PluginFixtureBuilder("placed-references")
             .WithPlugin(Compiled.Name, mod =>
             {
@@ -37,6 +38,9 @@ public sealed class PlacedReferencesQueryTests : IDisposable
                 inside.Keyword.SetTo(target);
                 quest.DialogTopics.Add(inside);
                 topic = inside.FormKey;
+                var itself = mod.Npcs.AddNew("Itself");
+                itself.DefaultTemplate.SetTo(itself.FormKey);
+                selfReferrer = itself.FormKey;
             }, origin: Compiled.Origin)
             .WithPlugin(Rendered.Name, (mod, built) =>
             {
@@ -47,7 +51,7 @@ public sealed class PlacedReferencesQueryTests : IDisposable
             }, origin: Rendered.Origin)
             .BuildScattered();
         SourceMods.Init(_fixture.Plugins.Single(plugin => plugin.Name == Compiled.Name));
-        (_target, _npc, _topic, _renderedNpc) = (target.ToString(), npc.ToString(), topic.ToString(), renderedNpc.ToString());
+        (_target, _npc, _topic, _renderedNpc, _selfReferrer) = (target.ToString(), npc.ToString(), topic.ToString(), renderedNpc.ToString(), selfReferrer.ToString());
     }
 
     public void Dispose() => _fixture.Dispose();
@@ -76,6 +80,18 @@ public sealed class PlacedReferencesQueryTests : IDisposable
         Assert.Equal(index.Queries.GetCopyDocument(Compiled, _npc).Value(), placed.Document);
         Assert.Equal(2, placed.Ranges.Count);
         AssertEachRangeIsTheTarget(File.ReadAllText(placed.Document.Location), placed);
+    }
+
+    [Fact]
+    public void ARecordReferencingItself_IsPlacedAtTheFieldThatHoldsTheReference_NeverAtItsOwnFormKey()
+    {
+        using var index = Indexes.Reconciled(_fixture);
+
+        var placed = CopyOf(index.Queries.GetPlacedReferences(_selfReferrer).Value(), _selfReferrer);
+
+        var line = VSCodeLineEnd.Split(File.ReadAllText(placed.Document.Location))[Assert.Single(placed.Ranges).Start.Line];
+        Assert.Contains($"\"{_selfReferrer}\"", line, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"FormKey\"", line, StringComparison.Ordinal);
     }
 
     [Fact]

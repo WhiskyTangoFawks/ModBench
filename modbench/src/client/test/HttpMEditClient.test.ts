@@ -1039,6 +1039,30 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     expect(requests).toHaveLength(1);
   });
 
+  it('asks where a record\'s references are placed only once the pending hand-over has answered, so they are placed in the text VS Code shows', async () => {
+    let answerHandOver!: () => void;
+    const answered = new Promise<void>((resolve) => { answerHandOver = resolve; });
+    const handedOver = vi.fn();
+    const requests: string[] = [];
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/unsaved-documents', () => { handedOver(); return answered.then(() => new Response(null, { status: 204 })); }],
+      ['/placed-references', (req) => { requests.push(new URL(req.url).pathname); return Promise.resolve(jsonResponse(200, { copies: [], leftOut: [] })); }],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+    client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]);
+    await vi.waitFor(() => expect(handedOver).toHaveBeenCalled());
+
+    const asking = client.getPlacedReferences(record.formKey);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(requests).toEqual([]);
+
+    answerHandOver();
+    expect(await asking).toEqual({ copies: [], leftOut: [] });
+    expect(requests).toHaveLength(1);
+  });
+
   it.each(gestures)('sends the %s request only once the load order sent before it has settled', async (_name, gesture, route) => {
     const { response, push } = pushableStreamResponse();
     let putLoadOrder = false;
