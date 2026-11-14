@@ -6,7 +6,6 @@ interface Asker {
   onLoadOrderSettled(listener: () => void): () => void;
 }
 
-/** Tells `listener` of every change to what a file names: of a plugin, of the load order, or of the instance. The asker has dropped what it held before the listener hears. */
 export function heardChanges(
   { asker, instance }: { asker: Asker; instance: { subscribe: (listener: () => void) => { dispose: () => unknown } } | undefined },
   listener: (plugin?: PluginAddress) => void,

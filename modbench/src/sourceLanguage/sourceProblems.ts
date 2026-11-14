@@ -6,7 +6,7 @@ import type { Reporter } from '../ports/reporter';
 import type { PathHop } from '../wire/messages';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { locationOf, type Segment } from './sourceText';
-import { lastRead, readiness, tellingOnSurface, type Asked, type Position, type Told } from './feedShape';
+import { askedAgain, lastRead, readiness, tellingOnSurface, type Asked, type Position, type Told } from './feedShape';
 import { answerOf, failureReason, type ReadFailed } from '../wire/readFailed';
 
 type SourceProblem = PluginProblems['problems'][number];
@@ -174,9 +174,7 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
   const unsubscribe = [
     deps.ask.onLoadOrderSettled((status) => { if (status.conflictsComputed) { wholeWanted = true; askWanted(); } }),
     deps.ask.onPluginChanged(askPluginWhenReady),
-    deps.ask.onAskedAgain('getPluginProblems', (plugin) => {
-      if (plugin === undefined) { wholeWanted = true; askWanted(); } else askPluginWhenReady({ plugin });
-    }),
+    deps.ask.onAskedAgain('getPluginProblems', askedAgain(() => { wholeWanted = true; askWanted(); }, askPluginWhenReady)),
     client.onUnsavedHandOver(handedOver),
   ];
   askWanted();

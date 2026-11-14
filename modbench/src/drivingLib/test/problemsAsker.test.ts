@@ -6,6 +6,7 @@ import type { ReadFailed } from '../../wire/readFailed';
 
 interface Answered { plugin: PluginAddress; unread: string[]; failure?: string }
 type Answer = Answered[] | ReadFailed;
+type Asker = ReturnType<typeof started>['asker'];
 type Method = 'getPluginFilePaths' | 'getPluginProblems';
 
 const A: PluginAddress = { name: 'A.esp', origin: 'ModA' };
@@ -212,17 +213,6 @@ describe('problemsAsker', () => {
     expect(client.asked()).toEqual([undefined, undefined]);
   });
 
-  it('keeps the whole set when no plugin changed', async () => {
-    const { client, asker } = started();
-    await asker.getPluginFilePaths();
-    asker.onPluginChanged(() => undefined);
-
-    await asker.getPluginFilePaths();
-    await asker.getPluginFilePaths(B);
-
-    expect(client.asked()).toEqual([undefined]);
-  });
-
   describe('a read that failed', () => {
     const failing = (method: Method, plugin?: PluginAddress) => {
       vi.useFakeTimers();
@@ -262,13 +252,66 @@ describe('problemsAsker', () => {
     });
 
     it.each([
-      ['a change to the plugin, which asks again itself', (asker: ReturnType<typeof started>['asker']) => { asker.forget(A); }],
-      ['a settled load order, which asks again itself', (asker: ReturnType<typeof started>['asker']) => { asker.forget(); }],
-    ])('is not asked again after %s', async (_case, forget) => {
-      const { asker, again, ask } = failing('getPluginFilePaths', A);
+      ['plugin', A, 'everything, as a document closes or the instance changes', (asker: Asker) => { asker.forget(); }],
+      ['plugin', A, 'the plugin, as a change to it', (asker: Asker) => { asker.forget(A); }],
+      ['whole set', undefined, 'a plugin, as a change to it', (asker: Asker) => { asker.forget(A); }],
+      ['whole set', undefined, 'everything, as a document closes or the instance changes', (asker: Asker) => { asker.forget(); }],
+    ])('is asked again of the %s, whatever is forgotten meanwhile: %s', async (_of, plugin, _what, forget) => {
+      const { asker, again, ask } = failing('getPluginFilePaths', plugin);
       await ask();
 
       forget(asker);
+      await vi.advanceTimersByTimeAsync(RETRY_AFTER_MS);
+
+      expect(again).toEqual([plugin]);
+    });
+
+    it('is asked again when an older ask is answered late, after a newer one failed', async () => {
+      vi.useFakeTimers();
+      const client = fakeClient();
+      const [older] = client.gate('getPluginFilePaths', 1, [answerFor(A)]);
+      client.answerNext('getPluginFilePaths', () => Promise.resolve(TIMED_OUT));
+      const asker = problemsAsker(client, RETRY_AFTER_MS);
+      const again: unknown[] = [];
+      asker.onAskedAgain('getPluginFilePaths', (each) => { again.push(each); });
+      const before = asker.getPluginFilePaths(A);
+      await vi.advanceTimersByTimeAsync(0);
+      asker.forget(A);
+      await asker.getPluginFilePaths(A).catch(() => undefined);
+
+      older?.now();
+      await before;
+      await vi.advanceTimersByTimeAsync(RETRY_AFTER_MS);
+
+      expect(again).toEqual([A]);
+    });
+
+    it('is not asked again once the whole set is answered, which answers every plugin', async () => {
+      const { asker, again, ask } = failing('getPluginFilePaths', A);
+      await ask();
+
+      await asker.getPluginFilePaths();
+      await vi.advanceTimersByTimeAsync(RETRY_AFTER_MS);
+
+      expect(again).toEqual([]);
+    });
+
+    it('is not asked again once a newer ask of it is answered', async () => {
+      const { asker, again, ask } = failing('getPluginFilePaths', A);
+      await ask();
+
+      asker.forget(A);
+      await asker.getPluginFilePaths(A);
+      await vi.advanceTimersByTimeAsync(RETRY_AFTER_MS);
+
+      expect(again).toEqual([]);
+    });
+
+    it('is told nothing once the asker is disposed', async () => {
+      const { asker, again, ask } = failing('getPluginFilePaths');
+      await ask();
+
+      asker.dispose();
       await vi.advanceTimersByTimeAsync(RETRY_AFTER_MS * 2);
 
       expect(again).toEqual([]);
@@ -287,7 +330,7 @@ describe('problemsAsker', () => {
       expect([client.asked(), again]).toEqual([[undefined, undefined, undefined], [undefined, undefined]]);
     });
 
-    it.each(['getPluginFilePaths', 'getPluginProblems'] as const)('is not asked again of a %s that failed after the change that asks again itself', async (method) => {
+    it.each(['getPluginFilePaths', 'getPluginProblems'] as const)('is not asked again of a %s that failed after a newer ask of it was answered', async (method) => {
       vi.useFakeTimers();
       const client = fakeClient();
       const [late] = client.gate(method, 1, TIMED_OUT);
@@ -297,6 +340,7 @@ describe('problemsAsker', () => {
       const before = asker[method](A);
       await vi.advanceTimersByTimeAsync(0);
       asker.forget(A);
+      await asker[method](A);
 
       late?.now();
       await before;

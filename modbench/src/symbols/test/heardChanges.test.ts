@@ -1,30 +1,26 @@
 import { describe, it, expect } from 'vitest';
 import { heardChanges } from '../heardChanges';
 import { problemsAsker } from '../../drivingLib/problemsAsker';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 import type { PluginAddress } from '../../client';
 
 const A: PluginAddress = { name: 'A.esp', origin: 'ModA' };
 
 function world() {
-  const calls: (PluginAddress | undefined)[] = [];
-  const changed = new Set<(event: { plugin: PluginAddress }) => void>();
-  const settled = new Set<(status: unknown) => void>();
-  const instance = new Set<() => void>();
-  const client = {
-    getPluginFilePaths: (plugin?: PluginAddress) => { calls.push(plugin); return Promise.resolve([{ plugin: A, unread: [] }]); },
-    getPluginProblems: () => Promise.resolve([]),
-    onNotification: (_kind: 'rows-changed' | 'plugin-changed', listener: (event: { plugin: PluginAddress }) => void) => { changed.add(listener); return () => { changed.delete(listener); }; },
-    onLoadOrderSettled: (listener: (status: unknown) => void) => { settled.add(listener); return () => { settled.delete(listener); }; },
-  };
+  const client = new InMemoryMEditClient();
+  client.setQueryAnswer('getPluginFilePaths', [{ plugin: A, paths: [], scripts: [], unread: [] }]);
   const asker = problemsAsker(client);
+  const instance = new Set<() => void>();
   const heard: (PluginAddress | undefined)[] = [];
   const subscribe = (listener: () => void) => { instance.add(listener); return { dispose: () => { instance.delete(listener); } }; };
   const stop = heardChanges({ asker, instance: { subscribe } }, (plugin) => { heard.push(plugin); });
+  const asked = () => client.calls.filter(({ method }) => method === 'getPluginFilePaths').length;
   return {
-    asker, calls, heard, stop,
+    asker, heard, stop, asked,
     instanceChanges: () => { for (const listener of instance) listener(); },
-    pluginChanges: () => { for (const listener of changed) listener({ plugin: A }); },
-    settles: () => { for (const listener of settled) listener({}); },
+    pluginChanges: () => { client.emit({ kind: 'plugin-changed', plugin: A.name, origin: A.origin, keys: [], sequence: 1 }); },
+    settles: () => { client.emit(loadOrderStatusEventFixture({ state: 'Ready', conflictsComputed: true, version: 1 })); },
   };
 }
 
@@ -42,7 +38,7 @@ describe('heardChanges', () => {
     change(w);
     await w.asker.getPluginFilePaths();
 
-    expect([w.heard, w.calls]).toEqual([[plugin], [undefined, undefined]]);
+    expect([w.heard, w.asked()]).toEqual([[plugin], 2]);
   });
 
   it('hears nothing once stopped', () => {
