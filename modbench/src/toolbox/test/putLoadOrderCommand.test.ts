@@ -41,6 +41,14 @@ describe('signal change', () => {
     expect(sent).toEqual(['put', 'signal /mods/A/A.esp,/mods/B/B.esp', 'put', 'signal ']);
   });
 
+  it('is not sent for a recompute that named no path and was not a check of the disk', () => {
+    const { sent, instance } = wired();
+
+    instance.publish(instanceValueFixture(), { named: [], disk: false });
+
+    expect(sent).toEqual(['put']);
+  });
+
   it('is not sent for a change of the strings language, which changes no file', () => {
     const { sent } = wired();
 
