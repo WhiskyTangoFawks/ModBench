@@ -376,6 +376,20 @@ internal sealed class RelationReads(
         return LinkResolution.ForLinksOf(context, formKeys, Resolve);
     }
 
+    /// <summary>The record type of each of <paramref name="formKeys"/> an active or compiled plugin holds, read off its
+    /// copy latest in load order. It joins no winners, so its memory grows with the FormKeys asked, not the index.</summary>
+    public IReadOnlyDictionary<string, string> RecordTypesOf(IReadOnlyList<string> formKeys)
+    {
+        using var context = OpenRead();
+        return context.Rows($"""
+            SELECT r.form_key, r.record_type
+            FROM {Copies}
+            WHERE r.form_key IN (SELECT unnest($1::VARCHAR[])) AND {ActiveOrCompiled}
+            QUALIFY row_number() OVER (PARTITION BY r.form_key ORDER BY p.load_order_idx DESC NULLS LAST, r.plugin, r.origin) = 1
+            """, reader => KeyValuePair.Create(reader.GetString(0), reader.GetString(1)), formKeys.ToList())
+            .ToDictionary(StringComparer.OrdinalIgnoreCase);
+    }
+
     private List<MissingReference> GetReferencesToMissingRecords()
     {
         using var context = OpenRead();
