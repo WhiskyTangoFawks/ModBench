@@ -30,7 +30,7 @@ const askedPlugin = { argument: { kind: 'plugin', plugin: BASE } };
 beforeEach(() => { handlers.clear(); executeCommand.mockClear(); });
 
 function modRows(over: Partial<ModRows> = {}) {
-  const rows: ModRows = { selected: () => undefined, show: () => undefined, folderOf: () => undefined, dataPathOf: () => undefined, ...over };
+  const rows: ModRows = { selected: () => undefined, show: () => undefined, folderOf: () => undefined, dataPathOf: () => undefined, fileTooltip: () => undefined, ...over };
   return { rows };
 }
 

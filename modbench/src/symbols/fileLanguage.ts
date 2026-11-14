@@ -27,18 +27,43 @@ export interface FileCopies {
 }
 
 interface FileLanguageDeps extends FileCopies {
-  instance: { readonly value: Pick<InstanceValue, 'stackedCopies' | 'dataFolderFiles' | 'gameFolderArchived'> } | undefined;
+  instance: { readonly value: FilesValue } | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
   client: FileClient;
+  /** The tooltip of the row Mods shows for the copy the game gets of the file at `path`; undefined where it shows none. */
+  tooltip: (path: string) => string | undefined;
 }
 
 type FileNamed = { readonly kind: 'file'; readonly path: string };
 
 const holdsCopy = (found: CopyAt | { none: string }): found is CopyAt => !('none' in found);
 
+// More than a person reads down; VS Code asks again at each keystroke, so typing more narrows a longer list.
+const MOST_FILES_LISTED = 1000;
+
+type FilesValue = Pick<InstanceValue, 'stackedCopies' | 'dataFolderFiles' | 'gameFolderArchived'>;
+type FoldedPath = readonly [folded: string, path: string];
+
+// A modlist holds hundreds of thousands of files, and VS Code asks again at each keystroke: an instance value's paths
+// are folded once.
+const folded = new WeakMap<FilesValue, readonly FoldedPath[]>();
+
+function foldedPathsOf(value: FilesValue): readonly FoldedPath[] {
+  const known = folded.get(value);
+  if (known !== undefined) return known;
+  const paths = [
+    ...[...value.stackedCopies].map(({ relativePath }) => relativePath),
+    ...value.dataFolderFiles.kind === 'listed' ? [...value.dataFolderFiles.files.values()].map(({ relativePath }) => relativePath) : [],
+    ...[...value.gameFolderArchived.copies.values()].map(({ file }) => file),
+  ];
+  const each = [...new Map(paths.map((path): FoldedPath => [path.toLowerCase(), path]))];
+  folded.set(value, each);
+  return each;
+}
+
 /** A file as a symbol, named by its path in the Data folder: the records that name it, which mEdit answers (symbols.md,
  *  The symbols). */
-export function fileLanguage({ instance, reporter, client, gameRelease, copyOf, reveal }: FileLanguageDeps) {
+export function fileLanguage({ instance, reporter, client, gameRelease, copyOf, reveal, tooltip }: FileLanguageDeps) {
   const pathAt = async (document: AskedIn, offset: number): Promise<Named<FileNamed> | undefined> => {
     if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
     const text = heldText(document);
@@ -61,16 +86,13 @@ export function fileLanguage({ instance, reporter, client, gameRelease, copyOf, 
     return { locations: found, unread };
   };
 
-  const dataPaths = (): Map<string, string> => {
-    const value = instance?.value;
-    if (value === undefined) return new Map();
-    const paths = [
-      ...[...value.stackedCopies].map(({ relativePath }) => relativePath),
-      ...value.dataFolderFiles.kind === 'listed' ? [...value.dataFolderFiles.files.values()].map(({ relativePath }) => relativePath) : [],
-      ...[...value.gameFolderArchived.copies.values()].map(({ file }) => file),
-    ];
-    return new Map(paths.map((path) => [path.toLowerCase(), path]));
-  };
+  const dataPaths = (): readonly FoldedPath[] => (instance === undefined ? [] : foldedPathsOf(instance.value));
+
+  const listedAt = (path: string, copy: CopyAt): Listed => ({
+    name: path, detail: 'file', icon: vscode.SymbolKind.File,
+    location: new vscode.Location(vscode.Uri.file(copy.kind === 'loose' ? copy.path : copy.archive), new vscode.Position(0, 0)),
+    resolve: async () => { await reveal(copy); return undefined; },
+  });
 
   const kind: SymbolKind<FileNamed> = {
     nameAt: pathAt,
@@ -80,22 +102,32 @@ export function fileLanguage({ instance, reporter, client, gameRelease, copyOf, 
       return Promise.resolve(holdsCopy(copy) ? { shown: copy } : { refused: copy.none });
     },
     referencesTo,
-    /** Its path in the Data folder. */
-    hoverOf: ({ symbol, spelled }) => Promise.resolve(['refused' in symbol ? spelled : symbol.path]),
+    /** Its row's tooltip, else its path in the Data folder. */
+    hoverOf({ symbol, spelled }) {
+      if ('refused' in symbol) return Promise.resolve([spelled]);
+      const lines = tooltip(symbol.path)?.split('\n').filter((line) => line !== '') ?? [];
+      return Promise.resolve(lines.length > 0 ? lines : [symbol.path]);
+    },
     completionsAt: () => Promise.resolve(undefined),
-    /** Each file whose path in the Data folder holds `query`, at the copy the game gets. */
+    /** Each file whose path in the Data folder holds `query`, at the copy the game gets, up to `MOST_FILES_LISTED`; the
+     *  Output says how many more match. */
     symbolsFor(query) {
       const wanted = query.trim().toLowerCase();
       if (wanted === '') return Promise.resolve([]);
-      return Promise.resolve([...dataPaths()].flatMap(([folded, path]): Listed[] => {
-        if (!folded.includes(wanted)) return [];
+      const matching = dataPaths().filter(([path]) => path.includes(wanted));
+      const listed: Listed[] = [];
+      for (const [, path] of matching) {
+        if (listed.length === MOST_FILES_LISTED) break;
         const copy = copyOf(path);
-        if (!holdsCopy(copy)) return [];
-        return [{
-          name: path, detail: 'file', icon: vscode.SymbolKind.File, location: new vscode.Location(vscode.Uri.file(copy.kind === 'loose' ? copy.path : copy.archive), new vscode.Position(0, 0)),
-          resolve: async () => { await reveal(copy); return undefined; },
-        }];
-      }));
+        if (holdsCopy(copy)) listed.push(listedAt(path, copy));
+      }
+      if (listed.length < matching.length) {
+        reporter.shownOnSurface(
+          'warning', `Go to Symbol in Workspace lists ${listed.length} of the ${matching.length} files whose path holds "${query.trim()}".`,
+          `It lists at most ${MOST_FILES_LISTED}, and none whose copy the game gets is outside the workspace. Type more of the path to narrow the list.`,
+        );
+      }
+      return Promise.resolve(listed);
     },
   };
 

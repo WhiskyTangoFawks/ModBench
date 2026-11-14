@@ -76,7 +76,7 @@ export function createSymbols(deps: SymbolsDeps): Symbols {
   });
   const { entryTooltip, downloadedFileTooltip, modOrderFileOf } = deps;
   const entry = entryLanguage({ instance, reporter, owners: deps.entryOwners, rows: () => rows?.mods, entryTooltip, downloadedFileTooltip, modOrderFileOf });
-  const file = fileLanguage({ instance, reporter, client, ...fileCopies });
+  const file = fileLanguage({ instance, reporter, client, ...fileCopies, tooltip: (path) => rows?.mods.fileTooltip(path) });
   const kinds: SymbolKinds = {
     plugin, entry, file,
     script: scriptLanguage({ instance, reporter, client }),

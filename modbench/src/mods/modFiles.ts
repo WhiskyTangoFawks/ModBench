@@ -1,12 +1,34 @@
 // mods.md, A row, File and folder: a mod's or Overwrite's files, as a folder tree.
 
 import * as vscode from 'vscode';
-import type { FileOrigin, OriginFile, OriginFolder } from '../instanceLoader/instance';
+import type { FileOrigin, InstanceValue, OriginFile, OriginFolder } from '../instanceLoader/instance';
 import { originLabel, type FileOrderConflict } from '../instanceLoader/fileConflictIndex';
 import type { ModlistNode } from './ModListProvider';
 import type { OriginFileMark, OriginFileRef } from '../modCommands/modCommands';
 import { byLevel, byName } from './fileTree';
 import { archivedFileUri } from './archiveFiles';
+import { filesOfOrigin } from './copiesToRead';
+import { gameFolderFileOver, unreadableArchiveReason } from './modFileStates';
+
+const looseTooltip = (relativePath: string, unreadable: string | undefined): string =>
+  (unreadable === undefined ? relativePath : `${relativePath}\ncannot be read: ${unreadable}`);
+
+const archivedTooltip = (inMod: string, gameFolderFile: string | undefined): string =>
+  (gameFolderFile === undefined ? inMod : `${inMod}\nwon by the game folder: ${gameFolderFile}`);
+
+type CopyValue = Pick<InstanceValue, 'stackedCopies' | 'filesByMod' | 'overwriteFiles' | 'archiveContents' | 'dataFolderFiles'>;
+
+/** The tooltip of the row of the copy of the file at `path` in the Data folder that the game gets; undefined where no
+ *  mod or Overwrite holds that copy. */
+export function winningCopyTooltip(value: CopyValue, path: string): string | undefined {
+  const winner = value.stackedCopies.get(path)?.copies[0];
+  if (winner === undefined) return undefined;
+  const { origin, at } = winner;
+  const held = filesOfOrigin(value, origin).find(({ sourcePath }) => sourcePath === (at.kind === 'loose' ? at.path : at.archive));
+  if (held === undefined) return undefined;
+  if (at.kind === 'loose') return looseTooltip(held.relativePath, unreadableArchiveReason(value, held));
+  return archivedTooltip(`${held.relativePath}/${at.file}`, gameFolderFileOver(value, at.file));
+}
 
 // Not `file:`: VS Code badges and tints a row whose resourceUri carries a diagnostic or another
 // provider's file decoration, and a file row draws neither. The file icon theme reads the name
@@ -147,7 +169,7 @@ export class FileNode extends vscode.TreeItem {
 function sayingWhyItCannotBeRead(row: FileNode, reason: string | undefined): FileNode {
   if (reason === undefined) return row;
   row.description = joined([row.description, `cannot be read: ${reason}`]);
-  row.tooltip = `${row.file.relativePath}\ncannot be read: ${reason}`;
+  row.tooltip = looseTooltip(row.file.relativePath, reason);
   return row;
 }
 
@@ -164,7 +186,7 @@ function archivedRow(row: vscode.TreeItem, parent: ModlistNode, archive: FileNod
   const inMod = `${archive.file.relativePath}/${path}`;
   row.id = `${parent.id}/${name}`;
   row.resourceUri = fileRowUri(archive.origin, inMod);
-  row.tooltip = gameFolderFile === undefined ? inMod : `${inMod}\nwon by the game folder: ${gameFolderFile}`;
+  row.tooltip = archivedTooltip(inMod, gameFolderFile);
 }
 
 /** A folder in an archive, and the files below it. */

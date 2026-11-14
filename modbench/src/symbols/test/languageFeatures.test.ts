@@ -152,6 +152,15 @@ describe('Go to Definition presents the symbol\'s definition (symbols.md, The sy
     expect(reporter.shownFailures).toEqual([{ severity: 'warning', message: 'Go to Definition cannot go to Actors\\Npc.nif.', detail: 'No enabled mod holds meshes/actors/npc.nif.' }]);
   });
 
+  it('writes the reason again each time it recurs (common.md, Reporting: a line in the Output for each reason)', async () => {
+    const { definition, reporter } = defining({ refused: 'No enabled mod holds meshes/actors/npc.nif.' });
+
+    await definition();
+    await definition();
+
+    expect(reporter.shownFailures).toHaveLength(2);
+  });
+
   it('says why a name that names nothing has no definition', async () => {
     const { definition, reporter } = features(fakeKinds({ file: fakeKind<never>({ nameAt: () => Promise.resolve({ ...SPAN, symbol: { refused: 'no path its asset type holds' } }) }) }));
 
@@ -192,6 +201,15 @@ describe('Find All References lists the places the symbol\'s kind answers (symbo
 
     expect(await references()).toEqual([]);
     expect(reporter.shownFailures).toEqual([{ severity: 'warning', message: 'Find All References cannot list what names Actors\\Npc.nif.', detail: 'Mod order resolves Gone.esp to no plugin.' }]);
+  });
+
+  it('writes a line for each file left out, each time it is asked', async () => {
+    const { references, reporter } = listing({ locations: [], unread: ['/a: unreadable', '/b: unreadable'] });
+
+    await references();
+    await references();
+
+    expect(reporter.shownFailures.map(({ detail }) => detail)).toEqual(['/a: unreadable', '/b: unreadable', '/a: unreadable', '/b: unreadable']);
   });
 });
 

@@ -37,9 +37,11 @@ interface Doubles {
   copy?: CopyAt | { none: string };
   resolve?: () => ReturnType<FileClient['resolveFilePath']>;
   compare?: FileClient['getComparison'];
+  tooltip?: string;
+  rocks?: number;
 }
 
-function language(answer: Awaited<ReturnType<FileClient['getFileReferences']>>, { copy = LOOSE, resolve = () => Promise.resolve(FILE), compare }: Doubles = {}) {
+function language(answer: Awaited<ReturnType<FileClient['getFileReferences']>>, { copy = LOOSE, resolve = () => Promise.resolve(FILE), compare, tooltip, rocks = 0 }: Doubles = {}) {
   const reporter = recordingReporter();
   const getFileReferences = vi.fn(() => Promise.resolve(answer));
   const resolveFilePath = vi.fn(resolve);
@@ -53,6 +55,7 @@ function language(answer: Awaited<ReturnType<FileClient['getFileReferences']>>, 
   };
   const stackedCopies = new FileConflictLookup<StackedFile>();
   stackedCopies.set({ relativePath: 'Textures/Decals/Stain_d.dds', copies: [] });
+  for (let rock = 0; rock < rocks; rock += 1) stackedCopies.set({ relativePath: `meshes/rocks/rock${rock}.nif`, copies: [] });
   const value = {
     stackedCopies,
     dataFolderFiles: { kind: 'listed' as const, files: new Map([['meshes/rock.nif', { path: '/game/Data/meshes/rock.nif', relativePath: 'meshes/rock.nif' }]]) },
@@ -60,9 +63,10 @@ function language(answer: Awaited<ReturnType<FileClient['getFileReferences']>>, 
   };
   const copyOf = vi.fn((path: string) => {
     if (path.toLowerCase() === FILE) return copy;
+    if (path.startsWith('meshes/rocks/')) return { kind: 'loose' as const, path: `/instance/mods/Rocks/${path}` };
     return path === ARCHIVED.file ? ARCHIVED : NO_COPY;
   });
-  return { reporter, getFileReferences, resolveFilePath, reveal, ...fileLanguage({ instance: { value }, reporter, client, gameRelease: () => Promise.resolve('Fallout4'), copyOf, reveal }) };
+  return { reporter, getFileReferences, resolveFilePath, reveal, copyOf, stackedCopies, ...fileLanguage({ instance: { value }, reporter, client, gameRelease: () => Promise.resolve('Fallout4'), copyOf, reveal, tooltip: () => tooltip }) };
 }
 
 describe('a path in plugin source names a file (symbols.md, The symbols, File)', () => {
@@ -99,13 +103,12 @@ describe('a path in plugin source names a file (symbols.md, The symbols, File)',
     expect(resolveFilePath).not.toHaveBeenCalled();
   });
 
-  it('hovers with its path in the Data folder, else the path as the field spells it', async () => {
-    const kind = language(NONE);
-
-    expect([
-      await kind.hoverOf({ ...SPAN, spelled: 'Decals\\Stain_d.dds', symbol: { kind: 'file', path: FILE } }),
-      await kind.hoverOf({ ...SPAN, spelled: 'Decals\\Stain_d.dds', symbol: { refused: 'no path' } }),
-    ]).toEqual([[FILE], ['Decals\\Stain_d.dds']]);
+  it.each([
+    ['its row\'s tooltip, a line to each of its lines', 'Main.ba2/textures/decals/stain_d.dds\nwon by the game folder: /game/Data/textures/decals/stain_d.dds', { kind: 'file' as const, path: FILE }, ['Main.ba2/textures/decals/stain_d.dds', 'won by the game folder: /game/Data/textures/decals/stain_d.dds']],
+    ['its path in the Data folder where Mods shows no row for it', undefined, { kind: 'file' as const, path: FILE }, [FILE]],
+    ['the path as the field spells it where it names no file', 'a tooltip', { refused: 'no path' }, ['Decals\\Stain_d.dds']],
+  ])('hovers with %s', async (_case, tooltip, symbol, lines) => {
+    expect(await language(NONE, { tooltip }).hoverOf({ ...SPAN, spelled: 'Decals\\Stain_d.dds', symbol })).toEqual(lines);
   });
 });
 
@@ -140,10 +143,44 @@ describe('Go to Symbol in Workspace on a file (symbols.md, The features, story 4
     ]);
   });
 
-  it('lists no file the game gets no copy of, and nothing for an empty query', async () => {
-    const kind = language(NONE);
+  it('lists nothing for an empty query, saying nothing', async () => {
+    const { reporter, ...kind } = language(NONE);
 
-    expect([await kind.symbolsFor('rock'), await kind.symbolsFor(' ')]).toEqual([[], []]);
+    expect([await kind.symbolsFor(' '), reporter.shownFailures]).toEqual([[], []]);
+  });
+
+  it('lists no file the game gets no copy of, and says in the Output that it matched and went unlisted', async () => {
+    const { reporter, ...kind } = language(NONE);
+
+    expect(await kind.symbolsFor('rock')).toEqual([]);
+    expect(reporter.shownFailures.map(({ severity, message }) => [severity, message])).toEqual([['warning', 'Go to Symbol in Workspace lists 0 of the 1 files whose path holds "rock".']]);
+  });
+
+  it('lists at most a thousand files on a modlist of many, placing no more, and says in the Output how many more match (principles.md, Usable first; Never silently wrong)', async () => {
+    const { reporter, copyOf, ...kind } = language(NONE, { rocks: 200_000 });
+
+    expect([(await kind.symbolsFor('rocks/')).length, copyOf.mock.calls.length]).toEqual([1000, 1000]);
+    expect(reporter.shownFailures.map(({ message, detail }) => [message, detail])).toEqual([[
+      'Go to Symbol in Workspace lists 1000 of the 200000 files whose path holds "rocks/".',
+      'It lists at most 1000, and none whose copy the game gets is outside the workspace. Type more of the path to narrow the list.',
+    ]]);
+  });
+
+  it('lists every match, saying nothing, where no more match than it lists', async () => {
+    const { reporter, ...kind } = language(NONE, { rocks: 200_000 });
+
+    expect([(await kind.symbolsFor('rock199999.')).map(({ name }) => name), reporter.shownFailures]).toEqual([['meshes/rocks/rock199999.nif'], []]);
+  });
+
+  it('reads an instance value\'s files once, however many keystrokes ask', async () => {
+    const { stackedCopies, ...kind } = language(NONE, { rocks: 10 });
+    const read = vi.spyOn(stackedCopies, 'values');
+
+    await kind.symbolsFor('r');
+    await kind.symbolsFor('ro');
+    await kind.symbolsFor('roc');
+
+    expect(read).toHaveBeenCalledOnce();
   });
 
   it('shows the copy in the Explorer when the user picks it, as its definition is', async () => {
