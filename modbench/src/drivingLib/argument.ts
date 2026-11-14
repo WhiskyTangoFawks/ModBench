@@ -31,6 +31,12 @@ export function modArgumentOf(carrier: unknown): ModArgument | undefined {
   return argument && Reflect.get(argument, 'kind') === 'mod' && isString(name) ? { kind: 'mod', name } : undefined;
 }
 
+export function separatorArgumentOf(carrier: unknown): ArgumentOf<'separator'> | undefined {
+  const separator: unknown = typeof carrier === 'object' && carrier !== null && Reflect.get(carrier, 'kind') === 'separator' && Reflect.get(carrier, 'separator');
+  const name: unknown = typeof separator === 'object' && separator !== null && Reflect.get(separator, 'name');
+  return isString(name) ? { kind: 'separator', name } : undefined;
+}
+
 /** What names the object a row stands for: its `name` when it has one, else the label it shows. */
 export function rowLabelOf(carrier: unknown): string | undefined {
   if (typeof carrier !== 'object' || carrier === null) return undefined;

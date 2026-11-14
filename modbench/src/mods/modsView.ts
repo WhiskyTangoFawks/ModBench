@@ -220,7 +220,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     drawsHighlight: { highlight: (related) => { provider.highlight(related.origins); } },
     symbolRows: {
       selected: () => { const [only, ...rest] = view.selection; return rest.length === 0 && only?.kind === 'mod' ? only : undefined; },
-      show: (mod) => { const row = provider.entryRow({ kind: 'mod', name: mod }); return row && (() => view.reveal(row, { select: true, focus: true })); },
+      show: (entry) => { const row = provider.entryRow(entry); return row && (() => view.reveal(row, { select: true, focus: true })); },
       folderOf: (mod) => instance.value.paths.modDirs.get(mod),
       dataPathOf: (clicked) => clicked instanceof FileNode ? clicked.file.relativePath : clicked instanceof ArchivedFileNode ? clicked.path : undefined,
       fileTooltip: (path) => winningCopyTooltip(instance.value, path),

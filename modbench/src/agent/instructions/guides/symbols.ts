@@ -17,7 +17,9 @@ export const SYMBOLS_GUIDE = `Modbench works like a language server whose symbol
   - a mod: the view whose row it is, Mods, or its folder when Mods shows no row for it
   - a Papyrus script: its source, or its compiled script when it has no source
   - a file: the copy that the game gets, inside its archive when it is archived
-  - a mod separator, a downloaded file or a profile has no definition
+  - a mod separator: the view whose row it is, Mods
+  - a downloaded file: the view whose row it is, Downloads
+  - a profile: none
 - list_references lists each place that a file names a symbol, of every kind.
 - Rename a symbol with its rename tool, such as mod_rename, plugin_rename or separator_rename. The tool carries every reference. In plugin source and build files, the change is a working-tree edit that the user reviews. A rename by hand, with mv or a text edit, leaves every reference on the old name.
 - When a rename cannot carry a reference, such as one in a plugin with no plugin source, the rename lands, and its warning names each reference left behind.

@@ -18,6 +18,7 @@ import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, loadOrderComing, sourceModRepositoriesOver } from './editor';
 import { quickFixes } from './drivingLib/quickFixes';
 import type { FileCopies } from './symbols/fileLanguage';
+import type { Reveal } from './drivingLib/symbolRows';
 import { createSymbols, followRenames, referencedByCopyValueText, registerFollowRename, type SymbolRows } from './symbols';
 import { createSourceLanguage } from './sourceLanguage';
 import { saveUnsavedUnder } from './textDocuments/saveUnsavedUnder';
@@ -141,6 +142,7 @@ interface InstanceSide {
   modsLines: () => string[];
   entryTooltip: (entry: EntryRef) => string | undefined;
   downloadedFileTooltip: (name: string) => string | undefined;
+  downloadedFileRow: (name: string) => Reveal | undefined;
   modOrderFileOf: (profile: string) => string | undefined;
   fileCopies: FileCopies;
   pathStanding: PathStanding;
@@ -160,6 +162,7 @@ function buildBareSide(own: Own): InstanceSide {
     modsLines: () => [],
     entryTooltip: () => undefined,
     downloadedFileTooltip: () => undefined,
+    downloadedFileRow: () => undefined,
     modOrderFileOf: () => undefined,
     fileCopies: { copyOf: (path) => ({ none: `No instance is open to hold ${path}.` }), reveal: revealCopy },
     pathStanding: NO_PATH_STANDING,
@@ -303,12 +306,16 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     modsLines: () => mods.standingLines(),
     entryTooltip: (entry) => mods.tooltipOf(entry),
     downloadedFileTooltip: (name) => downloads.tooltipOf(name),
+    downloadedFileRow: (name) => downloads.show(name),
     modOrderFileOf: (profile) => adapter.modOrderFileOf(profile),
     fileCopies: { copyOf: (path) => copyTheGameGets(instance.value, path), reveal: revealCopy },
     deployment: { folder: () => deploymentFolderOf(deploymentFolderSetting), pluginsTxtPlace: placeForGame },
     pathStanding: pathStandingOf(instance),
     sourceFiles: (origin) => sourceFiles(instance.value, origin),
-    symbolRows: { mods: mods.symbolRows, plugins: plugins.symbolRows, filesHeld: () => instance.value },
+    symbolRows: {
+      mods: mods.symbolRows, plugins: plugins.symbolRows, filesHeld: () => instance.value,
+      selection: () => deps.focusedView.selection(),
+    },
     copyValue: [mods.copyValue, plugins.copyValue, downloads.copyValue],
   };
 }
@@ -413,6 +420,7 @@ function start(context: vscode.ExtensionContext): void {
     fileCopies: views.fileCopies,
     entryTooltip: views.entryTooltip,
     downloadedFileTooltip: views.downloadedFileTooltip,
+    downloadedFileRow: views.downloadedFileRow,
     modOrderFileOf: views.modOrderFileOf,
     owners: [recordIndexReferences(meditClient, () => Promise.resolve([]), sourceNames), ...opened.owners],
     entryOwners: opened.entryOwners,

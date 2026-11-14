@@ -161,6 +161,15 @@ describe('the Downloads rows come from the Instance value', () => {
   });
 });
 
+describe('the row the tree shows for a downloaded file', () => {
+  it('is its node, and none while the tree hides it', () => {
+    const provider = providerOver(row({ name: 'armor.zip' }), row({ name: 'sleep.zip' }), row({ name: 'old.zip', excluded: true }));
+    provider.setFilter('sleep');
+
+    expect([provider.rowFor('sleep.zip')?.id, provider.rowFor('armor.zip'), provider.rowFor('old.zip')]).toEqual(['sleep.zip', undefined, undefined]);
+  });
+});
+
 describe('Show excluded', () => {
   it('includes excluded rows alongside visible ones when turned on', async () => {
     const provider = providerOver(row({ name: 'excluded.zip', excluded: true }), row({ name: 'visible.zip' }));

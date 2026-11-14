@@ -2109,7 +2109,7 @@ describe('Referenced By and Go to on a mod, as VS Code runs them from the Mods v
     assert.strictEqual(await selectedRow(), '', 'no row of Mods is selected before go to');
 
     await waitFor(`go to to select ${modName}`, async () => {
-      await vscode.commands.executeCommand('modbench.mod.goTo', asked);
+      await vscode.commands.executeCommand('modbench.symbol.goTo', asked);
       return (await selectedRow()) === modName;
     });
   });
