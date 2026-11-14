@@ -22,6 +22,7 @@ As a user, I want:
 12. My agent to learn from Modbench that a FOMOD's choices are mine, so it names only choices I made or gave it to make, and otherwise puts them to me. Cites: story 6
 13. My agent to understand that Modbench is modding with software development practice, so that it works as Modbench intends even before I know how Modbench applies that practice. Cites: story 6; Existing tools
 14. My agent to understand what Modbench does to the instance automatically, and what follows a change I make by hand, so that a change it did not make does not surprise it. Cites: story 6; ADR-0003; ADR-0001
+15. My agent to learn from Modbench how to report what Modbench gets wrong or cannot do, so a report reaches the maintainer in a form they can act on. My agent files only a report I approve. Cites: story 6; Existing tools
 
 ## Names
 
