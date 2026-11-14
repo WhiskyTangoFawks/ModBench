@@ -55,6 +55,10 @@ describe('the copy of a file the game gets (symbols.md, The symbols, File)', () 
   it('is found by a path in any case', () => {
     expect(copyTheGameGets(held({ winner: LOOSE }), 'Textures/Decals/Stain_D.dds')).toEqual(LOOSE);
   });
+
+  it('is the game folder\'s archived copy, found by a path spelled with backslashes', () => {
+    expect(copyTheGameGets(held({ gameFolderArchived: gameLoadsFirst }), 'Textures\\Decals\\Stain_d.dds')).toEqual(GAME_ARCHIVED);
+  });
 });
 
 describe('a game folder outside the workspace is never a definition (ADR-0001)', () => {

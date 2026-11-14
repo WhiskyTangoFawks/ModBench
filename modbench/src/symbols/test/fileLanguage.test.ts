@@ -64,7 +64,7 @@ function language(answer: Awaited<ReturnType<FileClient['getFileReferences']>>, 
   const copyOf = vi.fn((path: string) => {
     if (foldPath(path) === FILE) return copy;
     if (path.startsWith('meshes/rocks/')) return { kind: 'loose' as const, path: `/instance/mods/Rocks/${path}` };
-    return path.toLowerCase() === ARCHIVED.file ? ARCHIVED : NO_COPY;
+    return foldPath(path) === ARCHIVED.file ? ARCHIVED : NO_COPY;
   });
   const names = sourceNames({
     fileAt: () => Promise.resolve(named),
@@ -100,13 +100,6 @@ describe('where a file is defined, and the records that name it (symbols.md, The
     ['nothing for a file no copy exists of, refusing with what was searched', NO_COPY, { refused: NO_COPY.none }],
   ])('defines %s', async (_case, copy, expected) => {
     expect(await language(NONE, { copy }).definitionOf({ kind: 'file', path: FILE })).toEqual(expected);
-  });
-
-  it.each([
-    ['in a mod', 'Textures\\Decals\\Stain_d.dds', LOOSE],
-    ['in a game archive', 'Textures\\Decals\\Other_d.dds', ARCHIVED],
-  ])('defines a file %s named with backslashes as the one named with forward slashes (symbols.md, A symbol gives one answer wherever I ask)', async (_case, path, copy) => {
-    expect(await language(NONE).definitionOf({ kind: 'file', path })).toEqual({ shown: copy });
   });
 
   it('lists each record that names it at its member, and each copy it could not read', async () => {

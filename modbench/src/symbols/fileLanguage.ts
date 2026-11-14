@@ -84,7 +84,7 @@ export function fileLanguage({ instance, reporter, client, names, copyOf, reveal
     }),
     /** The copy the game gets, inside its archive when archived. */
     definitionOf({ path }): Promise<Definition> {
-      const copy = copyOf(foldPath(path));
+      const copy = copyOf(path);
       return Promise.resolve(holdsCopy(copy) ? { shown: copy } : { refused: copy.none });
     },
     referencesTo,
