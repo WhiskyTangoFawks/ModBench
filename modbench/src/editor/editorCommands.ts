@@ -36,7 +36,6 @@ import { failureReason, isReadFailed } from '../wire/readFailed';
 export interface EditorCommandDeps {
   loadOrderComing: LoadOrderComing;
   context: Pick<vscode.ExtensionContext, 'extensionUri'>;
-  // The open record tabs and the one in focus.
   tabs: RecordTabs;
   meditClient: Pick<MEditClient,
     | 'getEditChanges' | 'searchRecords'

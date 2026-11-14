@@ -467,7 +467,7 @@ internal sealed class RelationReads(
     private static CopyNaming CopyNamingOf(System.Data.Common.DbDataReader reader) =>
         new(reader.GetString(0), new PluginAddress(reader.GetString(1), reader.GetString(2)), reader.GetBoolean(3));
 
-    /// <summary>The same read over the active plugins and the inactive compiled ones (ADR-0012).</summary>
+    /// <summary>Each copy that references the record, in an active plugin or a compiled one (ADR-0012).</summary>
     public IReadOnlyList<ReferenceRow> GetReferencedByInActiveOrCompiledPlugins(string targetFormKey)
     {
         using var context = OpenRead();

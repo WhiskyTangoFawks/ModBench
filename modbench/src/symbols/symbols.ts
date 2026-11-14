@@ -28,7 +28,6 @@ interface SymbolsDeps {
   instance: Pick<Instance, 'value' | 'subscribe'> | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
   client: Pick<MEditClient, 'getRecordOfFile'> & RecordClient & ScriptClient & FileClient & RecordReferencedByDeps['client'];
-  /** The record of the tab in focus, else the one the user picks; undefined where none is. */
   focusedOrPickedRecord: () => Promise<string | undefined>;
   fileCopies: FileCopies;
   /** Each box that owns files, saying where they name a symbol (ADR-0028). */

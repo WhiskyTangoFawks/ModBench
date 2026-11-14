@@ -130,12 +130,12 @@ def compare(form_keys: list[str], plugin: Name | None = None) -> dict[str, list[
 
 
 def referenced_by(form_key: str) -> list[Referrer]:
-    """The records that reference a record, each with its plugin and the field that holds the reference."""
+    """The records in the active plugins and the compiled ones that reference a record, each with its plugin and the field that holds the reference."""
     return [
         Referrer(
             plugin=Plugin(referrer['plugin'], referrer['origin']), form_key=referrer['formKey'],
             field_path=referrer['fieldPath'], record_type=referrer['recordType'], editor_id=referrer['editorId'])
-        for referrer in _call('GET', f'/records/{_quoted(form_key)}/references')]
+        for referrer in _call('GET', f'/records/{_quoted(form_key)}/references-in-active-or-compiled-plugins')]
 
 
 _NO_VALUE = object()

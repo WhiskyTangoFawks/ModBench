@@ -16,7 +16,6 @@ export interface RecordReferencedByDeps {
   client: ReferencedByClient & Pick<MEditClient, 'getComparison'>;
   reporter: Reporter;
   locateRecord: LocateRecord;
-  /** The record of the tab in focus, else the one the user picks; undefined where none is. */
   focusedOrPickedRecord: () => Promise<string | undefined>;
 }
 

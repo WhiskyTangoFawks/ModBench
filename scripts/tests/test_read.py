@@ -73,8 +73,10 @@ class ReferencesAnswered(unittest.TestCase):
         answer = [{
             'formKey': '000800:Mod.esp', 'plugin': 'Mod.esp', 'origin': 'Some Mod', 'fieldPath': 'Conditions[0].Data.ParameterOneRecord',
             'recordType': 'cobj', 'recordTypeName': 'Constructible Object', 'editorId': 'Recipe'}]
-        with medit_answering(200, answer) as url, window_of(url):
+        requested: list[str] = []
+        with medit_answering(200, answer, requested=requested) as url, window_of(url):
             referrers = medit.referenced_by('000800:Other.esp')
+        self.assertEqual(requested, ['/records/000800%3AOther.esp/references-in-active-or-compiled-plugins'])
         self.assertEqual(referrers, [medit.Referrer(
             medit.Plugin('Mod.esp', 'Some Mod'), '000800:Mod.esp', 'Conditions[0].Data.ParameterOneRecord', 'cobj', 'Recipe')])
 
