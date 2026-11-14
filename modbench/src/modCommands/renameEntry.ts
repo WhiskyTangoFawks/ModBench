@@ -44,8 +44,10 @@ const renamedLine = ({ kind, name }: EntryRef, to: string): ModOrderChange =>
   (kind === 'mod' ? { kind: 'renameMod', from: name, to } : { kind: 'renameSeparator', from: name, to });
 
 // A separator's folder moves with the first line renamed, so a failure
-// before it writes nothing. An entry no profile lists and no folder held does not exist.
-async function linesRenamed(adapter: InstanceAdapter, entry: EntryRef, to: string, inProfiles: readonly string[], hadFolder: boolean): Promise<Committed> {
+// before it writes nothing.
+async function linesRenamed(
+  adapter: InstanceAdapter, entry: EntryRef, to: string, inProfiles: readonly string[],
+): Promise<{ readonly failed: string } | { readonly cannotFollow: string[]; readonly listed: boolean }> {
   const cannotFollow: string[] = [];
   let folderMoved = entry.kind === 'mod';
   let listed = false;
@@ -59,7 +61,7 @@ async function linesRenamed(adapter: InstanceAdapter, entry: EntryRef, to: strin
       cannotFollow.push(`profile "${profile}"'s ${adapter.names.modOrderFile}: ${errorMessage(err)}`);
     }
   }
-  return listed || hadFolder ? { cannotFollow } : { failed: entryNotFound(entry) };
+  return { cannotFollow, listed };
 }
 
 async function profilesActiveFirst(adapter: InstanceAdapter): Promise<string[]> {
@@ -92,9 +94,11 @@ function entryDefinition(adapter: InstanceAdapter, sourceFolder: FolderMove | un
           } catch (err) {
             return { failed: errorMessage(err) };
           }
-          const lines = await linesRenamed(adapter, entry, to, ordered, from !== undefined);
+          const lines = await linesRenamed(adapter, entry, to, ordered);
           if ('failed' in lines) return lines;
           const moved = await folderOf(adapter, { kind: entry.kind, name: to });
+          // An entry no profile lists and no folder now holds under the new name was never there.
+          if (!lines.listed && moved === undefined) return { failed: entryNotFound(entry) };
           const folders = from === undefined || moved === undefined ? [] : [{ from, to: moved }];
           const cannotFollow = [
             ...lines.cannotFollow,

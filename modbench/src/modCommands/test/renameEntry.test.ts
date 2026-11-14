@@ -149,10 +149,21 @@ describe('rename separator: its line in each profile, its folder, and each refer
     expect(linesWritten(renamer.fake.calls)).toEqual([]);
   });
 
-  it('lands a separator no profile lists but a folder holds, with no line to carry', async () => {
+  it('fails a separator no profile lists whose folder stays where it is, writing no line', async () => {
     const renamer = over({}, { modFolders: modFoldersOf(...ORDER, separator('Orphan')) });
 
-    expect(await renamer.commands.renameSeparator(renamer.editing, 'Orphan', 'Renamed')).toEqual({ applied: true, cannotFollow: [], name: 'Renamed' });
+    expect(await renamer.commands.renameSeparator(renamer.editing, 'Orphan', 'Renamed')).toEqual({ applied: false, failed: 'Separator not found in modlist: Orphan', edited: false, moved: [] });
+    expect(linesWritten(renamer.fake.calls)).toEqual([]);
+  });
+
+  it('lands a separator no profile lists once the Explorer has moved its folder, with no line to carry', async () => {
+    const renamer = over({}, { modFolders: modFoldersOf(...ORDER, separator('Orphan')) });
+    const explorerMovesTheFolder = (changes: readonly FileChanges[]) => {
+      renamer.fake.read({ modFolders: modFoldersOf(...ORDER, separator('Renamed')) });
+      return renamer.editing.apply(changes);
+    };
+
+    expect(await renamer.commands.renameSeparator({ ...renamer.editing, apply: explorerMovesTheFolder }, 'Orphan', 'Renamed')).toEqual({ applied: true, cannotFollow: [], name: 'Renamed' });
     expect(linesWritten(renamer.fake.calls)).toEqual([]);
   });
 
