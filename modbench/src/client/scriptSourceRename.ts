@@ -4,9 +4,8 @@ import { pluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
 import { holdsNoCopy } from '../wire/recordCopy';
 import { failureReason, isReadFailed } from '../wire/readFailed';
 import type { MEditClient } from './MEditClient';
-import { stringsAt } from './pluginSourceText';
 
-export type ScriptSourceClient = Pick<MEditClient, 'getScriptReferences' | 'getCopyDocument'>;
+type ScriptSourceClient =Pick<MEditClient, 'getScriptReferences' | 'getCopyDocument' | 'getPluginSourceNames'>;
 
 interface ScriptSourceRenameDeps {
   readonly client: ScriptSourceClient;
@@ -40,7 +39,10 @@ export function scriptSourceRename({ client, readText, refreshSourceControlFor }
           const path = await fileOf(copy);
           if (typeof path !== 'string') return path;
           const text = heldTextAt(held, path) ?? await readText(path);
-          const spans = stringsAt(text, copy.formKey, copy.fieldPaths).filter(({ value }) => sameName(value, name));
+          const names = await client.getPluginSourceNames(text, path);
+          if (isReadFailed(names)) throw new Error(failureReason(names));
+          const spans = names.filter((named) => named.kind === 'Script' && named.record === copy.formKey
+            && copy.fieldPaths.includes(named.fieldPath ?? '') && sameName(named.value, name));
           if (spans.length < copy.fieldPaths.length) throw new Error(`its plugin source does not name ${name} at ${copy.fieldPaths.join(', ')}`);
           return { path, text, spans, plugin: copy.plugin };
         } catch (error) {

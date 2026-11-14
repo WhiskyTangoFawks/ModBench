@@ -36,7 +36,13 @@ function references(rows: ReferenceResult[], copies: Record<string, CopyOnDisk>,
     if (found === undefined) throw new Error('The file is gone.');
     return found;
   };
-  const read = referencesToFormKey({ client, open: (uri) => new Promise<{ getText(): string }>((resolve) => { const text = textAt(uri); resolve({ getText: () => text }); }) });
+  const read = referencesToFormKey({
+    client, open: (uri) => new Promise<{ getText(): string }>((resolve) => { const text = textAt(uri); resolve({ getText: () => text }); }),
+    spanIn: (text, referrer, formKey) => {
+      const start = text.indexOf(`"${formKey}"`, text.indexOf(`"FormKey": "${referrer}"`));
+      return Promise.resolve({ start, end: start + formKey.length + 2 });
+    },
+  });
   return { read, referencesAt: async (formKey: string) => (await read(formKey)).found };
 }
 
@@ -58,62 +64,17 @@ describe('Find All References on a FormKey (symbols.md, The features, story 2)',
     ]);
   });
 
-  describe('a referrer that shares its file with its child records', () => {
+  it('lists a child record on its own tab of its owner\'s file', async () => {
     const CELL = '000701:A.esp';
-    const PLACED = '000702:A.esp';
     const PERSISTENT = '000703:A.esp';
     const CELL_FILE = '/source/ModA/plugin-source/A.esp/Cell.json';
-    const cell = `{ "FormKey": "${CELL}", "Placed": [{ "FormKey": "${PLACED}", "Base": "${GUN}" }], "Owner": "${GUN}", "Persistent": [{ "FormKey": "${PERSISTENT}", "Base": "${GUN}" }] }`;
-    const onCell = (...rows: ReferenceResult[]) =>
-      references(rows, { [key(CELL, modA)]: { file: CELL_FILE, text: cell }, [key(PERSISTENT, modA)]: { file: CELL_FILE, text: cell } });
-
-    it('lists a child record at the reference in its own object, on its own tab of its owner\'s file', async () => {
-      const { referencesAt } = onCell(row(PERSISTENT, modA, 'Base'));
-
-      expect(listed(await referencesAt(GUN))).toEqual([
-        { uri: `modbench-child-record:${CELL_FILE}`, text: `"${GUN}"`, start: cell.lastIndexOf(GUN) - 1 },
-      ]);
-    });
-
-    it('lists the owner at its own reference, past the references its child records hold', async () => {
-      const { referencesAt } = onCell(row(CELL, modA, 'Owner'));
-
-      expect(listed(await referencesAt(GUN))).toEqual([
-        { uri: `file:${CELL_FILE}`, text: `"${GUN}"`, start: cell.indexOf(`"Owner": "${GUN}"`) + '"Owner": '.length },
-      ]);
-    });
-  });
-
-  it('lists a copy whose unsaved document lacks the reference mEdit counts at its record\'s own FormKey', async () => {
-    const edited = `{ "Model": "", "FormKey": "${STAND}" }`;
-    const { referencesAt } = references([row(STAND, modA, 'Model')], { [key(STAND, modA)]: { file: STAND_FILE, text: edited } });
+    const cell = `{ "FormKey": "${CELL}", "Owner": "${GUN}", "Persistent": [{ "FormKey": "${PERSISTENT}", "Base": "${GUN}" }] }`;
+    const { referencesAt } = references(
+      [row(PERSISTENT, modA, 'Base')], { [key(CELL, modA)]: { file: CELL_FILE, text: cell }, [key(PERSISTENT, modA)]: { file: CELL_FILE, text: cell } },
+    );
 
     expect(listed(await referencesAt(GUN))).toEqual([
-      { uri: `file:${STAND_FILE}`, text: `"${STAND}"`, start: edited.indexOf(STAND) - 1 },
-    ]);
-  });
-
-  it('lists a copy whose unsaved document lacks its record at the document\'s start', async () => {
-    const { referencesAt } = references([row(STAND, modA, 'Model')], { [key(STAND, modA)]: { file: STAND_FILE, text: '{}' } });
-
-    expect(listed(await referencesAt(GUN))).toEqual([{ uri: `file:${STAND_FILE}`, text: '', start: 0 }]);
-  });
-
-  it('lists a record that references itself at the field that holds the reference, never at its own FormKey member', async () => {
-    const own = `{ "FormKey": "${GUN}", "Template": "${GUN}" }`;
-    const { referencesAt } = references([row(GUN, modA, 'Template')], { [key(GUN, modA)]: { file: STAND_FILE, text: own } });
-
-    expect(listed(await referencesAt(GUN))).toEqual([
-      { uri: `file:${STAND_FILE}`, text: `"${GUN}"`, start: own.lastIndexOf(GUN) - 1 },
-    ]);
-  });
-
-  it('passes over a property name that spells the FormKey', async () => {
-    const keyed = `{ "FormKey": "${STAND}", "${GUN}": 1, "Model": "${GUN}" }`;
-    const { referencesAt } = references([row(STAND, modA, 'Model')], { [key(STAND, modA)]: { file: STAND_FILE, text: keyed } });
-
-    expect(listed(await referencesAt(GUN))).toEqual([
-      { uri: `file:${STAND_FILE}`, text: `"${GUN}"`, start: keyed.lastIndexOf(GUN) - 1 },
+      { uri: `modbench-child-record:${CELL_FILE}`, text: `"${GUN}"`, start: cell.lastIndexOf(GUN) - 1 },
     ]);
   });
 

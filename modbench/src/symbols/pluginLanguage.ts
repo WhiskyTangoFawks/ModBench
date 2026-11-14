@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import type { PluginRows } from '../drivingLib/symbolRows';
-import { formKeyValue } from '../client';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
@@ -14,6 +13,7 @@ import { atFile, nameHolds, placeLocation, showReferencedBy, spelledAround, type
 import { pluginReferencesOf, type PluginReference } from './pluginReferences';
 import { locateRecord, locationOf } from './recordLocation';
 import { selectingItsRow } from './definitionShown';
+import type { SourceNames } from './sourceNames';
 import type { Definition, Listed, Named, PluginNamed, References, SymbolKind } from './symbolKind';
 
 interface PluginLanguageDeps {
@@ -21,6 +21,7 @@ interface PluginLanguageDeps {
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
   client: RecordDocumentClient;
   owners: readonly SymbolOwner[];
+  names: Pick<SourceNames, 'formKeyIn' | 'pluginNamesIn'>;
   /** The plugin's `rename`, with the new name an entry point supplies. */
   renamePlugin: (plugin: PluginSymbol, newName: string) => Promise<void>;
   /** What Plugins shows of its rows; absent with no instance. */
@@ -33,9 +34,9 @@ const locationOfReference = (found: PluginReference<vscode.TextDocument>): vscod
   ('file' in found ? placeLocation(found) : locationOf(found));
 
 /** A plugin as a symbol, wherever an owner's file names it (symbols.md, The symbols, Plugin). */
-export function pluginLanguage({ instance, reporter, client, owners, renamePlugin, rows, tooltip }: PluginLanguageDeps) {
+export function pluginLanguage({ instance, reporter, client, owners, names, renamePlugin, rows, tooltip }: PluginLanguageDeps) {
   const read = pluginReferencesOf({
-    owners, client, open: openPluginSourceDocument,
+    owners, client, open: openPluginSourceDocument, spansIn: names.pluginNamesIn,
     plugins: () => instance?.value.plugins ?? [],
     held: () => heldTexts(unsavedTexts()),
   });
@@ -73,7 +74,7 @@ export function pluginLanguage({ instance, reporter, client, owners, renamePlugi
 
   // Referenced By anchors at the plugin's header, as a record's anchors at its FormKey; else at a place that names it.
   const anchorOf = (plugin: PluginSymbol) => async (first: ListedLocations): Promise<vscode.Location | { refused: string }> => {
-    const header = await locateRecord({ client, open: openPluginSourceDocument }, { formKey: headerFormKeyOf(plugin), plugin }, formKeyValue)
+    const header = await locateRecord({ client, open: openPluginSourceDocument }, { formKey: headerFormKeyOf(plugin), plugin }, names.formKeyIn)
       .catch((error: unknown) => ({ refused: errorMessage(error) }));
     if (header && !('refused' in header)) return locationOf(header);
     return first.locations[0] ?? { refused: header?.refused ?? `No active plugin holds ${headerFormKeyOf(plugin)}.` };

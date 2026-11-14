@@ -15,7 +15,7 @@ vi.mock('vscode', () => ({
 import { fileLanguage, type FileClient } from '../fileLanguage';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { FileConflictLookup, NO_GAME_FOLDER_ARCHIVED, type CopyAt, type StackedFile } from '../../instanceLoader/fileConflictIndex';
-import type { NamedFile } from '../../client';
+import type { NamedFile } from '../sourceNames';
 import { sourceNames } from './fakeSourceNames';
 
 const HOLDER = '000801:Mod.esp';
@@ -61,7 +61,10 @@ function language(answer: Awaited<ReturnType<FileClient['getFileReferences']>>, 
     if (path.startsWith('meshes/rocks/')) return { kind: 'loose' as const, path: `/instance/mods/Rocks/${path}` };
     return path === ARCHIVED.file ? ARCHIVED : NO_COPY;
   });
-  const names = sourceNames({ fileAt: () => Promise.resolve(named) });
+  const names = sourceNames({
+    fileAt: () => Promise.resolve(named),
+    membersIn: (text, formKey, fieldPaths) => Promise.resolve(formKey === HOLDER && fieldPaths.includes('Diffuse') && text === TEXT ? [SPAN] : []),
+  });
   return { reporter, getFileReferences, reveal, copyOf, stackedCopies, ...fileLanguage({ instance: { value }, reporter, client, names, copyOf, reveal, tooltip: () => tooltip }) };
 }
 

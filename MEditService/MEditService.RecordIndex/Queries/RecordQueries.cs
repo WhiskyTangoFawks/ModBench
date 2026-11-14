@@ -479,6 +479,16 @@ internal sealed class RecordQueries(
     public Answer<RecordOfFileAnswer, IndexRefused> GetRecordOfFile(string path) =>
         _answer.Of(() => source.RecordOfFile(_loadOrder.Require(), path));
 
+    public Answer<IReadOnlyList<DocumentName>, IndexRefused> GetPluginSourceNames(string? path, string text, int? at) =>
+        _answer.Of(() =>
+        {
+            if (path is not null && source.Touching(_loadOrder.Require(), path) is not PathAnswer.Touches) return (IReadOnlyList<DocumentName>)[];
+            var document = DocumentSpans.Read(text);
+            var schemas = RequireSchemas();
+            var typeOf = RequireReads().LinkResolver([.. document.RecordFormKeys]);
+            return DocumentNames.In(document, formKey => typeOf(formKey) is { } entry && schemas.TryGetValue(entry.RecordType, out var schema) ? schema.RecordColumns : null, at);
+        });
+
     public Task<Answer<IReadOnlyList<WorldspaceSummary>, IndexRefused>> GetWorldspaces(PluginAddress plugin, CancellationToken cancel) =>
         _answer.Of(() =>
         {

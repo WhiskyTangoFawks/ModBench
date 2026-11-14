@@ -14,7 +14,7 @@ import { recordLanguage } from '../recordLanguage';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { localFailure } from '../../wire/readFailed';
-import { sourceNames } from './fakeSourceNames';
+import { sourceNames, spelledIn } from './fakeSourceNames';
 
 const GUN = '000801:A.esp';
 const modA = { name: 'A.esp', origin: 'ModA' };
@@ -30,7 +30,10 @@ function kind({ open = (): Promise<{ getText(): string }> => Promise.resolve({ g
   client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: GUN_FILE });
   const opened: unknown[] = [];
   const record = recordLanguage({
-    client, reporter: recordingReporter(), names: sourceNames({ recordAt: () => ({ ...NAMED, formKey: GUN }) }),
+    client, reporter: recordingReporter(), names: sourceNames({
+      recordAt: () => Promise.resolve({ ...NAMED, formKey: GUN }),
+      declarationIn: (text: string, formKey: string) => Promise.resolve(spelledIn(text, `"FormKey": "${formKey}"`)),
+    }),
     open: async (uri: vscode.Uri) => { opened.push(uri); return { ...await open(), positionAt: (offset: number) => new vscode.Position(0, offset) }; },
   });
   return { client, opened, record };

@@ -1,11 +1,12 @@
 import * as vscode from 'vscode';
-import type { MEditClient, PluginSourceNames } from '../client';
+import type { MEditClient } from '../client';
 import type { InstanceValue, PapyrusScript } from '../instanceLoader/instance';
 import { sameName, type ScriptSymbol } from '../symbolNames/symbolNames';
 import { heldText } from '../textDocuments/heldText';
 import { openPluginSourceDocument } from '../textDocuments/pluginSource';
 import type { RecordDocumentClient } from '../textDocuments/recordDocument';
 import { membersNaming } from './memberReferences';
+import type { SourceNames } from './sourceNames';
 import { atFile, nameHolds, type AskedIn } from './symbolPlaces';
 import type { Definition, SymbolKind } from './symbolKind';
 
@@ -13,7 +14,7 @@ export type ScriptClient = Pick<MEditClient, 'getScriptReferences'> & RecordDocu
 
 interface ScriptLanguageDeps {
   instance: { readonly value: Pick<InstanceValue, 'papyrusScripts'> } | undefined;
-  names: Pick<PluginSourceNames, 'scriptAt'>;
+  names: Pick<SourceNames, 'scriptAt' | 'membersIn' | 'formKeyIn'>;
   client: ScriptClient;
 }
 
@@ -39,7 +40,7 @@ export function scriptLanguage({ instance, names, client }: ScriptLanguageDeps):
     },
     /** Each member of a record that names it. */
     async referencesTo({ name }) {
-      const { found, unread } = await membersNaming(client, openPluginSourceDocument, await client.getScriptReferences(name));
+      const { found, unread } = await membersNaming(client, openPluginSourceDocument, names, await client.getScriptReferences(name));
       return { locations: found, unread };
     },
     /** None: a script has no row. */

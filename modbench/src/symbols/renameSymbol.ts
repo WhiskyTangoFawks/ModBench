@@ -1,4 +1,5 @@
-import type { MEditClient, PluginSourceNames, RecordMember } from '../client';
+import type { MEditClient } from '../client';
+import type { RecordMember, SourceNames } from './sourceNames';
 import { pluginNamed, type PluginSymbol, type ResolvedPlugin, type TextSpan } from '../symbolNames/symbolNames';
 import { heldText } from '../textDocuments/heldText';
 import type { RecordEditEnvelope } from '../wire/messages';
@@ -8,7 +9,7 @@ import type { AskedIn } from './symbolPlaces';
 
 interface RenameSymbolDeps {
   readonly plugin: Pick<ReturnType<typeof pluginLanguage>, 'renameRangeAt' | 'renameAt'>;
-  readonly names: Pick<PluginSourceNames, 'recordMemberAt'>;
+  readonly names: Pick<SourceNames, 'recordMemberAt'>;
   readonly plugins: () => readonly ResolvedPlugin[];
   readonly client: Pick<MEditClient, 'getRecordOfFile'>;
   readonly executeCommand: (command: string, ...args: unknown[]) => PromiseLike<unknown>;
@@ -17,7 +18,7 @@ interface RenameSymbolDeps {
 /** Rename Symbol: on a plugin's name, the plugin's `rename`; on a FormKey or an EditorID in plugin source, `edit
  *  field` on it (symbols.md, The symbols, Record). */
 export function renameSymbol({ plugin, names, plugins, client, executeCommand }: RenameSymbolDeps) {
-  const recordNamedAt = (document: AskedIn, offset: number): RecordMember | undefined =>
+  const recordNamedAt = (document: AskedIn, offset: number): Promise<RecordMember | undefined> =>
     names.recordMemberAt(document.uri.fsPath, heldText(document), offset);
 
   // An EditorID is the label of the copy its file holds.
@@ -38,12 +39,12 @@ export function renameSymbol({ plugin, names, plugins, client, executeCommand }:
     async prepare(document: AskedIn, offset: number): Promise<TextSpan & { placeholder: string }> {
       const named = await plugin.renameRangeAt(document, offset);
       if (named !== undefined) return { start: named.start, end: named.end, placeholder: named.name };
-      const record = recordNamedAt(document, offset);
+      const record = await recordNamedAt(document, offset);
       if (record === undefined) throw new Error('Rename Symbol renames a plugin, or changes a record\'s FormKey or EditorID, and none is here.');
       return { start: record.start, end: record.end, placeholder: heldText(document).slice(record.start, record.end) };
     },
     async rename(document: AskedIn, offset: number, newName: string): Promise<void> {
-      const record = await plugin.renameRangeAt(document, offset) === undefined ? recordNamedAt(document, offset) : undefined;
+      const record = await plugin.renameRangeAt(document, offset) === undefined ? await recordNamedAt(document, offset) : undefined;
       if (record === undefined) {
         await plugin.renameAt(document, offset, newName);
         return;

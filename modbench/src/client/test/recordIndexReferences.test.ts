@@ -6,7 +6,7 @@ import { recordIndexReferences, type SourceFilesOf } from '../recordIndexReferen
 const symbol = { name: 'Base.esm', origin: 'BaseMod' };
 const child = { name: 'Child.esp', origin: 'ChildMod' };
 
-type PlanClient = Pick<MEditClient, 'getPluginNameReferences' | 'getRenameSourceChanges' | 'moveLastWritten'>;
+type PlanClient = Pick<MEditClient, 'getPluginNameReferences' | 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginSourceNames'>;
 
 const unasked = (): never => { throw new Error('not asked'); };
 
@@ -28,6 +28,7 @@ function planClient(answers: Partial<PlanClient> = {}): PlanClient & { moved: un
     moved,
     asked,
     getPluginNameReferences: () => Promise.resolve([]),
+    getPluginSourceNames: () => Promise.resolve([]),
     getRenameSourceChanges: (...args) => { asked.push(args); return Promise.resolve(SOURCE_CHANGES); },
     moveLastWritten: (...args) => { moved.push(args); return Promise.resolve({ moved: true }); },
     ...answers,
@@ -43,11 +44,29 @@ const planned = async (client: PlanClient, plugins: readonly ResolvedPlugin[] = 
   return plan;
 };
 
+describe('the plugin a place in plugin source names, as the record index answers (ADR-0028)', () => {
+  const FILE = '/source/Mod/plugin-source/Mod.esp/Npc.json';
+  const TEXT = '{ "Race": "000800:Base.esm" }';
+  const named = (kind: 'Plugin' | 'Record', value: string) => ({ kind, start: 0, end: 1, value, record: null, fieldPath: 'Race' });
+
+  it.each([
+    ['the plugin mEdit names there, by its file name alone', [named('Record', '000800:Base.esm'), named('Plugin', 'Base.esm')], { name: 'Base.esm' }],
+    ['none where mEdit names no plugin there', [named('Record', '000800:Base.esm')], undefined],
+    ['none where mEdit cannot answer', { failed: 'unreachable' as const }, undefined],
+  ])('is %s, asking of the text at that place', async (_case, answer, expected) => {
+    const asked: unknown[][] = [];
+    const owner = recordIndexReferences(planClient({ getPluginSourceNames: (...args) => { asked.push(args); return Promise.resolve(answer); } }), sourceFiles);
+
+    expect(await owner.nameAt(FILE, TEXT, 14)).toEqual(expected);
+    expect(asked).toEqual([[TEXT, FILE, 14]]);
+  });
+});
+
 describe('the record index says where plugins name a plugin (ADR-0028)', () => {
   it('answers each copy that names the plugin, named by its file name alone', async () => {
     const owner = recordIndexReferences({
       getPluginNameReferences: () => Promise.resolve([{ formKey: '000800:Base.esm', plugin: child, inPluginSource: false }]),
-      getRenameSourceChanges: unasked, moveLastWritten: unasked,
+      getRenameSourceChanges: unasked, moveLastWritten: unasked, getPluginSourceNames: unasked,
     }, sourceFiles);
 
     expect(await owner.read(symbol, heldTexts([]))).toEqual({

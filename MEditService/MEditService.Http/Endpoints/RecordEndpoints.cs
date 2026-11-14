@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using MEditService.Codec.Schema;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
@@ -160,6 +161,25 @@ internal static class RecordEndpoints
         .Produces(204)
         .ProducesProblem(400)
         .ProducesProblem(422)
+        .ProducesProblem(503);
+
+        app.MapPost("/plugin-source/names", (PluginSourceNamesRequest request, IQueries svc) =>
+        {
+            if (request.Path is { } path && !Path.IsPathFullyQualified(path))
+                return EndpointMapping.BadRequest("Name the file by its absolute path.");
+            if (request.At is < 0 || request.At > request.Text.Length)
+                return EndpointMapping.BadRequest($"The offset {request.At} is outside the text.");
+            return EndpointMapping.Ok(svc.GetPluginSourceNames(request.Path, request.Text, request.At));
+        })
+        .WithName("GetPluginSourceNames")
+        .WithDescription(
+            "The names a document's text holds, and where each sits, by the text's own character offsets: each record's " +
+            "FormKey, the plugin inside it, and the Papyrus scripts, files, references and EditorID it names. With an " +
+            "offset, the names at it. The text is the caller's, saved or not; with a path, the text is that file's, and a " +
+            "file no plugin's source holds holds none.")
+        .WithTags("Records")
+        .Produces<IReadOnlyList<DocumentName>>()
+        .ProducesProblem(400)
         .ProducesProblem(503);
 
         app.MapGet("/records/{formKey}/references-in-active-or-compiled-plugins", (string formKey, IQueries svc, CancellationToken aborted) =>
@@ -473,6 +493,9 @@ internal static class RecordEndpoints
 }
 
 internal sealed record SelectRequest(string Sql);
+
+/// <summary>A document's text, the absolute path of its file when it is one, and the offset whose names are asked.</summary>
+internal sealed record PluginSourceNamesRequest(string Text, string? Path = null, int? At = null);
 
 internal sealed record ResolveNamesRequest(IReadOnlyList<NameQuery> Names);
 

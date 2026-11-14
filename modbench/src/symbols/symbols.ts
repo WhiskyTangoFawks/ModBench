@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { formKeyValue, type MEditClient, type PluginSourceNames } from '../client';
+import type { MEditClient } from '../client';
+import { sourceNames, type SourceNames, type SourceNamesClient } from './sourceNames';
 import type { Reporter } from '../ports/reporter';
 import type { EntryRef } from '../instanceAdapter/instanceAdapter';
 import type { RecordDocumentClient } from '../textDocuments/recordDocument';
@@ -26,13 +27,11 @@ import { publishReferencesView } from '../drivingLib/referencesView';
 interface SymbolsDeps {
   instance: Pick<Instance, 'value' | 'subscribe'> | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
-  client: Pick<MEditClient, 'getRecordOfFile'> & RecordClient & ScriptClient & FileClient & RecordReferencedByDeps['client'];
+  client: Pick<MEditClient, 'getRecordOfFile'> & RecordClient & ScriptClient & FileClient & RecordReferencedByDeps['client'] & SourceNamesClient;
   focusedOrPickedRecord: () => Promise<string | undefined>;
   fileCopies: FileCopies;
   /** Each box that owns files, saying where they name a symbol (ADR-0028). */
   owners: readonly SymbolOwner[];
-  /** The names plugin source holds, and where each sits. */
-  sourceNames: PluginSourceNames;
   /** Each box that owns files, saying where they name a symbol its name alone names. */
   entryOwners: readonly EntryNames[];
   /** The tooltip of the row Mods shows for a mod or a separator; undefined where it shows none. */
@@ -64,17 +63,18 @@ interface Symbols extends vscode.Disposable {
   symbols: SymbolIndex;
 }
 
-function formKeyLocation(client: RecordDocumentClient) {
+function formKeyLocation(client: RecordDocumentClient, names: Pick<SourceNames, 'formKeyIn'>) {
   return async (record: Parameters<typeof locateRecord>[1]): Promise<vscode.Location | { refused: string } | undefined> => {
-    const found = await locateRecord({ client, open: openPluginSourceDocument }, record, formKeyValue);
+    const found = await locateRecord({ client, open: openPluginSourceDocument }, record, names.formKeyIn);
     return found && ('refused' in found ? found : locationOf(found));
   };
 }
 
 export function createSymbols(deps: SymbolsDeps): Symbols {
-  const { instance, reporter, client, rows, reporterFor, fileCopies, focusedOrPickedRecord, sourceNames: names } = deps;
+  const { instance, reporter, client, rows, reporterFor, fileCopies, focusedOrPickedRecord } = deps;
+  const names = sourceNames({ client, reporter });
   const plugin = pluginLanguage({
-    instance, reporter, client, owners: deps.owners, renamePlugin: renamePluginNamed, rows: () => rows?.plugins,
+    instance, reporter, client, owners: deps.owners, names, renamePlugin: renamePluginNamed, rows: () => rows?.plugins,
     tooltip: (shown) => deps.pluginsShown?.tooltipLines(shown) ?? [],
   });
   const { entryTooltip, downloadedFileTooltip, modOrderFileOf } = deps;
@@ -93,7 +93,7 @@ export function createSymbols(deps: SymbolsDeps): Symbols {
   const disposable = vscode.Disposable.from(
     registerLanguageFeatures({ kinds, reporter, reveal: fileCopies.reveal, rename }),
     publishReferencesView((key, value) => { void vscode.commands.executeCommand('setContext', key, value); }),
-    registerRecordReferencedBy({ client, reporter: reporterFor('referencedBy'), locateRecord: formKeyLocation(client), focusedOrPickedRecord }),
+    registerRecordReferencedBy({ client, reporter: reporterFor('referencedBy'), locateRecord: formKeyLocation(client, names), focusedOrPickedRecord }),
     ...(rows ? [
       registerGoToMod({ ...goTo, rows: rows.mods, reporter: reporterFor('mod.goTo') }),
       registerModReferencedBy({ referencedBy: { mod: entry.referencedBy, file: file.referencedBy }, rows: rows.mods, value: rows.filesHeld, reporter: reporterFor('mod.referencedBy') }),

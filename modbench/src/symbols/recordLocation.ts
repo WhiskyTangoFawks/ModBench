@@ -20,12 +20,12 @@ export const locationOf = ({ uri, document, start, end }: RecordLocation<Pick<vs
 export async function locateRecord<Document extends { getText(): string }>(
   { client, open }: RecordLocationDeps<Document>,
   record: Pick<RecordCopy, 'formKey'> & Partial<RecordCopy>,
-  spanIn: (text: string, formKey: string) => TextSpan | undefined,
+  spanIn: (text: string, formKey: string) => Promise<TextSpan | undefined>,
 ): Promise<RecordLocation<Document> | { refused: string } | undefined> {
   const opened = await recordDocument(client, record);
   if (!opened || 'refused' in opened) return opened;
   const document = await open(opened.uri);
-  const span = spanIn(heldText(document), record.formKey);
+  const span = await spanIn(heldText(document), record.formKey);
   return span ? { uri: opened.uri, document, ...span } : { refused: `${opened.uri.path} states no ${record.formKey} member.` };
 }
 

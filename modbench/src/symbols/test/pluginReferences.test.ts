@@ -7,6 +7,7 @@ import type * as vscode from 'vscode';
 import { pluginReferencesOf } from '../pluginReferences';
 import { heldTexts, type HeldTexts, type PlaceInFile, type PluginSymbol, type SymbolOwner, type SymbolReading } from '../../symbolNames/symbolNames';
 import { copyDocumentsOf, copyKey as key, type CopyOnDisk } from './copyDocuments';
+import { spelledIn } from './fakeSourceNames';
 
 const BASE = { name: 'Base.esm', origin: 'Base Mod' };
 const BASE_LOSING = { name: 'Base.esm', origin: 'Old Base Mod' };
@@ -41,6 +42,7 @@ function references(owners: SymbolOwner[], copies: Record<string, CopyOnDisk> = 
     owners, plugins: () => plugins, held: () => held,
     client: { getCopyDocument, getRecordOwner: () => Promise.reject(new Error('A copy names its plugin.')) },
     open: (uri) => Promise.resolve({ getText: () => textAt(uri) }),
+    spansIn: (text, formKey, name) => Promise.resolve([spelledIn(text, name) ?? spelledIn(text, `"${formKey}"`) ?? { start: 0, end: 0 }]),
   });
   return { referencesTo, held };
 }

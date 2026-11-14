@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import type { MEditClient, PluginSourceNames } from '../client';
+import type { MEditClient } from '../client';
+import type { SourceNames } from './sourceNames';
 import type { CopyAt } from '../instanceLoader/fileConflictIndex';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { heldText } from '../textDocuments/heldText';
@@ -14,17 +15,16 @@ export type FileClient = Pick<MEditClient, 'getFileReferences'> & RecordDocument
 
 /** What the box that owns the instance's files says of one: which copy the game gets, and where it is shown. */
 export interface FileCopies {
-  gameRelease: () => Promise<string>;
   /** The copy of the file at its path in the Data folder that the game gets. */
   copyOf: (path: string) => CopyAt | { none: string };
   reveal: (copy: CopyAt) => Promise<void>;
 }
 
-interface FileLanguageDeps extends Omit<FileCopies, 'gameRelease'> {
+interface FileLanguageDeps extends FileCopies {
   instance: { readonly value: FilesValue } | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
   client: FileClient;
-  names: Pick<PluginSourceNames, 'fileAt'>;
+  names: Pick<SourceNames, 'fileAt' | 'membersIn' | 'formKeyIn'>;
   /** The tooltip of the row Mods shows for the copy the game gets of the file at `path`; undefined where it shows none. */
   tooltip: (path: string) => string | undefined;
 }
@@ -63,7 +63,7 @@ export function fileLanguage({ instance, reporter, client, names, copyOf, reveal
   };
 
   const referencesTo = async ({ path }: FileNamed): Promise<References> => {
-    const { found, unread } = await membersNaming(client, openPluginSourceDocument, await client.getFileReferences(path));
+    const { found, unread } = await membersNaming(client, openPluginSourceDocument, names, await client.getFileReferences(path));
     return { locations: found, unread };
   };
 

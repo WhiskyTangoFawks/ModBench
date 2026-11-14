@@ -1,10 +1,11 @@
-import { locationOf, type MEditClient, type PluginAddress, type PluginProblems, type Segment } from '../client';
+import type { MEditClient, PluginAddress, PluginProblems } from '../client';
 import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import { coalesced } from '../ports/coalesced';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import type { PathHop } from '../wire/messages';
 import { pluginAddressKey } from '../wire/pluginAddress';
+import { locationOf, type Segment } from '../drivingLib/sourceText';
 import { lastRead, readiness, tellingOnSurface, type Position, type Told } from './feedShape';
 import { answerOf, failureReason, type ReadFailed } from '../wire/readFailed';
 

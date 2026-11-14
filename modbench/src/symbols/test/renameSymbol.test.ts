@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('vscode', () => ({}));
 
 import { renameSymbol } from '../renameSymbol';
-import type { RecordMember } from '../../client';
+import type { RecordMember } from '../sourceNames';
 import { sourceNames } from './fakeSourceNames';
 
 const SOURCE = '/instance/source/Patch Mod/plugin-source/Patch.esp/Npcs/PatchNpc - 000800_Patch.esp.json';
@@ -28,7 +28,7 @@ function renaming({ pluginNamed, file = { formKey: '000800:Patch.esp', plugin: P
   const renameAt = vi.fn(() => Promise.resolve());
   const symbol = renameSymbol({
     plugin: { renameRangeAt: () => Promise.resolve(pluginNamed === undefined ? undefined : { start: 1, end: 9, name: pluginNamed }), renameAt },
-    names: sourceNames({ recordMemberAt: (_file, _text, offset) => MEMBERS[offset] }),
+    names: sourceNames({ recordMemberAt: (_file: string, _text: string, offset: number) => Promise.resolve(MEMBERS[offset]) }),
     plugins: () => PLUGINS,
     client: { getRecordOfFile: () => Promise.resolve(file) },
     executeCommand,

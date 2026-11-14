@@ -1,4 +1,4 @@
-import { pluginNameSpans } from '../client';
+import type { SourceNames } from './sourceNames';
 import { namesPlugin, type CopyNaming, type HeldTexts, type PlaceInFile, type PluginSymbol, type ResolvedPlugin, type SymbolOwner } from '../symbolNames/symbolNames';
 import { heldText } from '../textDocuments/heldText';
 import { locateCopies, type RecordLocation, type RecordLocationDeps } from './recordLocation';
@@ -9,6 +9,7 @@ interface PluginReferencesDeps<Document> extends RecordLocationDeps<Document> {
   /** The instance's plugin rows, which a file name alone resolves through. */
   plugins: () => readonly ResolvedPlugin[];
   held: () => HeldTexts;
+  spansIn: SourceNames['pluginNamesIn'];
 }
 
 export type PluginReference<Document> = PlaceInFile | RecordLocation<Document>;
@@ -22,7 +23,7 @@ type Read<Document> = (symbol: PluginSymbol) => Promise<PluginReferences<Documen
 
 /** Each place a file names the plugin, as each owner of files says (ADR-0028), and why each file went unread. */
 export function pluginReferencesOf<Document extends { getText(): string }>(
-  { owners, plugins, held, client, open }: PluginReferencesDeps<Document>,
+  { owners, plugins, held, client, open, spansIn }: PluginReferencesDeps<Document>,
 ): Read<Document> {
   return async (symbol) => {
     const readings = await Promise.all(owners.map((owner) => readBy(owner, symbol, held())));
@@ -32,7 +33,7 @@ export function pluginReferencesOf<Document extends { getText(): string }>(
     const copies = naming.flatMap((reference): CopyNaming[] => ('copy' in reference ? [reference.copy] : []));
     const { found, leftOut } = await locateCopies(client, copies, async (copy, uri) => {
       const document = await open(uri);
-      return pluginNameSpans(heldText(document), copy.formKey, symbol.name).map((span) => ({ uri, document, ...span }));
+      return (await spansIn(heldText(document), copy.formKey, symbol.name)).map((span) => ({ uri, document, ...span }));
     });
     return { found: [...places, ...found.flat()], unread: [...readings.flatMap((reading) => reading.leftOut), ...leftOut] };
   };

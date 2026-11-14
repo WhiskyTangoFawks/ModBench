@@ -39,7 +39,11 @@ function language(references: Awaited<ReturnType<ScriptClient['getScriptReferenc
     getRecordOwner: () => Promise.resolve(undefined),
     getCopyDocument: (plugin) => Promise.resolve(plugin.origin === 'Gone' ? null : { kind: 'OwnFile' as const, location: SOURCE }),
   };
-  const names = sourceNames({ scriptAt: (file, _text, offset) => Promise.resolve(file === SOURCE && offset === AT_SCRIPT ? { ...SPAN, name: 'Ns:Quest' } : undefined) });
+  const names = sourceNames({
+    scriptAt: (file: string, _text: string, offset: number) => Promise.resolve(file === SOURCE && offset === AT_SCRIPT ? { ...SPAN, name: 'Ns:Quest' } : undefined),
+    membersIn: (text: string, formKey: string, fieldPaths: readonly string[]) =>
+      Promise.resolve(text === TEXT && formKey === QUEST && fieldPaths.includes(PATH) ? [SPAN] : []),
+  });
   return { language: scriptLanguage({ instance: { value: { papyrusScripts: scripts } }, names, client }) };
 }
 

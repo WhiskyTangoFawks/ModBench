@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { scriptSourceRename, type ScriptSourceClient } from '../scriptSourceRename';
+import { scriptSourceRename } from '../scriptSourceRename';
 import { heldTexts } from '../../symbolNames/symbolNames';
+import type { DocumentName } from '../MEditClient';
 
 const QUEST = '000801:Mod.esp';
 const ALIAS = '000802:Mod.esp';
@@ -11,11 +12,19 @@ const PATH = 'VirtualMachineAdapter.Scripts[0].Name';
 const MOD = { name: 'Mod.esp', origin: 'Mod' };
 const COMPILED = { name: 'Other.esp', origin: 'Other' };
 
-type Answer = Awaited<ReturnType<ScriptSourceClient['getScriptReferences']>>;
+type Answer = Awaited<ReturnType<Parameters<typeof scriptSourceRename>[0]['client']['getScriptReferences']>>;
+
+const firstScriptOfEachRecordIn = (text: string): DocumentName[] =>
+  [...text.matchAll(/"FormKey": "([^"]+)", "VirtualMachineAdapter": \{ "Scripts": \[ \{ "Name": "/g)].map((found) => {
+    const start = found.index + found[0].length;
+    const value = text.slice(start, text.indexOf('"', start));
+    return { kind: 'Script', start, end: start + value.length, value, record: found[1], fieldPath: PATH };
+  });
 
 const planning = (answer: Answer, unsaved?: string, refreshSourceControlFor = vi.fn()) => scriptSourceRename({
   client: {
     getScriptReferences: () => Promise.resolve(answer),
+    getPluginSourceNames: (text) => Promise.resolve(firstScriptOfEachRecordIn(text)),
     getCopyDocument: (plugin) => Promise.resolve(plugin.origin === 'Gone' ? null : { kind: plugin.origin === 'Rendered' ? 'Rendered' as const : 'ContainersFile' as const, location: CONTAINER }),
   },
   readText: () => Promise.resolve(TEXT),
