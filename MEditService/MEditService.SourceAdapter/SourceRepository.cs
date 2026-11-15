@@ -277,17 +277,21 @@ internal sealed class SourceRepository : ISourceRepository
             return read(documents);
         });
 
-    public Answer<FilesRead?, SourceFailure> ReadFiles(PluginAddress plugin, IReadOnlyList<string> files) =>
+    public Answer<FilesRead?, SourceFailure> ReadFiles(PluginAddress plugin, IReadOnlyList<string> files, IReadOnlyList<WrittenDocument> written) =>
         SourceFailure.Answer(() =>
         {
             var spelled = Spelled(plugin);
             using var documents = new SourceTreeDocuments(_sourceFolder, spelled.Name, _release, Files);
-            return NamedFiles.Read(_sourceFolder, spelled, Files, documents, _memory.Listed(SourceRepositoryLayout.RootIn(_sourceFolder, spelled.Name)), files);
+            return NamedFiles.Read(
+                _sourceFolder, spelled, Files, documents, _memory.Listed(SourceRepositoryLayout.RootIn(_sourceFolder, spelled.Name)), files,
+                new WrittenDocuments(written));
         });
 
-    public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommitIn(PluginAddress plugin, IReadOnlyList<string> files) =>
+    public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommitIn(
+        PluginAddress plugin, IReadOnlyList<string> files, IReadOnlyList<WrittenDocument> written) =>
         SourceFailure.Answer(() => LastCommitComparison.Of(
-            _sourceFolder, _release, _git, _memory.Committed, Locator, Spelled(plugin), [.. files.Select(file => Path.GetRelativePath(_sourceFolder, Path.GetFullPath(file)))]));
+            _sourceFolder, _release, _git, _memory.Committed, Locator, Spelled(plugin),
+            [.. files.Select(file => Path.GetRelativePath(_sourceFolder, Path.GetFullPath(file)))], new WrittenDocuments(written)));
 
     public Answer<PluginSourceFiles, SourceFailure> TreeOf(PluginAddress plugin) =>
         SourceFailure.Answer(() =>

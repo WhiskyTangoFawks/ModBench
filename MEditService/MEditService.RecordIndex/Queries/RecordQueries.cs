@@ -565,6 +565,8 @@ internal sealed class RecordQueries(
         }
     }
 
+    public Task<string?> Hold(IReadOnlyList<HandedPlugin>? written, CancellationToken cancel) => _index.Hold(written, cancel);
+
     public long GetSequence() => _index.Sequence;
 
     public async Task<SequenceAwaitResponse> AwaitSequence(long atLeast, TimeSpan timeout)

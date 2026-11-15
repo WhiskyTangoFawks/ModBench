@@ -71,19 +71,20 @@ internal sealed class CountingTreeSource(ISourceAdapter inner) : DelegatingSourc
             return reads.ReadDocuments(plugin, read);
         }
 
-        public Answer<FilesRead?, SourceFailure> ReadFiles(PluginAddress plugin, IReadOnlyList<string> files)
+        public Answer<FilesRead?, SourceFailure> ReadFiles(PluginAddress plugin, IReadOnlyList<string> files, IReadOnlyList<WrittenDocument> written)
         {
             if (Interlocked.Exchange(ref owner._namedReadThrows, 0) == 1) throw new IOException("The named read was made to fail.");
             Volatile.Read(ref owner._beforeEachNamedRead)?.Invoke();
-            var read = reads.ReadFiles(plugin, files);
+            var read = reads.ReadFiles(plugin, files, written);
             if (read.Holds(out var alone, out _) && alone is not null) Interlocked.Increment(ref owner._namedReads);
             return read;
         }
 
-        public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommitIn(PluginAddress plugin, IReadOnlyList<string> files)
+        public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommitIn(
+            PluginAddress plugin, IReadOnlyList<string> files, IReadOnlyList<WrittenDocument> written)
         {
             Interlocked.Increment(ref owner._namedGitStatus);
-            return reads.ChangedSinceLastCommitIn(plugin, files);
+            return reads.ChangedSinceLastCommitIn(plugin, files, written);
         }
 
         public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommit(PluginAddress plugin)

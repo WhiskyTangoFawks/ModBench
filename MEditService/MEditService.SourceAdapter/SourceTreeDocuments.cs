@@ -150,10 +150,10 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
             || SourceRepositoryLayout.ContainerDocumentHeldBy(_files, Path.GetDirectoryName(file) ?? "").Equals(file, FilePaths.Comparison));
     }
 
-    /// <summary>The records <paramref name="file"/> holds, its own first, placed where its path puts it, as the whole read
-    /// yields them; none when the file is gone. Throws, naming the file, for one the whole read refuses.</summary>
-    internal IReadOnlyList<PluginDocument> DocumentsIn(string file) =>
-        [.. DocumentsAt(file, CellStructureAt(file), new OneDocumentPerFormKey(_sourceFolder))];
+    /// <summary>The records <paramref name="file"/>, or <paramref name="text"/> in its place, holds, its own first, as the
+    /// whole read yields them; none when the file is gone. Throws, naming the file, for one the whole read refuses.</summary>
+    internal IReadOnlyList<PluginDocument> DocumentsIn(string file, string? text) =>
+        [.. DocumentsAt(file, CellStructureAt(file), new OneDocumentPerFormKey(_sourceFolder), text)];
 
     private string? DirectoryPerRecordTypeOf(LayoutPath path) =>
         GroupFolders.For(_release).DirectoryPerRecordTypeIn(path.GroupFolderName, nested: false);
@@ -173,13 +173,13 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
 
     // The header is the one document with a file of its own that is not yielded here: it has its own
     // member, and the record index writes its row through a door of its own.
-    private IEnumerable<PluginDocument> DocumentsAt(string file, CellStructure? cell, OneDocumentPerFormKey holders)
+    private IEnumerable<PluginDocument> DocumentsAt(string file, CellStructure? cell, OneDocumentPerFormKey holders, string? given = null)
     {
         if (SourceRepositoryLayout.CarriesNoRecord(file)) yield break;
 
         var relativePath = Path.GetRelativePath(_sourceFolder, file);
         if (relativePath.Equals(_headerRelativePath, StringComparison.Ordinal)) yield break;
-        if (Read(file) is not { } text) yield break;
+        if ((given ?? Read(file)) is not { } text) yield break;
 
         // A record filed here that nothing can read would go missing from the read model. The caller
         // degrades to the binary and says so, which is visible; dropping it here would not be.

@@ -103,6 +103,18 @@ public sealed class WriteNamingItsFilesTests : IDisposable
             .. saved.Made.Moves.SelectMany(move => new[] { move.From, move.To }), .. saved.Made.Deletions,
             .. saved.Made.Documents.Select(document => document.Path)]);
 
+    private static HandedPlugin Handed((LoadOrderEntry Entry, SourceChanges Made) saved) =>
+        new(saved.Entry.Key, Named(saved).Files.Require(), [.. saved.Made.Documents.Select(document =>
+            new WrittenDocument(document.Path, document.Text, FileStamp.Of(document.Path).Require()))]);
+
+    private static HandedPlugin HandedRenamedAgain(HandedPlugin handed, string editorId) =>
+        handed with { Documents = [.. handed.Documents.Select(document => document with { Text = document.Text.Replace("RenamedNpc", editorId, StringComparison.Ordinal) })] };
+
+    private Task<string?> Hold(params HandedPlugin[] written) => _index.Queries.Hold(written, CancellationToken.None);
+
+    private (LoadOrderEntry Entry, SourceChanges Made) NpcRenamed() =>
+        Saved(Container, RepositoryOf(Container).ChangesToPut(Container.Key, Renamed(_npc, "RenamedNpc")));
+
     private void Written((LoadOrderEntry Entry, SourceChanges Made) saved)
     {
         var own = _holder.BeginOwnWrites();
@@ -158,6 +170,142 @@ public sealed class WriteNamingItsFilesTests : IDisposable
         Written(Writes[write](this));
 
         AssertTheRowsAFreshReadHolds();
+    }
+
+    [Theory]
+    [MemberData(nameof(WriteKinds))]
+    public async Task AHandedWrite_LeavesTheRowsAReadOfTheSameBytesHolds(string write)
+    {
+        Assert.Null(await Hold(Handed(Writes[write](this))));
+
+        AssertTheRowsAFreshReadHolds();
+    }
+
+    [Fact]
+    public async Task TheRowsHoldTheHandedDocument_NotAReadOfItsFile()
+    {
+        await Hold(HandedRenamedAgain(Handed(NpcRenamed()), "HandedNpc"));
+
+        Assert.Equal("HandedNpc", Record(_npc).EditorId);
+    }
+
+    [Fact]
+    public async Task TheWatchNamingAFileWhoseHandedDocumentsStampHasNotSettled_ReadsItAgain()
+    {
+        var saved = NpcRenamed();
+        await Hold(HandedRenamedAgain(Handed(saved), "HandedNpc"));
+
+        _index.SignalChange([Named(saved)]);
+        Waits.Reached(() => !_index.Status.Validating, "the watch's read");
+
+        Assert.Equal("RenamedNpc", Record(_npc).EditorId);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AFileTheWatchNamesInTheTurnThatTakesItsHandedDocument_IsReadFromTheFile(bool watchFirst)
+    {
+        using var held = new FirstNamedReadHeld();
+        _source.BeforeEachNamedRead = held.Before;
+        _index.SignalChange([Named(Saved(Overriding, RepositoryOf(Overriding).ChangesToRemove(Overriding.Key, Identity(_npc, Overriding))))]);
+        held.Reached.Wait();
+        var saved = NpcRenamed();
+
+        if (watchFirst) _index.SignalChange([Named(saved)]);
+        var hand = Hold(HandedRenamedAgain(Handed(saved), "HandedNpc"));
+        if (!watchFirst) _index.SignalChange([Named(saved)]);
+        held.Release.Set();
+        await hand;
+
+        Assert.Equal("RenamedNpc", Record(_npc).EditorId);
+    }
+
+    private sealed class FirstNamedReadHeld : IDisposable
+    {
+        private int _reads;
+
+        public ManualResetEventSlim Reached { get; } = new();
+
+        public ManualResetEventSlim Release { get; } = new();
+
+        public void Before()
+        {
+            if (Interlocked.Increment(ref _reads) != 1) return;
+            Reached.Set();
+            Release.Wait();
+        }
+
+        public void Dispose()
+        {
+            Release.Set();
+            Reached.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task AHand_IsAnsweredOnlyOnceTheRecordIndexHoldsIt()
+    {
+        using var reading = new ManualResetEventSlim();
+        _source.BeforeEachNamedRead = reading.Wait;
+
+        var hand = Hold(Handed(NpcRenamed()));
+
+        Assert.False(hand.IsCompleted);
+        reading.Set();
+        Assert.Null(await hand);
+        Assert.Equal("RenamedNpc", Record(_npc).EditorId);
+    }
+
+    [Fact]
+    public async Task AHandForAPluginTheLoadOrderDoesNotHold_IsAnsweredWithWhy()
+    {
+        var unread = await Hold(new HandedPlugin(new PluginAddress("Absent.esp", "AbsentMod"), [], []));
+
+        Assert.Contains("does not hold Absent.esp", unread, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AHandWhosePluginCannotBeRead_IsAnsweredWithWhy()
+    {
+        var npc = Container.SourceFileOf(Record(_npc));
+        File.WriteAllText(npc, "{ not a document");
+
+        var unread = await Hold(new HandedPlugin(Container.Key, [npc], [new WrittenDocument(npc, "{ not a document", FileStamp.Of(npc).Require())]));
+
+        Assert.Contains(ContainerMod.PluginName, unread, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AHandNamingNoPlugin_IsAnsweredOnceACheckOfTheDiskHasReadIt()
+    {
+        using var reading = new ManualResetEventSlim();
+        Container.HandEdit(Record(_keys.Cell), $"\"{ContainerModPlugin.CellEditorId}\"", "\"EditedByHand\"");
+        _source.BeforeNextGitStatus = reading.Wait;
+
+        var hand = _index.Queries.Hold(null, CancellationToken.None);
+
+        Assert.False(hand.IsCompleted);
+        reading.Set();
+        Assert.Null(await hand);
+        Assert.Equal("EditedByHand", Record(_keys.Cell).EditorId);
+    }
+
+    [Fact]
+    public async Task AHandTheRecordIndexTakesAfterItCloses_IsAnsweredThatItClosed()
+    {
+        var (queries, handed) = (_index.Queries, Handed(NpcRenamed()));
+        _index.Dispose();
+
+        Assert.Contains("closed", await queries.Hold([handed], CancellationToken.None), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AHandBeforeAnyLoadOrder_IsAnsweredThatItWasNotRead()
+    {
+        using var bare = Indexes.Open(new LoadOrderHolder());
+
+        Assert.Contains("stopped", await bare.Queries.Hold([Handed(NpcRenamed())], CancellationToken.None), StringComparison.Ordinal);
     }
 
     [Theory]
