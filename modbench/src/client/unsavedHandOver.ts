@@ -13,6 +13,8 @@ export interface UnsavedHandOver {
   onSettled: (listener: (failure: ReadFailed | undefined) => void) => () => void;
   /** Resolves once every put handed so far has answered. */
   sent: () => Promise<void>;
+  /** Whether a put handed has not answered. */
+  pending: () => boolean;
 }
 
 /** Puts each hand-over at once and in order while mEdit runs, and the newest again whenever the
@@ -22,8 +24,10 @@ export function createUnsavedHandOver(wire: UnsavedDocumentsWire): UnsavedHandOv
   const settle = (failure: ReadFailed | undefined) => { for (const listener of listeners) listener(failure); };
   let newest: readonly UnsavedDocument[] = [];
   let sending = Promise.resolve();
+  let unanswered = 0;
   const put = (documents: readonly UnsavedDocument[]): void => {
-    sending = sending.then(() => wire.put(documents)).then(settle, () => { settle({ failed: 'unreachable' }); });
+    unanswered++;
+    sending = sending.then(() => wire.put(documents)).then(settle, () => { settle({ failed: 'unreachable' }); }).finally(() => { unanswered--; });
   };
   wire.onStatusChanged((status) => { if (status === 'running') put(newest); });
   wire.onReconnected(() => { put(newest); });
@@ -33,6 +37,7 @@ export function createUnsavedHandOver(wire: UnsavedDocumentsWire): UnsavedHandOv
       if (wire.status() === 'running') put(documents);
     },
     sent: () => sending,
+    pending: () => unanswered > 0,
     onSettled: (listener) => {
       listeners.add(listener);
       return () => { listeners.delete(listener); };

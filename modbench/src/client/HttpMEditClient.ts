@@ -14,11 +14,12 @@ import { SseNotificationSubscriber, type ListenerThrows } from './notificationSt
 import { announceAfterReopen, createLoadOrderSender, type LoadOrderSender } from './loadOrderSender';
 import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
+import { keepRecordIndexChanges, type RecordIndexChanges } from './recordIndexChanges';
 import {
   type ArchiveContents, type BackendStatus, type CellChildRecords, type BuildFacts, type BuildMod, type BuildOutcome,
   type Submodule, type SubmodulesCloned, type PluginFilesFlagged, type PluginFileToFlag,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
-  type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
+  type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type RecordIndexChange, type NotificationKind, type NotificationPayloads,
   type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginIndexedState, type PluginFilePaths, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument, type DocumentName,
   type RebuildIndexOutcome, type CopyChangesOutcome, type CopyMode,
   type GridPosition, type RecordAt, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument, type RenameSourceChangesOutcome, type RenameSourceAsked,
@@ -114,6 +115,7 @@ class HttpMEditClient implements MEditClient {
   private readonly loadOrder: LoadOrderSender;
   private readonly loadOrderStatusKept: LoadOrderStatusKeeper;
   private readonly handOver: UnsavedHandOver;
+  private readonly changes: RecordIndexChanges;
   private readonly leaveWritesUnnamed: () => void;
 
   constructor(deps: HttpMEditClientDeps) {
@@ -149,6 +151,11 @@ class HttpMEditClient implements MEditClient {
       signalChange: (paths) => this.postSignalChange(paths),
     });
     announceAfterReopen(this.loadOrder, this.notifications);
+    this.changes = keepRecordIndexChanges({
+      onNotification: (kind, listener) => this.notifications.onNotification(kind, listener),
+      onStatusChanged: (listener) => this.lifecycle.onStatusChanged(listener),
+      onReconnected: (listener) => this.notifications.onReconnected(listener),
+    }, this.loadOrderStatusKept);
     this.handOver = createUnsavedHandOver({
       status: () => this.lifecycle.status,
       onStatusChanged: (listener) => this.lifecycle.onStatusChanged(listener),
@@ -183,6 +190,9 @@ class HttpMEditClient implements MEditClient {
   onExit(listener: () => void): () => void { return this.loadOrder.onExit(listener); }
   stop(): Promise<void> { return this.loadOrder.stop(); }
 
+  onDidChange(listener: (change: RecordIndexChange) => void): () => void { return this.changes.onDidChange(listener); }
+  get recordIndexMayBeLate(): boolean { return this.loadOrder.pending() || this.handOver.pending(); }
+
   get loadOrderStatus(): LoadOrderStatus | undefined { return this.loadOrderStatusKept.current(); }
   onLoadOrderStatus(listener: (status: LoadOrderStatus | undefined) => void): () => void {
     return this.loadOrderStatusKept.onStatus(listener);
@@ -203,7 +213,7 @@ class HttpMEditClient implements MEditClient {
   onUnsavedHandOver(listener: (failure: ReadFailed | undefined) => void): () => void { return this.handOver.onSettled(listener); }
 
   private putUnsavedDocuments(documents: readonly UnsavedDocument[]): Promise<ReadFailed | undefined> {
-    return this.read('putUnsavedDocuments', (api, signal) => api.PUT('/unsaved-documents', { body: { documents: [...documents] }, signal }), () => undefined);
+    return this.read('putUnsavedDocuments', (api, signal) => api.PUT('/unsaved-documents', { body: { documents: [...documents] }, signal }), () => undefined, { held: false });
   }
 
   // ── notifications ────────────────────────────────────────────────────────
@@ -614,8 +624,12 @@ class HttpMEditClient implements MEditClient {
     what: string,
     call: (api: ApiClient, signal: AbortSignal) => Promise<{ data?: D; error?: unknown; response: Response }>,
     answer: (data: D | undefined) => A | ReadFailed,
-    { timed = false, absent }: { timed?: boolean; absent?: { status: number; answers: A } } = {},
+    { timed = false, absent, held = true }: { timed?: boolean; absent?: { status: number; answers: A }; held?: boolean } = {},
   ): Promise<A | ReadFailed> {
+    if (held) {
+      await this.handOver.sent();
+      await this.loadOrder.latest();
+    }
     const api = this.startedApiClient;
     if (api === undefined) {
       this.log.error(`[HttpMEditClient] ${what}: mEdit has not started`);
@@ -787,8 +801,7 @@ class HttpMEditClient implements MEditClient {
     noBodyFails, { absent: { status: 404, answers: null } });
   }
 
-  async getRecordsComparison(copies: components['schemas']['RecordCopy'][]): Promise<CompareRecordsAnswer | ReadFailed> {
-    await this.handOver.sent();
+  getRecordsComparison(copies: components['schemas']['RecordCopy'][]): Promise<CompareRecordsAnswer | ReadFailed> {
     return this.read('getRecordsComparison', (api, signal) => api.POST('/records/compare', { body: { copies }, signal }), noBodyFails);
   }
 
@@ -798,8 +811,7 @@ class HttpMEditClient implements MEditClient {
       (data) => data ?? []);
   }
 
-  async getPlacedReferences(formKey: string): Promise<PlacedReferences | ReadFailed> {
-    await this.handOver.sent();
+  getPlacedReferences(formKey: string): Promise<PlacedReferences | ReadFailed> {
     return this.read(`getPlacedReferences(${formKey})`,
       (api, signal) => api.GET('/records/{formKey}/placed-references', { params: { path: { formKey } }, signal }), noBodyFails);
   }
@@ -820,8 +832,7 @@ class HttpMEditClient implements MEditClient {
       (api, signal) => api.GET('/file-paths/references', { params: { query: { path } }, signal }), noBodyFails);
   }
 
-  async getScriptRenameSourceChanges(name: string, newName: string): Promise<components['schemas']['ScriptRenameSourceChanges'] | ReadFailed> {
-    await this.handOver.sent();
+  getScriptRenameSourceChanges(name: string, newName: string): Promise<components['schemas']['ScriptRenameSourceChanges'] | ReadFailed> {
     return this.read(`getScriptRenameSourceChanges(${name}, ${newName})`,
       (api, signal) => api.POST('/script-names/rename-source-changes', { body: { name, newName }, signal }), noBodyFails);
   }

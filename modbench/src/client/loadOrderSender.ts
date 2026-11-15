@@ -19,6 +19,8 @@ export interface LoadOrderSender {
   signalChange(paths: readonly string[]): void;
   latest(): Promise<LoadOrderOutcome | undefined>;
   handed(): number;
+  /** Whether a snapshot or a change signal is waiting, in flight or owed. */
+  pending(): boolean;
   onResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void;
   onAppliedAfterReopen(listener: (snapshot: LoadOrderSnapshot) => void): () => void;
   onLaunch(listener: (launched: Promise<LaunchOutcome>) => void): () => void;
@@ -135,6 +137,7 @@ function createSendSlot(wire: LoadOrderWire) {
       pump();
     },
     holdsOne: () => waiting !== undefined,
+    pending: () => waiting !== undefined || inFlight !== undefined || owed !== undefined || signalling,
     drop,
     pump,
     abortInFlight: () => { inFlight?.abort(); },
@@ -226,6 +229,7 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     signalChange: (paths) => { if (!launcher.stopped()) slot.oweSignal(paths); },
     latest: () => slot.latest(),
     handed: () => handedCount,
+    pending: () => slot.pending(),
     onResent: resent.add,
     onAppliedAfterReopen: appliedAfterReopen.add,
     onLaunch: launches.add,

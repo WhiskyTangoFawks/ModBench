@@ -1,11 +1,12 @@
 import { IGNORED_THROWS } from './fixtures';
 import type {
-  MEditClient, NotificationKind, NotificationPayloads, BackendStatus, LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, UnsavedDocument,
+  MEditClient, RecordIndexChange, NotificationKind, NotificationPayloads, BackendStatus, LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, UnsavedDocument,
 } from '../MEditClient';
 import type { LoadOrderStatus, NotificationEvent } from '../apiClient';
 import { SseNotificationSubscriber } from '../notificationStream';
 import { announceAfterReopen, createLoadOrderSender, type LoadOrderWire } from '../loadOrderSender';
 import type { ReadFailed } from '../../wire/readFailed';
+import { keepRecordIndexChanges } from '../recordIndexChanges';
 import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 
 type QueryMethod =
@@ -78,6 +79,11 @@ export class InMemoryMEditClient implements MEditClient {
     onStatusChanged: (listener) => this.onStatusChanged(listener),
     onReconnected: (listener) => this.onReconnected(listener),
   });
+  private readonly changes = keepRecordIndexChanges({
+    onNotification: (kind, listener) => this.notifications.onNotification(kind, listener),
+    onStatusChanged: (listener) => this.onStatusChanged(listener),
+    onReconnected: (listener) => this.onReconnected(listener),
+  }, this.loadOrderStatusKept);
   private readonly snapshotsPut: LoadOrderSnapshot[] = [];
   private readonly sender = createLoadOrderSender({
     status: () => this.status,
@@ -227,6 +233,9 @@ export class InMemoryMEditClient implements MEditClient {
   onLaunch(listener: (launched: Promise<LaunchOutcome>) => void): () => void { return this.sender.onLaunch(listener); }
   onExit(listener: () => void): () => void { return this.sender.onExit(listener); }
   stop(): Promise<void> { return this.sender.stop(); }
+
+  onDidChange(listener: (change: RecordIndexChange) => void): () => void { return this.changes.onDidChange(listener); }
+  get recordIndexMayBeLate(): boolean { return this.sender.pending(); }
 
   get loadOrderStatus(): LoadOrderStatus | undefined { return this.loadOrderStatusKept.current(); }
   onLoadOrderStatus(listener: (status: LoadOrderStatus | undefined) => void): () => void {

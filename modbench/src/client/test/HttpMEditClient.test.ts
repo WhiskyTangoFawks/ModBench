@@ -1043,6 +1043,7 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     ['where a record\'s references are placed', (client) => client.getPlacedReferences(record.formKey), '/placed-references'],
     ['the records side by side', (client) => client.getRecordsComparison([{ formKey: record.formKey, plugin }]), '/records/compare'],
     ['what renaming a script changes', (client) => client.getScriptRenameSourceChanges('Old', 'New'), '/script-names/rename-source-changes'],
+    ['the references to a plugin name', (client) => client.getPluginNameReferences('A.esp'), '/plugin-names/'],
   ];
 
   it.each(readsOverUnsaved)('reads %s only once the pending hand-over has answered, so it reads the text VS Code shows', async (_name, reading, route) => {
@@ -1089,6 +1090,29 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
 
     push(readyTickThatSettlesPutLoadOrder());
     await gesturing;
+    expect(requests).toHaveLength(1);
+  });
+
+  it.each(readsOverUnsaved)('reads %s only once the load order sent before it has settled', async (_name, reading, route) => {
+    const { response, push } = pushableStreamResponse();
+    let putLoadOrder = false;
+    const requests: string[] = [];
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(response)],
+      ['/load-order', () => { putLoadOrder = true; return Promise.resolve(jsonResponse(200, { applied: true, version: 1 })); }],
+      [route, (req) => { requests.push(new URL(req.url).pathname); return Promise.resolve(jsonResponse(200, {})); }],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+    void client.sendLoadOrder(EMPTY_SNAPSHOT);
+    await vi.waitFor(() => expect(putLoadOrder).toBe(true));
+
+    const asking = reading(client);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(requests).toEqual([]);
+
+    push(readyTickThatSettlesPutLoadOrder());
+    await asking;
     expect(requests).toHaveLength(1);
   });
 

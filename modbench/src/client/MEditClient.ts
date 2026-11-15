@@ -24,6 +24,12 @@ import type { ItemRefusal } from '../ports/selectionOutcome';
  *  this port. */
 export type { RecordEditEnvelope } from '../wire/messages';
 
+/** A plugin whose records changed, with the record keys where mEdit gave them. */
+export interface RecordsChanged { readonly plugin: PluginAddress; readonly keys?: readonly string[] }
+
+/** What changed in the record index: the names, or undefined for everything. */
+export type RecordIndexChange = readonly RecordsChanged[] | undefined;
+
 /** The backend process as the extension reports it: starting while it comes up, running while
  *  it answers, disconnected when it has gone, stopped when the extension took it down. */
 export type BackendStatus = 'starting' | 'running' | 'disconnected' | 'stopped';
@@ -389,6 +395,13 @@ export interface MEditClient {
   /** A listener handed its kind's payload. A frame missing its kind's payload
    *  reaches no listener. */
   onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void;
+
+  /** The one change event: what changed in the record index, as names or as everything. A status alone is no change. */
+  onDidChange(listener: (change: RecordIndexChange) => void): () => void;
+
+  /** Whether the record index may not yet hold what Modbench handed it: a snapshot, a change signal or the
+   *  unsaved documents is unanswered. */
+  readonly recordIndexMayBeLate: boolean;
 
   /** The latest load-order status; undefined before the first, and again when a held status
    *  resets: mEdit has gone, or the stream has reopened onto a process that may be another. */
