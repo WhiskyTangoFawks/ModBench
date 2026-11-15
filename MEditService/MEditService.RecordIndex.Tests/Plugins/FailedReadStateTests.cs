@@ -1,4 +1,3 @@
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -615,24 +614,6 @@ public sealed class FailedReadStateTests : IDisposable
             Interlocked.Increment(ref _read) == 1
                 ? PluginFailures.Inaccessible()
                 : base.ReadContent(modPath, loadOrder, strings);
-    }
-
-    private sealed class FailsToOpen(PluginFailure failure, Func<int, bool> atOpen, Action? beforeFailing = null)
-        : DelegatingPluginAdapter(TestAdapters.Mutagen())
-    {
-        private int _opened;
-
-        public bool Failed { get; private set; }
-
-        public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
-            ModPath modPath, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-            PluginStrings strings)
-        {
-            if (!atOpen(Interlocked.Increment(ref _opened))) return base.OpenDocuments(modPath, loadOrder, schemas, strings);
-            beforeFailing?.Invoke();
-            Failed = true;
-            return failure;
-        }
     }
 
     private enum TreeMoment { StampsTaken, ReadBegins, ReadEnds, RecordRead }

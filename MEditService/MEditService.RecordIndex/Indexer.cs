@@ -230,7 +230,7 @@ internal sealed class Indexer : IDisposable
         var scope = RequireScope();
         lock (_lock)
         {
-            if (scope.Held.Failures.FirstOrDefault(failure => PluginAddress.Comparer.Equals(new PluginAddress(failure.Name, failure.Origin), key)) is { } failed)
+            if (scope.Held.FailureOf(key) is { } failed)
             {
                 var stillTheFileItFailedOn = _failedFileHashes.TryGetValue(key, out var at) && at.Path is not null && at.Hash is not null
                     && scope.Store.FileContentHash(at.Path) == at.Hash;

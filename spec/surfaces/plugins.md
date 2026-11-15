@@ -87,7 +87,7 @@ A plugin's statuses follow. The first that holds, in this order, sets the icon:
 | Description | the FormKey | xEdit; GLOSSARY.md, FormKey |
 | Icon | `$(error)` red when it, or a record beneath it, could not be read; none otherwise | |
 | Tooltip | its name, when it has one, and the reason it could not be read | xEdit's third column |
-| Badge | `M` modified and `A` added, in git's colours, while its plugin source has working-tree changes | ADR-0007; VS Code's source control badges |
+| Badge | `M` modified and `A` added, in git's colours, while the record differs from the last commit | ADR-0007; VS Code's source control badges |
 
 A block and a sub-block take xEdit's labels too. Cites: xEdit
 

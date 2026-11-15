@@ -11,14 +11,14 @@ Each story cites what decides it. A story that cites nothing is owned here.
 As a user, I want:
 
 1. Every list to be a native VS Code tree view, so selection, keyboard navigation, drag and the context menu behave as they do everywhere else in VS Code. Cites: Mutagen's data, the reference's behaviour, VS Code's interaction
-2. Every view to follow the disk: a change on disk, from Modbench, MO2 or any other tool, shows up with no action of mine. A view has no refresh of its own. Cites: ADR-0001
+2. Every view to follow the disk: a change on disk, from Modbench, MO2 or any other tool, shows up with no action of mine. A view has no refresh of its own. Cites: ADR-0029
 3. A row's icon, badge or colour to carry its status. A row with nothing wrong carries no warning.
 4. View state, such as a sort, a toggle or a filter, to end with the window. It is a lens, not a setting. Cites: commands.md, Exclude and hide
 5. Keys and mouse on a tree to do what VS Code's own trees do, as in the Explorer: a key fires the gesture VS Code binds it to, on a row that offers it. Cites: Mutagen's data, the reference's behaviour, VS Code's interaction
 6. Every list to let me select several rows. Cites: commands.md, Argument; A selection is one gesture, and each item lands on its own
 7. Every list to reverse its order from its title bar. The direction never changes what the order means, such as which item wins. Cites: GLOSSARY.md, Sort direction
 8. Ctrl+C, or the menu's copy value, to copy the selection as text, one item to a line. Cites: catalog `copy value`
-9. A copy of a record to open as one document, whichever view or VS Code feature opens it: one tab for one copy, and a tab restored after a restart opens the same copy again. Cites: VS Code's interaction; ADR-0012
+9. A copy of a record to open in the tab of its file, whichever view or VS Code feature opens it, and a tab restored after a restart to show the same copy again. Cites: VS Code's interaction; ADR-0012; ADR-0020
 10. Every page Modbench draws to take VS Code's theme, so they look as the rest of VS Code does. Cites: VS Code's interaction
 11. A collapsed row to carry the badges of the rows beneath it, and an expanded row only its own, so each change shows once, on the row I can see.
 12. Ctrl+F in a page Modbench draws to find text as in any editor, among what the page shows. Cites: VS Code's interaction
@@ -48,18 +48,19 @@ As a user, I want:
 5. When the instance's game folder cannot be found, to be told once, the same way everywhere. The Toolbox's Game row says where Modbench looked ([toolbox.md](toolbox.md)). Every view whose rows need the game folder says so in its message line. One line in the Output. Rows that do not need the game folder still show, and the records mEdit shows stay as they were until the folder is found. Cites: ADR-0019
 6. When a later read fails, the rows I had to stay, and the view's message line to say "Showing the last good read:" and the reason, with one line in the Output. The next good read clears it. Cites: ADR-0019
 7. An instance whose game Modbench does not support refused when it opens, naming the game, and no file of it written. Cites: Never break the instance for its owner
-8. A warning, when the mod manager that made the instance is running, that it overwrites my changes when it launches a program or exits. Cites: Never break the instance for its owner; Never silently wrong
+8. A warning, when I run a gesture that writes while the mod manager that made the instance is running, that it overwrites my changes when it launches a program or exits. A view shows it too, and can lag until I refresh. Cites: Never break the instance for its owner; Never silently wrong; ADR-0029
 9. One instance in each window: the first open folder that is an instance, chosen when Modbench starts. No view shows the other open folders, which stay VS Code's, and each other instance among them gets one line in the Output naming it. Cites: Existing tools
 10. A folder I have not trusted, when it is an instance, to say in Modbench's views that Modbench is off until I trust it, with a link to trust it, and Modbench to start once I do, with no reload. Cites: VS Code's interaction; Never silently wrong
 11. From the first change Modbench sees until Modbench has read it, every view's progress bar, so a view that may be late says so. Cites: Never silently wrong
 12. A notification naming each folder Modbench cannot watch, since a change in it shows only after a refresh. Cites: Never silently wrong
+13. While VS Code's git is off, or cannot open the repository, to be told that versioning is unavailable, and why, wherever a view shows what git holds. Cites: Existing tools
 
 ## A gesture that writes
 
 By commands.md, A gesture that writes ends when the read model shows it. As a user, I want:
 
 1. The view's progress bar from my click until the read that follows the gesture's write lands, and nothing in the view to change until then but what VS Code's own control changes as I click it, such as a check box. Cites: Mutagen's data, the reference's behaviour, VS Code's interaction
-2. Every value I see to be the read model's, whoever wrote it. Cites: ADR-0001; ADR-0003
+2. Every value I see to be the read model's, whoever wrote it. Cites: ADR-0029; ADR-0003
 3. A gesture whose read fails to end with it: the rows I had stay and the message line says so (States, story 6). Cites: ADR-0019
 4. A gesture to take as long as what it changes, whatever the size of my modlist. Cites: Usable first
 
