@@ -47,6 +47,6 @@ public sealed class UnreopenableIndexFileTests : IDisposable
         _index.NextCheckUnsettledUntil(() => _index.Status.State == LoadOrderState.Failed, "the reopen failing");
 
         Assert.Equal(LoadOrderState.Failed, _index.Status.State);
-        Assert.Single(Regex.Matches(_index.Status.Message ?? "", "mEdit's record index was not reopened: "));
+        Assert.True(Regex.Matches(_index.Status.Message ?? "", "mEdit's record index was not reopened: ").Count == 1, _index.Status.Message);
     }
 }

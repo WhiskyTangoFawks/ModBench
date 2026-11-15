@@ -25,6 +25,14 @@ public sealed class CommitLandingTests : IDisposable
         return new PluginDocument("misc", formKey, $$"""{"FormKey": "{{formKey}}", "EditorID": "Item{{i}}", "Name": "x"}""");
     });
 
+    private static bool IsQuiet(List<LogEntry> log)
+    {
+        int before;
+        lock (log) before = log.Count;
+        Thread.Sleep(TimeSpan.FromMilliseconds(500));
+        lock (log) return log.Count == before;
+    }
+
     private static bool Logged(List<LogEntry> log, string start)
     {
         lock (log) return log.Exists(e => e.Message.StartsWith(start, StringComparison.Ordinal));
@@ -39,8 +47,9 @@ public sealed class CommitLandingTests : IDisposable
         using var index = Indexes.Open(holder, new MadeUpAdapter((Master, () => Items(Master)), (Later, () => Items(Later))), loggerFactory: loggers);
         index.Reconcile(holder, _fixture.DataFolder, [_fixture.Plugins[0]], GameRelease.Fallout4, _fixture.InstanceRoot);
         Waits.Reached(() => Logged(log, Checkpointed), "the first load's checkpoint");
+        Waits.Reached(() => IsQuiet(log), "the first load's checkpoints");
         lock (log) log.Clear();
-        var rows = index.Queries.SelectRows("SELECT form_key FROM records").Value();
+        using var rows = index.Queries.SelectRows("SELECT form_key FROM records").Value();
         using var taken = rows.Rows().GetEnumerator();
         Assert.True(taken.MoveNext());
 
@@ -69,5 +78,40 @@ public sealed class CommitLandingTests : IDisposable
 
         index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         Assert.True(IndexFiles.StartedCount(_fixture.InstanceRoot, Materialized) > 0);
+    }
+
+    [Fact]
+    public void AStoreReopenedAfterInvalidation_AppliesTheFilterInForce()
+    {
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, new MadeUpAdapter((Master, () => Items(Master)), (Later, () => Items(Later))));
+        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+        index.SetFilter($"SELECT '000800:{Master}' AS form_key", "filter.sql");
+        IndexFiles.Invalidate(_fixture.InstanceRoot);
+
+        index.Queries.GetPlugins().Refused();
+
+        Waits.Reached(() => index.Status.State == LoadOrderState.Ready && index.Queries.GetPlugins().Holds(out _, out _), "the reopened index");
+        Assert.Equal(1, index.Queries.GetRecords(null, null, null, 100, 0).Value().Total);
+    }
+
+    [Fact]
+    public void AFatalCheckpoint_ReopensTheStore_WithNoReadToMeetIt()
+    {
+        var notifications = new InMemoryNotificationPublisher();
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, new MadeUpAdapter((Master, () => Items(Master)), (Later, () => Items(Later))), notifications: notifications);
+        index.Reconcile(holder, _fixture.DataFolder, [_fixture.Plugins[0]], GameRelease.Fallout4, _fixture.InstanceRoot);
+        using var rows = index.Queries.SelectRows("SELECT form_key FROM records").Value();
+        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+        IndexFiles.Execute(_fixture.InstanceRoot, "SET GLOBAL debug_checkpoint_abort = 'before_header'");
+        var before = notifications.Notifications.Count;
+
+        rows.Dispose();
+
+        Waits.Reached(
+            () => notifications.Since(before).OfType<LoadOrderStatusNotification>().Any(n => n.Status.State == LoadOrderState.Reconciling),
+            "the store reopening", TimeSpan.FromSeconds(30));
+        Waits.Reached(() => index.Status.State == LoadOrderState.Ready && index.Queries.GetPlugins().Holds(out _, out _), "the reopened index");
     }
 }

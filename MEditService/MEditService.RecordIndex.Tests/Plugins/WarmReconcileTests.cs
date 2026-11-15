@@ -271,6 +271,7 @@ public sealed class WarmReconcileTests
         using (var warm = Indexes.Open(holder, loggerFactory: loggers))
         {
             warm.Reconcile(holder, data.DataFolder, [.. data.Plugins.Select((p, at) => p with { Line = data.Plugins.Count - at })], GameRelease.Fallout4, data.InstanceRoot);
+            Waits.Reached(() => { lock (log) return log.Exists(e => e.Message.StartsWith("Checkpointed the record index", StringComparison.Ordinal)); }, "the checkpoint");
         }
 
         lock (log) Assert.Single(log, e => e.Message.StartsWith("Checkpointed the record index", StringComparison.Ordinal));

@@ -1,5 +1,6 @@
 using System.Globalization;
 using DuckDB.NET.Data;
+using DuckDB.NET.Native;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
@@ -30,7 +31,7 @@ internal static class IndexFiles
                 Execute(instanceRoot, "CHECKPOINT");
                 return true;
             }
-            catch (DuckDBException)
+            catch (DuckDBException ex) when (ex.ErrorType == DuckDBErrorType.Transaction)
             {
                 return false;
             }

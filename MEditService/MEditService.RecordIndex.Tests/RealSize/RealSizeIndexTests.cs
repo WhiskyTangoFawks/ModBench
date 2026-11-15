@@ -157,6 +157,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         var putBack = Restoring(path, CheckEnded);
         File.AppendAllText(path, "\n");
         WrittenAndRead(new PluginChange(plugin.Key, [path]));
+        IndexFiles.Checkpointed(Modlist.InstanceRoot);
         return putBack;
     }
 

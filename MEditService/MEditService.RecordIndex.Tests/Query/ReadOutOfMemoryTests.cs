@@ -47,6 +47,7 @@ public sealed class ReadOutOfMemoryTests : IDisposable
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
         Waits.Reached(() => index.Status is { State: LoadOrderState.Ready, Validating: false }, "the index at rest");
         index.Settled();
+        IndexFiles.Checkpointed(_fixture.InstanceRoot);
         using var fullPool = new FilledMemory(IndexFiles.In(_fixture.InstanceRoot));
 
         var refused = index.Queries.SelectRows("SELECT 1 AS form_key").Refused();
