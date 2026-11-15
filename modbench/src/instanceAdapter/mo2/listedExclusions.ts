@@ -35,12 +35,12 @@ export function listedExclusions(exclusion: () => Exclusion, watchedBases: reado
     },
     // A base the watch already holds at its first level is not followed again.
     excludedFolders: (): string[] => [...new Set([...listings.values()].flatMap(({ excludedFolders }) => excludedFolders))].filter((folder) => !watchedBases.includes(folder)),
-    named: (): UnwatchedFolder[] => distinct([...listings.values()].flatMap((listing) => [
+    named: (): UnwatchedFolder[] => [...listings.values()].flatMap((listing) => [
       ...listing.excludedFolders.map((folder) => ({ folder, reason: EXCLUDED })),
       ...listing.excludedFilePatterns.flatMap((pattern) => {
         const folder = baseOf(listing);
         return folder === undefined ? [] : [{ folder, reason: `files matching ${pattern} are ${EXCLUDED}` }];
       }),
-    ])),
+    ]),
   };
 }

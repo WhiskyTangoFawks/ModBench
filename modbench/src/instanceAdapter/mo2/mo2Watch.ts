@@ -62,7 +62,7 @@ export function mo2Watch(
     const reached = dropsEvents(base, glob) ? FIRST_LEVEL : glob;
     return watchFiles(base, reached, onChangeFor(base), heldFor(base, reached));
   };
-  const followed =followedFolders({ watch, armed: () => listeners.size > 0, checkDue, forget: (base, glob) => { held.delete(heldKey(base, glob)); } });
+  const followed = followedFolders({ watch, armed: () => listeners.size > 0, checkDue, forget: (base, glob) => { held.delete(heldKey(base, glob)); } });
 
   const listings = listedExclusions(() => excluding, instanceWatches(instanceRoot).map(({ base }) => base));
   const followExcludedFolders = (): void => { followed.follow('excludedFolders', listings.excludedFolders(), FIRST_LEVEL); };
