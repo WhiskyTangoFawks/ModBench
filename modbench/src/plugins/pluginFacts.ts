@@ -4,10 +4,10 @@ import { offeredMoves, type OfferedMove } from '../pluginCommands/pluginOrder';
 import type { ConditionFacts, FileFacts } from '../sortingRules/lootConditions';
 import { judgeLoot, type LootPartition, type LootRules } from '../sortingRules/lootJudge';
 import type { UnreadableSource } from '../wire/messages';
-import { OVERWRITE_ORIGIN, pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
+import { exactPluginAddressKey, OVERWRITE_ORIGIN, pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
 import { pluginOriginName } from '../instanceLoader/pluginStanding';
 import { pluginCanBeEdited } from '../wire/pluginEditable';
-import { ByPluginAddress } from './pluginAddress';
+import { ByPluginAddress, type NamedPlugins } from './pluginAddress';
 import type { PluginConditions } from '../drivingLib/recordRowContext';
 import type { PluginShown } from '../drivingLib/pluginsShown';
 
@@ -204,7 +204,7 @@ export class PluginFacts {
   private judgements(): Map<string, { address: PluginAddress; signature: string }> {
     const byPlugin = new Map<string, { address: PluginAddress; broken: BrokenRule[]; moves: OfferedMove[] }>();
     const entry = (address: PluginAddress) => {
-      const key = pluginAddressKey(address);
+      const key = exactPluginAddressKey(address);
       const held = byPlugin.get(key) ?? { address, broken: [], moves: [] };
       byPlugin.set(key, held);
       return held;
@@ -230,16 +230,15 @@ export class PluginFacts {
   }
 
   /** The facts alone, leaving the held plugins and the sorting statuses as the last reconcile
-   *  judged them. `asked` names the plugins the answer covers; none means every plugin. Whether
-   *  what the sorting rules judge changed. */
-  refreshed(plugins: readonly PluginMetadata[], asked?: readonly PluginAddress[]): boolean {
+   *  judged them. `asked` is the plugins the answer covers. Whether what the sorting rules judge changed. */
+  refreshed(plugins: readonly PluginMetadata[], asked?: NamedPlugins): boolean {
     answered(this.factsRead);
     if (asked === undefined) this.answers.clear();
     else {
-      const answered = new Set(plugins.map(pluginAddressKey));
-      for (const plugin of asked) if (!answered.has(pluginAddressKey(plugin))) this.answers.delete(pluginAddressKey(plugin));
+      const answeredKeys = new Set(plugins.map(exactPluginAddressKey));
+      for (const plugin of asked) if (!answeredKeys.has(exactPluginAddressKey(plugin))) this.answers.delete(exactPluginAddressKey(plugin));
     }
-    for (const p of plugins) this.answers.set(pluginAddressKey(p), p);
+    for (const p of plugins) this.answers.set(exactPluginAddressKey(p), p);
     return this.derive([...this.answers.values()]);
   }
 
@@ -359,6 +358,11 @@ export class PluginFacts {
     return (this.sorting.get(address) ?? []).filter((rule) => rule.level === level);
   }
 
+  /** Whether the last read of mEdit's facts failed, so what is held may be stale for any plugin. */
+  factsReadFailed(): boolean {
+    return this.factsRead.failure !== undefined;
+  }
+
   /** mEdit's facts about each plugin could not be read: a row not held expands to the error row
    *  naming why, and the last answer stays. */
   factsFailed(reason: string): void {
@@ -387,7 +391,10 @@ export class PluginFacts {
     this.changedByMod.set(event.origin, after);
     this.changed = new ByPluginAddress<true>();
     for (const address of [...this.changedByMod.values()].flat()) this.changed.set(address, true);
-    return [...before, ...after];
+    const standing = (plugins: readonly PluginAddress[]) => new Map(plugins.map((plugin) => [exactPluginAddressKey(plugin), plugin]));
+    const was = standing(before);
+    const is = standing(after);
+    return [...was, ...is].filter(([key]) => was.has(key) !== is.has(key)).map(([, plugin]) => plugin);
   }
 
   /** Each plugin a mod's manifest names that is not restored, with that mod, replacing the last. */

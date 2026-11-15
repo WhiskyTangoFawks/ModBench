@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import type { LoadOrderRefusal, MEditClient, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
 import { errorMessage } from '../ports/errorMessage';
-import { pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
+import { exactPluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
+import type { NamedPlugins } from './pluginAddress';
 import { PluginFacts, type LootInput, type PluginProblem, type SourceUnreadableProblem } from './pluginFacts';
 import { ruleFileDiagnostics, type RuleFileDiagnostic } from '../sortingRules/ruleFileDiagnostics';
 import type { FileFacts, FileRead } from '../sortingRules/lootConditions';
@@ -52,7 +53,7 @@ export type PluginRowFacts = Pick<PluginFacts,
  *  event, never per rendered row. */
 export class PluginFactsFeed implements vscode.Disposable {
   private readonly facts = new PluginFacts();
-  private readonly changed = new vscode.EventEmitter<readonly PluginAddress[] | undefined>();
+  private readonly changed = new vscode.EventEmitter<NamedPlugins>();
   private readonly unsubscribe: () => void;
   // Bumped by each reconcile step (a tick, a refusal, unreachable, the hand-off), so a slow read
   // answering after a newer step cannot resurrect a stale answer.
@@ -110,7 +111,7 @@ export class PluginFactsFeed implements vscode.Disposable {
    *  the read failed or a newer step superseded it. */
   async reconciled(failures: readonly PluginLoadFailure[]): Promise<number | undefined> {
     const generation = ++this.generation;
-    const plugins = await this.readPlugins();
+    const plugins = await this.readPlugins(undefined);
     if (generation !== this.generation) return undefined;
     if ('failure' in plugins) return this.factsFailed(plugins.failure);
     const active = this.deps.activePlugins();
@@ -151,8 +152,7 @@ export class PluginFactsFeed implements vscode.Disposable {
     await this.rejudgeAnnouncing([]);
   }
 
-  // The change event names the plugins the judgement altered besides those the caller announces, or everything when the caller does.
-  private async rejudgeAnnouncing(announced: readonly PluginAddress[] | undefined): Promise<void> {
+  private async rejudgeAnnouncing(announced: NamedPlugins): Promise<void> {
     const judged = this.facts.judgedOrder();
     if (judged === undefined) return;
     const rejudgement = ++this.rejudgements;
@@ -163,17 +163,18 @@ export class PluginFactsFeed implements vscode.Disposable {
     this.changed.fire(announced && [...announced, ...altered.filter((plugin) => !announced.some((a) => samePluginAddress(a, plugin)))]);
   }
 
-  /** Re-reads the facts of the plugins named, or of every plugin when none are, and judges again
-   *  against them, leaving the held load order as it is. None supersedes a reconcile's hand-off. */
-  refresh(named?: readonly PluginAddress[]): Promise<void> {
+  /** Re-reads the facts of the plugins named and judges again, leaving the held load order as it is.
+   *  After a failed read it reads every plugin, as any may be stale. Never supersedes a hand-off. */
+  refresh(named?: NamedPlugins): Promise<void> {
     const generation = this.generation;
     const refreshed = this.refreshing.then(() => this.refreshOnce(named, generation));
     this.refreshing = refreshed.catch(() => undefined);
     return refreshed;
   }
 
-  private async refreshOnce(named: readonly PluginAddress[] | undefined, generation: number): Promise<void> {
-    if (named?.length === 0) return;
+  private async refreshOnce(requested: NamedPlugins, generation: number): Promise<void> {
+    if (requested?.length === 0) return;
+    const named = this.facts.factsReadFailed() ? undefined : requested;
     const plugins = await this.readPlugins(named);
     if (generation !== this.generation) return;
     if ('failure' in plugins) return this.factsFailed(plugins.failure);
@@ -190,10 +191,10 @@ export class PluginFactsFeed implements vscode.Disposable {
 
   // The plugins of the rows the tree shows, joined by (origin, filename). A failed read is never
   // swallowed into an empty list, which would read as "nothing held".
-  private async readPlugins(named?: readonly PluginAddress[]): Promise<PluginMetadata[] | { failure: string }> {
+  private async readPlugins(named: NamedPlugins): Promise<PluginMetadata[] | { failure: string }> {
     try {
-      const shown = new Set(this.deps.shownPlugins().map(pluginAddressKey));
-      return answerOf(await this.deps.client.getPlugins(named)).filter((p) => shown.has(pluginAddressKey(p)));
+      const shown = new Set(this.deps.shownPlugins().map(exactPluginAddressKey));
+      return answerOf(await this.deps.client.getPlugins(named)).filter((p) => shown.has(exactPluginAddressKey(p)));
     } catch (err) {
       if (!(err instanceof ReadFailedError)) throw err;
       return { failure: errorMessage(err) };
