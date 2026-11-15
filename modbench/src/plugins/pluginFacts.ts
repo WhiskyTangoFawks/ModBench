@@ -239,7 +239,7 @@ export class PluginFacts {
       `"${p.name}" (${p.origin}): ${p.laterReadFailure.map((f) => `${f.sourceRelativePath}: ${f.message}`).join('; ')}`,
     ] as const]));
     this.noMatchAnywhere = plugins.length > 0 && plugins.every((p) => !p.hasMatchingRecords);
-    const judged = JSON.stringify(plugins.map((p) => [pluginAddressKey(p), p.masters, p.isMaster, p.isBlueprint]));
+    const judged = JSON.stringify(plugins.map((p) => [pluginAddressKey(p), p.masters, p.isMaster, p.isBlueprint, p.description]));
     const sortingChanged = judged !== this.judgedFacts;
     this.judgedFacts = judged;
     return sortingChanged;

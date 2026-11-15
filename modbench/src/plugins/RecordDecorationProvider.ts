@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
 import type { RecordBrowser } from './RecordBrowser';
+import { parseRecordResourceUri, parseRowResourceUri } from './recordResourceUri';
+import { pluginAddressKey } from '../wire/pluginAddress';
 
 export type RecordBadgeSource = Pick<
-  RecordBrowser, 'workingTreeStateOf' | 'statesBeneathOf' | 'isExpanded' | 'onDidReadRecords' | 'onDidReadBeneath'
+  RecordBrowser, 'workingTreeStateOf' | 'statesBeneathOf' | 'isExpanded' | 'onDidReadRecords' | 'onDidChangeStatesBeneath'
 >;
 
 const MODIFIED = 'gitDecoration.modifiedResourceForeground';
@@ -15,6 +17,8 @@ export class RecordDecorationProvider implements vscode.FileDecorationProvider, 
   private readonly _onDidChangeFileDecorations = new vscode.EventEmitter<vscode.Uri | vscode.Uri[] | undefined>();
   readonly onDidChangeFileDecorations = this._onDidChangeFileDecorations.event;
   private readonly subscriptions: vscode.Disposable[];
+  // The rows VS Code asked a decoration of, by plugin: the rows a change of that plugin's states beneath asks again.
+  private readonly asked = new Map<string, Map<string, vscode.Uri>>();
 
   constructor(
     private readonly source: RecordBadgeSource,
@@ -23,11 +27,14 @@ export class RecordDecorationProvider implements vscode.FileDecorationProvider, 
   ) {
     this.subscriptions = [
       source.onDidReadRecords((uris) => { this._onDidChangeFileDecorations.fire([...uris]); }),
-      source.onDidReadBeneath(() => { this._onDidChangeFileDecorations.fire(undefined); }),
+      source.onDidChangeStatesBeneath((plugins) => {
+        this._onDidChangeFileDecorations.fire(plugins === undefined ? undefined : plugins.flatMap((plugin) => [...this.asked.get(pluginAddressKey(plugin))?.values() ?? []]));
+      }),
     ];
   }
 
   provideFileDecoration(uri: vscode.Uri): vscode.ProviderResult<vscode.FileDecoration> {
+    this.remember(uri);
     const state = this.source.workingTreeStateOf(uri);
     if (state === 'Modified') {
       return { badge: 'M', color: new vscode.ThemeColor(MODIFIED), tooltip: 'Modified' };
@@ -37,6 +44,15 @@ export class RecordDecorationProvider implements vscode.FileDecorationProvider, 
     }
     if (this.source.isExpanded(uri) || this.lockedRows().has(uri.toString())) return undefined;
     return this.beneath(uri);
+  }
+
+  private remember(uri: vscode.Uri): void {
+    const identity = parseRecordResourceUri(uri) ?? parseRowResourceUri(uri);
+    if (identity === undefined) return;
+    const key = pluginAddressKey(identity.plugin);
+    const rows = this.asked.get(key) ?? new Map<string, vscode.Uri>();
+    rows.set(uri.toString(), uri);
+    this.asked.set(key, rows);
   }
 
   private async beneath(uri: vscode.Uri): Promise<vscode.FileDecoration | undefined> {

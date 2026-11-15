@@ -15,8 +15,8 @@ interface Reads<Paths extends Answered, Problems, Status> {
 export interface ProblemsAsker<Paths extends Answered, Problems, Status> {
   getPluginFilePaths: Reads<Paths, Problems, Status>['getPluginFilePaths'];
   getPluginProblems: Reads<Paths, Problems, Status>['getPluginProblems'];
-  /** Told after the asker dropped what it held of the plugin. */
-  onPluginChanged(listener: (event: { plugin: PluginAddress }) => void): () => void;
+  /** Told after the asker dropped what it held of the plugin, or of every plugin when no plugin is named. */
+  onPluginChanged(listener: (event: { plugin?: PluginAddress }) => void): () => void;
   /** Told after the asker dropped everything it held. */
   onLoadOrderSettled(listener: (status: Status) => void): () => void;
   /** Told to ask again of a read that failed: after a delay, and, for the file paths the asker holds, at once when another ask of them is answered. */
@@ -67,7 +67,7 @@ export function problemsAsker<Paths extends Answered, Problems, Status>(client: 
     onAskedAgain: (read, listener) => retries.onAskedAgain(read, listener),
     onPluginChanged: (listener) => {
       const subscription = client.onDidChange((change) => {
-        if (change === undefined) { forget(); return; }
+        if (change === undefined) { forget(); listener({}); return; }
         for (const { plugin } of change) { forget(plugin); listener({ plugin }); }
       });
       return () => { subscription.dispose(); };

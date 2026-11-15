@@ -59,15 +59,46 @@ describe('the states beneath a row', () => {
     expect(await browser.statesBeneathOf(rowResourceUri(PLUGIN))).toEqual(['Modified', 'Added']);
   });
 
-  it('are asked of mEdit each time, and kept by no one', async () => {
+  it('are asked of mEdit once for a plugin while a read is in flight, however many of its rows ask, and kept by no one', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getWorkingTreeStatesBeneath', NOTHING);
     const browser = new RecordBrowser(client);
 
-    await browser.statesBeneathOf(rowResourceUri(PLUGIN));
+    await Promise.all([browser.statesBeneathOf(rowResourceUri(PLUGIN)), browser.statesBeneathOf(rowResourceUri(PLUGIN, 'weap'))]);
+    const sharedCalls = beneathCalls(client).length;
     await browser.statesBeneathOf(rowResourceUri(PLUGIN));
 
-    expect(beneathCalls(client)).toHaveLength(2);
+    expect([sharedCalls, beneathCalls(client).length]).toEqual([1, 2]);
+  });
+
+  it('forget every plugin\'s failure when a refresh names none', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryFailure('getWorkingTreeStatesBeneath', { failed: 'refused', refusal: 'boom' });
+    const browser = new RecordBrowser(client);
+    await browser.statesBeneathOf(rowResourceUri(PLUGIN));
+
+    browser.refresh();
+
+    expect(browser.beneathFailure.message()).toBeUndefined();
+  });
+
+  it('give two blocks of one worldspace two rows', async () => {
+    const client = worldspaceClient(NOTHING);
+    client.setQueryAnswer('getWorldspaceBlocks', {
+      topCells: [],
+      blocks: [0, 1].map((x) => ({
+        x, y: 0, hasParseFailure: false,
+        subBlocks: [{ x: 0, y: 0, hasParseFailure: false, cells: [
+          { formKey: `c${x}:Plugin0.esp`, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false, workingTreeState: 'None' as const },
+        ] }],
+      })),
+    });
+    const browser = new RecordBrowser(client);
+    const worldspace = await soleChild(browser, await soleGroup(browser, PLUGIN), 'the group');
+
+    const blocks = await browser.getChildren(worldspace);
+
+    expect(new Set(blocks.map((block) => uriOf(block).toString())).size).toBe(2);
   });
 
   it('are a record-type group\'s own, read off the group row', async () => {
@@ -136,14 +167,15 @@ describe('the states beneath a row', () => {
     expect([standing, browser.beneathFailure.message()]).toEqual(['Failed to load: boom', undefined]);
   });
 
-  it('are announced by a refresh, so every row asks again', () => {
+  it('are announced by a refresh, naming the plugins it names, so their rows ask again', () => {
     const browser = new RecordBrowser(new InMemoryMEditClient());
     const announced = vi.fn();
-    browser.onDidReadBeneath(announced);
+    browser.onDidChangeStatesBeneath(announced);
 
     browser.refresh();
+    browser.refresh([PLUGIN]);
 
-    expect(announced).toHaveBeenCalledTimes(1);
+    expect(announced.mock.calls).toEqual([[undefined], [[PLUGIN]]]);
   });
 
   it('give the rows they badge an explicit blank icon, or the file icon theme draws one', async () => {

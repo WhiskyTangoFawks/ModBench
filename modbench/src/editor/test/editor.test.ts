@@ -779,12 +779,12 @@ describe('what a record tab\'s webview posts', () => {
       expect(outputChannel.warn).not.toHaveBeenCalled();
     });
 
-    it('reads again on a status once no load order is coming', async () => {
+    it('reads again on a refusal status once no load order is coming', async () => {
       const { tab, mEdit } = await refusedTab();
       const postsBefore = loadRecordPosts(tab).length;
 
       loadOrder.coming = false;
-      mEdit.reconnected();
+      mEdit.emit(loadOrderStatusEventFixture({ state: 'Failed', message: 'indexing failed', conflictsComputed: false }));
 
       await vi.waitFor(() => expect(loadRecordPosts(tab)).toHaveLength(postsBefore + 1));
     });

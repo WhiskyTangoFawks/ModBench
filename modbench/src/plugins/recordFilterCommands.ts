@@ -6,7 +6,7 @@ import type { RecordBrowser } from './RecordBrowser';
 import { answerOf } from '../wire/readFailed';
 
 export interface FilterCommandDeps {
-  client: Pick<MEditClient, 'setFilter' | 'clearFilter' | 'getActiveFilter' | 'onDidChange'>;
+  client: Pick<MEditClient, 'setFilter' | 'clearFilter' | 'getActiveFilter' | 'onDidChange' | 'onNotification'>;
   treeProvider: Pick<RecordBrowser, 'refresh'>;
   /** Symmetric on purpose: a stale `false` surviving a clear would leave a plugin permanently
    *  hidden (plugins.md). */
@@ -52,6 +52,7 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
     refreshMatchingPlugins();
   };
 
+  let lastRequested: string | undefined;
   let reads = 0;
 
   // Replies and clearings can arrive in any order, so what mEdit holds decides what shows, and
@@ -67,17 +68,21 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
   };
 
   const apply = async (filter: RecordFilter): Promise<void> => {
+    lastRequested = filter.source;
     const error = await client.setFilter(filter);
     if (error !== null) reporter.report('error', `Filter failed — ${error}`);
     await showHeld();
   };
 
-  // A change of everything may have cleared the filter, which mEdit does when the record index cannot apply it again.
-  const onEverythingChanged = async (): Promise<void> => {
+  // mEdit says why it cleared a filter only here; the change event says that everything changed, which asks the filter again.
+  const onCleared = async ({ source, reason }: { source: string; reason: string }): Promise<void> => {
     const shownBefore = showRecordFilter.shownSource();
     await showHeld();
-    if (shownBefore !== undefined && showRecordFilter.shownSource() === undefined) {
-      reporter.report('warning', `The record filter ${shownBefore} was cleared`);
+    const message = `The record filter ${source} was cleared`;
+    if (showRecordFilter.shownSource() !== shownBefore || lastRequested === source || shownBefore === source) {
+      reporter.report('warning', message, reason);
+    } else {
+      reporter.shownOnSurface('warning', message, reason);
     }
   };
 
@@ -103,7 +108,8 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
   };
 
   return [
-    client.onDidChange((change) => { if (change === undefined) void onEverythingChanged(); }),
+    client.onDidChange((change) => { if (change === undefined) void showHeld(); }),
+    { dispose: client.onNotification('record-filter-cleared', (cleared) => { void onCleared(cleared); }) },
     vscode.commands.registerCommand('modbench.record.filter', (source?: vscode.Uri) =>
       source === undefined ? fromPick() : fromDocument(source)),
     vscode.commands.registerCommand('modbench.record.clearFilter', async () => {

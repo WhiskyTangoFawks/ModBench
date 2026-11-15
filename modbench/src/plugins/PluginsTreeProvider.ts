@@ -331,7 +331,6 @@ export class PluginsTreeProvider
     return this.childrenOf(element);
   }
 
-  // The children a walk reads too, which VS Code did not ask for, so no row is marked expanded.
   private async childrenOf(element: PluginsTreeNode): Promise<PluginsTreeNode[]> {
     const children = isRow(element)
       ? await this.expandPluginRow(element)

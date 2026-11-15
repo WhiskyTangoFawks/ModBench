@@ -6,6 +6,8 @@ vi.mock('vscode', () => ({ Uri, ThemeColor, EventEmitter }));
 import * as vscode from 'vscode';
 import { RecordDecorationProvider } from '../RecordDecorationProvider';
 import type { components } from '../../wire/generated/api';
+import type { PluginAddress } from '../../wire/pluginAddress';
+import { recordResourceUri, rowResourceUri } from '../recordResourceUri';
 
 type WorkingTreeState = components['schemas']['WorkingTreeState'];
 
@@ -25,15 +27,15 @@ function source(
   expanded = false,
 ) {
   const reads = listeners<readonly vscode.Uri[]>();
-  const beneathReads = listeners<undefined>();
+  const beneathReads = listeners<readonly PluginAddress[] | undefined>();
   return {
     workingTreeStateOf: () => state,
     statesBeneathOf: () => Promise.resolve(beneath),
     isExpanded: () => expanded,
     onDidReadRecords: reads.on,
-    onDidReadBeneath: beneathReads.on,
+    onDidChangeStatesBeneath: beneathReads.on,
     read: reads.emit,
-    readBeneath: () => { beneathReads.emit(undefined); },
+    changeBeneath: beneathReads.emit,
   };
 }
 
@@ -98,14 +100,32 @@ describe('RecordDecorationProvider, a row with changes beneath it', () => {
     expect(await provider.provideFileDecoration(uri)).toBeUndefined();
   });
 
-  it('asks VS Code to ask again about every row when the states beneath are read', () => {
+  const PLUGIN: PluginAddress = { name: 'A.esp', origin: 'ModA' };
+  const OTHER: PluginAddress = { name: 'B.esp', origin: 'ModA' };
+
+  it('asks VS Code to ask again about every row when the states beneath of every plugin changed', () => {
     const badges = source('None');
     const provider = new RecordDecorationProvider(badges, NO_LOCKED_ROWS);
     const handler = vi.fn();
     provider.onDidChangeFileDecorations(handler);
 
-    badges.readBeneath();
+    badges.changeBeneath(undefined);
 
     expect(handler).toHaveBeenCalledWith(undefined);
+  });
+
+  it('asks VS Code to ask again only about the rows of the named plugin it was asked a decoration of', async () => {
+    const badges = source('None');
+    const provider = new RecordDecorationProvider(badges, NO_LOCKED_ROWS);
+    const pluginRow = rowResourceUri(PLUGIN);
+    const record = recordResourceUri(PLUGIN, '000800:A.esp');
+    const otherRow = rowResourceUri(OTHER);
+    await Promise.all([pluginRow, record, otherRow].map(async (row) => provider.provideFileDecoration(row)));
+    const handler = vi.fn();
+    provider.onDidChangeFileDecorations(handler);
+
+    badges.changeBeneath([PLUGIN]);
+
+    expect(handler.mock.calls).toEqual([[[pluginRow, record]]]);
   });
 });

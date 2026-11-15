@@ -59,6 +59,8 @@ export class PluginFactsFeed implements vscode.Disposable {
   private generation = 0;
   // `refresh`' own order, apart from `generation` so a fact re-read never discards a hand-off.
   private refreshes = 0;
+  // The plugins every re-read asked about since one last answered, so an overtaken re-read's names reach the one that answers.
+  private unannounced: Map<string, PluginAddress> | 'everything' = new Map();
   // The order of `rejudge`, so only the newest judgement of an order publishes.
   private rejudgements = 0;
 
@@ -161,15 +163,19 @@ export class PluginFactsFeed implements vscode.Disposable {
   /** Re-reads the facts alone and judges again against them, leaving the held load order as it is.
    *  A later re-read wins, and none supersedes a reconcile's hand-off. */
   async refresh(named?: readonly PluginAddress[]): Promise<void> {
+    if (named === undefined) this.unannounced = 'everything';
+    else if (this.unannounced !== 'everything') for (const plugin of named) this.unannounced.set(pluginAddressKey(plugin), plugin);
     const generation = this.generation;
     const refresh = ++this.refreshes;
     const plugins = await this.readPlugins();
     if (generation !== this.generation || refresh !== this.refreshes) return;
     if ('failure' in plugins) return this.factsFailed(plugins.failure);
+    const announced = this.unannounced === 'everything' ? undefined : [...this.unannounced.values()];
+    this.unannounced = new Map();
     const sortingChanged = this.facts.refreshed(plugins);
     this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);
     if (this.facts.judgedOrder() !== undefined && sortingChanged) await this.rejudge();
-    else this.changed.fire(named);
+    else this.changed.fire(announced);
   }
 
   /** The record filter changed, so the last answer belongs to another filter. */

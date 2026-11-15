@@ -366,7 +366,7 @@ describe('the Plugins view follows mEdit\'s change event', () => {
     expect(redrawn).toContain(undefined);
   });
 
-  it('re-reads every plugin, and never a named few, when mEdit holds the load order again after a dropped connection', async () => {
+  it('re-reads every plugin, then each plugin of the snapshot it holds again, after a dropped connection', async () => {
     const { client, recordBrowser } = pluginsView();
     client.answerPuts(() => Promise.resolve({ outcome: 'applied', status: APPLIED_STATUS }));
     client.setStatus('running');
@@ -376,8 +376,7 @@ describe('the Plugins view follows mEdit\'s change event', () => {
     client.reconnected();
     await client.latestLoadOrder();
 
-    await vi.waitFor(() => { expect(refresh).toHaveBeenCalled(); });
-    expect(refresh.mock.calls.map(([named]) => named?.length)).toEqual([undefined, 1, 1, 1]);
+    await vi.waitFor(() => { expect(refresh.mock.calls.map(([named]) => named?.length)).toEqual([undefined, 1, 1, 1]); });
   });
 
   it('hears no push once disposed', () => {
@@ -427,7 +426,7 @@ describe('the Plugins view re-renders for a reconcile tick only when it landed s
     const afterTheFirst = rerenders.length;
     client.emit(tick({ indexedPlugins: [A], failures: [{ name: 'B.esp', origin: 'SomeMod', reason: 'RACE parse' }] }));
 
-    expect(rerenders.length).toBeGreaterThan(afterTheFirst);
+    expect(rerenders.length - afterTheFirst).toBe(4);
   });
 });
 
@@ -523,10 +522,10 @@ describe('a record row\'s badge, from mEdit\'s stream', () => {
 
     client.setQueryAnswer('getRecords', { items: [summary('Modified')], total: 1 });
     client.emit({ ...rowsChanged, keys: [FORM_KEY] });
-    await vi.waitFor(() => { expect(badgeChanges).toEqual([undefined]); });
+    await vi.waitFor(() => { expect(badgeChanges).toEqual([[uri]]); });
     await asVsCodeReReadsAnExpandedGroupOnTreeChange(recordBrowser, group);
 
-    expect(badgeChanges).toEqual([undefined, [uri]]);
+    expect(badgeChanges).toEqual([[uri], [uri]]);
     expect((await badges.provideFileDecoration(uri))?.badge).toBe('M');
   });
 });
@@ -683,7 +682,10 @@ describe('the record filter, from the commands that set and clear it', () => {
   });
 
   describe('a record filter the record index could not apply again', () => {
-    const warned = [{ severity: 'warning', message: 'The record filter a was cleared' }];
+    const cleared = (source: string) => notificationEventFixture({
+      kind: 'record-filter-cleared', recordFilterCleared: { source, reason: 'Conversion Error' },
+    });
+    const warned = [{ severity: 'warning', message: 'The record filter a was cleared', detail: 'Conversion Error' }];
 
     async function showingA() {
       h.document = { uri: { scheme: 'untitled', path: 'a' }, fileName: 'a', getText: () => ARMOR_SQL };
@@ -694,32 +696,86 @@ describe('the record filter, from the commands that set and clear it', () => {
       return view;
     }
 
-    it('shows what mEdit holds when everything changed, re-reads the records, and warns naming the source', async () => {
+    it('shows what mEdit holds, re-reads the records, and warns naming the source and the reason', async () => {
       const view = await showingA();
       view.client.setQueryAnswer('getActiveFilter', null);
 
-      view.client.reconnected();
+      view.client.emit(cleared('a'));
 
       await vi.waitFor(() => { expect(view.reporter.reports).toEqual(warned); });
       expect(view.description()).toBeUndefined();
       expect(view.lensOn(ARMOR_SQL)).toBe('modbench.record.filter');
       expect(view.filterActive()).toEqual([true, false]);
-      expect(view.recordBrowserRefreshes.length).toBeGreaterThan(0);
+      expect(view.recordBrowserRefreshes).toHaveLength(2);
     });
 
-    it('keeps the filter mEdit still holds when everything changed, and says nothing', async () => {
+    it('keeps a newer filter mEdit holds, and only logs a clearing of an older one', async () => {
       const view = await showingA();
+      view.client.setQueryAnswer('getActiveFilter', { sql: ARMOR_SQL, source: 'a' });
 
-      view.client.reconnected();
-      await vi.waitFor(() => { expect(view.activeFilterReads()).toBe(2); });
-      await settle();
+      view.client.emit(cleared('older.sql'));
 
+      await vi.waitFor(() => {
+        expect(view.reporter.shownFailures).toEqual([
+          { severity: 'warning', message: 'The record filter older.sql was cleared', detail: 'Conversion Error' },
+        ]);
+      });
       expect(view.description()).toBe('records: a');
       expect(view.reporter.reports).toEqual([]);
     });
 
-    it('does not ask for the filter again when the change names plugins', async () => {
+    it('warns when the clearing of another source leaves the view without the filter it showed', async () => {
       const view = await showingA();
+      view.client.setQueryAnswer('getActiveFilter', null);
+
+      view.client.emit(cleared('older.sql'));
+
+      await vi.waitFor(() => {
+        expect(view.reporter.reports).toEqual([
+          { severity: 'warning', message: 'The record filter older.sql was cleared', detail: 'Conversion Error' },
+        ]);
+      });
+      expect(view.description()).toBeUndefined();
+    });
+
+    it('shows no filter when the clearing outruns the reply to the set it clears', async () => {
+      h.document = { uri: { scheme: 'untitled', path: 'a' }, fileName: 'a', getText: () => ARMOR_SQL };
+      const view = filtering();
+      let replied!: (error: string | null) => void;
+      view.client.setQueryAnswerOnce('setFilter', new Promise<string | null>((resolve) => { replied = resolve; }));
+      view.client.setQueryAnswer('getActiveFilter', null);
+
+      const applying = view.filter({ scheme: 'untitled', path: 'a' });
+      await vi.waitFor(() => { expect(view.setCalls()).toHaveLength(1); });
+      view.client.emit(cleared('a'));
+      await vi.waitFor(() => { expect(view.reporter.reports).toEqual(warned); });
+      replied(null);
+      await applying;
+
+      await vi.waitFor(() => { expect(view.filterActive()).toEqual([false, false]); });
+      expect(view.description()).toBeUndefined();
+    });
+  });
+
+  describe('a change of everything', () => {
+    it('shows what mEdit holds, and says nothing, since the reason a filter was cleared comes with the notification', async () => {
+      h.document = { uri: { scheme: 'untitled', path: 'a' }, fileName: 'a', getText: () => ARMOR_SQL };
+      const view = filtering();
+      view.holds('a');
+      await view.filter({ scheme: 'untitled', path: 'a' });
+      view.client.setQueryAnswer('getActiveFilter', null);
+
+      view.client.reconnected();
+
+      await vi.waitFor(() => { expect(view.description()).toBeUndefined(); });
+      expect(view.reporter.reports).toEqual([]);
+    });
+
+    it('does not ask for the filter again when the change names plugins', async () => {
+      h.document = { uri: { scheme: 'untitled', path: 'a' }, fileName: 'a', getText: () => ARMOR_SQL };
+      const view = filtering();
+      view.holds('a');
+      await view.filter({ scheme: 'untitled', path: 'a' });
 
       view.client.emit(rowsChanged);
       await settle();
@@ -775,8 +831,8 @@ describe('the record filter, from the commands that set and clear it', () => {
       const reapplying = view.filter({ scheme: 'untitled', path: 'a' });
       await vi.waitFor(() => { expect(view.setCalls()).toHaveLength(2); });
 
-      view.client.reconnected();
-      await vi.waitFor(() => { expect(view.activeFilterReads()).toBe(2); });
+      view.client.emit(notificationEventFixture({ kind: 'record-filter-cleared', recordFilterCleared: { source: 'a', reason: 'Conversion Error' } }));
+      await vi.waitFor(() => { expect(view.activeFilterReads()).toBe(3); });
       replied(null);
       await reapplying;
 

@@ -1112,6 +1112,33 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
     return { group: present(group, 'the Weapon group'), record: present(record, 'the record row') };
   }
 
+  describe('a change of the record index', () => {
+    const redrawnBy = async (filterSource: string | undefined) => {
+      const h = makeTree([plugin({ name: 'A.esp', line: 0 }), plugin({ name: 'B.esp', line: 1 })], { client: weaponOf(recordSummaryFixture()) });
+      await reconcile(h, [held('A.esp'), held('B.esp')]);
+      const [a] = await h.tree.getChildren();
+      h.tree.setRecordFilterSource(filterSource);
+      const redrawn: unknown[] = [];
+      h.tree.onDidChangeTreeData((element) => redrawn.push(element));
+
+      h.tree.indexChanged([{ plugin: { name: 'A.esp', origin: 'SomeMod' } }]);
+
+      return { redrawn, a };
+    };
+
+    it('redraws only the named plugin\'s row', async () => {
+      const { redrawn, a } = await redrawnBy(undefined);
+
+      expect(new Set(redrawn)).toEqual(new Set([a]));
+    });
+
+    it('redraws every row while a record filter is in force, which decides which plugins have a row', async () => {
+      const { redrawn } = await redrawnBy('a.sql');
+
+      expect(new Set(redrawn)).toEqual(new Set([undefined]));
+    });
+  });
+
   it('gives a record-type group an id of its own, so VS Code keeps it open across a redraw', async () => {
     const client = weaponOf(recordSummaryFixture());
     const h = makeTree([plugin({ name: 'A.esp', line: 0 })], { client });
@@ -1119,8 +1146,9 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
     const [row] = await h.tree.getChildren();
 
     const { group } = await firstRecordUnder(h, present(row, 'the A.esp row'));
+    const again = (await firstRecordUnder(h, present(row, 'the A.esp row'))).group;
 
-    expect(group.id).toBe(present(group.resourceUri, 'the group\'s URI').toString());
+    expect([group.id, again.id]).toEqual(Array(2).fill(present(group.resourceUri, 'the group\'s URI').toString()));
   });
 
   it('flips a record row on the reconcile after its mod is decompiled and committed', async () => {

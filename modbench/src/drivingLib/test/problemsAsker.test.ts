@@ -92,13 +92,14 @@ describe('problemsAsker', () => {
     const { client, asker } = started();
     await asker.getPluginFilePaths(A);
     await asker.getPluginFilePaths(B);
-    asker.onPluginChanged(() => undefined);
+    const told: unknown[] = [];
+    asker.onPluginChanged((event) => { told.push(event); });
 
     client.everythingChanged();
     await asker.getPluginFilePaths(A);
     await asker.getPluginFilePaths(B);
 
-    expect(client.asked()).toEqual([A, B, A, B]);
+    expect([client.asked(), told]).toEqual([[A, B, A, B], [{}]]);
   });
 
   it('tells a listener of a change only after it dropped what it held, so the listener is answered after the change', async () => {

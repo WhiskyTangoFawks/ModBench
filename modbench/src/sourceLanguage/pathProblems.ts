@@ -135,7 +135,7 @@ export function feedPathProblems(deps: PathProblemsDeps): () => void {
   };
   const unsubscribe = [
     deps.ask.onLoadOrderSettled((status) => { if (status.conflictsComputed) { wholeWanted = true; askWanted(); } }),
-    deps.ask.onPluginChanged(askPluginWhenReady),
+    deps.ask.onPluginChanged(({ plugin }) => { if (plugin === undefined) { wholeWanted = true; askWanted(); } else askPluginWhenReady({ plugin }); }),
     deps.ask.onAskedAgain('getPluginFilePaths', askedAgain(() => { wholeWanted = true; askWanted(); }, askPluginWhenReady)),
   ];
   const judging = paths.subscribe(() => { void judge(); });

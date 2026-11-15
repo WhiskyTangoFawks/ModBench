@@ -273,11 +273,40 @@ describe('PluginFactsFeed', () => {
       await feed.reconciled([]);
       asked.mockClear();
       changes.mockClear();
-      client.setQueryAnswer('getPlugins', [held({ description: 'edited' }), ...reads(false).slice(1)]);
+      client.setQueryAnswer('getPlugins', [held({ isCompiledPlugin: true }), ...reads(false).slice(1)]);
 
       await feed.refresh([A]);
 
       expect([asked.mock.calls.length, changes.mock.calls]).toEqual([0, [[[A]]]]);
+    });
+
+    it('names every plugin asked about since the last answer, so an overtaken re-read\'s plugin is not lost', async () => {
+      const { feed, client, changes } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B] });
+      client.setQueryAnswer('getPlugins', reads(false));
+      await feed.reconciled([]);
+      changes.mockClear();
+      const slow = deferred<PluginMetadata[]>();
+      client.setQueryAnswerOnce('getPlugins', slow.promise);
+
+      const overtaken = feed.refresh([A]);
+      await feed.refresh([B]);
+      slow.resolve(reads(false));
+      await overtaken;
+
+      expect(changes.mock.calls).toEqual([[[A, B]]]);
+    });
+
+    it('judges again for an edited description, which a version condition of the sorting rules reads', async () => {
+      const asked = vi.fn();
+      const { feed, client } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B], asked });
+      client.setQueryAnswer('getPlugins', reads(false));
+      await feed.reconciled([]);
+      asked.mockClear();
+      client.setQueryAnswer('getPlugins', [held({ description: 'edited' }), ...reads(false).slice(1)]);
+
+      await feed.refresh([A]);
+
+      expect(asked).toHaveBeenCalled();
     });
 
     it('judges nothing before the first reconcile', async () => {

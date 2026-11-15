@@ -28,17 +28,17 @@ type World = ReturnType<typeof world>;
 
 describe('heardChanges', () => {
   it.each([
-    ['the instance changes', (w: World) => { w.instanceChanges(); }, undefined],
-    ['the load order settles', (w: World) => { w.settles(); }, undefined],
-    ['a plugin changes', (w: World) => { w.pluginChanges(); }, A],
-  ])('tells its listener when %s, after the asker dropped what it held', async (_when, change, plugin) => {
+    ['the instance changes', (w: World) => { w.instanceChanges(); }, [undefined]],
+    ['the load order settles, which says everything changed as well', (w: World) => { w.settles(); }, [undefined, undefined]],
+    ['a plugin changes', (w: World) => { w.pluginChanges(); }, [A]],
+  ])('tells its listener when %s, after the asker dropped what it held', async (_when, change, plugins) => {
     const w = world();
     await w.asker.getPluginFilePaths();
 
     change(w);
     await w.asker.getPluginFilePaths();
 
-    expect([w.heard, w.asked()]).toEqual([[plugin], 2]);
+    expect([w.heard, w.asked()]).toEqual([plugins, 2]);
   });
 
   it('hears nothing once stopped', () => {
