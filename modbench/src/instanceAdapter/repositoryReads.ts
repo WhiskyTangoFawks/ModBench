@@ -5,8 +5,8 @@ import { GIT_DIR, keptUntilNamed } from './files';
 import { git } from './git';
 import type { Subscription } from './instanceAdapter';
 
-/** The instance repository's reads, from VS Code's git where its API answers them and from git elsewhere, kept in a
- *  reading only while VS Code's git holds the repository to say it changed. */
+/** The instance repository's reads, from VS Code's git where its API answers them and from git elsewhere, kept until a
+ *  check of the disk or a change that names the repository's .git. */
 export interface RepositoryReads {
   /** The commit HEAD names; undefined on a branch that has none. */
   readonly head: () => Promise<string | undefined>;
@@ -54,7 +54,6 @@ export function repositoryReads<Folder>(root: string, host: HostGit<Folder>): Re
 
   const kept = async (key: string, read: (repository: Repository<Folder> | undefined) => PromiseLike<string>): Promise<string> => {
     const repository = repositoryIn(await api());
-    if (repository === undefined) return read(undefined);
     const answered = await answers(dotGit);
     const held = answered.get(key);
     if (held !== undefined) return held;
@@ -70,7 +69,7 @@ export function repositoryReads<Folder>(root: string, host: HostGit<Folder>): Re
     // VS Code's state shows HEAD as of its latest status run, which a check of the disk cannot wait for.
     head: async () => {
       const repository = repositoryIn(await api());
-      if (repository === undefined) return (await gitOrNothing(root, ['rev-parse', '-q', '--verify', 'HEAD'])) || undefined;
+      if (repository === undefined) return (await kept('head', () => gitOrNothing(root, ['rev-parse', '-q', '--verify', 'HEAD']))) || undefined;
       await statusRun(statusKey);
       return repository.state.HEAD?.commit;
     },

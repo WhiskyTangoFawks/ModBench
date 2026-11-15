@@ -44,7 +44,7 @@ import type { GameDetectors } from '../../gameFolder/gameFolderResolver';
 import { FOMOD_ENGINE } from '../../../test/fomodEngine';
 import { DEPLOYED_PATH } from '../../../test/deployedPath';
 import type { ManagerAdapter, ManagerReading } from '../../publisher';
-import type { WatcherExclude } from '../../instanceAdapter';
+import { CHECK_THE_DISK, type Reread, type WatcherExclude } from '../../instanceAdapter';
 import { mo2Watch } from '../mo2Watch';
 import { watcherExcluding } from '../../../test/watcherExclusion';
 import type { Mo2Context } from '../mo2Context';
@@ -400,6 +400,26 @@ describe('the MO2 Instance adapter', () => {
           await runningOf(() => Promise.resolve(false)),
           await runningOf(() => Promise.reject(new Error('tasklist exited with code 1'))),
         ]).toEqual([{ kind: 'notRunning' }, { kind: 'unknown', reason: 'tasklist exited with code 1' }]);
+      });
+
+      it('asks again where the game is when the game path the settings hold or the Data folder changes, and whether MO2 is running only at a check of the disk', async () => {
+        const game = join(root, 'game');
+        const asked: string[] = [];
+        const adapter = adapterOver(root, {
+          mo2Running: () => { asked.push('running'); return Promise.resolve(false); },
+          gameFolder: () => { asked.push('game'); return Promise.resolve({ kind: 'found', root: game, dataFolder: join(game, 'Data') }); },
+        });
+        const askedBy = async (reread: Reread): Promise<string[]> => {
+          asked.length = 0;
+          await adapter.reading(reread);
+          return [...asked].sort();
+        };
+        const unrelated = { named: [join(root, 'mods', 'Harder VATS', 'Harder VATS.esp')], disk: false };
+        const first = await askedBy(CHECK_THE_DISK);
+        const settings = join(root, 'ModOrganizer.ini');
+        await writeFile(settings, setIniValue(await readFile(settings, 'utf8'), 'General', 'gamePath', join(root, 'elsewhere')));
+
+        expect([first, await askedBy(unrelated), await askedBy({ named: [join(game, 'Data')], disk: false })]).toEqual([['game', 'running'], ['game'], ['game']]);
       });
 
       it('answers the meta of a mod folder the mod order does not list, beside the listed ones', async () => {
