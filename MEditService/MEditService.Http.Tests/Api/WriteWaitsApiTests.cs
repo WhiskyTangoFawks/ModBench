@@ -159,7 +159,7 @@ public sealed class WriteWaitsApiTests : HostedTests
 
         var response = await Client.PostAsJsonAsync("/records/delete", Npc(formKey, Plugin, Origin)).WaitAsync(Generous);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Contains(Logged, entry => entry.Level == LogLevel.Warning && entry.Message.Contains("has not read the plugin source", StringComparison.Ordinal));
     }
 

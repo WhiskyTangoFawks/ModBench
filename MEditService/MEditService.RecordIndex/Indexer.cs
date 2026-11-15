@@ -404,7 +404,8 @@ internal sealed class Indexer : IDisposable
         foreach (var hand in hands) hand.TrySetResult(unread);
     }
 
-    // The last write whose files these are: a read of them vouches for it, as the holder raises writes in their order.
+    // The documents handed among the files, and the last write whose files these are: a read of them vouches for it, as the
+    // holder raises writes in their order.
     private sealed record AskedFiles(List<string> Files, List<WrittenDocument> Documents, long Write)
     {
         public AskedFiles With(IReadOnlyList<string> files, IReadOnlyList<WrittenDocument> documents, long write) =>
