@@ -34,9 +34,9 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved, TimeProvider time
 
     public PathAnswer Touching(LoadOrderSnapshot loadOrder, string path) => SourceRepository.Touching(loadOrder, Path.GetFullPath(path));
 
-    public void SignalChange(IReadOnlyList<PluginAddress>? plugins) => ChangeSignalled?.Invoke(plugins);
+    public void SignalChange(IReadOnlyCollection<PluginChange>? changes) => ChangeSignalled?.Invoke(changes);
 
-    public event Action<IReadOnlyList<PluginAddress>?>? ChangeSignalled;
+    public event Action<IReadOnlyCollection<PluginChange>?>? ChangeSignalled;
 
     public RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path) =>
         SourceRepository.RecordOfFile(loadOrder, path, Files(), _stamps);

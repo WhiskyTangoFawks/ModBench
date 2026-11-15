@@ -46,8 +46,11 @@ public sealed class RealSizeIndex : IDisposable
         }
     }
 
-    private static OpenedIndex Launch(RealSizeModlist modlist) =>
-        Indexes.Reconciled(modlist.DataFolder, modlist.LoadOrder, modlist.InstanceRoot, patience: IndexingPatience);
+    /// <summary>The source adapter the record index reads through, counting how it reads.</summary>
+    internal CountingTreeSource Source { get; } = new(TestAdapters.Source());
+
+    private OpenedIndex Launch(RealSizeModlist modlist) =>
+        Indexes.Reconciled(modlist.DataFolder, modlist.LoadOrder, modlist.InstanceRoot, source: Source, patience: IndexingPatience);
 
     /// <summary>The record index closed and launched again over the same file.</summary>
     internal void Relaunch() => Restore(() =>

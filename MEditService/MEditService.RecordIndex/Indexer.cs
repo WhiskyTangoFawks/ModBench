@@ -132,12 +132,13 @@ internal sealed class Indexer : IDisposable
     private long _writesSignalled;
     private readonly List<string> _handed = [];
     private readonly HashSet<PluginAddress> _named = new(PluginAddress.Comparer);
+    private readonly Dictionary<PluginAddress, AskedFiles> _namedFiles = new(PluginAddress.Comparer);
     private bool _working;
     private bool _validatingTurn;
     private bool _disposed;
     private CancellationTokenSource? _reconcileCancellation;
 
-    // Guards the nine fields above. Not _lock, so an arrival never waits on a status read or publish; none
+    // Guards the ten fields above. Not _lock, so an arrival never waits on a status read or publish; none
     // of this class's other locks is taken inside it.
     private readonly Lock _turns = new();
 
@@ -339,21 +340,33 @@ internal sealed class Indexer : IDisposable
         }
     }
 
-    // ADR-0001: the plugins a change names are re-read, and a change that names none checks every plugin. mEdit's own
-    // source write is such a change, named by mEdit.
-    private void OnChange(IReadOnlyCollection<PluginAddress>? plugins)
-    {
-        if (plugins is null) AskCheck();
-        else AskReRead(plugins);
-    }
+    // ADR-0001: the files a change names are read again, a plugin it names with no file is read whole, and a change that
+    // names none checks every plugin. A change signalled vouches for no write.
+    private void OnChange(IReadOnlyCollection<PluginChange>? changes) => OnWritten(changes, write: 0);
 
-    private void AskReRead(IReadOnlyCollection<PluginAddress> plugins)
+    private void OnWritten(IReadOnlyCollection<PluginChange>? changes, long write)
     {
+        if (changes is null)
+        {
+            AskCheck();
+            return;
+        }
         lock (_turns)
         {
-            _named.UnionWith(plugins);
+            foreach (var (plugin, files) in changes)
+            {
+                if (files is null) _named.Add(plugin);
+                else if (_namedFiles.TryGetValue(plugin, out var asked)) _namedFiles[plugin] = asked.With(files, write);
+                else _namedFiles[plugin] = new AskedFiles([.. files], write);
+            }
             WakeWorker();
         }
+    }
+
+    // The last write whose files these are: a read of them vouches for it, as the holder raises writes in their order.
+    private sealed record AskedFiles(List<string> Files, long Write)
+    {
+        public AskedFiles With(IReadOnlyList<string> files, long write) => new([.. Files, .. files], Math.Max(Write, write));
     }
 
     private void AskCheck()
@@ -369,7 +382,7 @@ internal sealed class Indexer : IDisposable
     // Lock order: _lock, then _turns. Nothing holding _turns takes _lock.
     private bool ValidationAsked()
     {
-        lock (_turns) return _validatingTurn || _checkAsked || _handed.Count > 0 || _named.Count > 0;
+        lock (_turns) return _validatingTurn || _checkAsked || _handed.Count > 0 || _named.Count > 0 || _namedFiles.Count > 0;
     }
 
     // A handed path is validated as a change on disk is.
@@ -422,7 +435,7 @@ internal sealed class Indexer : IDisposable
     {
         lock (_turns)
         {
-            if (_disposed || (!_reconcileAsked && !_checkAsked && _handed.Count == 0 && _named.Count == 0))
+            if (_disposed || (!_reconcileAsked && !_checkAsked && _handed.Count == 0 && _named.Count == 0 && _namedFiles.Count == 0))
             {
                 _working = false;
                 return null;
@@ -436,44 +449,47 @@ internal sealed class Indexer : IDisposable
             }
             List<string> paths = [.. _handed];
             HashSet<PluginAddress> named = new(_named, PluginAddress.Comparer);
+            Dictionary<PluginAddress, AskedFiles> files = new(_namedFiles, PluginAddress.Comparer);
             _handed.Clear();
             _named.Clear();
+            _namedFiles.Clear();
             _validatingTurn = true;
             var written = _holder.SourceWrites;
-            return () => ValidateAndPublish(paths, named, written);
+            return () => ValidateAndPublish(paths, named, files, written);
         }
     }
 
-    private void ValidateAndPublish(List<string> paths, HashSet<PluginAddress> named, long writes)
+    // A plugin read whole reads every write on disk when its turn began; one read alone, only the writes whose files it read.
+    private void ValidateAndPublish(List<string> paths, HashSet<PluginAddress> named, Dictionary<PluginAddress, AskedFiles> files, long writes)
     {
         bool moved;
         _exclusive.Enter();
         try
         {
-            List<PluginMetadata> reRead = [];
-            var failure = ValidationFailure(() => reRead = ValidateNamed(paths, named), CancellationToken.None, out _);
-            if (failure is null) VouchForWritesTo(reRead, writes);
-            else FailReReadOf(named, writes, failure);
+            List<(PluginAddress Plugin, long Writes)> reRead = [];
+            var failure = ValidationFailure(() => reRead = ValidateNamed(paths, named, files, writes), CancellationToken.None, out _);
+            if (failure is null) VouchForWritesTo(reRead);
+            else FailReReadOf([.. named.Select(plugin => (plugin, writes)), .. files.Select(asked => (asked.Key, asked.Value.Write))], failure);
             moved = Swap(standing => standing with { ReReadFailure = failure });
         }
         finally { _exclusive.Exit(); }
         if (moved) PublishStatus();
     }
 
-    private void VouchForWritesTo(List<PluginMetadata> reRead, long writes)
+    private void VouchForWritesTo(List<(PluginAddress Plugin, long Writes)> reRead)
     {
         lock (_lock)
         {
-            foreach (var key in reRead.Select(plugin => plugin.Key)) _writesReReadOf[key] = Math.Max(_writesReReadOf.GetValueOrDefault(key), writes);
+            foreach (var (key, writes) in reRead) _writesReReadOf[key] = Math.Max(_writesReReadOf.GetValueOrDefault(key), writes);
         }
         AnnounceWritesRead();
     }
 
-    private void FailReReadOf(IEnumerable<PluginAddress> named, long writes, string failure)
+    private void FailReReadOf(List<(PluginAddress Plugin, long Writes)> named, string failure)
     {
         lock (_lock)
         {
-            foreach (var key in named) _reReadFailedOf[key] = (writes, failure);
+            foreach (var (key, writes) in named) _reReadFailedOf[key] = (writes, failure);
         }
         AnnounceWritesRead();
     }
@@ -485,7 +501,8 @@ internal sealed class Indexer : IDisposable
         announced.SetResult();
     }
 
-    private List<PluginMetadata> ValidateNamed(List<string> paths, HashSet<PluginAddress> named)
+    private List<(PluginAddress Plugin, long Writes)> ValidateNamed(
+        List<string> paths, HashSet<PluginAddress> named, Dictionary<PluginAddress, AskedFiles> files, long writes)
     {
         var scope = RequireScope();
         named.UnionWith(paths
@@ -493,11 +510,30 @@ internal sealed class Indexer : IDisposable
             .OfType<PathAnswer.Touches>()
             .SelectMany(touches => touches.Plugins)
             .Select(plugin => plugin.Key));
+        List<(PluginAddress Plugin, long Writes)> readAlone = [.. scope.Held.Plugins
+            .Where(plugin => !named.Contains(plugin.Key) && files.TryGetValue(plugin.Key, out var asked) && ReadFiles(scope, plugin, asked.Files))
+            .Select(plugin => (plugin.Key, files[plugin.Key].Write))];
+        named.UnionWith(files.Keys.Where(key => !readAlone.Exists(read => PluginAddress.Comparer.Equals(read.Plugin, key))));
         var holding = scope.Held.Plugins.Where(plugin => named.Contains(plugin.Key)).ToList();
         if (holding.Count > 0 || scope.Store.SweepOwed) Validate(scope, holding, CancellationToken.None);
         // A plugin that failed to open is not held: the reconcile opens it again.
         if (scope.LoadOrder.Plugins.Any(plugin => named.Contains(plugin.Key) && scope.Held.Find(plugin.Key) is null)) AskReconcile();
-        return holding;
+        return [.. holding.Select(plugin => (plugin.Key, writes)), .. readAlone];
+    }
+
+    // A read that stands on a failure is cleared only by reading the plugin whole, as is one the named read fails on.
+    private bool ReadFiles(OpenScope scope, PluginMetadata plugin, IReadOnlyList<string> files)
+    {
+        if (scope.Held.IsHeldWithAFailure(plugin.Key) || scope.Failed.Holds(plugin.Key)) return false;
+        try
+        {
+            return scope.Projector.ReadFiles(plugin.Registered, files);
+        }
+        catch (Exception ex) when (FailsOnePlugin(ex, CancellationToken.None))
+        {
+            _logger.LogWarning(ex, "Could not read the files named of {Plugin} ({Origin}), so it is read whole", plugin.Name, plugin.Origin);
+            return false;
+        }
     }
 
     // Disposal is read with the exclusive right held, which Dispose takes after setting it, so no
@@ -1479,7 +1515,7 @@ internal sealed class Indexer : IDisposable
         _holder.Arrived += OnArrived;
         _unsaved.Arrived += ValidateTreesHolding;
         _source.ChangeSignalled += OnChange;
-        _holder.Written += OnChange;
+        _holder.Written += OnWritten;
     }
 
     private void OnArrived(LoadOrderSnapshot snapshot, long version) => AskReconcile();
@@ -1508,7 +1544,7 @@ internal sealed class Indexer : IDisposable
         _holder.Arrived -= OnArrived;
         _unsaved.Arrived -= ValidateTreesHolding;
         _source.ChangeSignalled -= OnChange;
-        _holder.Written -= OnChange;
+        _holder.Written -= OnWritten;
 
         lock (_turns) _disposed = true;
 

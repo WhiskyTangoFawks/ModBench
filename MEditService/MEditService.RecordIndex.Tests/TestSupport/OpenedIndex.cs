@@ -28,7 +28,11 @@ internal sealed class OpenedIndex(ServiceProvider container, LoadOrderHolder hol
     internal void SignalChange() => container.GetRequiredService<ISourceAdapter>().SignalChange(null);
 
     /// <summary>A change signalled as Signal change signals one whose paths name <paramref name="plugins"/>.</summary>
-    internal void SignalChange(IReadOnlyList<PluginAddress> plugins) => container.GetRequiredService<ISourceAdapter>().SignalChange(plugins);
+    internal void SignalChange(IReadOnlyList<PluginAddress> plugins) =>
+        SignalChange([.. plugins.Select(plugin => new PluginChange(plugin, null))]);
+
+    /// <summary>A change signalled as Signal change signals one whose paths name <paramref name="changes"/>' files.</summary>
+    internal void SignalChange(IReadOnlyCollection<PluginChange> changes) => container.GetRequiredService<ISourceAdapter>().SignalChange(changes);
 
     /// <summary>Returns once a write in flight has finished: setting the filter again passes the write
     /// gate every write passes, and a validation announces inside its hold. With no store open, no

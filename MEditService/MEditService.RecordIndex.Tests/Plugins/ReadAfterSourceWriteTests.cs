@@ -53,7 +53,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
         _fixture.Dispose();
     }
 
-    private void Written() => _holder.SourceWritten([_compiledPlugin.Key]);
+    private void Written() => _holder.SourceWritten([new PluginChange(_compiledPlugin.Key, null)]);
 
     private async Task WrittenWithItsReReadParked()
     {
@@ -88,7 +88,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     [InlineData(false)]
     public async Task AReadAfterASourceWrite_AnswersWhatItWrote_WithNoChangeSignalled(bool writeNamesItsPlugin)
     {
-        _holder.SourceWritten(writeNamesItsPlugin ? [_compiledPlugin.Key] : null);
+        _holder.SourceWritten(writeNamesItsPlugin ? [new PluginChange(_compiledPlugin.Key, null)] : null);
 
         AssertWritten(await Read().WaitAsync(Generous));
     }
@@ -125,7 +125,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     [Fact]
     public async Task AReadAfterASourceWrite_WaitsPastAReReadOfAnotherPlugin()
     {
-        _holder.SourceWritten([NotInTheLoadOrder]);
+        _holder.SourceWritten([new PluginChange(NotInTheLoadOrder, null)]);
         var read = Read();
 
         _index.SignalChange([_fixture.Plugins.Single(p => p.Name == OtherPlugin).Key]);
@@ -137,7 +137,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     [Fact]
     public async Task AReadAfterASourceWrite_WaitsPastALoadOrderThatArrives()
     {
-        _holder.SourceWritten([NotInTheLoadOrder]);
+        _holder.SourceWritten([new PluginChange(NotInTheLoadOrder, null)]);
         var read = Read();
 
         _index.Receive(_holder, SnapshotPlugins.Snapshot(
