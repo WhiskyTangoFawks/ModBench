@@ -1714,6 +1714,7 @@ describe('PluginsTreeProvider — load-failure decoration', () => {
 describe('PluginsTreeProvider fact refresh', () => {
   it('re-renders without rebuilding the rows', async () => {
     const h = makeTree([A_ROW()]);
+    await reconcile(h, []);
     const before = await h.tree.getChildren();
     const heard: unknown[] = [];
     h.tree.onDidChangeTreeData(() => heard.push(true));

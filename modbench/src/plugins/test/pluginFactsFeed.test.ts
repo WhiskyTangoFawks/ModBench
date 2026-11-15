@@ -395,10 +395,22 @@ describe('PluginFactsFeed', () => {
       expect(client.calls).toEqual([]);
     });
 
+    it('asks nothing before the first hand-off, as mEdit holds no load order to answer of', async () => {
+      const { feed, client } = feedOver();
+      client.calls.length = 0;
+
+      await feed.refresh();
+
+      expect(client.calls).toEqual([]);
+    });
+
     it('reads the next re-read after one that threw', async () => {
-      let broken = true;
+      let broken = false;
       const { feed, client } = feedOver({ shownPlugins: () => { if (broken) throw new Error('the tree broke'); return [A]; } });
+      client.setQueryAnswer('getPlugins', [held()]);
+      await feed.reconciled([]);
       client.setQueryAnswer('getPlugins', [held({ isCompiledPlugin: true })]);
+      broken = true;
       await expect(feed.refresh([A])).rejects.toThrow('the tree broke');
       broken = false;
 
@@ -651,16 +663,22 @@ describe('PluginFactsFeed', () => {
     });
   });
 
+  const unreadable = held({ pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } });
   it.each([
     ['a reconcile', (feed: PluginFactsFeed) => feed.reconciled([])],
-    ['a facts re-read', (feed: PluginFactsFeed) => feed.refresh()],
+    ['a facts re-read', async (feed: PluginFactsFeed, client: InMemoryMEditClient) => {
+      client.setQueryAnswer('getPlugins', [held()]);
+      await feed.reconciled([]);
+      client.setQueryAnswer('getPlugins', [unreadable]);
+      await feed.refresh();
+    }],
   ])('publishes a plugin whose plugin source is unreadable to the Problems panel on %s', async (_what, read) => {
     const { feed, client, sourceUnreadable } = feedOver();
-    client.setQueryAnswer('getPlugins', [held({ pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } })]);
+    client.setQueryAnswer('getPlugins', [unreadable]);
 
-    await read(feed);
+    await read(feed, client);
 
-    expect(sourceUnreadable.items.map((entries) => entries.map(({ plugin, origin }) => ({ plugin, origin })))).toEqual([[{ plugin: 'A.esp', origin: 'SomeMod' }]]);
+    expect(sourceUnreadable.items.at(-1)?.map(({ plugin, origin }) => ({ plugin, origin }))).toEqual([{ plugin: 'A.esp', origin: 'SomeMod' }]);
   });
 
   it('takes the external-change notification itself: publishes A\'s warning and fires the change event', () => {

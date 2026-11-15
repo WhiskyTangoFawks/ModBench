@@ -126,6 +126,15 @@ const tick = (over: Parameters<typeof loadOrderStatusEventFixture>[0] = {}) => l
 
 const silentChannel = { error: vi.fn(), info: vi.fn() };
 
+// mEdit answers no plugin's facts before it holds a load order, which a settled tick hands the view.
+async function handedOff(client: InMemoryMEditClient): Promise<void> {
+  const before = pluginReads(client);
+  client.emit(tick({ state: 'Ready', conflictsComputed: true }));
+  await vi.waitFor(() => { expect(pluginReads(client)).toBeGreaterThan(before); });
+  await settle();
+  client.calls.length = 0;
+}
+
 function syncRefusing() {
   let refusal: string | undefined;
   const pluginSync = createPluginSync(
@@ -278,6 +287,7 @@ describe('the Plugins view\'s selection relates to its masters (plugins.md, The 
       plugins: ['Dep.esp', 'Base.esm'].map((name, line) => ({ name, path: `/fixture/${name}`, origin: 'SomeMod', line, enabled: true, winning: true })),
       gameFolder: FOUND,
     }), { client });
+    await handedOff(client);
     const [dep] = await rows();
     client.emit(notificationEventFixture({ kind: 'rows-changed', plugin: 'Dep.esp', origin: 'SomeMod', sequence: 1 }));
     await vi.waitFor(() => { expect(pluginReads(client)).toBe(1); });
@@ -339,6 +349,7 @@ describe('the Plugins view follows mEdit\'s change event', () => {
 
   it.each(['rows-changed', 'plugin-changed'])('redraws only the named plugin\'s row, and re-reads only its records, on mEdit\'s %s', async (kind) => {
     const { client, recordBrowser, rows, provider } = pluginsView(twoPlugins());
+    await handedOff(client);
     const [test] = await rows();
     const refresh = vi.spyOn(recordBrowser, 'refresh');
     const redrawn: unknown[] = [];
@@ -354,6 +365,7 @@ describe('the Plugins view follows mEdit\'s change event', () => {
 
   it('redraws every row, and re-reads every plugin\'s records, when the change names none', async () => {
     const { client, recordBrowser, rows, provider } = pluginsView(twoPlugins());
+    await handedOff(client);
     await rows();
     const refresh = vi.spyOn(recordBrowser, 'refresh');
     const redrawn: unknown[] = [];
@@ -614,6 +626,8 @@ describe('the record filter, from the commands that set and clear it', () => {
       h.files.set('armor.sql', ARMOR_SQL);
       h.pick = (items) => items[0];
       const view = filtering();
+      await handedOff(view.client);
+      view.recordBrowserRefreshes.length = 0;
       view.holds('armor.sql');
 
       await view.filter();
@@ -865,7 +879,11 @@ describe('the record filter, from the commands that set and clear it', () => {
     });
 
     it('re-reads the matching plugins, as a set does', async () => {
-      const view = await applied();
+      h.document = { uri: source, fileName: 'a', getText: () => ARMOR_SQL };
+      const view = filtering();
+      view.holds('a');
+      await handedOff(view.client);
+      await view.filter(source);
       await view.pluginReadsAre(1);
 
       await view.clearFilter();
@@ -1011,6 +1029,7 @@ describe('the Plugins view\'s message line and name filter', () => {
       client.setQueryAnswer('getDiagnoses', []);
       const sync = syncRefusing();
       const result = await shown(found('Other.esp', 'TestMod.esp'), { client, pluginSync: sync.pluginSync });
+      await handedOff(client);
       await applyFilter(client, source);
       return { ...result, client, sync };
     }
@@ -1064,6 +1083,7 @@ describe('the Plugins view\'s message line and name filter', () => {
       client.setQueryAnswer('getDiagnoses', []);
       const sync = syncRefusing();
       const result = await shown(found('TestMod.esp'), { client, pluginSync: sync.pluginSync });
+      await handedOff(client);
       await applyFilter(client, recordFilter);
       return { ...result, sync };
     }
