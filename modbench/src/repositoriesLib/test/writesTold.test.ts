@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { toldAfter, writesToldTo } from '../writesTold';
+import { toldAfter, toldOnceSettled, writesToldTo } from '../writesTold';
 
 const told: (readonly string[])[] = [];
 
@@ -34,6 +34,19 @@ describe('a write the loader is told of', () => {
     loaderTold(() => Promise.reject(new Error('read failed')));
 
     await expect(toldAfter(['/a'], () => Promise.resolve())).rejects.toThrow('read failed');
+  });
+
+  it('tells at once a write that starts after the locked work it was armed in has settled', async () => {
+    loaderTold();
+    let later!: Promise<void>;
+
+    await toldOnceSettled(() => {
+      later = new Promise((resolve) => { setTimeout(resolve, 0); }).then(() => toldAfter(['/b'], () => Promise.resolve()));
+      return Promise.resolve();
+    });
+    await later;
+
+    expect(told).toEqual([['/b']]);
   });
 
   it('tells nothing of no files', async () => {

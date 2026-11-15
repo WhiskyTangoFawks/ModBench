@@ -16,7 +16,7 @@ import { foundUnchanged, handKept, keptTrusted, pathKey, stampFrom, type FileSta
 import { isOwnTemp, ownTempPrefix, renameOver, tempOwner } from '../repositoriesLib/wholeWrites';
 import { digestOf } from './fileContents/contentDigest';
 import type { MoveToTrash } from '../ports/trash';
-import { toldAfter } from '../repositoriesLib/writesTold';
+import { toldAfter, toldOnceSettled } from '../repositoriesLib/writesTold';
 
 /** ADR-0007, answered without the backend. */
 export function isRepository(sourceFolder: string): Promise<boolean> {
@@ -41,8 +41,12 @@ function tempWritePath(path: string): string {
 const chains = new Map<string, Promise<unknown>>();
 
 /** Runs `task` after every task already queued on `key`, holding the lock every write of that path
- *  here takes until `task` settles, and answers what it answered. */
+ *  here takes until `task` settles, and answers what it answered once the loader holds what it wrote. */
 export function withLock<T>(key: string, task: () => Promise<T>): Promise<T> {
+  return toldOnceSettled(() => chained(key, task));
+}
+
+function chained<T>(key: string, task: () => Promise<T>): Promise<T> {
   const prior = chains.get(key) ?? Promise.resolve();
   const next = prior.then(task, task);
   // The chain tail must never stay rejected, or a later write on this key queues behind a dead
@@ -257,10 +261,6 @@ export function writeTrashing(path: string, text: string, trash: MoveToTrash): P
       await rm(tmp, { force: true });
     }
   });
-}
-
-export function append(path: string, text: string): Promise<void> {
-  return toldAfter([path], () => appendFile(path, text));
 }
 
 /** Moves `from` to `to` in one filesystem step — an install's own entries moving up into a mod folder. */

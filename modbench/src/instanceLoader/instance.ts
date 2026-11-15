@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Log } from '../ports/log';
 import { FileConflictLookup, NO_GAME_FOLDER_ARCHIVED, type GameFolderArchived, type FileWinners, type StackedCopies } from './fileConflictIndex';
 import {
@@ -344,6 +345,8 @@ export class Instance implements Subscription {
 
   private quietEpoch = 0;
 
+  private readonly quietWork = new AsyncLocalStorage<WrittenFiles>();
+
   private readonly changes: Subscription;
 
   private readonly workspaceWatch: Subscription;
@@ -461,8 +464,13 @@ export class Instance implements Subscription {
   }
 
   /** Answers once the value holds the files a write just wrote, without waiting for the subscribers: a subscriber may be
-   *  the writer's own caller, holding a lock the write took. */
+   *  the writer's own caller, holding a lock the write took. No read lands inside `quiet`, which answers its own. */
   told(wrote: readonly string[]): Promise<void> {
+    const work = this.quietWork.getStore();
+    if (work !== undefined) {
+      work.name(wrote);
+      return Promise.resolve();
+    }
     return this.enqueue({ named: wrote, disk: false, tellsUnheard: false }, 'valueLanded');
   }
 
@@ -473,7 +481,7 @@ export class Instance implements Subscription {
     this.quietEpoch++;
     this.quiets++;
     try {
-      return await collectingWrites(written, () => work(written));
+      return await this.quietWork.run(written, () => collectingWrites(written, () => work(written)));
     } finally {
       this.quiets--;
       this.quietEpoch++;

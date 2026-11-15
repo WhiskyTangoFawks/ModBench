@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { WritesTold } from '../ports/writesTold';
 import type { WriteSink } from '../ports/writeSink';
 
@@ -16,9 +17,39 @@ export const leaveWritesUnnamed = (): void => diskCheckSink?.leaveUnnamed();
 const tell = (paths: readonly string[]): Promise<void> =>
   paths.length === 0 || loader === undefined ? Promise.resolve() : loader.told(paths);
 
+interface HeldBack { readonly paths: string[]; open: boolean }
+
+const heldBack = new AsyncLocalStorage<HeldBack>();
+
+/** Runs `locked`, work that holds a lock, and tells the loader the files its writes wrote once it has settled: the loader's
+ *  answer may wait on work that takes the same lock. */
+export async function toldOnceSettled<T>(locked: () => Promise<T>): Promise<T> {
+  if (heldBack.getStore()?.open === true) return locked();
+  const scope: HeldBack = { paths: [], open: true };
+  let answer: T;
+  try {
+    answer = await heldBack.run(scope, locked);
+  } catch (err) {
+    scope.open = false;
+    await tell(scope.paths).catch(() => undefined);
+    throw err;
+  }
+  scope.open = false;
+  await tell(scope.paths);
+  return answer;
+}
+
 /** Runs `write`, then tells the loader the files it wrote and answers once it holds them. A write that fails halfway may have
  *  written them too, so it tells them and rejects with its own failure. */
 export async function toldAfter<T>(paths: readonly string[], write: () => Promise<T>): Promise<T> {
+  const scope = heldBack.getStore();
+  if (scope?.open === true) {
+    try {
+      return await write();
+    } finally {
+      scope.paths.push(...paths);
+    }
+  }
   let written: T;
   try {
     written = await write();
