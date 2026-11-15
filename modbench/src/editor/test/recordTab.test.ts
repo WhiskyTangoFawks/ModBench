@@ -292,14 +292,14 @@ describe('a record tab going with the record to its new FormKey and reading it t
     });
 
     it.each([
-      ['reconnects', (client: InMemoryMEditClient) => { client.reconnected(); }],
-      ['restarts', (client: InMemoryMEditClient) => { client.setStatus('running'); client.setStatus('stopped'); client.setStatus('running'); }],
-    ])('reads the record again when mEdit %s', (_what, happens) => {
+      ['reconnects', (client: InMemoryMEditClient) => { client.reconnected(); }, 1],
+      ['restarts, after its first start read the record too', (client: InMemoryMEditClient) => { client.setStatus('running'); client.setStatus('stopped'); client.setStatus('running'); }, 2],
+    ])('reads the record again when mEdit %s', (_what, happens, loads) => {
       const { client, panel } = openOn('000800:Mod.esp');
 
       happens(client);
 
-      expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000800:Mod.esp' }]);
+      expect(loadsOf(panel)).toEqual(Array.from({ length: loads }, () => ({ type: 'loadRecord', formKey: '000800:Mod.esp' })));
     });
   });
 

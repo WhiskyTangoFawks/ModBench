@@ -57,16 +57,16 @@ describe('the client\'s one change event', () => {
     expect(changes).toEqual([undefined]);
   });
 
-  it('says everything when mEdit runs again after it has gone, and nothing at its first run', () => {
+  it('says everything each time mEdit runs, the first included', () => {
     const client = new InMemoryMEditClient();
     const changes = heard(client);
 
     client.setStatus('running');
-    expect(changes).toEqual([]);
+    expect(changes).toEqual([undefined]);
 
     client.setStatus('disconnected');
     client.setStatus('running');
-    expect(changes).toEqual([undefined]);
+    expect(changes).toEqual([undefined, undefined]);
   });
 
   it.each<BackendStatus>(['starting', 'disconnected', 'stopped'])('says nothing for a status alone: %s', (status) => {

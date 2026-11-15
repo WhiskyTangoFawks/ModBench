@@ -1189,6 +1189,7 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
       ['/unsaved-documents', noContent],
+      ['/load-order/status', () => Promise.resolve(jsonResponse(200, loadOrderStatusEventFixture().loadOrderStatus))],
       ['/plugins', (req) => new Promise<Response>((_resolve, reject) => {
         sent = true;
         req.signal.addEventListener('abort', () => { aborted = true; reject(new Error('aborted')); });
@@ -1228,6 +1229,7 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
       ['/unsaved-documents', noContent],
+      ['/load-order/status', () => Promise.resolve(jsonResponse(200, loadOrderStatusEventFixture().loadOrderStatus))],
       ['/records/select', (req) => {
         const body = new ReadableStream<Uint8Array>({
           start: (controller) => {
@@ -1278,6 +1280,7 @@ describe('HttpMEditClient — whether the record index may be late', () => {
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(response)],
       ['/unsaved-documents', noContent],
+      ['/load-order/status', () => Promise.resolve(jsonResponse(200, loadOrderStatusEventFixture({ state: 'None', conflictsComputed: false }).loadOrderStatus))],
       ['/load-order', () => putAnswered.then(() => jsonResponse(200, { applied: true, version: 1 }))],
     ]);
     const client = makeClient(fetch);
@@ -1295,13 +1298,14 @@ describe('HttpMEditClient — whether the record index may be late', () => {
     await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
   });
 
-  it('is true from unsaved documents handed until mEdit has answered their PUT', async () => {
+  it('is true from unsaved documents handed until their PUT is answered and the status shows nothing validating', async () => {
     let puts = 0;
     let answerPut!: () => void;
     const putAnswered = new Promise<void>((resolve) => { answerPut = resolve; });
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
       ['/unsaved-documents', () => (puts++ === 0 ? noContent() : putAnswered.then(() => new Response(null, { status: 204 })))],
+      ['/load-order/status', () => Promise.resolve(jsonResponse(200, loadOrderStatusEventFixture().loadOrderStatus))],
     ]);
     const client = makeClient(fetch);
     await client.start();
@@ -1312,5 +1316,77 @@ describe('HttpMEditClient — whether the record index may be late', () => {
 
     answerPut();
     await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+  });
+
+  describe.each<[string, (client: MEditClient) => void]>([
+    ['a change signal', (client) => { client.signalChange(['/m/Foo.esp']); }],
+    ['unsaved documents', (client) => { client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]); }],
+  ])('after %s are answered', (_what, hand) => {
+    async function started() {
+      const { response, push } = pushableStreamResponse();
+      let status: NonNullable<Parameters<typeof loadOrderStatusEventFixture>[0]> = {};
+      let statusWhenAnswered: typeof status = {};
+      let statusFails = false;
+      let statusReads = 0;
+      const answerHand = () => { status = statusWhenAnswered; return noContent(); };
+      const fetch = routedFetch([
+        ['/notifications/stream', () => Promise.resolve(response)],
+        ['/unsaved-documents', answerHand],
+        ['/signal-change', answerHand],
+        ['/load-order/status', () => {
+          statusReads++;
+          return Promise.resolve(statusFails ? new Response(null, { status: 500 }) : jsonResponse(200, loadOrderStatusEventFixture(status).loadOrderStatus));
+        }],
+      ]);
+      const client = makeClient(fetch);
+      await client.start();
+      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+      return {
+        client, push,
+        hand: async (answeredWith: typeof status, failing = false) => {
+          statusWhenAnswered = answeredWith;
+          statusFails = failing;
+          const reads = statusReads;
+          hand(client);
+          await vi.waitFor(() => { expect(statusReads).toBeGreaterThan(reads); });
+        },
+      };
+    }
+
+    it('stays true until the sweep it started has settled', async () => {
+      const { client, push, hand: handOver } = await started();
+
+      await handOver({ validating: true });
+      expect(client.recordIndexMayBeLate).toBe(true);
+
+      push(loadOrderStatusTick({ conflictsComputed: true, validating: false }));
+      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+    });
+
+    it('is false when mEdit has nothing validating', async () => {
+      const { client, hand: handOver } = await started();
+
+      await handOver({ validating: false });
+
+      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+    });
+
+    it('is false when mEdit holds no load order, as nothing is then late', async () => {
+      const { client, hand: handOver } = await started();
+
+      await handOver({ state: 'None', conflictsComputed: false });
+
+      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+    });
+
+    it('keeps waiting on the stream when the status cannot be read', async () => {
+      const { client, push, hand: handOver } = await started();
+
+      await handOver({ validating: true }, true);
+      expect(client.recordIndexMayBeLate).toBe(true);
+
+      push(loadOrderStatusTick({ conflictsComputed: true, validating: false }));
+      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+    });
   });
 });

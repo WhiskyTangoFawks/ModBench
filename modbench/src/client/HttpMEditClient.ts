@@ -2,7 +2,7 @@ import type { components } from '../wire/generated/api';
 import type { RecordEditEnvelope } from '../wire/messages';
 import { SILENT_LOG, type Log } from '../ports/log';
 import {
-  createApiClient, errorText, isTerminalLoadOrderStatusFor, openNotificationStream,
+  createApiClient, errorText, isSettled, isTerminalLoadOrderStatusFor, openNotificationStream,
   toLoadOrderStatus, type ApiClient, type LoadOrderStatus, type CompareResult, type CompareRecordsAnswer, type CopyText,
 } from './apiClient';
 import { createUnlimitedFetch } from './unlimitedFetch';
@@ -125,6 +125,7 @@ class HttpMEditClient implements MEditClient {
   private readonly handOver: UnsavedHandOver;
   private readonly changes: RecordIndexChanges;
   private readonly leaveWritesUnnamed: () => void;
+  private sweepsAwaited = 0;
 
   constructor(deps: HttpMEditClientDeps) {
     this.leaveWritesUnnamed = deps.leaveWritesUnnamed;
@@ -170,6 +171,7 @@ class HttpMEditClient implements MEditClient {
       onReconnected: (listener) => this.notifications.onReconnected(listener),
       put: (documents) => this.putUnsavedDocuments(documents),
     });
+    this.handOver.onSettled((failure) => { if (failure === undefined) this.awaitSweep(); });
   }
 
   // The port is the lifecycle's to choose, so the generated client is built once it is known.
@@ -199,7 +201,7 @@ class HttpMEditClient implements MEditClient {
   stop(): Promise<void> { return this.loadOrder.stop(); }
 
   onDidChange(listener: (change: RecordIndexChange) => void): Disposable { return this.changes.onDidChange(listener); }
-  get recordIndexMayBeLate(): boolean { return this.loadOrder.pending() || this.handOver.pending(); }
+  get recordIndexMayBeLate(): boolean { return this.loadOrder.pending() || this.handOver.pending() || this.sweepsAwaited > 0; }
 
   get loadOrderStatus(): LoadOrderStatus | undefined { return this.loadOrderStatusKept.current(); }
   onLoadOrderStatus(listener: (status: LoadOrderStatus | undefined) => void): () => void {
@@ -355,7 +357,8 @@ class HttpMEditClient implements MEditClient {
   private async postSignalChange(paths: readonly string[]): Promise<void> {
     try {
       const { error, response } = await this.apiClient.POST('/signal-change', { body: { paths: [...paths] } });
-      if (!response.ok) this.log.error(`[HttpMEditClient] signalChange failed (${response.status}): ${errorText(error)}`);
+      if (response.ok) this.awaitSweep();
+      else this.log.error(`[HttpMEditClient] signalChange failed (${response.status}): ${errorText(error)}`);
     } catch (e) {
       this.log.error(`[HttpMEditClient] signalChange threw: ${errorMessage(e)}`);
     }
@@ -433,6 +436,20 @@ class HttpMEditClient implements MEditClient {
         if (current && isTerminalLoadOrderStatusFor(current, version)) settle(current);
       });
     });
+  }
+
+  // An answered hand-over or signal starts a sweep mEdit publishes as validating: late until a status holds no load order or settles, or is lost.
+  private awaitSweep(): void {
+    this.sweepsAwaited++;
+    const end = (): void => {
+      if (subscription === undefined) return;
+      subscription();
+      subscription = undefined;
+      this.sweepsAwaited--;
+    };
+    const sweepOver = (status: LoadOrderStatus): boolean => status.holdsNone || isSettled(status);
+    let subscription: (() => void) | undefined = this.loadOrderStatusKept.onStatus((status) => { if (status === undefined || sweepOver(status)) end(); });
+    void this.currentLoadOrderStatus().then((current) => { if (current !== undefined && sweepOver(current)) end(); });
   }
 
   // Undefined when the read fails: the caller then waits on the stream's own ticks.
