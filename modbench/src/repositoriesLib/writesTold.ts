@@ -1,7 +1,5 @@
-import { isTold, type WritesTold } from '../ports/writesTold';
+import type { WritesTold } from '../ports/writesTold';
 import type { WriteSink } from '../ports/writeSink';
-
-export { withoutTelling } from '../ports/writesTold';
 
 let loader: WritesTold | undefined;
 let diskCheckSink: WriteSink | undefined;
@@ -16,7 +14,7 @@ export const diskCheckedBy = (to: WriteSink): void => { diskCheckSink = to; };
 export const leaveWritesUnnamed = (): void => diskCheckSink?.leaveUnnamed();
 
 const tell = (paths: readonly string[]): Promise<void> =>
-  paths.length === 0 || !isTold() || loader === undefined ? Promise.resolve() : loader.told(paths);
+  paths.length === 0 || loader === undefined ? Promise.resolve() : loader.told(paths);
 
 /** Runs `write`, then tells the loader the files it wrote and answers once it holds them. A write that fails halfway may have
  *  written them too, so it tells them and rejects with its own failure. */

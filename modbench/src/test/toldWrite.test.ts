@@ -7,7 +7,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return { ...actual, readFile: vi.fn(actual.readFile) };
 });
 
-import { readdir, readFile, rm, utimes } from 'node:fs/promises';
+import { readdir, readFile, rm, utimes, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Instance } from '../instanceLoader/instance';
 import { writesToldTo } from '../repositoriesLib/writesTold';
@@ -60,5 +60,17 @@ describe('a write over the real adapter', () => {
     await loader.refresh([modlist]);
 
     expect(heard).toEqual([[modlist], []]);
+  });
+
+  it('names a plugin the watch heard changed, though no fact of the value holds its stamp, so mEdit is told', async () => {
+    const { instance: loader } = await wiredInstance();
+    const plugin = join(root ?? '', 'mods', 'Patch Mod', 'Patch Mod.esp');
+    const heard: (readonly string[])[] = [];
+    loader.subscribe((_value, _sequence, { named }) => { heard.push(named); });
+
+    await writeFile(plugin, 'bytes an xEdit save wrote');
+    await loader.refresh([plugin]);
+
+    expect(heard).toEqual([[plugin]]);
   });
 });

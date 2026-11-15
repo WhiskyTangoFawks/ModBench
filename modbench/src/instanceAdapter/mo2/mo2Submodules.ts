@@ -7,7 +7,7 @@ import { errnoCode } from '../../ports/errno';
 import { git } from '../git';
 import { keptByIndex } from '../keptByIndex';
 import { errorMessage } from '../../ports/errorMessage';
-import { exists, get, ignoreSkippedLink, isRepository, listDirByStamp, listFolders, putIfChanged, readOrAbsent, remove, stampKept, textByStamp } from '../files';
+import { exists, get, ignoreSkippedLink, isRepository, listDirByStamp, listFolders, putIfChanged, putIfChangedUntold, readOrAbsent, remove, stampKept, textByStamp } from '../files';
 import type { InstanceAdapter, SourceHost, Submodule, SubmoduleLacks, SubmoduleNote, UnclonedSubmodule } from '../instanceAdapter';
 import {
   ignoreListFile, modsDir, sourceModLinesOf, sourceModPath, sourceRootDir, submodulesFile, leavesOutSourceFolders, withHeldWholeFollowed, withSourceModLines, type SourceFolders,
@@ -16,7 +16,6 @@ import type { FileProblems } from '../../ports/fileProblems';
 import type { Mo2Context } from './mo2Context';
 import { PRE_PUSH_HOOK, PRE_PUSH_HOOK_NAME } from '../prePushHook';
 import { sourceFoldersTracked } from './sourceModFolders';
-import { withoutTelling } from '../../repositoriesLib/writesTold';
 
 type Mo2Submodules = Pick<InstanceAdapter, 'writeSubmodules' | 'writeSourceModLines' | 'followFoldersInRepository' | 'sourceHost' | 'submodule' | 'unclonedSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk' | 'sourceFolderTracked'>;
 
@@ -116,11 +115,11 @@ async function sourceModLinesWritten(instanceRoot: string, submodules?: Readonly
   if (!(await exists(file))) return;
   const onDisk = await sourceFoldersOf(instanceRoot, submodules);
   const folders = { ...onDisk, plain: [...new Set([...onDisk.plain, ...letIn.filter((name) => !onDisk.submodules.includes(name))])] };
-  await withoutTelling(() => putIfChanged(file, (before) => {
+  await putIfChangedUntold(file, (before) => {
     const after = withSourceModLines(before, folders);
     if (after === undefined) throw new Error(`${file} has a source folders marker with no match, so its source folder lines are left as they are`);
     return after;
-  }));
+  });
 }
 
 /** Rewrites the source folder lines when the source folders change, in an ignore list that holds the whitelist. A marker

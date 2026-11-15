@@ -1,12 +1,12 @@
 // The instance repository holds this machine's folders and accounts by a token (instance-repository.md, The repository,
 // stories 3 and 6).
 
-import { withoutTelling } from '../../repositoriesLib/writesTold';
+import { toldAfter } from '../../repositoriesLib/writesTold';
 import { mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { errnoCode } from '../../ports/errno';
-import { exists, get, isRepository, makeTempDir, putIfChanged, readOrAbsent, remove, textByStamp, undoAll, withLock, write, type Undo } from '../files';
+import { exists, get, isRepository, makeTempDir, putIfChangedUntold, readOrAbsent, removeUntold, textByStamp, undoAll, withLock, writeUntold, type Undo } from '../files';
 import { git, gitFed, gitWritingInto } from '../git';
 import type { FileProblems } from '../../ports/fileProblems';
 import { unfilteredFiles } from '../unfilteredFiles';
@@ -101,13 +101,13 @@ async function attributesWritten(instanceRoot: string, covered: readonly Covered
   await mkdir(dirname(file), { recursive: true });
   const lines = covered.flatMap(({ patterns, driver }) => patterns.map((pattern) => `${pattern} filter=${driver} diff=${driver}`));
   let added: string[] = [];
-  await putIfChanged(file, (before) => {
+  await putIfChangedUntold(file, (before) => {
     const held = new Set(before.split(/\r?\n/));
     added = lines.filter((line) => !held.has(line));
     return added.length === 0 ? before : `${before}${before === '' || before.endsWith('\n') ? '' : '\n'}${added.join('\n')}\n`;
   }, { ifMissing: '' });
   return async () => {
-    await putIfChanged(file, (text) => text.split('\n').filter((line) => !added.includes(line.replace(/\r$/, ''))).join('\n'));
+    await putIfChangedUntold(file, (text) => text.split('\n').filter((line) => !added.includes(line.replace(/\r$/, ''))).join('\n'));
   };
 }
 
@@ -142,7 +142,7 @@ async function withScratch<T>(use: (scratch: ScratchGit) => Promise<T>): Promise
   try {
     return await use(gitWritingInto(objects));
   } finally {
-    await remove(objects);
+    await removeUntold(objects);
   }
 }
 
@@ -156,7 +156,7 @@ async function checkedOut(scratch: ScratchGit, instanceRoot: string, file: strin
 async function smudged(scratch: ScratchGit, instanceRoot: string, files: readonly string[]): Promise<string[]> {
   const holding: string[] = [];
   for (const file of files) {
-    await putIfChanged(join(instanceRoot, file), async (text) => {
+    await putIfChangedUntold(join(instanceRoot, file), async (text) => {
       const after = holdsToken(text) ? await checkedOut(scratch, instanceRoot, file, text) : text;
       if (holdsPathToken(after)) holding.push(file);
       return after;
@@ -207,7 +207,7 @@ function filterOf(instanceRoot: string, covered: readonly CoveredFile[], directo
 async function programsPut(instanceRoot: string, covered: readonly CoveredFile[], directory: string, folders: FilterFolders, accounts: TokenProgram, machine: Machine): Promise<void> {
   const { programFiles } = filterOf(instanceRoot, covered, directory, folders, accounts, machine);
   await mkdir(directory, { recursive: true });
-  for (const [file, text] of Object.entries(programFiles)) await write(file, text);
+  for (const [file, text] of Object.entries(programFiles)) await writeUntold(file, text);
 }
 
 // A filter's config names its program files and no folder, so one write serves every pass. Each key written costs a
@@ -244,10 +244,10 @@ async function filterHeld(instanceRoot: string, covered: readonly CoveredFile[],
       if (value === undefined) await unlessExit(5, () => git(instanceRoot, 'config', '--unset-all', key));
       else await git(instanceRoot, 'config', key, value);
     }
-    if (!folderHeld) return remove(directory);
+    if (!folderHeld) return removeUntold(directory);
     for (const { file, text } of files) {
-      if (text === undefined) await remove(file);
-      else await write(file, text);
+      if (text === undefined) await removeUntold(file);
+      else await writeUntold(file, text);
     }
   };
   return { config: held, restore };
@@ -338,9 +338,10 @@ export function pathTokensFollowed(context: Mo2Context, gameFolder: () => Promis
 export function mo2PathTokens(context: Mo2Context, gameFolder: () => Promise<GameFolder>, publisherFile: ConfigurationFile | undefined): Mo2PathTokens {
   const { instanceRoot } = context;
   const covered = coveredFiles(publisherFile);
-  const written = async (takeBack: Undo[]): Promise<string | undefined> => {
+  const written = async (takeBack: Undo[], covering: string[]): Promise<string | undefined> => {
     takeBack.push(await attributesWritten(instanceRoot, covered));
     const files = (await filesGitHolds(instanceRoot, covered)).flatMap(({ file, covered: isCovered }) => (isCovered ? [file] : []));
+    covering.push(...files.map((file) => join(instanceRoot, file)));
     const machine = await machineOf(instanceRoot, covered);
     const accounts = accountTokens(await get(settingsFile(instanceRoot), ''));
     const directory = await programDirectory(context);
@@ -362,11 +363,15 @@ export function mo2PathTokens(context: Mo2Context, gameFolder: () => Promise<Gam
     async writePathTokens() {
       if (!(await isRepository(instanceRoot))) return undefined;
       const takeBack: Undo[] = [];
-      try {
-        return await withoutTelling(() => withLock(programsLock(instanceRoot), () => written(takeBack)));
-      } catch (err) {
-        throw await undoAll(takeBack.reverse(), err);
-      }
+      const covering: string[] = [];
+      // Told once the lock is released: the read the loader makes of the files takes it.
+      return toldAfter(covering, async () => {
+        try {
+          return await withLock(programsLock(instanceRoot), () => written(takeBack, covering));
+        } catch (err) {
+          throw await undoAll(takeBack.reverse(), err);
+        }
+      });
     },
   };
 }

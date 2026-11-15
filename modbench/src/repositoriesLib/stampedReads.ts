@@ -39,6 +39,12 @@ type Keeper = (checked: (key: string) => boolean) => Promise<string[]>;
 
 const everyKept: Keeper[] = [];
 const trusting = new AsyncLocalStorage<true>();
+let unchangedFound = new Set<string>();
+
+/** Notes that a read inside `readTrustingKept` found the content of `path` as it was held. */
+export const foundUnchanged = (path: string): void => {
+  if (trusting.getStore() === true) unchangedFound.add(pathKey(path));
+};
 
 /** A reader of `path` that reads it again only when its stamp has changed, read without its stamp while `readTrustingKept`
  *  or `trustingKept` runs, and checked by `readTrustingKept` where a change named it. */
@@ -98,6 +104,7 @@ async function forgetChanged<T>(
 ): Promise<string[]> {
   const changed = await Promise.all([...kept].filter(([key]) => checked(key)).map(async ([key, held]) => {
     const still = await stampStill(stampOf, held);
+    if (still && held.settled && held.handed !== true) unchangedFound.add(pathKey(held.path));
     if ((outright || !still) && kept.get(key) === held) kept.delete(key);
     return still ? [] : [held.path];
   }));
@@ -107,10 +114,14 @@ async function forgetChanged<T>(
 /** Runs `read` trusting what is kept, once what each kept path `named` touches, or every one when `disk`, is forgotten where
  *  it may have changed. Answers each changed stamp `named` does not touch. A read outside it checks each stamp. */
 export async function readTrustingKept<T>(named: readonly string[], disk: boolean, read: () => Promise<T>): Promise<{ answer: T; unheard: string[] }> {
+  unchangedFound = new Set();
   const touched = touchedBy(named);
   const changed = (await Promise.all(everyKept.map((forget) => forget(disk ? () => true : touched)))).flat();
   return { answer: await trusting.run(true, read), unheard: [...new Set(changed)].filter((path) => !touched(pathKey(path))) };
 }
+
+/** The keys of the paths the latest `readTrustingKept` found as they were held. */
+export const unchangedInLastRead = (): ReadonlySet<string> => unchangedFound;
 
 /** Runs `read` trusting what the latest `readTrustingKept` left kept. */
 export const trustingKept = <T>(read: () => Promise<T>): Promise<T> => trusting.run(true, read);

@@ -940,12 +940,23 @@ describe('Instance — a value that survives a bad read', () => {
     const { instance } = loader();
     await instance.refresh();
     instance.subscribe(() => new Promise<void>(() => undefined));
-    const heard: number[] = [];
-    instance.subscribe((_value, sequence) => { heard.push(sequence); });
+    const reads: (readonly string[] | undefined)[] = [];
+    instance.subscribe((_value, _sequence, { named }) => { reads.push(named); });
 
     await instance.told(['/instance/profiles/Default/modlist.txt']);
 
-    expect(heard).toHaveLength(1);
+    expect(reads).toEqual([['/instance/profiles/Default/modlist.txt']]);
+  });
+
+  it('names to its subscribers every path a read was asked for but the ones the reading says it found as it held them', async () => {
+    const { instance } = loader({ unchangedFiles: ['/instance/profiles/Default/modlist.txt'] });
+    await instance.refresh();
+    const reads: (readonly string[])[] = [];
+    instance.subscribe((_value, _sequence, { named }) => { reads.push(named); });
+
+    await instance.refresh(['/instance/profiles/Default/modlist.txt', '/instance/mods/A/A.esp']);
+
+    expect(reads).toEqual([['/instance/mods/A/A.esp']]);
   });
 
   it('recomputes again while a subscriber has not settled, and holds only its own refresh', async () => {

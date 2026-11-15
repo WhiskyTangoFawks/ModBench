@@ -7,7 +7,7 @@ import { applyEdits, parse, parseTree, printParseErrorCode, type Edit, type Node
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { lastHanded, noneLeft } from '../../ports/lastBuilt';
-import { listDir, putIfChanged, readOrAbsent, textByStamp } from '../files';
+import { listDir, putIfChanged, putIfChangedUntold, readOrAbsent, textByStamp } from '../files';
 import type { Covering, Listed, PathRefusal, PublisherConfiguration, PublisherTag, PublisherTagChange, TagPathProblem, UnshippableReason } from '../instanceAdapter';
 import type { ConfigurationFile, Publisher } from '../publisher';
 import { sedReplacement, sedSubstitution } from '../pathTokens';
@@ -574,7 +574,7 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
         }, before);
       }, { ifMissing: '{}' });
     },
-    keepOut: async (kept) => {
+    keepOut: async (kept, tellsLoader = true) => {
       const text = await settingsText();
       if (text === undefined) return;
       const { present, owns } = await kept();
@@ -593,7 +593,7 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
         return withListChanged(before, 'Ignore', { changed, appended: missing.map(wabbajackSpelling) });
       };
       const after = keptOut(text);
-      if (after !== text) await putIfChanged(file, (before) => (before === text ? after : keptOut(before)));
+      if (after !== text) await (tellsLoader ? putIfChanged : putIfChangedUntold)(file, (before) => (before === text ? after : keptOut(before)));
     },
     subscribe: (listener) => watchFiles(instanceRoot, COMPILER_SETTINGS.name, listener),
   };

@@ -12,7 +12,7 @@ import { pipeline } from 'node:stream/promises';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import type { FileRead } from './instanceAdapter';
-import { handKept, keptTrusted, pathKey, stampFrom, type FileStamp, type Kept } from '../repositoriesLib/stampedReads';
+import { foundUnchanged, handKept, keptTrusted, pathKey, stampFrom, type FileStamp, type Kept } from '../repositoriesLib/stampedReads';
 import { isOwnTemp, ownTempPrefix, renameOver, tempOwner } from '../repositoriesLib/wholeWrites';
 import { digestOf } from './fileContents/contentDigest';
 import type { MoveToTrash } from '../ports/trash';
@@ -305,9 +305,13 @@ export const stampByStamp = stampKept(stampOf);
 const texts = new Map<string, Kept<string>>();
 
 /** The text of a file, read again only when its stamp has changed; the text a write handed over stands for the one read that names it. */
-export const textByStamp = stampKept(readText, texts);
+export const textByStamp = stampKept(async (path) => {
+  const text = await readText(path);
+  if (texts.get(pathKey(path))?.value === text) foundUnchanged(path);
+  return text;
+}, texts);
 
-export { keptUntilNamed, outsideTrustedRead, readTrustingKept, trustingKept } from '../repositoriesLib/stampedReads';
+export { keptUntilNamed, outsideTrustedRead, readTrustingKept, trustingKept, unchangedInLastRead } from '../repositoriesLib/stampedReads';
 
 /** A reader of what `parse` makes of a file's text, parsing again only when the text is not the one parsed before. */
 export const parsedBy = <T>(parse: (text: string) => T): ((path: string) => Promise<T>) => {
@@ -395,15 +399,34 @@ export function putIfChanged(
   path: string, edit: (before: string) => string | Promise<string>, opts: PutOptions = {},
 ): Promise<{ wrote: boolean }> {
   const attempted: string[] = [];
-  return toldAfter(attempted, () => withLock(path, async () => {
+  return toldAfter(attempted, () => putIfChangedUntold(path, edit, opts, () => { attempted.push(path); }));
+}
+
+/** As `putIfChanged`, for a file the loader does not read, or a write that tells the loader itself once it holds no lock. */
+export function putIfChangedUntold(
+  path: string, edit: (before: string) => string | Promise<string>, opts: PutOptions = {}, wrote: () => void = () => undefined,
+): Promise<{ wrote: boolean }> {
+  return withLock(path, async () => {
     const before = await readOr(path, opts.ifMissing);
     const after = await edit(before);
     if (after === before) return { wrote: false };
-    attempted.push(path);
+    wrote();
     await writeAtomic(path, after);
     return { wrote: true };
-  }));
+  });
 }
+
+/** As `write`, for a file the loader does not read, or a write that tells the loader itself. */
+export const writeUntold = (path: string, text: string): Promise<void> => writeAtomic(path, text);
+
+/** As `remove`, for a file the loader does not read, or a write that tells the loader itself. */
+export const removeUntold = (path: string): Promise<void> => rm(path, { recursive: true, force: true });
+
+/** As `ensureDir`, for a folder the loader does not read. */
+export const ensureDirUntold = (path: string): Promise<void> => mkdir(path, { recursive: true }).then(() => undefined);
+
+/** As `append`, for a file the loader does not read. */
+export const appendUntold = (path: string, text: string): Promise<void> => appendFile(path, text);
 
 export type Undo = () => Promise<void>;
 

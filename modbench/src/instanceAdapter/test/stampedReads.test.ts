@@ -329,7 +329,7 @@ describe('the MO2 reading of an instance nothing changed in', () => {
 
     const again = new Map(Object.entries(await adapter.reading({ named: [], disk: false })));
 
-    const notes = new Set(['orderNotes', 'archiveListNotes', 'linkNotes', 'unheardChanges']);
+    const notes = new Set(['orderNotes', 'archiveListNotes', 'linkNotes', 'unheardChanges', 'unchangedFiles']);
     expect(Object.entries(first).filter(([fact, held]) => !notes.has(fact) && again.get(fact) !== held).map(([fact]) => fact)).toEqual([]);
   });
 

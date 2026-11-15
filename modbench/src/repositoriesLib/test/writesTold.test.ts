@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { toldAfter, withoutTelling, writesToldTo } from '../writesTold';
+import { toldAfter, writesToldTo } from '../writesTold';
 
 const told: (readonly string[])[] = [];
 
@@ -36,10 +36,9 @@ describe('a write the loader is told of', () => {
     await expect(toldAfter(['/a'], () => Promise.resolve())).rejects.toThrow('read failed');
   });
 
-  it('tells nothing of a write made without telling, or of no files', async () => {
+  it('tells nothing of no files', async () => {
     loaderTold();
 
-    await withoutTelling(() => toldAfter(['/a'], () => Promise.resolve()));
     await toldAfter([], () => Promise.resolve());
 
     expect(told).toEqual([]);

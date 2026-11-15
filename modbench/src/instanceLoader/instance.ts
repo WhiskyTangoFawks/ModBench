@@ -19,7 +19,6 @@ import { ArchiveContentsHeld, unreadableArchiveLines, type ArchiveRead, type Arc
 import { FactsOfReading } from './factsOfReading';
 import { WrittenFiles } from './writtenFiles';
 import { collectingWrites } from './ambientWrites';
-import { withoutTelling } from '../ports/writesTold';
 
 /** The rows this value is made of. A view names a row's shape through the read model that
  *  publishes it, never through the codec that parsed the file behind it. */
@@ -40,27 +39,29 @@ interface Run {
   tellsUnheard: boolean;
   fromEvents: boolean;
   readonly settled: Promise<void>;
-  /** Settles when the read has landed, before its subscribers have; rejects with the failure of a read that failed. A run dropped
+  /** Settles when the read has landed, before its subscribers have settled; rejects with the failure of a read that failed. A run dropped
    *  for a write in flight settles with the run that reads what it was to read. */
-  readonly held: Promise<void>;
+  readonly valueLanded: Promise<void>;
   readonly inherited: Run[];
-  hold(failure?: Error): void;
+  /** The named paths the read found as the value held them. */
+  unchanged: ReadonlySet<string>;
+  landValue(failure?: Error): void;
   land(settled: Promise<void>): void;
 }
 
 function nextRun(): Run {
   let land!: (settled: Promise<void>) => void;
-  let settleHeld!: (failure?: Error) => void;
+  let settleValueLanded!: (failure?: Error) => void;
   const settled = new Promise<void>((resolve) => { land = resolve; });
-  const held = new Promise<void>((resolve, reject) => { settleHeld = (failure) => { if (failure === undefined) resolve(); else reject(failure); }; });
-  // A refresh asks for `settled` alone, so a failure nobody asked `held` for is not an unhandled one.
-  held.catch(() => undefined);
+  const valueLanded = new Promise<void>((resolve, reject) => { settleValueLanded = (failure) => { if (failure === undefined) resolve(); else reject(failure); }; });
+  // A refresh asks for `settled` alone, so a failure nobody asked `valueLanded` for is not an unhandled one.
+  valueLanded.catch(() => undefined);
   const inherited: Run[] = [];
-  const hold = (failure?: Error): void => {
-    settleHeld(failure);
-    for (const run of inherited) run.hold(failure);
+  const landValue = (failure?: Error): void => {
+    settleValueLanded(failure);
+    for (const run of inherited) run.landValue(failure);
   };
-  return { named: new Set(), disk: false, tellsUnheard: false, fromEvents: false, settled, held, inherited, hold, land };
+  return { named: new Set(), disk: false, tellsUnheard: false, fromEvents: false, settled, valueLanded, inherited, unchanged: new Set(), landValue, land };
 }
 
 type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'dataFolderFiles' | 'gameArchives' | 'archives' | 'archiveContents' | 'listingNotes' | 'managerRunning' | 'publisherConfiguration' | 'programVersions';
@@ -460,7 +461,7 @@ export class Instance implements Subscription {
   /** Answers once the value holds the files a write just wrote, without waiting for the subscribers: a subscriber may be
    *  the writer's own caller, holding a lock the write took. */
   told(wrote: readonly string[]): Promise<void> {
-    return this.enqueue({ named: wrote, disk: false, tellsUnheard: false }, 'held');
+    return this.enqueue({ named: wrote, disk: false, tellsUnheard: false }, 'valueLanded');
   }
 
   /** Runs `work`, a write to several files the value reads, then refreshes at the files `work` names. A read that overlapped
@@ -557,7 +558,7 @@ export class Instance implements Subscription {
 
   private enqueue({ named = [], disk, tellsUnheard, fromEvents = false }: {
     named?: readonly string[]; disk: boolean; tellsUnheard: boolean; fromEvents?: boolean;
-  }, answers: 'settled' | 'held' = 'settled'): Promise<void> {
+  }, answers: 'settled' | 'valueLanded' = 'settled'): Promise<void> {
     const next = this.next ?? nextRun();
     this.next = next;
     if (this.dropped !== undefined) {
@@ -589,7 +590,7 @@ export class Instance implements Subscription {
     for (let run = this.next; run !== undefined; run = this.next) {
       this.next = undefined;
       const { settled, failed, dropped } = await this.recompute(run);
-      if (!dropped) run.hold(failed);
+      if (!dropped) run.landValue(failed);
       run.land(settled);
     }
     this.reading = false;
@@ -617,8 +618,7 @@ export class Instance implements Subscription {
     this.failure = undefined;
     this.setLate(this.heardSinceRun());
     this.seq++;
-    const changed = tellsEvery || Object.keys(next).filter(isFactOf(next)).some((fact) => next[fact] !== before[fact]);
-    const reread: Reread = { named: changed ? [...run.named] : [], disk: run.disk };
+    const reread: Reread = { named: [...run.named].filter((path) => !run.unchanged.has(path)), disk: run.disk };
     if (this.workspaceMovedFrom(next)) void this.enqueue({ disk: false, tellsUnheard: false });
     const told = this.subscribers.filter(({ concerns }) => tellsEvery || concerns === undefined || concerns.some((fact) => next[fact] !== before[fact]));
     return { settled: this.notify(told.map(({ subscriber }) => subscriber), 'value', (subscriber) => subscriber(next, this.seq, reread)) };
@@ -660,10 +660,12 @@ export class Instance implements Subscription {
     return gameFolder.kind === 'found' && this.options.workspace.holds(gameFolder.dataFolder) ? gameFolder.dataFolder : undefined;
   }
 
-  private async read({ named, disk, tellsUnheard }: Run): Promise<InstanceValue> {
+  private async read(run: Run): Promise<InstanceValue> {
+    const { named, disk, tellsUnheard } = run;
     const { adapter, log } = this.options;
-    const reading = await withoutTelling(() => adapter.reading({ named: [...named], disk }));
+    const reading = await adapter.reading({ named: [...named], disk });
     if (tellsUnheard) for (const path of reading.unheardChanges) log.info(`[instance] The check of the disk found a change no event named: ${path}`);
+    run.unchanged = new Set(reading.unchangedFiles);
     return this.facts.of(reading, this.workspaceDataFolder(reading.gameFolder), {
       sourceMods: (sourceMods) => { this.tellReading(reading, sourceMods); },
       archiveSources: (sources) => { this.tellArchivesNothingHolds(sources); },
