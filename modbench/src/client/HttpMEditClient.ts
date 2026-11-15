@@ -171,7 +171,7 @@ class HttpMEditClient implements MEditClient {
       onReconnected: (listener) => this.notifications.onReconnected(listener),
       put: (documents) => this.putUnsavedDocuments(documents),
     });
-    this.handOver.onSettled((failure) => { if (failure === undefined) void this.awaitSweep(); });
+    this.handOver.onSettled((failure) => { if (failure === undefined) this.awaitSweep(); });
   }
 
   // The port is the lifecycle's to choose, so the generated client is built once it is known.
@@ -357,7 +357,7 @@ class HttpMEditClient implements MEditClient {
   private async postSignalChange(paths: readonly string[]): Promise<void> {
     try {
       const { error, response } = await this.apiClient.POST('/signal-change', { body: { paths: [...paths] } });
-      if (response.ok) void this.awaitSweep();
+      if (response.ok) this.awaitSweep();
       else this.log.error(`[HttpMEditClient] signalChange failed (${response.status}): ${errorText(error)}`);
     } catch (e) {
       this.log.error(`[HttpMEditClient] signalChange threw: ${errorMessage(e)}`);
@@ -439,16 +439,18 @@ class HttpMEditClient implements MEditClient {
   }
 
   // A hand-over or a signal answered starts a sweep that mEdit publishes as validating, so the record index
-  // stays possibly late until a settled status, or until the status is lost with mEdit.
-  private async awaitSweep(): Promise<void> {
+  // stays possibly late until a status that holds no load order or has settled, or until the status is lost with mEdit.
+  private awaitSweep(): void {
     this.sweepsAwaited++;
-    let settle!: () => void;
-    const settled = new Promise<void>((resolve) => { settle = resolve; });
-    const subscription = this.loadOrderStatusKept.onStatus((status) => { if (status === undefined || isSettled(status)) settle(); });
-    void this.currentLoadOrderStatus().then((current) => { if (current === undefined || isSettled(current)) settle(); });
-    await settled;
-    subscription();
-    this.sweepsAwaited--;
+    const end = (): void => {
+      if (subscription === undefined) return;
+      subscription();
+      subscription = undefined;
+      this.sweepsAwaited--;
+    };
+    const sweepOver = (status: LoadOrderStatus): boolean => status.holdsNone || isSettled(status);
+    let subscription: (() => void) | undefined = this.loadOrderStatusKept.onStatus((status) => { if (status === undefined || sweepOver(status)) end(); });
+    void this.currentLoadOrderStatus().then((current) => { if (current !== undefined && sweepOver(current)) end(); });
   }
 
   // Undefined when the read fails: the caller then waits on the stream's own ticks.
