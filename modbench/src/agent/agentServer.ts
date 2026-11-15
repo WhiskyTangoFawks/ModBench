@@ -34,6 +34,7 @@ import { RESOLVE_NAMES } from './resolveNames';
 import { SCRIPT_ENVIRONMENT, type TerminalEnvironment } from './scriptEnvironment';
 import { SELECT_ROWS } from './selectRows';
 import { PROBLEMS } from './problems';
+import { untilCaughtUp } from './untilCaughtUp';
 import { READ_GUIDE } from './readGuide';
 import { INSTRUCTIONS } from './instructions/instructions';
 import { TOOL_DESCRIPTIONS } from './instructions/tools';
@@ -42,8 +43,10 @@ export interface AgentServerOptions {
   port: number;
   instance: Pick<InstanceView, 'value' | 'sequence' | 'readFailure'> | undefined;
   copyReads: CopyReads | undefined;
-  mEdit: Pick<MEditClient, 'resolveNames' | 'selectRows' | 'getComparison' | 'getPlugins' | 'getCopyDocument' | 'getRenderedDocument' | 'getArchiveCopies'>;
+  mEdit: Pick<MEditClient, 'recordIndexMayBeLate' | 'onDidChange' | 'onLoadOrderStatus' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getPlugins' | 'getCopyDocument' | 'getRenderedDocument' | 'getArchiveCopies'>;
   symbols: SymbolIndex;
+  /** Resolves once every change mEdit named has its problems in the diagnostics. */
+  problemsCaughtUp: () => Promise<void>;
   terminalEnvironment: TerminalEnvironment;
   statuses: Pick<ModStatuses, 'current'> | undefined;
   deployment: DeploymentRead | undefined;
@@ -108,12 +111,12 @@ interface Tool<Shape extends z.ZodRawShape> {
 // The SDK refuses an input its schema rejects before the handler runs, with no Output line
 // (agent.md, Reporting, story 1), so it holds one that takes any object and advertises the tool's.
 function register<Shape extends z.ZodRawShape>(
-  server: McpServer, log: Log, standing: () => string[], { name, input }: Tool<Shape>, run: (args: z.output<z.ZodObject<Shape>>) => unknown,
+  server: McpServer, log: Log, standing: () => string[], { name, input }: Tool<Shape>, run: (args: z.output<z.ZodObject<Shape>>, cancelled: AbortSignal) => unknown,
 ): void {
   const schema = z.strictObject(input);
   const anyObject = z.looseObject({}).meta(z.toJSONSchema(schema, { io: 'input', target: 'draft-7' }));
   server.registerTool(name, { description: TOOL_DESCRIPTIONS[name], inputSchema: anyObject }, (args, extra) => answer(log, standing, name, () =>
-    stillWorking(extra, () => run(parseOrRefuse(schema, args)))));
+    stillWorking(extra, () => run(parseOrRefuse(schema, args), extra.signal))));
 }
 
 const NO_INPUT = {};
@@ -127,7 +130,7 @@ const RECORD_READS: readonly Source[] = ['instance', 'mEdit', 'plugins', 'unsave
 
 const SYMBOL_READS: readonly Source[] = [...RECORD_READS, 'modList'];
 
-function mcpServerOf({ instance, copyReads, mEdit, symbols, terminalEnvironment, statuses, deployment, standing: standingSources, pluginsShown, log }: OpenOptions): McpServer {
+function mcpServerOf({ instance, copyReads, mEdit, symbols, problemsCaughtUp, terminalEnvironment, statuses, deployment, standing: standingSources, pluginsShown, log }: OpenOptions): McpServer {
   const server = new McpServer({ name: 'modbench', version: '0' }, { instructions: INSTRUCTIONS });
   const sources: Record<Source, () => readonly string[]> = { ...standingSources, instance: () => instanceMessages(instance).filter((line) => line !== undefined) };
   const reading = (...read: Source[]) => () => [...new Set(read.flatMap((source) => sources[source]()))];
@@ -151,7 +154,10 @@ function mcpServerOf({ instance, copyReads, mEdit, symbols, terminalEnvironment,
     const { modDirs, sourceDirs, overwriteDir } = currentValue(instance).paths;
     return [...modDirs.values(), ...sourceDirs.values(), overwriteDir, deployment.folder()].filter((folder) => folder !== undefined);
   };
-  register(server, log, reading('instance', 'sortingRules', 'sourceLanguage'), PROBLEMS, (args) => PROBLEMS.of(args, problemFolders));
+  register(server, log, reading('instance', 'sortingRules', 'sourceLanguage'), PROBLEMS, async (args, cancelled) => {
+    await untilCaughtUp({ mEdit, problemsCaughtUp }, cancelled);
+    return PROBLEMS.of(args, problemFolders);
+  });
   register(server, log, reading('instance'), READ_GUIDE, (args) => READ_GUIDE.of(currentValue(instance), args));
   return server;
 }

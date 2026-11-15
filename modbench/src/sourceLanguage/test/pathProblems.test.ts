@@ -180,6 +180,33 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     expect(published[1]?.get(FILE)?.[0]?.start.character).toBe(SPAN.start + 2);
   });
 
+  it('is settled only once the judgement of a change is published', async () => {
+    let release: (text: string) => void = () => undefined;
+    let reading = false;
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getPluginFilePaths', [answerFor()]);
+    const published: ProblemsByFile[] = [];
+    const { settled } = feedPathProblems({
+      client, ask: problemsAsker(client), sourceFiles: sourceFolders, reporter: recordingReporter(),
+      readText: () => { if (!reading) return Promise.resolve(TEXT); return new Promise<string>((resolve) => { release = resolve; }); },
+      paths: { judged: () => true, holds: () => false, subscribe: () => ({ dispose: () => undefined }) },
+      publish: (problems) => published.push(problems), languageStatus: () => undefined,
+    });
+    await settled();
+    reading = true;
+    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+
+    let ended = false;
+    const waiting = settled().then(() => { ended = true; });
+    await vi.waitFor(() => { expect(asked(client)).toHaveLength(2); });
+    await new Promise((resolve) => { setTimeout(resolve, 20); });
+    expect(ended).toBe(false);
+    release(TEXT);
+    await waiting;
+
+    expect(published).toHaveLength(2);
+  });
+
   it('keeps one ask in flight and at most one pending, however many notifications arrive meanwhile', async () => {
     const { settled, client } = feed([answerFor()]);
     await settled(1);

@@ -52,3 +52,33 @@ export function mergedFeeds(publishFile: (file: string, problems: readonly Probl
     shown = merged;
   };
 }
+
+export interface Settling {
+  /** A change calls for an ask. */
+  requested: () => void;
+  /** Runs the ask that takes every request made before it began. */
+  answering: <T>(run: () => Promise<T>) => Promise<T>;
+  working: <T>(run: () => Promise<T>) => Promise<T>;
+  /** Resolves once no request is unanswered and no work runs. */
+  settled: () => Promise<void>;
+}
+
+export function settling(): Settling {
+  let requests = 0;
+  let running = 0;
+  const waiting: (() => void)[] = [];
+  const release = () => { if (requests === 0 && running === 0) for (const resume of waiting.splice(0)) resume(); };
+  const working = async <T>(run: () => Promise<T>): Promise<T> => {
+    running += 1;
+    try { return await run(); } finally { running -= 1; release(); }
+  };
+  return {
+    requested: () => { requests += 1; },
+    answering: (run) => {
+      const taken = requests;
+      return working(async () => { try { return await run(); } finally { requests -= taken; } });
+    },
+    working,
+    settled: () => (requests === 0 && running === 0 ? Promise.resolve() : new Promise<void>((resume) => { waiting.push(resume); })),
+  };
+}

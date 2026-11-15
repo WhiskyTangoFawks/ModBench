@@ -34,7 +34,7 @@ function feed(sourceFiles = sourceFolders, answeredAtSubscribe?: PluginProblems[
   const reporter = recordingReporter();
   const status: (string | undefined)[] = [];
   const unsaved: (string | undefined)[] = [];
-  feedSourceProblems({
+  const { settled } = feedSourceProblems({
     client,
     ask: problemsAsker(client, RETRY_AFTER_MS),
     sourceFiles,
@@ -50,7 +50,7 @@ function feed(sourceFiles = sourceFolders, answeredAtSubscribe?: PluginProblems[
     await vi.waitFor(() => { expect(published.length).toBeGreaterThan(before); });
     return published[published.length - 1] ?? new Map();
   };
-  return { client, reporter, published, status, unsaved, answered };
+  return { client, reporter, published, status, unsaved, answered, settled };
 }
 
 afterEach(() => { vi.useRealTimers(); });
@@ -113,6 +113,46 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
     const shown = await answered([{ plugin: PLUGIN, problems: [] }], { kind, plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [REFERRER], sequence: 1 });
 
     expect([...shown]).toEqual([]);
+  });
+
+  it('is settled only once the answer to a change is published', async () => {
+    const { client, answered, published, settled } = feed();
+    await answered([{ plugin: PLUGIN, problems: [problem()] }]);
+    let answer: (answer: PluginProblems[]) => void = () => undefined;
+    client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((resolve) => { answer = resolve; }));
+    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+    const before = published.length;
+    const asked = client.calls.filter(({ method }) => method === 'getPluginProblems').length;
+
+    let ended = false;
+    const waiting = settled().then(() => { ended = true; });
+    await vi.waitFor(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(asked + 1); });
+    expect(ended).toBe(false);
+    answer([{ plugin: PLUGIN, problems: [] }]);
+    await waiting;
+
+    expect(published.length).toBe(before + 1);
+    expect([...published[before] ?? []]).toEqual([]);
+  });
+
+  it('is settled only once the answer to a change is published', async () => {
+    const { client, answered, published, settled } = feed();
+    await answered([{ plugin: PLUGIN, problems: [problem()] }]);
+    let answer: (answer: PluginProblems[]) => void = () => undefined;
+    client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((resolve) => { answer = resolve; }));
+    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+    const before = published.length;
+    const asked = client.calls.filter(({ method }) => method === 'getPluginProblems').length;
+
+    let ended = false;
+    const waiting = settled().then(() => { ended = true; });
+    await vi.waitFor(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(asked + 1); });
+    expect(ended).toBe(false);
+    answer([{ plugin: PLUGIN, problems: [] }]);
+    await waiting;
+
+    expect(published.length).toBe(before + 1);
+    expect([...published[before] ?? []]).toEqual([]);
   });
 
   it('asks nothing when a plugin\'s failure arrives mid-reconcile, since mEdit would answer that it is not ready', () => {

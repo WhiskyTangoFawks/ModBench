@@ -6,8 +6,8 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { answerOf } from '../wire/readFailed';
 import { pluginAddressKey } from '../wire/pluginAddress';
-import { askedAgain, lastRead, positionAt, readiness, tellingOnSurface, type Asked, type Told } from './feedShape';
-import type { ProblemOnFile, ProblemsByFile } from './sourceProblems';
+import { askedAgain, lastRead, positionAt, readiness, settling, tellingOnSurface, type Asked, type Told } from './feedShape';
+import type { Feed, ProblemOnFile, ProblemsByFile } from './sourceProblems';
 import { stringsAt } from './sourceText';
 
 /** What the instance says of a file the plugin source names. */
@@ -66,7 +66,7 @@ async function problemsOf(held: readonly Held[], { paths, sourceFiles, readText 
 
 /** Publishes each path a plugin's source names that no file the game gets or its mod holds answers to. The links feed
  *  tells of a plugin with no source folder. */
-export function feedPathProblems(deps: PathProblemsDeps): () => void {
+export function feedPathProblems(deps: PathProblemsDeps): Feed {
   const { client, reporter, paths, publish, languageStatus } = deps;
   const held = new Map<string, Held>();
   const failures = new Map<string, string>();
@@ -90,11 +90,12 @@ export function feedPathProblems(deps: PathProblemsDeps): () => void {
     ]);
     tell([...standing, ...[...failures].map(([target, why]) => ({ key: `failed ${target}`, message: 'The Problems panel shows the last paths mEdit answered.', why }))]);
   };
-  const judge = async () => {
+  const asks = settling();
+  const judge = () => asks.working(async () => {
     const mine = ++shown;
     const problems = await problemsOf([...held.values()], deps);
     if (mine === shown) publish(problems);
-  };
+  });
   const take = (answers: readonly PluginFilePaths[], target: string) => {
     const answered = new Set(answers.map(({ plugin }) => pluginAddressKey(plugin)));
     for (const key of held.keys()) if ((target === WHOLE_SET || key === target) && !answered.has(key)) held.delete(key);
@@ -120,7 +121,7 @@ export function feedPathProblems(deps: PathProblemsDeps): () => void {
   const asking = new Map<string, PluginAddress>();
   let wholeWanted = true;
   let atSubscribe = true;
-  const askWanted = coalesced(async () => {
+  const run = coalesced(() => asks.answering(async () => {
     const whole = wholeWanted;
     const first = atSubscribe;
     const named = [...asking.values()];
@@ -128,7 +129,8 @@ export function feedPathProblems(deps: PathProblemsDeps): () => void {
     atSubscribe = false;
     asking.clear();
     await Promise.all(whole ? [ask(undefined, first)] : named.map((plugin) => ask(plugin)));
-  });
+  }));
+  const askWanted = () => { asks.requested(); run(); };
   const askPluginWhenReady = ({ plugin }: { plugin: PluginAddress }) => {
     if (!ready()) return;
     asking.set(pluginAddressKey(plugin), plugin);
@@ -140,8 +142,5 @@ export function feedPathProblems(deps: PathProblemsDeps): () => void {
   ];
   const judging = paths.subscribe(() => { void judge(); });
   askWanted();
-  return () => {
-    for (const off of unsubscribe) off();
-    judging.dispose();
-  };
+  return { stop: () => { for (const off of unsubscribe) off(); judging.dispose(); }, settled: asks.settled };
 }
