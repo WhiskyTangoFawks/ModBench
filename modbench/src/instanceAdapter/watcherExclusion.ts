@@ -1,28 +1,16 @@
 import { dirname, sep } from 'node:path';
+import picomatch from 'picomatch';
 
-const compiled = new Map<string, RegExp>();
+const compiled = new Map<string, (path: string) => boolean>();
 
-// VS Code's glob: `**` crosses folders, a single star and `?` stay in one name, `{a,b}` alternates, and a trailing `/**` takes its folder in.
-function regExpOf(pattern: string): RegExp {
+// The file system decides the case, as it does for VS Code's watcher.
+const matcherOf = (pattern: string): ((path: string) => boolean) => {
   const known = compiled.get(pattern);
   if (known) return known;
-  let braces = 0;
-  const source = pattern.replace(/\/\*\*$|\*\*\/|\*\*|\*|\?|[{},]|[.+^$()|[\]\\]/g, (token) => {
-    switch (token) {
-      case '/**': return '(?:/.*)?';
-      case '**/': return '(?:.*/)?';
-      case '**': return '.*';
-      case '?': return '[^/]';
-      case '{': braces++; return '(?:';
-      case '}': if (braces === 0) return '\\}'; braces--; return ')';
-      case ',': return braces > 0 ? '|' : ',';
-      default: return token.length === 1 && /[.+^$()|[\]\\]/.test(token) ? `\\${token}` : '[^/]*';
-    }
-  });
-  const regExp = new RegExp(`^${source}$`, process.platform === 'win32' ? 'i' : '');
-  compiled.set(pattern, regExp);
-  return regExp;
-}
+  const matcher = picomatch(pattern, { dot: true, nocase: process.platform === 'win32' });
+  compiled.set(pattern, matcher);
+  return matcher;
+};
 
 const asGlobPath = (path: string): string => (sep === '/' ? path : path.split(sep).join('/'));
 
@@ -38,19 +26,16 @@ export interface Exclusion {
 /** The folders and files the user's true `files.watcherExclude` patterns leave out, each pattern read as an absolute path
  *  and as a path relative to the instance root. */
 export function exclusionOf(patterns: Readonly<Record<string, boolean>>, instanceRoot: string): Exclusion {
-  const excluding = Object.entries(patterns).filter(([, excludes]) => excludes).map(([pattern]) => pattern);
-  const matchers = excluding.map((pattern) => ({ pattern, regExp: regExpOf(pattern) }));
+  const matchers = Object.entries(patterns).filter(([, excludes]) => excludes).map(([pattern]) => ({ pattern, matches: matcherOf(pattern) }));
   const inRoot = `${instanceRoot}${sep}`;
-  const matches =(regExp: RegExp, path: string): boolean => {
-    return regExp.test(asGlobPath(path)) || (path.startsWith(inRoot) && regExp.test(asGlobPath(path.slice(inRoot.length))));
-  };
-  const excludesAny = (path: string): boolean => matchers.some(({ regExp }) => matches(regExp, path));
+  const excludedBy = (matches: (path: string) => boolean, path: string): boolean =>
+    matches(asGlobPath(path)) || (path.startsWith(inRoot) && matches(asGlobPath(path.slice(inRoot.length))));
   const folders = new Map<string, boolean>();
   const excludesFolder = (folder: string): boolean => {
     const known = folders.get(folder);
     if (known !== undefined) return known;
     const parent = dirname(folder);
-    const excluded = matchers.length > 0 && (excludesAny(folder) || (parent !== folder && excludesFolder(parent)));
+    const excluded = matchers.some(({ matches }) => excludedBy(matches, folder)) || (parent !== folder && excludesFolder(parent));
     folders.set(folder, excluded);
     return excluded;
   };
@@ -58,7 +43,7 @@ export function exclusionOf(patterns: Readonly<Record<string, boolean>>, instanc
     excludesFolder,
     topmostExcluded: (listed) => listed.filter((folder) => excludesFolder(folder) && !excludesFolder(dirname(folder))),
     patternsExcludingFiles: (files) => matchers
-      .filter(({ regExp }) => files.some((file) => matches(regExp, file) && !excludesFolder(dirname(file))))
+      .filter(({ matches }) => files.some((file) => excludedBy(matches, file) && !excludesFolder(dirname(file))))
       .map(({ pattern }) => pattern),
   };
 }

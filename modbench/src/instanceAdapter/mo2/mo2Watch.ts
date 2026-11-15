@@ -3,9 +3,10 @@
 
 import { heldFolderWatchFor, type HeldFolderWatch } from '../heldFolders';
 import { watchFiles } from '../watchFiles';
-import { outsideTrustedRead } from '../files';
 import type { ChangeListener, Subscription, UnwatchedFolder, WatcherExclude } from '../instanceAdapter';
 import { exclusionOf } from '../watcherExclusion';
+import { followedFolders } from './followedFolders';
+import { EXCLUDED, listedExclusions } from './listedExclusions';
 import { FIRST_LEVEL, instanceWatches, sourceRootDir } from './layout';
 
 type FollowedFolder = 'downloadedFiles' | 'dataFolder' | 'programs' | 'creationClubList' | 'defaultIni' | 'myGamesInis' | 'gameFolderArchives' | 'profileFolders' | 'excludedFolders';
@@ -20,11 +21,6 @@ function isRepositoryChange(path: string): boolean {
   return rest.length === 0 && (first === 'HEAD' || first === 'packed-refs');
 }
 
-interface Followed {
-  readonly glob: string;
-  readonly watches: ReadonlyMap<string, Subscription | undefined>;
-}
-
 export interface Mo2Watch {
   subscribe(listener: ChangeListener): Subscription;
   /** Watches each of `bases` under `glob` for `what`, in place of the folders it followed before. A watch newly armed has
@@ -36,22 +32,11 @@ export interface Mo2Watch {
   unwatchedFolders(): UnwatchedFolder[];
 }
 
-const EXCLUDED = 'excluded in files.watcherExclude';
-const filesExcludedBy = (pattern: string): string => `files matching ${pattern} are ${EXCLUDED}`;
-
-interface Listing {
-  readonly folders: readonly string[];
-  readonly files: readonly string[];
-  excludedFolders: readonly string[];
-  excludedFilePatterns: readonly string[];
-}
-
 export function mo2Watch(
   instanceRoot: string, gameFolderChanged: (listener: () => void) => Subscription, repositoryChanged: (listener: (path: string) => void) => Subscription,
   exclusion: WatcherExclude,
 ): Mo2Watch {
   const listeners = new Set<ChangeListener>();
-  const followed = new Map<FollowedFolder, Followed>();
   let fixed: Subscription[] = [];
   // Kept across a disarm: a folder VS Code's watcher missed, it still misses once armed again.
   const held = new Map<string, HeldFolderWatch | undefined>();
@@ -78,59 +63,29 @@ export function mo2Watch(
     const reached = dropsEvents(base, glob) ? FIRST_LEVEL : glob;
     return watchFiles(base, reached, onChangeFor(base), heldFor(base, reached));
   };
-  const armed = (): boolean => listeners.size > 0;
-  const rearmed = ({ glob, watches }: Followed, arming: (base: string) => Subscription | undefined): Followed => {
-    for (const watching of watches.values()) watching?.dispose();
-    return { glob, watches: new Map([...watches.keys()].map((base) => [base, arming(base)])) };
-  };
-
-  // A read that follows a folder trusts what it keeps; what the watch arms, and the listeners it calls, never do.
-  const follow: Mo2Watch['follow'] = (what, bases, glob) => outsideTrustedRead(() => {
-    const before: Followed = followed.get(what) ?? { glob, watches: new Map<string, Subscription | undefined>() };
-    const kept = new Set(before.glob === glob ? bases : []);
-    const watches = new Map<string, Subscription | undefined>();
-    for (const [base, watching] of before.watches) {
-      if (kept.has(base)) watches.set(base, watching);
-      else {
-        watching?.dispose();
-        held.delete(heldKey(base, before.glob));
-      }
-    }
-    const added = bases.filter((base) => !watches.has(base));
-    for (const base of added) watches.set(base, armed() ? watch(base, glob) : undefined);
-    followed.set(what, { glob, watches });
-    if (added.length > 0 && armed()) checkDue();
+  const followed = followedFolders({
+    watch, armed: () => listeners.size > 0, checkDue, forget: (base, glob) => { held.delete(heldKey(base, glob)); },
   });
 
-  const listings = new Map<string, Listing>();
-  const fixedBases = instanceWatches(instanceRoot).map(({ base }) => base);
-  const judged = (listing: Listing): Listing => {
-    listing.excludedFolders = excluding.topmostExcluded(listing.folders);
-    listing.excludedFilePatterns = excluding.patternsExcludingFiles(listing.files);
-    return listing;
-  };
-  const followExcludedFolders = (): void => {
-    follow('excludedFolders', [...new Set([...listings.values()].flatMap(({ excludedFolders }) => excludedFolders))], FIRST_LEVEL);
-  };
-  const baseOf = (listing: Listing): string =>
-    fixedBases.filter((base) => listing.folders.some((folder) => folder.startsWith(base))).sort((a, b) => b.length - a.length)[0] ?? instanceRoot;
+  const listings = listedExclusions(() => excluding, instanceWatches(instanceRoot).map(({ base }) => base));
+  const followExcludedFolders = (): void => { followed.follow('excludedFolders', listings.excludedFolders(), FIRST_LEVEL); };
 
   const arm = (): void => {
     fixed = instanceWatches(instanceRoot).map(({ base, pattern }) => watch(base, pattern));
     fixed.push(gameFolderChanged(checkDue), repositoryChanged(changed), exclusion.changed(() => {
       disarm();
       excluding = exclusionOf(exclusion.value(), instanceRoot);
-      for (const listing of listings.values()) judged(listing);
+      listings.judgedAgain();
       arm();
       followExcludedFolders();
       checkDue();
     }));
-    for (const [what, folders] of followed) followed.set(what, rearmed(folders, (base) => watch(base, folders.glob)));
+    followed.arm();
   };
   const disarm = (): void => {
     for (const subscription of fixed) subscription.dispose();
     fixed = [];
-    for (const [what, folders] of followed) followed.set(what, rearmed(folders, () => undefined));
+    followed.disarm();
   };
 
   return {
@@ -144,19 +99,17 @@ export function mo2Watch(
       };
     },
 
-    follow,
+    follow: followed.follow,
 
     listed(key, listing) {
-      if (listing === undefined) listings.delete(key);
-      else listings.set(key, judged({ ...listing, excludedFolders: [], excludedFilePatterns: [] }));
+      listings.set(key, listing);
       followExcludedFolders();
     },
 
     unwatchedFolders: () => [
       ...instanceWatches(instanceRoot).filter(({ base, pattern }) => dropsEvents(base, pattern)).map(({ base }) => ({ folder: base, reason: EXCLUDED })),
-      ...[...followed.values()].flatMap(({ glob, watches }) => [...watches.keys()].filter((base) => dropsEvents(base, glob))).map((folder) => ({ folder, reason: EXCLUDED })),
-      ...[...listings.values()].flatMap((listing) => listing.excludedFolders.map((folder) => ({ folder, reason: EXCLUDED }))),
-      ...[...listings.values()].flatMap((listing) => listing.excludedFilePatterns.map((pattern) => ({ folder: baseOf(listing), reason: filesExcludedBy(pattern) }))),
+      ...followed.entries().filter(({ base, glob }) => dropsEvents(base, glob)).map(({ base }) => ({ folder: base, reason: EXCLUDED })),
+      ...listings.named(),
       ...[...held.values()].flatMap((folders) => folders?.failures() ?? []),
     ],
   };
