@@ -183,7 +183,6 @@ interface OpenedInstance {
 interface Opened {
   facts: InstanceFacts;
   instance?: Instance;
-  /** What a gesture that writes warns, read of the mod manager at that moment. */
   managerRunningMessage: () => Promise<string | undefined>;
   scriptEnvironmentFile?: InstanceAdapter['scriptEnvironmentFile'];
   /** Each box over the instance's files that says where they name a symbol. */

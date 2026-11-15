@@ -6,7 +6,7 @@ vi.mock('vscode', async () => {
 });
 
 import { progressSteps as steps } from '../../test/recordedProgress';
-import { asViewCall, RefusedWrite, runWritingGesture, surfaceManagerRunning, surfaceReadModel, surfaceRefusedWrites } from '../writingGesture';
+import { asViewCall, collectingWarnings, holdingTheWrite, RefusedWrite, runUnderProgress, runWritingGesture, surfaceManagerRunning, surfaceReadModel, surfaceRefusedWrites } from '../writingGesture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { Refusal } from '../refusal';
 import { ambientWrites } from '../../instanceLoader/ambientWrites';
@@ -71,24 +71,66 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
       return reporter;
     }
 
-    it('warns before the command writes, when the manager is running at that moment', async () => {
-      const reporter = surfacedManager(() => Promise.resolve('MO2 is running.'));
-      let warningsWhenCommandRan = -1;
+    const running = () => Promise.resolve('MO2 is running.');
+    const warned = [{ severity: 'warning', message: 'MO2 is running.', detail: undefined }];
 
-      await runWritingGesture('modbench.write', 'modbench.thing', instanceThatReads(), () => { warningsWhenCommandRan = reporter.reports.length; return Promise.resolve(); });
+    it('warns once a write held through holdingTheWrite has landed, when the manager is running at that moment', async () => {
+      const reporter = surfacedManager(running);
 
-      expect({ reports: reporter.reports, warningsWhenCommandRan }).toEqual({
-        reports: [{ severity: 'warning', message: 'MO2 is running.', detail: undefined }],
-        warningsWhenCommandRan: 1,
-      });
+      await holdingTheWrite('modbench.write', () => Promise.resolve('landed'));
+
+      expect(reporter.reports).toEqual(warned);
+    });
+
+    it('says nothing for a gesture that holds no write', async () => {
+      const reporter = surfacedManager(running);
+
+      await runUnderProgress('modbench.thing', instanceThatReads(), unnamed);
+
+      expect(reporter.reports).toEqual([]);
     });
 
     it('says nothing when the manager is not running', async () => {
       const reporter = surfacedManager(() => Promise.resolve(undefined));
 
-      await runWritingGesture('modbench.write', 'modbench.thing', instanceThatReads(), unnamed);
+      await holdingTheWrite('modbench.write', () => Promise.resolve('landed'));
 
       expect(reporter.reports).toEqual([]);
+    });
+
+    it('says nothing when the gesture was refused and wrote nothing', async () => {
+      const reporter = surfacedManager(running);
+
+      await holdingTheWrite('modbench.write', () => Promise.resolve({ applied: false, refusal: 'no' }));
+
+      expect(reporter.reports).toEqual([]);
+    });
+
+    it('starts the command without waiting on the ask', () => {
+      surfacedManager(() => new Promise<string>(() => undefined));
+      const commandRan = vi.fn();
+
+      void holdingTheWrite('modbench.write', () => { commandRan(); return Promise.resolve(); });
+
+      expect(commandRan).toHaveBeenCalled();
+    });
+
+    it('holds the write against another until the command is done, whatever the ask is doing', async () => {
+      surfacedManager(() => new Promise<string>(() => undefined));
+      let ends!: () => void;
+      void holdingTheWrite('modbench.write', () => new Promise<void>((r) => { ends = r; }));
+
+      await expect(holdingTheWrite('modbench.other', () => Promise.resolve())).rejects.toBeInstanceOf(RefusedWrite);
+      ends();
+    });
+
+    it('goes back to an agent that called, in its answer, and not as a notification', async () => {
+      const reporter = surfacedManager(running);
+      const told: string[] = [];
+
+      await collectingWarnings(told, () => holdingTheWrite('modbench.write', () => Promise.resolve('landed')));
+
+      expect({ told, reports: reporter.reports }).toEqual({ told: ['MO2 is running.'], reports: [] });
     });
   });
 

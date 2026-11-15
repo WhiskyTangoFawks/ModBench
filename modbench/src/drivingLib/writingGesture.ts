@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Instance } from '../instanceLoader/instance';
 import { WrittenFiles } from '../instanceLoader/writtenFiles';
 import { collectingWrites } from '../instanceLoader/ambientWrites';
@@ -16,8 +17,6 @@ export async function runUnderProgress<T>(
   const handedBefore = readModel?.handed();
   progress.working();
   try {
-    const running = await managerSurface?.message();
-    if (running !== undefined) managerSurface?.reporter.report('warning', running);
     return await collectingWrites(written, () => command(progress, written));
   } finally {
     progress.working();
@@ -30,7 +29,7 @@ export async function runUnderProgress<T>(
   }
 }
 
-/** Shows the disk at the files a write named, or the whole disk when it left them unnamed; a write that told the Instance loader of each file shows nothing more. */
+/** A write that told the Instance loader of each file shows nothing more. */
 export async function refreshWritten(instance: Pick<Instance, 'refresh'>, written: WrittenFiles): Promise<void> {
   if (written.named?.length !== 0) await instance.refresh(written.named);
 }
@@ -43,7 +42,26 @@ interface ManagerSurface {
 
 let managerSurface: ManagerSurface | undefined;
 
-/** Sets the warning a gesture that writes gives while the mod manager that made the instance is running (common.md, States, story 8). */
+const agentWarnings = new AsyncLocalStorage<string[]>();
+
+/** Runs `work` for an agent's call: the warnings it gives are collected into `warnings`, to go back in the answer. */
+export const collectingWarnings = <T>(warnings: string[], work: () => Promise<T>): Promise<T> => agentWarnings.run(warnings, work);
+
+const askedOfManager = (): Promise<string | undefined> =>
+  Promise.resolve(managerSurface?.message()).catch(() => undefined);
+
+const wroteNothing = (result: unknown): boolean =>
+  typeof result === 'object' && result !== null && 'applied' in result && result.applied === false;
+
+export function warnInNotification(message: string): void {
+  managerSurface?.reporter.report('warning', message);
+}
+
+function warnOfManager(message: string): void {
+  const toAgent = agentWarnings.getStore();
+  if (toAgent === undefined) warnInNotification(message); else toAgent.push(message);
+}
+
 export function surfaceManagerRunning(on: ManagerSurface): { dispose: () => void } {
   managerSurface = on;
   return { dispose: () => { managerSurface = undefined; } };
@@ -104,11 +122,16 @@ export async function asViewCall<T>(work: () => Promise<T>): Promise<T | undefin
 export async function holdingTheWrite<T>(write: string, work: () => Promise<T>): Promise<T> {
   if (inFlight !== undefined) throw new RefusedWrite(`${titleOf(write)} did not start: ${titleOf(inFlight)} is still writing.`);
   inFlight = write;
+  const asked = askedOfManager();
+  let result: T;
   try {
-    return await work();
+    result = await work();
   } finally {
     inFlight = undefined;
   }
+  const running = await asked;
+  if (running !== undefined && !wroteNothing(result)) warnOfManager(running);
+  return result;
 }
 
 /** Runs the `write` gesture's `command` under the view's progress, holding the write. */
