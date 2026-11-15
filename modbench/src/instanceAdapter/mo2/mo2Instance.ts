@@ -43,6 +43,8 @@ import { textByStamp } from '../files';
 import { trashingReplaced } from '../trashingReplaced';
 import { gamePlaceOf } from '../gameFolder/gamePlace';
 import { overlappedGameRoot } from '../gameFolder/pathWithin';
+import { repositoryReads, type RepositoryReads } from '../repositoryReads';
+import type { HostGit } from '../../ports/repository';
 
 export { overwriteDir } from './layout';
 
@@ -58,7 +60,7 @@ export type Mo2InstanceOptions = {
   fileProblems: FileProblems;
   fomodEngine: FomodEngine;
   deployedPath: DeployedPath;
-} & ({ gameFolderSetting: GameFolderSetting } | { context: Mo2Context });
+} & ({ gameFolderSetting: GameFolderSetting; hostGit: HostGit<unknown> } | { context: Mo2Context });
 
 /** Structural presence only, never file contents: an instance with a corrupt `modlist.txt` still
  *  reads `true` here (common.md, States, story 2). Synchronous: the composition
@@ -67,22 +69,25 @@ export function isMo2Instance(root: string): boolean {
   return existsSync(settingsFile(root)) && existsSync(modsDir(root)) && existsSync(profilesDir(root));
 }
 
+const mo2Context = (instanceRoot: string, gameFolderSetting: GameFolderSetting, repository: RepositoryReads): Mo2Context => ({
+  instanceRoot,
+  resolveGameFolder: gameFolderResolver(gameFolderSetting),
+  resolveSteamInstall: steamInstallResolver(),
+  resolveDownloadsFolder: downloadsDirectoryResolver(),
+  resolveMyGames: myGamesResolver(instanceRoot, STEAM),
+  watch: mo2Watch(instanceRoot, gameFolderSetting.changed, repository.changed),
+  repository,
+  mo2Running: () => programRunning(MO2_PROGRAM),
+});
+
 export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: ConfigurationFile | undefined): ManagerAdapter {
   const { instanceRoot, installationFileReader, fileProblems, fomodEngine, deployedPath } = options;
-  const context: Mo2Context = 'context' in options ? options.context : {
-    instanceRoot,
-    resolveGameFolder: gameFolderResolver(options.gameFolderSetting),
-    resolveSteamInstall: steamInstallResolver(),
-    resolveDownloadsFolder: downloadsDirectoryResolver(),
-    resolveMyGames: myGamesResolver(instanceRoot, STEAM),
-    watch: mo2Watch(instanceRoot, options.gameFolderSetting.changed),
-    mo2Running: () => programRunning(MO2_PROGRAM),
-  };
+  const context: Mo2Context = 'context' in options ? options.context : mo2Context(instanceRoot, options.gameFolderSetting, repositoryReads(instanceRoot, options.hostGit));
   const hashes = hashIndex(hashIndexDir(instanceRoot), installationFileReader, fileProblems);
   const source = readingSource(context, publisherFile, deployedPath);
   const gameFolder = async (): Promise<GameFolder> => (await source.settings()).gameFolder();
   const { originHoldsFile, planRename } = mo2PluginRename(context, source);
-  const showUnfiltered = unfilteredShown(instanceRoot, publisherFile, fileProblems);
+  const showUnfiltered = unfilteredShown(context, publisherFile, fileProblems);
   const followSourceModLines = sourceModLinesFollowed(instanceRoot, fileProblems);
   const followPathTokens = pathTokensFollowed(context, gameFolder, publisherFile);
   const adapter: ManagerAdapter = {

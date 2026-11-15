@@ -2,7 +2,7 @@
 // with no filter, and the diff's textconv shows it as filtered.
 
 import { errorMessage } from '../ports/errorMessage';
-import { git, gitBytes, gitFed, gitKept } from './git';
+import { git, gitBytes, gitFed } from './git';
 import { keptByIndex } from './keptByIndex';
 
 const blobsIn = (listing: string, entry: RegExp): Map<string, string> =>
@@ -13,9 +13,6 @@ const blobsIn = (listing: string, entry: RegExp): Map<string, string> =>
 
 const STAGED = /^\d+ ([0-9a-f]+) 0\t(.*)$/s;
 const COMMITTED = /^\d+ blob ([0-9a-f]+)\t(.*)$/s;
-
-const headOf = (repository: string): Promise<string | undefined> =>
-  gitKept(repository, 'rev-parse', '-q', '--verify', 'HEAD').then((commit) => commit.trim(), () => undefined);
 
 // Line ends are git's own conversion, not the filter's, so a clone that converts them reads its file as committed.
 const isUnfiltered = async (repository: string, path: string, blob: string): Promise<boolean> =>
@@ -52,10 +49,10 @@ async function unfilteredIn(repository: string, drivers: readonly string[], head
 
 /** Each file a filter of `drivers` covers that the index or HEAD holds as the filter would not make it, with its problem.
  *  Kept while the index and HEAD stay, unless a file could not be checked. */
-export function unfilteredFiles(): (repository: string, drivers: readonly string[]) => Promise<ReadonlyMap<string, string>> {
+export function unfilteredFiles(headOf: () => Promise<string | undefined>): (repository: string, drivers: readonly string[]) => Promise<ReadonlyMap<string, string>> {
   const kept = keptByIndex<ReadonlyMap<string, Problem>>((problems) => [...problems.values()].every(({ checked }) => checked));
   return async (repository, drivers) => {
-    const head = await headOf(repository);
+    const head = await headOf().catch(() => undefined);
     const problems = await kept(repository, drivers.join('\0'), () => unfilteredIn(repository, drivers, head), head ?? '');
     return new Map([...problems].map(([path, { message }]) => [path, message]));
   };

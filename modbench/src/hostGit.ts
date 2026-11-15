@@ -1,11 +1,8 @@
 import * as vscode from 'vscode';
-import type { HostGit } from './ports/repository';
-
-interface GitExtensionExports {
-  getAPI(version: 1): { init(folder: vscode.Uri): Thenable<unknown> };
-}
+import type { HostGit, HostGitApi } from './ports/repository';
 
 export const hostGit: HostGit<vscode.Uri> = {
-  extension: () => vscode.extensions.getExtension<GitExtensionExports>('vscode.git'),
+  extension: () => vscode.extensions.getExtension<{ getAPI(version: 1): HostGitApi<vscode.Uri> }>('vscode.git'),
   folderOf: (path) => vscode.Uri.file(path),
+  pathOf: (folder) => folder.fsPath,
 };
