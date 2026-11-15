@@ -52,12 +52,32 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
   ];
 }
 
-export function registerRefreshCommand(deps: { instance: Pick<Instance, 'refresh'> }): vscode.Disposable {
-  return registerWritingCommand('modbench.instance.refresh', async (called?: unknown) =>
-    runWritingGesture('modbench.instance.refresh', TOOLBOX_VIEW, deps.instance, (_progress, written) => {
+interface RefreshGestureDeps {
+  instance: Pick<Instance, 'refresh'>;
+  /** Whether mEdit's last check found another window holding the record index. */
+  heldElsewhere: () => boolean;
+  reporterFor: (tag: string) => Reporter;
+  /** Names this instance in toolbox.md's Reporting story 1. Modbench cannot name the other
+   *  window that holds the record index, only the one refused here. */
+  instanceRoot: string;
+}
+
+export function registerRefreshCommand(deps: RefreshGestureDeps): vscode.Disposable {
+  const reporter = deps.reporterFor('refresh');
+  const message = 'This instance is open in another Modbench window. Close it, then refresh.';
+  return registerWritingCommand('modbench.instance.refresh', async (called?: unknown) => {
+    await runWritingGesture('modbench.instance.refresh', TOOLBOX_VIEW, deps.instance, (_progress, written) => {
       written.leaveUnnamed();
-      return Promise.resolve(called instanceof AgentCall ? answeredToAgent({ applied: true }) : undefined);
-    }));
+      return Promise.resolve();
+    });
+    const fromAgent = called instanceof AgentCall;
+    if (deps.heldElsewhere()) {
+      if (fromAgent) return { applied: false, refusal: message, detail: deps.instanceRoot };
+      reporter.report('error', message, deps.instanceRoot);
+      return undefined;
+    }
+    return fromAgent ? answeredToAgent({ applied: true }) : undefined;
+  });
 }
 
 interface RebuildGestureDeps {

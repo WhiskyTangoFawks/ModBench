@@ -300,7 +300,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
       [MODS_KEY_ARGS.view, mods.nameFilter], [PLUGINS_KEY_ARGS.view, plugins.nameFilter], [DOWNLOADS_KEY_ARGS.view, downloads.nameFilter],
     ]),
   ));
-  own(registerRefreshCommand({ instance }));
+  own(registerRefreshCommand({ instance, heldElsewhere: () => client.loadOrderStatus?.refusal?.kind === 'heldElsewhere', reporterFor, instanceRoot }));
   own(registerRebuildRecordIndexCommand({
     commands, nextRefill: plugins.nextRefill, instance, reporterFor, instanceRoot,
   }));

@@ -178,25 +178,50 @@ describe('Switch profile, called by an agent', () => {
 });
 
 describe('Refresh', () => {
-  const registerRefresh = () => {
+  const registerRefresh = (heldElsewhere = false) => {
     const checks: unknown[] = [];
+    const { reporter, reporterFor } = tagRecordingReporterFor();
     registerRefreshCommand({
       instance: { refresh: (wrote) => { checks.push(wrote); progressSteps.push('Instance loader: check the disk'); return Promise.resolve(undefined); } },
+      heldElsewhere: () => heldElsewhere,
+      reporterFor,
+      instanceRoot: '/instance/FO4',
     });
-    return { checks, run: (...args: unknown[]) => present(handlers.get('modbench.instance.refresh'), 'the refresh handler')(...args) };
+    return { checks, reporter, run: (...args: unknown[]) => present(handlers.get('modbench.instance.refresh'), 'the refresh handler')(...args) };
   };
 
   it('checks the disk once, under the Toolbox\'s progress, and discards no record index', async () => {
-    const { checks, run } = registerRefresh();
+    const { checks, reporter, run } = registerRefresh();
 
     await run();
 
     expect(checks).toEqual([undefined]);
     expect(progressSteps).toEqual(['progress opens on modbench.toolbox', 'Instance loader: check the disk', 'progress closes']);
+    expect(reporter.reports).toEqual([]);
   });
 
   it('answers an agent call that it landed', async () => {
     expect(await registerRefresh().run(new AgentCall([], {}))).toEqual({ applied: true });
+  });
+
+  it('says, once the check has settled, that another window holds the index, naming the instance and what lets refresh run', async () => {
+    const { reporter, run } = registerRefresh(true);
+
+    await run();
+
+    expect(progressSteps.at(-1)).toBe('progress closes');
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'This instance is open in another Modbench window. Close it, then refresh.', detail: '/instance/FO4' },
+    ]);
+  });
+
+  it('answers an agent call the same refusal as its reason, and reports nowhere', async () => {
+    const { reporter, run } = registerRefresh(true);
+
+    expect(await run(new AgentCall([], {}))).toEqual({
+      applied: false, refusal: 'This instance is open in another Modbench window. Close it, then refresh.', detail: '/instance/FO4',
+    });
+    expect(reporter.reports).toEqual([]);
   });
 });
 
