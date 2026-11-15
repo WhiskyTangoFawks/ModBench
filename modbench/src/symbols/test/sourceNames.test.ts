@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { sourceNames } from '../sourceNames';
 import type { DocumentName, MEditClient } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { cancellableToken } from '../../client/test/fixtures';
 import { localFailure, type ReadFailed } from '../../wire/readFailed';
 
 const NPC = '000801:Mod.esp';
@@ -26,7 +27,16 @@ describe('the names at a place in plugin source, as mEdit answers them (target-a
 
     const answers = [await owner.recordAt(FILE, TEXT, 41), await owner.scriptAt(FILE, TEXT, 41)];
 
-    expect([answers, client.getPluginSourceNames.mock.calls[0]]).toEqual([[undefined, { start: 40, end: 42, name: 'Gu' }], [TEXT, FILE, 41]]);
+    expect([answers, client.getPluginSourceNames.mock.calls[0]]).toEqual([[undefined, { start: 40, end: 42, name: 'Gu' }], [TEXT, FILE, 41, undefined]]);
+  });
+
+  it('asks mEdit with the token of the request it answers', async () => {
+    const { owner, client } = names([named('Script', 40, 42, 'Gu')]);
+    const { token } = cancellableToken();
+
+    await owner.scriptAt(FILE, TEXT, 41, token);
+
+    expect(client.getPluginSourceNames.mock.calls).toEqual([[TEXT, FILE, 41, token]]);
   });
 
   it('tells the Output once of a place mEdit cannot answer for, however many kinds ask of it', async () => {

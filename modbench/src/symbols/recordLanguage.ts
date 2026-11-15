@@ -53,14 +53,14 @@ export function recordLanguage({ client, names, reporter, open }: RecordLanguage
   };
   const referencedBy = recordReferencedBy({ client, reporter, anchorOf });
   return {
-    async nameAt(document, offset) {
-      const found = await names.recordAt(document.uri.fsPath, heldText(document), offset);
+    async nameAt(document, offset, token) {
+      const found = await names.recordAt(document.uri.fsPath, heldText(document), offset, token);
       return found && { start: found.start, end: found.end, name: found.formKey, symbol: { kind: 'record', formKey: found.formKey } };
     },
     definitionOf,
-    async referencesTo({ formKey }): Promise<References> {
+    async referencesTo({ formKey }, token): Promise<References> {
       try {
-        const { locations, leftOut } = await references(formKey);
+        const { locations, leftOut } = await references(formKey, token);
         return { locations, unread: leftOut };
       } catch (error) {
         return { refused: `mEdit cannot list what references ${formKey}: ${errorMessage(error)}` };
@@ -68,7 +68,7 @@ export function recordLanguage({ client, names, reporter, open }: RecordLanguage
     },
     referencedBy,
     /** What symbols.md, The symbols, says a record's hover shows; none where no active plugin holds it. */
-    tooltipOf: async ({ formKey }) => await hoverOf({ client, reporter }, formKey) ?? [],
+    tooltipOf: async ({ formKey }, token) => await hoverOf({ client, reporter }, formKey, token) ?? [],
     /** The records of the types a reference field allows whose EditorID or FormKey holds the text typed so far, each
      *  once, found as Go to Symbol in Workspace finds them; nothing before anything is typed. */
     async completionsAt(document, offset, search) {

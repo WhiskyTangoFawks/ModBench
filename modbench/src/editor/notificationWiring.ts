@@ -2,12 +2,14 @@ import type { MEditClient } from '../client';
 import type { RecordTab } from './recordTab';
 import { isReadFailed } from '../wire/readFailed';
 
-// A plugin re-derived whole is announced with no keys: a tab waiting on a report reads once mEdit holds its record.
+// A plugin named with no keys is every record of it. A tab waiting on a report reads once mEdit holds its record.
 export function subscribeRecordTabsToNotifications(
   client: Pick<MEditClient, 'onDidChange' | 'getRecordOwners'>,
   tabs: Iterable<RecordTab>,
 ): () => void {
   const subscription = client.onDidChange((change) => {
+    if (change === undefined) for (const tab of tabs) tab.askWhichRecordAgain();
+    if (change === undefined || change.some(({ keys }) => keys === undefined)) for (const tab of tabs) tab.refresh();
     for (const { keys } of change ?? []) if (keys) for (const tab of tabs) tab.reported(keys);
     if (change !== undefined && change.every(({ keys }) => keys !== undefined)) return;
     for (const tab of tabs) {
@@ -20,9 +22,4 @@ export function subscribeRecordTabsToNotifications(
     }
   });
   return () => { subscription.dispose(); };
-}
-
-/** A reconcile settled: every record tab reads its comparison again. */
-export function announceConflictsComputed(tabs: Iterable<RecordTab>): void {
-  for (const tab of tabs) tab.refresh();
 }

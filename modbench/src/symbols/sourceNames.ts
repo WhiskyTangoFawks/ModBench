@@ -1,4 +1,5 @@
 import type { DocumentName, MEditClient } from '../client';
+import type { ReadCancellation } from '../client/MEditClient';
 import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import type { Reporter } from '../ports/reporter';
 import { sameName, type PluginName, type TextSpan } from '../symbolNames/symbolNames';
@@ -42,8 +43,8 @@ export function sourceNames({ names, paths, sourceFiles, reporter }: SourceNames
   let told: string | undefined;
 
   // Every kind asks of one place in turn, so a place mEdit cannot answer for is told once.
-  const namesAt = async (file: string, text: string, offset: number): Promise<DocumentName[]> => {
-    const answer = await names.getPluginSourceNames(text, file, offset);
+  const namesAt = async (file: string, text: string, offset: number, token?: ReadCancellation): Promise<DocumentName[]> => {
+    const answer = await names.getPluginSourceNames(text, file, offset, token);
     if (!isReadFailed(answer)) return answer;
     const place = JSON.stringify([file, offset, text, failureReason(answer)]);
     if (told !== place) reporter.shownOnSurface('error', 'Cannot tell what plugin source names here.', failureReason(answer));
@@ -53,20 +54,20 @@ export function sourceNames({ names, paths, sourceFiles, reporter }: SourceNames
 
   const namesIn = async (text: string): Promise<DocumentName[]> => answerOf(await names.getPluginSourceNames(text));
 
-  const nameAt = async (file: string, text: string, offset: number, kind: DocumentName['kind']): Promise<DocumentName | undefined> =>
-    (await namesAt(file, text, offset)).find((name) => name.kind === kind);
+  const nameAt = async (file: string, text: string, offset: number, kind: DocumentName['kind'], token?: ReadCancellation): Promise<DocumentName | undefined> =>
+    (await namesAt(file, text, offset, token)).find((name) => name.kind === kind);
 
   return {
     ...copyDocumentNames(namesIn),
     /** The record whose FormKey is at `offset`, spanning the FormKey with its quotes. */
-    async recordAt(file: string, text: string, offset: number): Promise<(TextSpan & { formKey: string }) | undefined> {
-      const found = await nameAt(file, text, offset, 'Record');
+    async recordAt(file: string, text: string, offset: number, token?: ReadCancellation): Promise<(TextSpan & { formKey: string }) | undefined> {
+      const found = await nameAt(file, text, offset, 'Record', token);
       return found && { ...spanOf(found), formKey: found.value };
     },
 
     /** The Papyrus script a record attaches whose name is at `offset`. */
-    async scriptAt(file: string, text: string, offset: number): Promise<(TextSpan & { name: string }) | undefined> {
-      const found = await nameAt(file, text, offset, 'Script');
+    async scriptAt(file: string, text: string, offset: number, token?: ReadCancellation): Promise<(TextSpan & { name: string }) | undefined> {
+      const found = await nameAt(file, text, offset, 'Script', token);
       return found && { ...spanOf(found), name: found.value };
     },
 
@@ -80,8 +81,8 @@ export function sourceNames({ names, paths, sourceFiles, reporter }: SourceNames
     },
 
     /** The file a record's path at `offset` names; undefined at an empty path, which names none. */
-    async fileAt(file: string, text: string, offset: number): Promise<NamedFile | undefined> {
-      const found = await nameAt(file, text, offset, 'File');
+    async fileAt(file: string, text: string, offset: number, token?: ReadCancellation): Promise<NamedFile | undefined> {
+      const found = await nameAt(file, text, offset, 'File', token);
       if (found === undefined || found.value === '') return undefined;
       const given = { ...spanOf(found), given: found.value };
       return found.dataPath ? { ...given, path: found.dataPath } : { ...given, refused: found.refusal ?? `${found.value} names no file.` };

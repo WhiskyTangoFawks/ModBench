@@ -4,6 +4,7 @@ import type { CompareResult } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { comparisonOf, type Copy } from '../../test/comparison';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { cancellableToken } from '../../client/test/fixtures';
 
 const FORM_KEY = '000801:Mod.esp';
 
@@ -34,6 +35,15 @@ describe('a record\'s hover (symbols.md, The symbols)', () => {
   it('shows the FormKey alone when the winner has no EditorID', async () => {
     const answer = comparison([{ plugin: 'Mod.esp', isWinner: true, editorId: null }]);
     expect(await hoverOf({ client: askingFor(answer), reporter }, FORM_KEY)).toEqual([`\`${FORM_KEY}\``, 'Weapon', 'Winner: Mod.esp']);
+  });
+
+  it('asks mEdit with the token of the hover it answers', async () => {
+    const client = askingFor(comparison());
+    const { token } = cancellableToken();
+
+    await hoverOf({ client, reporter }, FORM_KEY, token);
+
+    expect(client.calls).toEqual([{ method: 'getComparison', args: [FORM_KEY, undefined, token] }]);
   });
 
   it('shows nothing for a FormKey no active plugin holds', async () => {
