@@ -20,7 +20,9 @@ export const selectedProfileAt = (text: string) => iniNameAt(text, GENERAL_SECTI
 
 export const readGameName = (text: string): string => readRequired(text, 'gameName');
 
-export const readGamePath = (text: string): string => readRequired(text, 'gamePath');
+export const GAME_PATH_KEY = 'gamePath';
+
+export const readGamePath = (text: string): string => readRequired(text, GAME_PATH_KEY);
 
 /** `[Settings] download_directory`, undefined when unset or empty — MO2's own default then
  *  applies either way: its own UI removes the key rather than write an empty value. */

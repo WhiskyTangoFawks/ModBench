@@ -52,18 +52,20 @@ const alsoKeyOf = (path: string | undefined): string | undefined => (path === un
 
 /** A reader of what no stamp of `path` covers, read once inside `readTrustingKept` or `trustingKept` until a change names
  *  `path`, or the path `alsoNamedBy` gives for the answer, or the disk is checked, and each time outside them. */
-export function keptUntilNamed<T>(read: (path: string) => Promise<T>, alsoNamedBy?: (value: T) => string | undefined): (path: string) => Promise<T> {
+export function keptUntilNamed<T, Given = void>(
+  read: (path: string, given: Given) => Promise<T>, alsoNamedBy?: (value: T) => string | undefined,
+): (path: string, given: Given) => Promise<T> {
   const kept = new Map<string, { readonly value: T; readonly also: string | undefined }>();
   everyKept.push((checked) => {
     for (const [key, { also }] of [...kept]) if (checked(key) || (also !== undefined && checked(also))) kept.delete(key);
     return Promise.resolve([]);
   });
-  return async (path) => {
+  return async (path, given) => {
     const key = pathKey(path);
-    if (trusting.getStore() !== true) return read(path);
+    if (trusting.getStore() !== true) return read(path, given);
     const held = kept.get(key);
     if (held !== undefined) return held.value;
-    const value = await read(path);
+    const value = await read(path, given);
     kept.set(key, { value, also: alsoKeyOf(alsoNamedBy?.(value)) });
     return value;
   };
