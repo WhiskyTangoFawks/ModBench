@@ -5,7 +5,7 @@ import { isReadFailed, type ReadFailed } from '../wire/readFailed';
 
 interface Answered { plugin: PluginAddress; failure?: string | null; unread: string[] }
 
-interface Reads<Paths extends Answered, Problems, Status> {
+interface Reads<Paths extends Answered, Problems> {
   getPluginFilePaths(plugin?: PluginAddress): Promise<Paths[] | ReadFailed>;
   getPluginProblems(plugin?: PluginAddress): Promise<Problems[] | ReadFailed>;
   onDidChange(listener: (change: readonly { readonly plugin: PluginAddress }[] | undefined) => void): { dispose(): void };
@@ -16,9 +16,9 @@ export function askingOnChange(whole: () => void, plugin: (changed: { plugin: Pl
   return (event) => { if (event.plugin === undefined) whole(); else plugin({ plugin: event.plugin }); };
 }
 
-export interface ProblemsAsker<Paths extends Answered, Problems, Status> {
-  getPluginFilePaths: Reads<Paths, Problems, Status>['getPluginFilePaths'];
-  getPluginProblems: Reads<Paths, Problems, Status>['getPluginProblems'];
+export interface ProblemsAsker<Paths extends Answered, Problems> {
+  getPluginFilePaths: Reads<Paths, Problems>['getPluginFilePaths'];
+  getPluginProblems: Reads<Paths, Problems>['getPluginProblems'];
   /** Told after the asker dropped what it held of the plugin, or of every plugin when no plugin is named. */
   onPluginChanged(listener: (event: { plugin?: PluginAddress }) => void): () => void;
   /** Told to ask again of a read that failed: after a delay, and, for the file paths the asker holds, at once when another ask of them is answered. */
@@ -30,7 +30,7 @@ export interface ProblemsAsker<Paths extends Answered, Problems, Status> {
 
 const RETRY_AFTER_MS = 15_000;
 
-export function problemsAsker<Paths extends Answered, Problems, Status>(client: Reads<Paths, Problems, Status>, retryAfterMs = RETRY_AFTER_MS): ProblemsAsker<Paths, Problems, Status> {
+export function problemsAsker<Paths extends Answered, Problems>(client: Reads<Paths, Problems>, retryAfterMs = RETRY_AFTER_MS): ProblemsAsker<Paths, Problems> {
   const inTurn = bounded(REQUESTS_AT_ONCE);
   let held = new Map<string, Promise<Paths[] | ReadFailed>>();
   const retries = askedAgain(retryAfterMs);

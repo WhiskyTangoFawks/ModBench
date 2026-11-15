@@ -33,7 +33,7 @@ interface SymbolsDeps {
   instance: Pick<Instance, 'value' | 'subscribe'> | undefined;
   reporter: Pick<Reporter, 'shownOnSurface' | 'report'>;
   client: Pick<MEditClient, 'getRecordOfFile'> & RecordClient & ScriptClient & FileClient & RecordReferencedByDeps['client'];
-  asker: Pick<ProblemsAsker<PluginFilePaths, unknown, unknown>, 'getPluginFilePaths' | 'inTurn' | 'forget' | 'onPluginChanged'>;
+  asker: Pick<ProblemsAsker<PluginFilePaths, unknown>, 'getPluginFilePaths' | 'inTurn' | 'forget' | 'onPluginChanged'>;
   /** What mEdit's record index names in plugin source. */
   names: Pick<MEditClient, 'getPluginSourceNames'>;
   focusedRecord: () => string | undefined;

@@ -115,7 +115,7 @@ describe('each language feature asks the symbol under the place, of whatever kin
     const definitionOf = vi.fn((_symbol: unknown, _token?: unknown) => Promise.resolve({ at: ELSEWHERE }));
     const referencesTo = vi.fn((_symbol: unknown, _token?: unknown) => Promise.resolve(ANSWERED));
     const tooltipOf = vi.fn((_symbol: unknown, _token?: unknown) => Promise.resolve(['tip']));
-    const asked = features(fakeKinds({ file: fakeKind<never>({ nameAt, definitionOf, referencesTo, tooltipOf } as never) }));
+    const asked = features(fakeKinds({ file: fakeKind<typeof NAMED.symbol>({ nameAt, definitionOf, referencesTo, tooltipOf }) }));
 
     await asked.hover(token);
     await asked.definition(token);
