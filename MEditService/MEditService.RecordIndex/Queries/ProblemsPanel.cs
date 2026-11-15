@@ -102,7 +102,7 @@ internal static class ProblemsPanel
         if (FailureOf(laterReadFailure, rows, headerPlacementFailure) is var (failure, kind) && failure is not null)
             return new(plugin, stoppedAt, failure, kind);
         var problems = new PluginProblems(plugin, [.. stoppedAt, .. rows.Select(row => Problem(row, release, unreadable))]);
-        return heldFailure is null ? problems : problems with { Failure = ReadFailures.LastGoodRead(heldFailure), FailureKind = ProblemsFailureKind.LaterRead };
+        return heldFailure is null ? problems : problems with { Failure = heldFailure, FailureKind = ProblemsFailureKind.LaterRead };
     }
 
     private sealed record HeaderProblems(IReadOnlyList<SourceProblem> Problems, string? PlacementFailure);

@@ -52,10 +52,10 @@ internal static class FilePathsPanel
             paths.AddRange(files.Select(path => new NamedFilePath(copy.FormKey, path.FieldPath, file, path.DataPath)));
             scripts.AddRange(attached.Select(script => new NamedScript(copy.FormKey, script.FieldPath, file, script.Name)));
         }
-        // The rows stand, and the files that stopped the read stay named beside the line (common.md, States, story 6).
+        // The rows stand, and the files that stopped the read stay named beside the reason (common.md, States, story 6).
         return heldFailure is null
             ? new(plugin.Key, paths, scripts, unread)
-            : new(plugin.Key, paths, scripts, unread, ReadFailures.LastGoodRead(heldFailure), ProblemsFailureKind.LaterRead);
+            : new(plugin.Key, paths, scripts, unread, heldFailure, ProblemsFailureKind.LaterRead);
     }
 
     // A copy that cannot be read is told as unread and leaves the copies beside it answered.

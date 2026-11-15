@@ -14,7 +14,5 @@ internal static class ReadFailures
         index.Status.Failures.DistinctBy(failure => new PluginAddress(failure.Name, failure.Origin), PluginAddress.Comparer)
             .ToDictionary(failure => new PluginAddress(failure.Name, failure.Origin), failure => failure.Reason, PluginAddress.Comparer);
 
-    public static string LastGoodRead(string reason) => $"Showing the last good read: {reason}";
-
     public static string LaterRead(IEnumerable<SourceFileFailure> files) => string.Join(" ", files.Select(file => file.Message));
 }

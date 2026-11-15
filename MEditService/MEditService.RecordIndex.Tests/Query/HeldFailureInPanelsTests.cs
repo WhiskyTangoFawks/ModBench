@@ -72,8 +72,8 @@ public sealed class HeldFailureInPanelsTests : IDisposable
         var problems = Assert.Single(_index.Queries.GetProblems().Value());
 
         Assert.Equal((ProblemsFailureKind.LaterRead, ProblemsFailureKind.LaterRead), (paths.FailureKind, problems.FailureKind));
-        Assert.Equal($"Showing the last good read: {reason}", paths.Failure);
-        Assert.Equal($"Showing the last good read: {reason}", problems.Failure);
+        Assert.Equal(reason, paths.Failure);
+        Assert.Equal(reason, problems.Failure);
         Assert.Single(paths.Paths);
         Assert.NotEmpty(problems.Problems);
         Assert.Equal(namingAFile, paths.Unread.Any(file => file.Contains(StoppedAtFile, StringComparison.Ordinal)));

@@ -194,7 +194,7 @@ public sealed class ProblemsPanelTests : IDisposable
         Assert.Equal(
             (Absent, Relative(Broken, SourceFileHolding(Broken, "Referrer"))),
             (answer.Problems[^1].TargetFormKey, answer.Problems[^1].SourceRelativePath));
-        Assert.StartsWith("Showing the last good read: ", answer.Failure, StringComparison.Ordinal);
+        Assert.Contains("Could not read this plugin", answer.Failure, StringComparison.Ordinal);
     }
 
     [Fact]
