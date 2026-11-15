@@ -146,15 +146,12 @@ export function sourceModLinesFollowed(instanceRoot: string, problems: FileProbl
 }
 
 // A hook outside the repository's own git directory would run in every repository that reads it.
-async function hooksFolder(instanceRoot: string): Promise<string> {
+async function hooksFolder({ instanceRoot, repository: reads }: Mo2Context): Promise<string> {
   const repository = await isRepository(instanceRoot);
-  const gitDir = repository ? resolve(instanceRoot, (await git(instanceRoot, 'rev-parse', '--git-common-dir')).trim()) : join(instanceRoot, '.git');
-  const configuredHooks = (await git(instanceRoot, 'config', '--type=path', '--get', 'core.hooksPath').catch((err: unknown) => {
-    if (typeof err === 'object' && err !== null && 'code' in err && err.code === 1) return '';
-    throw err;
-  })).trim();
+  const gitDir = repository ? resolve(instanceRoot, await reads.git('rev-parse', '--git-common-dir')) : join(instanceRoot, '.git');
+  const configuredHooks = await reads.git('config', '--type=path', '--get', 'core.hooksPath');
   const hooks = configuredHooks !== '' ? resolve(instanceRoot, configuredHooks)
-    : repository ? resolve(instanceRoot, (await git(instanceRoot, 'rev-parse', '--git-path', 'hooks')).trim()) : join(gitDir, 'hooks');
+    : repository ? resolve(instanceRoot, await reads.git('rev-parse', '--git-path', 'hooks')) : join(gitDir, 'hooks');
   if (relative(gitDir, hooks).startsWith('..') || isAbsolute(relative(gitDir, hooks))) {
     throw new Error(`core.hooksPath points to ${hooks}, outside ${gitDir}, where a hook would run in every repository that reads it; Modbench writes no hook there.`);
   }
@@ -202,12 +199,13 @@ async function submoduleIn(instanceRoot: string, name: string): Promise<Submodul
 const isOwnHook = (hook: string): Promise<boolean> => readFile(hook, 'utf8').then((text) => text === PRE_PUSH_HOOK, () => false);
 
 /** Whether the repository holds Modbench's pre-push hook, in the place `refuseUnpublishedPins` writes it. */
-export const pushRefusalWritten = (instanceRoot: string): Promise<boolean> =>
-  hooksFolder(instanceRoot).then((hooks) => isOwnHook(join(hooks, PRE_PUSH_HOOK_NAME)), () => false);
+export const pushRefusalWritten = (context: Mo2Context): Promise<boolean> =>
+  hooksFolder(context).then((hooks) => isOwnHook(join(hooks, PRE_PUSH_HOOK_NAME)), () => false);
 
 const keptSubmodules = keptByIndex<Awaited<ReturnType<typeof submoduleIn>>>();
 
-export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
+export function mo2Submodules(context: Mo2Context): Mo2Submodules {
+  const { instanceRoot } = context;
   return {
     async writeSubmodules(acted, sourceMods) {
       if (!(await isRepository(instanceRoot))) return { notes: [], other: [], written: [] };
@@ -337,12 +335,12 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
     },
 
     async checkPushRefusalFree() {
-      const hook = join(await hooksFolder(instanceRoot), PRE_PUSH_HOOK_NAME);
+      const hook = join(await hooksFolder(context), PRE_PUSH_HOOK_NAME);
       if (await exists(hook)) throw hookExists(hook);
     },
 
     async refuseUnpublishedPins() {
-      const hooks = await hooksFolder(instanceRoot);
+      const hooks = await hooksFolder(context);
       await mkdir(hooks, { recursive: true });
       const hook = join(hooks, PRE_PUSH_HOOK_NAME);
       let written = true;

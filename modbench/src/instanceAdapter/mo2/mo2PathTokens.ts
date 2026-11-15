@@ -16,6 +16,7 @@ import {
 import { SETTINGS_FILE_NAME, readDownloadDirectory } from './codecs/modOrganizerIni';
 import { defaultDownloadsDir, MOD_META_FILES_PATTERN, PROFILE_INIS_PATTERN, SETTINGS_FILE_PATTERN, settingsFile } from './layout';
 import type { ConfigurationFile } from '../publisher';
+import type { RepositoryReads } from '../repositoryReads';
 import type { Mo2Context } from './mo2Context';
 
 type Mo2PathTokens = Pick<InstanceAdapter, 'writePathTokens'>;
@@ -171,17 +172,17 @@ async function statsForgotten(instanceRoot: string, files: readonly string[]): P
   if (staged.length > 0) await gitFed(instanceRoot, staged.map((line) => `${line}\0`).join(''), 'update-index', '-z', '--index-info');
 }
 
-const filterConfigured = (instanceRoot: string, driver: string): Promise<boolean> =>
-  git(instanceRoot, 'config', '--get', `filter.${driver}.clean`).then((value) => value.trim() !== '', () => false);
+const filterConfigured = (reads: RepositoryReads, driver: string): Promise<boolean> =>
+  reads.localConfig(`filter.${driver}.clean`).then((value) => value !== '', () => false);
 
-const filesNotWritten = async (instanceRoot: string, covered: readonly CoveredFile[]): Promise<CoveredFile[]> => {
-  const written = await Promise.all(covered.map(({ driver }) => filterConfigured(instanceRoot, driver)));
+const filesNotWritten = async (reads: RepositoryReads, covered: readonly CoveredFile[]): Promise<CoveredFile[]> => {
+  const written = await Promise.all(covered.map(({ driver }) => filterConfigured(reads, driver)));
   return covered.filter((_file, at) => !written[at]);
 };
 
 // Every worktree of the repository shares its config and attributes, so the programs sit in the common git directory.
-const programDirectory = async (instanceRoot: string): Promise<string> =>
-  join(resolve(instanceRoot, (await git(instanceRoot, 'rev-parse', '--git-common-dir')).trim()), 'modbench');
+const programDirectory = async ({ instanceRoot, repository }: Mo2Context): Promise<string> =>
+  join(resolve(instanceRoot, await repository.git('rev-parse', '--git-common-dir')), 'modbench');
 
 type FilterFolders = Omit<TokenFolders, 'instance'>;
 const NO_FOLDERS: FilterFolders = { game: undefined, downloads: undefined, committedOutsideInstance: [] };
@@ -252,10 +253,10 @@ async function filterHeld(instanceRoot: string, covered: readonly CoveredFile[],
 }
 
 /** Whether the repository's local config holds the path filter of each file it covers, `publisherFile` among them, and the programs it names are there. */
-export async function pathTokensWritten(instanceRoot: string, publisherFile: ConfigurationFile | undefined): Promise<boolean> {
+export async function pathTokensWritten(context: Mo2Context, publisherFile: ConfigurationFile | undefined): Promise<boolean> {
   const covered = coveredFiles(publisherFile);
-  if ((await filesNotWritten(instanceRoot, covered)).length > 0) return false;
-  const { programFiles } = filterOf(instanceRoot, covered, await programDirectory(instanceRoot), NO_FOLDERS, accountTokens(''), NOTHING_OF_MACHINE);
+  if ((await filesNotWritten(context.repository, covered)).length > 0) return false;
+  const { programFiles } = filterOf(context.instanceRoot, covered, await programDirectory(context), NO_FOLDERS, accountTokens(''), NOTHING_OF_MACHINE);
   return (await Promise.all(Object.keys(programFiles).map(exists))).every(Boolean);
 }
 
@@ -292,9 +293,9 @@ async function machineOf(instanceRoot: string, covered: readonly CoveredFile[]):
 
 /** Shows each file the path filter covers that the index or HEAD holds unfiltered as a problem on it. A failed listing
  *  leaves what it showed, since git's failure shows on the statuses. */
-export function unfilteredShown(instanceRoot: string, publisherFile: ConfigurationFile | undefined, problems: FileProblems): () => Promise<void> {
+export function unfilteredShown({ instanceRoot, repository }: Mo2Context, publisherFile: ConfigurationFile | undefined, problems: FileProblems): () => Promise<void> {
   const drivers = coveredFiles(publisherFile).map(({ driver }) => driver);
-  const unfiltered = unfilteredFiles();
+  const unfiltered = unfilteredFiles(repository.head);
   let shown: ReadonlyMap<string, string> = new Map();
   return async () => {
     const now = await isRepository(instanceRoot) ? await unfiltered(instanceRoot, drivers).catch(() => shown) : new Map<string, string>();
@@ -326,8 +327,8 @@ export function pathTokensFollowed(context: Mo2Context, gameFolder: () => Promis
     const machine = await machineOf(instanceRoot, covered);
     const values = JSON.stringify([...machine]);
     if (values === followed) return;
-    if (await isRepository(instanceRoot) && await pathTokensWritten(instanceRoot, publisherFile)) {
-      await machineProgramsPut(context, gameFolder, covered, await programDirectory(instanceRoot), accountTokens(await get(settingsFile(instanceRoot), '')), machine);
+    if (await isRepository(instanceRoot) && await pathTokensWritten(context, publisherFile)) {
+      await machineProgramsPut(context, gameFolder, covered, await programDirectory(context),accountTokens(await get(settingsFile(instanceRoot), '')), machine);
     }
     followed = values;
   });
@@ -341,7 +342,7 @@ export function mo2PathTokens(context: Mo2Context, gameFolder: () => Promise<Gam
     const files = (await filesGitHolds(instanceRoot, covered)).flatMap(({ file, covered: isCovered }) => (isCovered ? [file] : []));
     const machine = await machineOf(instanceRoot, covered);
     const accounts = accountTokens(await get(settingsFile(instanceRoot), ''));
-    const directory = await programDirectory(instanceRoot);
+    const directory = await programDirectory(context);
     const held = await filterHeld(instanceRoot, covered, directory);
     takeBack.push(held.restore);
     await programsPut(instanceRoot, covered, directory, NO_FOLDERS, accounts, machine);

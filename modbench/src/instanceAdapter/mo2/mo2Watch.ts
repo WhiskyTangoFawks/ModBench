@@ -1,5 +1,5 @@
-// MO2's watch: the instance's files as deep as they change, the downloads folder and the game folder's files Mod
-// Management reads, armed through VS Code's file watcher while anyone listens, and the game-folder setting.
+// MO2's watch, armed while anyone listens: VS Code's file watcher on the instance, the downloads folder and the game
+// folder's files Mod Management reads; the game-folder setting; VS Code's git.
 
 import { heldFolderWatchFor, type HeldFolderWatch } from '../heldFolders';
 import { watchFiles } from '../watchFiles';
@@ -32,7 +32,9 @@ export interface Mo2Watch {
   unwatchedFolders(): UnwatchedFolder[];
 }
 
-export function mo2Watch(instanceRoot: string, gameFolderChanged: (listener: () => void) => Subscription): Mo2Watch {
+export function mo2Watch(
+  instanceRoot: string, gameFolderChanged: (listener: () => void) => Subscription, repositoryChanged: (listener: (path: string) => void) => Subscription,
+): Mo2Watch {
   const listeners = new Set<ChangeListener>();
   const followed = new Map<FollowedFolder, Followed>();
   let fixed: Subscription[] = [];
@@ -63,7 +65,7 @@ export function mo2Watch(instanceRoot: string, gameFolderChanged: (listener: () 
 
   const arm = (): void => {
     fixed = instanceWatches(instanceRoot).map(({ base, pattern }) => watch(base, pattern));
-    fixed.push(gameFolderChanged(checkDue));
+    fixed.push(gameFolderChanged(checkDue), repositoryChanged(changed));
     for (const [what, folders] of followed) followed.set(what, rearmed(folders, (base) => watch(base, folders.glob)));
   };
   const disarm = (): void => {

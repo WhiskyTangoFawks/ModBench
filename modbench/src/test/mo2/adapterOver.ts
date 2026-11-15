@@ -11,6 +11,9 @@ import { adapterForInstance } from '../../instanceAdapter/openInstance';
 import { mo2InstanceAdapter } from '../../instanceAdapter/mo2/mo2Instance';
 import type { ConfigurationFile, ManagerAdapter } from '../../instanceAdapter/publisher';
 import { mo2Watch } from '../../instanceAdapter/mo2/mo2Watch';
+import { repositoryReads } from '../../instanceAdapter/repositoryReads';
+import type { HostGit } from '../../ports/repository';
+import { hostWithoutGit } from '../hostGitDouble';
 import { myGamesResolver } from '../../instanceAdapter/gameFolder/myGames';
 import type { ReadingSource } from '../../instanceAdapter/instanceReading';
 import { readingSource } from '../../instanceAdapter/mo2/mo2Reads';
@@ -37,14 +40,18 @@ export interface AdapterAnswers {
   detectors?: GameDetectors;
   mo2Running?: () => Promise<boolean>;
   fileProblems?: FileProblems;
+  /** VS Code's git; none unless a test fixes one. */
+  hostGit?: HostGit<string>;
 }
 
 /** MO2's context over `root`, detecting no game install, with the answers a test fixes in place. */
 export function contextOver(root: string, answers: AdapterAnswers = {}): Mo2Context {
   const {
     gameFolder, downloadsFolder, gameFolderSettingValue, gameFolderSettingChanged, detectors = NO_DETECTORS, mo2Running = () => Promise.resolve(false),
+    hostGit = hostWithoutGit,
   } = answers;
   const setting = fixedGameFolderSetting(gameFolderSettingValue, gameFolderSettingChanged);
+  const repository = repositoryReads(root, hostGit);
   return {
     instanceRoot: root,
     resolveGameFolder: gameFolder !== undefined
@@ -53,7 +60,8 @@ export function contextOver(root: string, answers: AdapterAnswers = {}): Mo2Cont
     resolveSteamInstall: steamInstallResolver(detectors),
     resolveDownloadsFolder: downloadsFolder !== undefined ? () => Promise.resolve(downloadsFolder) : downloadsDirectoryResolver(detectors),
     resolveMyGames: myGamesResolver(root, detectors),
-    watch: mo2Watch(root, setting.changed),
+    watch: mo2Watch(root, setting.changed, repository.changed),
+    repository,
     mo2Running,
   };
 }

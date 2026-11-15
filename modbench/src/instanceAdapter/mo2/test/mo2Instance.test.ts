@@ -55,6 +55,7 @@ import { setIniValue } from '../codecs/qSettingsIni';
 import { ownTempPrefix } from '../../../repositoriesLib/wholeWrites';
 import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
 import { runningProgram } from '../../../test/runningProgram';
+import { hostWithoutGit } from '../../../test/hostGitDouble';
 import { fileSystemClockMovedOn } from '../../../test/fileSystemClock';
 import { adapterOver, contextOver, managerOver, sourceOver } from '../../../test/mo2/adapterOver';
 import { INSTALLED_DEPOT, writeAppManifestOfDepot } from '../../../test/steamAppManifestFixture';
@@ -379,7 +380,7 @@ describe('the MO2 Instance adapter', () => {
 
       it('answers MO2 running while any process runs ModOrganizer.exe, whichever instance it has open', async () => {
         const onThisMachine = mo2InstanceAdapter({
-          instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(), installationFileReader: fakeInstallationFileReader([]), fileProblems: fileProblemsFake(), fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH,
+          instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(), hostGit: hostWithoutGit, installationFileReader: fakeInstallationFileReader([]), fileProblems: fileProblemsFake(), fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH,
         }, undefined);
         const mo2 = await runningProgram('ModOrganizer.exe');
         try {
