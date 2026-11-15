@@ -70,6 +70,8 @@ internal sealed class TreeStamps(TimeProvider time)
 {
     private readonly ConcurrentDictionary<string, StampGatedMemo<KnownDocument>> _known = new(StringComparer.Ordinal);
 
+    internal CommittedTexts Committed { get; } = new();
+
     private readonly ConcurrentDictionary<string, TreeListing> _listed = new(TreeListing.PathComparer);
 
     /// <summary>The tree at <paramref name="root"/> as it was last listed, kept as named files are read again; null when it

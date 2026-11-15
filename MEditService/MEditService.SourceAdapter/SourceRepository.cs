@@ -287,7 +287,7 @@ internal sealed class SourceRepository : ISourceRepository
 
     public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommitIn(PluginAddress plugin, IReadOnlyList<string> files) =>
         SourceFailure.Answer(() => LastCommitComparison.Of(
-            _sourceFolder, _release, _git, Locator, Spelled(plugin), [.. files.Select(file => Path.GetRelativePath(_sourceFolder, Path.GetFullPath(file)))]));
+            _sourceFolder, _release, _git, _stamps.Committed, Locator, Spelled(plugin), [.. files.Select(file => Path.GetRelativePath(_sourceFolder, Path.GetFullPath(file)))]));
 
     public Answer<PluginSourceFiles, SourceFailure> TreeOf(PluginAddress plugin) =>
         SourceFailure.Answer(() =>
@@ -331,7 +331,7 @@ internal sealed class SourceRepository : ISourceRepository
     /// child among them; a tree with no repository is all added. A failed read answers why, never
     /// reads as a deletion.</summary>
     public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommit(PluginAddress plugin) =>
-        SourceFailure.Answer(() => LastCommitComparison.Of(_sourceFolder, _release, _git, Locator, Spelled(plugin)));
+        SourceFailure.Answer(() => LastCommitComparison.Of(_sourceFolder, _release, _git, _stamps.Committed, Locator, Spelled(plugin)));
 
     public Answer<IReadOnlyList<string>, SourceFailure> WorkingTreeChangesOf(PluginAddress plugin) =>
         SourceFailure.Answer<IReadOnlyList<string>>(() => _git.WorkingTreeStatus(Spelled(plugin).Name) is { } status

@@ -287,6 +287,25 @@ internal abstract class SourceRepositoryGit
         return [head, Path.Combine(_gitDir, "index"), Path.Combine(commonDir, "packed-refs"), .. named is null ? [] : new[] { named }];
     }
 
+    /// <summary>The commit HEAD names, read off the ref store's files, not by running git; null when they do not say.</summary>
+    internal string? LastCommit()
+    {
+        const string RefPrefix = "ref: ";
+        var head = Path.Combine(_gitDir, "HEAD");
+        if (!File.Exists(head) || File.ReadLines(head).FirstOrDefault()?.Trim() is not { Length: > 0 } line) return null;
+        if (!line.StartsWith(RefPrefix, StringComparison.Ordinal)) return line;
+
+        var commonDir = CommonDirectoryOf(_gitDir);
+        var gitRef = line[RefPrefix.Length..].Trim();
+        var loose = Path.Combine(commonDir, gitRef);
+        if (File.Exists(loose)) return File.ReadLines(loose).FirstOrDefault()?.Trim() is { Length: > 0 } sha ? sha : null;
+
+        var packed = Path.Combine(commonDir, "packed-refs");
+        return File.Exists(packed)
+            ? File.ReadLines(packed).Where(entry => entry.EndsWith($" {gitRef}", StringComparison.Ordinal)).Select(entry => entry.Split(' ')[0]).FirstOrDefault()
+            : null;
+    }
+
     /// <summary>HEAD and the index of <see cref="FolderPaths"/> back at <paramref name="head"/>; with none, the branch is
     /// unborn again and the index holds none of them. A change staged outside them stays staged.</summary>
     internal void PutBack(string? head)
@@ -325,13 +344,12 @@ internal abstract class SourceRepositoryGit
     // Plugin and asset file names carry brackets and asterisks, which git otherwise reads as a glob.
     internal static string LiteralPathspec(string relativePath) => $":(literal){ToGitPath(relativePath)}";
 
-    /// <summary>One file's text at the last commit, or null. cat-file -p, not git show: for
-    /// a missing glob-shaped path, show exits 0 with empty output — a lying empty string.</summary>
+    /// <summary>One file's text at the last commit, which exists; null when it holds none, and git failing throws. cat-file -p, not git
+    /// show, which exits 0 with empty output for a missing glob-shaped path.</summary>
     internal string? ReadCommittedSourceText(string relativePath)
     {
-        if (!HoldsSourceMod(_sourceFolder)) return null;
-
-        return TryRun(out var stdout, "cat-file", "-p", $"HEAD:./{ToGitPath(relativePath)}") ? stdout : null;
+        var path = ToGitPath(relativePath);
+        return Run("ls-tree", "--name-only", "HEAD", "--", path).Length == 0 ? null : Run("cat-file", "-p", $"HEAD:./{path}");
     }
 
     /// <summary>Each path in the source folder under the plugin's tree that git status names, with its index-column code;
