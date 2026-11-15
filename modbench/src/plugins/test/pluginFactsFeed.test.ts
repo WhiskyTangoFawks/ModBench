@@ -622,7 +622,7 @@ describe('PluginFactsFeed', () => {
     expect(changes.mock.calls).toEqual([[[A]]]);
   });
 
-  it('names the plugin a later settle of the mod no longer holds changed, so its row is redrawn', () => {
+  it('names the plugin a later settle of the mod drops from its changed ones, so its row is redrawn', () => {
     const { client, changes } = feedOver();
     client.emit({ kind: 'external-change', plugin: '', origin: 'SomeMod', keys: [], sequence: 0, changedPlugins: [{ name: 'A.esp', bytesSha256: 'ab12' }] });
     changes.mockClear();

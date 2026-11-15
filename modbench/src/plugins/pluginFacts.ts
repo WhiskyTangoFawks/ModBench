@@ -189,9 +189,8 @@ export class PluginFacts {
     this.judgeSorting(activeOrder, loot);
   }
 
-  /** The sorting rules judged again over the order the last reconcile judged, because LOOT's rules changed. A no-op
-   *  before the first reconcile completes, as the order is not judged before then. The plugins
-   *  whose sorting statuses or offered moves changed come back. */
+  /** The sorting rules judged again over the order the last reconcile judged, because LOOT's rules changed, and
+   *  names the plugins whose statuses or offered moves changed. Nothing before the first reconcile. */
   rejudged(loot: LootInput): PluginAddress[] {
     if (this.judgedActiveOrder === undefined) return [];
     const before = this.judgements();
