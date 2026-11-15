@@ -219,6 +219,11 @@ internal sealed class HeldPlugins
         }
     }
 
+    internal PluginLoadFailure? FailureOf(PluginAddress key)
+    {
+        lock (_mutation) return _loadFailures.GetValueOrDefault(key);
+    }
+
     /// <summary>Held, and its last read failed: a plugin the open itself failed on is not held, and
     /// has nothing to read again.</summary>
     internal bool IsHeldWithAFailure(PluginAddress key)

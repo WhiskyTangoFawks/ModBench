@@ -221,7 +221,7 @@ public sealed class PluginFilePathsTests : IDisposable
         Assert.Equal([_holder.ToString()], answered.Paths.Select(path => path.FormKey));
         Assert.Equal(2, answered.Unread.Count);
         Assert.Contains(answered.Unread, file => file.Contains("Backup", StringComparison.Ordinal));
-        Assert.Null(answered.Failure);
+        Assert.StartsWith("Showing the last good read: ", answered.Failure, StringComparison.Ordinal);
     }
 
     [Fact]

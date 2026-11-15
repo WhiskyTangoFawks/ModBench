@@ -16,6 +16,7 @@ internal static class FilePathsPanel
     {
         var derivations = reads.GetDerivations();
         var stopped = index.SourceFileFailures.ToLookup(failure => failure.Plugin, PluginAddress.Comparer);
+        var held = ReadFailures.HeldReasons(index);
         return
         [
             .. snapshot.Plugins
@@ -28,7 +29,7 @@ internal static class FilePathsPanel
                     if (derivations[plugin.Key] == DerivedFrom.BinaryForUnreadableSource)
                         return Failed(plugin, whyUnreadable(plugin).Reason, ProblemsFailureKind.Placement);
                     return source.Over(plugin, snapshot.GameRelease) is { } repository
-                        ? PathsOf(plugin, reads.GetCopiesOf(plugin.Key), stopped[plugin.Key], repository, schemas)
+                        ? PathsOf(plugin, reads.GetCopiesOf(plugin.Key), stopped[plugin.Key], repository, schemas, held.GetValueOrDefault(plugin.Key))
                         : Failed(plugin, ReadFailures.NoModFolder(plugin.Name), ProblemsFailureKind.Placement);
                 }),
         ];
@@ -36,7 +37,7 @@ internal static class FilePathsPanel
 
     private static PluginFilePaths PathsOf(
         RegisteredPlugin plugin, IEnumerable<CopyHoldingText> copies, IEnumerable<SourceFileFailure> stoppedAt,
-        ISourceRepositoryReads repository, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        ISourceRepositoryReads repository, IReadOnlyDictionary<string, RecordTableSchema> schemas, string? heldFailure)
     {
         var paths = new List<NamedFilePath>();
         var scripts = new List<NamedScript>();
@@ -51,7 +52,10 @@ internal static class FilePathsPanel
             paths.AddRange(files.Select(path => new NamedFilePath(copy.FormKey, path.FieldPath, file, path.DataPath)));
             scripts.AddRange(attached.Select(script => new NamedScript(copy.FormKey, script.FieldPath, file, script.Name)));
         }
-        return new(plugin.Key, paths, scripts, unread);
+        // The rows stand, and the files that stopped the read stay named beside the line (common.md, States, story 6).
+        return heldFailure is null
+            ? new(plugin.Key, paths, scripts, unread)
+            : new(plugin.Key, paths, scripts, unread, ReadFailures.LastGoodRead(heldFailure), ProblemsFailureKind.LaterRead);
     }
 
     // A copy that cannot be read is told as unread and leaves the copies beside it answered.

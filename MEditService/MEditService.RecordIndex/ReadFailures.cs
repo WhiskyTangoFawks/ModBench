@@ -9,5 +9,12 @@ internal static class ReadFailures
 
     public static string NoModFolder(string pluginName) => $"{pluginName} is a compiled plugin but no mod folder provides it.";
 
+    /// <summary>Why each plugin held with a failure failed to read, the plugins whose rows are the last good read's.</summary>
+    public static IReadOnlyDictionary<PluginAddress, string> HeldReasons(Indexer index) =>
+        index.Status.Failures.DistinctBy(failure => new PluginAddress(failure.Name, failure.Origin), PluginAddress.Comparer)
+            .ToDictionary(failure => new PluginAddress(failure.Name, failure.Origin), failure => failure.Reason, PluginAddress.Comparer);
+
+    public static string LastGoodRead(string reason) => $"Showing the last good read: {reason}";
+
     public static string LaterRead(IEnumerable<SourceFileFailure> files) => string.Join(" ", files.Select(file => file.Message));
 }
