@@ -12,8 +12,6 @@ export type ArchiveRead = FileRead<readonly string[]> | { readonly kind: 'unansw
 
 const UNANSWERED: ArchiveRead = { kind: 'unanswered' };
 
-export type ArchiveReader = Pick<MEditClient, 'getArchiveContents'>;
-
 const stampKey = ({ size, modifiedNs }: FileStamp): string => `${size}/${modifiedNs}`;
 
 /** Each archive at the root of `files`, by the path it is read from. */
@@ -28,7 +26,7 @@ export class ArchiveContentsHeld {
   private held = new Map<string, { readonly stamp: string; readonly read: Extract<ArchiveRead, { readonly kind: 'read' }> }>();
   private unanswered = false;
 
-  constructor(private readonly reader: ArchiveReader) {}
+  constructor(private readonly reader: Pick<MEditClient, 'getArchiveContents'>) {}
 
   get anyUnanswered(): boolean {
     return this.unanswered;

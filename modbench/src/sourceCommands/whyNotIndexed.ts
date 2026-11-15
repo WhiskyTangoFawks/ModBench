@@ -46,7 +46,7 @@ export async function whyNotIndexed({ client, adapter, loadOrderSnapshot }: Deps
   };
 
   for (;;) {
-    const next = nextStatusOrRecheck(client, signal);
+    const next = nextChangeOrRecheck(client, signal);
     const now = unsent(await standings());
     if (now.every(({ kind }) => kind !== 'waiting') || signal?.aborted === true) {
       next.cancel();
@@ -64,7 +64,7 @@ function standingOf(plugin: PluginAddress, answer: Awaited<ReturnType<MEditClien
   return { kind: 'waiting' };
 }
 
-function nextStatusOrRecheck(client: Pick<MEditClient, 'onDidChange'>, signal: AbortSignal | undefined): { woken: Promise<void>; cancel: () => void } {
+function nextChangeOrRecheck(client: Pick<MEditClient, 'onDidChange'>, signal: AbortSignal | undefined): { woken: Promise<void>; cancel: () => void } {
   let cancel = (): void => undefined;
   const woken = new Promise<void>((resolve) => {
     const changes = client.onDidChange(() => { cancel(); });

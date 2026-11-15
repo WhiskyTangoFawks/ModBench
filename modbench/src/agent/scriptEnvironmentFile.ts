@@ -8,7 +8,7 @@ const VALUE = /^(?:(["'])(.*?)\1|(.*?))(\s+#.*)?\s*$/;
 /** Writes PYTHONPATH and MEDIT_PORT into the file `python.envFile` names, for the launchers that read it.
  *  Only a window whose mEdit holds the record index writes: a second window's mEdit would capture the first's notebooks. */
 export function reachMEditFromEnvFile(options: {
-  client: Pick<MEditClient, 'onPort' | 'onDidChange' | 'loadOrderStatus'>;
+  client: Pick<MEditClient, 'onPort' | 'onLoadOrderStatus' | 'loadOrderStatus'>;
   scriptsPath: string;
   /** Absent for a window with no instance. */
   envFile: Pick<InstanceAdapter['scriptEnvironmentFile'], 'read' | 'write'> | undefined;
@@ -33,8 +33,8 @@ export function reachMEditFromEnvFile(options: {
     });
   };
   const stopPort = client.onPort((now) => { port = now; write(); });
-  const changes = client.onDidChange((change) => { if (change === undefined) write(); });
-  return { dispose: () => { stopPort(); changes.dispose(); } };
+  const stopStatus = client.onLoadOrderStatus(write);
+  return { dispose: () => { stopPort(); stopStatus(); } };
 }
 
 function withOurLines(text: string, scriptsPath: string, port: number): string {

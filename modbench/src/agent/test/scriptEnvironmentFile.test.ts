@@ -62,6 +62,16 @@ describe('the file the Python tooling reads to reach mEdit', () => {
     expect(held).toBe(`PYTHONPATH=${SCRIPTS}\nMEDIT_PORT=41001\n`);
   });
 
+  it('writes the new port of a restarted mEdit at once, while its first reconcile is still running', async () => {
+    const { client } = await windowHolding(41000);
+    client.setStatus('stopped');
+    client.claimedPort(41001);
+    client.emit(loadOrderStatusEventFixture({ conflictsComputed: false }));
+    await settled();
+
+    expect(held).toBe(`PYTHONPATH=${SCRIPTS}\nMEDIT_PORT=41001\n`);
+  });
+
   it('writes nothing while another window holds the record index', async () => {
     const client = new InMemoryMEditClient();
     reach(client);

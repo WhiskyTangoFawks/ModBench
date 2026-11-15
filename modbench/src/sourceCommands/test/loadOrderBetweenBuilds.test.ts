@@ -48,27 +48,17 @@ describe('sourceCommands build, between mods', () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  it('builds the next mod once mEdit holds the plugins the built mod\'s folder gives the load order as they are on disk', async () => {
+  it.each([
+    ['a settled load order', () => loadOrderStatusEventFixture()],
+    ['a change it names in the record index', () => notificationEventFixture({ kind: 'plugin-changed', plugin: 'B.esp', origin: 'ModB' })],
+  ])('builds the next mod, with no recheck waited out, once mEdit tells %s and holds the plugins as they are on disk', async (_event, event) => {
     const { client, built } = buildingModBThenModA(modBHoldsPlugin);
     client.setQueryAnswer('getPluginIndexing', NOT_YET);
 
     const outcome = built();
-    await vi.waitFor(() => { expect(builtMods(client)).toEqual(['ModB']); });
+    await vi.waitFor(() => { expect(askedOfMEdit(client)).toContainEqual({ name: 'B.esp', origin: 'ModB' }); });
     client.setQueryAnswer('getPluginIndexing', AS_ON_DISK);
-    client.emit(loadOrderStatusEventFixture());
-
-    expect(await outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }], refused: [] });
-    expect(askedOfMEdit(client)).toContainEqual({ name: 'B.esp', origin: 'ModB' });
-  });
-
-  it('asks mEdit again at once when it names a change in the record index, without waiting out the recheck', async () => {
-    const { client, built } = buildingModBThenModA(modBHoldsPlugin);
-    client.setQueryAnswer('getPluginIndexing', NOT_YET);
-
-    const outcome = built();
-    await vi.waitFor(() => { expect(builtMods(client)).toEqual(['ModB']); });
-    client.setQueryAnswer('getPluginIndexing', AS_ON_DISK);
-    client.emit(notificationEventFixture({ kind: 'plugin-changed', plugin: 'B.esp', origin: 'ModB' }));
+    client.emit(event());
 
     expect(await outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }], refused: [] });
   });

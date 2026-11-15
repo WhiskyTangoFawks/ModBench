@@ -15,8 +15,9 @@ import type { FlaggedRead, SourceMods } from '../manifestAdapter/manifestAdapter
 import { type PapyrusScript } from './papyrusScripts';
 import { errorMessage } from '../ports/errorMessage';
 import type { MEditClient } from '../client/MEditClient';
+import type { Disposable } from '../client/eventEmitter';
 import { FlaggedHashesHeld } from './flaggedHashes';
-import { ArchiveContentsHeld, unreadableArchiveLines, type ArchiveRead, type ArchiveReader } from './archiveContents';
+import { ArchiveContentsHeld, unreadableArchiveLines, type ArchiveRead } from './archiveContents';
 import { FactsOfReading } from './factsOfReading';
 import { WrittenFiles } from './writtenFiles';
 import { collectingWrites } from './ambientWrites';
@@ -263,7 +264,7 @@ interface InstanceOptions {
   gameFolderSettingId: string;
   workspace: Workspace;
   log: Log;
-  medit: ArchiveReader & Pick<MEditClient, 'getFlaggedPluginHashes' | 'onDidChange'>;
+  medit: Pick<MEditClient, 'getArchiveContents' | 'getFlaggedPluginHashes' | 'onDidChange'>;
 }
 
 const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'publisherTags'>, gameFolderSettingId: string, entryKey: InstanceValue['entryKey']): InstanceValue => ({
@@ -351,7 +352,7 @@ export class Instance implements Subscription {
 
   private readonly flagged: FlaggedHashesHeld;
 
-  private readonly mEditChanges: { dispose(): void };
+  private readonly mEditChanges: Disposable;
 
   // A note is one Output line until its text changes or it clears.
   private readonly notesTold = new Map<NoteKind, ReadonlySet<string>>();
