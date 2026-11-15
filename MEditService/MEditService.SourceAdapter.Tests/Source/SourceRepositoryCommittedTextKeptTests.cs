@@ -99,6 +99,7 @@ public sealed class SourceRepositoryCommittedTextKeptTests : IDisposable
         Git("add", "-A");
         Git("commit", "-q", "-m", "Edited");
         File.SetLastWriteTimeUtc(refFile, stamped);
+        PastTheSettleWindow();
 
         Assert.Empty(ChangesIn(repository, NpcPath));
     }
