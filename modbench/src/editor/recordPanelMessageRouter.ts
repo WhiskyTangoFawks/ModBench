@@ -47,7 +47,6 @@ export interface RouteRecordPanelMessageDeps {
   // The panel's read of `formKey` is answered, and the webview shows that record from then on.
   readAnswered: (formKey: string, columns: readonly RecordCopy[]) => void;
   // A refusal for want of a load order is not read yet while none of the panel's reads has landed and one is on its way.
-  firstReadLanded: () => boolean;
   loadOrderComing: () => boolean;
   // The grid's place, which the tab an edit's move of the file opens shows again.
   keepViewState: (state: ViewState) => void;
@@ -61,7 +60,7 @@ export interface RouteRecordPanelMessageDeps {
 
 /** What every panel's messages share: the rest is the panel's own. */
 export type SharedRecordPanelDeps = Omit<
-  RouteRecordPanelMessageDeps, 'formKeyPicker' | 'focusCell' | 'reply' | keyof TabDocument | 'keepViewState' | 'readAnswered' | 'firstReadLanded' | 'originsShown'>;
+  RouteRecordPanelMessageDeps, 'formKeyPicker' | 'focusCell' | 'reply' | keyof TabDocument | 'keepViewState' | 'readAnswered' | 'originsShown'>;
 
 /** What a tab's document gives its panel's messages. */
 export type TabDocument = Pick<RouteRecordPanelMessageDeps, 'titleFromRead' | 'plugin' | 'documentText'>;
@@ -89,7 +88,6 @@ export function routerDepsForTab(
     titleFromRead: (formKey, columns) => { if (tab.isOpen) document.titleFromRead(formKey, columns); },
     keepViewState: (state) => { tab.keepPlace(state); },
     readAnswered: (formKey, columns) => { tab.answered(formKey, columns); },
-    firstReadLanded: () => tab.readLanded,
   };
 }
 
@@ -199,7 +197,7 @@ async function answerRecordLoad(
   const [settled] = await Promise.allSettled([readRecord(deps, m, pluginActive)]);
   const read = settled.status === 'rejected' ? localFailure(errorMessage(settled.reason)) : settled.value;
   if (isReadFailed(read)) {
-    if (read.failed === 'no-load-order' && !deps.firstReadLanded() && deps.loadOrderComing()) return;
+    if (read.failed === 'no-load-order' && deps.loadOrderComing()) return;
     if (read.failed === 'local') deps.channel.warn(`Failed to read ${m.formKey}: ${failureReason(read)}`);
     deps.reply({ type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: false, failure: read });
     return;

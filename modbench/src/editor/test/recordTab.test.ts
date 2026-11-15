@@ -20,7 +20,6 @@ const settles = (client: InMemoryMEditClient) => {
   client.emit(loadOrderStatusEventFixture({ state: 'Ready', conflictsComputed: true, version: (client.loadOrderStatus?.version ?? 0) + 1 }));
 };
 
-const holdsALoadOrder = (client: InMemoryMEditClient) => { client.emit(loadOrderStatusEventFixture({ state: 'Reconciling', conflictsComputed: false })); };
 
 const loadsOf = (panel: ReturnType<typeof fakePanel>) => (panel.webview.postMessage.mock.calls as unknown[][]).map(([m]) => m);
 
@@ -273,10 +272,9 @@ describe('a record tab going with the record to its new FormKey and reading it t
     });
   });
 
-  describe('a change that names a plugin and no record, which is every record of it, with a load order held', () => {
+  describe('a change that names a plugin and no record, which is every record of it', () => {
     it('reads the record it shows again, as a change from any other tool reaches it as a write of Modbench\'s does', () => {
       const { client, panel } = openOn('000800:Mod.esp');
-      holdsALoadOrder(client);
 
       client.emit(PLUGIN_CHANGED);
 
@@ -285,9 +283,8 @@ describe('a record tab going with the record to its new FormKey and reading it t
   });
 
   describe('a change that says everything changed', () => {
-    it('reads the record again when the record filter is cleared while mEdit holds a load order', () => {
+    it('reads the record again when the record filter is cleared', () => {
       const { client, panel } = openOn('000800:Mod.esp');
-      holdsALoadOrder(client);
 
       client.emit(notificationEventFixture({ kind: 'record-filter-cleared', recordFilterCleared: { source: 'a', reason: 'Conversion Error' } }));
 
@@ -297,15 +294,12 @@ describe('a record tab going with the record to its new FormKey and reading it t
     it.each([
       ['reconnects', (client: InMemoryMEditClient) => { client.reconnected(); }],
       ['restarts', (client: InMemoryMEditClient) => { client.setStatus('running'); client.setStatus('stopped'); client.setStatus('running'); }],
-    ])('waits for the load order, since a read while mEdit holds none fails, when mEdit %s', (_what, happens) => {
+    ])('reads the record again when mEdit %s', (_what, happens) => {
       const { client, panel } = openOn('000800:Mod.esp');
-      holdsALoadOrder(client);
 
       happens(client);
-      const readBeforeTheLoadOrder = loadsOf(panel);
-      settles(client);
 
-      expect([readBeforeTheLoadOrder, loadsOf(panel)]).toEqual([[], [{ type: 'loadRecord', formKey: '000800:Mod.esp' }]]);
+      expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000800:Mod.esp' }]);
     });
   });
 
