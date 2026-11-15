@@ -1,5 +1,4 @@
 import { errorMessage } from '../ports/errorMessage';
-import type { PartialFailure } from './agentGesture';
 import type { Instance } from '../instanceLoader/instance';
 import { WrittenFiles } from '../instanceLoader/writtenFiles';
 import { collectingWrites } from '../instanceLoader/ambientWrites';
@@ -84,17 +83,6 @@ function warningFor(answer: ManagerWarning | undefined): string | undefined {
 const wroteNothing = (result: unknown): boolean =>
   typeof result === 'object' && result !== null && 'applied' in result && result.applied === false;
 
-const isLandedAnswer = (answer: unknown): answer is { applied: true; partial?: readonly PartialFailure[] } =>
-  typeof answer === 'object' && answer !== null && 'applied' in answer && answer.applied === true;
-
-function carrying<T>(result: T, warning: string): T {
-  if (!isLandedAnswer(result)) {
-    managerSurface?.reporter.report('warning', warning);
-    return result;
-  }
-  const warned: PartialFailure = { message: warning, detail: '', severity: 'warning' };
-  return Object.assign({}, result, { partial: [...(result.partial ?? []), warned] });
-}
 let inFlight: string | undefined;
 
 interface ReadModel {
@@ -158,7 +146,8 @@ export async function holdingTheWrite<T>(write: string, work: () => Promise<T>):
     inFlight = undefined;
   }
   const warning = warningFor(await asked);
-  return warning === undefined || wroteNothing(result) ? result : carrying(result, warning);
+  if (warning !== undefined && !wroteNothing(result)) managerSurface?.reporter.report('warning', warning);
+  return result;
 }
 
 /** Runs the `write` gesture's `command` under the view's progress, holding the write. */

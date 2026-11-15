@@ -129,14 +129,14 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
       ends();
     });
 
-    it('goes with the result as a partial failure, which an agent is answered and a view reports, and is no notification', async () => {
+    it('is a notification whatever the result is, and leaves the result as it was', async () => {
       const reporter = surfacedManager(running);
 
-      const answer = await holdingTheWrite('modbench.write', () => Promise.resolve({ applied: true, partial: [{ message: 'one', detail: 'd', severity: 'log' }] }));
+      const answer = await holdingTheWrite('modbench.write', () => Promise.resolve({ applied: true, partial: [] }));
 
       expect({ answer, reports: reporter.reports }).toEqual({
-        answer: { applied: true, partial: [{ message: 'one', detail: 'd', severity: 'log' }, { message: 'MO2 is running.', detail: '', severity: 'warning' }] },
-        reports: [],
+        answer: { applied: true, partial: [] },
+        reports: [{ severity: 'warning', message: 'MO2 is running.', detail: undefined }],
       });
     });
 
