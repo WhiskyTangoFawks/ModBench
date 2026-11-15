@@ -15,7 +15,6 @@ internal sealed class WorkingTreeOverlay
     private const string AmongKeys = "IN (SELECT unnest($3::VARCHAR[]))";
 
     private readonly DuckDBConnection _connection;
-    private readonly ILogger _logger;
     private readonly ContainerDocuments _containers;
     private readonly PluginIngest _ingest;
     private readonly Func<string, string> _contentStamp;
@@ -29,7 +28,6 @@ internal sealed class WorkingTreeOverlay
     {
         _contentStamp = contentStamp;
         _connection = connection;
-        _logger = logger;
         _containers = new ContainerDocuments(release);
         _ingest = new PluginIngest(connection, logger, release, contentStamp);
         _types = RecordTypes.For(release);
@@ -37,7 +35,7 @@ internal sealed class WorkingTreeOverlay
         _schemas = schemas;
     }
 
-    private sealed record Written(string FormKey, string RecordType, string Body, bool Held);
+    private sealed record Written(string FormKey, string RecordType, string Body, bool Held, CellStructure? Cell = null);
 
     // Prepared is null for a type with no schema, and for the header, which carries no reference graph and cannot go
     // through the per-record codec.
@@ -45,36 +43,19 @@ internal sealed class WorkingTreeOverlay
         Written Document, string StoredBody, string Stamp, bool HasSchema, PluginIngest.PreparedRecord? Prepared,
         List<ContainerDocuments.ChildDocument> Embedded);
 
-    /// <summary>Folds re-derived documents into the read model: null Body deletes, byte-equal body
-    /// converges. Returns every key whose rows moved.</summary>
-    public List<string> ProjectDocuments(PluginAddress key, IReadOnlyList<(string FormKey, string? Body)> deltas)
+    /// <summary>Folds re-derived documents into the read model, a byte-equal one converging, and takes out the records of
+    /// <paramref name="gone"/>. A held record keeps its type and its place. Returns every key whose rows moved.</summary>
+    public List<string> ProjectDocuments(PluginAddress key, IReadOnlyList<PluginDocument> written, IReadOnlyList<string> gone)
     {
-        // The deltas' own keys are named whether or not their bytes moved: the caller asked about
+        // The documents' own keys are named whether or not their bytes moved: the caller asked about
         // them, and a subscriber re-reading one it was told about costs one query.
-        var movedKeys = new List<string>(deltas.Select(d => d.FormKey));
+        var movedKeys = new List<string>([.. written.Select(d => d.FormKey), .. gone]);
         var held = RecordTypesHeld(key, movedKeys);
 
-        List<Written> written = [];
-        List<string> gone = [];
-        foreach (var (formKey, body) in deltas)
-        {
-            if (held.TryGetValue(formKey, out var recordType))
-            {
-                if (body == null) gone.Add(formKey);
-                else written.Add(new Written(formKey, recordType, body, Held: true));
-            }
-            // A create is its own gesture and there is nothing here to derive its record_type from, so
-            // this is a caller mistake: logged, skipped, never thrown (the seam's missing-data rule).
-            else if (body != null)
-            {
-                _logger.LogWarning(
-                    "Ignoring a working-tree change for {FormKey}, which {Plugin} ({Origin}) does not hold",
-                    formKey, key.Name, key.Origin);
-            }
-        }
-
-        var uncarried = Write(key, written, movedKeys);
-        Remove(key, gone, uncarried, movedKeys);
+        var uncarried = Write(key, [.. written.Select(d => held.TryGetValue(d.FormKey, out var recordType)
+            ? new Written(d.FormKey, recordType, d.Text, Held: true)
+            : new Written(d.FormKey, d.RecordType, d.Text, Held: false, d.Cell))], movedKeys);
+        Remove(key, [.. gone.Where(held.ContainsKey)], uncarried, movedKeys);
         return [.. movedKeys.Distinct(StringComparer.Ordinal)];
     }
 
@@ -122,7 +103,7 @@ internal sealed class WorkingTreeOverlay
         }
 
         List<ContainerDocuments.ChildDocument> children = [];
-        var prepared = _ingest.PrepareRecord(new PluginDocument(document.RecordType, document.FormKey, document.Body), key.Name, schema, children);
+        var prepared = _ingest.PrepareRecord(new PluginDocument(document.RecordType, document.FormKey, document.Body, Cell: document.Cell), key.Name, schema, children);
         return new Derived(
             document, prepared.Body, prepared.ContentHash, HasSchema: true, prepared,
             [.. children.Where(c => _types.IsEmbeddedSlot(document.RecordType, c.SlotName))]);

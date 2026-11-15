@@ -277,6 +277,15 @@ internal sealed class SourceRepository : ISourceRepository
             return read(documents);
         });
 
+    public Answer<FilesRead?, SourceFailure> ReadFiles(PluginAddress plugin, IReadOnlyList<string> files) =>
+        SourceFailure.Answer(() =>
+        {
+            var spelled = Spelled(plugin);
+            using var documents = new SourceTreeDocuments(_sourceFolder, spelled.Name, _release, Files);
+            return NamedFiles.Read(_sourceFolder, spelled, Files, documents, _stamps.Listed(SourceRepositoryLayout.RootIn(_sourceFolder, spelled.Name)), files,
+                within => LastCommitComparison.Of(_sourceFolder, _release, _git, Locator, spelled, within));
+        });
+
     public Answer<PluginSourceFiles, SourceFailure> TreeOf(PluginAddress plugin) =>
         SourceFailure.Answer(() =>
         {

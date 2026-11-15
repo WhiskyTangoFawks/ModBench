@@ -26,7 +26,7 @@ public sealed class CreatePluginInModHandler
         }
 
         var result = await _create.CreatePlugin(new PluginAddress(name, place.Name), place.Folder, place.SourceFolder, flags);
-        if (result.Holds(out var created, out _)) _holder.SourceWritten([created]);
+        if (result.Holds(out var created, out _)) _holder.SourceWritten([new PluginWritten(created, null)]);
         return result;
     }
 }

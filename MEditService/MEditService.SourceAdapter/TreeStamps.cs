@@ -70,6 +70,16 @@ internal sealed class TreeStamps(TimeProvider time)
 {
     private readonly ConcurrentDictionary<string, StampGatedMemo<KnownDocument>> _known = new(StringComparer.Ordinal);
 
+    // Each tree's files as its last listing found them, kept as named files are read again, with the FormKey each declared:
+    // what a named file that is gone held. A tree never listed has none.
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, string?>> _listed = new(StringComparer.Ordinal);
+
+    private static readonly StringComparer PathComparer = StringComparer.FromComparison(FilePaths.Comparison);
+
+    /// <summary>Each file of the tree at <paramref name="root"/> as it was last listed or read, with the FormKey it declared;
+    /// null when the tree was never listed.</summary>
+    internal ConcurrentDictionary<string, string?>? Listed(string root) => _listed.GetValueOrDefault(root);
+
     private sealed record KnownDocument(
         string? FormKey, string Content, IReadOnlyList<string> FormKeys, string? Refusal, FormIdLimit? Limit, string? BelongsAt);
 
@@ -85,9 +95,14 @@ internal sealed class TreeStamps(TimeProvider time)
         var unsaved = new HashSet<string>(StringComparer.Ordinal);
 
         var root = SourceRepositoryLayout.RootIn(sourceFolder, plugin.Name);
-        if (!Directory.Exists(root)) _known.TryRemove(root, out _);
+        if (!Directory.Exists(root))
+        {
+            _known.TryRemove(root, out _);
+            _listed.TryRemove(root, out _);
+        }
         var known = _known.GetOrAdd(root, _ => new StampGatedMemo<KnownDocument>(time));
         var listed = new HashSet<string>(StringComparer.Ordinal);
+        var declared = new ConcurrentDictionary<string, string?>(PathComparer);
         var problems = new List<FileProblem>();
         var misplaced = new List<FileProblem>();
         var keysByFile = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
@@ -108,6 +123,7 @@ internal sealed class TreeStamps(TimeProvider time)
                 var document = readUnsaved
                     ? Read(files, file, relativePath, plugin.Name, release, unreadable)
                     : known.Of(file, () => Read(files, file, relativePath, plugin.Name, release, unreadable));
+                declared[file] = document?.FormKey;
                 if (document is null) continue;
                 if (document.FormKey is not { } formKey)
                 {
@@ -124,6 +140,7 @@ internal sealed class TreeStamps(TimeProvider time)
         }
 
         known.Retain(listed);
+        if (Directory.Exists(root)) _listed[root] = declared;
         var claimedDocuments = holders.Claimed.SelectMany(claim => claim.Documents).ToHashSet(StringComparer.Ordinal);
         problems.AddRange(misplaced.Where(file => !claimedDocuments.Contains(file.SourceRelativePath)));
         if (limit is not null) problems.AddRange(OutsideTheLimit(limit, plugin, keysByFile));

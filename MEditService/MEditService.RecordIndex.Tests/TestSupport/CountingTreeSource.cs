@@ -30,13 +30,28 @@ internal sealed class CountingTreeSource(ISourceAdapter inner) : DelegatingSourc
     public override ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release) =>
         base.Over(plugin, release) is { } reads ? new Counted(reads, this) : null;
 
+    private int _wholeReads;
+
+    /// <summary>Each read of a whole tree: a listing of its files, or a read of every document.</summary>
+    public int WholeTreeReads => Volatile.Read(ref _wholeReads);
+
     private sealed class Counted(ISourceRepositoryReads reads, CountingTreeSource owner) : ISourceRepositoryReads
     {
-        public RecordStamps StampsOf(PluginAddress plugin) => reads.StampsOf(plugin);
+        public RecordStamps StampsOf(PluginAddress plugin)
+        {
+            Interlocked.Increment(ref owner._wholeReads);
+            return reads.StampsOf(plugin);
+        }
 
         public FilesStamp RepositoryStamp() => reads.RepositoryStamp();
 
-        public Answer<T, SourceFailure> ReadDocuments<T>(PluginAddress plugin, Func<IPluginDocuments, T> read) => reads.ReadDocuments(plugin, read);
+        public Answer<T, SourceFailure> ReadDocuments<T>(PluginAddress plugin, Func<IPluginDocuments, T> read)
+        {
+            Interlocked.Increment(ref owner._wholeReads);
+            return reads.ReadDocuments(plugin, read);
+        }
+
+        public Answer<FilesRead?, SourceFailure> ReadFiles(PluginAddress plugin, IReadOnlyList<string> files) => reads.ReadFiles(plugin, files);
 
         public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommit(PluginAddress plugin)
         {

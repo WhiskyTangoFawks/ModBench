@@ -1,9 +1,11 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -14,6 +16,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
 {
     private static readonly TimeSpan OneGesture = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan LitRsLaunch = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan LitRsIndexWorkForOneRecord = TimeSpan.FromSeconds(0.4);
     private const int Runs = 5;
     private const int Launches = 3;
 
@@ -124,6 +127,51 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
 
         Budgets.Reached(OneGesture, () => CheckEnded() && ReferencesListed() == 0, "Deleting a big cell's document reaching reads");
         Assert.Null(Index.CopyIn(Modlist.BigCell, Modlist.BigSourcePlugin.Key));
+    }
+
+    [RealSizeFact]
+    public void ARecordItsWriterDeleted_ReachesReadsWithinLitRsIndexWorkForOneRecord()
+    {
+        var (plugin, formKey) = (Modlist.BigSourcePlugin, Modlist.TheManyDocuments[0]);
+        var path = plugin.SourceFileOf(Index.DocumentOf(formKey, plugin.Key));
+        using var restored = Restoring(path, () => CheckEnded() && Index.CopyIn(formKey, plugin.Key) is not null);
+        File.Delete(path);
+
+        Budgets.Ran(LitRsIndexWorkForOneRecord, () =>
+        {
+            Index.Holder.SourceWritten([new PluginWritten(plugin.Key, [path])]);
+            Waits.Reached(() => Index.CopyIn(formKey, plugin.Key) is null, "the deleted record gone from reads");
+        }, "A record its writer deleted reaching reads");
+    }
+
+    [RealSizeFact]
+    public void ARecordItsWriterCreated_ReachesReadsWithinLitRsIndexWorkForOneRecord()
+    {
+        var plugin = Modlist.BigSourcePlugin;
+        var (formKey, model) = ($"FFF000:{plugin.Name}", Index.DocumentOf(Modlist.TheManyDocuments[0], plugin.Key));
+        var body = plugin.SourceTextOf(model)
+            .Replace(model.FormKey, formKey, StringComparison.Ordinal)
+            .Replace($"\"{model.EditorId}\"", "\"Created\"", StringComparison.Ordinal);
+        var repository = SourceMods.RepositoryOf(plugin);
+        var created = repository.ChangesToPut(plugin.Key, new SourceDocument(formKey, model.RecordType, "Created", body)).Value()
+            .Under(repository.SourceFolder).Documents.Single();
+        using var restored = new CreatedPutBack(created.Path, realSize, () => CheckEnded() && Index.CopyIn(formKey, plugin.Key) is null);
+        File.WriteAllText(created.Path, created.Text);
+
+        Budgets.Ran(LitRsIndexWorkForOneRecord, () =>
+        {
+            Index.Holder.SourceWritten([new PluginWritten(plugin.Key, [created.Path])]);
+            Waits.Reached(() => Index.RowOf(formKey, plugin.Key) is { EditorId: "Created" }, "the created record in reads");
+        }, "A record its writer created reaching reads");
+    }
+
+    private sealed class CreatedPutBack(string path, RealSizeIndex realSize, Func<bool> restored) : IDisposable
+    {
+        public void Dispose() => realSize.Restore(() =>
+        {
+            File.Delete(path);
+            realSize.Index.SignalChange();
+        }, restored);
     }
 
     private string BigCellsDocument() => Modlist.BigSourcePlugin.SourceFileOf(Index.DocumentOf(Modlist.BigCell, Modlist.BigSourcePlugin.Key));

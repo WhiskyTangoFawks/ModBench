@@ -11,6 +11,10 @@ public interface ISourceRepositoryReads
 
     Answer<T, SourceFailure> ReadDocuments<T>(PluginAddress plugin, Func<IPluginDocuments, T> read);
 
+    /// <summary>What <paramref name="files"/>, absolute paths in the plugin's tree, hold now and held when last read; null
+    /// when they do not read alone, as in a tree never listed or a FormKey another file holds too.</summary>
+    Answer<FilesRead?, SourceFailure> ReadFiles(PluginAddress plugin, IReadOnlyList<string> files);
+
     /// <summary>What a commit or a checkout moves without touching a document: with the documents' stamps unchanged,
     /// an equal stamp that vouches means <see cref="ChangedSinceLastCommit"/> answers as it did.</summary>
     FilesStamp RepositoryStamp();
@@ -33,3 +37,8 @@ public interface ISourceRepositoryReads
 
     Answer<string?, SourceFailure> FileNameOf(PluginAddress plugin, RecordIdentity identity);
 }
+
+/// <summary>Each record's own document the named files hold, each FormKey whose document they held and hold not, and how
+/// each record they hold stands against the last commit: added when no named file held it there.</summary>
+public sealed record FilesRead(
+    IReadOnlyList<PluginDocument> Documents, IReadOnlyList<string> Gone, IReadOnlyDictionary<string, RecordChange> Changes);

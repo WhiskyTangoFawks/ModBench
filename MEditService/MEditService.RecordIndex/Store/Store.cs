@@ -1082,14 +1082,14 @@ internal sealed class Store : IDisposable
 
     private const string EffectiveRows = $"{TableDdlBuilder.MirrorSchema}.records";
 
-    // One transaction for the batch, so a throw partway leaves no row half-projected. A null body is
-    // the document gone. Returns every key whose rows moved, embedded children included.
-    public List<string> ProjectDocuments(PluginAddress key, IReadOnlyList<(string FormKey, string? Body)> deltas)
+    // One transaction for the batch, so a throw partway leaves no row half-projected. Returns every key whose rows
+    // moved, embedded children included.
+    public List<string> ProjectDocuments(PluginAddress key, IReadOnlyList<PluginDocument> written, IReadOnlyList<string> gone)
     {
-        if (deltas.Count == 0) return [];
+        if (written.Count + gone.Count == 0) return [];
 
         using var tx = BeginTransaction();
-        var movedKeys = StoreFaults.Translating(() => Overlay.ProjectDocuments(key, deltas));
+        var movedKeys = StoreFaults.Translating(() => Overlay.ProjectDocuments(key, written, gone));
         BumpSequence();
         OweCheckpoint();
         tx.Commit();
@@ -1117,6 +1117,13 @@ internal sealed class Store : IDisposable
             WHERE plugin = $1 AND origin = $2 AND working_tree_state <> '{WorkingTreeState.None.Stored()}'
             """, reader => KeyValuePair.Create(reader.GetString(0), WorkingTreeStates.FromStored(reader.GetString(1))), key.Name, key.Origin));
     }
+
+    /// <summary>The state of each of <paramref name="formKeys"/> the plugin holds a row for.</summary>
+    public Dictionary<string, WorkingTreeState> WorkingTreeStatesOf(PluginAddress key, IReadOnlyCollection<string> formKeys) =>
+        LastWins(DuckDbSql.Rows(Connection, $"""
+            SELECT form_key, working_tree_state FROM {EffectiveRows}
+            WHERE plugin = $1 AND origin = $2 AND form_key IN (SELECT unnest($3::VARCHAR[]))
+            """, reader => KeyValuePair.Create(reader.GetString(0), WorkingTreeStates.FromStored(reader.GetString(1))), key.Name, key.Origin, formKeys.ToList()));
 
     // --- What the rows hold ---
 

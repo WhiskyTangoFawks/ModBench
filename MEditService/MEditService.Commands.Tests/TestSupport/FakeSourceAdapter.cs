@@ -197,6 +197,8 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
         public Answer<T, SourceFailure> ReadDocuments<T>(PluginAddress plugin, Func<IPluginDocuments, T> read) => throw Unreached();
 
+        public Answer<FilesRead?, SourceFailure> ReadFiles(PluginAddress plugin, IReadOnlyList<string> files) => throw Unreached();
+
         public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommit(PluginAddress plugin) =>
             throw Unreached();
 

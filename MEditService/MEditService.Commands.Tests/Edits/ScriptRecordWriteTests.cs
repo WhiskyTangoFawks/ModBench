@@ -112,6 +112,21 @@ public sealed class ScriptRecordWriteTests
     }
 
     [Fact]
+    public void ADelete_NamesTheFileItWrote()
+    {
+        using var mod = SourceEditFixture.CompiledPlugin();
+        var file = Path.Combine(mod.ModFolder, mod.DocumentFile(mod.Npc.ToString()).Require());
+        IReadOnlyCollection<PluginWritten>? named = null;
+        mod.Holder.Written += written => named = written;
+
+        Delete(mod, mod.Npc.ToString());
+
+        var written = Assert.Single(named.Require());
+        Assert.Equal(mod.Plugin, written.Plugin);
+        Assert.Equal([file], written.Files);
+    }
+
+    [Fact]
     public void ADeleteOfAFileHeldUnsaved_IsRefusedAsUnsavedChanges_AndWritesNothing()
     {
         using var mod = SourceEditFixture.CompiledPlugin();

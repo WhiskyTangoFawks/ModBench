@@ -336,11 +336,14 @@ internal abstract class SourceRepositoryGit
 
     /// <summary>Each path in the source folder under the plugin's tree that git status names, with its index-column code;
     /// null when git cannot say. It names both ends of a move and every untracked or ignored file.</summary>
-    internal IReadOnlyList<(char Code, string Path)>? WorkingTreeStatus(string pluginFileName)
+    internal IReadOnlyList<(char Code, string Path)>? WorkingTreeStatus(string pluginFileName) =>
+        WorkingTreeStatus([SourceRepositoryLayout.RootFor(pluginFileName)]);
+
+    /// <summary>As <see cref="WorkingTreeStatus(string)"/>, under each of <paramref name="paths"/>, relative to the source folder.</summary>
+    internal IReadOnlyList<(char Code, string Path)>? WorkingTreeStatus(IReadOnlyList<string> paths)
     {
         if (!TryRun(out var stdout,
-                "status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=all", "--ignored",
-                "--", LiteralPathspec(SourceRepositoryLayout.RootFor(pluginFileName))))
+                ["status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=all", "--ignored", "--", .. paths.Select(LiteralPathspec)]))
         {
             return null;
         }

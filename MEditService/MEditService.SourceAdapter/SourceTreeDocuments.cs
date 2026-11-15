@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -132,6 +133,42 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
                 }
             }
         }
+    }
+
+    /// <summary>Whether the whole read reads <paramref name="file"/> as a record's own document: not the header, a group's
+    /// document, or a file in a cell's or a worldspace's directory beside its own document.</summary>
+    internal bool ReadsAsARecord(string file)
+    {
+        var relativePath = Path.GetRelativePath(_sourceFolder, file);
+        var path = new LayoutPath(relativePath);
+        if (!path.IsFlatDocument || relativePath.Equals(_headerRelativePath, StringComparison.Ordinal)) return false;
+        if (DirectoryPerRecordTypeOf(path) is not { } directoryPerRecord) return true;
+        var placed = _types.IsCell(directoryPerRecord)
+            ? path.UnderGroupBlockLevels
+            : path.UnderWorldspaceBlockLevels || (path.IsContainerDocument && !path.ContainerIsNested);
+        return placed && (!_files.FileExists(file)
+            || SourceRepositoryLayout.ContainerDocumentHeldBy(_files, Path.GetDirectoryName(file) ?? "").Equals(file, FilePaths.Comparison));
+    }
+
+    /// <summary>The records <paramref name="file"/> holds, its own first, placed where its path puts it, as the whole read
+    /// yields them; none when the file is gone. Throws, naming the file, for one the whole read refuses.</summary>
+    internal IReadOnlyList<PluginDocument> DocumentsIn(string file) =>
+        [.. DocumentsAt(file, CellStructureAt(file), new OneDocumentPerFormKey(_sourceFolder))];
+
+    private string? DirectoryPerRecordTypeOf(LayoutPath path) =>
+        GroupFolders.For(_release).DirectoryPerRecordTypeIn(path.GroupFolderName, nested: false);
+
+    private CellStructure? CellStructureAt(string file)
+    {
+        var path = new LayoutPath(Path.GetRelativePath(_sourceFolder, file));
+        if (path.UnderGroupBlockLevels && DirectoryPerRecordTypeOf(path) is { } type && _types.IsCell(type))
+            return CellStructure.Interior(Number(path.BlockFolderName), Number(path.SubBlockFolderName));
+        if (!path.UnderWorldspaceBlockLevels) return null;
+
+        var own = SourceRepositoryLayout.ContainerDocumentHeldBy(_files, Path.Combine(_sourceFolder, path.WorldspaceDirectory));
+        var worldspace = Read(own) is { } ownText ? DocumentText.FormKeyDeclaredIn(ownText, own, _pluginFileName) : null;
+        var ((blockX, blockY), (subX, subY)) = (Coordinates(path.BlockFolderName), Coordinates(path.SubBlockFolderName));
+        return new CellStructure(worldspace, blockX, blockY, subX, subY, IsInterior: false);
     }
 
     // The header is the one document with a file of its own that is not yielded here: it has its own

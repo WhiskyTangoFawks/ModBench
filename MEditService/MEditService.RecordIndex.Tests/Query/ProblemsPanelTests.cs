@@ -624,7 +624,7 @@ public sealed class ProblemsPanelTests : IDisposable
         source.AtEachText = Once(() =>
         {
             LinkResolvedByHand(index, plugin);
-            index.Holder.SourceWritten([Entry(plugin).Key]);
+            index.Holder.SourceWritten([new PluginWritten(Entry(plugin).Key, null)]);
         });
 
         var answer = Assert.Single(Ready(index));
@@ -643,7 +643,7 @@ public sealed class ProblemsPanelTests : IDisposable
         source.AtEachText = Once(() =>
         {
             parking.ParkNextTreeLookup();
-            index.Holder.SourceWritten([Entry(plugin).Key]);
+            index.Holder.SourceWritten([new PluginWritten(Entry(plugin).Key, null)]);
         });
 
         var problems = index.Queries.GetProblems();
@@ -683,7 +683,7 @@ public sealed class ProblemsPanelTests : IDisposable
         {
             LinkResolvedByHand(index, plugin);
             parking.ParkNextTreeLookup();
-            index.Holder.SourceWritten([Entry(other).Key]);
+            index.Holder.SourceWritten([new PluginWritten(Entry(other).Key, null)]);
         });
 
         var problems = index.Queries.GetProblems(Entry(plugin).Key);
@@ -706,7 +706,7 @@ public sealed class ProblemsPanelTests : IDisposable
         source.AtEachText = () =>
         {
             File.AppendAllText(referrer, "\n");
-            index.Holder.SourceWritten([Entry(plugin).Key]);
+            index.Holder.SourceWritten([new PluginWritten(Entry(plugin).Key, null)]);
         };
 
         var problems = Task.Run(() => index.Queries.GetProblems());

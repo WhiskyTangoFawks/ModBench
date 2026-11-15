@@ -67,10 +67,7 @@ internal sealed class Projector(
         var key = plugin.Key;
         if (!Over(plugin).ChangedSinceLastCommit(key).Holds(out var changes, out var stopped)) return stopped;
 
-        var learned = changes.ToDictionary(
-            change => change.Key,
-            change => change.Value == RecordChange.Added ? WorkingTreeState.Added : WorkingTreeState.Modified,
-            StringComparer.Ordinal);
+        var learned = changes.ToDictionary(change => change.Key, change => StateOf(change.Value), StringComparer.Ordinal);
         var differing = KeysDiffering(index.HeldWorkingTreeStates(key), learned).ToList();
         if (differing.Count == 0) return SourceAnswer.Of<IReadOnlyList<string>>([]);
 
@@ -84,6 +81,40 @@ internal sealed class Projector(
 
         index.SetWorkingTreeStates(key, moved);
         return SourceAnswer.Of<IReadOnlyList<string>>([.. moved.Select(m => m.FormKey)]);
+    }
+
+    private static WorkingTreeState StateOf(RecordChange change) =>
+        change == RecordChange.Added ? WorkingTreeState.Added : WorkingTreeState.Modified;
+
+    /// <summary>Re-derives the rows <paramref name="files"/> of the plugin's tree hold, reading nothing else of it (ADR-0001).
+    /// False when the files do not read alone, so the caller validates the plugin whole.</summary>
+    internal bool ReadFiles(RegisteredPlugin plugin, IReadOnlyList<string> files) => index.Commit(projection =>
+    {
+        var key = plugin.Key;
+        if (index.DerivationOf(key) != DerivedFrom.SourceTree || TruthOf(plugin) != DerivedFrom.SourceTree) return false;
+        if (!Over(plugin).ReadFiles(key, files).Holds(out var read, out _) || read is null) return false;
+
+        _matched.TryRemove(key, out _);
+        // A record whose row says the last commit holds it, which no named file held there, came from a file no write named.
+        var addedHere = read.Changes.Where(change => change.Value == RecordChange.Added).Select(change => change.Key).ToList();
+        var cameFromElsewhere = index.WorkingTreeStatesOf(key, addedHere).Values.Any(state => state != WorkingTreeState.Added);
+        var touched = index.ProjectDocuments(key, read.Documents, read.Gone);
+        IReadOnlyList<string> moved;
+        if (!cameFromElsewhere) moved = SetWorkingTreeStates(key, touched, read.Changes);
+        else if (LearnWorkingTreeStates(plugin).Holds(out var learned, out _)) moved = learned;
+        else return false;
+        AnnounceRows(projection, key, [.. touched.Union(moved, StringComparer.Ordinal)]);
+        return true;
+    });
+
+    private List<string> SetWorkingTreeStates(PluginAddress key, IReadOnlyCollection<string> formKeys, IReadOnlyDictionary<string, RecordChange> changes)
+    {
+        List<(string FormKey, WorkingTreeState State)> moved = [.. index.WorkingTreeStatesOf(key, formKeys)
+            .Select(held => (FormKey: held.Key, Held: held.Value, Now: changes.TryGetValue(held.Key, out var change) ? StateOf(change) : WorkingTreeState.None))
+            .Where(row => row.Held != row.Now)
+            .Select(row => (row.FormKey, row.Now))];
+        if (moved.Count > 0) index.SetWorkingTreeStates(key, moved);
+        return [.. moved.Select(row => row.FormKey)];
     }
 
     // A key absent from one side reads as that value's default: a clean row, or no row.
@@ -122,7 +153,10 @@ internal sealed class Projector(
             if (!ChangedDocument(repository, key, formKey, stored[formKey]).Holds(out var changed, out var stopped)) return stopped;
             if (changed is { } delta) deltas.Add(delta);
         }
-        var touched = index.ProjectDocuments(key, deltas);
+        var touched = index.ProjectDocuments(
+            key,
+            [.. deltas.Select(delta => delta.Body is { } body ? new PluginDocument(stored[delta.FormKey].RecordType, delta.FormKey, body) : null).OfType<PluginDocument>()],
+            [.. deltas.Where(delta => delta.Body is null).Select(delta => delta.FormKey)]);
         if (!LearnWorkingTreeStates(plugin).Holds(out var moved, out var unlearned)) return unlearned;
         touched.AddRange(moved);
 
