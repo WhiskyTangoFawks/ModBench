@@ -1,3 +1,4 @@
+using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 
@@ -17,11 +18,7 @@ internal static class AwaitsItsSourceWrite
 
             var unread = await services.GetRequiredService<IQueries>()
                 .AwaitSourceWrites(own, context.HttpContext.RequestAborted).ConfigureAwait(false);
-            if (unread is not null)
-            {
-                services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(AwaitsItsSourceWrite))
-                    .LogWarning("A write landed that the record index has not read: {Message}", unread.Message);
-            }
+            if (unread is not null) UnreadWrite.Log(services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(AwaitsItsSourceWrite)), unread.Message);
             return result;
         });
 }

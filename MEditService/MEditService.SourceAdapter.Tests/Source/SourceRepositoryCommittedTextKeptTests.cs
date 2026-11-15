@@ -69,7 +69,7 @@ public sealed class SourceRepositoryCommittedTextKeptTests : IDisposable
     [Fact]
     public void AWrittenDocumentWhoseFileKeepsItsStamp_IsComparedInPlaceOfTheFile()
     {
-        var written = new WrittenDocument(NpcPath, FirstEdit, WrittenStamp.Of(NpcPath).Require());
+        var written = new WrittenDocument(NpcPath, FirstEdit, FileStamp.Of(NpcPath).Require());
 
         var changes = Repository(_modFolder).ChangedSinceLastCommitIn(Plugin, [NpcPath], [written]).Value();
 

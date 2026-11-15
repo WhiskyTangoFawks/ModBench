@@ -6,6 +6,7 @@ using MEditService.LoadOrder;
 using MEditService.ModFolderAdapter;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.RecordIndex;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -43,6 +44,7 @@ public static class CommandHandlers
             sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<UnsavedDocuments>(),
             sp.GetRequiredService<LoadOrderHolder>(),
+            sp.GetRequiredService<IHandedWrites>(),
             sp.GetRequiredService<ILogger<EditRecordHandler>>()));
 
         services.AddSingleton(sp => new CreateRecordHandler(

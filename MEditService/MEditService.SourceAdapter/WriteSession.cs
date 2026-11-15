@@ -97,7 +97,9 @@ internal sealed class WriteSession : IWriteSession, ISourceFiles
                 foreach (var path in Changes.Deletions) journal.DeleteTree(path);
                 foreach (var (path, text) in Changes.Documents)
                 {
-                    if (journal.Write(path, Encoding.UTF8.GetBytes(text)) is { } stamp) written.Add(new WrittenDocument(path, text, stamp));
+                    var bytes = Encoding.UTF8.GetBytes(text);
+                    if (journal.Write(path, bytes) is { } stamp)
+                        written.Add(new WrittenDocument(path, Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(bytes)), stamp));
                 }
                 if (following() is { } failure) throw SourceStopException.Of(failure);
             });

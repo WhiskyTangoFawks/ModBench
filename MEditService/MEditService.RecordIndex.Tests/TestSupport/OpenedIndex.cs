@@ -16,6 +16,8 @@ internal sealed class OpenedIndex(ServiceProvider container, LoadOrderHolder hol
 
     internal IQueries Queries { get; } = container.GetRequiredService<IQueries>();
 
+    internal IHandedWrites Hands => container.GetRequiredService<IHandedWrites>();
+
     internal LoadOrderStatus Status => Queries.GetStatus();
 
     internal long Sequence => Queries.GetSequence();

@@ -109,7 +109,7 @@ public sealed class NamedFilesReadAloneTests : IDisposable
     }
 
     private static WrittenDocument WrittenWithAnotherEditorIdThanTheFile(string path) =>
-        new(path, File.ReadAllText(path).Replace("FixtureNpc", "HandedNpc", StringComparison.Ordinal), WrittenStamp.Of(path).Require());
+        new(path, File.ReadAllText(path).Replace("FixtureNpc", "HandedNpc", StringComparison.Ordinal), FileStamp.Of(path).Require());
 
     private static string ReadText(FilesRead read) => read.Documents.Single().Text;
 

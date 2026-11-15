@@ -67,7 +67,7 @@ internal sealed class WriteJournal(string sourceFolder)
     }
 
     /// <summary>The stamp the file took, null when the file system cannot answer.</summary>
-    internal string? Write(string path, byte[] content)
+    internal FileStamp? Write(string path, byte[] content)
     {
         CreateDirectory(PathShape.DirectoryOf(path));
         TempName.RemoveLeftovers(PathShape.DirectoryOf(path));
@@ -372,13 +372,13 @@ internal sealed class WriteJournal(string sourceFolder)
         TempName.FileIn(PathShape.DirectoryOf(path));
 
     // Stamped before the move, which keeps the stamp, so no write that lands after the move is taken for this one.
-    private static string? WriteAtomic(string path, byte[] content, string? tempPath = null)
+    private static FileStamp? WriteAtomic(string path, byte[] content, string? tempPath = null)
     {
         tempPath ??= TempPathFor(path);
         try
         {
             File.WriteAllBytes(tempPath, content);
-            var stamp = WrittenStamp.Of(tempPath);
+            var stamp = FileStamp.Of(tempPath);
             File.Move(tempPath, path, overwrite: true);
             return stamp;
         }

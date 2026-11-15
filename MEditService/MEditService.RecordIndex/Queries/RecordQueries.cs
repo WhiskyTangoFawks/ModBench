@@ -20,7 +20,7 @@ internal sealed class RecordQueries(
     LoadOrderHolder loadOrder,
     SchemaReflector schemaReflector,
     ISourceAdapter source,
-    ILogger<RecordQueries> logger) : IQueries, IDisposable
+    ILogger<RecordQueries> logger) : IQueries
 {
     private readonly ILogger _logger = logger;
     private readonly Indexer _index = index;
@@ -645,6 +645,4 @@ internal sealed class RecordQueries(
 
     private IReadOnlyDictionary<string, RecordTableSchema> RequireSchemas() =>
         _schemaReflector.GetSchemas(_loadOrder.Require().GameRelease);
-
-    public void Dispose() => _index.Dispose();
 }

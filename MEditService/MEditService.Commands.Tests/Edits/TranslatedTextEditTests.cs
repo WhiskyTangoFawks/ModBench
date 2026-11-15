@@ -18,7 +18,7 @@ public sealed class TranslatedTextEditTests : IDisposable
     {
         var formKey = _fixture.Seed(new Weapon(KeyOf(0x800), Fallout4Release.Fallout4) { EditorID = "Gun", Name = "10mm" }, "weap");
 
-        var outcome = _fixture.ScriptEditHandler.Edit(_fixture.Plugin, formKey, Spelled("set", "Name", "\"Pistolet\""), copiesWithNoPluginSource: Envelopes.NoCopies)
+        var outcome = _fixture.ScriptEditHandler.Edit(_fixture.Plugin, formKey, Spelled("set", "Name", "\"Pistolet\""), copiesWithNoPluginSource: Envelopes.NoCopies, CancellationToken.None)
             .GetAwaiter().GetResult().AsResult();
 
         Assert.True(outcome.Applied, outcome.Message);

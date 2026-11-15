@@ -32,7 +32,7 @@ internal static class NamedFiles
         files.RemoveWhere(file => written.At(file) is null && listing.HoldsWhatWasRead(file));
         var held = new HashSet<string>(StringComparer.Ordinal);
         var now = new Dictionary<string, IReadOnlyList<PluginDocument>>(TreeListing.PathComparer);
-        var settled = new Dictionary<string, string?>(TreeListing.PathComparer);
+        var settled = new Dictionary<string, FileStamp?>(TreeListing.PathComparer);
         foreach (var file in files)
         {
             if (!file.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.OrdinalIgnoreCase) || !documents.ReadsAsARecord(file)) return null;

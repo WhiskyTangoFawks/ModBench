@@ -1,7 +1,6 @@
 using System.Text.Json;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
-using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
@@ -17,53 +16,75 @@ public sealed class EditRecordTests : IDisposable
 
     private string NpcFile => Path.Combine(_mod.ModFolder, _mod.DocumentFile(_mod.Npc.ToString()).Require());
 
-    private RecordEditResult EditHeightMax() =>
-        _mod.ScriptEditHandler.Edit(_mod.Plugin, _mod.Npc.ToString(), SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax")), copiesWithNoPluginSource: Envelopes.NoCopies)
-            .GetAwaiter().GetResult().AsResult();
+    private Task<Answer<RecordEdited, RecordEditRefused>> EditingHeightMax(CancellationToken cancel = default) =>
+        _mod.ScriptEditHandler.Edit(
+            _mod.Plugin, _mod.Npc.ToString(), SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax")), Envelopes.NoCopies, cancel);
+
+    private async Task<RecordEditResult> EditHeightMax() => (await EditingHeightMax()).AsResult();
 
     [Fact]
-    public void AFieldEdit_IsWrittenToTheRecordsFile()
+    public async Task AFieldEdit_IsWrittenToTheRecordsFile()
     {
-        var outcome = EditHeightMax();
+        var outcome = await EditHeightMax();
 
         Assert.True(outcome.Applied, outcome.Message);
         Assert.Contains("0.75", File.ReadAllText(NpcFile), StringComparison.Ordinal);
     }
 
     [Fact]
-    public void AFieldEdit_HandsTheRecordIndexTheDocumentItWrote_WithTheStampItsFileTook_AndCountsNoWrite()
+    public async Task AFieldEdit_HandsTheRecordIndexTheDocumentItWrote_WithTheStampItsFileTook_AndCountsNoWrite()
     {
-        IReadOnlyCollection<PluginChange>? handed = null;
-        _mod.Holder.Handed += (written, reads) =>
-        {
-            handed = written;
-            reads.Add(Task.FromResult<string?>(null));
-        };
         var own = _mod.Holder.BeginOwnWrites();
 
-        EditHeightMax();
+        await EditHeightMax();
 
-        var change = Assert.Single(handed.Require());
-        var document = Assert.Single(change.Documents.Require());
-        Assert.Equal((_mod.Plugin, NpcFile, File.ReadAllText(NpcFile), WrittenStamp.Of(NpcFile)), (change.Plugin, document.Path, document.Text, document.Stamp));
+        var plugin = Assert.Single(Assert.Single(_mod.Index.Hands).Require());
+        var document = Assert.Single(plugin.Documents);
+        Assert.Equal((_mod.Plugin, NpcFile, File.ReadAllText(NpcFile), FileStamp.Of(NpcFile)), (plugin.Plugin, document.Path, document.Text, document.Stamp));
         Assert.Empty(own.Snapshot());
     }
 
     [Fact]
-    public void AFieldEditTheRecordIndexCouldNotRead_IsAnsweredAsWritten()
+    public async Task AFieldEdit_IsAnsweredOnlyOnceTheRecordIndexHoldsIt()
     {
-        _mod.Holder.Handed += (_, reads) => reads.Add(Task.FromResult<string?>("The record index could not read it."));
+        var held = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _mod.Index.Answer = () => held.Task;
 
-        Assert.True(EditHeightMax().Applied);
+        var editing = EditingHeightMax();
+
+        Assert.False(editing.IsCompleted);
+        held.SetResult(null);
+        Assert.True((await editing).AsResult().Applied);
     }
 
     [Fact]
-    public void AFieldEditOfAFileHeldUnsaved_IsRefusedAsUnsavedChanges()
+    public async Task AFieldEditWhoseCallerStopsWaiting_StopsWaiting_AndLeavesItsWriteOnDisk()
+    {
+        _mod.Index.Answer = () => new TaskCompletionSource<string?>().Task;
+        using var abandoned = new CancellationTokenSource();
+
+        var editing = EditingHeightMax(abandoned.Token);
+        await abandoned.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => editing.WaitAsync(TimeSpan.FromSeconds(30)));
+        Assert.Contains("0.75", File.ReadAllText(NpcFile), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AFieldEditTheRecordIndexCouldNotRead_IsAnsweredAsWritten()
+    {
+        _mod.Index.Answer = () => Task.FromResult<string?>("The record index could not read it.");
+
+        Assert.True((await EditHeightMax()).Applied);
+    }
+
+    [Fact]
+    public async Task AFieldEditOfAFileHeldUnsaved_IsRefusedAsUnsavedChanges()
     {
         var saved = File.ReadAllText(NpcFile);
         _mod.Unsaved.Apply([new DocumentChange(NpcFile, saved + " ")]);
 
-        var outcome = EditHeightMax();
+        var outcome = await EditHeightMax();
 
         Assert.Equal(RecordEditRefusal.UnsavedChanges, outcome.Refusal);
     }

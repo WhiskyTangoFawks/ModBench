@@ -11,15 +11,15 @@ internal sealed class TreeListing(TimeProvider time)
 
     private readonly ConcurrentDictionary<string, string?> _declared = new(PathComparer);
     private readonly ConcurrentDictionary<string, bool> _gone = new(PathComparer);
-    private readonly ConcurrentDictionary<string, string> _settled = new(PathComparer);
+    private readonly ConcurrentDictionary<string, FileStamp> _settled = new(PathComparer);
 
     /// <summary><paramref name="settled"/> is <see cref="SettledStampOf"/> the file, taken before the read.</summary>
-    internal void Read(string file, string? formKey, string? settled = null)
+    internal void Read(string file, string? formKey, FileStamp? settled = null)
     {
         _declared[file] = formKey;
         _gone.TryRemove(file, out _);
-        if (settled is null) _settled.TryRemove(file, out _);
-        else _settled[file] = settled;
+        if (settled is { } stamp) _settled[file] = stamp;
+        else _settled.TryRemove(file, out _);
     }
 
     internal void ReadGone(string file)
@@ -30,10 +30,10 @@ internal sealed class TreeListing(TimeProvider time)
     }
 
     /// <summary>The file's stamp once it has settled, so a later write moves it (ADR-0003); null before.</summary>
-    internal string? SettledStampOf(string file) => SettledStamp.Of(file, time);
+    internal FileStamp? SettledStampOf(string file) => FileStamp.Of(file) is { } stamp && stamp.SettledAt(time.GetUtcNow()) ? stamp : null;
 
     /// <summary>Whether the file keeps the settled stamp it had when last read, so it holds what was read.</summary>
-    internal bool HoldsWhatWasRead(string file) => _settled.TryGetValue(file, out var stamp) && WrittenStamp.Of(file) == stamp;
+    internal bool HoldsWhatWasRead(string file) => _settled.TryGetValue(file, out var stamp) && FileStamp.Of(file) == stamp;
 
     internal bool Holds(string file, out string? formKey) => _declared.TryGetValue(file, out formKey);
 

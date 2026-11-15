@@ -1,8 +1,10 @@
-using System.Text;
-using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
 
 namespace MEditService.SourceAdapter;
+
+/// <summary>A document mEdit wrote: its absolute path, its text as a read of the file's bytes gives it, and the stamp its
+/// file took.</summary>
+public sealed record WrittenDocument(string Path, string Text, FileStamp Stamp);
 
 /// <summary>Documents mEdit wrote, each standing in for its file while the file keeps the stamp it took (ADR-0003).</summary>
 internal sealed class WrittenDocuments
@@ -14,10 +16,7 @@ internal sealed class WrittenDocuments
         foreach (var document in written) _byPath[Path.GetFullPath(document.Path)] = document;
     }
 
-    /// <summary>The text a read of the file's bytes gives; null when no document written there still stands.</summary>
-    internal string? At(string path)
-    {
-        if (!_byPath.TryGetValue(Path.GetFullPath(path), out var document) || WrittenStamp.Of(path) != document.Stamp) return null;
-        return Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(Encoding.UTF8.GetBytes(document.Text)));
-    }
+    /// <summary>Null when no document written there still stands.</summary>
+    internal string? At(string path) =>
+        _byPath.TryGetValue(Path.GetFullPath(path), out var document) && FileStamp.Of(path) == document.Stamp ? document.Text : null;
 }

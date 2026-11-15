@@ -221,7 +221,7 @@ public sealed class FormIdEditTests
     {
         using var two = TwoModReferenceFixture.Create(initReferencer: true);
 
-        var result = (await two.ScriptEditHandler.Edit(two.TargetPlugin, two.TargetRace.ToString(), FormKeySet, copiesWithNoPluginSource: Envelopes.NoCopies)).AsResult();
+        var result = (await two.ScriptEditHandler.Edit(two.TargetPlugin, two.TargetRace.ToString(), FormKeySet, copiesWithNoPluginSource: Envelopes.NoCopies, CancellationToken.None)).AsResult();
 
         Assert.True(result.Applied, result.Message);
         Assert.Contains("000F00:Base.esm", two.DocumentCarrying(two.ReferencerPlugin, TwoModReferenceFixture.ReferencerNpcEditorId).Body, StringComparison.Ordinal);
