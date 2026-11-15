@@ -7,8 +7,6 @@ import type { FlaggedPluginFile } from '../wire/messages';
 import { isReadFailed } from '../wire/readFailed';
 import { lastHanded } from '../ports/lastBuilt';
 
-export type FlaggedReader = Pick<MEditClient, 'getFlaggedPluginHashes' | 'onStatusChanged'>;
-
 const UNANSWERED: FlaggedRead = { kind: 'unanswered' };
 
 const keyOf = ({ size, modifiedNs }: FileStamp, flags: FlaggedPluginFile['flags']): string =>
