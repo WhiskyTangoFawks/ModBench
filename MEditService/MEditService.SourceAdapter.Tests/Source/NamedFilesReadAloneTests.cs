@@ -1,7 +1,9 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
+using Microsoft.Extensions.Time.Testing;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -17,12 +19,13 @@ public sealed class NamedFilesReadAloneTests : IDisposable
     private static readonly PluginAddress Plugin = new(PluginName, TestMod.Name);
 
     private readonly ScratchDirectory _modFolder = new("medit-named-files-");
+    private readonly FakeTimeProvider _clock = new(TimeProvider.System.GetUtcNow());
     private readonly ISourceRepository _repository;
 
     public NamedFilesReadAloneTests()
     {
         PluginBaselines.InitWithNoRecords(_modFolder);
-        _repository = TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4).Require();
+        _repository = TestAdapters.Source(_clock).Open(TestMod.In(_modFolder), GameRelease.Fallout4).Require();
         _repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", "FixtureNpc", NpcBody(NpcFormKey))).Wrote();
         _repository.Put(Plugin, new SourceDocument(CellFormKey, "cell", "FixtureCell", RecordTextCodec.SerializeToText(
             new Cell(FormKey.Factory(CellFormKey), Fallout4Release.Fallout4) { EditorID = "FixtureCell" }, GameRelease.Fallout4))).Wrote();
@@ -81,7 +84,7 @@ public sealed class NamedFilesReadAloneTests : IDisposable
     {
         var files = FallingBack[named](this);
 
-        Assert.Null(_repository.ReadFiles(Plugin, files).Value());
+        Assert.Null(_repository.ReadFiles(Plugin, files, []).Value());
     }
 
     [Fact]
@@ -89,7 +92,7 @@ public sealed class NamedFilesReadAloneTests : IDisposable
     {
         var files = Listed([NpcFile]);
 
-        Assert.Equal([NpcFormKey], _repository.ReadFiles(Plugin, files).Value().Require().Documents.Select(document => document.FormKey));
+        Assert.Equal([NpcFormKey], _repository.ReadFiles(Plugin, files, []).Value().Require().Documents.Select(document => document.FormKey));
     }
 
     [Fact]
@@ -98,10 +101,73 @@ public sealed class NamedFilesReadAloneTests : IDisposable
         var npc = NpcFile;
         _ = Listed([npc]);
         File.Delete(npc);
-        Assert.Equal([NpcFormKey], _repository.ReadFiles(Plugin, [npc]).Value().Require().Gone);
+        Assert.Equal([NpcFormKey], _repository.ReadFiles(Plugin, [npc], []).Value().Require().Gone);
 
-        var again = _repository.ReadFiles(Plugin, [npc]).Value().Require();
+        var again = _repository.ReadFiles(Plugin, [npc], []).Value().Require();
 
         Assert.Equal((0, 0), (again.Documents.Count, again.Gone.Count));
+    }
+
+    private static WrittenDocument WrittenWithAnotherEditorIdThanTheFile(string path) =>
+        new(path, File.ReadAllText(path).Replace("FixtureNpc", "HandedNpc", StringComparison.Ordinal), FileStamp.Of(path).Require());
+
+    private static string ReadText(FilesRead read) => read.Documents.Single().Text;
+
+    [Fact]
+    public void AWrittenDocument_IsReadInPlaceOfItsFile_WhileTheFileKeepsItsStamp()
+    {
+        var npc = Listed([NpcFile])[0];
+
+        var read = _repository.ReadFiles(Plugin, [npc], [WrittenWithAnotherEditorIdThanTheFile(npc)]).Value().Require();
+
+        Assert.Contains("HandedNpc", ReadText(read), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AWrittenDocumentWhoseFileWasWrittenAgain_IsReadFromTheFile()
+    {
+        var npc = Listed([NpcFile])[0];
+        var written = WrittenWithAnotherEditorIdThanTheFile(npc);
+        File.AppendAllText(npc, " ");
+
+        var read = _repository.ReadFiles(Plugin, [npc], [written]).Value().Require();
+
+        Assert.Contains("FixtureNpc", ReadText(read), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFileWhoseWrittenDocumentWasReadBeforeItsStampSettled_IsReadAgain()
+    {
+        var npc = Listed([NpcFile])[0];
+        _ = _repository.ReadFiles(Plugin, [npc], [WrittenWithAnotherEditorIdThanTheFile(npc)]).Value();
+
+        var again = _repository.ReadFiles(Plugin, [npc], []).Value().Require();
+
+        Assert.Contains("FixtureNpc", ReadText(again), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFileReadOnceItsStampSettled_IsNotReadAgainWhileItKeepsIt()
+    {
+        var npc = Listed([NpcFile])[0];
+        _clock.Advance(TimeSpan.FromSeconds(3));
+        _ = _repository.ReadFiles(Plugin, [npc], []).Value();
+
+        var again = _repository.ReadFiles(Plugin, [npc], []).Value().Require();
+
+        Assert.Equal((0, 0), (again.Documents.Count, again.Gone.Count));
+    }
+
+    [Fact]
+    public void AFileReadOnceItsStampSettled_IsReadAgainOnceWrittenAgain()
+    {
+        var npc = Listed([NpcFile])[0];
+        _clock.Advance(TimeSpan.FromSeconds(3));
+        _ = _repository.ReadFiles(Plugin, [npc], []).Value();
+        File.AppendAllText(npc, " ");
+
+        var again = _repository.ReadFiles(Plugin, [npc], []).Value().Require();
+
+        Assert.Single(again.Documents);
     }
 }

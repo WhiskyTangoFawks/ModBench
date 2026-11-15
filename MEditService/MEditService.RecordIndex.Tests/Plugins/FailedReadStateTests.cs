@@ -661,10 +661,12 @@ public sealed class FailedReadStateTests : IDisposable
             return inner.RecordOf(plugin, identity);
         }
 
-        public Answer<FilesRead?, SourceFailure> ReadFiles(PluginAddress plugin, IReadOnlyList<string> files) => inner.ReadFiles(plugin, files);
+        public Answer<FilesRead?, SourceFailure> ReadFiles(PluginAddress plugin, IReadOnlyList<string> files, IReadOnlyList<WrittenDocument> written) =>
+            inner.ReadFiles(plugin, files, written);
 
-        public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommitIn(PluginAddress plugin, IReadOnlyList<string> files) =>
-            inner.ChangedSinceLastCommitIn(plugin, files);
+        public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommitIn(
+            PluginAddress plugin, IReadOnlyList<string> files, IReadOnlyList<WrittenDocument> written) =>
+            inner.ChangedSinceLastCommitIn(plugin, files, written);
 
         public FilesStamp RepositoryStamp() => inner.RepositoryStamp();
 

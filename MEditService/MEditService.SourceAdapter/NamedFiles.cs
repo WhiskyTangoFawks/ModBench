@@ -12,7 +12,7 @@ internal static class NamedFiles
 
     internal static FilesRead? Read(
         string sourceFolder, PluginAddress plugin, ISourceFiles disk, SourceTreeDocuments documents, TreeListing? listing,
-        IReadOnlyList<string> named)
+        IReadOnlyList<string> named, WrittenDocuments written)
     {
         if (listing is null || named.Count > MostPaths) return null;
         var root = SourceRepositoryLayout.RootIn(sourceFolder, plugin.Name);
@@ -29,8 +29,10 @@ internal static class NamedFiles
             files.UnionWith(listed);
         }
 
+        files.RemoveWhere(file => written.At(file) is null && listing.HoldsWhatWasRead(file));
         var held = new HashSet<string>(StringComparer.Ordinal);
         var now = new Dictionary<string, IReadOnlyList<PluginDocument>>(TreeListing.PathComparer);
+        var settled = new Dictionary<string, FileStamp?>(TreeListing.PathComparer);
         foreach (var file in files)
         {
             if (!file.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.OrdinalIgnoreCase) || !documents.ReadsAsARecord(file)) return null;
@@ -39,7 +41,8 @@ internal static class NamedFiles
                 if (formKey is null) return null;
                 held.Add(formKey);
             }
-            now[file] = documents.DocumentsIn(file);
+            settled[file] = listing.SettledStampOf(file);
+            now[file] = documents.DocumentsIn(file, written.At(file));
         }
 
         var own = now.Values.Where(records => records.Count > 0).Select(records => records[0]).ToList();
@@ -52,7 +55,7 @@ internal static class NamedFiles
 
         foreach (var (file, records) in now)
         {
-            if (records.Count > 0) listing.Read(file, records[0].FormKey);
+            if (records.Count > 0) listing.Read(file, records[0].FormKey, settled[file]);
             else listing.ReadGone(file);
         }
         return new FilesRead(own, [.. held.Except(holds)]);
