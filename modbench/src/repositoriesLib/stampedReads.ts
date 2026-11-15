@@ -45,9 +45,8 @@ export const foundUnchanged = (path: string): void => {
   trusting.getStore()?.unchanged.add(pathKey(path));
 };
 
-/** A reader of `path` that reads it again only when its stamp has changed, read without its stamp while `readTrustingKept`
- *  or `trustingKept` runs, and checked by `readTrustingKept` where a change named it. `comparesText` says the kept answer is a
- *  file's content, so a settled stamp that holds shows the file unchanged. */
+/** A reader of `path` that reads it again only when its stamp has changed, and trusts what is kept inside a trusted read.
+ *  `comparesText`: the answer is a file's content, which a settled stamp that holds shows unchanged. */
 export function keptTrusted<T>(
   stampOf: (path: string) => Promise<FileStamp>, read: (path: string) => Promise<T>, kept = new Map<string, Kept<T>>(), stampMayMiss = false, comparesText = false,
 ): (path: string) => Promise<T> {
