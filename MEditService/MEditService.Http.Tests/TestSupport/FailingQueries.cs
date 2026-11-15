@@ -63,7 +63,7 @@ internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null)
 
     public Answer<IReadOnlyList<DocumentName>, IndexRefused> GetPluginSourceNames(string? path, string text, int? at) => throw Failed();
 
-    public Task<IndexRefused?> AwaitSourceWritesAfter(long before, CancellationToken cancel) => throw Failed();
+    public Task<IndexRefused?> AwaitSourceWrites(OwnWrites own, CancellationToken cancel) => throw Failed();
 
     public LoadOrderStatus GetStatus() => throw Failed();
 

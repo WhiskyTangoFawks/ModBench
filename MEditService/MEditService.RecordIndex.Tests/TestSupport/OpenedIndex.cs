@@ -34,11 +34,11 @@ internal sealed class OpenedIndex(ServiceProvider container, LoadOrderHolder hol
     /// <summary>A change signalled as Signal change signals one whose paths name <paramref name="changes"/>' files.</summary>
     internal void SignalChange(IReadOnlyCollection<PluginChange> changes) => container.GetRequiredService<ISourceAdapter>().SignalChange(changes);
 
-    /// <summary>Returns once the record index has read every source write counted after <paramref name="before"/>, as a
-    /// writer waits for its own; a refusal here is a broken fixture.</summary>
-    internal void AwaitWritesAfter(long before)
+    /// <summary>Returns once the record index has read <paramref name="own"/>, as a writer waits for its own; a refusal
+    /// here is a broken fixture.</summary>
+    internal void AwaitWrites(OwnWrites own)
     {
-        if (Queries.AwaitSourceWritesAfter(before, CancellationToken.None).GetAwaiter().GetResult() is { } unread)
+        if (Queries.AwaitSourceWrites(own, CancellationToken.None).GetAwaiter().GetResult() is { } unread)
             throw new InvalidOperationException($"Expected the Index to read the writes: {unread.Refusal}: {unread.Message}");
     }
 

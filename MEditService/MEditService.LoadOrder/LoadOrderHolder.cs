@@ -25,12 +25,19 @@ public sealed class LoadOrderHolder
     public long SourceWrites => Interlocked.Read(ref _sourceWrites);
 
     private readonly Lock _writing = new();
-    private readonly Dictionary<PluginAddress, long> _lastWriteOf = new(PluginAddress.Comparer);
-    private long _lastUnnamedWrite;
+    private readonly AsyncLocal<OwnWrites?> _ownWrites = new();
 
     /// <summary>Raised by every SourceWritten with the plugins it names and the count it was given, in the order of the
     /// counts: a write counted is raised before the next is counted.</summary>
     public event Action<IReadOnlyCollection<PluginChange>?, long>? Written;
+
+    /// <summary>From here, the writes counted by this flow of execution and the ones it starts, as they are counted.</summary>
+    public OwnWrites BeginOwnWrites()
+    {
+        OwnWrites own = new();
+        _ownWrites.Value = own;
+        return own;
+    }
 
     /// <summary>Marks that mEdit wrote a system of record, of <paramref name="written"/>; null when no plugin names
     /// what it wrote.</summary>
@@ -39,20 +46,8 @@ public sealed class LoadOrderHolder
         lock (_writing)
         {
             var write = Interlocked.Increment(ref _sourceWrites);
-            if (written is null) _lastUnnamedWrite = write;
-            else foreach (var plugin in written) _lastWriteOf[plugin.Plugin] = write;
+            _ownWrites.Value?.Add(new SourceWrite(write, written?.Select(change => change.Plugin).ToList()));
             Written?.Invoke(written, write);
-        }
-    }
-
-    /// <summary>Of the writes after <paramref name="checkedThrough"/>, the last that named no plugin, which only a check of
-    /// the whole disk reads, or 0 when none did; and each plugin's last.</summary>
-    public (long LastUnnamed, IReadOnlyDictionary<PluginAddress, long> LastOfEach) WritesAfter(long checkedThrough)
-    {
-        lock (_writing)
-        {
-            return (_lastUnnamedWrite > checkedThrough ? _lastUnnamedWrite : 0,
-                _lastWriteOf.Where(last => last.Value > checkedThrough).ToDictionary(PluginAddress.Comparer));
         }
     }
 
@@ -77,6 +72,30 @@ public sealed class LoadOrderHolder
 
     private sealed record Arrival(LoadOrderSnapshot Snapshot, long Version);
 }
+
+/// <summary>The writes one flow of execution counted, so a gesture waits for its own and no other.</summary>
+public sealed class OwnWrites
+{
+    private readonly List<SourceWrite> _writes = [];
+
+    internal OwnWrites()
+    {
+    }
+
+    internal void Add(SourceWrite write)
+    {
+        lock (_writes) _writes.Add(write);
+    }
+
+    public IReadOnlyList<SourceWrite> Snapshot()
+    {
+        lock (_writes) return [.. _writes];
+    }
+}
+
+/// <summary>A write of mEdit's, by its count, and the plugins it named; null when none did, which only a check of the
+/// whole disk reads.</summary>
+public sealed record SourceWrite(long Count, IReadOnlyList<PluginAddress>? Plugins);
 
 /// <summary>A plugin a change touched, and the files of it the change names; null when it cannot tell which, so every file
 /// of the plugin is read again (ADR-0001).</summary>

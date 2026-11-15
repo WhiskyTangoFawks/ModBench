@@ -1,4 +1,6 @@
 using System.Reflection;
+using System.Runtime.ExceptionServices;
+using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,9 +11,9 @@ namespace MEditService.Http.Tests.TestSupport;
 public class AwaitingQueries : DispatchProxy
 {
     private IQueries? _real;
-    private Func<long, Task<IndexRefused?>>? _awaiting;
+    private Func<OwnWrites, Task<IndexRefused?>>? _awaiting;
 
-    internal static void Replace(IServiceCollection services, Func<long, Task<IndexRefused?>> awaiting)
+    internal static void Replace(IServiceCollection services, Func<OwnWrites, Task<IndexRefused?>> awaiting)
     {
         var original = services.Single(service => service.ServiceType == typeof(IQueries));
         services.Remove(original);
@@ -28,14 +30,15 @@ public class AwaitingQueries : DispatchProxy
     protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
     {
         var method = targetMethod.Require();
-        if (method.Name == nameof(IQueries.AwaitSourceWritesAfter)) return _awaiting.Require()((long)args.Require()[0].Require());
+        if (method.Name == nameof(IQueries.AwaitSourceWrites)) return _awaiting.Require()((OwnWrites)args.Require()[0].Require());
         try
         {
             return method.Invoke(_real, args);
         }
         catch (TargetInvocationException ex) when (ex.InnerException is not null)
         {
-            throw ex.InnerException;
+            ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
+            throw;
         }
     }
 }

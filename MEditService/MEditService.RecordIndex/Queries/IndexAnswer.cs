@@ -30,19 +30,6 @@ internal sealed class IndexAnswer(Action onInvalidation)
             return new IndexRefused(IndexRefusal.SourceStopped, failure.Reason);
         });
 
-    public static async Task<IndexRefused?> Awaiting(Func<Task> wait)
-    {
-        try
-        {
-            await wait().ConfigureAwait(false);
-            return null;
-        }
-        catch (Exception ex) when (RefusalOf(ex) is { } refused)
-        {
-            return refused;
-        }
-    }
-
     public IndexRefused? Refusing(Func<IndexRefused?> act) =>
         Flat<bool>(() =>
         {

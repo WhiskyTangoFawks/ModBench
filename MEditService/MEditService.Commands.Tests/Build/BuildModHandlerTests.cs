@@ -395,11 +395,11 @@ public sealed class BuildModHandlerTests : IDisposable
     public async Task ACompile_MarksEachPluginItWroteWritten_ForTheReadsAfterIt()
     {
         await InitializedWithALocalizedPlugin();
-        var before = _holder.SourceWrites;
+        var own = _holder.BeginOwnWrites();
 
         await Landed(Compile());
 
-        Assert.Equal([new PluginAddress(Plugin, ModName)], _holder.WritesAfter(before).LastOfEach.Keys);
+        Assert.Equal([new PluginAddress(Plugin, ModName)], own.Snapshot().SelectMany(write => write.Plugins ?? []));
     }
 
     [Fact]

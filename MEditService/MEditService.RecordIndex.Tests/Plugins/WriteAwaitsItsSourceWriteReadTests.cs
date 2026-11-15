@@ -21,6 +21,7 @@ public sealed class WriteAwaitsItsSourceWriteReadTests : IDisposable
 
     private readonly FakeTimeProvider _clock = new(Start);
     private readonly LoadOrderHolder _holder = new();
+    private readonly OwnWrites _own;
     private readonly GatedPluginAdapter _gate = new();
     private readonly FailingCheck _checks;
     private readonly ParkingSource _source = new();
@@ -31,6 +32,7 @@ public sealed class WriteAwaitsItsSourceWriteReadTests : IDisposable
 
     public WriteAwaitsItsSourceWriteReadTests()
     {
+        _own = _holder.BeginOwnWrites();
         string npc = "";
         _fixture = new PluginFixtureBuilder("read-after-source-write")
             .WithPlugin(CompiledPlugin, mod => npc = mod.Npcs.AddNew("CompiledPluginNpc").FormKey.ToString(), origin: "SourceMod")
@@ -77,8 +79,8 @@ public sealed class WriteAwaitsItsSourceWriteReadTests : IDisposable
         await _gate.WaitUntilParkedAsync();
     }
 
-    private async Task<Answer<RenderedDocument?, IndexRefused>> Read(long before = 0, CancellationToken cancel = default) =>
-        await _index.Queries.AwaitSourceWritesAfter(before, cancel) is { } unread
+    private async Task<Answer<RenderedDocument?, IndexRefused>> Read(OwnWrites? own = null, CancellationToken cancel = default) =>
+        await _index.Queries.AwaitSourceWrites(own ?? _own, cancel) is { } unread
             ? unread
             : _index.Queries.GetRenderedDocument(_compiledPlugin.Key, _npc);
 
@@ -129,7 +131,7 @@ public sealed class WriteAwaitsItsSourceWriteReadTests : IDisposable
     {
         _holder.SourceWritten([new PluginChange(NotInTheLoadOrder, null)]);
 
-        Assert.Null(await _index.Queries.AwaitSourceWritesAfter(0, CancellationToken.None).WaitAsync(Generous));
+        Assert.Null(await _index.Queries.AwaitSourceWrites(_own, CancellationToken.None).WaitAsync(Generous));
     }
 
     [Fact]
@@ -203,13 +205,30 @@ public sealed class WriteAwaitsItsSourceWriteReadTests : IDisposable
         await Read().WaitAsync(Generous);
 
         await WorkerParkedInAReconcile();
-        var before = _holder.SourceWrites;
+        var own = _holder.BeginOwnWrites();
         _holder.SourceWritten(null);
-        var read = Read(before);
+        var read = Read(own);
 
         Assert.False(read.IsCompleted);
         _gate.Release();
         AssertWritten(await read.WaitAsync(Generous));
+    }
+
+    [Fact]
+    public async Task AWrite_IsNotRefusedByAnotherWritersFailedCheck()
+    {
+        _checks.FailNext();
+        var others = await Task.Run(() =>
+        {
+            var own = _holder.BeginOwnWrites();
+            _holder.SourceWritten(null);
+            return own;
+        });
+        Assert.Equal(IndexRefusal.IndexNotReady, (await Read(others).WaitAsync(Generous)).Refused().Refusal);
+        var mine = _holder.BeginOwnWrites();
+        Written();
+
+        AssertWritten(await Read(mine).WaitAsync(Generous));
     }
 
     [Fact]
@@ -220,9 +239,9 @@ public sealed class WriteAwaitsItsSourceWriteReadTests : IDisposable
         await Read().WaitAsync(Generous);
         Waits.Reached(() => !_index.Status.Validating, "the failed re-read's turn ending");
 
-        var before = _holder.SourceWrites;
+        var own = _holder.BeginOwnWrites();
         await WrittenWithItsReReadParked();
-        var read = Read(before);
+        var read = Read(own);
 
         Assert.False(read.IsCompleted);
         _source.Release();

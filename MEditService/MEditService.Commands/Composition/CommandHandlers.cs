@@ -168,7 +168,7 @@ public static class CommandHandlers
 
         services.AddSingleton(sp => new FollowSourceFolderMoveHandler(sp.GetRequiredService<ISourceAdapter>()));
 
-        services.AddSingleton(sp => new SetPluginFileFlagsHandler(sp.GetRequiredService<IPluginAdapter>()));
+        services.AddSingleton(sp => new SetPluginFileFlagsHandler(sp.GetRequiredService<IPluginAdapter>(), sp.GetRequiredService<LoadOrderHolder>()));
 
         services.AddSingleton(sp => new CreatePluginHandler(
             sp.GetRequiredService<IPluginAdapter>(),

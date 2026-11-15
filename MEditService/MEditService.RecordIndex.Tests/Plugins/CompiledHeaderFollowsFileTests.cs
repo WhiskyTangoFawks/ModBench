@@ -79,11 +79,11 @@ public sealed class CompiledHeaderFollowsFileTests : IDisposable
             ReadWrittenBuilt([Master]);
         }
         WriteBuilt(referencingMaster: !dropsMaster);
-        var before = _holder.SourceWrites;
+        var own = _holder.BeginOwnWrites();
         _holder.SourceWritten([new PluginChange(_built.Key, null)]);
         var read = Task.Run(() =>
         {
-            _index.AwaitWritesAfter(before);
+            _index.AwaitWrites(own);
             return MastersOfBuilt();
         });
 

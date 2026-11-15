@@ -9,6 +9,7 @@ internal static class PluginFileEndpoints
     public static IEndpointRouteBuilder MapPluginFileEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/plugin-files/set-flags", SetPluginFileFlags)
+            .AwaitingItsSourceWrite()
             .WithName("SetPluginFileFlags")
             .WithTags(Tag)
             .WithDescription(

@@ -187,6 +187,7 @@ internal static class PluginEndpoints
             .ProducesProblem(503);
 
         app.MapPost("/plugins/create", CreatePlugin)
+            .AwaitingItsSourceWrite()
             .WithName("CreatePlugin")
             .WithTags(Tag)
             .WithDescription(
@@ -216,6 +217,7 @@ internal static class PluginEndpoints
             .ProducesProblem(503);
 
         app.MapPost("/plugins/decompile", Decompile)
+            .AwaitingItsSourceWrite()
             .WithName("DecompilePlugin")
             .WithTags(Tag)
             .Produces<DecompileResult>()
@@ -225,6 +227,7 @@ internal static class PluginEndpoints
             .ProducesProblem(503);
 
         app.MapPost("/plugins/decompile-and-repair", DecompileAndRepair)
+            .AwaitingItsSourceWrite()
             .WithName("DecompileAndRepairPlugin")
             .WithTags(Tag)
             .WithDescription(

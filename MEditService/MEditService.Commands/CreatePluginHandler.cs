@@ -45,6 +45,14 @@ public sealed class CreatePluginHandler
             $"Could not write {address.Name}'s source into {mod.SourceFolder}: {failure} {TakeBack(modKey, address.Name, folder, written)}");
     }
 
+    private async Task<Answer<PluginAddress, PluginCreateRefused>> WrittenOnceItsSourceLands(
+        LoadOrderSnapshot loadOrder, PluginAddress address, string folder, string? sourceFolder, string written)
+    {
+        var landed = await LandSourceIfCompiledPlugin(loadOrder, address, folder, sourceFolder, written);
+        if (landed.Holds(out _, out _)) _holder.SourceWritten([new PluginChange(address, null)]);
+        return landed;
+    }
+
     private string TakeBack(ModKey modKey, string name, string folder, string written)
     {
         if (!_adapter.TakeBackEmpty(modKey, folder, written).Holds(out var takenBack, out var failure))
@@ -109,7 +117,7 @@ public sealed class CreatePluginHandler
 
         return created.Outcome switch
         {
-            EmptyPluginWrite.Written => await LandSourceIfCompiledPlugin(loadOrder, plugin, folder, sourceFolder, created.Written),
+            EmptyPluginWrite.Written => await WrittenOnceItsSourceLands(loadOrder, plugin, folder, sourceFolder, created.Written),
             EmptyPluginWrite.FolderGone => new PluginCreateRefused(PluginCreateRefusal.FolderGone,
                 $"The folder {folder} has gone, so {plugin.Name} was not created."),
             EmptyPluginWrite.FileExists => new PluginCreateRefused(PluginCreateRefusal.FileExists,

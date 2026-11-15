@@ -40,7 +40,7 @@ public interface IQueries
     Answer<PlacedReferences, IndexRefused> GetPlacedReferences(string targetFormKey);
     Answer<IReadOnlyList<CopyNaming>, IndexRefused> GetPluginNameReferences(string name);
     /// <summary>Each copy, in an active plugin with no plugin source, that copies or links the record <paramref name="plugin"/> holds.
-    /// No source write of mEdit's changes such a copy, so it waits for none.</summary>
+    /// No source write of mEdit's changes such a copy.</summary>
     Answer<IReadOnlyList<RecordAt>, IndexRefused> GetCopiesWithNoPluginSourceNaming(PluginAddress plugin, string formKey);
     Answer<MemberReferences, IndexRefused> GetScriptReferences(string name);
     /// <summary>Each copy, in an active or compiled plugin, that names the file at <paramref name="dataPath"/> in the Data
@@ -69,9 +69,8 @@ public interface IQueries
     Answer<IReadOnlyList<PluginProblems>, IndexRefused> GetProblems(PluginAddress? plugin);
     Answer<IReadOnlyList<PluginFilePaths>, IndexRefused> GetFilePaths(PluginAddress? plugin);
 
-    /// <summary>Null once the record index has read every source write mEdit made after the count <paramref name="before"/> of
-    /// <see cref="LoadOrderHolder.SourceWrites"/>, holding no thread; otherwise why it has not.</summary>
-    Task<IndexRefused?> AwaitSourceWritesAfter(long before, CancellationToken cancel);
+    /// <summary>Null once the record index has read each of <paramref name="own"/>, holding no thread; otherwise why it has not.</summary>
+    Task<IndexRefused?> AwaitSourceWrites(OwnWrites own, CancellationToken cancel);
 
     // Answered in every state, "no load order yet" included (ADR-0013).
     LoadOrderStatus GetStatus();

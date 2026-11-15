@@ -105,9 +105,9 @@ public sealed class WriteNamingItsFilesTests : IDisposable
 
     private void Written((LoadOrderEntry Entry, SourceChanges Made) saved)
     {
-        var before = _holder.SourceWrites;
+        var own = _holder.BeginOwnWrites();
         _holder.SourceWritten([Named(saved)]);
-        _index.AwaitWritesAfter(before);
+        _index.AwaitWrites(own);
         _index.Settled();
     }
 
@@ -260,14 +260,14 @@ public sealed class WriteNamingItsFilesTests : IDisposable
         var renamedCell = Saved(Container, RepositoryOf(Container).ChangesToPut(Container.Key, Renamed(_keys.Cell, "RenamedCell")));
         using var paused = new FirstRaisePaused();
         _onWritten = paused.Raised;
-        var before = _holder.SourceWrites;
+        var own = _holder.BeginOwnWrites();
         var first = Task.Run(() => _holder.SourceWritten([Named(renamedNpc)]));
         paused.Counted.Wait();
         var second = Task.Run(() => _holder.SourceWritten([Named(renamedCell)]));
 
         paused.Released.Set();
         await Task.WhenAll(first, second);
-        _index.AwaitWritesAfter(before);
+        _index.AwaitWrites(own);
 
         Assert.Equal("RenamedNpc", Record(_npc).EditorId);
         Assert.Equal("RenamedCell", Record(_keys.Cell).EditorId);
@@ -281,7 +281,7 @@ public sealed class WriteNamingItsFilesTests : IDisposable
         var renameNpc = RepositoryOf(Container).ChangesToPut(Container.Key, Renamed(_npc, "RenamedNpc"));
         using var held = new FirstAndThirdNamedReadsHeld();
         _source.BeforeEachNamedRead = held.Before;
-        var before = _holder.SourceWrites;
+        var own = _holder.BeginOwnWrites();
         _holder.SourceWritten([Named(Saved(Overriding, deleteOverride))]);
         held.FirstReached.Wait();
         _holder.SourceWritten([Named(Saved(Container, createNpc))]);
@@ -295,7 +295,7 @@ public sealed class WriteNamingItsFilesTests : IDisposable
         paused.Released.Set();
         await npcWritten;
 
-        var awaited = _index.Queries.AwaitSourceWritesAfter(before, CancellationToken.None);
+        var awaited = _index.Queries.AwaitSourceWrites(own, CancellationToken.None);
 
         Assert.False(awaited.IsCompleted);
         held.Third.Set();

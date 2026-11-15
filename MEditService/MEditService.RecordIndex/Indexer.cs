@@ -523,7 +523,7 @@ internal sealed class Indexer : IDisposable
 
     // The record index holds nothing of a plugin the load order lacks, so a write to it has nothing to be read.
     private static IEnumerable<PluginAddress> NotInTheLoadOrder(OpenScope scope, HashSet<PluginAddress> named) =>
-        named.Where(plugin => !scope.LoadOrder.Plugins.Any(listed => PluginAddress.Comparer.Equals(listed.Key, plugin)));
+        named.Where(plugin => scope.LoadOrder.Plugin(plugin) is null);
 
     // A read that stands on a failure is cleared only by reading the plugin whole, as is one the named read fails on.
     private bool ReadFiles(OpenScope scope, PluginMetadata plugin, IReadOnlyList<string> files)
@@ -575,12 +575,12 @@ internal sealed class Indexer : IDisposable
         }
     }
 
-    /// <summary>Read-your-writes: returns once a check of the disk has read each source write after the count
-    /// <paramref name="before"/> that named no plugin, and a re-read or check has read each plugin the others named.
-    /// Throws <see cref="IndexNotReadyException"/> otherwise.</summary>
-    public async Task AwaitTheReadOfSourceWritesAfter(long before, CancellationToken cancel)
+    /// <summary>Read-your-writes: returns once each of <paramref name="own"/> has been read, a write that named no plugin by a
+    /// check of the disk, the others by a re-read or a check of each plugin they named. Throws
+    /// <see cref="IndexNotReadyException"/> otherwise.</summary>
+    public async Task AwaitTheReadOf(OwnWrites own, CancellationToken cancel)
     {
-        var (lastUnnamed, lastOfEach) = _holder.WritesAfter(Math.Max(before, WritesChecked));
+        var writes = own.Snapshot();
         var deadline = _timeProvider.GetUtcNow() + SourceWriteReadLimit;
         while (true)
         {
@@ -588,10 +588,10 @@ internal sealed class Indexer : IDisposable
             bool checkUnfinished;
             lock (_lock)
             {
-                checkUnfinished = lastUnnamed > _writesChecked;
-                var unread = lastOfEach.Where(last => !ReadSince(last)).ToList();
-                if (!checkUnfinished && unread.Count == 0) return;
-                if (FailedReadOf(checkUnfinished ? lastUnnamed : 0, unread) is { } failed) throw new IndexNotReadyException(NotReadYet + failed);
+                var unread = writes.Where(write => !Read(write)).ToList();
+                checkUnfinished = unread.Exists(write => write.Plugins is null);
+                if (unread.Count == 0) return;
+                if (FailedReadOf(unread) is { } failed) throw new IndexNotReadyException(NotReadYet + failed);
                 announced = _writesRead.Task;
             }
             var remaining = deadline - _timeProvider.GetUtcNow();
@@ -610,29 +610,29 @@ internal sealed class Indexer : IDisposable
         return new IndexNotReadyException($"{NotReadYet}{unfinished} did not finish{reason}.");
     }
 
-    private bool ReadSince(KeyValuePair<PluginAddress, long> lastWrite)
-    {
-        lock (_lock) return lastWrite.Value <= _writesChecked || _writesReReadOf.GetValueOrDefault(lastWrite.Key) >= lastWrite.Value;
-    }
+    // Guarded by _lock.
+    private bool Read(SourceWrite write) =>
+        write.Count <= _writesChecked
+        || (write.Plugins is { } plugins && plugins.All(plugin => _writesReReadOf.GetValueOrDefault(plugin) >= write.Count));
 
     // The check or re-read asked after an unread write that failed: nothing reads that write until another change.
-    private string? FailedReadOf(long uncheckedUnnamed, List<KeyValuePair<PluginAddress, long>> unread)
+    // Guarded by _lock.
+    private string? FailedReadOf(List<SourceWrite> unread)
     {
-        lock (_lock)
+        foreach (var write in unread)
         {
-            if (uncheckedUnnamed > 0 && _checkFailed.Writes >= uncheckedUnnamed)
-                return $"its check of the disk failed: {_checkFailed.Failure}";
-            return unread
-                .Select(last => _reReadFailedOf.TryGetValue(last.Key, out var failed) && failed.Writes >= last.Value
-                    ? $"its re-read of the plugins written failed: {failed.Failure}"
-                    : null)
-                .FirstOrDefault(failure => failure is not null);
+            if (write.Plugins is null)
+            {
+                if (_checkFailed.Writes >= write.Count) return $"its check of the disk failed: {_checkFailed.Failure}";
+                continue;
+            }
+            foreach (var plugin in write.Plugins)
+            {
+                if (_reReadFailedOf.TryGetValue(plugin, out var failed) && failed.Writes >= write.Count)
+                    return $"its re-read of the plugins written failed: {failed.Failure}";
+            }
         }
-    }
-
-    private long WritesChecked
-    {
-        get { lock (_lock) return _writesChecked; }
+        return null;
     }
 
     // A superseded reconcile throws and publishes nothing. The closing swap and its publish share one

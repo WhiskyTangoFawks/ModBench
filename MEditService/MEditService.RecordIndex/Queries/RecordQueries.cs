@@ -551,8 +551,18 @@ internal sealed class RecordQueries(
 
     public LoadOrderStatus GetStatus() => _index.Status;
 
-    public Task<IndexRefused?> AwaitSourceWritesAfter(long before, CancellationToken cancel) =>
-        IndexAnswer.Awaiting(() => _index.AwaitTheReadOfSourceWritesAfter(before, cancel));
+    public async Task<IndexRefused?> AwaitSourceWrites(OwnWrites own, CancellationToken cancel)
+    {
+        try
+        {
+            await _index.AwaitTheReadOf(own, cancel).ConfigureAwait(false);
+            return null;
+        }
+        catch (IndexNotReadyException ex)
+        {
+            return new IndexRefused(IndexRefusal.IndexNotReady, ex.Message);
+        }
+    }
 
     public long GetSequence() => _index.Sequence;
 

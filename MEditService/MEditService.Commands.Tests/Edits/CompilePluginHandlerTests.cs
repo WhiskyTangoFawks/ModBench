@@ -24,11 +24,11 @@ public sealed class CompilePluginHandlerTests : IDisposable
     [Fact]
     public async Task ACompile_MarksItsPluginWritten_ForTheReadsAfterIt()
     {
-        var before = _mod.Holder.SourceWrites;
+        var own = _mod.Holder.BeginOwnWrites();
 
         (await _mod.CompileHandler.CompileAsync([_mod.Plugin])).Value();
 
-        Assert.Equal([_mod.Plugin], _mod.Holder.WritesAfter(before).LastOfEach.Keys);
+        Assert.Equal([_mod.Plugin], own.Snapshot().SelectMany(write => write.Plugins ?? []));
     }
 
     [Fact]
