@@ -5,7 +5,7 @@ import { gameReleaseForGame, nexusDomainForMetaGame, nexusDomainsForGame, shortN
 import { readGameName } from './codecs/modOrganizerIni';
 import { entryNamed, modNameKey, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
 import type { DownloadsDirectoryResolver } from './downloadsDirectory';
-import { exists, get, textByStamp, ignoreSkippedLink, listFolders, readOrAbsent, type SkippedLink } from '../files';
+import { exists, get, textByStamp, ignoreSkippedLink, listDirByStamp, listFolders, readOrAbsent, type SkippedLink } from '../files';
 import type { GameFolderResolver, SteamInstallResolver } from '../gameFolder/gameFolderResolver';
 import type { EntryRef, ModFolder, ModFolders, ModlistEntry } from '../instanceAdapter';
 import type { FileOrigin } from '../instanceAdapter';
@@ -53,7 +53,7 @@ export async function metaGameOfDomain(context: Mo2Context, domain: string): Pro
 export async function listModFolders(
   { instanceRoot }: Mo2Context, skippedLink: SkippedLink,
 ): Promise<ModFolder[] | undefined> {
-  const names = await readOrAbsent<string[] | undefined>(() => listFolders(modsDir(instanceRoot), skippedLink), undefined);
+  const names = await readOrAbsent<string[] | undefined>(() => listFolders(modsDir(instanceRoot), skippedLink, listDirByStamp), undefined);
   return names
     ?.filter((name) => modNameKey(name) !== OVERWRITE_DIR_NAME)
     .map((name) => ({ ...entryNamed(name), path: modDir(instanceRoot, name), modName: name }));

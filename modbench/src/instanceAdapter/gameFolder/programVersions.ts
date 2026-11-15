@@ -7,6 +7,9 @@ import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import type { GameFolder } from '../instanceAdapter';
 import { versionResourceOf, type VersionResource } from './versionResource';
+import { stampKept } from '../files';
+
+const versionResourceAt = stampKept(versionResourceOf);
 
 /** A program's version; or, named, a program the game folder lacks, one with no version resource, a file that is no
  *  Windows program, or one the file system would not read. */
@@ -32,7 +35,7 @@ async function versionIn(
   root: string, program: string, versionOf: (read: Extract<VersionResource, { readonly kind: 'read' }>) => string,
 ): Promise<ProgramVersion> {
   try {
-    const resource = await versionResourceOf(join(root, program));
+    const resource = await versionResourceAt(join(root, program));
     return resource.kind === 'read' ? { kind: 'read', version: versionOf(resource) } : { kind: resource.kind, program };
   } catch (err) {
     return errnoCode(err) === 'ENOENT' ? { kind: 'notFound', program } : { kind: 'unreadable', program, why: errorMessage(err) };

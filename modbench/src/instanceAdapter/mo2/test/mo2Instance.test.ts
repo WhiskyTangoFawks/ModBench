@@ -1148,6 +1148,14 @@ describe('the MO2 Instance adapter', () => {
       expect(signals).toBe(1);
     });
 
+    it('hears a change to .gitmodules, which names the submodules of the source folders', () => {
+      let signals = 0;
+      managerOver(root).subscribe(() => { signals++; });
+
+      expect(fire(root, '.gitmodules')).toBe(true);
+      expect(signals).toBe(1);
+    });
+
     it('arms nothing until someone listens, and disarms when the last listener leaves', () => {
       const watched = managerOver(root);
       expect(live()).toEqual([]);
@@ -1441,6 +1449,25 @@ describe('the MO2 Instance adapter', () => {
         await (await watched.settings()).gameFolder();
 
         expect(fire(join(game, 'Data'), name)).toBe(heard);
+      } finally {
+        await rm(game, { recursive: true, force: true });
+      }
+    });
+
+    it.each([
+      ['Fallout4.exe', true],
+      ['F4SE_Loader.EXE', true],
+      ['Fallout4Launcher.exe', false],
+    ])('follows the game\'s program and its script extender\'s loader at the game folder\'s root, in any case: %s heard %s', async (name, heard) => {
+      const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-programs-'));
+      try {
+        await mkdir(join(game, 'Data'));
+        const watched = watchedOver(contextOver(root, { gameFolderSettingValue: game }));
+        watched.subscribe(() => undefined);
+
+        await (await watched.settings()).gameFolder();
+
+        expect(fire(game, name)).toBe(heard);
       } finally {
         await rm(game, { recursive: true, force: true });
       }

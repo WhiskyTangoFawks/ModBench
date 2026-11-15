@@ -1,17 +1,26 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtemp, mkdir, writeFile, readdir, readFile, rm, stat, utimes } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { access, link, lstat, mkdtemp, mkdir, writeFile, readdir, readFile, rm, stat, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
-import { managerOver } from '../../test/mo2/adapterOver';
+import { adapterOver, managerOver } from '../../test/mo2/adapterOver';
 import { listDir, listDirByStamp, parsedBy, readTrustingKept } from '../files';
 import { sortingRuleFilePaths } from '../mo2/layout';
-import { CHECK_THE_DISK, type InstanceReading, type Reread } from '../instanceAdapter';
+import { programsOf } from '../../tables/gamePaths';
+import { expectKind } from '../../test/expectKind';
+import { CHECK_THE_DISK, type GameFolder, type InstanceReading, type Reread } from '../instanceAdapter';
+const programReads = vi.hoisted(() => vi.fn());
 vi.mock('vscode', () => fakeVscodeModule());
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
-  return { ...actual, readdir: vi.fn(actual.readdir), readFile: vi.fn(actual.readFile), stat: vi.fn(actual.stat) };
+  programReads.mockImplementation(actual.open);
+  return {
+    ...actual, readdir: vi.fn(actual.readdir), readFile: vi.fn(actual.readFile), stat: vi.fn(actual.stat), lstat: vi.fn(actual.lstat),
+    access: vi.fn(actual.access), open: programReads,
+  };
 });
 
 const forgetWhatEarlierTestsKeptOfFoldersNowGone = (): Promise<unknown> => readTrustingKept([], true, () => Promise.resolve());
@@ -164,6 +173,40 @@ describe('a folder listed and a file parsed by their stamps', () => {
     expect(await readTrustingKept([], true, () => textAt(path))).toEqual({ answer: '+B', unheard: [path] });
   });
 
+  describe('on a file system that leaves a folder\'s stamp as it was for an entry added', () => {
+    afterEach(async () => {
+      const { stat: realStat } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+      vi.mocked(stat).mockImplementation(realStat);
+    });
+
+    const addedUnderAHeldStamp = async (): Promise<void> => {
+      const { stat: realStat } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+      await writeFile(join(root, 'a.esp'), '');
+      settle();
+      const held = await realStat(root, { bigint: true });
+      vi.mocked(stat).mockImplementation(async (...args) => (args[0] === root ? held : realStat(...args)));
+      await namesOf(root);
+      await writeFile(join(root, 'b.esp'), '');
+    };
+
+    it('lists the folder again at a check of the disk', async () => {
+      await addedUnderAHeldStamp();
+
+      const unnamed = await readTrustingKept([], false, () => namesOf(root));
+      const checked = await readTrustingKept([], true, () => namesOf(root));
+
+      expect([unnamed.answer, checked.answer]).toEqual([['a.esp'], ['a.esp', 'b.esp']]);
+    });
+
+    it('lists the folder again within a re-read named the entry added', async () => {
+      await addedUnderAHeldStamp();
+
+      const { answer } = await readTrustingKept([join(root, 'b.esp')], false, () => namesOf(root));
+
+      expect(answer).toEqual(['a.esp', 'b.esp']);
+    });
+  });
+
   it('forgets at a check of the disk, as a change no event named, a folder it kept that is gone', async () => {
     const gone = join(root, 'gone');
     await mkdir(gone);
@@ -221,7 +264,7 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     await rm(instance, { recursive: true, force: true });
   });
 
-  it('lists no mod folder again, and still shows a file added to one', async () => {
+  it('lists no mod folder again in a reading named nothing, and lists each again at a check of the disk, which shows a file added to one', async () => {
     const adapter = managerOver(instance);
     const first = await adapter.reading();
     const [name, files] = [...first.modFiles].find(([, listed]) => listed.files.length > 0) ?? ['', undefined];
@@ -230,7 +273,7 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
     await adapter.reading();
     vi.mocked(readdir).mockClear();
-    await adapter.reading();
+    await adapter.reading({ named: [], disk: false });
     expect(listingsOf(folder)).toBe(0);
 
     await mkdir(join(folder, 'added'), { recursive: true });
@@ -251,7 +294,7 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     adapter.subscribe(() => { startedByTheListener.push(namesOf(folder)); });
     await mkdir(join(instance, 'mods', 'New Mod'));
 
-    await adapter.reading({ named: [], disk: false });
+    await adapter.reading({ named: [join(instance, 'mods', 'New Mod')], disk: false });
 
     expect(await Promise.all(startedByTheListener)).toEqual([await namesOf(folder, listDir)]);
     expect(await namesOf(folder, listDir)).toContain('added.txt');
@@ -309,6 +352,113 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     expect(named).not.toEqual(before);
     expect(outside).not.toEqual(named);
     expect(checked).not.toEqual(outside);
+  });
+
+  it('reads .gitmodules again, within a reading, only where a re-read is named it', async () => {
+    execFileSync('git', ['init', '-q', instance]);
+    const file = join(instance, '.gitmodules');
+    const entry = (name: string): string => `[submodule "${name}"]\n\tpath = source/${name}\n\turl = https://example.com/${name}.git\n`;
+    await writeFile(file, entry('A'));
+    const adapter = managerOver(instance);
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
+    const uncloned = async (reread: Reread): Promise<string[]> =>
+      (await (await adapter.reading(reread)).trustingKept(() => adapter.unclonedSubmodules())).map(({ name }) => name);
+    const first = await uncloned(CHECK_THE_DISK);
+    await writeFile(file, entry('A') + entry('B'));
+    await modifiedLater(file);
+
+    const unnamed = await uncloned({ named: [], disk: false });
+    const named = await uncloned({ named: [file], disk: false });
+
+    expect([first, unnamed, named]).toEqual([['A'], ['A'], ['A', 'B']]);
+  });
+
+  describe('with a game folder', () => {
+    let game: string;
+    let gameFolder: GameFolder;
+    const IO = [vi.mocked(readdir), vi.mocked(readFile), vi.mocked(stat), vi.mocked(lstat), vi.mocked(access), programReads];
+
+    beforeEach(async () => {
+      game = await mkdtemp(join(tmpdir(), 'medit-kept-game-'));
+      gameFolder = { kind: 'found', root: game, dataFolder: join(game, 'Data') };
+      const programs = programsOf('Fallout4');
+      await mkdir(join(game, 'Data', 'Strings'), { recursive: true });
+      await mkdir(join(game, 'Data', 'Textures'));
+      await Promise.all([
+        ...[programs?.game ?? '', programs?.extenderLoader ?? ''].map((program) => writeFile(join(game, program), 'MZ')),
+        ...['Fallout4.esm', 'Fallout4 - Textures1.ba2', 'Strings/Fallout4_en.STRINGS', 'Textures/a.dds'].map((file) => writeFile(join(game, 'Data', file), '')),
+      ]);
+      vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
+    });
+
+    afterEach(() => rm(game, { recursive: true, force: true }));
+
+    const pathsThereTakenBesideTheNamedFile = async (named: string): Promise<string[]> => {
+      const adapter = adapterOver(instance, { gameFolder });
+      await adapter.reading(CHECK_THE_DISK);
+      await adapter.reading(CHECK_THE_DISK);
+      for (const io of IO) io.mockClear();
+      await adapter.reading({ named: [named], disk: false });
+      const touched = IO.flatMap((io) => io.mock.calls.flatMap((call: unknown[]) => (typeof call[0] === 'string' ? [call[0]] : [])));
+      return touched.filter((path) => path !== named && path !== dirname(named) && existsSync(path));
+    };
+
+    it('reads, lists and stats nothing of a repository with a source mod but the file a re-read is named and its folder', async () => {
+      execFileSync('git', ['init', '-q', instance]);
+      await mkdir(join(instance, 'source', 'Patch Mod'), { recursive: true });
+      await writeFile(join(instance, 'source', 'Patch Mod', 'build.json'), '{}');
+
+      expect(await pathsThereTakenBesideTheNamedFile(join(instance, 'mods', 'Patch Mod', 'Patch Mod.esp'))).toEqual([]);
+    });
+
+    it('reads, lists and stats nothing of an instance with a publisher\'s configuration but the file a re-read is named, its folder, and each folder along a tag\'s path', async () => {
+      await writeFile(join(instance, 'compiler_settings.json'), JSON.stringify({ Profile: 'Default', Include: ['mods/Patch Mod/Patch Mod.esp'] }));
+
+      expect(await pathsThereTakenBesideTheNamedFile(join(instance, 'mods', 'Patch Mod', 'Patch Mod.esp'))).toEqual([instance, join(instance, 'mods')]);
+    });
+
+    it('shows a publisher tag\'s path made at the instance root, which no watch hears, at a re-read named another file', async () => {
+      await writeFile(join(instance, 'compiler_settings.json'), JSON.stringify({ Include: ['tools/x.txt'] }));
+      const adapter = adapterOver(instance, { gameFolder });
+      const pathProblems = async (reread: Reread): Promise<number> =>
+        expectKind((await adapter.reading(reread)).publisherConfiguration, 'read').pathProblems.length;
+      const before = await pathProblems(CHECK_THE_DISK);
+      await mkdir(join(instance, 'tools'));
+      await writeFile(join(instance, 'tools', 'x.txt'), '');
+      await modifiedLater(instance);
+
+      const after = await pathProblems({ named: [join(instance, 'mods', 'Patch Mod', 'Patch Mod.esp')], disk: false });
+
+      expect([before, after]).toEqual([1, 0]);
+    });
+
+    it('reads the Creation Club list a mod deploys from a folder in it, which no watch hears, at a re-read named another file', async () => {
+      const deployedFrom = join(instance, 'mods', 'Patch Mod', 'Root');
+      await writeFile(join(game, 'Fallout4.ccc'), 'a.esl\r\n');
+      await mkdir(deployedFrom);
+      const adapter = adapterOver(instance, { gameFolder });
+      const listed = async (reread: Reread): Promise<readonly string[]> => (await adapter.reading(reread)).creationClubList;
+      const before = await listed(CHECK_THE_DISK);
+      await writeFile(join(deployedFrom, 'Fallout4.ccc'), 'b.esl\r\n');
+      await modifiedLater(deployedFrom);
+
+      const after = await listed({ named: [join(instance, 'mods', 'Harder VATS', 'x.esp')], disk: false });
+
+      expect([before, after]).toEqual([['a.esl'], ['b.esl']]);
+    });
+
+    it('finds at a check of the disk a Data folder file a link elsewhere made a deployed one, which no stamp shows', async () => {
+      const adapter = adapterOver(instance, { gameFolder });
+      const plugins = async (reread: Reread): Promise<ReadonlySet<string>> => expectKind((await adapter.reading(reread)).dataFolderPlugins, 'listed').names;
+      await plugins(CHECK_THE_DISK);
+      await link(join(game, 'Data', 'Fallout4.esm'), join(game, 'Fallout4.esm'));
+
+      const unnamed = await plugins({ named: [], disk: false });
+      const checked = await plugins(CHECK_THE_DISK);
+
+      expect([...unnamed]).toEqual(['Fallout4.esm']);
+      expect([...checked]).toEqual([]);
+    });
   });
 });
 

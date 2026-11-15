@@ -4,7 +4,7 @@ import { dirname, join, relative } from 'node:path';
 import { commitFolder } from '../commitFolder';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
-import { exists, get, GIT_DIR, ignoreSkippedLink, listFolders, readOrAbsent, listEntries, putIfChanged, remove, type ResolvedEntry } from '../files';
+import { exists, get, GIT_DIR, ignoreSkippedLink, listDirByStamp, listFolders, readOrAbsent, listEntries, putIfChanged, remove, type ResolvedEntry } from '../files';
 import { ignoreLink, listOwnEntries } from '../gameFolder/ownEntries';
 import type { HashIndex } from '../fileContents/hashIndex';
 import { isBareName, type DeployedPath, type FileRead, type GameFile, type InstanceAdapter } from '../instanceAdapter';
@@ -41,7 +41,7 @@ async function folderLinesWritten(
   });
 }
 
-const lowerCased =(names: readonly ResolvedEntry[]): Map<string, ResolvedEntry> => new Map(names.map((entry) => [entry.name.toLowerCase(), entry]));
+const lowerCased = (names: readonly ResolvedEntry[]): Map<string, ResolvedEntry> => new Map(names.map((entry) => [entry.name.toLowerCase(), entry]));
 
 // The game's folder is as case-sensitive as its file system, and a mod's paths are the game's, which ignores case.
 function caseBlindFinder(root: string) {
@@ -116,10 +116,10 @@ export function mo2Repository(context: Mo2Context, publisherFile: ConfigurationF
     },
 
     async filesKept() {
-      const mods = await readOrAbsent(() => listFolders(modsDir(instanceRoot), ignoreSkippedLink), []);
+      const mods = await readOrAbsent(() => listFolders(modsDir(instanceRoot), ignoreSkippedLink, listDirByStamp), []);
       const inFolders = await Promise.all(mods.map(async (mod) => {
         const folder = join(modsDir(instanceRoot), mod);
-        return (await listEntries(folder, ignoreSkippedLink)).map(({ name }) => join(folder, name)).filter((path) => isManifestPath(instanceRoot, path));
+        return (await listEntries(folder, ignoreSkippedLink, listDirByStamp)).map(({ name }) => join(folder, name)).filter((path) => isManifestPath(instanceRoot, path));
       }));
       const fixed = [
         join(instanceRoot, GIT_DIR), ignoreListFile(instanceRoot), submodulesFile(instanceRoot), recordIndexDir(instanceRoot),

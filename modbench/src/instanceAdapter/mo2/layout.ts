@@ -180,7 +180,7 @@ export const FIRST_LEVEL = '?*';
 /** The instance's own watches, each as shallow as its changes are. A mod's or a profile's folder is followed once read. */
 export const instanceWatches = (instanceRoot: string): readonly WatchedFolder[] => [
   // A profile switch rewrites the settings and nothing else; a repository appears at, or vanishes from, the root.
-  { base: instanceRoot, pattern: `{${SETTINGS_FILE_NAME},${IGNORE_LIST_FILE},${GIT_DIR},${Object.values(SORTING_RULE_FILES).join(',')}}` },
+  { base: instanceRoot, pattern: `{${SETTINGS_FILE_NAME},${IGNORE_LIST_FILE},${SUBMODULES_FILE},${GIT_DIR},${Object.values(SORTING_RULE_FILES).join(',')}}` },
   { base: modsDir(instanceRoot), pattern: FIRST_LEVEL },
   { base: profilesDir(instanceRoot), pattern: FIRST_LEVEL },
   { base: overwriteDir(instanceRoot), pattern: EVERYTHING_BELOW },

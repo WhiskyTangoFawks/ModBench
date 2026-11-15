@@ -5,7 +5,7 @@ import { mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { errnoCode } from '../../ports/errno';
-import { exists, get, isRepository, makeTempDir, putIfChanged, readOrAbsent, remove, undoAll, withLock, write, type Undo } from '../files';
+import { exists, get, isRepository, makeTempDir, putIfChanged, readOrAbsent, remove, textByStamp, undoAll, withLock, write, type Undo } from '../files';
 import { git, gitFed, gitWritingInto } from '../git';
 import type { FileProblems } from '../../ports/fileProblems';
 import { unfilteredFiles } from '../unfilteredFiles';
@@ -284,7 +284,9 @@ async function committedOutsideInstanceIn(instanceRoot: string, covered: readonl
 
 // What each file holds before the filter's passes rewrite it.
 async function machineOf(instanceRoot: string, covered: readonly CoveredFile[]): Promise<Machine> {
-  const texts = await Promise.all(covered.flatMap(({ driver, file }) => (file === undefined ? [] : [get(join(instanceRoot, file), '').then((text): [string, string] => [driver, text])])));
+  const texts = await Promise.all(covered.flatMap(({ driver, file }) => (file === undefined ? [] : [
+    readOrAbsent(() => textByStamp(join(instanceRoot, file)), '').then((text): [string, string] => [driver, text]),
+  ])));
   return new Map(texts);
 }
 
