@@ -2,7 +2,7 @@ import type { PluginAddress } from '../client';
 
 interface Asker {
   forget(): void;
-  onPluginChanged(listener: (event: { plugin: PluginAddress }) => void): () => void;
+  onPluginChanged(listener: (event: { plugin?: PluginAddress }) => void): () => void;
   onLoadOrderSettled(listener: () => void): () => void;
 }
 

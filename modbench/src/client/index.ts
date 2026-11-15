@@ -1,5 +1,5 @@
 export type {
-  MEditClient, LaunchOutcome, LoadOrderOutcome, LoadOrderProgress, LoadOrderSnapshot,
+  MEditClient, RecordIndexChange, LaunchOutcome, LoadOrderOutcome, LoadOrderProgress, LoadOrderSnapshot,
   NotificationPayloads, RecordPage, InteriorCellBlock, InteriorCellSubBlock,
   PluginRecordTypeCount, PluginProblems, PluginFilePaths, PluginAddress, RecordAt,
   CopyMode, CopyItem, ReferenceResult, RecordFilter,

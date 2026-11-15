@@ -12,7 +12,7 @@ export interface RecordGroup {
 export type RecordPlace<Row> = RecordGroup | { container: Row };
 
 export interface CreatedRecordSelectionDeps<Row> {
-  client: Pick<MEditClient, 'onNotification'>;
+  client: Pick<MEditClient, 'onDidChange'>;
   rowOf(place: RecordPlace<Row>, formKey: string): Promise<Row | undefined>;
   view: { reveal(row: Row, options: { select: boolean; focus: boolean }): PromiseLike<void> };
 }
@@ -49,22 +49,18 @@ export function createdRecordSelection<Row>(deps: CreatedRecordSelectionDeps<Row
         forget();
         void selectAndOpen(plugin, created.place, created.formKey);
       };
-      const unsubscribes = [
-        deps.client.onNotification('rows-changed', (event) => {
-          if (!samePluginAddress(event.plugin, plugin)) return;
-          if (created === undefined) for (const key of event.keys) namedBeforeAnswer?.add(key);
-          else landed ||= event.keys.includes(created.formKey);
-          settle();
-        }),
-        // A plugin re-derived whole is announced with no keys.
-        deps.client.onNotification('plugin-changed', (event) => {
-          if (!samePluginAddress(event.plugin, plugin)) return;
-          landed = true;
-          settle();
-        }),
-      ];
+      // A plugin re-derived whole, or every plugin, is announced with no keys.
+      const subscription = deps.client.onDidChange((change) => {
+        for (const { plugin: changed, keys } of change ?? [{ plugin, keys: undefined }]) {
+          if (!samePluginAddress(changed, plugin)) continue;
+          if (keys === undefined) landed = true;
+          else if (created === undefined) for (const key of keys) namedBeforeAnswer?.add(key);
+          else landed ||= keys.includes(created.formKey);
+        }
+        settle();
+      });
       const forget = () => {
-        for (const unsubscribe of unsubscribes) unsubscribe();
+        subscription.dispose();
         if (forgetLatest === forget) forgetLatest = undefined;
       };
       forgetLatest = forget;

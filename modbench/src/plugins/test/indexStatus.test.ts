@@ -30,17 +30,14 @@ const statusEvent = (over: Parameters<typeof loadOrderStatusEventFixture>[0] = {
 function followed() {
   const client = new InMemoryMEditClient();
   client.setStatus('running');
-  client.setQueryAnswer('getActiveFilter', null);
   const deps = {
     client,
     facts: {
       indexed: vi.fn(), refused: vi.fn(), unreachable: vi.fn(),
       reconciled: vi.fn().mockResolvedValue(0), refresh: vi.fn().mockResolvedValue(undefined),
     },
-    recordBrowser: { refresh: vi.fn() },
     progress: { while: vi.fn((work: () => Promise<void>) => work()), say: vi.fn() },
     statusBar: createStatusBar(client, () => recordingReporter()),
-    showRecordFilter: vi.fn(),
     registerRepositories: vi.fn(),
     log: vi.fn(),
     reporter: recordingReporter(),
@@ -145,13 +142,12 @@ describe('the Plugins view following the record index status and mEdit\'s own', 
 describe('a reconcile that reached Ready, reported and then applied whoever started it', () => {
   const badFailure = { name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' };
 
-  it('refreshes the record browser, whose page, interior and reference caches would otherwise show stale records, and announces that conflicts are computed', async () => {
+  it('registers the source mods\' repositories', async () => {
     const { client, deps, handedOver } = followed();
 
     client.emit(statusEvent());
     await handedOver();
 
-    expect(deps.recordBrowser.refresh).toHaveBeenCalledOnce();
     expect(deps.registerRepositories).toHaveBeenCalledOnce();
   });
 
@@ -166,43 +162,13 @@ describe('a reconcile that reached Ready, reported and then applied whoever star
     expect(deps.log).toHaveBeenCalledWith('info', expect.stringContaining('Bad.esp'));
   });
 
-  it('syncs the filter state, then hands the tree the status\'s own failures and counts the snapshot\'s total in the log', async () => {
+  it('hands the tree the status\'s own failures and counts the snapshot\'s total in the log', async () => {
     const { client, deps, handedOver } = followed();
-    client.setQueryAnswer('getActiveFilter', { sql: 'SELECT form_key FROM "npc_"', source: 'npcs.sql' });
-    const order: string[] = [];
-    deps.showRecordFilter.mockImplementation(() => { order.push('showRecordFilter'); });
-    deps.facts.reconciled.mockImplementation(() => { order.push('applyReconciled'); return Promise.resolve(1); });
 
     client.emit(statusEvent({ totalPlugins: 42, failures: [badFailure] }));
     await handedOver();
 
-    expect(order).toEqual(['showRecordFilter', 'applyReconciled']);
-    expect(deps.showRecordFilter).toHaveBeenCalledWith({ sql: 'SELECT form_key FROM "npc_"', source: 'npcs.sql' });
     expect(deps.facts.reconciled).toHaveBeenCalledWith([badFailure]);
-    expect(deps.log).toHaveBeenCalledWith('info', '[loadOrder] applying reconciled load order to tree: 1 in the load order, 1 failed, of 42 plugins');
-  });
-
-  it('shows no filter when mEdit holds none', async () => {
-    const { client, deps, handedOver } = followed();
-
-    client.emit(statusEvent());
-    await handedOver();
-
-    expect(deps.showRecordFilter).toHaveBeenCalledWith(null);
-    expect(deps.reporter.reports).toEqual([]);
-  });
-
-  it('logs and warns a filter read failure, keeps showing the last known filter, and still applies the reconcile, since a failed read says nothing about whether mEdit still filters', async () => {
-    const { client, deps, handedOver } = followed();
-    client.setQueryFailure('getActiveFilter', { failed: 'refused', refusal: 'boom' });
-
-    client.emit(statusEvent());
-    await handedOver();
-
-    expect(deps.log).toHaveBeenCalledWith('info', expect.stringContaining('boom'));
-    expect(deps.reporter.reports[0]?.message).toBe(
-      "Could not read the record filter — the Plugins view shows it as it last was. boom");
-    expect(deps.showRecordFilter).not.toHaveBeenCalled();
-    expect(deps.facts.reconciled).toHaveBeenCalledOnce();
+    expect(deps.log).toHaveBeenCalledWith('info', '[loadOrder] applying reconciled load order to tree: 0 in the load order, 1 failed, of 42 plugins');
   });
 });

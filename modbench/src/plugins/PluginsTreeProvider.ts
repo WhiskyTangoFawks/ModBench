@@ -41,7 +41,7 @@ function isDropPayload(value: unknown): value is { plugins: PluginAddress[] } {
  *  satisfies it. */
 export type RecordBrowserFacet = Pick<
   RecordBrowser,
-  'getPluginChildren' | 'getChildren' | 'getTreeItem' | 'onDidChangeTreeData' | 'reopen'
+  'getPluginChildren' | 'getChildren' | 'getTreeItem' | 'onDidChangeTreeData' | 'refresh'
 >;
 
 const TREE_READS = {
@@ -200,9 +200,9 @@ export class PluginsTreeProvider
       }),
       options.records.onDidChangeTreeData((child) => this._onDidChangeTreeData.fire(child)),
       this.facts,
-      this.facts.onDidChange(() => {
+      this.facts.onDidChange((named) => {
         if (this.facts.rows.blueprintPlugins() !== this.rowsBlueprints) this.cache = undefined;
-        this._onDidChangeTreeData.fire(undefined);
+        this.redrawRowsOf(named);
       }),
     );
   }
@@ -217,6 +217,27 @@ export class PluginsTreeProvider
   // A filter keystroke changes nothing on disk, so it must not force a re-render off a stale cache.
   private render(): void {
     this._onDidChangeTreeData.fire(undefined);
+  }
+
+  /** The record index changed (the client's one change event): the rows of the plugins it names
+   *  read again, or every row when it names none. */
+  indexChanged(change: readonly { readonly plugin: PluginAddress }[] | undefined): void {
+    const named = change?.map(({ plugin }) => plugin);
+    this.records.refresh(named);
+    void this.facts.refresh(named);
+    this.redrawRowsOf(named);
+  }
+
+  // A record filter in force decides which plugins have a row, so a change under it redraws them all.
+  private redrawRowsOf(named: readonly PluginAddress[] | undefined): void {
+    if (named === undefined || this.recordFilterSource !== undefined) {
+      this._onDidChangeTreeData.fire(undefined);
+      return;
+    }
+    for (const plugin of named) {
+      const row = this.rowOf(plugin);
+      if (row !== undefined) this._onDidChangeTreeData.fire(row);
+    }
   }
 
   viewMessage(): string | undefined {
@@ -307,11 +328,9 @@ export class PluginsTreeProvider
 
   async getChildren(element?: PluginsTreeNode): Promise<PluginsTreeNode[]> {
     if (element === undefined) return this.rows();
-    if (element.resourceUri) this.records.reopen(element.resourceUri);
     return this.childrenOf(element);
   }
 
-  // The children a walk reads too, which VS Code did not ask for, so no row is marked expanded.
   private async childrenOf(element: PluginsTreeNode): Promise<PluginsTreeNode[]> {
     const children = isRow(element)
       ? await this.expandPluginRow(element)
@@ -332,6 +351,7 @@ export class PluginsTreeProvider
       this.parentOf.set(child, parent);
       const formKey = recordFormKeyOf(child);
       if (formKey !== undefined && plugin !== undefined) child.id = rowIdentity(child.kind, plugin, formKey);
+      else if (child.resourceUri !== undefined) child.id = child.resourceUri.toString();
     }
     return children;
   }
