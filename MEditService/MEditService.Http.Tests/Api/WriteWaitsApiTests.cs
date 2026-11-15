@@ -1,8 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using MEditService.Http.Tests.TestSupport;
-using MEditService.LoadOrder;
-using MEditService.RecordIndex.Queries;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -17,13 +15,13 @@ public sealed class WriteWaitsApiTests : HostedTests
     private const string OtherOrigin = "OtherMod";
     private static readonly TimeSpan Generous = TimeSpan.FromSeconds(30);
 
-    private readonly TaskCompletionSource<IReadOnlyList<SourceWrite>> _writerAwaits = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private readonly TaskCompletionSource<IndexRefused?> _indexReads = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource<CancellationToken> _writerAwaits = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource<string?> _indexReads = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    protected override MEditHost CreateHost() => new(services => AwaitingQueries.Replace(services, own =>
+    protected override MEditHost CreateHost() => new(services => AwaitingQueries.Replace(services, (_, cancel) =>
     {
-        _writerAwaits.TrySetResult(own.Snapshot());
-        return _indexReads.Task;
+        _writerAwaits.TrySetResult(cancel);
+        return _indexReads.Task.WaitAsync(cancel);
     }));
 
     private async Task<ScatteredFixtureData> Loaded(bool versioned = true)
@@ -39,15 +37,24 @@ public sealed class WriteWaitsApiTests : HostedTests
 
     private async Task AssertTheWriteWaitsForTheIndex(Task<HttpResponseMessage> gesture)
     {
-        var written = await _writerAwaits.Task.WaitAsync(Generous);
+        var cancel = await _writerAwaits.Task.WaitAsync(Generous);
 
-        Assert.NotEmpty(written);
+        Assert.True(cancel.CanBeCanceled, "the wait takes the request's token");
         Assert.False(gesture.IsCompleted);
         _indexReads.SetResult(null);
         Assert.True((await gesture.WaitAsync(Generous)).IsSuccessStatusCode);
     }
 
     private static object Npc(string formKey, string plugin, string origin) => new { formKey, plugin = new { name = plugin, origin } };
+
+    [Fact]
+    public async Task AScriptEdit_Answers_OnlyOnceTheRecordIndexHasReadIt()
+    {
+        await Loaded();
+        var formKey = await Client.FirstFormKey(Plugin, Origin);
+
+        await AssertTheWriteWaitsForTheIndex(Client.ScriptEdit(formKey, Plugin, Origin, "HeightMax", 0.75));
+    }
 
     [Fact]
     public async Task AScriptCopy_Answers_OnlyOnceTheRecordIndexHasReadIt()
@@ -155,7 +162,7 @@ public sealed class WriteWaitsApiTests : HostedTests
     {
         await Loaded();
         var formKey = await Client.FirstFormKey(Plugin, Origin);
-        _indexReads.SetResult(new IndexRefused(IndexRefusal.IndexNotReady, "mEdit's record index has not read the plugin source mEdit wrote."));
+        _indexReads.SetResult("mEdit's record index has not read the plugin source mEdit wrote.");
 
         var response = await Client.PostAsJsonAsync("/records/delete", Npc(formKey, Plugin, Origin)).WaitAsync(Generous);
 

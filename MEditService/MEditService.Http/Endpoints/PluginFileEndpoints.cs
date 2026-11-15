@@ -9,7 +9,6 @@ internal static class PluginFileEndpoints
     public static IEndpointRouteBuilder MapPluginFileEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/plugin-files/set-flags", SetPluginFileFlags)
-            .AwaitingItsSourceWrite()
             .WithName("SetPluginFileFlags")
             .WithTags(Tag)
             .WithDescription(
@@ -22,13 +21,14 @@ internal static class PluginFileEndpoints
         return app;
     }
 
-    internal static IResult SetPluginFileFlags(SetPluginFileFlagsRequest req, SetPluginFileFlagsHandler handler, ILoggerFactory loggerFactory)
+    internal static async Task<IResult> SetPluginFileFlags(
+        SetPluginFileFlagsRequest req, SetPluginFileFlagsHandler handler, ILoggerFactory loggerFactory, CancellationToken cancel)
     {
         if (EndpointMapping.ParseGameRelease(req.GameRelease, out var gameRelease) is { } releaseErr) return releaseErr;
         return req.Files is { Count: > 0 } files
             && files.All(file => !string.IsNullOrWhiteSpace(file.Path) && file.Flags is { Count: > 0 })
             ? EndpointMapping.Answered(
-                "Set plugin file flags", loggerFactory.CreateLogger(nameof(PluginFileEndpoints)), handler.Set(files, gameRelease))
+                "Set plugin file flags", loggerFactory.CreateLogger(nameof(PluginFileEndpoints)), await handler.Set(files, gameRelease, cancel))
             : EndpointMapping.BadRequest("At least one file is required, and every file needs a path and at least one flag.");
     }
 }

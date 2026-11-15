@@ -3,6 +3,7 @@ using MEditService.Commands.Build;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.ModFolderAdapter;
+using MEditService.RecordIndex.Queries;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -25,6 +26,7 @@ public sealed class BuildModHandlerTests : IDisposable
 
     private readonly ScratchDirectory _root = new("medit-build-handler-");
     private readonly LoadOrderHolder _holder = new();
+    private readonly HandedWrites _index = HandedWrites.Create();
 
     public void Dispose() => _root.Dispose();
 
@@ -392,14 +394,13 @@ public sealed class BuildModHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task ACompile_MarksEachPluginItWroteWritten_ForTheReadsAfterIt()
+    public async Task ACompile_HandsTheRecordIndexEachPluginItWroteToReadBack()
     {
         await InitializedWithALocalizedPlugin();
-        var own = _holder.BeginOwnWrites();
 
         await Landed(Compile());
 
-        Assert.Equal([new PluginAddress(Plugin, ModName)], own.Snapshot().SelectMany(write => write.Plugins ?? []));
+        Assert.Equal([HandedPlugin.ReadBack(new PluginAddress(Plugin, ModName))], Assert.Single(_index.Hands).Require());
     }
 
     [Fact]
@@ -536,7 +537,7 @@ public sealed class BuildModHandlerTests : IDisposable
     private async Task<BuildResult> Build(ModToBuild mod, InstanceToBuild? instance = null)
     {
         if (_holder.Held is null) _holder.Apply(SnapshotPlugins.Snapshot(_root, _root, GameRelease.Fallout4, []));
-        return (await TestEditService.BuildModHandler(_holder).BuildAsync([mod], instance ?? NoArchives)).Value();
+        return (await TestEditService.BuildModHandler(_holder, index: _index.Queries).BuildAsync([mod], instance ?? NoArchives)).Value();
     }
 
     private static readonly InstanceToBuild Packing = new(ExclusionMark, new ArchiveVariants(

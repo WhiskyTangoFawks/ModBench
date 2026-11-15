@@ -194,7 +194,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
 
     private void WrittenAndRead(PluginChange written)
     {
-        Index.Holder.SourceWritten([written]);
+        Assert.Null(Index.Queries.Hold([new HandedPlugin(written.Plugin, written.Files, [])], CancellationToken.None).GetAwaiter().GetResult());
         Waits.Reached(() => !Index.Status.Validating, "the record index's read of the write");
     }
 

@@ -2,6 +2,7 @@ using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.PluginAdapter.Repair;
+using MEditService.RecordIndex.Queries;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
@@ -23,6 +24,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     private readonly string _newMod;
     private readonly string _dataFolder;
     private readonly LoadOrderHolder _holder = new();
+    private readonly HandedWrites _index = HandedWrites.Create();
 
     public DecompileAndRepairPluginHandlerTests()
     {
@@ -77,6 +79,20 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         Assert.Empty(Git(_newMod, "status", "--porcelain"));
         Assert.Empty(ExternalChanges.NamedBy(_holder.Current));
         await AssertCompilesAsync(plugin);
+    }
+
+    [Fact]
+    public async Task DecompileAndRepair_InAModWithNoRepository_HandsTheRecordIndexThePluginAndEachOtherPluginItsSourceFolderHolds_ToReadBack()
+    {
+        var plugin = AddToNewMod(Lossless.Malformed);
+        WriteCleanPlugin(_newMod, "Clean.esp");
+        Load(Entry(_newMod, Malformed), Entry(_newMod, "Clean.esp"));
+
+        await Repair(ToRepair(plugin));
+
+        Assert.Equal(
+            [HandedPlugin.ReadBack(new PluginAddress("Clean.esp", NewModName)), HandedPlugin.ReadBack(plugin)],
+            Assert.Single(_index.Hands).Require().OrderBy(handed => handed.Plugin.Name, StringComparer.Ordinal));
     }
 
     [Fact]
@@ -338,7 +354,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     private Task<DecompileAndRepairResult> Repair(PluginToRepair plugin) => Repair([plugin]);
 
     private async Task<DecompileAndRepairResult> Repair(IReadOnlyList<PluginToRepair> plugins, bool force = false, IPluginAdapter? adapter = null) =>
-        (await TestEditService.Over(_holder, adapter: adapter).GetRequiredService<DecompileAndRepairPluginHandler>()
+        (await TestEditService.Over(_holder, adapter: adapter, index: _index.Queries).GetRequiredService<DecompileAndRepairPluginHandler>()
             .DecompileAndRepairAsync(plugins, force)).Value();
 
     private static void WriteCleanPlugin(string modFolder, string name)

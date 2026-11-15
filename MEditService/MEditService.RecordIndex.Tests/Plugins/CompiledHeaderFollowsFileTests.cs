@@ -1,5 +1,6 @@
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -71,7 +72,7 @@ public sealed class CompiledHeaderFollowsFileTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ABuild_IsReadBeforeTheReadOfItsWriteIsVouched_WhetherItAddsAMasterOrDropsOne(bool dropsMaster)
+    public async Task ABuildReadBack_IsAnsweredOnceTheRecordIndexHoldsItsHeader_WhetherItAddsAMasterOrDropsOne(bool dropsMaster)
     {
         if (dropsMaster)
         {
@@ -79,17 +80,12 @@ public sealed class CompiledHeaderFollowsFileTests : IDisposable
             ReadWrittenBuilt([Master]);
         }
         WriteBuilt(referencingMaster: !dropsMaster);
-        var own = _holder.BeginOwnWrites();
-        _holder.SourceWritten([new PluginChange(_built.Key, null)]);
-        var read = Task.Run(() =>
-        {
-            _index.AwaitWrites(own);
-            return MastersOfBuilt();
-        });
+        var hand = _index.Queries.Hold([HandedPlugin.ReadBack(_built.Key)], CancellationToken.None);
 
         _index.SignalChange([_built.Key]);
 
-        Assert.Equal(dropsMaster ? [] : [Master], await read.WaitAsync(Generous));
+        Assert.Null(await hand.WaitAsync(Generous));
+        Assert.Equal(dropsMaster ? [] : [Master], MastersOfBuilt());
     }
 
     [Fact]

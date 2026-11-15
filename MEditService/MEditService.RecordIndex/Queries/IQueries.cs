@@ -70,9 +70,6 @@ public interface IQueries
     Answer<IReadOnlyList<PluginProblems>, IndexRefused> GetProblems(PluginAddress? plugin);
     Answer<IReadOnlyList<PluginFilePaths>, IndexRefused> GetFilePaths(PluginAddress? plugin);
 
-    /// <summary>Null once the record index has read each of <paramref name="own"/>, holding no thread; otherwise why it has not.</summary>
-    Task<IndexRefused?> AwaitSourceWrites(OwnWrites own, CancellationToken cancel);
-
     /// <summary>Null once the record index holds each plugin <paramref name="written"/> names, or once a check of the disk has
     /// read it when null; otherwise why not (ADR-0029).</summary>
     Task<string?> Hold(IReadOnlyList<HandedPlugin>? written, CancellationToken cancel);

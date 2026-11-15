@@ -13,7 +13,6 @@ internal static class ModEndpoints
         // A missing load order or git refuses the whole selection once; every other refusal is an item of
         // the answer.
         app.MapPost("/build", Build)
-            .AwaitingItsSourceWrite()
             .WithName("BuildMod")
             .WithTags("Mods")
             .WithDescription(
@@ -102,7 +101,7 @@ internal static class ModEndpoints
     }
 
     // build-mod: the selection (commands.md, A selection is one gesture).
-    internal static async Task<IResult> Build(BuildRequest req, BuildModHandler buildModHandler, ILoggerFactory loggerFactory)
+    internal static async Task<IResult> Build(BuildRequest req, BuildModHandler buildModHandler, ILoggerFactory loggerFactory, CancellationToken cancel)
     {
         var logger = loggerFactory.CreateLogger(nameof(ModEndpoints));
         var mods = req.Mods ?? [];
@@ -126,7 +125,7 @@ internal static class ModEndpoints
         if (req.Archives is not null && variants is null) return EndpointMapping.BadRequest(ArchiveVariantsRequest.NotOneEach);
 
         return await EndpointMapping.Answered(
-            "Build", logger, buildModHandler.BuildAsync(toBuild, new InstanceToBuild(req.ExclusionMark, variants)), EndpointMapping.Refusal);
+            "Build", logger, buildModHandler.BuildAsync(toBuild, new InstanceToBuild(req.ExclusionMark, variants), cancel), EndpointMapping.Refusal);
     }
 }
 

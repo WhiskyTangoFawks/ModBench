@@ -1,5 +1,6 @@
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.RecordIndex.Queries;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -25,13 +26,13 @@ public sealed class SetPluginFileFlagsHandlerTests : IDisposable
     private static PluginFileFlagsToSet Small(string path) => new(path, new Dictionary<string, bool> { ["Small"] = true });
 
     [Fact]
-    public void AFlagWhoseRangeThePluginExceeds_IsRefusedNamingWhy_WhileTheRestAreSet()
+    public async Task AFlagWhoseRangeThePluginExceeds_IsRefusedNamingWhy_WhileTheRestAreSet()
     {
         var fits = PluginHolding("Fits.esp", 0x800);
         var exceeds = PluginHolding("Exceeds.esp", 0x1000);
         var exceedsBefore = File.ReadAllBytes(exceeds);
 
-        var result = TestEditService.SetPluginFileFlagsHandler().Set([Small(exceeds), Small(fits)], GameRelease.Fallout4);
+        var result = await TestEditService.SetPluginFileFlagsHandler().Set([Small(exceeds), Small(fits)], GameRelease.Fallout4);
 
         Assert.Equal([fits], result.Applied.Select(set => set.Path));
         var refused = Assert.Single(result.Refused);
@@ -41,17 +42,18 @@ public sealed class SetPluginFileFlagsHandlerTests : IDisposable
     }
 
     [Fact]
-    public void SettingFlags_NamesToTheRecordIndexOnlyThePluginsTheLoadOrderHolds()
+    public async Task SettingFlags_HandsTheRecordIndexToReadBackOnlyThePluginsTheLoadOrderHolds()
     {
         using var data = new PluginFixtureBuilder("set-plugin-file-flags-held").WithPlugin("Held.esp").Build();
         var holder = new LoadOrderHolder();
         holder.Apply(SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
         var held = Assert.Single(data.Plugins);
-        var own = holder.BeginOwnWrites();
+        var index = HandedWrites.Create();
 
-        var result = TestEditService.SetPluginFileFlagsHandler(holder).Set([Small(held.Path), Small(PluginHolding("Loose.esp", 0x800))], GameRelease.Fallout4);
+        var result = await TestEditService.SetPluginFileFlagsHandler(holder, index.Queries)
+            .Set([Small(held.Path), Small(PluginHolding("Loose.esp", 0x800))], GameRelease.Fallout4);
 
         Assert.Equal(2, result.Applied.Count);
-        Assert.Equal([held.Key], Assert.Single(own.Snapshot()).Plugins);
+        Assert.Equal([HandedPlugin.ReadBack(held.Key)], Assert.Single(index.Hands).Require());
     }
 }

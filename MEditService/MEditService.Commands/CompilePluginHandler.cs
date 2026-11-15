@@ -1,7 +1,9 @@
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
+using MEditService.RecordIndex.Queries;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
+using Microsoft.Extensions.Logging;
 
 namespace MEditService.Commands;
 
@@ -11,18 +13,23 @@ public sealed class CompilePluginHandler
     private readonly PluginCompileService _compileService;
     private readonly LoadOrderHolder _loadOrder;
     private readonly ISourceAdapter _source;
+    private readonly IQueries _index;
+    private readonly ILogger _logger;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal CompilePluginHandler(PluginCompileService compileService, LoadOrderHolder loadOrder, ISourceAdapter source) =>
-        (_compileService, _loadOrder, _source) = (compileService, loadOrder, source);
+    internal CompilePluginHandler(
+        PluginCompileService compileService, LoadOrderHolder loadOrder, ISourceAdapter source, IQueries index, ILogger<CompilePluginHandler> logger) =>
+        (_compileService, _loadOrder, _source, _index, _logger) = (compileService, loadOrder, source, index, logger);
 
     /// <summary>Refuses with <see cref="CompileRefusal.NoLoadOrder"/>, writing nothing, when none is held: no
-    /// plugin of the selection escapes it (commands.md, A selection is one gesture).</summary>
+    /// plugin of the selection escapes it (commands.md, A selection is one gesture). <paramref name="cancel"/> stops
+    /// the wait, not the writes.</summary>
     public async Task<Answer<CompileResult, SelectionRefusal<CompileRefusal>>> CompileAsync(
-        IReadOnlyList<PluginAddress> plugins)
+        IReadOnlyList<PluginAddress> plugins, CancellationToken cancel = default)
     {
         if (WhyNoPluginCompiles() is { } none) return none;
         var (landed, refused) = await Each(plugins, _compileService.CompileAsync);
+        await ReadBack(landed, cancel);
         return new CompileResult(
             [.. landed.Select(compiled => new CompiledPlugin(compiled.Item.Name, compiled.Item.Origin, compiled.Outcome))],
             [.. refused.Select(item => new CompileRefused(item.Item, item.Refusal, item.Message))]);
@@ -36,6 +43,11 @@ public sealed class CompilePluginHandler
         var byKey = placed.ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);
         return await Each([.. byKey.Keys], plugin => _compileService.CompileAsync(byKey[plugin], leavesUnwritten));
     }
+
+    /// <summary>A compile writes a binary, whose rows it cannot know, so the record index reads back each plugin compiled
+    /// (ADR-0029).</summary>
+    internal Task ReadBack(IEnumerable<ItemLanded<PluginAddress, IReadOnlyList<CompileDiagnostic>>> compiled, CancellationToken cancel) =>
+        _index.Held([.. compiled.Select(landed => HandedPlugin.ReadBack(landed.Item))], _logger, cancel);
 
     /// <summary>The cause no plugin of a selection escapes: no load order held, or git unable to run.</summary>
     internal SelectionRefusal<CompileRefusal>? WhyNoPluginCompiles()

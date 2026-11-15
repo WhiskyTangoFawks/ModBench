@@ -3,6 +3,8 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.RecordIndex.Queries;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
 namespace MEditService.Commands;
@@ -42,11 +44,16 @@ public sealed class SetPluginFileFlagsHandler
 {
     private readonly IPluginAdapter _plugins;
     private readonly LoadOrderHolder _loadOrder;
+    private readonly IQueries _index;
+    private readonly ILogger _logger;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal SetPluginFileFlagsHandler(IPluginAdapter plugins, LoadOrderHolder loadOrder) => (_plugins, _loadOrder) = (plugins, loadOrder);
+    internal SetPluginFileFlagsHandler(IPluginAdapter plugins, LoadOrderHolder loadOrder, IQueries index, ILogger<SetPluginFileFlagsHandler> logger) =>
+        (_plugins, _loadOrder, _index, _logger) = (plugins, loadOrder, index, logger);
 
-    public SetPluginFileFlagsResult Set(IReadOnlyList<PluginFileFlagsToSet> files, GameRelease gameRelease)
+    /// <summary>Answers once the record index has read back each plugin the load order holds that was written;
+    /// <paramref name="cancel"/> stops the wait, not the writes.</summary>
+    public async Task<SetPluginFileFlagsResult> Set(IReadOnlyList<PluginFileFlagsToSet> files, GameRelease gameRelease, CancellationToken cancel = default)
     {
         var known = GameCodecs.For(gameRelease).LoadFlags;
         List<PluginFileFlagsSet> applied = [];
@@ -60,18 +67,18 @@ public sealed class SetPluginFileFlagsHandler
             else refused.Add(new PluginFileFlagRefused(file.Path, RefusalOf(failure), failure.Reason));
         }
 
-        if (PluginsWritten(applied.Select(set => set.Path)) is { Count: > 0 } written) _loadOrder.SourceWritten(written);
+        await _index.Held(PluginsWritten(applied.Select(set => set.Path)), _logger, cancel);
         return new SetPluginFileFlagsResult(applied, refused);
     }
 
     // The record index holds nothing of a file no plugin of the load order is, so a write to one has nothing to be read.
-    private List<PluginChange> PluginsWritten(IEnumerable<string> paths)
+    private List<HandedPlugin> PluginsWritten(IEnumerable<string> paths)
     {
         var held = _loadOrder.Current.Plugins;
         return [.. paths
             .Select(path => held.FirstOrDefault(plugin => string.Equals(plugin.Path, path, StringComparison.OrdinalIgnoreCase)))
             .OfType<RegisteredPlugin>()
-            .Select(plugin => new PluginChange(plugin.Key, null))];
+            .Select(plugin => HandedPlugin.ReadBack(plugin.Key))];
     }
 
     private static PluginFileFlagRefusal RefusalOf(PluginFailure failure) =>

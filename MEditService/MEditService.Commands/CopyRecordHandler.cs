@@ -1,5 +1,6 @@
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
+using MEditService.RecordIndex.Queries;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
@@ -14,14 +15,17 @@ public sealed class CopyRecordHandler
     private readonly ISourceAdapter _source;
     private readonly UnsavedDocuments _unsaved;
     private readonly LoadOrderHolder _loadOrder;
+    private readonly IQueries _index;
     private readonly ILogger<CopyRecordHandler> _logger;
 
     internal CopyRecordHandler(
-        CopyRecordChangesHandler changes, ISourceAdapter source, UnsavedDocuments unsaved, LoadOrderHolder loadOrder,
+        CopyRecordChangesHandler changes, ISourceAdapter source, UnsavedDocuments unsaved, LoadOrderHolder loadOrder, IQueries index,
         ILogger<CopyRecordHandler> logger) =>
-        (_changes, _source, _unsaved, _loadOrder, _logger) = (changes, source, unsaved, loadOrder, logger);
+        (_changes, _source, _unsaved, _loadOrder, _index, _logger) = (changes, source, unsaved, loadOrder, index, logger);
 
-    public async Task<Answer<RecordWritten, RecordEditRefused>> Copy(RecordAt record, CopyMode mode, PluginAddress destination, bool replace)
+    /// <summary>Answers once the record index holds the copy; <paramref name="cancel"/> stops the wait, not the write.</summary>
+    public async Task<Answer<RecordWritten, RecordEditRefused>> Copy(
+        RecordAt record, CopyMode mode, PluginAddress destination, bool replace, CancellationToken cancel)
     {
         var sessions = new WriteSessions(_source, _unsaved.Current);
         var selection = await _changes.CopyRecords([record], mode, [destination], replace, sessions);
@@ -29,7 +33,7 @@ public sealed class CopyRecordHandler
             mode == CopyMode.New
                 ? landed.Outcome.NewFormKey ?? throw new InvalidOperationException("Expected a copy as new to carry the new FormKey.")
                 : record.FormKey));
-        return sessions.Written(outcome, $"Could not write the copy of {record.FormKey} into {destination.Name}", _loadOrder, _logger)
-            .AsWritten();
+        return (await sessions.Handed(
+            outcome, $"Could not write the copy of {record.FormKey} into {destination.Name}", _loadOrder, _index, _logger, cancel)).AsWritten();
     }
 }

@@ -58,9 +58,9 @@ changes: "each change the watch sees, and each write Modbench names" {
   indexer."re-read each plugin named, or every plugin"
 }
 written: "each write of mEdit's own to a system of record" {
-  commands -> loadorder: "source written: the plugins it names, or none" {class: signal}
-  loadorder -> indexer: "source written" {class: signal}
-  indexer."re-read each plugin named, or every plugin; the write waits for that re-read, and is refused when it fails"
+  commands -> indexer: "hold: each document written with its stamp, each plugin to read back whole, or none to check the disk" {class: signal}
+  indexer."take the documents, read what else the write names, in the turn a change takes"
+  indexer -> commands: "held, or why not, per plugin" {class: signal}
 }
 codec -> indexer: schema {class: query}
 sourceadapter -> indexer: documents (a compiled plugin) {class: query}

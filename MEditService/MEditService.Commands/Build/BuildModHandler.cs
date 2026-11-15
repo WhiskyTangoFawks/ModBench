@@ -11,17 +11,20 @@ namespace MEditService.Commands.Build;
 public sealed class BuildModHandler
 {
     private readonly SourceModBuild _build;
+    private readonly CompilePluginHandler _compile;
     private readonly LoadOrderHolder _loadOrder;
     private readonly ISourceAdapter _source;
     private readonly INotificationPublisher _notifications;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal BuildModHandler(SourceModBuild build, LoadOrderHolder loadOrder, ISourceAdapter source, INotificationPublisher notifications) =>
-        (_build, _loadOrder, _source, _notifications) = (build, loadOrder, source, notifications);
+    internal BuildModHandler(
+        SourceModBuild build, CompilePluginHandler compile, LoadOrderHolder loadOrder, ISourceAdapter source, INotificationPublisher notifications) =>
+        (_build, _compile, _loadOrder, _source, _notifications) = (build, compile, loadOrder, source, notifications);
 
     /// <summary>Each mod's step runs against the held load order. Refuses the whole selection, writing nothing, when no load
-    /// order is held or git cannot run.</summary>
-    public async Task<Answer<BuildResult, SelectionRefusal<BuildRefusal>>> BuildAsync(IReadOnlyList<ModToBuild> mods, InstanceToBuild instance)
+    /// order is held or git cannot run. <paramref name="cancel"/> stops the wait, not the writes.</summary>
+    public async Task<Answer<BuildResult, SelectionRefusal<BuildRefusal>>> BuildAsync(
+        IReadOnlyList<ModToBuild> mods, InstanceToBuild instance, CancellationToken cancel = default)
     {
         if (_loadOrder.Held is null)
             return new SelectionRefusal<BuildRefusal>(BuildRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
@@ -31,6 +34,7 @@ public sealed class BuildModHandler
         var built = await ModByMod.OverAsync(
             mods, mod => mod.Name, progress => _notifications.Publish(new BuildProgressNotification(progress)),
             (mod, _) => _build.BuildAsync(mod, instance), CancellationToken.None);
+        await _compile.ReadBack(built.Landed.SelectMany(mod => mod.Outcome.Compiled), cancel);
         return built.ToResult(
             landed => ModBuiltOf(landed.Item, landed.Outcome),
             refused => new BuildRefused(refused.Item, refused.Refusal, refused.Message),

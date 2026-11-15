@@ -282,9 +282,8 @@ internal static class RecordEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        app.MapPost("/records/copy", (ScriptCopyRequest request, CopyRecordHandler copies) =>
-            CopyRecord(request, copies, logger))
-        .AwaitingItsSourceWrite()
+        app.MapPost("/records/copy", (ScriptCopyRequest request, CopyRecordHandler copies, CancellationToken cancel) =>
+            CopyRecord(request, copies, logger, cancel))
         .WithName("CopyRecord")
         .WithSummary("Writes a copy of a record into a destination plugin's source: a script's copy.")
         .WithDescription(
@@ -300,9 +299,8 @@ internal static class RecordEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        app.MapPost("/records/delete", (RecordAt request, DeleteRecordHandler deletes) =>
-            DeleteRecord(request, deletes, logger))
-        .AwaitingItsSourceWrite()
+        app.MapPost("/records/delete", (RecordAt request, DeleteRecordHandler deletes, CancellationToken cancel) =>
+            DeleteRecord(request, deletes, logger, cancel))
         .WithName("DeleteRecord")
         .WithSummary("Deletes a record from plugin source: a script's delete.")
         .WithDescription(
@@ -425,18 +423,18 @@ internal static class RecordEndpoints
     private static Func<Answer<RecordAt[], string>> CopiesWithNoPluginSource(IQueries svc, PluginAddress plugin, string formKey) =>
         () => svc.GetCopiesWithNoPluginSourceNaming(plugin, formKey).Holds(out var copies, out var refused) ? copies.ToArray() : refused.Message;
 
-    internal static async Task<IResult> CopyRecord(ScriptCopyRequest request, CopyRecordHandler copies, ILogger logger)
+    internal static async Task<IResult> CopyRecord(ScriptCopyRequest request, CopyRecordHandler copies, ILogger logger, CancellationToken cancel)
     {
         if (AddressProblem(request.Record) is { } unaddressed) return unaddressed;
         if (string.IsNullOrWhiteSpace(request.Destination.Name) || string.IsNullOrWhiteSpace(request.Destination.Origin))
             return EndpointMapping.BadRequest("Every destination needs a name and an origin.");
 
         return EndpointMapping.Answered(
-            "CopyRecord", logger, await copies.Copy(request.Record, request.Mode, request.Destination, request.Replace), Results.Ok);
+            "CopyRecord", logger, await copies.Copy(request.Record, request.Mode, request.Destination, request.Replace, cancel), Results.Ok);
     }
 
-    internal static async Task<IResult> DeleteRecord(RecordAt request, DeleteRecordHandler deletes, ILogger logger) =>
-        AddressProblem(request) ?? EndpointMapping.Answered("DeleteRecord", logger, await deletes.Delete(request));
+    internal static async Task<IResult> DeleteRecord(RecordAt request, DeleteRecordHandler deletes, ILogger logger, CancellationToken cancel) =>
+        AddressProblem(request) ?? EndpointMapping.Answered("DeleteRecord", logger, await deletes.Delete(request, cancel));
 
     private static bool Unaddressed(RecordAt record) =>
         string.IsNullOrWhiteSpace(record.FormKey) || string.IsNullOrWhiteSpace(record.Plugin.Name) || string.IsNullOrWhiteSpace(record.Plugin.Origin);

@@ -198,7 +198,6 @@ internal static class PluginEndpoints
             .ProducesProblem(503);
 
         app.MapPost("/plugins/create", CreatePlugin)
-            .AwaitingItsSourceWrite()
             .WithName("CreatePlugin")
             .WithTags(Tag)
             .WithDescription(
@@ -213,7 +212,6 @@ internal static class PluginEndpoints
             .ProducesProblem(503);
 
         app.MapPost("/plugins/create-in-mod", CreatePluginInMod)
-            .AwaitingItsSourceWrite()
             .WithName("CreatePluginInMod")
             .WithTags(Tag)
             .WithDescription(
@@ -228,7 +226,6 @@ internal static class PluginEndpoints
             .ProducesProblem(503);
 
         app.MapPost("/plugins/decompile", Decompile)
-            .AwaitingItsSourceWrite()
             .WithName("DecompilePlugin")
             .WithTags(Tag)
             .Produces<DecompileResult>()
@@ -238,7 +235,6 @@ internal static class PluginEndpoints
             .ProducesProblem(503);
 
         app.MapPost("/plugins/decompile-and-repair", DecompileAndRepair)
-            .AwaitingItsSourceWrite()
             .WithName("DecompileAndRepairPlugin")
             .WithTags(Tag)
             .WithDescription(
@@ -282,7 +278,6 @@ internal static class PluginEndpoints
         // A missing load order refuses the whole selection once; every other refusal is an item of
         // the answer.
         app.MapPost("/plugins/compile", Compile)
-            .AwaitingItsSourceWrite()
             .WithName("CompilePlugin")
             .WithTags(Tag)
             .Produces<CompileResult>()
@@ -311,7 +306,6 @@ internal static class PluginEndpoints
             .ProducesProblem(503);
 
         app.MapPost("/plugins/{plugin}/create-record", CreateRecord)
-            .AwaitingItsSourceWrite()
             .WithName("CreateRecord")
             .WithSummary("Writes a new record to plugin source: a script's create.")
             .WithDescription(
@@ -330,35 +324,37 @@ internal static class PluginEndpoints
         return app;
     }
 
-    internal static IResult CreateRecord(
-        string plugin, RecordCreateChangesRequest req, CreateRecordHandler creates, ILoggerFactory loggerFactory)
+    internal static async Task<IResult> CreateRecord(
+        string plugin, RecordCreateChangesRequest req, CreateRecordHandler creates, ILoggerFactory loggerFactory, CancellationToken cancel)
     {
         if (!EndpointMapping.PluginAt(plugin, req.Origin, out var address, out var refused)) return refused;
         return RecordTypeProblem(req) ?? EndpointMapping.Answered(
             "CreateRecord", loggerFactory.CreateLogger(nameof(PluginEndpoints)),
-            creates.Create(address, req.RecordType, req.Container, req.Position), Results.Ok);
+            await creates.Create(address, req.RecordType, req.Container, req.Position, cancel), Results.Ok);
     }
 
     private static IResult? RecordTypeProblem(RecordCreateChangesRequest req) =>
         string.IsNullOrWhiteSpace(req.RecordType) ? EndpointMapping.BadRequest("A record type is required.") : null;
 
     internal static async Task<IResult> CreatePlugin(
-        CreatePluginRequest req, CreatePluginHandler create, ILoggerFactory loggerFactory)
+        CreatePluginRequest req, CreatePluginHandler create, ILoggerFactory loggerFactory, CancellationToken cancel)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (Malformed(req) is { } malformed) return malformed;
 
         var plugin = new PluginAddress(req.Name, req.Origin);
-        return EndpointMapping.Answered("Create plugin", logger, plugin, await create.CreatePlugin(plugin, req.Folder, req.SourceFolder, req.Flags));
+        return EndpointMapping.Answered(
+            "Create plugin", logger, plugin, await create.CreatePlugin(plugin, req.Folder, req.SourceFolder, req.Flags, cancel));
     }
 
     internal static async Task<IResult> CreatePluginInMod(
-        CreatePluginInModRequest req, CreatePluginInModHandler create, ILoggerFactory loggerFactory)
+        CreatePluginInModRequest req, CreatePluginInModHandler create, ILoggerFactory loggerFactory, CancellationToken cancel)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (RenamedPlugin(req.Name, req.Origin) is not { } plugin) return EndpointMapping.BadRequest("Plugin name and origin are required.");
 
-        return EndpointMapping.Answered("Create plugin in mod", logger, plugin, await create.CreatePluginIn(plugin.Origin, plugin.Name, req.Flags));
+        return EndpointMapping.Answered(
+            "Create plugin in mod", logger, plugin, await create.CreatePluginIn(plugin.Origin, plugin.Name, req.Flags, cancel));
     }
 
     // The refusals a malformed request earns, taken before the door so a name that could never be
@@ -397,15 +393,15 @@ internal static class PluginEndpoints
 
     // decompile-plugin: the selection (commands.md, A selection is one gesture).
     internal static Task<IResult> Decompile(
-        DecompileRequest req, DecompilePluginHandler decompileHandler, ILoggerFactory loggerFactory)
+        DecompileRequest req, DecompilePluginHandler decompileHandler, ILoggerFactory loggerFactory, CancellationToken cancel)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         return OverPlugins(req.Plugins, plugins => EndpointMapping.Answered(
-            "Decompile", logger, decompileHandler.DecompileAsync(plugins, req.Force), EndpointMapping.Refusal));
+            "Decompile", logger, decompileHandler.DecompileAsync(plugins, req.Force, cancel), EndpointMapping.Refusal));
     }
 
     internal static Task<IResult> DecompileAndRepair(
-        DecompileAndRepairRequest req, DecompileAndRepairPluginHandler repairHandler, ILoggerFactory loggerFactory)
+        DecompileAndRepairRequest req, DecompileAndRepairPluginHandler repairHandler, ILoggerFactory loggerFactory, CancellationToken cancel)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var requested = req.Plugins ?? [];
@@ -420,18 +416,18 @@ internal static class PluginEndpoints
         return OverPlugins([.. requested.Select(p => p.Plugin)], _ => EndpointMapping.Answered(
             "Decompile and repair", logger,
             repairHandler.DecompileAndRepairAsync(
-                [.. requested.Select(p => new PluginToRepair(p.Plugin, p.SourceFolder?.ToSourceFolderContents()))], req.Force),
+                [.. requested.Select(p => new PluginToRepair(p.Plugin, p.SourceFolder?.ToSourceFolderContents()))], req.Force, cancel),
             EndpointMapping.Refusal));
     }
 
     // compile-plugin: the selection (commands.md, A selection is one gesture).
     internal static Task<IResult> Compile(
-        CompileRequest req, CompilePluginHandler compileHandler, ILoggerFactory loggerFactory)
+        CompileRequest req, CompilePluginHandler compileHandler, ILoggerFactory loggerFactory, CancellationToken cancel)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         return OverPlugins(req.Plugins, plugins => EndpointMapping.Answered(
             "Compile", logger,
-            compileHandler.CompileAsync(plugins),
+            compileHandler.CompileAsync(plugins, cancel),
             EndpointMapping.Refusal));
     }
 

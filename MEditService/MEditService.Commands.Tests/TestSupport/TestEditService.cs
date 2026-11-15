@@ -60,22 +60,23 @@ internal static class TestEditService
         ISourceAdapter? source = null) =>
         Over(holder, adapter: adapter, notifications: notifications, source: source).GetRequiredService<VersionInGitHandler>();
 
-    internal static BuildModHandler BuildModHandler(LoadOrderHolder holder, ISourceAdapter? source = null, IModFolderRepository? modFolders = null) =>
-        Over(holder, source: source, modFolders: modFolders).GetRequiredService<BuildModHandler>();
+    internal static BuildModHandler BuildModHandler(
+        LoadOrderHolder holder, ISourceAdapter? source = null, IModFolderRepository? modFolders = null, IQueries? index = null) =>
+        Over(holder, source: source, modFolders: modFolders, index: index).GetRequiredService<BuildModHandler>();
 
     internal static CloneSubmodulesHandler CloneSubmodulesHandler() => Over(new LoadOrderHolder()).GetRequiredService<CloneSubmodulesHandler>();
 
-    internal static DecompilePluginHandler DecompileHandler(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
-        Over(holder, adapter: adapter).GetRequiredService<DecompilePluginHandler>();
+    internal static DecompilePluginHandler DecompileHandler(LoadOrderHolder holder, IPluginAdapter? adapter = null, IQueries? index = null) =>
+        Over(holder, adapter: adapter, index: index).GetRequiredService<DecompilePluginHandler>();
 
     internal static CreatePluginHandler PluginCreateHandler(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
         Over(holder, adapter: adapter).GetRequiredService<CreatePluginHandler>();
 
-    internal static SetPluginFileFlagsHandler SetPluginFileFlagsHandler(LoadOrderHolder? holder = null) =>
-        Over(holder ?? new LoadOrderHolder()).GetRequiredService<SetPluginFileFlagsHandler>();
+    internal static SetPluginFileFlagsHandler SetPluginFileFlagsHandler(LoadOrderHolder? holder = null, IQueries? index = null) =>
+        Over(holder ?? new LoadOrderHolder(), index: index).GetRequiredService<SetPluginFileFlagsHandler>();
 
-    internal static CreatePluginInModHandler PluginCreateInModHandler(LoadOrderHolder holder) =>
-        Over(holder).GetRequiredService<CreatePluginInModHandler>();
+    internal static CreatePluginInModHandler PluginCreateInModHandler(LoadOrderHolder holder, IQueries? index = null) =>
+        Over(holder, index: index).GetRequiredService<CreatePluginInModHandler>();
 
     internal static PutLoadOrderHandler PutLoadOrderHandler(
         LoadOrderHolder holder, INotificationPublisher? notifications = null, IPluginAdapter? adapter = null) =>

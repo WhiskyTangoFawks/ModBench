@@ -2,6 +2,7 @@ using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.RecordIndex.Queries;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
@@ -17,12 +18,16 @@ public sealed class CreatePluginHandler
     private readonly IPluginAdapter _adapter;
     private readonly LoadOrderHolder _holder;
     private readonly ISourceAdapter _source;
+    private readonly IQueries _index;
+    private readonly ILogger _logger;
     private readonly PluginDecompiler _decompiler;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
     internal CreatePluginHandler(
-        IPluginAdapter adapter, LoadOrderHolder holder, ISourceAdapter source, SchemaReflector schemaReflector, ILogger<CreatePluginHandler> logger) =>
-        (_adapter, _holder, _source, _decompiler) = (adapter, holder, source, new PluginDecompiler(logger, adapter, source, schemaReflector));
+        IPluginAdapter adapter, LoadOrderHolder holder, ISourceAdapter source, SchemaReflector schemaReflector, IQueries index,
+        ILogger<CreatePluginHandler> logger) =>
+        (_adapter, _holder, _source, _index, _logger, _decompiler) =
+        (adapter, holder, source, index, logger, new PluginDecompiler(logger, adapter, source, schemaReflector));
 
     private async Task<Answer<PluginAddress, PluginCreateRefused>> LandSourceIfCompiledPlugin(
         LoadOrderSnapshot loadOrder, PluginAddress address, string folder, string? sourceFolder, string written)
@@ -46,10 +51,10 @@ public sealed class CreatePluginHandler
     }
 
     private async Task<Answer<PluginAddress, PluginCreateRefused>> WrittenOnceItsSourceLands(
-        LoadOrderSnapshot loadOrder, PluginAddress address, string folder, string? sourceFolder, string written)
+        LoadOrderSnapshot loadOrder, PluginAddress address, string folder, string? sourceFolder, string written, CancellationToken cancel)
     {
         var landed = await LandSourceIfCompiledPlugin(loadOrder, address, folder, sourceFolder, written);
-        if (landed.Holds(out _, out _)) _holder.SourceWritten([new PluginChange(address, null)]);
+        if (landed.Holds(out _, out _)) await _index.Held([HandedPlugin.ReadBack(address)], _logger, cancel);
         return landed;
     }
 
@@ -90,10 +95,11 @@ public sealed class CreatePluginHandler
             : match.ToList();
     }
 
-    /// <summary>Refuses, writing nothing, when no load order is held. <paramref name="sourceFolder"/> is the
-    /// mod's, null for Overwrite. <paramref name="flags"/> may be left out where one combination is offered.</summary>
+    /// <summary>Refuses, writing nothing, when no load order is held. <paramref name="sourceFolder"/> is null for
+    /// Overwrite. <paramref name="flags"/> may be left out where one combination is offered. <paramref name="cancel"/>
+    /// stops the wait, not the write.</summary>
     public async Task<Answer<PluginAddress, PluginCreateRefused>> CreatePlugin(
-        PluginAddress plugin, string folder, string? sourceFolder, IReadOnlyList<string>? flags = null)
+        PluginAddress plugin, string folder, string? sourceFolder, IReadOnlyList<string>? flags = null, CancellationToken cancel = default)
     {
         if (_holder.Held is not { Snapshot: var loadOrder })
             return new PluginCreateRefused(PluginCreateRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
@@ -117,7 +123,7 @@ public sealed class CreatePluginHandler
 
         return created.Outcome switch
         {
-            EmptyPluginWrite.Written => await WrittenOnceItsSourceLands(loadOrder, plugin, folder, sourceFolder, created.Written),
+            EmptyPluginWrite.Written => await WrittenOnceItsSourceLands(loadOrder, plugin, folder, sourceFolder, created.Written, cancel),
             EmptyPluginWrite.FolderGone => new PluginCreateRefused(PluginCreateRefusal.FolderGone,
                 $"The folder {folder} has gone, so {plugin.Name} was not created."),
             EmptyPluginWrite.FileExists => new PluginCreateRefused(PluginCreateRefusal.FileExists,

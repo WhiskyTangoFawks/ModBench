@@ -3,8 +3,7 @@ using MEditService.RepositoriesLib;
 
 namespace MEditService.Commands;
 
-/// <summary>A script's create gesture: the plugin goes into the place its origin names, one the gesture's pick offers, and
-/// the write names its file, so the route waits for the record index to read it.</summary>
+/// <summary>A script's create gesture: the plugin goes into the place its origin names, one the gesture's pick offers.</summary>
 public sealed class CreatePluginInModHandler
 {
     private readonly CreatePluginHandler _create;
@@ -13,7 +12,9 @@ public sealed class CreatePluginInModHandler
     internal CreatePluginInModHandler(CreatePluginHandler create, LoadOrderHolder holder) =>
         (_create, _holder) = (create, holder);
 
-    public async Task<Answer<PluginAddress, PluginCreateRefused>> CreatePluginIn(string origin, string name, IReadOnlyList<string>? flags = null)
+    /// <summary>As <see cref="CreatePluginHandler.CreatePlugin"/> answers.</summary>
+    public async Task<Answer<PluginAddress, PluginCreateRefused>> CreatePluginIn(
+        string origin, string name, IReadOnlyList<string>? flags = null, CancellationToken cancel = default)
     {
         if (_holder.Held is not { Snapshot: var loadOrder })
             return new PluginCreateRefused(PluginCreateRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
@@ -25,8 +26,6 @@ public sealed class CreatePluginInModHandler
                 $"'{origin}' is not an enabled mod or Overwrite, so {name} was not created in it.");
         }
 
-        var result = await _create.CreatePlugin(new PluginAddress(name, place.Name), place.Folder, place.SourceFolder, flags);
-        if (result.Holds(out var created, out _)) _holder.SourceWritten([new PluginChange(created, null)]);
-        return result;
+        return await _create.CreatePlugin(new PluginAddress(name, place.Name), place.Folder, place.SourceFolder, flags, cancel);
     }
 }

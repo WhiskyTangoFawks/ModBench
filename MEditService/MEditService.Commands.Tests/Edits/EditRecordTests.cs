@@ -32,16 +32,13 @@ public sealed class EditRecordTests : IDisposable
     }
 
     [Fact]
-    public async Task AFieldEdit_HandsTheRecordIndexTheDocumentItWrote_WithTheStampItsFileTook_AndCountsNoWrite()
+    public async Task AFieldEdit_HandsTheRecordIndexTheDocumentItWrote_WithTheStampItsFileTook()
     {
-        var own = _mod.Holder.BeginOwnWrites();
-
         await EditHeightMax();
 
         var plugin = Assert.Single(Assert.Single(_mod.Index.Hands).Require());
         var document = Assert.Single(plugin.Documents);
         Assert.Equal((_mod.Plugin, NpcFile, File.ReadAllText(NpcFile), FileStamp.Of(NpcFile)), (plugin.Plugin, document.Path, document.Text, document.Stamp));
-        Assert.Empty(own.Snapshot());
     }
 
     [Fact]
