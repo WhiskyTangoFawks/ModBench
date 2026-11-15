@@ -3,11 +3,12 @@
 import type { InstanceValue } from '../instanceLoader/instance';
 import { SOURCE_FILES_READ } from '../instanceLoader/loadOrderSnapshot';
 import { OVERWRITE_ORIGIN } from '../wire/pluginAddress';
+import { gameReleaseForGame, pathsTheGameTries } from '../tables/gamePaths';
 import { copyTheGameGets } from './fileCopy';
 
 const STANDING_READ = {
   stackedCopies: true, dataFolderFiles: true, gameFolderArchived: true, gameFolderInWorkspace: true, gameFolder: true, filesByMod: true, overwriteFiles: true,
-  archiveContents: true,
+  archiveContents: true, gameName: true,
 } as const;
 type StandingValue = Pick<InstanceValue, keyof typeof STANDING_READ>;
 
@@ -28,8 +29,9 @@ export function pathStandingOf(instance: {
   return {
     judged: (): boolean => instance.value.gameFolder.kind === 'found' && instance.value.gameFolderInWorkspace,
     holds: ({ origin }: { origin: string }, dataPath: string): boolean => {
-      const path = dataPath.replaceAll('\\', '/');
-      return !('none' in copyTheGameGets(instance.value, path)) || modHolds(instance.value, origin, path.toLowerCase());
+      const { value } = instance;
+      return pathsTheGameTries(gameReleaseForGame(value.gameName), dataPath.replaceAll('\\', '/')).some((path) =>
+        !('none' in copyTheGameGets(value, path)) || modHolds(value, origin, path.toLowerCase()));
     },
     subscribe: (listener: () => void) => instance.subscribe(listener, JUDGED_READ),
   };
