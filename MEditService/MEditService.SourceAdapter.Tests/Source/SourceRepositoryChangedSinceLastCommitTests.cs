@@ -54,6 +54,18 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
     }
 
     [Fact]
+    public void AnEditWrittenBackToTheCommittedText_ChangesNoRecord()
+    {
+        var repository = SourceMod();
+        File.WriteAllText(Path.Combine(_modFolder, NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk), EditedBody);
+        ChangesIn(repository);
+
+        File.WriteAllText(Path.Combine(_modFolder, NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk), NpcBody);
+
+        Assert.Empty(ChangesIn(repository));
+    }
+
+    [Fact]
     public void AStagedMoveOfAFileNoRecordIsFiledIn_OutOfAFolderNamedLikeTheTree_ChangesNoRecord_GuardingAgainstARenamesBareOldPathTokenReturningWhichNoRenamesTurnsOff()
     {
         var rootSegment = PluginSourceRoot.For(PluginName).Split(Path.DirectorySeparatorChar)[0];
