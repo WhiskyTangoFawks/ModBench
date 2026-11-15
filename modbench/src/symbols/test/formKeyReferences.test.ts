@@ -5,6 +5,7 @@ vi.mock('vscode', () => ({ Uri, Range, Location: class { constructor(readonly ur
 
 import { referencesToFormKey } from '../formKeyReferences';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { cancellableToken } from '../../client/test/fixtures';
 import { copyDocumentUri } from '../../textDocuments/recordDocument';
 import type { PlacedReferences } from '../../client/MEditClient';
 
@@ -34,7 +35,7 @@ function references() {
 describe('Find All References on a FormKey (symbols.md, The features, story 2)', () => {
   it('asks mEdit with the token of the request it answers', async () => {
     const { client, read } = references();
-    const token = { isCancellationRequested: false, onCancellationRequested: () => ({ dispose: () => undefined }) };
+    const { token } = cancellableToken();
 
     await read(GUN, token);
 

@@ -99,17 +99,23 @@ describe('problemsAsker', () => {
     expect([client.asked(), told]).toEqual([[A, B, A, B], [{}]]);
   });
 
-  it('tells a listener of a change only after it dropped what it held, so the listener is answered after the change', async () => {
+  it.each([
+    ['a plugin changes', (client: ReturnType<typeof fakeClient>) => { client.pluginChanged(A); }],
+    ['everything changes', (client: ReturnType<typeof fakeClient>) => { client.everythingChanged(); }],
+  ])('tells a listener of a change only after it dropped what it held, so what the listener asked stays held, when %s', async (_when, change) => {
     const { client, asker } = started();
+    client.answerAlways('getPluginFilePaths', [answerFor(A)]);
     await asker.getPluginFilePaths(A);
     const heard: unknown[] = [];
-    asker.onPluginChanged(({ plugin }) => { void asker.getPluginFilePaths(plugin).then((answer) => { heard.push(answer); }); });
-    client.answerAlways('getPluginFilePaths', [answerFor(A, { unread: ['after'] })]);
+    let listenerAsked: PluginAddress | undefined;
+    asker.onPluginChanged(({ plugin }) => { listenerAsked = plugin; void asker.getPluginFilePaths(plugin).then((answer) => { heard.push(answer); }); });
+    client.answerAlways('getPluginFilePaths', [answerFor(B)]);
 
-    client.pluginChanged(A);
+    change(client);
     await turn();
+    await asker.getPluginFilePaths(listenerAsked);
 
-    expect(heard).toEqual([[answerFor(A, { unread: ['after'] })]]);
+    expect([heard, client.asked()]).toEqual([[[answerFor(B)]], [A, listenerAsked]]);
   });
 
   it('asks again of the whole set after it is told to forget, as when the instance changes', async () => {

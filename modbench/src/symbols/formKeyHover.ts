@@ -1,4 +1,5 @@
 import type { CompareResult, MEditClient } from '../client';
+import type { ReadCancellation } from '../client/MEditClient';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { recordLabel } from '../wire/recordLabel';
@@ -18,7 +19,7 @@ function linesOf(formKey: string, comparison: CompareResult): string[] {
 export async function hoverOf(
   { client, reporter }: { client: Pick<MEditClient, 'getComparison'>; reporter: Pick<Reporter, 'shownOnSurface'> },
   formKey: string,
-  token?: Parameters<MEditClient['getComparison']>[2],
+  token?: ReadCancellation,
 ): Promise<string[] | undefined> {
   try {
     const comparison = answerOf(await client.getComparison(formKey, undefined, token));

@@ -4,6 +4,7 @@ import type { CompareResult } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { comparisonOf, type Copy } from '../../test/comparison';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { cancellableToken } from '../../client/test/fixtures';
 
 const FORM_KEY = '000801:Mod.esp';
 
@@ -38,7 +39,7 @@ describe('a record\'s hover (symbols.md, The symbols)', () => {
 
   it('asks mEdit with the token of the hover it answers', async () => {
     const client = askingFor(comparison());
-    const token = { isCancellationRequested: false, onCancellationRequested: () => ({ dispose: () => undefined }) };
+    const { token } = cancellableToken();
 
     await hoverOf({ client, reporter }, FORM_KEY, token);
 

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { sourceNames } from '../sourceNames';
 import type { DocumentName, MEditClient } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { cancellableToken } from '../../client/test/fixtures';
 import { localFailure, type ReadFailed } from '../../wire/readFailed';
 
 const NPC = '000801:Mod.esp';
@@ -31,7 +32,7 @@ describe('the names at a place in plugin source, as mEdit answers them (target-a
 
   it('asks mEdit with the token of the request it answers', async () => {
     const { owner, client } = names([named('Script', 40, 42, 'Gu')]);
-    const token = { isCancellationRequested: false, onCancellationRequested: () => ({ dispose: () => undefined }) };
+    const { token } = cancellableToken();
 
     await owner.scriptAt(FILE, TEXT, 41, token);
 

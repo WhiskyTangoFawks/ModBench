@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
+import type { ReadCancellation } from '../client/MEditClient';
 import { copyDocumentUri } from '../textDocuments/recordDocument';
 import { answerOf } from '../wire/readFailed';
 
@@ -7,7 +8,7 @@ import { answerOf } from '../wire/readFailed';
  *  mEdit fails throws. */
 export function referencesToFormKey(
   client: Pick<MEditClient, 'getPlacedReferences'>,
-): (formKey: string, token?: Parameters<MEditClient['getPlacedReferences']>[1]) => Promise<{ locations: vscode.Location[]; leftOut: string[] }> {
+): (formKey: string, token?: ReadCancellation) => Promise<{ locations: vscode.Location[]; leftOut: string[] }> {
   return async (formKey, token) => {
     const { copies, leftOut } = answerOf(await client.getPlacedReferences(formKey, token));
     const locations = copies.flatMap(({ formKey: referrer, plugin, document, ranges }) => {
