@@ -5,9 +5,9 @@ vi.mock('vscode', () => ({ EventEmitter }));
 
 import { RecordTabs } from '../recordTabs';
 import type { RecordTab } from '../recordTab';
-import { announceConflictsComputed, subscribeRecordTabsToNotifications } from '../notificationWiring';
+import { subscribeRecordTabsToNotifications } from '../notificationWiring';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { notificationEventFixture } from '../../client/test/fixtures';
+import { loadOrderStatusEventFixture, notificationEventFixture } from '../../client/test/fixtures';
 import { fakePanel } from './editorVscode';
 
 const EDITED_MOD_ESP_FROM_MODA = { formKey: '000800:Mod.esp', plugin: { name: 'Mod.esp', origin: 'ModA' } };
@@ -15,6 +15,9 @@ const EDITED_MOD_ESP_FROM_MODA = { formKey: '000800:Mod.esp', plugin: { name: 'M
 const rowsChanged = (keys: string[]) => notificationEventFixture({ kind: 'rows-changed', plugin: 'Mod.esp', origin: 'ModA', keys, sequence: 2 });
 
 const PLUGIN_CHANGED = notificationEventFixture({ kind: 'plugin-changed', plugin: 'Mod.esp', origin: 'ModA', sequence: 2 });
+
+let settledVersion = 0;
+const settles = (client: InMemoryMEditClient) => { client.emit(loadOrderStatusEventFixture({ state: 'Ready', conflictsComputed: true, version: ++settledVersion })); };
 
 const loadsOf = (panel: ReturnType<typeof fakePanel>) => (panel.webview.postMessage.mock.calls as unknown[][]).map(([m]) => m);
 
@@ -154,13 +157,13 @@ describe('a record tab going with the record to its new FormKey and reading it t
   });
 
   it('holds a refresh of the comparison between the answer and the report, which then reads the new FormKey', async () => {
-    const { client, panel, tab, tabs } = openOn('000800:Mod.esp');
+    const { client, panel, tab } = openOn('000800:Mod.esp');
 
     await tab.gate()(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
-    announceConflictsComputed(tabs);
+    settles(client);
     expect(loadsOf(panel)).toEqual([]);
     client.emit(rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
-    announceConflictsComputed(tabs);
+    settles(client);
 
     expect(loadsOf(panel)).toEqual([
       { type: 'loadRecord', formKey: '000900:Mod.esp' },
@@ -169,11 +172,11 @@ describe('a record tab going with the record to its new FormKey and reading it t
   });
 
   it('refreshes the comparison after the answer when it was announced while an edit was in flight', async () => {
-    const { panel, tab, tabs } = openOn('000800:Mod.esp');
+    const { client, panel, tab } = openOn('000800:Mod.esp');
     const { write, answer } = writeAnsweredWhenTheTestChooses();
 
     const editing = tab.gate()(EDITED_MOD_ESP_FROM_MODA, write);
-    announceConflictsComputed(tabs);
+    settles(client);
     expect(loadsOf(panel)).toEqual([]);
     answer(undefined);
     await editing;
@@ -182,12 +185,12 @@ describe('a record tab going with the record to its new FormKey and reading it t
   });
 
   it('reads once after the answer when both a report and a refresh were held by it', async () => {
-    const { client, panel, tab, tabs } = openOn('000800:Mod.esp');
+    const { client, panel, tab } = openOn('000800:Mod.esp');
     const { write, answer } = writeAnsweredWhenTheTestChooses();
 
     const editing = tab.gate()(EDITED_MOD_ESP_FROM_MODA, write);
     client.emit(rowsChanged(['000800:Mod.esp']));
-    announceConflictsComputed(tabs);
+    settles(client);
     answer(undefined);
     await editing;
 
@@ -236,13 +239,13 @@ describe('a record tab going with the record to its new FormKey and reading it t
 
   describe('when mEdit re-derives a plugin whole, a tab waiting for its new FormKey, since no report names its key', () => {
     it('reads it once the Index holds it, and refreshes as usual afterwards', async () => {
-      const { client, panel, tab, tabs } = openOn('000800:Mod.esp');
+      const { client, panel, tab } = openOn('000800:Mod.esp');
       client.setQueryAnswer('getRecordOwners', [{ name: 'Mod.esp', origin: 'ModA' }]);
       await tab.gate()(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
 
       client.emit(PLUGIN_CHANGED);
       await vi.waitFor(() => expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000900:Mod.esp' }]));
-      announceConflictsComputed(tabs);
+      settles(client);
 
       expect(loadsOf(panel)).toEqual([
         { type: 'loadRecord', formKey: '000900:Mod.esp' },
