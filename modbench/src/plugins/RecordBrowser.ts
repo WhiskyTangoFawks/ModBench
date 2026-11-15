@@ -3,7 +3,7 @@ import { ErrorNode } from '../drivingLib/errorNode';
 import type {
   RecordSummary,
   WorldspaceSummary, CellSummary, ChildRecordSummary, WorldspaceBlock, WorldspaceSubBlock,
-  MEditClient, PluginRecordTypeCount, InteriorCellBlock, InteriorCellSubBlock,
+  MEditClient, PluginRecordTypeCount, InteriorCellBlock, InteriorCellSubBlock, WorkingTreeStatesBeneath,
 } from '../client';
 import { parseRecordResourceUri, parseRowResourceUri, recordResourceUri, rowResourceUri } from './recordResourceUri';
 import type { RecordArgument } from '../drivingLib/recordArgument';
@@ -11,6 +11,7 @@ import { failurePrefixIcon } from './failurePrefixIcon';
 import { pluginAddressKey, pluginAddressOf, type PluginAddress } from '../wire/pluginAddress';
 import { conditionedContextValue, type PluginConditions } from '../drivingLib/recordRowContext';
 import { errorMessage } from '../ports/errorMessage';
+import type { SyncMessage } from '../drivingLib/syncFailureReport';
 import { blankIcon } from '../drivingLib/blankIcon';
 import { UNLIMITED_RECORDS } from '../client';
 import { answerOf, ReadFailedError } from '../wire/readFailed';
@@ -271,6 +272,8 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
   // What the last read of each row said of its own state, which a decoration is asked for by URI alone.
   private readonly rowStates = new Map<string, WorkingTreeState>();
   private readonly expanded = new Set<string>();
+  private readonly beneathFailures = new Map<string, string>();
+  private readonly _onDidChangeBeneathFailure = new vscode.EventEmitter<void>();
   constructor(private readonly repository: RecordBrowserClient) {}
 
   /** The record index changed: the named plugins' rows forget what they said of themselves, or every
@@ -279,14 +282,30 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
   refresh(plugins?: readonly PluginAddress[]): void {
     if (plugins === undefined) {
       this.rowStates.clear();
+      this.forgetBeneathFailures(this.beneathFailures.keys());
       this._onDidChangeTreeData.fire(undefined);
     } else {
       for (const plugin of plugins) {
         for (const key of [...this.rowStates.keys()]) if (key.startsWith(`${pluginAddressKey(plugin)}::`)) this.rowStates.delete(key);
       }
+      this.forgetBeneathFailures(plugins.map(pluginAddressKey));
     }
     this._onDidReadBeneath.fire();
   }
+
+  // A failure stands until its plugin reads well; a refresh forgets it, and the rows still shown ask again.
+  private forgetBeneathFailures(plugins: Iterable<string>): void {
+    let forgot = false;
+    for (const key of [...plugins]) forgot = this.beneathFailures.delete(key) || forgot;
+    if (forgot) this._onDidChangeBeneathFailure.fire();
+  }
+
+  /** The message line's part when the states beneath the rows could not be read (common.md, States,
+   *  stories 2 and 6): the rows beneath that plugin show no dot. */
+  readonly beneathFailure: SyncMessage = {
+    message: () => this.beneathFailures.values().next().value,
+    onMessageChanged: (listener) => this._onDidChangeBeneathFailure.event(listener),
+  };
 
   /** Undefined for a URI that is not a record row's, and for a record nothing has cached yet, which
    *  the decoration provider reads the same as 'None': nothing to badge. */
@@ -300,7 +319,17 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
   async statesBeneathOf(uri: vscode.Uri): Promise<readonly WorkingTreeState[]> {
     const identity = parseRecordResourceUri(uri) ?? parseRowResourceUri(uri);
     if (identity === undefined) return [];
-    const answer = answerOf(await this.repository.getWorkingTreeStatesBeneath(identity.plugin));
+    const key = pluginAddressKey(identity.plugin);
+    let answer: WorkingTreeStatesBeneath;
+    try {
+      answer = answerOf(await this.repository.getWorkingTreeStatesBeneath(identity.plugin));
+    } catch (e) {
+      if (!(e instanceof ReadFailedError)) throw e;
+      this.beneathFailures.set(key, `Failed to load: ${this.err(e)}`);
+      this._onDidChangeBeneathFailure.fire();
+      return [];
+    }
+    if (this.beneathFailures.delete(key)) this._onDidChangeBeneathFailure.fire();
     if ('formKey' in identity) return answer.records[identity.formKey] ?? [];
     const [recordType, ...deeper] = identity.path;
     if (recordType === undefined) return answer.plugin;

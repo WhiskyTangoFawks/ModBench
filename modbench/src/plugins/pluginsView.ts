@@ -140,7 +140,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   const showKeyContext = () => { publishKeyContext(selected.rows(), tree); };
   showKeyContext();
   const keyContextSubscriptions = [view.onDidChangeSelection(showKeyContext), tree.onDidChangeTreeData(showKeyContext)];
-  const sync = joinSyncMessages(pluginSync, loadOrderPut);
+  const sync = joinSyncMessages(pluginSync, loadOrderPut, recordBrowser.beneathFailure);
   const viewMessage = () => messageLine(tree.viewMessage(), sync.message());
   const nameFilter = registerPluginsNameFilter(view, tree, viewMessage, sync);
   const lens = new FilterCodeLensProvider();

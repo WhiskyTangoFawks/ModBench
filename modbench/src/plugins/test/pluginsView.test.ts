@@ -1114,4 +1114,18 @@ describe('a collapsed row\'s badge, from the states beneath it', () => {
 
     expect([collapsed, expanded, (await badges.provideFileDecoration(uri))?.badge]).toEqual(['•', undefined, '•']);
   });
+
+  it('puts a failed read of the states beneath on the view\'s message line, and decorates nothing', async () => {
+    const { client, rows, view } = pluginsView(instanceValueFixture({
+      plugins: [{ name: 'A.esp', path: '/fixture/A.esp', origin: 'SomeMod', line: 0, enabled: true, winning: true }],
+      gameFolder: FOUND,
+    }));
+    client.setQueryFailure('getWorkingTreeStatesBeneath', { failed: 'refused', refusal: 'boom' });
+    const row = expectInstanceOf((await rows())[0], PluginNode);
+
+    const decoration = await badgeSource().provideFileDecoration(present(row.resourceUri, 'the row\'s resourceUri'));
+
+    expect(decoration).toBeUndefined();
+    await waitForMessage(view(), (message) => message === 'Failed to load: boom', 'the failed read of the states beneath');
+  });
 });

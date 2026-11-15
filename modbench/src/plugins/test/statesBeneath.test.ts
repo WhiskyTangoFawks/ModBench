@@ -107,6 +107,35 @@ describe('the states beneath a row', () => {
     expect([modded, await browser.statesBeneathOf(rowResourceUri(PLUGIN))]).toEqual([['Modified'], []]);
   });
 
+  it('are nothing when the read fails, and the failure is the message line\'s until a later read lands', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryFailureOnce('getWorkingTreeStatesBeneath', { failed: 'refused', refusal: 'boom' });
+    const browser = new RecordBrowser(client);
+    const told = vi.fn();
+    browser.beneathFailure.onMessageChanged(told);
+
+    const failed = await browser.statesBeneathOf(rowResourceUri(PLUGIN));
+    const whileFailing = browser.beneathFailure.message();
+    client.setQueryAnswer('getWorkingTreeStatesBeneath', NOTHING);
+    await browser.statesBeneathOf(rowResourceUri(PLUGIN));
+
+    expect([failed, whileFailing, browser.beneathFailure.message(), told.mock.calls.length]).toEqual([[], 'Failed to load: boom', undefined, 2]);
+  });
+
+  it('leave a failure of one plugin standing while another plugin reads well, and forget it when a refresh names its plugin', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryFailureOnce('getWorkingTreeStatesBeneath', { failed: 'refused', refusal: 'boom' });
+    client.setQueryAnswer('getWorkingTreeStatesBeneath', NOTHING);
+    const browser = new RecordBrowser(client);
+    await browser.statesBeneathOf(rowResourceUri(PLUGIN));
+    await browser.statesBeneathOf(rowResourceUri({ name: 'Other.esp', origin: 'Data/' }));
+    const standing = browser.beneathFailure.message();
+
+    browser.refresh([PLUGIN]);
+
+    expect([standing, browser.beneathFailure.message()]).toEqual(['Failed to load: boom', undefined]);
+  });
+
   it('are announced by a refresh, so every row asks again', () => {
     const browser = new RecordBrowser(new InMemoryMEditClient());
     const announced = vi.fn();
