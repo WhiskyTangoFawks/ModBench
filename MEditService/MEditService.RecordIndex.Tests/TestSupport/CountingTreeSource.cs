@@ -35,6 +35,14 @@ internal sealed class CountingTreeSource(ISourceAdapter inner) : DelegatingSourc
     private int _namedReads;
     private int _namedReadThrows;
 
+    private Action? _beforeEachNamedRead;
+
+    /// <summary>Runs before each read of named files, on the record index's worker.</summary>
+    public Action? BeforeEachNamedRead
+    {
+        set => Volatile.Write(ref _beforeEachNamedRead, value);
+    }
+
     /// <summary>The next read of named files throws.</summary>
     public void FailNextNamedRead() => Volatile.Write(ref _namedReadThrows, 1);
 
@@ -66,6 +74,7 @@ internal sealed class CountingTreeSource(ISourceAdapter inner) : DelegatingSourc
         public Answer<FilesRead?, SourceFailure> ReadFiles(PluginAddress plugin, IReadOnlyList<string> files)
         {
             if (Interlocked.Exchange(ref owner._namedReadThrows, 0) == 1) throw new IOException("The named read was made to fail.");
+            Volatile.Read(ref owner._beforeEachNamedRead)?.Invoke();
             var read = reads.ReadFiles(plugin, files);
             if (read.Holds(out var alone, out _) && alone is not null) Interlocked.Increment(ref owner._namedReads);
             return read;

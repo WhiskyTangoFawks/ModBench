@@ -31,8 +31,7 @@ internal static class NamedFiles
 
         var held = new HashSet<string>(StringComparer.Ordinal);
         var now = new Dictionary<string, IReadOnlyList<PluginDocument>>(TreeListing.PathComparer);
-        // A group's document carries no record: where a cell sits is its folders' names.
-        foreach (var file in files.Where(file => !SourceRepositoryLayout.IsGroupDocument(file)))
+        foreach (var file in files)
         {
             if (!file.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.OrdinalIgnoreCase) || !documents.ReadsAsARecord(file)) return null;
             if (listing.Holds(file, out var formKey))

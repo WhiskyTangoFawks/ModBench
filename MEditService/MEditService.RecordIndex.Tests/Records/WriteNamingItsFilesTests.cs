@@ -144,6 +144,12 @@ public sealed class WriteNamingItsFilesTests : IDisposable
 
     public static TheoryData<string> WriteKinds() => [.. Writes.Keys];
 
+    private static readonly string[] MakingACellsBlock = ["an interior cell created", "an exterior cell created", "a record copied as an override"];
+
+    public static TheoryData<string> WritesReadAlone() => [.. Writes.Keys.Except(MakingACellsBlock)];
+
+    public static TheoryData<string> WritesMakingACellsBlock() => [.. MakingACellsBlock];
+
     [Theory]
     [MemberData(nameof(WriteKinds))]
     public void AWriteNamingItsFiles_LeavesTheRowsAFreshReadOfTheTreeHolds(string write)
@@ -154,7 +160,7 @@ public sealed class WriteNamingItsFilesTests : IDisposable
     }
 
     [Theory]
-    [MemberData(nameof(WriteKinds))]
+    [MemberData(nameof(WritesReadAlone))]
     public void AWriteNamingItsFiles_ReadsThemAlone_AndNoWholeTree(string write)
     {
         var saved = Writes[write](this);
@@ -163,6 +169,33 @@ public sealed class WriteNamingItsFilesTests : IDisposable
         Written(saved);
 
         Assert.Equal((named + 1, wholeReads, wholeStatuses), (_source.NamedReads, _source.WholeTreeReads, _source.GitStatusAsked));
+    }
+
+    [Theory]
+    [MemberData(nameof(WritesMakingACellsBlock))]
+    public void AWriteThatMakesACellsBlock_NamesItsGroupDocument_SoThePluginIsReadWhole(string write)
+    {
+        var saved = Writes[write](this);
+        var wholeReads = _source.WholeTreeReads;
+
+        Written(saved);
+
+        Assert.True(_source.WholeTreeReads > wholeReads);
+    }
+
+    [Fact]
+    public void AChangeSignalledNamingAGroupDocumentBrokenByHand_ShowsItsRefusal()
+    {
+        var block = Directory.GetDirectories(Path.Combine(Container.ModFolderOf(), PluginSourceRoot.For(ContainerMod.PluginName), "Cells")).First();
+        var group = Path.Combine(block, "GroupRecordData.json");
+        File.WriteAllText(group, "{\"BlockNumber\": \"text\"}");
+
+        _index.SignalChange([new PluginChange(Container.Key, [group])]);
+        Waits.Reached(() => !_index.Status.Validating, "the signal's read");
+
+        Assert.Contains(
+            Path.GetRelativePath(Container.ModFolderOf(), group),
+            _index.Queries.GetProblems().Value().Single(problems => PluginAddress.Comparer.Equals(problems.Plugin, Container.Key)).Problems.Select(problem => problem.SourceRelativePath));
     }
 
     [Fact]
@@ -235,6 +268,62 @@ public sealed class WriteNamingItsFilesTests : IDisposable
         paused.Released.Set();
         await Task.WhenAll(first, second);
         Assert.Equal("RenamedNpc", npcRead);
+    }
+
+    [Fact]
+    public async Task AWriteCountedAsATurnBegins_IsNotVouchedForByThatTurnsNamedRead()
+    {
+        var deleteOverride = RepositoryOf(Overriding).ChangesToRemove(Overriding.Key, Identity(_npc, Overriding));
+        var createNpc = RepositoryOf(Container).ChangesToPut(Container.Key, Copied(_npc, NewFormKey, "CreatedNpc"));
+        var renameNpc = RepositoryOf(Container).ChangesToPut(Container.Key, Renamed(_npc, "RenamedNpc"));
+        using var held = new FirstAndThirdNamedReadsHeld();
+        _source.BeforeEachNamedRead = held.Before;
+        _holder.SourceWritten([Named(Saved(Overriding, deleteOverride))]);
+        held.FirstReached.Wait();
+        _holder.SourceWritten([Named(Saved(Container, createNpc))]);
+        var renamedNpc = Saved(Container, renameNpc);
+        using var paused = new FirstRaisePaused();
+        _onWritten = paused.Raised;
+        var npcWritten = Task.Run(() => _holder.SourceWritten([Named(renamedNpc)]));
+        paused.Counted.Wait();
+        held.First.Set();
+        Waits.Reached(() => _source.NamedReads == 2 && !_index.Status.Validating, "the turn reading the created record");
+
+        var npcRead = _index.RowOf(_npc.ToString(), Container.Key)?.EditorId;
+
+        held.Third.Set();
+        await npcWritten;
+        Assert.Equal("RenamedNpc", npcRead);
+    }
+
+    private sealed class FirstAndThirdNamedReadsHeld : IDisposable
+    {
+        private static readonly TimeSpan AtMost = TimeSpan.FromSeconds(5);
+        private int _reads = -1;
+
+        public ManualResetEventSlim FirstReached { get; } = new();
+
+        public ManualResetEventSlim First { get; } = new();
+
+        public ManualResetEventSlim Third { get; } = new();
+
+        public void Before()
+        {
+            var read = Interlocked.Increment(ref _reads);
+            if (read == 0)
+            {
+                FirstReached.Set();
+                First.Wait(AtMost);
+            }
+            if (read == 2) Third.Wait(AtMost);
+        }
+
+        public void Dispose()
+        {
+            FirstReached.Dispose();
+            First.Dispose();
+            Third.Dispose();
+        }
     }
 
     private sealed class FirstRaisePaused : IDisposable

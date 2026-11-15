@@ -69,6 +69,7 @@ public sealed class NamedFilesReadAloneTests : IDisposable
         ["a FormKey another file holds"] = test => test.Listed([Written(Path.Combine(Path.GetDirectoryName(test.NpcFile).Require(), "Copy.json"), NpcBody(NpcFormKey))]),
         ["a file beside a cell's own document"] = test => test.Listed([Written(
             Path.Combine(Path.GetDirectoryName(test.CellFile).Require(), "Stray.json"), NpcBody(StrayFormKey))]),
+        ["a group's document"] = test => test.Listed([Directory.GetFiles(test._modFolder, "GroupRecordData.json", SearchOption.AllDirectories).First()]),
         ["a file neither on disk nor listed"] = test => test.Listed([Path.Combine(Path.GetDirectoryName(test.NpcFile).Require(), "Never.json")]),
     };
 
