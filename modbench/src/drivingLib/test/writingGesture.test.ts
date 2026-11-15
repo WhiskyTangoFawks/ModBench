@@ -6,7 +6,7 @@ vi.mock('vscode', async () => {
 });
 
 import { progressSteps as steps } from '../../test/recordedProgress';
-import { asViewCall, collectingWarnings, holdingTheWrite, RefusedWrite, runUnderProgress, runWritingGesture, surfaceManagerRunning, surfaceReadModel, surfaceRefusedWrites } from '../writingGesture';
+import { asViewCall, holdingTheWrite, RefusedWrite, runUnderProgress, runWritingGesture, surfaceManagerRunning, type ManagerState, surfaceReadModel, surfaceRefusedWrites } from '../writingGesture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { Refusal } from '../refusal';
 import { ambientWrites } from '../../instanceLoader/ambientWrites';
@@ -64,22 +64,27 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
   });
 
   describe('with the mod manager\'s state surfaced', () => {
-    function surfacedManager(message: () => Promise<string | undefined>) {
+    const says = (state: ManagerState) => (state.kind === 'running' ? 'MO2 is running.' : state.kind === 'unknown' ? 'Cannot tell whether MO2 is running.' : undefined);
+
+    function surfacedManager(running: () => Promise<ManagerState>) {
       const reporter = recordingReporter();
-      const surface = surfaceManagerRunning({ reporter, message });
+      const surface = surfaceManagerRunning({ reporter, running, message: says });
       onTestFinished(() => { surface.dispose(); });
       return reporter;
     }
 
-    const running = () => Promise.resolve('MO2 is running.');
-    const warned = [{ severity: 'warning', message: 'MO2 is running.', detail: undefined }];
+    const running = () => Promise.resolve<ManagerState>({ kind: 'running' });
+    const unknown = () => Promise.resolve<ManagerState>({ kind: 'unknown', reason: 'x' });
+    const notRunning = () => Promise.resolve<ManagerState>({ kind: 'notRunning' });
+    const wrote = () => holdingTheWrite('modbench.write', () => Promise.resolve('landed'));
+    const noticed = (reporter: ReturnType<typeof recordingReporter>) => reporter.reports.map((report) => report.message);
 
     it('warns once a write held through holdingTheWrite has landed, when the manager is running at that moment', async () => {
       const reporter = surfacedManager(running);
 
-      await holdingTheWrite('modbench.write', () => Promise.resolve('landed'));
+      await wrote();
 
-      expect(reporter.reports).toEqual(warned);
+      expect(reporter.reports).toEqual([{ severity: 'warning', message: 'MO2 is running.', detail: undefined }]);
     });
 
     it('says nothing for a gesture that holds no write', async () => {
@@ -91,9 +96,9 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
     });
 
     it('says nothing when the manager is not running', async () => {
-      const reporter = surfacedManager(() => Promise.resolve(undefined));
+      const reporter = surfacedManager(notRunning);
 
-      await holdingTheWrite('modbench.write', () => Promise.resolve('landed'));
+      await wrote();
 
       expect(reporter.reports).toEqual([]);
     });
@@ -107,7 +112,7 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
     });
 
     it('starts the command without waiting on the ask', () => {
-      surfacedManager(() => new Promise<string>(() => undefined));
+      surfacedManager(() => new Promise<ManagerState>(() => undefined));
       const commandRan = vi.fn();
 
       void holdingTheWrite('modbench.write', () => { commandRan(); return Promise.resolve(); });
@@ -116,7 +121,7 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
     });
 
     it('holds the write against another until the command is done, whatever the ask is doing', async () => {
-      surfacedManager(() => new Promise<string>(() => undefined));
+      surfacedManager(() => new Promise<ManagerState>(() => undefined));
       let ends!: () => void;
       void holdingTheWrite('modbench.write', () => new Promise<void>((r) => { ends = r; }));
 
@@ -124,13 +129,46 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
       ends();
     });
 
-    it('goes back to an agent that called, in its answer, and not as a notification', async () => {
+    it('goes with the result as a partial failure, which an agent is answered and a view reports, and is no notification', async () => {
       const reporter = surfacedManager(running);
-      const told: string[] = [];
 
-      await collectingWarnings(told, () => holdingTheWrite('modbench.write', () => Promise.resolve('landed')));
+      const answer = await holdingTheWrite('modbench.write', () => Promise.resolve({ applied: true, partial: [{ message: 'one', detail: 'd', severity: 'log' }] }));
 
-      expect({ told, reports: reporter.reports }).toEqual({ told: ['MO2 is running.'], reports: [] });
+      expect({ answer, reports: reporter.reports }).toEqual({
+        answer: { applied: true, partial: [{ message: 'one', detail: 'd', severity: 'log' }, { message: 'MO2 is running.', detail: '', severity: 'warning' }] },
+        reports: [],
+      });
+    });
+
+    it('warns at every write while the manager is running', async () => {
+      const reporter = surfacedManager(running);
+
+      await wrote();
+      await wrote();
+
+      expect(noticed(reporter)).toEqual(['MO2 is running.', 'MO2 is running.']);
+    });
+
+    it('says it cannot tell only when the answer changes to unknown', async () => {
+      let answers = [unknown, unknown, running, unknown];
+      const reporter = surfacedManager(() => (answers.shift() ?? unknown)());
+
+      for (let write = 0; write < 4; write++) await wrote();
+
+      expect(noticed(reporter)).toEqual(['Cannot tell whether MO2 is running.', 'MO2 is running.', 'Cannot tell whether MO2 is running.']);
+      answers = [];
+    });
+
+    it('logs a failed ask once, treats it as unknown, and does not delay the write', async () => {
+      const reporter = surfacedManager(() => Promise.reject(new Error('tasklist failed')));
+
+      await wrote();
+      await wrote();
+
+      expect({ shown: reporter.shownFailures.length, noticed: noticed(reporter) }).toEqual({
+        shown: 1,
+        noticed: ['Cannot tell whether the mod manager is running: tasklist failed.'],
+      });
     });
   });
 

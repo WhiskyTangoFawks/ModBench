@@ -11,7 +11,7 @@ vi.mock('vscode', () => ({ commands: { registerCommand }, TreeItem }));
 
 import { AgentCall, argumentOfKind, registerAgentGesture, registerWritingCommand, reportPartial, type AgentGesture, type PartialFailure } from '../agentGesture';
 import { Refusal } from '../refusal';
-import { holdingTheWrite, RefusedWrite, surfaceManagerRunning } from '../writingGesture';
+import { holdingTheWrite, RefusedWrite } from '../writingGesture';
 import { aWriteInFlight } from '../../test/writeInFlight';
 import type { GestureEntry } from '../gestureEntry';
 
@@ -170,27 +170,5 @@ describe('what a partly landed gesture tells the user', () => {
     reportPartial(reporter);
     reportPartial(reporter, [logged]);
     expect(reporter.reports).toEqual([]);
-  });
-});
-
-describe('the mod manager running when an agent\'s call wrote', () => {
-  it('goes back in the agent\'s answer as a partial failure, and gives no notification', async () => {
-    const reporter = recordingReporter();
-    const surface = surfaceManagerRunning({ reporter, message: () => Promise.resolve('MO2 is running.') });
-    const gesture: AgentGesture<Row, string, { applied: true }> = {
-      fromView: () => undefined, fromAgent: () => 'given', report: () => undefined,
-      run: () => holdingTheWrite('modbench.test.write', () => Promise.resolve({ applied: true as const })),
-    };
-    registerAgentGesture('modbench.test.write', () => [], gesture).dispose();
-    const registered = registerCommand.mock.calls.at(-1)?.[1];
-    if (!registered) throw new Error('the gesture registered no command');
-
-    const answer = await Promise.resolve(registered(new AgentCall([], {})));
-    surface.dispose();
-
-    expect({ answer, reports: reporter.reports }).toEqual({
-      answer: { applied: true, partial: [{ message: 'MO2 is running.', detail: '', severity: 'warning' }] },
-      reports: [],
-    });
   });
 });

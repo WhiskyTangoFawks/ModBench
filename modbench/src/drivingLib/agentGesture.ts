@@ -5,7 +5,7 @@ import type { SelectionOutcome } from '../ports/selectionOutcome';
 import { Refusal } from './refusal';
 import type { Reporter } from '../ports/reporter';
 import { gestureEntry, type GestureEntry, type KindedRow } from './gestureEntry';
-import { asViewCall, collectingWarnings, warnInNotification } from './writingGesture';
+import { asViewCall } from './writingGesture';
 
 /** The Argument and the Options an agent call gives a gesture (commands.md, The entry point supplies what it knows). */
 export class AgentCall<Options extends object = object> {
@@ -64,21 +64,6 @@ export function argumentOfKind<K extends Argument['kind']>(argument: Argument, .
   return argument;
 }
 
-async function answeredWithWarnings<T>(run: () => Promise<T>): Promise<T> {
-  const warnings: string[] = [];
-  const answer = await collectingWarnings(warnings, run);
-  if (warnings.length === 0) return answer;
-  if (!isLandedAnswer(answer)) {
-    warnings.forEach(warnInNotification);
-    return answer;
-  }
-  const warned = warnings.map((message): PartialFailure => ({ message, detail: '', severity: 'warning' }));
-  return { ...answer, partial: [...(answer.partial ?? []), ...warned] };
-}
-
-const isLandedAnswer = (answer: unknown): answer is { applied: true; partial?: readonly PartialFailure[] } =>
-  typeof answer === 'object' && answer !== null && 'applied' in answer && answer.applied === true;
-
 /** A gesture the agent runs, by the parts a view call and an agent call share and the parts only a view call has. */
 export interface AgentGesture<Row, Given, Outcome, Options extends object = object> {
   /** What a view call acts on: its entry, and what a picker, a prompt or a confirmation adds. Nothing ends it with no write. */
@@ -103,7 +88,7 @@ export function registerAgentGesture<Row, Given, Outcome, Options extends object
 ): vscode.Disposable {
   const isCall = (value: unknown): value is AgentCall<Options> => value instanceof AgentCall;
   return vscode.commands.registerCommand(commandId, async (clicked?: unknown, selected?: readonly Row[], option?: unknown) => {
-    if (isCall(clicked)) return answeredWithWarnings(async () => gesture.run(await gesture.fromAgent(clicked)));
+    if (isCall(clicked)) return gesture.run(await gesture.fromAgent(clicked));
     return asViewCall(async () => {
       const given = await gesture.fromView(gestureEntry(clicked, selected, viewSelection, isRow), option, clicked);
       if (given !== undefined) gesture.report(await gesture.run(given), given);
