@@ -732,13 +732,14 @@ describe('Instance — a write that changes several files', () => {
     expect(fake.rereads).toEqual([CHECK, reread('/instance/mods/A/a.esp')]);
   });
 
-  it('checks the disk after work that names no file', async () => {
+  it('reads again no file after work that names none, and checks the disk after work that left its files unnamed', async () => {
     const { instance, fake } = loader();
     await instance.refresh();
 
     await instance.quiet(() => Promise.resolve());
+    await instance.quiet((written) => { written.leaveUnnamed(); return Promise.resolve(); });
 
-    expect(fake.rereads).toEqual([CHECK, CHECK]);
+    expect(fake.rereads).toEqual([CHECK, { named: [], disk: false }, CHECK]);
   });
 
   it('lands no value read inside it, and lands the refresh after it', async () => {
@@ -826,6 +827,31 @@ describe('Instance — a value that survives a bad read', () => {
     expect(instance.readFailure).toBe(failures[0]);
   });
 
+  it('refuses a write told to it when the read that was to hold the file fails, so the gesture learns of it', async () => {
+    const { instance, fake } = loader({ mods: [mod('A')] });
+    await instance.refresh();
+
+    fake.failReading('ModOrganizer.ini is half-written');
+
+    await expect(instance.told(['/instance/profiles/Default/modlist.txt'])).rejects.toThrow('ModOrganizer.ini is half-written');
+  });
+
+  it('answers a write told to it during a quiet scope once the read after the scope has landed, never at the dropped read', async () => {
+    const { instance } = loader({ mods: [mod('A')] });
+    await instance.refresh();
+    let told: Promise<void> | undefined;
+    let answered = false;
+
+    await instance.quiet(async () => {
+      told = instance.told(['/instance/profiles/Default/modlist.txt']).then(() => { answered = true; });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(answered).toBe(false);
+    });
+    await told;
+
+    expect(answered).toBe(true);
+  });
+
   it('reports a failed first read to failure subscribers, so a tree can settle on an error node, holds the sequence at 0, and lands the next successful read at sequence 1', async () => {
     const { instance, fake } = loader({ mods: [mod('A')] });
     fake.failReading('ModOrganizer.ini is empty');
@@ -908,6 +934,29 @@ describe('Instance — a value that survives a bad read', () => {
     await refreshed;
 
     expect(finished).toEqual(['another subscriber', 'refresh']);
+  });
+
+  it('answers a write told to it once its value holds the file, before its subscribers have settled', async () => {
+    const { instance } = loader();
+    await instance.refresh();
+    instance.subscribe(() => new Promise<void>(() => undefined));
+    const reads: (readonly string[] | undefined)[] = [];
+    instance.subscribe((_value, _sequence, { named }) => { reads.push(named); });
+
+    await instance.told(['/instance/profiles/Default/modlist.txt']);
+
+    expect(reads).toEqual([['/instance/profiles/Default/modlist.txt']]);
+  });
+
+  it('names to its subscribers every path a read was asked for but the ones the reading says it found as it held them', async () => {
+    const { instance } = loader({ unchangedFiles: ['/instance/profiles/Default/modlist.txt'] });
+    await instance.refresh();
+    const reads: (readonly string[])[] = [];
+    instance.subscribe((_value, _sequence, { named }) => { reads.push(named); });
+
+    await instance.refresh(['/instance/profiles/Default/modlist.txt', '/instance/mods/A/A.esp']);
+
+    expect(reads).toEqual([['/instance/mods/A/A.esp']]);
   });
 
   it('recomputes again while a subscriber has not settled, and holds only its own refresh', async () => {

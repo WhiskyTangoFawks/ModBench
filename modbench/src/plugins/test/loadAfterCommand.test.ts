@@ -66,7 +66,7 @@ beforeEach(() => {
 
 describe('modbench.plugin.loadAfter', () => {
   it('picks many of the places offered outside the selection, and writes a rule for each selected plugin', async () => {
-    const { fake, reporter, instance } = registered();
+    const { fake, reporter } = registered();
     picks.chosen = ['C.esp', 'D.esp'];
 
     await invoke(row('A.esp'), [row('A.esp'), row('B.esp')]);
@@ -75,7 +75,6 @@ describe('modbench.plugin.loadAfter', () => {
     expect(picks.options).toMatchObject({ canPickMany: true });
     expect(fake.calls).toEqual(wrote({ plugin: 'A.esp', after: ['C.esp', 'D.esp'] }, { plugin: 'B.esp', after: ['C.esp', 'D.esp'] }));
     expect(reporter.reports).toEqual([]);
-    expect(instance.refresh).toHaveBeenCalled();
   });
 
   it('writes nothing when the pick is dismissed', async () => {

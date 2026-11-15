@@ -247,6 +247,20 @@ describe('PluginFactsFeed', () => {
     expect([beforeReconcile, sortingErrors.items.map((errors) => errors.length)]).toEqual([0, [1, 0]]);
   });
 
+  it('names only the plugins whose judgement the changed rules altered', async () => {
+    const B = { name: 'B.esp', origin: 'SomeMod' };
+    let rules = NO_RULES;
+    const { feed, client, changes } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B], rules: () => rules });
+    client.setQueryAnswer('getPlugins', [held(), held({ name: 'B.esp' })]);
+    await feed.reconciled([]);
+    changes.mockClear();
+    rules = rulesOf(filesWith('plugins:\n  - name: A.esp\n    req: [Missing.esp]\n'));
+
+    await feed.rejudge();
+
+    expect(changes.mock.calls).toEqual([[[A]]]);
+  });
+
   describe('judging again as the facts are re-read', () => {
     const B = { name: 'B.esp', origin: 'SomeMod' };
     const raised = (errors: readonly (readonly unknown[])[]) => errors.map((published) => published.length > 0);
@@ -280,7 +294,42 @@ describe('PluginFactsFeed', () => {
       expect([asked.mock.calls.length, changes.mock.calls]).toEqual([0, [[[A]]]]);
     });
 
-    it('names every plugin asked about since the last answer, so an overtaken re-read\'s plugin is not lost', async () => {
+    it('asks again only for the plugins named, and keeps what it holds of the others', async () => {
+      const { feed, client } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B] });
+      client.setQueryAnswer('getPlugins', [held({ isCompiledPlugin: true }), held({ name: 'B.esp', isCompiledPlugin: true })]);
+      await feed.reconciled([]);
+      client.calls.length = 0;
+      client.setQueryAnswer('getPlugins', [held({ isCompiledPlugin: false })]);
+
+      await feed.refresh([A]);
+
+      expect([client.calls.map(({ args }) => args), feed.rows.contextFlags(A).includes('compiledPlugin'), feed.rows.contextFlags(B).includes('compiledPlugin')])
+        .toEqual([[[[A]]], false, true]);
+    });
+
+    it('asks for every plugin when it is named none', async () => {
+      const { feed, client } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B] });
+      client.setQueryAnswer('getPlugins', reads(false));
+      await feed.reconciled([]);
+      client.calls.length = 0;
+
+      await feed.refresh();
+
+      expect(client.calls.map(({ args }) => args)).toEqual([[]]);
+    });
+
+    it('forgets a named plugin the answer does not hold', async () => {
+      const { feed, client } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B] });
+      client.setQueryAnswer('getPlugins', reads(false));
+      await feed.reconciled([]);
+      client.setQueryAnswer('getPlugins', []);
+
+      await feed.refresh([B]);
+
+      expect(feed.rows.contextFlags(B)).toEqual([]);
+    });
+
+    it('names each re-read\'s plugins on its own change, in the order they were asked', async () => {
       const { feed, client, changes } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B] });
       client.setQueryAnswer('getPlugins', reads(false));
       await feed.reconciled([]);
@@ -288,12 +337,74 @@ describe('PluginFactsFeed', () => {
       const slow = deferred<PluginMetadata[]>();
       client.setQueryAnswerOnce('getPlugins', slow.promise);
 
-      const overtaken = feed.refresh([A]);
-      await feed.refresh([B]);
+      const earlier = feed.refresh([A]);
+      const later = feed.refresh([B]);
       slow.resolve(reads(false));
-      await overtaken;
+      await Promise.all([earlier, later]);
+
+      expect(changes.mock.calls).toEqual([[[A]], [[B]]]);
+    });
+
+    it('names the plugins asked about and the plugins whose judgement the re-read altered', async () => {
+      const { feed, client, changes } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B] });
+      client.setQueryAnswer('getPlugins', [held({ isMaster: true }), held({ name: 'B.esp', isMaster: true })]);
+      await feed.reconciled([]);
+      changes.mockClear();
+      client.setQueryAnswer('getPlugins', [held({ isMaster: false })]);
+
+      await feed.refresh([A]);
 
       expect(changes.mock.calls).toEqual([[[A, B]]]);
+    });
+
+    it('asks for every plugin after a failed read, so a plugin the failed read named is not left stale', async () => {
+      const { feed, client } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B] });
+      client.setQueryAnswer('getPlugins', [held({ isCompiledPlugin: false }), held({ name: 'B.esp' })]);
+      await feed.reconciled([]);
+      client.setQueryFailureOnce('getPlugins', { failed: 'unreachable' });
+      await feed.refresh([A]);
+      client.calls.length = 0;
+      client.setQueryAnswer('getPlugins', [held({ isCompiledPlugin: true }), held({ name: 'B.esp' })]);
+
+      await feed.refresh([B]);
+
+      expect([client.calls.map(({ args }) => args), compiledPluginFlag(feed)]).toEqual([[[]], true]);
+    });
+
+    it('keeps apart two plugins whose names differ only in case', async () => {
+      const upper = { name: 'A.esp', origin: 'SomeMod' };
+      const lower = { name: 'a.esp', origin: 'SomeMod' };
+      const { feed, client } = feedOver({ shownPlugins: () => [upper, lower] });
+      client.setQueryAnswer('getPlugins', [held({ name: 'A.esp', isCompiledPlugin: true }), held({ name: 'a.esp', isCompiledPlugin: false })]);
+      await feed.reconciled([]);
+      client.setQueryAnswer('getPlugins', [held({ name: 'a.esp', isCompiledPlugin: false })]);
+
+      await feed.refresh([lower]);
+
+      expect(feed.rows.contextFlags(upper)).toContain('compiledPlugin');
+    });
+
+    it('asks nothing when it is named no plugin', async () => {
+      const { feed, client } = feedOver();
+      client.setQueryAnswer('getPlugins', [held()]);
+      await feed.reconciled([]);
+      client.calls.length = 0;
+
+      await feed.refresh([]);
+
+      expect(client.calls).toEqual([]);
+    });
+
+    it('reads the next re-read after one that threw', async () => {
+      let broken = true;
+      const { feed, client } = feedOver({ shownPlugins: () => { if (broken) throw new Error('the tree broke'); return [A]; } });
+      client.setQueryAnswer('getPlugins', [held({ isCompiledPlugin: true })]);
+      await expect(feed.refresh([A])).rejects.toThrow('the tree broke');
+      broken = false;
+
+      await feed.refresh([A]);
+
+      expect(compiledPluginFlag(feed)).toBe(true);
     });
 
     it('judges again for an edited description, which a version condition of the sorting rules reads', async () => {
@@ -423,15 +534,15 @@ describe('PluginFactsFeed', () => {
     expect(compiledPluginFlag(feed)).toBe(true);
   });
 
-  it('a later re-read wins over an earlier one still in flight', async () => {
+  it('a later re-read lands over an earlier one still in flight', async () => {
     const { feed, client } = feedOver();
     const slow = deferred<PluginMetadata[]>();
     client.setQueryAnswerOnce('getPlugins', slow.promise);
     client.setQueryAnswer('getPlugins', [held({ isCompiledPlugin: false })]);
     const earlier = feed.refresh();
-    await feed.refresh();
+    const later = feed.refresh();
     slow.resolve([held({ isCompiledPlugin: true })]);
-    await earlier;
+    await Promise.all([earlier, later]);
 
     expect(compiledPluginFlag(feed)).toBe(false);
   });
@@ -558,7 +669,28 @@ describe('PluginFactsFeed', () => {
     client.emit({ kind: 'external-change', plugin: '', origin: 'SomeMod', keys: [], sequence: 0, changedPlugins: [{ name: 'A.esp', bytesSha256: 'ab12' }] });
 
     expect(changedOutside.items.map((warnings) => warnings.map(({ plugin, origin }) => ({ plugin, origin })))).toEqual([[{ plugin: 'A.esp', origin: 'SomeMod' }]]);
-    expect(changes).toHaveBeenCalledOnce();
+    expect(changes.mock.calls).toEqual([[[A]]]);
+  });
+
+  it('names the plugin a later settle of the mod drops from its changed ones, so its row is redrawn', () => {
+    const { client, changes } = feedOver();
+    client.emit({ kind: 'external-change', plugin: '', origin: 'SomeMod', keys: [], sequence: 0, changedPlugins: [{ name: 'A.esp', bytesSha256: 'ab12' }] });
+    changes.mockClear();
+
+    client.emit({ kind: 'external-change', plugin: '', origin: 'SomeMod', keys: [], sequence: 1, changedPlugins: [] });
+
+    expect(changes.mock.calls).toEqual([[[A]]]);
+  });
+
+  it('names only the plugins whose changed standing a settle altered', () => {
+    const { client, changes } = feedOver();
+    const settle = (sequence: number, ...names: string[]) => client.emit({ kind: 'external-change', plugin: '', origin: 'SomeMod', keys: [], sequence, changedPlugins: names.map((name) => ({ name, bytesSha256: 'ab12' })) });
+    settle(0, 'A.esp', 'B.esp');
+    changes.mockClear();
+
+    settle(1, 'B.esp', 'C.esp');
+
+    expect(changes.mock.calls).toEqual([[[A, { name: 'C.esp', origin: 'SomeMod' }]]]);
   });
 
   it('stops listening for the notification once disposed', () => {

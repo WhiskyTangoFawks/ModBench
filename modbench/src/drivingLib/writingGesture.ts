@@ -7,8 +7,7 @@ import type { Reporter } from '../ports/reporter';
 
 export type RecordWrite = (command: () => Promise<void>) => Promise<void>;
 
-/** Runs `command` under the view's progress, which a command that waits on a person closes through the `Progress` it is
- *  given. The refresh that follows is work, so the progress is shown for it. */
+/** Runs `command` under the view's progress, which a command that waits on a person closes through the `Progress` it is given. */
 export async function runUnderProgress<T>(
   viewId: string, instance: Pick<Instance, 'refresh'>, command: (progress: Progress, written: WrittenFiles) => Promise<T>,
 ): Promise<T> {
@@ -21,7 +20,7 @@ export async function runUnderProgress<T>(
   } finally {
     progress.working();
     try {
-      await instance.refresh(written.named);
+      if (written.named?.length !== 0) await instance.refresh(written.named);
       if (readModel !== undefined && readModel.handed() !== handedBefore) await readModel.latest();
     } finally {
       await progress.done();

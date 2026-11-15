@@ -41,7 +41,7 @@ import type { MoveToTrash } from '../../ports/trash';
 import type { LocatedDownloadedFileRow, DownloadedFileRow, Instance } from '../../instanceLoader/instance';
 import { recordingReporter, assertSelectionOutcome } from '../../test/surfacingDoubles';
 import { downloadedFileRowFixture } from '../../test/mo2/downloadedFileRowFixture';
-import { downloadedFilesOf, fakeInstanceAdapter, readingFixture, type InstanceAnswers, type FakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
+import { downloadedFilesOf, fakeInstanceAdapter, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
@@ -119,30 +119,21 @@ describe('opening a downloaded file or its metadata', () => {
 });
 
 
-describe('a Downloads gesture that writes ends on the Instance loader\'s read, with the view\'s progress bar open throughout', () => {
+describe('a Downloads gesture that writes ends when its writes return, with the view\'s progress bar open throughout', () => {
   beforeEach(() => { vi.clearAllMocks(); progressSteps.length = 0; });
 
   const opens = 'progress opens on modbench.downloads';
-  const reads = 'Instance loader: read every file again';
-
-  const instanceReadingTheWrites = (fake: FakeInstanceAdapter): Pick<Instance, 'value' | 'refresh'> => ({
-    ...fakeInstance(),
-    refresh: () => {
-      progressSteps.push(`read finds ${fake.calls.map((call) => (call.verb === 'markDownloadedFile' ? `${call.verb} ${call.mark}` : call.verb)).join()}`);
-      return Promise.resolve();
-    },
-  });
 
   it.each([
     ['exclude', {}, 'Excluded'],
     ['include', { excluded: true }, 'Included'],
-  ])('%s writes the mark, then the read, then the bar closes', async (verb, row, mark) => {
+  ])('%s writes the mark, then the bar closes', async (verb, row, mark) => {
     const fake = downloadsFake();
 
-    registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), instanceReadingTheWrites(fake), recordingReporter(), trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), instanceThatReads, recordingReporter(), trash, downloadsLog, () => []);
     await invoke(`modbench.downloadedFile.${verb}`, node(ROOT, 'foo.7z', row));
 
-    expect(progressSteps).toEqual([opens, `read finds markDownloadedFile ${mark}`, 'progress closes']);
+    expect({ steps: progressSteps, calls: fake.calls }).toEqual({ steps: [opens, 'progress closes'], calls: [{ verb: 'markDownloadedFile', name: 'foo.7z', mark }] });
   });
 
   it.each([
@@ -157,7 +148,7 @@ describe('a Downloads gesture that writes ends on the Instance loader\'s read, w
     expect(fake.calls).toEqual([{ verb: 'markDownloadedFile', name: 'foo.7z', mark }]);
   });
 
-  it('delete trashes, then the read, then the bar closes', async () => {
+  it('delete trashes, then the bar closes', async () => {
     const { adapter } = downloadsFake();
     const trashing: InstanceAdapter = {
       ...adapter,
@@ -167,19 +158,7 @@ describe('a Downloads gesture that writes ends on the Instance loader\'s read, w
     registerDownloadsMultiRowCommands(downloadedFileCommands(trashing), instanceThatReads, recordingReporter(), trash, downloadsLog, () => []);
     await invoke('modbench.downloadedFile.delete', node(ROOT, 'foo.7z'));
 
-    expect(progressSteps).toEqual([opens, 'trash', reads, 'progress closes']);
-  });
-
-  it('a read that fails after the gesture leaves the rows and says so', async () => {
-    const disk = new FakeInstance(instanceValueFixture({ downloadedFiles: { kind: 'listed', rows: [downloadedFileRowFixture('foo.7z', {}, ROOT)] } }));
-    const provider = new DownloadsProvider({ instance: disk });
-    const instance = { value: disk.value, refresh: () => { disk.fail('locked'); return Promise.resolve(); } };
-
-    registerDownloadsMultiRowCommands(downloadedFileCommands(downloadsFake().adapter), instance, recordingReporter(), trash, downloadsLog, () => []);
-    await invoke('modbench.downloadedFile.exclude', node(ROOT, 'foo.7z'));
-
-    expect((await provider.getChildren()).map((n) => n.kind === 'downloadedFile' && n.argument.row.name)).toEqual(['foo.7z']);
-    expect(provider.viewMessage()).toBe('Showing the last good read: locked');
+    expect(progressSteps).toEqual([opens, 'trash', 'progress closes']);
   });
 });
 
@@ -346,14 +325,14 @@ describe('query info from the Downloads view', () => {
     return reporter;
   };
 
-  it('asks about the selected files, then reads the instance again, in one bar', async () => {
+  it('asks about the selected files, in one bar', async () => {
     queryInfo.mockResolvedValue({ applied: true, outcome: { landed: [{ name: 'a.7z' }, { name: 'b.7z' }], refused: [] } });
     register();
 
     await invoke(QUERY, node(ROOT, 'a.7z'), [node(ROOT, 'a.7z'), node(ROOT, 'b.7z')]);
 
     expect(queryInfo).toHaveBeenCalledWith(['a.7z', 'b.7z']);
-    expect(progressSteps).toEqual(['progress opens on modbench.downloads', 'Instance loader: read every file again', 'progress closes']);
+    expect(progressSteps).toEqual(['progress opens on modbench.downloads', 'progress closes']);
   });
 
   it('says in one line how many files it filled', async () => {

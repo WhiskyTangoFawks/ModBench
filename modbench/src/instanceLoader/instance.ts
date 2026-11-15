@@ -39,13 +39,29 @@ interface Run {
   tellsUnheard: boolean;
   fromEvents: boolean;
   readonly settled: Promise<void>;
+  /** Settles when the read has landed, before its subscribers have settled; rejects with the failure of a read that failed. A run dropped
+   *  for a write in flight settles with the run that reads what it was to read. */
+  readonly valueLanded: Promise<void>;
+  readonly inherited: Run[];
+  /** The named paths the read found as the value held them. */
+  unchanged: ReadonlySet<string>;
+  landValue(failure?: Error): void;
   land(settled: Promise<void>): void;
 }
 
 function nextRun(): Run {
   let land!: (settled: Promise<void>) => void;
+  let settleValueLanded!: (failure?: Error) => void;
   const settled = new Promise<void>((resolve) => { land = resolve; });
-  return { named: new Set(), disk: false, tellsUnheard: false, fromEvents: false, settled, land };
+  const valueLanded = new Promise<void>((resolve, reject) => { settleValueLanded = (failure) => { if (failure === undefined) resolve(); else reject(failure); }; });
+  // A refresh asks for `settled` alone, so a failure nobody asked `valueLanded` for is not an unhandled one.
+  valueLanded.catch(() => undefined);
+  const inherited: Run[] = [];
+  const landValue = (failure?: Error): void => {
+    settleValueLanded(failure);
+    for (const run of inherited) run.landValue(failure);
+  };
+  return { named: new Set(), disk: false, tellsUnheard: false, fromEvents: false, settled, valueLanded, inherited, unchanged: new Set(), landValue, land };
 }
 
 type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'dataFolderFiles' | 'gameArchives' | 'archives' | 'archiveContents' | 'listingNotes' | 'managerRunning' | 'publisherConfiguration' | 'programVersions';
@@ -337,7 +353,7 @@ export class Instance implements Subscription {
   private readonly stopHearingMEditStatus: () => void;
 
   // A note is one Output line until its text changes or it clears.
-  private readonly told = new Map<NoteKind, ReadonlySet<string>>();
+  private readonly notesTold = new Map<NoteKind, ReadonlySet<string>>();
   private readonly facts: FactsOfReading;
 
   constructor(private readonly options: InstanceOptions) {
@@ -442,6 +458,12 @@ export class Instance implements Subscription {
     return this.enqueue({ named: wrote, disk: wrote === undefined, tellsUnheard: false });
   }
 
+  /** Answers once the value holds the files a write just wrote, without waiting for the subscribers: a subscriber may be
+   *  the writer's own caller, holding a lock the write took. */
+  told(wrote: readonly string[]): Promise<void> {
+    return this.enqueue({ named: wrote, disk: false, tellsUnheard: false }, 'valueLanded');
+  }
+
   /** Runs `work`, a write to several files the value reads, then refreshes at the files `work` names. A read that overlapped
    *  it never lands: it may hold some files from before the write and some after. */
   async quiet<T>(work: (written: WrittenFiles) => Promise<T>): Promise<T> {
@@ -499,9 +521,9 @@ export class Instance implements Subscription {
   }
 
   private tellOnce(kind: NoteKind, lines: readonly string[], level: 'info' | 'warn'): void {
-    const before = this.told.get(kind);
+    const before = this.notesTold.get(kind);
     for (const line of lines) if (!before?.has(line)) this.options.log[level](line);
-    this.told.set(kind, new Set(lines));
+    this.notesTold.set(kind, new Set(lines));
   }
 
   // xEdit reports a listed archive it cannot find; the game loads none, so the views stay true.
@@ -536,7 +558,7 @@ export class Instance implements Subscription {
 
   private enqueue({ named = [], disk, tellsUnheard, fromEvents = false }: {
     named?: readonly string[]; disk: boolean; tellsUnheard: boolean; fromEvents?: boolean;
-  }): Promise<void> {
+  }, answers: 'settled' | 'valueLanded' = 'settled'): Promise<void> {
     const next = this.next ?? nextRun();
     this.next = next;
     if (this.dropped !== undefined) {
@@ -544,6 +566,7 @@ export class Instance implements Subscription {
       next.disk ||= this.dropped.disk;
       next.tellsUnheard ||= this.dropped.tellsUnheard;
       next.fromEvents ||= this.dropped.fromEvents;
+      next.inherited.push(...this.dropped.inherited);
       this.dropped = undefined;
     }
     for (const path of named) next.named.add(path);
@@ -557,7 +580,7 @@ export class Instance implements Subscription {
     next.disk ||= disk;
     next.tellsUnheard ||= tellsUnheard;
     void this.drain();
-    return next.settled;
+    return next[answers];
   }
 
   // A run settles with its value's subscribers; the next run does not wait for them.
@@ -566,14 +589,16 @@ export class Instance implements Subscription {
     this.reading = true;
     for (let run = this.next; run !== undefined; run = this.next) {
       this.next = undefined;
-      run.land((await this.recompute(run)).settled);
+      const { settled, failed, dropped } = await this.recompute(run);
+      if (!dropped) run.landValue(failed);
+      run.land(settled);
     }
     this.reading = false;
   }
 
   // A read that throws logs and leaves the last value and the last sequence in place, so a file
   // another tool is half-way through writing never empties the trees.
-  private async recompute(run: Run): Promise<{ settled: Promise<void> }> {
+  private async recompute(run: Run): Promise<{ settled: Promise<void>; failed?: Error; dropped?: true }> {
     let next: InstanceValue;
     const epoch = this.quietEpoch;
     try {
@@ -584,7 +609,7 @@ export class Instance implements Subscription {
       const failure = errorMessage(err);
       this.options.log.error(`[instance] Failed to read the instance: ${failure}`);
       this.failure = failure;
-      return { settled: this.notify(this.failureListeners, 'read-failure', (listener) => listener()) };
+      return { settled: this.notify(this.failureListeners, 'read-failure', (listener) => listener()), failed: new Error(failure) };
     }
     if (epoch !== this.quietEpoch || this.quiets > 0) return this.dropRun(run);
     const before = this.current;
@@ -593,22 +618,23 @@ export class Instance implements Subscription {
     this.failure = undefined;
     this.setLate(this.heardSinceRun());
     this.seq++;
-    const reread: Reread = { named: [...run.named], disk: run.disk };
+    const reread: Reread = { named: [...run.named].filter((path) => !run.unchanged.has(path)), disk: run.disk };
     if (this.workspaceMovedFrom(next)) void this.enqueue({ disk: false, tellsUnheard: false });
     const told = this.subscribers.filter(({ concerns }) => tellsEvery || concerns === undefined || concerns.some((fact) => next[fact] !== before[fact]));
     return { settled: this.notify(told.map(({ subscriber }) => subscriber), 'value', (subscriber) => subscriber(next, this.seq, reread)) };
   }
 
   // What a dropped run was to read is read by the next run, so a change the watch heard while a write ran is never lost.
-  private dropRun(run: Run): { settled: Promise<void> } {
+  private dropRun(run: Run): { settled: Promise<void>; dropped: true } {
     const dropped = this.dropped ?? nextRun();
     this.dropped = dropped;
     for (const path of run.named) dropped.named.add(path);
     dropped.disk ||= run.disk;
     dropped.tellsUnheard ||= run.tellsUnheard;
     dropped.fromEvents ||= run.fromEvents;
+    dropped.inherited.push(run);
     if (this.quiets === 0) void this.enqueue({ disk: false, tellsUnheard: false });
-    return { settled: Promise.resolve() };
+    return { settled: Promise.resolve(), dropped: true };
   }
 
   // A throwing subscriber would otherwise reject the queue for good, and no later recompute
@@ -634,10 +660,12 @@ export class Instance implements Subscription {
     return gameFolder.kind === 'found' && this.options.workspace.holds(gameFolder.dataFolder) ? gameFolder.dataFolder : undefined;
   }
 
-  private async read({ named, disk, tellsUnheard }: Run): Promise<InstanceValue> {
+  private async read(run: Run): Promise<InstanceValue> {
+    const { named, disk, tellsUnheard } = run;
     const { adapter, log } = this.options;
     const reading = await adapter.reading({ named: [...named], disk });
     if (tellsUnheard) for (const path of reading.unheardChanges) log.info(`[instance] The check of the disk found a change no event named: ${path}`);
+    run.unchanged = new Set(reading.unchangedFiles);
     return this.facts.of(reading, this.workspaceDataFolder(reading.gameFolder), {
       sourceMods: (sourceMods) => { this.tellReading(reading, sourceMods); },
       archiveSources: (sources) => { this.tellArchivesNothingHolds(sources); },

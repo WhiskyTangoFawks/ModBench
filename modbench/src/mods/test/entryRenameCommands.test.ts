@@ -245,7 +245,7 @@ describe('rename separator', () => {
     await invoke('modbench.separator.rename', groupB);
 
     expect(progressSteps).toEqual([
-      'progress opens on modbench.modList', 'changeModOrder', 'followFoldersInRepository', 'Instance loader: read every file again', 'progress closes',
+      'progress opens on modbench.modList', 'changeModOrder', 'followFoldersInRepository', 'progress closes',
     ]);
   });
 

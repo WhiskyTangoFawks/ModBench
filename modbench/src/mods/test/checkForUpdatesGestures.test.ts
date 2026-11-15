@@ -76,7 +76,7 @@ describe('check for updates, from a view', () => {
     await run(CHECK, modRow('ModB'), [modRow('ModA'), modRow('ModB')]);
 
     expect(fake.calls).toEqual(checked('ModA', 'ModB'));
-    expect(progressSteps).toEqual(['progress opens on modbench.modList', 'Instance loader: read every file again', 'progress closes']);
+    expect(progressSteps).toEqual(['progress opens on modbench.modList', 'progress closes']);
   });
 
   it('checks every mod from the Mods title bar', async () => {

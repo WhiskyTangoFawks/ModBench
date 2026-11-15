@@ -114,27 +114,17 @@ describe('Switch profile', () => {
     expect(switchProfile).toHaveBeenCalledWith('Modding');
   });
 
-  it('writes the switch under the Toolbox\'s progress, which closes once the Instance loader has read again', async () => {
+  it('writes the switch under the Toolbox\'s progress, which closes when the write returns', async () => {
     switchProfile.mockImplementationOnce(() => { progressSteps.push('write'); return Promise.resolve({ applied: true, wrote: true }); });
 
     const { reporter } = await switchProfileChoosing('Modding');
 
     expect(progressSteps).toEqual([
-      'progress opens on modbench.toolbox', 'write', 'Instance loader: read every file again', 'progress closes',
+      'progress opens on modbench.toolbox', 'write', 'progress closes',
     ]);
     expect(reporter.reports).toEqual([]);
     expect(reporter.landings).toEqual([]);
     expect(executeCommand).not.toHaveBeenCalled();
-  });
-
-  it('reads again after a refused switch, since the disk is what the view shows', async () => {
-    switchProfile.mockResolvedValueOnce({ applied: false, refusal: 'read-only' });
-
-    await switchProfileChoosing('Modding');
-
-    expect(progressSteps).toEqual([
-      'progress opens on modbench.toolbox', 'Instance loader: read every file again', 'progress closes',
-    ]);
   });
 
   it('reports a refused switch at error', async () => {

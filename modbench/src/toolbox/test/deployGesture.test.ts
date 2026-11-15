@@ -27,6 +27,7 @@ vi.mock('vscode', async () => {
 });
 
 import { progressSteps } from '../../test/recordedProgress';
+import { ambientWrites } from '../../instanceLoader/ambientWrites';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { registerDeployCommands } from '../deployGesture';
 import { tagRecordingReporterFor } from '../../test/surfacingDoubles';
@@ -56,9 +57,9 @@ function deployAnswering(
   { sequence = 1, moved = NOT_MOVED, purged = NOT_PURGED, unmanagedNow = [] }: { sequence?: number; moved?: MoveToOverwriteResult; purged?: PurgeResult; unmanagedNow?: readonly string[] } = {},
 ) {
   const { reporter, reporterFor, tags } = tagRecordingReporterFor();
-  const deploy = vi.fn<DeployCommands['deploy']>(() => { progressSteps.push('deploy'); return Promise.resolve(result); });
-  const moveToOverwrite = vi.fn<DeployCommands['moveToOverwrite']>(() => { progressSteps.push('move'); return Promise.resolve(moved); });
-  const purge = vi.fn<DeployCommands['purge']>(() => { progressSteps.push('purge'); return Promise.resolve(purged); });
+  const deploy = vi.fn<DeployCommands['deploy']>(() => { progressSteps.push('deploy'); ambientWrites.leaveUnnamed(); return Promise.resolve(result); });
+  const moveToOverwrite = vi.fn<DeployCommands['moveToOverwrite']>(() => { progressSteps.push('move'); ambientWrites.leaveUnnamed(); return Promise.resolve(moved); });
+  const purge = vi.fn<DeployCommands['purge']>(() => { progressSteps.push('purge'); ambientWrites.leaveUnnamed(); return Promise.resolve(purged); });
   const unmanaged = vi.fn<DeployCommands['unmanaged']>(() => Promise.resolve({ applied: true, folder: '/deployed', unmanaged: unmanagedNow.map(inDeployed) }));
   registerDeployCommands({
     commands: { deploy, purge, moveToOverwrite, unmanaged },

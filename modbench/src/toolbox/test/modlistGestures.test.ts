@@ -17,6 +17,7 @@ vi.mock('vscode', async () => {
 });
 
 import { progressSteps } from '../../test/recordedProgress';
+import { ambientWrites } from '../../instanceLoader/ambientWrites';
 import { registerModlistCommands } from '../modlistGestures';
 import { tagRecordingReporterFor } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -51,7 +52,7 @@ describe('Git init', () => {
   });
 
   it('makes the repository under the Toolbox\'s progress, which closes once the Instance loader has read again, and says nothing', async () => {
-    gitInit.mockImplementationOnce(() => { progressSteps.push('git init'); return Promise.resolve({ applied: true }); });
+    gitInit.mockImplementationOnce(() => { progressSteps.push('git init'); ambientWrites.leaveUnnamed(); return Promise.resolve({ applied: true }); });
     const { reporter, run } = register();
 
     await run();
