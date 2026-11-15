@@ -1,6 +1,10 @@
 import { execFile } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
+import { errnoCode } from '../ports/errno';
 import { leaveWritesUnnamed } from '../repositoriesLib/writeNaming';
+import { GIT_DIR, keptUntilNamed, readOrAbsent, stampKept } from './files';
 
 const execFileAsync = promisify(execFile);
 
@@ -55,6 +59,34 @@ export const gitStagingInto = (index: string): { git: Git; gitFed: GitFed } => g
 
 /** git, each object it writes kept in `objects` and out of the repository. */
 export const gitWritingInto = (objects: string): { git: Git; gitFed: GitFed } => gitWith({ ...process.env, GIT_OBJECT_DIRECTORY: objects }, false);
+
+// A linked worktree and a submodule have the git directory their .git file names.
+const gitDirAt = stampKept(async (dotGit: string): Promise<string> => {
+  try {
+    const linked = (await readFile(dotGit, 'utf8')).split('\n').find((line) => line.startsWith('gitdir:'));
+    return linked === undefined ? dotGit : resolve(dirname(dotGit), linked.slice('gitdir:'.length).trim());
+  } catch (err) {
+    if (errnoCode(err) === 'EISDIR') return dotGit;
+    throw err;
+  }
+});
+
+/** The git directory of the repository at `repository`. */
+export const gitDirOf = (repository: string): Promise<string> => readOrAbsent(() => gitDirAt(join(repository, GIT_DIR)), join(repository, GIT_DIR));
+
+// VS Code's git extension runs its reads again at a change at the first level of the git directory, and reads git's
+// configuration outside the repository only as part of them (extensions/git/src/repository.ts, DotGitWatcher).
+const answersIn = keptUntilNamed(() => Promise.resolve(new Map<string, Promise<string>>()));
+
+/** What git answers in `repository` for a read its git directory's first level and git's configuration decide: kept within
+ *  a reading until a change names that first level or the disk is checked, read each time outside one. */
+export async function gitKept(repository: string, ...args: string[]): Promise<string> {
+  const answers = await answersIn(await gitDirOf(repository));
+  const key = [repository, ...args].join('\0');
+  const answer = answers.get(key) ?? git(repository, ...args);
+  answers.set(key, answer);
+  return answer;
+}
 
 /** What git answers in `folder`, byte for byte. */
 export const gitBytes = async (folder: string, ...args: string[]): Promise<Buffer> =>

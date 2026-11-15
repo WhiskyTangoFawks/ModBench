@@ -13,7 +13,14 @@ import { programsOf } from '../../tables/gamePaths';
 import { expectKind } from '../../test/expectKind';
 import { CHECK_THE_DISK, type GameFolder, type InstanceReading, type Reread } from '../instanceAdapter';
 const programReads = vi.hoisted(() => vi.fn());
+const spawns = vi.hoisted(() => vi.fn());
 vi.mock('vscode', () => fakeVscodeModule());
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  const { promisify } = await import('node:util');
+  spawns.mockImplementation(promisify(actual.execFile));
+  return { ...actual, execFile: Object.assign(vi.fn(actual.execFile), { [promisify.custom]: spawns }) };
+});
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   programReads.mockImplementation(actual.open);
@@ -371,6 +378,74 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     const named = await uncloned({ named: [file], disk: false });
 
     expect([first, unnamed, named]).toEqual([['A'], ['A'], ['A', 'B']]);
+  });
+
+  describe('in a repository, whose git reads VS Code\'s git extension runs again at a change at its git directory\'s first level', () => {
+    let adapter: ReturnType<typeof managerOver>;
+    const git = (...args: string[]): void => {
+      execFileSync('git', ['-C', instance, '-c', 'user.name=Modbench', '-c', 'user.email=modbench@example.com', ...args]);
+    };
+    const gitDir = (): string => join(instance, '.git');
+    const gitRunIn = async (reread: Reread): Promise<string[]> => {
+      spawns.mockClear();
+      await adapter.reading(reread);
+      return spawns.mock.calls.flatMap(([file, args]: [string, string[]]) => (file === 'git' ? [args.slice(2).join(' ')] : [])).sort();
+    };
+    const firstLevel = async (): Promise<Map<string, bigint>> =>
+      new Map(await Promise.all((await readdir(gitDir())).map(async (name) => [name, (await stat(join(gitDir(), name), { bigint: true })).mtimeNs] as const)));
+    const changedAtFirstLevel = async (change: () => void | Promise<void>): Promise<string[]> => {
+      const before = await firstLevel();
+      await change();
+      return [...await firstLevel()].filter(([name, modified]) => before.get(name) !== modified).map(([name]) => join(gitDir(), name));
+    };
+
+    beforeEach(async () => {
+      git('init', '-q');
+      adapter = managerOver(instance);
+      await adapter.refuseUnpublishedPins();
+      await adapter.writePathTokens();
+      git('add', 'ModOrganizer.ini');
+      git('commit', '-qm', 'One');
+      vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
+      await adapter.reading(CHECK_THE_DISK);
+    });
+
+    it('runs no git in a reading named a file outside the git directory', async () => {
+      const kept = await gitRunIn(CHECK_THE_DISK);
+
+      const unrelated = await gitRunIn({ named: [join(instance, 'mods', 'Harder VATS', 'Harder VATS.esp')], disk: false });
+
+      expect([kept.length > 0, unrelated]).toEqual([true, []]);
+    });
+
+    it('runs every git read it keeps again at a check of the disk', async () => {
+      const kept = await gitRunIn(CHECK_THE_DISK);
+      await gitRunIn({ named: [], disk: false });
+
+      expect([kept.length > 0, await gitRunIn(CHECK_THE_DISK)]).toEqual([true, kept]);
+    });
+
+    it.each([
+      ['a commit, which moves a ref', async () => {
+        await writeFile(join(instance, 'a.txt'), '');
+        git('add', 'a.txt');
+        git('commit', '-qm', 'Two');
+      }],
+      ['a pack of the refs', () => { git('pack-refs', '--all'); }],
+      ['a value set in the repository\'s config', () => { git('config', 'user.name', 'Another'); }],
+    ])('runs every git read it keeps again in a reading named what %s changed there', async (_change, change) => {
+      const kept = await gitRunIn(CHECK_THE_DISK);
+      const named = await changedAtFirstLevel(change);
+
+      expect([kept.length > 0, await gitRunIn({ named, disk: false })]).toEqual([true, expect.arrayContaining(kept)]);
+    });
+
+    it('reads the repository as not set up in a reading named what setting the hooks path elsewhere changed there', async () => {
+      const before = (await adapter.reading(CHECK_THE_DISK)).repositorySetUp;
+      const named = await changedAtFirstLevel(() => { git('config', 'core.hooksPath', '.git/elsewhere'); });
+
+      expect([before, (await adapter.reading({ named, disk: false })).repositorySetUp]).toEqual([true, false]);
+    });
   });
 
   describe('with a game folder', () => {
