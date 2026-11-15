@@ -6,7 +6,7 @@ import type { RebuildResult } from '../loadOrder';
 import type { RebuildIndexOutcome } from '../../client/MEditClient';
 
 describe('rebuildRecordIndex', () => {
-  const refreshOver = (client: InMemoryMEditClient, gameRelease = 'Fallout4') =>
+  const rebuildOver = (client: InMemoryMEditClient, gameRelease = 'Fallout4') =>
     instanceCommands({ adapter: fakeInstanceAdapter(readingFixture({ gameRelease })).adapter, client, instanceRoot: '/instance' }).rebuildRecordIndex;
 
   it.each([
@@ -16,7 +16,7 @@ describe('rebuildRecordIndex', () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('rebuildIndex', { rebuilt: true });
 
-    const result = await refreshOver(client, release)();
+    const result = await rebuildOver(client, release)();
 
     expect(client.calls.map((c) => [c.method, ...c.args])).toEqual([['rebuildIndex', '/instance', release]]);
     expect(result).toEqual({ applied: true });
@@ -30,7 +30,7 @@ describe('rebuildRecordIndex', () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('rebuildIndex', answer);
 
-    expect(await refreshOver(client)()).toEqual(refused);
+    expect(await rebuildOver(client)()).toEqual(refused);
     expect(client.calls.map((c) => c.method)).toEqual(['rebuildIndex']);
   });
 

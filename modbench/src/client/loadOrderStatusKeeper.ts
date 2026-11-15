@@ -1,4 +1,4 @@
-import type { LoadOrderStatus } from './apiClient';
+import { isReconciled, type LoadOrderStatus } from './apiClient';
 import { isMEditGone, type MEditClient } from './MEditClient';
 
 export interface LoadOrderStatusKeeper {
@@ -19,7 +19,7 @@ export function keepLoadOrderStatus(
   const hear = (status: LoadOrderStatus) => {
     const failuresChanged = JSON.stringify(status.failures) !== JSON.stringify(latest?.failures ?? []);
     // A refresh reconciles the version already settled again.
-    const reconciled = status.conflictsComputed && (status.version > settledVersion || latest?.conflictsComputed === false);
+    const reconciled = isReconciled(status) && (status.version > settledVersion || (latest !== undefined && !isReconciled(latest)));
     latest = status;
     tell(statusListeners, status);
     if (reconciled) settledVersion = status.version;

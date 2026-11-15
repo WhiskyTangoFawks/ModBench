@@ -82,6 +82,19 @@ describe('the client\'s load-order status', () => {
       expect(settled).toHaveBeenCalledOnce();
     });
 
+    it('is told at the tick that stops validating, not at the one that starts it, so lateness and the change it ends are one moment', () => {
+      const client = new InMemoryMEditClient();
+      client.emit(loadOrderStatusEventFixture({ conflictsComputed: true, validating: false, version: 1 }));
+      const settled = vi.fn();
+      client.onLoadOrderSettled(settled);
+
+      client.emit(loadOrderStatusEventFixture({ conflictsComputed: true, validating: true, version: 1 }));
+      expect(settled).not.toHaveBeenCalled();
+
+      client.emit(loadOrderStatusEventFixture({ conflictsComputed: true, validating: false, version: 1 }));
+      expect(settled).toHaveBeenCalledOnce();
+    });
+
     it('is not told when a reconcile starts, or while it runs', () => {
       const client = new InMemoryMEditClient();
       client.emit(tick(true, [], 1));

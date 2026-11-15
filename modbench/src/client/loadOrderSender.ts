@@ -46,8 +46,14 @@ interface OwedSignal {
   since?: number;
   readonly paths: Set<string>;
   disk: boolean;
-  readonly done: Promise<void>;
-  readonly sweepStarted: (ended: Promise<void>) => void;
+  done: Promise<void>;
+  sweepStarted: (ended: Promise<void>) => void;
+}
+
+function awaitingSweep(): Pick<OwedSignal, 'done' | 'sweepStarted'> {
+  let sweepStarted!: (ended: Promise<void>) => void;
+  const done = new Promise<void>((resolve) => { sweepStarted = resolve; });
+  return { done, sweepStarted };
 }
 
 interface Waiting {
@@ -156,16 +162,18 @@ function createSendSlot(wire: LoadOrderWire) {
       return sent;
     },
     oweSignal(paths: readonly string[]): Promise<void> {
-      if (owed === undefined) {
-        let sweepStarted!: (ended: Promise<void>) => void;
-        const done = new Promise<void>((resolve) => { sweepStarted = resolve; });
-        owed = { paths: new Set(), disk: false, done, sweepStarted };
-      }
+      owed ??= { paths: new Set(), disk: false, ...awaitingSweep() };
       const { done } = owed;
       owed.disk ||= paths.length === 0;
       for (const path of paths) owed.paths.add(path);
       pump();
       return done;
+    },
+    /** Settles every caller waiting on the owed signal, which stays owed for the next run. */
+    releaseSignalWaiters(): void {
+      if (owed === undefined) return;
+      owed.sweepStarted(Promise.resolve());
+      Object.assign(owed, awaitingSweep());
     },
     holdsOne: () => waiting !== undefined,
     pending: () => waiting !== undefined || inFlight !== undefined || owed !== undefined || signalling,
@@ -234,6 +242,7 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     if (isMEditGone(status)) {
       slot.abortInFlight();
       slot.drop(BACKEND_FAILED);
+      slot.releaseSignalWaiters();
       if (!launcher.launching() && !launcher.stopped()) exits.fire();
       return;
     }
@@ -246,7 +255,9 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     signalChange: (paths) => {
       if (launcher.stopped()) return Promise.resolve();
       const done = slot.oweSignal(paths);
-      return wire.status() === 'running' ? done : Promise.resolve();
+      if (wire.status() === 'running') return done;
+      slot.releaseSignalWaiters();
+      return done;
     },
     latest: () => slot.latest(),
     applied: () => slot.applied(),
@@ -263,6 +274,7 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
       reopenUnannounced = false;
       slot.abortInFlight();
       slot.drop(ABANDONED);
+      slot.releaseSignalWaiters();
       await wire.stop();
     },
   };

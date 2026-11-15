@@ -55,16 +55,16 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
 interface RefreshGestureDeps {
   instance: Pick<Instance, 'refresh'>;
   /** The record index's status as mEdit last published it. */
-  loadOrderStatus: () => { readonly refusal?: { readonly kind: string } } | undefined;
+  loadOrderStatus: () => { readonly refusal?: { readonly kind: 'heldElsewhere' | 'failed' } } | undefined;
   reporterFor: (tag: string) => Reporter;
-  /** Names this instance in toolbox.md's Reporting story 1. Modbench cannot name the other
-   *  window that holds the record index, only the one refused here. */
   instanceRoot: string;
 }
 
+const heldElsewhereMessage = (then: string): string => `This instance is open in another Modbench window. Close it, then ${then}.`;
+
 export function registerRefreshCommand(deps: RefreshGestureDeps): vscode.Disposable {
   const reporter = deps.reporterFor('refresh');
-  const message = 'This instance is open in another Modbench window. Close it, then refresh.';
+  const message = heldElsewhereMessage('refresh');
   return registerWritingCommand('modbench.instance.refresh', async (called?: unknown) => {
     await runWritingGesture('modbench.instance.refresh', TOOLBOX_VIEW, deps.instance, (_progress, written) => {
       written.leaveUnnamed();
@@ -86,10 +86,9 @@ interface RebuildGestureDeps {
    *  rebuild answers before it has read anything again. A refused rebuild starts no refill, so its
    *  wait is released. */
   nextRefill: () => { ended: Promise<void>; release: () => void };
-  instance: Pick<Instance, 'value' | 'refresh'>;
+  instance: Pick<Instance, 'refresh'>;
   reporterFor: (tag: string) => Reporter;
-  /** Names this instance in toolbox.md's Reporting story 1. Modbench cannot name the other
-   *  window that holds the record index, only the one refused here. */
+  /** Names this instance in a refusal: Modbench cannot name the other window that holds the record index. */
   instanceRoot: string;
 }
 
@@ -104,7 +103,7 @@ export function registerRebuildRecordIndexCommand(deps: RebuildGestureDeps): vsc
         return;
       }
       refill.release();
-      if (outcome.heldElsewhere) reporter.report('error', 'This instance is open in another Modbench window. Close it, then rebuild the index.', deps.instanceRoot);
+      if (outcome.heldElsewhere) reporter.report('error', heldElsewhereMessage('rebuild the index'), deps.instanceRoot);
       else reporter.report('error', 'Could not rebuild the index.', outcome.refusal);
     }));
 }

@@ -336,9 +336,10 @@ class HttpMEditClient implements MEditClient {
     });
   }
 
-  /** Refresh's first step (commands.md, Instance), which refills the record index against the load order
-   *  mEdit holds. A 423 is `heldElsewhere` (ADR-0010), never a rejection. */
+  /** Discards the record index and refills it against the load order mEdit holds (commands.md, Instance). A 423 is
+   *  `heldElsewhere` (ADR-0010), never a rejection. The refill is a sweep, late until it settles. */
   async rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome> {
+    const refills = this.loadOrderStatus?.holdsNone === false;
     try {
       const { error, response } = await this.apiClient.POST('/index/rebuild', { body: { instanceRoot, gameRelease } });
       if (!response.ok) {
@@ -347,6 +348,7 @@ class HttpMEditClient implements MEditClient {
         if (response.status === 423) return { rebuilt: false, heldElsewhere: true };
         return { rebuilt: false, heldElsewhere: false, detail: text };
       }
+      if (refills) void this.awaitSweep((status) => isSettled(status) && !status.holdsNone);
       return { rebuilt: true };
     } catch (e) {
       this.log.error(`[HttpMEditClient] rebuildIndex threw: ${errorMessage(e)}`);
@@ -440,20 +442,19 @@ class HttpMEditClient implements MEditClient {
   }
 
   // An answered hand-over or signal starts a sweep mEdit publishes as validating: late until a status holds no load order or settles, or is lost.
-  private awaitSweep(): Promise<void> {
+  private awaitSweep(over: (status: LoadOrderStatus) => boolean = (status) => status.holdsNone || isSettled(status)): Promise<void> {
     this.sweepsAwaited++;
-    let over!: () => void;
-    const ended = new Promise<void>((resolve) => { over = resolve; });
+    let finish!: () => void;
+    const ended = new Promise<void>((resolve) => { finish = resolve; });
     const end = (): void => {
       if (subscription === undefined) return;
       subscription();
       subscription = undefined;
       this.sweepsAwaited--;
-      over();
+      finish();
     };
-    const sweepOver = (status: LoadOrderStatus): boolean => status.holdsNone || isSettled(status);
-    let subscription: (() => void) | undefined = this.loadOrderStatusKept.onStatus((status) => { if (status === undefined || sweepOver(status)) end(); });
-    void this.currentLoadOrderStatus().then((current) => { if (current !== undefined && sweepOver(current)) end(); });
+    let subscription: (() => void) | undefined = this.loadOrderStatusKept.onStatus((status) => { if (status === undefined || over(status)) end(); });
+    void this.currentLoadOrderStatus().then((current) => { if (current !== undefined && over(current)) end(); });
     return ended;
   }
 

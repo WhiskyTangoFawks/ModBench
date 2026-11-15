@@ -1326,11 +1326,41 @@ describe('HttpMEditClient — whether the record index may be late', () => {
       await signalled;
       expect(settled).toBe(true);
     });
+  });
 
-    it('settles at once while mEdit is not running, the signal staying owed', async () => {
-      const client = makeClient(routedFetch([]));
+  describe('a rebuild of the record index', () => {
+    async function rebuilding(holdingALoadOrder: boolean) {
+      const { response, push } = pushableStreamResponse();
+      let status: NonNullable<Parameters<typeof loadOrderStatusEventFixture>[0]> = { state: 'None', conflictsComputed: false };
+      const fetch = routedFetch([
+        ['/notifications/stream', () => Promise.resolve(response)],
+        ['/index/rebuild', () => { status = { state: 'None', conflictsComputed: false }; return noContent(); }],
+        ['/load-order/status', () => Promise.resolve(jsonResponse(200, loadOrderStatusEventFixture(status).loadOrderStatus))],
+      ]);
+      const client = makeClient(fetch);
+      await client.start();
+      if (holdingALoadOrder) push(readyTickThatSettlesPutLoadOrder());
+      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+      if (holdingALoadOrder) await vi.waitFor(() => { expect(client.loadOrderStatus?.holdsNone).toBe(false); });
+      return { client, push };
+    }
 
-      await expect(client.signalChange([])).resolves.toBeUndefined();
+    it('is late until the refill it starts settles', async () => {
+      const { client, push } = await rebuilding(true);
+
+      await expect(client.rebuildIndex('/instance', 'Fallout4')).resolves.toEqual({ rebuilt: true });
+      expect(client.recordIndexMayBeLate).toBe(true);
+
+      push(loadOrderStatusTick({ conflictsComputed: true, validating: false, version: 1 }));
+      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+    });
+
+    it('is not late when mEdit holds no load order to refill', async () => {
+      const { client } = await rebuilding(false);
+
+      await client.rebuildIndex('/instance', 'Fallout4');
+
+      expect(client.recordIndexMayBeLate).toBe(false);
     });
   });
 

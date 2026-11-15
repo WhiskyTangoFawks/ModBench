@@ -37,6 +37,7 @@ import type { InstanceCommands } from '../../instanceCommands/instanceCommands';
 const value = instanceValueFixture({ activeProfile: 'Default', profiles: ['Default', 'Modding', 'Survival'] });
 
 type ToolboxCommandDeps = Parameters<typeof registerToolboxCommands>[0];
+type RefreshDeps = Parameters<typeof registerRefreshCommand>[0];
 
 function register(over: Partial<ToolboxCommandDeps> = {}) {
   const reporter = recordingReporter();
@@ -178,19 +179,27 @@ describe('Switch profile, called by an agent', () => {
 });
 
 describe('Refresh', () => {
-  const registerRefresh = (heldElsewhere = false) => {
+  const registerRefresh = (statusWhenChecked?: ReturnType<RefreshDeps['loadOrderStatus']>) => {
     const checks: unknown[] = [];
+    let status: ReturnType<RefreshDeps['loadOrderStatus']>;
     const { reporter, reporterFor } = tagRecordingReporterFor();
     registerRefreshCommand({
-      instance: { refresh: (wrote) => { checks.push(wrote); progressSteps.push('Instance loader: check the disk'); return Promise.resolve(undefined); } },
-      loadOrderStatus: () => (heldElsewhere ? { refusal: { kind: 'heldElsewhere' } } : { refusal: { kind: 'failed' } }),
+      instance: {
+        refresh: (wrote) => {
+          checks.push(wrote);
+          progressSteps.push('Instance loader: check the disk');
+          status = statusWhenChecked;
+          return Promise.resolve(undefined);
+        },
+      },
+      loadOrderStatus: () => status,
       reporterFor,
       instanceRoot: '/instance/FO4',
     });
     return { checks, reporter, run: (...args: unknown[]) => present(handlers.get('modbench.instance.refresh'), 'the refresh handler')(...args) };
   };
 
-  it('checks the disk once, under the Toolbox\'s progress, and discards no record index', async () => {
+  it('checks the disk once, under the Toolbox\'s progress', async () => {
     const { checks, reporter, run } = registerRefresh();
 
     await run();
@@ -205,7 +214,7 @@ describe('Refresh', () => {
   });
 
   it('says, once the check has settled, that another window holds the index, naming the instance and what lets refresh run', async () => {
-    const { reporter, run } = registerRefresh(true);
+    const { reporter, run } = registerRefresh({ refusal: { kind: 'heldElsewhere' } });
 
     await run();
 
@@ -216,7 +225,7 @@ describe('Refresh', () => {
   });
 
   it('answers an agent call the same refusal as its reason, and reports nowhere', async () => {
-    const { reporter, run } = registerRefresh(true);
+    const { reporter, run } = registerRefresh({ refusal: { kind: 'heldElsewhere' } });
 
     expect(await run(new AgentCall([], {}))).toEqual({
       applied: false, refusal: 'This instance is open in another Modbench window. Close it, then refresh.', detail: '/instance/FO4',
@@ -235,7 +244,7 @@ describe('Rebuild record index', () => {
     registerRebuildRecordIndexCommand({
       commands: { rebuildRecordIndex: () => { progressSteps.push('instance commands: rebuild'); return Promise.resolve(result); } },
       nextRefill: () => ({ ended: refill, release: () => { released.push(true); } }),
-      instance: { value, refresh: () => Promise.resolve(undefined) },
+      instance: { refresh: () => Promise.resolve(undefined) },
       reporterFor,
       instanceRoot,
     });

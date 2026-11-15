@@ -583,6 +583,61 @@ describe('a change signalled', () => {
   });
 });
 
+describe('the promise a change signal returns', () => {
+  const settledWithin = (promise: Promise<void>): Promise<boolean> =>
+    Promise.race([promise.then(() => true), new Promise<boolean>((resolve) => { setTimeout(() => { resolve(false); }, 20); })]);
+
+  function behindAnUnansweredPut() {
+    const client = running();
+    let answer!: () => void;
+    client.answerPuts((_sent, _signal, answered) => { answer = answered; return pending<LoadOrderOutcome>().promise; });
+    void client.sendLoadOrder(snapshot('A.esp'));
+    return { client, answer: () => { answer(); } };
+  }
+
+  it('settles at once while mEdit is not running, and the signal stays owed for the next run', async () => {
+    const client = new InMemoryMEditClient();
+    client.setStatus('disconnected');
+
+    await expect(settledWithin(client.signalChange([]))).resolves.toBe(true);
+    expect(signalled(client)).toEqual([]);
+
+    client.setStatus('running');
+    await vi.waitFor(() => { expect(signalled(client)).toEqual([[]]); });
+  });
+
+  it('is one for the signals folded into one, and waits for that signal', async () => {
+    const { client, answer } = behindAnUnansweredPut();
+
+    const all = [client.signalChange(['/a.esp']), client.signalChange(['/b.esp']), client.signalChange([])];
+    await expect(settledWithin(Promise.all(all).then(() => undefined))).resolves.toBe(false);
+    answer();
+    await Promise.all(all);
+
+    expect(signalled(client)).toEqual([[]]);
+  });
+
+  it('settles when mEdit goes before the signal is posted, and the signal stays owed', async () => {
+    const { client } = behindAnUnansweredPut();
+    const waiting = client.signalChange([]);
+
+    client.setStatus('disconnected');
+
+    await expect(settledWithin(waiting)).resolves.toBe(true);
+    expect(signalled(client)).toEqual([]);
+  });
+
+  it('settles when the client stops before the signal is posted', async () => {
+    const { client } = behindAnUnansweredPut();
+    const waiting = client.signalChange([]);
+
+    await client.stop();
+
+    await expect(settledWithin(waiting)).resolves.toBe(true);
+    expect(signalled(client)).toEqual([]);
+  });
+});
+
 describe('a stop', () => {
   it('is the end: a snapshot or a start after it launches nothing, and announces none', async () => {
     const client = running();

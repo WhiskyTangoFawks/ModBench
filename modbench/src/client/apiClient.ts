@@ -110,9 +110,14 @@ export function toLoadOrderStatus(wire: Schemas['LoadOrderStatus']): LoadOrderSt
   };
 }
 
-/** Ready and validating nothing, or either refusal: the record index has nothing more to say until something changes. */
+/** Ready and validating nothing. */
+export function isReconciled(status: LoadOrderStatus): boolean {
+  return status.conflictsComputed && !status.validating;
+}
+
+/** Reconciled, or either refusal: the record index has nothing more to say until something changes. */
 export function isSettled(status: LoadOrderStatus): boolean {
-  return status.refusal !== undefined || (status.conflictsComputed && !status.validating);
+  return status.refusal !== undefined || isReconciled(status);
 }
 
 /** Ready, or either refusal, and for the version an Apply actually answers — a status still
