@@ -15,6 +15,7 @@ import { announceAfterReopen, createLoadOrderSender, type LoadOrderSender } from
 import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import { keepRecordIndexChanges, type RecordIndexChanges } from './recordIndexChanges';
+import type { Disposable } from './eventEmitter';
 import {
   type ArchiveContents, type BackendStatus, type CellChildRecords, type BuildFacts, type BuildMod, type BuildOutcome,
   type Submodule, type SubmodulesCloned, type PluginFilesFlagged, type PluginFileToFlag,
@@ -197,7 +198,7 @@ class HttpMEditClient implements MEditClient {
   onExit(listener: () => void): () => void { return this.loadOrder.onExit(listener); }
   stop(): Promise<void> { return this.loadOrder.stop(); }
 
-  onDidChange(listener: (change: RecordIndexChange) => void): { dispose(): void } { return this.changes.onDidChange(listener); }
+  onDidChange(listener: (change: RecordIndexChange) => void): Disposable { return this.changes.onDidChange(listener); }
   get recordIndexMayBeLate(): boolean { return this.loadOrder.pending() || this.handOver.pending(); }
 
   get loadOrderStatus(): LoadOrderStatus | undefined { return this.loadOrderStatusKept.current(); }
@@ -630,12 +631,12 @@ class HttpMEditClient implements MEditClient {
   private async read<D, A>(
     what: string,
     call: (api: ApiClient, signal: AbortSignal) => Promise<{ data?: D; error?: unknown; response: Response }>,
-    answer: (data: D | undefined) => A | ReadFailed,
+    answer: (data: D | undefined) => A | ReadFailed | Promise<A | ReadFailed>,
     { token, ...options }: ReadOptions<A> = {},
   ): Promise<A | ReadFailed> {
     if (token?.isCancellationRequested) return CANCELLED;
     const controller = new AbortController();
-    let subscription: { dispose(): void } | undefined;
+    let subscription: Disposable | undefined;
     const cancelled = new Promise<ReadFailed>((resolve) => {
       subscription = token?.onCancellationRequested(() => { controller.abort(); resolve(CANCELLED); });
     });
@@ -649,7 +650,7 @@ class HttpMEditClient implements MEditClient {
   private async readHeld<D, A>(
     what: string,
     call: (api: ApiClient, signal: AbortSignal) => Promise<{ data?: D; error?: unknown; response: Response }>,
-    answer: (data: D | undefined) => A | ReadFailed,
+    answer: (data: D | undefined) => A | ReadFailed | Promise<A | ReadFailed>,
     { timed = false, absent, held = true }: Omit<ReadOptions<A>, 'token'>,
     controller: AbortController,
   ): Promise<A | ReadFailed> {
@@ -664,7 +665,7 @@ class HttpMEditClient implements MEditClient {
       return UNREACHABLE;
     }
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const settled = call(api, controller.signal).then(({ data, error, response }): A | ReadFailed => {
+    const settled = call(api, controller.signal).then(({ data, error, response }): A | ReadFailed | Promise<A | ReadFailed> => {
       if (absent && response.status === absent.status) return absent.answers;
       if (!response.ok) {
         const text = errorText(error);
@@ -672,7 +673,7 @@ class HttpMEditClient implements MEditClient {
         return text ? { failed: refusalNamed(error) === 'NoLoadOrder' ? 'no-load-order' : 'refused', refusal: text } : NO_ANSWER;
       }
       const answered = answer(data);
-      if (isReadFailed(answered)) this.log.error(`[HttpMEditClient] ${what}: mEdit answered with no body`);
+      if (!(answered instanceof Promise) && isReadFailed(answered)) this.log.error(`[HttpMEditClient] ${what}: mEdit answered with no body`);
       return answered;
     }, (e: unknown): ReadFailed => {
       if (controller.signal.aborted) return CANCELLED;
@@ -809,16 +810,18 @@ class HttpMEditClient implements MEditClient {
     return this.read('resolveNames', (api, signal) => api.POST('/names/resolve', { body: { names: [...names] }, signal }), noBodyFails, { token });
   }
 
-  async selectRows(sql: string, atMostChars: number, token?: ReadCancellation): Promise<RowsRead | ReadFailed> {
-    const body = await this.read('selectRows', (api, signal) => api.POST('/records/select', { body: { sql }, parseAs: 'stream', signal }),
-      (data) => data ?? NO_ANSWER, { token });
-    if (isReadFailed(body)) return body;
-    try {
-      return await rowsOf(body, atMostChars, (reason) => { this.log.error(`[HttpMEditClient] selectRows stopped: ${reason}`); });
-    } catch (e) {
-      this.log.error(`[HttpMEditClient] selectRows threw: ${errorMessage(e)}`);
-      return e instanceof SyntaxError ? { failed: 'unreadable' } : UNREACHABLE;
-    }
+  selectRows(sql: string, atMostChars: number, token?: ReadCancellation): Promise<RowsRead | ReadFailed> {
+    return this.read('selectRows', (api, signal) => api.POST('/records/select', { body: { sql }, parseAs: 'stream', signal }),
+      async (body) => {
+        if (!body) return NO_ANSWER;
+        try {
+          return await rowsOf(body, atMostChars, (reason) => { this.log.error(`[HttpMEditClient] selectRows stopped: ${reason}`); });
+        } catch (e) {
+          if (token?.isCancellationRequested) return CANCELLED;
+          this.log.error(`[HttpMEditClient] selectRows threw: ${errorMessage(e)}`);
+          return e instanceof SyntaxError ? { failed: 'unreadable' } : UNREACHABLE;
+        }
+      }, { token });
   }
 
   getComparison(formKey: string, text?: CopyText, token?: ReadCancellation): Promise<CompareResult | null | ReadFailed> {

@@ -13,7 +13,6 @@ export interface UnsavedHandOver {
   onSettled: (listener: (failure: ReadFailed | undefined) => void) => () => void;
   /** Resolves once every put handed so far has answered. */
   sent: () => Promise<void>;
-  /** Whether a put handed has not answered. */
   pending: () => boolean;
 }
 

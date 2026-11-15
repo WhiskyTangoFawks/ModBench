@@ -18,6 +18,7 @@ export type { SourceModIn };
 import type { ReadFailed } from '../wire/readFailed';
 import type { ArchivedCopy, FlaggedPluginFile, FlaggedPluginHashes } from '../wire/messages';
 import type { ItemRefusal } from '../ports/selectionOutcome';
+import type { Disposable } from './eventEmitter';
 
 
 /** What `getEditChanges` is handed, re-exported because its caller reaches the backend only through
@@ -27,7 +28,7 @@ export type { RecordEditEnvelope } from '../wire/messages';
 /** What a read watches to stop early: VS Code's own `CancellationToken` fits it as is. */
 export interface ReadCancellation {
   readonly isCancellationRequested: boolean;
-  onCancellationRequested(listener: () => unknown): { dispose(): void };
+  onCancellationRequested(listener: () => unknown): Disposable;
 }
 
 /** A plugin whose records changed, with the record keys where mEdit gave them. */
@@ -403,7 +404,7 @@ export interface MEditClient {
   onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void;
 
   /** The one change event, shaped as VS Code's `Event`: what changed in the record index, as names or as everything. A status alone is no change. */
-  onDidChange(listener: (change: RecordIndexChange) => void): { dispose(): void };
+  onDidChange(listener: (change: RecordIndexChange) => void): Disposable;
 
   /** Whether the record index may not yet hold what Modbench handed it: a snapshot, a change signal or the
    *  unsaved documents is unanswered. */

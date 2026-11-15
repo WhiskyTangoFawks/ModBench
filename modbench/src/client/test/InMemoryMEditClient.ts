@@ -1,4 +1,5 @@
 import { IGNORED_THROWS } from './fixtures';
+import type { Disposable } from '../eventEmitter';
 import type {
   MEditClient, RecordIndexChange, NotificationKind, NotificationPayloads, BackendStatus, LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, UnsavedDocument,
 } from '../MEditClient';
@@ -234,7 +235,7 @@ export class InMemoryMEditClient implements MEditClient {
   onExit(listener: () => void): () => void { return this.sender.onExit(listener); }
   stop(): Promise<void> { return this.sender.stop(); }
 
-  onDidChange(listener: (change: RecordIndexChange) => void): { dispose(): void } { return this.changes.onDidChange(listener); }
+  onDidChange(listener: (change: RecordIndexChange) => void): Disposable { return this.changes.onDidChange(listener); }
   get recordIndexMayBeLate(): boolean { return this.sender.pending(); }
 
   get loadOrderStatus(): LoadOrderStatus | undefined { return this.loadOrderStatusKept.current(); }

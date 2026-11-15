@@ -99,8 +99,6 @@ describe('whether a hand-over is pending', () => {
 
     await vi.waitFor(() => { expect(mEdit.put).toEqual(['first']); });
     answer();
-    await handOver.sent();
-    await Promise.resolve();
-    expect(handOver.pending()).toBe(false);
+    await vi.waitFor(() => { expect(handOver.pending()).toBe(false); });
   });
 });

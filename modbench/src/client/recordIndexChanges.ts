@@ -1,18 +1,17 @@
 import { isMEditGone, type MEditClient, type RecordIndexChange } from './MEditClient';
+import { EventEmitter, type Disposable } from './eventEmitter';
 import type { LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 
 export interface RecordIndexChanges {
-  onDidChange(listener: (change: RecordIndexChange) => void): { dispose(): void };
+  onDidChange(listener: (change: RecordIndexChange) => void): Disposable;
 }
 
-/** The one change event: the plugins and keys the stream names, and everything when a load order
- *  settles, the stream reopens, or mEdit runs again after it went. */
 export function keepRecordIndexChanges(
   client: Pick<MEditClient, 'onNotification' | 'onStatusChanged'> & { onReconnected(listener: () => void): () => void },
   loadOrder: Pick<LoadOrderStatusKeeper, 'onSettled'>,
 ): RecordIndexChanges {
-  const listeners = new Set<(change: RecordIndexChange) => void>();
-  const tell = (change: RecordIndexChange) => { for (const listener of [...listeners]) listener(change); };
+  const changes = new EventEmitter<[RecordIndexChange]>();
+  const tell = (change: RecordIndexChange) => { changes.fire(change); };
 
   client.onNotification('rows-changed', ({ plugin, keys }) => { tell([{ plugin, keys }]); });
   client.onNotification('plugin-changed', ({ plugin }) => { tell([{ plugin }]); });
@@ -28,10 +27,5 @@ export function keepRecordIndexChanges(
     gone = false;
   });
 
-  return {
-    onDidChange: (listener) => {
-      listeners.add(listener);
-      return { dispose: () => { listeners.delete(listener); } };
-    },
-  };
+  return { onDidChange: changes.event };
 }

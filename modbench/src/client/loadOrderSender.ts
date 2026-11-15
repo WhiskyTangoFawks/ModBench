@@ -1,3 +1,4 @@
+import { EventEmitter } from './eventEmitter';
 import { errorMessage } from '../ports/errorMessage';
 import { createLauncher, type LauncherWire } from './backendLifecycle';
 import {
@@ -62,8 +63,7 @@ function createSendSlot(wire: LoadOrderWire) {
   let waiting: Waiting | undefined;
   let inFlight: AbortController | undefined;
   let unanswered = false;
-  let newest: Promise<LoadOrderOutcome> | undefined;
-  let newestApplied: Promise<void> | undefined;
+  let newest: { sent: Promise<LoadOrderOutcome>; applied: Promise<void> } | undefined;
   let owed: OwedSignal | undefined;
   let signalTimer: ReturnType<typeof setTimeout> | undefined;
   let signalling = false;
@@ -127,15 +127,23 @@ function createSendSlot(wire: LoadOrderWire) {
     pumpSignal();
   };
 
+  const ofNewest = async <T>(of: (handed: NonNullable<typeof newest>) => Promise<T>): Promise<T | undefined> => {
+    for (let asked = newest; asked !== undefined; asked = newest) {
+      const result = await of(asked);
+      if (asked === newest) return result;
+    }
+    return undefined;
+  };
+
   return {
     hold(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> {
       drop(ABANDONED);
       let applied!: () => void;
-      newestApplied = new Promise<void>((resolve) => { applied = resolve; });
+      const appliedPromise = new Promise<void>((resolve) => { applied = resolve; });
       const sent = new Promise<LoadOrderOutcome>((settle) => {
         waiting = { snapshot, settle: (outcome) => { applied(); settle(outcome); }, applied };
       });
-      newest = sent;
+      newest = { sent, applied: appliedPromise };
       pump();
       return sent;
     },
@@ -150,19 +158,8 @@ function createSendSlot(wire: LoadOrderWire) {
     drop,
     pump,
     abortInFlight: () => { inFlight?.abort(); },
-    async applied(): Promise<void> {
-      for (let asked = newestApplied; asked !== undefined; asked = newestApplied) {
-        await asked;
-        if (asked === newestApplied) return;
-      }
-    },
-    async latest(): Promise<LoadOrderOutcome | undefined> {
-      for (let asked = newest; asked !== undefined; asked = newest) {
-        const outcome = await asked;
-        if (asked === newest) return outcome;
-      }
-      return undefined;
-    },
+    applied: async (): Promise<void> => { await ofNewest((handed) => handed.applied); },
+    latest: (): Promise<LoadOrderOutcome | undefined> => ofNewest((handed) => handed.sent),
   };
 }
 
@@ -175,29 +172,20 @@ export function announceAfterReopen(sender: Pick<LoadOrderSender, 'onAppliedAfte
   sender.onAppliedAfterReopen((snapshot) => { notifications.announceChanged(snapshot); });
 }
 
-function listeners<A extends unknown[]>() {
-  const held = new Set<(...args: A) => void>();
-  return {
-    add: (listener: (...args: A) => void): (() => void) => {
-      held.add(listener);
-      return () => { held.delete(listener); };
-    },
-    fire: (...args: A): void => {
-      for (const listener of held) listener(...args);
-    },
-  };
-}
-
 export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
   const slot = createSendSlot(wire);
   let newestHanded: LoadOrderSnapshot | undefined;
   let handedCount = 0;
   let reopenUnannounced = false;
-  const resent = listeners<[LoadOrderSnapshot, LoadOrderOutcome]>();
-  const appliedAfterReopen = listeners<[LoadOrderSnapshot]>();
-  const launches = listeners<[Promise<LaunchOutcome>]>();
-  const exits = listeners<[]>();
-  const launcher = createLauncher(wire, launches.fire);
+  const resent = new EventEmitter<[LoadOrderSnapshot, LoadOrderOutcome]>();
+  const appliedAfterReopen = new EventEmitter<[LoadOrderSnapshot]>();
+  const launches = new EventEmitter<[Promise<LaunchOutcome>]>();
+  const exits = new EventEmitter();
+  const launcher = createLauncher(wire, (launched) => { launches.fire(launched); });
+  const subscribeTo = <A extends unknown[]>(emitter: EventEmitter<A>) => (listener: (...args: A) => void): (() => void) => {
+    const subscription = emitter.event(listener);
+    return () => { subscription.dispose(); };
+  };
 
   const launch = (): Promise<LaunchOutcome> => {
     const launched = launcher.launch();
@@ -246,10 +234,10 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     applied: () => slot.applied(),
     handed: () => handedCount,
     pending: () => slot.pending(),
-    onResent: resent.add,
-    onAppliedAfterReopen: appliedAfterReopen.add,
-    onLaunch: launches.add,
-    onExit: exits.add,
+    onResent: subscribeTo(resent),
+    onAppliedAfterReopen: subscribeTo(appliedAfterReopen),
+    onLaunch: subscribeTo(launches),
+    onExit: subscribeTo(exits),
     launch,
     async stop() {
       launcher.stop();

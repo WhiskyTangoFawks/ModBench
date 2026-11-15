@@ -1,18 +1,13 @@
-import { describe, it, expect } from 'vitest';
-import type { BackendStatus, LoadOrderSnapshot, RecordIndexChange } from '../MEditClient';
+import { describe, it, expect, vi } from 'vitest';
+import type { BackendStatus, RecordIndexChange } from '../MEditClient';
 import { InMemoryMEditClient } from './InMemoryMEditClient';
-import { loadOrderStatusEventFixture } from './fixtures';
+import { EMPTY_SNAPSHOT, loadOrderStatusEventFixture } from './fixtures';
 
 function heard(client: InMemoryMEditClient): RecordIndexChange[] {
   const changes: RecordIndexChange[] = [];
   client.onDidChange((change) => changes.push(change));
   return changes;
 }
-
-const EMPTY_SNAPSHOT: LoadOrderSnapshot = {
-  plugins: [], active: [], loadedWithNoLine: [], archives: [], listedArchives: [], stringsFiles: [], places: [],
-  dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'English',
-};
 
 const rows = { kind: 'rows-changed', plugin: 'A.esp', origin: 'Mod', keys: ['0001:A.esp'], sequence: 1 };
 
@@ -103,7 +98,6 @@ describe('whether the record index may be late', () => {
 
     answer();
     await sent;
-    await Promise.resolve();
-    expect(client.recordIndexMayBeLate).toBe(false);
+    await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
   });
 });

@@ -1,4 +1,4 @@
-import { IGNORED_THROWS, loadOrderStatusEventFixture } from './fixtures';
+import { EMPTY_SNAPSHOT, IGNORED_THROWS, cancellableToken, loadOrderStatusEventFixture } from './fixtures';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { leveledLog } from '../../test/leveledLog';
@@ -69,11 +69,6 @@ function routedFetch(routes: [match: string, handle: (req: Request) => Promise<R
     return route[1](req);
   });
 }
-
-const EMPTY_SNAPSHOT = {
-  plugins: [], active: [], loadedWithNoLine: [], archives: [], listedArchives: [], stringsFiles: [], places: [], mods: [],
-  dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'English',
-};
 
 describe('HttpMEditClient — the process is the client\'s own', () => {
   it('reports the backend\'s status changes to its listeners, until one unsubscribes', async () => {
@@ -1043,7 +1038,6 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     ['where a record\'s references are placed', (client) => client.getPlacedReferences(record.formKey), '/placed-references'],
     ['the records side by side', (client) => client.getRecordsComparison([{ formKey: record.formKey, plugin }]), '/records/compare'],
     ['what renaming a script changes', (client) => client.getScriptRenameSourceChanges('Old', 'New'), '/script-names/rename-source-changes'],
-    ['the references to a plugin name', (client) => client.getPluginNameReferences('A.esp'), '/plugin-names/'],
   ];
 
   it.each(readsOverUnsaved)('reads %s only once the pending hand-over has answered, so it reads the text VS Code shows', async (_name, reading, route) => {
@@ -1141,21 +1135,6 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
 });
 
 describe('HttpMEditClient — a read whose token is cancelled', () => {
-  function token() {
-    let cancel = () => {};
-    const listeners: (() => unknown)[] = [];
-    const disposed = vi.fn();
-    cancel = () => { for (const listener of listeners) listener(); };
-    return {
-      token: {
-        isCancellationRequested: false,
-        onCancellationRequested: (listener: () => unknown) => { listeners.push(listener); return { dispose: disposed }; },
-      },
-      cancel: () => { cancel(); },
-      disposed,
-    };
-  }
-
   const cancelled = { failed: 'local', cause: 'The read was cancelled.' };
 
   it('is never sent when it is cancelled while it is held', async () => {
@@ -1170,7 +1149,7 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
     const client = makeClient(fetch);
     await client.start();
     client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]);
-    const { token: held, cancel } = token();
+    const { token: held, cancel } = cancellableToken();
 
     const asking = client.getPlugins(held);
     cancel();
@@ -1195,7 +1174,7 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
     const log = fakeLogChannel();
     const client = makeClient(fetch, { log });
     await client.start();
-    const { token: flying, cancel, disposed } = token();
+    const { token: flying, cancel } = cancellableToken();
 
     const asking = client.getPlugins(flying);
     await vi.waitFor(() => expect(sent).toBe(true));
@@ -1204,7 +1183,52 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
     expect(await asking).toEqual(cancelled);
     expect(aborted).toBe(true);
     expect(log.error).not.toHaveBeenCalled();
-    expect(disposed).toHaveBeenCalled();
+  });
+
+  it('stops watching the token once it has answered', async () => {
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/plugins', () => Promise.resolve(jsonResponse(200, []))],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+    const { token: answered, unsubscribed } = cancellableToken();
+
+    await client.getPlugins(answered);
+
+    expect(unsubscribed).toHaveBeenCalledOnce();
+  });
+
+  it('aborts the rows still streaming, when it is cancelled after their headers arrived', async () => {
+    let aborted = false;
+    let sentRow = false;
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/unsaved-documents', noContent],
+      ['/records/select', (req) => {
+        const body = new ReadableStream<Uint8Array>({
+          start: (controller) => {
+            controller.enqueue(new TextEncoder().encode(`${JSON.stringify({ row: { n: 1 } })}\n`));
+            sentRow = true;
+            req.signal.addEventListener('abort', () => { aborted = true; controller.error(new Error('aborted')); });
+          },
+        });
+        return Promise.resolve(new Response(body, { status: 200, headers: { 'content-type': 'application/x-ndjson' } }));
+      }],
+    ]);
+    const log = fakeLogChannel();
+    const client = makeClient(fetch, { log });
+    await client.start();
+    const { token: streaming, cancel } = cancellableToken();
+
+    const asking = client.selectRows('SELECT 1', 1000, streaming);
+    await vi.waitFor(() => expect(sentRow).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    cancel();
+
+    expect(await asking).toEqual(cancelled);
+    expect(aborted).toBe(true);
+    expect(log.error).not.toHaveBeenCalled();
   });
 
   it('is not sent when it is cancelled already', async () => {
@@ -1220,5 +1244,48 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
 
     expect(answer).toEqual(cancelled);
     expect(requests).toEqual([]);
+  });
+});
+
+describe('HttpMEditClient — whether the record index may be late', () => {
+  it('is true from a snapshot handed until its load order has settled', async () => {
+    const { response, push } = pushableStreamResponse();
+    let answerPut!: () => void;
+    const putAnswered = new Promise<void>((resolve) => { answerPut = resolve; });
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(response)],
+      ['/unsaved-documents', noContent],
+      ['/load-order', () => putAnswered.then(() => jsonResponse(200, { applied: true, version: 1 }))],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+    await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+
+    void client.sendLoadOrder(EMPTY_SNAPSHOT);
+    expect(client.recordIndexMayBeLate).toBe(true);
+
+    answerPut();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(client.recordIndexMayBeLate).toBe(true);
+
+    push(readyTickThatSettlesPutLoadOrder());
+    await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+  });
+
+  it('is true from unsaved documents handed until mEdit has answered their PUT', async () => {
+    let answerPut!: () => void;
+    const putAnswered = new Promise<void>((resolve) => { answerPut = resolve; });
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/unsaved-documents', () => putAnswered.then(() => new Response(null, { status: 204 }))],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+
+    client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]);
+    expect(client.recordIndexMayBeLate).toBe(true);
+
+    answerPut();
+    await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
   });
 });
