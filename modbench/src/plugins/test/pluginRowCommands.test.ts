@@ -97,7 +97,7 @@ describe('modbench.plugin.decompile', () => {
     expect(ask.asked).toEqual([]);
     expect(decompileCalls(client)).toEqual([[[SECOND], false]]);
     expect(progressSteps).toEqual([
-      'progress opens on modbench.pluginListTree', 'decompile Second.esp', 'Instance loader: read every file again', 'progress closes',
+      'progress opens on modbench.pluginListTree', 'decompile Second.esp', 'progress closes',
     ]);
     expect(reporter.landings).toEqual(['Decompiled "Second.esp".']);
     expect(reporter.reports).toEqual([]);
@@ -118,7 +118,7 @@ describe('modbench.plugin.decompile', () => {
     }]);
     expect(progressSteps).toEqual([
       'progress opens on modbench.pluginListTree', 'progress closes',
-      'progress opens on modbench.pluginListTree', 'decompile Second.esp forced', 'Instance loader: read every file again', 'progress closes',
+      'progress opens on modbench.pluginListTree', 'decompile Second.esp forced', 'progress closes',
     ]);
     expect(reporter.landings).toEqual(['Decompiled "Second.esp".']);
   });
@@ -402,7 +402,7 @@ describe('modbench.plugin.decompileAndRepair', () => {
     expect(repaired).toEqual([{ plugins: [MALFORMED], force: false }]);
     expect(ask.asked).toEqual([]);
     expect(progressSteps).toEqual([
-      'progress opens on modbench.pluginListTree', 'decompile and repair', 'Instance loader: read every file again', 'progress closes',
+      'progress opens on modbench.pluginListTree', 'decompile and repair', 'progress closes',
     ]);
     expect(reporter.landings).toEqual(['Decompiled and repaired "Malformed.esp".']);
   });

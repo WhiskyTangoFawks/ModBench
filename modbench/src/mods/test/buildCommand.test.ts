@@ -65,7 +65,7 @@ describe('modbench.mod.build', () => {
 
     expect(builds).toEqual([['ModA']]);
     expect(progressSteps).toEqual([
-      'progress opens on modbench.modList', 'build', 'Instance loader: read every file again', 'progress closes',
+      'progress opens on modbench.modList', 'build', 'progress closes',
     ]);
     expect(reporter.landings).toEqual(['Built "ModA".']);
     expect(reporter.reports).toEqual([]);

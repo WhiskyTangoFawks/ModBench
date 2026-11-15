@@ -1,8 +1,6 @@
 import * as vscode from 'vscode';
-import { ambientWrites } from './instanceLoader/ambientWrites';
+import { toldAfter } from './repositoriesLib/writesTold';
 import type { MoveToTrash } from './ports/trash';
 
-export const moveToTrash: MoveToTrash = async (path) => {
-  ambientWrites.name([path]);
-  await vscode.workspace.fs.delete(vscode.Uri.file(path), { recursive: true, useTrash: true });
-};
+export const moveToTrash: MoveToTrash = (path) =>
+  toldAfter([path], () => Promise.resolve(vscode.workspace.fs.delete(vscode.Uri.file(path), { recursive: true, useTrash: true })));

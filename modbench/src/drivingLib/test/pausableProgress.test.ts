@@ -41,7 +41,7 @@ describe('a view\'s progress that pauses while a person is asked', () => {
 });
 
 describe('a writing gesture that waits on a person', () => {
-  it('closes its progress while it waits, and shows it again for the refresh', async () => {
+  it('closes its progress while it waits, and shows it again for the rest of the command', async () => {
     const instance = { refresh: () => { steps.push('refresh'); return Promise.resolve(undefined); } };
 
     await runWritingGesture('modbench.write', 'modbench.thing', instance, async (progress) => {
@@ -55,7 +55,7 @@ describe('a writing gesture that waits on a person', () => {
 
     expect(steps).toEqual([
       'progress opens on modbench.thing', 'extracting', 'progress closes', 'person answered', 'progress opens on modbench.thing', 'landing',
-      'refresh', 'progress closes',
+      'progress closes',
     ]);
   });
 });

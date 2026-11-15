@@ -7,7 +7,7 @@ import { errorMessage } from '../../ports/errorMessage';
 import type { FileProblems } from '../../ports/fileProblems';
 import type { InstallationFileReader } from './installationFileReader';
 import { digestOf } from './contentDigest';
-import { append, ensureDir, get, listDir, makeTempDir, readOrReason, remove, stampOf, withLock } from '../files';
+import { appendUntold, ensureDirUntold, get, listDir, makeTempDir, readOrReason, removeUntold, stampOf, withLock } from '../files';
 import { sameStamp, settledBefore } from '../../repositoriesLib/stampedReads';
 import type { FileRead, FileStamp, HashedDownloadedFile, HashedFile, InstanceAdapter } from '../instanceAdapter';
 
@@ -47,7 +47,7 @@ function keptAt(line: string): { kind: Kind; path: string; stamp: FileStamp; rea
 // An extraction is a whole installation file, so one a crash left behind would hold its space for good.
 async function removeLeftoverExtractions(folder: string): Promise<void> {
   const names = await listDir(folder).catch(() => []);
-  await Promise.all(names.filter((name) => name.name.startsWith(EXTRACTION_PREFIX)).map((name) => remove(join(folder, name.name))));
+  await Promise.all(names.filter((name) => name.name.startsWith(EXTRACTION_PREFIX)).map((name) => removeUntold(join(folder, name.name))));
 }
 
 // One extracts over the other wherever names ignore case, so the survivor's hash would stand for both.
@@ -99,7 +99,7 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
   const hashedWithEntries = (path: string, stamp: FileStamp): Promise<HashedDownloadedFile> => withLock(join(folder, EXTRACTION_PREFIX), async () => {
     const listed = await installationFileReader.list(path);
     refuseCaseCollisions(listed);
-    await ensureDir(folder);
+    await ensureDirUntold(folder);
     const extraction = await makeTempDir(join(folder, EXTRACTION_PREFIX));
     try {
       await installationFileReader.extract(path, extraction);
@@ -107,7 +107,7 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
       for (const entry of listed) entries.push({ path: entry, hash: await digestOf(join(extraction, entry)) });
       return { ...(await hashedAlone(path, stamp)), entries };
     } finally {
-      await remove(extraction);
+      await removeUntold(extraction);
     }
   });
 
@@ -120,7 +120,7 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
       return;
     }
     if (read.kind === 'unreadable') return;
-    await ensureDir(folder).then(() => append(indexFile, lineOf(kind, path, entry.stamp, read.answer))).catch((err: unknown) => { unwritten = errorMessage(err); });
+    await ensureDirUntold(folder).then(() => appendUntold(indexFile, lineOf(kind, path, entry.stamp, read.answer))).catch((err: unknown) => { unwritten = errorMessage(err); });
   }
 
   const shown = (path: string, read: FileRead<unknown>): void => {

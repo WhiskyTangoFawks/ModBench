@@ -205,12 +205,11 @@ describe('modbench.mod.install over a downloaded file: the pick among the upgrad
 describe('modbench.mod.install over a downloaded file: the progress bar and the read', () => {
   beforeEach(() => { vi.clearAllMocks(); progressSteps.length = 0; });
   const opens = 'progress opens on modbench.downloads';
-  const reads = 'Instance loader: read every file again';
 
   it('install over a downloaded file installs, then the read, then the bar closes', async () => {
     await installRow(installDeps({ reporter: recordingReporter() }), {}, { answers: { refusals: stepOnInstall } });
 
-    expect(progressSteps).toEqual([opens, 'install', reads, 'progress closes']);
+    expect(progressSteps).toEqual([opens, 'install', 'progress closes']);
   });
 
   it('Esc at the upgrade pick opens no bar', async () => {

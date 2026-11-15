@@ -45,6 +45,27 @@ describe('plugin sync on the instance', () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
+  it('reads nothing back when what it wrote told the Instance loader', async () => {
+    const { instance, refresh, hears } = instanceHeard();
+    pluginSyncOn({ instance, channel, syncPlugins: () => Promise.resolve({ applied: true, wrote: true, added: [], dropped: [] }) });
+
+    await hears();
+
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('reads the whole disk back when its write left the files unnamed', async () => {
+    const { instance, refresh, hears } = instanceHeard();
+    pluginSyncOn({
+      instance, channel,
+      syncPlugins: () => { ambientWrites.leaveUnnamed(); return Promise.resolve({ applied: true, wrote: true, added: [], dropped: [] }); },
+    });
+
+    await hears();
+
+    expect(refresh.mock.calls).toEqual([[undefined]]);
+  });
+
   it('reads back what its own run wrote when a later run, overlapping it, wrote nothing', async () => {
     const { instance, refresh, hears } = instanceHeard();
     let finishFirst!: () => void;
@@ -72,6 +93,6 @@ describe('plugin sync on the instance', () => {
 
     await collectingWrites(around, hears);
 
-    expect(around.named).toBeUndefined();
+    expect(around.named).toEqual([]);
   });
 });

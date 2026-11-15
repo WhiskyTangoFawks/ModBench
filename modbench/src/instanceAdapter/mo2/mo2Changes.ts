@@ -24,7 +24,7 @@ import { parseModlist } from './codecs/modlistText';
 import { addLoadAfter } from '../../sortingRules/lootMetadata';
 import { currentDownloadsDir, entryKey, folderHolding, listedAs, newModFolder, metaGameOfDomain, refuseFolderTaken, type Mo2Context } from './mo2Context';
 import { readPluginsProvided, type ReadingSource } from '../instanceReading';
-import { nameWrites } from '../../repositoriesLib/writeNaming';
+import { toldAfter } from '../../repositoriesLib/writesTold';
 
 type Mo2Changes = Pick<InstanceAdapter,
   | 'changePluginOrder' | 'changePluginOrderOverProvided' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'markDownloadedFile' | 'writeNexusFileInfo'
@@ -106,15 +106,16 @@ async function copyDownloadedFile(context: Mo2Context, from: string, name: strin
     if (await exists(file)) throw new Error(`'${name}' is already in the downloads folder`);
     await ensureDir(downloadsDir);
     const copiedMetadata = downloadedFileMetadataPath(downloadsDir, name);
-    nameWrites(file, copiedMetadata);
-    await copyFile(from, file, constants.COPYFILE_EXCL);
-    const metadata = downloadedFileMetadataPath(dirname(from), basename(from));
-    try {
-      if (await exists(metadata)) await copyFile(metadata, copiedMetadata, constants.COPYFILE_EXCL);
-    } catch (err) {
-      await remove(file);
-      throw err;
-    }
+    await toldAfter([file, copiedMetadata], async () => {
+      await copyFile(from, file, constants.COPYFILE_EXCL);
+      const metadata = downloadedFileMetadataPath(dirname(from), basename(from));
+      try {
+        if (await exists(metadata)) await copyFile(metadata, copiedMetadata, constants.COPYFILE_EXCL);
+      } catch (err) {
+        await remove(file);
+        throw err;
+      }
+    });
   });
 }
 

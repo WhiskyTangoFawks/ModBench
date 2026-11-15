@@ -106,7 +106,6 @@ describe('onPluginCheckboxChanged', () => {
 describe('a check box ends when the read lands (common.md, A gesture that writes)', () => {
   const ENDS_ON_THE_READ = [
     'progress opens on modbench.pluginListTree',
-    'Instance loader: read every file again',
     'progress closes',
   ];
 

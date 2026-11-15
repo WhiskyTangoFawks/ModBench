@@ -242,7 +242,7 @@ describe('Update manifest', () => {
 
     await run(UPDATE, modRow('ModA'));
 
-    expect(progressSteps).toEqual(['progress opens on modbench.modList', 'update manifest', 'Instance loader: read every file again', 'progress closes']);
+    expect(progressSteps).toEqual(['progress opens on modbench.modList', 'update manifest', 'progress closes']);
   });
 
   it('says in one line how many mods were unchanged, updated and refused, and that no file is outside its package', async () => {
@@ -313,7 +313,7 @@ describe('Restore from manifest', () => {
     await run(RESTORE, modRow('ModB'), [modRow('ModA'), modRow('ModB')]);
 
     expect(sentMods(restoreFromManifest)).toEqual([['ModA', 'ModB']]);
-    expect(progressSteps).toEqual(['progress opens on modbench.modList', 'restore', 'Instance loader: read every file again', 'progress closes']);
+    expect(progressSteps).toEqual(['progress opens on modbench.modList', 'restore', 'progress closes']);
   });
 
   it('restores the mods a selected separator holds, and not the separator, which has no manifest', async () => {
