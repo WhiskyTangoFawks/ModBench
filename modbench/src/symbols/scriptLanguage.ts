@@ -52,18 +52,18 @@ export function scriptLanguage({ instance, names, client, reporter }: ScriptLang
   };
   const isHeld = (name: string): boolean => scripts().some((script) => sameName(script.name, name));
 
-  const nameAt = (document: AskedIn, offset: number) => names.scriptAt(document.uri.fsPath, heldText(document), offset);
+  const nameAt = (document: AskedIn, offset: number, token?: vscode.CancellationToken) => names.scriptAt(document.uri.fsPath, heldText(document), offset, token);
 
   const fileOf = ({ source, compiled }: PapyrusScript): string | undefined => source ?? compiled;
 
-  const referencesTo = async ({ name }: ScriptSymbol): Promise<References> => {
-    const { found, unread } = await membersNaming(client, openPluginSourceDocument, names, await client.getScriptReferences(name));
+  const referencesTo = async ({ name }: ScriptSymbol, token?: vscode.CancellationToken): Promise<References> => {
+    const { found, unread } = await membersNaming(client, openPluginSourceDocument, names, await client.getScriptReferences(name, token));
     return { locations: found, unread };
   };
 
   return {
-    async nameAt(document, offset) {
-      const found = await nameAt(document, offset);
+    async nameAt(document, offset, token) {
+      const found = await nameAt(document, offset, token);
       return found && { start: found.start, end: found.end, name: found.name, symbol: { kind: 'script', name: found.name } };
     },
     /** Its source, else its compiled script. */

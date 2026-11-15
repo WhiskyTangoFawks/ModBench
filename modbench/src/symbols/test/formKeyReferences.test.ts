@@ -32,12 +32,21 @@ function references() {
 }
 
 describe('Find All References on a FormKey (symbols.md, The features, story 2)', () => {
+  it('asks mEdit with the token of the request it answers', async () => {
+    const { client, read } = references();
+    const token = { isCancellationRequested: false, onCancellationRequested: () => ({ dispose: () => undefined }) };
+
+    await read(GUN, token);
+
+    expect(client.calls).toEqual([{ method: 'getPlacedReferences', args: [GUN, token] }]);
+  });
+
   it('asks mEdit once, for the record, whatever the number of referrers, and nothing else', async () => {
     const { client, read } = references();
 
     await read(GUN);
 
-    expect(client.calls).toEqual([{ method: 'getPlacedReferences', args: [GUN] }]);
+    expect(client.calls).toEqual([{ method: 'getPlacedReferences', args: [GUN, undefined] }]);
   });
 
   it('lists each place each copy names the record, at the copy\'s document', async () => {

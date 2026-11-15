@@ -36,6 +36,15 @@ describe('a record\'s hover (symbols.md, The symbols)', () => {
     expect(await hoverOf({ client: askingFor(answer), reporter }, FORM_KEY)).toEqual([`\`${FORM_KEY}\``, 'Weapon', 'Winner: Mod.esp']);
   });
 
+  it('asks mEdit with the token of the hover it answers', async () => {
+    const client = askingFor(comparison());
+    const token = { isCancellationRequested: false, onCancellationRequested: () => ({ dispose: () => undefined }) };
+
+    await hoverOf({ client, reporter }, FORM_KEY, token);
+
+    expect(client.calls).toEqual([{ method: 'getComparison', args: [FORM_KEY, undefined, token] }]);
+  });
+
   it('shows nothing for a FormKey no active plugin holds', async () => {
     expect(await hoverOf({ client: askingFor(null), reporter }, FORM_KEY)).toBeUndefined();
   });

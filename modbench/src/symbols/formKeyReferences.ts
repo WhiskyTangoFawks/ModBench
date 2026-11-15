@@ -7,9 +7,9 @@ import { answerOf } from '../wire/readFailed';
  *  mEdit fails throws. */
 export function referencesToFormKey(
   client: Pick<MEditClient, 'getPlacedReferences'>,
-): (formKey: string) => Promise<{ locations: vscode.Location[]; leftOut: string[] }> {
-  return async (formKey) => {
-    const { copies, leftOut } = answerOf(await client.getPlacedReferences(formKey));
+): (formKey: string, token?: Parameters<MEditClient['getPlacedReferences']>[1]) => Promise<{ locations: vscode.Location[]; leftOut: string[] }> {
+  return async (formKey, token) => {
+    const { copies, leftOut } = answerOf(await client.getPlacedReferences(formKey, token));
     const locations = copies.flatMap(({ formKey: referrer, plugin, document, ranges }) => {
       const uri = copyDocumentUri({ formKey: referrer, plugin }, document);
       return ranges.map(({ start, end }) => new vscode.Location(uri, new vscode.Range(start.line, start.character, end.line, end.character)));

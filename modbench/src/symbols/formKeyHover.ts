@@ -18,9 +18,10 @@ function linesOf(formKey: string, comparison: CompareResult): string[] {
 export async function hoverOf(
   { client, reporter }: { client: Pick<MEditClient, 'getComparison'>; reporter: Pick<Reporter, 'shownOnSurface'> },
   formKey: string,
+  token?: Parameters<MEditClient['getComparison']>[2],
 ): Promise<string[] | undefined> {
   try {
-    const comparison = answerOf(await client.getComparison(formKey));
+    const comparison = answerOf(await client.getComparison(formKey, undefined, token));
     return comparison ? linesOf(formKey, comparison) : undefined;
   } catch (error) {
     reporter.shownOnSurface('error', `Hover cannot describe ${formKey}.`, errorMessage(error));

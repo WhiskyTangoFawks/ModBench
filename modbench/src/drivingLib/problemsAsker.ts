@@ -9,7 +9,6 @@ interface Reads<Paths extends Answered, Problems, Status> {
   getPluginFilePaths(plugin?: PluginAddress): Promise<Paths[] | ReadFailed>;
   getPluginProblems(plugin?: PluginAddress): Promise<Problems[] | ReadFailed>;
   onDidChange(listener: (change: readonly { readonly plugin: PluginAddress }[] | undefined) => void): { dispose(): void };
-  onLoadOrderSettled(listener: (status: Status) => void): () => void;
 }
 
 /** A plugin-changed listener that asks of the one plugin named, or of the whole set when none is. */
@@ -22,8 +21,6 @@ export interface ProblemsAsker<Paths extends Answered, Problems, Status> {
   getPluginProblems: Reads<Paths, Problems, Status>['getPluginProblems'];
   /** Told after the asker dropped what it held of the plugin, or of every plugin when no plugin is named. */
   onPluginChanged(listener: (event: { plugin?: PluginAddress }) => void): () => void;
-  /** Told after the asker dropped everything it held. */
-  onLoadOrderSettled(listener: (status: Status) => void): () => void;
   /** Told to ask again of a read that failed: after a delay, and, for the file paths the asker holds, at once when another ask of them is answered. */
   onAskedAgain(read: Read, listener: (plugin?: PluginAddress) => void): () => void;
   forget(plugin?: PluginAddress): void;
@@ -77,7 +74,6 @@ export function problemsAsker<Paths extends Answered, Problems, Status>(client: 
       });
       return () => { subscription.dispose(); };
     },
-    onLoadOrderSettled: (listener) => client.onLoadOrderSettled((status) => { forget(); listener(status); }),
     forget,
     inTurn,
   };

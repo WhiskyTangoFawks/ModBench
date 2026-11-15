@@ -58,15 +58,15 @@ const foldedPathOf = (held: string): string => foldPath(held.replaceAll('\\\\', 
 /** A file as a symbol, named by its path in the Data folder: the records that name it, which mEdit answers (symbols.md,
  *  The symbols). */
 export function fileLanguage({ instance, reporter, client, names, copyOf, reveal, tooltip }: FileLanguageDeps): SymbolKind<FileNamed> {
-  const pathAt = async (document: AskedIn, offset: number): Promise<Named<FileNamed> | undefined> => {
-    const found = await names.fileAt(document.uri.fsPath, heldText(document), offset);
+  const pathAt = async (document: AskedIn, offset: number, token?: vscode.CancellationToken): Promise<Named<FileNamed> | undefined> => {
+    const found = await names.fileAt(document.uri.fsPath, heldText(document), offset, token);
     if (found === undefined) return undefined;
     const span = { start: found.start, end: found.end };
     return 'refused' in found ? { ...span, name: found.given, symbol: { refused: found.refused } } : { ...span, name: found.path, symbol: { kind: 'file', path: found.path } };
   };
 
-  const referencesTo = async ({ path }: FileNamed): Promise<References> => {
-    const { found, unread } = await membersNaming(client, openPluginSourceDocument, names, await client.getFileReferences(path));
+  const referencesTo = async ({ path }: FileNamed, token?: vscode.CancellationToken): Promise<References> => {
+    const { found, unread } = await membersNaming(client, openPluginSourceDocument, names, await client.getFileReferences(path, token));
     return { locations: found, unread };
   };
 

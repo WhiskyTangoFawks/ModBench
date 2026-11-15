@@ -21,7 +21,7 @@ export interface PathStanding {
 
 export interface PathProblemsDeps {
   client: Pick<MEditClient, 'loadOrderStatus'>;
-  ask: Pick<Asked, 'getPluginFilePaths' | 'onPluginChanged' | 'onLoadOrderSettled' | 'onAskedAgain'>;
+  ask: Pick<Asked, 'getPluginFilePaths' | 'onPluginChanged' | 'onAskedAgain'>;
   sourceFiles: SourceFilesOf;
   readText: (path: string) => Promise<string>;
   reporter: Pick<Reporter, 'shownOnSurface'>;
@@ -135,7 +135,6 @@ export function feedPathProblems(deps: PathProblemsDeps): () => void {
     askWanted();
   };
   const unsubscribe = [
-    deps.ask.onLoadOrderSettled((status) => { if (status.conflictsComputed) { wholeWanted = true; askWanted(); } }),
     deps.ask.onPluginChanged(askingOnChange(() => { wholeWanted = true; askWanted(); }, askPluginWhenReady)),
     deps.ask.onAskedAgain('getPluginFilePaths', askedAgain(() => { wholeWanted = true; askWanted(); }, askPluginWhenReady)),
   ];
