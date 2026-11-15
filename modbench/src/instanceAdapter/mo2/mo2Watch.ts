@@ -26,8 +26,7 @@ export interface Mo2Watch {
   /** Watches each of `bases` under `glob` for `what`, in place of the folders it followed before. A watch newly armed has
    *  the disk checked once, for a change it missed while arming. */
   follow(what: FollowedFolder, bases: readonly string[], glob: string): void;
-  /** The folders and files a read of `key` listed, in place of what it listed before; `undefined` once it lists none. A folder the
-   *  user excluded from VS Code's watch is then watched to its first level, and named with each pattern excluding a file. */
+  /** The folders and files a read of `key` listed, in place of what it listed before; `undefined` once it lists none. */
   listed(key: string, listing: { readonly folders: readonly string[]; readonly files: readonly string[] } | undefined): void;
   unwatchedFolders(): UnwatchedFolder[];
 }
