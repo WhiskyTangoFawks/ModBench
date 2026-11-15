@@ -83,18 +83,25 @@ internal sealed class WriteSession : IWriteSession, ISourceFiles
         return held.Count > 0 ? new SourceFailure.Unsaved(held) : SourceFailure.Answer(() => WriteToDisk(following));
     }
 
+    public IReadOnlyList<WrittenDocument> Written { get; private set; } = [];
+
     private void WriteToDisk(Func<SourceFailure?> following)
     {
         var journal = new WriteJournal(_repository.SourceFolder);
+        List<WrittenDocument> written = [];
         try
         {
             journal.PutBackOnFailure(() =>
             {
                 foreach (var (from, to) in Changes.Moves) journal.Move(from, to);
                 foreach (var path in Changes.Deletions) journal.DeleteTree(path);
-                foreach (var (path, text) in Changes.Documents) journal.Write(path, Encoding.UTF8.GetBytes(text));
+                foreach (var (path, text) in Changes.Documents)
+                {
+                    if (journal.Write(path, Encoding.UTF8.GetBytes(text)) is { } stamp) written.Add(new WrittenDocument(path, text, stamp));
+                }
                 if (following() is { } failure) throw SourceStopException.Of(failure);
             });
+            Written = written;
         }
         finally
         {
@@ -192,7 +199,7 @@ internal sealed class WriteSession : IWriteSession, ISourceFiles
 
     private Kind? Overlaid(string path)
     {
-        if (Written(path) is not null) return Kind.File;
+        if (ChangedAt(path) is not null) return Kind.File;
         if (Changes.Documents.Any(document => IsUnder(path, document.Path))) return Kind.Directory;
         return Deleted(path) ? Kind.None : null;
     }
@@ -218,7 +225,7 @@ internal sealed class WriteSession : IWriteSession, ISourceFiles
 
     private bool Deleted(string path) => Changes.Deletions.Any(deleted => AtOrUnder(path, deleted));
 
-    private DocumentChange? Written(string path) => Changes.Documents.FirstOrDefault(document => Same(document.Path, path));
+    private DocumentChange? ChangedAt(string path) => Changes.Documents.FirstOrDefault(document => Same(document.Path, path));
 
     private static string Rebased(string path, string from, string to) => AtOrUnder(path, from) ? to + path[from.Length..] : path;
 
@@ -267,7 +274,7 @@ internal sealed class WriteSession : IWriteSession, ISourceFiles
     private (string? Written, string Origin) Held(string path)
     {
         var full = Path.GetFullPath(path);
-        if (Written(full) is { } document) return (document.Text, full);
+        if (ChangedAt(full) is { } document) return (document.Text, full);
         if (KindOf(full) != Kind.File || Unmoved(full) is not { } origin)
             throw new FileNotFoundException($"Could not find file '{path}'.", path);
         return (null, origin);

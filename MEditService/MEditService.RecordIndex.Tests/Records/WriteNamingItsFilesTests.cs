@@ -103,6 +103,15 @@ public sealed class WriteNamingItsFilesTests : IDisposable
             .. saved.Made.Moves.SelectMany(move => new[] { move.From, move.To }), .. saved.Made.Deletions,
             .. saved.Made.Documents.Select(document => document.Path)]);
 
+    private static PluginChange Handed((LoadOrderEntry Entry, SourceChanges Made) saved) =>
+        Named(saved) with { Documents = [.. saved.Made.Documents.Select(document => new WrittenDocument(document.Path, document.Text, WrittenStamp.Of(document.Path).Require()))] };
+
+    private static PluginChange HandedRenamedAgain(PluginChange handed, string editorId) =>
+        handed with { Documents = [.. handed.Documents.Require().Select(document => document with { Text = document.Text.Replace("RenamedNpc", editorId, StringComparison.Ordinal) })] };
+
+    private (LoadOrderEntry Entry, SourceChanges Made) NpcRenamed() =>
+        Saved(Container, RepositoryOf(Container).ChangesToPut(Container.Key, Renamed(_npc, "RenamedNpc")));
+
     private void Written((LoadOrderEntry Entry, SourceChanges Made) saved)
     {
         var own = _holder.BeginOwnWrites();
@@ -158,6 +167,49 @@ public sealed class WriteNamingItsFilesTests : IDisposable
         Written(Writes[write](this));
 
         AssertTheRowsAFreshReadHolds();
+    }
+
+    [Theory]
+    [MemberData(nameof(WriteKinds))]
+    public async Task AHandedWrite_LeavesTheRowsAReadOfTheSameBytesHolds(string write)
+    {
+        Assert.Null(await _holder.Hand([Handed(Writes[write](this))]));
+
+        AssertTheRowsAFreshReadHolds();
+    }
+
+    [Fact]
+    public async Task TheRowsHoldTheHandedDocument_NotAReadOfItsFile()
+    {
+        await _holder.Hand([HandedRenamedAgain(Handed(NpcRenamed()), "HandedNpc")]);
+
+        Assert.Equal("HandedNpc", Record(_npc).EditorId);
+    }
+
+    [Fact]
+    public async Task TheWatchNamingAFileThatKeepsTheStampOfItsHandedDocument_ReadsItNotAgain()
+    {
+        var saved = NpcRenamed();
+        await _holder.Hand([HandedRenamedAgain(Handed(saved), "HandedNpc")]);
+
+        _index.SignalChange([Named(saved)]);
+        Waits.Reached(() => !_index.Status.Validating, "the watch's read");
+
+        Assert.Equal("HandedNpc", Record(_npc).EditorId);
+    }
+
+    [Fact]
+    public async Task AHand_IsAnsweredOnlyOnceTheRecordIndexHoldsIt()
+    {
+        using var reading = new ManualResetEventSlim();
+        _source.BeforeEachNamedRead = reading.Wait;
+
+        var hand = _holder.Hand([Handed(NpcRenamed())]);
+
+        Assert.False(hand.IsCompleted);
+        reading.Set();
+        Assert.Null(await hand);
+        Assert.Equal("RenamedNpc", Record(_npc).EditorId);
     }
 
     [Theory]

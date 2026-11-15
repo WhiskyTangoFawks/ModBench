@@ -114,6 +114,8 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
         public SourceFailure? WriteThen(Func<SourceFailure?> following) => throw Unreached();
 
+        public IReadOnlyList<WrittenDocument> Written => throw Unreached();
+
         public SourceChanges ChangesAddedSince(SourceChanges before) =>
             new(
                 [.. Changes.Moves.Skip(before.Moves.Count)],
@@ -195,9 +197,11 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
         public Answer<T, SourceFailure> ReadDocuments<T>(PluginAddress plugin, Func<IPluginDocuments, T> read) => throw Unreached();
 
-        public Answer<FilesRead?, SourceFailure> ReadFiles(PluginAddress plugin, IReadOnlyList<string> files) => throw Unreached();
+        public Answer<FilesRead?, SourceFailure> ReadFiles(PluginAddress plugin, IReadOnlyList<string> files, IReadOnlyList<WrittenDocument> written) =>
+            throw Unreached();
 
-        public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommitIn(PluginAddress plugin, IReadOnlyList<string> files) =>
+        public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommitIn(
+            PluginAddress plugin, IReadOnlyList<string> files, IReadOnlyList<WrittenDocument> written) =>
             throw Unreached();
 
         public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommit(PluginAddress plugin) =>

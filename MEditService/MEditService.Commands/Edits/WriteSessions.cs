@@ -35,12 +35,24 @@ internal sealed class WriteSessions(ISourceAdapter source, IReadOnlyList<Documen
     {
         if (!outcome.Applied || !_byFolder.Values.Any(Changes)) return outcome;
         if (Write() is { } failure) return WriteFailure.Refusal(failure, doing, logger);
-        loadOrder.SourceWritten(PluginsWritten(loadOrder.Current));
+        loadOrder.SourceWritten(PluginsWritten(loadOrder.Current, []));
+        return outcome;
+    }
+
+    /// <summary>As <see cref="Written"/>, handing the record index the documents written, and answered once it holds
+    /// them (ADR-0029). A write the record index could not read is answered as written: its status says so.</summary>
+    internal async Task<RecordEditResult> Handed(RecordEditResult outcome, string doing, LoadOrderHolder loadOrder, ILogger logger)
+    {
+        if (!outcome.Applied || !_byFolder.Values.Any(Changes)) return outcome;
+        if (Write() is { } failure) return WriteFailure.Refusal(failure, doing, logger);
+        var written = _byFolder.Values.SelectMany(session => session.Written).ToList();
+        if (await loadOrder.Hand(PluginsWritten(loadOrder.Current, written)).ConfigureAwait(false) is { } unread)
+            logger.LogWarning("A write landed that the record index has not read: {Message}", unread);
         return outcome;
     }
 
     // Null when a path written names no plugin, so only a check of the whole disk reads it.
-    private List<PluginChange>? PluginsWritten(LoadOrderSnapshot loadOrder)
+    private List<PluginChange>? PluginsWritten(LoadOrderSnapshot loadOrder, IReadOnlyList<WrittenDocument> written)
     {
         var made = Made;
         var files = new Dictionary<PluginAddress, List<string>>(PluginAddress.Comparer);
@@ -59,7 +71,8 @@ internal sealed class WriteSessions(ISourceAdapter source, IReadOnlyList<Documen
                     break;
             }
         }
-        return [.. files.Select(written => new PluginChange(written.Key, written.Value))];
+        return [.. files.Select(named => new PluginChange(
+            named.Key, named.Value, [.. written.Where(document => named.Value.Contains(document.Path, StringComparer.Ordinal))]))];
     }
 
     private static bool Changes(IWriteSession session) =>

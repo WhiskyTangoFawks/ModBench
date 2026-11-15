@@ -86,16 +86,16 @@ internal sealed class Projector(
     private static WorkingTreeState StateOf(RecordChange change) =>
         change == RecordChange.Added ? WorkingTreeState.Added : WorkingTreeState.Modified;
 
-    /// <summary>Re-derives the rows <paramref name="files"/> of the plugin's tree hold, reading nothing else of it (ADR-0001).
-    /// False when the files do not read alone, so the caller validates the plugin whole.</summary>
-    internal bool ReadFiles(RegisteredPlugin plugin, IReadOnlyList<string> files) => index.Commit(projection =>
+    /// <summary>Re-derives the rows <paramref name="files"/> of the plugin's tree hold, reading nothing else of it (ADR-0001),
+    /// a <paramref name="written"/> document in place of its file. False when the files do not read alone.</summary>
+    internal bool ReadFiles(RegisteredPlugin plugin, IReadOnlyList<string> files, IReadOnlyList<WrittenDocument> written) => index.Commit(projection =>
     {
         var key = plugin.Key;
         if (index.DerivationOf(key) != DerivedFrom.SourceTree || TruthOf(plugin) != DerivedFrom.SourceTree) return false;
         var repository = Over(plugin);
-        if (!repository.ReadFiles(key, files).Holds(out var read, out _) || read is null) return false;
+        if (!repository.ReadFiles(key, files, written).Holds(out var read, out _) || read is null) return false;
         if (AsRead(key, read)) return true;
-        if (!repository.ChangedSinceLastCommitIn(key, files).Holds(out var changes, out _)) return false;
+        if (!repository.ChangedSinceLastCommitIn(key, files, written).Holds(out var changes, out _)) return false;
 
         _matched.TryRemove(key, out _);
         // A record whose row says the last commit holds it, which no named file held there, came from a file no change named.

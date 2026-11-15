@@ -15,7 +15,7 @@ internal static class LastCommitComparison
     /// whole tree when null. A record no file there held at the last commit is added.</summary>
     internal static IReadOnlyDictionary<string, RecordChange> Of(
         string sourceFolder, GameRelease release, SourceRepositoryGit git, CommittedTexts committedTexts, SourceRepositoryLocator locator,
-        PluginAddress plugin, IReadOnlyList<string>? within = null)
+        PluginAddress plugin, IReadOnlyList<string>? within = null, WrittenDocuments? written = null)
     {
         using var expansion = new SourceTreeDocuments(sourceFolder, plugin.Name, release, DiskFiles.Instance);
         var committed = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -26,7 +26,7 @@ internal static class LastCommitComparison
             var fullPath = Path.Combine(sourceFolder, relativePath);
             var committedText = heldAtLastCommit ? committedTexts.Of(git, relativePath) : null;
             RecordTextsIn(committed, locator, expansion, plugin, relativePath, committedText);
-            var workingText = ReadWorkingText(fullPath);
+            var workingText = written?.At(fullPath)?.Text ?? ReadWorkingText(fullPath);
             if (workingText is not null) locator.RequireParsedFormKey(relativePath, workingText, plugin.Name);
             RecordTextsIn(working, locator, expansion, plugin, relativePath, workingText);
         }

@@ -31,6 +31,19 @@ public sealed class LoadOrderHolder
     /// counts: a write counted is raised before the next is counted.</summary>
     public event Action<IReadOnlyCollection<PluginChange>?, long>? Written;
 
+    /// <summary>Raised by <see cref="Hand"/>: a record index adds its read of what was handed, answering why it could not.</summary>
+    public event Action<IReadOnlyCollection<PluginChange>?, ICollection<Task<string?>>>? Handed;
+
+    /// <summary>Hands the record index what mEdit wrote, null when no plugin names it (ADR-0029). Completes once the
+    /// record index holds it, with why it could not read it; at once when no record index reads.</summary>
+    public async Task<string?> Hand(IReadOnlyCollection<PluginChange>? written)
+    {
+        List<Task<string?>> reads = [];
+        Handed?.Invoke(written, reads);
+        var unread = await Task.WhenAll(reads).ConfigureAwait(false);
+        return unread.FirstOrDefault(failure => failure is not null);
+    }
+
     /// <summary>From here, the writes counted by this flow of execution and the ones it starts, as they are counted.</summary>
     public OwnWrites BeginOwnWrites()
     {
@@ -98,5 +111,8 @@ public sealed class OwnWrites
 public sealed record SourceWrite(long Count, IReadOnlyList<PluginAddress>? Plugins);
 
 /// <summary>A plugin a change touched, and the files of it the change names; null when it cannot tell which, so every file
-/// of the plugin is read again (ADR-0001).</summary>
-public sealed record PluginChange(PluginAddress Plugin, IReadOnlyList<string>? Files);
+/// of the plugin is read again (ADR-0001). A handed document stands in for its file.</summary>
+public sealed record PluginChange(PluginAddress Plugin, IReadOnlyList<string>? Files, IReadOnlyList<WrittenDocument>? Documents = null);
+
+/// <summary>A document mEdit wrote: its absolute path, its text, and the stamp its file took (ADR-0003).</summary>
+public sealed record WrittenDocument(string Path, string Text, string Stamp);

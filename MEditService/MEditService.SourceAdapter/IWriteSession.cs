@@ -1,3 +1,4 @@
+using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
 
 namespace MEditService.SourceAdapter;
@@ -13,6 +14,10 @@ public interface IWriteSession
     /// <summary><see cref="Write"/>, then <paramref name="following"/>. A failure <paramref name="following"/> answers puts back what
     /// this write made, and is the answer, so writes across folders land all together.</summary>
     SourceFailure? WriteThen(Func<SourceFailure?> following);
+
+    /// <summary>The documents <see cref="Write"/> wrote, each with the stamp its file took; a document whose stamp the file
+    /// system did not answer is not among them.</summary>
+    IReadOnlyList<WrittenDocument> Written { get; }
 
     /// <summary>The repository the session's writes are made through, reading the held unsaved texts in place of
     /// their files, and each change made through the session. Its verbs that write the disk themselves refuse.</summary>

@@ -25,7 +25,10 @@ formkeyread: "a change of the FormKey: Commands calls the read before anything i
 sourceadapter."the moves, deletions and documents that text makes"
 commands -> sourceadapter: write {class: signal}
 sourceadapter -> source: "moves, then deletions, then documents, one mod source after another; a later one's failure puts back the earlier" {class: edit}
-sourceadapter -> commands: written {class: edit}
+sourceadapter -> commands: "written, each document with the stamp its file took" {class: edit}
+commands -> recordindex: "each document written, handed" {class: edit}
+recordindex -> sourceadapter: "the handed documents, read in place of their files while each keeps its stamp" {class: edit}
+recordindex -> commands: held {class: edit}
 commands -> http: applied {class: edit}
 http -> scripts: "200: the new FormKey, and each plugin source and copy left behind" {class: edit}
 

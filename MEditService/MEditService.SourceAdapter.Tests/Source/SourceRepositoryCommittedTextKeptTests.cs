@@ -1,6 +1,7 @@
 using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Time.Testing;
@@ -49,7 +50,7 @@ public sealed class SourceRepositoryCommittedTextKeptTests : IDisposable
         TestAdapters.Source(_clock).OverFolder(TestMod.In(sourceFolder), GameRelease.Fallout4);
 
     private static IReadOnlyDictionary<string, RecordChange> ChangesIn(ISourceRepository repository, string npcPath) =>
-        repository.ChangedSinceLastCommitIn(Plugin, [npcPath]).Value();
+        repository.ChangedSinceLastCommitIn(Plugin, [npcPath], []).Value();
 
     [Fact]
     public void AWriteToAFileWhoseCommittedTextWasAsked_IsComparedWithoutAskingGitAgain()
@@ -61,6 +62,16 @@ public sealed class SourceRepositoryCommittedTextKeptTests : IDisposable
         File.WriteAllText(NpcPath, SecondEdit);
 
         var changes = GitOffPath.While(() => ChangesIn(repository, NpcPath));
+
+        Assert.Equal(RecordChange.Modified, Assert.Single(changes).Value);
+    }
+
+    [Fact]
+    public void AWrittenDocumentWhoseFileKeepsItsStamp_IsComparedInPlaceOfTheFile()
+    {
+        var written = new WrittenDocument(NpcPath, FirstEdit, WrittenStamp.Of(NpcPath).Require());
+
+        var changes = Repository(_modFolder).ChangedSinceLastCommitIn(Plugin, [NpcPath], [written]).Value();
 
         Assert.Equal(RecordChange.Modified, Assert.Single(changes).Value);
     }

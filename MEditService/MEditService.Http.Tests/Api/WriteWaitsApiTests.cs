@@ -50,15 +50,6 @@ public sealed class WriteWaitsApiTests : HostedTests
     private static object Npc(string formKey, string plugin, string origin) => new { formKey, plugin = new { name = plugin, origin } };
 
     [Fact]
-    public async Task AScriptEdit_Answers_OnlyOnceTheRecordIndexHasReadIt()
-    {
-        await Loaded();
-        var formKey = await Client.FirstFormKey(Plugin, Origin);
-
-        await AssertTheWriteWaitsForTheIndex(Client.ScriptEdit(formKey, Plugin, Origin, "HeightMax", 0.75));
-    }
-
-    [Fact]
     public async Task AScriptCopy_Answers_OnlyOnceTheRecordIndexHasReadIt()
     {
         await Loaded();
@@ -166,19 +157,18 @@ public sealed class WriteWaitsApiTests : HostedTests
         var formKey = await Client.FirstFormKey(Plugin, Origin);
         _indexReads.SetResult(new IndexRefused(IndexRefusal.IndexNotReady, "mEdit's record index has not read the plugin source mEdit wrote."));
 
-        var response = await Client.ScriptEdit(formKey, Plugin, Origin, "HeightMax", 0.75).WaitAsync(Generous);
+        var response = await Client.PostAsJsonAsync("/records/delete", Npc(formKey, Plugin, Origin)).WaitAsync(Generous);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains(Logged, entry => entry.Level == LogLevel.Warning && entry.Message.Contains("has not read the plugin source", StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task AScriptEditThatWritesNothing_DoesNotWait()
+    public async Task AScriptDeleteThatWritesNothing_DoesNotWait()
     {
         await Loaded();
-        var formKey = await Client.FirstFormKey(Plugin, Origin);
 
-        var response = await Client.ScriptEdit(formKey, Plugin, Origin, "NoSuchMember", 1).WaitAsync(Generous);
+        var response = await Client.PostAsJsonAsync("/records/delete", Npc("000FFF:Waited.esp", Plugin, Origin)).WaitAsync(Generous);
 
         Assert.False(response.IsSuccessStatusCode);
         Assert.False(_writerAwaits.Task.IsCompleted);

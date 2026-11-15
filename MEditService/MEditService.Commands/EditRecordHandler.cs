@@ -22,12 +22,12 @@ public sealed class EditRecordHandler
         (_changes, _source, _unsaved, _loadOrder, _logger) = (changes, source, unsaved, loadOrder, logger);
 
     /// <summary><paramref name="copiesWithNoPluginSource"/> as <see cref="EditRecordChangesHandler.Changes"/> takes them.</summary>
-    public Answer<RecordEdited, RecordEditRefused> Edit(
+    public async Task<Answer<RecordEdited, RecordEditRefused>> Edit(
         PluginAddress plugin, string formKey, RecordEditEnvelope envelope, Func<Answer<RecordAt[], string>> copiesWithNoPluginSource)
     {
         var sessions = new WriteSessions(_source, _unsaved.Current);
         var edited = _changes.Edited(plugin, formKey, envelope, copiesWithNoPluginSource, sessions);
-        var written = sessions.Written(edited.Outcome, $"Could not write the edit of {formKey}", _loadOrder, _logger);
+        var written = await sessions.Handed(edited.Outcome, $"Could not write the edit of {formKey}", _loadOrder, _logger).ConfigureAwait(false);
         return written.Applied
             ? new RecordEdited(written.NewFormKey, edited.LeftBehind, edited.CopiesLeftBehind, edited.CopiesUnread)
             : written.AsRefused();

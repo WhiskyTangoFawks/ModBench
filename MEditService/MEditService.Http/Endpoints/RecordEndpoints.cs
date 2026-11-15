@@ -267,7 +267,6 @@ internal static class RecordEndpoints
 
         app.MapPost("/records/{formKey}/edit", (string formKey, RecordEditRequest request, EditRecordHandler edits, IQueries svc) =>
             EditRecord(formKey, request, edits, svc, logger))
-        .AwaitingItsSourceWrite()
         .WithName("EditRecord")
         .WithSummary("Writes an edit of a record to plugin source: a script's edit.")
         .WithDescription(
@@ -377,7 +376,7 @@ internal static class RecordEndpoints
             "EditChanges", logger, edits.Changes(plugin, decoded, envelope, CopiesWithNoPluginSource(svc, plugin, decoded)), Results.Ok);
     }
 
-    internal static IResult EditRecord(string formKey, RecordEditRequest request, EditRecordHandler edits, IQueries svc, ILogger logger)
+    internal static async Task<IResult> EditRecord(string formKey, RecordEditRequest request, EditRecordHandler edits, IQueries svc, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
         var spelled = RecordEditEnvelope.Spell(request.Path ?? []);
@@ -385,7 +384,7 @@ internal static class RecordEndpoints
         if (EditRequestProblem(request) is { } problem) return problem;
         var (plugin, envelope) = (new PluginAddress(request.Plugin, request.Origin), EnvelopeOf(request));
         return EndpointMapping.Answered(
-            "EditRecord", logger, edits.Edit(plugin, decoded, envelope, CopiesWithNoPluginSource(svc, plugin, decoded)), Results.Ok);
+            "EditRecord", logger, await edits.Edit(plugin, decoded, envelope, CopiesWithNoPluginSource(svc, plugin, decoded)), Results.Ok);
     }
 
     internal static IResult ScriptRenameSourceChanges(

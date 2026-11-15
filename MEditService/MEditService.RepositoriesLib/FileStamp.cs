@@ -6,13 +6,22 @@ public static class SettledStamp
     /// <summary>Null when the file system cannot answer, or the file changed too recently for a later write to move
     /// its stamp.</summary>
     public static string? Of(string path, TimeProvider timeProvider) =>
-        FileStamp.Of(path) is { } stamp && stamp.SettledAt(timeProvider.GetUtcNow()) ? $"{stamp.Size}:{stamp.Modified}" : null;
+        FileStamp.Of(path) is { } stamp && stamp.SettledAt(timeProvider.GetUtcNow()) ? stamp.Text : null;
+}
+
+/// <summary>A file's <see cref="FileStamp"/> as text however recently it changed: what a writer keeps of its own write.</summary>
+public static class WrittenStamp
+{
+    /// <summary>Null when the file system cannot answer.</summary>
+    public static string? Of(string path) => FileStamp.Of(path)?.Text;
 }
 
 /// <summary>What the file system says of a file without a read of its bytes: its size and date
 /// modified, which a link leaves as it was (ADR-0003). The date is ticks since the Unix epoch.</summary>
 internal readonly record struct FileStamp(long Size, long Modified)
 {
+    internal string Text => $"{Size}:{Modified}";
+
     /// <summary>Null when the file system cannot answer, and then nothing vouches for a remembered
     /// hash.</summary>
     internal static FileStamp? Of(string path)
