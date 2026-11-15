@@ -21,11 +21,14 @@ internal static class PluginEndpoints
             .ProducesProblem(503);
 
         app.MapPost("/plugins/facts", (PluginFactsRequest request, IQueries svc) =>
-            EndpointMapping.Ok(svc.GetPlugins(request.Plugins)))
+            request.Plugins is not { } plugins || plugins.Any(Unnamed)
+                ? EndpointMapping.BadRequest("Name the plugins, each with a name and an origin.")
+                : EndpointMapping.Ok(svc.GetPlugins(plugins)))
             .WithName("GetPluginFacts")
             .WithTags(Tag)
             .WithDescription("GET /plugins for only the plugins named, each by name and origin: the same facts, a cost that follows the plugins named.")
             .Produces<IReadOnlyList<PluginResponse>>()
+            .ProducesProblem(400)
             .ProducesProblem(503);
 
         // Every mutable plugin in the load order, diagnosed off its original bytes — the
@@ -432,6 +435,9 @@ internal static class PluginEndpoints
             EndpointMapping.Refusal));
     }
 
+    private static bool Unnamed(PluginAddress plugin) =>
+        string.IsNullOrWhiteSpace(plugin.Name) || string.IsNullOrWhiteSpace(plugin.Origin);
+
     // The routes over a selection of plugins share their request's shape.
     private static async Task<IResult> OverPlugins(
         IReadOnlyList<PluginAddress>? requested,
@@ -440,7 +446,7 @@ internal static class PluginEndpoints
         var plugins = requested ?? [];
         if (plugins.Count == 0)
             return EndpointMapping.BadRequest("At least one plugin is required.");
-        if (plugins.Any(p => string.IsNullOrWhiteSpace(p.Name) || string.IsNullOrWhiteSpace(p.Origin)))
+        if (plugins.Any(Unnamed))
             return EndpointMapping.BadRequest("Every plugin needs a name and an origin.");
 
         return await answer(plugins);

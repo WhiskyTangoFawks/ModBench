@@ -20,15 +20,23 @@ public class PluginFactsTests
         }, origin: "ModB")
         .WithPlugin("Other.esp", mod => mod.Npcs.AddNew("Elsewhere"), origin: "ModC");
 
-    [Fact]
-    public void PluginsNamed_AnswerOnlyThosePlugins_EachOfTheOriginAsked()
+    public static TheoryData<PluginAddress[], PluginAddress[]> NamedAndAnswered => new()
+    {
+        { [ModB, Other], [ModB, Other] },
+        { [ModA], [ModA] },
+        { [], [] },
+    };
+
+    [Theory]
+    [MemberData(nameof(NamedAndAnswered))]
+    public void PluginsNamed_AreTheOnlyPluginsAnswered_EachOfTheOriginAsked(PluginAddress[] named, PluginAddress[] answered)
     {
         using var plugins = Plugins().BuildScattered();
         using var index = Indexes.Reconciled(plugins);
 
-        var answered = index.Queries.GetPlugins([ModB, Other]).Value().Select(row => row.KeyOf());
+        var facts = index.Queries.GetPlugins(named).Value().Select(row => row.KeyOf());
 
-        Assert.Equal(new HashSet<PluginAddress> { ModB, Other }, answered.ToHashSet());
+        Assert.Equal(answered.ToHashSet(), facts.ToHashSet());
     }
 
     [Fact]
@@ -46,12 +54,11 @@ public class PluginFactsTests
     }
 
     [Fact]
-    public void NoPluginsNamed_AnswerNoPlugin_WhereNoFilterAnswersEveryPlugin()
+    public void NoPluginsNamed_AnswerEveryPlugin()
     {
         using var plugins = Plugins().BuildScattered();
         using var index = Indexes.Reconciled(plugins);
 
-        Assert.Empty(index.Queries.GetPlugins([]).Value());
         Assert.Equal(3, index.Queries.GetPlugins().Value().Count);
     }
 }

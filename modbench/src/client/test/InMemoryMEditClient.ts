@@ -363,7 +363,7 @@ export class InMemoryMEditClient implements MEditClient {
     const answer = await this.query('getPlugins', plugins ? [plugins] : []);
     if (!plugins || isReadFailed(answer)) return answer;
     const asked = new Set(plugins.map(pluginAddressKey));
-    return answer.filter((row) => asked.has(pluginAddressKey({ name: row.name, origin: row.origin })));
+    return answer.filter((row) => asked.has(pluginAddressKey(row)));
   }
   getDiagnoses(): ReturnType<MEditClient['getDiagnoses']> { return this.query('getDiagnoses', []); }
   getPluginIndexing(...args: Parameters<MEditClient['getPluginIndexing']>): ReturnType<MEditClient['getPluginIndexing']> {

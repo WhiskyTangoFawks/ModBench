@@ -579,16 +579,23 @@ internal sealed class RelationReads(
     /// <summary>Every plugin at least one filtered record matches, restricted to
     /// <paramref name="tableNames"/> (plugins.md). Empty when no filter is active: every plugin
     /// already has matches.</summary>
-    public IReadOnlySet<PluginAddress> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames)
+    public IReadOnlySet<PluginAddress> GetPluginsWithMatchingRecords(
+        IEnumerable<string> tableNames, IReadOnlyCollection<PluginAddress>? among = null)
     {
         var types = tableNames.ToList();
-        if (types.Count == 0 || !store.Filter.Active)
+        if (types.Count == 0 || !store.Filter.Active || among is { Count: 0 })
             return new HashSet<PluginAddress>(PluginAddress.Comparer);
 
         using var context = OpenRead();
 
         var (where, paramValues) = BuildWhere(
             null, null, FilterMatches.Matching, origin: null, recordTypes: types);
+        if (among is not null)
+        {
+            var pairs = among.Select((plugin, i) => $"(${paramValues.Count + 2 * i + 1}, ${paramValues.Count + 2 * i + 2})");
+            where += $" AND (plugin, origin) IN ({string.Join(", ", pairs)})";
+            paramValues.AddRange(among.SelectMany(plugin => new[] { plugin.Name, plugin.Origin }));
+        }
 
         return new HashSet<PluginAddress>(
             context.Rows($"SELECT DISTINCT plugin, origin FROM records{where}",

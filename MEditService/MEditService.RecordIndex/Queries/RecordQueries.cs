@@ -66,7 +66,7 @@ internal sealed class RecordQueries(
         // plugins.md: a record filter prunes records and record types, never
         // a plugin row — every plugin is still returned, and HasMatchingRecords is the additive fact
         // a caller decides expandability from, not row presence.
-        var matchingPlugins = reads.GetPluginsWithMatchingRecords(RequireSchemas().Keys);
+        var matchingPlugins = reads.GetPluginsWithMatchingRecords(RequireSchemas().Keys, [.. rows.Select(row => row.Key)]);
         return [.. rows.Select(c => ToResponse(c, matchingPlugins.Contains(c.Key)))];
     }
 

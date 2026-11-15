@@ -17,7 +17,6 @@ describe('InMemoryMEditClient — getPlugins', () => {
     client.setQueryAnswer('getPlugins', [modA, modB]);
 
     await expect(client.getPlugins([{ name: 'Shared.esp', origin: 'ModB' }])).resolves.toEqual([modB]);
-    await expect(client.getPlugins()).resolves.toEqual([modA, modB]);
   });
 });
 

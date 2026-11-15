@@ -317,7 +317,6 @@ export interface MEditClient {
 
   // Queries — the read verbs, by their current names, plus the filter facet (set filter, clear
   // filter, active filter). A read answers its value, or a ReadFailed (ADR-0019).
-  /** Every plugin's facts, or only `plugins`'. */
   getPlugins(plugins?: readonly PluginAddress[], token?: ReadCancellation): Promise<PluginMetadata[] | ReadFailed>;
   getDiagnoses(token?: ReadCancellation): Promise<PluginDiagnosisReport[] | ReadFailed>;
   getPluginIndexing(plugin: PluginAddress, token?: ReadCancellation): Promise<PluginIndexedState | ReadFailed>;
