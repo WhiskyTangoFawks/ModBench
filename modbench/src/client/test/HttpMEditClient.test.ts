@@ -1,4 +1,4 @@
-import { IGNORED_THROWS, loadOrderStatusEventFixture } from './fixtures';
+import { EMPTY_SNAPSHOT, IGNORED_THROWS, cancellableToken, loadOrderStatusEventFixture } from './fixtures';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { leveledLog } from '../../test/leveledLog';
@@ -69,11 +69,6 @@ function routedFetch(routes: [match: string, handle: (req: Request) => Promise<R
     return route[1](req);
   });
 }
-
-const EMPTY_SNAPSHOT = {
-  plugins: [], active: [], loadedWithNoLine: [], archives: [], listedArchives: [], stringsFiles: [], places: [], mods: [],
-  dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'English',
-};
 
 describe('HttpMEditClient — the process is the client\'s own', () => {
   it('reports the backend\'s status changes to its listeners, until one unsubscribes', async () => {
@@ -588,6 +583,13 @@ describe('HttpMEditClient — selectRows reads the rows as mEdit streams them', 
     expect(await request.json()).toEqual({ sql: 'SELECT 1' });
   });
 
+  it('logs the read once, and answers no answer, when mEdit sends no body', async () => {
+    const { result, log } = await exchange((c) => c.selectRows('SELECT 1', 1000), () => Promise.resolve(new Response(null, { status: 200 })));
+
+    expect(result).toEqual({ failed: 'no-answer' });
+    expect(log.lines.error).toEqual(['[HttpMEditClient] selectRows: mEdit answered with no body']);
+  });
+
   it('stops reading once the rows\' text passes the length asked for, and answers the rows read before it, with more', async () => {
     const row = { row: { body: 'x'.repeat(40) } };
     const { respond, cancelled } = streaming(lines(row, row, row, { end: true }));
@@ -1092,6 +1094,30 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     expect(requests).toHaveLength(1);
   });
 
+  it.each(readsOverUnsaved)('reads %s once mEdit has answered the load order sent before it, not once its sweep has finished', async (_name, reading, route) => {
+    let answerPut!: () => void;
+    const putAnswered = new Promise<void>((resolve) => { answerPut = resolve; });
+    let putLoadOrder = false;
+    const requests: string[] = [];
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/load-order', () => { putLoadOrder = true; return putAnswered.then(() => jsonResponse(200, { applied: true, version: 1 })); }],
+      [route, (req) => { requests.push(new URL(req.url).pathname); return Promise.resolve(jsonResponse(200, {})); }],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+    void client.sendLoadOrder(EMPTY_SNAPSHOT);
+    await vi.waitFor(() => expect(putLoadOrder).toBe(true));
+
+    const asking = reading(client);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(requests).toEqual([]);
+
+    answerPut();
+    await asking;
+    expect(requests).toHaveLength(1);
+  });
+
   it('fails a refused hand-over with mEdit\'s reason alone', async () => {
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
@@ -1113,4 +1139,162 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     expect(await client.getEditChanges(record.formKey, plugin, envelope)).toEqual({ applied: false, refusal: 'Unknown', message: 'mEdit could not be reached.' });
   });
 
+});
+
+describe('HttpMEditClient — a read whose token is cancelled', () => {
+  const cancelled = { failed: 'local', cause: 'The read was cancelled.' };
+
+  it('is never sent when it is cancelled while it is held', async () => {
+    let answerHandOver!: () => void;
+    const handedOver = new Promise<void>((resolve) => { answerHandOver = resolve; });
+    const requests: string[] = [];
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/unsaved-documents', () => handedOver.then(() => new Response(null, { status: 204 }))],
+      ['/plugins', (req) => { requests.push(req.url); return Promise.resolve(jsonResponse(200, [])); }],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+    client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]);
+    const { token: held, cancel } = cancellableToken();
+
+    const asking = client.getPlugins(held);
+    cancel();
+    expect(await asking).toEqual(cancelled);
+
+    answerHandOver();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(requests).toEqual([]);
+  });
+
+  it('is aborted when it is cancelled in flight, and logs no failure', async () => {
+    let aborted = false;
+    let sent = false;
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/unsaved-documents', noContent],
+      ['/plugins', (req) => new Promise<Response>((_resolve, reject) => {
+        sent = true;
+        req.signal.addEventListener('abort', () => { aborted = true; reject(new Error('aborted')); });
+      })],
+    ]);
+    const log = fakeLogChannel();
+    const client = makeClient(fetch, { log });
+    await client.start();
+    const { token: flying, cancel } = cancellableToken();
+
+    const asking = client.getPlugins(flying);
+    await vi.waitFor(() => expect(sent).toBe(true));
+    cancel();
+
+    expect(await asking).toEqual(cancelled);
+    expect(aborted).toBe(true);
+    expect(log.error).not.toHaveBeenCalled();
+  });
+
+  it('stops watching the token once it has answered', async () => {
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/plugins', () => Promise.resolve(jsonResponse(200, []))],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+    const { token: answered, unsubscribed } = cancellableToken();
+
+    await client.getPlugins(answered);
+
+    expect(unsubscribed).toHaveBeenCalledOnce();
+  });
+
+  it('aborts the rows still streaming, when it is cancelled after their headers arrived', async () => {
+    let aborted = false;
+    let sentRow = false;
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/unsaved-documents', noContent],
+      ['/records/select', (req) => {
+        const body = new ReadableStream<Uint8Array>({
+          start: (controller) => {
+            controller.enqueue(new TextEncoder().encode(`${JSON.stringify({ row: { n: 1 } })}\n`));
+            sentRow = true;
+            req.signal.addEventListener('abort', () => { aborted = true; controller.error(new Error('aborted')); });
+          },
+        });
+        return Promise.resolve(new Response(body, { status: 200, headers: { 'content-type': 'application/x-ndjson' } }));
+      }],
+    ]);
+    const log = fakeLogChannel();
+    const client = makeClient(fetch, { log });
+    await client.start();
+    const { token: streaming, cancel } = cancellableToken();
+
+    const asking = client.selectRows('SELECT 1', 1000, streaming);
+    await vi.waitFor(() => expect(sentRow).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    cancel();
+
+    expect(await asking).toEqual(cancelled);
+    expect(aborted).toBe(true);
+    expect(log.error).not.toHaveBeenCalled();
+  });
+
+  it('is not sent when it is cancelled already', async () => {
+    const requests: string[] = [];
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/plugins', (req) => { requests.push(req.url); return Promise.resolve(jsonResponse(200, [])); }],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+
+    const answer = await client.getPlugins({ isCancellationRequested: true, onCancellationRequested: () => ({ dispose: () => undefined }) });
+
+    expect(answer).toEqual(cancelled);
+    expect(requests).toEqual([]);
+  });
+});
+
+describe('HttpMEditClient — whether the record index may be late', () => {
+  it('is true from a snapshot handed until its load order has settled', async () => {
+    const { response, push } = pushableStreamResponse();
+    let answerPut!: () => void;
+    const putAnswered = new Promise<void>((resolve) => { answerPut = resolve; });
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(response)],
+      ['/unsaved-documents', noContent],
+      ['/load-order', () => putAnswered.then(() => jsonResponse(200, { applied: true, version: 1 }))],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+    await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+
+    void client.sendLoadOrder(EMPTY_SNAPSHOT);
+    expect(client.recordIndexMayBeLate).toBe(true);
+
+    answerPut();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(client.recordIndexMayBeLate).toBe(true);
+
+    push(readyTickThatSettlesPutLoadOrder());
+    await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+  });
+
+  it('is true from unsaved documents handed until mEdit has answered their PUT', async () => {
+    let puts = 0;
+    let answerPut!: () => void;
+    const putAnswered = new Promise<void>((resolve) => { answerPut = resolve; });
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/unsaved-documents', () => (puts++ === 0 ? noContent() : putAnswered.then(() => new Response(null, { status: 204 })))],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+    await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+
+    client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]);
+    expect(client.recordIndexMayBeLate).toBe(true);
+
+    answerPut();
+    await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+  });
 });
