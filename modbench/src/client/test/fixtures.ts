@@ -1,8 +1,10 @@
+import { vi } from 'vitest';
 import type { ListenerThrows } from '../notificationStream';
 import type { NotificationEvent } from '../apiClient';
 import type { PluginAddress, PluginMetadata, PluginRecordTypeCount, RecordSummary } from '../index';
 import type { components } from '../../wire/generated/api';
 import type { InMemoryMEditClient } from './InMemoryMEditClient';
+import type { LoadOrderSnapshot, ReadCancellation } from '../MEditClient';
 import { isReadFailed } from '../../wire/readFailed';
 
 type CompiledPlugin = components['schemas']['CompiledPlugin'];
@@ -113,4 +115,27 @@ export function recordedThrows() {
     recovered: (listener) => { recovered.push(listener); },
   };
   return { sink, threw, recovered };
+}
+
+export const EMPTY_SNAPSHOT: LoadOrderSnapshot = {
+  plugins: [], active: [], loadedWithNoLine: [], archives: [], listedArchives: [], stringsFiles: [], places: [],
+  dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'English',
+};
+
+/** A token as VS Code's behaves: `cancel` sets `isCancellationRequested` and tells each listener; `unsubscribed` counts the disposals. */
+export function cancellableToken() {
+  const listeners: (() => unknown)[] = [];
+  const unsubscribed = vi.fn();
+  const token: { isCancellationRequested: boolean } & ReadCancellation = {
+    isCancellationRequested: false,
+    onCancellationRequested: (listener: () => unknown) => { listeners.push(listener); return { dispose: unsubscribed }; },
+  };
+  return {
+    token,
+    unsubscribed,
+    cancel: () => {
+      token.isCancellationRequested = true;
+      for (const listener of listeners) listener();
+    },
+  };
 }
