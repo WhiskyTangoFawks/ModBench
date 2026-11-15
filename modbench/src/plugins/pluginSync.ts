@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { createPluginSync, type Sync, type SyncChannel } from '../drivingLib/syncFailureReport';
+import { refreshWritten } from '../drivingLib/writingGesture';
 import type { Instance } from '../instanceLoader/instance';
 import { WrittenFiles } from '../instanceLoader/writtenFiles';
 import { isolatingWrites } from '../instanceLoader/ambientWrites';
@@ -23,7 +24,7 @@ export function pluginSyncOn({ instance, syncPlugins, channel }: PluginSyncDeps)
   const subscription = instance.subscribe(async () => {
     const written = new WrittenFiles();
     const synced = await isolatingWrites(written, () => pluginSync.run());
-    if (synced?.wrote && written.named?.length !== 0) await instance.refresh(written.named);
+    if (synced?.wrote) await refreshWritten(instance, written);
   });
   return { pluginSync, dispose: () => { subscription.dispose(); } };
 }

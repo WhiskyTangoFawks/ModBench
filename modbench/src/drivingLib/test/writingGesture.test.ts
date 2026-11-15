@@ -6,7 +6,7 @@ vi.mock('vscode', async () => {
 });
 
 import { progressSteps as steps } from '../../test/recordedProgress';
-import { asViewCall, RefusedWrite, runWritingGesture, surfaceReadModel, surfaceRefusedWrites } from '../writingGesture';
+import { asViewCall, holdingTheWrite, RefusedWrite, runUnderProgress, runWritingGesture, surfaceManagerRunning, type ManagerState, surfaceReadModel, surfaceRefusedWrites } from '../writingGesture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { Refusal } from '../refusal';
 import { ambientWrites } from '../../instanceLoader/ambientWrites';
@@ -51,28 +51,125 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
     expect(steps).toEqual(['progress opens on modbench.thing', 'refresh', 'progress closes']);
   });
 
-  it('refreshes at the files a write the command made named, though the command named none itself', async () => {
-    const refresh = vi.fn(() => Promise.resolve());
+  it.each([
+    ['refreshes at the files a write the command made named, though the command named none itself', () => { ambientWrites.name(['/mods/A/meta.ini']); }, [[['/mods/A/meta.ini']]]],
+    ['ends when its writes return, refreshing nothing, when every write told the Instance loader', () => undefined, []],
+    ['checks the whole disk when the command left its writes unnamed', () => { ambientWrites.leaveUnnamed(); }, [[undefined]]],
+  ])('%s', async (_name, write, refreshes) => {
+    const refresh = vi.fn((_named?: readonly string[]) => Promise.resolve());
 
-    await runWritingGesture('modbench.write', 'modbench.thing', { refresh }, () => { ambientWrites.name(['/mods/A/meta.ini']); return Promise.resolve(); });
+    await runWritingGesture('modbench.write', 'modbench.thing', { refresh }, () => { write(); return Promise.resolve(); });
 
-    expect(refresh.mock.calls).toEqual([[['/mods/A/meta.ini']]]);
+    expect(refresh.mock.calls).toEqual(refreshes);
   });
 
-  it('ends when its writes return, refreshing nothing, when every write told the Instance loader', async () => {
-    const refresh = vi.fn(() => Promise.resolve());
+  describe('with the mod manager\'s state surfaced', () => {
+    const says = (state: ManagerState) => (state.kind === 'running' ? 'MO2 is running.' : state.kind === 'unknown' ? 'Cannot tell whether MO2 is running.' : undefined);
 
-    await runWritingGesture('modbench.write', 'modbench.thing', { refresh }, () => Promise.resolve());
+    function surfacedManager(running: () => Promise<ManagerState>) {
+      const reporter = recordingReporter();
+      const surface = surfaceManagerRunning({ reporter, running, message: says });
+      onTestFinished(() => { surface.dispose(); });
+      return reporter;
+    }
 
-    expect(refresh).not.toHaveBeenCalled();
-  });
+    const running = () => Promise.resolve<ManagerState>({ kind: 'running' });
+    const unknown = () => Promise.resolve<ManagerState>({ kind: 'unknown', reason: 'x' });
+    const notRunning = () => Promise.resolve<ManagerState>({ kind: 'notRunning' });
+    const wrote = () => holdingTheWrite('modbench.write', () => Promise.resolve('landed'));
+    const noticed = (reporter: ReturnType<typeof recordingReporter>) => reporter.reports.map((report) => report.message);
 
-  it('checks the whole disk when the command left its writes unnamed', async () => {
-    const refresh = vi.fn(() => Promise.resolve());
+    it('warns once a write held through holdingTheWrite has landed, when the manager is running at that moment', async () => {
+      const reporter = surfacedManager(running);
 
-    await runWritingGesture('modbench.write', 'modbench.thing', { refresh }, () => { ambientWrites.leaveUnnamed(); return Promise.resolve(); });
+      await wrote();
 
-    expect(refresh.mock.calls).toEqual([[undefined]]);
+      expect(reporter.reports).toEqual([{ severity: 'warning', message: 'MO2 is running.', detail: undefined }]);
+    });
+
+    it('says nothing for a gesture that holds no write', async () => {
+      const reporter = surfacedManager(running);
+
+      await runUnderProgress('modbench.thing', instanceThatReads(), unnamed);
+
+      expect(reporter.reports).toEqual([]);
+    });
+
+    it('says nothing when the manager is not running', async () => {
+      const reporter = surfacedManager(notRunning);
+
+      await wrote();
+
+      expect(reporter.reports).toEqual([]);
+    });
+
+    it('says nothing when the gesture was refused and wrote nothing', async () => {
+      const reporter = surfacedManager(running);
+
+      await holdingTheWrite('modbench.write', () => Promise.resolve({ applied: false, refusal: 'no' }));
+
+      expect(reporter.reports).toEqual([]);
+    });
+
+    it('starts the command without waiting on the ask', () => {
+      surfacedManager(() => new Promise<ManagerState>(() => undefined));
+      const commandRan = vi.fn();
+
+      void holdingTheWrite('modbench.write', () => { commandRan(); return Promise.resolve(); });
+
+      expect(commandRan).toHaveBeenCalled();
+    });
+
+    it('holds the write against another until the command is done, whatever the ask is doing', async () => {
+      surfacedManager(() => new Promise<ManagerState>(() => undefined));
+      let ends!: () => void;
+      void holdingTheWrite('modbench.write', () => new Promise<void>((r) => { ends = r; }));
+
+      await expect(holdingTheWrite('modbench.other', () => Promise.resolve())).rejects.toBeInstanceOf(RefusedWrite);
+      ends();
+    });
+
+    it('is a notification whatever the result is, and leaves the result as it was', async () => {
+      const reporter = surfacedManager(running);
+
+      const answer = await holdingTheWrite('modbench.write', () => Promise.resolve({ applied: true, partial: [] }));
+
+      expect({ answer, reports: reporter.reports }).toEqual({
+        answer: { applied: true, partial: [] },
+        reports: [{ severity: 'warning', message: 'MO2 is running.', detail: undefined }],
+      });
+    });
+
+    it('warns at every write while the manager is running', async () => {
+      const reporter = surfacedManager(running);
+
+      await wrote();
+      await wrote();
+
+      expect(noticed(reporter)).toEqual(['MO2 is running.', 'MO2 is running.']);
+    });
+
+    it('says it cannot tell only when the answer changes to unknown', async () => {
+      let answers = [unknown, unknown, running, unknown];
+      const reporter = surfacedManager(() => (answers.shift() ?? unknown)());
+
+      for (let write = 0; write < 4; write++) await wrote();
+
+      expect(noticed(reporter)).toEqual(['Cannot tell whether MO2 is running.', 'MO2 is running.', 'Cannot tell whether MO2 is running.']);
+      answers = [];
+    });
+
+    it('logs a failed ask once, treats it as unknown, and does not delay the write', async () => {
+      const reporter = surfacedManager(() => Promise.reject(new Error('tasklist failed')));
+
+      await wrote();
+      await wrote();
+
+      expect({ shown: reporter.shownFailures.length, noticed: noticed(reporter) }).toEqual({
+        shown: 1,
+        noticed: ['Cannot tell whether the mod manager is running: tasklist failed.'],
+      });
+    });
   });
 
   describe('with the other read model surfaced', () => {
@@ -119,8 +216,10 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
   describe('while another write is in flight', () => {
     function heldWrite(name: string) {
       let ends!: () => void;
-      const running = runWritingGesture(name, 'modbench.thing', instanceThatReads(), () => new Promise<void>((r) => { ends = r; }));
-      const end = async () => { ends(); await running; };
+      let started!: () => void;
+      const hasStarted = new Promise<void>((r) => { started = r; });
+      const running = runWritingGesture(name, 'modbench.thing', instanceThatReads(), () => new Promise<void>((r) => { ends = r; started(); }));
+      const end = async () => { await hasStarted; ends(); await running; };
       onTestFinished(end);
       return { end };
     }

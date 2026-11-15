@@ -1,3 +1,4 @@
+import { errorMessage } from '../ports/errorMessage';
 import type { Instance } from '../instanceLoader/instance';
 import { WrittenFiles } from '../instanceLoader/writtenFiles';
 import { collectingWrites } from '../instanceLoader/ambientWrites';
@@ -20,13 +21,67 @@ export async function runUnderProgress<T>(
   } finally {
     progress.working();
     try {
-      if (written.named?.length !== 0) await instance.refresh(written.named);
+      await refreshWritten(instance, written);
       if (readModel !== undefined && readModel.handed() !== handedBefore) await readModel.latest();
     } finally {
       await progress.done();
     }
   }
 }
+
+/** A write that told the Instance loader of each file shows nothing more. */
+export async function refreshWritten(instance: Pick<Instance, 'refresh'>, written: WrittenFiles): Promise<void> {
+  if (written.named?.length !== 0) await instance.refresh(written.named);
+}
+
+interface ManagerSurface {
+  readonly reporter: Reporter;
+  /** Reads whether the mod manager is running at this moment. */
+  readonly running: () => Promise<ManagerState>;
+  /** What the state says, or undefined when it says nothing. */
+  readonly message: (state: ManagerState) => string | undefined;
+}
+
+export type ManagerState = { readonly kind: 'running' | 'notRunning' } | { readonly kind: 'unknown'; readonly reason: string };
+
+interface ManagerWarning {
+  readonly kind: 'running' | 'unknown';
+  readonly message: string;
+}
+
+let managerSurface: ManagerSurface | undefined;
+let toldUnknown = false;
+let toldFailure: string | undefined;
+
+export function surfaceManagerRunning(on: ManagerSurface): { dispose: () => void } {
+  managerSurface = on;
+  toldUnknown = false;
+  toldFailure = undefined;
+  return { dispose: () => { managerSurface = undefined; } };
+}
+
+async function askedOfManager(): Promise<ManagerWarning | undefined> {
+  try {
+    if (managerSurface === undefined) return undefined;
+    const state = await managerSurface.running();
+    const message = managerSurface.message(state);
+    return message === undefined ? undefined : { kind: state.kind === 'unknown' ? 'unknown' : 'running', message };
+  } catch (e) {
+    const why = errorMessage(e);
+    if (why !== toldFailure) managerSurface?.reporter.shownOnSurface('warning', 'Cannot tell whether the mod manager is running', why);
+    toldFailure = why;
+    return { kind: 'unknown', message: `Cannot tell whether the mod manager is running: ${why}.` };
+  }
+}
+
+function warningFor(answer: ManagerWarning | undefined): string | undefined {
+  const newlyUnknown = answer?.kind === 'unknown' && !toldUnknown;
+  toldUnknown = answer?.kind === 'unknown';
+  return answer !== undefined && (answer.kind === 'running' || newlyUnknown) ? answer.message : undefined;
+}
+
+const wroteNothing = (result: unknown): boolean =>
+  typeof result === 'object' && result !== null && 'applied' in result && result.applied === false;
 
 let inFlight: string | undefined;
 
@@ -83,11 +138,16 @@ export async function asViewCall<T>(work: () => Promise<T>): Promise<T | undefin
 export async function holdingTheWrite<T>(write: string, work: () => Promise<T>): Promise<T> {
   if (inFlight !== undefined) throw new RefusedWrite(`${titleOf(write)} did not start: ${titleOf(inFlight)} is still writing.`);
   inFlight = write;
+  const asked = askedOfManager();
+  let result: T;
   try {
-    return await work();
+    result = await work();
   } finally {
     inFlight = undefined;
   }
+  const warning = warningFor(await asked);
+  if (warning !== undefined && !wroteNothing(result)) managerSurface?.reporter.report('warning', warning);
+  return result;
 }
 
 /** Runs the `write` gesture's `command` under the view's progress, holding the write. */

@@ -8,7 +8,7 @@ import type { EntryNames, SymbolOwner } from './symbolNames/symbolNames';
 import { makeReporter } from './drivingLib/reporter';
 import { workspaceFolders } from './toolbox/workspaceFolders';
 import { commandTitles } from './drivingLib/commandTitles';
-import { surfaceReadModel, surfaceRefusedWrites } from './drivingLib/writingGesture';
+import { surfaceManagerRunning, surfaceReadModel, surfaceRefusedWrites, type ManagerState } from './drivingLib/writingGesture';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
 import { ambientWrites } from './instanceLoader/ambientWrites';
@@ -29,7 +29,7 @@ import { registerCopyValueCommand, type CopyValueAdapter } from './drivingLib/co
 import type { SourceEditing } from './textDocuments/sourceEditing';
 import { applyWorkspaceChanges } from './textDocuments/applyWorkspaceChanges';
 import { oneAtATime } from './textDocuments/oneAtATime';
-import { Instance } from './instanceLoader/instance';
+import { Instance, managerRunningMessage } from './instanceLoader/instance';
 import { factsOf, NO_INSTANCE_FACTS, type InstanceFacts } from './instanceLoader/instanceFacts';
 import { sourceFiles, NO_SOURCE_FILES, type SourceFilesOf } from './instanceLoader/loadOrderSnapshot';
 import { downloadedFileReader, isPluginSourcePath, type InstanceAdapter, type EntryRef } from './instanceAdapter/instanceAdapter';
@@ -183,6 +183,7 @@ interface OpenedInstance {
 interface Opened {
   facts: InstanceFacts;
   instance?: Instance;
+  managerRunning: Pick<Parameters<typeof surfaceManagerRunning>[0], 'running' | 'message'>;
   scriptEnvironmentFile?: InstanceAdapter['scriptEnvironmentFile'];
   /** Each box over the instance's files that says where they name a symbol. */
   owners: readonly SymbolOwner[];
@@ -216,9 +217,13 @@ function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, 
         companions: async () => pluginCompanionRule(await adapter.gameRelease()),
       })];
       const entryOwners = [adapter.entryReferences, manifestEntryNames({ modFolderOf: (mod) => adapter.modFolderPath(mod), modFolders: () => instance.value.paths.modDirs })];
-      return { facts: factsOf(instance), instance, scriptEnvironmentFile: adapter.scriptEnvironmentFile, owners, entryOwners, side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
+      const managerRunning = {
+        running: () => adapter.managerRunning(),
+        message: (state: ManagerState) => managerRunningMessage({ managerRunning: state, managerNames: instance.value.managerNames }),
+      };
+      return { facts: factsOf(instance), instance, managerRunning, scriptEnvironmentFile: adapter.scriptEnvironmentFile, owners, entryOwners, side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
     },
-    notAnInstance: () => ({ facts: NO_INSTANCE_FACTS, owners: [], entryOwners: [], side: buildBareSide }),
+    notAnInstance: () => ({ facts: NO_INSTANCE_FACTS, managerRunning: { running: () => Promise.resolve({ kind: 'notRunning' }), message: () => undefined }, owners: [], entryOwners: [], side: buildBareSide }),
   });
 }
 
@@ -407,6 +412,7 @@ function start(context: vscode.ExtensionContext): void {
   const reporterFor = (tag: string) => makeReporter(outputChannel, tag);
   context.subscriptions.push(surfaceRefusedWrites({ reporter: reporterFor('write'), titles: commandTitles(context.extension.packageJSON), redraw: opened.facts.redraw }));
   context.subscriptions.push(surfaceReadModel({ handed: () => meditClient.loadOrdersHanded(), latest: () => meditClient.latestLoadOrder() }));
+  context.subscriptions.push(surfaceManagerRunning({ reporter: reporterFor('write'), ...opened.managerRunning }));
   const plugins = createPlugins({
     client: meditClient, facts: opened.facts, channel: outputChannel, reporterFor,
     registerRepositories: sourceModRepositories.registerRepositories, ask: askQuestion, sourceEditing,

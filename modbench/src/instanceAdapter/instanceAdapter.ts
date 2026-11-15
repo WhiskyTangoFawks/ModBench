@@ -708,6 +708,8 @@ export interface InstanceAdapter extends DataFileReads {
   downloadedFileAt(path: string): Promise<FileRead<DownloadedFile | undefined>>;
   /** Every source mod's folder in the source folder now, a repository or one the instance repository holds, by its name. */
   sourceModFolders(): Promise<ReadonlyMap<string, string>>;
+  /** Whether the mod manager is running at this moment, asked of the platform and never kept from a reading. */
+  managerRunning(): Promise<ManagerRunning>;
   readonly names: ManagerNames;
   /** Each publisher tag the instance's publisher declares. Whenever the publisher's configuration is read or written, each
    *  file Modbench keeps in the instance is in its ignore list, every other entry as written. */
