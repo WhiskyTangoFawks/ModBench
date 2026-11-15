@@ -1,4 +1,4 @@
-import { isMEditGone, type MEditClient, type RecordIndexChange } from './MEditClient';
+import type { MEditClient, RecordIndexChange } from './MEditClient';
 import { EventEmitter, type Disposable } from './eventEmitter';
 import type { LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 
@@ -18,15 +18,7 @@ export function keepRecordIndexChanges(
   client.onNotification('record-filter-cleared', () => { tell(undefined); });
   loadOrder.onSettled(() => { tell(undefined); });
   client.onReconnected(() => { tell(undefined); });
-  let ran = false;
-  let gone = false;
-  client.onStatusChanged((status) => {
-    if (isMEditGone(status)) { gone = true; return; }
-    if (status !== 'running') return;
-    if (ran && gone) tell(undefined);
-    ran = true;
-    gone = false;
-  });
+  client.onStatusChanged((status) => { if (status === 'running') tell(undefined); });
 
   return { onDidChange: changes.event };
 }
