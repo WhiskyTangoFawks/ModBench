@@ -21,7 +21,7 @@ import { pushRefusalWritten } from './mo2Submodules';
 import { get, ignoreSkippedLink, isAbsent, parsedBy, textByStamp, isRepository, listDirByStamp, listEntries, listFolders, readOrAbsent, readOrReason, identityOf, type ResolvedEntry, type SkippedLink, stampByStamp } from '../files';
 import { isOwnTemp } from '../../repositoriesLib/wholeWrites';
 import { anyCase, type DeployedPath, type DownloadedFile, type DownloadedFiles, type GameFolder, type InstanceAdapter, type ManagerNames, type ManagerRunning, type ModFolder, type ModFolders, type ModMeta, type SortingRuleFile } from '../instanceAdapter';
-import { DATA_FOLDER_GLOB, DOWNLOADS_WATCH_GLOB, FIRST_LEVEL, PROFILE_WATCH_PATTERN, profileDir, downloadedFilePath, downloadedFileMetadataPath, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile, sortingRuleFilePaths } from './layout';
+import { DATA_FOLDER_GLOB, DOWNLOADS_WATCH_GLOB, PROFILE_WATCH_PATTERN, profileDir, downloadedFilePath, downloadedFileMetadataPath, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile, sortingRuleFilePaths } from './layout';
 import { fileNamedIn, mo2Archives } from './mo2Archives';
 import type { ReadingSource } from '../instanceReading';
 import type { ConfigurationFile } from '../publisher';
@@ -112,10 +112,6 @@ function watchedProfiles({ instanceRoot, watch }: Mo2Context, profiles: string[]
   return profiles;
 }
 
-const watchModFolders = ({ watch }: Mo2Context, folders: readonly ModFolder[]): void => {
-  watch.follow('modFolders', folders.map((folder) => folder.path), FIRST_LEVEL);
-};
-
 const entriesIfThere = (skippedLink: SkippedLink) => (folder: string): Promise<ResolvedEntry[]> =>
   listEntries(folder, skippedLink).catch((err: unknown) => {
     if (isAbsent(err)) return [];
@@ -192,7 +188,6 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
 
     modFolders: async (skippedLink) => {
       const all = await listModFolders(context, skippedLink);
-      watchModFolders(context, all ?? []);
       return all === undefined ? undefined : modFoldersOf(all);
     },
 
