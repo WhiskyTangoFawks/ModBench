@@ -20,15 +20,21 @@ internal static class Budgets
     /// budget: load from other processes only slows a run, so the minimum is nearest the code's own cost.</summary>
     internal static void Ran(TimeSpan budget, Action gesture, string what, int runs = 1)
     {
+        var fastest = Fastest(gesture, runs);
+        Assert.True(fastest <= budget * Tolerance, $"{Over(budget, what)} It took {fastest.TotalSeconds:F1} s.");
+        Console.WriteLine($"BUDGET {what}: {fastest.TotalSeconds:F2} s");
+    }
+
+    /// <summary>The fastest of <paramref name="runs"/> runs, after one warm-up when there is more than one.</summary>
+    internal static TimeSpan Fastest(Action gesture, int runs = 1)
+    {
         if (runs > 1) gesture();
-        var fastest = Enumerable.Range(0, runs).Min(_ =>
+        return Enumerable.Range(0, runs).Min(_ =>
         {
             var took = Stopwatch.StartNew();
             gesture();
             return took.Elapsed;
         });
-        Assert.True(fastest <= budget * Tolerance, $"{Over(budget, what)} It took {fastest.TotalSeconds:F1} s.");
-        Console.WriteLine($"BUDGET {what}: {fastest.TotalSeconds:F2} s");
     }
 
     private static string Over(TimeSpan budget, string what) =>

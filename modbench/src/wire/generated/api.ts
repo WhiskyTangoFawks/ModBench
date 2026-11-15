@@ -356,6 +356,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins/facts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description GET /plugins for only the plugins named, each by name and origin: the same facts, a cost that follows the plugins named. */
+        post: operations["GetPluginFacts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/diagnoses": {
         parameters: {
             query?: never;
@@ -1796,6 +1813,9 @@ export interface components {
             origin: string;
             text: string;
         };
+        PluginFactsRequest: {
+            plugins: components["schemas"]["PluginAddress"][];
+        };
         /** @enum {string} */
         PluginFileFlagRefusal: "None" | "NotAPlugin" | "UnknownFlag" | "FormIdOutsideFlagLimit";
         PluginFileFlagRefused: {
@@ -3055,6 +3075,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginResponse"][];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetPluginFacts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PluginFactsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginResponse"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Service Unavailable */

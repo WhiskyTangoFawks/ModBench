@@ -9,6 +9,17 @@ describe('InMemoryMEditClient — unscripted queries reject', () => {
   });
 });
 
+describe('InMemoryMEditClient — getPlugins', () => {
+  it('answers only the plugins named, each of the origin asked', async () => {
+    const client = new InMemoryMEditClient();
+    const modA = pluginMetadataFixture({ name: 'Shared.esp', origin: 'ModA' });
+    const modB = pluginMetadataFixture({ name: 'Shared.esp', origin: 'ModB' });
+    client.setQueryAnswer('getPlugins', [modA, modB]);
+
+    await expect(client.getPlugins([{ name: 'Shared.esp', origin: 'ModB' }])).resolves.toEqual([modB]);
+  });
+});
+
 describe('InMemoryMEditClient — a scripted query failure', () => {
   it('answers every call with the scripted failure until re-scripted, an answer alone not clearing a standing failure', async () => {
     const client = new InMemoryMEditClient();

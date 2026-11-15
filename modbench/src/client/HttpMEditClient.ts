@@ -698,7 +698,10 @@ class HttpMEditClient implements MEditClient {
     }
   }
 
-  getPlugins(token?: ReadCancellation): Promise<PluginMetadata[] | ReadFailed> {
+  getPlugins(plugins?: readonly PluginAddress[], token?: ReadCancellation): Promise<PluginMetadata[] | ReadFailed> {
+    if (plugins) {
+      return this.read('POST /plugins/facts', (api, signal) => api.POST('/plugins/facts', { body: { plugins: [...plugins] }, signal }), (data) => data ?? [], { token });
+    }
     return this.read('GET /plugins', (api, signal) => api.GET('/plugins', { signal }), (data) => data ?? [], { token });
   }
 
