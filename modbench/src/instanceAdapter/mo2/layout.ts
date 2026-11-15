@@ -185,7 +185,8 @@ export const instanceWatches = (instanceRoot: string): readonly WatchedFolder[] 
   { base: profilesDir(instanceRoot), pattern: FIRST_LEVEL },
   { base: overwriteDir(instanceRoot), pattern: EVERYTHING_BELOW },
   { base: sourceRootDir(instanceRoot), pattern: EVERYTHING_BELOW },
-  // Git init's push check, and what decides the folders git holds whole. The git directory is followed once read.
+  // Git init's path filter and push check, and what decides the folders git holds whole.
+  { base: join(instanceRoot, GIT_DIR), pattern: '{config,index}' },
   { base: join(instanceRoot, GIT_DIR, 'hooks'), pattern: 'pre-push' },
   { base: join(instanceRoot, GIT_DIR, 'info'), pattern: 'exclude' },
 ];

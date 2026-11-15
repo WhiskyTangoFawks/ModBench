@@ -89,7 +89,7 @@ describe('what git answers from the index and .gitmodules, kept while both keep 
     expect(await kept(linked, 'answer', read)).toBe(2);
   });
 
-  it('trusts within a reading the index no change named, a linked worktree\'s in its git directory too', async () => {
+  it('trusts within a reading the index a change named, and stamps afresh a linked worktree\'s, which no watch follows', async () => {
     const linked = join(root, 'linked');
     git(root, 'worktree', 'add', '-q', '-b', 'side', linked);
     const [gitDir] = execFileSync('git', ['-C', linked, 'rev-parse', '--absolute-git-dir'], { encoding: 'utf8' }).split('\n');
@@ -99,7 +99,7 @@ describe('what git answers from the index and .gitmodules, kept while both keep 
     await modifiedLater(join(root, '.git', 'index'));
     await modifiedLater(join(gitDir ?? '', 'index'));
 
-    expect([await inReading(root), await inReading(linked)]).toEqual([1, 2]);
+    expect([await inReading(root), await inReading(linked)]).toEqual([1, 3]);
   });
 
   it('keeps no answer whose read rejected', async () => {

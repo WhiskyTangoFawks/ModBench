@@ -31,7 +31,6 @@ import { sourceModFoldersIn } from './sourceModFolders';
 import { errorMessage } from '../../ports/errorMessage';
 import { errnoCode } from '../../ports/errno';
 import { holdsPathToken } from '../pathTokens';
-import { gitDirOf } from '../git';
 
 /** The names of the downloaded files in `downloadsDir`; undefined when it is absent. */
 export async function downloadedFileNames(downloadsDir: string, skippedLink: SkippedLink): Promise<string[] | undefined> {
@@ -151,12 +150,6 @@ const creationClubListOf = (context: Mo2Context, deployedPath: DeployedPath): Re
     return list === undefined ? [] : readCreationClubList(list);
   };
 
-async function holdsRepositoryFollowed({ instanceRoot, watch }: Mo2Context): Promise<boolean> {
-  const holds = await isRepository(instanceRoot);
-  watch.follow('gitDirectory', holds ? [await gitDirOf(instanceRoot)] : [], FIRST_LEVEL);
-  return holds;
-}
-
 export function readingSource(context: Mo2Context, publisherFile: ConfigurationFile | undefined, deployedPath: DeployedPath): ReadingSource {
   const { instanceRoot, resolveGameFolder, resolveDownloadsFolder, watch, mo2Running } = context;
   const originFilesOf = originFilesReader(context);
@@ -226,8 +219,8 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
       return { masterlist, prelude, userlist };
     },
 
-    holdsRepository: () => holdsRepositoryFollowed(context),
-    repositorySetUp: async () => await isRepository(instanceRoot) && await pushRefusalWritten(instanceRoot) && await pathTokensWritten(instanceRoot, publisherFile),
+    holdsRepository: () => isRepository(instanceRoot),
+    repositorySetUp: async () => await isRepository(instanceRoot) && await pushRefusalWritten(context) && await pathTokensWritten(context, publisherFile),
     unwatchedFolders: () => watch.unwatchedFolders(),
     managerRunning: () => mo2Running().then(
       (running): ManagerRunning => ({ kind: running ? 'running' : 'notRunning' }),

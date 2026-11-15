@@ -12,6 +12,7 @@ import type { FileOrigin } from '../instanceAdapter';
 import { entryDir, mo2FolderName, modDir, modsDir, overwriteDir, settingsFile } from './layout';
 import type { MyGamesResolver } from '../gameFolder/myGames';
 import type { Mo2Watch } from './mo2Watch';
+import type { RepositoryReads } from '../repositoryReads';
 
 export interface Mo2Context {
   readonly instanceRoot: string;
@@ -20,6 +21,7 @@ export interface Mo2Context {
   readonly resolveDownloadsFolder: DownloadsDirectoryResolver;
   readonly resolveMyGames: MyGamesResolver;
   readonly watch: Mo2Watch;
+  readonly repository: RepositoryReads;
   readonly mo2Running: () => Promise<boolean>;
 }
 

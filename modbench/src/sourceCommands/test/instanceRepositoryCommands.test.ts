@@ -5,7 +5,7 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { fakeInstanceAdapter, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { instanceRepositoryCommands } from '../instanceRepositoryCommands';
 import type { HostGit } from '../../ports/repository';
-import { hostGitFailingToActivate, hostGitRecordingInits } from './hostGitDouble';
+import { hostGitFailingToActivate, hostGitRecordingInits } from '../../test/hostGitDouble';
 import { answeringFrom, nexusAnswering } from '../../nexus/test/nexusDouble';
 
 function commandsOver(answers: InstanceAnswers = {}, hostGit?: HostGit<string>) {

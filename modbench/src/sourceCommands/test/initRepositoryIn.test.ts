@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { initRepositoryIn } from '../initRepositoryIn';
-import { hostGitRecordingInits, hostWithoutGit } from './hostGitDouble';
+import { hostGitRecordingInits, hostWithoutGit } from '../../test/hostGitDouble';
 
 describe('initRepositoryIn', () => {
   it('asks VS Code\'s git to make the folder a repository', async () => {
