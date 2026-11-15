@@ -54,8 +54,7 @@ public sealed class DecompileAndRepairPluginHandler
         var heldByANewSourceFolder = new HashSet<PluginAddress>(PluginAddress.Comparer);
         var repaired = await ItemWrite.OverAsync(_source, plugins, SamePlugin.Instance, DecompileAndRepairRefusal.GitUnavailable, item =>
             RepairOneAsync(loadOrder, item, targets[item.Plugin], repairedHere, (leftOutOfANewSourceFolder, heldByANewSourceFolder), force));
-        IEnumerable<PluginAddress> written = [.. repaired.Landed.Select(landed => landed.Item.Plugin), .. heldByANewSourceFolder];
-        await _index.Held([.. written.Distinct(PluginAddress.Comparer).Select(HandedPlugin.ReadBack)], _logger, cancel);
+        await _index.ReadBack([.. repaired.Landed.Select(landed => landed.Item.Plugin), .. heldByANewSourceFolder], _logger, cancel);
         return repaired.ToAnswer(
             landed => landed.Item.Plugin,
             refused => Explained(refused, leftOutOfANewSourceFolder, heldByANewSourceFolder),

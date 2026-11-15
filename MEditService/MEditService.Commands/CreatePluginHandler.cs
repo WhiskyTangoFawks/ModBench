@@ -54,7 +54,7 @@ public sealed class CreatePluginHandler
         LoadOrderSnapshot loadOrder, PluginAddress address, string folder, string? sourceFolder, string written, CancellationToken cancel)
     {
         var landed = await LandSourceIfCompiledPlugin(loadOrder, address, folder, sourceFolder, written);
-        if (landed.Holds(out _, out _)) await _index.Held([HandedPlugin.ReadBack(address)], _logger, cancel);
+        if (landed.Holds(out _, out _)) await _index.ReadBack([address], _logger, cancel);
         return landed;
     }
 

@@ -17,9 +17,11 @@ public sealed class WriteWaitsApiTests : HostedTests
 
     private readonly TaskCompletionSource<CancellationToken> _writerAwaits = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource<string?> _indexReads = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private volatile bool _setUp;
 
     protected override MEditHost CreateHost() => new(services => AwaitingQueries.Replace(services, (_, cancel) =>
     {
+        if (!_setUp) return Task.FromResult<string?>(null);
         _writerAwaits.TrySetResult(cancel);
         return _indexReads.Task.WaitAsync(cancel);
     }));
@@ -32,7 +34,16 @@ public sealed class WriteWaitsApiTests : HostedTests
             .BuildScattered());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         if (versioned) (await Client.VersionInGit([Origin, OtherOrigin])).EnsureSuccessStatusCode();
+        _setUp = true;
         return fx;
+    }
+
+    [Fact]
+    public async Task AVersionInGit_Answers_OnlyOnceTheRecordIndexHasReadIt()
+    {
+        await Loaded(versioned: false);
+
+        await AssertTheWriteWaitsForTheIndex(Client.VersionInGit([Origin]));
     }
 
     private async Task AssertTheWriteWaitsForTheIndex(Task<HttpResponseMessage> gesture)
@@ -138,6 +149,7 @@ public sealed class WriteWaitsApiTests : HostedTests
         using var fx = new PluginFixtureBuilder("api-write-waits-repair").WithPlugin(malformed.FileName, origin: "RepairedMod").BuildScattered();
         File.WriteAllBytes(Path.Combine(OtherTool.ModFolderOf(fx, "RepairedMod"), malformed.FileName), malformed.Bytes);
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        _setUp = true;
         var repair = new
         {
             plugin = new { name = malformed.FileName, origin = "RepairedMod" },

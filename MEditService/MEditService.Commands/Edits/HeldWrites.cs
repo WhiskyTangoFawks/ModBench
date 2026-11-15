@@ -1,3 +1,4 @@
+using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using Microsoft.Extensions.Logging;
 
@@ -13,4 +14,8 @@ internal static class HeldWrites
         if (await index.Hold(written, cancel).ConfigureAwait(false) is { } unread)
             logger.LogWarning("A write landed that the record index has not read: {Message}", unread);
     }
+
+    /// <summary>As <see cref="Held"/>, for a write that cannot know its rows, so each plugin is read back whole.</summary>
+    internal static Task ReadBack(this IQueries index, IEnumerable<PluginAddress> written, ILogger logger, CancellationToken cancel) =>
+        index.Held([.. written.Distinct(PluginAddress.Comparer).Select(HandedPlugin.ReadBack)], logger, cancel);
 }

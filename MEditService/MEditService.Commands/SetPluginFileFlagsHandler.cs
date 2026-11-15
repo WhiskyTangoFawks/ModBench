@@ -67,18 +67,18 @@ public sealed class SetPluginFileFlagsHandler
             else refused.Add(new PluginFileFlagRefused(file.Path, RefusalOf(failure), failure.Reason));
         }
 
-        await _index.Held(PluginsWritten(applied.Select(set => set.Path)), _logger, cancel);
+        await _index.ReadBack(PluginsWritten(applied.Select(set => set.Path)), _logger, cancel);
         return new SetPluginFileFlagsResult(applied, refused);
     }
 
     // The record index holds nothing of a file no plugin of the load order is, so a write to one has nothing to be read.
-    private List<HandedPlugin> PluginsWritten(IEnumerable<string> paths)
+    private List<PluginAddress> PluginsWritten(IEnumerable<string> paths)
     {
         var held = _loadOrder.Current.Plugins;
         return [.. paths
             .Select(path => held.FirstOrDefault(plugin => string.Equals(plugin.Path, path, StringComparison.OrdinalIgnoreCase)))
             .OfType<RegisteredPlugin>()
-            .Select(plugin => HandedPlugin.ReadBack(plugin.Key))];
+            .Select(plugin => plugin.Key)];
     }
 
     private static PluginFileFlagRefusal RefusalOf(PluginFailure failure) =>

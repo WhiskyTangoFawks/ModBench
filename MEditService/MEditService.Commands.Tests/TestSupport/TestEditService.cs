@@ -57,8 +57,8 @@ internal static class TestEditService
 
     internal static VersionInGitHandler VersionInGitHandler(
         LoadOrderHolder holder, IPluginAdapter? adapter = null, INotificationPublisher? notifications = null,
-        ISourceAdapter? source = null) =>
-        Over(holder, adapter: adapter, notifications: notifications, source: source).GetRequiredService<VersionInGitHandler>();
+        ISourceAdapter? source = null, IQueries? index = null) =>
+        Over(holder, adapter: adapter, notifications: notifications, source: source, index: index).GetRequiredService<VersionInGitHandler>();
 
     internal static BuildModHandler BuildModHandler(
         LoadOrderHolder holder, ISourceAdapter? source = null, IModFolderRepository? modFolders = null, IQueries? index = null) =>

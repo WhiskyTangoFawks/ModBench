@@ -34,7 +34,7 @@ public sealed class DecompilePluginHandler
 
         var decompiled = await ItemWrite.OverAsync(
             _source, plugins, PluginAddress.Comparer, DecompileRefusal.GitUnavailable, plugin => DecompileOneAsync(loadOrder, plugin, force));
-        await _index.Held([.. decompiled.Landed.Select(landed => HandedPlugin.ReadBack(landed.Item))], _logger, cancel);
+        await _index.ReadBack(decompiled.Landed.Select(landed => landed.Item), _logger, cancel);
         return decompiled.ToAnswer(
             landed => landed.Item,
             refused => new DecompileRefused(refused.Item, refused.Refusal, refused.Message),

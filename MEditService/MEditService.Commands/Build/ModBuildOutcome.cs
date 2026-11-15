@@ -72,6 +72,9 @@ internal sealed record ModBuildOutcome(
 
     public IReadOnlyList<ReplacedTree> Replaced { get; init; } = [];
 
+    /// <summary>Each plugin whose plugin source a decompile wrote, a stopped one's included.</summary>
+    public IReadOnlyList<PluginAddress> Decompiled { get; init; } = [];
+
     /// <summary>Each file a step would have made at a path the manifest ignores, by its path in the folder.</summary>
     public IReadOnlyList<string> Ignored { get; init; } = [];
 

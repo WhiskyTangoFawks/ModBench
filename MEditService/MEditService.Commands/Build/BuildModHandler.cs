@@ -1,8 +1,10 @@
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.RecordIndex.Queries;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
+using Microsoft.Extensions.Logging;
 
 namespace MEditService.Commands.Build;
 
@@ -11,15 +13,17 @@ namespace MEditService.Commands.Build;
 public sealed class BuildModHandler
 {
     private readonly SourceModBuild _build;
-    private readonly CompilePluginHandler _compile;
     private readonly LoadOrderHolder _loadOrder;
     private readonly ISourceAdapter _source;
     private readonly INotificationPublisher _notifications;
+    private readonly IQueries _index;
+    private readonly ILogger _logger;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
     internal BuildModHandler(
-        SourceModBuild build, CompilePluginHandler compile, LoadOrderHolder loadOrder, ISourceAdapter source, INotificationPublisher notifications) =>
-        (_build, _compile, _loadOrder, _source, _notifications) = (build, compile, loadOrder, source, notifications);
+        SourceModBuild build, LoadOrderHolder loadOrder, ISourceAdapter source, INotificationPublisher notifications, IQueries index,
+        ILogger<BuildModHandler> logger) =>
+        (_build, _loadOrder, _source, _notifications, _index, _logger) = (build, loadOrder, source, notifications, index, logger);
 
     /// <summary>Each mod's step runs against the held load order. Refuses the whole selection, writing nothing, when no load
     /// order is held or git cannot run. <paramref name="cancel"/> stops the wait, not the writes.</summary>
@@ -34,7 +38,8 @@ public sealed class BuildModHandler
         var built = await ModByMod.OverAsync(
             mods, mod => mod.Name, progress => _notifications.Publish(new BuildProgressNotification(progress)),
             (mod, _) => _build.BuildAsync(mod, instance), CancellationToken.None);
-        await _compile.ReadBack(built.Landed.SelectMany(mod => mod.Outcome.Compiled), cancel);
+        await _index.ReadBack(
+            built.Landed.SelectMany(mod => mod.Outcome.Compiled.Select(compiled => compiled.Item).Concat(mod.Outcome.Decompiled)), _logger, cancel);
         return built.ToResult(
             landed => ModBuiltOf(landed.Item, landed.Outcome),
             refused => new BuildRefused(refused.Item, refused.Refusal, refused.Message),

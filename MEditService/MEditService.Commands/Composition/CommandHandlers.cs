@@ -117,6 +117,7 @@ public static class CommandHandlers
             sp.GetRequiredService<IModFolderRepository>(),
             sp.GetRequiredService<INotificationPublisher>(),
             sp.GetRequiredService<SchemaReflector>(),
+            sp.GetRequiredService<IQueries>(),
             sp.GetRequiredService<ILogger<VersionInGitHandler>>()));
 
         services.AddSingleton(sp => new DecompilePluginHandler(
@@ -167,10 +168,11 @@ public static class CommandHandlers
 
         services.AddSingleton(sp => new BuildModHandler(
             sp.GetRequiredService<SourceModBuild>(),
-            sp.GetRequiredService<CompilePluginHandler>(),
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<ISourceAdapter>(),
-            sp.GetRequiredService<INotificationPublisher>()));
+            sp.GetRequiredService<INotificationPublisher>(),
+            sp.GetRequiredService<IQueries>(),
+            sp.GetRequiredService<ILogger<BuildModHandler>>()));
 
         services.AddSingleton(sp => new CloneSubmodulesHandler(sp.GetRequiredService<ISourceAdapter>()));
 

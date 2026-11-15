@@ -79,7 +79,8 @@ internal static class ModEndpoints
     }
 
     // version-in-git: the selection (commands.md, A selection is one gesture); the load order says each mod's plugins and folder.
-    internal static async Task<IResult> VersionInGit(VersionInGitRequest req, VersionInGitHandler versionInGitHandler, ILoggerFactory loggerFactory)
+    internal static async Task<IResult> VersionInGit(
+        VersionInGitRequest req, VersionInGitHandler versionInGitHandler, ILoggerFactory loggerFactory, CancellationToken cancel)
     {
         var logger = loggerFactory.CreateLogger(nameof(ModEndpoints));
         var mods = req.Mods ?? [];
@@ -97,7 +98,7 @@ internal static class ModEndpoints
             return EndpointMapping.BadRequest(SourceFolderRequest.ManifestFileIsAPath);
         List<ModToVersionInGit> toVersion = [.. mods.Select(mod => new ModToVersionInGit(mod.Name, mod.ModFolder, mod.SourceFolder.ToSourceFolderContents(), mod.Commit == true))];
 
-        return await EndpointMapping.Answered("Version in git", logger, versionInGitHandler.VersionInGitAsync(toVersion), EndpointMapping.Refusal);
+        return await EndpointMapping.Answered("Version in git", logger, versionInGitHandler.VersionInGitAsync(toVersion, cancel), EndpointMapping.Refusal);
     }
 
     // build-mod: the selection (commands.md, A selection is one gesture).
