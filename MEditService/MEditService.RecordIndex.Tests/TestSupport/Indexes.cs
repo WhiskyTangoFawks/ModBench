@@ -120,6 +120,18 @@ internal static class Indexes
         Waits.Reached(() => index.Status.State != LoadOrderState.Reconciling, "the check's status");
     }
 
+    /// <summary>Checks the disk until the index is Ready and <paramref name="recovered"/> holds: after a fatal error the
+    /// next check reopens the store (ADR-0003).</summary>
+    internal static void Recovered(this OpenedIndex index, Func<bool> recovered, string what) =>
+        Waits.Reached(() =>
+        {
+            var status = index.Status;
+            if (status.Validating || status.State == LoadOrderState.Reconciling) return false;
+            if (status.State == LoadOrderState.Ready && recovered()) return true;
+            index.SignalChange();
+            return false;
+        }, what);
+
     /// <summary>A change signalled, answered once the rows it changed are announced as the sequence moving, which a
     /// projection does after it has re-applied the filter.</summary>
     internal static void NextCheck(this OpenedIndex index)

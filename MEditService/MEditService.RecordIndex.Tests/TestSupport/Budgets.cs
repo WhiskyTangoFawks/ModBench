@@ -11,8 +11,9 @@ internal static class Budgets
     internal static void Reached(TimeSpan budget, Func<bool> reached, string what)
     {
         var took = Stopwatch.StartNew();
-        Assert.True(Waits.ReachedWithin(reached, budget * Tolerance), Over(budget, what));
+        var landed = Waits.ReachedWithin(reached, budget * Tolerance);
         Console.WriteLine($"BUDGET {what}: {took.Elapsed.TotalSeconds:F2} s");
+        Assert.True(landed, Over(budget, what));
     }
 
     /// <summary>Runs the gesture once, or after one warm-up <paramref name="runs"/> times and holds the fastest to the

@@ -806,8 +806,8 @@ internal sealed class Store : IDisposable
         first?.Throw();
     }
 
-    // A plain CHECKPOINT fails while a transaction is open where FORCE waits for it (DuckDB 1.4), so the debt
-    // is only paid with no read open, and the end of the last read asks again.
+    // DuckDB's own checkpoint leaves a plugin's index nodes in memory (IngestRetentionTests). A plain CHECKPOINT
+    // fails while a transaction is open where FORCE waits for it (DuckDB 1.4): it is paid with no read open.
     private void RequestCheckpoint()
     {
         if (CheckpointDue()) Task.Run(PayCheckpoint);

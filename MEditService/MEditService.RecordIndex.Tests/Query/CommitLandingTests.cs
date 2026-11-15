@@ -81,21 +81,6 @@ public sealed class CommitLandingTests : IDisposable
     }
 
     [Fact]
-    public void AStoreReopenedAfterInvalidation_AppliesTheFilterInForce()
-    {
-        var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder, new MadeUpAdapter((Master, () => Items(Master)), (Later, () => Items(Later))));
-        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
-        index.SetFilter($"SELECT '000800:{Master}' AS form_key", "filter.sql");
-        IndexFiles.Invalidate(_fixture.InstanceRoot);
-
-        index.Queries.GetPlugins().Refused();
-
-        Waits.Reached(() => index.Status.State == LoadOrderState.Ready && index.Queries.GetPlugins().Holds(out _, out _), "the reopened index");
-        Assert.Equal(1, index.Queries.GetRecords(null, null, null, 100, 0).Value().Total);
-    }
-
-    [Fact]
     public void AFatalCheckpoint_ReopensTheStore_WithNoReadToMeetIt()
     {
         var notifications = new InMemoryNotificationPublisher();

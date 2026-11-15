@@ -159,7 +159,7 @@ public sealed class ReconcileDoorTests
     }
 
     [Fact]
-    public void APluginReadAgain_IsListed_ThoughTheValidationFailsAtTheNextPlugin()
+    public void APluginReadAgain_IsListed_ThoughTheIndexFileIsInvalidatedAtTheNextPlugin()
     {
         using var data = new PluginFixtureBuilder("landed-before-throw-door")
             .WithPlugin("B.esp", mod =>
@@ -183,8 +183,7 @@ public sealed class ReconcileDoorTests
 
         index.Receive(holder, SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
 
-        Assert.Equal(LoadOrderState.Failed, index.Status.State);
-        Assert.Contains(B, index.Status.IndexedPlugins);
+        index.Recovered(() => index.Status.IndexedPlugins.Contains(B), "the plugin read again listed");
         Assert.Equal(2, index.CountOf(B, "npc_"));
     }
 

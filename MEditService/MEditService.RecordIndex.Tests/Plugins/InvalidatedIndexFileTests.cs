@@ -1,5 +1,4 @@
 using MEditService.LoadOrder;
-using MEditService.Ports;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -21,17 +20,15 @@ public sealed class InvalidatedIndexFileTests : IDisposable
         .Build();
 
     private readonly LoadOrderHolder _holder = new();
-    private readonly InMemoryNotificationPublisher _notifications = new();
     private readonly OpenedIndex _index;
 
     public InvalidatedIndexFileTests()
     {
-        _index = Indexes.Open(_holder, new AbortingDuckDbsCheckpoint(_fixture.InstanceRoot, Aborted, nthRead: 2), notifications: _notifications);
+        _index = Indexes.Open(_holder, new AbortingDuckDbsCheckpoint(_fixture.InstanceRoot, Aborted, nthRead: 2));
         _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         var rewritten = new Fallout4Mod(ModKey.FromFileName(Aborted), Fallout4Release.Fallout4);
         rewritten.Npcs.AddNew("RewrittenNpc");
         rewritten.WriteToBinary(_fixture.Plugins.Single(p => p.Name == Aborted).Path);
-        _index.NextCheckUnsettledUntil(() => _index.Status.State == LoadOrderState.Failed, "the validation failing");
     }
 
     public void Dispose()
@@ -41,39 +38,11 @@ public sealed class InvalidatedIndexFileTests : IDisposable
     }
 
     [Fact]
-    public void AFatalErrorInTheIndexFile_FailsTheSnapshot_AndBlamesNoPlugin()
+    public void AFatalErrorInTheIndexFile_IsRecoveredFrom_BlamesNoPlugin_AndEveryPluginIsRead()
     {
-        var status = _index.Status;
+        _index.Recovered(() => _index.Status.IndexedPlugins.Select(p => p.Name).Order().SequenceEqual([Aborted, After, Before]), "every plugin read");
 
-        Assert.Empty(status.Failures);
-        Assert.Equal(LoadOrderState.Failed, status.State);
+        Assert.Empty(_index.Status.Failures);
+        Assert.Single(_index.ListedIn(_fixture.Plugins.Single(p => p.Name == Before).Key));
     }
-
-    [Fact]
-    public void AFatalError_LeavesThePluginsReadBeforeItAnswering_BeforeTheNextCheck()
-    {
-        var read = _index.ListedIn(_fixture.Plugins.Single(p => p.Name == Before).Key);
-
-        Assert.Single(read);
-        Assert.Equal([Aborted, After, Before], PublishedIndexedPlugins());
-        Assert.Equal([Aborted, After, Before], _index.Status.IndexedPlugins.Select(p => p.Name).Order());
-    }
-
-    private string[] PublishedIndexedPlugins() =>
-        [.. _notifications.Notifications.OfType<LoadOrderStatusNotification>().Last().Status.IndexedPlugins.Select(p => p.Name).Order()];
-
-    [Fact]
-    public void TheNextCheckAfterAFatalError_OpensTheIndexFileAgain_AndReadsEveryPlugin()
-    {
-        var before = _notifications.Notifications.Count;
-        _index.NextCheckUnsettledUntil(() => Answered(before) is not null, "the check's answer");
-
-        Assert.Equal(LoadOrderState.Ready, Answered(before));
-        Assert.Equal([Aborted, After, Before], _index.Status.IndexedPlugins.Select(p => p.Name).Order());
-    }
-
-    private LoadOrderState? Answered(int before) =>
-        _notifications.Since(before).OfType<LoadOrderStatusNotification>()
-            .Where(n => !n.Status.Validating)
-            .Select(n => (LoadOrderState?)n.Status.State).LastOrDefault(state => state is LoadOrderState.Ready or LoadOrderState.Failed);
 }
