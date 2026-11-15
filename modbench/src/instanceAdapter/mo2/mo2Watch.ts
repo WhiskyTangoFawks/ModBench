@@ -1,13 +1,21 @@
 // MO2's watch: the instance's files as deep as they change, the downloads folder and the game folder's files Mod
 // Management reads, armed through VS Code's file watcher while anyone listens, and the game-folder setting.
 
+import { basename } from 'node:path';
 import { heldFolderWatchFor, type HeldFolderWatch } from '../heldFolders';
 import { watchFiles } from '../watchFiles';
 import { outsideTrustedRead } from '../files';
 import type { ChangeListener, Subscription, UnwatchedFolder } from '../instanceAdapter';
 import { instanceWatches, sourceRootDir } from './layout';
 
-type FollowedFolder = 'downloadedFiles' | 'dataFolder' | 'programs' | 'creationClubList' | 'defaultIni' | 'myGamesInis' | 'gameFolderArchives' | 'modFolders' | 'profileFolders';
+type FollowedFolder = 'downloadedFiles' | 'dataFolder' | 'programs' | 'creationClubList' | 'defaultIni' | 'myGamesInis' | 'gameFolderArchives' | 'modFolders' | 'profileFolders' | 'gitDirectory';
+
+// VS Code's git extension hears its git directory's first level but for index.lock and watchman's cookies
+// (extensions/git/src/repository.ts, DotGitWatcher).
+const isGitDirectoryChange = (path: string): boolean => {
+  const name = basename(path);
+  return name !== 'index.lock' && !name.startsWith('.watchman-cookie-');
+};
 
 // A repository's change is its working tree and its refs, never git's own bookkeeping.
 function isRepositoryChange(path: string): boolean {
@@ -44,17 +52,20 @@ export function mo2Watch(instanceRoot: string, gameFolderChanged: (listener: () 
     for (const listener of [...listeners]) listener(path);
   };
   const checkDue = (): void => { changed(undefined); };
-  const onSourceChange = (path: string): void => {
-    if (isRepositoryChange(path)) changed(path);
+  const changedWhere = (heard: (path: string) => boolean) => (path: string): void => {
+    if (heard(path)) changed(path);
   };
+  const onSourceChange = changedWhere(isRepositoryChange);
+  const onGitDirectoryChange = changedWhere(isGitDirectoryChange);
   const onChangeFor = (base: string): ((path: string) => void) => (base === sources ? onSourceChange : changed);
+  const onFollowedChange = (what: FollowedFolder): ((path: string) => void) => (what === 'gitDirectory' ? onGitDirectoryChange : changed);
   const heldKey = (base: string, glob: string): string => `${base}\0${glob}`;
-  const heldFor = (base: string, glob: string): HeldFolderWatch | undefined => {
+  const heldFor = (base: string, glob: string, onChange: (path: string) => void): HeldFolderWatch | undefined => {
     const key = heldKey(base, glob);
-    if (!held.has(key)) held.set(key, heldFolderWatchFor(glob, { onChange: onChangeFor(base), holds: isRepositoryChange, onFailure: checkDue }));
+    if (!held.has(key)) held.set(key, heldFolderWatchFor(glob, { onChange, holds: isRepositoryChange, onFailure: checkDue }));
     return held.get(key);
   };
-  const watch = (base: string, glob: string): Subscription => watchFiles(base, glob, onChangeFor(base), heldFor(base, glob));
+  const watch = (base: string, glob: string, onChange = onChangeFor(base)): Subscription => watchFiles(base, glob, onChange, heldFor(base, glob, onChange));
   const armed = (): boolean => listeners.size > 0;
   const rearmed = ({ glob, watches }: Followed, arming: (base: string) => Subscription | undefined): Followed => {
     for (const watching of watches.values()) watching?.dispose();
@@ -64,7 +75,7 @@ export function mo2Watch(instanceRoot: string, gameFolderChanged: (listener: () 
   const arm = (): void => {
     fixed = instanceWatches(instanceRoot).map(({ base, pattern }) => watch(base, pattern));
     fixed.push(gameFolderChanged(checkDue));
-    for (const [what, folders] of followed) followed.set(what, rearmed(folders, (base) => watch(base, folders.glob)));
+    for (const [what, folders] of followed) followed.set(what, rearmed(folders, (base) => watch(base, folders.glob, onFollowedChange(what))));
   };
   const disarm = (): void => {
     for (const subscription of fixed) subscription.dispose();
@@ -96,7 +107,7 @@ export function mo2Watch(instanceRoot: string, gameFolderChanged: (listener: () 
         }
       }
       const added = bases.filter((base) => !watches.has(base));
-      for (const base of added) watches.set(base, armed() ? watch(base, glob) : undefined);
+      for (const base of added) watches.set(base, armed() ? watch(base, glob, onFollowedChange(what)) : undefined);
       followed.set(what, { glob, watches });
       if (added.length > 0 && armed()) checkDue();
     }),

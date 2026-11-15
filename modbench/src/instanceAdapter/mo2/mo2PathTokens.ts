@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { errnoCode } from '../../ports/errno';
 import { exists, get, isRepository, makeTempDir, putIfChanged, readOrAbsent, remove, textByStamp, undoAll, withLock, write, type Undo } from '../files';
-import { git, gitFed, gitWritingInto } from '../git';
+import { git, gitFed, gitKept, gitWritingInto } from '../git';
 import type { FileProblems } from '../../ports/fileProblems';
 import { unfilteredFiles } from '../unfilteredFiles';
 import type { GameFolder, InstanceAdapter } from '../instanceAdapter';
@@ -172,7 +172,7 @@ async function statsForgotten(instanceRoot: string, files: readonly string[]): P
 }
 
 const filterConfigured = (instanceRoot: string, driver: string): Promise<boolean> =>
-  git(instanceRoot, 'config', '--get', `filter.${driver}.clean`).then((value) => value.trim() !== '', () => false);
+  gitKept(instanceRoot, 'config', '--get', `filter.${driver}.clean`).then((value) => value.trim() !== '', () => false);
 
 const filesNotWritten = async (instanceRoot: string, covered: readonly CoveredFile[]): Promise<CoveredFile[]> => {
   const written = await Promise.all(covered.map(({ driver }) => filterConfigured(instanceRoot, driver)));
@@ -181,7 +181,7 @@ const filesNotWritten = async (instanceRoot: string, covered: readonly CoveredFi
 
 // Every worktree of the repository shares its config and attributes, so the programs sit in the common git directory.
 const programDirectory = async (instanceRoot: string): Promise<string> =>
-  join(resolve(instanceRoot, (await git(instanceRoot, 'rev-parse', '--git-common-dir')).trim()), 'modbench');
+  join(resolve(instanceRoot, (await gitKept(instanceRoot, 'rev-parse', '--git-common-dir')).trim()), 'modbench');
 
 type FilterFolders = Omit<TokenFolders, 'instance'>;
 const NO_FOLDERS: FilterFolders = { game: undefined, downloads: undefined, committedOutsideInstance: [] };
