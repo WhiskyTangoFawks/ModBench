@@ -46,7 +46,7 @@ export interface RouteRecordPanelMessageDeps {
   documentText: (pluginActive: boolean) => Promise<string | undefined>;
   // The panel's read of `formKey` is answered, and the webview shows that record from then on.
   readAnswered: (formKey: string, columns: readonly RecordCopy[]) => void;
-  // A refusal for want of a load order is not read yet while none of the panel's reads has landed and one is on its way.
+  // A refusal for want of a load order is not read yet while one is on its way.
   loadOrderComing: () => boolean;
   // The grid's place, which the tab an edit's move of the file opens shows again.
   keepViewState: (state: ViewState) => void;
