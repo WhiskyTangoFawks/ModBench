@@ -12,7 +12,7 @@ import { surfaceReadModel, surfaceRefusedWrites } from './drivingLib/writingGest
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
 import { ambientWrites } from './instanceLoader/ambientWrites';
-import { leaveWritesUnnamed, writesNamedTo } from './repositoriesLib/writeNaming';
+import { leaveWritesUnnamed, writesNamedTo, writesToldTo } from './repositoriesLib/writeNaming';
 import { highlightFollowingFocus } from './drivingLib/highlightFollowsFocus';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, loadOrderComing, sourceModRepositoriesOver } from './editor';
@@ -209,6 +209,7 @@ function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, 
       const instance = own(new Instance({
         adapter, gameFolderSettingId: gameFolderSetting.id, log: outputChannel, medit, workspace: workspaceFolders,
       }));
+      writesToldTo(instance);
       const owners = [adapter.pluginReferences, manifestFileReferences({
         sourceFolders: () => instance.value.paths.sourceDirs,
         modFolderOf: (mod) => adapter.modFolderPath(mod),

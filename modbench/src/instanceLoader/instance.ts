@@ -39,13 +39,18 @@ interface Run {
   tellsUnheard: boolean;
   fromEvents: boolean;
   readonly settled: Promise<void>;
+  /** Settles when the read has landed, before its subscribers have. */
+  readonly held: Promise<void>;
+  hold(): void;
   land(settled: Promise<void>): void;
 }
 
 function nextRun(): Run {
   let land!: (settled: Promise<void>) => void;
+  let hold!: () => void;
   const settled = new Promise<void>((resolve) => { land = resolve; });
-  return { named: new Set(), disk: false, tellsUnheard: false, fromEvents: false, settled, land };
+  const held = new Promise<void>((resolve) => { hold = resolve; });
+  return { named: new Set(), disk: false, tellsUnheard: false, fromEvents: false, settled, held, hold, land };
 }
 
 type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'dataFolderFiles' | 'gameArchives' | 'archives' | 'archiveContents' | 'listingNotes' | 'managerRunning' | 'publisherConfiguration' | 'programVersions';
@@ -337,7 +342,7 @@ export class Instance implements Subscription {
   private readonly stopHearingMEditStatus: () => void;
 
   // A note is one Output line until its text changes or it clears.
-  private readonly told = new Map<NoteKind, ReadonlySet<string>>();
+  private readonly notesTold = new Map<NoteKind, ReadonlySet<string>>();
   private readonly facts: FactsOfReading;
 
   constructor(private readonly options: InstanceOptions) {
@@ -442,6 +447,12 @@ export class Instance implements Subscription {
     return this.enqueue({ named: wrote, disk: wrote === undefined, tellsUnheard: false });
   }
 
+  /** Answers once the value holds the files a write just wrote, without waiting for the subscribers: a subscriber may be
+   *  the writer's own caller, holding a lock the write took. */
+  told(wrote: readonly string[]): Promise<void> {
+    return this.enqueue({ named: wrote, disk: false, tellsUnheard: false }, 'held');
+  }
+
   /** Runs `work`, a write to several files the value reads, then refreshes at the files `work` names. A read that overlapped
    *  it never lands: it may hold some files from before the write and some after. */
   async quiet<T>(work: (written: WrittenFiles) => Promise<T>): Promise<T> {
@@ -499,9 +510,9 @@ export class Instance implements Subscription {
   }
 
   private tellOnce(kind: NoteKind, lines: readonly string[], level: 'info' | 'warn'): void {
-    const before = this.told.get(kind);
+    const before = this.notesTold.get(kind);
     for (const line of lines) if (!before?.has(line)) this.options.log[level](line);
-    this.told.set(kind, new Set(lines));
+    this.notesTold.set(kind, new Set(lines));
   }
 
   // xEdit reports a listed archive it cannot find; the game loads none, so the views stay true.
@@ -536,7 +547,7 @@ export class Instance implements Subscription {
 
   private enqueue({ named = [], disk, tellsUnheard, fromEvents = false }: {
     named?: readonly string[]; disk: boolean; tellsUnheard: boolean; fromEvents?: boolean;
-  }): Promise<void> {
+  }, answers: 'settled' | 'held' = 'settled'): Promise<void> {
     const next = this.next ?? nextRun();
     this.next = next;
     if (this.dropped !== undefined) {
@@ -557,7 +568,7 @@ export class Instance implements Subscription {
     next.disk ||= disk;
     next.tellsUnheard ||= tellsUnheard;
     void this.drain();
-    return next.settled;
+    return next[answers];
   }
 
   // A run settles with its value's subscribers; the next run does not wait for them.
@@ -566,7 +577,9 @@ export class Instance implements Subscription {
     this.reading = true;
     for (let run = this.next; run !== undefined; run = this.next) {
       this.next = undefined;
-      run.land((await this.recompute(run)).settled);
+      const { settled } = await this.recompute(run);
+      run.hold();
+      run.land(settled);
     }
     this.reading = false;
   }

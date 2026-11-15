@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cpSync, mkdtempSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { adapterOver } from '../../test/mo2/adapterOver';
-import { writesNamedTo } from '../../repositoriesLib/writeNaming';
+import { writesToldTo } from '../../repositoriesLib/writeNaming';
 import type { InstanceAdapter } from '../instanceAdapter';
 import { PROFILE } from './adapterContract';
 
@@ -14,13 +14,13 @@ vi.mock('vscode', () => fakeVscodeModule());
 describe('a write through the adapter', () => {
   let root: string;
   let adapter: InstanceAdapter;
-  let named: Set<string>;
+  let told: Map<string, boolean>;
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'modbench-writes-named-'));
     cpSync(join(__dirname, 'fixtures', 'order-instance'), root, { recursive: true });
     adapter = adapterOver(root);
-    named = new Set();
-    writesNamedTo({ name: (paths) => paths.forEach((path) => named.add(path)), leaveUnnamed: () => undefined });
+    told = new Map();
+    writesToldTo({ told: (paths) => { for (const path of paths) told.set(path, existsSync(path)); return Promise.resolve(); } });
   });
   afterEach(() => rm(root, { recursive: true, force: true }));
 
@@ -31,9 +31,10 @@ describe('a write through the adapter', () => {
     ['a change to the plugin order', (a) => a.changePluginOrder(PROFILE, () => [{ kind: 'enable', plugin: 'B.esp', enabled: true }]), () => [inProfile('loadorder.txt'), inProfile('plugins.txt')]],
     ['a new mod folder', (a) => a.createModFolder('Fresh'), (r) => [join(r, 'mods', 'Fresh')]],
     ['a change that changes nothing', (a) => a.changeModOrder(PROFILE, () => []), () => []],
-  ])('names the files it writes for %s', async (_, write, files) => {
+  ])('tells the loader the files it wrote, once they are written, for %s', async (_, write, files) => {
     await write(adapter);
 
-    expect([...named].sort()).toEqual(files(root).sort());
+    expect([...told.keys()].sort()).toEqual(files(root).sort());
+    expect([...told.values()].every(Boolean)).toBe(true);
   });
 });

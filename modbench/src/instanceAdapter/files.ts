@@ -16,7 +16,7 @@ import { keptTrusted, pathKey, stampFrom, type FileStamp, type Kept } from '../r
 import { isOwnTemp, ownTempPrefix, renameOver, tempOwner } from '../repositoriesLib/wholeWrites';
 import { digestOf } from './fileContents/contentDigest';
 import type { MoveToTrash } from '../ports/trash';
-import { nameWrites } from '../repositoriesLib/writeNaming';
+import { toldAfter } from '../repositoriesLib/writeNaming';
 
 /** ADR-0007, answered without the backend. */
 export function isRepository(sourceFolder: string): Promise<boolean> {
@@ -206,7 +206,6 @@ function reportedAsTarget(err: unknown, tmp: string, target: string): unknown {
 // A temp file beside the real target, then one rename: never a partial read, never a target
 // left half-written. Not writable is refused before any temp is written.
 async function writeAtomic(path: string, text: string): Promise<void> {
-  nameWrites(path);
   const target = await writeTargetOf(path);
   await removeStaleTempsFor(target);
   const mode = await modeOf(target);
@@ -224,54 +223,53 @@ async function writeAtomic(path: string, text: string): Promise<void> {
 
 /** Streams `bytes` to a temp beside `path`, and moves it to `path` only when `keep` accepts the temp; answers whether it did.
  *  The temp goes either way. */
-export async function putStreamedIf(path: string, bytes: AsyncIterable<Uint8Array>, keep: (temp: string) => Promise<boolean>): Promise<boolean> {
-  nameWrites(path);
-  await removeStaleTempsFor(path);
-  const tmp = tempWritePath(path);
-  try {
-    await pipeline(bytes, createWriteStream(tmp, { flags: 'wx' }));
-    if (!(await keep(tmp))) return false;
-    await renameOver(fsRename, tmp, path);
-    return true;
-  } finally {
-    await rm(tmp, { force: true });
-  }
+export function putStreamedIf(path: string, bytes: AsyncIterable<Uint8Array>, keep: (temp: string) => Promise<boolean>): Promise<boolean> {
+  return toldAfter([path], async () => {
+    await removeStaleTempsFor(path);
+    const tmp = tempWritePath(path);
+    try {
+      await pipeline(bytes, createWriteStream(tmp, { flags: 'wx' }));
+      if (!(await keep(tmp))) return false;
+      await renameOver(fsRename, tmp, path);
+      return true;
+    } finally {
+      await rm(tmp, { force: true });
+    }
+  });
 }
 
 /** Writes `text` to `path` outright — no read-back, no splice, no lock: install's own meta.ini. */
 export function write(path: string, text: string): Promise<void> {
-  return writeAtomic(path, text);
+  return toldAfter([path], () => writeAtomic(path, text));
 }
 
 /** Writes `text` to `path` as `write` does, trashing the file it replaces only once the text waits beside it. */
-export async function writeTrashing(path: string, text: string, trash: MoveToTrash): Promise<void> {
-  nameWrites(path);
-  await removeStaleTempsFor(path);
-  const tmp = tempWritePath(path);
-  try {
-    await writeFile(tmp, text);
-    if (await exists(path)) await trash(path);
-    await renameOver(fsRename, tmp, path);
-  } finally {
-    await rm(tmp, { force: true });
-  }
+export function writeTrashing(path: string, text: string, trash: MoveToTrash): Promise<void> {
+  return toldAfter([path], async () => {
+    await removeStaleTempsFor(path);
+    const tmp = tempWritePath(path);
+    try {
+      await writeFile(tmp, text);
+      if (await exists(path)) await trash(path);
+      await renameOver(fsRename, tmp, path);
+    } finally {
+      await rm(tmp, { force: true });
+    }
+  });
 }
 
 export function append(path: string, text: string): Promise<void> {
-  nameWrites(path);
-  return appendFile(path, text);
+  return toldAfter([path], () => appendFile(path, text));
 }
 
 /** Moves `from` to `to` in one filesystem step — an install's own entries moving up into a mod folder. */
 export function rename(from: string, to: string): Promise<void> {
-  nameWrites(from, to);
-  return fsRename(from, to);
+  return toldAfter([from, to], () => fsRename(from, to));
 }
 
 /** Copies `from`'s whole tree to `to`, leaving `from` in place. */
 export function copyTree(from: string, to: string): Promise<void> {
-  nameWrites(to);
-  return cp(from, to, { recursive: true });
+  return toldAfter([to], () => cp(from, to, { recursive: true }));
 }
 
 /** A fresh, uniquely-named directory made from `prefix`. */
@@ -282,8 +280,7 @@ export function makeTempDir(prefix: string): Promise<string> {
 /** Creates `path` alone, its parent already there. Rejects with EEXIST when another tool got
  *  there first, so the caller owns exactly what it made. */
 export function makeDir(path: string): Promise<void> {
-  nameWrites(path);
-  return mkdir(path).then(() => undefined);
+  return toldAfter([path], () => mkdir(path).then(() => undefined));
 }
 
 /** A reader of what `read` answers of a file, which reads it again only when the file's stamp has changed: the fact every
@@ -353,21 +350,21 @@ export async function listFolders(
 
 /** Creates `path` and every missing parent; a no-op when it is already there. */
 export async function ensureDir(path: string): Promise<void> {
-  nameWrites(path);
-  await mkdir(path, { recursive: true });
+  await toldAfter([path], () => mkdir(path, { recursive: true }));
 }
 
 /** Deletes `path` when it is an empty directory; answers whether it is gone, and false when it holds an entry. */
-export async function removeIfEmpty(path: string): Promise<boolean> {
-  nameWrites(path);
-  try {
-    await rmdir(path);
-    return true;
-  } catch (err) {
-    if (errnoCode(err) === 'ENOENT') return true;
-    if (errnoCode(err) === 'ENOTEMPTY') return false;
-    throw err;
-  }
+export function removeIfEmpty(path: string): Promise<boolean> {
+  return toldAfter([path], async () => {
+    try {
+      await rmdir(path);
+      return true;
+    } catch (err) {
+      if (errnoCode(err) === 'ENOENT') return true;
+      if (errnoCode(err) === 'ENOTEMPTY') return false;
+      throw err;
+    }
+  });
 }
 
 /** Whether the files at `one` and `other` hold the same bytes, as their manifest lines read them. */
@@ -377,8 +374,7 @@ export async function sameBytes(one: string, other: string): Promise<boolean> {
 
 /** Deletes `path`, file or directory, and everything under it; already-gone is not an error. */
 export function remove(path: string): Promise<void> {
-  nameWrites(path);
-  return rm(path, { recursive: true, force: true });
+  return toldAfter([path], () => rm(path, { recursive: true, force: true }));
 }
 
 /** Hands `edit` the text of `path`, serialized per path, and skips the write when `edit` changed
@@ -386,13 +382,15 @@ export function remove(path: string): Promise<void> {
 export function putIfChanged(
   path: string, edit: (before: string) => string | Promise<string>, opts: PutOptions = {},
 ): Promise<{ wrote: boolean }> {
-  return withLock(path, async () => {
+  const attempted: string[] = [];
+  return toldAfter(attempted, () => withLock(path, async () => {
     const before = await readOr(path, opts.ifMissing);
     const after = await edit(before);
     if (after === before) return { wrote: false };
+    attempted.push(path);
     await writeAtomic(path, after);
     return { wrote: true };
-  });
+  }));
 }
 
 export type Undo = () => Promise<void>;

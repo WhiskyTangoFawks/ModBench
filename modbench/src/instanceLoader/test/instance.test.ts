@@ -732,13 +732,14 @@ describe('Instance — a write that changes several files', () => {
     expect(fake.rereads).toEqual([CHECK, reread('/instance/mods/A/a.esp')]);
   });
 
-  it('checks the disk after work that names no file', async () => {
+  it('reads again no file after work that names none, and checks the disk after work that left its files unnamed', async () => {
     const { instance, fake } = loader();
     await instance.refresh();
 
     await instance.quiet(() => Promise.resolve());
+    await instance.quiet((written) => { written.leaveUnnamed(); return Promise.resolve(); });
 
-    expect(fake.rereads).toEqual([CHECK, CHECK]);
+    expect(fake.rereads).toEqual([CHECK, { named: [], disk: false }, CHECK]);
   });
 
   it('lands no value read inside it, and lands the refresh after it', async () => {
@@ -908,6 +909,18 @@ describe('Instance — a value that survives a bad read', () => {
     await refreshed;
 
     expect(finished).toEqual(['another subscriber', 'refresh']);
+  });
+
+  it('answers a write told to it once its value holds the file, before its subscribers have settled', async () => {
+    const { instance } = loader();
+    await instance.refresh();
+    instance.subscribe(() => new Promise<void>(() => undefined));
+    const reads: (readonly string[] | undefined)[] = [];
+    instance.subscribe((_value, _sequence, { named }) => { reads.push(named); });
+
+    await instance.told(['/instance/profiles/Default/modlist.txt']);
+
+    expect(reads).toEqual([['/instance/profiles/Default/modlist.txt']]);
   });
 
   it('recomputes again while a subscriber has not settled, and holds only its own refresh', async () => {
