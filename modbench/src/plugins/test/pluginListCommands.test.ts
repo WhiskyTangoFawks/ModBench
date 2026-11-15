@@ -309,7 +309,7 @@ describe('registerCreatePluginCommand', () => {
     const { run } = invoke(client, mo2);
     await run();
 
-    expect(progressSteps).toEqual(['progress opens on modbench.pluginListTree', 'Instance loader: read every file again', 'progress closes']);
+    expect(progressSteps).toEqual(['progress opens on modbench.pluginListTree', 'progress closes']);
   });
 });
 

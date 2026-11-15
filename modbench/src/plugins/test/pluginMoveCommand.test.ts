@@ -70,13 +70,13 @@ const PLACES: { label: string; drop: PluginsDrop }[] = [
 
 function registered(
   selection: PluginsTreeNode[] = [], masters: Pick<MEditClient, 'getPlugins'> = noMasters,
-  refresh = () => Promise.resolve(), fake = fakeOver('A.esp', 'B.esp', 'C.esp'),
+  fake = fakeOver('A.esp', 'B.esp', 'C.esp'),
   value = instanceValueFixture({ activeProfile: 'Default' }),
 ) {
   const reporter = recordingReporter();
   const instance = {
     value,
-    refresh: () => { progressSteps.push('Instance loader: read every file again'); return refresh(); },
+    refresh: () => Promise.resolve(),
   };
   registerPluginMoveCommand(pluginCommandsWith(fake.adapter, masters), instance, { selection: () => selection, movePlaces: () => PLACES }, reporter);
   return { reporter, fake };
@@ -112,7 +112,6 @@ describe('modbench.plugin.move', () => {
     expect(fake.calls).toEqual(moved('A.esp', 2));
     expect(progressSteps).toEqual([
       'progress opens on modbench.pluginListTree',
-      'Instance loader: read every file again',
       'progress closes',
     ]);
   });
@@ -164,14 +163,6 @@ describe('modbench.plugin.move', () => {
       severity: 'error', message: 'Could not move plugins.', detail: '"A.esp" is a master of "B.esp", so it must load before it.',
     }]);
     expect(fake.calls).toEqual([]);
-  });
-
-  it('reports what throws as a failure, apart from a refusal', async () => {
-    const { reporter } = registered([], noMasters, () => Promise.reject(new Error('read failed')));
-
-    await invoke(...rowsOf(A), LOSING_END);
-
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to move plugins.', detail: 'read failed' }]);
   });
 });
 

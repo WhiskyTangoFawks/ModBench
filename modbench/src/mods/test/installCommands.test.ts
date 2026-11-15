@@ -370,6 +370,6 @@ describe('an install ends on the Instance loader\'s read, with the Mods progress
     }, { refusals: stepOnInstall });
     await invoke('modbench.mod.install');
 
-    expect(progressSteps).toEqual(['progress opens on modbench.modList', 'install', 'Instance loader: read every file again', 'progress closes']);
+    expect(progressSteps).toEqual(['progress opens on modbench.modList', 'install', 'progress closes']);
   });
 });

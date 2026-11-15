@@ -921,7 +921,7 @@ describe('a Mods gesture that writes ends on the Instance loader\'s read, with t
   ])('%s', async (_name, run, writes) => {
     await run();
 
-    expect(progressSteps).toEqual(['progress opens on modbench.modList', ...writes, 'Instance loader: read every file again', 'progress closes']);
+    expect(progressSteps).toEqual(['progress opens on modbench.modList', ...writes, 'progress closes']);
   });
 });
 

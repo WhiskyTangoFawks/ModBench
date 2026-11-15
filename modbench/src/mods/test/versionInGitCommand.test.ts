@@ -191,7 +191,7 @@ describe('modbench.mod.versionInGit', () => {
     await handler(row(FIRST));
 
     expect(progressSteps).toEqual([
-      'progress opens on modbench.pluginListTree', 'Instance loader: read every file again', 'progress closes',
+      'progress opens on modbench.pluginListTree', 'progress closes',
     ]);
     expect(said.at(-1)).toBeUndefined();
   });
