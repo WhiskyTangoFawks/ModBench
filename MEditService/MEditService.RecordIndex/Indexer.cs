@@ -17,7 +17,7 @@ namespace MEditService.RecordIndex;
 
 /// <summary>Brings the Store to the load order (ADR-0013), and validates each plugin a change names, or every plugin at a
 /// check of the disk (ADR-0001). It holds the open plugins, the progress and the scope.</summary>
-internal sealed class Indexer : IHandedWrites, IDisposable
+internal sealed class Indexer : IDisposable
 {
     private readonly LoadOrderHolder _holder;
     private readonly UnsavedDocuments _unsaved;
@@ -1650,19 +1650,18 @@ internal sealed class Indexer : IHandedWrites, IDisposable
         return readsEnded;
     }
 
-    // The container disposes it once as itself and once as the hand's reader.
     public void Dispose()
     {
-        lock (_turns)
-        {
-            if (_disposed) return;
-            _disposed = true;
-            Answer([.. _namedHands.Select(hand => hand.Held), .. _checkHands], Closed);
-        }
         _holder.Arrived -= OnArrived;
         _unsaved.Arrived -= ValidateTreesHolding;
         _source.ChangeSignalled -= OnChange;
         _holder.Written -= OnWritten;
+
+        lock (_turns)
+        {
+            _disposed = true;
+            Answer([.. _namedHands.Select(hand => hand.Held), .. _checkHands], Closed);
+        }
 
         _disposal.Cancel();
         if (!EnterExclusiveWithin(CloseLimit))

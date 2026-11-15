@@ -65,6 +65,8 @@ internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null)
 
     public Task<IndexRefused?> AwaitSourceWrites(OwnWrites own, CancellationToken cancel) => throw Failed();
 
+    public Task<string?> Hold(IReadOnlyList<HandedPlugin>? written, CancellationToken cancel) => throw Failed();
+
     public LoadOrderStatus GetStatus() => throw Failed();
 
     public long GetSequence() => throw Failed();

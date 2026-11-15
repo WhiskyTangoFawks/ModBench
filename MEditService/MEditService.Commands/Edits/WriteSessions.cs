@@ -1,5 +1,5 @@
 using MEditService.LoadOrder;
-using MEditService.RecordIndex;
+using MEditService.RecordIndex.Queries;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -42,7 +42,7 @@ internal sealed class WriteSessions(ISourceAdapter source, IReadOnlyList<Documen
     /// <summary>As <see cref="Written"/>, handing <paramref name="index"/> the documents written, and answered once it holds
     /// them (ADR-0029). A write the record index could not read is answered as written: its status says so.</summary>
     internal async Task<RecordEditResult> Handed(
-        RecordEditResult outcome, string doing, LoadOrderHolder loadOrder, IHandedWrites index, ILogger logger, CancellationToken cancel)
+        RecordEditResult outcome, string doing, LoadOrderHolder loadOrder, IQueries index, ILogger logger, CancellationToken cancel)
     {
         if (Unwritten(outcome, doing, logger) is { } answered) return answered;
         var written = _byFolder.Values.SelectMany(session => session.Written).ToList();

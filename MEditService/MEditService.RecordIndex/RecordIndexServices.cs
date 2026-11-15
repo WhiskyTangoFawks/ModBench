@@ -19,27 +19,25 @@ public static class RecordIndexServices
 
     public static IServiceCollection AddRecordIndex(this IServiceCollection services, long? memoryLimit = null)
     {
-        services.AddSingleton(sp => new FilterInForce(sp.GetRequiredService<ILogger<FilterInForce>>(), sp.GetService<INotificationPublisher>()));
-        services.AddSingleton(sp =>
+        services.AddSingleton<IQueries>(sp =>
         {
+            var filter = new FilterInForce(sp.GetRequiredService<ILogger<FilterInForce>>(), sp.GetService<INotificationPublisher>());
             var index = new Indexer(
                 sp.GetRequiredService<LoadOrderHolder>(),
                 sp.GetRequiredService<UnsavedDocuments>(),
                 sp.GetRequiredService<IPluginAdapter>(),
                 sp.GetRequiredService<ISourceAdapter>(),
                 sp.GetRequiredService<SchemaReflector>(),
-                sp.GetRequiredService<FilterInForce>(),
+                filter,
                 memoryLimit ?? Gigabyte,
                 sp.GetRequiredService<ILoggerFactory>(),
                 sp.GetService<INotificationPublisher>(),
                 sp.GetRequiredService<TimeProvider>());
             index.Subscribe();
-            return index;
+            return new RecordQueries(
+                index, filter, sp.GetRequiredService<LoadOrderHolder>(), sp.GetRequiredService<SchemaReflector>(),
+                sp.GetRequiredService<ISourceAdapter>(), sp.GetRequiredService<ILogger<RecordQueries>>());
         });
-        services.AddSingleton<IHandedWrites>(sp => sp.GetRequiredService<Indexer>());
-        services.AddSingleton<IQueries>(sp => new RecordQueries(
-            sp.GetRequiredService<Indexer>(), sp.GetRequiredService<FilterInForce>(), sp.GetRequiredService<LoadOrderHolder>(),
-            sp.GetRequiredService<SchemaReflector>(), sp.GetRequiredService<ISourceAdapter>(), sp.GetRequiredService<ILogger<RecordQueries>>()));
         services.AddHostedService<IndexAtStartup>();
         return services;
     }

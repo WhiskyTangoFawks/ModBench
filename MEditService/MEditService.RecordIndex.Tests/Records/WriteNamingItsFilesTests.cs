@@ -110,7 +110,7 @@ public sealed class WriteNamingItsFilesTests : IDisposable
     private static HandedPlugin HandedRenamedAgain(HandedPlugin handed, string editorId) =>
         handed with { Documents = [.. handed.Documents.Select(document => document with { Text = document.Text.Replace("RenamedNpc", editorId, StringComparison.Ordinal) })] };
 
-    private Task<string?> Hold(params HandedPlugin[] written) => _index.Hands.Hold(written, CancellationToken.None);
+    private Task<string?> Hold(params HandedPlugin[] written) => _index.Queries.Hold(written, CancellationToken.None);
 
     private (LoadOrderEntry Entry, SourceChanges Made) NpcRenamed() =>
         Saved(Container, RepositoryOf(Container).ChangesToPut(Container.Key, Renamed(_npc, "RenamedNpc")));
@@ -283,7 +283,7 @@ public sealed class WriteNamingItsFilesTests : IDisposable
         Container.HandEdit(Record(_keys.Cell), $"\"{ContainerModPlugin.CellEditorId}\"", "\"EditedByHand\"");
         _source.BeforeNextGitStatus = reading.Wait;
 
-        var hand = _index.Hands.Hold(null, CancellationToken.None);
+        var hand = _index.Queries.Hold(null, CancellationToken.None);
 
         Assert.False(hand.IsCompleted);
         reading.Set();
@@ -294,10 +294,10 @@ public sealed class WriteNamingItsFilesTests : IDisposable
     [Fact]
     public async Task AHandTheRecordIndexTakesAfterItCloses_IsAnsweredThatItClosed()
     {
-        var (hands, handed) = (_index.Hands, Handed(NpcRenamed()));
+        var (queries, handed) = (_index.Queries, Handed(NpcRenamed()));
         _index.Dispose();
 
-        Assert.Contains("closed", await hands.Hold([handed], CancellationToken.None), StringComparison.Ordinal);
+        Assert.Contains("closed", await queries.Hold([handed], CancellationToken.None), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -305,7 +305,7 @@ public sealed class WriteNamingItsFilesTests : IDisposable
     {
         using var bare = Indexes.Open(new LoadOrderHolder());
 
-        Assert.Contains("stopped", await bare.Hands.Hold([Handed(NpcRenamed())], CancellationToken.None), StringComparison.Ordinal);
+        Assert.Contains("stopped", await bare.Queries.Hold([Handed(NpcRenamed())], CancellationToken.None), StringComparison.Ordinal);
     }
 
     [Theory]

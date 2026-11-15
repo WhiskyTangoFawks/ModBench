@@ -20,7 +20,7 @@ internal sealed class RecordQueries(
     LoadOrderHolder loadOrder,
     SchemaReflector schemaReflector,
     ISourceAdapter source,
-    ILogger<RecordQueries> logger) : IQueries
+    ILogger<RecordQueries> logger) : IQueries, IDisposable
 {
     private readonly ILogger _logger = logger;
     private readonly Indexer _index = index;
@@ -565,6 +565,8 @@ internal sealed class RecordQueries(
         }
     }
 
+    public Task<string?> Hold(IReadOnlyList<HandedPlugin>? written, CancellationToken cancel) => _index.Hold(written, cancel);
+
     public long GetSequence() => _index.Sequence;
 
     public async Task<SequenceAwaitResponse> AwaitSequence(long atLeast, TimeSpan timeout)
@@ -645,4 +647,6 @@ internal sealed class RecordQueries(
 
     private IReadOnlyDictionary<string, RecordTableSchema> RequireSchemas() =>
         _schemaReflector.GetSchemas(_loadOrder.Require().GameRelease);
+
+    public void Dispose() => _index.Dispose();
 }

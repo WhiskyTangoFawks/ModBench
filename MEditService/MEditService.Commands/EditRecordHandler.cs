@@ -1,6 +1,6 @@
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
-using MEditService.RecordIndex;
+using MEditService.RecordIndex.Queries;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
@@ -15,11 +15,11 @@ public sealed class EditRecordHandler
     private readonly ISourceAdapter _source;
     private readonly UnsavedDocuments _unsaved;
     private readonly LoadOrderHolder _loadOrder;
-    private readonly IHandedWrites _index;
+    private readonly IQueries _index;
     private readonly ILogger<EditRecordHandler> _logger;
 
     internal EditRecordHandler(
-        EditRecordChangesHandler changes, ISourceAdapter source, UnsavedDocuments unsaved, LoadOrderHolder loadOrder, IHandedWrites index,
+        EditRecordChangesHandler changes, ISourceAdapter source, UnsavedDocuments unsaved, LoadOrderHolder loadOrder, IQueries index,
         ILogger<EditRecordHandler> logger) =>
         (_changes, _source, _unsaved, _loadOrder, _index, _logger) = (changes, source, unsaved, loadOrder, index, logger);
 
