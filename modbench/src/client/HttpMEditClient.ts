@@ -438,8 +438,7 @@ class HttpMEditClient implements MEditClient {
     });
   }
 
-  // A hand-over or a signal answered starts a sweep that mEdit publishes as validating, so the record index
-  // stays possibly late until a status that holds no load order or has settled, or until the status is lost with mEdit.
+  // An answered hand-over or signal starts a sweep mEdit publishes as validating: late until a status holds no load order or settles, or is lost.
   private awaitSweep(): void {
     this.sweepsAwaited++;
     const end = (): void => {
