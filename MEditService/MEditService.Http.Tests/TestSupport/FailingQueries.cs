@@ -12,7 +12,7 @@ namespace MEditService.Http.Tests.TestSupport;
 /// <summary>A face that fails every question; given a rebuild refusal, answers a rebuild with it.</summary>
 internal sealed class FailingQueries(StoreRebuildRefused? rebuildRefusal = null) : IQueries
 {
-    public Answer<IReadOnlyList<PluginResponse>, IndexRefused> GetPlugins() => throw Failed();
+    public Answer<IReadOnlyList<PluginResponse>, IndexRefused> GetPlugins(IReadOnlyCollection<PluginAddress>? plugins = null) => throw Failed();
 
     public Answer<PagedResult<RecordSummary>, IndexRefused> GetRecords(
         IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset) =>
