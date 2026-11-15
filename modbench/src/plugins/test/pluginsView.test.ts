@@ -14,7 +14,7 @@ const treeViews = new FakeTreeViews();
 const h = vi.hoisted(() => ({
   state: { commands: new Map<string, (...args: unknown[]) => unknown>(), boxes: [] as FakeInputBox[] },
   lenses: [] as SqlLens[],
-  decorations: [] as { provideFileDecoration(uri: unknown): { badge?: string } | undefined }[],
+  decorations: [] as { provideFileDecoration(uri: unknown): Promise<{ badge?: string } | undefined> | { badge?: string } | undefined }[],
   diagnostics: new Map<string, FakeDiagnosticCollection>(),
   commands: new Map<string, (...args: unknown[]) => unknown>(),
   contexts: [] as [string, unknown][],
@@ -330,18 +330,43 @@ function snapshotOf(...names: string[]): LoadOrderSnapshot {
   };
 }
 
-describe('the Plugins view follows mEdit\'s pushes', () => {
-  it.each(['rows-changed', 'plugin-changed'])('re-reads the record browser and the plugin facts on mEdit\'s %s', async (kind) => {
-    const { client, recordBrowser } = pluginsView();
+describe('the Plugins view follows mEdit\'s change event', () => {
+  const TEST = { name: 'Test.esp', origin: 'ModA' };
+  const twoPlugins = () => instanceValueFixture({
+    plugins: ['Test.esp', 'Other.esp'].map((name, line) => ({ name, path: `/fixture/${name}`, origin: 'ModA', line, enabled: true, winning: true })),
+    gameFolder: FOUND,
+  });
+
+  it.each(['rows-changed', 'plugin-changed'])('redraws only the named plugin\'s row, and re-reads only its records, on mEdit\'s %s', async (kind) => {
+    const { client, recordBrowser, rows, provider } = pluginsView(twoPlugins());
+    const [test] = await rows();
     const refresh = vi.spyOn(recordBrowser, 'refresh');
+    const redrawn: unknown[] = [];
+    provider().onDidChangeTreeData?.((element) => redrawn.push(element));
 
     client.emit({ ...rowsChanged, kind });
 
     await vi.waitFor(() => { expect(pluginReads(client)).toBe(1); });
-    expect(refresh).toHaveBeenCalledTimes(1);
+    await settle();
+    expect(refresh.mock.calls).toEqual([[[TEST]]]);
+    expect(new Set(redrawn)).toEqual(new Set([test]));
   });
 
-  it('re-reads once when mEdit holds the load order again after a dropped connection, however many plugins it names', async () => {
+  it('redraws every row, and re-reads every plugin\'s records, when the change names none', async () => {
+    const { client, recordBrowser, rows, provider } = pluginsView(twoPlugins());
+    await rows();
+    const refresh = vi.spyOn(recordBrowser, 'refresh');
+    const redrawn: unknown[] = [];
+    provider().onDidChangeTreeData?.((element) => redrawn.push(element));
+
+    client.reconnected();
+
+    await vi.waitFor(() => { expect(pluginReads(client)).toBe(1); });
+    expect(refresh.mock.calls).toEqual([[undefined]]);
+    expect(redrawn).toContain(undefined);
+  });
+
+  it('re-reads every plugin, then each plugin of the snapshot it holds again, after a dropped connection', async () => {
     const { client, recordBrowser } = pluginsView();
     client.answerPuts(() => Promise.resolve({ outcome: 'applied', status: APPLIED_STATUS }));
     client.setStatus('running');
@@ -351,8 +376,7 @@ describe('the Plugins view follows mEdit\'s pushes', () => {
     client.reconnected();
     await client.latestLoadOrder();
 
-    await vi.waitFor(() => { expect(pluginReads(client)).toBe(1); });
-    expect(refresh).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => { expect(refresh.mock.calls.map(([named]) => named?.length)).toEqual([undefined, 1, 1, 1]); });
   });
 
   it('hears no push once disposed', () => {
@@ -399,9 +423,10 @@ describe('the Plugins view re-renders for a reconcile tick only when it landed s
     const { client, rerenders } = reconciling();
 
     client.emit(tick({ indexedPlugins: [A] }));
+    const afterTheFirst = rerenders.length;
     client.emit(tick({ indexedPlugins: [A], failures: [{ name: 'B.esp', origin: 'SomeMod', reason: 'RACE parse' }] }));
 
-    expect(rerenders).toHaveLength(2);
+    expect(rerenders.length - afterTheFirst).toBe(4);
   });
 });
 
@@ -487,20 +512,21 @@ describe('a record row\'s badge, from mEdit\'s stream', () => {
     const { client, recordBrowser } = pluginsView();
     client.setQueryAnswer('getRecords', { items: [summary('None')], total: 1 });
     client.setQueryAnswer('getRecordTypes', [recordTypeCountFixture({ type: 'NPC_', displayName: 'Non-Player Character' })]);
+    client.setQueryAnswer('getWorkingTreeStatesBeneath', { plugin: [], recordTypes: {}, records: {} });
     const group = await soleGroup(recordBrowser, { name: 'Test.esp', origin: 'ModA' });
     const uri = present((await recordBrowser.getChildren(group))[0]?.resourceUri, "the row's resource URI");
     const badges = badgeSource();
     const badgeChanges: unknown[] = [];
     badges.onDidChangeFileDecorations((changed) => { badgeChanges.push(changed); });
-    expect(badges.provideFileDecoration(uri)).toBeUndefined();
+    expect(await badges.provideFileDecoration(uri)).toBeUndefined();
 
     client.setQueryAnswer('getRecords', { items: [summary('Modified')], total: 1 });
     client.emit({ ...rowsChanged, keys: [FORM_KEY] });
-    await vi.waitFor(() => { expect(badgeChanges).toEqual([undefined]); });
+    await vi.waitFor(() => { expect(badgeChanges).toEqual([[uri]]); });
     await asVsCodeReReadsAnExpandedGroupOnTreeChange(recordBrowser, group);
 
-    expect(badgeChanges).toEqual([undefined, [uri]]);
-    expect(badges.provideFileDecoration(uri)?.badge).toBe('M');
+    expect(badgeChanges).toEqual([[uri], [uri]]);
+    expect((await badges.provideFileDecoration(uri))?.badge).toBe('M');
   });
 });
 
@@ -680,7 +706,7 @@ describe('the record filter, from the commands that set and clear it', () => {
       expect(view.description()).toBeUndefined();
       expect(view.lensOn(ARMOR_SQL)).toBe('modbench.record.filter');
       expect(view.filterActive()).toEqual([true, false]);
-      expect(view.recordBrowserRefreshes).toHaveLength(1);
+      expect(view.recordBrowserRefreshes).toHaveLength(2);
     });
 
     it('keeps a newer filter mEdit holds, and only logs a clearing of an older one', async () => {
@@ -728,6 +754,33 @@ describe('the record filter, from the commands that set and clear it', () => {
 
       await vi.waitFor(() => { expect(view.filterActive()).toEqual([false, false]); });
       expect(view.description()).toBeUndefined();
+    });
+  });
+
+  describe('a change of everything', () => {
+    it('shows what mEdit holds, and says nothing, since the reason a filter was cleared comes with the notification', async () => {
+      h.document = { uri: { scheme: 'untitled', path: 'a' }, fileName: 'a', getText: () => ARMOR_SQL };
+      const view = filtering();
+      view.holds('a');
+      await view.filter({ scheme: 'untitled', path: 'a' });
+      view.client.setQueryAnswer('getActiveFilter', null);
+
+      view.client.reconnected();
+
+      await vi.waitFor(() => { expect(view.description()).toBeUndefined(); });
+      expect(view.reporter.reports).toEqual([]);
+    });
+
+    it('does not ask for the filter again when the change names plugins', async () => {
+      h.document = { uri: { scheme: 'untitled', path: 'a' }, fileName: 'a', getText: () => ARMOR_SQL };
+      const view = filtering();
+      view.holds('a');
+      await view.filter({ scheme: 'untitled', path: 'a' });
+
+      view.client.emit(rowsChanged);
+      await settle();
+
+      expect(view.activeFilterReads()).toBe(1);
     });
   });
 
@@ -779,7 +832,7 @@ describe('the record filter, from the commands that set and clear it', () => {
       await vi.waitFor(() => { expect(view.setCalls()).toHaveLength(2); });
 
       view.client.emit(notificationEventFixture({ kind: 'record-filter-cleared', recordFilterCleared: { source: 'a', reason: 'Conversion Error' } }));
-      await vi.waitFor(() => { expect(view.activeFilterReads()).toBe(2); });
+      await vi.waitFor(() => { expect(view.activeFilterReads()).toBe(3); });
       replied(null);
       await reapplying;
 
@@ -1109,19 +1162,16 @@ describe('a collapsed row\'s badge, from the states beneath it', () => {
     const row = expectInstanceOf((await rows())[0], PluginNode);
     const uri = present(row.resourceUri, 'the row\'s resourceUri');
     const badges = badgeSource();
-    const badged = new Promise((resolve) => { badges.onDidChangeFileDecorations(resolve); });
 
-    badges.provideFileDecoration(uri);
-    await badged;
-    const collapsed = badges.provideFileDecoration(uri)?.badge;
+    const collapsed = (await badges.provideFileDecoration(uri))?.badge;
     treeViews.view().expand(row);
-    const expanded = badges.provideFileDecoration(uri)?.badge;
+    const expanded = (await badges.provideFileDecoration(uri))?.badge;
     treeViews.view().collapse(row);
 
-    expect([collapsed, expanded, badges.provideFileDecoration(uri)?.badge]).toEqual(['•', undefined, '•']);
+    expect([collapsed, expanded, (await badges.provideFileDecoration(uri))?.badge]).toEqual(['•', undefined, '•']);
   });
 
-  it('puts a failed read of the states beneath on the view\'s message line', async () => {
+  it('puts a failed read of the states beneath on the view\'s message line, and decorates nothing', async () => {
     const { client, rows, view } = pluginsView(instanceValueFixture({
       plugins: [{ name: 'A.esp', path: '/fixture/A.esp', origin: 'SomeMod', line: 0, enabled: true, winning: true }],
       gameFolder: FOUND,
@@ -1129,8 +1179,9 @@ describe('a collapsed row\'s badge, from the states beneath it', () => {
     client.setQueryFailure('getWorkingTreeStatesBeneath', { failed: 'refused', refusal: 'boom' });
     const row = expectInstanceOf((await rows())[0], PluginNode);
 
-    badgeSource().provideFileDecoration(present(row.resourceUri, 'the row\'s resourceUri'));
+    const decoration = await badgeSource().provideFileDecoration(present(row.resourceUri, 'the row\'s resourceUri'));
 
+    expect(decoration).toBeUndefined();
     await waitForMessage(view(), (message) => message === 'Failed to load: boom', 'the failed read of the states beneath');
   });
 });

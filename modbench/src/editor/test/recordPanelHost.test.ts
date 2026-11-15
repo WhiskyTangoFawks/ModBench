@@ -6,7 +6,7 @@ vi.mock('vscode', () => editorVscode);
 
 import * as vscode from 'vscode';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { loadOrderStatusEventFixture, notificationEventFixture } from '../../client/test/fixtures';
+import { notificationEventFixture } from '../../client/test/fixtures';
 
 function isPanel(candidate: unknown): candidate is vscode.WebviewPanel {
   return typeof candidate === 'object' && candidate !== null && 'webview' in candidate;
@@ -118,7 +118,7 @@ describe('a file mEdit answers holds no record', () => {
     meditClient.setQueryFailureOnce('getRecordOfFile', { failed: 'unreachable' });
     await opened(meditClient);
 
-    meditClient.emit(loadOrderStatusEventFixture({ totalPlugins: 1, activePlugins: 1, conflictsComputed: false }));
+    meditClient.reconnected();
 
     await vi.waitFor(() => expect(reopened()).toEqual([['vscode.openWith', uri, 'default', inStead]]));
   });

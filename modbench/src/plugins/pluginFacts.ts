@@ -122,6 +122,7 @@ export class PluginFacts {
   private held = new ByPluginAddress<true>();
   private reads = new ByPluginAddress<PluginRead>();
   private blueprints = '';
+  private judgedFacts = '';
   private readsByFilename = new Map<string, PluginRead[]>();
   // Every broken sorting rule on each plugin it names, as the last completed reconcile judged the order.
   private sorting = new ByPluginAddress<BrokenRule[]>();
@@ -209,8 +210,8 @@ export class PluginFacts {
   }
 
   /** The facts alone, leaving which plugins are held as they are and the sorting statuses as the
-   *  last reconcile judged them. */
-  refreshed(plugins: readonly PluginMetadata[]): void {
+   *  last reconcile judged them. Whether what the sorting rules judge of a plugin changed. */
+  refreshed(plugins: readonly PluginMetadata[]): boolean {
     answered(this.factsRead);
     const reads = new ByPluginAddress<PluginRead>();
     const readOf = new Map<string, PluginRead[]>();
@@ -238,6 +239,10 @@ export class PluginFacts {
       `"${p.name}" (${p.origin}): ${p.laterReadFailure.map((f) => `${f.sourceRelativePath}: ${f.message}`).join('; ')}`,
     ] as const]));
     this.noMatchAnywhere = plugins.length > 0 && plugins.every((p) => !p.hasMatchingRecords);
+    const judged = JSON.stringify(plugins.map((p) => [pluginAddressKey(p), p.masters, p.isMaster, p.isBlueprint, p.description]));
+    const sortingChanged = judged !== this.judgedFacts;
+    this.judgedFacts = judged;
+    return sortingChanged;
   }
 
   private factsOver(order: readonly PluginAddress[]): PluginFactsOf {

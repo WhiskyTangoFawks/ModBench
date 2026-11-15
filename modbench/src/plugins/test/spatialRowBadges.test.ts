@@ -15,9 +15,9 @@ import { present } from '../../ports/present';
 
 const PLUGIN: PluginAddress = { name: 'Plugin0.esp', origin: 'Data/' };
 
-function badgeOf(provider: RecordBrowser, row: RecordBrowserNode): string | undefined {
+async function badgeOf(provider: RecordBrowser, row: RecordBrowserNode): Promise<string | undefined> {
   const badges = new RecordDecorationProvider(provider, () => new Set());
-  return badges.provideFileDecoration(present(row.resourceUri, 'the row\'s resourceUri'))?.badge;
+  return (await badges.provideFileDecoration(present(row.resourceUri, 'the row\'s resourceUri')))?.badge;
 }
 
 async function groupOf(client: InMemoryMEditClient, type: string) {
@@ -50,7 +50,7 @@ describe('the working-tree badge of worldspace, cell and placed reference rows',
     const cell = await soleChild(provider, subBlock, 'the sub-block');
     const placed = await soleChild(provider, await soleChild(provider, cell, 'the cell'), 'the placed group');
 
-    expect([badgeOf(provider, worldspace), badgeOf(provider, cell), badgeOf(provider, placed)]).toEqual(['M', 'A', 'M']);
+    expect([await badgeOf(provider, worldspace), await badgeOf(provider, cell), await badgeOf(provider, placed)]).toEqual(['M', 'A', 'M']);
   });
 
   it('shows M on a modified interior cell', async () => {
@@ -63,15 +63,16 @@ describe('the working-tree badge of worldspace, cell and placed reference rows',
     const block = await soleChild(provider, group, 'the group');
     const cell = await soleChild(provider, await soleChild(provider, block, 'the block'), 'the sub-block');
 
-    expect(badgeOf(provider, cell)).toBe('M');
+    expect(await badgeOf(provider, cell)).toBe('M');
   });
 
   it('shows no badge on a clean row', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getWorldspaces', [{ formKey: 'w:Plugin0.esp', hasParseFailure: false, hasChildren: false, workingTreeState: 'None' }]);
+    client.setQueryAnswer('getWorkingTreeStatesBeneath', { plugin: [], recordTypes: {}, records: {} });
     const { provider, group } = await groupOf(client, 'wrld');
 
-    expect(badgeOf(provider, await soleChild(provider, group, 'the group'))).toBeUndefined();
+    expect(await badgeOf(provider, await soleChild(provider, group, 'the group'))).toBeUndefined();
   });
 
   it('names a row it reads, so a decoration VS Code holds is refreshed', async () => {

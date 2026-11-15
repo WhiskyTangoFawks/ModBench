@@ -30,6 +30,15 @@ describe('the client\'s one change event', () => {
     expect(changes).toEqual([[{ plugin: { name: 'A.esp', origin: 'Mod' } }]]);
   });
 
+  it('says everything when the record filter is cleared, whichever source it was', () => {
+    const client = new InMemoryMEditClient();
+    const changes = heard(client);
+
+    client.emit({ ...rows, kind: 'record-filter-cleared', keys: [], recordFilterCleared: { source: 'other.sql', reason: 'boom' } });
+
+    expect(changes).toEqual([undefined]);
+  });
+
   it('says everything when a load order settles', () => {
     const client = new InMemoryMEditClient();
     const changes = heard(client);
