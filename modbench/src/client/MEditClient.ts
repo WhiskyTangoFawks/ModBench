@@ -427,8 +427,7 @@ export interface MEditClient {
   /** How many snapshots have been handed to be sent: a caller that sees it grow knows a send followed its work. */
   loadOrdersHanded(): number;
   /** Tells mEdit the files at `paths` changed, or, with none, to check the disk, once every snapshot handed
-   *  before has answered. Signals handed while one is in flight fold into one more. Settles once the sweep
-   *  the signal starts is over, and at once while mEdit is not running. */
+   *  before has answered. Settles once the sweep it starts is over, at once while mEdit is not running. */
   signalChange(paths: readonly string[]): Promise<void>;
   /** Each put of the newest snapshot that no send asked for: after a reconnect, since the process
    *  behind the stream may hold nothing sent before. */
