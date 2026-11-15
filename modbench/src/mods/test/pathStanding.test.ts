@@ -19,14 +19,15 @@ interface Value {
   stacked?: true;
   modFiles?: OriginFile[];
   archive?: readonly string[];
+  gameName?: string;
 }
 
-function standing({ gameFolder = FOUND, inWorkspace = true, gameLoose, stacked, modFiles = [], archive }: Value) {
+function standing({ gameFolder = FOUND, inWorkspace = true, gameLoose, stacked, modFiles = [], archive, gameName = 'Fallout 4' }: Value, path = PATH) {
   const stackedCopies = new FileConflictLookup<StackedFile>();
-  if (stacked) stackedCopies.set({ relativePath: PATH, copies: [{ origin: modOrigin('Other'), at: { kind: 'loose', path: '/mods/Other/x' } }] });
+  if (stacked) stackedCopies.set({ relativePath: path, copies: [{ origin: modOrigin('Other'), at: { kind: 'loose', path: '/mods/Other/x' } }] });
   const value = {
-    stackedCopies, gameFolderArchived: NO_GAME_FOLDER_ARCHIVED, gameFolderInWorkspace: inWorkspace, gameFolder,
-    dataFolderFiles: { kind: 'listed' as const, files: new Map(gameLoose ? [[PATH, { relativePath: PATH, path: `/game/Data/${PATH}` }]] : []) },
+    gameName, stackedCopies, gameFolderArchived: NO_GAME_FOLDER_ARCHIVED, gameFolderInWorkspace: inWorkspace, gameFolder,
+    dataFolderFiles: { kind: 'listed' as const, files: new Map(gameLoose ? [[path, { relativePath: path, path: `/game/Data/${path}` }]] : []) },
     filesByMod: new Map([['Mod', modFiles]]), overwriteFiles: [],
     archiveContents: new Map(archive ? [['/mods/Mod/Mod.ba2', { kind: 'read' as const, answer: archive }]] : []),
   };
@@ -55,5 +56,21 @@ describe('what holds a path a plugin source names (source.md, Editing plugin sou
     ['not judged while no game folder is found, as before the first read', { gameFolder: NOT_FOUND, inWorkspace: false }, false],
   ])('is %s', (_what, value, judged) => {
     expect(standing(value).judged()).toBe(judged);
+  });
+});
+
+describe('a .wav a plugin source names is held by the .xwm the game plays it from (source.md, Editing plugin source, story 1)', () => {
+  const holds = (value: Value) => standing(value, 'sound/fx/shot.xwm').holds({ origin: 'Mod' }, 'Sound/FX/shot.wav');
+
+  it('holds it for an .xwm the game gets', () => {
+    expect(holds({ stacked: true })).toBe(true);
+  });
+
+  it('holds it for an .xwm its plugin\'s mod holds', () => {
+    expect(holds({ modFiles: [file('Sound/FX/shot.xwm')] })).toBe(true);
+  });
+
+  it('holds no .wav when neither file exists', () => {
+    expect(holds({})).toBe(false);
   });
 });
