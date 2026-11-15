@@ -4,8 +4,9 @@
 import { heldFolderWatchFor, type HeldFolderWatch } from '../heldFolders';
 import { watchFiles } from '../watchFiles';
 import { outsideTrustedRead } from '../files';
-import type { ChangeListener, Subscription, UnwatchedFolder } from '../instanceAdapter';
-import { instanceWatches, sourceRootDir } from './layout';
+import type { ChangeListener, Subscription, UnwatchedFolder, WatcherExclude } from '../instanceAdapter';
+import { excludesFolder } from '../watcherExclusion';
+import { instanceWatches, modsDir, sourceRootDir } from './layout';
 
 type FollowedFolder = 'downloadedFiles' | 'dataFolder' | 'programs' | 'creationClubList' | 'defaultIni' | 'myGamesInis' | 'gameFolderArchives' | 'modFolders' | 'profileFolders';
 
@@ -29,11 +30,16 @@ export interface Mo2Watch {
   /** Watches each of `bases` under `glob` for `what`, in place of the folders it followed before. A watch newly armed has
    *  the disk checked once, for a change it missed while arming. */
   follow(what: FollowedFolder, bases: readonly string[], glob: string): void;
+  /** Whether the user excluded the mods from VS Code's watch, which then reaches each mod folder's first level alone. */
+  modsExcluded(): boolean;
   unwatchedFolders(): UnwatchedFolder[];
 }
 
+const NOT_EXCLUDING: WatcherExclude = { value: () => ({}), changed: () => ({ dispose: () => {} }) };
+
 export function mo2Watch(
   instanceRoot: string, gameFolderChanged: (listener: () => void) => Subscription, repositoryChanged: (listener: (path: string) => void) => Subscription,
+  exclusion: WatcherExclude = NOT_EXCLUDING,
 ): Mo2Watch {
   const listeners = new Set<ChangeListener>();
   const followed = new Map<FollowedFolder, Followed>();
@@ -63,9 +69,11 @@ export function mo2Watch(
     return { glob, watches: new Map([...watches.keys()].map((base) => [base, arming(base)])) };
   };
 
+  const modsExcluded = (): boolean => excludesFolder(exclusion.value(), modsDir(instanceRoot), instanceRoot);
+
   const arm = (): void => {
-    fixed = instanceWatches(instanceRoot).map(({ base, pattern }) => watch(base, pattern));
-    fixed.push(gameFolderChanged(checkDue), repositoryChanged(changed));
+    fixed = instanceWatches(instanceRoot, modsExcluded()).map(({ base, pattern }) => watch(base, pattern));
+    fixed.push(gameFolderChanged(checkDue), repositoryChanged(changed), exclusion.changed(() => { disarm(); arm(); checkDue(); }));
     for (const [what, folders] of followed) followed.set(what, rearmed(folders, (base) => watch(base, folders.glob)));
   };
   const disarm = (): void => {
@@ -103,6 +111,11 @@ export function mo2Watch(
       if (added.length > 0 && armed()) checkDue();
     }),
 
-    unwatchedFolders: () => [...held.values()].flatMap((folders) => folders?.failures() ?? []),
+    modsExcluded,
+
+    unwatchedFolders: () => [
+      ...modsExcluded() ? [{ folder: modsDir(instanceRoot), reason: 'excluded in files.watcherExclude' }] : [],
+      ...[...held.values()].flatMap((folders) => folders?.failures() ?? []),
+    ],
   };
 }

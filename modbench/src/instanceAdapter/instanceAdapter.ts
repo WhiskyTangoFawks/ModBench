@@ -40,6 +40,12 @@ export interface GameFolderSetting {
   readonly changed: (listener: () => void) => Subscription;
 }
 
+/** VS Code's `files.watcherExclude`: the paths its watch leaves out, each a glob and whether it excludes, and a change heard through `changed`. */
+export interface WatcherExclude {
+  readonly value: () => Readonly<Record<string, boolean>>;
+  readonly changed: (listener: () => void) => Subscription;
+}
+
 /** One place Modbench looked for the game folder, and what it found there. */
 export interface GameFolderLook {
   readonly place: string;

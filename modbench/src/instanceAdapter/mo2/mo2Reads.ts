@@ -112,9 +112,9 @@ function watchedProfiles({ instanceRoot, watch }: Mo2Context, profiles: string[]
   return profiles;
 }
 
-// A change deeper in a mod is left to the check of the disk: a watch of every folder of every mod passes the system's limit.
+// VS Code's watch holds the mods whole; where the user excluded them, a mod folder is watched to its first level instead.
 const watchModFolders = ({ watch }: Mo2Context, folders: readonly ModFolder[]): void => {
-  watch.follow('modFolders', folders.map((folder) => folder.path), FIRST_LEVEL);
+  watch.follow('modFolders', watch.modsExcluded() ? folders.map((folder) => folder.path) : [], FIRST_LEVEL);
 };
 
 const entriesIfThere = (skippedLink: SkippedLink) => (folder: string): Promise<ResolvedEntry[]> =>

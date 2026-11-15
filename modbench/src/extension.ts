@@ -42,6 +42,7 @@ import { deploymentFolderOf } from './instanceCommands/deploy';
 import { offerToVsCodeChat } from './agent/vsCodeChat';
 import { agentPort } from './agent/agentPort';
 import { deploymentFolderSetting, gameFolderSetting } from './toolbox/workspaceSettings';
+import { watcherExcludeSetting } from './watcherExcludeSetting';
 import { registerPutLoadOrder } from './toolbox/putLoadOrderCommand';
 import { showProgressWhileLate } from './drivingLib/lateProgress';
 import { reportUnwatchedFolders } from './drivingLib/unwatchedFolders';
@@ -203,7 +204,7 @@ function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, 
   return whenOpened<Opened>(openedFolder(isInstance, (line) => outputChannel.info(line)), {
     instance: (instanceRoot) => {
       const adapter = adapterForInstance({
-        instanceRoot, gameFolderSetting, hostGit, scriptEnvironmentFileSetting: scriptEnvironmentFileOf(instanceRoot), installationFileReader: downloadedFileReader, fileProblems: fileProblemsOver(problemsHostOver(own(vscode.languages.createDiagnosticCollection('modbench-unhashed'))), outputChannel), fomodEngine: fomodEngineIn(extensionUri, outputChannel), deployedPath,
+        instanceRoot, gameFolderSetting, watcherExclude: watcherExcludeSetting, hostGit, scriptEnvironmentFileSetting: scriptEnvironmentFileOf(instanceRoot), installationFileReader: downloadedFileReader, fileProblems: fileProblemsOver(problemsHostOver(own(vscode.languages.createDiagnosticCollection('modbench-unhashed'))), outputChannel), fomodEngine: fomodEngineIn(extensionUri, outputChannel), deployedPath,
       });
       const instance = own(new Instance({
         adapter, gameFolderSettingId: gameFolderSetting.id, log: outputChannel, medit, workspace: workspaceFolders,

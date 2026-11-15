@@ -8,7 +8,7 @@ import { ACTIVATION_DECIDES_MESSAGE, ACTIVATION_DECIDES_SELECTORS } from '../../
 
 
 const ACTIVATION = 'extension.ts';
-const PORTS_THE_ROOT_IMPLEMENTS_OVER_THE_WINDOW_API = ['dialog.ts', 'hostGit.ts', 'problemsHost.ts', 'tasks.ts', 'trash.ts'];
+const PORTS_THE_ROOT_IMPLEMENTS_OVER_THE_WINDOW_API = ['dialog.ts', 'hostGit.ts', 'problemsHost.ts', 'tasks.ts', 'trash.ts', 'watcherExcludeSetting.ts'];
 const ACTIVATION_EXPORTS = ['activate', 'deactivate'];
 
 const parse = (path: string, text = readFileSync(path, 'utf8')): ts.SourceFile =>
