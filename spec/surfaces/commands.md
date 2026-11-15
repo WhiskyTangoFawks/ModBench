@@ -118,7 +118,7 @@ What every list view does to whatever it shows, whatever the object. common.md s
 | refresh | writes | `modbench.instance.refresh` | - | - | MO2 toolbar | Rebuild the record index, and read the instance again from disk. | load-instance |
 | deploy / purge | writes | `modbench.instance.deploy`, `modbench.instance.purge` | - | - | none | Deploy the active profile's load order to the deployment folder, or remove what deploy wrote there ([deployment-hardlink.md](deployment-hardlink.md)). | - |
 | move to Overwrite | writes | `modbench.instance.moveToOverwrite` | files in the deployment folder that deploy does not manage | - | none | Move each file into Overwrite at its path, so the next deploy links it back. | - |
-| update masterlist | writes | `modbench.instance.updateMasterlist` | - | force: [agent.md](agent.md#any-agent), story 7 | LOOT, Update Masterlist | Fetch the game's masterlist and prelude from LOOT into the instance, in the metadata version this Modbench reads. | update-masterlist |
+| update masterlist | writes | `modbench.instance.updateMasterlist` | - | - | LOOT, Update Masterlist | Fetch the game's masterlist and prelude from LOOT into the instance, in the metadata version this Modbench reads. | update-masterlist |
 
 ## Profile
 
