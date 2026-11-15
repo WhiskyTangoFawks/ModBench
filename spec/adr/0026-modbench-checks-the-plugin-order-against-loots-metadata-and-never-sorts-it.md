@@ -9,7 +9,7 @@ The user owns the plugin order, and a tool that sorts it takes that control away
 - A sorting rule names a plugin by its file name, as LOOT and the game do. It judges the active plugin of that name, which is unique, and a broken rule names that plugin as `(origin, filename)` ([ADR-0012](0012-index-every-plugin-filter-to-the-active-ones.md)). A plugin is present when mod order resolves a file of that name, as LOOT sees the Data folder.
 - The facts a condition reads come from mEdit and the instance, never from a parser of LOOT's. Mutagen still decides the data ([ADR-0004](0004-mutagen-is-the-parser.md)).
 - The userlist is the instance's, so git holds it. LOOT's global userlist is not read: it is one per machine, and git cannot see it.
-- The masterlist is pinned in the instance, so a sorting rule changes only with a diff. To disagree with the masterlist, the user edits that copy. LOOT's format lets a userlist add to the masterlist but never remove from it.
+- To disagree with the masterlist, the user edits its copy in the instance, because LOOT's format lets a userlist add to the masterlist but never remove from it.
 
 ## Alternatives rejected
 

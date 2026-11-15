@@ -124,7 +124,7 @@ As a user, I want:
 3. A requirement and an incompatibility to count a plugin present as LOOT does. Cites: LOOT; ADR-0026
 4. Each in the Problems panel, on the plugin file, at its level, in LOOT's words. One the userlist states is also on its line in the userlist. Info sets no row icon. Cites: common.md, Reporting
 5. Apply suggested move offered for a broken rule a move keeps, when a drop there would land (Drag and drop, story 3): on the plugin row, and as a code action on its line in the userlist. Modbench moves a plugin only for a gesture I start. Cites: ADR-0026; No dead entries
-6. To disagree with a masterlist rule by editing the masterlist in the instance. Git shows my edit, and update masterlist shows it undone in its diff. Cites: ADR-0026
+6. To disagree with a masterlist rule by editing the masterlist in the instance. Cites: ADR-0026
 7. The userlist and the masterlist to open as text in VS Code, as any file in the instance. Cites: loot.md, divergence 5
 8. A sorting rule file that does not read named in the view's message line, and in the Problems panel on its line. The rules that read still apply. A condition Modbench cannot evaluate is a Warning on its line, never skipped. Cites: Never silently wrong
 9. A line Modbench adds to `plugins.txt` to land at the winning-most place the game would load its plugin. Cites: MO2; Never silently wrong
@@ -254,7 +254,7 @@ As a user, I want:
 As a user, I want:
 
 1. No prompt. While it runs, the view's message line says so.
-2. One confirmation, only while the masterlist has uncommitted changes, naming them. Cites: Confirm what destroys
+2. The masterlist and prelude it replaces sent to the trash, so an edit of mine comes back in one step. Cites: Confirm what destroys
 
 ### Create record
 
