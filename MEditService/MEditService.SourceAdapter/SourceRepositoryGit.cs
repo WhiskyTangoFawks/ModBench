@@ -249,6 +249,8 @@ internal abstract class SourceRepositoryGit
             : [];
     }
 
+    internal string SourceFolder => _sourceFolder;
+
     internal string GitDirectory => _gitDir;
 
     internal bool Exists => Directory.Exists(_gitDir);
@@ -278,7 +280,7 @@ internal abstract class SourceRepositoryGit
     /// the index and the ref HEAD names.</summary>
     internal IReadOnlyList<string> StateFiles() => [.. HeadFiles(), Path.Combine(_gitDir, "index")];
 
-    /// <summary>The files a commit moves HEAD through: HEAD, the ref it names, and the packed refs.</summary>
+    /// <summary>The files a commit moves HEAD through: HEAD, the ref it names, the packed refs, and the reftable list.</summary>
     internal IReadOnlyList<string> HeadFiles()
     {
         const string RefPrefix = "ref: ";
@@ -287,7 +289,7 @@ internal abstract class SourceRepositoryGit
         var named = File.Exists(head) && File.ReadLines(head).FirstOrDefault() is { } line && line.StartsWith(RefPrefix, StringComparison.Ordinal)
             ? Path.Combine(commonDir, line[RefPrefix.Length..].Trim())
             : null;
-        return [head, Path.Combine(commonDir, "packed-refs"), .. named is null ? [] : new[] { named }];
+        return [head, Path.Combine(commonDir, "packed-refs"), Path.Combine(commonDir, "reftable", "tables.list"), .. named is null ? [] : new[] { named }];
     }
 
     /// <summary>HEAD and the index of <see cref="FolderPaths"/> back at <paramref name="head"/>; with none, the branch is
@@ -328,24 +330,20 @@ internal abstract class SourceRepositoryGit
     // Plugin and asset file names carry brackets and asterisks, which git otherwise reads as a glob.
     internal static string LiteralPathspec(string relativePath) => $":(literal){ToGitPath(relativePath)}";
 
-    /// <summary>One file's text at the last commit, which exists; null when it holds none, and git failing throws. cat-file -p, not git
-    /// show, which exits 0 with empty output for a missing glob-shaped path.</summary>
-    internal string? ReadCommittedSourceText(string relativePath)
+    /// <summary>One file's text at <paramref name="commit"/>, or null when it holds none; git failing throws. cat-file -p,
+    /// not git show, which exits 0 with empty output for a missing glob-shaped path.</summary>
+    internal string? ReadCommittedSourceText(string commit, string relativePath)
     {
         var path = ToGitPath(relativePath);
-        return Run("ls-tree", "--name-only", "HEAD", "--", path).Length == 0 ? null : Run("cat-file", "-p", $"HEAD:./{path}");
+        return Run("ls-tree", "--name-only", commit, "--", path).Length == 0 ? null : Run("cat-file", "-p", $"{commit}:./{path}");
     }
 
     /// <summary>Each path in the source folder under the plugin's tree that git status names, with its index-column code;
     /// null when git cannot say. It names both ends of a move and every untracked or ignored file.</summary>
-    internal IReadOnlyList<(char Code, string Path)>? WorkingTreeStatus(string pluginFileName) =>
-        WorkingTreeStatus([SourceRepositoryLayout.RootFor(pluginFileName)]);
-
-    /// <summary>As <see cref="WorkingTreeStatus(string)"/>, under each of <paramref name="paths"/>, relative to the source folder.</summary>
-    internal IReadOnlyList<(char Code, string Path)>? WorkingTreeStatus(IReadOnlyList<string> paths)
+    internal IReadOnlyList<(char Code, string Path)>? WorkingTreeStatus(string pluginFileName)
     {
         if (!TryRun(out var stdout,
-                ["status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=all", "--ignored", "--", .. paths.Select(LiteralPathspec)]))
+                "status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=all", "--ignored", "--", LiteralPathspec(SourceRepositoryLayout.RootFor(pluginFileName))))
         {
             return null;
         }

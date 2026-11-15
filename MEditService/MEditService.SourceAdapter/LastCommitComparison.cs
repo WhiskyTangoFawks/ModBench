@@ -11,8 +11,8 @@ public enum RecordChange { Modified, Added }
 /// <summary>The records of a plugin's tree whose text differs from the last commit's.</summary>
 internal static class LastCommitComparison
 {
-    /// <summary>The records of the files under <paramref name="within"/>, relative to the source folder, or of the whole tree
-    /// when null. A record no file there held at the last commit is added.</summary>
+    /// <summary>The records of the files <paramref name="within"/> names, relative to the source folder, or of the plugin's
+    /// whole tree when null. A record no file there held at the last commit is added.</summary>
     internal static IReadOnlyDictionary<string, RecordChange> Of(
         string sourceFolder, GameRelease release, SourceRepositoryGit git, CommittedTexts committedTexts, SourceRepositoryLocator locator,
         PluginAddress plugin, IReadOnlyList<string>? within = null)
@@ -24,7 +24,7 @@ internal static class LastCommitComparison
         foreach (var (relativePath, heldAtLastCommit) in ChangedFiles(sourceFolder, git, plugin, within))
         {
             var fullPath = Path.Combine(sourceFolder, relativePath);
-            var committedText = heldAtLastCommit ? committedTexts.Of(sourceFolder, git, relativePath) : null;
+            var committedText = heldAtLastCommit ? committedTexts.Of(git, relativePath) : null;
             RecordTextsIn(committed, locator, expansion, plugin, relativePath, committedText);
             var workingText = ReadWorkingText(fullPath);
             if (workingText is not null) locator.RequireParsedFormKey(relativePath, workingText, plugin.Name);
