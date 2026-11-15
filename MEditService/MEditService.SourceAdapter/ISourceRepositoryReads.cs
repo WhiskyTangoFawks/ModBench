@@ -12,8 +12,8 @@ public interface ISourceRepositoryReads
     Answer<T, SourceFailure> ReadDocuments<T>(PluginAddress plugin, Func<IPluginDocuments, T> read);
 
     /// <summary>What <paramref name="files"/>, absolute paths in the plugin's tree, hold now and held when last read; null
-    /// when they do not read alone, as in a tree never listed or a FormKey another file holds too.</summary>
-    Answer<FilesRead?, SourceFailure> ReadFiles(PluginAddress plugin, IReadOnlyList<string> files);
+    /// when they do not read alone. A written document stands in for its file while it keeps its stamp.</summary>
+    Answer<FilesRead?, SourceFailure> ReadFiles(PluginAddress plugin, IReadOnlyList<string> files, IReadOnlyList<WrittenDocument> written);
 
     /// <summary>What a commit or a checkout moves without touching a document: with the documents' stamps unchanged,
     /// an equal stamp that vouches means <see cref="ChangedSinceLastCommit"/> answers as it did.</summary>
@@ -22,8 +22,9 @@ public interface ISourceRepositoryReads
     Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommit(PluginAddress plugin);
 
     /// <summary>As <see cref="ChangedSinceLastCommit"/>, of the records <paramref name="files"/> hold, absolute paths in the
-    /// plugin's tree: a record none of them held at the last commit is added.</summary>
-    Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommitIn(PluginAddress plugin, IReadOnlyList<string> files);
+    /// plugin's tree: a record none of them held at the last commit is added. A written document stands in as in ReadFiles.</summary>
+    Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommitIn(
+        PluginAddress plugin, IReadOnlyList<string> files, IReadOnlyList<WrittenDocument> written);
 
     /// <summary>Each file under the plugin's tree that git status names as changed or untracked, relative to the
     /// source folder; ignored files are not changes.</summary>

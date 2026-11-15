@@ -40,10 +40,12 @@ public abstract class TestInstance : IDisposable
             holder.Apply(LoadOrder);
             return holder;
         });
-        _services = new Lazy<IServiceProvider>(() => TestEditService.Over(Holder));
+        _services = new Lazy<IServiceProvider>(() => TestEditService.Over(Holder, index: Index.Queries));
     }
 
     public string DataFolder { get; }
+
+    public HandedWrites Index { get; } = HandedWrites.Create();
 
     public LoadOrderHolder Holder => _holder.Value;
 

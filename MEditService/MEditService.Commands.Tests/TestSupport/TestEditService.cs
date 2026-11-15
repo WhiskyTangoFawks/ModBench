@@ -4,6 +4,7 @@ using MEditService.LoadOrder;
 using MEditService.ModFolderAdapter;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.RecordIndex.Queries;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,12 +22,13 @@ internal static class TestEditService
     internal static IServiceProvider Over(
         LoadOrderHolder holder, Action<ILoggingBuilder>? logging = null, IPluginAdapter? adapter = null,
         INotificationPublisher? notifications = null, UnsavedDocuments? unsaved = null, ISourceAdapter? source = null,
-        IModFolderRepository? modFolders = null)
+        IModFolderRepository? modFolders = null, IQueries? index = null)
     {
         var documents = unsaved ?? new UnsavedDocuments();
         return new ServiceCollection()
             .AddLogging(logging ?? (_ => { }))
             .AddSingleton(holder)
+            .AddSingleton(index ?? HandedWrites.Create().Queries)
             .AddSingleton(documents)
             .AddSingleton(source ?? new GitSourceAdapter(documents, TimeProvider.System))
             .AddSingleton(TimeProvider.System)

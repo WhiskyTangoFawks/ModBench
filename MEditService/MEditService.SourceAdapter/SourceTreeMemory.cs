@@ -100,7 +100,7 @@ internal sealed class SourceTreeMemory(TimeProvider time)
         }
         var known = _known.GetOrAdd(root, _ => new StampGatedMemo<KnownDocument>(time));
         var listed = new HashSet<string>(StringComparer.Ordinal);
-        var declared = new TreeListing();
+        var declared = new TreeListing(time);
         var problems = new List<FileProblem>();
         var misplaced = new List<FileProblem>();
         var keysByFile = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);

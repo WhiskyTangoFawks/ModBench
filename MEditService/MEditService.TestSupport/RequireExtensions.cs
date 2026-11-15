@@ -13,6 +13,9 @@ public static class RequireExtensions
     public static T Require<T>(this T? value) where T : class =>
         value ?? throw new InvalidOperationException($"Expected a non-null {typeof(T).Name} here; the fixture does not hold what the test built.");
 
+    public static T Require<T>(this T? value) where T : struct =>
+        value ?? throw new InvalidOperationException($"Expected a {typeof(T).Name} here; the fixture does not hold what the test built.");
+
     /// <summary>The value a plugin read or write answered; its failure here is a broken fixture.</summary>
     public static T Answered<T>(this Answer<T, PluginFailure> answer) =>
         answer.Holds(out var value, out var failure)

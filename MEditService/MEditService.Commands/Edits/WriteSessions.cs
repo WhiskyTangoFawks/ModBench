@@ -1,4 +1,5 @@
 using MEditService.LoadOrder;
+using MEditService.RecordIndex.Queries;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -33,14 +34,33 @@ internal sealed class WriteSessions(ISourceAdapter source, IReadOnlyList<Documen
     /// <paramref name="loadOrder"/> marks it; an outcome that changed nothing is not written.</summary>
     internal RecordEditResult Written(RecordEditResult outcome, string doing, LoadOrderHolder loadOrder, ILogger logger)
     {
-        if (!outcome.Applied || !_byFolder.Values.Any(Changes)) return outcome;
-        if (Write() is { } failure) return WriteFailure.Refusal(failure, doing, logger);
-        loadOrder.SourceWritten(PluginsWritten(loadOrder.Current));
+        if (Unwritten(outcome, doing, logger) is { } answered) return answered;
+        loadOrder.SourceWritten(PluginsWritten(loadOrder.Current)?.Select(named => new PluginChange(named.Key, named.Value)).ToList());
         return outcome;
     }
 
+    /// <summary>As <see cref="Written"/>, handing <paramref name="index"/> the documents written, and answered once it holds
+    /// them (ADR-0029). A write the record index could not read is answered as written: its status says so.</summary>
+    internal async Task<RecordEditResult> Handed(
+        RecordEditResult outcome, string doing, LoadOrderHolder loadOrder, IQueries index, ILogger logger, CancellationToken cancel)
+    {
+        if (Unwritten(outcome, doing, logger) is { } answered) return answered;
+        var written = _byFolder.Values.SelectMany(session => session.Written).ToList();
+        var handed = PluginsWritten(loadOrder.Current)?.Select(named => new HandedPlugin(
+            named.Key, named.Value, [.. written.Where(document => named.Value.Contains(document.Path, StringComparer.Ordinal))])).ToList();
+        if (await index.Hold(handed, cancel).ConfigureAwait(false) is { } unread) UnreadWrite.Log(logger, unread);
+        return outcome;
+    }
+
+    // Null once the changes are written; else the outcome, which changed nothing or failed to write.
+    private RecordEditResult? Unwritten(RecordEditResult outcome, string doing, ILogger logger)
+    {
+        if (!outcome.Applied || !_byFolder.Values.Any(Changes)) return outcome;
+        return Write() is { } failure ? WriteFailure.Refusal(failure, doing, logger) : null;
+    }
+
     // Null when a path written names no plugin, so only a check of the whole disk reads it.
-    private List<PluginChange>? PluginsWritten(LoadOrderSnapshot loadOrder)
+    private Dictionary<PluginAddress, List<string>>? PluginsWritten(LoadOrderSnapshot loadOrder)
     {
         var made = Made;
         var files = new Dictionary<PluginAddress, List<string>>(PluginAddress.Comparer);
@@ -59,7 +79,7 @@ internal sealed class WriteSessions(ISourceAdapter source, IReadOnlyList<Documen
                     break;
             }
         }
-        return [.. files.Select(written => new PluginChange(written.Key, written.Value))];
+        return files;
     }
 
     private static bool Changes(IWriteSession session) =>
