@@ -1,4 +1,5 @@
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -37,5 +38,20 @@ public sealed class SetPluginFileFlagsHandlerTests : IDisposable
         Assert.Equal((exceeds, PluginFileFlagRefusal.FormIdOutsideFlagLimit), (refused.Item, refused.Refusal));
         Assert.Contains("light range", refused.Message);
         Assert.Equal(exceedsBefore, File.ReadAllBytes(exceeds));
+    }
+
+    [Fact]
+    public void SettingFlags_NamesToTheRecordIndexOnlyThePluginsTheLoadOrderHolds()
+    {
+        using var data = new PluginFixtureBuilder("set-plugin-file-flags-held").WithPlugin("Held.esp").Build();
+        var holder = new LoadOrderHolder();
+        holder.Apply(SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        var held = Assert.Single(data.Plugins);
+        var own = holder.BeginOwnWrites();
+
+        var result = TestEditService.SetPluginFileFlagsHandler(holder).Set([Small(held.Path), Small(PluginHolding("Loose.esp", 0x800))], GameRelease.Fallout4);
+
+        Assert.Equal(2, result.Applied.Count);
+        Assert.Equal([held.Key], Assert.Single(own.Snapshot()).Plugins);
     }
 }

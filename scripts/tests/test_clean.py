@@ -1,8 +1,6 @@
 import itertools
-import threading
 import unittest
-from collections.abc import Generator, Iterator
-from contextlib import contextmanager
+from collections.abc import Iterator
 
 import medit
 from default.clean import clean
@@ -11,8 +9,8 @@ from tests.fixture_medit import (
     CONFLICT_A,
     PLUGINS,
     Fixture,
-    call,
     fixture_medit,
+    hand_load_order,
     plugin_entry,
     version_in_git,
     window_of,
@@ -20,7 +18,6 @@ from tests.fixture_medit import (
 
 PATCH = medit.Plugin('MBDevPatchAB.esp', 'MB-DEV Patch A+B')
 ITEM_A = '000800:MBDevConflictA.esp'
-WATCH_INTERVAL_S = 0.25
 DELETED = 0x20
 PERSISTENT = 0x400
 INITIALLY_DISABLED = 0x800
@@ -29,50 +26,22 @@ ENABLE_PARENT = 'EnableParent'
 
 
 class Created:
-    """A resend built before a plugin joined the list but sent after mEdit wrote it would be the snapshot the next read
-    waits for, and would not name the plugin; the lock keeps a resend from straddling a creation."""
+    """Each plugin created, then the load order Modbench's watcher hands mEdit once it sees the plugin."""
 
-    def __init__(self) -> None:
+    def __init__(self, fixture: Fixture) -> None:
+        self.fixture = fixture
         self.enabled: list[medit.Plugin] = []
         self.disabled: list[medit.Plugin] = []
-        self.lock = threading.Lock()
 
     def create(self, name: str, origin: str, active: bool) -> medit.Plugin:
-        with self.lock:
-            plugin = medit.create_plugin(name, origin, flags=[])
-            (self.enabled if active else self.disabled).append(plugin)
-            return plugin
-
-
-def resend_with(fixture: Fixture, created: Created) -> None:
-    with created.lock:
-        send_load_order(fixture, created)
-        call('POST', fixture.url + '/signal-change')
-
-
-def send_load_order(fixture: Fixture, created: Created) -> None:
-    enabled = [plugin_entry(fixture.instance, plugin, len(PLUGINS) + at) for at, plugin in enumerate(created.enabled)]
-    disabled = [plugin_entry(fixture.instance, plugin, None) for plugin in created.disabled]
-    call('PUT', fixture.url + '/load-order', {
-        **fixture.load_order, 'plugins': fixture.load_order['plugins'] + enabled + disabled,
-        'active': fixture.load_order['active'] + [plugin._asdict() for plugin in created.enabled]})
-
-
-@contextmanager
-def watching(fixture: Fixture, created: Created) -> Generator[None]:
-    stopped = threading.Event()
-
-    def resend() -> None:
-        while not stopped.wait(WATCH_INTERVAL_S):
-            resend_with(fixture, created)
-
-    watcher = threading.Thread(target=resend, daemon=True)
-    watcher.start()
-    try:
-        yield
-    finally:
-        stopped.set()
-        watcher.join()
+        plugin = medit.create_plugin(name, origin, flags=[])
+        (self.enabled if active else self.disabled).append(plugin)
+        enabled = [plugin_entry(self.fixture.instance, plugin, len(PLUGINS) + at) for at, plugin in enumerate(self.enabled)]
+        disabled = [plugin_entry(self.fixture.instance, plugin, None) for plugin in self.disabled]
+        hand_load_order(self.fixture.url, {
+            **self.fixture.load_order, 'plugins': self.fixture.load_order['plugins'] + enabled + disabled,
+            'active': self.fixture.load_order['active'] + [plugin._asdict() for plugin in self.enabled]})
+        return plugin
 
 
 class CleanAgainstTheFixtureInstance(unittest.TestCase):
@@ -83,12 +52,11 @@ class CleanAgainstTheFixtureInstance(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.fixture = cls.enterClassContext(fixture_medit())
-        cls.created = Created()
+        cls.created = Created(cls.fixture)
         cls.names = itertools.count()
         version_in_git(cls.fixture, PATCH.origin)
         version_in_git(cls.fixture, CONDITIONS.origin)
         cls.enterClassContext(window_of(cls.fixture.url))
-        cls.enterClassContext(watching(cls.fixture, cls.created))
 
     @classmethod
     def enabled(cls) -> medit.Plugin:

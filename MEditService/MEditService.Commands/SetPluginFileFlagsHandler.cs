@@ -60,21 +60,18 @@ public sealed class SetPluginFileFlagsHandler
             else refused.Add(new PluginFileFlagRefused(file.Path, RefusalOf(failure), failure.Reason));
         }
 
-        if (applied.Count > 0) _loadOrder.SourceWritten(PluginsWritten(applied.Select(set => set.Path)));
+        if (PluginsWritten(applied.Select(set => set.Path)) is { Count: > 0 } written) _loadOrder.SourceWritten(written);
         return new SetPluginFileFlagsResult(applied, refused);
     }
 
-    // Null when a path written is no plugin of the load order, so only a check of the whole disk reads it.
-    private List<PluginChange>? PluginsWritten(IEnumerable<string> paths)
+    // The record index holds nothing of a file no plugin of the load order is, so a write to one has nothing to be read.
+    private List<PluginChange> PluginsWritten(IEnumerable<string> paths)
     {
         var held = _loadOrder.Current.Plugins;
-        List<PluginChange> changes = [];
-        foreach (var path in paths)
-        {
-            if (held.FirstOrDefault(plugin => string.Equals(plugin.Path, path, StringComparison.OrdinalIgnoreCase)) is not { } plugin) return null;
-            changes.Add(new PluginChange(plugin.Key, null));
-        }
-        return changes;
+        return [.. paths
+            .Select(path => held.FirstOrDefault(plugin => string.Equals(plugin.Path, path, StringComparison.OrdinalIgnoreCase)))
+            .OfType<RegisteredPlugin>()
+            .Select(plugin => new PluginChange(plugin.Key, null))];
     }
 
     private static PluginFileFlagRefusal RefusalOf(PluginFailure failure) =>

@@ -178,7 +178,7 @@ def version_in_git(fixture: Fixture, mod: str) -> None:
 def watcher_sees_a_change(fixture: Fixture, *created: Plugin) -> None:
     """Modbench's watcher once the instance changed: the load order, which a created plugin joins with no line, then the change signalled."""
     plugins = fixture.load_order['plugins'] + [plugin_entry(fixture.instance, plugin, None) for plugin in created]
-    call('PUT', fixture.url + '/load-order', {**fixture.load_order, 'plugins': plugins})
+    hand_load_order(fixture.url, {**fixture.load_order, 'plugins': plugins})
     call('POST', fixture.url + '/signal-change')
 
 
