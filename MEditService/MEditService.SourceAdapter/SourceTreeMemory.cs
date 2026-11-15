@@ -64,13 +64,14 @@ public sealed record RecordStamps(
     public override int GetHashCode() => ByFormKey.Count;
 }
 
-/// <summary>A record's content stamp: what the record index remembers of a document, and what the tree is
-/// asked against (ADR-0003). A file is remembered once <paramref name="time"/> settles its stamp.</summary>
-internal sealed class TreeStamps(TimeProvider time)
+/// <summary>What the adapter remembers of source trees across reads: a record's content stamp, which the record index
+/// remembers of a document and the tree is asked against (ADR-0003), and the text a file held at the last commit
+/// (ADR-0007). A file is remembered once <paramref name="time"/> settles its stamp.</summary>
+internal sealed class SourceTreeMemory(TimeProvider time)
 {
     private readonly ConcurrentDictionary<string, StampGatedMemo<KnownDocument>> _known = new(StringComparer.Ordinal);
 
-    internal CommittedTexts Committed { get; } = new();
+    internal CommittedTexts Committed { get; } = new(time);
 
     private readonly ConcurrentDictionary<string, TreeListing> _listed = new(TreeListing.PathComparer);
 

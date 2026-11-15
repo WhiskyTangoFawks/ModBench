@@ -16,7 +16,7 @@ internal sealed class SourceRepository : ISourceRepository
     private readonly string _modName;
     private readonly GameRelease _release;
     private readonly SourceRepositoryGit _git;
-    private readonly TreeStamps _stamps;
+    private readonly SourceTreeMemory _stamps;
 
     public string SourceFolder => _sourceFolder;
 
@@ -28,7 +28,7 @@ internal sealed class SourceRepository : ISourceRepository
 
     internal ISourceFiles Files { get; }
 
-    private SourceRepository(string sourceFolder, GameRelease release, string modName, ISourceFiles files, TreeStamps stamps)
+    private SourceRepository(string sourceFolder, GameRelease release, string modName, ISourceFiles files, SourceTreeMemory stamps)
     {
         (_sourceFolder, _release, _modName, Files, _stamps) = (sourceFolder, release, modName, files, stamps);
         _git = SourceRepositoryGit.Holding(sourceFolder);
@@ -42,12 +42,12 @@ internal sealed class SourceRepository : ISourceRepository
 
     /// <summary>The repository over <paramref name="mod"/>'s source folder, or null when the folder is not
     /// a source mod and so has no source tree to answer from.</summary>
-    internal static SourceRepository? Open(PluginProvider.FromMod mod, GameRelease release, TreeStamps stamps) =>
+    internal static SourceRepository? Open(PluginProvider.FromMod mod, GameRelease release, SourceTreeMemory stamps) =>
         IsSourceMod(mod) ? Over(mod, release, stamps) : null;
 
     /// <summary>The repository over a mod's source folder, which refuses the last-written record of a plugin
     /// another mod provides (ADR-0012): a repository knows only its folder.</summary>
-    internal static SourceRepository Over(PluginProvider.FromMod mod, GameRelease release, TreeStamps stamps) =>
+    internal static SourceRepository Over(PluginProvider.FromMod mod, GameRelease release, SourceTreeMemory stamps) =>
         new(mod.SourceFolder ?? throw new InvalidOperationException($"'{mod.Name}' is not a source mod, so it has no source folder."),
             release, mod.Name, DiskFiles.Instance, stamps);
 
@@ -167,7 +167,7 @@ internal sealed class SourceRepository : ISourceRepository
             : null);
 
     /// <summary>What the file at <paramref name="path"/> holds, read from its text as the record index reads it.</summary>
-    internal static RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path, ISourceFiles files, TreeStamps stamps)
+    internal static RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path, ISourceFiles files, SourceTreeMemory stamps)
     {
         var fullPath = Path.GetFullPath(path);
         if (SourceRepositoryLayout.CarriesNoRecord(fullPath)) return new RecordOfFileAnswer.HoldsNone();

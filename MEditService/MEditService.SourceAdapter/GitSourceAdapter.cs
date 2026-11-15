@@ -9,7 +9,7 @@ namespace MEditService.SourceAdapter;
 /// stamp by <paramref name="time"/>.</summary>
 public sealed class GitSourceAdapter(UnsavedDocuments unsaved, TimeProvider time) : ISourceAdapter
 {
-    private readonly TreeStamps _stamps = new(time);
+    private readonly SourceTreeMemory _stamps = new(time);
 
     public bool SourceReads(RegisteredPlugin plugin) => SourceRepository.SourceReads(plugin);
 
@@ -47,7 +47,7 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved, TimeProvider time
 
     public SourceFailure? WhyGitCannotRun() => SourceRepository.WhyGitCannotRun();
 
-    public string ContentStamp(string text) => TreeStamps.ContentStamp(text);
+    public string ContentStamp(string text) => SourceTreeMemory.ContentStamp(text);
 
     public SourceFailure? Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,

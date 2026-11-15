@@ -3,6 +3,7 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
+using Microsoft.Extensions.Time.Testing;
 using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter.Tests.Source;
@@ -20,13 +21,15 @@ public sealed class SourceRepositoryCommittedTextKeptTests : IDisposable
 
     private readonly ScratchDirectory _modFolder = new("medit-committed-kept-");
     private readonly string _npcPath;
+    private readonly FakeTimeProvider _clock = new(TimeProvider.System.GetUtcNow());
     private readonly ISourceRepository _repository;
 
     public SourceRepositoryCommittedTextKeptTests()
     {
         var relative = Path.Combine("plugin-source", PluginName, "Npcs", $"FixtureNpc - 000800_{PluginName}.json");
         PluginBaselines.Init(_modFolder, [new TreeFile(relative, Encoding.UTF8.GetBytes(NpcBody))]);
-        _repository = TestAdapters.OpenSourceMod(_modFolder, GameRelease.Fallout4);
+        _clock.SetUtcNow(TimeProvider.System.GetUtcNow().AddSeconds(3));
+        _repository = TestAdapters.Source(_clock).Open(TestMod.In(_modFolder), GameRelease.Fallout4).Require();
         _npcPath = Path.Combine(_modFolder, relative);
     }
 

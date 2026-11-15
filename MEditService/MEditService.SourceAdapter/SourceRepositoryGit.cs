@@ -276,7 +276,10 @@ internal abstract class SourceRepositoryGit
 
     /// <summary>The files whose change moves what git status says of a tree but touches no document: a commit moves
     /// the index and the ref HEAD names.</summary>
-    internal IReadOnlyList<string> StateFiles()
+    internal IReadOnlyList<string> StateFiles() => [.. HeadFiles(), Path.Combine(_gitDir, "index")];
+
+    /// <summary>The files a commit moves HEAD through: HEAD, the ref it names, and the packed refs.</summary>
+    internal IReadOnlyList<string> HeadFiles()
     {
         const string RefPrefix = "ref: ";
         var head = Path.Combine(_gitDir, "HEAD");
@@ -284,26 +287,7 @@ internal abstract class SourceRepositoryGit
         var named = File.Exists(head) && File.ReadLines(head).FirstOrDefault() is { } line && line.StartsWith(RefPrefix, StringComparison.Ordinal)
             ? Path.Combine(commonDir, line[RefPrefix.Length..].Trim())
             : null;
-        return [head, Path.Combine(_gitDir, "index"), Path.Combine(commonDir, "packed-refs"), .. named is null ? [] : new[] { named }];
-    }
-
-    /// <summary>The commit HEAD names, read off the ref store's files, not by running git; null when they do not say.</summary>
-    internal string? LastCommit()
-    {
-        const string RefPrefix = "ref: ";
-        var head = Path.Combine(_gitDir, "HEAD");
-        if (!File.Exists(head) || File.ReadLines(head).FirstOrDefault()?.Trim() is not { Length: > 0 } line) return null;
-        if (!line.StartsWith(RefPrefix, StringComparison.Ordinal)) return line;
-
-        var commonDir = CommonDirectoryOf(_gitDir);
-        var gitRef = line[RefPrefix.Length..].Trim();
-        var loose = Path.Combine(commonDir, gitRef);
-        if (File.Exists(loose)) return File.ReadLines(loose).FirstOrDefault()?.Trim() is { Length: > 0 } sha ? sha : null;
-
-        var packed = Path.Combine(commonDir, "packed-refs");
-        return File.Exists(packed)
-            ? File.ReadLines(packed).Where(entry => entry.EndsWith($" {gitRef}", StringComparison.Ordinal)).Select(entry => entry.Split(' ')[0]).FirstOrDefault()
-            : null;
+        return [head, Path.Combine(commonDir, "packed-refs"), .. named is null ? [] : new[] { named }];
     }
 
     /// <summary>HEAD and the index of <see cref="FolderPaths"/> back at <paramref name="head"/>; with none, the branch is
