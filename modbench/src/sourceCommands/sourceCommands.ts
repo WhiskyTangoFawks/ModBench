@@ -18,7 +18,7 @@ import type { StepTasks } from './steps';
 import { whyNotIndexed, type LoadOrderSnapshot } from './whyNotIndexed';
 
 interface SourceCommandsDeps {
-  client: Pick<MEditClient, 'build' | 'versionInGit' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
+  client: Pick<MEditClient, 'build' | 'versionInGit' | 'getPluginIndexing' | 'onDidChange'>;
   adapter: Pick<InstanceAdapter,
     'reading' | 'modOrder' | 'entryKey' | 'downloadedFile' | 'downloadedFilesHashed' | 'downloadedFileHolding' | 'installationFile' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceModFolders'
     | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'pathInFolder' | 'ownPath' | 'nexusFileAt' | 'gamePlace' | 'gameFiles' | 'gameFilesTakenBy' | 'textHash' | 'filesIn'

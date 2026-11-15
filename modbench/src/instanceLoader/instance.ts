@@ -14,8 +14,10 @@ import {
 import type { FlaggedRead, SourceMods } from '../manifestAdapter/manifestAdapter';
 import { type PapyrusScript } from './papyrusScripts';
 import { errorMessage } from '../ports/errorMessage';
-import { FlaggedHashesHeld, type FlaggedReader } from './flaggedHashes';
-import { ArchiveContentsHeld, unreadableArchiveLines, type ArchiveRead, type ArchiveReader } from './archiveContents';
+import type { MEditClient } from '../client/MEditClient';
+import type { Disposable } from '../client/eventEmitter';
+import { FlaggedHashesHeld } from './flaggedHashes';
+import { ArchiveContentsHeld, unreadableArchiveLines, type ArchiveRead } from './archiveContents';
 import { FactsOfReading } from './factsOfReading';
 import { WrittenFiles } from './writtenFiles';
 import { collectingWrites } from './ambientWrites';
@@ -262,7 +264,7 @@ interface InstanceOptions {
   gameFolderSettingId: string;
   workspace: Workspace;
   log: Log;
-  medit: ArchiveReader & FlaggedReader;
+  medit: Pick<MEditClient, 'getArchiveContents' | 'getFlaggedPluginHashes' | 'onDidChange'>;
 }
 
 const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'publisherTags'>, gameFolderSettingId: string, entryKey: InstanceValue['entryKey']): InstanceValue => ({
@@ -350,7 +352,7 @@ export class Instance implements Subscription {
 
   private readonly flagged: FlaggedHashesHeld;
 
-  private readonly stopHearingMEditStatus: () => void;
+  private readonly mEditChanges: Disposable;
 
   // A note is one Output line until its text changes or it clears.
   private readonly notesTold = new Map<NoteKind, ReadonlySet<string>>();
@@ -366,8 +368,8 @@ export class Instance implements Subscription {
     this.archives = new ArchiveContentsHeld(options.medit);
     this.flagged = new FlaggedHashesHeld(options.medit);
     this.facts = new FactsOfReading(options.adapter, entryKey, this.archives, this.flagged);
-    this.stopHearingMEditStatus = options.medit.onStatusChanged((status) => {
-      if (status === 'running' && (this.archives.anyUnanswered || this.flagged.anyUnanswered)) void this.enqueue({ disk: false, tellsUnheard: false });
+    this.mEditChanges = options.medit.onDidChange((change) => {
+      if (change === undefined && (this.archives.anyUnanswered || this.flagged.anyUnanswered)) void this.enqueue({ disk: false, tellsUnheard: false });
     });
   }
 
@@ -489,7 +491,7 @@ export class Instance implements Subscription {
     clearTimeout(this.settleTimer);
     this.changes.dispose();
     this.workspaceWatch.dispose();
-    this.stopHearingMEditStatus();
+    this.mEditChanges.dispose();
     this.subscribers = [];
     this.failureListeners = [];
     this.redrawListeners = [];
