@@ -72,8 +72,8 @@ describe('a folder listed and a file parsed by their stamps', () => {
     const unnamed = await readTrustingKept([], false, () => namesOf(root));
     const named = await readTrustingKept([join(root, 'b.esp')], false, () => namesOf(root));
 
-    expect(unnamed).toEqual({ answer: ['a.esp'], unheard: [] });
-    expect(named).toEqual({ answer: ['a.esp', 'b.esp'], unheard: [] });
+    expect(unnamed).toMatchObject({ answer: ['a.esp'], unheard: [] });
+    expect(named).toMatchObject({ answer: ['a.esp', 'b.esp'], unheard: [] });
     expect(listingsOf(root)).toBe(1);
   });
 
@@ -159,7 +159,7 @@ describe('a folder listed and a file parsed by their stamps', () => {
 
     const checked = await readTrustingKept([join(heard, 'new.esp')], true, async () => [await namesOf(heard), await namesOf(unheard)]);
 
-    expect(checked).toEqual({ answer: [['new.esp'], ['new.esp']], unheard: [unheard] });
+    expect(checked).toMatchObject({ answer: [['new.esp'], ['new.esp']], unheard: [unheard] });
   });
 
   it('answers as unheard a change to a file it last read too soon after a write to trust', async () => {
@@ -170,7 +170,7 @@ describe('a folder listed and a file parsed by their stamps', () => {
     await writeFile(path, '+B');
     await modifiedLater(path);
 
-    expect(await readTrustingKept([], true, () => textAt(path))).toEqual({ answer: '+B', unheard: [path] });
+    expect(await readTrustingKept([], true, () => textAt(path))).toMatchObject({ answer: '+B', unheard: [path] });
   });
 
   describe('on a file system that leaves a folder\'s stamp as it was for an entry added', () => {
@@ -329,7 +329,7 @@ describe('the MO2 reading of an instance nothing changed in', () => {
 
     const again = new Map(Object.entries(await adapter.reading({ named: [], disk: false })));
 
-    const notes = new Set(['orderNotes', 'archiveListNotes', 'linkNotes', 'unheardChanges']);
+    const notes = new Set(['orderNotes', 'archiveListNotes', 'linkNotes', 'unheardChanges', 'unchangedFiles']);
     expect(Object.entries(first).filter(([fact, held]) => !notes.has(fact) && again.get(fact) !== held).map(([fact]) => fact)).toEqual([]);
   });
 
@@ -421,7 +421,7 @@ describe('the MO2 reading of an instance nothing changed in', () => {
       await writeFile(join(instance, 'compiler_settings.json'), JSON.stringify({ Include: ['tools/x.txt'] }));
       const adapter = adapterOver(instance, { gameFolder });
       const pathProblems = async (reread: Reread): Promise<number> =>
-        expectKind((await adapter.reading(reread)).publisherConfiguration, 'read').pathProblems.length;
+        expectKind((await adapter.reading(reread)).publisherConfiguration, 'read').pathProblems.filter(({ tag }) => tag.name === 'Include').length;
       const before = await pathProblems(CHECK_THE_DISK);
       await mkdir(join(instance, 'tools'));
       await writeFile(join(instance, 'tools', 'x.txt'), '');

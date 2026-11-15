@@ -23,7 +23,7 @@ export function pluginSyncOn({ instance, syncPlugins, channel }: PluginSyncDeps)
   const subscription = instance.subscribe(async () => {
     const written = new WrittenFiles();
     const synced = await isolatingWrites(written, () => pluginSync.run());
-    if (synced?.wrote) await instance.refresh(written.named);
+    if (synced?.wrote && written.named?.length !== 0) await instance.refresh(written.named);
   });
   return { pluginSync, dispose: () => { subscription.dispose(); } };
 }

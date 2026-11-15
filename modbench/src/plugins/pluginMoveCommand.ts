@@ -3,9 +3,8 @@ import type { PluginAddress } from '../client';
 import type { Instance } from '../instanceLoader/instance';
 import { registerAgentGesture, type AgentGesture, type GestureResult } from '../drivingLib/agentGesture';
 import { pluralArgument } from '../drivingLib/gestureEntry';
-import { RefusedWrite, runWritingGesture } from '../drivingLib/writingGesture';
+import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { PluginCommands, PluginsDrop } from '../pluginCommands/plugins';
-import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
 import { type PluginsTreeProvider } from './PluginsTreeProvider';
@@ -30,15 +29,10 @@ export async function movePlugins(
   write: string, commands: Pick<PluginCommands, 'reorderPlugins'>, instance: Pick<Instance, 'value' | 'refresh'>,
   plugins: readonly PluginAddress[], drop: PluginsDrop,
 ): Promise<GestureResult<PluginAddress>> {
-  try {
-    const result = await runWritingGesture(write, PLUGINS_KEY_ARGS.view, instance, () => commands.reorderPlugins(plugins, drop));
-    return result.applied
-      ? { applied: true, outcome: { landed: plugins, refused: [] } }
-      : { applied: false, refusal: 'Could not move plugins.', detail: result.refusal };
-  } catch (e) {
-    if (e instanceof RefusedWrite) throw e;
-    return { applied: false, refusal: 'Failed to move plugins.', detail: errorMessage(e) };
-  }
+  const result = await runWritingGesture(write, PLUGINS_KEY_ARGS.view, instance, () => commands.reorderPlugins(plugins, drop));
+  return result.applied
+    ? { applied: true, outcome: { landed: plugins, refused: [] } }
+    : { applied: false, refusal: 'Could not move plugins.', detail: result.refusal };
 }
 
 /** `modbench.plugin.move`: the plugins and the drop where they land. Left out, the plugins are the

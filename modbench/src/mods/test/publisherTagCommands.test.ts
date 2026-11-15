@@ -119,7 +119,7 @@ describe('add publisher tag (publishing.md, Publisher tags, story 2)', () => {
 
     expect(offered).toEqual(['Include', 'Ignore', 'Always Enabled']);
     expect(fake.calls).toEqual([tagChange('add', 'Always Enabled', '/instance/mods/M', '/instance/mods/N')]);
-    expect(progressSteps).toEqual(['progress opens on modbench.modList', 'Instance loader: read every file again', 'progress closes']);
+    expect(progressSteps).toEqual(['progress opens on modbench.modList', 'progress closes']);
   });
 
   it('offers only the tags that mark paths over files and folders, and adds to the files and folders alone', async () => {

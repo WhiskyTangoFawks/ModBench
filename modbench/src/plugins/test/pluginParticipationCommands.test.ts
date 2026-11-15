@@ -111,7 +111,6 @@ describe('the enable and disable entries end when the read lands (common.md, A g
   const alpha = new PluginNode({ name: 'Alpha.esp', enabled: false }, 'SomeMod');
   const ENDS_ON_THE_READ = [
     'progress opens on modbench.pluginListTree',
-    'Instance loader: read every file again',
     'progress closes',
   ];
 

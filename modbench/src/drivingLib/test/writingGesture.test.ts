@@ -11,6 +11,8 @@ import { recordingReporter } from '../../test/surfacingDoubles';
 import { Refusal } from '../refusal';
 import { ambientWrites } from '../../instanceLoader/ambientWrites';
 
+const unnamed = (): Promise<void> => { ambientWrites.leaveUnnamed(); return Promise.resolve(); };
+
 function instanceThatReads() {
   return {
     refresh: () => { steps.push('refresh'); return Promise.resolve(undefined); },
@@ -18,10 +20,10 @@ function instanceThatReads() {
 }
 
 describe('a gesture that writes, inside its view\'s progress bar', () => {
-  it('runs the command once and then one refresh, inside the view\'s progress bar', async () => {
+  it('runs the command once and then, when its writes were left unnamed, one refresh, inside the view\'s progress bar', async () => {
     steps.length = 0;
 
-    await runWritingGesture('modbench.write', 'modbench.thing', instanceThatReads(), () => { steps.push('command'); return Promise.resolve(); });
+    await runWritingGesture('modbench.write', 'modbench.thing', instanceThatReads(), () => { steps.push('command'); return unnamed(); });
 
     expect(steps).toEqual(['progress opens on modbench.thing', 'command', 'refresh', 'progress closes']);
   });
@@ -31,7 +33,7 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
     let lands!: () => void;
     const instance = { refresh: () => new Promise<undefined>((r) => { lands = () => r(undefined); }) };
 
-    const running = runWritingGesture('modbench.write', 'modbench.thing', instance, () => Promise.resolve());
+    const running = runWritingGesture('modbench.write', 'modbench.thing', instance, unnamed);
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(steps).toEqual(['progress opens on modbench.thing']);
 
@@ -40,10 +42,10 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
     expect(steps.at(-1)).toBe('progress closes');
   });
 
-  it('shows the disk after a command that throws, and lets the failure through', async () => {
+  it('shows the disk after a command that throws having left its writes unnamed, and lets the failure through', async () => {
     steps.length = 0;
 
-    await expect(runWritingGesture('modbench.write', 'modbench.thing', instanceThatReads(), () => Promise.reject(new Error('half written'))))
+    await expect(runWritingGesture('modbench.write', 'modbench.thing', instanceThatReads(), () => { ambientWrites.leaveUnnamed(); return Promise.reject(new Error('half written')); }))
       .rejects.toThrow('half written');
 
     expect(steps).toEqual(['progress opens on modbench.thing', 'refresh', 'progress closes']);
@@ -57,13 +59,20 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
     expect(refresh.mock.calls).toEqual([[['/mods/A/meta.ini']]]);
   });
 
-  it('refreshes at the files the command named, and at the whole disk when it named none', async () => {
+  it('ends when its writes return, refreshing nothing, when every write told the Instance loader', async () => {
     const refresh = vi.fn(() => Promise.resolve());
 
-    await runWritingGesture('modbench.write', 'modbench.thing', { refresh }, (_progress, written) => { written.name(['/a.esp']); return Promise.resolve(); });
     await runWritingGesture('modbench.write', 'modbench.thing', { refresh }, () => Promise.resolve());
 
-    expect(refresh.mock.calls).toEqual([[['/a.esp']], [undefined]]);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('checks the whole disk when the command left its writes unnamed', async () => {
+    const refresh = vi.fn(() => Promise.resolve());
+
+    await runWritingGesture('modbench.write', 'modbench.thing', { refresh }, () => { ambientWrites.leaveUnnamed(); return Promise.resolve(); });
+
+    expect(refresh.mock.calls).toEqual([[undefined]]);
   });
 
   describe('with the other read model surfaced', () => {
@@ -83,7 +92,7 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
       const other = otherReadModel();
       const instance = { refresh: () => { other.hand(); steps.push('refresh'); return Promise.resolve(undefined); } };
 
-      const running = runWritingGesture('modbench.write', 'modbench.thing', instance, () => Promise.resolve());
+      const running = runWritingGesture('modbench.write', 'modbench.thing', instance, unnamed);
       await new Promise((resolve) => setTimeout(resolve, 0));
       expect(steps).toEqual(['progress opens on modbench.thing', 'refresh']);
 
@@ -97,7 +106,7 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
       const other = otherReadModel();
       other.hand();
 
-      await runWritingGesture('modbench.write', 'modbench.thing', instanceThatReads(), () => Promise.resolve());
+      await runWritingGesture('modbench.write', 'modbench.thing', instanceThatReads(), unnamed);
 
       expect(steps).toEqual(['progress opens on modbench.thing', 'refresh', 'progress closes']);
     });
@@ -190,7 +199,7 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
     it('stays held while the refresh that shows the write is running', async () => {
       let lands!: () => void;
       const refreshing = { refresh: () => new Promise<undefined>((r) => { lands = () => r(undefined); }) };
-      const running = runWritingGesture('modbench.mod.build', 'modbench.thing', refreshing, () => Promise.resolve());
+      const running = runWritingGesture('modbench.mod.build', 'modbench.thing', refreshing, unnamed);
       onTestFinished(async () => { lands(); await running; });
       await new Promise((resolve) => setTimeout(resolve, 0));
 

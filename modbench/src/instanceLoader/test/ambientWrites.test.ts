@@ -23,7 +23,7 @@ describe('the writes of the command running', () => {
 
     ambientWrites.name(['/outside']);
 
-    expect(written.named).toBeUndefined();
+    expect(written.named).toEqual([]);
   });
 
   it('name each file to the collector of its own command when two run together', async () => {

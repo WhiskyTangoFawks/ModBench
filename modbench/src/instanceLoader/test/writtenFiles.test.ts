@@ -11,8 +11,8 @@ describe('the files a write wrote', () => {
     expect(written.named).toEqual(['/a', '/b']);
   });
 
-  it('are none named when none was, so the whole disk is checked', () => {
-    expect(new WrittenFiles().named).toBeUndefined();
+  it('are none when none was named, which asks for no check of the disk', () => {
+    expect(new WrittenFiles().named).toEqual([]);
   });
 
   it('are none named when a write left its files unnamed, though another named its own', () => {

@@ -3,14 +3,14 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { git, gitFed, gitStagingInto } from '../git';
-import { writesNamedTo } from '../../repositoriesLib/writeNaming';
+import { diskCheckedBy } from '../../repositoriesLib/writesTold';
 
 let root: string;
 let unnamed: number;
 
 beforeEach(() => {
   unnamed = 0;
-  writesNamedTo({ name: () => undefined, leaveUnnamed: () => { unnamed++; } });
+  diskCheckedBy({ name: () => undefined, leaveUnnamed: () => { unnamed++; } });
 });
 
 afterEach(async () => {
