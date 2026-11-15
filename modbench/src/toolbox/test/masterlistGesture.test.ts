@@ -59,7 +59,7 @@ describe('from the palette', () => {
 
     expect(ask.asked).toEqual([]);
     expect(said).toEqual(['Updating the masterlist…', undefined]);
-    expect(progressSteps).toEqual([`progress opens on ${PLUGINS_VIEW}`, 'Instance loader: read every file again', 'progress closes']);
+    expect(progressSteps).toEqual([`progress opens on ${PLUGINS_VIEW}`, 'progress closes']);
   });
 
   it('asks once, naming the files, while git holds uncommitted changes of them, and updates on the confirming button', async () => {

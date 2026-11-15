@@ -76,9 +76,11 @@ export function registerRefreshCommand(deps: RefreshGestureDeps): vscode.Disposa
     const outcome = await deps.commands.refresh();
     if (outcome.applied) {
       await refill.ended;
+      await deps.instance.refresh();
       return fromAgent ? answeredToAgent(outcome) : undefined;
     }
     refill.release();
+    await deps.instance.refresh();
     const { message, detail } = refusalOf(outcome);
     if (fromAgent) return { applied: false, refusal: message, detail };
     reporter.report('error', message, detail);
