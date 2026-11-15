@@ -49,12 +49,12 @@ internal sealed class FilterInForce(ILogger logger, INotificationPublisher? noti
 
     /// <summary>Materializes the filter in force again after rows moved, or none: a store opened while a
     /// clear waited still holds the cleared one. One that cannot apply again is cleared and published.</summary>
-    public void Reapply(Store.Store store)
+    public void Reapply(Store.Store store, bool rowsChanged)
     {
-        if (ReapplyOrClear(store) is { } cleared) notifications?.Publish(cleared);
+        if (ReapplyOrClear(store, rowsChanged) is { } cleared) notifications?.Publish(cleared);
     }
 
-    private RecordFilterClearedNotification? ReapplyOrClear(Store.Store store)
+    private RecordFilterClearedNotification? ReapplyOrClear(Store.Store store, bool rowsChanged)
     {
         lock (_lock)
         {
@@ -63,6 +63,7 @@ internal sealed class FilterInForce(ILogger logger, INotificationPublisher? noti
                 store.Filter.Set(null);
                 return null;
             }
+            if (!rowsChanged) return null;
             if (store.Filter.Set(filter.Sql) is not { } rejection) return null;
             logger.LogWarning(
                 "Could not re-materialize the active filter ({Error}); the filter is cleared", rejection);

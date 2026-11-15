@@ -247,8 +247,9 @@ public sealed class WriteNamingItsFilesTests : IDisposable
         var header = Directory.GetFiles(Path.Combine(Container.ModFolderOf(), PluginSourceRoot.For(ContainerMod.PluginName)), "*.json", SearchOption.TopDirectoryOnly).Single();
         var wholeReads = _source.WholeTreeReads;
 
+        var own = _holder.BeginOwnWrites();
         _holder.SourceWritten([new PluginChange(Container.Key, [header])]);
-        _ = _index.ListedIn(Container.Key);
+        _index.AwaitWrites(own);
 
         Assert.True(_source.WholeTreeReads > wholeReads);
     }

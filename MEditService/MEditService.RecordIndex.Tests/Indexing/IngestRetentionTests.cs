@@ -47,6 +47,7 @@ public sealed class IngestRetentionTests : IDisposable
     public void APluginsIngest_LeavesNoIndexNodesInDuckDbsMemory()
     {
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
+        IndexFiles.Checkpointed(_fixture.InstanceRoot);
 
         Assert.Equal(
             ["0"],

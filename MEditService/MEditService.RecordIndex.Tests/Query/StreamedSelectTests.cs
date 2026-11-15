@@ -71,7 +71,7 @@ public sealed class StreamedSelectTests : IDisposable
         lock (log) log.Clear();
         index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
 
-        lock (log) Assert.Contains(log, e => e.Message.StartsWith("Checkpointed the record index", StringComparison.Ordinal));
+        Waits.Reached(() => { lock (log) return log.Exists(e => e.Message.StartsWith("Checkpointed the record index", StringComparison.Ordinal)); }, "the checkpoint");
     }
 
     [Fact]

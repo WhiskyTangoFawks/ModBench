@@ -26,6 +26,14 @@ internal sealed class IndexWriteGate
         return new Holding(_gate);
     }
 
+    /// <summary>Whether the gate was free; never waits.</summary>
+    public bool TryEnter(out Holding held)
+    {
+        var entered = _gate.TryEnter();
+        held = new Holding(_gate);
+        return entered;
+    }
+
     /// <summary>One acquisition of the gate; disposing it releases exactly that one.</summary>
     public readonly struct Holding(Lock gate) : IDisposable
     {
