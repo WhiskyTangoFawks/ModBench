@@ -51,7 +51,7 @@ export interface RouteRecordPanelMessageDeps {
   // The grid's place, which the tab an edit's move of the file opens shows again.
   keepViewState: (state: ViewState) => void;
   // The latest load-order status, read rather than fetched.
-  conflictsComputed: () => boolean;
+  recordIndexMayBeLate: () => boolean;
   loadFailures: () => readonly PluginLoadFailure[];
   modFacts: ModFacts;
   // The origins the panel's last read showed, which it is told the state of when the instance changes.
@@ -227,7 +227,7 @@ function tellAnswered(
   deps.reply({
     type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: true,
     ...answered, ...(answered.compare && { compare: withMasterCellStates(answered.compare) }), plugins: listed, columnStatuses: statuses,
-    conflictsComputed: deps.conflictsComputed(), loadFailures: [...deps.loadFailures()], documentPlugin: deps.plugin,
+    conflictsComputed: !deps.recordIndexMayBeLate(), loadFailures: [...deps.loadFailures()], documentPlugin: deps.plugin,
     modsByOrigin: modsByOrigin(origins, deps.modFacts), fileOverriddenBy,
   });
 }

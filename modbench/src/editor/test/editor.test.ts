@@ -948,6 +948,39 @@ describe('what a record tab\'s webview posts', () => {
       expect(loadAnswered(tab)).toMatchObject([{ compare: { diffs: [{ cellStates: { 'A.esp': 'OnlyOne' } }] } }]);
     });
 
+    it('is answered conflicts not computed while a change signal is unanswered, though the status holds them computed', async () => {
+      const mEdit = client();
+      mEdit.emit(conflictsComputedTick);
+      mEdit.setStatus('running');
+      mEdit.answerSignals(() => new Promise<undefined>(() => undefined));
+      mEdit.signalChange(['/m/A.esp']);
+      const { open } = makeEditor(mEdit);
+      const tab = open(GUN);
+
+      tab.receive(loadRequest);
+      await readAnswered(tab);
+
+      expect(loadAnswered(tab)).toMatchObject([{ conflictsComputed: false }]);
+    });
+
+    it('is answered conflicts computed once the signal is answered and the load order settles', async () => {
+      const mEdit = client();
+      mEdit.emit(conflictsComputedTick);
+      mEdit.setStatus('running');
+      let answerSignal!: () => void;
+      mEdit.answerSignals(() => new Promise<undefined>((r) => { answerSignal = () => { r(undefined); }; }));
+      mEdit.signalChange(['/m/A.esp']);
+      const { open } = makeEditor(mEdit);
+      const tab = open(GUN);
+      answerSignal();
+      await vi.waitFor(() => expect(mEdit.recordIndexMayBeLate).toBe(false));
+
+      tab.receive(loadRequest);
+      await readAnswered(tab);
+
+      expect(loadAnswered(tab)).toMatchObject([{ conflictsComputed: true }]);
+    });
+
     describe('for a record no active plugin holds', () => {
       const gone: { formKey: string; plugin: { name: string; origin: string }; reason: 'RecordGone' | 'NotInPlugin'; message: string } = { formKey: GUN, plugin: { name: 'A.esp', origin: 'ModA' }, reason: 'RecordGone', message: `${GUN} is held by no plugin.` };
       const answeredFor = async (answer: { compare: typeof compare | null; missing: (typeof gone)[] }) => {
@@ -965,7 +998,7 @@ describe('what a record tab\'s webview posts', () => {
       it('is answered gone, naming it, when no registered plugin holds it', async () => {
         const { tab, outputChannel } = await answeredFor({ compare: null, missing: [gone] });
 
-        expect(loadAnswered(tab)).toEqual([expect.objectContaining({ ok: true, compare: null, gone: [GUN], copiesLacking: [], conflictsComputed: false, loadFailures: [] })]);
+        expect(loadAnswered(tab)).toEqual([expect.objectContaining({ ok: true, compare: null, gone: [GUN], copiesLacking: [], conflictsComputed: true, loadFailures: [] })]);
         expect(outputChannel.warn).toHaveBeenCalledWith(expect.stringContaining(GUN));
       });
 
