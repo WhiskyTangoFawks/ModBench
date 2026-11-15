@@ -32,7 +32,7 @@ type FolderOf = (name: string) => Promise<string | undefined>;
 type FolderValue = Awaited<ReturnType<InstanceAdapter['folderValue']>>;
 
 export interface RestoreDeps {
-  readonly client: Pick<MEditClient, 'cloneSubmodules' | 'setPluginFileFlags' | 'getFlaggedPluginHashes' | 'build' | 'getPluginIndexing' | 'onLoadOrderStatus'>;
+  readonly client: Pick<MEditClient, 'cloneSubmodules' | 'setPluginFileFlags' | 'getFlaggedPluginHashes' | 'build' | 'getPluginIndexing' | 'onDidChange'>;
   readonly adapter: Adapter;
   readonly nexus: Pick<Nexus, 'download'>;
   readonly loadOrderSnapshot: LoadOrderSnapshot;

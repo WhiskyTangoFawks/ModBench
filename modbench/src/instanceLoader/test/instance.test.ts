@@ -16,6 +16,7 @@ import { factsOf } from '../instanceFacts';
 import { modOrigin } from '../fileConflictIndex';
 import { fakeWorkspace } from '../../test/fakeWorkspace';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 import { writeManifestIn } from '../../manifestAdapter/manifestAdapter';
 
 const instances: Instance[] = [];
@@ -1406,14 +1407,14 @@ describe('Instance — what each flagged plugin could have held before its flags
     expect(instance.value.flaggedHashes.get(plugin)).toEqual({ kind: 'read', answer: ['new'] });
   });
 
-  it('holds a file unanswered while mEdit cannot be reached, and asks again once mEdit runs', async () => {
+  it('holds a file unanswered while mEdit cannot be reached, and asks again once mEdit tells everything changed', async () => {
     const { instance, medit, plugin } = await flaggedLoader();
     medit.setQueryFailureOnce('getFlaggedPluginHashes', { failed: 'unreachable' });
     medit.setQueryAnswerOnce('getFlaggedPluginHashes', [{ path: plugin, hashes: [COPY] }]);
     await instance.refresh();
     const unreached = instance.value.flaggedHashes.get(plugin);
 
-    medit.setStatus('running');
+    medit.emit(loadOrderStatusEventFixture());
     const reached = (await pastSequence(instance, 1)).flaggedHashes.get(plugin);
 
     expect([unreached, reached]).toEqual([{ kind: 'unanswered' }, { kind: 'read', answer: [COPY] }]);
@@ -1487,14 +1488,14 @@ describe('Instance — what each archive holds', () => {
     expect([locked, instance.value.archiveContents.get(MOD_ARCHIVE)]).toEqual([{ kind: 'unreadable', reason: 'EBUSY' }, { kind: 'read', answer: ['meshes/a.nif'] }]);
   });
 
-  it('holds an archive unanswered while mEdit cannot be reached, never unreadable, and asks again once mEdit runs', async () => {
+  it('holds an archive unanswered while mEdit cannot be reached, never unreadable, and asks again once mEdit tells everything changed', async () => {
     const { instance, medit } = loader(ARCHIVES_HELD);
     medit.setQueryFailureOnce('getArchiveContents', { failed: 'unreachable' });
     medit.setQueryAnswerOnce('getArchiveContents', [holding(MOD_ARCHIVE, 'meshes/a.nif'), holding(OVERWRITE_ARCHIVE)]);
     await instance.refresh();
     const unreached = instance.value.archiveContents.get(MOD_ARCHIVE);
 
-    medit.setStatus('running');
+    medit.emit(loadOrderStatusEventFixture());
     const reached = (await pastSequence(instance, 1)).archiveContents.get(MOD_ARCHIVE);
 
     expect([unreached, reached]).toEqual([{ kind: 'unanswered' }, { kind: 'read', answer: ['meshes/a.nif'] }]);
