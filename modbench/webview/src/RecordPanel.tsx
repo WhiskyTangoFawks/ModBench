@@ -55,8 +55,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const [editableSet, setEditableSet] = useState<Set<ColumnKey> | null>(null);
   const [columnStatuses, setColumnStatuses] = useState<Readonly<Record<string, ColumnStatus>>>({});
   const [modsByOrigin, setModsByOrigin] = useState<Record<string, ModRepository>>({});
-  // Whether the winner sweep has run. Initial `true` only matters until the first load
-  // lands, so it can never read as a false "settled".
+  // Initial `true` only matters until the first load lands.
   const [comparisonComplete, setComparisonComplete] = useState(true);
   const [loadFailures, setLoadFailures] = useState<PluginLoadFailure[]>([]);
   const [fileColumn, setFileColumn] = useState<ColumnKey | undefined>(undefined);
@@ -155,8 +154,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       setEditableSet(loaded.editableSet);
       setColumnStatuses(loaded.columnStatuses);
       setModsByOrigin(loaded.modsByOrigin);
-      // No `?? true` fallback: `undefined` is falsy, so a fixture that omits `comparisonComplete`
-      // still shows the banner rather than reading as settled.
       setComparisonComplete(loaded.comparisonComplete);
       setLoadFailures(loaded.loadFailures);
       setFileColumn(loaded.fileColumn);

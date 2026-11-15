@@ -50,7 +50,7 @@ export interface RouteRecordPanelMessageDeps {
   loadOrderComing: () => boolean;
   // The grid's place, which the tab an edit's move of the file opens shows again.
   keepViewState: (state: ViewState) => void;
-  // The latest load-order status, read rather than fetched.
+  // Whether the record index may not yet hold what Modbench handed it.
   recordIndexMayBeLate: () => boolean;
   loadFailures: () => readonly PluginLoadFailure[];
   modFacts: ModFacts;
