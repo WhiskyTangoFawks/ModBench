@@ -70,6 +70,7 @@ public sealed class RealSizeIndex : IDisposable
         {
             putBack();
             Waits.Reached(restored, "the shared index restored", patience);
+            IndexFiles.Checkpointed(_modlist.Value.InstanceRoot);
         }
         catch (Exception ex)
         {

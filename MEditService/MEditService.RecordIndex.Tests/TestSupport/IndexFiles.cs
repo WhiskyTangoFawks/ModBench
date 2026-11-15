@@ -1,5 +1,6 @@
 using System.Globalization;
 using DuckDB.NET.Data;
+using DuckDB.NET.Native;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
@@ -21,6 +22,21 @@ internal static class IndexFiles
         cmd.ExecuteNonQuery();
     }
 
+    /// <summary>Returns once the open Index's DuckDB has checkpointed: the store pays its own off the commit's turn.</summary>
+    internal static void Checkpointed(string instanceRoot) =>
+        Waits.Reached(() =>
+        {
+            try
+            {
+                Execute(instanceRoot, "CHECKPOINT");
+                return true;
+            }
+            catch (DuckDBException ex) when (ex.ErrorType == DuckDBErrorType.Transaction)
+            {
+                return false;
+            }
+        }, "the record index's checkpoint");
+
     /// <summary>Leaves DuckDB to abort its next checkpoint: a fatal error that invalidates the index file.</summary>
     internal static void AbortNextCheckpoint(string instanceRoot) =>
         Execute(instanceRoot, "SET GLOBAL checkpoint_threshold = '1KB'; SET GLOBAL debug_checkpoint_abort = 'before_header'");
@@ -28,6 +44,7 @@ internal static class IndexFiles
     /// <summary>Invalidates the open Index's database: a checkpoint aborted by a fatal error.</summary>
     internal static void Invalidate(string instanceRoot)
     {
+        Checkpointed(instanceRoot);
         AbortNextCheckpoint(instanceRoot);
         try
         {

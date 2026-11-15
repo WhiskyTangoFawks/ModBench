@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.RecordIndex.Tests.TestSupport;
@@ -47,6 +46,6 @@ public sealed class UnreopenableIndexFileTests : IDisposable
         _index.NextCheckUnsettledUntil(() => _index.Status.State == LoadOrderState.Failed, "the reopen failing");
 
         Assert.Equal(LoadOrderState.Failed, _index.Status.State);
-        Assert.Single(Regex.Matches(_index.Status.Message ?? "", "mEdit's record index was not reopened: "));
+        Assert.Contains("index.duckdb", _index.Status.Message, StringComparison.Ordinal);
     }
 }

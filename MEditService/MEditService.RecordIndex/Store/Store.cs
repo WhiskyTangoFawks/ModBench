@@ -3,6 +3,7 @@ using System.Data;
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using DuckDB.NET.Data;
+using DuckDB.NET.Native;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -36,6 +37,7 @@ internal sealed class Store : IDisposable
     private readonly FilterInForce _filterInForce;
     private readonly INotificationPublisher? _notifications;
     private readonly long _memoryLimit;
+    private readonly Action _onInvalidated;
     private readonly Projection _projection;
     private IReadOnlyDictionary<string, RecordTableSchema>? _schemas;
     private PluginIngest? _pluginIngest;
@@ -74,8 +76,9 @@ internal sealed class Store : IDisposable
     public Store(
         ILogger logger, string? databasePath, string? instanceRoot, SchemaReflector schemaReflector, TableDdlBuilder ddlBuilder, IPluginAdapter plugins,
         TimeProvider? timeProvider, Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, Func<bool> indexed,
-        IndexWriteGate gate, FilterInForce filterInForce, INotificationPublisher? notifications, long memoryLimit)
+        IndexWriteGate gate, FilterInForce filterInForce, INotificationPublisher? notifications, long memoryLimit, Action onInvalidated)
     {
+        _onInvalidated = onInvalidated;
         _memoryLimit = memoryLimit;
         _logger = logger;
         _gate = gate;
@@ -138,34 +141,21 @@ internal sealed class Store : IDisposable
 
     // DuckDB.NET duplicates in-memory connections only; a file opened again on the same path shares
     // this process's database instance. Either way the read gets its own snapshot.
-    public ReadContext OpenRead() => OpenedRead(streamed: false);
-
-    /// <summary>A read its caller holds open at its own pace, as a script takes a SELECT's rows. No checkpoint waits on
-    /// it.</summary>
-    public ReadContext OpenStreamedRead()
-    {
-        lock (_checkpointGate) return OpenedRead(streamed: true);
-    }
-
-    private ReadContext OpenedRead(bool streamed)
+    public ReadContext OpenRead()
     {
         lock (_readsGate)
         {
             if (_closedToReads) throw new IndexNotReadyException("mEdit's record index is closed to new reads while it is replaced.");
             var connection = _databasePath == null ? OpenedInOneSnapshot(Connection.Duplicate()) : OpenedInOneSnapshot($"DataSource={_databasePath}");
             _readsInFlight++;
-            connection.Disposed += (_, _) => { lock (_readsGate) { _readsInFlight--; Monitor.PulseAll(_readsGate); } };
-            if (streamed)
+            connection.Disposed += (_, _) =>
             {
-                Interlocked.Increment(ref _streamedReadsOpen);
-                connection.Disposed += (_, _) => Interlocked.Decrement(ref _streamedReadsOpen);
-            }
+                lock (_readsGate) { _readsInFlight--; Monitor.PulseAll(_readsGate); }
+                RequestCheckpoint();
+            };
             return new ReadContext(connection);
         }
     }
-
-    private readonly Lock _checkpointGate = new();
-    private int _streamedReadsOpen;
 
     private readonly object _readsGate = new();
     private int _readsInFlight;
@@ -254,7 +244,11 @@ internal sealed class Store : IDisposable
                 "The record index at {Path} closes under a read still open after {Seconds}s; the next index opened on it may answer its old rows",
                 _databasePath, IndexWriteGate.HoldLimit.TotalSeconds);
         }
-        _connection?.Dispose();
+        lock (_checkpointLock)
+        {
+            _closed = true;
+            _connection?.Dispose();
+        }
     }
 
     // DuckDB needs 125 MB a thread to spill, and a join that hashes bodies twice that: on less, a read that
@@ -656,8 +650,12 @@ internal sealed class Store : IDisposable
         lock (_projectionLock) _owedSweep = _owedSweep.Union(owed);
     }
 
-    // Outlives the commit that owed it, as the sweep does: a failed checkpoint stands owed.
+    // Outlives the commit that owed it: a refused checkpoint stands owed until a commit lands or the last read ends.
     private bool _checkpointOwed;
+
+    // The checkpoint runs on a connection of its own, so no write waits on it in mEdit; DuckDB may. The close waits for it.
+    private readonly Lock _checkpointLock = new();
+    private bool _closed;
 
     private void OweCheckpoint()
     {
@@ -744,10 +742,20 @@ internal sealed class Store : IDisposable
         DuckDbSql.Execute(Connection, $"UPDATE {SequenceRelation} SET value = $1 WHERE value < $1", atLeast);
     }
 
-    /// <summary>The one way the rows change. The outermost commit then lands them, thrown
-    /// or not: the sweep and the checkpoint they owe, the filter again, one advance and their
-    /// announcements. The first throw reaches the caller.</summary>
-    public T Commit<T>(Func<Projection, T> write) => StoreFaults.Translating(() => CommitUntranslated(write));
+    /// <summary>The one way the rows change. The outermost commit then lands them, thrown or not: the sweep
+    /// they owe, the filter again if a row changed, one advance, their announcements. The first throw reaches
+    /// the caller.</summary>
+    public T Commit<T>(Func<Projection, T> write)
+    {
+        try
+        {
+            return StoreFaults.Translating(() => CommitUntranslated(write));
+        }
+        finally
+        {
+            if (_openProjection.Value is null) RequestCheckpoint();
+        }
+    }
 
     public void Commit(Action<Projection> write) => Commit(projection =>
     {
@@ -779,7 +787,7 @@ internal sealed class Store : IDisposable
     // would hide the first.
     private void Land(ExceptionDispatchInfo? first)
     {
-        Action[] steps = [SweepWinners, Checkpoint, () => _filterInForce.Reapply(this)];
+        Action[] steps = [SweepWinners, () => _filterInForce.Reapply(this, OpenProjection.BumpOwed)];
         foreach (var step in steps)
         {
             try
@@ -798,29 +806,60 @@ internal sealed class Store : IDisposable
         first?.Throw();
     }
 
-    // Rows written in bulk bypass the WAL, so DuckDB's own checkpoint never comes due, and the record index
-    // nodes they built stay in memory it cannot evict. FORCE: a plain CHECKPOINT refuses, rather
-    // than waits, while a read ends.
-    private void Checkpoint()
+    // DuckDB's own checkpoint leaves a plugin's index nodes in memory (IngestRetentionTests). A plain CHECKPOINT
+    // fails while a transaction is open where FORCE waits for it (DuckDB 1.4): it is paid with no read open.
+    private void RequestCheckpoint()
+    {
+        if (CheckpointDue()) Task.Run(PayCheckpoint);
+    }
+
+    private bool CheckpointDue()
     {
         lock (_projectionLock)
         {
-            if (!_checkpointOwed) return;
+            if (!_checkpointOwed) return false;
         }
-        var timer = Stopwatch.StartNew();
-        lock (_checkpointGate)
+        lock (_readsGate) return _readsInFlight == 0;
+    }
+
+    private void PayCheckpoint()
+    {
+        try
         {
-            // After a delete, a checkpoint waits for every read older than it.
-            if (Volatile.Read(ref _streamedReadsOpen) > 0)
+            lock (_checkpointLock)
             {
-                _logger.LogDebug("The record index's checkpoint stays owed while a SELECT's rows are read");
-                return;
+                if (_closed || !CheckpointDue()) return;
+                lock (_projectionLock) _checkpointOwed = false;
+                var timer = Stopwatch.StartNew();
+                try
+                {
+                    using var connection = _databasePath == null ? Opened(Connection.Duplicate()) : Opened($"DataSource={_databasePath}");
+                    using var checkpoint = connection.CreateCommand();
+                    checkpoint.CommandText = "CHECKPOINT";
+                    checkpoint.ExecuteNonQuery();
+                }
+                catch
+                {
+                    lock (_projectionLock) _checkpointOwed = true;
+                    throw;
+                }
+                if (_logger.IsEnabled(LogLevel.Debug))
+                    _logger.LogDebug("Checkpointed the record index in {ElapsedMs} ms", timer.ElapsedMilliseconds);
             }
-            DuckDbSql.Execute(Connection, "FORCE CHECKPOINT");
         }
-        lock (_projectionLock) _checkpointOwed = false;
-        if (_logger.IsEnabled(LogLevel.Debug))
-            _logger.LogDebug("Checkpointed the record index in {ElapsedMs} ms", timer.ElapsedMilliseconds);
+        catch (DuckDBException ex) when (ex.ErrorType == DuckDBErrorType.Transaction)
+        {
+            _logger.LogDebug(ex, "The record index's checkpoint stays owed while a transaction is open");
+        }
+        catch (DuckDBException ex) when (ex.ErrorType == DuckDBErrorType.Fatal)
+        {
+            _logger.LogError(ex, "The record index's checkpoint invalidated the database");
+            _onInvalidated();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _logger.LogError(ex, "The record index's checkpoint failed");
+        }
     }
 
     /// <summary>What one commit owes beyond its rows.</summary>

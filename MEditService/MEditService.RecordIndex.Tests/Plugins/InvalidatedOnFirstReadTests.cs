@@ -1,5 +1,4 @@
 using MEditService.LoadOrder;
-using MEditService.Ports;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -32,18 +31,11 @@ public sealed class InvalidatedOnFirstReadTests : IDisposable
     }
 
     [Fact]
-    public void AFatalErrorOnAFirstRead_FailsTheLoadOrder_AndLeavesTheIndexFileAnswering()
+    public void AFatalErrorOnAFirstRead_IsRecoveredFrom_AndEveryPluginIsRead()
     {
-        Assert.Equal(LoadOrderState.Failed, _index.Status.State);
+        _index.Recovered(() => _index.Status.IndexedPlugins.Select(p => p.Name).Order().SequenceEqual([Aborted, After]), "every plugin read");
+
         Assert.Empty(_index.Status.Failures);
-        Assert.Empty(_index.ListedIn(_fixture.Plugins.Single(p => p.Name == Aborted).Key));
-    }
-
-    [Fact]
-    public void TheNextCheckAfterAFatalErrorOnAFirstRead_ReadsEveryPlugin()
-    {
-        _index.NextCheckUntil(() => _index.Status.State == LoadOrderState.Ready, "the check's answer");
-
-        Assert.Equal([Aborted, After], _index.Status.IndexedPlugins.Select(p => p.Name).Order());
+        Assert.Single(_index.ListedIn(_fixture.Plugins.Single(p => p.Name == Aborted).Key));
     }
 }

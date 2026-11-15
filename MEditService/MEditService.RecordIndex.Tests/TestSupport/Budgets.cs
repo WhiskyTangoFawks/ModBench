@@ -8,8 +8,13 @@ internal static class Budgets
 {
     private const int Tolerance = 3;
 
-    internal static void Reached(TimeSpan budget, Func<bool> reached, string what) =>
-        Assert.True(Waits.ReachedWithin(reached, budget * Tolerance), Over(budget, what));
+    internal static void Reached(TimeSpan budget, Func<bool> reached, string what)
+    {
+        var took = Stopwatch.StartNew();
+        var landed = Waits.ReachedWithin(reached, budget * Tolerance);
+        Console.WriteLine($"BUDGET {what}: {took.Elapsed.TotalSeconds:F2} s");
+        Assert.True(landed, Over(budget, what));
+    }
 
     /// <summary>Runs the gesture once, or after one warm-up <paramref name="runs"/> times and holds the fastest to the
     /// budget: load from other processes only slows a run, so the minimum is nearest the code's own cost.</summary>
@@ -23,6 +28,7 @@ internal static class Budgets
             return took.Elapsed;
         });
         Assert.True(fastest <= budget * Tolerance, $"{Over(budget, what)} It took {fastest.TotalSeconds:F1} s.");
+        Console.WriteLine($"BUDGET {what}: {fastest.TotalSeconds:F2} s");
     }
 
     private static string Over(TimeSpan budget, string what) =>

@@ -17,6 +17,7 @@ public sealed class ReadOutOfMemoryTests : IDisposable
     public void AReadDuckDbRunsOutOfMemoryFor_IsRefusedSayingSo()
     {
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
+        IndexFiles.Checkpointed(_fixture.InstanceRoot);
         IndexFiles.Execute(_fixture.InstanceRoot, "SET GLOBAL memory_limit = '1MB'");
 
         var refused = index.Queries.GetProblems().Refused();
@@ -31,6 +32,7 @@ public sealed class ReadOutOfMemoryTests : IDisposable
     public void ASelectDuckDbRunsOutOfMemoryFor_IsRefusedSayingSo_AndHowToSelectBodies_NotAnsweredAsBadSql()
     {
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
+        IndexFiles.Checkpointed(_fixture.InstanceRoot);
         IndexFiles.Execute(_fixture.InstanceRoot, "SET GLOBAL memory_limit = '1MB'");
 
         var refused = index.Queries.SelectRows(MoreThanAMegabyte).Refused();
@@ -45,6 +47,7 @@ public sealed class ReadOutOfMemoryTests : IDisposable
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
         Waits.Reached(() => index.Status is { State: LoadOrderState.Ready, Validating: false }, "the index at rest");
         index.Settled();
+        IndexFiles.Checkpointed(_fixture.InstanceRoot);
         using var fullPool = new FilledMemory(IndexFiles.In(_fixture.InstanceRoot));
 
         var refused = index.Queries.SelectRows("SELECT 1 AS form_key").Refused();
@@ -57,6 +60,7 @@ public sealed class ReadOutOfMemoryTests : IDisposable
     public void AFilterWhoseMatchesDuckDbRunsOutOfMemoryFor_IsRefusedSayingSo()
     {
         using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
+        IndexFiles.Checkpointed(_fixture.InstanceRoot);
         IndexFiles.Execute(_fixture.InstanceRoot, "SET GLOBAL memory_limit = '1MB'");
 
         var refused = index.Queries.SetFilter(MoreThanAMegabyte, "filter.sql");
