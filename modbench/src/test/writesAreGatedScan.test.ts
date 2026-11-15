@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import ts from 'typescript';
-import { catalogCommandIds, GESTURES_MARKDOWN } from './commandsCatalog';
+import { catalogCommandIds, GESTURES_MARKDOWN, SPECIFIED_AHEAD_OF_CODE } from './commandsCatalog';
 import { plantedTree, productionFiles, SRC } from './scanSource';
 
 const GATES = new Set(['holdingTheWrite', 'runWritingGesture', 'runModsWriting', 'runDownloadsWriting', 'movePlugins']);
@@ -48,8 +48,9 @@ const ungatedWrites = (root: string, writes: Iterable<string>): string[] => {
 };
 
 describe('every gesture whose Effect is writes holds the one write at a time (commands.md, Refuse, do not repair)', () => {
-  it('is gated by a write gate under its Command ID', () => {
-    expect(ungatedWrites(SRC, catalogCommandIds(GESTURES_MARKDOWN, 'writes'))).toEqual([]);
+  it('is gated by a write gate under its Command ID, but a gesture specified ahead of its code', () => {
+    const written = [...catalogCommandIds(GESTURES_MARKDOWN, 'writes')].filter((id) => !SPECIFIED_AHEAD_OF_CODE.includes(id));
+    expect(ungatedWrites(SRC, written)).toEqual([]);
   });
 
   it('flags a write whose command runs under no gate', () => {

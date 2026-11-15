@@ -5,6 +5,7 @@ A modding concept is a symbol whenever a file Modbench reads names it, and VS Co
 ## Consequences
 
 - A rename carries every reference to what it renames. A reference that cannot follow does not stop the rename: it lands, and a warning names what was left behind, since the rename is the user's choice and the warning keeps the picture true.
+- A rename or a move of a file or folder goes through VS Code, whoever starts it. An open editor then follows it, and its references follow the same way from a Modbench gesture and from the Explorer.
 
 ## Alternatives rejected
 

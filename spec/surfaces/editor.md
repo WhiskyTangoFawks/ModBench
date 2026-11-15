@@ -20,14 +20,14 @@ As a user, I want:
 
 1. A click on a record in Plugins or Referenced By to open it as a preview editor, which my next click replaces. Cites: catalog `open`; VS Code's preview editors
 2. Open, from a row's menu, to open the record pinned in the editor group I am in, so later clicks leave it alone. An extension's tree receives no double click, which pins in VS Code's Explorer. Cites: catalog `open`; VS Code's interaction
-3. A record already open in a tab to be shown, not opened twice. Cites: VS Code; common, A view, story 9
+3. A record whose file is already open in a tab to be shown there, not opened twice. Cites: VS Code; common, A view, story 9
 4. Several records opened at once to open one grid: the first record's file, with the others as its columns. Cites: catalog `open`; xEdit Compare Selected
-5. The tab titled with the file's name, as any file is. The file is named by the record's EditorID, so the title carries it. A child record has no file of its own, so its tab is titled with its EditorID, or its FormKey when it has none. Cites: ADR-0001; ADR-0020; source.md, The tree, story 1; ruling
+5. The tab titled with the record it shows. A file is named by its record's EditorID, so the file's name carries it. A child record has no file of its own, so the title is the child's EditorID, or its FormKey when it has none. Cites: ADR-0001; ADR-0020; source.md, The tree, story 1
 6. Open from the palette, with no record given, to ask for one by EditorID, FormID or FormKey. Cites: catalog `open`
 7. A tab I leave and come back to to be as I left it. Cites: VS Code keeps a tab's place
 8. A record given without a plugin, by any caller, to open the winning copy's file. Cites: xEdit lands on the winning copy
 9. The copy of a plugin with no plugin source, or with an unreadable one, to open as a document mEdit renders from the plugin, read-only. It is not a file, so the file features above do not reach it. Cites: ADR-0007; ADR-0001
-10. A child record, such as a placed reference, to open in a tab of its own, though it shares its cell's file. A change in either tab shows in both. A container's tab shows its own fields, never its child lists. Cites: source.md, The tree, story 3; ruling
+10. A child record, such as a placed reference, to open in the tab of the file it shares with its container, showing the child. Split Editor shows two records of one file side by side. A container shows its own fields, never its child lists. Cites: ADR-0020; ADR-0005; VS Code's interaction; source.md, The tree, story 3
 11. A group's metadata file in plugin source to open in the text editor, as any JSON file does. Cites: ADR-0001; Existing tools
 12. Records of different record types opened at once to open one grid too. Cites: xedit.md, divergence 31
 
@@ -118,7 +118,7 @@ As a user, I want:
 2. When the first read fails, the reason in place of the grid, and a line in the Output. The next good read replaces it. Cites: common, States, story 2; ADR-0019
 3. While mEdit is still indexing plugins, a message above the grid that the comparison is not complete, so the colours are not final. It goes by itself once they are, and the grid reads again. Cites: Never silently wrong
 4. When a record the tab showed is gone from every plugin, the panel to say the record is gone, naming it, in place of the grid.
-5. The file's column to follow its document, which the read model reads unsaved (ADR-0001), and the other columns to read again when mEdit reports the record changed, from an edit of mine or from any other tool, and not before. The tab stays as I left it (Opening, story 7). Collapse No Conflict applies again to the rows and columns whose state changed, and leaves alone what I restored.
+5. The file's column to follow its document, which the read model reads unsaved (ADR-0029), and the other columns to read again when mEdit reports the record changed, from an edit of mine or from any other tool, and not before. The tab stays as I left it (Opening, story 7). Collapse No Conflict applies again to the rows and columns whose state changed, and leaves alone what I restored.
 6. While mEdit cannot read a plugin the panel shows, the message above the grid saying it shows the last good read, and the reason. Cites: common, States, story 6
 7. A file whose plugin is not active to show its own column alone, editable, with no conflict colour, and the message above the grid saying the plugin is not active, so no other copy is compared. Cites: ADR-0012; ADR-0001
 
