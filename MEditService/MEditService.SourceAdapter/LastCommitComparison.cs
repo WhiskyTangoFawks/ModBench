@@ -11,10 +11,10 @@ public enum RecordChange { Modified, Added }
 /// <summary>The records of a plugin's tree whose text differs from the last commit's.</summary>
 internal static class LastCommitComparison
 {
-    /// <summary>The records of the files under <paramref name="within"/>, relative to the source folder, or of the whole tree
-    /// when null. A record no file there held at the last commit is added.</summary>
+    /// <summary>The records of the files <paramref name="within"/> names, relative to the source folder, or of the plugin's
+    /// whole tree when null. A record no file there held at the last commit is added.</summary>
     internal static IReadOnlyDictionary<string, RecordChange> Of(
-        string sourceFolder, GameRelease release, SourceRepositoryGit git, SourceRepositoryLocator locator,
+        string sourceFolder, GameRelease release, SourceRepositoryGit git, CommittedTexts committedTexts, SourceRepositoryLocator locator,
         PluginAddress plugin, IReadOnlyList<string>? within = null)
     {
         using var expansion = new SourceTreeDocuments(sourceFolder, plugin.Name, release, DiskFiles.Instance);
@@ -24,10 +24,7 @@ internal static class LastCommitComparison
         foreach (var (relativePath, heldAtLastCommit) in ChangedFiles(sourceFolder, git, plugin, within))
         {
             var fullPath = Path.Combine(sourceFolder, relativePath);
-            var committedText = heldAtLastCommit
-                ? git.ReadCommittedSourceText(relativePath)
-                    ?? throw SourceStopException.GitFailed($"git cannot read what the last commit holds for '{fullPath}'.")
-                : null;
+            var committedText = heldAtLastCommit ? committedTexts.Of(git, relativePath) : null;
             RecordTextsIn(committed, locator, expansion, plugin, relativePath, committedText);
             var workingText = ReadWorkingText(fullPath);
             if (workingText is not null) locator.RequireParsedFormKey(relativePath, workingText, plugin.Name);
@@ -48,7 +45,9 @@ internal static class LastCommitComparison
     private static IEnumerable<(string RelativePath, bool HeldAtLastCommit)> ChangedFiles(
         string sourceFolder, SourceRepositoryGit git, PluginAddress plugin, IReadOnlyList<string>? within)
     {
-        if ((within is null ? git.WorkingTreeStatus(plugin.Name) : git.WorkingTreeStatus(within)) is { } status)
+        if (within is not null) return within.Select(path => (path, true));
+
+        if (git.WorkingTreeStatus(plugin.Name) is { } status)
         {
             return status.Select(entry => (
                 entry.Path.Replace('/', Path.DirectorySeparatorChar), entry.Code is not ('?' or '!' or 'A')));
@@ -57,8 +56,7 @@ internal static class LastCommitComparison
         if (SourceRepositoryGit.HoldsSourceMod(sourceFolder))
             throw SourceStopException.GitFailed($"git cannot report what changed in '{sourceFolder}'.");
 
-        return (within?.Select(path => Path.Combine(sourceFolder, path)) ?? [SourceRepositoryLayout.RootIn(sourceFolder, plugin.Name)])
-            .SelectMany(FilesAt)
+        return FilesAt(SourceRepositoryLayout.RootIn(sourceFolder, plugin.Name))
             .Select(path => (Path.GetRelativePath(sourceFolder, path), false));
     }
 

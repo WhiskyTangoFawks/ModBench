@@ -16,16 +16,16 @@ internal sealed class WriteSession : IWriteSession, ISourceFiles
     private bool _writing;
     private SourceFailure? _stopped;
 
-    private WriteSession(PluginProvider.FromMod mod, GameRelease release, IEnumerable<DocumentChange> held, TreeStamps stamps)
+    private WriteSession(PluginProvider.FromMod mod, GameRelease release, IEnumerable<DocumentChange> held, SourceTreeMemory memory)
     {
         _unsaved = new UnsavedFiles(held);
-        _repository = SourceRepository.Over(mod, release, stamps).Over(this);
+        _repository = SourceRepository.Over(mod, release, memory).Over(this);
     }
 
     /// <summary>A session over <paramref name="mod"/>'s source folder, reading each of <paramref name="held"/>'s texts in
     /// place of the file at its absolute path.</summary>
-    public static WriteSession Over(PluginProvider.FromMod mod, GameRelease release, IReadOnlyList<DocumentChange> held, TreeStamps stamps) =>
-        new(mod, release, held, stamps);
+    public static WriteSession Over(PluginProvider.FromMod mod, GameRelease release, IReadOnlyList<DocumentChange> held, SourceTreeMemory memory) =>
+        new(mod, release, held, memory);
 
     public ISourceRepository Repository => _repository;
 

@@ -9,7 +9,7 @@ namespace MEditService.SourceAdapter;
 /// stamp by <paramref name="time"/>.</summary>
 public sealed class GitSourceAdapter(UnsavedDocuments unsaved, TimeProvider time) : ISourceAdapter
 {
-    private readonly TreeStamps _stamps = new(time);
+    private readonly SourceTreeMemory _memory = new(time);
 
     public bool SourceReads(RegisteredPlugin plugin) => SourceRepository.SourceReads(plugin);
 
@@ -20,17 +20,17 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved, TimeProvider time
     public SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) => SourceRepository.WhySourceDoesNotRead(plugin);
 
     public ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release) =>
-        plugin.Provider is PluginProvider.FromMod { SourceFolder: not null } mod ? SourceRepository.Over(mod, release, _stamps).Over(Files()) : null;
+        plugin.Provider is PluginProvider.FromMod { SourceFolder: not null } mod ? SourceRepository.Over(mod, release, _memory).Over(Files()) : null;
 
     public ISourceRepositoryReads? TreeOf(RegisteredPlugin plugin, GameRelease release) =>
         SourceReads(plugin) ? Over(plugin, release) : null;
 
-    public ISourceRepository? Open(PluginProvider.FromMod provider, GameRelease release) => SourceRepository.Open(provider, release, _stamps);
+    public ISourceRepository? Open(PluginProvider.FromMod provider, GameRelease release) => SourceRepository.Open(provider, release, _memory);
 
-    public ISourceRepository OverFolder(PluginProvider.FromMod provider, GameRelease release) => SourceRepository.Over(provider, release, _stamps);
+    public ISourceRepository OverFolder(PluginProvider.FromMod provider, GameRelease release) => SourceRepository.Over(provider, release, _memory);
 
     public IWriteSession WriteSessionOver(PluginProvider.FromMod provider, GameRelease release, IReadOnlyList<DocumentChange> held) =>
-        WriteSession.Over(provider, release, held, _stamps);
+        WriteSession.Over(provider, release, held, _memory);
 
     public PathAnswer Touching(LoadOrderSnapshot loadOrder, string path) => SourceRepository.Touching(loadOrder, Path.GetFullPath(path));
 
@@ -39,7 +39,7 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved, TimeProvider time
     public event Action<IReadOnlyCollection<PluginChange>?>? ChangeSignalled;
 
     public RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path) =>
-        SourceRepository.RecordOfFile(loadOrder, path, Files(), _stamps);
+        SourceRepository.RecordOfFile(loadOrder, path, Files(), _memory);
 
     public string FileNameOf(RecordIdentity identity) => SourceRepository.FileNameOf(identity);
 
@@ -47,7 +47,7 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved, TimeProvider time
 
     public SourceFailure? WhyGitCannotRun() => SourceRepository.WhyGitCannotRun();
 
-    public string ContentStamp(string text) => TreeStamps.ContentStamp(text);
+    public string ContentStamp(string text) => SourceTreeMemory.ContentStamp(text);
 
     public SourceFailure? Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
