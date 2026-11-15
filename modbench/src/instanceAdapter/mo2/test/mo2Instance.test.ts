@@ -1132,47 +1132,15 @@ describe('the MO2 Instance adapter', () => {
       expect(signals).toBe(2);
     });
 
-    it('hears a change to .git/hooks/pre-push, where git init writes the push check', () => {
+    it.each(['.git/config', '.git/hooks/pre-push'])('hears a change to %s, where git init writes the path filter and the push check', (inside) => {
       let signals = 0;
       managerOver(root).subscribe(() => { signals++; });
 
-      expect(fire(root, '.git/hooks/pre-push')).toBe(true);
+      expect(fire(root, inside)).toBe(true);
       expect(signals).toBe(1);
     });
 
-    describe('the instance repository\'s git directory, followed at its first level as VS Code\'s git extension follows it', () => {
-      const signalsAt = async (gitDir: string, inside: string, heardAsByVsCodesMatcher = inside): Promise<number> => {
-        const watched = managerOver(root);
-        let signals = 0;
-        watched.subscribe(() => { signals++; });
-        await watched.reading();
-        signals = 0;
-        fire(gitDir, inside, heardAsByVsCodesMatcher);
-        return signals;
-      };
-
-      it.each<[string, number, string?]>([
-        ['HEAD', 1], ['config', 1], ['index', 1], ['packed-refs', 1], ['COMMIT_EDITMSG', 1], ['index.lock', 0],
-        ['.watchman-cookie-host-1', 0, 'watchman-cookie-host-1'], ['refs/heads/main', 0], ['objects/ab/cdef', 0],
-      ])('signals a change to %s %i times', async (inside, signalled, heardAsByVsCodesMatcher) => {
-        execFileSync('git', ['init', '-q', root]);
-
-        expect(await signalsAt(join(root, '.git'), inside, heardAsByVsCodesMatcher)).toBe(signalled);
-      });
-
-      it('follows the git directory a .git file names', async () => {
-        const gitDir = join(await mkdtemp(join(tmpdir(), 'mo2-git-dir-')), 'repository');
-        try {
-          execFileSync('git', ['init', '-q', `--separate-git-dir=${gitDir}`, root]);
-
-          expect(await signalsAt(gitDir, 'HEAD')).toBe(1);
-        } finally {
-          await rm(dirname(gitDir), { recursive: true, force: true });
-        }
-      });
-    });
-
-    it.each(['.gitignore', '.git/info/exclude'])('hears a change to %s, which decides the folders git holds whole', (inside) => {
+    it.each(['.gitignore', '.git/index', '.git/info/exclude'])('hears a change to %s, which decides the folders git holds whole', (inside) => {
       let signals = 0;
       managerOver(root).subscribe(() => { signals++; });
 

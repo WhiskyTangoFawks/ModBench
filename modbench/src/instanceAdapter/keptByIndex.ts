@@ -1,19 +1,37 @@
-import { join } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
+import { errnoCode } from '../ports/errno';
 import { sameStamp, settledBefore, type FileStamp } from '../repositoriesLib/stampedReads';
-import { isAbsent, stampByStamp } from './files';
-import { gitDirOf } from './git';
+import { GIT_DIR, isAbsent, readOrAbsent, stampByStamp, stampKept, stampOf } from './files';
 
 type MaybeStamped = FileStamp | undefined;
 
-const stampedIfThere = (path: string): Promise<MaybeStamped> =>
-  stampByStamp(path).catch((err: unknown) => {
+// A linked worktree and a submodule keep their index in the git directory their .git file names.
+const gitDirAt = stampKept(async (dotGit: string): Promise<string> => {
+  try {
+    const linked = (await readFile(dotGit, 'utf8')).split('\n').find((line) => line.startsWith('gitdir:'));
+    return linked === undefined ? dotGit : resolve(dirname(dotGit), linked.slice('gitdir:'.length).trim());
+  } catch (err) {
+    if (errnoCode(err) === 'EISDIR') return dotGit;
+    throw err;
+  }
+});
+
+const gitDirOf = (repository: string): Promise<string> => readOrAbsent(() => gitDirAt(join(repository, GIT_DIR)), join(repository, GIT_DIR));
+
+const stampedIfThere = (stamp: (path: string) => Promise<FileStamp>) => (path: string): Promise<MaybeStamped> =>
+  stamp(path).catch((err: unknown) => {
     if (isAbsent(err)) return undefined;
     throw err;
   });
 
-// The instance's watch follows its git directory's index and its .gitmodules.
+// The instance's watch follows its own .git folder's index and its .gitmodules; no watch follows a git directory elsewhere.
 async function indexStamps(repository: string): Promise<MaybeStamped[]> {
-  return Promise.all([join(await gitDirOf(repository), 'index'), join(repository, '.gitmodules')].map(stampedIfThere));
+  const dotGit = join(repository, GIT_DIR);
+  const gitDir = await gitDirOf(repository);
+  return Promise.all([
+    stampedIfThere(gitDir === dotGit ? stampByStamp : stampOf)(join(gitDir, 'index')), stampedIfThere(stampByStamp)(join(repository, '.gitmodules')),
+  ]);
 }
 
 const sameStamps = (a: readonly MaybeStamped[], b: readonly MaybeStamped[]): boolean =>

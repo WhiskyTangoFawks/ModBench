@@ -2,7 +2,7 @@
 // with no filter, and the diff's textconv shows it as filtered.
 
 import { errorMessage } from '../ports/errorMessage';
-import { git, gitBytes, gitFed, gitKept } from './git';
+import { git, gitBytes, gitFed } from './git';
 import { keptByIndex } from './keptByIndex';
 
 const blobsIn = (listing: string, entry: RegExp): Map<string, string> =>
@@ -15,7 +15,7 @@ const STAGED = /^\d+ ([0-9a-f]+) 0\t(.*)$/s;
 const COMMITTED = /^\d+ blob ([0-9a-f]+)\t(.*)$/s;
 
 const headOf = (repository: string): Promise<string | undefined> =>
-  gitKept(repository, 'rev-parse', '-q', '--verify', 'HEAD').then((commit) => commit.trim(), () => undefined);
+  git(repository, 'rev-parse', '-q', '--verify', 'HEAD').then((commit) => commit.trim(), () => undefined);
 
 // Line ends are git's own conversion, not the filter's, so a clone that converts them reads its file as committed.
 const isUnfiltered = async (repository: string, path: string, blob: string): Promise<boolean> =>
