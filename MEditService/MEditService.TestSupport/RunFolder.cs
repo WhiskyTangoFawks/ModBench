@@ -14,9 +14,11 @@ public sealed class RunFolder : IDisposable
         _held = Hold(path);
     }
 
+    public static string PathOf(string name) => System.IO.Path.Combine(System.IO.Path.GetTempPath(), name);
+
     public static RunFolder Written(string name, Action<string> write)
     {
-        var folder = new RunFolder(System.IO.Path.Combine(System.IO.Path.GetTempPath(), name));
+        var folder = new RunFolder(PathOf(name));
         try
         {
             if (Directory.Exists(folder.Path)) AnotherTool.Delete(folder.Path);

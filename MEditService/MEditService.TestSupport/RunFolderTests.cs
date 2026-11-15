@@ -7,7 +7,7 @@ public sealed class RunFolderTests
     [Fact]
     public void AWrite_ClearsWhatAKilledRunLeftThere()
     {
-        var leftover = Path.Combine(Path.GetTempPath(), Name, "leftover.txt");
+        var leftover = Path.Combine(RunFolder.PathOf(Name), "leftover.txt");
         Directory.CreateDirectory(Path.GetDirectoryName(leftover).Require());
         File.WriteAllText(leftover, "a killed run's");
 
@@ -26,7 +26,7 @@ public sealed class RunFolderTests
             throw new InvalidOperationException("The write failed part-way.");
         }));
 
-        Assert.False(Directory.Exists(Path.Combine(Path.GetTempPath(), Name)));
+        Assert.False(Directory.Exists(RunFolder.PathOf(Name)));
     }
 
     [Fact]
