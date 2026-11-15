@@ -575,9 +575,8 @@ internal sealed class Indexer : IDisposable
         }
     }
 
-    /// <summary>Read-your-writes: returns once each of <paramref name="own"/> has been read, a write that named no plugin by a
-    /// check of the disk, the others by a re-read or a check of each plugin they named. Throws
-    /// <see cref="IndexNotReadyException"/> otherwise.</summary>
+    /// <summary>Read-your-writes: returns once each of <paramref name="own"/> has been read, by a check of the disk or a
+    /// re-read of the plugins it named. Throws <see cref="IndexNotReadyException"/> otherwise.</summary>
     public async Task AwaitTheReadOf(OwnWrites own, CancellationToken cancel)
     {
         var writes = own.Snapshot();
