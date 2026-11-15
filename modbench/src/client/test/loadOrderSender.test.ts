@@ -606,6 +606,24 @@ describe('the promise a change signal returns', () => {
     await vi.waitFor(() => { expect(signalled(client)).toEqual([[]]); });
   });
 
+  it('waits while mEdit starts, posts the signal once it runs, and settles when it goes instead', async () => {
+    const client = new InMemoryMEditClient();
+    client.setStatus('starting');
+    const waiting = client.signalChange([]);
+    await expect(settledWithin(waiting)).resolves.toBe(false);
+    expect(signalled(client)).toEqual([]);
+
+    client.setStatus('running');
+    await vi.waitFor(() => { expect(signalled(client)).toEqual([[]]); });
+    await waiting;
+
+    const next = new InMemoryMEditClient();
+    next.setStatus('starting');
+    const never = next.signalChange([]);
+    next.setStatus('disconnected');
+    await expect(settledWithin(never)).resolves.toBe(true);
+  });
+
   it('is one for the signals folded into one, and waits for that signal', async () => {
     const { client, answer } = behindAnUnansweredPut();
 

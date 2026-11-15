@@ -1328,6 +1328,30 @@ describe('HttpMEditClient — whether the record index may be late', () => {
     });
   });
 
+  describe('the event of the lateness changing', () => {
+    it('tells true when a signal starts a sweep and false when the sweep settles, once each', async () => {
+      const { response, push } = pushableStreamResponse();
+      let status: NonNullable<Parameters<typeof loadOrderStatusEventFixture>[0]> = {};
+      const fetch = routedFetch([
+        ['/notifications/stream', () => Promise.resolve(response)],
+        ['/signal-change', () => { status = { validating: true }; return noContent(); }],
+        ['/load-order/status', () => Promise.resolve(jsonResponse(200, loadOrderStatusEventFixture(status).loadOrderStatus))],
+      ]);
+      const client = makeClient(fetch);
+      await client.start();
+      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+      const told: boolean[] = [];
+      client.onDidChangeRecordIndexMayBeLate((late) => { told.push(late); });
+
+      const signalled = client.signalChange(['/m/Foo.esp']);
+      await vi.waitFor(() => { expect(told).toEqual([true]); });
+      push(loadOrderStatusTick({ conflictsComputed: true, validating: false }));
+      await signalled;
+
+      expect(told).toEqual([true, false]);
+    });
+  });
+
   describe('a rebuild of the record index', () => {
     async function rebuilding(holdingALoadOrder: boolean) {
       const { response, push } = pushableStreamResponse();

@@ -58,6 +58,8 @@ interface RefreshGestureDeps {
   loadOrderStatus: () => { readonly refusal?: { readonly kind: 'heldElsewhere' | 'failed' } } | undefined;
   reporterFor: (tag: string) => Reporter;
   instanceRoot: string;
+  /** Whether mEdit is up to take the check. */
+  mEditStatus: () => 'starting' | 'running' | 'disconnected' | 'stopped';
 }
 
 const heldElsewhereMessage = (then: string): string => `This instance is open in another Modbench window. Close it, then ${then}.`;
@@ -65,12 +67,18 @@ const heldElsewhereMessage = (then: string): string => `This instance is open in
 export function registerRefreshCommand(deps: RefreshGestureDeps): vscode.Disposable {
   const reporter = deps.reporterFor('refresh');
   const message = heldElsewhereMessage('refresh');
+  const unchecked = 'Checked the instance, but not the index: mEdit is not running.';
   return registerWritingCommand('modbench.instance.refresh', async (called?: unknown) => {
     await runWritingGesture('modbench.instance.refresh', TOOLBOX_VIEW, deps.instance, (_progress, written) => {
       written.leaveUnnamed();
       return Promise.resolve();
     });
     const fromAgent = called instanceof AgentCall;
+    if (deps.mEditStatus() !== 'running') {
+      if (fromAgent) return { applied: false, refusal: unchecked };
+      reporter.report('error', unchecked);
+      return undefined;
+    }
     if (deps.loadOrderStatus()?.refusal?.kind === 'heldElsewhere') {
       if (fromAgent) return { applied: false, refusal: message, detail: deps.instanceRoot };
       reporter.report('error', message, deps.instanceRoot);

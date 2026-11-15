@@ -409,6 +409,8 @@ export interface MEditClient {
   /** Whether the record index may not yet hold what Modbench handed it: a snapshot, a change signal or the
    *  unsaved documents is unanswered, or the sweep one started has not settled. */
   readonly recordIndexMayBeLate: boolean;
+  /** Told the new value wherever `recordIndexMayBeLate` changes, which no change of the record index tells. */
+  onDidChangeRecordIndexMayBeLate(listener: (late: boolean) => void): Disposable;
 
   /** The latest load-order status; undefined before the first, and again when a held status
    *  resets: mEdit has gone, or the stream has reopened onto a process that may be another. */

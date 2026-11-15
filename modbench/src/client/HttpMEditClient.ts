@@ -1,3 +1,4 @@
+import { trackLateness } from './lateness';
 import type { components } from '../wire/generated/api';
 import type { RecordEditEnvelope } from '../wire/messages';
 import { SILENT_LOG, type Log } from '../ports/log';
@@ -126,6 +127,7 @@ class HttpMEditClient implements MEditClient {
   private readonly changes: RecordIndexChanges;
   private readonly leaveWritesUnnamed: () => void;
   private sweepsAwaited = 0;
+  private readonly lateness = trackLateness(() => this.recordIndexMayBeLate);
 
   constructor(deps: HttpMEditClientDeps) {
     this.leaveWritesUnnamed = deps.leaveWritesUnnamed;
@@ -172,6 +174,8 @@ class HttpMEditClient implements MEditClient {
       put: (documents) => this.putUnsavedDocuments(documents),
     });
     this.handOver.onSettled((failure) => { if (failure === undefined) void this.awaitSweep(); });
+    this.loadOrder.onPendingChanged(this.lateness.note);
+    this.handOver.onPendingChanged(this.lateness.note);
   }
 
   // The port is the lifecycle's to choose, so the generated client is built once it is known.
@@ -201,6 +205,7 @@ class HttpMEditClient implements MEditClient {
   stop(): Promise<void> { return this.loadOrder.stop(); }
 
   onDidChange(listener: (change: RecordIndexChange) => void): Disposable { return this.changes.onDidChange(listener); }
+  onDidChangeRecordIndexMayBeLate(listener: (late: boolean) => void): Disposable { return this.lateness.event(listener); }
   get recordIndexMayBeLate(): boolean { return this.loadOrder.pending() || this.handOver.pending() || this.sweepsAwaited > 0; }
 
   get loadOrderStatus(): LoadOrderStatus | undefined { return this.loadOrderStatusKept.current(); }
@@ -444,6 +449,7 @@ class HttpMEditClient implements MEditClient {
   // An answered hand-over or signal starts a sweep mEdit publishes as validating: late until a status holds no load order or settles, or is lost.
   private awaitSweep(over: (status: LoadOrderStatus) => boolean = (status) => status.holdsNone || isSettled(status)): Promise<void> {
     this.sweepsAwaited++;
+    this.lateness.note();
     let finish!: () => void;
     const ended = new Promise<void>((resolve) => { finish = resolve; });
     const end = (): void => {
@@ -452,6 +458,7 @@ class HttpMEditClient implements MEditClient {
       subscription = undefined;
       this.sweepsAwaited--;
       finish();
+      this.lateness.note();
     };
     let subscription: (() => void) | undefined = this.loadOrderStatusKept.onStatus((status) => { if (status === undefined || over(status)) end(); });
     void this.currentLoadOrderStatus().then((current) => { if (current !== undefined && over(current)) end(); });

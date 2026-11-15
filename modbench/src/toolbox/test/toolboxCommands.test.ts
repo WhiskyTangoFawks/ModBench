@@ -179,7 +179,7 @@ describe('Switch profile, called by an agent', () => {
 });
 
 describe('Refresh', () => {
-  const registerRefresh = (statusWhenChecked?: ReturnType<RefreshDeps['loadOrderStatus']>) => {
+  const registerRefresh = (statusWhenChecked?: ReturnType<RefreshDeps['loadOrderStatus']>, mEditStatus: ReturnType<RefreshDeps['mEditStatus']> = 'running') => {
     const checks: unknown[] = [];
     let status: ReturnType<RefreshDeps['loadOrderStatus']>;
     const { reporter, reporterFor } = tagRecordingReporterFor();
@@ -193,6 +193,7 @@ describe('Refresh', () => {
         },
       },
       loadOrderStatus: () => status,
+      mEditStatus: () => mEditStatus,
       reporterFor,
       instanceRoot: '/instance/FO4',
     });
@@ -222,6 +223,18 @@ describe('Refresh', () => {
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'This instance is open in another Modbench window. Close it, then refresh.', detail: '/instance/FO4' },
     ]);
+  });
+
+  it.each(['starting', 'disconnected', 'stopped'] as const)('says it checked the instance but not the record index when mEdit is %s, and answers an agent call the same', async (mEditStatus) => {
+    const said = 'Checked the instance, but not the index: mEdit is not running.';
+    const viewCall = registerRefresh(undefined, mEditStatus);
+    await viewCall.run();
+    expect(viewCall.reporter.reports).toEqual([{ severity: 'error', message: said, detail: undefined }]);
+
+    handlers.clear();
+    const agentCall = registerRefresh(undefined, mEditStatus);
+    expect(await agentCall.run(new AgentCall([], {}))).toEqual({ applied: false, refusal: said });
+    expect(agentCall.reporter.reports).toEqual([]);
   });
 
   it('answers an agent call the same refusal as its reason, and reports nowhere', async () => {

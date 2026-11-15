@@ -22,7 +22,7 @@ export interface SweepEnd {
 /** The one sender of ADR-0013's snapshot and its change signal, and the owner of the process they are sent to. */
 export interface LoadOrderSender {
   send(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome>;
-  /** Settles once the sweep the signal starts is over, at once when mEdit is not running: the signal is then owed. */
+  /** Settles once the sweep the signal starts is over, at once when mEdit is gone: the signal is then owed. */
   signalChange(paths: readonly string[]): Promise<void>;
   latest(): Promise<LoadOrderOutcome | undefined>;
   /** Resolves once the newest snapshot handed has been answered, or dropped, ahead of the sweep that follows it. */
@@ -30,6 +30,8 @@ export interface LoadOrderSender {
   handed(): number;
   /** Whether a snapshot or a change signal is waiting, in flight or owed. */
   pending(): boolean;
+  /** Told wherever `pending` may have changed. */
+  onPendingChanged(listener: () => void): () => void;
   onResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void;
   onAppliedAfterReopen(listener: (snapshot: LoadOrderSnapshot) => void): () => void;
   onLaunch(listener: (launched: Promise<LaunchOutcome>) => void): () => void;
@@ -73,7 +75,7 @@ function putSnapshot(wire: LoadOrderWire, snapshot: LoadOrderSnapshot, signal: A
 
 // One snapshot waits and one is in flight. An arrival replaces the one waiting, so the newest
 // lands instead of a queue of stale ones each paying an index.
-function createSendSlot(wire: LoadOrderWire) {
+function createSendSlot(wire: LoadOrderWire, changed: () => void) {
   let waiting: Waiting | undefined;
   let inFlight: AbortController | undefined;
   let unanswered = false;
@@ -86,6 +88,7 @@ function createSendSlot(wire: LoadOrderWire) {
     const dropped = waiting;
     waiting = undefined;
     dropped?.settle(outcome);
+    changed();
   };
 
   const sendWaiting = (next: Waiting): void => {
@@ -131,7 +134,7 @@ function createSendSlot(wire: LoadOrderWire) {
 
   // The backend publishes a PUT's progress the moment that PUT lands, so a snapshot waits for
   // mEdit to run rather than being sent into a backend that is not there yet.
-  const pump = (): void => {
+  const advance = (): void => {
     if (wire.status() !== 'running') return;
     if (!inFlight && waiting) {
       const next = waiting;
@@ -139,6 +142,10 @@ function createSendSlot(wire: LoadOrderWire) {
       sendWaiting(next);
     }
     pumpSignal();
+  };
+  const pump = (): void => {
+    advance();
+    changed();
   };
 
   const ofNewest = async <T>(of: (handed: NonNullable<typeof newest>) => Promise<T>): Promise<T | undefined> => {
@@ -195,7 +202,8 @@ export function announceAfterReopen(sender: Pick<LoadOrderSender, 'onAppliedAfte
 }
 
 export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
-  const slot = createSendSlot(wire);
+  const pendingChanges = new EventEmitter();
+  const slot = createSendSlot(wire, () => { pendingChanges.fire(); });
   let newestHanded: LoadOrderSnapshot | undefined;
   let handedCount = 0;
   let reopenUnannounced = false;
@@ -255,14 +263,14 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     signalChange: (paths) => {
       if (launcher.stopped()) return Promise.resolve();
       const done = slot.oweSignal(paths);
-      if (wire.status() === 'running') return done;
-      slot.releaseSignalWaiters();
+      if (isMEditGone(wire.status())) slot.releaseSignalWaiters();
       return done;
     },
     latest: () => slot.latest(),
     applied: () => slot.applied(),
     handed: () => handedCount,
     pending: () => slot.pending(),
+    onPendingChanged: subscribeTo(pendingChanges),
     onResent: (listener) => subscribeTo(resent)(({ snapshot, outcome }) => { listener(snapshot, outcome); }),
     onAppliedAfterReopen: subscribeTo(appliedAfterReopen),
     onLaunch: subscribeTo(launches),

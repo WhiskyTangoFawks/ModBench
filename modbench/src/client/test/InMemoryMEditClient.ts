@@ -8,6 +8,7 @@ import type { LoadOrderStatus, NotificationEvent } from '../apiClient';
 import { SseNotificationSubscriber } from '../notificationStream';
 import { announceAfterReopen, createLoadOrderSender, type LoadOrderWire } from '../loadOrderSender';
 import { isReadFailed, type ReadFailed } from '../../wire/readFailed';
+import { trackLateness } from '../lateness';
 import { keepRecordIndexChanges } from '../recordIndexChanges';
 import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 
@@ -111,8 +112,11 @@ export class InMemoryMEditClient implements MEditClient {
     },
   });
 
+  private readonly lateness = trackLateness(() => this.sender.pending());
+
   constructor() {
     announceAfterReopen(this.sender, this.notifications);
+    this.sender.onPendingChanged(this.lateness.note);
   }
 
   /** Answers each PUT of a snapshot, as the backend would, from the snapshot and its abort signal. */
@@ -238,6 +242,7 @@ export class InMemoryMEditClient implements MEditClient {
 
   onDidChange(listener: (change: RecordIndexChange) => void): Disposable { return this.changes.onDidChange(listener); }
   get recordIndexMayBeLate(): boolean { return this.sender.pending(); }
+  onDidChangeRecordIndexMayBeLate(listener: (late: boolean) => void): Disposable { return this.lateness.event(listener); }
 
   get loadOrderStatus(): LoadOrderStatus | undefined { return this.loadOrderStatusKept.current(); }
   onLoadOrderStatus(listener: (status: LoadOrderStatus | undefined) => void): () => void {
