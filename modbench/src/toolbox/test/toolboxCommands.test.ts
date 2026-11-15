@@ -183,7 +183,7 @@ describe('Refresh', () => {
     const { reporter, reporterFor } = tagRecordingReporterFor();
     registerRefreshCommand({
       instance: { refresh: (wrote) => { checks.push(wrote); progressSteps.push('Instance loader: check the disk'); return Promise.resolve(undefined); } },
-      heldElsewhere: () => heldElsewhere,
+      loadOrderStatus: () => (heldElsewhere ? { refusal: { kind: 'heldElsewhere' } } : { refusal: { kind: 'failed' } }),
       reporterFor,
       instanceRoot: '/instance/FO4',
     });

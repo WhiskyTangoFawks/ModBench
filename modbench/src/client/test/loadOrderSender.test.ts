@@ -483,7 +483,7 @@ describe('a change signalled', () => {
     client.answerPuts((_sent, _signal, answered) => { answer = answered; return pending<LoadOrderOutcome>().promise; });
     void client.sendLoadOrder(snapshot('A.esp'));
 
-    client.signalChange([]);
+    void client.signalChange([]);
     await vi.waitFor(() => { expect(methods(client)).toEqual(['put']); });
     answer();
 
@@ -498,7 +498,7 @@ describe('a change signalled', () => {
       void client.sendLoadOrder(snapshot('A.esp'));
       void client.sendLoadOrder(snapshot('B.esp'));
 
-      client.signalChange([]);
+      void client.signalChange([]);
       await vi.advanceTimersByTimeAsync(SIGNAL_WAIT_CAP_MS - 1);
       expect(methods(client)).toEqual(['put']);
       await vi.advanceTimersByTimeAsync(1);
@@ -517,7 +517,7 @@ describe('a change signalled', () => {
       let answer!: () => void;
       client.answerPuts((_sent, _signal, answered) => { answer = answered; return pending<LoadOrderOutcome>().promise; });
       void client.sendLoadOrder(snapshot('A.esp'));
-      client.signalChange([]);
+      void client.signalChange([]);
       await vi.advanceTimersByTimeAsync(SIGNAL_WAIT_CAP_MS + 1);
 
       client.setStatus('running');
@@ -537,9 +537,9 @@ describe('a change signalled', () => {
     const released = pending<undefined>();
     client.answerSignals(() => released.promise);
 
-    client.signalChange([]);
-    client.signalChange([]);
-    client.signalChange([]);
+    void client.signalChange([]);
+    void client.signalChange([]);
+    void client.signalChange([]);
     released.resolve(undefined);
     await vi.waitFor(() => { expect(methods(client)).toEqual(['signalChange', 'signalChange']); });
     await client.sendLoadOrder(snapshot('A.esp'));
@@ -554,9 +554,9 @@ describe('a change signalled', () => {
     const client = running();
     const released = pending<undefined>();
     client.answerSignals(() => released.promise);
-    client.signalChange(['/first.esp']);
+    void client.signalChange(['/first.esp']);
 
-    for (const paths of handed) client.signalChange(paths);
+    for (const paths of handed) void client.signalChange(paths);
     released.resolve(undefined);
 
     await vi.waitFor(() => { expect(signalled(client)).toEqual([['/first.esp'], folded]); });
@@ -566,7 +566,7 @@ describe('a change signalled', () => {
     const client = new InMemoryMEditClient();
     client.answerPuts(() => Promise.resolve(APPLIED));
 
-    client.signalChange([]);
+    void client.signalChange([]);
     expect(methods(client)).toEqual([]);
     await client.start();
 

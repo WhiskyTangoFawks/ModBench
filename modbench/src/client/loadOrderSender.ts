@@ -11,13 +11,19 @@ export interface LoadOrderWire extends LauncherWire {
   onStatusChanged(listener: (status: BackendStatus) => void): () => void;
   onReconnected(listener: () => void): () => void;
   put(snapshot: LoadOrderSnapshot, signal: AbortSignal, answered: () => void): Promise<LoadOrderOutcome>;
-  signalChange(paths: readonly string[]): Promise<void>;
+  signalChange(paths: readonly string[]): Promise<SweepEnd>;
+}
+
+/** What a posted signal started: `ended` settles once mEdit's sweep over what it named is over. */
+export interface SweepEnd {
+  readonly ended: Promise<void>;
 }
 
 /** The one sender of ADR-0013's snapshot and its change signal, and the owner of the process they are sent to. */
 export interface LoadOrderSender {
   send(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome>;
-  signalChange(paths: readonly string[]): void;
+  /** Settles once the sweep the signal starts is over, at once when mEdit is not running: the signal is then owed. */
+  signalChange(paths: readonly string[]): Promise<void>;
   latest(): Promise<LoadOrderOutcome | undefined>;
   /** Resolves once the newest snapshot handed has been answered, or dropped, ahead of the sweep that follows it. */
   applied(): Promise<void>;
@@ -40,6 +46,8 @@ interface OwedSignal {
   since?: number;
   readonly paths: Set<string>;
   disk: boolean;
+  readonly done: Promise<void>;
+  readonly sweepStarted: (ended: Promise<void>) => void;
 }
 
 interface Waiting {
@@ -96,7 +104,7 @@ function createSendSlot(wire: LoadOrderWire) {
     clearTimeout(signalTimer);
     signalTimer = undefined;
     signalling = true;
-    void wire.signalChange(signal.disk ? [] : [...signal.paths]).finally(() => {
+    void wire.signalChange(signal.disk ? [] : [...signal.paths]).then(({ ended }) => { signal.sweepStarted(ended); }).finally(() => {
       signalling = false;
       pump();
     });
@@ -147,11 +155,17 @@ function createSendSlot(wire: LoadOrderWire) {
       pump();
       return sent;
     },
-    oweSignal(paths: readonly string[]): void {
-      owed ??= { paths: new Set(), disk: false };
+    oweSignal(paths: readonly string[]): Promise<void> {
+      if (owed === undefined) {
+        let sweepStarted!: (ended: Promise<void>) => void;
+        const done = new Promise<void>((resolve) => { sweepStarted = resolve; });
+        owed = { paths: new Set(), disk: false, done, sweepStarted };
+      }
+      const { done } = owed;
       owed.disk ||= paths.length === 0;
       for (const path of paths) owed.paths.add(path);
       pump();
+      return done;
     },
     holdsOne: () => waiting !== undefined,
     pending: () => waiting !== undefined || inFlight !== undefined || owed !== undefined || signalling,
@@ -212,7 +226,7 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     if (!snapshot) return;
     reopenUnannounced = true;
     if (!slot.holdsOne()) void hand(snapshot).then((outcome) => { resent.fire({ snapshot, outcome }); });
-    slot.oweSignal([]);
+    void slot.oweSignal([]);
   };
 
   // A send in flight when mEdit goes answers abandoned, never a killed backend as a network failure.
@@ -229,7 +243,11 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
 
   return {
     send: hand,
-    signalChange: (paths) => { if (!launcher.stopped()) slot.oweSignal(paths); },
+    signalChange: (paths) => {
+      if (launcher.stopped()) return Promise.resolve();
+      const done = slot.oweSignal(paths);
+      return wire.status() === 'running' ? done : Promise.resolve();
+    },
     latest: () => slot.latest(),
     applied: () => slot.applied(),
     handed: () => handedCount,

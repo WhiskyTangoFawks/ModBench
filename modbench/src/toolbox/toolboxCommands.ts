@@ -54,8 +54,8 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
 
 interface RefreshGestureDeps {
   instance: Pick<Instance, 'refresh'>;
-  /** Whether mEdit's last check found another window holding the record index. */
-  heldElsewhere: () => boolean;
+  /** The record index's status as mEdit last published it. */
+  loadOrderStatus: () => { readonly refusal?: { readonly kind: string } } | undefined;
   reporterFor: (tag: string) => Reporter;
   /** Names this instance in toolbox.md's Reporting story 1. Modbench cannot name the other
    *  window that holds the record index, only the one refused here. */
@@ -71,7 +71,7 @@ export function registerRefreshCommand(deps: RefreshGestureDeps): vscode.Disposa
       return Promise.resolve();
     });
     const fromAgent = called instanceof AgentCall;
-    if (deps.heldElsewhere()) {
+    if (deps.loadOrderStatus()?.refusal?.kind === 'heldElsewhere') {
       if (fromAgent) return { applied: false, refusal: message, detail: deps.instanceRoot };
       reporter.report('error', message, deps.instanceRoot);
       return undefined;

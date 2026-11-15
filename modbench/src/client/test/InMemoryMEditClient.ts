@@ -107,7 +107,7 @@ export class InMemoryMEditClient implements MEditClient {
     },
     signalChange: (paths) => {
       this.record('signalChange', [paths]);
-      return this.signalAnswer();
+      return this.signalAnswer().then(() => ({ ended: Promise.resolve() }));
     },
   });
 
@@ -250,7 +250,7 @@ export class InMemoryMEditClient implements MEditClient {
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> { return this.sender.send(snapshot); }
   latestLoadOrder(): Promise<LoadOrderOutcome | undefined> { return this.sender.latest(); }
   loadOrdersHanded(): number { return this.sender.handed(); }
-  signalChange(paths: readonly string[]): void { this.sender.signalChange(paths); }
+  signalChange(paths: readonly string[]): Promise<void> { return this.sender.signalChange(paths); }
   onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void {
     return this.sender.onResent(listener);
   }

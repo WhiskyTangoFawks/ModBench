@@ -26,7 +26,7 @@ export interface EditingFlow {
   /** Puts the snapshot when it differs from the one mEdit holds (ADR-0013). */
   onRecompute(source: LoadOrderSource, stringsLanguage: string | undefined): void;
   /** Tells mEdit the files at `paths` changed, or, with none, to check the disk. */
-  signalChange(paths: readonly string[]): void;
+  signalChange(paths: readonly string[]): Promise<void>;
   dispose(): void;
 }
 
@@ -114,7 +114,7 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
       }
     },
     onRecompute: put,
-    signalChange: (paths) => { client.signalChange(paths); },
+    signalChange: (paths) => client.signalChange(paths),
     dispose: () => { for (const unsubscribe of unsubscribes) unsubscribe(); },
   };
 }

@@ -11,7 +11,7 @@ import { bundledBackendPath, spawnPiped } from './bundledBackend';
 import { backendLogLevelArgs, makeBackendLogForwarder, type BackendLogChannel } from './backendLog';
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
 import { SseNotificationSubscriber, type ListenerThrows } from './notificationStream';
-import { announceAfterReopen, createLoadOrderSender, type LoadOrderSender } from './loadOrderSender';
+import { announceAfterReopen, createLoadOrderSender, type LoadOrderSender, type SweepEnd } from './loadOrderSender';
 import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import { keepRecordIndexChanges, type RecordIndexChanges } from './recordIndexChanges';
@@ -171,7 +171,7 @@ class HttpMEditClient implements MEditClient {
       onReconnected: (listener) => this.notifications.onReconnected(listener),
       put: (documents) => this.putUnsavedDocuments(documents),
     });
-    this.handOver.onSettled((failure) => { if (failure === undefined) this.awaitSweep(); });
+    this.handOver.onSettled((failure) => { if (failure === undefined) void this.awaitSweep(); });
   }
 
   // The port is the lifecycle's to choose, so the generated client is built once it is known.
@@ -214,7 +214,7 @@ class HttpMEditClient implements MEditClient {
   sendLoadOrder(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> { return this.loadOrder.send(snapshot); }
   latestLoadOrder(): Promise<LoadOrderOutcome | undefined> { return this.loadOrder.latest(); }
   loadOrdersHanded(): number { return this.loadOrder.handed(); }
-  signalChange(paths: readonly string[]): void { this.loadOrder.signalChange(paths); }
+  signalChange(paths: readonly string[]): Promise<void> { return this.loadOrder.signalChange(paths); }
   onLoadOrderResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void {
     return this.loadOrder.onResent(listener);
   }
@@ -354,14 +354,15 @@ class HttpMEditClient implements MEditClient {
     }
   }
 
-  private async postSignalChange(paths: readonly string[]): Promise<void> {
+  private async postSignalChange(paths: readonly string[]): Promise<SweepEnd> {
     try {
       const { error, response } = await this.apiClient.POST('/signal-change', { body: { paths: [...paths] } });
-      if (response.ok) this.awaitSweep();
-      else this.log.error(`[HttpMEditClient] signalChange failed (${response.status}): ${errorText(error)}`);
+      if (response.ok) return { ended: this.awaitSweep() };
+      this.log.error(`[HttpMEditClient] signalChange failed (${response.status}): ${errorText(error)}`);
     } catch (e) {
       this.log.error(`[HttpMEditClient] signalChange threw: ${errorMessage(e)}`);
     }
+    return { ended: Promise.resolve() };
   }
 
   // `instanceRoot` scopes the backend's index (ADR-0010). The signal aborts the PUT itself rather
@@ -439,17 +440,21 @@ class HttpMEditClient implements MEditClient {
   }
 
   // An answered hand-over or signal starts a sweep mEdit publishes as validating: late until a status holds no load order or settles, or is lost.
-  private awaitSweep(): void {
+  private awaitSweep(): Promise<void> {
     this.sweepsAwaited++;
+    let over!: () => void;
+    const ended = new Promise<void>((resolve) => { over = resolve; });
     const end = (): void => {
       if (subscription === undefined) return;
       subscription();
       subscription = undefined;
       this.sweepsAwaited--;
+      over();
     };
     const sweepOver = (status: LoadOrderStatus): boolean => status.holdsNone || isSettled(status);
     let subscription: (() => void) | undefined = this.loadOrderStatusKept.onStatus((status) => { if (status === undefined || sweepOver(status)) end(); });
     void this.currentLoadOrderStatus().then((current) => { if (current !== undefined && sweepOver(current)) end(); });
+    return ended;
   }
 
   // Undefined when the read fails: the caller then waits on the stream's own ticks.
