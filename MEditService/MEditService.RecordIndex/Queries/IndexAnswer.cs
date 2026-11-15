@@ -6,13 +6,9 @@ namespace MEditService.RecordIndex.Queries;
 
 /// <summary>Builds the answers the Index's face gives. Inside the Index a read that finds nothing held,
 /// not ready or out of memory throws; here it becomes the answer.</summary>
-internal sealed class IndexAnswer(Action onInvalidation, Func<CancellationToken, Task> sourceWritesRead)
+internal sealed class IndexAnswer(Action onInvalidation)
 {
     public Answer<T, IndexRefused> Of<T>(Func<T> read) => Flat<T>(() => read());
-
-    /// <summary>The answer once the record index has read every source write mEdit made before it, as each overload
-    /// given a token builds it.</summary>
-    public Task<Answer<T, IndexRefused>> Of<T>(Func<T> read, CancellationToken cancel) => AfterSourceWrites(() => Of(read), cancel);
 
     public Answer<T, IndexRefused> Flat<T>(Func<Answer<T, IndexRefused>> read)
     {
@@ -27,9 +23,6 @@ internal sealed class IndexAnswer(Action onInvalidation, Func<CancellationToken,
         }
     }
 
-    public Task<Answer<T, IndexRefused>> Flat<T>(Func<Answer<T, IndexRefused>> read, CancellationToken cancel) =>
-        AfterSourceWrites(() => Flat(read), cancel);
-
     public Answer<T, IndexRefused> Sourced<T>(Func<Answer<T, SourceFailure>> read) =>
         Flat<T>(() =>
         {
@@ -37,20 +30,17 @@ internal sealed class IndexAnswer(Action onInvalidation, Func<CancellationToken,
             return new IndexRefused(IndexRefusal.SourceStopped, failure.Reason);
         });
 
-    public Task<Answer<T, IndexRefused>> Sourced<T>(Func<Answer<T, SourceFailure>> read, CancellationToken cancel) =>
-        AfterSourceWrites(() => Sourced(read), cancel);
-
-    private async Task<Answer<T, IndexRefused>> AfterSourceWrites<T>(Func<Answer<T, IndexRefused>> answer, CancellationToken cancel)
+    public static async Task<IndexRefused?> Awaiting(Func<Task> wait)
     {
         try
         {
-            await sourceWritesRead(cancel).ConfigureAwait(false);
+            await wait().ConfigureAwait(false);
+            return null;
         }
         catch (Exception ex) when (RefusalOf(ex) is { } refused)
         {
             return refused;
         }
-        return answer();
     }
 
     public IndexRefused? Refusing(Func<IndexRefused?> act) =>

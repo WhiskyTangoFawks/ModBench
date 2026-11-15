@@ -50,8 +50,6 @@ public abstract class DelegatingSourceAdapter(ISourceAdapter inner) : ISourceAda
 
     public virtual string ContentStamp(string text) => inner.ContentStamp(text);
 
-    public virtual string? FormKeyDeclaredIn(string text, string path, string pluginFileName) => inner.FormKeyDeclaredIn(text, path, pluginFileName);
-
     public virtual SourceFailure? Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<FileToCopy> assets, bool commit, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest, IReadOnlyList<string> ignored,

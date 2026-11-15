@@ -10,9 +10,7 @@ namespace MEditService.RecordIndex.Queries;
 /// failed is answered with the files that stopped it, and the links of rows its tree gave.</summary>
 internal static class ProblemsPanel
 {
-    internal sealed record Placements(IReadOnlyList<PluginProblems> Problems, IReadOnlySet<PluginAddress> OnUnreadText);
-
-    public static Placements Of(Indexer index, RelationReads reads, LoadOrderSnapshot snapshot, ISourceAdapter source, PluginAddress? only = null)
+    public static IReadOnlyList<PluginProblems> Of(Indexer index, RelationReads reads, LoadOrderSnapshot snapshot, ISourceAdapter source, PluginAddress? only = null)
     {
         var derivations = reads.GetDerivations();
         var stopped = index.SourceFileFailures.ToLookup(failure => failure.Plugin, PluginAddress.Comparer);
@@ -25,7 +23,7 @@ internal static class ProblemsPanel
                 ? source.Over(registered, snapshot.GameRelease)
                 : null)
             .ToLookup(row => row.Reference.Plugin, PluginAddress.Comparer);
-        List<Placements> placed =
+        List<PluginProblems> placed =
         [
             .. snapshot.Plugins
                 .Where(plugin => only is not { } one || PluginAddress.Comparer.Equals(plugin.Key, one))
@@ -39,23 +37,21 @@ internal static class ProblemsPanel
                     var headerProblems = linkedUnreadable.Count == 0
                         ? new HeaderProblems([], null)
                         : NoLinkChecked(plugin, linkedUnreadable, source.Over(plugin, snapshot.GameRelease));
-                    return Placed(plugin, source, reads, ProblemsOf(
+                    return Placed(plugin, source, ProblemsOf(
                         plugin.Key, snapshot.GameRelease, index.LaterReadFailure(plugin.Key),
                         [.. stopped[plugin.Key].Select(SourceProblem.StoppedAt), .. Found(found[plugin.Key].Select(held => held.Problem), stopped[plugin.Key]), .. headerProblems.Problems],
                         [.. missing[plugin.Key]], unreadable, headerProblems.PlacementFailure));
                 }),
         ];
-        return new([.. placed.SelectMany(plugin => plugin.Problems)], placed.SelectMany(plugin => plugin.OnUnreadText).ToHashSet(PluginAddress.Comparer));
+        return placed;
     }
 
-    private sealed record PlacedText(ProblemPlacement Placement, string? Document, string Stamp);
-
     // A file that cannot be read to place its problems is a failure of the plugin; its problems sit on the first line.
-    private static Placements Placed(
-        RegisteredPlugin plugin, ISourceAdapter source, RelationReads reads, PluginProblems answer)
+    private static PluginProblems Placed(
+        RegisteredPlugin plugin, ISourceAdapter source, PluginProblems answer)
     {
         var folder = (plugin.Provider as PluginProvider.FromMod)?.SourceFolder;
-        var placements = new Dictionary<string, PlacedText?>();
+        var placements = new Dictionary<string, ProblemPlacement?>();
         var unread = new List<string>();
         SourceRange RangeOf(SourceProblem problem)
         {
@@ -66,7 +62,7 @@ internal static class ProblemsPanel
                 try
                 {
                     var text = source.TextOf(folder, path);
-                    file = new(new ProblemPlacement(text), source.FormKeyDeclaredIn(text, path, plugin.Name), source.ContentStamp(text));
+                    file = new ProblemPlacement(text);
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
@@ -74,26 +70,12 @@ internal static class ProblemsPanel
                 }
                 placements[path] = file;
             }
-            return file?.Placement.Of(problem.FormKey, problem.TargetFormKey, problem.FieldPath) ?? SourceRange.FirstLine;
+            return file?.Of(problem.FormKey, problem.TargetFormKey, problem.FieldPath) ?? SourceRange.FirstLine;
         }
         var placed = answer with { Problems = [.. answer.Problems.Select(problem => problem with { Range = RangeOf(problem) })] };
-        var linkTexts = answer.Problems
-            .Where(problem => problem.FieldPath is not null)
-            .Select(problem => placements.GetValueOrDefault(problem.SourceRelativePath))
-            .OfType<PlacedText>()
-            .Distinct()
-            .ToList();
-        return new(
-            [unread.Count > 0 && placed.Failure is null
-                ? placed with { Failure = string.Join(" ", unread), FailureKind = ProblemsFailureKind.Placement }
-                : placed],
-            linkTexts.Count > 0 && AnyUnread(plugin.Key, reads, linkTexts) ? new HashSet<PluginAddress>([plugin.Key], PluginAddress.Comparer) : []);
-    }
-
-    private static bool AnyUnread(PluginAddress plugin, RelationReads reads, List<PlacedText> texts)
-    {
-        var read = reads.GetContentStamps(plugin, [.. texts.Select(text => text.Document).OfType<string>()]);
-        return texts.Any(text => text.Document is not { } document || !read[document].Contains(text.Stamp));
+        return unread.Count > 0 && placed.Failure is null
+            ? placed with { Failure = string.Join(" ", unread), FailureKind = ProblemsFailureKind.Placement }
+            : placed;
     }
 
     // Only the load order's active plugins answer a link, and it holds one per file name (ADR-0012).

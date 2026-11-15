@@ -20,7 +20,7 @@ public sealed class LoadOrderHolder
     /// Apply answers.</summary>
     public event Action<LoadOrderSnapshot, long>? Arrived;
 
-    /// <summary>How many times mEdit has written a system of record. A read after a write waits for the record index to
+    /// <summary>How many times mEdit has written a system of record. A write waits for the record index to
     /// have read what it wrote.</summary>
     public long SourceWrites => Interlocked.Read(ref _sourceWrites);
 

@@ -18,7 +18,7 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
 
     private bool Binds(string sql)
     {
-        if (!fixture.Index.Queries.SelectRows(sql).Answered().Holds(out var rows, out _)) return false;
+        if (!fixture.Index.Queries.SelectRows(sql).Holds(out var rows, out _)) return false;
         rows.Dispose();
         return true;
     }

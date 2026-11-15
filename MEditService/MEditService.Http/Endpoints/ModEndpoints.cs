@@ -13,6 +13,7 @@ internal static class ModEndpoints
         // A missing load order or git refuses the whole selection once; every other refusal is an item of
         // the answer.
         app.MapPost("/build", Build)
+            .AwaitingItsSourceWrite()
             .WithName("BuildMod")
             .WithTags("Mods")
             .WithDescription(

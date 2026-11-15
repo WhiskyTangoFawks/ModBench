@@ -143,7 +143,7 @@ internal sealed class Indexer : IDisposable
     private readonly Lock _turns = new();
 
     // The source writes made before the change signalled that the last whole check of the disk answered, guarded by _lock
-    // and announced by _writesRead, which a read after a source write waits on.
+    // and announced by _writesRead, which a write waits on.
     private long _writesChecked;
 
     // The source writes made before each plugin's last re-read began, guarded by _lock and announced by _writesRead.
@@ -518,8 +518,12 @@ internal sealed class Indexer : IDisposable
         if (holding.Count > 0 || scope.Store.SweepOwed) Validate(scope, holding, CancellationToken.None);
         // A plugin that failed to open is not held: the reconcile opens it again.
         if (scope.LoadOrder.Plugins.Any(plugin => named.Contains(plugin.Key) && scope.Held.Find(plugin.Key) is null)) AskReconcile();
-        return [.. holding.Select(plugin => (plugin.Key, writes)), .. readAlone];
+        return [.. holding.Select(plugin => (plugin.Key, writes)), .. readAlone, .. NotInTheLoadOrder(scope, named).Select(plugin => (plugin, writes))];
     }
+
+    // The record index holds nothing of a plugin the load order lacks, so a write to it has nothing to be read.
+    private static IEnumerable<PluginAddress> NotInTheLoadOrder(OpenScope scope, HashSet<PluginAddress> named) =>
+        named.Where(plugin => !scope.LoadOrder.Plugins.Any(listed => PluginAddress.Comparer.Equals(listed.Key, plugin)));
 
     // A read that stands on a failure is cleared only by reading the plugin whole, as is one the named read fails on.
     private bool ReadFiles(OpenScope scope, PluginMetadata plugin, IReadOnlyList<string> files)
@@ -571,11 +575,12 @@ internal sealed class Indexer : IDisposable
         }
     }
 
-    /// <summary>Read-your-writes: returns once a check of the disk has read each source write that named no plugin, and
-    /// a re-read or check has read each plugin the others named. Throws <see cref="IndexNotReadyException"/> otherwise.</summary>
-    public async Task AwaitTheReadOfTheLastSourceWrite(CancellationToken cancel)
+    /// <summary>Read-your-writes: returns once a check of the disk has read each source write after the count
+    /// <paramref name="before"/> that named no plugin, and a re-read or check has read each plugin the others named.
+    /// Throws <see cref="IndexNotReadyException"/> otherwise.</summary>
+    public async Task AwaitTheReadOfSourceWritesAfter(long before, CancellationToken cancel)
     {
-        var (lastUnnamed, lastOfEach) = _holder.WritesAfter(WritesChecked);
+        var (lastUnnamed, lastOfEach) = _holder.WritesAfter(Math.Max(before, WritesChecked));
         var deadline = _timeProvider.GetUtcNow() + SourceWriteReadLimit;
         while (true)
         {
