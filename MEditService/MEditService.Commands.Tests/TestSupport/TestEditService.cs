@@ -69,8 +69,8 @@ internal static class TestEditService
     internal static CreatePluginHandler PluginCreateHandler(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
         Over(holder, adapter: adapter).GetRequiredService<CreatePluginHandler>();
 
-    internal static SetPluginFileFlagsHandler SetPluginFileFlagsHandler() =>
-        Over(new LoadOrderHolder()).GetRequiredService<SetPluginFileFlagsHandler>();
+    internal static SetPluginFileFlagsHandler SetPluginFileFlagsHandler(LoadOrderHolder? holder = null) =>
+        Over(holder ?? new LoadOrderHolder()).GetRequiredService<SetPluginFileFlagsHandler>();
 
     internal static CreatePluginInModHandler PluginCreateInModHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<CreatePluginInModHandler>();

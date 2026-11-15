@@ -6,8 +6,6 @@ using MEditService.RecordIndex.Queries;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Http.Tests.Api;
 
@@ -154,9 +152,7 @@ public sealed class WriteWaitsApiTests : HostedTests
     [Fact]
     public async Task ASetOfPluginFileFlags_Answers_OnlyOnceTheRecordIndexHasReadIt()
     {
-        using var scratch = new ScratchDirectory("api-write-waits-flags-");
-        var path = Path.Combine(scratch, "Flagged.esp");
-        new Fallout4Mod(ModKey.FromFileName("Flagged.esp"), Fallout4Release.Fallout4).WriteToBinary(path);
+        var path = (await Loaded(versioned: false)).Plugins.Single(plugin => plugin.Name == Plugin).Path;
 
         await AssertTheWriteWaitsForTheIndex(Client.PostAsJsonAsync(
             "/plugin-files/set-flags",
