@@ -8,7 +8,7 @@ import { ACTIVATION_DECIDES_MESSAGE, ACTIVATION_DECIDES_SELECTORS } from '../../
 
 
 const ACTIVATION = 'extension.ts';
-const PORTS_THE_ROOT_IMPLEMENTS_OVER_THE_WINDOW_API = ['dialog.ts', 'hostGit.ts', 'problemsHost.ts', 'tasks.ts', 'trash.ts', 'watcherExcludeSetting.ts'];
+const WINDOW_API_ADAPTERS_THE_ROOT_IMPLEMENTS = ['dialog.ts', 'hostGit.ts', 'problemsHost.ts', 'tasks.ts', 'trash.ts', 'watcherExcludeSetting.ts'];
 const ACTIVATION_EXPORTS = ['activate', 'deactivate'];
 
 const parse = (path: string, text = readFileSync(path, 'utf8')): ts.SourceFile =>
@@ -61,7 +61,7 @@ function activateReturnType(source: ts.SourceFile): string | undefined {
 
 describe('the composition root builds each box, registers it with VS Code and decides nothing', () => {
   it('holds the activation file and the ports it implements, and no other file', () => {
-    expect(rootFiles().map((path) => basename(path)).sort()).toEqual([ACTIVATION, ...PORTS_THE_ROOT_IMPLEMENTS_OVER_THE_WINDOW_API].sort());
+    expect(rootFiles().map((path) => basename(path)).sort()).toEqual([ACTIVATION, ...WINDOW_API_ADAPTERS_THE_ROOT_IMPLEMENTS].sort());
   });
 
   it.each(rootFiles().map((path) => basename(path)))('the lint config applies the deciding selectors to %s', async (file) => {

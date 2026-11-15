@@ -294,7 +294,7 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     adapter.subscribe(() => { startedByTheListener.push(namesOf(folder)); });
     await mkdir(join(instance, 'profiles', 'New Profile'));
 
-    await adapter.reading({ named: [join(instance, 'profiles')], disk: false });
+    await adapter.reading({ named: [join(instance, 'profiles', 'New Profile')], disk: false });
 
     expect(await Promise.all(startedByTheListener)).toEqual([await namesOf(folder, listDir)]);
     expect(await namesOf(folder, listDir)).toContain('added.txt');

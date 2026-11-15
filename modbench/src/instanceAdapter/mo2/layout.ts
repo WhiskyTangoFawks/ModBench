@@ -177,11 +177,10 @@ const EVERYTHING_BELOW = '**';
  *  mark of a skipped line, which the format scan keeps to those codecs. */
 export const FIRST_LEVEL = '?*';
 
-/** The instance's own watches. The mods are held whole unless the user excluded them from VS Code's watch. */
-export const instanceWatches = (instanceRoot: string, modsExcluded: boolean): readonly WatchedFolder[] => [
+export const instanceWatches = (instanceRoot: string): readonly WatchedFolder[] => [
   // A profile switch rewrites the settings and nothing else; a repository appears at, or vanishes from, the root.
   { base: instanceRoot, pattern: `{${SETTINGS_FILE_NAME},${IGNORE_LIST_FILE},${SUBMODULES_FILE},${GIT_DIR},${Object.values(SORTING_RULE_FILES).join(',')}}` },
-  { base: modsDir(instanceRoot), pattern: modsExcluded ? FIRST_LEVEL : EVERYTHING_BELOW },
+  { base: modsDir(instanceRoot), pattern: EVERYTHING_BELOW },
   { base: profilesDir(instanceRoot), pattern: FIRST_LEVEL },
   { base: overwriteDir(instanceRoot), pattern: EVERYTHING_BELOW },
   { base: sourceRootDir(instanceRoot), pattern: EVERYTHING_BELOW },
