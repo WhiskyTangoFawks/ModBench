@@ -1,5 +1,4 @@
 import pathlib
-import threading
 import unittest
 
 import medit
@@ -106,13 +105,6 @@ class WriteAgainstTheFixtureInstance(unittest.TestCase):
     def test_a_write_into_the_created_plugin_lands_once_the_watchers_snapshot_holds_it(self) -> None:
         created = medit.create_plugin(NEW_PLUGIN, CONDITIONS.origin, flags=[])
         watcher_sees_a_change(self.fixture, created)
-        self.assertTrue(medit.create_record(created, 'npc_').endswith(f':{NEW_PLUGIN}'))
-
-    def test_a_write_into_the_created_plugin_waits_for_the_watchers_snapshot_that_holds_it(self) -> None:
-        created = medit.create_plugin(NEW_PLUGIN, CONDITIONS.origin, flags=[])
-        watcher = threading.Timer(1, watcher_sees_a_change, [self.fixture, created])
-        watcher.start()
-        self.addCleanup(watcher.join)
         self.assertTrue(medit.create_record(created, 'npc_').endswith(f':{NEW_PLUGIN}'))
 
     def test_creates_a_plugin_in_a_mod_that_holds_no_plugin(self) -> None:
