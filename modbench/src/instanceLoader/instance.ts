@@ -351,7 +351,7 @@ export class Instance implements Subscription {
 
   private readonly flagged: FlaggedHashesHeld;
 
-  private readonly stopHearingMEdit: () => void;
+  private readonly mEditChanges: { dispose(): void };
 
   // A note is one Output line until its text changes or it clears.
   private readonly notesTold = new Map<NoteKind, ReadonlySet<string>>();
@@ -367,9 +367,9 @@ export class Instance implements Subscription {
     this.archives = new ArchiveContentsHeld(options.medit);
     this.flagged = new FlaggedHashesHeld(options.medit);
     this.facts = new FactsOfReading(options.adapter, entryKey, this.archives, this.flagged);
-    this.stopHearingMEdit = options.medit.onDidChange((change) => {
+    this.mEditChanges = options.medit.onDidChange((change) => {
       if (change === undefined && (this.archives.anyUnanswered || this.flagged.anyUnanswered)) void this.enqueue({ disk: false, tellsUnheard: false });
-    }).dispose;
+    });
   }
 
   /** Never undefined and never partial: before the first read it is the empty value at
@@ -490,7 +490,7 @@ export class Instance implements Subscription {
     clearTimeout(this.settleTimer);
     this.changes.dispose();
     this.workspaceWatch.dispose();
-    this.stopHearingMEdit();
+    this.mEditChanges.dispose();
     this.subscribers = [];
     this.failureListeners = [];
     this.redrawListeners = [];

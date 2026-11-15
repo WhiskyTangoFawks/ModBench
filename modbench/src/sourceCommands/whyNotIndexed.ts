@@ -67,10 +67,10 @@ function standingOf(plugin: PluginAddress, answer: Awaited<ReturnType<MEditClien
 function nextStatusOrRecheck(client: Pick<MEditClient, 'onDidChange'>, signal: AbortSignal | undefined): { woken: Promise<void>; cancel: () => void } {
   let cancel = (): void => undefined;
   const woken = new Promise<void>((resolve) => {
-    const { dispose: stop } = client.onDidChange(() => { cancel(); });
+    const changes = client.onDidChange(() => { cancel(); });
     const timer = setTimeout(() => { cancel(); }, RECHECK_MS);
     signal?.addEventListener('abort', () => { cancel(); }, { once: true });
-    cancel = () => { clearTimeout(timer); stop(); resolve(); };
+    cancel = () => { clearTimeout(timer); changes.dispose(); resolve(); };
   });
   return { woken, cancel: () => { cancel(); } };
 }
