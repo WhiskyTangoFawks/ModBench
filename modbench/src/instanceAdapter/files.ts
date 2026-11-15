@@ -299,7 +299,7 @@ const listings = new Map<string, Kept<Dirent[]>>();
 
 /** As `listDir`, listed again only when the folder's stamp changed. Only for a folder a watch follows at its first level:
  *  inside a reading, a change no watch names waits for a check of the disk. */
-export const listDirByStamp = stampKept(listDir, listings);
+export const listDirByStamp = keptTrusted(stampOf, listDir, listings, true);
 
 /** `path`'s stamp, kept as `listDirByStamp` keeps a listing. */
 export const stampByStamp = stampKept(stampOf);

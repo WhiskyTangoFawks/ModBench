@@ -173,6 +173,40 @@ describe('a folder listed and a file parsed by their stamps', () => {
     expect(await readTrustingKept([], true, () => textAt(path))).toEqual({ answer: '+B', unheard: [path] });
   });
 
+  describe('on a file system that leaves a folder\'s stamp as it was for an entry added', () => {
+    afterEach(async () => {
+      const { stat: realStat } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+      vi.mocked(stat).mockImplementation(realStat);
+    });
+
+    const addedUnderAHeldStamp = async (): Promise<void> => {
+      const { stat: realStat } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+      await writeFile(join(root, 'a.esp'), '');
+      settle();
+      const held = await realStat(root, { bigint: true });
+      vi.mocked(stat).mockImplementation(async (...args) => (args[0] === root ? held : realStat(...args)));
+      await namesOf(root);
+      await writeFile(join(root, 'b.esp'), '');
+    };
+
+    it('lists the folder again at a check of the disk', async () => {
+      await addedUnderAHeldStamp();
+
+      const unnamed = await readTrustingKept([], false, () => namesOf(root));
+      const checked = await readTrustingKept([], true, () => namesOf(root));
+
+      expect([unnamed.answer, checked.answer]).toEqual([['a.esp'], ['a.esp', 'b.esp']]);
+    });
+
+    it('lists the folder again within a re-read named the entry added', async () => {
+      await addedUnderAHeldStamp();
+
+      const { answer } = await readTrustingKept([join(root, 'b.esp')], false, () => namesOf(root));
+
+      expect(answer).toEqual(['a.esp', 'b.esp']);
+    });
+  });
+
   it('forgets at a check of the disk, as a change no event named, a folder it kept that is gone', async () => {
     const gone = join(root, 'gone');
     await mkdir(gone);
@@ -230,7 +264,7 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     await rm(instance, { recursive: true, force: true });
   });
 
-  it('lists no mod folder again, and still shows a file added to one', async () => {
+  it('lists no mod folder again in a reading named nothing, and lists each again at a check of the disk, which shows a file added to one', async () => {
     const adapter = managerOver(instance);
     const first = await adapter.reading();
     const [name, files] = [...first.modFiles].find(([, listed]) => listed.files.length > 0) ?? ['', undefined];
@@ -239,7 +273,7 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
     await adapter.reading();
     vi.mocked(readdir).mockClear();
-    await adapter.reading();
+    await adapter.reading({ named: [], disk: false });
     expect(listingsOf(folder)).toBe(0);
 
     await mkdir(join(folder, 'added'), { recursive: true });

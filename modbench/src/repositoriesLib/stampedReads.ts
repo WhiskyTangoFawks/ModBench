@@ -40,8 +40,11 @@ const trusting = new AsyncLocalStorage<true>();
 
 /** A reader of `path` that reads it again only when its stamp has changed, read without its stamp while `readTrustingKept`
  *  or `trustingKept` runs, and checked by `readTrustingKept` where a change named it. */
-export function keptTrusted<T>(stampOf: (path: string) => Promise<FileStamp>, read: (path: string) => Promise<T>, kept = new Map<string, Kept<T>>()): (path: string) => Promise<T> {
-  everyKept.push((checked) => forgetChanged(kept, stampOf, checked));
+export function keptTrusted<T>(
+  stampOf: (path: string) => Promise<FileStamp>, read: (path: string) => Promise<T>, kept = new Map<string, Kept<T>>(), stampMayMiss = false,
+): (path: string) => Promise<T> {
+  // A folder's stamp can stay as it was for an entry added (ADR-0003), so a change named and a check of the disk forget it.
+  everyKept.push((checked) => forgetChanged(kept, stampOf, checked, stampMayMiss));
   return keptByStamp(stampOf, read, kept);
 }
 
@@ -78,11 +81,13 @@ const stampStill = async (stampOf: (path: string) => Promise<FileStamp>, { path,
   }
 };
 
-async function forgetChanged<T>(kept: Map<string, Kept<T>>, stampOf: (path: string) => Promise<FileStamp>, checked: (key: string) => boolean): Promise<string[]> {
+async function forgetChanged<T>(
+  kept: Map<string, Kept<T>>, stampOf: (path: string) => Promise<FileStamp>, checked: (key: string) => boolean, outright: boolean,
+): Promise<string[]> {
   const changed = await Promise.all([...kept].filter(([key]) => checked(key)).map(async ([key, held]) => {
-    if (await stampStill(stampOf, held)) return [];
-    if (kept.get(key) === held) kept.delete(key);
-    return [held.path];
+    const still = await stampStill(stampOf, held);
+    if ((outright || !still) && kept.get(key) === held) kept.delete(key);
+    return still ? [] : [held.path];
   }));
   return changed.flat();
 }
