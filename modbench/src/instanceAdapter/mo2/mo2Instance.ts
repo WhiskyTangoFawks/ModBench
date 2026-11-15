@@ -39,16 +39,16 @@ import { textHash } from '../fileContents/contentDigest';
 import { hashIndexDir, modlistFile, modsDir, profilesDir, settingsFile } from './layout';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { parseModlist } from './codecs/modlistText';
-import { get } from '../files';
+import { textByStamp } from '../files';
 import { trashingReplaced } from '../trashingReplaced';
 import { gamePlaceOf } from '../gameFolder/gamePlace';
 import { overlappedGameRoot } from '../gameFolder/pathWithin';
 
 export { overwriteDir } from './layout';
 
-/** The mods `profile`'s mod order enables, by name, read now. */
+/** The mods `profile`'s mod order enables, by name. */
 export const enabledModsIn = (instanceRoot: string) => async (profile: string): Promise<string[]> =>
-  parseModlist(await get(modlistFile(instanceRoot, profile))).flatMap((entry) => (entry.kind === 'mod' && entry.enabled ? [entry.name] : []));
+  parseModlist(await textByStamp(modlistFile(instanceRoot, profile))).flatMap((entry) => (entry.kind === 'mod' && entry.enabled ? [entry.name] : []));
 
 const MO2_PROGRAM = 'ModOrganizer.exe';
 
@@ -87,7 +87,11 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
   const followPathTokens = pathTokensFollowed(context, gameFolder, publisherFile);
   const adapter: ManagerAdapter = {
     names: source.names,
-    reading: async (reread) => (await Promise.all([readInstance(source, reread), showUnfiltered(), followPathTokens(), followSourceModLines()]))[0],
+    reading: async (reread) => {
+      const reading = await readInstance(source, reread);
+      await reading.trustingKept(() => Promise.all([showUnfiltered(), followPathTokens(), followSourceModLines()]));
+      return reading;
+    },
     activeProfile: async () => (await source.settings()).profile,
     gameRelease: async () => (await source.settings()).gameRelease,
     gameFolder,

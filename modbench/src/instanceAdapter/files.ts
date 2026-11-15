@@ -12,7 +12,7 @@ import { pipeline } from 'node:stream/promises';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import type { FileRead } from './instanceAdapter';
-import { keptTrusted, stampFrom, type FileStamp, type Kept } from '../repositoriesLib/stampedReads';
+import { keptTrusted, pathKey, stampFrom, type FileStamp, type Kept } from '../repositoriesLib/stampedReads';
 import { isOwnTemp, ownTempPrefix, renameOver, tempOwner } from '../repositoriesLib/wholeWrites';
 import { digestOf } from './fileContents/contentDigest';
 import type { MoveToTrash } from '../ports/trash';
@@ -20,7 +20,12 @@ import { nameWrites } from '../repositoriesLib/writeNaming';
 
 /** ADR-0007, answered without the backend. */
 export function isRepository(sourceFolder: string): Promise<boolean> {
-  return exists(join(sourceFolder, GIT_DIR));
+  return listedIn(sourceFolder, GIT_DIR);
+}
+
+/** Whether `folder`'s listing, kept as `listDirByStamp` keeps it, holds an entry named `name`; false when `folder` is not there. */
+export async function listedIn(folder: string, name: string): Promise<boolean> {
+  return (await readOrAbsent(() => listDirByStamp(folder), [])).some((entry) => pathKey(entry.name) === pathKey(name));
 }
 
 /** The git directory, whose presence makes a folder a repository. */
@@ -280,8 +285,9 @@ export function makeDir(path: string): Promise<void> {
   return mkdir(path).then(() => undefined);
 }
 
-// The stamp is the fact every write changes that ADR-0003 validates by.
-const stampKept = <T>(read: (path: string) => Promise<T>, kept?: Map<string, Kept<T>>): (path: string) => Promise<T> => keptTrusted(stampOf, read, kept);
+/** A reader of what `read` answers of a file, which reads it again only when the file's stamp has changed: the fact every
+ *  write changes that ADR-0003 validates by. */
+export const stampKept = <T>(read: (path: string) => Promise<T>, kept?: Map<string, Kept<T>>): (path: string) => Promise<T> => keptTrusted(stampOf, read, kept);
 
 /** `path`'s directory entries; the caller's own filter picks the ones it wants. */
 export function listDir(path: string): Promise<Dirent[]> {
@@ -296,7 +302,7 @@ export const listDirByStamp = stampKept(listDir, listings);
 /** `path`'s stamp, kept as `listDirByStamp` keeps a listing. */
 export const stampByStamp = stampKept(stampOf);
 
-export { outsideTrustedRead, readTrustingKept, trustingKept } from '../repositoriesLib/stampedReads';
+export { keptUntilNamed, outsideTrustedRead, readTrustingKept, trustingKept } from '../repositoriesLib/stampedReads';
 
 /** A reader of the text `parse` makes of a file, which reads and parses it again only when the file's stamp has changed. */
 export const parsedBy = <T>(parse: (text: string) => T): ((path: string) => Promise<T>) =>
@@ -318,11 +324,12 @@ export interface ResolvedEntry {
   readonly isDirectory: boolean;
 }
 
-/** The entries directly in `path`, each link as what it links to. */
+/** The entries directly in `path`, each link as what it links to. A folder outside the instance and the game, or one a watch
+ *  stands in for, is listed by `listDir`. */
 export async function listEntries(
-  path: string, skippedLink: SkippedLink,
+  path: string, skippedLink: SkippedLink, list: (path: string) => Promise<Dirent[]> = listDirByStamp,
 ): Promise<ResolvedEntry[]> {
-  const entries = await Promise.all((await listDir(path)).map(async (dirent): Promise<ResolvedEntry | undefined> => {
+  const entries = await Promise.all((await list(path)).map(async (dirent): Promise<ResolvedEntry | undefined> => {
     const { name } = dirent;
     if (!dirent.isSymbolicLink()) return { name, isFile: dirent.isFile(), isDirectory: dirent.isDirectory() };
     try {
@@ -338,9 +345,9 @@ export async function listEntries(
 
 /** The folders directly in `path`, links followed as `listEntries` follows them. */
 export async function listFolders(
-  path: string, skippedLink: SkippedLink,
+  path: string, skippedLink: SkippedLink, list?: (path: string) => Promise<Dirent[]>,
 ): Promise<string[]> {
-  return (await listEntries(path, skippedLink)).filter((entry) => entry.isDirectory).map((entry) => entry.name);
+  return (await listEntries(path, skippedLink, list)).filter((entry) => entry.isDirectory).map((entry) => entry.name);
 }
 
 /** Creates `path` and every missing parent; a no-op when it is already there. */

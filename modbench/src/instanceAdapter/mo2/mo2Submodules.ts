@@ -7,7 +7,7 @@ import { errnoCode } from '../../ports/errno';
 import { git } from '../git';
 import { keptByIndex } from '../keptByIndex';
 import { errorMessage } from '../../ports/errorMessage';
-import { exists, get, ignoreSkippedLink, isRepository, listFolders, putIfChanged, readOrAbsent, remove } from '../files';
+import { exists, get, ignoreSkippedLink, isRepository, listFolders, putIfChanged, readOrAbsent, remove, stampKept, textByStamp } from '../files';
 import type { InstanceAdapter, SourceHost, Submodule, SubmoduleLacks, SubmoduleNote, UnclonedSubmodule } from '../instanceAdapter';
 import {
   ignoreListFile, modsDir, sourceModLinesOf, sourceModPath, sourceRootDir, submodulesFile, leavesOutSourceFolders, withHeldWholeFollowed, withSourceModLines, type SourceFolders,
@@ -72,17 +72,18 @@ async function submoduleOf(folder: string): Promise<SubmoduleEntry | undefined |
   }
 }
 
-async function submodulePaths(instanceRoot: string, file: string): Promise<Map<string, string>> {
-  if (!(await exists(file))) return new Map();
-  const listed = await git(instanceRoot, 'config', '-f', file, '--null', '--list');
+const submodulePathsIn = stampKept(async (file: string): Promise<ReadonlyMap<string, string>> => {
+  const listed = await git(dirname(file), 'config', '-f', file, '--null', '--list');
   return new Map(listed.split('\0').filter((entry) => entry !== '').flatMap((entry) => {
     const [key = '', value = ''] = entry.split('\n');
     return key.startsWith('submodule.') && key.endsWith('.path') ? [[key.slice('submodule.'.length, -'.path'.length), value] as const] : [];
   }));
-}
+});
 
-async function sourceEntries(instanceRoot: string, file: string): Promise<string[]> {
-  return [...await submodulePaths(instanceRoot, file)].flatMap(([name, path]) => (path.startsWith(sourceModPath('')) ? [name] : []));
+const submodulePaths = (file: string): Promise<ReadonlyMap<string, string>> => readOrAbsent(() => submodulePathsIn(file), new Map());
+
+async function sourceEntries(file: string): Promise<string[]> {
+  return [...await submodulePaths(file)].flatMap(([name, path]) => (path.startsWith(sourceModPath('')) ? [name] : []));
 }
 
 // An unset key is exit code 5.
@@ -102,7 +103,7 @@ async function entryWritten(instanceRoot: string, file: string, { name, url, bra
 
 /** The source folders a clone gets: those `.gitmodules` names, or `submodules`, and each other that holds no repository of its own. */
 export async function sourceFoldersOf(instanceRoot: string, submodules?: ReadonlySet<string>): Promise<SourceFolders> {
-  const entries = submodules ?? new Set(await sourceEntries(instanceRoot, submodulesFile(instanceRoot)));
+  const entries = submodules ?? new Set(await sourceEntries(submodulesFile(instanceRoot)));
   const folders = await readOrAbsent(() => listFolders(sourceRootDir(instanceRoot), ignoreSkippedLink), []);
   const plain: string[] = [];
   for (const name of folders) if (!entries.has(name) && !(await isRepository(join(sourceRootDir(instanceRoot), name)))) plain.push(name);
@@ -128,7 +129,7 @@ export function sourceModLinesFollowed(instanceRoot: string, problems: FileProbl
   let followed: string | undefined;
   let shown = false;
   return async () => {
-    if (!(await isRepository(instanceRoot)) || !leavesOutSourceFolders(await get(file, ''))) return;
+    if (!(await isRepository(instanceRoot)) || !leavesOutSourceFolders(await readOrAbsent(() => textByStamp(file), ''))) return;
     const folders = await sourceFoldersOf(instanceRoot);
     const now = JSON.stringify(folders);
     if (now === followed) return;
@@ -223,7 +224,7 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
       const kept = new Set<string>();
       let existing: string[] = [];
       try {
-        existing = await sourceEntries(instanceRoot, file);
+        existing = await sourceEntries(file);
       } catch (err) {
         other.push(`${file} could not be read, so no source mod's entry is changed: ${errorMessage(err)}`);
       }
@@ -298,7 +299,7 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
         }, before));
       }
       const file = submodulesFile(instanceRoot);
-      const paths = await submodulePaths(instanceRoot, file);
+      const paths = await submodulePaths(file);
       for (const { from, to } of moves) {
         const [name] = [...paths].find(([, path]) => path === gitPath(instanceRoot, from)) ?? [];
         if (name === undefined) continue;
@@ -316,7 +317,7 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
     async unclonedSubmodules() {
       if (!(await isRepository(instanceRoot))) return [];
       const uncloned: UnclonedSubmodule[] = [];
-      for (const name of await sourceEntries(instanceRoot, submodulesFile(instanceRoot))) {
+      for (const name of await sourceEntries(submodulesFile(instanceRoot))) {
         if (await isRepository(join(sourceRootDir(instanceRoot), name))) continue;
         uncloned.push({ name, ...await keptSubmodules(instanceRoot, name, () => submoduleIn(instanceRoot, name)) });
       }

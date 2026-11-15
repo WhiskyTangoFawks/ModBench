@@ -41,7 +41,7 @@ async function folderLinesWritten(
   });
 }
 
-const lowerCased =(names: readonly ResolvedEntry[]): Map<string, ResolvedEntry> => new Map(names.map((entry) => [entry.name.toLowerCase(), entry]));
+const lowerCased = (names: readonly ResolvedEntry[]): Map<string, ResolvedEntry> => new Map(names.map((entry) => [entry.name.toLowerCase(), entry]));
 
 // The game's folder is as case-sensitive as its file system, and a mod's paths are the game's, which ignores case.
 function caseBlindFinder(root: string) {

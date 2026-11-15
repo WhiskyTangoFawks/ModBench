@@ -2,7 +2,7 @@
 // cloned builds where it is (source.md, Build, story 4).
 
 import { errorMessage } from '../ports/errorMessage';
-import { lastHanded } from '../ports/lastBuilt';
+import { lastHanded, noneLeft } from '../ports/lastBuilt';
 import { manifestIn } from './manifestFiles';
 import { repositoryOf } from './manifestPackages';
 
@@ -49,8 +49,22 @@ export async function sourceModsOf(
 
 const sourceModsHanded = lastHanded<SourceMods>();
 
-const linkParts = (link: Link): unknown[] =>
-  ['repository' in link ? link.repository : undefined, 'unreadable' in link ? link.unreadable : undefined, 'noManifest' in link, 'unlinked' in link];
+function linkParts(link: Link): unknown[] {
+  if ('repository' in link) {
+    const { repository, ...rest } = link;
+    return ['repository', repository, ...noneLeft(rest)];
+  }
+  if ('unreadable' in link) {
+    const { unreadable, ...rest } = link;
+    return ['unreadable', unreadable, ...noneLeft(rest)];
+  }
+  if ('unlinked' in link) {
+    const { unlinked, ...rest } = link;
+    return ['unlinked', unlinked, ...noneLeft(rest)];
+  }
+  const { noManifest, ...rest } = link;
+  return ['noManifest', noManifest, ...noneLeft(rest)];
+}
 
 function sourceModsFrom(mods: readonly ModFolderAt[], links: readonly Link[], repositories: ReadonlyMap<string, string>, keyOf: (mod: string) => string): SourceMods {
   const notes: string[] = [];

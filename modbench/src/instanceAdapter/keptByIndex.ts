@@ -1,25 +1,26 @@
 import { readFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { errnoCode } from '../ports/errno';
 import { sameStamp, settledBefore, type FileStamp } from '../repositoriesLib/stampedReads';
-import { GIT_DIR, isAbsent, stampOf } from './files';
+import { GIT_DIR, isAbsent, readOrAbsent, stampByStamp, stampKept } from './files';
 
 type MaybeStamped = FileStamp | undefined;
 
 // A linked worktree and a submodule keep their index in the git directory their .git file names.
-async function gitDirOf(repository: string): Promise<string> {
-  const dotGit = join(repository, GIT_DIR);
+const gitDirAt = stampKept(async (dotGit: string): Promise<string> => {
   try {
     const linked = (await readFile(dotGit, 'utf8')).split('\n').find((line) => line.startsWith('gitdir:'));
-    return linked === undefined ? dotGit : resolve(repository, linked.slice('gitdir:'.length).trim());
+    return linked === undefined ? dotGit : resolve(dirname(dotGit), linked.slice('gitdir:'.length).trim());
   } catch (err) {
-    if (errnoCode(err) === 'EISDIR' || errnoCode(err) === 'ENOENT') return dotGit;
+    if (errnoCode(err) === 'EISDIR') return dotGit;
     throw err;
   }
-}
+});
+
+const gitDirOf = (repository: string): Promise<string> => readOrAbsent(() => gitDirAt(join(repository, GIT_DIR)), join(repository, GIT_DIR));
 
 const stampedIfThere = (path: string): Promise<MaybeStamped> =>
-  stampOf(path).catch((err: unknown) => {
+  stampByStamp(path).catch((err: unknown) => {
     if (isAbsent(err)) return undefined;
     throw err;
   });

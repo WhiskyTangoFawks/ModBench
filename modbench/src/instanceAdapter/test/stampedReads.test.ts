@@ -1,17 +1,26 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtemp, mkdir, writeFile, readdir, readFile, rm, stat, utimes } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { access, link, lstat, mkdtemp, mkdir, writeFile, readdir, readFile, rm, stat, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
-import { managerOver } from '../../test/mo2/adapterOver';
+import { adapterOver, managerOver } from '../../test/mo2/adapterOver';
 import { listDir, listDirByStamp, parsedBy, readTrustingKept } from '../files';
 import { sortingRuleFilePaths } from '../mo2/layout';
-import { CHECK_THE_DISK, type InstanceReading, type Reread } from '../instanceAdapter';
+import { programsOf } from '../../tables/gamePaths';
+import { expectKind } from '../../test/expectKind';
+import { CHECK_THE_DISK, type GameFolder, type InstanceReading, type Reread } from '../instanceAdapter';
+const programReads = vi.hoisted(() => vi.fn());
 vi.mock('vscode', () => fakeVscodeModule());
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
-  return { ...actual, readdir: vi.fn(actual.readdir), readFile: vi.fn(actual.readFile), stat: vi.fn(actual.stat) };
+  programReads.mockImplementation(actual.open);
+  return {
+    ...actual, readdir: vi.fn(actual.readdir), readFile: vi.fn(actual.readFile), stat: vi.fn(actual.stat), lstat: vi.fn(actual.lstat),
+    access: vi.fn(actual.access), open: programReads,
+  };
 });
 
 const forgetWhatEarlierTestsKeptOfFoldersNowGone = (): Promise<unknown> => readTrustingKept([], true, () => Promise.resolve());
@@ -251,7 +260,7 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     adapter.subscribe(() => { startedByTheListener.push(namesOf(folder)); });
     await mkdir(join(instance, 'mods', 'New Mod'));
 
-    await adapter.reading({ named: [], disk: false });
+    await adapter.reading({ named: [join(instance, 'mods', 'New Mod')], disk: false });
 
     expect(await Promise.all(startedByTheListener)).toEqual([await namesOf(folder, listDir)]);
     expect(await namesOf(folder, listDir)).toContain('added.txt');
@@ -309,6 +318,64 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     expect(named).not.toEqual(before);
     expect(outside).not.toEqual(named);
     expect(checked).not.toEqual(outside);
+  });
+
+  describe('with a game folder', () => {
+    let game: string;
+    let gameFolder: GameFolder;
+    const IO = [vi.mocked(readdir), vi.mocked(readFile), vi.mocked(stat), vi.mocked(lstat), vi.mocked(access), programReads];
+
+    beforeEach(async () => {
+      game = await mkdtemp(join(tmpdir(), 'medit-kept-game-'));
+      gameFolder = { kind: 'found', root: game, dataFolder: join(game, 'Data') };
+      const programs = programsOf('Fallout4');
+      await mkdir(join(game, 'Data', 'Strings'), { recursive: true });
+      await mkdir(join(game, 'Data', 'Textures'));
+      await Promise.all([
+        ...[programs?.game ?? '', programs?.extenderLoader ?? ''].map((program) => writeFile(join(game, program), 'MZ')),
+        ...['Fallout4.esm', 'Fallout4 - Textures1.ba2', 'Strings/Fallout4_en.STRINGS', 'Textures/a.dds'].map((file) => writeFile(join(game, 'Data', file), '')),
+      ]);
+      vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
+    });
+
+    afterEach(() => rm(game, { recursive: true, force: true }));
+
+    const pathsThereTakenBesideTheNamedFile = async (named: string): Promise<string[]> => {
+      const adapter = adapterOver(instance, { gameFolder });
+      await adapter.reading(CHECK_THE_DISK);
+      await adapter.reading(CHECK_THE_DISK);
+      for (const io of IO) io.mockClear();
+      await adapter.reading({ named: [named], disk: false });
+      const touched = IO.flatMap((io) => io.mock.calls.flatMap((call: unknown[]) => (typeof call[0] === 'string' ? [call[0]] : [])));
+      return touched.filter((path) => path !== named && path !== dirname(named) && existsSync(path));
+    };
+
+    it('reads, lists and stats nothing of a repository with a source mod but the file a re-read is named and its folder', async () => {
+      execFileSync('git', ['init', '-q', instance]);
+      await mkdir(join(instance, 'source', 'Patch Mod'), { recursive: true });
+      await writeFile(join(instance, 'source', 'Patch Mod', 'build.json'), '{}');
+
+      expect(await pathsThereTakenBesideTheNamedFile(join(instance, 'mods', 'Patch Mod', 'Patch Mod.esp'))).toEqual([]);
+    });
+
+    it('reads, lists and stats nothing of an instance with a publisher\'s configuration but the file a re-read is named and its folder', async () => {
+      await writeFile(join(instance, 'compiler_settings.json'), JSON.stringify({ Profile: 'Default', Include: ['mods/Patch Mod/Patch Mod.esp'] }));
+
+      expect(await pathsThereTakenBesideTheNamedFile(join(instance, 'mods', 'Patch Mod', 'Patch Mod.esp'))).toEqual([]);
+    });
+
+    it('finds at a check of the disk a Data folder file a link elsewhere made a deployed one, which no stamp shows', async () => {
+      const adapter = adapterOver(instance, { gameFolder });
+      const plugins = async (reread: Reread): Promise<ReadonlySet<string>> => expectKind((await adapter.reading(reread)).dataFolderPlugins, 'listed').names;
+      await plugins(CHECK_THE_DISK);
+      await link(join(game, 'Data', 'Fallout4.esm'), join(game, 'Fallout4.esm'));
+
+      const unnamed = await plugins({ named: [], disk: false });
+      const checked = await plugins(CHECK_THE_DISK);
+
+      expect([...unnamed]).toEqual(['Fallout4.esm']);
+      expect([...checked]).toEqual([]);
+    });
   });
 });
 

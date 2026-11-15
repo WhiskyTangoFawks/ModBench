@@ -7,7 +7,7 @@ import { applyEdits, parse, parseTree, printParseErrorCode, type Edit, type Node
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { lastHanded, noneLeft } from '../../ports/lastBuilt';
-import { get, listDir, putIfChanged, readOrAbsent } from '../files';
+import { listDirByStamp, putIfChanged, readOrAbsent, textByStamp } from '../files';
 import type { Covering, Listed, PathRefusal, PublisherConfiguration, PublisherTag, PublisherTagChange, TagPathProblem, UnshippableReason } from '../instanceAdapter';
 import type { ConfigurationFile, Publisher } from '../publisher';
 import { sedReplacement, sedSubstitution } from '../pathTokens';
@@ -121,7 +121,7 @@ async function holdsPath(instanceRoot: string, names: readonly string[], listing
   let folder = instanceRoot;
   for (const name of names) {
     const listed = folder;
-    const listing = listings.get(listed) ?? listDir(listed).then(
+    const listing = listings.get(listed) ?? listDirByStamp(listed).then(
       (entries) => new Map(entries.map((entry) => [entry.name.toLowerCase(), entry.name])),
       (err: unknown) => {
         if (errnoCode(err) === 'ENOENT' || errnoCode(err) === 'ENOTDIR') return undefined;
@@ -457,7 +457,7 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
     }
     return { settings, ...judging };
   };
-  const settingsText = () => readOrAbsent(() => get(file), undefined);
+  const settingsText = () => readOrAbsent(() => textByStamp(file), undefined);
   const configurationRead = lastHanded<PublisherConfiguration>();
   const readProfiles = async (held: HeldTexts): Promise<{ text: string; profiles: Segment[] } | undefined> => {
     const text = heldTextAt(held, file) ?? await settingsText();
@@ -574,22 +574,25 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
         }, before);
       }, { ifMissing: '{}' });
     },
-    keepOut: async ({ present, owns }) => {
-      if (await readOrAbsent(() => get(file), undefined) === undefined) return;
+    keepOut: async (kept) => {
+      const text = await settingsText();
+      if (text === undefined) return;
+      const { present, owns } = await kept();
       const insides = present.flatMap((path) => inInstance(instanceRoot, path) ?? []);
       const insideKeys = new Set(insides.map((inside) => namesOf(inside).join('/')));
       const isGone = (entry: string): boolean => {
         const names = namesOf(entry);
         return owns(join(instanceRoot, ...names)) && !insideKeys.has(names.join('/'));
       };
-      await putIfChanged(file, (before) => {
+      const keptOut = (before: string): string => {
         const entries = valueOf(settingsIn(before, file), 'Ignore', file, [isNames, 'a list of paths']) ?? [];
         const changed = new Map(entries.flatMap((entry, at) => (isGone(entry) ? [[at, undefined] as const] : [])));
         const remaining = entries.filter((_, at) => !changed.has(at));
         const remainingKeys = new Set(remaining.map((entry) => namesOf(entry).join('/')));
         const missing = insides.filter((inside) => !isUnderAnyOf(namesOf(inside), remainingKeys));
         return withListChanged(before, 'Ignore', { changed, appended: missing.map(wabbajackSpelling) });
-      });
+      };
+      if (keptOut(text) !== text) await putIfChanged(file, keptOut);
     },
     subscribe: (listener) => watchFiles(instanceRoot, COMPILER_SETTINGS.name, listener),
   };

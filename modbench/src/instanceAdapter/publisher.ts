@@ -53,8 +53,8 @@ export interface Publisher {
   changeTag: InstanceAdapter['changePublisherTag'];
   followFolders: InstanceAdapter['followModFolders'];
   /** Lists each kept file in the ignore list, leaving every other entry as written. Rejects, writing nothing, for a
-   *  configuration it cannot read; does nothing when the instance holds none. */
-  keepOut(kept: KeptFiles): Promise<void>;
+   *  configuration it cannot read; does nothing, and asks for no kept file, when the instance holds none. */
+  keepOut(kept: () => Promise<KeptFiles>): Promise<void>;
   /** Hears each change to the publisher's configuration. */
   subscribe(listener: ChangeListener): Subscription;
 }
@@ -63,7 +63,7 @@ const withEnvironmentFile = ({ present, owns }: KeptFiles, environmentFile: stri
 
 export function withPublisher(manager: ManagerAdapter, publisher: Publisher, scriptEnvironmentFilePath: () => string): Omit<InstanceAdapter, 'scriptEnvironmentFile'> {
   const keepOutFailed = lastHanded<PublisherConfiguration>();
-  const keepOut = async () => publisher.keepOut(withEnvironmentFile(await manager.filesKept(), scriptEnvironmentFilePath()));
+  const keepOut = () => publisher.keepOut(async () => withEnvironmentFile(await manager.filesKept(), scriptEnvironmentFilePath()));
   const afterKeepingOut = async <T>(write: Promise<T>): Promise<T> => {
     const written = await write;
     await keepOut();
@@ -101,8 +101,8 @@ export function withPublisher(manager: ManagerAdapter, publisher: Publisher, scr
     followModFolders: (moves) => afterKeepingOut(publisher.followFolders(moves)),
     publisherConfigurationRefusal: () => publisher.refusal(),
     reading: async (reread) => {
-      const [reading, publisherConfiguration] = await Promise.all([manager.reading(reread), keptOutConfiguration()]);
-      return { ...reading, publisherConfiguration };
+      const reading = await manager.reading(reread);
+      return { ...reading, publisherConfiguration: await reading.trustingKept(keptOutConfiguration) };
     },
     subscribe: (listener) => {
       const heard = [manager.subscribe(listener), publisher.subscribe(listener)];
