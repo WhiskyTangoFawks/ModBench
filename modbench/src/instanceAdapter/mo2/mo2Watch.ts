@@ -6,7 +6,7 @@ import { watchFiles } from '../watchFiles';
 import type { ChangeListener, Subscription, UnwatchedFolder, WatcherExclude } from '../instanceAdapter';
 import { exclusionOf } from '../watcherExclusion';
 import { followedFolders } from './followedFolders';
-import { EXCLUDED, listedExclusions } from './listedExclusions';
+import { distinct, EXCLUDED, listedExclusions } from './listedExclusions';
 import { FIRST_LEVEL, instanceWatches, sourceRootDir } from './layout';
 
 type FollowedFolder = 'downloadedFiles' | 'dataFolder' | 'programs' | 'creationClubList' | 'defaultIni' | 'myGamesInis' | 'gameFolderArchives' | 'profileFolders' | 'excludedFolders';
@@ -62,9 +62,7 @@ export function mo2Watch(
     const reached = dropsEvents(base, glob) ? FIRST_LEVEL : glob;
     return watchFiles(base, reached, onChangeFor(base), heldFor(base, reached));
   };
-  const followed = followedFolders({
-    watch, armed: () => listeners.size > 0, checkDue, forget: (base, glob) => { held.delete(heldKey(base, glob)); },
-  });
+  const followed =followedFolders({ watch, armed: () => listeners.size > 0, checkDue, forget: (base, glob) => { held.delete(heldKey(base, glob)); } });
 
   const listings = listedExclusions(() => excluding, instanceWatches(instanceRoot).map(({ base }) => base));
   const followExcludedFolders = (): void => { followed.follow('excludedFolders', listings.excludedFolders(), FIRST_LEVEL); };
@@ -105,11 +103,11 @@ export function mo2Watch(
       followExcludedFolders();
     },
 
-    unwatchedFolders: () => [
+    unwatchedFolders: () => distinct([
       ...instanceWatches(instanceRoot).filter(({ base, pattern }) => dropsEvents(base, pattern)).map(({ base }) => ({ folder: base, reason: EXCLUDED })),
       ...followed.entries().filter(({ base, glob }) => dropsEvents(base, glob)).map(({ base }) => ({ folder: base, reason: EXCLUDED })),
       ...listings.named(),
       ...[...held.values()].flatMap((folders) => folders?.failures() ?? []),
-    ],
+    ]),
   };
 }

@@ -10,6 +10,9 @@ interface Listing {
   excludedFilePatterns: readonly string[];
 }
 
+export const distinct = (named: readonly UnwatchedFolder[]): UnwatchedFolder[] =>
+  [...new Map(named.map((one) => [`${one.folder}\0${one.reason}`, one])).values()];
+
 /** What each read of an origin's files listed, and which of it the user excluded from VS Code's watch. */
 export function listedExclusions(exclusion: () => Exclusion, watchedBases: readonly string[]) {
   const listings = new Map<string, Listing>();
@@ -30,13 +33,14 @@ export function listedExclusions(exclusion: () => Exclusion, watchedBases: reado
     judgedAgain(): void {
       for (const listing of listings.values()) judged(listing);
     },
-    excludedFolders: (): string[] => [...new Set([...listings.values()].flatMap(({ excludedFolders }) => excludedFolders))],
-    named: (): UnwatchedFolder[] => [...new Map([...listings.values()].flatMap((listing) => [
+    // A base the watch already holds at its first level is not followed again.
+    excludedFolders: (): string[] => [...new Set([...listings.values()].flatMap(({ excludedFolders }) => excludedFolders))].filter((folder) => !watchedBases.includes(folder)),
+    named: (): UnwatchedFolder[] => distinct([...listings.values()].flatMap((listing) => [
       ...listing.excludedFolders.map((folder) => ({ folder, reason: EXCLUDED })),
       ...listing.excludedFilePatterns.flatMap((pattern) => {
         const folder = baseOf(listing);
         return folder === undefined ? [] : [{ folder, reason: `files matching ${pattern} are ${EXCLUDED}` }];
       }),
-    ]).map((named) => [`${named.folder}\0${named.reason}`, named])).values()],
+    ])),
   };
 }

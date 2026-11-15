@@ -1150,6 +1150,13 @@ describe('the MO2 Instance adapter', () => {
         expect(named(watched)).toEqual([{ folder: 'mods', reason: `files matching **/*.dds are ${EXCLUDED}` }]);
       });
 
+      it('names Overwrite once and watches its first level once, though its listing names it as well', async () => {
+        const watched = await listedWith({ '**/overwrite/**': true });
+        await watched.originFiles({ kind: 'runtimeOutput' }, 'list');
+
+        expect([named(watched), firstLevelOf('overwrite')]).toEqual([[{ folder: 'overwrite', reason: EXCLUDED }], 1]);
+      });
+
       it('names an excluded mod once, though both its root-only and its full listing name it', async () => {
         const watched = await listedWith({ '**/mods/Harder VATS/**': true });
         await watched.originRootFiles(harderVats, 'list');
