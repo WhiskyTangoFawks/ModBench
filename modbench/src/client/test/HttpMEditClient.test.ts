@@ -1189,6 +1189,7 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
       ['/unsaved-documents', noContent],
+      ['/load-order/status', () => Promise.resolve(jsonResponse(200, loadOrderStatusEventFixture().loadOrderStatus))],
       ['/plugins', (req) => new Promise<Response>((_resolve, reject) => {
         sent = true;
         req.signal.addEventListener('abort', () => { aborted = true; reject(new Error('aborted')); });
@@ -1228,6 +1229,7 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
       ['/unsaved-documents', noContent],
+      ['/load-order/status', () => Promise.resolve(jsonResponse(200, loadOrderStatusEventFixture().loadOrderStatus))],
       ['/records/select', (req) => {
         const body = new ReadableStream<Uint8Array>({
           start: (controller) => {
@@ -1272,12 +1274,14 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
 
 describe('HttpMEditClient — whether the record index may be late', () => {
   it('is true from a snapshot handed until its load order has settled', async () => {
+    let sent = false;
     const { response, push } = pushableStreamResponse();
     let answerPut!: () => void;
     const putAnswered = new Promise<void>((resolve) => { answerPut = resolve; });
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(response)],
       ['/unsaved-documents', noContent],
+      ['/load-order/status', () => Promise.resolve(jsonResponse(200, loadOrderStatusEventFixture({ conflictsComputed: !sent }).loadOrderStatus))],
       ['/load-order', () => putAnswered.then(() => jsonResponse(200, { applied: true, version: 1 }))],
     ]);
     const client = makeClient(fetch);
@@ -1285,6 +1289,7 @@ describe('HttpMEditClient — whether the record index may be late', () => {
     await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
 
     void client.sendLoadOrder(EMPTY_SNAPSHOT);
+    sent = true;
     expect(client.recordIndexMayBeLate).toBe(true);
 
     answerPut();
@@ -1311,6 +1316,67 @@ describe('HttpMEditClient — whether the record index may be late', () => {
     expect(client.recordIndexMayBeLate).toBe(true);
 
     answerPut();
+    await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+  });
+
+  it('stays true past the answer to a change signal, until the sweep it started has settled', async () => {
+    const { response, push } = pushableStreamResponse();
+    let validating = false;
+    const status = () => jsonResponse(200, loadOrderStatusEventFixture({ validating }).loadOrderStatus);
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(response)],
+      ['/unsaved-documents', noContent],
+      ['/load-order/status', () => Promise.resolve(status())],
+      ['/signal-change', () => { validating = true; return noContent(); }],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+    await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+
+    client.signalChange(['/m/Foo.esp']);
+    await vi.waitFor(() => { expect(fetch.mock.calls.some(([req]) => req.url.includes('/signal-change'))).toBe(true); });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(client.recordIndexMayBeLate).toBe(true);
+
+    push(loadOrderStatusTick({ conflictsComputed: true, validating: false }));
+    await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+  });
+
+  it('is false once a change signal is answered and mEdit has nothing validating', async () => {
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/unsaved-documents', noContent],
+      ['/load-order/status', () => Promise.resolve(jsonResponse(200, loadOrderStatusEventFixture().loadOrderStatus))],
+      ['/signal-change', noContent],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+    await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+
+    client.signalChange([]);
+
+    await vi.waitFor(() => { expect(fetch.mock.calls.some(([req]) => req.url.includes('/signal-change'))).toBe(true); });
+    await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+  });
+
+  it('stays true past the answer to unsaved documents, until the sweep they started has settled', async () => {
+    const { response, push } = pushableStreamResponse();
+    let puts = 0;
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(response)],
+      ['/unsaved-documents', () => { puts++; return noContent(); }],
+      ['/load-order/status', () => Promise.resolve(jsonResponse(200, loadOrderStatusEventFixture({ validating: puts > 1 }).loadOrderStatus))],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+    await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+
+    client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]);
+    await vi.waitFor(() => { expect(puts).toBe(2); });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(client.recordIndexMayBeLate).toBe(true);
+
+    push(loadOrderStatusTick({ conflictsComputed: true, validating: false }));
     await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
   });
 });
