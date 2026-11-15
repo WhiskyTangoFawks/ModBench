@@ -11,7 +11,8 @@ namespace MEditService.RecordIndex.Queries;
 /// source writes; no read does.</summary>
 public interface IQueries
 {
-    Answer<IReadOnlyList<PluginResponse>, IndexRefused> GetPlugins();
+    /// <summary>Every plugin, or only <paramref name="plugins"/> (ADR-0012): the same facts either way.</summary>
+    Answer<IReadOnlyList<PluginResponse>, IndexRefused> GetPlugins(IReadOnlyCollection<PluginAddress>? plugins = null);
     // A null plugin browses every plugin.
     Answer<PagedResult<RecordSummary>, IndexRefused> GetRecords(
         IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset);

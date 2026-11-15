@@ -17,6 +17,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     private static readonly TimeSpan OneGesture = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan LitRsLaunch = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan LitRsIndexWorkForOneDeletedRecord = TimeSpan.FromSeconds(0.4);
+    private static readonly TimeSpan OneFactsRead = TimeSpan.FromSeconds(0.01);
     private static readonly TimeSpan OneFilesRead = TimeSpan.FromSeconds(0.1);
     private const int Runs = 5;
     private const int Launches = 3;
@@ -39,6 +40,36 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
 
     private long Count(string sql) =>
         long.Parse(IndexFiles.Rows(Modlist.InstanceRoot, sql).Single().Single(), CultureInfo.InvariantCulture);
+
+    [RealSizeFact]
+    public void OnePluginsFacts_AreReadWithinAFewMilliseconds_AndUnderARecordFilterInAThirdOfEveryPluginsTime()
+    {
+        PluginAddress[] one = [Modlist.LoadOrder[^1].Key];
+        PluginAddress[] big = [Modlist.BigSourcePlugin.Key];
+        Assert.Single(Index.Queries.GetPlugins(one).Value());
+        Assert.Equal(RealSizeModlist.Plugins, Index.Queries.GetPlugins().Value().Count);
+
+        var oneTook = Budgets.Fastest(() => Index.Queries.GetPlugins(one).Value(), Runs);
+        var everyTook = Budgets.Fastest(() => Index.Queries.GetPlugins().Value(), Runs);
+        Index.SetFilter("SELECT form_key FROM npc_", "plugin-facts.sql");
+        TimeSpan oneFilteredTook, bigFilteredTook, everyFilteredTook;
+        try
+        {
+            oneFilteredTook = Budgets.Fastest(() => Index.Queries.GetPlugins(one).Value(), Runs);
+            bigFilteredTook = Budgets.Fastest(() => Index.Queries.GetPlugins(big).Value(), Runs);
+            everyFilteredTook = Budgets.Fastest(() => Index.Queries.GetPlugins().Value(), Runs);
+        }
+        finally
+        {
+            Index.Queries.ClearFilter();
+        }
+
+        Console.WriteLine($"BUDGET One plugin's facts: {oneTook.TotalMilliseconds:F2} ms, every plugin's: {everyTook.TotalMilliseconds:F2} ms; " +
+            $"with a record filter: {oneFilteredTook.TotalMilliseconds:F2} ms, the big source plugin's {bigFilteredTook.TotalMilliseconds:F2} ms, every plugin's {everyFilteredTook.TotalMilliseconds:F2} ms");
+        Assert.True(oneTook <= OneFactsRead * 3, $"One plugin's facts took {oneTook.TotalMilliseconds:F1} ms.");
+        Assert.True(oneFilteredTook * 3 < everyFilteredTook, $"One plugin's facts under a record filter took {oneFilteredTook.TotalMilliseconds:F1} ms.");
+        Assert.True(bigFilteredTook < everyFilteredTook);
+    }
 
     [RealSizeFact]
     public void ALaunchWithNothingChanged_IsReadyWithinLitRsTenSeconds()
