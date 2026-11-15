@@ -187,7 +187,7 @@ public sealed class WriteNamingItsFilesTests : IDisposable
     }
 
     [Fact]
-    public async Task TheWatchNamingAFileThatKeepsTheStampOfItsHandedDocument_ReadsItNotAgain()
+    public async Task TheWatchNamingAFileWhoseHandedDocumentsStampHasNotSettled_ReadsItAgain()
     {
         var saved = NpcRenamed();
         await _holder.Hand([HandedRenamedAgain(Handed(saved), "HandedNpc")]);
@@ -195,7 +195,7 @@ public sealed class WriteNamingItsFilesTests : IDisposable
         _index.SignalChange([Named(saved)]);
         Waits.Reached(() => !_index.Status.Validating, "the watch's read");
 
-        Assert.Equal("HandedNpc", Record(_npc).EditorId);
+        Assert.Equal("RenamedNpc", Record(_npc).EditorId);
     }
 
     [Fact]

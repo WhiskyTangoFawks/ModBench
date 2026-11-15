@@ -26,7 +26,7 @@ internal static class LastCommitComparison
             var fullPath = Path.Combine(sourceFolder, relativePath);
             var committedText = heldAtLastCommit ? committedTexts.Of(git, relativePath) : null;
             RecordTextsIn(committed, locator, expansion, plugin, relativePath, committedText);
-            var workingText = written?.At(fullPath)?.Text ?? ReadWorkingText(fullPath);
+            var workingText = written?.At(fullPath) ?? ReadWorkingText(fullPath);
             if (workingText is not null) locator.RequireParsedFormKey(relativePath, workingText, plugin.Name);
             RecordTextsIn(working, locator, expansion, plugin, relativePath, workingText);
         }

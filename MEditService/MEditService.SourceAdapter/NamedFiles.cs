@@ -29,14 +29,10 @@ internal static class NamedFiles
             files.UnionWith(listed);
         }
 
-        var standing = new Dictionary<string, (string Text, string Stamp)>(TreeListing.PathComparer);
-        foreach (var file in files)
-        {
-            if (written.At(file) is { } document) standing[file] = document;
-        }
-        files.RemoveWhere(file => !standing.ContainsKey(file) && listing.HoldsWhatWasWritten(file));
+        files.RemoveWhere(file => written.At(file) is null && listing.HoldsWhatWasRead(file));
         var held = new HashSet<string>(StringComparer.Ordinal);
         var now = new Dictionary<string, IReadOnlyList<PluginDocument>>(TreeListing.PathComparer);
+        var settled = new Dictionary<string, string?>(TreeListing.PathComparer);
         foreach (var file in files)
         {
             if (!file.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.OrdinalIgnoreCase) || !documents.ReadsAsARecord(file)) return null;
@@ -45,7 +41,8 @@ internal static class NamedFiles
                 if (formKey is null) return null;
                 held.Add(formKey);
             }
-            now[file] = documents.DocumentsIn(file, standing.TryGetValue(file, out var document) ? document.Text : null);
+            settled[file] = listing.SettledStampOf(file);
+            now[file] = documents.DocumentsIn(file, written.At(file));
         }
 
         var own = now.Values.Where(records => records.Count > 0).Select(records => records[0]).ToList();
@@ -58,7 +55,7 @@ internal static class NamedFiles
 
         foreach (var (file, records) in now)
         {
-            if (records.Count > 0) listing.Read(file, records[0].FormKey, standing.TryGetValue(file, out var document) ? document.Stamp : null);
+            if (records.Count > 0) listing.Read(file, records[0].FormKey, settled[file]);
             else listing.ReadGone(file);
         }
         return new FilesRead(own, [.. held.Except(holds)]);

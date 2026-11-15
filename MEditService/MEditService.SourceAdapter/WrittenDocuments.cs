@@ -14,10 +14,10 @@ internal sealed class WrittenDocuments
         foreach (var document in written) _byPath[Path.GetFullPath(document.Path)] = document;
     }
 
-    /// <summary>The text a read of the file's bytes gives, and the stamp; null when no document written there still stands.</summary>
-    internal (string Text, string Stamp)? At(string path)
+    /// <summary>The text a read of the file's bytes gives; null when no document written there still stands.</summary>
+    internal string? At(string path)
     {
         if (!_byPath.TryGetValue(Path.GetFullPath(path), out var document) || WrittenStamp.Of(path) != document.Stamp) return null;
-        return (Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(Encoding.UTF8.GetBytes(document.Text))), document.Stamp);
+        return Encoding.UTF8.GetString(DocumentText.StripUtf8Bom(Encoding.UTF8.GetBytes(document.Text)));
     }
 }
