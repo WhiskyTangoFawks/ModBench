@@ -202,7 +202,10 @@ export function originFilesReader(
     if (named === modFolders) return;
     named = modFolders;
     const live = new Set(modFolders.all.flatMap(({ path }) => [modKey(false, path), modKey(true, path)]));
-    for (const key of walked.keys()) if (key.startsWith('mod|') && !live.has(key)) walked.delete(key);
+    for (const key of walked.keys()) if (key.startsWith('mod|') && !live.has(key)) {
+      walked.delete(key);
+      context.watch.listed(key, undefined);
+    }
   };
 
   const walkedAgain = (key: string, files: OriginFiles): OriginFiles => {
@@ -219,6 +222,7 @@ export function originFilesReader(
     if (before !== undefined && await listingsStill(before)) return before.files;
     const done = await walk();
     const files = filesOf(done);
+    context.watch.listed(key, { folders: [done.root, ...files.folders.map(({ path }) => path)], files: files.files.map(({ path }) => path) });
     if (done.stampsCover) walked.set(key, { listings: done.listings, files });
     else walked.delete(key);
     return done.stampsCover ? files : walkedAgain(key, files);
