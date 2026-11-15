@@ -22,7 +22,6 @@ function fakeClient() {
   const queued: Record<Method, (() => Promise<Answer>)[]> = { getPluginFilePaths: [], getPluginProblems: [] };
   const standing: Record<Method, Answer> = { getPluginFilePaths: [answerFor(A), answerFor(B)], getPluginProblems: [] };
   const changed = new Set<(change: readonly { plugin: PluginAddress }[] | undefined) => void>();
-  const settled = new Set<(status: { conflictsComputed: boolean }) => void>();
   const read = (method: Method) => (plugin?: PluginAddress): Promise<Answer> => {
     calls.push({ method, plugin });
     return queued[method].shift()?.() ?? Promise.resolve(standing[method]);
@@ -33,7 +32,6 @@ function fakeClient() {
     getPluginFilePaths: read('getPluginFilePaths'),
     getPluginProblems: read('getPluginProblems'),
     onDidChange: (listener: (change: readonly { plugin: PluginAddress }[] | undefined) => void) => ({ dispose: subscribe(changed, listener) }),
-    onLoadOrderSettled: (listener: (status: { conflictsComputed: boolean }) => void) => subscribe(settled, listener),
     answerNext: (method: Method, answer: () => Promise<Answer>) => { queued[method].push(answer); },
     answerAlways: (method: Method, answer: Answer) => { standing[method] = answer; },
     gate: (method: Method, count: number, answer: Answer = []) => {
@@ -43,7 +41,6 @@ function fakeClient() {
     },
     pluginChanged: (plugin: PluginAddress) => { for (const listener of changed) listener([{ plugin }]); },
     everythingChanged: () => { for (const listener of changed) listener(undefined); },
-    loadOrderSettled: () => { for (const listener of settled) listener({ conflictsComputed: true }); },
     asked: (method: Method = 'getPluginFilePaths') => calls.filter((call) => call.method === method).map(({ plugin }) => plugin),
   };
 }
@@ -102,30 +99,23 @@ describe('problemsAsker', () => {
     expect([client.asked(), told]).toEqual([[A, B, A, B], [{}]]);
   });
 
-  it('tells a listener of a change only after it dropped what it held, so the listener is answered after the change', async () => {
+  it.each([
+    ['a plugin changes', (client: ReturnType<typeof fakeClient>) => { client.pluginChanged(A); }],
+    ['everything changes', (client: ReturnType<typeof fakeClient>) => { client.everythingChanged(); }],
+  ])('tells a listener of a change only after it dropped what it held, so what the listener asked stays held, when %s', async (_when, change) => {
     const { client, asker } = started();
+    client.answerAlways('getPluginFilePaths', [answerFor(A)]);
     await asker.getPluginFilePaths(A);
     const heard: unknown[] = [];
-    asker.onPluginChanged(({ plugin }) => { void asker.getPluginFilePaths(plugin).then((answer) => { heard.push(answer); }); });
-    client.answerAlways('getPluginFilePaths', [answerFor(A, { unread: ['after'] })]);
+    let listenerAsked: PluginAddress | undefined;
+    asker.onPluginChanged(({ plugin }) => { listenerAsked = plugin; void asker.getPluginFilePaths(plugin).then((answer) => { heard.push(answer); }); });
+    client.answerAlways('getPluginFilePaths', [answerFor(B)]);
 
-    client.pluginChanged(A);
+    change(client);
     await turn();
+    await asker.getPluginFilePaths(listenerAsked);
 
-    expect(heard).toEqual([[answerFor(A, { unread: ['after'] })]]);
-  });
-
-  it('tells a listener of a settled load order only after it dropped everything it held', async () => {
-    const { client, asker } = started();
-    await asker.getPluginFilePaths();
-    const heard: unknown[] = [];
-    asker.onLoadOrderSettled(() => { void asker.getPluginFilePaths().then((answer) => { heard.push(answer); }); });
-    client.answerAlways('getPluginFilePaths', [answerFor(A, { unread: ['after'] })]);
-
-    client.loadOrderSettled();
-    await turn();
-
-    expect(heard).toEqual([[answerFor(A, { unread: ['after'] })]]);
+    expect([heard, client.asked()]).toEqual([[[answerFor(B)]], [A, listenerAsked]]);
   });
 
   it('asks again of the whole set after it is told to forget, as when the instance changes', async () => {

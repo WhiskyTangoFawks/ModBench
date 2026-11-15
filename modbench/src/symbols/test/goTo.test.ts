@@ -60,7 +60,7 @@ describe('go to presents the definition of the symbol a row stands for (commands
 
     await run(row);
 
-    expect(asked.mock.calls).toEqual([[symbol]]);
+    expect(asked.mock.calls).toEqual([[symbol, undefined]]);
   });
 
   it('selects the row its definition names', async () => {
@@ -116,7 +116,7 @@ describe('go to with no row clicked (commands.md, The entry point supplies what 
 
     await run();
 
-    expect(asked.mock.calls).toEqual([[symbol]]);
+    expect(asked.mock.calls).toEqual([[symbol, undefined]]);
   });
 
   it.each<[string, readonly unknown[]]>([

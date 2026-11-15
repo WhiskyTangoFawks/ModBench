@@ -8,12 +8,13 @@ interface FakeDocument {
   offsetAt(position: FakePosition): number;
   positionAt(offset: number): FakePosition;
 }
+type Token = { isCancellationRequested: boolean };
 interface FakePosition { readonly line: number; readonly character: number }
 interface Captured {
-  hover?: { provideHover(document: FakeDocument, position: FakePosition): Promise<{ contents: unknown } | undefined> };
+  hover?: { provideHover(document: FakeDocument, position: FakePosition, token: Token): Promise<{ contents: unknown } | undefined> };
   completion?: { provideCompletionItems(document: FakeDocument, position: FakePosition, token: { isCancellationRequested: boolean }): Promise<unknown> };
-  definition?: { provideDefinition(document: FakeDocument, position: FakePosition): Promise<unknown> };
-  references?: { provideReferences(document: FakeDocument, position: FakePosition): Promise<unknown> };
+  definition?: { provideDefinition(document: FakeDocument, position: FakePosition, token: Token): Promise<unknown> };
+  references?: { provideReferences(document: FakeDocument, position: FakePosition, context: unknown, token: Token): Promise<unknown> };
   workspaceSymbols?: {
     provideWorkspaceSymbols(query: string, token: { isCancellationRequested: boolean }): Promise<{ name: string; location: unknown }[]>;
     resolveWorkspaceSymbol(symbol: { name: string; location: unknown }): Promise<{ location: unknown }>;
@@ -77,15 +78,17 @@ const CLAIMING: { readonly [Claiming in keyof SymbolKinds]: (answers: Answers) =
 
 const claimedBy = (claiming: keyof SymbolKinds, answers: Answers = {}): SymbolKinds => CLAIMING[claiming](answers);
 
+const LIVE: Token = { isCancellationRequested: false };
+
 function features(kinds: SymbolKinds) {
   const reporter = recordingReporter();
   const reveal = vi.fn((_copy: CopyAt) => Promise.resolve());
   registerLanguageFeatures({ kinds, reporter, reveal, rename: { prepare: () => Promise.reject(new Error('Not renamed here.')), rename: () => Promise.resolve() } });
   return {
     reporter, reveal,
-    definition: () => present(captured.definition, 'definition').provideDefinition(document, AT),
-    references: () => present(captured.references, 'references').provideReferences(document, AT),
-    hover: () => present(captured.hover, 'hover').provideHover(document, AT),
+    definition: (token: Token = LIVE) => present(captured.definition, 'definition').provideDefinition(document, AT, token),
+    references: (token: Token = LIVE) => present(captured.references, 'references').provideReferences(document, AT, {}, token),
+    hover: (token: Token = LIVE) => present(captured.hover, 'hover').provideHover(document, AT, token),
     completion: (isCancellationRequested = false) => present(captured.completion, 'completion').provideCompletionItems(document, AT, { isCancellationRequested }),
     workspaceSymbols: (query: string, isCancellationRequested = false) =>
       present(captured.workspaceSymbols, 'workspace symbols').provideWorkspaceSymbols(query, { isCancellationRequested }),
@@ -104,6 +107,23 @@ describe('each language feature asks the symbol under the place, of whatever kin
     }));
 
     expect([await asked.definition(), await asked.references(), (await asked.hover())?.contents]).toEqual([ELSEWHERE, [ELSEWHERE], { value: claiming }]);
+  });
+
+  it('hands VS Code\'s token to every read it asks of the kind, as the last argument', async () => {
+    const token = { isCancellationRequested: true };
+    const nameAt = vi.fn((_document: unknown, _offset: number, _token?: unknown) => Promise.resolve({ ...SPAN, symbol: NAMED.symbol }));
+    const definitionOf = vi.fn((_symbol: unknown, _token?: unknown) => Promise.resolve({ at: ELSEWHERE }));
+    const referencesTo = vi.fn((_symbol: unknown, _token?: unknown) => Promise.resolve(ANSWERED));
+    const tooltipOf = vi.fn((_symbol: unknown, _token?: unknown) => Promise.resolve(['tip']));
+    const asked = features(fakeKinds({ file: fakeKind<typeof NAMED.symbol>({ nameAt, definitionOf, referencesTo, tooltipOf }) }));
+
+    await asked.hover(token);
+    await asked.definition(token);
+    await asked.references(token);
+
+    expect([nameAt, definitionOf, referencesTo, tooltipOf].map((read) => read.mock.calls.map((call) => call.at(-1)))).toEqual([
+      [token, token, token], [token], [token], [token],
+    ]);
   });
 
   it('asks a plugin\'s name inside a FormKey of the plugin, not the record', async () => {

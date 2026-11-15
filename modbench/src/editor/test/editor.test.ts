@@ -755,6 +755,20 @@ describe('what a record tab\'s webview posts', () => {
       expect(outputChannel.warn).not.toHaveBeenCalled();
     });
 
+    it('answers nothing, as it does a tab that has read nothing, while a load order is on its way and the tab has already read', async () => {
+      const mEdit = client();
+      const { openDocument, outputChannel } = makeEditor(mEdit);
+      const tab = await openDocument(cell);
+      tab.receive(loadRequest);
+      await readAnswered(tab);
+      mEdit.setQueryFailure('getComparison', refusal);
+
+      tab.receive({ ...loadRequest, requestId: 'r2' });
+      await aMacrotask();
+
+      expect([loadAnswered(tab), outputChannel.warn.mock.calls]).toEqual([[expect.objectContaining({ requestId: 'r1', ok: true })], []]);
+    });
+
     it('is failed once no load order is on its way', async () => {
       loadOrder.coming = false;
 
@@ -804,21 +818,6 @@ describe('what a record tab\'s webview posts', () => {
       tab.receive({ ...loadRequest, requestId: 'r2' });
       await readAnswered(tab, 'r2');
       expect(lastLoadAnswer(tab)).toMatchObject({ requestId: 'r2', ok: true });
-    });
-
-    it('is failed in the Output once a read of the tab has landed', async () => {
-      const mEdit = client();
-      const { openDocument, outputChannel } = makeEditor(mEdit);
-      const tab = await openDocument(cell);
-      tab.receive(loadRequest);
-      await readAnswered(tab);
-      mEdit.setQueryFailure('getComparison', refusal);
-
-      tab.receive({ ...loadRequest, requestId: 'r2' });
-      await readAnswered(tab, 'r2');
-
-      expect(lastLoadAnswer(tab)).toEqual({ type: 'recordLoadAnswered', requestId: 'r2', ok: false, failure: refusal });
-      expect(outputChannel.warn).not.toHaveBeenCalled();
     });
   });
 
@@ -1365,17 +1364,17 @@ describe('mEdit\'s reports to an open record tab', () => {
   const reported = (kind: 'rows-changed' | 'plugin-changed', keys: string[]) =>
     notificationEventFixture({ kind, plugin: 'A.esp', origin: 'ModA', keys, sequence: 1 });
 
-  it('has a tab read its record again when a report names it, and not when a report names another record or a plugin\'s change', () => {
+  it('has a tab read its record again when a report names it or a plugin\'s change names no record, and not when a report names another record', () => {
     const client = new InMemoryMEditClient();
     const { open } = makeEditor(client);
     const tab = open(GUN);
 
     client.emit(reported('rows-changed', ['000802:A.esp']));
-    client.emit(reported('plugin-changed', [GUN]));
     expect(tab.webview.postMessage).not.toHaveBeenCalled();
 
     client.emit(reported('rows-changed', [GUN]));
-    expect(tab.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: GUN }]]);
+    client.emit(reported('plugin-changed', [GUN]));
+    expect(tab.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: GUN }], [{ type: 'loadRecord', formKey: GUN }]]);
   });
 
   it('is not heard once the Editor is disposed', () => {

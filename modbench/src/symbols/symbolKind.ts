@@ -61,13 +61,13 @@ export interface Listed {
 
 /** One kind of symbol, giving every entry point one answer (symbols.md; ADR-0028). */
 export interface SymbolKind<Symbol> {
-  nameAt(document: AskedIn, offset: number): Promise<Named<Symbol> | undefined>;
-  definitionOf(symbol: Symbol): Promise<Definition>;
-  referencesTo(symbol: Symbol): Promise<References>;
+  nameAt(document: AskedIn, offset: number, token?: vscode.CancellationToken): Promise<Named<Symbol> | undefined>;
+  definitionOf(symbol: Symbol, token?: vscode.CancellationToken): Promise<Definition>;
+  referencesTo(symbol: Symbol, token?: vscode.CancellationToken): Promise<References>;
   /** `referenced by`: shows what references the symbol in VS Code's References view, reporting what it could not list. */
   referencedBy(symbol: Symbol): Promise<void>;
   /** What its row's tooltip says, a line to each line; none where it has no row or no tooltip. */
-  tooltipOf(symbol: Symbol): Promise<readonly string[]>;
+  tooltipOf(symbol: Symbol, token?: vscode.CancellationToken): Promise<readonly string[]>;
   /** What completion offers over the span where a file names a symbol of the kind, asking nothing further once the
    *  search is cancelled. */
   completionsAt(document: AskedIn, offset: number, search: SymbolSearch): Promise<(TextSpan & {
@@ -95,8 +95,8 @@ export interface SymbolKinds {
 }
 
 interface Asked {
-  definition(): Promise<Definition>;
-  references(): Promise<References>;
+  definition(token?: vscode.CancellationToken): Promise<Definition>;
+  references(token?: vscode.CancellationToken): Promise<References>;
 }
 
 /** A symbol, with its kind's answers and `referenced by`. */
@@ -108,14 +108,14 @@ export interface AskedSymbol extends Asked {
 export interface AskedAt extends Asked, TextSpan {
   readonly name: string;
   /** What a hover says: its row's tooltip, and with no row or no tooltip, its name (symbols.md, The symbols). */
-  hover(): Promise<readonly string[]>;
+  hover(token?: vscode.CancellationToken): Promise<readonly string[]>;
 }
 
 const namesNothing = (symbol: object): symbol is Refused => 'refused' in symbol;
 
 const askedOf = <Symbol extends object>(kind: SymbolKind<Symbol>, symbol: Symbol | Refused): Asked => ({
-  definition: () => (namesNothing(symbol) ? Promise.resolve(symbol) : kind.definitionOf(symbol)),
-  references: () => (namesNothing(symbol) ? Promise.resolve(symbol) : kind.referencesTo(symbol)),
+  definition: (token) => (namesNothing(symbol) ? Promise.resolve(symbol) : kind.definitionOf(symbol, token)),
+  references: (token) => (namesNothing(symbol) ? Promise.resolve(symbol) : kind.referencesTo(symbol, token)),
 });
 
 const askedSymbolOf = <Symbol extends object>(kind: SymbolKind<Symbol>, symbol: Symbol): AskedSymbol => ({
@@ -123,12 +123,12 @@ const askedSymbolOf = <Symbol extends object>(kind: SymbolKind<Symbol>, symbol: 
   referencedBy: () => kind.referencedBy(symbol),
 });
 
-const claimOf = (kind: SymbolKind<object>) => async (document: AskedIn, offset: number): Promise<AskedAt | undefined> => {
-  const named = await kind.nameAt(document, offset);
+const claimOf = (kind: SymbolKind<object>) => async (document: AskedIn, offset: number, token?: vscode.CancellationToken): Promise<AskedAt | undefined> => {
+  const named = await kind.nameAt(document, offset, token);
   if (named === undefined) return undefined;
   const { start, end, name, symbol } = named;
-  const hover = async (): Promise<readonly string[]> => {
-    const tooltip = namesNothing(symbol) ? [] : await kind.tooltipOf(symbol);
+  const hover = async (hoverToken?: vscode.CancellationToken): Promise<readonly string[]> => {
+    const tooltip = namesNothing(symbol) ? [] : await kind.tooltipOf(symbol, hoverToken);
     return tooltip.length > 0 ? tooltip : [name];
   };
   return { ...askedOf(kind, symbol), start, end, name, hover };
@@ -138,9 +138,9 @@ const claimOf = (kind: SymbolKind<object>) => async (document: AskedIn, offset: 
 export const inOrder = ({ plugin, entry, script, file, record }: SymbolKinds) => [plugin, entry, script, file, record];
 
 /** The symbol the document names at `offset`, from the first kind that claims it; undefined where it names none. */
-export async function askedAt(kinds: SymbolKinds, document: AskedIn, offset: number): Promise<AskedAt | undefined> {
+export async function askedAt(kinds: SymbolKinds, document: AskedIn, offset: number, token?: vscode.CancellationToken): Promise<AskedAt | undefined> {
   for (const kind of inOrder(kinds)) {
-    const found = await claimOf(kind)(document, offset);
+    const found = await claimOf(kind)(document, offset, token);
     if (found !== undefined) return found;
   }
   return undefined;
