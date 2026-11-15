@@ -2,12 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
 import { instanceCommands } from '../instanceCommands';
-import type { RefreshResult } from '../loadOrder';
+import type { RebuildResult } from '../loadOrder';
 import type { RebuildIndexOutcome } from '../../client/MEditClient';
 
-describe('refresh', () => {
+describe('rebuildRecordIndex', () => {
   const refreshOver = (client: InMemoryMEditClient, gameRelease = 'Fallout4') =>
-    instanceCommands({ adapter: fakeInstanceAdapter(readingFixture({ gameRelease })).adapter, client, instanceRoot: '/instance' }).refresh;
+    instanceCommands({ adapter: fakeInstanceAdapter(readingFixture({ gameRelease })).adapter, client, instanceRoot: '/instance' }).rebuildRecordIndex;
 
   it.each([
     ['the release the adapter reads now', 'Fallout4'],
@@ -22,7 +22,7 @@ describe('refresh', () => {
     expect(result).toEqual({ applied: true });
   });
 
-  it.each<[string, RebuildIndexOutcome, RefreshResult]>([
+  it.each<[string, RebuildIndexOutcome, RebuildResult]>([
     ['reports held-elsewhere by name, apart from the generic refusal every other failure gets', { rebuilt: false, heldElsewhere: true }, { applied: false, heldElsewhere: true }],
     ['returns the reason for every other refused rebuild', { rebuilt: false, heldElsewhere: false, detail: 'Failed to rebuild the store.' },
       { applied: false, heldElsewhere: false, refusal: 'Failed to rebuild the store.' }],
@@ -38,7 +38,7 @@ describe('refresh', () => {
     const adapter = { ...fakeInstanceAdapter().adapter, gameRelease: () => Promise.reject(new Error('ModOrganizer.ini is unreadable')) };
     const client = new InMemoryMEditClient();
 
-    const result = await instanceCommands({ adapter, client, instanceRoot: '/instance' }).refresh();
+    const result = await instanceCommands({ adapter, client, instanceRoot: '/instance' }).rebuildRecordIndex();
 
     expect(result).toEqual({ applied: false, heldElsewhere: false, refusal: 'ModOrganizer.ini is unreadable' });
     expect(client.calls).toEqual([]);

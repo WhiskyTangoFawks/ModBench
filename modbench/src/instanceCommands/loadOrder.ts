@@ -45,9 +45,9 @@ export async function putLoadOrder(
   return { sent: true, snapshot, outcome: await client.sendLoadOrder(snapshot) };
 }
 
-/** The rebuild of commands.md's `refresh`: mEdit reads every plugin again against the load order
+/** The rebuild of commands.md's `modbench.instance.rebuildRecordIndex`: mEdit reads every plugin again against the load order
  *  it holds, and nothing is sent. Held-elsewhere is its own refusal (ADR-0010). */
-export type RefreshResult =
+export type RebuildResult =
   | { applied: true }
   | { applied: false; heldElsewhere: true }
   | { applied: false; heldElsewhere: false; refusal: string };

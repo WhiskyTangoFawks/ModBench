@@ -26,12 +26,12 @@ import { progressSteps } from '../../test/recordedProgress';
 
 const switchProfile = vi.fn<InstanceCommands['switchProfile']>();
 
-import { registerRefreshCommand, registerToolboxCommands } from '../toolboxCommands';
+import { registerRebuildRecordIndexCommand, registerRefreshCommand, registerToolboxCommands } from '../toolboxCommands';
 import { recordingReporter, tagRecordingReporterFor } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
 import { fakeQuickPick } from '../../drivingLib/test/quickPickDouble';
-import type { RefreshResult } from '../../instanceCommands/loadOrder';
+import type { RebuildResult } from '../../instanceCommands/loadOrder';
 import type { InstanceCommands } from '../../instanceCommands/instanceCommands';
 
 const value = instanceValueFixture({ activeProfile: 'Default', profiles: ['Default', 'Modding', 'Survival'] });
@@ -178,41 +178,57 @@ describe('Switch profile, called by an agent', () => {
 });
 
 describe('Refresh', () => {
-  function registerRefresh(
-    result: RefreshResult, instanceRoot = '/instance',
+  const registerRefresh = () => {
+    const checks: unknown[] = [];
+    registerRefreshCommand({
+      instance: { refresh: (wrote) => { checks.push(wrote); progressSteps.push('Instance loader: check the disk'); return Promise.resolve(undefined); } },
+    });
+    return { checks, run: (...args: unknown[]) => present(handlers.get('modbench.instance.refresh'), 'the refresh handler')(...args) };
+  };
+
+  it('checks the disk once, under the Toolbox\'s progress, and discards no record index', async () => {
+    const { checks, run } = registerRefresh();
+
+    await run();
+
+    expect(checks).toEqual([undefined]);
+    expect(progressSteps).toEqual(['progress opens on modbench.toolbox', 'Instance loader: check the disk', 'progress closes']);
+  });
+
+  it('answers an agent call that it landed', async () => {
+    expect(await registerRefresh().run(new AgentCall([], {}))).toEqual({ applied: true });
+  });
+});
+
+describe('Rebuild record index', () => {
+  function registerRebuild(
+    result: RebuildResult, instanceRoot = '/instance',
     refill: Promise<void> = Promise.resolve(),
   ) {
     const { reporter, reporterFor, tags } = tagRecordingReporterFor();
     const released: true[] = [];
-    registerRefreshCommand({
-      commands: { refresh: () => { progressSteps.push('instance commands: refresh'); return Promise.resolve(result); } },
+    registerRebuildRecordIndexCommand({
+      commands: { rebuildRecordIndex: () => { progressSteps.push('instance commands: rebuild'); return Promise.resolve(result); } },
       nextRefill: () => ({ ended: refill, release: () => { released.push(true); } }),
-      instance: {
-        value,
-        refresh: () => {
-          progressSteps.push('Instance loader: read every file again');
-          return Promise.resolve(undefined);
-        },
-      },
+      instance: { value, refresh: () => Promise.resolve(undefined) },
       reporterFor,
       instanceRoot,
     });
-    return { reporter, tags, released, run: (...args: unknown[]) => present(handlers.get('modbench.instance.refresh'), 'the refresh handler')(...args) };
+    return { reporter, tags, released, run: (...args: unknown[]) => present(handlers.get('modbench.instance.rebuildRecordIndex'), 'the rebuild handler')(...args) };
   }
 
-  it('reports under the refresh tag', () => {
-    expect(registerRefresh({ applied: true }).tags).toEqual(['refresh']);
+  it('reports under the rebuildRecordIndex tag', () => {
+    expect(registerRebuild({ applied: true }).tags).toEqual(['rebuildRecordIndex']);
   });
 
-  it('asks instance commands to refresh, then the Instance loader to read every file again, under the Toolbox\'s progress', async () => {
-    const { reporter, run } = registerRefresh({ applied: true });
+  it('asks instance commands to rebuild, under the Toolbox\'s progress', async () => {
+    const { reporter, run } = registerRebuild({ applied: true });
 
     await run();
 
     expect(progressSteps).toEqual([
       'progress opens on modbench.toolbox',
-      'instance commands: refresh',
-      'Instance loader: read every file again',
+      'instance commands: rebuild',
       'progress closes',
     ]);
     expect(reporter.reports).toEqual([]);
@@ -220,48 +236,37 @@ describe('Refresh', () => {
 
   it('keeps the Toolbox\'s progress open until mEdit\'s refill ends, not only until the rebuild answers with the record index still empty', async () => {
     let refillEnds!: () => void;
-    const { run } = registerRefresh({ applied: true }, '/instance', new Promise<void>((resolve) => { refillEnds = resolve; }));
+    const { run } = registerRebuild({ applied: true }, '/instance', new Promise<void>((resolve) => { refillEnds = resolve; }));
 
     const running = run();
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(progressSteps).toEqual(['progress opens on modbench.toolbox', 'instance commands: refresh']);
+    expect(progressSteps).toEqual(['progress opens on modbench.toolbox', 'instance commands: rebuild']);
 
     refillEnds();
     await running;
     expect(progressSteps.at(-1)).toBe('progress closes');
   });
 
-  it.each<[string, RefreshResult, string, { severity: string; message: string; detail: string }]>([
+  it.each<[string, RebuildResult, string, { severity: string; message: string; detail: string }]>([
     ['the second-window refusal in toolbox.md\'s words, naming this instance since Modbench cannot name the other window',
       { applied: false, heldElsewhere: true }, '/instance/FO4',
-      { severity: 'error', message: 'This instance is open in another Modbench window. Close it, then refresh.', detail: '/instance/FO4' }],
-    ['any other refused refresh with its own generic message at error, the backend\'s refusal as its reason',
+      { severity: 'error', message: 'This instance is open in another Modbench window. Close it, then rebuild the index.', detail: '/instance/FO4' }],
+    ['any other refused rebuild with its own generic message at error, the backend\'s refusal as its reason',
       { applied: false, heldElsewhere: false, refusal: 'Failed to rebuild the store.' }, '/instance',
-      { severity: 'error', message: 'Could not refresh.', detail: 'Failed to rebuild the store.' }],
-  ])('reports %s, and still reads again', async (_case, result, instanceRoot, report) => {
-    const { reporter, run } = registerRefresh(result, instanceRoot);
+      { severity: 'error', message: 'Could not rebuild the index.', detail: 'Failed to rebuild the store.' }],
+  ])('reports %s, ', async (_case, result, instanceRoot, report) => {
+    const { reporter, run } = registerRebuild(result, instanceRoot);
 
     await run();
 
     expect(progressSteps).toEqual([
-      'progress opens on modbench.toolbox', 'instance commands: refresh', 'Instance loader: read every file again', 'progress closes',
+      'progress opens on modbench.toolbox', 'instance commands: rebuild', 'progress closes',
     ]);
     expect(reporter.reports).toEqual([report]);
   });
 
-  it('answers an agent call that it landed, and a refusal with its reason, reporting neither', async () => {
-    const landed = registerRefresh({ applied: true });
-    expect([await landed.run(new AgentCall([], {})), landed.reporter.reports]).toEqual([{ applied: true }, []]);
-
-    handlers.clear();
-    const held = registerRefresh({ applied: false, heldElsewhere: true }, '/instance/FO4');
-    expect([await held.run(new AgentCall([], {})), held.reporter.reports]).toEqual([
-      { applied: false, refusal: 'This instance is open in another Modbench window. Close it, then refresh.', detail: '/instance/FO4' }, [],
-    ]);
-  });
-
   it('releases the wait it armed for a refill, since a refused rebuild starts none', async () => {
-    const { released, run } = registerRefresh(
+    const { released, run } = registerRebuild(
       { applied: false, heldElsewhere: false, refusal: 'Failed to rebuild the store.' }, '/instance', new Promise<void>(() => {}));
 
     await run();

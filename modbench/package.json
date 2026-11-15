@@ -499,6 +499,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.instance.rebuildRecordIndex",
+        "title": "Rebuild Record Index",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.settings.open",
         "title": "Open Settings",
         "category": "Modbench"
@@ -1296,6 +1301,10 @@
         },
         {
           "command": "modbench.instance.refresh",
+          "when": "modbench.folder == instance"
+        },
+        {
+          "command": "modbench.instance.rebuildRecordIndex",
           "when": "modbench.folder == instance"
         },
         {

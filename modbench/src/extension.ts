@@ -78,7 +78,7 @@ import { masterlistCommands } from './instanceCommands/masterlist';
 import { registerMasterlistCommand } from './toolbox/masterlistGesture';
 import { createHttpLootMetadata } from './lootMetadata/httpLootMetadata';
 import type { LootMetadata } from './lootMetadata/lootMetadata';
-import { registerRefreshCommand, registerToolboxCommands, TOOLBOX_VIEW } from './toolbox/toolboxCommands';
+import { registerRebuildRecordIndexCommand, registerRefreshCommand, registerToolboxCommands, TOOLBOX_VIEW } from './toolbox/toolboxCommands';
 import { afterTrust, openedFolder, whenOpened } from './toolbox/instanceCheck';
 import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
 import { toastOncePerFailure } from './drivingLib/toastOncePerFailure';
@@ -300,7 +300,8 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
       [MODS_KEY_ARGS.view, mods.nameFilter], [PLUGINS_KEY_ARGS.view, plugins.nameFilter], [DOWNLOADS_KEY_ARGS.view, downloads.nameFilter],
     ]),
   ));
-  own(registerRefreshCommand({
+  own(registerRefreshCommand({ instance }));
+  own(registerRebuildRecordIndexCommand({
     commands, nextRefill: plugins.nextRefill, instance, reporterFor, instanceRoot,
   }));
   ownAll(own, registerDeployCommands({
