@@ -120,6 +120,7 @@ export function placeOf(origin: string, { modOfOrigin, listedSourceMods }: Place
  *  shows from them (plugins.md, A row). */
 export class PluginFacts {
   private held = new ByPluginAddress<true>();
+  private answers = new Map<string, PluginMetadata>();
   private reads = new ByPluginAddress<PluginRead>();
   private blueprints = '';
   private judgedFacts = '';
@@ -210,9 +211,21 @@ export class PluginFacts {
   }
 
   /** The facts alone, leaving which plugins are held as they are and the sorting statuses as the
-   *  last reconcile judged them. Whether what the sorting rules judge of a plugin changed. */
-  refreshed(plugins: readonly PluginMetadata[]): boolean {
+   *  last reconcile judged them. Whether what the sorting rules judge changed. `asked` names the
+   *  plugins the answer is for, each of which the answer leaves out when it no longer shows it;
+   *  without it the answer is every plugin. */
+  refreshed(plugins: readonly PluginMetadata[], asked?: readonly PluginAddress[]): boolean {
     answered(this.factsRead);
+    if (asked === undefined) this.answers.clear();
+    else {
+      const answered = new Set(plugins.map(pluginAddressKey));
+      for (const plugin of asked) if (!answered.has(pluginAddressKey(plugin))) this.answers.delete(pluginAddressKey(plugin));
+    }
+    for (const p of plugins) this.answers.set(pluginAddressKey(p), p);
+    return this.derive([...this.answers.values()]);
+  }
+
+  private derive(plugins: readonly PluginMetadata[]): boolean {
     const reads = new ByPluginAddress<PluginRead>();
     const readOf = new Map<string, PluginRead[]>();
     const matches = new ByPluginAddress<boolean>();

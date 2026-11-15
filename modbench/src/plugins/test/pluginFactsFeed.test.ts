@@ -280,7 +280,42 @@ describe('PluginFactsFeed', () => {
       expect([asked.mock.calls.length, changes.mock.calls]).toEqual([0, [[[A]]]]);
     });
 
-    it('names every plugin asked about since the last answer, so an overtaken re-read\'s plugin is not lost', async () => {
+    it('asks again only for the plugins named, and keeps what it holds of the others', async () => {
+      const { feed, client } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B] });
+      client.setQueryAnswer('getPlugins', [held({ isCompiledPlugin: true }), held({ name: 'B.esp', isCompiledPlugin: true })]);
+      await feed.reconciled([]);
+      client.calls.length = 0;
+      client.setQueryAnswer('getPlugins', [held({ isCompiledPlugin: false })]);
+
+      await feed.refresh([A]);
+
+      expect([client.calls.map(({ args }) => args), feed.rows.contextFlags(A).includes('compiledPlugin'), feed.rows.contextFlags(B).includes('compiledPlugin')])
+        .toEqual([[[[A]]], false, true]);
+    });
+
+    it('asks for every plugin when it is named none', async () => {
+      const { feed, client } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B] });
+      client.setQueryAnswer('getPlugins', reads(false));
+      await feed.reconciled([]);
+      client.calls.length = 0;
+
+      await feed.refresh();
+
+      expect(client.calls.map(({ args }) => args)).toEqual([[]]);
+    });
+
+    it('forgets a named plugin the answer no longer holds', async () => {
+      const { feed, client } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B] });
+      client.setQueryAnswer('getPlugins', reads(false));
+      await feed.reconciled([]);
+      client.setQueryAnswer('getPlugins', []);
+
+      await feed.refresh([B]);
+
+      expect(feed.rows.contextFlags(B)).toEqual([]);
+    });
+
+    it('names each re-read\'s plugins on its own change, in the order they were asked', async () => {
       const { feed, client, changes } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B] });
       client.setQueryAnswer('getPlugins', reads(false));
       await feed.reconciled([]);
@@ -289,11 +324,11 @@ describe('PluginFactsFeed', () => {
       client.setQueryAnswerOnce('getPlugins', slow.promise);
 
       const overtaken = feed.refresh([A]);
-      await feed.refresh([B]);
+      const later = feed.refresh([B]);
       slow.resolve(reads(false));
-      await overtaken;
+      await Promise.all([overtaken, later]);
 
-      expect(changes.mock.calls).toEqual([[[A, B]]]);
+      expect(changes.mock.calls).toEqual([[[A]], [[B]]]);
     });
 
     it('judges again for an edited description, which a version condition of the sorting rules reads', async () => {
@@ -423,15 +458,15 @@ describe('PluginFactsFeed', () => {
     expect(compiledPluginFlag(feed)).toBe(true);
   });
 
-  it('a later re-read wins over an earlier one still in flight', async () => {
+  it('a later re-read lands over an earlier one still in flight', async () => {
     const { feed, client } = feedOver();
     const slow = deferred<PluginMetadata[]>();
     client.setQueryAnswerOnce('getPlugins', slow.promise);
     client.setQueryAnswer('getPlugins', [held({ isCompiledPlugin: false })]);
     const earlier = feed.refresh();
-    await feed.refresh();
+    const later = feed.refresh();
     slow.resolve([held({ isCompiledPlugin: true })]);
-    await earlier;
+    await Promise.all([earlier, later]);
 
     expect(compiledPluginFlag(feed)).toBe(false);
   });

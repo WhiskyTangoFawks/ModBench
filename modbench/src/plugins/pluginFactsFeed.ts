@@ -57,10 +57,8 @@ export class PluginFactsFeed implements vscode.Disposable {
   // Bumped by each reconcile step (a tick, a refusal, unreachable, the hand-off), so a slow read
   // answering after a newer step cannot resurrect a stale answer.
   private generation = 0;
-  // `refresh`' own order, apart from `generation` so a fact re-read never discards a hand-off.
-  private refreshes = 0;
-  // The plugins every re-read asked about since one last answered, so an overtaken re-read's names reach the one that answers.
-  private unannounced: Map<string, PluginAddress> | 'everything' = new Map();
+  // Each `refresh` reads after the one before it answered, so an answer for a plugin never lands over a newer one.
+  private refreshing: Promise<unknown> = Promise.resolve();
   // The order of `rejudge`, so only the newest judgement of an order publishes.
   private rejudgements = 0;
 
@@ -160,22 +158,24 @@ export class PluginFactsFeed implements vscode.Disposable {
     this.changed.fire(undefined);
   }
 
-  /** Re-reads the facts alone and judges again against them, leaving the held load order as it is.
-   *  A later re-read wins, and none supersedes a reconcile's hand-off. */
-  async refresh(named?: readonly PluginAddress[]): Promise<void> {
-    if (named === undefined) this.unannounced = 'everything';
-    else if (this.unannounced !== 'everything') for (const plugin of named) this.unannounced.set(pluginAddressKey(plugin), plugin);
+  /** Re-reads the facts of the plugins named, or of every plugin when none are, and judges again
+   *  against them, leaving the held load order as it is. None supersedes a reconcile's hand-off. */
+  refresh(named?: readonly PluginAddress[]): Promise<void> {
     const generation = this.generation;
-    const refresh = ++this.refreshes;
-    const plugins = await this.readPlugins();
-    if (generation !== this.generation || refresh !== this.refreshes) return;
+    const refreshed = this.refreshing.then(() => this.refreshOnce(named, generation));
+    this.refreshing = refreshed.catch(() => undefined);
+    return refreshed;
+  }
+
+  private async refreshOnce(named: readonly PluginAddress[] | undefined, generation: number): Promise<void> {
+    if (named?.length === 0) return;
+    const plugins = await this.readPlugins(named);
+    if (generation !== this.generation) return;
     if ('failure' in plugins) return this.factsFailed(plugins.failure);
-    const announced = this.unannounced === 'everything' ? undefined : [...this.unannounced.values()];
-    this.unannounced = new Map();
-    const sortingChanged = this.facts.refreshed(plugins);
+    const sortingChanged = this.facts.refreshed(plugins, named);
     this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);
     if (this.facts.judgedOrder() !== undefined && sortingChanged) await this.rejudge();
-    else this.changed.fire(announced);
+    else this.changed.fire(named);
   }
 
   /** The record filter changed, so the last answer belongs to another filter. */
@@ -185,10 +185,10 @@ export class PluginFactsFeed implements vscode.Disposable {
 
   // The plugins of the rows the tree shows, joined by (origin, filename). A failed read is never
   // swallowed into an empty list, which would read as "nothing held".
-  private async readPlugins(): Promise<PluginMetadata[] | { failure: string }> {
+  private async readPlugins(named?: readonly PluginAddress[]): Promise<PluginMetadata[] | { failure: string }> {
     try {
       const shown = new Set(this.deps.shownPlugins().map(pluginAddressKey));
-      return answerOf(await this.deps.client.getPlugins()).filter((p) => shown.has(pluginAddressKey(p)));
+      return answerOf(await this.deps.client.getPlugins(named)).filter((p) => shown.has(pluginAddressKey(p)));
     } catch (err) {
       if (!(err instanceof ReadFailedError)) throw err;
       return { failure: errorMessage(err) };
