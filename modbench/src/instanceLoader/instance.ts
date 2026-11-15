@@ -19,7 +19,7 @@ import { ArchiveContentsHeld, unreadableArchiveLines, type ArchiveRead, type Arc
 import { FactsOfReading } from './factsOfReading';
 import { WrittenFiles } from './writtenFiles';
 import { collectingWrites } from './ambientWrites';
-import { withoutTelling } from '../repositoriesLib/writesTold';
+import { withoutTelling } from '../ports/writesTold';
 
 /** The rows this value is made of. A view names a row's shape through the read model that
  *  publishes it, never through the codec that parsed the file behind it. */
@@ -617,7 +617,7 @@ export class Instance implements Subscription {
     this.failure = undefined;
     this.setLate(this.heardSinceRun());
     this.seq++;
-    const changed = tellsEvery || (Object.keys(next) as (keyof InstanceValue)[]).some((fact) => next[fact] !== before[fact]);
+    const changed = tellsEvery || Object.keys(next).filter(isFactOf(next)).some((fact) => next[fact] !== before[fact]);
     const reread: Reread = { named: changed ? [...run.named] : [], disk: run.disk };
     if (this.workspaceMovedFrom(next)) void this.enqueue({ disk: false, tellsUnheard: false });
     const told = this.subscribers.filter(({ concerns }) => tellsEvery || concerns === undefined || concerns.some((fact) => next[fact] !== before[fact]));

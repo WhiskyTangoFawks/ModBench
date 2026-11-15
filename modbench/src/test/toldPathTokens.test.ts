@@ -1,14 +1,14 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { rm } from 'node:fs/promises';
-import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
-import { cloneCorpusFixture } from '../../../test/mo2/corpusFixture';
-import { adapterOver } from '../../../test/mo2/adapterOver';
-import { Instance } from '../../../instanceLoader/instance';
-import { writesToldTo } from '../../../repositoriesLib/writesTold';
-import { InMemoryMEditClient } from '../../../client/test/InMemoryMEditClient';
-import { fakeWorkspace } from '../../../test/fakeWorkspace';
-import { GAME_FOLDER_SETTING_ID } from '../../../test/gameFolderSetting';
+import { fakeVscodeModule } from './mo2/fakeVscodeWatcher';
+import { cloneCorpusFixture } from './mo2/corpusFixture';
+import { adapterOver } from './mo2/adapterOver';
+import { Instance } from '../instanceLoader/instance';
+import { writesToldTo } from '../repositoriesLib/writesTold';
+import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
+import { fakeWorkspace } from './fakeWorkspace';
+import { GAME_FOLDER_SETTING_ID } from './gameFolderSetting';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
