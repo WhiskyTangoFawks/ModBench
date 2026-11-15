@@ -1,5 +1,6 @@
 import { bounded, REQUESTS_AT_ONCE, type InTurn } from '../ports/bounded';
-import { pluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
+import { askedAgain, keyOf, WHOLE_SET, type Read } from './askedAgain';
+import type { PluginAddress } from '../wire/pluginAddress';
 import { isReadFailed, type ReadFailed } from '../wire/readFailed';
 
 interface Answered { plugin: PluginAddress; failure?: string | null; unread: string[] }
@@ -25,58 +26,17 @@ export interface ProblemsAsker<Paths extends Answered, Problems, Status> {
   inTurn: InTurn;
 }
 
-type Read = 'getPluginFilePaths' | 'getPluginProblems';
-
 const RETRY_AFTER_MS = 15_000;
-
-const WHOLE_SET = '';
-const keyOf = (plugin?: PluginAddress): string => plugin === undefined ? WHOLE_SET : pluginAddressKey(plugin);
 
 export function problemsAsker<Paths extends Answered, Problems, Status>(client: Reads<Paths, Problems, Status>, retryAfterMs = RETRY_AFTER_MS): ProblemsAsker<Paths, Problems, Status> {
   const inTurn = bounded(REQUESTS_AT_ONCE);
   let held = new Map<string, Promise<Paths[] | ReadFailed>>();
-  const listeners: Record<Read, Set<(plugin?: PluginAddress) => void>> = { getPluginFilePaths: new Set(), getPluginProblems: new Set() };
-  const pending = new Map<string, ReturnType<typeof setTimeout>>();
-  const latest = new Map<string, number>();
-  let asks = 0;
-  let disposed = false;
-  const retryId = (read: Read, plugin?: PluginAddress) => `${read}\n${keyOf(plugin)}`;
-
-  const stopRetrying = (id: string) => {
-    clearTimeout(pending.get(id));
-    pending.delete(id);
-  };
+  const retries = askedAgain(retryAfterMs);
 
   const forget = (plugin?: PluginAddress) => {
     if (plugin === undefined) { held = new Map(); return; }
     held.delete(WHOLE_SET);
     held.delete(keyOf(plugin));
-  };
-
-  const tell = (read: Read, plugin?: PluginAddress) => { for (const listener of listeners[read]) listener(plugin); };
-
-  const retryFailed = (id: string, read: Read, plugin?: PluginAddress) => {
-    if (disposed || pending.has(id)) return;
-    pending.set(id, setTimeout(() => {
-      pending.delete(id);
-      tell(read, plugin);
-    }, retryAfterMs));
-  };
-
-  const askedAgainIfFailed = <T>(read: Read, plugin: PluginAddress | undefined, asked: Promise<T[] | ReadFailed>) => {
-    const id = retryId(read, plugin);
-    asks += 1;
-    const mine = asks;
-    latest.set(id, mine);
-    const settled = (failed: boolean) => {
-      if (latest.get(id) !== mine) return;
-      latest.delete(id);
-      if (failed) { retryFailed(id, read, plugin); return; }
-      const ended = [...pending.keys()].filter((key) => plugin === undefined ? key.startsWith(`${read}\n`) : key === id);
-      for (const each of ended) stopRetrying(each);
-      if (ended.length > 0 && read === 'getPluginFilePaths') tell(read, plugin);
-    };
-    asked.then((answer) => { settled(isReadFailed(answer)); }, () => { settled(true); });
   };
 
   const filePathsOf = (plugin?: PluginAddress): Promise<Paths[] | ReadFailed> => {
@@ -87,7 +47,7 @@ export function problemsAsker<Paths extends Answered, Problems, Status>(client: 
     if (plugin !== undefined && whole) return whole.then((answer) => (isReadFailed(answer) ? answer : answer.filter((each) => keyOf(each.plugin) === key)));
     const asked = inTurn(() => client.getPluginFilePaths(plugin));
     held.set(key, asked);
-    askedAgainIfFailed('getPluginFilePaths', plugin, asked);
+    retries.watch('getPluginFilePaths', plugin, asked);
     const keepIfComplete = (answer?: Paths[] | ReadFailed) => {
       const complete = answer !== undefined && !isReadFailed(answer) && answer.every(({ failure, unread }) => failure == null && unread.length === 0);
       if (!complete && held.get(key) === asked) held.delete(key);
@@ -100,17 +60,11 @@ export function problemsAsker<Paths extends Answered, Problems, Status>(client: 
     getPluginFilePaths: filePathsOf,
     getPluginProblems: (plugin) => {
       const asked = inTurn(() => client.getPluginProblems(plugin));
-      askedAgainIfFailed('getPluginProblems', plugin, asked);
+      retries.watch('getPluginProblems', plugin, asked);
       return asked;
     },
-    dispose: () => {
-      disposed = true;
-      for (const id of [...pending.keys()]) stopRetrying(id);
-    },
-    onAskedAgain: (read, listener) => {
-      listeners[read].add(listener);
-      return () => { listeners[read].delete(listener); };
-    },
+    dispose: () => { retries.dispose(); },
+    onAskedAgain: (read, listener) => retries.onAskedAgain(read, listener),
     onPluginChanged: (listener) => {
       const heard = (event: { plugin: PluginAddress }) => { forget(event.plugin); listener(event); };
       const off = [client.onNotification('rows-changed', heard), client.onNotification('plugin-changed', heard)];
