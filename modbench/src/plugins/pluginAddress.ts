@@ -1,5 +1,8 @@
 import { exactPluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
 
+/** The plugins a change or a read names; `undefined` names every plugin. */
+export type NamedPlugins = readonly PluginAddress[] | undefined;
+
 /** Filed by spelling, so plugins whose names differ only in case stay apart. */
 export class ByPluginAddress<T> {
   private readonly bySpelling = new Map<string, T>();
