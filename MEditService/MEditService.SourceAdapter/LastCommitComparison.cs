@@ -11,15 +11,17 @@ public enum RecordChange { Modified, Added }
 /// <summary>The records of a plugin's tree whose text differs from the last commit's.</summary>
 internal static class LastCommitComparison
 {
+    /// <summary>The records of the files under <paramref name="within"/>, relative to the source folder, or of the whole tree
+    /// when null. A record no file there held at the last commit is added.</summary>
     internal static IReadOnlyDictionary<string, RecordChange> Of(
         string sourceFolder, GameRelease release, SourceRepositoryGit git, SourceRepositoryLocator locator,
-        PluginAddress plugin)
+        PluginAddress plugin, IReadOnlyList<string>? within = null)
     {
         using var expansion = new SourceTreeDocuments(sourceFolder, plugin.Name, release, DiskFiles.Instance);
         var committed = new Dictionary<string, string>(StringComparer.Ordinal);
         var working = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        foreach (var (relativePath, heldAtLastCommit) in ChangedFiles(sourceFolder, git, plugin))
+        foreach (var (relativePath, heldAtLastCommit) in ChangedFiles(sourceFolder, git, plugin, within))
         {
             var fullPath = Path.Combine(sourceFolder, relativePath);
             var committedText = heldAtLastCommit
@@ -44,9 +46,9 @@ internal static class LastCommitComparison
     // Git's paths use forward slashes on every platform. An index column of ?, ! or A means the last
     // commit has no such file.
     private static IEnumerable<(string RelativePath, bool HeldAtLastCommit)> ChangedFiles(
-        string sourceFolder, SourceRepositoryGit git, PluginAddress plugin)
+        string sourceFolder, SourceRepositoryGit git, PluginAddress plugin, IReadOnlyList<string>? within)
     {
-        if (git.WorkingTreeStatus(plugin.Name) is { } status)
+        if ((within is null ? git.WorkingTreeStatus(plugin.Name) : git.WorkingTreeStatus(within)) is { } status)
         {
             return status.Select(entry => (
                 entry.Path.Replace('/', Path.DirectorySeparatorChar), entry.Code is not ('?' or '!' or 'A')));
@@ -55,11 +57,15 @@ internal static class LastCommitComparison
         if (SourceRepositoryGit.HoldsSourceMod(sourceFolder))
             throw SourceStopException.GitFailed($"git cannot report what changed in '{sourceFolder}'.");
 
-        var root = SourceRepositoryLayout.RootIn(sourceFolder, plugin.Name);
-        return Directory.Exists(root)
-            ? Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
-                .Select(path => (Path.GetRelativePath(sourceFolder, path), false))
-            : [];
+        return (within?.Select(path => Path.Combine(sourceFolder, path)) ?? [SourceRepositoryLayout.RootIn(sourceFolder, plugin.Name)])
+            .SelectMany(FilesAt)
+            .Select(path => (Path.GetRelativePath(sourceFolder, path), false));
+    }
+
+    private static IEnumerable<string> FilesAt(string path)
+    {
+        if (Directory.Exists(path)) return Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories);
+        return File.Exists(path) ? [path] : [];
     }
 
     // A file a racing write took away is gone. One another process holds throws as it is, so the

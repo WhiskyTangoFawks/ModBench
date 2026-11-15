@@ -44,12 +44,12 @@ public interface ISourceAdapter
     /// build file, repository, or plugin source no plugin's tree holds.</summary>
     PathAnswer Touching(LoadOrderSnapshot loadOrder, string path);
 
-    /// <summary>Relays Mod Management's word that the disk changed to the record index: the plugins its paths name,
-    /// which it re-reads, or null, and it checks every plugin.</summary>
-    void SignalChange(IReadOnlyList<PluginAddress>? plugins);
+    /// <summary>Relays Mod Management's word that the disk changed to the record index: the plugins its paths touch and the
+    /// files of each they name, which it reads again, or null, and it checks every plugin.</summary>
+    void SignalChange(IReadOnlyCollection<PluginChange>? changes);
 
-    /// <summary>Raised by each <see cref="SignalChange"/>, with its plugins.</summary>
-    event Action<IReadOnlyList<PluginAddress>?>? ChangeSignalled;
+    /// <summary>Raised by each <see cref="SignalChange"/>, with its changes.</summary>
+    event Action<IReadOnlyCollection<PluginChange>?>? ChangeSignalled;
 
     RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path);
 

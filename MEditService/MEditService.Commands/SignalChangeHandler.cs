@@ -4,8 +4,8 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Commands;
 
-/// <summary>Tells the record index's reader of the files the plugins the changed paths touch, and checks their mods for a
-/// change made outside Modbench (ADR-0003). A path read for plugins none can name checks the disk.</summary>
+/// <summary>Tells the record index's reader of the plugins the changed paths touch and the source files they name, and
+/// checks their mods for an outside change (ADR-0003). A path none can name checks the disk.</summary>
 public sealed class SignalChangeHandler
 {
     private readonly LoadOrderHolder _holder;
@@ -30,20 +30,28 @@ public sealed class SignalChangeHandler
             _externalChanges.Check(snapshot, snapshot.Plugins);
             return;
         }
-        var plugins = touched.Source.Concat(touched.Files).Select(plugin => plugin.Key).Distinct(PluginAddress.Comparer).ToList();
-        if (plugins.Count > 0) _source.SignalChange(plugins);
+        // A plugin's own files read it whole; its source reads the files named.
+        var wholes = touched.Files.Select(plugin => plugin.Key).ToHashSet(PluginAddress.Comparer);
+        List<PluginChange> changes =
+        [
+            .. wholes.Select(plugin => new PluginChange(plugin, null)),
+            .. touched.Source.Where(named => !wholes.Contains(named.Plugin.Key))
+                .GroupBy(named => named.Plugin.Key, PluginAddress.Comparer)
+                .Select(plugin => new PluginChange(plugin.Key, [.. plugin.Select(named => named.Path)])),
+        ];
+        if (changes.Count > 0) _source.SignalChange(changes);
         _externalChanges.Check(snapshot, touched.Files);
     }
 
-    private (List<RegisteredPlugin> Source, List<RegisteredPlugin> Files)? Touched(LoadOrderSnapshot snapshot, IReadOnlyList<string> paths)
+    private (List<(RegisteredPlugin Plugin, string Path)> Source, List<RegisteredPlugin> Files)? Touched(LoadOrderSnapshot snapshot, IReadOnlyList<string> paths)
     {
         if (paths.Count == 0) return null;
-        var (source, files) = (new List<RegisteredPlugin>(), new List<RegisteredPlugin>());
+        var (source, files) = (new List<(RegisteredPlugin, string)>(), new List<RegisteredPlugin>());
         foreach (var path in paths)
         {
             var (bySource, byFiles) = (_source.Touching(snapshot, path), _plugins.Touching(snapshot, path));
             if (bySource is PathAnswer.Unnamed || byFiles is PathAnswer.Unnamed) return null;
-            if (bySource is PathAnswer.Touches sourceTouches) source.AddRange(sourceTouches.Plugins);
+            if (bySource is PathAnswer.Touches sourceTouches) source.AddRange(sourceTouches.Plugins.Select(plugin => (plugin, path)));
             if (byFiles is PathAnswer.Touches filesTouches) files.AddRange(filesTouches.Plugins);
         }
         return (source, files);

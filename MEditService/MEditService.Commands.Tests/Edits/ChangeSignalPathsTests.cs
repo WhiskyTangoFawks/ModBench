@@ -17,7 +17,7 @@ public sealed class ChangeSignalPathsTests : IDisposable
     private readonly InMemoryNotificationPublisher _notifications = new();
     private readonly ScratchDirectory _instanceRoot = new("medit-change-signal-paths-");
     private readonly IServiceProvider _service;
-    private readonly List<IReadOnlyList<PluginAddress>?> _relayed = [];
+    private readonly List<IReadOnlyCollection<PluginChange>?> _relayed = [];
 
     public ChangeSignalPathsTests()
     {
@@ -61,15 +61,26 @@ public sealed class ChangeSignalPathsTests : IDisposable
 
     private void Signal(string kinds) => Signal(kinds.Split(',', StringSplitOptions.RemoveEmptyEntries));
 
+    private PluginChange Relayed => Assert.Single(Assert.Single(_relayed).Require());
+
     [Theory]
     [InlineData("plugin file")]
-    [InlineData("plugin source")]
     [InlineData("plugin file,asset")]
-    public void APathThatTouchesAPlugin_HasTheRecordIndexReReadThatPlugin(string kinds)
+    [InlineData("plugin file,plugin source")]
+    public void ThePluginsOwnFileNamed_HasTheRecordIndexReadThatPluginWhole(string kinds)
     {
         Signal(kinds);
 
-        Assert.Equal([new PluginAddress(PluginOf(NamedMod), NamedMod)], Assert.Single(_relayed));
+        Assert.Equal((new PluginAddress(PluginOf(NamedMod), NamedMod), null), (Relayed.Plugin, Relayed.Files));
+    }
+
+    [Fact]
+    public void ASourceFileNamed_HasTheRecordIndexReadThatFile()
+    {
+        Signal("plugin source");
+
+        Assert.Equal(new PluginAddress(PluginOf(NamedMod), NamedMod), Relayed.Plugin);
+        Assert.Equal([PathNamed("plugin source")], Relayed.Files);
     }
 
     [Theory]
