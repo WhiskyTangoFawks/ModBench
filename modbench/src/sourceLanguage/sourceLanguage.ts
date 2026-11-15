@@ -51,6 +51,8 @@ function diagnosticOf({ message, start, end, clearing }: ProblemOnFile): vscode.
 
 interface SourceLanguage extends vscode.Disposable {
   messages(): string[];
+  /** The line that says mEdit could not take the unsaved plugin source: the one line a read of a record is qualified by. */
+  unsavedSourceMessages(): string[];
 }
 
 function workspaceNotice(instance: SourceLanguageDeps['instance']): vscode.Disposable {
@@ -74,7 +76,7 @@ function languageStatusItem(id: string) {
   };
 }
 
-function sourceProblems(deps: SourceLanguageDeps): Pick<SourceLanguage, 'dispose' | 'messages'> {
+function sourceProblems(deps: SourceLanguageDeps): Pick<SourceLanguage, 'dispose' | 'messages' | 'unsavedSourceMessages'> {
   const collection = vscode.languages.createDiagnosticCollection('modbench-source');
   const feedOf = mergedFeeds((file, onFile) => {
     if (onFile.length === 0) collection.delete(vscode.Uri.file(file));
@@ -82,12 +84,13 @@ function sourceProblems(deps: SourceLanguageDeps): Pick<SourceLanguage, 'dispose
   });
   const linkStatus = languageStatusItem('modbench.sourceProblems');
   const pathStatus = languageStatusItem('modbench.sourcePaths');
+  let unsaved: string | undefined;
   const unsubscribe = [
-    feedSourceProblems({ ...deps, publish: feedOf('links'), languageStatus: linkStatus.show }),
+    feedSourceProblems({ ...deps, publish: feedOf('links'), languageStatus: linkStatus.show, unsavedStatus: (text) => { unsaved = text; } }),
     feedPathProblems({ ...deps, paths: deps.pathStanding, readText: heldOrSavedText, publish: feedOf('paths'), languageStatus: pathStatus.show }),
   ];
   const disposable = new vscode.Disposable(() => { for (const off of unsubscribe) off(); collection.dispose(); linkStatus.dispose(); pathStatus.dispose(); });
-  return { dispose: () => { disposable.dispose(); }, messages: () => [...linkStatus.text(), ...pathStatus.text()] };
+  return { dispose: () => { disposable.dispose(); }, messages: () => [...linkStatus.text(), ...pathStatus.text()], unsavedSourceMessages: () => (unsaved === undefined ? [] : [unsaved]) };
 }
 
 export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
@@ -97,5 +100,5 @@ export function createSourceLanguage(deps: SourceLanguageDeps): SourceLanguage {
     handUnsavedPluginSource(deps.client, isPluginSourcePath),
     registerEnumCompletion(deps), problems, workspaceNotice(deps.instance), ...entryPoints,
   );
-  return { dispose: () => { disposable.dispose(); }, messages: () => problems.messages() };
+  return { dispose: () => { disposable.dispose(); }, messages: () => problems.messages(), unsavedSourceMessages: () => problems.unsavedSourceMessages() };
 }

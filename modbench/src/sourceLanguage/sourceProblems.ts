@@ -6,7 +6,7 @@ import type { Reporter } from '../ports/reporter';
 import type { PathHop } from '../wire/messages';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { locationOf, type Segment } from './sourceText';
-import { lastRead, readiness, tellingOnSurface, type Asked, type Position, type Told } from './feedShape';
+import { askedAgain, lastRead, readiness, tellingOnSurface, type Asked, type Position, type Told } from './feedShape';
 import { answerOf, failureReason, type ReadFailed } from '../wire/readFailed';
 
 type SourceProblem = PluginProblems['problems'][number];
@@ -18,14 +18,18 @@ export type ProblemsByFile = ReadonlyMap<string, ProblemOnFile[]>;
 
 export interface SourceProblemsDeps {
   client: Pick<MEditClient, 'loadOrderStatus' | 'onUnsavedHandOver'>;
-  ask: Pick<Asked, 'getPluginProblems' | 'onPluginChanged' | 'onLoadOrderSettled'>;
+  ask: Pick<Asked, 'getPluginProblems' | 'onPluginChanged' | 'onLoadOrderSettled' | 'onAskedAgain'>;
   sourceFiles: SourceFilesOf;
   reporter: Pick<Reporter, 'shownOnSurface'>;
   /** Replaces every problem published before. */
   publish: (problems: ProblemsByFile) => void;
   /** Says why the Problems panel shows the last good read; undefined when it shows the latest. */
   languageStatus: (text: string | undefined) => void;
+  /** Says why mEdit could not take the unsaved plugin source; undefined when it could. */
+  unsavedStatus: (text: string | undefined) => void;
 }
+
+const unsavedBecause = (why: string): string => `mEdit could not take the unsaved plugin source: ${why}`;
 
 const FIRST_LINE = { line: 0, character: 0 };
 
@@ -104,7 +108,7 @@ function nextHeld(held: Map<string, Contribution>, answered: Map<string, Contrib
  *  cannot answer for keeps the links it last had and takes the stops it now answers, and the
  *  language status says why. */
 export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
-  const { client, reporter, publish, languageStatus } = deps;
+  const { client, reporter, publish, languageStatus, unsavedStatus } = deps;
   const tellUnplaced = tellingOnSurface(reporter);
   let held = new Map<string, Contribution>();
   let unplacedHeld = new Map<string, Unplaced>();
@@ -113,7 +117,7 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
   const showStatus = () => {
     const failed = [...failures.values()][0];
     if (failed !== undefined) languageStatus(lastRead(failed));
-    else if (handOverFailed !== undefined) languageStatus(lastRead(`mEdit could not take the unsaved plugin source: ${handOverFailed}`));
+    else if (handOverFailed !== undefined) languageStatus(lastRead(unsavedBecause(handOverFailed)));
     else languageStatus(unplacedStatus());
   };
   const handedOver = (failure: ReadFailed | undefined) => {
@@ -122,6 +126,7 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
       reporter.shownOnSurface('warning', 'The Problems panel shows what mEdit last took of the unsaved plugin source.', why);
     }
     handOverFailed = why;
+    unsavedStatus(why === undefined ? undefined : lastRead(unsavedBecause(why)));
     showStatus();
   };
   const { ready, answeredAtSubscribe } = readiness(client);
@@ -169,6 +174,7 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
   const unsubscribe = [
     deps.ask.onLoadOrderSettled((status) => { if (status.conflictsComputed) { wholeWanted = true; askWanted(); } }),
     deps.ask.onPluginChanged(askPluginWhenReady),
+    deps.ask.onAskedAgain('getPluginProblems', askedAgain(() => { wholeWanted = true; askWanted(); }, askPluginWhenReady)),
     client.onUnsavedHandOver(handedOver),
   ];
   askWanted();

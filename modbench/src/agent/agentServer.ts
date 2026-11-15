@@ -123,7 +123,7 @@ const namesAnOrigin = (args: unknown): boolean =>
   typeof args === 'object' && args !== null
   && Object.entries(args).some(([key, value]) => (key === 'origin' && typeof value === 'string') || namesAnOrigin(value));
 
-const RECORD_READS: readonly Source[] = ['instance', 'mEdit', 'plugins', 'sourceLanguage'];
+const RECORD_READS: readonly Source[] = ['instance', 'mEdit', 'plugins', 'unsavedSource'];
 
 const SYMBOL_READS: readonly Source[] = [...RECORD_READS, 'modList'];
 

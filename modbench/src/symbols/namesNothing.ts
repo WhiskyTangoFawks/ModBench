@@ -123,7 +123,6 @@ export function registerNamesNothing({ kinds, collection, reporter, savedText, o
   judgeAll();
   return vscode.Disposable.from(
     onChanged((plugin) => {
-      asker.forget(plugin);
       if (plugin === undefined) wholeWanted = true;
       else asking.set(pluginAddressKey(plugin), plugin);
       judgeAll();

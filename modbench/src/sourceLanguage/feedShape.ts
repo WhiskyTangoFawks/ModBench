@@ -1,4 +1,4 @@
-import type { MEditClient, PluginFilePaths, PluginProblems } from '../client';
+import type { MEditClient, PluginAddress, PluginFilePaths, PluginProblems } from '../client';
 import type { ProblemsAsker } from '../drivingLib/problemsAsker';
 import type { Reporter } from '../ports/reporter';
 import type { ProblemOnFile, ProblemsByFile } from './sourceProblems';
@@ -13,6 +13,11 @@ export function positionAt(text: string, offset: number): Position {
 }
 
 export const lastRead = (why: string): string => `Showing the last good read: ${why}`;
+
+/** What a feed does when told to ask again: the whole set, or the one plugin. */
+export const askedAgain = (whole: () => void, one: (event: { plugin: PluginAddress }) => void) => (plugin?: PluginAddress): void => {
+  if (plugin) one({ plugin }); else whole();
+};
 
 export interface Told { key: string; message: string; why: string }
 

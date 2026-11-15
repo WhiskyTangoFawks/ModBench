@@ -126,16 +126,14 @@ describe('the problem a name that names nothing raises (symbols.md, The features
     expect(mostAtOnce).toBe(REQUESTS_AT_ONCE);
   });
 
-  it('has the asker forget what it held of the plugin that changed, of all when the instance changes, and of all when a document closes', async () => {
+  it('has the asker forget all it held when a document closes', async () => {
     world.documents = [];
-    const { changed, forgotten } = start(script({ filesNamingNothing: () => Promise.resolve([]) }));
+    const { forgotten } = start(script({ filesNamingNothing: () => Promise.resolve([]) }));
     await settle();
 
-    changed(PLUGIN);
-    changed();
     world.handlers.get('close')?.(document('closed'));
 
-    expect(forgotten).toEqual([PLUGIN, undefined, undefined]);
+    expect(forgotten).toEqual([undefined]);
   });
 
   it('judges the document being edited before the closed files that wait for a place', async () => {

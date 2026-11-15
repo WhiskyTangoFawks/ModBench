@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { problemsAsker } from '../../drivingLib/problemsAsker';
 import { feedSourceProblems, type ProblemsByFile } from '../sourceProblems';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
@@ -8,6 +8,7 @@ import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 import type { NotificationEvent } from '../../client/apiClient';
 import type { SourceFilesOf } from '../../instanceLoader/loadOrderSnapshot';
 
+const RETRY_AFTER_MS = 1000;
 const MISSING = '000ABC:Absent.esp';
 const REFERRER = '000800:Refers.esp';
 const PLUGIN = { name: 'Refers.esp', origin: 'ReferringMod' };
@@ -32,13 +33,15 @@ function feed(sourceFiles = sourceFolders, answeredAtSubscribe?: PluginProblems[
   const published: ProblemsByFile[] = [];
   const reporter = recordingReporter();
   const status: (string | undefined)[] = [];
+  const unsaved: (string | undefined)[] = [];
   feedSourceProblems({
     client,
-    ask: problemsAsker(client),
+    ask: problemsAsker(client, RETRY_AFTER_MS),
     sourceFiles,
     reporter,
     publish: (problems) => published.push(problems),
     languageStatus: (text) => status.push(text),
+    unsavedStatus: (text) => unsaved.push(text),
   });
   const answered = async (answer: PluginProblems[], event?: NotificationEvent): Promise<ProblemsByFile> => {
     const before = published.length;
@@ -47,8 +50,10 @@ function feed(sourceFiles = sourceFolders, answeredAtSubscribe?: PluginProblems[
     await vi.waitFor(() => { expect(published.length).toBeGreaterThan(before); });
     return published[published.length - 1] ?? new Map();
   };
-  return { client, reporter, published, status, answered };
+  return { client, reporter, published, status, unsaved, answered };
 }
+
+afterEach(() => { vi.useRealTimers(); });
 
 describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () => {
   const RECORD = { formKey: REFERRER, plugin: 'Refers.esp', origin: 'ReferringMod' };
@@ -292,6 +297,20 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
     expect(status.at(-1)).toBeUndefined();
   });
 
+  it('asks again after a delay of an ask that failed, with no event between, and publishes its answer', async () => {
+    const { client, answered, published, status } = feed();
+    await answered([{ plugin: PLUGIN, problems: [problem()] }]);
+    vi.useFakeTimers();
+    client.setQueryFailureOnce('getPluginProblems', { failed: 'timed-out' });
+    reconciledAgain(client);
+    await vi.waitFor(() => { expect(status.at(-1)).toBe('Showing the last good read: mEdit did not answer in time.'); });
+    client.setQueryAnswer('getPluginProblems', []);
+
+    await vi.advanceTimersByTimeAsync(RETRY_AFTER_MS);
+
+    expect([published.at(-1), status.at(-1)]).toEqual([new Map(), undefined]);
+  });
+
   it('keeps the problems of a plugin mEdit cannot place while the rest publishes, and says so in the language status', async () => {
     const other = { name: 'Other.esp', origin: 'OtherMod' };
     const { answered, status } = feed();
@@ -376,5 +395,24 @@ describe('feedSourceProblems, when mEdit cannot take the unsaved plugin source',
     client.settleHandOver(undefined);
 
     expect(status.at(-1)).toBeUndefined();
+  });
+
+  it('gives the line alone, so a read of a record can carry it, and clears it with the next hand-over', () => {
+    const { client, unsaved } = feed();
+
+    client.settleHandOver({ failed: 'refused', refusal: 'connection reset' });
+    client.settleHandOver(undefined);
+
+    expect(unsaved).toEqual([lastRead('connection reset'), undefined]);
+  });
+
+  it('gives no line for an ask of the Problems panel that failed', async () => {
+    const { client, status, unsaved, answered } = feed();
+    await answered([{ plugin: PLUGIN, problems: [problem()] }]);
+    client.setQueryFailureOnce('getPluginProblems', { failed: 'timed-out' });
+    reconciledAgain(client);
+    await vi.waitFor(() => { expect(status.at(-1)).toContain('mEdit did not answer in time.'); });
+
+    expect(unsaved.filter((line) => line !== undefined)).toEqual([]);
   });
 });

@@ -1,5 +1,6 @@
 import { bounded, REQUESTS_AT_ONCE, type InTurn } from '../ports/bounded';
-import { pluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
+import { askedAgain, keyOf, WHOLE_SET, type Read } from './askedAgain';
+import type { PluginAddress } from '../wire/pluginAddress';
 import { isReadFailed, type ReadFailed } from '../wire/readFailed';
 
 interface Answered { plugin: PluginAddress; failure?: string | null; unread: string[] }
@@ -18,17 +19,19 @@ export interface ProblemsAsker<Paths extends Answered, Problems, Status> {
   onPluginChanged(listener: (event: { plugin: PluginAddress }) => void): () => void;
   /** Told after the asker dropped everything it held. */
   onLoadOrderSettled(listener: (status: Status) => void): () => void;
-  /** Drops what it held of the plugin, or of all. */
+  /** Told to ask again of a read that failed: after a delay, and, for the file paths the asker holds, at once when another ask of them is answered. */
+  onAskedAgain(read: Read, listener: (plugin?: PluginAddress) => void): () => void;
   forget(plugin?: PluginAddress): void;
+  dispose(): void;
   inTurn: InTurn;
 }
 
-const WHOLE_SET = '';
-const keyOf = (plugin?: PluginAddress): string => plugin === undefined ? WHOLE_SET : pluginAddressKey(plugin);
+const RETRY_AFTER_MS = 15_000;
 
-export function problemsAsker<Paths extends Answered, Problems, Status>(client: Reads<Paths, Problems, Status>): ProblemsAsker<Paths, Problems, Status> {
+export function problemsAsker<Paths extends Answered, Problems, Status>(client: Reads<Paths, Problems, Status>, retryAfterMs = RETRY_AFTER_MS): ProblemsAsker<Paths, Problems, Status> {
   const inTurn = bounded(REQUESTS_AT_ONCE);
   let held = new Map<string, Promise<Paths[] | ReadFailed>>();
+  const retries = askedAgain(retryAfterMs);
 
   const forget = (plugin?: PluginAddress) => {
     if (plugin === undefined) { held = new Map(); return; }
@@ -44,6 +47,7 @@ export function problemsAsker<Paths extends Answered, Problems, Status>(client: 
     if (plugin !== undefined && whole) return whole.then((answer) => (isReadFailed(answer) ? answer : answer.filter((each) => keyOf(each.plugin) === key)));
     const asked = inTurn(() => client.getPluginFilePaths(plugin));
     held.set(key, asked);
+    retries.watch('getPluginFilePaths', plugin, asked);
     const keepIfComplete = (answer?: Paths[] | ReadFailed) => {
       const complete = answer !== undefined && !isReadFailed(answer) && answer.every(({ failure, unread }) => failure == null && unread.length === 0);
       if (!complete && held.get(key) === asked) held.delete(key);
@@ -54,7 +58,13 @@ export function problemsAsker<Paths extends Answered, Problems, Status>(client: 
 
   return {
     getPluginFilePaths: filePathsOf,
-    getPluginProblems: (plugin) => inTurn(() => client.getPluginProblems(plugin)),
+    getPluginProblems: (plugin) => {
+      const asked = inTurn(() => client.getPluginProblems(plugin));
+      retries.watch('getPluginProblems', plugin, asked);
+      return asked;
+    },
+    dispose: () => { retries.dispose(); },
+    onAskedAgain: (read, listener) => retries.onAskedAgain(read, listener),
     onPluginChanged: (listener) => {
       const heard = (event: { plugin: PluginAddress }) => { forget(event.plugin); listener(event); };
       const off = [client.onNotification('rows-changed', heard), client.onNotification('plugin-changed', heard)];
