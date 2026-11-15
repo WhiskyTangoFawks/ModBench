@@ -150,7 +150,7 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
   const originFilesOf = originFilesReader(context);
   // A change inside the Data folder names its own file, so the key sits below the folder: a change to the folder or the game folder forgets it.
   const resolvedGameFolder = keptUntilNamed(
-    (managed) => resolveGameFolder(JSON.parse(managed) as ManagerGamePath),
+    (_key, managed: ManagerGamePath) => resolveGameFolder(managed),
     (folder) => { const data = dataFolderOf(folder); return data === undefined ? undefined : data + sep; },
   );
   // No path holds this answer, so only a check of the disk forgets it.
@@ -170,7 +170,8 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
         ...game,
         // What the settings resolve is what the watch follows.
         gameFolder: async () => {
-          const gameFolder = await resolvedGameFolder(JSON.stringify(managedGamePath(iniText, game.gameRelease)));
+          const managed = managedGamePath(iniText, game.gameRelease);
+          const gameFolder = await resolvedGameFolder(JSON.stringify(managed), managed);
           const dataFolder = dataFolderOf(gameFolder);
           const programs = programsOf(game.gameRelease);
           watch.follow('dataFolder', dataFolder === undefined ? [] : [dataFolder], DATA_FOLDER_GLOB);
