@@ -16,6 +16,7 @@ internal static class ProblemsPanel
         var stopped = index.SourceFileFailures.ToLookup(failure => failure.Plugin, PluginAddress.Comparer);
         var found = index.FileProblems.ToLookup(problem => problem.Plugin, PluginAddress.Comparer);
         var unreadable = UnreadableActive(index, snapshot);
+        var heldReasons = ReadFailures.HeldReasons(index);
         var linkedPlugins = reads.GetPluginsLinkedBySourcePlugins();
         var held = snapshot.Plugins.ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);
         var missing = reads
@@ -39,6 +40,7 @@ internal static class ProblemsPanel
                         : NoLinkChecked(plugin, linkedUnreadable, source.Over(plugin, snapshot.GameRelease));
                     return Placed(plugin, source, ProblemsOf(
                         plugin.Key, snapshot.GameRelease, index.LaterReadFailure(plugin.Key),
+                        derivations.ContainsKey(plugin.Key) ? heldReasons.GetValueOrDefault(plugin.Key) : null,
                         [.. stopped[plugin.Key].Select(SourceProblem.StoppedAt), .. Found(found[plugin.Key].Select(held => held.Problem), stopped[plugin.Key]), .. headerProblems.Problems],
                         [.. missing[plugin.Key]], unreadable, headerProblems.PlacementFailure));
                 }),
@@ -94,11 +96,14 @@ internal static class ProblemsPanel
             .Select(problem => new SourceProblem(problem.FormKey, null, null, problem.SourceRelativePath, problem.Message));
 
     private static PluginProblems ProblemsOf(
-        PluginAddress plugin, GameRelease release, IReadOnlyList<SourceFileFailure>? laterReadFailure, List<SourceProblem> stoppedAt,
-        List<MissingReferenceOnFile> rows, IReadOnlyDictionary<string, string> unreadable, string? headerPlacementFailure) =>
-        FailureOf(laterReadFailure, rows, headerPlacementFailure) is var (failure, kind) && failure is not null
-            ? new(plugin, stoppedAt, failure, kind)
-            : new(plugin, [.. stoppedAt, .. rows.Select(row => Problem(row, release, unreadable))]);
+        PluginAddress plugin, GameRelease release, IReadOnlyList<SourceFileFailure>? laterReadFailure, string? heldFailure, List<SourceProblem> stoppedAt,
+        List<MissingReferenceOnFile> rows, IReadOnlyDictionary<string, string> unreadable, string? headerPlacementFailure)
+    {
+        if (FailureOf(laterReadFailure, rows, headerPlacementFailure) is var (failure, kind) && failure is not null)
+            return new(plugin, stoppedAt, failure, kind);
+        var problems = new PluginProblems(plugin, [.. stoppedAt, .. rows.Select(row => Problem(row, release, unreadable))]);
+        return heldFailure is null ? problems : problems with { Failure = heldFailure, FailureKind = ProblemsFailureKind.LaterRead };
+    }
 
     private sealed record HeaderProblems(IReadOnlyList<SourceProblem> Problems, string? PlacementFailure);
 
