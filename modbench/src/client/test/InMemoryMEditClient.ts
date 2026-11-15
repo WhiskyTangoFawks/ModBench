@@ -234,7 +234,7 @@ export class InMemoryMEditClient implements MEditClient {
   onExit(listener: () => void): () => void { return this.sender.onExit(listener); }
   stop(): Promise<void> { return this.sender.stop(); }
 
-  onDidChange(listener: (change: RecordIndexChange) => void): () => void { return this.changes.onDidChange(listener); }
+  onDidChange(listener: (change: RecordIndexChange) => void): { dispose(): void } { return this.changes.onDidChange(listener); }
   get recordIndexMayBeLate(): boolean { return this.sender.pending(); }
 
   get loadOrderStatus(): LoadOrderStatus | undefined { return this.loadOrderStatusKept.current(); }

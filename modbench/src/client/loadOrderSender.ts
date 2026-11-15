@@ -18,6 +18,8 @@ export interface LoadOrderSender {
   send(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome>;
   signalChange(paths: readonly string[]): void;
   latest(): Promise<LoadOrderOutcome | undefined>;
+  /** Resolves once the newest snapshot handed has been answered, or dropped, ahead of the sweep that follows it. */
+  applied(): Promise<void>;
   handed(): number;
   /** Whether a snapshot or a change signal is waiting, in flight or owed. */
   pending(): boolean;
@@ -42,6 +44,7 @@ interface OwedSignal {
 interface Waiting {
   snapshot: LoadOrderSnapshot;
   settle: (outcome: LoadOrderOutcome) => void;
+  applied: () => void;
 }
 
 // Swallowing the throw here is what keeps one bad send from wedging every send after it; the
@@ -60,6 +63,7 @@ function createSendSlot(wire: LoadOrderWire) {
   let inFlight: AbortController | undefined;
   let unanswered = false;
   let newest: Promise<LoadOrderOutcome> | undefined;
+  let newestApplied: Promise<void> | undefined;
   let owed: OwedSignal | undefined;
   let signalTimer: ReturnType<typeof setTimeout> | undefined;
   let signalling = false;
@@ -75,6 +79,7 @@ function createSendSlot(wire: LoadOrderWire) {
     inFlight = controller;
     unanswered = true;
     const answered = (): void => {
+      next.applied();
       if (inFlight !== controller || !unanswered) return;
       unanswered = false;
       pump();
@@ -125,7 +130,11 @@ function createSendSlot(wire: LoadOrderWire) {
   return {
     hold(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome> {
       drop(ABANDONED);
-      const sent = new Promise<LoadOrderOutcome>((settle) => { waiting = { snapshot, settle }; });
+      let applied!: () => void;
+      newestApplied = new Promise<void>((resolve) => { applied = resolve; });
+      const sent = new Promise<LoadOrderOutcome>((settle) => {
+        waiting = { snapshot, settle: (outcome) => { applied(); settle(outcome); }, applied };
+      });
       newest = sent;
       pump();
       return sent;
@@ -141,6 +150,12 @@ function createSendSlot(wire: LoadOrderWire) {
     drop,
     pump,
     abortInFlight: () => { inFlight?.abort(); },
+    async applied(): Promise<void> {
+      for (let asked = newestApplied; asked !== undefined; asked = newestApplied) {
+        await asked;
+        if (asked === newestApplied) return;
+      }
+    },
     async latest(): Promise<LoadOrderOutcome | undefined> {
       for (let asked = newest; asked !== undefined; asked = newest) {
         const outcome = await asked;
@@ -228,6 +243,7 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     send: hand,
     signalChange: (paths) => { if (!launcher.stopped()) slot.oweSignal(paths); },
     latest: () => slot.latest(),
+    applied: () => slot.applied(),
     handed: () => handedCount,
     pending: () => slot.pending(),
     onResent: resent.add,

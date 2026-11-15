@@ -2,7 +2,7 @@ import { isMEditGone, type MEditClient, type RecordIndexChange } from './MEditCl
 import type { LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 
 export interface RecordIndexChanges {
-  onDidChange(listener: (change: RecordIndexChange) => void): () => void;
+  onDidChange(listener: (change: RecordIndexChange) => void): { dispose(): void };
 }
 
 /** The one change event: the plugins and keys the stream names, and everything when a load order
@@ -31,7 +31,7 @@ export function keepRecordIndexChanges(
   return {
     onDidChange: (listener) => {
       listeners.add(listener);
-      return () => { listeners.delete(listener); };
+      return { dispose: () => { listeners.delete(listener); } };
     },
   };
 }

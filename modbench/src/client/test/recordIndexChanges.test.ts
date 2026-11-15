@@ -75,12 +75,12 @@ describe('the client\'s one change event', () => {
     expect(changes).toEqual([]);
   });
 
-  it('stops telling a listener that unsubscribed', () => {
+  it('stops telling a listener that was disposed', () => {
     const client = new InMemoryMEditClient();
     const changes: RecordIndexChange[] = [];
-    const unsubscribe = client.onDidChange((change) => changes.push(change));
+    const subscription = client.onDidChange((change) => changes.push(change));
 
-    unsubscribe();
+    subscription.dispose();
     client.emit(rows);
 
     expect(changes).toEqual([]);

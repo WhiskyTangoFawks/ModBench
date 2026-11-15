@@ -1093,13 +1093,14 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     expect(requests).toHaveLength(1);
   });
 
-  it.each(readsOverUnsaved)('reads %s only once the load order sent before it has settled', async (_name, reading, route) => {
-    const { response, push } = pushableStreamResponse();
+  it.each(readsOverUnsaved)('reads %s once mEdit has answered the load order sent before it, not once its sweep has finished', async (_name, reading, route) => {
+    let answerPut!: () => void;
+    const putAnswered = new Promise<void>((resolve) => { answerPut = resolve; });
     let putLoadOrder = false;
     const requests: string[] = [];
     const fetch = routedFetch([
-      ['/notifications/stream', () => Promise.resolve(response)],
-      ['/load-order', () => { putLoadOrder = true; return Promise.resolve(jsonResponse(200, { applied: true, version: 1 })); }],
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/load-order', () => { putLoadOrder = true; return putAnswered.then(() => jsonResponse(200, { applied: true, version: 1 })); }],
       [route, (req) => { requests.push(new URL(req.url).pathname); return Promise.resolve(jsonResponse(200, {})); }],
     ]);
     const client = makeClient(fetch);
@@ -1111,7 +1112,7 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(requests).toEqual([]);
 
-    push(readyTickThatSettlesPutLoadOrder());
+    answerPut();
     await asking;
     expect(requests).toHaveLength(1);
   });
@@ -1137,4 +1138,87 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     expect(await client.getEditChanges(record.formKey, plugin, envelope)).toEqual({ applied: false, refusal: 'Unknown', message: 'mEdit could not be reached.' });
   });
 
+});
+
+describe('HttpMEditClient — a read whose token is cancelled', () => {
+  function token() {
+    let cancel = () => {};
+    const listeners: (() => unknown)[] = [];
+    const disposed = vi.fn();
+    cancel = () => { for (const listener of listeners) listener(); };
+    return {
+      token: {
+        isCancellationRequested: false,
+        onCancellationRequested: (listener: () => unknown) => { listeners.push(listener); return { dispose: disposed }; },
+      },
+      cancel: () => { cancel(); },
+      disposed,
+    };
+  }
+
+  const cancelled = { failed: 'local', cause: 'The read was cancelled.' };
+
+  it('is never sent when it is cancelled while it is held', async () => {
+    let answerHandOver!: () => void;
+    const handedOver = new Promise<void>((resolve) => { answerHandOver = resolve; });
+    const requests: string[] = [];
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/unsaved-documents', () => handedOver.then(() => new Response(null, { status: 204 }))],
+      ['/plugins', (req) => { requests.push(req.url); return Promise.resolve(jsonResponse(200, [])); }],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+    client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]);
+    const { token: held, cancel } = token();
+
+    const asking = client.getPlugins(held);
+    cancel();
+    expect(await asking).toEqual(cancelled);
+
+    answerHandOver();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(requests).toEqual([]);
+  });
+
+  it('is aborted when it is cancelled in flight, and logs no failure', async () => {
+    let aborted = false;
+    let sent = false;
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/unsaved-documents', noContent],
+      ['/plugins', (req) => new Promise<Response>((_resolve, reject) => {
+        sent = true;
+        req.signal.addEventListener('abort', () => { aborted = true; reject(new Error('aborted')); });
+      })],
+    ]);
+    const log = fakeLogChannel();
+    const client = makeClient(fetch, { log });
+    await client.start();
+    const { token: flying, cancel, disposed } = token();
+
+    const asking = client.getPlugins(flying);
+    await vi.waitFor(() => expect(sent).toBe(true));
+    cancel();
+
+    expect(await asking).toEqual(cancelled);
+    expect(aborted).toBe(true);
+    expect(log.error).not.toHaveBeenCalled();
+    expect(disposed).toHaveBeenCalled();
+  });
+
+  it('is not sent when it is cancelled already', async () => {
+    const requests: string[] = [];
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/plugins', (req) => { requests.push(req.url); return Promise.resolve(jsonResponse(200, [])); }],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+
+    const answer = await client.getPlugins({ isCancellationRequested: true, onCancellationRequested: () => ({ dispose: () => undefined }) });
+
+    expect(answer).toEqual(cancelled);
+    expect(requests).toEqual([]);
+  });
 });

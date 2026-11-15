@@ -24,6 +24,12 @@ import type { ItemRefusal } from '../ports/selectionOutcome';
  *  this port. */
 export type { RecordEditEnvelope } from '../wire/messages';
 
+/** What a read watches to stop early: VS Code's own `CancellationToken` fits it as is. */
+export interface ReadCancellation {
+  readonly isCancellationRequested: boolean;
+  onCancellationRequested(listener: () => unknown): { dispose(): void };
+}
+
 /** A plugin whose records changed, with the record keys where mEdit gave them. */
 export interface RecordsChanged { readonly plugin: PluginAddress; readonly keys?: readonly string[] }
 
@@ -310,94 +316,94 @@ export interface MEditClient {
 
   // Queries — the read verbs, by their current names, plus the filter facet (set filter, clear
   // filter, active filter). A read answers its value, or a ReadFailed (ADR-0019).
-  getPlugins(): Promise<PluginMetadata[] | ReadFailed>;
-  getDiagnoses(): Promise<PluginDiagnosisReport[] | ReadFailed>;
-  getPluginIndexing(plugin: PluginAddress): Promise<PluginIndexedState | ReadFailed>;
+  getPlugins(token?: ReadCancellation): Promise<PluginMetadata[] | ReadFailed>;
+  getDiagnoses(token?: ReadCancellation): Promise<PluginDiagnosisReport[] | ReadFailed>;
+  getPluginIndexing(plugin: PluginAddress, token?: ReadCancellation): Promise<PluginIndexedState | ReadFailed>;
   // Fails while mEdit has not finished indexing: a plugin it has not reached would read as clean.
-  getPluginProblems(plugin?: PluginAddress): Promise<PluginProblems[] | ReadFailed>;
+  getPluginProblems(plugin?: PluginAddress, token?: ReadCancellation): Promise<PluginProblems[] | ReadFailed>;
   /** The file paths each compiled plugin's source names, or only `plugin`'s. */
-  getPluginFilePaths(plugin?: PluginAddress): Promise<PluginFilePaths[] | ReadFailed>;
-  getRecordTypes(plugin: PluginAddress): Promise<PluginRecordTypeCount[] | ReadFailed>;
-  getWorkingTreeStatesBeneath(plugin: PluginAddress): Promise<WorkingTreeStatesBeneath | ReadFailed>;
+  getPluginFilePaths(plugin?: PluginAddress, token?: ReadCancellation): Promise<PluginFilePaths[] | ReadFailed>;
+  getRecordTypes(plugin: PluginAddress, token?: ReadCancellation): Promise<PluginRecordTypeCount[] | ReadFailed>;
+  getWorkingTreeStatesBeneath(plugin: PluginAddress, token?: ReadCancellation): Promise<WorkingTreeStatesBeneath | ReadFailed>;
   // The game's, not a plugin's: every plugin of the load order shares it.
-  getCreatableRecordTypes(): Promise<RecordTypeChoice[] | ReadFailed>;
+  getCreatableRecordTypes(token?: ReadCancellation): Promise<RecordTypeChoice[] | ReadFailed>;
   /** The types the plugin's copy of a container record can hold, in name order. */
-  getChildRecordTypes(plugin: PluginAddress, formKey: string): Promise<RecordTypeChoice[] | ReadFailed>;
-  getCreatablePluginExtensions(): Promise<string[] | ReadFailed>;
+  getChildRecordTypes(plugin: PluginAddress, formKey: string, token?: ReadCancellation): Promise<RecordTypeChoice[] | ReadFailed>;
+  getCreatablePluginExtensions(token?: ReadCancellation): Promise<string[] | ReadFailed>;
   /** The header flag combinations a new plugin of the file name's extension may take. */
-  getCreatablePluginFlags(name: string): Promise<string[][] | ReadFailed>;
+  getCreatablePluginFlags(name: string, token?: ReadCancellation): Promise<string[][] | ReadFailed>;
   /** What each archive holds, by its absolute path; the release says which game's format a BSA is read as. */
-  getArchiveContents(gameRelease: string, archives: readonly string[]): Promise<ArchiveContents[] | ReadFailed>;
+  getArchiveContents(gameRelease: string, archives: readonly string[], token?: ReadCancellation): Promise<ArchiveContents[] | ReadFailed>;
   /** The bytes of one file in an archive, by its path there. */
-  getArchiveFile(gameRelease: string, archive: string, file: string): Promise<Uint8Array | ReadFailed>;
+  getArchiveFile(gameRelease: string, archive: string, file: string, token?: ReadCancellation): Promise<Uint8Array | ReadFailed>;
   /** Each of `files` the archive holds, by its path there, with its hash when `hashed`; one the archive does not hold is left out. */
-  getArchiveCopies(gameRelease: string, archive: string, files: readonly string[], hashed: boolean): Promise<ArchivedCopy[] | ReadFailed>;
+  getArchiveCopies(gameRelease: string, archive: string, files: readonly string[], hashed: boolean, token?: ReadCancellation): Promise<ArchivedCopy[] | ReadFailed>;
   /** Each plugin file's hashes with its flags at each combination of their original values, as a manifest carries them; writes nothing. */
-  getFlaggedPluginHashes(gameRelease: string, files: readonly FlaggedPluginFile[]): Promise<FlaggedPluginHashes[] | ReadFailed>;
-  getRecords(plugin: PluginAddress, type: string, offset: number, limit: number): Promise<RecordPage | ReadFailed>;
+  getFlaggedPluginHashes(gameRelease: string, files: readonly FlaggedPluginFile[], token?: ReadCancellation): Promise<FlaggedPluginHashes[] | ReadFailed>;
+  getRecords(plugin: PluginAddress, type: string, offset: number, limit: number, token?: ReadCancellation): Promise<RecordPage | ReadFailed>;
   /** Every active plugin's copies, or one plugin's: at most `atMost`, 20 unless told, and how many match. */
-  searchRecords(query: string, validTypes: string[], plugin?: PluginAddress, atMost?: number): Promise<RecordPage | ReadFailed>;
-  getRecordOwners(formKey: string): Promise<PluginAddress[] | ReadFailed>;
+  searchRecords(query: string, validTypes: string[], plugin?: PluginAddress, atMost?: number, token?: ReadCancellation): Promise<RecordPage | ReadFailed>;
+  getRecordOwners(formKey: string, token?: ReadCancellation): Promise<PluginAddress[] | ReadFailed>;
   /** Every plugin that holds a copy of the record, its own included. */
-  getRecordHolders(formKey: string): Promise<PluginAddress[] | ReadFailed>;
+  getRecordHolders(formKey: string, token?: ReadCancellation): Promise<PluginAddress[] | ReadFailed>;
   /** One record as every active plugin has it, untransformed (target-architecture.d2 `modbench_driving.editor`).
    *  Null: no active plugin holds it and no `text` gives it. With `text`, that plugin's column reads
    *  from it, outside the conflict states if inactive. */
-  getComparison(formKey: string, text?: CopyText): Promise<CompareResult | null | ReadFailed>;
+  getComparison(formKey: string, text?: CopyText, token?: ReadCancellation): Promise<CompareResult | null | ReadFailed>;
   /** Several records side by side: one column per copy, in order, with no conflict state; `documentText`
    *  spells a copy in place of its plugin's. With no `compare`, `missing` names each copy no plugin gave and why. */
-  getRecordsComparison(copies: components['schemas']['RecordCopy'][]): Promise<CompareRecordsAnswer | ReadFailed>;
+  getRecordsComparison(copies: components['schemas']['RecordCopy'][], token?: ReadCancellation): Promise<CompareRecordsAnswer | ReadFailed>;
   /** What each name means, in order, or why one cannot be: mEdit's refusal names every name it could not resolve, with each
    *  match of an ambiguous one. A name with an origin names a plugin. */
-  resolveNames(names: readonly NameQuery[]): Promise<NamedObject[] | ReadFailed>;
+  resolveNames(names: readonly NameQuery[], token?: ReadCancellation): Promise<NamedObject[] | ReadFailed>;
   /** The rows one SQL SELECT over the record index selects, read until their JSON text passes `atMostChars`. A statement
    *  that is not a SELECT, or cannot run, fails with the database's reason. */
-  selectRows(sql: string, atMostChars: number): Promise<RowsRead | ReadFailed>;
+  selectRows(sql: string, atMostChars: number, token?: ReadCancellation): Promise<RowsRead | ReadFailed>;
   /** The referrers of the active plugins and of the inactive compiled ones. */
-  getReferencesInActiveOrCompiledPlugins(formKey: string): Promise<ReferenceResult[] | ReadFailed>;
+  getReferencesInActiveOrCompiledPlugins(formKey: string, token?: ReadCancellation): Promise<ReferenceResult[] | ReadFailed>;
   /** Each copy, in the active plugins and the compiled ones, that references the record, with its document and each range
    *  that names it, over the unsaved documents mEdit holds; refused until the record index has read every plugin. */
-  getPlacedReferences(formKey: string): Promise<PlacedReferences | ReadFailed>;
+  getPlacedReferences(formKey: string, token?: ReadCancellation): Promise<PlacedReferences | ReadFailed>;
   /** Each copy whose text names the plugin file `name`, and the Plugin Header of each plugin with no plugin source that lists it as a master. */
-  getPluginNameReferences(name: string): Promise<components['schemas']['CopyNaming'][] | ReadFailed>;
-  getScriptReferences(name: string): Promise<components['schemas']['MemberReferences'] | ReadFailed>;
+  getPluginNameReferences(name: string, token?: ReadCancellation): Promise<components['schemas']['CopyNaming'][] | ReadFailed>;
+  getScriptReferences(name: string, token?: ReadCancellation): Promise<components['schemas']['MemberReferences'] | ReadFailed>;
   /** Each copy that names the file at `path` in the Data folder. */
-  getFileReferences(path: string): Promise<components['schemas']['MemberReferences'] | ReadFailed>;
+  getFileReferences(path: string, token?: ReadCancellation): Promise<components['schemas']['MemberReferences'] | ReadFailed>;
   /** The names a document's `text` holds, and where each sits; with `at`, those at that offset. With the `path` of its
    *  file, none when no plugin's source holds the file. */
-  getPluginSourceNames(text: string, path?: string, at?: number): Promise<DocumentName[] | ReadFailed>;
+  getPluginSourceNames(text: string, path?: string, at?: number, token?: ReadCancellation): Promise<DocumentName[] | ReadFailed>;
   /** The text of each plugin source document renaming the Papyrus script `name` changes, over the unsaved documents
    *  mEdit holds, the plugins whose source changes, and each reference left behind. */
-  getScriptRenameSourceChanges(name: string, newName: string): Promise<components['schemas']['ScriptRenameSourceChanges'] | ReadFailed>;
+  getScriptRenameSourceChanges(name: string, newName: string, token?: ReadCancellation): Promise<components['schemas']['ScriptRenameSourceChanges'] | ReadFailed>;
   /** Null: the plugin holds no such record. */
-  getRenderedDocument(plugin: PluginAddress, formKey: string): Promise<RenderedDocument | null | ReadFailed>;
+  getRenderedDocument(plugin: PluginAddress, formKey: string, token?: ReadCancellation): Promise<RenderedDocument | null | ReadFailed>;
   /** Null: the plugin holds no such record. `location` is the path of the copy's own file, of the file of the
    *  record carrying it, or the name of its rendered document, as `kind` says. */
-  getCopyDocument(plugin: PluginAddress, formKey: string): Promise<CopyDocument | null | ReadFailed>;
+  getCopyDocument(plugin: PluginAddress, formKey: string, token?: ReadCancellation): Promise<CopyDocument | null | ReadFailed>;
   /** The record whose own document the file at the absolute `path` is; null when mEdit answers the file holds
    *  no record. Fails with mEdit's reason when it cannot read the file. */
-  getRecordOfFile(path: string): Promise<RecordAt | null | ReadFailed>;
+  getRecordOfFile(path: string, token?: ReadCancellation): Promise<RecordAt | null | ReadFailed>;
   /** Over the unsaved documents mEdit holds. mEdit writes nothing. */
   getEditChanges(
     formKey: string, plugin: PluginAddress, envelope: RecordEditEnvelope,
   ): Promise<RecordEditChangesOutcome>;
-  getWorldspaces(plugin: PluginAddress): Promise<WorldspaceSummary[] | ReadFailed>;
-  getWorldspaceBlocks(plugin: PluginAddress, worldspaceFormKey: string): Promise<WorldspaceBlocks | ReadFailed>;
-  getCellChildRecords(plugin: PluginAddress, cellFormKey: string): Promise<CellChildRecords | ReadFailed>;
-  getInteriorCells(plugin: PluginAddress): Promise<InteriorCellBlock[] | ReadFailed>;
-  getContainerChildren(plugin: PluginAddress, parentFormKey: string): Promise<ContainerChildSummary[] | ReadFailed>;
+  getWorldspaces(plugin: PluginAddress, token?: ReadCancellation): Promise<WorldspaceSummary[] | ReadFailed>;
+  getWorldspaceBlocks(plugin: PluginAddress, worldspaceFormKey: string, token?: ReadCancellation): Promise<WorldspaceBlocks | ReadFailed>;
+  getCellChildRecords(plugin: PluginAddress, cellFormKey: string, token?: ReadCancellation): Promise<CellChildRecords | ReadFailed>;
+  getInteriorCells(plugin: PluginAddress, token?: ReadCancellation): Promise<InteriorCellBlock[] | ReadFailed>;
+  getContainerChildren(plugin: PluginAddress, parentFormKey: string, token?: ReadCancellation): Promise<ContainerChildSummary[] | ReadFailed>;
   /** Null when mEdit took the filter, or the reason it did not. */
   setFilter(filter: RecordFilter): Promise<string | null>;
   /** Null when mEdit dropped the filter, or the reason it did not. */
   clearFilter(): Promise<string | null>;
-  getActiveFilter(): Promise<RecordFilter | null | ReadFailed>;
+  getActiveFilter(token?: ReadCancellation): Promise<RecordFilter | null | ReadFailed>;
 
   /** A listener handed its kind's payload. A frame missing its kind's payload
    *  reaches no listener. */
   onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void;
 
-  /** The one change event: what changed in the record index, as names or as everything. A status alone is no change. */
-  onDidChange(listener: (change: RecordIndexChange) => void): () => void;
+  /** The one change event, shaped as VS Code's `Event`: what changed in the record index, as names or as everything. A status alone is no change. */
+  onDidChange(listener: (change: RecordIndexChange) => void): { dispose(): void };
 
   /** Whether the record index may not yet hold what Modbench handed it: a snapshot, a change signal or the
    *  unsaved documents is unanswered. */
