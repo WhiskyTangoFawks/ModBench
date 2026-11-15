@@ -3,7 +3,7 @@ import { fileProblemsFake } from '../../../test/fileProblemsFake';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { MoveToTrash } from '../../../ports/trash';
 import type { NexusFileInfo } from '../../../ports/nexusFileInfo';
-import { ignoreSkippedLink } from '../../files';
+import { ignoreSkippedLink, trustingKept } from '../../files';
 import { ignoreLink } from '../../gameFolder/ownEntries';
 import {
   access, chmod, link, mkdir, mkdtemp, readdir, readFile, realpath, rename as fsRename, rm, stat, symlink, utimes, writeFile,
@@ -401,6 +401,19 @@ describe('the MO2 Instance adapter', () => {
           await runningOf(() => Promise.resolve(false)),
           await runningOf(() => Promise.reject(new Error('tasklist exited with code 1'))),
         ]).toEqual([{ kind: 'notRunning' }, { kind: 'unknown', reason: 'tasklist exited with code 1' }]);
+      });
+
+      it('asks the platform whether MO2 is running on each call, even inside a read that trusts what is kept', async () => {
+        let running = false;
+        const adapter = adapterOver(root, { mo2Running: () => Promise.resolve(running) });
+
+        const asked = await trustingKept(async () => {
+          const before = await adapter.managerRunning();
+          running = true;
+          return [before, await adapter.managerRunning()];
+        });
+
+        expect(asked).toEqual([{ kind: 'notRunning' }, { kind: 'running' }]);
       });
 
       it('asks again where the game is when the game path the settings hold or the Data folder changes, and whether MO2 is running only at a check of the disk', async () => {

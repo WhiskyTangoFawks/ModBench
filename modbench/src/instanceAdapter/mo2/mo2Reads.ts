@@ -145,6 +145,11 @@ const creationClubListOf = (context: Mo2Context, deployedPath: DeployedPath): Re
     return list === undefined ? [] : readCreationClubList(list);
   };
 
+export const askedRunning = (mo2Running: () => Promise<boolean>): Promise<ManagerRunning> => mo2Running().then(
+  (isRunning): ManagerRunning => ({ kind: isRunning ? 'running' : 'notRunning' }),
+  (err: unknown): ManagerRunning => ({ kind: 'unknown', reason: errorMessage(err) }),
+);
+
 export function readingSource(context: Mo2Context, publisherFile: ConfigurationFile | undefined, deployedPath: DeployedPath): ReadingSource {
   const { instanceRoot, resolveGameFolder, resolveDownloadsFolder, watch, mo2Running } = context;
   const originFilesOf = originFilesReader(context);
@@ -154,10 +159,7 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
     (folder) => { const data = dataFolderOf(folder); return data === undefined ? undefined : data + sep; },
   );
   // No path holds this answer, so only a check of the disk forgets it.
-  const running = keptUntilNamed((): Promise<ManagerRunning> => mo2Running().then(
-    (isRunning): ManagerRunning => ({ kind: isRunning ? 'running' : 'notRunning' }),
-    (err: unknown): ManagerRunning => ({ kind: 'unknown', reason: errorMessage(err) }),
-  ));
+  const running = keptUntilNamed(() => askedRunning(mo2Running));
   return {
     names: MO2_NAMES,
     modLineKey,
