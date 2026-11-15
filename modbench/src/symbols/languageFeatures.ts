@@ -32,7 +32,7 @@ class ListedSymbol extends vscode.SymbolInformation {
 /** VS Code's language features, each an entry point that asks the symbol under the place, of whatever kind, for its
  *  answer (symbols.md, The features). */
 export function registerLanguageFeatures({ kinds, reporter, reveal, rename }: LanguageFeaturesDeps): vscode.Disposable {
-  const at = (document: vscode.TextDocument, position: vscode.Position) => askedAt(kinds, document, document.offsetAt(position));
+  const at = (document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken) => askedAt(kinds, document, document.offsetAt(position), token);
   const workspaceSymbols: vscode.WorkspaceSymbolProvider<ListedSymbol> = {
     async provideWorkspaceSymbols(query, token) {
       const search = { gesture: 'Go to Symbol in Workspace', cancelled: () => token.isCancellationRequested };
@@ -46,9 +46,9 @@ export function registerLanguageFeatures({ kinds, reporter, reveal, rename }: La
   };
   return vscode.Disposable.from(
     vscode.languages.registerHoverProvider(ownedFiles, {
-      async provideHover(document, position) {
-        const asked = await at(document, position);
-        return asked && new vscode.Hover(new vscode.MarkdownString((await asked.hover()).join('\n\n')), rangeIn(document, asked));
+      async provideHover(document, position, token) {
+        const asked = await at(document, position, token);
+        return asked && new vscode.Hover(new vscode.MarkdownString((await asked.hover(token)).join('\n\n')), rangeIn(document, asked));
       },
     }),
     vscode.languages.registerCompletionItemProvider(ownedFiles, {
@@ -72,10 +72,10 @@ export function registerLanguageFeatures({ kinds, reporter, reveal, rename }: La
       },
     }),
     vscode.languages.registerDefinitionProvider(ownedFiles, {
-      async provideDefinition(document, position) {
-        const asked = await at(document, position);
+      async provideDefinition(document, position, token) {
+        const asked = await at(document, position, token);
         if (asked === undefined) return undefined;
-        const definition = await asked.definition();
+        const definition = await asked.definition(token);
         if ('none' in definition) return undefined;
         if ('refused' in definition) {
           reporter.shownOnSurface('warning', `Go to Definition cannot go to ${asked.name}.`, definition.refused);
@@ -91,10 +91,10 @@ export function registerLanguageFeatures({ kinds, reporter, reveal, rename }: La
       },
     }),
     vscode.languages.registerReferenceProvider(ownedFiles, {
-      async provideReferences(document, position) {
-        const asked = await at(document, position);
+      async provideReferences(document, position, _context, token) {
+        const asked = await at(document, position, token);
         if (asked === undefined) return undefined;
-        const found = await asked.references();
+        const found = await asked.references(token);
         if ('refused' in found) {
           reporter.shownOnSurface('warning', `Find All References cannot list what names ${asked.name}.`, found.refused);
           return [];

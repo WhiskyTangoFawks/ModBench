@@ -441,7 +441,7 @@ function start(context: vscode.ExtensionContext): void {
   });
   const scriptEnvironmentFailures = toastOncePerFailure(reporterFor('scriptEnvironment'));
   const scriptsPath = vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath;
-  const asker = problemsAsker<PluginFilePaths, PluginProblems, NonNullable<MEditClient['loadOrderStatus']>>(meditClient);
+  const asker = problemsAsker<PluginFilePaths, PluginProblems>(meditClient);
   const sourceLanguage = createSourceLanguage({
     client: meditClient, ask: asker, instance: views.instance, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
     pathStanding: views.pathStanding,

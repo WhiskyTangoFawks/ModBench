@@ -19,7 +19,7 @@ export type ProblemsByFile = ReadonlyMap<string, ProblemOnFile[]>;
 
 export interface SourceProblemsDeps {
   client: Pick<MEditClient, 'loadOrderStatus' | 'onUnsavedHandOver'>;
-  ask: Pick<Asked, 'getPluginProblems' | 'onPluginChanged' | 'onLoadOrderSettled' | 'onAskedAgain'>;
+  ask: Pick<Asked, 'getPluginProblems' | 'onPluginChanged' | 'onAskedAgain'>;
   sourceFiles: SourceFilesOf;
   reporter: Pick<Reporter, 'shownOnSurface'>;
   /** Replaces every problem published before. */
@@ -173,7 +173,6 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
     askWanted();
   };
   const unsubscribe = [
-    deps.ask.onLoadOrderSettled((status) => { if (status.conflictsComputed) { wholeWanted = true; askWanted(); } }),
     deps.ask.onPluginChanged(askingOnChange(() => { wholeWanted = true; askWanted(); }, askPluginWhenReady)),
     deps.ask.onAskedAgain('getPluginProblems', askedAgain(() => { wholeWanted = true; askWanted(); }, askPluginWhenReady)),
     client.onUnsavedHandOver(handedOver),

@@ -15,7 +15,7 @@ import { registerGridKeyCommands } from './gridKeyCommands';
 import {
   registerRecordLifecycleCommands, registerRecordCopyCommands, type ViewSelections,
 } from './recordLifecycleCommands';
-import { announceConflictsComputed, subscribeRecordTabsToNotifications } from './notificationWiring';
+import { subscribeRecordTabsToNotifications } from './notificationWiring';
 import { recordWriteOver } from '../drivingLib/recordWrite';
 import type { Instance } from '../instanceLoader/instance';
 import type { SourceEditing } from '../textDocuments/sourceEditing';
@@ -41,7 +41,7 @@ export interface EditorCommandDeps {
     | 'getEditChanges' | 'searchRecords'
     | 'getDeleteChanges' | 'getCopyChanges'
     | 'getPlugins' | 'getRecordHolders'
-    | 'getComparison' | 'getRecordsComparison' | 'onDidChange' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'onLoadOrderSettled' | 'getRecordOwners'
+    | 'getComparison' | 'getRecordsComparison' | 'onDidChange' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'getRecordOwners'
     | 'latestLoadOrder' | 'getCopyDocument' | 'getRecordOfFile' | 'getRenderedDocument'>;
   // The rows selected in the view the user last selected in, which a palette entry acts on.
   focusedViewSelection: () => readonly unknown[];
@@ -97,9 +97,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     new RenderedDocuments(meditClient),
     childRecordDocuments,
     holdOneTextPerFile(outputChannel),
-    { dispose: meditClient.onLoadOrderSettled(() => { announceConflictsComputed(tabs); }) },
     vscode.window.registerCustomEditorProvider(RECORD_VIEW_TYPE, recordEditorProvider, editorOptions),
-    meditClient.onDidChange((change) => { if (change === undefined) recordEditorProvider.readAgain(); }),
     { dispose: meditClient.onLoadOrderStatus((status) => { if (status?.refusal !== undefined) recordEditorProvider.readAgain(); }) },
     deps.loadOrderComing.onChanged(() => { recordEditorProvider.readAgain(); }),
     followCopiesIntoDocuments(meditClient, childRecordDocuments, recordEditorProvider),

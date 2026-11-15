@@ -222,7 +222,7 @@ describe('referenced by on a file (commands.md, `referenced by` under Symbol)', 
 
     await files.referencedBy({ kind: 'file', path: FILE });
 
-    expect(files.getFileReferences.mock.calls).toEqual([[FILE]]);
+    expect(files.getFileReferences.mock.calls).toEqual([[FILE, undefined]]);
     expect(setInput).toHaveBeenCalledWith(expect.objectContaining({
       title: `Referenced By: ${FILE}`, contextValue: 'modbench.fileReferencedBy',
       location: { uri: Uri.file(SOURCE), range: { start: { line: 0, character: NAMED }, end: { line: 0, character: NAMED + 'Decals\\\\Stain_d.dds'.length } } },
