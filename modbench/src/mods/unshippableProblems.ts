@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { modbenchDiagnostic } from '../drivingLib/modbenchDiagnostic';
-import type { InstanceView } from '../instanceLoader/instance';
+import type { InstanceOf } from '../instanceLoader/instance';
 import type { ModStatus } from '../manifestAdapter/manifestAdapter';
 import type { ModStatuses } from '../modStatus/modStatuses';
 
@@ -32,6 +32,8 @@ interface Judged {
   readonly message: string | undefined;
 }
 
+const UNSHIPPABLE_READ = { publisherConfiguration: true, modFolders: true } as const;
+
 const sameFiles = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((path, at) => path === b[at]);
 
 /** The Problems panel's view of the files a publisher has no way to ship (publishing.md, What ships, story 2): a warning
@@ -42,10 +44,10 @@ export class UnshippableProblems {
 
   constructor(
     private readonly collection: vscode.DiagnosticCollection,
-    private readonly instance: Pick<InstanceView, 'value' | 'subscribe'>,
+    private readonly instance: Pick<InstanceOf<keyof typeof UNSHIPPABLE_READ>, 'value' | 'subscribe'>,
     private readonly statuses: Pick<ModStatuses, 'current' | 'heldByPackage' | 'onDidChange'>,
   ) {
-    this.following = [instance.subscribe(() => { void this.show(); }), statuses.onDidChange(() => { void this.show(); })];
+    this.following = [instance.subscribe(() => { void this.show(); }, UNSHIPPABLE_READ), statuses.onDidChange(() => { void this.show(); })];
     void this.show();
   }
 

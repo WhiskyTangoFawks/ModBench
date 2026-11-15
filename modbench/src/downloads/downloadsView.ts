@@ -75,7 +75,7 @@ export function createDownloadsView(
   showKeyContext();
   // Disposed in order: what reads the tree and the view goes before them.
   const disposable = vscode.Disposable.from(
-    logOncePerFailure(instance, downloadsFolderUnresolvedLine, logUnresolved),
+    logOncePerFailure(instance, { downloadedFiles: true }, downloadsFolderUnresolvedLine, logUnresolved),
     vscode.window.registerFileDecorationProvider(excludedDecorations),
     provider.onDidChangeTreeData(() => excludedDecorations.refresh()),
     provider.onDidChangeTreeData(updateAllExcludedContext),

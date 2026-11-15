@@ -1,8 +1,12 @@
 import type { InstanceValue } from '../instanceLoader/instance';
 import { outsideGameFolder } from '../instanceLoader/outsideGameFolder';
 
+const NOTICE_READ = { gameFolder: true, gameFolderInWorkspace: true } as const;
+
 interface WorkspaceNoticeDeps {
-  instance: { readonly value: Pick<InstanceValue, 'gameFolder' | 'gameFolderInWorkspace'>; subscribe: (listener: () => void) => { dispose: () => unknown } };
+  instance: {
+    readonly value: Pick<InstanceValue, keyof typeof NOTICE_READ>; subscribe: (listener: () => void, concerns: typeof NOTICE_READ) => { dispose: () => unknown };
+  };
   /** Undefined clears the status. */
   languageStatus: (text: string | undefined) => void;
 }
@@ -14,7 +18,7 @@ export function feedWorkspaceNotice({ instance, languageStatus }: WorkspaceNotic
     const outside = outsideGameFolder(instance.value);
     languageStatus(outside && `Paths are checked only against the instance, and scripts are not checked: the game also gets files from ${outside.root}, outside the workspace.`);
   };
-  const subscription = instance.subscribe(say);
+  const subscription = instance.subscribe(say, NOTICE_READ);
   say();
   return () => { subscription.dispose(); };
 }

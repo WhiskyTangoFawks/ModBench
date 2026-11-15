@@ -1,5 +1,5 @@
 import type { Subscription } from '../instanceAdapter/instanceAdapter';
-import type { Instance } from './instance';
+import type { Instance, InstanceOf } from './instance';
 import { pluginStanding, type PluginStanding } from './pluginStanding';
 import { modOfOrigin } from './modOfOrigin';
 import type { PluginAddress } from '../wire/pluginAddress';
@@ -15,13 +15,15 @@ export interface InstanceFacts {
   redraw: () => void;
 }
 
-export const factsOf = (instance: Instance): InstanceFacts => ({
+const FACTS_READ = { listedSourceMods: true, sourceMods: true, mods: true, paths: true, plugins: true, pluginsLoadedWithNoLine: true } as const;
+
+export const factsOf = (instance: InstanceOf<keyof typeof FACTS_READ | 'entryKey'> & Pick<Instance, 'refresh' | 'redraw'>): InstanceFacts => ({
   listedSourceMods: () => instance.value.listedSourceMods,
   sourceMods: () => instance.value.sourceMods,
   modOfOrigin: (origin) => modOfOrigin(instance.value, origin)?.name,
   sourceDirs: () => instance.value.paths.sourceDirs,
   standingOf: (plugin) => pluginStanding(instance.value, plugin),
-  onChange: (listener) => instance.subscribe(() => { listener(); }),
+  onChange: (listener) => instance.subscribe(() => { listener(); }, FACTS_READ),
   refresh: () => instance.refresh(),
   redraw: () => { instance.redraw(); },
 });

@@ -61,7 +61,11 @@ class CarriersRead implements Carriers {
   }
 }
 
-function carriersOf(value: InstanceValue): Carriers {
+const CARRIERS_READ = {
+  publisherConfiguration: true, mods: true, foldersByMod: true, filesByMod: true, paths: true, overwriteFiles: true, overwriteFolders: true, modGroups: true,
+} as const;
+
+function carriersOf(value: Pick<InstanceValue, keyof typeof CARRIERS_READ>): Carriers {
   const configuration = value.publisherConfiguration;
   const carriers = new CarriersRead(configuration.kind === 'read' ? configuration.covering : () => []);
   const carriedByMod = new Map<string, Set<PublisherTag>>();
@@ -87,11 +91,11 @@ function carriersOf(value: InstanceValue): Carriers {
 }
 
 /** One provider for each publisher tag the publisher declares. */
-export class PublisherTagDecorations extends OpenableRowDecorations<Carriers> {
+export class PublisherTagDecorations extends OpenableRowDecorations<Carriers, keyof typeof CARRIERS_READ> {
   readonly providers: readonly IndicatorDecorationProvider[];
 
   constructor(instance: Pick<InstanceView, 'value' | 'subscribe'>, open: OpenRows, settings: WorkspaceSettings) {
-    super(instance, open, carriersOf);
+    super(instance, open, carriersOf, CARRIERS_READ);
     const carries = (tag: PublisherTag) => (uri: vscode.Uri): boolean => {
       const key = uri.toString();
       const carried = this.carriers().rows.get(key);

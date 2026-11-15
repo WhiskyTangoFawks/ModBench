@@ -1,9 +1,11 @@
 import * as vscode from 'vscode';
 import { modbenchDiagnostic } from '../drivingLib/modbenchDiagnostic';
-import type { InstanceView } from '../instanceLoader/instance';
+import type { InstanceOf } from '../instanceLoader/instance';
 import type { ModStatuses } from '../modStatus/modStatuses';
 import { severalPackagesNote, statusProblems } from '../modStatus/statusProblems';
 import { diagnosticsByPath } from './diagnosticsByPath';
+
+const PROBLEMS_READ = { modFolders: true, plugins: true } as const;
 
 /** The Problems panel's view of Mod status: a problem for each unfinished state of a mod, while it holds. */
 export class ModProblems {
@@ -11,10 +13,10 @@ export class ModProblems {
 
   constructor(
     private readonly collection: vscode.DiagnosticCollection,
-    private readonly instance: Pick<InstanceView, 'value' | 'subscribe'>,
+    private readonly instance: Pick<InstanceOf<keyof typeof PROBLEMS_READ>, 'value' | 'subscribe'>,
     private readonly statuses: Pick<ModStatuses, 'current' | 'of' | 'onDidChange'>,
   ) {
-    this.following = [instance.subscribe(() => { void this.show(); }), statuses.onDidChange(() => { void this.show(); })];
+    this.following = [instance.subscribe(() => { void this.show(); }, PROBLEMS_READ), statuses.onDidChange(() => { void this.show(); })];
     void this.show();
   }
 

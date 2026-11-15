@@ -4,7 +4,7 @@ import type { EntryRef, FileOrigin, Mod, OriginFile, OriginFolder, Separator } f
 import { tagsHeldAt } from './tagsHeldAt';
 import { modNameOf } from '../instanceLoader/modName';
 import { fileOrderConflictOf, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
-import { instanceMessages, type InstanceValue, type InstanceView, type ModGroup, type ModGroups } from '../instanceLoader/instance';
+import { instanceMessages, MESSAGE_READS, type InstanceOf, type ModGroup, type ModGroups } from '../instanceLoader/instance';
 import { gameFolderFileOver, unreadableArchiveReason } from './modFileStates';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
@@ -33,10 +33,18 @@ function isDraggedRows(value: unknown): value is DraggedRows {
   return 'focused' in value && value.rows.some((row) => row === value.focused);
 }
 
+const TREE_READS = {
+  ...MESSAGE_READS, mods: true, modGroups: true, modNames: true, holdsRepository: true, gameName: true, dataFolderFiles: true, stackedCopies: true, plugins: true,
+  overwriteFiles: true, overwriteFolders: true, filesByMod: true, foldersByMod: true, listedSourceMods: true, paths: true, publisherConfiguration: true,
+  files: true, archiveContents: true,
+} as const;
+
+type TreeInstance = InstanceOf<keyof typeof TREE_READS>;
+
 interface ModListProviderOptions {
   /** Mods/separators in override order, per-mod conflict/override/missing status and the
    *  overwrite/ file count. */
-  instance: InstanceView;
+  instance: TreeInstance;
   /** Each mod's status against its manifest, as Mod status derives it. */
   statuses: Pick<ModStatuses, 'of' | 'onDidChange'>;
   /** The rows the view shows open. */
@@ -186,8 +194,8 @@ export class ModListProvider
   private highlighted: readonly FileOrigin[] = [];
   private positionsHeld: ReadonlyMap<string, string> | undefined;
   private marks: ReadonlySet<string> | undefined;
-  private readonly instance: InstanceView;
-  private instanceValue: InstanceValue;
+  private readonly instance: TreeInstance;
+  private instanceValue: TreeInstance['value'];
   private readonly instanceSubscription: vscode.Disposable;
   private readonly readFailureSubscription: vscode.Disposable;
   private readonly redrawSubscription: vscode.Disposable;
@@ -202,10 +210,7 @@ export class ModListProvider
     this.instance = options.instance;
     this.instanceValue = options.instance.value;
     this.firstRead = firstReadOf(options.instance);
-    this.instanceSubscription = options.instance.subscribe((value) => {
-      this.instanceValue = value;
-      this.invalidate();
-    });
+    this.instanceSubscription = options.instance.subscribe(() => { this.invalidate(); }, TREE_READS);
     this.readFailureSubscription = options.instance.onReadFailure(() => this.render());
     this.redrawSubscription = options.instance.onRedraw(() => this.render());
     this.statuses = options.statuses;

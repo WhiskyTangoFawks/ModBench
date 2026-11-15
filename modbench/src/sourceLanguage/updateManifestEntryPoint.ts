@@ -17,7 +17,7 @@ export function registerUpdateManifestEntryPoint({ instance, reporter }: UpdateM
     void vscode.commands.executeCommand('setContext', SOURCE_FOLDERS_KEY, [...paths.sourceDirs.values()].map((folder) => vscode.Uri.file(folder).fsPath));
   };
   publish(instance.value);
-  const subscription = instance.subscribe(publish);
+  const subscription = instance.subscribe(publish, { paths: true });
   const command = vscode.commands.registerCommand('modbench.source.updateManifest', async (clicked?: unknown, selected?: readonly unknown[]) => {
     const folders = new Map([...instance.value.paths.sourceDirs.values()].map((folder) => [vscode.Uri.file(folder).toString(), folder]));
     const held = new Set<string>();

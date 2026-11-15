@@ -6,6 +6,7 @@ import { isAbsolute, join, relative, sep } from 'node:path';
 import { applyEdits, parse, parseTree, printParseErrorCode, type Edit, type Node, type ParseError } from 'jsonc-parser';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
+import { lastHanded, noneLeft } from '../../ports/lastBuilt';
 import { get, listDir, putIfChanged, readOrAbsent } from '../files';
 import type { Covering, Listed, PathRefusal, PublisherConfiguration, PublisherTag, PublisherTagChange, TagPathProblem, UnshippableReason } from '../instanceAdapter';
 import type { ConfigurationFile, Publisher } from '../publisher';
@@ -68,6 +69,17 @@ const pathNode = (): PathNode => ({ tags: new Set(), below: new Map() });
 
 // As Wabbajack's serializer reads it: comments and a comma before a closing bracket are skipped.
 const READS = { allowTrailingComma: true };
+
+const NO_CONFIGURATION: PublisherConfiguration = { kind: 'none' };
+
+function pathProblemParts(problem: TagPathProblem): unknown[] {
+  if (problem.kind === 'notChecked') {
+    const { kind, file, line, tag, entry, reason, ...rest } = problem;
+    return [kind, file, line, tag, entry, reason, ...noneLeft(rest)];
+  }
+  const { kind, file, line, tag, entry, ...rest } = problem;
+  return [kind, file, line, tag, entry, ...noneLeft(rest)];
+}
 
 function settingsIn(text: string, file: string): object {
   const errors: ParseError[] = [];
@@ -446,6 +458,7 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
     return { settings, ...judging };
   };
   const settingsText = () => readOrAbsent(() => get(file), undefined);
+  const configurationRead = lastHanded<PublisherConfiguration>();
   const readProfiles = async (held: HeldTexts): Promise<{ text: string; profiles: Segment[] } | undefined> => {
     const text = heldTextAt(held, file) ?? await settingsText();
     if (text === undefined) return undefined;
@@ -482,14 +495,15 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
     configuration: async (): Promise<PublisherConfiguration> => {
       try {
         const text = await settingsText();
-        if (text === undefined) return { kind: 'none' };
+        if (text === undefined) return NO_CONFIGURATION;
         const { settings, tags, covering, reason } = await understood(text);
-        return {
-          kind: 'read', covering, listed: listedIn(instanceRoot, tags), pathProblems: await tagsWithPathProblems(instanceRoot, settings, text, file),
-          unshippable: { file, reason },
-        };
+        const pathProblems = await tagsWithPathProblems(instanceRoot, settings, text, file);
+        return configurationRead({ kind: 'read', covering, listed: listedIn(instanceRoot, tags), pathProblems, unshippable: { file, reason } }, [
+          covering, tags, reason, ...pathProblems.flatMap(pathProblemParts),
+        ]);
       } catch (err) {
-        return { kind: 'unreadable', reason: errorMessage(err) };
+        const reason = errorMessage(err);
+        return configurationRead({ kind: 'unreadable', reason }, [reason]);
       }
     },
     refusal: async () => {

@@ -64,6 +64,7 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
     repositorySetUp: false,
     unwatchedFolders: [],
     unheardChanges: [],
+    trustingKept: (read) => read(),
     managerRunning: { kind: 'notRunning' },
     publisherConfiguration: NO_PUBLISHER,
     ...overrides,

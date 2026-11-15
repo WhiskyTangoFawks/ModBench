@@ -1,28 +1,22 @@
 import type { Log } from '../ports/log';
+import { FileConflictLookup, NO_GAME_FOLDER_ARCHIVED, type GameFolderArchived, type FileWinners, type StackedCopies } from './fileConflictIndex';
 import {
-  FileConflictLookup, foldPath, gameFolderArchivedOf, indexReusing, NO_GAME_FOLDER_ARCHIVED, stackReusing, type FileConflictIndex, type GameFolderArchived, type FileWinners, type StackedCopies,
-} from './fileConflictIndex';
-import {
-  archivesGameLoads, archivesInLoadOrder, buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, stampedSnapshot, type ArchiveSources,
-  type DataFolderFiles, type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine, type LoadOrderSnapshotRefusal,
+  listedArchivesNothingHolds, type ArchiveSources, type DataFolderFiles, type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine, type LoadOrderSnapshotRefusal,
   type LoadOrderSnapshotValue, type PluginWithNoLine,
 } from './loadOrderSnapshot';
-import { OVERWRITE_ORIGIN } from '../wire/pluginAddress';
-import { modNamesOf } from './modName';
-import { buildDownloadedFileRows, modsByInstallationFileName, type LocatedDownloadedFileRow } from './downloadedFileRows';
-import { blueprintLoadsLastIn, loadedWithNoLineOf, nexusDomainForMetaGame } from '../tables/gamePaths';
+import { type LocatedDownloadedFileRow } from './downloadedFileRows';
+import { nexusDomainForMetaGame } from '../tables/gamePaths';
 import {
-  ABSENT_SORTING_RULE_FILES, fileInFolder, type DownloadedFiles, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
-  type ProgramVersion, type ProgramVersions, type EntryRef, type ManagerNames, type ManagerRunning, type ModGroups, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type PublisherConfiguration,
+  ABSENT_SORTING_RULE_FILES, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder,
+  type ProgramVersion, type ProgramVersions, type EntryRef, type ManagerNames, type ManagerRunning, type ModGroups, type ModlistEntry, type OriginFile, type OriginFolder, type PublisherConfiguration,
   type PublisherTag, type Reread, type SortingRuleFiles, type Subscription, type UnwatchedFolder,
 } from '../instanceAdapter/instanceAdapter';
-import { sourceModsOf, type FlaggedRead, type SourceMods } from '../manifestAdapter/manifestAdapter';
-import { pluginPlacesOf } from './pluginPlacesOf';
-import { archivedPathsOf, papyrusScriptsOf, type PapyrusScript } from './papyrusScripts';
+import type { FlaggedRead, SourceMods } from '../manifestAdapter/manifestAdapter';
+import { type PapyrusScript } from './papyrusScripts';
 import { errorMessage } from '../ports/errorMessage';
-import { FlaggedHashesHeld, flaggedPluginsIn, type FlaggedReader } from './flaggedHashes';
-import { ArchiveContentsHeld, archivePathsIn, unreadableArchiveLines, type ArchiveRead, type ArchiveReader } from './archiveContents';
-import { pluginOrderOf, unplaced } from './pluginOrder';
+import { FlaggedHashesHeld, type FlaggedReader } from './flaggedHashes';
+import { ArchiveContentsHeld, unreadableArchiveLines, type ArchiveRead, type ArchiveReader } from './archiveContents';
+import { FactsOfReading } from './factsOfReading';
 import { WrittenFiles } from './writtenFiles';
 import { collectingWrites } from './ambientWrites';
 
@@ -60,7 +54,7 @@ type DownloadedFilesResult =
   | { readonly kind: 'listed'; readonly rows: readonly LocatedDownloadedFileRow[] }
   | { readonly kind: 'unresolved'; readonly reason: string };
 
-interface InstancePaths {
+export interface InstancePaths {
   /** `undefined` until read, and when the instance gives run-time output no folder. */
   readonly overwriteDir: string | undefined;
   /** `undefined` while unresolved (or not yet read): a consumer skips the action, no fallback. */
@@ -169,7 +163,17 @@ export interface InstanceValue {
 }
 
 /** A subscriber that returns a promise holds `refresh` until it settles. `reread` is what the value was read again for. */
-export type InstanceSubscriber = (value: InstanceValue, sequence: number, reread: Reread) => void | Promise<void>;
+export type InstanceSubscriber<K extends keyof InstanceValue = keyof InstanceValue> = (value: Pick<InstanceValue, K>, sequence: number, reread: Reread) => void | Promise<void>;
+
+/** The facts a subscriber reads, each named as a key. */
+export type Concerns<K extends keyof InstanceValue> = Readonly<Record<K, true>>;
+
+interface Subscribed {
+  readonly subscriber: InstanceSubscriber;
+  readonly concerns: readonly (keyof InstanceValue)[] | undefined;
+}
+
+const isFactOf = (value: InstanceValue) => (key: string): key is keyof InstanceValue => key in value;
 
 /** Hears each recompute that failed; `readFailure` holds the reason. The value and sequence are
  *  where they were: before the first landed value that is the empty sentinel at 0. */
@@ -186,6 +190,12 @@ export type ListenerOutcomeListener = (outcome: ListenerOutcome) => void;
 /** The Instance as a tree reads it: the held value, sequence and read failure, plus the
  *  channels they move on. */
 export type InstanceView = Pick<Instance, 'value' | 'sequence' | 'readFailure' | 'subscribe' | 'onReadFailure' | 'onRedraw'>;
+
+/** The Instance as a subscriber that reads the facts `K` sees it. */
+export type InstanceOf<K extends keyof InstanceValue> = Omit<InstanceView, 'value'> & { readonly value: Pick<InstanceValue, K> };
+
+/** The facts the message line reads (`instanceMessages`). */
+export const MESSAGE_READS = { managerRunning: true, managerNames: true } as const;
 
 const cannotTellRunning = (manager: string, reason: string): string => `Cannot tell whether ${manager} is running: ${reason}.`;
 
@@ -207,7 +217,7 @@ function programVersionFailures(versions: ProgramVersions): string[] {
   return [...game, ...programVersionFailure('the script extender\'s version', versions.extender)];
 }
 
-export function managerRunningMessage({ managerRunning, managerNames: { manager } }: InstanceValue): string | undefined {
+export function managerRunningMessage({ managerRunning, managerNames: { manager } }: Pick<InstanceValue, keyof typeof MESSAGE_READS>): string | undefined {
   if (managerRunning.kind === 'unknown') return cannotTellRunning(manager, managerRunning.reason);
   return managerRunning.kind === 'running' ? `${manager} is running, and overwrites your changes when it launches a program or exits.` : undefined;
 }
@@ -219,7 +229,7 @@ export function instanceLastGoodReadFailure({ sequence, readFailure }: Pick<Inst
 
 /** What every view of the instance says on its message line (common.md, States), in order: the mod manager running
  *  (story 8), and a read that failed after rows landed (story 6), the error row's business before then. */
-export function instanceMessages(view: Pick<InstanceView, 'value' | 'sequence' | 'readFailure'>): (string | undefined)[] {
+export function instanceMessages(view: Pick<InstanceOf<keyof typeof MESSAGE_READS>, 'value' | 'sequence' | 'readFailure'>): (string | undefined)[] {
   const reason = instanceLastGoodReadFailure(view);
   return [managerRunningMessage(view.value), reason === undefined ? undefined : `Showing the last good read: ${reason}`];
 }
@@ -239,33 +249,7 @@ interface InstanceOptions {
   medit: ArchiveReader & FlaggedReader;
 }
 
-// A listed source mod under its name in the mod order, an unlisted one under the name its folder gives it.
-function sourceDirsOf(entries: readonly ModlistEntry[], sourceMods: SourceMods): Map<string, string> {
-  const listed = entries.flatMap((entry) => {
-    const folder = entry.kind === 'mod' ? sourceMods.folderOf(entry.name) : undefined;
-    return folder === undefined ? [] : [[entry.name, folder] as const];
-  });
-  const claimed = new Set(listed.map(([, folder]) => folder));
-  return new Map([...listed, ...[...sourceMods.folders].filter(([, folder]) => !claimed.has(folder))]);
-}
-
-// Each listed mod's folder is matched as the manager matches names.
-function pathsOf(
-  runtimeOutput: OriginFiles, downloaded: DownloadedFiles, entries: readonly ModlistEntry[], modFolders: ModFolders | undefined,
-  sourceMods: SourceMods,
-): InstancePaths {
-  return {
-    overwriteDir: runtimeOutput.folder,
-    downloadsDir: downloaded.kind === 'listed' ? downloaded.downloadsDir : undefined,
-    modDirs: new Map(entries.flatMap((entry) => {
-      const folder = entry.kind === 'mod' ? modFolders?.holding(entry) : undefined;
-      return folder === undefined ? [] : [[entry.name, folder.path] as const];
-    })),
-    sourceDirs: sourceDirsOf(entries, sourceMods),
-  };
-}
-
-const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey' | 'publisherTags'>, gameFolderSettingId: string): InstanceValue => ({
+const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'publisherTags'>, gameFolderSettingId: string, entryKey: InstanceValue['entryKey']): InstanceValue => ({
   mods: [],
   modGroups: { ungrouped: [], groups: [] },
   modFolders: [],
@@ -290,7 +274,7 @@ const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey' | 'publi
   activeProfile: '',
   managerNames: adapter.names,
   managerRunning: { kind: 'notRunning' },
-  entryKey: (entry) => adapter.entryKey(entry),
+  entryKey,
   gameName: '',
   blueprintLoadsLast: false,
   nexusDomainOf: nexusDomainForMetaGame,
@@ -318,7 +302,7 @@ export class Instance implements Subscription {
 
   private failure: string | undefined;
 
-  private subscribers: InstanceSubscriber[] = [];
+  private subscribers: Subscribed[] = [];
 
   private failureListeners: ReadFailureListener[] = [];
   private redrawListeners: (() => void)[] = [];
@@ -354,17 +338,18 @@ export class Instance implements Subscription {
 
   // A note is one Output line until its text changes or it clears.
   private readonly told = new Map<NoteKind, ReadonlySet<string>>();
-  private readonly indexOf = indexReusing();
-  private readonly stackOf = stackReusing();
+  private readonly facts: FactsOfReading;
 
   constructor(private readonly options: InstanceOptions) {
-    this.current = emptyValue(options.adapter, options.gameFolderSettingId);
+    const entryKey: InstanceValue['entryKey'] = (entry) => options.adapter.entryKey(entry);
+    this.current = emptyValue(options.adapter, options.gameFolderSettingId, entryKey);
     this.changes = options.adapter.subscribe((path) => { this.hear(path); });
     this.workspaceWatch = options.workspace.onDidChange(() => {
       if (this.workspaceMovedFrom(this.current)) void this.enqueue({ disk: false, tellsUnheard: false });
     });
-    this.archives = new ArchiveContentsHeld(options.medit, (path) => options.adapter.fileStamp(path));
-    this.flagged = new FlaggedHashesHeld(options.medit, (path) => options.adapter.fileStamp(path));
+    this.archives = new ArchiveContentsHeld(options.medit);
+    this.flagged = new FlaggedHashesHeld(options.medit);
+    this.facts = new FactsOfReading(options.adapter, entryKey, this.archives, this.flagged);
     this.stopHearingMEditStatus = options.medit.onStatusChanged((status) => {
       if (status === 'running' && (this.archives.anyUnanswered || this.flagged.anyUnanswered)) void this.enqueue({ disk: false, tellsUnheard: false });
     });
@@ -393,12 +378,16 @@ export class Instance implements Subscription {
     return this.failure;
   }
 
-  /** Called with each landed value and the sequence it landed at, never with a failure. */
-  subscribe(subscriber: InstanceSubscriber): Subscription {
-    this.subscribers.push(subscriber);
+  /** Called with each landed value and its sequence; with `concerns`, only with the first, the first after a failed read, a
+   *  check of the disk, and each in which a concern is not the object it was. */
+  subscribe<K extends keyof InstanceValue>(
+    subscriber: InstanceSubscriber<K>, concerns?: Concerns<K>,
+  ): Subscription {
+    const subscribed: Subscribed = { subscriber, concerns: concerns && Object.keys(concerns).filter(isFactOf(this.current)) };
+    this.subscribers.push(subscribed);
     return {
       dispose: () => {
-        this.subscribers = this.subscribers.filter((s) => s !== subscriber);
+        this.subscribers = this.subscribers.filter((s) => s !== subscribed);
       },
     };
   }
@@ -598,13 +587,16 @@ export class Instance implements Subscription {
       return { settled: this.notify(this.failureListeners, 'read-failure', (listener) => listener()) };
     }
     if (epoch !== this.quietEpoch || this.quiets > 0) return this.dropRun(run);
+    const before = this.current;
+    const tellsEvery = this.seq === 0 || this.failure !== undefined || run.disk;
     this.current = next;
     this.failure = undefined;
     this.setLate(this.heardSinceRun());
     this.seq++;
     const reread: Reread = { named: [...run.named], disk: run.disk };
     if (this.workspaceMovedFrom(next)) void this.enqueue({ disk: false, tellsUnheard: false });
-    return { settled: this.notify(this.subscribers, 'value', (subscriber) => subscriber(next, this.seq, reread)) };
+    const told = this.subscribers.filter(({ concerns }) => tellsEvery || concerns === undefined || concerns.some((fact) => next[fact] !== before[fact]));
+    return { settled: this.notify(told.map(({ subscriber }) => subscriber), 'value', (subscriber) => subscriber(next, this.seq, reread)) };
   }
 
   // What a dropped run was to read is read by the next run, so a change the watch heard while a write ran is never lost.
@@ -642,122 +634,15 @@ export class Instance implements Subscription {
     return gameFolder.kind === 'found' && this.options.workspace.holds(gameFolder.dataFolder) ? gameFolder.dataFolder : undefined;
   }
 
-  private async archivesIn(
-    { gameRelease, listed, inData, files, filesByOrigin }: ArchiveSources, index: FileConflictIndex,
-    order: { readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[]; readonly pluginsLoadedWithNoLine: readonly PluginWithNoLine[] },
-    dataFolder: string | undefined,
-  ): Promise<Pick<InstanceValue, 'archiveContents' | 'loadsArchive' | 'stackedCopies' | 'gameFolderArchived'>> {
-    const { loadedWithNoLine, fromLines } = pluginOrderOf(order, unplaced);
-    const active = [...loadedWithNoLine, ...fromLines.filter((plugin) => plugin.enabled && plugin.path !== undefined)].map(({ name, origin }) => ({ name, origin }));
-    const inLoadOrder = dataFolder === undefined ? [] : archivesInLoadOrder({ gameRelease, listed, inData, files, filesByOrigin }, dataFolder, active);
-    const gameArchives = new Set(inData.kind === 'listed' && dataFolder !== undefined ? inData.archives.map((name) => fileInFolder(dataFolder, name)) : []);
-    const inGameFolder = inLoadOrder.filter((archive) => gameArchives.has(archive));
-    const archiveContents = await this.archives.read(gameRelease, [...archivePathsIn(gameRelease, [...filesByOrigin.values()].flat()), ...inGameFolder]);
-    this.tellOnce('archiveContents', unreadableArchiveLines(archiveContents), 'warn');
-    const loaded = archivesGameLoads(gameRelease, listed, active, files);
-    const names = new Set(loaded.map(({ relativePath }) => foldPath(relativePath)));
-    const read = loaded.map(({ winner, winnerOrigin }) => {
-      const contents = archiveContents.get(winner);
-      return { origin: winnerOrigin, archive: winner, files: contents?.kind === 'read' ? contents.answer : undefined };
-    });
-    const gameFolderArchived = gameFolderArchivedOf(inLoadOrder.map((archive) => {
-      const contents = archiveContents.get(archive);
-      return { archive, ...gameArchives.has(archive) && contents?.kind === 'read' && { gameFolderFiles: contents.answer } };
-    }), gameRelease);
-    return { archiveContents, loadsArchive: (name) => names.has(foldPath(name)), stackedCopies: this.stackOf(index, read, gameRelease), gameFolderArchived };
-  }
-
-  private async flaggedHashesIn(
-    { gameRelease, holdsRepository }: Pick<InstanceReading, 'gameRelease' | 'holdsRepository'>, entries: readonly ModlistEntry[], modFolders: ModFolders | undefined,
-    filesByMod: ReadonlyMap<string, readonly OriginFile[]>,
-  ): Promise<ReadonlyMap<string, FlaggedRead>> {
-    const mods = holdsRepository ? entries.flatMap((entry) => {
-      const folder = entry.kind === 'mod' ? modFolders?.holding(entry)?.path : undefined;
-      return folder === undefined ? [] : [{ folder, files: filesByMod.get(entry.name) ?? [] }];
-    }) : [];
-    return this.flagged.read(gameRelease, await flaggedPluginsIn(mods, (path) => this.options.adapter.ownPath(path)));
-  }
-
   private async read({ named, disk, tellsUnheard }: Run): Promise<InstanceValue> {
     const { adapter, log } = this.options;
     const reading = await adapter.reading({ named: [...named], disk });
     if (tellsUnheard) for (const path of reading.unheardChanges) log.info(`[instance] The check of the disk found a change no event named: ${path}`);
-    const {
-      profile, gameName, gameRelease, mods: entries, pluginOrder, downloadedFiles: downloadedFilesOutcome, gameFolder, programVersions, dataFolderPlugins,
-      creationClubList: creationClub, dataFolderArchives, dataFolderFiles, runtimeOutput, modFolders, profiles,
-    } = reading;
-    const sourceMods = await sourceModsOf(modFolders?.all, reading.sourceModFolders, (name) => adapter.entryKey({ kind: 'mod', name }));
-    this.tellReading(reading, sourceMods);
-    const index = this.indexOf(entries, runtimeOutput.files, reading.modFiles);
-    const plugins = buildLoadOrderRows(pluginOrder, index, runtimeOutput.files, gameFolder, dataFolderPlugins);
-    const pluginsLoadedWithNoLine = pluginsLoadedWithNoLineOf(loadedWithNoLineOf(gameRelease, creationClub), dataFolderPlugins, plugins, gameFolder);
-    // Installed reads every mod folder, not one profile's mod order: a folder no profile has synced
-    // into its mod order yet still owns its meta's claim. A separator is never installed from a
-    // downloaded file.
-    const installedInto = modsByInstallationFileName(
-      [...reading.folderMeta].map(([name, meta]) => ({ name, installationFileName: meta.installationFileName })),
-    );
-    const modFolderList = modFolders?.all;
-    const modNames = modNamesOf(entries, modFolders);
-    const paths = pathsOf(runtimeOutput, downloadedFilesOutcome, entries, modFolders, sourceMods);
-    const archiveSources: ArchiveSources = {
-      gameRelease, listed: reading.archiveList, inData: dataFolderArchives, files: index.files,
-      filesByOrigin: new Map([...index.filesByMod, [OVERWRITE_ORIGIN, runtimeOutput.files]]),
-    };
-    this.tellArchivesNothingHolds(archiveSources);
-    const dataFolder = this.workspaceDataFolder(gameFolder);
-    const archives = await this.archivesIn(archiveSources, index, { plugins, pluginsLoadedWithNoLine: pluginsLoadedWithNoLine ?? [] }, dataFolder);
-    const flaggedHashes = await this.flaggedHashesIn(reading, entries, modFolders, index.filesByMod);
-    const loadOrderSnapshot = loadOrderSnapshotOf({
-      plugins, gameFolder, pluginsLoadedWithNoLine, modFolders, sourceDirs: paths.sourceDirs, places: pluginPlacesOf({ mods: entries, paths }), archives: archiveSources,
+    return this.facts.of(reading, this.workspaceDataFolder(reading.gameFolder), {
+      sourceMods: (sourceMods) => { this.tellReading(reading, sourceMods); },
+      archiveSources: (sources) => { this.tellArchivesNothingHolds(sources); },
+      archiveContents: (reads) => { this.tellOnce('archiveContents', unreadableArchiveLines(reads), 'warn'); },
     });
-    return {
-      mods: entries,
-      modGroups: reading.modGroups,
-      modFolders: modFolderList,
-      modNames,
-      listedSourceMods: new Set(entries.flatMap((entry) => (entry.kind === 'mod' && paths.sourceDirs.has(entry.name) ? [entry.name] : []))),
-      sourceMods: new Set(paths.sourceDirs.keys()),
-      holdsRepository: reading.holdsRepository,
-      repositorySetUp: reading.repositorySetUp,
-      profiles,
-      files: index.files,
-      filesByMod: index.filesByMod,
-      foldersByMod: index.foldersByMod,
-      ...archives,
-      flaggedHashes,
-      papyrusScripts: papyrusScriptsOf(index.files, dataFolderFiles, gameRelease, archivedPathsOf(archives)),
-      plugins,
-      downloadedFiles: downloadedFilesOutcome.kind === 'unresolved'
-        ? { kind: 'unresolved', reason: downloadedFilesOutcome.reason }
-        : {
-          kind: 'listed',
-          rows: downloadedFilesOutcome.files ? buildDownloadedFileRows(downloadedFilesOutcome.files, installedInto, entries, new Set(paths.sourceDirs.keys())) : [],
-        },
-      activeProfile: profile,
-      managerNames: adapter.names,
-      managerRunning: reading.managerRunning,
-      entryKey: (entry) => adapter.entryKey(entry),
-      gameName,
-      blueprintLoadsLast: blueprintLoadsLastIn(gameRelease),
-      nexusDomainOf: nexusDomainForMetaGame,
-      gameFolder,
-      gameFolderInWorkspace: dataFolder !== undefined,
-      programVersions,
-      gameFolderLinks: reading.gameFolderLinks,
-      dataFolderPlugins,
-      dataFolderFiles,
-      pluginsLoadedWithNoLine,
-      loadOrderSnapshot: loadOrderSnapshot === undefined || 'refusal' in loadOrderSnapshot
-        ? loadOrderSnapshot
-        : await stampedSnapshot(loadOrderSnapshot, (path) => adapter.fileStamp(path)),
-      overwriteFiles: runtimeOutput.files,
-      overwriteFolders: runtimeOutput.folders,
-      paths,
-      publisherTags: adapter.publisherTags,
-      publisherConfiguration: reading.publisherConfiguration,
-      sortingRuleFiles: reading.sortingRuleFiles,
-      unwatchedFolders: reading.unwatchedFolders,
-    };
   }
+
 }
