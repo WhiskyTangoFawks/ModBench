@@ -17,6 +17,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     private static readonly TimeSpan OneGesture = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan LitRsLaunch = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan LitRsIndexWorkForOneDeletedRecord = TimeSpan.FromSeconds(0.4);
+    private static readonly TimeSpan OneFilesRead = TimeSpan.FromSeconds(0.1);
     private const int Runs = 5;
     private const int Launches = 3;
 
@@ -134,24 +135,51 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     {
         var (plugin, formKey) = (Modlist.BigSourcePlugin, Modlist.TheManyDocuments[0]);
         var path = plugin.SourceFileOf(Index.DocumentOf(formKey, plugin.Key));
+        using var landed = CheckpointOfEarlierWritesLanded();
         using var restored = Restoring(path, () => CheckEnded() && Index.CopyIn(formKey, plugin.Key) is not null);
         File.Delete(path);
-        CheckpointOfEarlierWritesLanded();
 
-        Budgets.Ran(LitRsIndexWorkForOneDeletedRecord, () => WrittenAndRead(new PluginWritten(plugin.Key, [path])), "Reading a record its writer deleted");
+        ReadAlone(LitRsIndexWorkForOneDeletedRecord, () => WrittenAndRead(new PluginChange(plugin.Key, [path])), "Reading a record its writer deleted");
         Assert.Null(Index.CopyIn(formKey, plugin.Key));
     }
 
-    private void CheckpointOfEarlierWritesLanded()
+    private void ReadAlone(TimeSpan budget, Action gesture, string what)
     {
-        var plugin = Modlist.BigSourcePlugin;
-        WrittenAndRead(new PluginWritten(plugin.Key, [plugin.SourceFileOf(Index.DocumentOf(Modlist.TheManyDocuments[^1], plugin.Key))]));
+        var (named, whole) = (realSize.Source.NamedReads, realSize.Source.WholeTreeReads);
+        Budgets.Ran(budget, gesture, what);
+        Assert.Equal((named + 1, whole), (realSize.Source.NamedReads, realSize.Source.WholeTreeReads));
     }
 
-    private void WrittenAndRead(PluginWritten written)
+    private DocumentsPutBack CheckpointOfEarlierWritesLanded()
+    {
+        var plugin = Modlist.BigSourcePlugin;
+        var path = plugin.SourceFileOf(Index.DocumentOf(Modlist.TheManyDocuments[^1], plugin.Key));
+        var putBack = Restoring(path, CheckEnded);
+        File.AppendAllText(path, "\n");
+        WrittenAndRead(new PluginChange(plugin.Key, [path]));
+        return putBack;
+    }
+
+    private void WrittenAndRead(PluginChange written)
     {
         Index.Holder.SourceWritten([written]);
         Waits.Reached(() => !Index.Status.Validating, "the record index's read of the write");
+    }
+
+    [RealSizeFact]
+    public void TheWatchersEchoOfAWrite_IsReadWithinOneFilesRead()
+    {
+        var plugin = Modlist.BigSourcePlugin;
+        var path = plugin.SourceFileOf(Index.DocumentOf(Modlist.TheManyDocuments[1], plugin.Key));
+        using var restored = Restoring(path, CheckEnded);
+        File.AppendAllText(path, "\n");
+        WrittenAndRead(new PluginChange(plugin.Key, [path]));
+
+        ReadAlone(OneFilesRead, () =>
+        {
+            Index.SignalChange([new PluginChange(plugin.Key, [path])]);
+            Waits.Reached(() => !Index.Status.Validating, "the record index's read of the echo");
+        }, "Reading the watcher's echo of a write");
     }
 
     [RealSizeFact]
@@ -165,11 +193,11 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         var repository = SourceMods.RepositoryOf(plugin);
         var created = repository.ChangesToPut(plugin.Key, new SourceDocument(formKey, model.RecordType, "Created", body)).Value()
             .Under(repository.SourceFolder).Documents.Single();
+        using var landed = CheckpointOfEarlierWritesLanded();
         using var restored = new CreatedPutBack(created.Path, realSize, () => CheckEnded() && Index.CopyIn(formKey, plugin.Key) is null);
         File.WriteAllText(created.Path, created.Text);
-        CheckpointOfEarlierWritesLanded();
 
-        Budgets.Ran(OneGesture, () => WrittenAndRead(new PluginWritten(plugin.Key, [created.Path])), "Reading a record its writer created");
+        ReadAlone(OneGesture, () => WrittenAndRead(new PluginChange(plugin.Key, [created.Path])), "Reading a record its writer created");
         Assert.Equal("Created", Index.RowOf(formKey, plugin.Key)?.EditorId);
     }
 

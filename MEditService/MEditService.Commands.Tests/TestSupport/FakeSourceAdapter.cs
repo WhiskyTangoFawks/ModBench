@@ -57,9 +57,9 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
     public PathAnswer Touching(LoadOrderSnapshot loadOrder, string path) => throw Unreached();
 
-    public void SignalChange(IReadOnlyList<PluginAddress>? plugins) => ChangeSignalled?.Invoke(plugins);
+    public void SignalChange(IReadOnlyCollection<PluginChange>? changes) => ChangeSignalled?.Invoke(changes);
 
-    public event Action<IReadOnlyList<PluginAddress>?>? ChangeSignalled;
+    public event Action<IReadOnlyCollection<PluginChange>?>? ChangeSignalled;
 
     public RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path) => throw Unreached();
 
@@ -198,6 +198,9 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
         public Answer<T, SourceFailure> ReadDocuments<T>(PluginAddress plugin, Func<IPluginDocuments, T> read) => throw Unreached();
 
         public Answer<FilesRead?, SourceFailure> ReadFiles(PluginAddress plugin, IReadOnlyList<string> files) => throw Unreached();
+
+        public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommitIn(PluginAddress plugin, IReadOnlyList<string> files) =>
+            throw Unreached();
 
         public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommit(PluginAddress plugin) =>
             throw Unreached();

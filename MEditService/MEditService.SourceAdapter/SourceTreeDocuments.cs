@@ -141,7 +141,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     {
         var relativePath = Path.GetRelativePath(_sourceFolder, file);
         var path = new LayoutPath(relativePath);
-        if (!path.IsFlatDocument || relativePath.Equals(_headerRelativePath, StringComparison.Ordinal)) return false;
+        if (!path.IsFlatDocument || relativePath.Equals(_headerRelativePath, FilePaths.Comparison)) return false;
         if (DirectoryPerRecordTypeOf(path) is not { } directoryPerRecord) return true;
         var placed = _types.IsCell(directoryPerRecord)
             ? path.UnderGroupBlockLevels

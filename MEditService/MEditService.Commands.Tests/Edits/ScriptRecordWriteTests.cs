@@ -116,8 +116,8 @@ public sealed class ScriptRecordWriteTests
     {
         using var mod = SourceEditFixture.CompiledPlugin();
         var file = Path.Combine(mod.ModFolder, mod.DocumentFile(mod.Npc.ToString()).Require());
-        IReadOnlyCollection<PluginWritten>? named = null;
-        mod.Holder.Written += written => named = written;
+        IReadOnlyCollection<PluginChange>? named = null;
+        mod.Holder.Written += (written, _) => named = written;
 
         Delete(mod, mod.Npc.ToString());
 

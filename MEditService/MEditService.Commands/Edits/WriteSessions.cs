@@ -40,7 +40,7 @@ internal sealed class WriteSessions(ISourceAdapter source, IReadOnlyList<Documen
     }
 
     // Null when a path written names no plugin, so only a check of the whole disk reads it.
-    private List<PluginWritten>? PluginsWritten(LoadOrderSnapshot loadOrder)
+    private List<PluginChange>? PluginsWritten(LoadOrderSnapshot loadOrder)
     {
         var made = Made;
         var files = new Dictionary<PluginAddress, List<string>>(PluginAddress.Comparer);
@@ -59,7 +59,7 @@ internal sealed class WriteSessions(ISourceAdapter source, IReadOnlyList<Documen
                     break;
             }
         }
-        return [.. files.Select(written => new PluginWritten(written.Key, written.Value))];
+        return [.. files.Select(written => new PluginChange(written.Key, written.Value))];
     }
 
     private static bool Changes(IWriteSession session) =>

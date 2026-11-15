@@ -31,9 +31,9 @@ public abstract class DelegatingSourceAdapter(ISourceAdapter inner) : ISourceAda
 
     public virtual PathAnswer Touching(LoadOrderSnapshot loadOrder, string path) => inner.Touching(loadOrder, path);
 
-    public void SignalChange(IReadOnlyList<PluginAddress>? plugins) => inner.SignalChange(plugins);
+    public void SignalChange(IReadOnlyCollection<PluginChange>? changes) => inner.SignalChange(changes);
 
-    public event Action<IReadOnlyList<PluginAddress>?>? ChangeSignalled
+    public event Action<IReadOnlyCollection<PluginChange>?>? ChangeSignalled
     {
         add => inner.ChangeSignalled += value;
         remove => inner.ChangeSignalled -= value;

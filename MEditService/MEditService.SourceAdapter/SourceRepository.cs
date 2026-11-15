@@ -282,9 +282,12 @@ internal sealed class SourceRepository : ISourceRepository
         {
             var spelled = Spelled(plugin);
             using var documents = new SourceTreeDocuments(_sourceFolder, spelled.Name, _release, Files);
-            return NamedFiles.Read(_sourceFolder, spelled, Files, documents, _stamps.Listed(SourceRepositoryLayout.RootIn(_sourceFolder, spelled.Name)), files,
-                within => LastCommitComparison.Of(_sourceFolder, _release, _git, Locator, spelled, within));
+            return NamedFiles.Read(_sourceFolder, spelled, Files, documents, _stamps.Listed(SourceRepositoryLayout.RootIn(_sourceFolder, spelled.Name)), files);
         });
+
+    public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommitIn(PluginAddress plugin, IReadOnlyList<string> files) =>
+        SourceFailure.Answer(() => LastCommitComparison.Of(
+            _sourceFolder, _release, _git, Locator, Spelled(plugin), [.. files.Select(file => Path.GetRelativePath(_sourceFolder, Path.GetFullPath(file)))]));
 
     public Answer<PluginSourceFiles, SourceFailure> TreeOf(PluginAddress plugin) =>
         SourceFailure.Answer(() =>

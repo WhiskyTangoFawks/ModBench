@@ -21,6 +21,10 @@ public interface ISourceRepositoryReads
 
     Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommit(PluginAddress plugin);
 
+    /// <summary>As <see cref="ChangedSinceLastCommit"/>, of the records <paramref name="files"/> hold, absolute paths in the
+    /// plugin's tree: a record none of them held at the last commit is added.</summary>
+    Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommitIn(PluginAddress plugin, IReadOnlyList<string> files);
+
     /// <summary>Each file under the plugin's tree that git status names as changed or untracked, relative to the
     /// source folder; ignored files are not changes.</summary>
     Answer<IReadOnlyList<string>, SourceFailure> WorkingTreeChangesOf(PluginAddress plugin);
@@ -38,7 +42,5 @@ public interface ISourceRepositoryReads
     Answer<string?, SourceFailure> FileNameOf(PluginAddress plugin, RecordIdentity identity);
 }
 
-/// <summary>Each record's own document the named files hold, each FormKey whose document they held and hold not, and how
-/// each record they hold stands against the last commit: added when no named file held it there.</summary>
-public sealed record FilesRead(
-    IReadOnlyList<PluginDocument> Documents, IReadOnlyList<string> Gone, IReadOnlyDictionary<string, RecordChange> Changes);
+/// <summary>Each record's own document the named files hold, and each FormKey whose document they held and hold not.</summary>
+public sealed record FilesRead(IReadOnlyList<PluginDocument> Documents, IReadOnlyList<string> Gone);

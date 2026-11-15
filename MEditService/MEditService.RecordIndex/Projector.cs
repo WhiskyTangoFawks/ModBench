@@ -92,20 +92,32 @@ internal sealed class Projector(
     {
         var key = plugin.Key;
         if (index.DerivationOf(key) != DerivedFrom.SourceTree || TruthOf(plugin) != DerivedFrom.SourceTree) return false;
-        if (!Over(plugin).ReadFiles(key, files).Holds(out var read, out _) || read is null) return false;
+        var repository = Over(plugin);
+        if (!repository.ReadFiles(key, files).Holds(out var read, out _) || read is null) return false;
+        if (AsRead(key, read)) return true;
+        if (!repository.ChangedSinceLastCommitIn(key, files).Holds(out var changes, out _)) return false;
 
         _matched.TryRemove(key, out _);
-        // A record whose row says the last commit holds it, which no named file held there, came from a file no write named.
-        var addedHere = read.Changes.Where(change => change.Value == RecordChange.Added).Select(change => change.Key).ToList();
+        // A record whose row says the last commit holds it, which no named file held there, came from a file no change named.
+        var addedHere = changes.Where(change => change.Value == RecordChange.Added).Select(change => change.Key).ToList();
         var cameFromElsewhere = index.WorkingTreeStatesOf(key, addedHere).Values.Any(state => state != WorkingTreeState.Added);
         var touched = index.ProjectDocuments(key, read.Documents, read.Gone);
         IReadOnlyList<string> moved;
-        if (!cameFromElsewhere) moved = SetWorkingTreeStates(key, touched, read.Changes);
+        if (!cameFromElsewhere) moved = SetWorkingTreeStates(key, touched, changes);
         else if (LearnWorkingTreeStates(plugin).Holds(out var learned, out _)) moved = learned;
         else return false;
         AnnounceRows(projection, key, [.. touched.Union(moved, StringComparer.Ordinal)]);
         return true;
     });
+
+    // ADR-0003: the content decides, never who wrote it, so the watcher's echo of a write already read costs a read of its files.
+    private bool AsRead(PluginAddress key, FilesRead read)
+    {
+        if (read.Gone.Count > 0) return false;
+        var stored = index.StoredRows(key, [.. read.Documents.Select(document => document.FormKey)]);
+        return read.Documents.All(document => stored.TryGetValue(document.FormKey, out var row)
+            && string.Equals(row.ContentHash, source.ContentStamp(document.Text), StringComparison.Ordinal));
+    }
 
     private List<string> SetWorkingTreeStates(PluginAddress key, IReadOnlyCollection<string> formKeys, IReadOnlyDictionary<string, RecordChange> changes)
     {

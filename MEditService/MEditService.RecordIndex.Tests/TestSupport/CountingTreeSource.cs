@@ -31,6 +31,18 @@ internal sealed class CountingTreeSource(ISourceAdapter inner) : DelegatingSourc
         base.Over(plugin, release) is { } reads ? new Counted(reads, this) : null;
 
     private int _wholeReads;
+    private int _namedGitStatus;
+    private int _namedReads;
+    private int _namedReadThrows;
+
+    /// <summary>The next read of named files throws.</summary>
+    public void FailNextNamedRead() => Volatile.Write(ref _namedReadThrows, 1);
+
+    /// <summary>Each read of named files that read them alone.</summary>
+    public int NamedReads => Volatile.Read(ref _namedReads);
+
+    /// <summary>Each git status asked of named files alone.</summary>
+    public int NamedGitStatusAsked => Volatile.Read(ref _namedGitStatus);
 
     /// <summary>Each read of a whole tree: a listing of its files, or a read of every document.</summary>
     public int WholeTreeReads => Volatile.Read(ref _wholeReads);
@@ -51,7 +63,19 @@ internal sealed class CountingTreeSource(ISourceAdapter inner) : DelegatingSourc
             return reads.ReadDocuments(plugin, read);
         }
 
-        public Answer<FilesRead?, SourceFailure> ReadFiles(PluginAddress plugin, IReadOnlyList<string> files) => reads.ReadFiles(plugin, files);
+        public Answer<FilesRead?, SourceFailure> ReadFiles(PluginAddress plugin, IReadOnlyList<string> files)
+        {
+            if (Interlocked.Exchange(ref owner._namedReadThrows, 0) == 1) throw new IOException("The named read was made to fail.");
+            var read = reads.ReadFiles(plugin, files);
+            if (read.Holds(out var alone, out _) && alone is not null) Interlocked.Increment(ref owner._namedReads);
+            return read;
+        }
+
+        public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommitIn(PluginAddress plugin, IReadOnlyList<string> files)
+        {
+            Interlocked.Increment(ref owner._namedGitStatus);
+            return reads.ChangedSinceLastCommitIn(plugin, files);
+        }
 
         public Answer<IReadOnlyDictionary<string, RecordChange>, SourceFailure> ChangedSinceLastCommit(PluginAddress plugin)
         {

@@ -28,20 +28,21 @@ public sealed class LoadOrderHolder
     private readonly Dictionary<PluginAddress, long> _lastWriteOf = new(PluginAddress.Comparer);
     private long _lastUnnamedWrite;
 
-    /// <summary>Raised by every SourceWritten, once it is counted, with the plugins it names.</summary>
-    public event Action<IReadOnlyCollection<PluginWritten>?>? Written;
+    /// <summary>Raised by every SourceWritten with the plugins it names and the count it was given, in the order of the
+    /// counts: a write counted is raised before the next is counted.</summary>
+    public event Action<IReadOnlyCollection<PluginChange>?, long>? Written;
 
     /// <summary>Marks that mEdit wrote a system of record, of <paramref name="written"/>; null when no plugin names
     /// what it wrote.</summary>
-    public void SourceWritten(IReadOnlyCollection<PluginWritten>? written)
+    public void SourceWritten(IReadOnlyCollection<PluginChange>? written)
     {
         lock (_writing)
         {
             var write = Interlocked.Increment(ref _sourceWrites);
             if (written is null) _lastUnnamedWrite = write;
             else foreach (var plugin in written) _lastWriteOf[plugin.Plugin] = write;
+            Written?.Invoke(written, write);
         }
-        Written?.Invoke(written);
     }
 
     /// <summary>Of the writes after <paramref name="checkedThrough"/>, the last that named no plugin, which only a check of
@@ -77,6 +78,6 @@ public sealed class LoadOrderHolder
     private sealed record Arrival(LoadOrderSnapshot Snapshot, long Version);
 }
 
-/// <summary>A plugin a write changed, and the files of its source the write names; null when it cannot tell which, so every
-/// file of the plugin is read again (ADR-0001).</summary>
-public sealed record PluginWritten(PluginAddress Plugin, IReadOnlyList<string>? Files);
+/// <summary>A plugin a change touched, and the files of it the change names; null when it cannot tell which, so every file
+/// of the plugin is read again (ADR-0001).</summary>
+public sealed record PluginChange(PluginAddress Plugin, IReadOnlyList<string>? Files);

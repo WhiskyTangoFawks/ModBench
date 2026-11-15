@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
@@ -9,35 +8,34 @@ namespace MEditService.SourceAdapter;
 internal static class NamedFiles
 {
     // Git takes each path as an argument, and a command line holds a few hundred.
-    private const int MostPaths = 100;
-
-    private static readonly StringComparer PathComparer = StringComparer.FromComparison(FilePaths.Comparison);
+    internal const int MostPaths = 100;
 
     internal static FilesRead? Read(
-        string sourceFolder, PluginAddress plugin, ISourceFiles disk, SourceTreeDocuments documents,
-        ConcurrentDictionary<string, string?>? listed, IReadOnlyList<string> named,
-        Func<IReadOnlyList<string>, IReadOnlyDictionary<string, RecordChange>> changedSinceLastCommit)
+        string sourceFolder, PluginAddress plugin, ISourceFiles disk, SourceTreeDocuments documents, TreeListing? listing,
+        IReadOnlyList<string> named)
     {
-        if (listed is null || named.Count > MostPaths) return null;
+        if (listing is null || named.Count > MostPaths) return null;
         var root = SourceRepositoryLayout.RootIn(sourceFolder, plugin.Name);
         var paths = named.Select(Path.GetFullPath).ToList();
         if (!paths.All(path => Under(root, path))) return null;
 
-        var files = new HashSet<string>(PathComparer);
+        var files = new HashSet<string>(TreeListing.PathComparer);
         foreach (var path in paths)
         {
+            var listed = listing.Files.Select(file => file.Key).Where(file => Under(path, file)).ToList();
             if (disk.DirectoryExists(path)) files.UnionWith(disk.FilesIn(path, $"*{SourceRepositoryLayout.JsonSuffix}", SearchOption.AllDirectories));
-            else if (path.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.OrdinalIgnoreCase)) files.Add(path);
-            files.UnionWith(listed.Keys.Where(file => Under(path, file)));
+            else if (disk.FileExists(path) || listing.KnowsGone(path)) files.Add(path);
+            else if (listed.Count == 0) return null;
+            files.UnionWith(listed);
         }
 
         var held = new HashSet<string>(StringComparer.Ordinal);
-        var now = new Dictionary<string, IReadOnlyList<PluginDocument>>(PathComparer);
+        var now = new Dictionary<string, IReadOnlyList<PluginDocument>>(TreeListing.PathComparer);
         // A group's document carries no record: where a cell sits is its folders' names.
         foreach (var file in files.Where(file => !SourceRepositoryLayout.IsGroupDocument(file)))
         {
-            if (!documents.ReadsAsARecord(file)) return null;
-            if (listed.TryGetValue(file, out var formKey))
+            if (!file.EndsWith(SourceRepositoryLayout.JsonSuffix, StringComparison.OrdinalIgnoreCase) || !documents.ReadsAsARecord(file)) return null;
+            if (listing.Holds(file, out var formKey))
             {
                 if (formKey is null) return null;
                 held.Add(formKey);
@@ -48,20 +46,19 @@ internal static class NamedFiles
         var own = now.Values.Where(records => records.Count > 0).Select(records => records[0]).ToList();
         var holds = now.Values.SelectMany(records => records).Select(record => record.FormKey).ToHashSet(StringComparer.Ordinal);
         if (own.DistinctBy(document => document.FormKey).Count() < own.Count
-            || listed.Any(entry => !files.Contains(entry.Key) && entry.Value is { } other && (holds.Contains(other) || held.Contains(other))))
+            || listing.Files.Any(entry => !files.Contains(entry.Key) && entry.Value is { } other && (holds.Contains(other) || held.Contains(other))))
         {
             return null;
         }
 
         foreach (var (file, records) in now)
         {
-            if (records.Count > 0) listed[file] = records[0].FormKey;
-            else listed.TryRemove(file, out _);
+            if (records.Count > 0) listing.Read(file, records[0].FormKey);
+            else listing.ReadGone(file);
         }
-        var changes = changedSinceLastCommit([.. paths.Select(path => Path.GetRelativePath(sourceFolder, path))]);
-        return new FilesRead(own, [.. held.Except(holds)], changes);
+        return new FilesRead(own, [.. held.Except(holds)]);
     }
 
-    private static bool Under(string folder, string path) =>
+    internal static bool Under(string folder, string path) =>
         path.Equals(folder, FilePaths.Comparison) || path.StartsWith(folder + Path.DirectorySeparatorChar, FilePaths.Comparison);
 }
