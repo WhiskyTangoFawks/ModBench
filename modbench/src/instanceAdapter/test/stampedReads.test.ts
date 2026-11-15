@@ -283,7 +283,7 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     expect(after.modFiles.get(name)?.files.map((file) => file.relativePath)).toContain('added/new.txt');
   });
 
-  it('has a read that a listener starts, called as the instance read follows a new mod folder, check each stamp', async () => {
+  it('has a read that a listener starts, called as the instance read follows a new profile folder, check each stamp', async () => {
     const adapter = managerOver(instance);
     vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
     const first = await adapter.reading();
@@ -292,9 +292,9 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     await modifiedLater(folder);
     const startedByTheListener: Promise<string[]>[] = [];
     adapter.subscribe(() => { startedByTheListener.push(namesOf(folder)); });
-    await mkdir(join(instance, 'mods', 'New Mod'));
+    await mkdir(join(instance, 'profiles', 'New Profile'));
 
-    await adapter.reading({ named: [join(instance, 'mods', 'New Mod')], disk: false });
+    await adapter.reading({ named: [join(instance, 'profiles', 'New Profile')], disk: false });
 
     expect(await Promise.all(startedByTheListener)).toEqual([await namesOf(folder, listDir)]);
     expect(await namesOf(folder, listDir)).toContain('added.txt');

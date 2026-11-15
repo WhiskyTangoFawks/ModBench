@@ -44,6 +44,9 @@ import type { GameDetectors } from '../../gameFolder/gameFolderResolver';
 import { FOMOD_ENGINE } from '../../../test/fomodEngine';
 import { DEPLOYED_PATH } from '../../../test/deployedPath';
 import type { ManagerAdapter, ManagerReading } from '../../publisher';
+import type { WatcherExclude } from '../../instanceAdapter';
+import { mo2Watch } from '../mo2Watch';
+import { watcherExcluding } from '../../../test/watcherExclusion';
 import type { Mo2Context } from '../mo2Context';
 import type { ReadingSource } from '../../instanceReading';
 import { readingSource } from '../mo2Reads';
@@ -380,7 +383,7 @@ describe('the MO2 Instance adapter', () => {
 
       it('answers MO2 running while any process runs ModOrganizer.exe, whichever instance it has open', async () => {
         const onThisMachine = mo2InstanceAdapter({
-          instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(), hostGit: hostWithoutGit, installationFileReader: fakeInstallationFileReader([]), fileProblems: fileProblemsFake(), fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH,
+          instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(), watcherExclude: watcherExcluding(), hostGit: hostWithoutGit, installationFileReader: fakeInstallationFileReader([]), fileProblems: fileProblemsFake(), fomodEngine: FOMOD_ENGINE, deployedPath: DEPLOYED_PATH,
         }, undefined);
         const mo2 = await runningProgram('ModOrganizer.exe');
         try {
@@ -1081,7 +1084,7 @@ describe('the MO2 Instance adapter', () => {
     };
     const recursive = (pattern: string): boolean => pattern.includes('**') || pattern.includes('/');
 
-    it('watches the whole of nothing in the instance but Overwrite and the source folders, each mod folder to its first level and each profile for its files', async () => {
+    it('watches the whole of nothing in the instance but the mods, Overwrite and the source folders, and each profile for its files', async () => {
       const watched = managerOver(root);
       watched.subscribe(() => undefined);
       await watched.reading();
@@ -1089,22 +1092,103 @@ describe('the MO2 Instance adapter', () => {
       const wholeBelow = live().filter((w) => recursive(w.pattern)).map((w) => relativeFrom(root, w.base).split(sep).join('/'));
       const patternsUnder = (folder: string): string[] => live().filter((w) => dirname(w.base) === join(root, folder)).map((w) => w.pattern);
 
-      expect(wholeBelow.sort()).toEqual(['overwrite', 'source']);
-      expect(patternsUnder('mods')).toEqual(Array(9).fill(FIRST_LEVEL));
+      expect(wholeBelow.sort()).toEqual(['mods', 'overwrite', 'source']);
+      expect(patternsUnder('mods')).toEqual([]);
       expect(patternsUnder('profiles')).toEqual([PROFILE_WATCH_PATTERN, PROFILE_WATCH_PATTERN]);
     });
 
-    it('stops watching a mod folder a later read does not list', async () => {
-      const watched = managerOver(root);
-      watched.subscribe(() => undefined);
-      await watched.reading();
-      const harderVats = join(root, 'mods', 'Harder VATS');
-      const watching = live().find((w) => w.base === harderVats);
+    describe('where the user excludes folders from VS Code\'s watch (files.watcherExclude)', () => {
+      const excludingOver = (exclude: WatcherExclude): ReturnType<typeof watchedOver> => {
+        const context = contextOver(root);
+        return watchedOver({ ...context, watch: mo2Watch(root, () => ({ dispose: () => {} }), context.repository.changed, exclude) });
+      };
+      const wholeBelow = (): string[] => live().filter((w) => recursive(w.pattern)).map((w) => relativeFrom(root, w.base).split(sep).join('/')).sort();
+      const firstLevelOf = (folder: string): number => live().filter((w) => w.base === join(root, folder) && w.pattern === FIRST_LEVEL).length;
+      const harderVats = { kind: 'mod' as const, name: 'Harder VATS' };
+      const listedWith = async (patterns: Record<string, boolean>): Promise<ReturnType<typeof watchedOver>> => {
+        await mkdir(join(root, 'mods', 'Harder VATS', 'textures', 'actors'), { recursive: true });
+        await writeFile(join(root, 'mods', 'Harder VATS', 'textures', 'actors', 'a.dds'), '');
+        const watched = excludingOver(watcherExcluding(patterns));
+        watched.subscribe(() => undefined);
+        await watched.originFiles(harderVats, 'list');
+        return watched;
+      };
+      const named = (watched: ReturnType<typeof watchedOver>): { folder: string; reason: string }[] =>
+        watched.unwatchedFolders().map(({ folder, reason }) => ({ folder: relativeFrom(root, folder).split(sep).join('/'), reason }));
+      const EXCLUDED = 'excluded in files.watcherExclude';
 
-      await rm(harderVats, { recursive: true });
-      await watched.reading();
+      it('watches the mods to their first level and names them where the mods are excluded', async () => {
+        const watched = await listedWith({ '**/mods/**': true });
 
-      expect([watching?.disposed, live().some((w) => w.base === harderVats)]).toEqual([true, false]);
+        expect(wholeBelow()).toEqual(['overwrite', 'source']);
+        expect(named(watched)).toEqual([{ folder: 'mods', reason: EXCLUDED }]);
+      });
+
+      it('names the topmost excluded folder below a mod and watches it to its first level, the mods held whole', async () => {
+        const watched = await listedWith({ '**/textures/**': true });
+
+        expect(wholeBelow()).toEqual(['mods', 'overwrite', 'source']);
+        expect(firstLevelOf('mods/Harder VATS/textures')).toBe(1);
+        expect(named(watched)).toEqual([{ folder: 'mods/Harder VATS/textures', reason: EXCLUDED }]);
+      });
+
+      it('names a mod the user excluded alone, and Overwrite where Overwrite is excluded', async () => {
+        const watched = await listedWith({ '**/mods/Harder VATS/**': true, '**/overwrite/**': true });
+
+        expect(wholeBelow()).toEqual(['mods', 'source']);
+        expect(named(watched).sort((a, b) => a.folder.localeCompare(b.folder))).toEqual([
+          { folder: 'mods/Harder VATS', reason: EXCLUDED }, { folder: 'overwrite', reason: EXCLUDED },
+        ]);
+      });
+
+      it('names the folder holding files the user excluded, with the pattern, once for each pattern however many mods hold them', async () => {
+        const watched = await listedWith({ '**/*.dds': true });
+        await writeFile(join(root, 'mods', 'Patch Mod', 'b.dds'), '');
+        await watched.originFiles({ kind: 'mod', name: 'Patch Mod' }, 'list');
+
+        expect(wholeBelow()).toEqual(['mods', 'overwrite', 'source']);
+        expect(named(watched)).toEqual([{ folder: 'mods', reason: `files matching **/*.dds are ${EXCLUDED}` }]);
+      });
+
+      it('names Overwrite once and watches its first level once, though its listing names it as well', async () => {
+        const watched = await listedWith({ '**/overwrite/**': true });
+        await watched.originFiles({ kind: 'runtimeOutput' }, 'list');
+
+        expect([named(watched), firstLevelOf('overwrite')]).toEqual([[{ folder: 'overwrite', reason: EXCLUDED }], 1]);
+      });
+
+      it('names an excluded mod once, though both its root-only and its full listing name it', async () => {
+        const watched = await listedWith({ '**/mods/Harder VATS/**': true });
+        await watched.originRootFiles(harderVats, 'list');
+
+        expect(named(watched)).toEqual([{ folder: 'mods/Harder VATS', reason: EXCLUDED }]);
+      });
+
+      it('watches everything whole, and names no folder, once the user stops excluding them', async () => {
+        let excluded: Record<string, boolean> = { '**/textures/**': true, '**/*.dds': true };
+        let settingChanged = (): void => undefined;
+        const watched = excludingOver({ value: () => excluded, changed: (listener) => { settingChanged = listener; return { dispose: () => {} }; } });
+        await mkdir(join(root, 'mods', 'Harder VATS', 'textures'), { recursive: true });
+        await writeFile(join(root, 'mods', 'Harder VATS', 'textures', 'a.dds'), '');
+        watched.subscribe(() => undefined);
+        await watched.originFiles(harderVats, 'list');
+
+        excluded = {};
+        settingChanged();
+
+        expect([wholeBelow(), watched.unwatchedFolders(), firstLevelOf('mods/Harder VATS/textures')]).toEqual([['mods', 'overwrite', 'source'], [], 0]);
+      });
+
+      it('stops watching an excluded folder a later listing does not hold', async () => {
+        const watched = await listedWith({ '**/textures/**': true });
+        const textures = join(root, 'mods', 'Harder VATS', 'textures');
+        const watching = live().find((w) => w.base === textures);
+
+        await rm(textures, { recursive: true });
+        await watched.originFiles(harderVats, 'list');
+
+        expect([watching?.disposed, named(watched)]).toEqual([true, []]);
+      });
     });
 
     it('hears a file created, changed or deleted alike, each by its path, so a deleted mod folder is heard', async () => {
@@ -1201,7 +1285,7 @@ describe('the MO2 Instance adapter', () => {
       ['a profile\'s settings', 'profiles/Default/settings.ini', 1],
       ['a profile\'s INI, in any case', 'profiles/Default/fallout4.INI', 1],
       ['no other file of a profile', 'profiles/Default/other.txt', 0],
-      ['no file deeper in a mod, which the check of the disk finds', 'mods/Harder VATS/Textures/a.dds', 0],
+      ['a file deeper in a mod', 'mods/Harder VATS/Textures/a.dds', 1],
     ])('signals a change to %s', async (_what, relativePath, signalled) => {
       const watched = managerOver(root);
       let signals = 0;

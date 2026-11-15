@@ -110,7 +110,7 @@ describe('plugin sync and the Instance close a loop that settles', () => {
     const { root, instance, syncs, plugins } = await wiredInstance();
 
     await writeFile(join(root, 'mods', 'Provider', 'New.esp'), 'plugin');
-    const provider = watcherOver(join(root, 'mods', 'Provider'));
+    const provider = watcherOver(join(root, 'mods'));
     provider.fireCreate(join(root, 'mods', 'Provider', 'New.esp'));
     provider.fireChange(join(root, 'mods', 'Provider', 'New.esp'));
     provider.fireChange(join(root, 'mods', 'Provider', 'New.esp'));

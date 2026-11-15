@@ -22,6 +22,7 @@ import { pluginCommandsWith } from '../pluginCommandsWith';
 import { fakeInstallationFileReader } from '../fakeInstallationFileReader';
 import { NO_DETECTORS } from '../noDetectors';
 import { fixedGameFolderSetting } from '../gameFolderSetting';
+import { watcherExcluding } from '../watcherExclusion';
 import { FOMOD_ENGINE } from '../fomodEngine';
 import { DEPLOYED_PATH } from '../deployedPath';
 import { expectKind } from '../expectKind';
@@ -60,7 +61,7 @@ export function contextOver(root: string, answers: AdapterAnswers = {}): Mo2Cont
     resolveSteamInstall: steamInstallResolver(detectors),
     resolveDownloadsFolder: downloadsFolder !== undefined ? () => Promise.resolve(downloadsFolder) : downloadsDirectoryResolver(detectors),
     resolveMyGames: myGamesResolver(root, detectors),
-    watch: mo2Watch(root, setting.changed, repository.changed),
+    watch: mo2Watch(root, setting.changed, repository.changed, watcherExcluding()),
     repository,
     mo2Running,
   };

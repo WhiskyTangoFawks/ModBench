@@ -46,11 +46,15 @@ const PATH_IMPORT = {
 };
 const PACKAGE_IMPORT = {
     regex: '^(?![.]|node:|vscode$)',
-    message: 'Only the mEdit client, the content digest (xxhash-wasm), the FOMOD installer (its engine), the Wabbajack publisher and the text of plugin source (jsonc-parser) and LOOT\'s metadata (yaml) import a package.',
+    message: 'Only the mEdit client, the content digest (xxhash-wasm), the watcher exclusion (picomatch), the FOMOD installer (its engine), the Wabbajack publisher and the text of plugin source (jsonc-parser) and LOOT\'s metadata (yaml) import a package.',
 };
 const DIGEST_PACKAGE_IMPORT = {
     regex: '^(?![.]|node:|vscode$|xxhash-wasm$)',
     message: 'The content digest imports one package: the xxHash mEdit\'s manifest is hashed with.',
+};
+const PICOMATCH_PACKAGE_IMPORT = {
+    regex: '^(?![.]|node:|vscode$|picomatch$)',
+    message: 'The watcher exclusion imports one package: the glob matcher for files.watcherExclude.',
 };
 const FOMOD_ENGINE_PACKAGE_IMPORT = {
     regex: '^(?![.]|node:|vscode$|@nexusmods/fomod-installer-native$)',
@@ -263,6 +267,12 @@ export default defineConfig(
             'no-restricted-imports': restrictedImports({
                 vscode: true, packages: false, path: false, inAdapter: true, byteReads: false, extra: [DIGEST_PACKAGE_IMPORT],
             }),
+        },
+    },
+    {
+        files: ['src/instanceAdapter/watcherExclusion.ts'],
+        rules: {
+            'no-restricted-imports': restrictedImports({ vscode: true, packages: false, path: false, inAdapter: true, extra: [PICOMATCH_PACKAGE_IMPORT] }),
         },
     },
     {
