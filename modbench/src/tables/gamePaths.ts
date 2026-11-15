@@ -20,6 +20,8 @@ export interface GamePathInfo {
   readonly steamFolderName?: string;
   /** The game's masters: the plugins it loads with no plugins.txt line, in Mutagen's `Implicits.Listings` order for the release. */
   readonly masters: readonly string[];
+  /** The game plays a sound named as a `.wav` from the `.xwm` at the same path when it holds no `.wav` (xEdit's Assets manager, `gmTES5` onward). */
+  readonly playsWavFromXwm?: true;
   /** The release loads a blueprint plugin after every plugin that is not one. */
   readonly blueprintLoadsLast?: true;
   /** The release has light plugins, which the game loads as masters (libloot's `is_master_file`). Mutagen's `CanBeSmallMaster`. */
@@ -120,21 +122,21 @@ const SKYRIM_ARCHIVES: ArchiveLists = {
 
 const GAME_PATHS: Record<string, GamePathInfo> = {
   Fallout4: {
-    gameName: 'Fallout 4', lightPlugins: true, nexusSlug: 'fallout4', lootRepository: 'fallout4', steamAppId: '377160', steamFolderName: 'Fallout 4',
+    gameName: 'Fallout 4', lightPlugins: true, playsWavFromXwm: true, nexusSlug: 'fallout4', lootRepository: 'fallout4', steamAppId: '377160', steamFolderName: 'Fallout 4',
     masters: FALLOUT4_MASTERS, creationClubList: 'Fallout4.ccc',
     scriptExtenderFolder: 'f4se', programs: { game: 'Fallout4.exe', extenderLoader: 'f4se_loader.exe' },
     pluginCompanions: FALLOUT4_COMPANIONS, archiveLists: FALLOUT4_ARCHIVES, papyrusFolders: FALLOUT4_PAPYRUS,
     archives: FALLOUT4_ARCHIVES_PACKED,
   },
   Fallout4VR: {
-    gameName: 'Fallout 4 VR', lightPlugins: true, nexusSlug: 'fallout4', lootRepository: 'fallout4vr', validShortNames: ['Fallout4'], masters: [...FALLOUT4_MASTERS, 'Fallout4_VR.esm'],
+    gameName: 'Fallout 4 VR', lightPlugins: true, playsWavFromXwm: true, nexusSlug: 'fallout4', lootRepository: 'fallout4vr', validShortNames: ['Fallout4'], masters: [...FALLOUT4_MASTERS, 'Fallout4_VR.esm'],
     creationClubList: 'Fallout4.ccc',
     scriptExtenderFolder: 'f4se', programs: { game: 'Fallout4VR.exe', extenderLoader: 'f4sevr_loader.exe' }, pluginCompanions: FALLOUT4_COMPANIONS,
     archiveLists: { ...FALLOUT4_ARCHIVES, myGamesFolder: 'Fallout4VR', defaultIni: 'Fallout4.ini' }, papyrusFolders: FALLOUT4_PAPYRUS,
     archives: FALLOUT4_ARCHIVES_PACKED,
   },
   SkyrimSE: {
-    gameName: 'Skyrim Special Edition', lightPlugins: true, nexusSlug: 'skyrimspecialedition', lootRepository: 'skyrimse', validShortNames: ['Skyrim'], steamAppId: '489830', steamFolderName: 'Skyrim Special Edition',
+    gameName: 'Skyrim Special Edition', lightPlugins: true, playsWavFromXwm: true, nexusSlug: 'skyrimspecialedition', lootRepository: 'skyrimse', validShortNames: ['Skyrim'], steamAppId: '489830', steamFolderName: 'Skyrim Special Edition',
     masters: SKYRIM_MASTERS,
     creationClubList: 'Skyrim.ccc',
     scriptExtenderFolder: 'skse', programs: { game: 'SkyrimSE.exe', extenderLoader: 'skse64_loader.exe' },
@@ -142,14 +144,14 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
     archives: SKYRIM_ARCHIVES_PACKED,
   },
   SkyrimVR: {
-    gameName: 'Skyrim VR', lightPlugins: true, nexusSlug: 'skyrimspecialedition', lootRepository: 'skyrimvr', validShortNames: ['Skyrim', 'SkyrimSE'], masters: [...SKYRIM_MASTERS, 'SkyrimVR.esm'],
+    gameName: 'Skyrim VR', lightPlugins: true, playsWavFromXwm: true, nexusSlug: 'skyrimspecialedition', lootRepository: 'skyrimvr', validShortNames: ['Skyrim', 'SkyrimSE'], masters: [...SKYRIM_MASTERS, 'SkyrimVR.esm'],
     creationClubList: 'Skyrim.ccc',
     scriptExtenderFolder: 'skse', programs: { game: 'SkyrimVR.exe', extenderLoader: 'sksevr_loader.exe' }, pluginCompanions: SKYRIM_COMPANIONS,
     archiveLists: { ...SKYRIM_ARCHIVES, myGamesFolder: 'Skyrim VR', defaultIni: 'Skyrim.ini', userInis: ['Skyrim.ini', 'SkyrimVR.ini', 'SkyrimCustom.ini'] },
     papyrusFolders: SKYRIM_PAPYRUS, archives: SKYRIM_ARCHIVES_PACKED,
   },
   Starfield: {
-    gameName: 'Starfield', lightPlugins: true, nexusSlug: 'starfield', lootRepository: 'starfield', steamAppId: '1716740', steamFolderName: 'Starfield',
+    gameName: 'Starfield', lightPlugins: true, playsWavFromXwm: true, nexusSlug: 'starfield', lootRepository: 'starfield', steamAppId: '1716740', steamFolderName: 'Starfield',
     masters: STARFIELD_MASTERS, creationClubList: 'Starfield.ccc', blueprintLoadsLast: true,
     scriptExtenderFolder: 'sfse', programs: { game: 'Starfield.exe', extenderLoader: 'sfse_loader.exe' }, pluginCompanions: FALLOUT4_COMPANIONS,
     archiveLists: { myGamesFolder: 'Starfield', defaultIni: 'Starfield.ini', userInis: ['StarfieldCustom.ini'], keys: RESOURCE_INDEX_KEYS },
@@ -194,6 +196,12 @@ const NEXUS_DOMAINS_OF_UNSUPPORTED_SHORT_NAMES: Readonly<Record<string, string>>
 export function nexusDomainForMetaGame(gameName: string): string | undefined {
   const release = gameReleaseForMetaGame(gameName);
   return release === undefined ? NEXUS_DOMAINS_OF_UNSUPPORTED_SHORT_NAMES[gameName] : GAME_PATHS[release]?.nexusSlug;
+}
+
+/** The paths the game gets for a path a plugin source names, in the order it tries them. */
+export function pathsTheGameTries(release: string | undefined, dataPath: string): readonly string[] {
+  const plays = release !== undefined && GAME_PATHS[release]?.playsWavFromXwm === true;
+  return plays && dataPath.toLowerCase().endsWith('.wav') ? [dataPath, `${dataPath.slice(0, -4)}.xwm`] : [dataPath];
 }
 
 /** The Nexus domains the mod manager asks about a file of the game `gameName` names, in its order: the game's own, then each valid short name's. */
