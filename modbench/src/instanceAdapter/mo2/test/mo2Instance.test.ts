@@ -1141,11 +1141,20 @@ describe('the MO2 Instance adapter', () => {
         ]);
       });
 
-      it('names the folder holding a file the user excluded, with the pattern, once for each pattern', async () => {
+      it('names the folder holding files the user excluded, with the pattern, once for each pattern however many mods hold them', async () => {
         const watched = await listedWith({ '**/*.dds': true });
+        await writeFile(join(root, 'mods', 'Patch Mod', 'b.dds'), '');
+        await watched.originFiles({ kind: 'mod', name: 'Patch Mod' }, 'list');
 
         expect(wholeBelow()).toEqual(['mods', 'overwrite', 'source']);
         expect(named(watched)).toEqual([{ folder: 'mods', reason: `files matching **/*.dds are ${EXCLUDED}` }]);
+      });
+
+      it('names an excluded mod once, though both its root-only and its full listing name it', async () => {
+        const watched = await listedWith({ '**/mods/Harder VATS/**': true });
+        await watched.originRootFiles(harderVats, 'list');
+
+        expect(named(watched)).toEqual([{ folder: 'mods/Harder VATS', reason: EXCLUDED }]);
       });
 
       it('watches everything whole, and names no folder, once the user stops excluding them', async () => {

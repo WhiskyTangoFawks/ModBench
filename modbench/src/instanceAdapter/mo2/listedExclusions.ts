@@ -31,12 +31,12 @@ export function listedExclusions(exclusion: () => Exclusion, watchedBases: reado
       for (const listing of listings.values()) judged(listing);
     },
     excludedFolders: (): string[] => [...new Set([...listings.values()].flatMap(({ excludedFolders }) => excludedFolders))],
-    named: (): UnwatchedFolder[] => [...listings.values()].flatMap((listing) => [
+    named: (): UnwatchedFolder[] => [...new Map([...listings.values()].flatMap((listing) => [
       ...listing.excludedFolders.map((folder) => ({ folder, reason: EXCLUDED })),
       ...listing.excludedFilePatterns.flatMap((pattern) => {
         const folder = baseOf(listing);
         return folder === undefined ? [] : [{ folder, reason: `files matching ${pattern} are ${EXCLUDED}` }];
       }),
-    ]),
+    ]).map((named) => [`${named.folder}\0${named.reason}`, named])).values()],
   };
 }
