@@ -4,13 +4,12 @@ import { isReadFailed } from '../wire/readFailed';
 
 // A plugin re-derived whole is announced with no keys: a tab waiting on a report reads once mEdit holds its record.
 export function subscribeRecordTabsToNotifications(
-  client: Pick<MEditClient, 'onNotification' | 'getRecordOwners'>,
+  client: Pick<MEditClient, 'onDidChange' | 'getRecordOwners'>,
   tabs: Iterable<RecordTab>,
 ): () => void {
-  const unsubscribeRows = client.onNotification('rows-changed', (event) => {
-    for (const tab of tabs) tab.reported(event.keys);
-  });
-  const unsubscribePlugin = client.onNotification('plugin-changed', () => {
+  const subscription = client.onDidChange((change) => {
+    for (const { keys } of change ?? []) if (keys) for (const tab of tabs) tab.reported(keys);
+    if (change !== undefined && change.every(({ keys }) => keys !== undefined)) return;
     for (const tab of tabs) {
       const formKey = tab.waitingFor();
       if (!formKey) continue;
@@ -20,7 +19,7 @@ export function subscribeRecordTabsToNotifications(
         () => undefined);
     }
   });
-  return () => { unsubscribeRows(); unsubscribePlugin(); };
+  return () => { subscription.dispose(); };
 }
 
 /** A reconcile settled: every record tab reads its comparison again. */

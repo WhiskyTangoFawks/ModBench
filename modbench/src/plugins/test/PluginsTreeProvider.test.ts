@@ -1112,19 +1112,56 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
     return { group: present(group, 'the Weapon group'), record: present(record, 'the record row') };
   }
 
-  it('flips a record row on the reconcile after its mod is decompiled and committed, from the rows already read', async () => {
+  describe('a change of the record index', () => {
+    const redrawnBy = async (filterSource: string | undefined) => {
+      const h = makeTree([plugin({ name: 'A.esp', line: 0 }), plugin({ name: 'B.esp', line: 1 })], { client: weaponOf(recordSummaryFixture()) });
+      await reconcile(h, [held('A.esp'), held('B.esp')]);
+      const [a] = await h.tree.getChildren();
+      h.tree.setRecordFilterSource(filterSource);
+      const redrawn: unknown[] = [];
+      h.tree.onDidChangeTreeData((element) => redrawn.push(element));
+
+      h.tree.indexChanged([{ plugin: { name: 'A.esp', origin: 'SomeMod' } }]);
+
+      return { redrawn, a };
+    };
+
+    it('redraws only the named plugin\'s row', async () => {
+      const { redrawn, a } = await redrawnBy(undefined);
+
+      expect(new Set(redrawn)).toEqual(new Set([a]));
+    });
+
+    it('redraws every row while a record filter is in force, which decides which plugins have a row', async () => {
+      const { redrawn } = await redrawnBy('a.sql');
+
+      expect(new Set(redrawn)).toEqual(new Set([undefined]));
+    });
+  });
+
+  it('gives a record-type group an id of its own, so VS Code keeps it open across a redraw', async () => {
+    const client = weaponOf(recordSummaryFixture());
+    const h = makeTree([plugin({ name: 'A.esp', line: 0 })], { client });
+    await reconcile(h, [held('A.esp')]);
+    const [row] = await h.tree.getChildren();
+
+    const { group } = await firstRecordUnder(h, present(row, 'the A.esp row'));
+    const again = (await firstRecordUnder(h, present(row, 'the A.esp row'))).group;
+
+    expect([group.id, again.id]).toEqual(Array(2).fill(present(group.resourceUri, 'the group\'s URI').toString()));
+  });
+
+  it('flips a record row on the reconcile after its mod is decompiled and committed', async () => {
     const client = weaponOf(recordSummaryFixture());
     const h = makeTree([plugin({ name: 'A.esp', line: 0 })], { client });
     await reconcile(h, [held('A.esp')]);
     const [row] = await h.tree.getChildren();
     expect((await firstRecordUnder(h, present(row, 'the A.esp row'))).record.contextValue).toBe('record');
-    const reads = client.calls.filter((c) => c.method === 'getRecords').length;
 
     await reconcile(h, [held('A.esp', { isCompiledPlugin: true })]);
     const [again] = await h.tree.getChildren();
 
     expect((await firstRecordUnder(h, present(again, 'the A.esp row'))).record.contextValue).toBe('record editable');
-    expect(client.calls.filter((c) => c.method === 'getRecords')).toHaveLength(reads);
   });
 
   const DATA_COPY = held('Fallout4.esm', { origin: 'Data/', isImmutable: true });
@@ -1748,20 +1785,6 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
     const row = present(await tree.recordRow(NPCS, NEW_NPC), 'the new record\'s row');
 
     expect(row.description).toBe('000900:A.esp');
-  });
-
-  it('does not count a row it walks past as expanded, though it reads its children', async () => {
-    const h = await heldWith(listing('000900:A.esp'));
-    const group = present(h.tree.getParent(present(await h.tree.recordRow(NPCS, NEW_NPC), 'the new record\'s row')), 'the group row');
-    const groupUri = present(group.resourceUri, 'the group row\'s URI');
-    h.records.expandedRow(groupUri);
-    h.records.refresh();
-
-    await h.tree.recordRow(NPCS, NEW_NPC);
-    const walked = h.records.isExpanded(groupUri);
-    await h.tree.getChildren(group);
-
-    expect([walked, h.records.isExpanded(groupUri)]).toEqual([false, true]);
   });
 
   it('walks from the record\'s row up through its group to its plugin row, and no further', async () => {

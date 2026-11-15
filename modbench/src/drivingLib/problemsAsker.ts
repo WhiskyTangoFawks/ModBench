@@ -8,15 +8,20 @@ interface Answered { plugin: PluginAddress; failure?: string | null; unread: str
 interface Reads<Paths extends Answered, Problems, Status> {
   getPluginFilePaths(plugin?: PluginAddress): Promise<Paths[] | ReadFailed>;
   getPluginProblems(plugin?: PluginAddress): Promise<Problems[] | ReadFailed>;
-  onNotification(kind: 'rows-changed' | 'plugin-changed', listener: (event: { plugin: PluginAddress }) => void): () => void;
+  onDidChange(listener: (change: readonly { readonly plugin: PluginAddress }[] | undefined) => void): { dispose(): void };
   onLoadOrderSettled(listener: (status: Status) => void): () => void;
+}
+
+/** A plugin-changed listener that asks of the one plugin named, or of the whole set when none is. */
+export function askingOnChange(whole: () => void, plugin: (changed: { plugin: PluginAddress }) => void): (event: { plugin?: PluginAddress }) => void {
+  return (event) => { if (event.plugin === undefined) whole(); else plugin({ plugin: event.plugin }); };
 }
 
 export interface ProblemsAsker<Paths extends Answered, Problems, Status> {
   getPluginFilePaths: Reads<Paths, Problems, Status>['getPluginFilePaths'];
   getPluginProblems: Reads<Paths, Problems, Status>['getPluginProblems'];
-  /** Told after the asker dropped what it held of the plugin. */
-  onPluginChanged(listener: (event: { plugin: PluginAddress }) => void): () => void;
+  /** Told after the asker dropped what it held of the plugin, or of every plugin when no plugin is named. */
+  onPluginChanged(listener: (event: { plugin?: PluginAddress }) => void): () => void;
   /** Told after the asker dropped everything it held. */
   onLoadOrderSettled(listener: (status: Status) => void): () => void;
   /** Told to ask again of a read that failed: after a delay, and, for the file paths the asker holds, at once when another ask of them is answered. */
@@ -66,9 +71,11 @@ export function problemsAsker<Paths extends Answered, Problems, Status>(client: 
     dispose: () => { retries.dispose(); },
     onAskedAgain: (read, listener) => retries.onAskedAgain(read, listener),
     onPluginChanged: (listener) => {
-      const heard = (event: { plugin: PluginAddress }) => { forget(event.plugin); listener(event); };
-      const off = [client.onNotification('rows-changed', heard), client.onNotification('plugin-changed', heard)];
-      return () => { for (const stop of off) stop(); };
+      const subscription = client.onDidChange((change) => {
+        if (change === undefined) { forget(); listener({}); return; }
+        for (const { plugin } of change) { forget(plugin); listener({ plugin }); }
+      });
+      return () => { subscription.dispose(); };
     },
     onLoadOrderSettled: (listener) => client.onLoadOrderSettled((status) => { forget(); listener(status); }),
     forget,

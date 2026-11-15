@@ -21,7 +21,7 @@ function fakeClient() {
   const calls: { method: Method; plugin?: PluginAddress }[] = [];
   const queued: Record<Method, (() => Promise<Answer>)[]> = { getPluginFilePaths: [], getPluginProblems: [] };
   const standing: Record<Method, Answer> = { getPluginFilePaths: [answerFor(A), answerFor(B)], getPluginProblems: [] };
-  const changed = new Set<(event: { plugin: PluginAddress }) => void>();
+  const changed = new Set<(change: readonly { plugin: PluginAddress }[] | undefined) => void>();
   const settled = new Set<(status: { conflictsComputed: boolean }) => void>();
   const read = (method: Method) => (plugin?: PluginAddress): Promise<Answer> => {
     calls.push({ method, plugin });
@@ -32,7 +32,7 @@ function fakeClient() {
     calls,
     getPluginFilePaths: read('getPluginFilePaths'),
     getPluginProblems: read('getPluginProblems'),
-    onNotification: (_kind: 'rows-changed' | 'plugin-changed', listener: (event: { plugin: PluginAddress }) => void) => subscribe(changed, listener),
+    onDidChange: (listener: (change: readonly { plugin: PluginAddress }[] | undefined) => void) => ({ dispose: subscribe(changed, listener) }),
     onLoadOrderSettled: (listener: (status: { conflictsComputed: boolean }) => void) => subscribe(settled, listener),
     answerNext: (method: Method, answer: () => Promise<Answer>) => { queued[method].push(answer); },
     answerAlways: (method: Method, answer: Answer) => { standing[method] = answer; },
@@ -41,7 +41,8 @@ function fakeClient() {
       release.forEach((each) => queued[method].push(() => new Promise<Answer>((resolve) => { each.now = () => { resolve(answer); }; })));
       return release;
     },
-    pluginChanged: (plugin: PluginAddress) => { for (const listener of changed) listener({ plugin }); },
+    pluginChanged: (plugin: PluginAddress) => { for (const listener of changed) listener([{ plugin }]); },
+    everythingChanged: () => { for (const listener of changed) listener(undefined); },
     loadOrderSettled: () => { for (const listener of settled) listener({ conflictsComputed: true }); },
     asked: (method: Method = 'getPluginFilePaths') => calls.filter((call) => call.method === method).map(({ plugin }) => plugin),
   };
@@ -85,6 +86,20 @@ describe('problemsAsker', () => {
     expect([await asker.getPluginFilePaths(A), await asker.getPluginFilePaths(B), client.asked()]).toEqual([
       [answerFor(A, { unread: ['changed'] })], [answerFor(B)], [A, B, A],
     ]);
+  });
+
+  it('asks again of every plugin when a change names none', async () => {
+    const { client, asker } = started();
+    await asker.getPluginFilePaths(A);
+    await asker.getPluginFilePaths(B);
+    const told: unknown[] = [];
+    asker.onPluginChanged((event) => { told.push(event); });
+
+    client.everythingChanged();
+    await asker.getPluginFilePaths(A);
+    await asker.getPluginFilePaths(B);
+
+    expect([client.asked(), told]).toEqual([[A, B, A, B], [{}]]);
   });
 
   it('tells a listener of a change only after it dropped what it held, so the listener is answered after the change', async () => {
