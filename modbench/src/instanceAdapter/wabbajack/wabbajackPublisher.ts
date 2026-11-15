@@ -7,7 +7,7 @@ import { applyEdits, parse, parseTree, printParseErrorCode, type Edit, type Node
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { lastHanded, noneLeft } from '../../ports/lastBuilt';
-import { listDirByStamp, putIfChanged, readOrAbsent, textByStamp } from '../files';
+import { listDir, putIfChanged, readOrAbsent, textByStamp } from '../files';
 import type { Covering, Listed, PathRefusal, PublisherConfiguration, PublisherTag, PublisherTagChange, TagPathProblem, UnshippableReason } from '../instanceAdapter';
 import type { ConfigurationFile, Publisher } from '../publisher';
 import { sedReplacement, sedSubstitution } from '../pathTokens';
@@ -121,7 +121,7 @@ async function holdsPath(instanceRoot: string, names: readonly string[], listing
   let folder = instanceRoot;
   for (const name of names) {
     const listed = folder;
-    const listing = listings.get(listed) ?? listDirByStamp(listed).then(
+    const listing = listings.get(listed) ?? listDir(listed).then(
       (entries) => new Map(entries.map((entry) => [entry.name.toLowerCase(), entry.name])),
       (err: unknown) => {
         if (errnoCode(err) === 'ENOENT' || errnoCode(err) === 'ENOTDIR') return undefined;
@@ -592,7 +592,8 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
         const missing = insides.filter((inside) => !isUnderAnyOf(namesOf(inside), remainingKeys));
         return withListChanged(before, 'Ignore', { changed, appended: missing.map(wabbajackSpelling) });
       };
-      if (keptOut(text) !== text) await putIfChanged(file, keptOut);
+      const after = keptOut(text);
+      if (after !== text) await putIfChanged(file, (before) => (before === text ? after : keptOut(before)));
     },
     subscribe: (listener) => watchFiles(instanceRoot, COMPILER_SETTINGS.name, listener),
   };

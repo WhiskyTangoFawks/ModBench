@@ -34,7 +34,7 @@ import { holdsPathToken } from '../pathTokens';
 
 /** The names of the downloaded files in `downloadsDir`; undefined when it is absent. */
 export async function downloadedFileNames(downloadsDir: string, skippedLink: SkippedLink): Promise<string[] | undefined> {
-  const dirents = await readOrAbsent(() => listEntries(downloadsDir, skippedLink), undefined);
+  const dirents = await readOrAbsent(() => listEntries(downloadsDir, skippedLink, listDirByStamp), undefined);
   return dirents?.filter((d) => d.isFile && isInstallationFileName(d.name) && !isOwnTemp(d.name)).map((d) => d.name);
 }
 
@@ -183,7 +183,7 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
       };
     },
 
-    profiles: async (skippedLink) => watchedProfiles(context, await readOrAbsent(() => listFolders(profilesDir(instanceRoot), skippedLink), [])),
+    profiles: async (skippedLink) => watchedProfiles(context, await readOrAbsent(() => listFolders(profilesDir(instanceRoot), skippedLink, listDirByStamp), [])),
 
     async modOrder(profile) {
       return modlistAt(modlistFile(instanceRoot, profile));

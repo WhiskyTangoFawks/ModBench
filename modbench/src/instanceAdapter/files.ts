@@ -23,7 +23,8 @@ export function isRepository(sourceFolder: string): Promise<boolean> {
   return listedIn(sourceFolder, GIT_DIR);
 }
 
-/** Whether `folder`'s listing, kept as `listDirByStamp` keeps it, holds an entry named `name`; false when `folder` is not there. */
+/** Whether `folder`'s listing, kept as `listDirByStamp` keeps it, holds an entry named `name`; false when `folder` is not
+ *  there. Only for a `name` a watch hears made and removed. */
 export async function listedIn(folder: string, name: string): Promise<boolean> {
   return (await readOrAbsent(() => listDirByStamp(folder), [])).some((entry) => pathKey(entry.name) === pathKey(name));
 }
@@ -296,7 +297,8 @@ export function listDir(path: string): Promise<Dirent[]> {
 
 const listings = new Map<string, Kept<Dirent[]>>();
 
-/** As `listDir`, for a folder of the instance or the game, which is not listed again while its stamp has not changed. */
+/** As `listDir`, listed again only when the folder's stamp changed. Only for a folder a watch follows at its first level:
+ *  inside a reading, a change no watch names waits for a check of the disk. */
 export const listDirByStamp = stampKept(listDir, listings);
 
 /** `path`'s stamp, kept as `listDirByStamp` keeps a listing. */
@@ -324,10 +326,9 @@ export interface ResolvedEntry {
   readonly isDirectory: boolean;
 }
 
-/** The entries directly in `path`, each link as what it links to. A folder outside the instance and the game, or one a watch
- *  stands in for, is listed by `listDir`. */
+/** The entries directly in `path`, as `list` lists them, each link as what it links to. */
 export async function listEntries(
-  path: string, skippedLink: SkippedLink, list: (path: string) => Promise<Dirent[]> = listDirByStamp,
+  path: string, skippedLink: SkippedLink, list: (path: string) => Promise<Dirent[]> = listDir,
 ): Promise<ResolvedEntry[]> {
   const entries = await Promise.all((await list(path)).map(async (dirent): Promise<ResolvedEntry | undefined> => {
     const { name } = dirent;

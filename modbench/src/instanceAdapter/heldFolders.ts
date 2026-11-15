@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
 import { isInside } from '../ports/pathInside';
 import { errnoCode } from '../ports/errno';
-import { ignoreSkippedLink, listDir, listFolders } from './files';
+import { ignoreSkippedLink, listFolders } from './files';
 import type { UnwatchedFolder } from './instanceAdapter';
 
 export interface HeldFolderWatch {
@@ -92,7 +92,7 @@ function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): H
   const foldersIn = async (folder: string): Promise<string[]> => {
     listingFailed.delete(folder);
     try {
-      const names = await listFolders(folder, ignoreSkippedLink, listDir);
+      const names = await listFolders(folder, ignoreSkippedLink);
       return names.map((name) => join(folder, name));
     } catch (error) {
       if (isGone(error)) return [];

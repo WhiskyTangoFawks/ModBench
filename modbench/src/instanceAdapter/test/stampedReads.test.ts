@@ -320,6 +320,25 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     expect(checked).not.toEqual(outside);
   });
 
+  it('reads .gitmodules again, within a reading, only where a re-read is named it', async () => {
+    execFileSync('git', ['init', '-q', instance]);
+    const file = join(instance, '.gitmodules');
+    const entry = (name: string): string => `[submodule "${name}"]\n\tpath = source/${name}\n\turl = https://example.com/${name}.git\n`;
+    await writeFile(file, entry('A'));
+    const adapter = managerOver(instance);
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
+    const uncloned = async (reread: Reread): Promise<string[]> =>
+      (await (await adapter.reading(reread)).trustingKept(() => adapter.unclonedSubmodules())).map(({ name }) => name);
+    const first = await uncloned(CHECK_THE_DISK);
+    await writeFile(file, entry('A') + entry('B'));
+    await modifiedLater(file);
+
+    const unnamed = await uncloned({ named: [], disk: false });
+    const named = await uncloned({ named: [file], disk: false });
+
+    expect([first, unnamed, named]).toEqual([['A'], ['A'], ['A', 'B']]);
+  });
+
   describe('with a game folder', () => {
     let game: string;
     let gameFolder: GameFolder;
@@ -358,10 +377,40 @@ describe('the MO2 reading of an instance nothing changed in', () => {
       expect(await pathsThereTakenBesideTheNamedFile(join(instance, 'mods', 'Patch Mod', 'Patch Mod.esp'))).toEqual([]);
     });
 
-    it('reads, lists and stats nothing of an instance with a publisher\'s configuration but the file a re-read is named and its folder', async () => {
+    it('reads, lists and stats nothing of an instance with a publisher\'s configuration but the file a re-read is named, its folder, and each folder along a tag\'s path', async () => {
       await writeFile(join(instance, 'compiler_settings.json'), JSON.stringify({ Profile: 'Default', Include: ['mods/Patch Mod/Patch Mod.esp'] }));
 
-      expect(await pathsThereTakenBesideTheNamedFile(join(instance, 'mods', 'Patch Mod', 'Patch Mod.esp'))).toEqual([]);
+      expect(await pathsThereTakenBesideTheNamedFile(join(instance, 'mods', 'Patch Mod', 'Patch Mod.esp'))).toEqual([instance, join(instance, 'mods')]);
+    });
+
+    it('shows a publisher tag\'s path made at the instance root, which no watch hears, at a re-read named another file', async () => {
+      await writeFile(join(instance, 'compiler_settings.json'), JSON.stringify({ Include: ['tools/x.txt'] }));
+      const adapter = adapterOver(instance, { gameFolder });
+      const pathProblems = async (reread: Reread): Promise<number> =>
+        expectKind((await adapter.reading(reread)).publisherConfiguration, 'read').pathProblems.length;
+      const before = await pathProblems(CHECK_THE_DISK);
+      await mkdir(join(instance, 'tools'));
+      await writeFile(join(instance, 'tools', 'x.txt'), '');
+      await modifiedLater(instance);
+
+      const after = await pathProblems({ named: [join(instance, 'mods', 'Patch Mod', 'Patch Mod.esp')], disk: false });
+
+      expect([before, after]).toEqual([1, 0]);
+    });
+
+    it('reads the Creation Club list a mod deploys from a folder in it, which no watch hears, at a re-read named another file', async () => {
+      const deployedFrom = join(instance, 'mods', 'Patch Mod', 'Root');
+      await writeFile(join(game, 'Fallout4.ccc'), 'a.esl\r\n');
+      await mkdir(deployedFrom);
+      const adapter = adapterOver(instance, { gameFolder });
+      const listed = async (reread: Reread): Promise<readonly string[]> => (await adapter.reading(reread)).creationClubList;
+      const before = await listed(CHECK_THE_DISK);
+      await writeFile(join(deployedFrom, 'Fallout4.ccc'), 'b.esl\r\n');
+      await modifiedLater(deployedFrom);
+
+      const after = await listed({ named: [join(instance, 'mods', 'Harder VATS', 'x.esp')], disk: false });
+
+      expect([before, after]).toEqual([['a.esl'], ['b.esl']]);
     });
 
     it('finds at a check of the disk a Data folder file a link elsewhere made a deployed one, which no stamp shows', async () => {

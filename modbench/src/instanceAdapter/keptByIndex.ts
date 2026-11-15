@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { errnoCode } from '../ports/errno';
 import { sameStamp, settledBefore, type FileStamp } from '../repositoriesLib/stampedReads';
-import { GIT_DIR, isAbsent, readOrAbsent, stampByStamp, stampKept } from './files';
+import { GIT_DIR, isAbsent, readOrAbsent, stampByStamp, stampKept, stampOf } from './files';
 
 type MaybeStamped = FileStamp | undefined;
 
@@ -19,11 +19,20 @@ const gitDirAt = stampKept(async (dotGit: string): Promise<string> => {
 
 const gitDirOf = (repository: string): Promise<string> => readOrAbsent(() => gitDirAt(join(repository, GIT_DIR)), join(repository, GIT_DIR));
 
-const stampedIfThere = (path: string): Promise<MaybeStamped> =>
-  stampByStamp(path).catch((err: unknown) => {
+const stampedIfThere = (stamp: (path: string) => Promise<FileStamp>) => (path: string): Promise<MaybeStamped> =>
+  stamp(path).catch((err: unknown) => {
     if (isAbsent(err)) return undefined;
     throw err;
   });
+
+// The instance's watch follows its own .git folder's index and its .gitmodules; no watch follows a git directory elsewhere.
+async function indexStamps(repository: string): Promise<MaybeStamped[]> {
+  const dotGit = join(repository, GIT_DIR);
+  const gitDir = await gitDirOf(repository);
+  return Promise.all([
+    stampedIfThere(gitDir === dotGit ? stampByStamp : stampOf)(join(gitDir, 'index')), stampedIfThere(stampByStamp)(join(repository, '.gitmodules')),
+  ]);
+}
 
 const sameStamps = (a: readonly MaybeStamped[], b: readonly MaybeStamped[]): boolean =>
   a.length === b.length && a.every((stamp, i) => {
@@ -43,7 +52,7 @@ export function keptByIndex<T>(keeps: (value: T) => boolean = () => true): (repo
   const kept = new Map<string, Kept<T>>();
   return async (repository, key, read, version = '') => {
     const where = `${repository}\0${key}`;
-    const stamps = await Promise.all([join(await gitDirOf(repository), 'index'), join(repository, '.gitmodules')].map(stampedIfThere));
+    const stamps = await indexStamps(repository);
     const held = kept.get(where);
     if (held !== undefined && held.version === version && sameStamps(held.stamps, stamps)) return held.value;
     const readFromMs = Date.now();

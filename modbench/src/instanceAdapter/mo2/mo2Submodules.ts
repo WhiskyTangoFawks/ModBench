@@ -7,7 +7,7 @@ import { errnoCode } from '../../ports/errno';
 import { git } from '../git';
 import { keptByIndex } from '../keptByIndex';
 import { errorMessage } from '../../ports/errorMessage';
-import { exists, get, ignoreSkippedLink, isRepository, listFolders, putIfChanged, readOrAbsent, remove, stampKept, textByStamp } from '../files';
+import { exists, get, ignoreSkippedLink, isRepository, listDirByStamp, listFolders, putIfChanged, readOrAbsent, remove, stampKept, textByStamp } from '../files';
 import type { InstanceAdapter, SourceHost, Submodule, SubmoduleLacks, SubmoduleNote, UnclonedSubmodule } from '../instanceAdapter';
 import {
   ignoreListFile, modsDir, sourceModLinesOf, sourceModPath, sourceRootDir, submodulesFile, leavesOutSourceFolders, withHeldWholeFollowed, withSourceModLines, type SourceFolders,
@@ -104,7 +104,7 @@ async function entryWritten(instanceRoot: string, file: string, { name, url, bra
 /** The source folders a clone gets: those `.gitmodules` names, or `submodules`, and each other that holds no repository of its own. */
 export async function sourceFoldersOf(instanceRoot: string, submodules?: ReadonlySet<string>): Promise<SourceFolders> {
   const entries = submodules ?? new Set(await sourceEntries(submodulesFile(instanceRoot)));
-  const folders = await readOrAbsent(() => listFolders(sourceRootDir(instanceRoot), ignoreSkippedLink), []);
+  const folders = await readOrAbsent(() => listFolders(sourceRootDir(instanceRoot), ignoreSkippedLink, listDirByStamp), []);
   const plain: string[] = [];
   for (const name of folders) if (!entries.has(name) && !(await isRepository(join(sourceRootDir(instanceRoot), name)))) plain.push(name);
   return { submodules: [...entries], plain };

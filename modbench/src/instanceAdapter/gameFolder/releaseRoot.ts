@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { SCRIPT_EXTENDER_FOLDERS } from '../../tables/gamePaths';
 import { present } from '../../ports/present';
-import { ignoreSkippedLink, listDir, listEntries } from '../files';
+import { ignoreSkippedLink, listEntries } from '../files';
 
 const DATA_DIRS = new Set([
   'meshes', 'textures', 'materials', 'sound', 'music', 'scripts', 'source',
@@ -21,7 +21,7 @@ export type FomodKind = 'xml' | 'script';
 const INSTALLER_FILES: readonly [string, FomodKind][] = [['moduleconfig.xml', 'xml'], ['script.cs', 'script']];
 
 async function installerIn(fomodDir: string): Promise<FomodKind | undefined> {
-  const files = (await listEntries(fomodDir, ignoreSkippedLink, listDir)).filter((entry) => entry.isFile);
+  const files = (await listEntries(fomodDir, ignoreSkippedLink)).filter((entry) => entry.isFile);
   return INSTALLER_FILES.find(([name]) => files.some(named(name)))?.[1];
 }
 
@@ -29,7 +29,7 @@ async function installerIn(fomodDir: string): Promise<FomodKind | undefined> {
 export async function releaseRoot(extracted: string): Promise<{ root: string; fomod?: FomodKind }> {
   let level = extracted;
   for (let depth = 0; depth < MAX_WRAPPERS; depth++) {
-    const entries = await listEntries(level, ignoreSkippedLink, listDir);
+    const entries = await listEntries(level, ignoreSkippedLink);
     const folders = entries.filter((entry) => entry.isDirectory);
 
     const fomodDir = folders.find(named('fomod'));
