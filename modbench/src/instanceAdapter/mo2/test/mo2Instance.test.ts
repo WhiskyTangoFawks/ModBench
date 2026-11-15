@@ -44,7 +44,7 @@ import type { GameDetectors } from '../../gameFolder/gameFolderResolver';
 import { FOMOD_ENGINE } from '../../../test/fomodEngine';
 import { DEPLOYED_PATH } from '../../../test/deployedPath';
 import type { ManagerAdapter, ManagerReading } from '../../publisher';
-import type { WatcherExclude } from '../../instanceAdapter';
+import { CHECK_THE_DISK, type Reread, type WatcherExclude } from '../../instanceAdapter';
 import { mo2Watch } from '../mo2Watch';
 import { watcherExcluding } from '../../../test/watcherExclusion';
 import type { Mo2Context } from '../mo2Context';
@@ -400,6 +400,26 @@ describe('the MO2 Instance adapter', () => {
           await runningOf(() => Promise.resolve(false)),
           await runningOf(() => Promise.reject(new Error('tasklist exited with code 1'))),
         ]).toEqual([{ kind: 'notRunning' }, { kind: 'unknown', reason: 'tasklist exited with code 1' }]);
+      });
+
+      it('asks whether MO2 is running at a check of the disk, and where the game is when the settings change, and in no reading that names other files', async () => {
+        const asked: string[] = [];
+        const adapter = adapterOver(root, {
+          mo2Running: () => { asked.push('running'); return Promise.resolve(false); },
+          gameFolder: () => { asked.push('game'); return Promise.resolve({ kind: 'notFound', looked: [], setting: 'none' }); },
+        });
+        const unrelated = { named: [join(root, 'mods', 'Harder VATS', 'Harder VATS.esp')], disk: false };
+
+        const askedBy = async (reread: Reread): Promise<string[]> => {
+          asked.length = 0;
+          await adapter.reading(reread);
+          return [...asked].sort();
+        };
+
+        const settings = { named: [join(root, 'ModOrganizer.ini')], disk: false };
+
+        expect([await askedBy(CHECK_THE_DISK), await askedBy(unrelated), await askedBy(settings), await askedBy(CHECK_THE_DISK)])
+          .toEqual([['game', 'running'], [], ['game'], ['game', 'running']]);
       });
 
       it('answers the meta of a mod folder the mod order does not list, beside the listed ones', async () => {

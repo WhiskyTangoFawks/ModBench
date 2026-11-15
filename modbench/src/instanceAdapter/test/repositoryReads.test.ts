@@ -213,12 +213,14 @@ describe('the MO2 reading of an instance repository', () => {
     ['with git disabled', () => hostGitDisabled],
     ['with VS Code\'s git holding no repository', () => hostGitHoldingNone],
     ['with VS Code\'s git holding only a repository the instance is inside', () => hostGitHolding(dirname(instance)).host],
-  ])('runs every git read again in each reading %s, since nothing would tell it of a change', async (_case, host) => {
+  ])('reads git again only at a check of the disk or a change naming the repository\'s .git, %s', async (_case, host) => {
     const adapter = await setUpOver(host());
-
-    expect([(await adapter.reading(CHECK_THE_DISK)).repositorySetUp, await gitRunIn(adapter, unrelated())]).toEqual([true, [
+    const dotGit = (): Reread => ({ named: [join(instance, '.git', 'config')], disk: false });
+    const ALL_READS = [
       'config --local --get filter.modbench-settings-tokens.clean', `config --local --get ${FILTER}`, 'config --type=path --get core.hooksPath',
-      'rev-parse --git-common-dir', 'rev-parse --git-common-dir', 'rev-parse --git-path hooks', 'rev-parse -q --verify HEAD',
-    ]]);
+      'rev-parse --git-common-dir', 'rev-parse --git-path hooks', 'rev-parse -q --verify HEAD',
+    ];
+
+    expect([await gitRunIn(adapter, unrelated()), await gitRunIn(adapter, dotGit()), await gitRunIn(adapter, CHECK_THE_DISK)]).toEqual([[], ALL_READS, ALL_READS]);
   });
 });
