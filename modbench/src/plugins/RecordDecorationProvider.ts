@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { RecordBrowser } from './RecordBrowser';
 import { parseRecordResourceUri, parseRowResourceUri } from './recordResourceUri';
-import { pluginAddressKey } from '../wire/pluginAddress';
+import { pluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
 
 export type RecordBadgeSource = Pick<
   RecordBrowser, 'workingTreeStateOf' | 'statesBeneathOf' | 'isExpanded' | 'onDidReadRecords' | 'onDidChangeStatesBeneath'
@@ -27,9 +27,7 @@ export class RecordDecorationProvider implements vscode.FileDecorationProvider, 
   ) {
     this.subscriptions = [
       source.onDidReadRecords((uris) => { this._onDidChangeFileDecorations.fire([...uris]); }),
-      source.onDidChangeStatesBeneath((plugins) => {
-        this._onDidChangeFileDecorations.fire(plugins === undefined ? undefined : plugins.flatMap((plugin) => [...this.asked.get(pluginAddressKey(plugin))?.values() ?? []]));
-      }),
+      source.onDidChangeStatesBeneath((plugins) => { this.askAgain(plugins); }),
     ];
   }
 
@@ -44,6 +42,18 @@ export class RecordDecorationProvider implements vscode.FileDecorationProvider, 
     }
     if (this.source.isExpanded(uri) || this.lockedRows().has(uri.toString())) return undefined;
     return this.beneath(uri);
+  }
+
+  // The rows asked again are asked of again by VS Code if still shown, and remembered then.
+  private askAgain(plugins: readonly PluginAddress[] | undefined): void {
+    if (plugins === undefined) {
+      this.asked.clear();
+      this._onDidChangeFileDecorations.fire(undefined);
+      return;
+    }
+    const keys = plugins.map(pluginAddressKey);
+    this._onDidChangeFileDecorations.fire(keys.flatMap((key) => [...this.asked.get(key)?.values() ?? []]));
+    for (const key of keys) this.asked.delete(key);
   }
 
   private remember(uri: vscode.Uri): void {

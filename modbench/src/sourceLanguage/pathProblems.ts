@@ -1,5 +1,6 @@
 import type { MEditClient, PluginAddress, PluginFilePaths } from '../client';
 import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
+import { askingOnChange } from '../drivingLib/problemsAsker';
 import { coalesced } from '../ports/coalesced';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
@@ -135,7 +136,7 @@ export function feedPathProblems(deps: PathProblemsDeps): () => void {
   };
   const unsubscribe = [
     deps.ask.onLoadOrderSettled((status) => { if (status.conflictsComputed) { wholeWanted = true; askWanted(); } }),
-    deps.ask.onPluginChanged(({ plugin }) => { if (plugin === undefined) { wholeWanted = true; askWanted(); } else askPluginWhenReady({ plugin }); }),
+    deps.ask.onPluginChanged(askingOnChange(() => { wholeWanted = true; askWanted(); }, askPluginWhenReady)),
     deps.ask.onAskedAgain('getPluginFilePaths', askedAgain(() => { wholeWanted = true; askWanted(); }, askPluginWhenReady)),
   ];
   const judging = paths.subscribe(() => { void judge(); });

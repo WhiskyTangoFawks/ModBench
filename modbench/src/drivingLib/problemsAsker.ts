@@ -12,6 +12,11 @@ interface Reads<Paths extends Answered, Problems, Status> {
   onLoadOrderSettled(listener: (status: Status) => void): () => void;
 }
 
+/** A plugin-changed listener that asks of the one plugin named, or of the whole set when none is. */
+export function askingOnChange(whole: () => void, plugin: (changed: { plugin: PluginAddress }) => void): (event: { plugin?: PluginAddress }) => void {
+  return (event) => { if (event.plugin === undefined) whole(); else plugin({ plugin: event.plugin }); };
+}
+
 export interface ProblemsAsker<Paths extends Answered, Problems, Status> {
   getPluginFilePaths: Reads<Paths, Problems, Status>['getPluginFilePaths'];
   getPluginProblems: Reads<Paths, Problems, Status>['getPluginProblems'];

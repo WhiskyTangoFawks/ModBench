@@ -277,9 +277,8 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
   private readonly _onDidChangeBeneathFailure = new vscode.EventEmitter<void>();
   constructor(private readonly repository: RecordBrowserClient) {}
 
-  /** The record index changed: the named plugins' rows forget what they said of themselves, or every
-   *  plugin's do. The tree asks for the rows again when VS Code is told which rows changed, and a
-   *  refresh of everything tells it. */
+  /** The record index changed: the named plugins' rows, or every plugin's, forget what they said of
+   *  themselves. Only a refresh of everything tells the tree; a named plugin's row is its owner's. */
   refresh(plugins?: readonly PluginAddress[]): void {
     if (plugins === undefined) {
       this.rowStates.clear();

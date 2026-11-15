@@ -128,4 +128,17 @@ describe('RecordDecorationProvider, a row with changes beneath it', () => {
 
     expect(handler.mock.calls).toEqual([[[pluginRow, record]]]);
   });
+
+  it('asks again of a row once per change, until VS Code asks a decoration of it again', async () => {
+    const badges = source('None');
+    const provider = new RecordDecorationProvider(badges, NO_LOCKED_ROWS);
+    await provider.provideFileDecoration(rowResourceUri(PLUGIN));
+    const handler = vi.fn();
+    provider.onDidChangeFileDecorations(handler);
+
+    badges.changeBeneath([PLUGIN]);
+    badges.changeBeneath([PLUGIN]);
+
+    expect(handler.mock.calls).toEqual([[[rowResourceUri(PLUGIN)]], [[]]]);
+  });
 });
