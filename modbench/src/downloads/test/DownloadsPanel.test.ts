@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, onTestFinished } from 'vitest';
 
 const {
   executeCommand, registerCommand, showTextDocument, createQuickPick, openExternal,
@@ -36,6 +36,7 @@ import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { downloadedFileCommands } from '../../downloadedFileCommands/downloads';
 import type { QueryInfo } from '../../downloadedFileCommands/queryInfo';
 import { AgentCall } from '../../drivingLib/agentGesture';
+import { surfaceManagerRunning } from '../../drivingLib/writingGesture';
 import { Refusal } from '../../drivingLib/refusal';
 import type { MoveToTrash } from '../../ports/trash';
 import type { LocatedDownloadedFileRow, DownloadedFileRow, Instance } from '../../instanceLoader/instance';
@@ -146,6 +147,17 @@ describe('a Downloads gesture that writes ends when its writes return, with the 
     await invoke(command, node(ROOT, 'foo.7z', row));
 
     expect(fake.calls).toEqual([{ verb: 'markDownloadedFile', name: 'foo.7z', mark }]);
+  });
+
+  it('warns the user, as a notification, when the mod manager is running', async () => {
+    const told = recordingReporter();
+    const surface = surfaceManagerRunning({ reporter: told, running: () => Promise.resolve({ kind: 'running' }), message: () => 'MO2 is running.' });
+    onTestFinished(() => { surface.dispose(); });
+    registerDownloadsMultiRowCommands(downloadedFileCommands(downloadsFake().adapter), instanceThatReads, recordingReporter(), trash, downloadsLog, () => []);
+
+    await invoke('modbench.downloadedFile.exclude', node(ROOT, 'foo.7z', {}));
+
+    expect(told.reports.map(({ severity, message }) => ({ severity, message }))).toEqual([{ severity: 'warning', message: 'MO2 is running.' }]);
   });
 
   it('delete trashes, then the bar closes', async () => {

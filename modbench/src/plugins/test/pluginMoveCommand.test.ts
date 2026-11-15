@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest';
 
 const { handlers, registerCommand, picks } = vi.hoisted(() => {
   const handlers = new Map<string, (...args: unknown[]) => Promise<void> | void>();
@@ -40,7 +40,7 @@ import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
 import { progressSteps } from '../../test/recordedProgress';
 import { aWriteInFlight } from '../../test/writeInFlight';
-import { RefusedWrite } from '../../drivingLib/writingGesture';
+import { RefusedWrite, surfaceManagerRunning } from '../../drivingLib/writingGesture';
 
 const MOVE = 'modbench.plugin.move';
 const A = { name: 'A.esp', origin: 'ModA' };
@@ -100,6 +100,19 @@ describe('modbench.plugin.move, asked while a write is in flight', () => {
     const call = new AgentCall([{ kind: 'plugin', plugin: A }], { drop: { kind: 'winningEnd' } });
 
     await expect(invoke(call)).rejects.toBeInstanceOf(RefusedWrite);
+  });
+});
+
+describe('modbench.plugin.move, while the mod manager is running', () => {
+  it('warns the user, as a notification, after the move landed', async () => {
+    const told = recordingReporter();
+    const surface = surfaceManagerRunning({ reporter: told, running: () => Promise.resolve({ kind: 'running' }), message: () => 'MO2 is running.' });
+    onTestFinished(() => { surface.dispose(); });
+    registered();
+
+    await invoke(...rowsOf(A), { kind: 'winningEnd' });
+
+    expect(told.reports.map(({ severity, message }) => ({ severity, message }))).toEqual([{ severity: 'warning', message: 'MO2 is running.' }]);
   });
 });
 

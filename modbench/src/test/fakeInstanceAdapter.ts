@@ -340,6 +340,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       rereads.push(reread);
       return readingFailure === undefined ? Promise.resolve(current) : Promise.reject(new Error(readingFailure));
     },
+    managerRunning: () => Promise.resolve(current.managerRunning),
     activeProfile: () => Promise.resolve(current.profile),
     gameRelease: () => Promise.resolve(current.gameRelease),
     gameFolder: () => Promise.resolve(current.gameFolder),

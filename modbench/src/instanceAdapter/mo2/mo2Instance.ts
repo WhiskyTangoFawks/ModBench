@@ -28,7 +28,7 @@ import { mo2RenamedSymbol } from './mo2RenamedSymbol';
 import { mo2EntryReferences } from './mo2EntryReferences';
 import { mo2Installation } from './mo2Installation';
 import { readInstance } from '../instanceReading';
-import { mo2Reads, readingSource } from './mo2Reads';
+import { askedRunning, mo2Reads, readingSource } from './mo2Reads';
 import { mo2Watch } from './mo2Watch';
 import { programRunning } from '../processes';
 import type { FileProblems } from '../../ports/fileProblems';
@@ -97,6 +97,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: C
       await reading.trustingKept(() => Promise.all([showUnfiltered(), followPathTokens(), followSourceModLines()]));
       return reading;
     },
+    managerRunning: () => askedRunning(context.mo2Running),
     activeProfile: async () => (await source.settings()).profile,
     gameRelease: async () => (await source.settings()).gameRelease,
     gameFolder,
