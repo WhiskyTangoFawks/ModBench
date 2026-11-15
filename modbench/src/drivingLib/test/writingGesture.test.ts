@@ -6,7 +6,7 @@ vi.mock('vscode', async () => {
 });
 
 import { progressSteps as steps } from '../../test/recordedProgress';
-import { asViewCall, RefusedWrite, runWritingGesture, surfaceReadModel, surfaceRefusedWrites } from '../writingGesture';
+import { asViewCall, RefusedWrite, runWritingGesture, surfaceManagerRunning, surfaceReadModel, surfaceRefusedWrites } from '../writingGesture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { Refusal } from '../refusal';
 import { ambientWrites } from '../../instanceLoader/ambientWrites';
@@ -51,28 +51,45 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
     expect(steps).toEqual(['progress opens on modbench.thing', 'refresh', 'progress closes']);
   });
 
-  it('refreshes at the files a write the command made named, though the command named none itself', async () => {
-    const refresh = vi.fn(() => Promise.resolve());
+  it.each([
+    ['refreshes at the files a write the command made named, though the command named none itself', () => { ambientWrites.name(['/mods/A/meta.ini']); }, [[['/mods/A/meta.ini']]]],
+    ['ends when its writes return, refreshing nothing, when every write told the Instance loader', () => undefined, []],
+    ['checks the whole disk when the command left its writes unnamed', () => { ambientWrites.leaveUnnamed(); }, [[undefined]]],
+  ])('%s', async (_name, write, refreshes) => {
+    const refresh = vi.fn((_named?: readonly string[]) => Promise.resolve());
 
-    await runWritingGesture('modbench.write', 'modbench.thing', { refresh }, () => { ambientWrites.name(['/mods/A/meta.ini']); return Promise.resolve(); });
+    await runWritingGesture('modbench.write', 'modbench.thing', { refresh }, () => { write(); return Promise.resolve(); });
 
-    expect(refresh.mock.calls).toEqual([[['/mods/A/meta.ini']]]);
+    expect(refresh.mock.calls).toEqual(refreshes);
   });
 
-  it('ends when its writes return, refreshing nothing, when every write told the Instance loader', async () => {
-    const refresh = vi.fn(() => Promise.resolve());
+  describe('with the mod manager\'s state surfaced', () => {
+    function surfacedManager(message: () => Promise<string | undefined>) {
+      const reporter = recordingReporter();
+      const surface = surfaceManagerRunning({ reporter, message });
+      onTestFinished(() => { surface.dispose(); });
+      return reporter;
+    }
 
-    await runWritingGesture('modbench.write', 'modbench.thing', { refresh }, () => Promise.resolve());
+    it('warns before the command writes, when the manager is running at that moment', async () => {
+      const reporter = surfacedManager(() => Promise.resolve('MO2 is running.'));
+      let warningsWhenCommandRan = -1;
 
-    expect(refresh).not.toHaveBeenCalled();
-  });
+      await runWritingGesture('modbench.write', 'modbench.thing', instanceThatReads(), () => { warningsWhenCommandRan = reporter.reports.length; return Promise.resolve(); });
 
-  it('checks the whole disk when the command left its writes unnamed', async () => {
-    const refresh = vi.fn(() => Promise.resolve());
+      expect({ reports: reporter.reports, warningsWhenCommandRan }).toEqual({
+        reports: [{ severity: 'warning', message: 'MO2 is running.', detail: undefined }],
+        warningsWhenCommandRan: 1,
+      });
+    });
 
-    await runWritingGesture('modbench.write', 'modbench.thing', { refresh }, () => { ambientWrites.leaveUnnamed(); return Promise.resolve(); });
+    it('says nothing when the manager is not running', async () => {
+      const reporter = surfacedManager(() => Promise.resolve(undefined));
 
-    expect(refresh.mock.calls).toEqual([[undefined]]);
+      await runWritingGesture('modbench.write', 'modbench.thing', instanceThatReads(), unnamed);
+
+      expect(reporter.reports).toEqual([]);
+    });
   });
 
   describe('with the other read model surfaced', () => {
@@ -119,8 +136,10 @@ describe('a gesture that writes, inside its view\'s progress bar', () => {
   describe('while another write is in flight', () => {
     function heldWrite(name: string) {
       let ends!: () => void;
-      const running = runWritingGesture(name, 'modbench.thing', instanceThatReads(), () => new Promise<void>((r) => { ends = r; }));
-      const end = async () => { ends(); await running; };
+      let started!: () => void;
+      const hasStarted = new Promise<void>((r) => { started = r; });
+      const running = runWritingGesture(name, 'modbench.thing', instanceThatReads(), () => new Promise<void>((r) => { ends = r; started(); }));
+      const end = async () => { await hasStarted; ends(); await running; };
       onTestFinished(end);
       return { end };
     }

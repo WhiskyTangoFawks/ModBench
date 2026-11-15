@@ -16,16 +16,37 @@ export async function runUnderProgress<T>(
   const handedBefore = readModel?.handed();
   progress.working();
   try {
+    const running = await managerSurface?.message();
+    if (running !== undefined) managerSurface?.reporter.report('warning', running);
     return await collectingWrites(written, () => command(progress, written));
   } finally {
     progress.working();
     try {
-      if (written.named?.length !== 0) await instance.refresh(written.named);
+      await refreshWritten(instance, written);
       if (readModel !== undefined && readModel.handed() !== handedBefore) await readModel.latest();
     } finally {
       await progress.done();
     }
   }
+}
+
+/** Shows the disk at the files a write named, or the whole disk when it left them unnamed; a write that told the Instance loader of each file shows nothing more. */
+export async function refreshWritten(instance: Pick<Instance, 'refresh'>, written: WrittenFiles): Promise<void> {
+  if (written.named?.length !== 0) await instance.refresh(written.named);
+}
+
+interface ManagerSurface {
+  readonly reporter: Reporter;
+  /** Reads whether the mod manager is running at this moment, and answers the warning when it is. */
+  readonly message: () => Promise<string | undefined>;
+}
+
+let managerSurface: ManagerSurface | undefined;
+
+/** Sets the warning a gesture that writes gives while the mod manager that made the instance is running (common.md, States, story 8). */
+export function surfaceManagerRunning(on: ManagerSurface): { dispose: () => void } {
+  managerSurface = on;
+  return { dispose: () => { managerSurface = undefined; } };
 }
 
 let inFlight: string | undefined;
