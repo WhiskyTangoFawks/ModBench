@@ -286,7 +286,8 @@ export function makeDir(path: string): Promise<void> {
 
 /** A reader of what `read` answers of a file, which reads it again only when the file's stamp has changed: the fact every
  *  write changes that ADR-0003 validates by. */
-export const stampKept = <T>(read: (path: string) => Promise<T>, kept?: Map<string, Kept<T>>): (path: string) => Promise<T> => keptTrusted(stampOf, read, kept);
+export const stampKept = <T>(read: (path: string) => Promise<T>, kept?: Map<string, Kept<T>>, comparesText = false): (path: string) => Promise<T> =>
+  keptTrusted(stampOf, read, kept, false, comparesText);
 
 /** `path`'s directory entries; the caller's own filter picks the ones it wants. */
 export function listDir(path: string): Promise<Dirent[]> {
@@ -309,9 +310,9 @@ export const textByStamp = stampKept(async (path) => {
   const text = await readText(path);
   if (texts.get(pathKey(path))?.value === text) foundUnchanged(path);
   return text;
-}, texts);
+}, texts, true);
 
-export { keptUntilNamed, outsideTrustedRead, readTrustingKept, trustingKept, unchangedInLastRead } from '../repositoriesLib/stampedReads';
+export { keptUntilNamed, outsideTrustedRead, readTrustingKept, trustingKept } from '../repositoriesLib/stampedReads';
 
 /** A reader of what `parse` makes of a file's text, parsing again only when the text is not the one parsed before. */
 export const parsedBy = <T>(parse: (text: string) => T): ((path: string) => Promise<T>) => {

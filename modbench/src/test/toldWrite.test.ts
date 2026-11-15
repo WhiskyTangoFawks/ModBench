@@ -7,7 +7,8 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return { ...actual, readFile: vi.fn(actual.readFile) };
 });
 
-import { readdir, readFile, rm, utimes, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Instance } from '../instanceLoader/instance';
 import { writesToldTo } from '../repositoriesLib/writesTold';
@@ -60,6 +61,23 @@ describe('a write over the real adapter', () => {
     await loader.refresh([modlist]);
 
     expect(heard).toEqual([[modlist], []]);
+  });
+
+  it('names the folder of a copy over an existing mod folder, whose own stamp holds while a plugin below it is replaced', async () => {
+    const { instance: loader } = await wiredInstance();
+    const folder = join(root ?? '', 'mods', 'Patch Mod');
+    const replacement = await mkdtemp(join(tmpdir(), 'modbench-reinstall-'));
+    await writeFile(join(replacement, 'Patch Mod.esp'), 'a reinstalled plugin');
+    const heard: (readonly string[])[] = [];
+    loader.subscribe((_value, _sequence, { named }) => { heard.push(named); });
+
+    const stamp = await stat(folder);
+    await cp(replacement, folder, { recursive: true });
+    await utimes(folder, stamp.atime, stamp.mtime);
+    await rm(replacement, { recursive: true, force: true });
+    await loader.refresh([folder]);
+
+    expect(heard).toEqual([[folder]]);
   });
 
   it('names a plugin the watch heard changed, though no fact of the value holds its stamp, so mEdit is told', async () => {

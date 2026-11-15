@@ -22,7 +22,7 @@ export interface ConfigurationFile {
   readonly blanked?: (thisMachine: string) => TokenProgram;
 }
 
-interface KeptFiles {
+export interface KeptFiles {
   readonly present: readonly string[];
   /** Whether a path is one of the shapes Modbench keeps a file at, there now or not. */
   readonly owns: (path: string) => boolean;
@@ -54,8 +54,9 @@ export interface Publisher {
   followFolders: InstanceAdapter['followModFolders'];
   /** Lists each kept file in the ignore list, leaving every other entry as written. Rejects, writing nothing, for a
    *  configuration it cannot read; does nothing, and asks for no kept file, when the instance holds none. */
-  /** `tellsLoader` is false inside the loader's own reading, which reads the file next. */
-  keepOut(kept: () => Promise<KeptFiles>, tellsLoader?: boolean): Promise<void>;
+  keepOut(kept: () => Promise<KeptFiles>): Promise<void>;
+  /** As `keepOut`, for the loader's own reading, which reads the file next and so is not told of the write. */
+  keepOutWithinReading(kept: () => Promise<KeptFiles>): Promise<void>;
   /** Hears each change to the publisher's configuration. */
   subscribe(listener: ChangeListener): Subscription;
 }
@@ -64,10 +65,10 @@ const withEnvironmentFile = ({ present, owns }: KeptFiles, environmentFile: stri
 
 export function withPublisher(manager: ManagerAdapter, publisher: Publisher, scriptEnvironmentFilePath: () => string): Omit<InstanceAdapter, 'scriptEnvironmentFile'> {
   const keepOutFailed = lastHanded<PublisherConfiguration>();
-  const keepOut = (tellsLoader: boolean) => publisher.keepOut(async () => withEnvironmentFile(await manager.filesKept(), scriptEnvironmentFilePath()), tellsLoader);
+  const keptFiles = async (): Promise<KeptFiles> => withEnvironmentFile(await manager.filesKept(), scriptEnvironmentFilePath());
   const afterKeepingOut = async <T>(write: Promise<T>): Promise<T> => {
     const written = await write;
-    await keepOut(true);
+    await publisher.keepOut(keptFiles);
     return written;
   };
   return {
@@ -113,7 +114,7 @@ export function withPublisher(manager: ManagerAdapter, publisher: Publisher, scr
 
   async function keptOutConfiguration(): Promise<PublisherConfiguration> {
     try {
-      await keepOut(false);
+      await publisher.keepOutWithinReading(keptFiles);
     } catch (err) {
       const reason = errorMessage(err);
       return keepOutFailed({ kind: 'unreadable', reason }, [reason]);

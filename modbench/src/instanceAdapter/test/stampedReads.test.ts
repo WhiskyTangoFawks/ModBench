@@ -72,8 +72,8 @@ describe('a folder listed and a file parsed by their stamps', () => {
     const unnamed = await readTrustingKept([], false, () => namesOf(root));
     const named = await readTrustingKept([join(root, 'b.esp')], false, () => namesOf(root));
 
-    expect(unnamed).toEqual({ answer: ['a.esp'], unheard: [] });
-    expect(named).toEqual({ answer: ['a.esp', 'b.esp'], unheard: [] });
+    expect(unnamed).toMatchObject({ answer: ['a.esp'], unheard: [] });
+    expect(named).toMatchObject({ answer: ['a.esp', 'b.esp'], unheard: [] });
     expect(listingsOf(root)).toBe(1);
   });
 
@@ -159,7 +159,7 @@ describe('a folder listed and a file parsed by their stamps', () => {
 
     const checked = await readTrustingKept([join(heard, 'new.esp')], true, async () => [await namesOf(heard), await namesOf(unheard)]);
 
-    expect(checked).toEqual({ answer: [['new.esp'], ['new.esp']], unheard: [unheard] });
+    expect(checked).toMatchObject({ answer: [['new.esp'], ['new.esp']], unheard: [unheard] });
   });
 
   it('answers as unheard a change to a file it last read too soon after a write to trust', async () => {
@@ -170,7 +170,7 @@ describe('a folder listed and a file parsed by their stamps', () => {
     await writeFile(path, '+B');
     await modifiedLater(path);
 
-    expect(await readTrustingKept([], true, () => textAt(path))).toEqual({ answer: '+B', unheard: [path] });
+    expect(await readTrustingKept([], true, () => textAt(path))).toMatchObject({ answer: '+B', unheard: [path] });
   });
 
   describe('on a file system that leaves a folder\'s stamp as it was for an entry added', () => {

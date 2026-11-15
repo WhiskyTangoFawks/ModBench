@@ -4,7 +4,7 @@
 import { firstLines } from '../loadOrderFileCodec/firstLines';
 import { pluginKey, PLUGINS_FILE_NAME } from '../loadOrderFileCodec/pluginsText';
 import { pathKey } from '../repositoriesLib/stampedReads';
-import { ignoreSkippedLink, readTrustingKept, trustingKept, unchangedInLastRead, type SkippedLink } from './files';
+import { ignoreSkippedLink, readTrustingKept, trustingKept, type SkippedLink } from './files';
 import {
   CHECK_THE_DISK, filesWinningFirst, type Reread, type DataFolderArchives, type DataFolderFiles, type DataFolderPlugins, type DownloadedFiles, type EntryRef, type FileOrigin, type GameFolder,
   type ManagerNames, type ManagerRunning, type ModFolders, type ModMeta, type ModlistEntry, type OriginFiles, type PluginEntry, type PluginsProvided,
@@ -131,8 +131,7 @@ async function folderMetaOf(
 /** The instance whole, every fact against the one read of the settings, so a profile switch
  *  mid-read cannot mix one profile's mod order with another's plugin order. */
 export async function readInstance(source: ReadingSource, { named, disk }: Reread = CHECK_THE_DISK): Promise<ManagerReading> {
-  const { answer, unheard } = await readTrustingKept(named, disk, () => readWhole(source));
-  const unchanged = unchangedInLastRead();
+  const { answer, unheard, unchanged } = await readTrustingKept(named, disk, () => readWhole(source));
   return { ...answer, unheardChanges: unheard, unchangedFiles: named.filter((path) => unchanged.has(pathKey(path))), trustingKept };
 }
 

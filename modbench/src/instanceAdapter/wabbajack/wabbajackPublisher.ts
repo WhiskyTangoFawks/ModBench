@@ -2,6 +2,7 @@
 // compiler settings hold, as its compiler applies them, and never a mod's metadata (publishing.md,
 // Publisher tags, story 5).
 
+import type { KeptFiles } from '../publisher';
 import { isAbsolute, join, relative, sep } from 'node:path';
 import { applyEdits, parse, parseTree, printParseErrorCode, type Edit, type Node, type ParseError } from 'jsonc-parser';
 import { errnoCode } from '../../ports/errno';
@@ -574,27 +575,30 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
         }, before);
       }, { ifMissing: '{}' });
     },
-    keepOut: async (kept, tellsLoader = true) => {
-      const text = await settingsText();
-      if (text === undefined) return;
-      const { present, owns } = await kept();
-      const insides = present.flatMap((path) => inInstance(instanceRoot, path) ?? []);
-      const insideKeys = new Set(insides.map((inside) => namesOf(inside).join('/')));
-      const isGone = (entry: string): boolean => {
-        const names = namesOf(entry);
-        return owns(join(instanceRoot, ...names)) && !insideKeys.has(names.join('/'));
-      };
-      const keptOut = (before: string): string => {
-        const entries = valueOf(settingsIn(before, file), 'Ignore', file, [isNames, 'a list of paths']) ?? [];
-        const changed = new Map(entries.flatMap((entry, at) => (isGone(entry) ? [[at, undefined] as const] : [])));
-        const remaining = entries.filter((_, at) => !changed.has(at));
-        const remainingKeys = new Set(remaining.map((entry) => namesOf(entry).join('/')));
-        const missing = insides.filter((inside) => !isUnderAnyOf(namesOf(inside), remainingKeys));
-        return withListChanged(before, 'Ignore', { changed, appended: missing.map(wabbajackSpelling) });
-      };
-      const after = keptOut(text);
-      if (after !== text) await (tellsLoader ? putIfChanged : putIfChangedUntold)(file, (before) => (before === text ? after : keptOut(before)));
-    },
+    keepOut: (kept) => keptOut(kept, putIfChanged),
+    keepOutWithinReading: (kept) => keptOut(kept, putIfChangedUntold),
     subscribe: (listener) => watchFiles(instanceRoot, COMPILER_SETTINGS.name, listener),
   };
+
+  async function keptOut(kept: () => Promise<KeptFiles>, put: typeof putIfChanged): Promise<void> {
+    const text = await settingsText();
+    if (text === undefined) return;
+    const { present, owns } = await kept();
+    const insides = present.flatMap((path) => inInstance(instanceRoot, path) ?? []);
+    const insideKeys = new Set(insides.map((inside) => namesOf(inside).join('/')));
+    const isGone = (entry: string): boolean => {
+      const names = namesOf(entry);
+      return owns(join(instanceRoot, ...names)) && !insideKeys.has(names.join('/'));
+    };
+    const keptOutOf = (before: string): string => {
+      const entries = valueOf(settingsIn(before, file), 'Ignore', file, [isNames, 'a list of paths']) ?? [];
+      const changed = new Map(entries.flatMap((entry, at) => (isGone(entry) ? [[at, undefined] as const] : [])));
+      const remaining = entries.filter((_, at) => !changed.has(at));
+      const remainingKeys = new Set(remaining.map((entry) => namesOf(entry).join('/')));
+      const missing = insides.filter((inside) => !isUnderAnyOf(namesOf(inside), remainingKeys));
+      return withListChanged(before, 'Ignore', { changed, appended: missing.map(wabbajackSpelling) });
+    };
+    const after = keptOutOf(text);
+    if (after !== text) await put(file, (before) => (before === text ? after : keptOutOf(before)));
+  }
 }

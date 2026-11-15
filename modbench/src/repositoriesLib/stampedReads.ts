@@ -35,24 +35,24 @@ export interface Kept<T> {
 export const pathKey = (path: string): string => (process.platform === 'win32' ? path.toLowerCase() : path);
 
 // Forgets each kept answer whose key `checked` picks and that may have changed, and answers the paths that did.
-type Keeper = (checked: (key: string) => boolean) => Promise<string[]>;
+type Keeper = (checked: (key: string) => boolean, unchanged: Set<string>) => Promise<string[]>;
 
 const everyKept: Keeper[] = [];
-const trusting = new AsyncLocalStorage<true>();
-let unchangedFound = new Set<string>();
+const trusting = new AsyncLocalStorage<{ readonly unchanged: Set<string> }>();
 
-/** Notes that a read inside `readTrustingKept` found the content of `path` as it was held. */
+/** Notes that a read inside `readTrustingKept` compared the content of the file at `path` and found it as it was held. */
 export const foundUnchanged = (path: string): void => {
-  if (trusting.getStore() === true) unchangedFound.add(pathKey(path));
+  trusting.getStore()?.unchanged.add(pathKey(path));
 };
 
 /** A reader of `path` that reads it again only when its stamp has changed, read without its stamp while `readTrustingKept`
- *  or `trustingKept` runs, and checked by `readTrustingKept` where a change named it. */
+ *  or `trustingKept` runs, and checked by `readTrustingKept` where a change named it. `comparesText` says the kept answer is a
+ *  file's content, so a settled stamp that holds shows the file unchanged. */
 export function keptTrusted<T>(
-  stampOf: (path: string) => Promise<FileStamp>, read: (path: string) => Promise<T>, kept = new Map<string, Kept<T>>(), stampMayMiss = false,
+  stampOf: (path: string) => Promise<FileStamp>, read: (path: string) => Promise<T>, kept = new Map<string, Kept<T>>(), stampMayMiss = false, comparesText = false,
 ): (path: string) => Promise<T> {
   // A folder's stamp can stay as it was for an entry added (ADR-0003), so a change named and a check of the disk forget it.
-  everyKept.push((checked) => forgetChanged(kept, stampOf, checked, stampMayMiss));
+  everyKept.push((checked, unchanged) => forgetChanged(kept, stampOf, checked, stampMayMiss, comparesText ? unchanged : undefined));
   return keptByStamp(stampOf, read, kept);
 }
 
@@ -76,7 +76,7 @@ export function keptUntilNamed<T, Given = void>(
   });
   return async (path, given) => {
     const key = pathKey(path);
-    if (trusting.getStore() !== true) return read(path, given);
+    if (trusting.getStore() === undefined) return read(path, given);
     const held = kept.get(key);
     if (held !== undefined) return held.value;
     const value = await read(path, given);
@@ -101,10 +101,11 @@ const stampStill = async (stampOf: (path: string) => Promise<FileStamp>, { path,
 
 async function forgetChanged<T>(
   kept: Map<string, Kept<T>>, stampOf: (path: string) => Promise<FileStamp>, checked: (key: string) => boolean, outright: boolean,
+  unchanged?: Set<string>,
 ): Promise<string[]> {
   const changed = await Promise.all([...kept].filter(([key]) => checked(key)).map(async ([key, held]) => {
     const still = await stampStill(stampOf, held);
-    if (still && held.settled && held.handed !== true) unchangedFound.add(pathKey(held.path));
+    if (unchanged !== undefined && still && held.settled && held.handed !== true) unchanged.add(pathKey(held.path));
     if ((outright || !still) && kept.get(key) === held) kept.delete(key);
     return still ? [] : [held.path];
   }));
@@ -113,18 +114,17 @@ async function forgetChanged<T>(
 
 /** Runs `read` trusting what is kept, once what each kept path `named` touches, or every one when `disk`, is forgotten where
  *  it may have changed. Answers each changed stamp `named` does not touch. A read outside it checks each stamp. */
-export async function readTrustingKept<T>(named: readonly string[], disk: boolean, read: () => Promise<T>): Promise<{ answer: T; unheard: string[] }> {
-  unchangedFound = new Set();
+export async function readTrustingKept<T>(
+  named: readonly string[], disk: boolean, read: () => Promise<T>,
+): Promise<{ answer: T; unheard: string[]; unchanged: ReadonlySet<string> }> {
+  const unchanged = new Set<string>();
   const touched = touchedBy(named);
-  const changed = (await Promise.all(everyKept.map((forget) => forget(disk ? () => true : touched)))).flat();
-  return { answer: await trusting.run(true, read), unheard: [...new Set(changed)].filter((path) => !touched(pathKey(path))) };
+  const changed = (await Promise.all(everyKept.map((forget) => forget(disk ? () => true : touched, unchanged)))).flat();
+  return { answer: await trusting.run({ unchanged }, read), unheard: [...new Set(changed)].filter((path) => !touched(pathKey(path))), unchanged };
 }
 
-/** The keys of the paths the latest `readTrustingKept` found as they were held. */
-export const unchangedInLastRead = (): ReadonlySet<string> => unchangedFound;
-
 /** Runs `read` trusting what the latest `readTrustingKept` left kept. */
-export const trustingKept = <T>(read: () => Promise<T>): Promise<T> => trusting.run(true, read);
+export const trustingKept = <T>(read: () => Promise<T>): Promise<T> => trusting.run({ unchanged: new Set() }, read);
 
 /** Runs `arm` outside any read that trusts what is kept, so a timer, watch or listener it arms reads as any other caller. */
 export const outsideTrustedRead = <T>(arm: () => T): T => trusting.exit(arm);
@@ -134,9 +134,9 @@ function keptByStamp<T>(stampOf: (path: string) => Promise<FileStamp>, read: (pa
   return async (path) => {
     const key = pathKey(path);
     const held = kept.get(key);
-    if (held?.settled === true && trusting.getStore() === true) return held.value;
+    if (held?.settled === true && trusting.getStore() !== undefined) return held.value;
     const stamp = await stampOf(path);
-    if (held?.handed === true && trusting.getStore() === true && sameStamp(held.stamp, stamp)) {
+    if (held?.handed === true && trusting.getStore() !== undefined && sameStamp(held.stamp, stamp)) {
       kept.set(key, { ...held, handed: false });
       return held.value;
     }
