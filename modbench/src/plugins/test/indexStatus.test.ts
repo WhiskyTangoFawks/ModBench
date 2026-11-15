@@ -37,7 +37,6 @@ function followed() {
       indexed: vi.fn(), refused: vi.fn(), unreachable: vi.fn(),
       reconciled: vi.fn().mockResolvedValue(0), refresh: vi.fn().mockResolvedValue(undefined),
     },
-    recordBrowser: { refresh: vi.fn() },
     progress: { while: vi.fn((work: () => Promise<void>) => work()), say: vi.fn() },
     statusBar: createStatusBar(client, () => recordingReporter()),
     showRecordFilter: vi.fn(),
@@ -145,13 +144,12 @@ describe('the Plugins view following the record index status and mEdit\'s own', 
 describe('a reconcile that reached Ready, reported and then applied whoever started it', () => {
   const badFailure = { name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' };
 
-  it('refreshes the record browser, whose page, interior and reference caches would otherwise show stale records, and announces that conflicts are computed', async () => {
+  it('registers the source mods\' repositories', async () => {
     const { client, deps, handedOver } = followed();
 
     client.emit(statusEvent());
     await handedOver();
 
-    expect(deps.recordBrowser.refresh).toHaveBeenCalledOnce();
     expect(deps.registerRepositories).toHaveBeenCalledOnce();
   });
 

@@ -38,7 +38,6 @@ import { registerPluginEnableCommands } from './pluginParticipationCommands';
 import { FilterCodeLensProvider } from './FilterCodeLensProvider';
 import { makeShowRecordFilter, registerFilterCommands } from './recordFilterCommands';
 import { survivingSelection } from './survivingSelection';
-import { subscribeTreeToNotifications } from './treeNotifications';
 import { followIndexStatus } from './indexStatus';
 import type { PluginsViewProgress } from './pluginRowCommands';
 import type { RecordCreateDeps } from './createRecordCommand';
@@ -58,7 +57,7 @@ export interface PluginsViewDeps {
   /** Every plugin-keyed fact the tree's badges read, the pushes that re-read them, and the record index
    *  status. */
   client: PluginFactsClient & RenamePluginDeps['client'] & DecompileDeps['client']
-    & RecordCreateDeps['client'] & Pick<MEditClient, 'getActiveFilter' | 'onLoadOrderStatus' | 'onStatusChanged' | 'setFilter' | 'clearFilter' | 'createPlugin' | 'getCreatablePluginFlags'>;
+    & RecordCreateDeps['client'] & Pick<MEditClient, 'getActiveFilter' | 'onDidChange' | 'onLoadOrderStatus' | 'onStatusChanged' | 'setFilter' | 'clearFilter' | 'createPlugin' | 'getCreatablePluginFlags'>;
   statusBar: StatusBar;
   /** Registers the source mods' repositories: a reconcile reached Ready. */
   registerRepositories: () => Promise<void>;
@@ -148,10 +147,10 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   const showRecordFilter = makeShowRecordFilter(lens, { pluginsNameFilter: nameFilter, pluginsTree: tree });
   const progress = pluginsViewProgress(view, nameFilter);
   const indexStatus = followIndexStatus({
-    client, facts: tree.facts, recordBrowser, progress, statusBar, showRecordFilter, registerRepositories: registerInBackground, log,
+    client, facts: tree.facts, progress, statusBar, showRecordFilter, registerRepositories: registerInBackground, log,
     reporter: reporterFor('loadOrder'),
   });
-  const unsubscribe = subscribeTreeToNotifications(client, recordBrowser, () => { void tree.facts.refresh(); });
+  const changes = client.onDidChange((change) => { tree.indexChanged(change); });
   // Disposed in order: what reads the tree and the view goes before them.
   const recordDecorations = new RecordDecorationProvider(recordBrowser, () => tree.lockedRowUris());
   const disposable = vscode.Disposable.from(
@@ -160,7 +159,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     view.onDidExpandElement(({ element }) => { if (element.resourceUri) recordBrowser.expandedRow(element.resourceUri); }),
     view.onDidCollapseElement(({ element }) => { if (element.resourceUri) recordBrowser.collapsedRow(element.resourceUri); }),
     vscode.window.registerFileDecorationProvider(recordDecorations),
-    { dispose: unsubscribe },
+    changes,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, lens),
     ...registerPluginEnableCommands(
       commands, instance, selected.rows, reporterFor('pluginListTree.enableDisable')),

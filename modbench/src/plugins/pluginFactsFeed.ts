@@ -52,13 +52,16 @@ export type PluginRowFacts = Pick<PluginFacts,
  *  event, never per rendered row. */
 export class PluginFactsFeed implements vscode.Disposable {
   private readonly facts = new PluginFacts();
-  private readonly changed = new vscode.EventEmitter<void>();
+  private readonly changed = new vscode.EventEmitter<readonly PluginAddress[] | undefined>();
   private readonly unsubscribe: () => void;
   // Bumped by each reconcile step (a tick, a refusal, unreachable, the hand-off), so a slow read
   // answering after a newer step cannot resurrect a stale answer.
   private generation = 0;
   // `refresh`' own order, apart from `generation` so a fact re-read never discards a hand-off.
   private refreshes = 0;
+  // The plugins the re-read about to run is asked about; changes that arrive together fold into one read.
+  private wanted: Map<string, PluginAddress> | 'everything' | undefined;
+  private wantedRead: Promise<void> | undefined;
   // The order of `rejudge`, so only the newest judgement of an order publishes.
   private rejudgements = 0;
 
@@ -69,7 +72,7 @@ export class PluginFactsFeed implements vscode.Disposable {
     this.unsubscribe = deps.client.onNotification('external-change', (event) => {
       this.facts.externalChange(event);
       deps.publishChangedOutside(this.facts.problems().changedOutside);
-      this.changed.fire();
+      this.changed.fire(undefined);
     });
   }
 
@@ -83,7 +86,7 @@ export class PluginFactsFeed implements vscode.Disposable {
   indexed(plugins: readonly PluginAddress[], failures: readonly PluginLoadFailure[]): void {
     this.generation++;
     this.facts.indexed(plugins, failures);
-    this.changed.fire();
+    this.changed.fire(undefined);
   }
 
   /** Each row a mod's manifest names that is not restored, joined by the tree, which fires its own change. */
@@ -95,14 +98,14 @@ export class PluginFactsFeed implements vscode.Disposable {
   refused(refusal: LoadOrderRefusal): void {
     this.generation++;
     this.facts.refused(refusal);
-    this.changed.fire();
+    this.changed.fire(undefined);
   }
 
   /** mEdit confirmed unreachable (ADR-0002; plugins.md, States, story 3). */
   unreachable(reason: string): void {
     this.generation++;
     this.facts.unreachable(reason);
-    this.changed.fire();
+    this.changed.fire(undefined);
   }
 
   /** The completed reconcile's whole hand-off, in one read: which files the backend holds, and
@@ -121,7 +124,7 @@ export class PluginFactsFeed implements vscode.Disposable {
     this.publishSorting();
     this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);
     // Diagnoses stay as the last scan left them (no blink) until the scan lands a fresh answer.
-    this.changed.fire();
+    this.changed.fire(undefined);
     // Fire-and-forget: the hand-off must not wait on a whole-load-order scan. A failed scan is
     // ADR-0019's background tier, and retries at the next reconcile.
     void this.scanDiagnoses(generation);
@@ -155,21 +158,36 @@ export class PluginFactsFeed implements vscode.Disposable {
     if (rejudgement !== this.rejudgements || judged !== this.facts.judgedOrder()) return;
     this.facts.rejudged(loot);
     this.publishSorting();
-    this.changed.fire();
+    this.changed.fire(undefined);
   }
 
   /** Re-reads the facts alone and judges again against them, leaving the held load order as it is.
    *  A later re-read wins, and none supersedes a reconcile's hand-off. */
-  async refresh(): Promise<void> {
+  refresh(named?: readonly PluginAddress[]): Promise<void> {
+    if (named === undefined) this.wanted = 'everything';
+    else {
+      this.wanted ??= new Map();
+      if (this.wanted !== 'everything') for (const plugin of named) this.wanted.set(pluginAddressKey(plugin), plugin);
+    }
     const generation = this.generation;
+    this.wantedRead ??= Promise.resolve().then(() => {
+      const wanted = this.wanted;
+      this.wanted = undefined;
+      this.wantedRead = undefined;
+      return this.reread(generation, wanted === 'everything' || wanted === undefined ? undefined : [...wanted.values()]);
+    });
+    return this.wantedRead;
+  }
+
+  private async reread(generation: number, named: readonly PluginAddress[] | undefined): Promise<void> {
     const refresh = ++this.refreshes;
     const plugins = await this.readPlugins();
     if (generation !== this.generation || refresh !== this.refreshes) return;
     if ('failure' in plugins) return this.factsFailed(plugins.failure);
-    this.facts.refreshed(plugins);
+    const sortingChanged = this.facts.refreshed(plugins);
     this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);
-    if (this.facts.judgedOrder() === undefined) this.changed.fire();
-    else await this.rejudge();
+    if (this.facts.judgedOrder() !== undefined && sortingChanged) await this.rejudge();
+    else this.changed.fire(named);
   }
 
   /** The record filter changed, so the last answer belongs to another filter. */
@@ -191,7 +209,7 @@ export class PluginFactsFeed implements vscode.Disposable {
 
   private factsFailed(reason: string): undefined {
     this.facts.factsFailed(reason);
-    this.changed.fire();
+    this.changed.fire(undefined);
     return undefined;
   }
 
@@ -202,13 +220,13 @@ export class PluginFactsFeed implements vscode.Disposable {
       // One derivation, two surfaces — the tree badge and the Problems panel cannot disagree.
       this.facts.diagnosed(reports);
       this.deps.publishDiagnoses(this.facts.problems().malformed);
-      this.changed.fire();
+      this.changed.fire(undefined);
     } catch (err) {
       if (!(err instanceof ReadFailedError)) throw err;
       const reason = errorMessage(err);
       if (generation !== this.generation) return;
       this.facts.scanFailed(reason);
-      this.changed.fire();
+      this.changed.fire(undefined);
     }
   }
 }

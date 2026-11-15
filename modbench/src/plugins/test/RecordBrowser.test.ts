@@ -528,6 +528,51 @@ describe('refreshing the browser', () => {
   });
 });
 
+describe('refreshing the browser for named plugins', () => {
+  const OTHER: PluginAddress = { name: 'Other.esp', origin: 'Data/' };
+
+  it('reads the named plugin\'s group again and keeps what it holds of every other, and leaves redrawing to the plugin row\'s owner', async () => {
+    const repo = makeClient({ records: { items: [makeRecord(0)], total: 1 } });
+    const provider = new RecordBrowser(repo);
+    const named = await soleGroup(provider, PLUGIN0);
+    const other = await soleGroup(provider, OTHER);
+    await provider.getChildren(named);
+    await provider.getChildren(other);
+    const redrawn = vi.fn();
+    provider.onDidChangeTreeData(redrawn);
+    const reads = () => repo.calls.filter((call) => call.method === 'getRecords').length;
+    const before = reads();
+
+    provider.refresh([PLUGIN0]);
+    await provider.getChildren(named);
+    await provider.getChildren(other);
+
+    expect([reads() - before, redrawn.mock.calls.length]).toEqual([1, 0]);
+  });
+
+  it('drops a read of the named plugin that was in flight, and not one of another plugin', async () => {
+    const record = makeRecord(0, 'None');
+    const repo = makeClient();
+    const provider = new RecordBrowser(repo);
+    const typeNode = await soleGroup(provider, PLUGIN0);
+    const read: (readonly vscode.Uri[])[] = [];
+    provider.onDidReadRecords((uris) => read.push(uris));
+    let answerStale!: (page: RecordPage) => void;
+    repo.setQueryAnswerOnce('getRecords', new Promise<RecordPage>((resolve) => { answerStale = resolve; }));
+
+    const inFlight = provider.getChildren(typeNode);
+    provider.refresh([OTHER]);
+    answerStale({ items: [record], total: 1 });
+    await inFlight;
+    const firstRead = read.length;
+    const another = provider.getChildren(typeNode);
+    provider.refresh([PLUGIN0]);
+    await another;
+
+    expect([firstRead, read.length]).toEqual([1, 1]);
+  });
+});
+
 describe('the worldspace tree', () => {
   it('expands a worldspace into its persistent cell and blocks, labeled the way xEdit does', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });

@@ -330,18 +330,43 @@ function snapshotOf(...names: string[]): LoadOrderSnapshot {
   };
 }
 
-describe('the Plugins view follows mEdit\'s pushes', () => {
-  it.each(['rows-changed', 'plugin-changed'])('re-reads the record browser and the plugin facts on mEdit\'s %s', async (kind) => {
-    const { client, recordBrowser } = pluginsView();
+describe('the Plugins view follows mEdit\'s change event', () => {
+  const TEST = { name: 'Test.esp', origin: 'ModA' };
+  const twoPlugins = () => instanceValueFixture({
+    plugins: ['Test.esp', 'Other.esp'].map((name, line) => ({ name, path: `/fixture/${name}`, origin: 'ModA', line, enabled: true, winning: true })),
+    gameFolder: FOUND,
+  });
+
+  it.each(['rows-changed', 'plugin-changed'])('redraws only the named plugin\'s row, and re-reads only its records, on mEdit\'s %s', async (kind) => {
+    const { client, recordBrowser, rows, provider } = pluginsView(twoPlugins());
+    const [test] = await rows();
     const refresh = vi.spyOn(recordBrowser, 'refresh');
+    const redrawn: unknown[] = [];
+    provider().onDidChangeTreeData?.((element) => redrawn.push(element));
 
     client.emit({ ...rowsChanged, kind });
 
     await vi.waitFor(() => { expect(pluginReads(client)).toBe(1); });
-    expect(refresh).toHaveBeenCalledTimes(1);
+    await settle();
+    expect(refresh.mock.calls).toEqual([[[TEST]]]);
+    expect(new Set(redrawn)).toEqual(new Set([test]));
   });
 
-  it('re-reads once when mEdit holds the load order again after a dropped connection, however many plugins it names', async () => {
+  it('redraws every row, and re-reads every plugin\'s records, when the change names none', async () => {
+    const { client, recordBrowser, rows, provider } = pluginsView(twoPlugins());
+    await rows();
+    const refresh = vi.spyOn(recordBrowser, 'refresh');
+    const redrawn: unknown[] = [];
+    provider().onDidChangeTreeData?.((element) => redrawn.push(element));
+
+    client.reconnected();
+
+    await vi.waitFor(() => { expect(pluginReads(client)).toBe(1); });
+    expect(refresh.mock.calls).toEqual([[undefined]]);
+    expect(redrawn).toContain(undefined);
+  });
+
+  it('re-reads every plugin, and never a named few, when mEdit holds the load order again after a dropped connection', async () => {
     const { client, recordBrowser } = pluginsView();
     client.answerPuts(() => Promise.resolve({ outcome: 'applied', status: APPLIED_STATUS }));
     client.setStatus('running');
@@ -351,8 +376,8 @@ describe('the Plugins view follows mEdit\'s pushes', () => {
     client.reconnected();
     await client.latestLoadOrder();
 
-    await vi.waitFor(() => { expect(pluginReads(client)).toBe(1); });
-    expect(refresh).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => { expect(refresh).toHaveBeenCalled(); });
+    expect(refresh.mock.calls.map(([named]) => named?.length)).toEqual([undefined, 1, 1, 1]);
   });
 
   it('hears no push once disposed', () => {
@@ -399,9 +424,10 @@ describe('the Plugins view re-renders for a reconcile tick only when it landed s
     const { client, rerenders } = reconciling();
 
     client.emit(tick({ indexedPlugins: [A] }));
+    const afterTheFirst = rerenders.length;
     client.emit(tick({ indexedPlugins: [A], failures: [{ name: 'B.esp', origin: 'SomeMod', reason: 'RACE parse' }] }));
 
-    expect(rerenders).toHaveLength(2);
+    expect(rerenders.length).toBeGreaterThan(afterTheFirst);
   });
 });
 

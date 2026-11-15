@@ -4,7 +4,6 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import type { PluginsViewProgress } from './pluginRowCommands';
 import type { PluginFactsFeed } from './pluginFactsFeed';
-import type { RecordBrowser } from './RecordBrowser';
 import { reportSkippedPlugins } from './pluginFailures';
 import { createReconcileNarrator, type ReconcileNarrator } from './reconcileNarrator';
 import type { StatusBar } from './statusBar';
@@ -15,7 +14,6 @@ interface ReconciledDeps {
   warn: (msg: string) => void;
   statusBar: Pick<StatusBar, 'ready'>;
   registerRepositories: () => void;
-  refreshTree: () => void;
   syncFilterState: () => Promise<void>;
   /** The completed reconcile's whole hand-off to the tree, so no caller can apply one part of
    *  it without the rest. */
@@ -27,9 +25,6 @@ interface ReconciledDeps {
 async function settleReconciled(status: LoadOrderProgress, deps: ReconciledDeps): Promise<void> {
   reportSkippedPlugins(status.failures, deps);
   deps.statusBar.ready(status.activePlugins);
-  // A reconciled load order can move which records a row's page/interior/reference caches hold,
-  // so the record browser re-reads them the same as any other write.
-  deps.refreshTree();
   deps.registerRepositories();
   await deps.syncFilterState();
   await deps.applyReconciled(status.failures, status.totalPlugins);
@@ -62,8 +57,6 @@ const UNREACHABLE_REASON = {
 interface IndexStatusDeps {
   client: Pick<MEditClient, 'onLoadOrderStatus' | 'onStatusChanged' | 'getActiveFilter'>;
   facts: Pick<PluginFactsFeed, 'indexed' | 'refused' | 'reconciled' | 'unreachable' | 'refresh'>;
-  /** The record browser a reconciled load order refreshes. */
-  recordBrowser: Pick<RecordBrowser, 'refresh'>;
   progress: PluginsViewProgress;
   statusBar: Pick<StatusBar, 'ready' | 'showMEditState'>;
   showRecordFilter: (filter: RecordFilter | null) => void;
@@ -76,7 +69,7 @@ interface IndexStatusDeps {
 // whoever started the reconcile. mEdit going away, or a stream reopening onto another process,
 // starts its versions over.
 export function followIndexStatus(deps: IndexStatusDeps): { narrator: ReconcileNarrator } & vscode.Disposable {
-  const { client, facts, recordBrowser, progress, statusBar, showRecordFilter, registerRepositories, log, reporter } = deps;
+  const { client, facts, progress, statusBar, showRecordFilter, registerRepositories, log, reporter } = deps;
   const info = (m: string) => log('info', `[loadOrder] ${m}`);
   const warn = (m: string) => reporter.report('warning', m);
   const narrator = createReconcileNarrator({
@@ -91,7 +84,6 @@ export function followIndexStatus(deps: IndexStatusDeps): { narrator: ReconcileN
     },
     settle: (status) => settleReconciled(status, {
       log: info, warn, statusBar, registerRepositories,
-      refreshTree: () => recordBrowser.refresh(),
       syncFilterState: () => syncActiveFilter(async () => answerOf(await client.getActiveFilter()), { log: info, warn, showRecordFilter }),
       applyReconciled: (failures, totalPlugins) => applyReconciled(deps, failures, totalPlugins),
     }),
