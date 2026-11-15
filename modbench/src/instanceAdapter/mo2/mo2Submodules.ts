@@ -4,7 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { gitPath } from '../foldersHeldWhole';
 import { errnoCode } from '../../ports/errno';
-import { git } from '../git';
+import { git, gitKept } from '../git';
 import { keptByIndex } from '../keptByIndex';
 import { errorMessage } from '../../ports/errorMessage';
 import { exists, get, ignoreSkippedLink, isRepository, listDirByStamp, listFolders, putIfChanged, readOrAbsent, remove, stampKept, textByStamp } from '../files';
@@ -148,13 +148,13 @@ export function sourceModLinesFollowed(instanceRoot: string, problems: FileProbl
 // A hook outside the repository's own git directory would run in every repository that reads it.
 async function hooksFolder(instanceRoot: string): Promise<string> {
   const repository = await isRepository(instanceRoot);
-  const gitDir = repository ? resolve(instanceRoot, (await git(instanceRoot, 'rev-parse', '--git-common-dir')).trim()) : join(instanceRoot, '.git');
-  const configuredHooks = (await git(instanceRoot, 'config', '--type=path', '--get', 'core.hooksPath').catch((err: unknown) => {
+  const gitDir = repository ? resolve(instanceRoot, (await gitKept(instanceRoot, 'rev-parse', '--git-common-dir')).trim()) : join(instanceRoot, '.git');
+  const configuredHooks = (await gitKept(instanceRoot, 'config', '--type=path', '--get', 'core.hooksPath').catch((err: unknown) => {
     if (typeof err === 'object' && err !== null && 'code' in err && err.code === 1) return '';
     throw err;
   })).trim();
   const hooks = configuredHooks !== '' ? resolve(instanceRoot, configuredHooks)
-    : repository ? resolve(instanceRoot, (await git(instanceRoot, 'rev-parse', '--git-path', 'hooks')).trim()) : join(gitDir, 'hooks');
+    : repository ? resolve(instanceRoot, (await gitKept(instanceRoot, 'rev-parse', '--git-path', 'hooks')).trim()) : join(gitDir, 'hooks');
   if (relative(gitDir, hooks).startsWith('..') || isAbsolute(relative(gitDir, hooks))) {
     throw new Error(`core.hooksPath points to ${hooks}, outside ${gitDir}, where a hook would run in every repository that reads it; Modbench writes no hook there.`);
   }
