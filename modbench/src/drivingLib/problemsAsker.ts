@@ -8,7 +8,7 @@ interface Answered { plugin: PluginAddress; failure?: string | null; unread: str
 interface Reads<Paths extends Answered, Problems, Status> {
   getPluginFilePaths(plugin?: PluginAddress): Promise<Paths[] | ReadFailed>;
   getPluginProblems(plugin?: PluginAddress): Promise<Problems[] | ReadFailed>;
-  onNotification(kind: 'rows-changed' | 'plugin-changed', listener: (event: { plugin: PluginAddress }) => void): () => void;
+  onDidChange(listener: (change: readonly { readonly plugin: PluginAddress }[] | undefined) => void): { dispose(): void };
   onLoadOrderSettled(listener: (status: Status) => void): () => void;
 }
 
@@ -66,9 +66,11 @@ export function problemsAsker<Paths extends Answered, Problems, Status>(client: 
     dispose: () => { retries.dispose(); },
     onAskedAgain: (read, listener) => retries.onAskedAgain(read, listener),
     onPluginChanged: (listener) => {
-      const heard = (event: { plugin: PluginAddress }) => { forget(event.plugin); listener(event); };
-      const off = [client.onNotification('rows-changed', heard), client.onNotification('plugin-changed', heard)];
-      return () => { for (const stop of off) stop(); };
+      const subscription = client.onDidChange((change) => {
+        if (change === undefined) { forget(); return; }
+        for (const { plugin } of change) { forget(plugin); listener({ plugin }); }
+      });
+      return () => { subscription.dispose(); };
     },
     onLoadOrderSettled: (listener) => client.onLoadOrderSettled((status) => { forget(); listener(status); }),
     forget,

@@ -215,7 +215,6 @@ describe('the focused cell of the record tab in focus', () => {
 });
 
 const conflictsComputedTick = loadOrderStatusEventFixture();
-const reconcilingTick = loadOrderStatusEventFixture({ conflictsComputed: false });
 
 describe('conflicts computed', () => {
   it('has every open record tab read its record again', () => {
@@ -393,7 +392,7 @@ describe('a record file\'s tab', () => {
     expect(pageGlobal(tab, 'mEditLoadError')).toBeUndefined();
     expect(outputChannel.warn).not.toHaveBeenCalled();
 
-    client.emit(reconcilingTick);
+    client.reconnected();
 
     await vi.waitFor(() => expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN));
   });
@@ -419,7 +418,7 @@ describe('a record file\'s tab', () => {
     const tab = await openFile(FILE);
     expect(pageGlobal(tab, 'mEditLoadError')).toEqual({ failed: 'unreachable' });
 
-    client.emit(reconcilingTick);
+    client.reconnected();
 
     await vi.waitFor(() => expect(pageGlobal(tab, 'mEditLoadError')).toBeUndefined());
   });
@@ -432,7 +431,7 @@ describe('a record file\'s tab', () => {
     const tab = await openFile(FILE);
     expect(pageGlobal(tab, 'mEditLoadError')).toEqual({ failed: 'unreachable' });
 
-    client.emit(reconcilingTick);
+    client.reconnected();
 
     await vi.waitFor(() => expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN));
     expect(pageGlobal(tab, 'mEditLoadError')).toBeUndefined();
@@ -785,7 +784,7 @@ describe('what a record tab\'s webview posts', () => {
       const postsBefore = loadRecordPosts(tab).length;
 
       loadOrder.coming = false;
-      mEdit.emit(reconcilingTick);
+      mEdit.reconnected();
 
       await vi.waitFor(() => expect(loadRecordPosts(tab)).toHaveLength(postsBefore + 1));
     });
@@ -1253,7 +1252,7 @@ describe('several records opened at once', () => {
     const tab = await openDocument(vscode.Uri.file(GUN_FILE));
 
     await openSeveral();
-    client.emit(reconcilingTick);
+    client.reconnected();
     await vi.waitFor(() => expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN));
     expect(columnsPosted(tab)).toEqual([]);
     tab.receive(firstRead);

@@ -59,9 +59,6 @@ export class PluginFactsFeed implements vscode.Disposable {
   private generation = 0;
   // `refresh`' own order, apart from `generation` so a fact re-read never discards a hand-off.
   private refreshes = 0;
-  // The plugins the re-read about to run is asked about; changes that arrive together fold into one read.
-  private wanted: Map<string, PluginAddress> | 'everything' | undefined;
-  private wantedRead: Promise<void> | undefined;
   // The order of `rejudge`, so only the newest judgement of an order publishes.
   private rejudgements = 0;
 
@@ -163,23 +160,8 @@ export class PluginFactsFeed implements vscode.Disposable {
 
   /** Re-reads the facts alone and judges again against them, leaving the held load order as it is.
    *  A later re-read wins, and none supersedes a reconcile's hand-off. */
-  refresh(named?: readonly PluginAddress[]): Promise<void> {
-    if (named === undefined) this.wanted = 'everything';
-    else {
-      this.wanted ??= new Map();
-      if (this.wanted !== 'everything') for (const plugin of named) this.wanted.set(pluginAddressKey(plugin), plugin);
-    }
+  async refresh(named?: readonly PluginAddress[]): Promise<void> {
     const generation = this.generation;
-    this.wantedRead ??= Promise.resolve().then(() => {
-      const wanted = this.wanted;
-      this.wanted = undefined;
-      this.wantedRead = undefined;
-      return this.reread(generation, wanted === 'everything' || wanted === undefined ? undefined : [...wanted.values()]);
-    });
-    return this.wantedRead;
-  }
-
-  private async reread(generation: number, named: readonly PluginAddress[] | undefined): Promise<void> {
     const refresh = ++this.refreshes;
     const plugins = await this.readPlugins();
     if (generation !== this.generation || refresh !== this.refreshes) return;

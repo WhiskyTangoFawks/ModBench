@@ -27,7 +27,7 @@ export class RecordDecorationProvider implements vscode.FileDecorationProvider, 
     ];
   }
 
-  provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
+  provideFileDecoration(uri: vscode.Uri): vscode.ProviderResult<vscode.FileDecoration> {
     const state = this.source.workingTreeStateOf(uri);
     if (state === 'Modified') {
       return { badge: 'M', color: new vscode.ThemeColor(MODIFIED), tooltip: 'Modified' };
@@ -36,7 +36,11 @@ export class RecordDecorationProvider implements vscode.FileDecorationProvider, 
       return { badge: 'A', color: new vscode.ThemeColor(ADDED), tooltip: 'Added' };
     }
     if (this.source.isExpanded(uri) || this.lockedRows().has(uri.toString())) return undefined;
-    const beneath = this.source.statesBeneathOf(uri);
+    return this.beneath(uri);
+  }
+
+  private async beneath(uri: vscode.Uri): Promise<vscode.FileDecoration | undefined> {
+    const beneath = await this.source.statesBeneathOf(uri);
     if (beneath.length === 0) return undefined;
     return { badge: '•', color: new vscode.ThemeColor(beneath.includes('Modified') ? MODIFIED : ADDED), tooltip: 'Contains emphasized items' };
   }

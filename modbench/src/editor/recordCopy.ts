@@ -1,18 +1,22 @@
 import * as vscode from 'vscode';
-import type { MEditClient, NotificationPayloads } from '../client';
+import type { MEditClient, RecordIndexChange } from '../client';
 import { samePluginAddress } from '../wire/pluginAddress';
 import type { CopyChanged } from '../wire/recordCopy';
 
-/** Hands `changedWhere` the copies mEdit reports changed: those a rows-changed report touches, as
- *  `touches` reads it, and each copy of a plugin mEdit read again whole. */
+type NamedRecords = NonNullable<RecordIndexChange>[number] & { readonly keys: readonly string[] };
+
+/** Hands `changedWhere` the copies mEdit reports changed: those a report naming records touches, as
+ *  `touches` reads it, each copy of a plugin mEdit read again whole, and every copy when it read everything again. */
 export function followReportedCopies(
-  client: Pick<MEditClient, 'onNotification'>,
+  client: Pick<MEditClient, 'onDidChange'>,
   changedWhere: (affects: CopyChanged) => void,
-  touches: (report: NotificationPayloads['rows-changed']) => CopyChanged,
+  touches: (report: NamedRecords) => CopyChanged,
 ): vscode.Disposable {
-  const unsubscribes = [
-    client.onNotification('rows-changed', (report) => { changedWhere(touches(report)); }),
-    client.onNotification('plugin-changed', ({ plugin }) => { changedWhere((copy) => samePluginAddress(copy.plugin, plugin)); }),
-  ];
-  return new vscode.Disposable(() => { for (const unsubscribe of unsubscribes) unsubscribe(); });
+  const subscription = client.onDidChange((change) => {
+    if (change === undefined) { changedWhere(() => true); return; }
+    for (const { plugin, keys } of change) {
+      changedWhere(keys === undefined ? (copy) => samePluginAddress(copy.plugin, plugin) : touches({ plugin, keys }));
+    }
+  });
+  return new vscode.Disposable(() => { subscription.dispose(); });
 }

@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
 import { ErrorNode } from '../drivingLib/errorNode';
 import type {
-  RecordSummary, RecordPage,
-  WorldspaceSummary, CellSummary, ChildRecordSummary, WorldspaceBlock, WorldspaceSubBlock, CellChildRecords,
-  ContainerChildSummary, MEditClient, PluginRecordTypeCount, InteriorCellBlock, InteriorCellSubBlock, WorkingTreeStatesBeneath,
+  RecordSummary,
+  WorldspaceSummary, CellSummary, ChildRecordSummary, WorldspaceBlock, WorldspaceSubBlock,
+  MEditClient, PluginRecordTypeCount, InteriorCellBlock, InteriorCellSubBlock,
 } from '../client';
 import { parseRecordResourceUri, parseRowResourceUri, recordResourceUri, rowResourceUri } from './recordResourceUri';
 import type { RecordArgument } from '../drivingLib/recordArgument';
@@ -11,7 +11,6 @@ import { failurePrefixIcon } from './failurePrefixIcon';
 import { pluginAddressKey, pluginAddressOf, type PluginAddress } from '../wire/pluginAddress';
 import { conditionedContextValue, type PluginConditions } from '../drivingLib/recordRowContext';
 import { errorMessage } from '../ports/errorMessage';
-import type { SyncMessage } from '../drivingLib/syncFailureReport';
 import { blankIcon } from '../drivingLib/blankIcon';
 import { UNLIMITED_RECORDS } from '../client';
 import { answerOf, ReadFailedError } from '../wire/readFailed';
@@ -246,37 +245,12 @@ export type RecordBrowserNode =
 export const CELL_RECORD_TYPE = 'cell';
 const WORLDSPACE_RECORD_TYPE = 'wrld';
 
-interface Listings {
-  records: RecordPage;
-  interior: InteriorCellBlock[];
-  cellRefs: CellChildRecords;
-  containerChildren: ContainerChildSummary[];
-}
-type Listing = Listings[keyof Listings];
-
-type FoldedRow = Pick<RecordSummary, 'formKey' | 'workingTreeState'>;
-type RowRead = FoldedRow & { readonly plugin: PluginAddress };
+type RowRead = Pick<RecordSummary, 'formKey' | 'workingTreeState'> & { readonly plugin: PluginAddress };
 type WorkingTreeState = RecordSummary['workingTreeState'];
-
-interface Stamp { readonly plugin: PluginAddress; readonly value: string }
 
 const rowKey = (uri: vscode.Uri) => `${uri.scheme}:${uri.path}`;
 
-function ownerOf(uri: vscode.Uri): string {
-  const identity = parseRecordResourceUri(uri) ?? parseRowResourceUri(uri);
-  return identity === undefined ? '' : pluginAddressKey(identity.plugin);
-}
-
-const foldKey = (plugin: PluginAddress, path: readonly string[]) => `${pluginAddressKey(plugin)}::${JSON.stringify(path)}`;
-
-function distinctChanges(states: readonly WorkingTreeState[]): WorkingTreeState[] {
-  return [...new Set(states.filter(state => state !== 'None'))];
-}
-
-// The one key of everything cached: a plugin's address (ADR-0012), what is cached of it, and which.
-function cacheKey(plugin: PluginAddress, scope: keyof Listings | 'row', id = ''): string {
-  return `${pluginAddressKey(plugin)}::${scope}::${id}`;
-}
+const rowStateKey = (plugin: PluginAddress, formKey: string) => `${pluginAddressKey(plugin)}::${formKey}`;
 
 type RecordBrowserClient = Pick<
   MEditClient,
@@ -294,67 +268,23 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
   /** Every row's states beneath it may have changed. */
   readonly onDidReadBeneath = this._onDidReadBeneath.event;
 
-  private readonly listings = new Map<string, Listing>();
-  private readonly rowStates = new Map<string, RecordSummary['workingTreeState']>();
-  private readonly beneath = new Map<string, { generation: Stamp; answer: WorkingTreeStatesBeneath }>();
-  private readonly beneathLoading = new Set<string>();
-  private readonly beneathFailures = new Map<string, string>();
-  private readonly _onDidChangeBeneathFailure = new vscode.EventEmitter<void>();
-  // The rows under a block or a group, whose own states fold into its badge.
-  private readonly folds = new Map<string, readonly FoldedRow[]>();
-  // The rows shown expanded, each with the key of the plugin it belongs to.
-  private expanded = new Map<string, string>();
-  // Rows that were expanded before the last refresh: expanded again once the tree asks for their children.
-  private reopening = new Map<string, string>();
-  // Bumped by a refresh of everything or of one plugin, so a read answered before mEdit's rows changed caches nothing.
-  private everything = 0;
-  private readonly generations = new Map<string, number>();
+  // What the last read of each row said of its own state, which a decoration is asked for by URI alone.
+  private readonly rowStates = new Map<string, WorkingTreeState>();
+  private readonly expanded = new Set<string>();
   constructor(private readonly repository: RecordBrowserClient) {}
 
-  private valueOf(plugin: PluginAddress): string {
-    return `${this.everything}.${this.generations.get(pluginAddressKey(plugin)) ?? 0}`;
-  }
-
-  private stampOf(plugin: PluginAddress): Stamp {
-    return { plugin, value: this.valueOf(plugin) };
-  }
-
-  private holds(stamp: Stamp): boolean {
-    return stamp.value === this.valueOf(stamp.plugin);
-  }
-
-  /** The rows of the named plugins read again, or of every plugin when none is named. The tree
-   *  that shows the rows is told of a refresh of everything only; a named plugin's row is its owner's. */
+  /** The record index changed: the named plugins' rows forget what they said of themselves, or every
+   *  plugin's do. The tree asks for the rows again when VS Code is told which rows changed, and a
+   *  refresh of everything tells it. */
   refresh(plugins?: readonly PluginAddress[]): void {
-    if (plugins === undefined) return this.refreshEverything();
-    for (const plugin of plugins) this.forget(pluginAddressKey(plugin));
-    this._onDidReadBeneath.fire();
-  }
-
-  private forget(plugin: string): void {
-    this.generations.set(plugin, (this.generations.get(plugin) ?? 0) + 1);
-    for (const map of [this.listings, this.rowStates, this.folds]) {
-      for (const key of [...map.keys()]) if (key.startsWith(`${plugin}::`)) map.delete(key);
+    if (plugins === undefined) {
+      this.rowStates.clear();
+      this._onDidChangeTreeData.fire(undefined);
+    } else {
+      for (const plugin of plugins) {
+        for (const key of [...this.rowStates.keys()]) if (key.startsWith(`${pluginAddressKey(plugin)}::`)) this.rowStates.delete(key);
+      }
     }
-    this.beneathLoading.delete(plugin);
-    if (this.beneathFailures.delete(plugin)) this._onDidChangeBeneathFailure.fire();
-    for (const [row, owner] of [...this.expanded]) {
-      if (owner !== plugin) continue;
-      this.expanded.delete(row);
-      this.reopening.set(row, owner);
-    }
-  }
-
-  private refreshEverything(): void {
-    this.everything++;
-    this.listings.clear();
-    this.rowStates.clear();
-    this.beneathLoading.clear();
-    this.folds.clear();
-    this.reopening = new Map([...this.reopening, ...this.expanded]);
-    this.dropBeneathFailures();
-    this.expanded = new Map();
-    this._onDidChangeTreeData.fire(undefined);
     this._onDidReadBeneath.fire();
   }
 
@@ -362,98 +292,37 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
    *  the decoration provider reads the same as 'None': nothing to badge. */
   workingTreeStateOf(uri: vscode.Uri): RecordSummary['workingTreeState'] | undefined {
     const identity = parseRecordResourceUri(uri);
-    return identity && this.rowStates.get(cacheKey(identity.plugin, 'row', identity.formKey));
+    return identity && this.rowStates.get(rowStateKey(identity.plugin, identity.formKey));
   }
 
-  /** The distinct changes strictly beneath the row, never its own. An answer older than the last refresh
-   *  is shown until its replacement lands. */
-  statesBeneathOf(uri: vscode.Uri): readonly WorkingTreeState[] {
+  /** The distinct changes strictly beneath the row, never its own, as mEdit says now. A block or a
+   *  group, which stands for no plugin, record type or record, has none. */
+  async statesBeneathOf(uri: vscode.Uri): Promise<readonly WorkingTreeState[]> {
     const identity = parseRecordResourceUri(uri) ?? parseRowResourceUri(uri);
     if (identity === undefined) return [];
-    const answer = this.beneathOf(identity.plugin);
-    if (answer === undefined) return [];
+    const answer = answerOf(await this.repository.getWorkingTreeStatesBeneath(identity.plugin));
     if ('formKey' in identity) return answer.records[identity.formKey] ?? [];
-    const fold = this.folds.get(foldKey(identity.plugin, identity.path));
-    if (fold !== undefined) {
-      return distinctChanges(fold.flatMap(row => [row.workingTreeState, ...(answer.records[row.formKey] ?? [])]));
-    }
-    const [recordType] = identity.path;
-    return recordType === undefined ? answer.plugin : answer.recordTypes[recordType] ?? [];
+    const [recordType, ...deeper] = identity.path;
+    if (recordType === undefined) return answer.plugin;
+    return deeper.length === 0 ? answer.recordTypes[recordType] ?? [] : [];
   }
-
-  private beneathOf(plugin: PluginAddress): WorkingTreeStatesBeneath | undefined {
-    const key = pluginAddressKey(plugin);
-    const held = this.beneath.get(key);
-    if (held === undefined || !this.holds(held.generation)) this.loadBeneath(plugin, key);
-    return held?.answer;
-  }
-
-  // A failed read is not retried until the next refresh, so no row asks again.
-  private loadBeneath(plugin: PluginAddress, key: string): void {
-    if (this.beneathLoading.has(key)) return;
-    this.beneathLoading.add(key);
-    const generation = this.stampOf(plugin);
-    this.repository.getWorkingTreeStatesBeneath(plugin).then(answerOf).then((answer) => {
-      if (!this.holds(generation)) return;
-      this.beneath.set(key, { generation, answer });
-      this._onDidReadBeneath.fire();
-      if (this.beneathFailures.delete(key)) this._onDidChangeBeneathFailure.fire();
-    }, (e: unknown) => {
-      if (!this.holds(generation)) return;
-      const reason = this.err(e);
-      const message = this.beneath.has(key) ? `Showing the last good read: ${reason}` : `Failed to load: ${reason}`;
-      if (this.beneathFailures.get(key) !== message) {
-        this.beneathFailures.set(key, message);
-        this._onDidChangeBeneathFailure.fire();
-      }
-    });
-  }
-
-  // A failure stands until its plugin reads well; a plugin that left the tree never will, so each
-  // refresh forgets them and the rows still shown ask again.
-  private dropBeneathFailures(): void {
-    if (this.beneathFailures.size === 0) return;
-    this.beneathFailures.clear();
-    this._onDidChangeBeneathFailure.fire();
-  }
-
-  /** The message line's part when the states beneath the rows could not be read (common.md, States,
-   *  stories 2 and 6): the rows keep the last answer. */
-  readonly beneathFailure: SyncMessage = {
-    message: () => this.beneathFailures.values().next().value,
-    onMessageChanged: (listener) => this._onDidChangeBeneathFailure.event(listener),
-  };
 
   isExpanded(uri: vscode.Uri): boolean {
     return this.expanded.has(rowKey(uri));
   }
 
   expandedRow(uri: vscode.Uri): void {
-    this.expanded.set(rowKey(uri), ownerOf(uri));
+    this.expanded.add(rowKey(uri));
     this._onDidReadRecords.fire([uri]);
   }
 
   collapsedRow(uri: vscode.Uri): void {
     this.expanded.delete(rowKey(uri));
-    this.reopening.delete(rowKey(uri));
     this._onDidReadRecords.fire([uri]);
   }
 
-  /** VS Code asks for the children of the rows it keeps expanded across a rebuild, and of no
-   *  others: the one caller that says so is the tree answering VS Code. */
-  reopen(uri: vscode.Uri): void {
-    if (!this.reopening.delete(rowKey(uri))) return;
-    this.expanded.set(rowKey(uri), ownerOf(uri));
-    this._onDidReadRecords.fire([uri]);
-  }
-
-  private folded<N extends vscode.TreeItem & { plugin: string; origin: string; path: readonly string[] }>(
-    node: N, rows: readonly FoldedRow[],
-  ): N {
-    const plugin = pluginAddressOf(node);
-    node.resourceUri = rowResourceUri(plugin, ...node.path);
-    this.folds.set(foldKey(plugin, node.path), rows);
-    this._onDidReadRecords.fire([node.resourceUri]);
+  private folded<N extends vscode.TreeItem & { plugin: string; origin: string; path: readonly string[] }>(node: N): N {
+    node.resourceUri = rowResourceUri(pluginAddressOf(node), ...node.path);
     return node;
   }
 
@@ -490,8 +359,7 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
       return source.cells.map(c => new CellNode(node.plugin, c, node.origin, node.conditions));
     }
     const kind = 'x' in source ? 'subBlock' : 'interiorSubBlock';
-    return source.subBlocks.map(s => this.folded(
-      new BlockLevelNode(kind, s, node.plugin, node.origin, node.conditions, [...node.path, blockId(s)]), s.cells));
+    return source.subBlocks.map(s => this.folded(new BlockLevelNode(kind, s, node.plugin, node.origin, node.conditions, [...node.path, blockId(s)])));
   }
 
   private err(e: unknown): string {
@@ -507,21 +375,6 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
       if (!(e instanceof ReadFailedError)) throw e;
       return [new ErrorNode(this.err(e))];
     }
-  }
-
-  // A failed load caches nothing, so the next expand retries. `load`, never `fetch`: this has
-  // nothing to do with the backend seam the client folder owns.
-  private getOrLoad<S extends keyof Listings>(
-    scope: S, plugin: PluginAddress, id: string, load: () => Promise<Listings[S]>,
-  ): Promise<Listings[S]>;
-  private async getOrLoad(scope: keyof Listings, plugin: PluginAddress, id: string, load: () => Promise<Listing>): Promise<Listing> {
-    const key = cacheKey(plugin, scope, id);
-    const cached = this.listings.get(key);
-    if (cached !== undefined) return cached;
-    const generation = this.stampOf(plugin);
-    const value = await load();
-    if (this.holds(generation)) this.listings.set(key, value);
-    return value;
   }
 
   /** Keyed by the plugin rather than by a node this provider built: `PluginsTreeProvider` expands
@@ -542,35 +395,30 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
 
   private fetchWorldspaces(node: RecordTypeNode): Promise<RecordBrowserNode[]> {
     return this.orErrorNode(async () => {
-      const generation = this.stampOf(pluginAddressOf(node));
       const worldspaces = answerOf(await this.repository.getWorldspaces(pluginAddressOf(node)));
-      this.readRows(generation, worldspaces.map(w => ({ ...w, plugin: pluginAddressOf(node) })));
+      this.readRows(worldspaces.map(w => ({ ...w, plugin: pluginAddressOf(node) })));
       return worldspaces.map(w => new WorldspaceNode(node.plugin, w, node.origin, node.conditions));
     });
   }
 
   private fetchWorldspaceChildren(node: WorldspaceNode): Promise<RecordBrowserNode[]> {
     return this.orErrorNode(async () => {
-      const generation = this.stampOf(pluginAddressOf(node));
       const data = answerOf(await this.repository.getWorldspaceBlocks(pluginAddressOf(node), node.worldspace.formKey));
       const cells = [...data.topCells, ...data.blocks.flatMap(b => b.subBlocks.flatMap(s => s.cells))];
-      this.readRows(generation, cells.map(c => ({ ...c, plugin: pluginAddressOf(node) })));
+      this.readRows(cells.map(c => ({ ...c, plugin: pluginAddressOf(node) })));
       const nodes: RecordBrowserNode[] = data.topCells.map(c => new CellNode(node.plugin, c, node.origin, node.conditions));
-      nodes.push(...data.blocks.map(b => this.folded(
-        new BlockLevelNode('block', b, node.plugin, node.origin, node.conditions, [node.formKey, blockId(b)]), b.subBlocks.flatMap(s => s.cells))));
+      nodes.push(...data.blocks.map(b => this.folded(new BlockLevelNode('block', b, node.plugin, node.origin, node.conditions, [node.formKey, blockId(b)]))));
       return nodes;
     });
   }
 
   private fetchCellGroups(node: CellNode): Promise<RecordBrowserNode[]> {
     return this.orErrorNode(async () => {
-      const generation = this.stampOf(pluginAddressOf(node));
-      const refs = await this.getOrLoad('cellRefs', pluginAddressOf(node), node.cell.formKey,
-        async () => answerOf(await this.repository.getCellChildRecords(pluginAddressOf(node), node.cell.formKey)));
-      this.readRows(generation, [...refs.persistent, ...refs.temporary].map(r => ({ ...r, plugin: pluginAddressOf(node) })));
+      const refs = answerOf(await this.repository.getCellChildRecords(pluginAddressOf(node), node.cell.formKey));
+      this.readRows([...refs.persistent, ...refs.temporary].map(r => ({ ...r, plugin: pluginAddressOf(node) })));
       const groups: ChildRecordGroupNode[] = [];
-      if (refs.persistent.length) groups.push(this.folded(new ChildRecordGroupNode(node.plugin, node.cell.formKey, 'persistent', refs.persistent, node.origin, node.conditions), refs.persistent));
-      if (refs.temporary.length) groups.push(this.folded(new ChildRecordGroupNode(node.plugin, node.cell.formKey, 'temporary', refs.temporary, node.origin, node.conditions), refs.temporary));
+      if (refs.persistent.length) groups.push(this.folded(new ChildRecordGroupNode(node.plugin, node.cell.formKey, 'persistent', refs.persistent, node.origin, node.conditions)));
+      if (refs.temporary.length) groups.push(this.folded(new ChildRecordGroupNode(node.plugin, node.cell.formKey, 'temporary', refs.temporary, node.origin, node.conditions)));
       return groups;
     });
   }
@@ -578,12 +426,8 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
   private fetchContainerChildren(node: RecordNode): Promise<RecordBrowserNode[]> {
     return this.orErrorNode(async () => {
       const owner = { name: node.record.plugin, origin: node.origin };
-      const generation = this.stampOf(owner);
-      const children = await this.getOrLoad('containerChildren', owner, node.record.formKey, async () => {
-        const loaded = answerOf(await this.repository.getContainerChildren(owner, node.record.formKey));
-        this.readRecords(generation, node.origin, loaded);
-        return loaded;
-      });
+      const children = answerOf(await this.repository.getContainerChildren(owner, node.record.formKey));
+      this.readRecords(node.origin, children);
       return children.map(c => new RecordNode(c, node.origin, node.conditions, c.isContainer, c.hasContainerChildren));
     });
   }
@@ -591,34 +435,26 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
   // Every interior cell in one call (plugins.md, The tree, story 8).
   private fetchInteriorCells(node: RecordTypeNode): Promise<RecordBrowserNode[]> {
     return this.orErrorNode(async () => {
-      const generation = this.stampOf(pluginAddressOf(node));
-      const blocks = await this.getOrLoad('interior', pluginAddressOf(node), '',
-        async () => answerOf(await this.repository.getInteriorCells(pluginAddressOf(node))));
-      this.readRows(generation, blocks.flatMap(b => b.subBlocks.flatMap(s => s.cells)).map(c => ({ ...c, plugin: pluginAddressOf(node) })));
-      return blocks.map(b => this.folded(
-        new BlockLevelNode('interiorBlock', b, node.plugin, node.origin, node.conditions, [node.recordType, blockId(b)]), b.subBlocks.flatMap(s => s.cells)));
+      const blocks = answerOf(await this.repository.getInteriorCells(pluginAddressOf(node)));
+      this.readRows(blocks.flatMap(b => b.subBlocks.flatMap(s => s.cells)).map(c => ({ ...c, plugin: pluginAddressOf(node) })));
+      return blocks.map(b => this.folded(new BlockLevelNode('interiorBlock', b, node.plugin, node.origin, node.conditions, [node.recordType, blockId(b)])));
     });
   }
 
   private fetchRecords(node: RecordTypeNode): Promise<RecordBrowserNode[]> {
     return this.orErrorNode(async () => {
-      const generation = this.stampOf(pluginAddressOf(node));
-      const page = await this.getOrLoad('records', pluginAddressOf(node), node.recordType, async () => {
-        const loaded = answerOf(await this.repository.getRecords(pluginAddressOf(node), node.recordType, 0, UNLIMITED_RECORDS));
-        this.readRecords(generation, node.origin, loaded.items);
-        return loaded;
-      });
+      const page = answerOf(await this.repository.getRecords(pluginAddressOf(node), node.recordType, 0, UNLIMITED_RECORDS));
+      this.readRecords(node.origin, page.items);
       return page.items.map(r => new RecordNode(r, node.origin, node.conditions, node.isContainer, r.hasContainerChildren));
     });
   }
 
-  private readRecords(generation: Stamp, origin: string, rows: readonly RecordSummary[]): void {
-    this.readRows(generation, rows.map(r => ({ ...r, plugin: { name: r.plugin, origin } })));
+  private readRecords(origin: string, rows: readonly RecordSummary[]): void {
+    this.readRows(rows.map(r => ({ ...r, plugin: { name: r.plugin, origin } })));
   }
 
-  private readRows(generation: Stamp, rows: readonly RowRead[]): void {
-    if (!this.holds(generation)) return;
-    for (const row of rows) this.rowStates.set(cacheKey(row.plugin, 'row', row.formKey), row.workingTreeState);
+  private readRows(rows: readonly RowRead[]): void {
+    for (const row of rows) this.rowStates.set(rowStateKey(row.plugin, row.formKey), row.workingTreeState);
     this._onDidReadRecords.fire(rows.map(row => recordResourceUri(row.plugin, row.formKey)));
   }
 }

@@ -28,7 +28,7 @@ function source(
   const beneathReads = listeners<undefined>();
   return {
     workingTreeStateOf: () => state,
-    statesBeneathOf: () => beneath,
+    statesBeneathOf: () => Promise.resolve(beneath),
     isExpanded: () => expanded,
     onDidReadRecords: reads.on,
     onDidReadBeneath: beneathReads.on,
@@ -49,9 +49,9 @@ describe('RecordDecorationProvider', () => {
     ['None', undefined],
     ['Modified', { badge: 'M', color: MODIFIED, tooltip: 'Modified' }],
     ['Added', { badge: 'A', color: ADDED, tooltip: 'Added' }],
-  ])('badges a record whose working-tree state is %s as git does', (state, decoration) => {
+  ])('badges a record whose working-tree state is %s as git does', async (state, decoration) => {
     const provider = new RecordDecorationProvider(source(state), NO_LOCKED_ROWS);
-    expect(provider.provideFileDecoration(uri)).toEqual(decoration);
+    expect(await provider.provideFileDecoration(uri)).toEqual(decoration);
   });
 
   it('fires onDidChangeFileDecorations for exactly the rows its source reads', () => {
@@ -75,27 +75,27 @@ describe('RecordDecorationProvider, a row with changes beneath it', () => {
     ['a dot in the added colour for additions alone', undefined, ['Added'], { ...DOT, color: ADDED }],
     ['a dot in the modified colour for modifications and additions both', 'None', ['Added', 'Modified'], { ...DOT, color: MODIFIED }],
     ['nothing for nothing', 'None', [], undefined],
-  ])('shows, while collapsed, %s beneath it', (_case, state, beneath, decoration) => {
+  ])('shows, while collapsed, %s beneath it', async (_case, state, beneath, decoration) => {
     const provider = new RecordDecorationProvider(source(state, beneath), NO_LOCKED_ROWS);
-    expect(provider.provideFileDecoration(uri)).toEqual(decoration);
+    expect(await provider.provideFileDecoration(uri)).toEqual(decoration);
   });
 
-  it('shows its own letter rather than the dot when it has a change of its own', () => {
+  it('shows its own letter rather than the dot when it has a change of its own', async () => {
     const provider = new RecordDecorationProvider(source('Added', ['Modified']), NO_LOCKED_ROWS);
-    expect(provider.provideFileDecoration(uri)).toEqual({ badge: 'A', color: ADDED, tooltip: 'Added' });
+    expect(await provider.provideFileDecoration(uri)).toEqual({ badge: 'A', color: ADDED, tooltip: 'Added' });
   });
 
-  it('shows no dot while expanded, and its own letter still', () => {
+  it('shows no dot while expanded, and its own letter still', async () => {
     const own = new RecordDecorationProvider(source('Modified', ['Added'], true), NO_LOCKED_ROWS);
     const plain = new RecordDecorationProvider(source('None', ['Added'], true), NO_LOCKED_ROWS);
 
-    expect(own.provideFileDecoration(uri)?.badge).toBe('M');
-    expect(plain.provideFileDecoration(uri)).toBeUndefined();
+    expect((await own.provideFileDecoration(uri))?.badge).toBe('M');
+    expect(await plain.provideFileDecoration(uri)).toBeUndefined();
   });
 
-  it('leaves a locked row its grey, whatever is beneath it', () => {
+  it('leaves a locked row its grey, whatever is beneath it', async () => {
     const provider = new RecordDecorationProvider(source('None', ['Modified']), () => new Set([uri.toString()]));
-    expect(provider.provideFileDecoration(uri)).toBeUndefined();
+    expect(await provider.provideFileDecoration(uri)).toBeUndefined();
   });
 
   it('asks VS Code to ask again about every row when the states beneath are read', () => {

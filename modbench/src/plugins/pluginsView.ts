@@ -140,14 +140,14 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   const showKeyContext = () => { publishKeyContext(selected.rows(), tree); };
   showKeyContext();
   const keyContextSubscriptions = [view.onDidChangeSelection(showKeyContext), tree.onDidChangeTreeData(showKeyContext)];
-  const sync = joinSyncMessages(pluginSync, loadOrderPut, recordBrowser.beneathFailure);
+  const sync = joinSyncMessages(pluginSync, loadOrderPut);
   const viewMessage = () => messageLine(tree.viewMessage(), sync.message());
   const nameFilter = registerPluginsNameFilter(view, tree, viewMessage, sync);
   const lens = new FilterCodeLensProvider();
   const showRecordFilter = makeShowRecordFilter(lens, { pluginsNameFilter: nameFilter, pluginsTree: tree });
   const progress = pluginsViewProgress(view, nameFilter);
   const indexStatus = followIndexStatus({
-    client, facts: tree.facts, progress, statusBar, showRecordFilter, registerRepositories: registerInBackground, log,
+    client, facts: tree.facts, progress, statusBar, registerRepositories: registerInBackground, log,
     reporter: reporterFor('loadOrder'),
   });
   const changes = client.onDidChange((change) => { tree.indexChanged(change); });

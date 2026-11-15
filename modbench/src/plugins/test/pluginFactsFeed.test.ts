@@ -280,21 +280,6 @@ describe('PluginFactsFeed', () => {
       expect([asked.mock.calls.length, changes.mock.calls]).toEqual([0, [[[A]]]]);
     });
 
-    it('reads once for the changes that arrive together, and names every plugin they named, or none when one named none', async () => {
-      const { feed, client, changes } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B] });
-      client.setQueryAnswer('getPlugins', reads(false));
-      await feed.reconciled([]);
-      const before = client.calls.filter((call) => call.method === 'getPlugins').length;
-      changes.mockClear();
-
-      await Promise.all([feed.refresh([A]), feed.refresh([B]), feed.refresh([A])]);
-      await feed.refresh([A]);
-      await Promise.all([feed.refresh([A]), feed.refresh(), feed.refresh([B])]);
-
-      expect([client.calls.filter((call) => call.method === 'getPlugins').length - before, changes.mock.calls])
-        .toEqual([3, [[[A, B]], [[A]], [undefined]]]);
-    });
-
     it('judges nothing before the first reconcile', async () => {
       const { feed, client, sortingErrors } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B] });
       client.setQueryAnswer('getPlugins', reads(true));
@@ -415,7 +400,6 @@ describe('PluginFactsFeed', () => {
     client.setQueryAnswerOnce('getPlugins', slow.promise);
     client.setQueryAnswer('getPlugins', [held({ isCompiledPlugin: false })]);
     const earlier = feed.refresh();
-    await new Promise((resolve) => { setImmediate(resolve); });
     await feed.refresh();
     slow.resolve([held({ isCompiledPlugin: true })]);
     await earlier;

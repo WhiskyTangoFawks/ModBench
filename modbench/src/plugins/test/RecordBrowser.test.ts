@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
-  type RecordSummary, type RecordPage, type ContainerChildSummary, type CellSummary, type InteriorCellBlock,
+  type RecordSummary, type ContainerChildSummary, type CellSummary, type InteriorCellBlock,
   type ChildRecordSummary, type WorldspaceSummary,
 } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
@@ -360,13 +360,14 @@ describe('the rows a group reads, and their working-tree state', () => {
     expect(provider.workingTreeStateOf(recordResourceUri({ name: record.plugin, origin: 'Data/' }, record.formKey))).toBe('Modified');
   });
 
-  it('names nothing when a group answers from its cache', async () => {
-    const { provider, typeNode, read } = await readGroup(makeClient());
+  it('asks mEdit each time VS Code asks for the group, and keeps no listing', async () => {
+    const repo = makeClient();
+    const { provider, typeNode } = await readGroup(repo);
     await provider.getChildren(typeNode);
 
     await provider.getChildren(typeNode);
 
-    expect(read).toHaveLength(1);
+    expect(repo.calls.filter((call) => call.method === 'getRecords')).toHaveLength(2);
   });
 
   it('names the rows again, with mEdit\'s new state, when a refresh makes the group read again', async () => {
@@ -381,28 +382,6 @@ describe('the rows a group reads, and their working-tree state', () => {
 
     const uri = recordResourceUri({ name: record.plugin, origin: 'Data/' }, record.formKey);
     expect(read).toEqual([[uri], [uri]]);
-    expect(provider.workingTreeStateOf(recordResourceUri({ name: record.plugin, origin: 'Data/' }, record.formKey))).toBe('Modified');
-  });
-
-  it('drops a read that was in flight when a refresh came, and names only the read that follows it', async () => {
-    const record = makeRecord(0, 'None');
-    const repo = makeClient();
-    const { provider, typeNode, read } = await readGroup(repo);
-    let answerStale!: (page: RecordPage) => void;
-    repo.setQueryAnswerOnce('getRecords', new Promise<RecordPage>((resolve) => { answerStale = resolve; }));
-    repo.setQueryAnswer('getRecords', { items: [{ ...record, workingTreeState: 'Modified' }], total: 1 });
-
-    const inFlight = provider.getChildren(typeNode);
-    provider.refresh();
-    answerStale({ items: [record], total: 1 });
-    await inFlight;
-
-    expect(read).toEqual([]);
-    expect(provider.workingTreeStateOf(recordResourceUri({ name: record.plugin, origin: 'Data/' }, record.formKey))).toBeUndefined();
-
-    await provider.getChildren(typeNode);
-
-    expect(read).toEqual([[recordResourceUri({ name: record.plugin, origin: 'Data/' }, record.formKey)]]);
     expect(provider.workingTreeStateOf(recordResourceUri({ name: record.plugin, origin: 'Data/' }, record.formKey))).toBe('Modified');
   });
 
@@ -530,46 +509,36 @@ describe('refreshing the browser', () => {
 
 describe('refreshing the browser for named plugins', () => {
   const OTHER: PluginAddress = { name: 'Other.esp', origin: 'Data/' };
+  const stateOf = (provider: RecordBrowser, plugin: PluginAddress) => provider.workingTreeStateOf(recordResourceUri(plugin, '000000:Fallout4.esm'));
 
-  it('reads the named plugin\'s group again and keeps what it holds of every other, and leaves redrawing to the plugin row\'s owner', async () => {
-    const repo = makeClient({ records: { items: [makeRecord(0)], total: 1 } });
+  async function browsedBoth() {
+    const row = (plugin: PluginAddress) => ({ ...makeRecord(0, 'Modified'), formKey: '000000:Fallout4.esm', plugin: plugin.name });
+    const repo = makeClient({ records: { items: [row(PLUGIN0)], total: 1 } });
     const provider = new RecordBrowser(repo);
-    const named = await soleGroup(provider, PLUGIN0);
-    const other = await soleGroup(provider, OTHER);
-    await provider.getChildren(named);
-    await provider.getChildren(other);
+    await provider.getChildren(await soleGroup(provider, PLUGIN0));
+    repo.setQueryAnswer('getRecords', { items: [row(OTHER)], total: 1 });
+    await provider.getChildren(await soleGroup(provider, OTHER));
+    return { provider, repo };
+  }
+
+  it('makes the named plugin\'s rows forget their own state and leaves every other\'s, and leaves redrawing to the plugin row\'s owner', async () => {
+    const { provider } = await browsedBoth();
     const redrawn = vi.fn();
     provider.onDidChangeTreeData(redrawn);
-    const reads = () => repo.calls.filter((call) => call.method === 'getRecords').length;
-    const before = reads();
 
     provider.refresh([PLUGIN0]);
-    await provider.getChildren(named);
-    await provider.getChildren(other);
 
-    expect([reads() - before, redrawn.mock.calls.length]).toEqual([1, 0]);
+    expect([stateOf(provider, PLUGIN0), stateOf(provider, OTHER), redrawn.mock.calls.length]).toEqual([undefined, 'Modified', 0]);
   });
 
-  it('drops a read of the named plugin that was in flight, and not one of another plugin', async () => {
-    const record = makeRecord(0, 'None');
-    const repo = makeClient();
-    const provider = new RecordBrowser(repo);
-    const typeNode = await soleGroup(provider, PLUGIN0);
-    const read: (readonly vscode.Uri[])[] = [];
-    provider.onDidReadRecords((uris) => read.push(uris));
-    let answerStale!: (page: RecordPage) => void;
-    repo.setQueryAnswerOnce('getRecords', new Promise<RecordPage>((resolve) => { answerStale = resolve; }));
+  it('makes every plugin\'s rows forget their own state, and redraws the tree, for a change that names none', async () => {
+    const { provider } = await browsedBoth();
+    const redrawn = vi.fn();
+    provider.onDidChangeTreeData(redrawn);
 
-    const inFlight = provider.getChildren(typeNode);
-    provider.refresh([OTHER]);
-    answerStale({ items: [record], total: 1 });
-    await inFlight;
-    const firstRead = read.length;
-    const another = provider.getChildren(typeNode);
-    provider.refresh([PLUGIN0]);
-    await another;
+    provider.refresh();
 
-    expect([firstRead, read.length]).toEqual([1, 1]);
+    expect([stateOf(provider, PLUGIN0), stateOf(provider, OTHER), redrawn.mock.calls]).toEqual([undefined, undefined, [[undefined]]]);
   });
 });
 
@@ -908,18 +877,6 @@ describe('a plugin of a shared filename browses its own children', () => {
     await provider.getChildren(fromB);
 
     expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(2);
-  });
-
-  it('caches one plugin once, whatever case its filename and origin arrive in, as MO2 and a Windows filesystem compare them', async () => {
-    const repo = sharedClient();
-    const provider = new RecordBrowser(repo);
-
-    const asListed = await soleGroup(provider, { name: 'Shared.esp', origin: 'ModA' });
-    const recased = await soleGroup(provider, { name: 'shared.ESP', origin: 'moda' });
-    await provider.getChildren(asListed);
-    await provider.getChildren(recased);
-
-    expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
   });
 });
 

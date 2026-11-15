@@ -41,7 +41,7 @@ function isDropPayload(value: unknown): value is { plugins: PluginAddress[] } {
  *  satisfies it. */
 export type RecordBrowserFacet = Pick<
   RecordBrowser,
-  'getPluginChildren' | 'getChildren' | 'getTreeItem' | 'onDidChangeTreeData' | 'reopen' | 'refresh'
+  'getPluginChildren' | 'getChildren' | 'getTreeItem' | 'onDidChangeTreeData' | 'refresh'
 >;
 
 const TREE_READS = {
@@ -328,7 +328,6 @@ export class PluginsTreeProvider
 
   async getChildren(element?: PluginsTreeNode): Promise<PluginsTreeNode[]> {
     if (element === undefined) return this.rows();
-    if (element.resourceUri) this.records.reopen(element.resourceUri);
     return this.childrenOf(element);
   }
 
@@ -353,6 +352,7 @@ export class PluginsTreeProvider
       this.parentOf.set(child, parent);
       const formKey = recordFormKeyOf(child);
       if (formKey !== undefined && plugin !== undefined) child.id = rowIdentity(child.kind, plugin, formKey);
+      else if (child.resourceUri !== undefined) child.id = child.resourceUri.toString();
     }
     return children;
   }

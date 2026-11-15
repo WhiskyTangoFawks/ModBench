@@ -1,20 +1,17 @@
 import type * as vscode from 'vscode';
-import { isMEditGone, type LoadOrderProgress, type MEditClient, type PluginLoadFailure, type RecordFilter } from '../client';
-import { errorMessage } from '../ports/errorMessage';
+import { isMEditGone, type LoadOrderProgress, type MEditClient, type PluginLoadFailure } from '../client';
 import type { Reporter } from '../ports/reporter';
 import type { PluginsViewProgress } from './pluginRowCommands';
 import type { PluginFactsFeed } from './pluginFactsFeed';
 import { reportSkippedPlugins } from './pluginFailures';
 import { createReconcileNarrator, type ReconcileNarrator } from './reconcileNarrator';
 import type { StatusBar } from './statusBar';
-import { answerOf } from '../wire/readFailed';
 
 interface ReconciledDeps {
   log: (msg: string) => void;
   warn: (msg: string) => void;
   statusBar: Pick<StatusBar, 'ready'>;
   registerRepositories: () => void;
-  syncFilterState: () => Promise<void>;
   /** The completed reconcile's whole hand-off to the tree, so no caller can apply one part of
    *  it without the rest. */
   applyReconciled: (failures: PluginLoadFailure[], totalPlugins: number) => Promise<void>;
@@ -26,26 +23,7 @@ async function settleReconciled(status: LoadOrderProgress, deps: ReconciledDeps)
   reportSkippedPlugins(status.failures, deps);
   deps.statusBar.ready(status.activePlugins);
   deps.registerRepositories();
-  await deps.syncFilterState();
   await deps.applyReconciled(status.failures, status.totalPlugins);
-}
-
-// A read failure logs and warns, and never throws (ADR-0019), so a failed read leaves the view
-// as it was.
-async function syncActiveFilter(
-  getActiveFilter: () => Promise<RecordFilter | null>,
-  deps: { log: (msg: string) => void; warn: (msg: string) => void; showRecordFilter: (filter: RecordFilter | null) => void },
-): Promise<void> {
-  let filter: RecordFilter | null;
-  try {
-    filter = await getActiveFilter();
-  } catch (e) {
-    const detail = errorMessage(e);
-    deps.log(`syncing the record filter failed: ${detail}`);
-    deps.warn(`Could not read the record filter — the Plugins view shows it as it last was. ${detail}`);
-    return;
-  }
-  deps.showRecordFilter(filter);
 }
 
 // plugins.md, States 3: the tree's own wording for a row not yet held while mEdit is unreachable.
@@ -55,11 +33,10 @@ const UNREACHABLE_REASON = {
 };
 
 interface IndexStatusDeps {
-  client: Pick<MEditClient, 'onLoadOrderStatus' | 'onStatusChanged' | 'getActiveFilter'>;
+  client: Pick<MEditClient, 'onLoadOrderStatus' | 'onStatusChanged'>;
   facts: Pick<PluginFactsFeed, 'indexed' | 'refused' | 'reconciled' | 'unreachable' | 'refresh'>;
   progress: PluginsViewProgress;
   statusBar: Pick<StatusBar, 'ready' | 'showMEditState'>;
-  showRecordFilter: (filter: RecordFilter | null) => void;
   registerRepositories: () => void;
   log: (level: 'info' | 'warn' | 'error', msg: string) => void;
   reporter: Reporter;
@@ -69,7 +46,7 @@ interface IndexStatusDeps {
 // whoever started the reconcile. mEdit going away, or a stream reopening onto another process,
 // starts its versions over.
 export function followIndexStatus(deps: IndexStatusDeps): { narrator: ReconcileNarrator } & vscode.Disposable {
-  const { client, facts, progress, statusBar, showRecordFilter, registerRepositories, log, reporter } = deps;
+  const { client, facts, progress, statusBar, registerRepositories, log, reporter } = deps;
   const info = (m: string) => log('info', `[loadOrder] ${m}`);
   const warn = (m: string) => reporter.report('warning', m);
   const narrator = createReconcileNarrator({
@@ -84,7 +61,6 @@ export function followIndexStatus(deps: IndexStatusDeps): { narrator: ReconcileN
     },
     settle: (status) => settleReconciled(status, {
       log: info, warn, statusBar, registerRepositories,
-      syncFilterState: () => syncActiveFilter(async () => answerOf(await client.getActiveFilter()), { log: info, warn, showRecordFilter }),
       applyReconciled: (failures, totalPlugins) => applyReconciled(deps, failures, totalPlugins),
     }),
     log: (m) => log('error', `[loadOrder] ${m}`),
