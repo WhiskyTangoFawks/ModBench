@@ -812,16 +812,17 @@ class HttpMEditClient implements MEditClient {
 
   selectRows(sql: string, atMostChars: number, token?: ReadCancellation): Promise<RowsRead | ReadFailed> {
     return this.read('selectRows', (api, signal) => api.POST('/records/select', { body: { sql }, parseAs: 'stream', signal }),
-      async (body) => {
-        if (!body) return NO_ANSWER;
-        try {
-          return await rowsOf(body, atMostChars, (reason) => { this.log.error(`[HttpMEditClient] selectRows stopped: ${reason}`); });
-        } catch (e) {
-          if (token?.isCancellationRequested) return CANCELLED;
-          this.log.error(`[HttpMEditClient] selectRows threw: ${errorMessage(e)}`);
-          return e instanceof SyntaxError ? { failed: 'unreadable' } : UNREACHABLE;
-        }
-      }, { token });
+      (body) => (body ? this.rowsRead(body, atMostChars, token) : NO_ANSWER), { token });
+  }
+
+  private async rowsRead(body: ReadableStream<Uint8Array>, atMostChars: number, token?: ReadCancellation): Promise<RowsRead | ReadFailed> {
+    try {
+      return await rowsOf(body, atMostChars, (reason) => { this.log.error(`[HttpMEditClient] selectRows stopped: ${reason}`); });
+    } catch (e) {
+      if (token?.isCancellationRequested) return CANCELLED;
+      this.log.error(`[HttpMEditClient] selectRows threw: ${errorMessage(e)}`);
+      return e instanceof SyntaxError ? { failed: 'unreadable' } : UNREACHABLE;
+    }
   }
 
   getComparison(formKey: string, text?: CopyText, token?: ReadCancellation): Promise<CompareResult | null | ReadFailed> {

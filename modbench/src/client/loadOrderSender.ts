@@ -177,12 +177,12 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
   let newestHanded: LoadOrderSnapshot | undefined;
   let handedCount = 0;
   let reopenUnannounced = false;
-  const resent = new EventEmitter<[LoadOrderSnapshot, LoadOrderOutcome]>();
-  const appliedAfterReopen = new EventEmitter<[LoadOrderSnapshot]>();
-  const launches = new EventEmitter<[Promise<LaunchOutcome>]>();
+  const resent = new EventEmitter<{ snapshot: LoadOrderSnapshot; outcome: LoadOrderOutcome }>();
+  const appliedAfterReopen = new EventEmitter<LoadOrderSnapshot>();
+  const launches = new EventEmitter<Promise<LaunchOutcome>>();
   const exits = new EventEmitter();
   const launcher = createLauncher(wire, (launched) => { launches.fire(launched); });
-  const subscribeTo = <A extends unknown[]>(emitter: EventEmitter<A>) => (listener: (...args: A) => void): (() => void) => {
+  const subscribeTo = <T>(emitter: EventEmitter<T>) => (listener: (data: T) => void): (() => void) => {
     const subscription = emitter.event(listener);
     return () => { subscription.dispose(); };
   };
@@ -211,7 +211,7 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     const snapshot = newestHanded;
     if (!snapshot) return;
     reopenUnannounced = true;
-    if (!slot.holdsOne()) void hand(snapshot).then((outcome) => { resent.fire(snapshot, outcome); });
+    if (!slot.holdsOne()) void hand(snapshot).then((outcome) => { resent.fire({ snapshot, outcome }); });
     slot.oweSignal([]);
   };
 
@@ -234,7 +234,7 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     applied: () => slot.applied(),
     handed: () => handedCount,
     pending: () => slot.pending(),
-    onResent: subscribeTo(resent),
+    onResent: (listener) => subscribeTo(resent)(({ snapshot, outcome }) => { listener(snapshot, outcome); }),
     onAppliedAfterReopen: subscribeTo(appliedAfterReopen),
     onLaunch: subscribeTo(launches),
     onExit: subscribeTo(exits),

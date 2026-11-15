@@ -583,6 +583,13 @@ describe('HttpMEditClient — selectRows reads the rows as mEdit streams them', 
     expect(await request.json()).toEqual({ sql: 'SELECT 1' });
   });
 
+  it('logs the read once, and answers no answer, when mEdit sends no body', async () => {
+    const { result, log } = await exchange((c) => c.selectRows('SELECT 1', 1000), () => Promise.resolve(new Response(null, { status: 200 })));
+
+    expect(result).toEqual({ failed: 'no-answer' });
+    expect(log.lines.error).toEqual(['[HttpMEditClient] selectRows: mEdit answered with no body']);
+  });
+
   it('stops reading once the rows\' text passes the length asked for, and answers the rows read before it, with more', async () => {
     const row = { row: { body: 'x'.repeat(40) } };
     const { respond, cancelled } = streaming(lines(row, row, row, { end: true }));
@@ -1273,14 +1280,16 @@ describe('HttpMEditClient — whether the record index may be late', () => {
   });
 
   it('is true from unsaved documents handed until mEdit has answered their PUT', async () => {
+    let puts = 0;
     let answerPut!: () => void;
     const putAnswered = new Promise<void>((resolve) => { answerPut = resolve; });
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
-      ['/unsaved-documents', () => putAnswered.then(() => new Response(null, { status: 204 }))],
+      ['/unsaved-documents', () => (puts++ === 0 ? noContent() : putAnswered.then(() => new Response(null, { status: 204 })))],
     ]);
     const client = makeClient(fetch);
     await client.start();
+    await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
 
     client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]);
     expect(client.recordIndexMayBeLate).toBe(true);

@@ -10,7 +10,7 @@ export function keepRecordIndexChanges(
   client: Pick<MEditClient, 'onNotification' | 'onStatusChanged'> & { onReconnected(listener: () => void): () => void },
   loadOrder: Pick<LoadOrderStatusKeeper, 'onSettled'>,
 ): RecordIndexChanges {
-  const changes = new EventEmitter<[RecordIndexChange]>();
+  const changes = new EventEmitter<RecordIndexChange>();
   const tell = (change: RecordIndexChange) => { changes.fire(change); };
 
   client.onNotification('rows-changed', ({ plugin, keys }) => { tell([{ plugin, keys }]); });
