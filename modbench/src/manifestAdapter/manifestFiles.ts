@@ -7,6 +7,7 @@ import { errorMessage } from '../ports/errorMessage';
 import { isManifestPath, MANIFEST_SUFFIX } from '../repositoriesLib/manifestPath';
 import type { PackagesAsked } from '../repositoriesLib/statusValues';
 import { ownTempPrefix, renameOver } from '../repositoriesLib/wholeWrites';
+import { toldAfter } from '../repositoriesLib/writeNaming';
 import { BUILD_FILE, PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
 import { heldTextAt, heldTexts, samePath, type HeldTexts } from '../symbolNames/symbolNames';
 import type { BuildFileAgainst, BuildFileLack, BuildFileRead, BuildStep } from './buildFile';
@@ -115,8 +116,11 @@ export async function writeManifestIn(folder: string, manifest: Manifest): Promi
   const text = manifestText(manifest);
   refuseUnlessReadable(text);
   if (named !== undefined && await textAt(path) === text) return false;
-  await writeWhole(folder, path, text);
-  if (one !== undefined && named === undefined) await rm(join(folder, one));
+  const replaced = one !== undefined && named === undefined ? join(folder, one) : undefined;
+  await toldAfter(replaced === undefined ? [path] : [path, replaced], async () => {
+    await writeWhole(folder, path, text);
+    if (replaced !== undefined) await rm(replaced);
+  });
   return true;
 }
 
