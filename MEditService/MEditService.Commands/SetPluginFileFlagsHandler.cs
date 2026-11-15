@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
+using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using Mutagen.Bethesda;
 
@@ -40,9 +41,10 @@ public sealed record SetPluginFileFlagsResult(IReadOnlyList<PluginFileFlagsSet> 
 public sealed class SetPluginFileFlagsHandler
 {
     private readonly IPluginAdapter _plugins;
+    private readonly LoadOrderHolder _loadOrder;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal SetPluginFileFlagsHandler(IPluginAdapter plugins) => _plugins = plugins;
+    internal SetPluginFileFlagsHandler(IPluginAdapter plugins, LoadOrderHolder loadOrder) => (_plugins, _loadOrder) = (plugins, loadOrder);
 
     public SetPluginFileFlagsResult Set(IReadOnlyList<PluginFileFlagsToSet> files, GameRelease gameRelease)
     {
@@ -58,7 +60,21 @@ public sealed class SetPluginFileFlagsHandler
             else refused.Add(new PluginFileFlagRefused(file.Path, RefusalOf(failure), failure.Reason));
         }
 
+        if (applied.Count > 0) _loadOrder.SourceWritten(PluginsWritten(applied.Select(set => set.Path)));
         return new SetPluginFileFlagsResult(applied, refused);
+    }
+
+    // Null when a path written is no plugin of the load order, so only a check of the whole disk reads it.
+    private List<PluginChange>? PluginsWritten(IEnumerable<string> paths)
+    {
+        var held = _loadOrder.Current.Plugins;
+        List<PluginChange> changes = [];
+        foreach (var path in paths)
+        {
+            if (held.FirstOrDefault(plugin => string.Equals(plugin.Path, path, StringComparison.OrdinalIgnoreCase)) is not { } plugin) return null;
+            changes.Add(new PluginChange(plugin.Key, null));
+        }
+        return changes;
     }
 
     private static PluginFileFlagRefusal RefusalOf(PluginFailure failure) =>

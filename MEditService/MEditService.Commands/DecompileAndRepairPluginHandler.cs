@@ -121,13 +121,13 @@ public sealed class DecompileAndRepairPluginHandler
                 return Refused(RefusalOfInit(initRefusal), $"{mod.Name} is not a source mod, and making a source folder for {plugin.Name} was refused: {initMessage}");
             newSourceFolder.LeftOut.UnionWith(leftOut);
             newSourceFolder.Held.UnionWith(((ItemAnswer<VersionInGitRefusal, IReadOnlyList<PluginAddress>>.Wrote)init).Outcome);
-            return ItemAnswer<DecompileAndRepairRefusal, NoOutcome>.Landed(default);
+            return Written([plugin.Key, .. ((ItemAnswer<VersionInGitRefusal, IReadOnlyList<PluginAddress>>.Wrote)init).Outcome]);
         }
 
         switch (repository.CommitRepair(plugin.Key, new TreeCommit(baseline, BaselineMessage(plugin, repair)), repairedCommit, repair.OriginalSha256))
         {
             case null:
-                return ItemAnswer<DecompileAndRepairRefusal, NoOutcome>.Landed(default);
+                return Written([plugin.Key]);
             case SourceFailure.GitUnavailable gitMissing:
                 return Refused(DecompileAndRepairRefusal.GitUnavailable, gitMissing.Reason);
             case SourceFailure.TwinFolders twins:
@@ -145,6 +145,12 @@ public sealed class DecompileAndRepairPluginHandler
         PluginFailure.RepairUnverified => Refused(DecompileAndRepairRefusal.RoundTripFailed, $"{plugin.Name}'s repair was refused: {failure.Reason}."),
         _ => Refused(DecompileAndRepairRefusal.RepairFailed, $"{plugin.Name}'s repair could not be made: {failure.Reason}."),
     };
+
+    private ItemAnswer<DecompileAndRepairRefusal, NoOutcome> Written(IEnumerable<PluginAddress> plugins)
+    {
+        _loadOrder.SourceWritten([.. plugins.Distinct(PluginAddress.Comparer).Select(plugin => new PluginChange(plugin, null))]);
+        return ItemAnswer<DecompileAndRepairRefusal, NoOutcome>.Landed(default);
+    }
 
     private static DecompileAndRepairRefusal RefusalOfInit(VersionInGitRefusal refusal) => refusal switch
     {

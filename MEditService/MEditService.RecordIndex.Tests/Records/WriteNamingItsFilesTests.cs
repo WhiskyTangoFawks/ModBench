@@ -105,8 +105,9 @@ public sealed class WriteNamingItsFilesTests : IDisposable
 
     private void Written((LoadOrderEntry Entry, SourceChanges Made) saved)
     {
+        var own = _holder.BeginOwnWrites();
         _holder.SourceWritten([Named(saved)]);
-        _ = _index.ListedIn(saved.Entry.Key);
+        _index.AwaitWrites(own);
         _index.Settled();
     }
 
@@ -253,21 +254,23 @@ public sealed class WriteNamingItsFilesTests : IDisposable
     }
 
     [Fact]
-    public async Task AWriteCountedWhileATurnReadsAnotherWritesFiles_IsReadBeforeAReadAfterItAnswers()
+    public async Task AWriteCountedWhileATurnReadsAnotherWritesFiles_IsReadBeforeTheWriterIsAnswered()
     {
         var renamedNpc = Saved(Container, RepositoryOf(Container).ChangesToPut(Container.Key, Renamed(_npc, "RenamedNpc")));
         var renamedCell = Saved(Container, RepositoryOf(Container).ChangesToPut(Container.Key, Renamed(_keys.Cell, "RenamedCell")));
         using var paused = new FirstRaisePaused();
         _onWritten = paused.Raised;
+        var own = _holder.BeginOwnWrites();
         var first = Task.Run(() => _holder.SourceWritten([Named(renamedNpc)]));
         paused.Counted.Wait();
         var second = Task.Run(() => _holder.SourceWritten([Named(renamedCell)]));
 
-        var npcRead = Record(_npc).EditorId;
-
         paused.Released.Set();
         await Task.WhenAll(first, second);
-        Assert.Equal("RenamedNpc", npcRead);
+        _index.AwaitWrites(own);
+
+        Assert.Equal("RenamedNpc", Record(_npc).EditorId);
+        Assert.Equal("RenamedCell", Record(_keys.Cell).EditorId);
     }
 
     [Fact]
@@ -278,6 +281,7 @@ public sealed class WriteNamingItsFilesTests : IDisposable
         var renameNpc = RepositoryOf(Container).ChangesToPut(Container.Key, Renamed(_npc, "RenamedNpc"));
         using var held = new FirstAndThirdNamedReadsHeld();
         _source.BeforeEachNamedRead = held.Before;
+        var own = _holder.BeginOwnWrites();
         _holder.SourceWritten([Named(Saved(Overriding, deleteOverride))]);
         held.FirstReached.Wait();
         _holder.SourceWritten([Named(Saved(Container, createNpc))]);
@@ -288,17 +292,20 @@ public sealed class WriteNamingItsFilesTests : IDisposable
         paused.Counted.Wait();
         held.First.Set();
         Waits.Reached(() => _source.NamedReads == 2 && !_index.Status.Validating, "the turn reading the created record");
-
-        var npcRead = _index.RowOf(_npc.ToString(), Container.Key)?.EditorId;
-
-        held.Third.Set();
+        paused.Released.Set();
         await npcWritten;
-        Assert.Equal("RenamedNpc", npcRead);
+
+        var awaited = _index.Queries.AwaitSourceWrites(own, CancellationToken.None);
+
+        Assert.False(awaited.IsCompleted);
+        held.Third.Set();
+        Assert.Null(await awaited);
+        Assert.Equal("RenamedNpc", Record(_npc).EditorId);
     }
 
     private sealed class FirstAndThirdNamedReadsHeld : IDisposable
     {
-        private static readonly TimeSpan AtMost = TimeSpan.FromSeconds(5);
+        private readonly CancellationTokenSource _abandoned = new();
         private int _reads = -1;
 
         public ManualResetEventSlim FirstReached { get; } = new();
@@ -313,13 +320,15 @@ public sealed class WriteNamingItsFilesTests : IDisposable
             if (read == 0)
             {
                 FirstReached.Set();
-                First.Wait(AtMost);
+                First.Wait(_abandoned.Token);
             }
-            if (read == 2) Third.Wait(AtMost);
+            if (read == 2) Third.Wait(_abandoned.Token);
         }
 
         public void Dispose()
         {
+            _abandoned.Cancel();
+            _abandoned.Dispose();
             FirstReached.Dispose();
             First.Dispose();
             Third.Dispose();
@@ -328,7 +337,7 @@ public sealed class WriteNamingItsFilesTests : IDisposable
 
     private sealed class FirstRaisePaused : IDisposable
     {
-        private static readonly TimeSpan AtMost = TimeSpan.FromSeconds(2);
+        private readonly CancellationTokenSource _abandoned = new();
         private int _raised;
 
         public ManualResetEventSlim Counted { get; } = new();
@@ -339,11 +348,13 @@ public sealed class WriteNamingItsFilesTests : IDisposable
         {
             if (Interlocked.Exchange(ref _raised, 1) == 1) return;
             Counted.Set();
-            Released.Wait(AtMost);
+            Released.Wait(_abandoned.Token);
         }
 
         public void Dispose()
         {
+            _abandoned.Cancel();
+            _abandoned.Dispose();
             Counted.Dispose();
             Released.Dispose();
         }

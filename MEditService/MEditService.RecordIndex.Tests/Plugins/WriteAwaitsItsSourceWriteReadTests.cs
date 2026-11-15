@@ -9,7 +9,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.RecordIndex.Tests.Plugins;
 
-public sealed class ReadAfterSourceWriteTests : IDisposable
+public sealed class WriteAwaitsItsSourceWriteReadTests : IDisposable
 {
     private const string CompiledPlugin = "CompiledPlugin.esp";
     private const string OtherPlugin = "Other.esp";
@@ -21,6 +21,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
 
     private readonly FakeTimeProvider _clock = new(Start);
     private readonly LoadOrderHolder _holder = new();
+    private readonly OwnWrites _own;
     private readonly GatedPluginAdapter _gate = new();
     private readonly FailingCheck _checks;
     private readonly ParkingSource _source = new();
@@ -29,8 +30,9 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     private readonly string _npc;
     private readonly OpenedIndex _index;
 
-    public ReadAfterSourceWriteTests()
+    public WriteAwaitsItsSourceWriteReadTests()
     {
+        _own = _holder.BeginOwnWrites();
         string npc = "";
         _fixture = new PluginFixtureBuilder("read-after-source-write")
             .WithPlugin(CompiledPlugin, mod => npc = mod.Npcs.AddNew("CompiledPluginNpc").FormKey.ToString(), origin: "SourceMod")
@@ -77,8 +79,10 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
         await _gate.WaitUntilParkedAsync();
     }
 
-    private Task<Answer<RenderedDocument?, IndexRefused>> Read(CancellationToken cancel = default) =>
-        _index.Queries.GetRenderedDocument(_compiledPlugin.Key, _npc, cancel);
+    private async Task<Answer<RenderedDocument?, IndexRefused>> Read(OwnWrites? own = null, CancellationToken cancel = default) =>
+        await _index.Queries.AwaitSourceWrites(own ?? _own, cancel) is { } unread
+            ? unread
+            : _index.Queries.GetRenderedDocument(_compiledPlugin.Key, _npc);
 
     private static void AssertWritten(Answer<RenderedDocument?, IndexRefused> answer) =>
         Assert.Contains("\"Written\"", answer.Value()?.Text, StringComparison.Ordinal);
@@ -86,7 +90,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task AReadAfterASourceWrite_AnswersWhatItWrote_WithNoChangeSignalled(bool writeNamesItsPlugin)
+    public async Task AWrite_AnswersWhatItWrote_WithNoChangeSignalled(bool writeNamesItsPlugin)
     {
         _holder.SourceWritten(writeNamesItsPlugin ? [new PluginChange(_compiledPlugin.Key, null)] : null);
 
@@ -94,7 +98,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     }
 
     [Fact]
-    public async Task AReadAfterAnUnnamedWriteAndThenANamedOne_AnswersOnceTheCheckAndTheReReadLand()
+    public async Task AnUnnamedWriteThenANamedOne_AnswersOnceTheCheckAndTheReReadLand()
     {
         await WorkerParkedInAReconcile();
         _holder.SourceWritten(null);
@@ -107,7 +111,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     }
 
     [Fact]
-    public async Task AReadAfterAnUnnamedWriteAndThenANamedOne_WhoseCheckFails_IsRefusedAtOnce_NamingTheFailedCheck()
+    public async Task AnUnnamedWriteThenANamedOne_WhoseCheckFails_IsRefusedAtOnce_NamingTheFailedCheck()
     {
         await WorkerParkedInAReconcile();
         _checks.FailNext();
@@ -123,31 +127,15 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     }
 
     [Fact]
-    public async Task AReadAfterASourceWrite_WaitsPastAReReadOfAnotherPlugin()
+    public async Task AWriteToAPluginTheLoadOrderLacks_HasNothingToBeRead()
     {
         _holder.SourceWritten([new PluginChange(NotInTheLoadOrder, null)]);
-        var read = Read();
 
-        _index.SignalChange([_fixture.Plugins.Single(p => p.Name == OtherPlugin).Key]);
-        Waits.Reached(() => !_index.Status.Validating, "the other plugin's re-read");
-
-        Assert.NotSame(read, await Task.WhenAny(read, Task.Delay(TimeSpan.FromMilliseconds(500))));
+        Assert.Null(await _index.Queries.AwaitSourceWrites(_own, CancellationToken.None).WaitAsync(Generous));
     }
 
     [Fact]
-    public async Task AReadAfterASourceWrite_WaitsPastALoadOrderThatArrives()
-    {
-        _holder.SourceWritten([new PluginChange(NotInTheLoadOrder, null)]);
-        var read = Read();
-
-        _index.Receive(_holder, SnapshotPlugins.Snapshot(
-            _fixture.DataFolder, _fixture.InstanceRoot, GameRelease.Fallout4, [.. _fixture.Plugins, NotCompiledEntry()]));
-
-        Assert.NotSame(read, await Task.WhenAny(read, Task.Delay(TimeSpan.FromMilliseconds(500))));
-    }
-
-    [Fact]
-    public async Task AReadWaitingOnTheReadOfASourceWrite_HoldsNoThread()
+    public async Task AWriteWaitingOnTheReadOfItsSourceWrite_HoldsNoThread()
     {
         await WrittenWithItsReReadParked();
 
@@ -159,11 +147,11 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     }
 
     [Fact]
-    public async Task AReadWaitingOnTheReadOfASourceWrite_EndsWhenItsCallerCancels()
+    public async Task AWriteWaitingOnTheReadOfItsSourceWrite_EndsWhenItsCallerCancels()
     {
         await WrittenWithItsReReadParked();
         using var aborted = new CancellationTokenSource();
-        var read = Read(aborted.Token);
+        var read = Read(cancel: aborted.Token);
 
         await aborted.CancelAsync();
 
@@ -172,7 +160,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     }
 
     [Fact]
-    public async Task AReadAfterASourceWrite_WhoseReReadIsUnfinished_IsRefusedOnceItsWaitExpires_NamingTheReRead()
+    public async Task AWrite_WhoseReReadIsUnfinished_IsRefusedOnceItsWaitExpires_NamingTheReRead()
     {
         await WrittenWithItsReReadParked();
         var read = Read();
@@ -186,7 +174,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     }
 
     [Fact]
-    public async Task AReadAfterASourceWrite_WhoseReReadFails_IsRefusedAtOnce_NamingTheFailedReRead()
+    public async Task AWrite_WhoseReReadFails_IsRefusedAtOnce_NamingTheFailedReRead()
     {
         IndexFiles.Invalidate(_fixture.InstanceRoot);
         Written();
@@ -198,7 +186,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     }
 
     [Fact]
-    public async Task AReadAfterASourceWriteNamingNoPlugin_WhoseCheckFails_IsRefusedAtOnce_NamingTheFailedCheck()
+    public async Task AWriteNamingNoPlugin_WhoseCheckFails_IsRefusedAtOnce_NamingTheFailedCheck()
     {
         _checks.FailNext();
         _holder.SourceWritten(null);
@@ -210,15 +198,16 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     }
 
     [Fact]
-    public async Task AReadAfterAWriteThatFollowsAFailedCheck_WaitsForItsOwnCheck()
+    public async Task AWriteThatFollowsAFailedCheck_WaitsForItsOwnCheck()
     {
         _checks.FailNext();
         _holder.SourceWritten(null);
         await Read().WaitAsync(Generous);
 
         await WorkerParkedInAReconcile();
+        var own = _holder.BeginOwnWrites();
         _holder.SourceWritten(null);
-        var read = Read();
+        var read = Read(own);
 
         Assert.False(read.IsCompleted);
         _gate.Release();
@@ -226,15 +215,33 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     }
 
     [Fact]
-    public async Task AReadAfterAWriteThatFollowsAFailedReRead_WaitsForItsOwnReRead()
+    public async Task AWrite_IsNotRefusedByAnotherWritersFailedCheck()
+    {
+        _checks.FailNext();
+        var others = await Task.Run(() =>
+        {
+            var own = _holder.BeginOwnWrites();
+            _holder.SourceWritten(null);
+            return own;
+        });
+        Assert.Equal(IndexRefusal.IndexNotReady, (await Read(others).WaitAsync(Generous)).Refused().Refusal);
+        var mine = _holder.BeginOwnWrites();
+        Written();
+
+        AssertWritten(await Read(mine).WaitAsync(Generous));
+    }
+
+    [Fact]
+    public async Task AWriteThatFollowsAFailedReRead_WaitsForItsOwnReRead()
     {
         IndexFiles.Invalidate(_fixture.InstanceRoot);
         Written();
         await Read().WaitAsync(Generous);
         Waits.Reached(() => !_index.Status.Validating, "the failed re-read's turn ending");
 
+        var own = _holder.BeginOwnWrites();
         await WrittenWithItsReReadParked();
-        var read = Read();
+        var read = Read(own);
 
         Assert.False(read.IsCompleted);
         _source.Release();
@@ -242,7 +249,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     }
 
     [Fact]
-    public async Task AReadAfterASourceWriteNamingNoPlugin_WhoseCheckIsUnfinished_IsRefusedOnceItsWaitExpires_NamingTheCheck()
+    public async Task AWriteNamingNoPlugin_WhoseCheckIsUnfinished_IsRefusedOnceItsWaitExpires_NamingTheCheck()
     {
         await WorkerParkedInAReconcile();
         _holder.SourceWritten(null);
@@ -257,7 +264,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     }
 
     [Fact]
-    public async Task AReReadASourceWriteAsks_WhileACheckAskedBeforeItWaits_StillReleasesTheRead()
+    public async Task AReReadASourceWriteAsks_WhileACheckAskedBeforeItWaits_StillReleasesTheWrite()
     {
         await WorkerParkedInAReconcile();
         _index.SignalChange();
@@ -267,19 +274,6 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
         _gate.Release();
 
         AssertWritten(await read.WaitAsync(Generous));
-    }
-
-    [Fact]
-    public async Task ANameResolvedAfterASourceWrite_IsRefusedAsNotReadyOrAsNamedByNothing_NeverResolvedAgainstTheOldLoadOrder()
-    {
-        await WrittenWithItsReReadParked();
-        var resolved = _index.Queries.ResolveNames([new NameQuery(CompiledPlugin, null)]);
-
-        _holder.Apply(SnapshotPlugins.Snapshot(_fixture.DataFolder, _fixture.InstanceRoot, GameRelease.Fallout4, []));
-        _source.Release();
-
-        var refused = (await resolved.WaitAsync(Generous)).Refused();
-        Assert.Contains(refused.Refusal, new[] { IndexRefusal.IndexNotReady, IndexRefusal.NameRefused });
     }
 
     private sealed class FailingCheck(IPluginAdapter inner) : DelegatingPluginAdapter(inner)

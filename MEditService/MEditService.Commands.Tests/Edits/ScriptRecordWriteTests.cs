@@ -104,11 +104,11 @@ public sealed class ScriptRecordWriteTests
     public void ADelete_MarksItsPluginWritten()
     {
         using var mod = SourceEditFixture.CompiledPlugin();
-        var before = mod.Holder.SourceWrites;
+        var own = mod.Holder.BeginOwnWrites();
 
         Delete(mod, mod.Npc.ToString());
 
-        Assert.Equal([mod.Plugin], mod.Holder.WritesAfter(before).LastOfEach.Keys);
+        Assert.Equal([mod.Plugin], own.Snapshot().SelectMany(write => write.Plugins ?? []));
     }
 
     [Fact]

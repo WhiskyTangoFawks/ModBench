@@ -49,8 +49,6 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved, TimeProvider time
 
     public string ContentStamp(string text) => TreeStamps.ContentStamp(text);
 
-    public string? FormKeyDeclaredIn(string text, string path, string pluginFileName) => DocumentText.FormKeyDeclaredIn(text, path, pluginFileName);
-
     public SourceFailure? Init(
         string sourceFolder, byte[] buildFile, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<FileToCopy> assets, bool commit, (PluginAddress Plugin, TreeCommit Commit)? repair, RootFile? manifest, IReadOnlyList<string> ignored,

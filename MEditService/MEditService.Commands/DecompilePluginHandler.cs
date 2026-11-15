@@ -73,11 +73,17 @@ public sealed class DecompilePluginHandler
 
         return repository.ReplaceSourceFrom(key, source.Files, source.BinarySha256) switch
         {
-            null => ItemAnswer<DecompileRefusal, NoOutcome>.Landed(default),
+            null => Written(key),
             SourceFailure.GitUnavailable gitMissing => ItemAnswer<DecompileRefusal, NoOutcome>.Refused(DecompileRefusal.GitUnavailable, gitMissing.Reason),
             SourceFailure.TwinFolders twins => ItemAnswer<DecompileRefusal, NoOutcome>.Refused(DecompileRefusal.AmbiguousSource, twins.Reason),
             var failure => ItemAnswer<DecompileRefusal, NoOutcome>.Refused(
                 DecompileRefusal.WriteFailed, $"Could not write {plugin.Name}'s source: {failure.Reason}"),
         };
+    }
+
+    private ItemAnswer<DecompileRefusal, NoOutcome> Written(PluginAddress plugin)
+    {
+        _loadOrder.SourceWritten([new PluginChange(plugin, null)]);
+        return ItemAnswer<DecompileRefusal, NoOutcome>.Landed(default);
     }
 }
