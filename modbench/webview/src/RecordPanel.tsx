@@ -57,7 +57,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const [modsByOrigin, setModsByOrigin] = useState<Record<string, ModRepository>>({});
   // Whether the winner sweep has run. Initial `true` only matters until the first load
   // lands, so it can never read as a false "settled".
-  const [conflictsComputed, setConflictsComputed] = useState(true);
+  const [comparisonComplete, setComparisonComplete] = useState(true);
   const [loadFailures, setLoadFailures] = useState<PluginLoadFailure[]>([]);
   const [fileColumn, setFileColumn] = useState<ColumnKey | undefined>(undefined);
   const [fileCopyAlone, setFileCopyAlone] = useState(false);
@@ -155,9 +155,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       setEditableSet(loaded.editableSet);
       setColumnStatuses(loaded.columnStatuses);
       setModsByOrigin(loaded.modsByOrigin);
-      // No `?? true` fallback: `undefined` is falsy, so a fixture that omits `conflictsComputed`
+      // No `?? true` fallback: `undefined` is falsy, so a fixture that omits `comparisonComplete`
       // still shows the banner rather than reading as settled.
-      setConflictsComputed(loaded.conflictsComputed);
+      setComparisonComplete(loaded.comparisonComplete);
       setLoadFailures(loaded.loadFailures);
       setFileColumn(loaded.fileColumn);
       setFileCopyAlone(loaded.fileCopyAlone);
@@ -329,7 +329,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
 
   const title = recordLabel(overrides, formKey);
   // Several records compared, or a file alone, carry no colours to be final (editor.md, Columns, story 7; States, story 7).
-  const incompleteMessage = severalRecords || fileCopyAlone ? undefined : recordPanelIncompleteMessage(conflictsComputed);
+  const incompleteMessage = severalRecords || fileCopyAlone ? undefined : recordPanelIncompleteMessage(comparisonComplete);
 
   function openColumn(opened: CompareOverride) {
     const copyOf = (o: CompareOverride): RecordCopy => ({ formKey: o.formKey, plugin: pluginAddressOf(o) });
@@ -391,7 +391,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       </div>
       {error && <div style={messageStyle}>Showing the last good read: {error}</div>}
       {/* See recordPanelIncompleteMessage. Clears itself with no user action once refresh() next
-          lands a settled `conflictsComputed`. */}
+          lands a settled `comparisonComplete`. */}
       {loadFailureMessage && <div style={messageStyle}>{loadFailureMessage}</div>}
       {incompleteMessage && <div style={messageStyle}>{incompleteMessage}</div>}
       {fileCopyAlone && <div style={messageStyle}>This file's plugin is not active: no other copy is compared.</div>}

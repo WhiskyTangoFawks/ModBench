@@ -227,7 +227,7 @@ function tellAnswered(
   deps.reply({
     type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: true,
     ...answered, ...(answered.compare && { compare: withMasterCellStates(answered.compare) }), plugins: listed, columnStatuses: statuses,
-    conflictsComputed: !deps.recordIndexMayBeLate(), loadFailures: [...deps.loadFailures()], documentPlugin: deps.plugin,
+    comparisonComplete: !deps.recordIndexMayBeLate(), loadFailures: [...deps.loadFailures()], documentPlugin: deps.plugin,
     modsByOrigin: modsByOrigin(origins, deps.modFacts), fileOverriddenBy,
   });
 }

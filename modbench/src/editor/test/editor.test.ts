@@ -927,7 +927,7 @@ describe('what a record tab\'s webview posts', () => {
       await readAnswered(tab);
 
       expect(loadAnswered(tab)).toEqual([{
-        type: 'recordLoadAnswered', requestId: 'r1', ok: true, compare, plugins: activeA, conflictsComputed: true,
+        type: 'recordLoadAnswered', requestId: 'r1', ok: true, compare, plugins: activeA, comparisonComplete: true,
         loadFailures: [failure], documentPlugin: COPY_PLUGIN, modsByOrigin: {}, fileCopyAlone: false, fileOverriddenBy: null,
         columnStatuses: { 'A.esp': { label: '(read-only)', reason: expect.stringContaining('Version in Git') as unknown } },
       }]);
@@ -960,7 +960,7 @@ describe('what a record tab\'s webview posts', () => {
       tab.receive(loadRequest);
       await readAnswered(tab);
 
-      expect(loadAnswered(tab)).toMatchObject([{ conflictsComputed: false }]);
+      expect(loadAnswered(tab)).toMatchObject([{ comparisonComplete: false }]);
     });
 
     it('is answered conflicts computed once the signal is answered and the load order settles', async () => {
@@ -978,7 +978,7 @@ describe('what a record tab\'s webview posts', () => {
       tab.receive(loadRequest);
       await readAnswered(tab);
 
-      expect(loadAnswered(tab)).toMatchObject([{ conflictsComputed: true }]);
+      expect(loadAnswered(tab)).toMatchObject([{ comparisonComplete: true }]);
     });
 
     describe('for a record no active plugin holds', () => {
@@ -998,7 +998,7 @@ describe('what a record tab\'s webview posts', () => {
       it('is answered gone, naming it, when no registered plugin holds it', async () => {
         const { tab, outputChannel } = await answeredFor({ compare: null, missing: [gone] });
 
-        expect(loadAnswered(tab)).toEqual([expect.objectContaining({ ok: true, compare: null, gone: [GUN], copiesLacking: [], conflictsComputed: true, loadFailures: [] })]);
+        expect(loadAnswered(tab)).toEqual([expect.objectContaining({ ok: true, compare: null, gone: [GUN], copiesLacking: [], comparisonComplete: true, loadFailures: [] })]);
         expect(outputChannel.warn).toHaveBeenCalledWith(expect.stringContaining(GUN));
       });
 

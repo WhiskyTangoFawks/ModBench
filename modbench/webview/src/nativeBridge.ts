@@ -96,7 +96,7 @@ export function requestRecordLoad(formKey: string, columns: RecordCopy[]): Promi
       if (msg.type !== EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED) return { ok: false, failure: { failed: 'refused', refusal: 'Mismatched reply.' } };
       return msg.ok
         ? {
-          ok: true, ...(msg.compare === null ? { compare: null, gone: msg.gone, copiesLacking: msg.copiesLacking } : { compare: msg.compare }), plugins: msg.plugins, conflictsComputed: msg.conflictsComputed,
+          ok: true, ...(msg.compare === null ? { compare: null, gone: msg.gone, copiesLacking: msg.copiesLacking } : { compare: msg.compare }), plugins: msg.plugins, comparisonComplete: msg.comparisonComplete,
           loadFailures: msg.loadFailures, documentPlugin: msg.documentPlugin, modsByOrigin: msg.modsByOrigin, fileCopyAlone: msg.fileCopyAlone,
           fileOverriddenBy: msg.fileOverriddenBy, columnStatuses: msg.columnStatuses,
         }
