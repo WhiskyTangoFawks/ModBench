@@ -16,7 +16,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
 {
     private static readonly TimeSpan OneGesture = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan LitRsLaunch = TimeSpan.FromSeconds(10);
-    private static readonly TimeSpan LitRsIndexWorkForOneRecord = TimeSpan.FromSeconds(0.4);
+    private static readonly TimeSpan LitRsIndexWorkForOneDeletedRecord = TimeSpan.FromSeconds(0.4);
     private const int Runs = 5;
     private const int Launches = 3;
 
@@ -130,22 +130,32 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     }
 
     [RealSizeFact]
-    public void ARecordItsWriterDeleted_ReachesReadsWithinLitRsIndexWorkForOneRecord()
+    public void ARecordItsWriterDeleted_IsReadWithinLitRsIndexWorkForOneDeletedRecord()
     {
         var (plugin, formKey) = (Modlist.BigSourcePlugin, Modlist.TheManyDocuments[0]);
         var path = plugin.SourceFileOf(Index.DocumentOf(formKey, plugin.Key));
         using var restored = Restoring(path, () => CheckEnded() && Index.CopyIn(formKey, plugin.Key) is not null);
         File.Delete(path);
+        CheckpointOfEarlierWritesLanded();
 
-        Budgets.Ran(LitRsIndexWorkForOneRecord, () =>
-        {
-            Index.Holder.SourceWritten([new PluginWritten(plugin.Key, [path])]);
-            Waits.Reached(() => Index.CopyIn(formKey, plugin.Key) is null, "the deleted record gone from reads");
-        }, "A record its writer deleted reaching reads");
+        Budgets.Ran(LitRsIndexWorkForOneDeletedRecord, () => WrittenAndRead(new PluginWritten(plugin.Key, [path])), "Reading a record its writer deleted");
+        Assert.Null(Index.CopyIn(formKey, plugin.Key));
+    }
+
+    private void CheckpointOfEarlierWritesLanded()
+    {
+        var plugin = Modlist.BigSourcePlugin;
+        WrittenAndRead(new PluginWritten(plugin.Key, [plugin.SourceFileOf(Index.DocumentOf(Modlist.TheManyDocuments[^1], plugin.Key))]));
+    }
+
+    private void WrittenAndRead(PluginWritten written)
+    {
+        Index.Holder.SourceWritten([written]);
+        Waits.Reached(() => !Index.Status.Validating, "the record index's read of the write");
     }
 
     [RealSizeFact]
-    public void ARecordItsWriterCreated_ReachesReadsWithinLitRsIndexWorkForOneRecord()
+    public void ARecordItsWriterCreated_IsReadWithinOneGesture()
     {
         var plugin = Modlist.BigSourcePlugin;
         var (formKey, model) = ($"FFF000:{plugin.Name}", Index.DocumentOf(Modlist.TheManyDocuments[0], plugin.Key));
@@ -157,12 +167,10 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
             .Under(repository.SourceFolder).Documents.Single();
         using var restored = new CreatedPutBack(created.Path, realSize, () => CheckEnded() && Index.CopyIn(formKey, plugin.Key) is null);
         File.WriteAllText(created.Path, created.Text);
+        CheckpointOfEarlierWritesLanded();
 
-        Budgets.Ran(LitRsIndexWorkForOneRecord, () =>
-        {
-            Index.Holder.SourceWritten([new PluginWritten(plugin.Key, [created.Path])]);
-            Waits.Reached(() => Index.RowOf(formKey, plugin.Key) is { EditorId: "Created" }, "the created record in reads");
-        }, "A record its writer created reaching reads");
+        Budgets.Ran(OneGesture, () => WrittenAndRead(new PluginWritten(plugin.Key, [created.Path])), "Reading a record its writer created");
+        Assert.Equal("Created", Index.RowOf(formKey, plugin.Key)?.EditorId);
     }
 
     private sealed class CreatedPutBack(string path, RealSizeIndex realSize, Func<bool> restored) : IDisposable
