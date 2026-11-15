@@ -2,7 +2,7 @@
 
 import { lastHanded, noneLeft } from '../ports/lastBuilt';
 import type {
-  DataFolderArchives, DataFolderFiles, DataFolderPlugins, DownloadedFiles, GameFolder, ManagerRunning, ModFolder, ModFolders, ModlistEntry, ModMeta, OriginFiles,
+  DataFolderArchives, DataFolderFiles, DataFolderPlugins, DataFolderUnlisted, DownloadedFiles, GameFolder, ManagerRunning, ModFolder, ModFolders, ModlistEntry, ModMeta, OriginFiles,
   SortingRuleFile, SortingRuleFiles, UnwatchedFolder,
 } from './instanceAdapter';
 import type { ProgramVersion, ProgramVersions } from './gameFolder/programVersions';
@@ -57,9 +57,21 @@ function programVersionParts(version: ProgramVersion): unknown[] {
 }
 
 function programVersionsParts(versions: ProgramVersions): unknown[] {
-  if (versions.kind !== 'found') return [versions.kind];
+  if (versions.kind !== 'found') {
+    const { kind, ...rest } = versions;
+    return [kind, ...noneLeft(rest)];
+  }
   const { kind, game, extender, ...rest } = versions;
   return [kind, ...programVersionParts(game), ...programVersionParts(extender), ...noneLeft(rest)];
+}
+
+function unlistedParts(fact: DataFolderUnlisted): unknown[] {
+  if (fact.kind === 'unresolved') {
+    const { kind, ...rest } = fact;
+    return [kind, ...noneLeft(rest)];
+  }
+  const { kind, reason, ...rest } = fact;
+  return [kind, reason, ...noneLeft(rest)];
 }
 
 function sortingRuleFileParts(file: SortingRuleFile): unknown[] {
@@ -87,19 +99,19 @@ function downloadedFilesParts(downloaded: DownloadedFiles): unknown[] {
 }
 
 function dataFolderFilesParts(files: DataFolderFiles): unknown[] {
-  if (files.kind === 'unresolved') return [files.kind];
-  if (files.kind === 'unreadable') return [files.kind, files.reason];
-  return [files.kind, ...[...files.files].flatMap(([key, { relativePath, path, ...rest }]) => [key, relativePath, path, ...noneLeft(rest)])];
+  if (files.kind !== 'listed') return unlistedParts(files);
+  const { kind, files: listed, ...rest } = files;
+  return [kind, ...noneLeft(rest), ...[...listed].flatMap(([key, { relativePath, path, ...file }]) => [key, relativePath, path, ...noneLeft(file)])];
 }
 
 function dataFolderPluginsParts(plugins: DataFolderPlugins): unknown[] {
-  if (plugins.kind === 'unresolved') return [plugins.kind];
-  return plugins.kind === 'unreadable' ? [plugins.kind, plugins.reason] : [plugins.kind, ...plugins.names];
+  if (plugins.kind !== 'listed') return unlistedParts(plugins);
+  const { kind, names, ...rest } = plugins;
+  return [kind, ...noneLeft(rest), ...names];
 }
 
 function dataFolderArchivesParts(archives: DataFolderArchives): unknown[] {
-  if (archives.kind === 'unresolved') return [archives.kind];
-  if (archives.kind === 'unreadable') return [archives.kind, archives.reason];
+  if (archives.kind !== 'listed') return unlistedParts(archives);
   const { kind, archives: listed, stringsFiles, ...rest } = archives;
   return [kind, listed.length, ...listed, ...stringsFiles, ...noneLeft(rest)];
 }
@@ -112,7 +124,17 @@ const modFolderParts = ({ kind, name, path, modName, ...rest }: ModFolder): unkn
 
 const unwatchedFolderParts = ({ folder, reason, ...rest }: UnwatchedFolder): unknown[] => [folder, reason, ...noneLeft(rest)];
 
-const managerRunningParts = (running: ManagerRunning): unknown[] => (running.kind === 'unknown' ? [running.kind, running.reason] : [running.kind]);
+function managerRunningParts(running: ManagerRunning): unknown[] {
+  if (running.kind === 'unknown') {
+    const { kind, reason, ...rest } = running;
+    return [kind, reason, ...noneLeft(rest)];
+  }
+  const { kind, ...rest } = running;
+  return [kind, ...noneLeft(rest)];
+}
+
+const sortingRuleFilesParts = ({ masterlist, prelude, userlist, ...rest }: SortingRuleFiles): unknown[] =>
+  [...sortingRuleFileParts(masterlist), ...sortingRuleFileParts(prelude), ...sortingRuleFileParts(userlist), ...noneLeft(rest)];
 
 /** Steadies each reading of one source against the one before it. */
 export function readingSteadier(): (read: ReadFacts) => SteadyFacts {
@@ -136,7 +158,7 @@ export function readingSteadier(): (read: ReadFacts) => SteadyFacts {
     folderMeta: lastHanded<ReadonlyMap<string, ModMeta>>(),
   };
   return (read) => {
-    const { sortingRuleFiles: rules, managerRunning } = read;
+    const { sortingRuleFiles, managerRunning } = read;
     return {
       mods: steady.mods(read.mods, read.modsReadFrom),
       gameFolder: steady.gameFolder(read.gameFolder, gameFolderParts(read.gameFolder)),
@@ -150,7 +172,7 @@ export function readingSteadier(): (read: ReadFacts) => SteadyFacts {
       modFolders: steady.modFolders(read.modFolders, read.modFolders?.all.flatMap(modFolderParts) ?? [undefined]),
       downloadedFiles: steady.downloadedFiles(read.downloadedFiles, downloadedFilesParts(read.downloadedFiles)),
       sourceModFolders: steady.sourceModFolders(read.sourceModFolders, [...read.sourceModFolders].flat()),
-      sortingRuleFiles: steady.sortingRuleFiles(rules, [rules.masterlist, rules.prelude, rules.userlist].flatMap(sortingRuleFileParts)),
+      sortingRuleFiles: steady.sortingRuleFiles(sortingRuleFiles, sortingRuleFilesParts(sortingRuleFiles)),
       unwatchedFolders: steady.unwatchedFolders(read.unwatchedFolders, read.unwatchedFolders.flatMap(unwatchedFolderParts)),
       managerRunning: steady.managerRunning(managerRunning, managerRunningParts(managerRunning)),
       modFiles: steady.modFiles(read.modFiles, [...read.modFiles].flatMap(([name, listing]) => [name, listing.folder === undefined ? undefined : listing])),

@@ -11,13 +11,14 @@ import { type MetaIni, modMetaOf, parseMetaIni } from './codecs/metaIni';
 import { entryNamed, MODLIST_FILE_NAME, modLineKey, parseModlist } from './codecs/modlistText';
 import { readGamePath, readSelectedProfile, SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
 import { gameOfSettings } from './mo2Game';
+import { programsOf } from '../../tables/gamePaths';
 import type { ManagerGamePath } from '../gameFolder/gameFolderResolver';
 import { creationClubFileOf, dataFolderOf, listDataFolderFiles, listDataFolderPlugins, readCreationClubList } from '../gameFolder/dataFolder';
 import { listOwnEntries } from '../gameFolder/ownEntries';
 import { sameName } from '../../symbolNames/symbolNames';
 import { pathTokensWritten } from './mo2PathTokens';
 import { pushRefusalWritten } from './mo2Submodules';
-import { get, ignoreSkippedLink, isAbsent, parsedBy, textByStamp, isRepository, listDirByStamp, listEntries, listFolders, readOrAbsent, readOrReason, identityOf, type ResolvedEntry, type SkippedLink, stampByStamp, stampOf } from '../files';
+import { get, ignoreSkippedLink, isAbsent, parsedBy, textByStamp, isRepository, listDirByStamp, listEntries, listFolders, readOrAbsent, readOrReason, identityOf, type ResolvedEntry, type SkippedLink, stampByStamp } from '../files';
 import { isOwnTemp } from '../../repositoriesLib/wholeWrites';
 import { anyCase, type DeployedPath, type DownloadedFile, type DownloadedFiles, type GameFolder, type InstanceAdapter, type ManagerNames, type ManagerRunning, type ModFolder, type ModFolders, type ModMeta, type SortingRuleFile } from '../instanceAdapter';
 import { DATA_FOLDER_GLOB, DOWNLOADS_WATCH_GLOB, FIRST_LEVEL, PROFILE_WATCH_PATTERN, profileDir, downloadedFilePath, downloadedFileMetadataPath, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile, sortingRuleFilePaths } from './layout';
@@ -33,7 +34,7 @@ import { holdsPathToken } from '../pathTokens';
 
 /** The names of the downloaded files in `downloadsDir`; undefined when it is absent. */
 export async function downloadedFileNames(downloadsDir: string, skippedLink: SkippedLink): Promise<string[] | undefined> {
-  const dirents = await readOrAbsent(() => listEntries(downloadsDir, skippedLink), undefined);
+  const dirents = await readOrAbsent(() => listEntries(downloadsDir, skippedLink, listDirByStamp), undefined);
   return dirents?.filter((d) => d.isFile && isInstallationFileName(d.name) && !isOwnTemp(d.name)).map((d) => d.name);
 }
 
@@ -44,7 +45,7 @@ async function listDownloadedFiles(downloadsDir: string, skippedLink: SkippedLin
     const path = downloadedFilePath(downloadsDir, name);
     const metadataPath = downloadedFileMetadataPath(downloadsDir, name);
     const [stamp, parsed] = await Promise.all([
-      stampOf(path),
+      stampByStamp(path),
       readOrAbsent<ReturnType<typeof parseDownloadedFileMeta> | undefined>(() => downloadedMetaAt(metadataPath), undefined),
     ]);
     return { name, path, metadataPath, size: Number(stamp.size), mtimeMs: Number(stamp.modifiedNs) / 1e6, excluded: parsed?.hidden ?? false, meta: parsed?.meta, modID: effectiveModId(parsed?.meta.modID, name) };
@@ -157,7 +158,7 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
     modLineKey,
     ...mo2Archives(context),
     async settings() {
-      const iniText = await get(settingsFile(instanceRoot));
+      const iniText = await textByStamp(settingsFile(instanceRoot));
       const game = gameOfSettings(iniText);
       return {
         profile: readSelectedProfile(iniText),
@@ -166,7 +167,10 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
         gameFolder: async () => {
           const gameFolder = await resolveGameFolder(managedGamePath(iniText, game.gameRelease));
           const dataFolder = dataFolderOf(gameFolder);
+          const programs = programsOf(game.gameRelease);
           watch.follow('dataFolder', dataFolder === undefined ? [] : [dataFolder], DATA_FOLDER_GLOB);
+          watch.follow('programs', gameFolder.kind === 'found' && programs !== undefined ? [gameFolder.root] : [],
+            programs === undefined ? '' : `{${anyCase(programs.game)},${anyCase(programs.extenderLoader)}}`);
           return gameFolder;
         },
         downloadedFiles: async (skippedLink: SkippedLink): Promise<DownloadedFiles> => {
@@ -179,7 +183,7 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
       };
     },
 
-    profiles: async (skippedLink) => watchedProfiles(context, await readOrAbsent(() => listFolders(profilesDir(instanceRoot), skippedLink), [])),
+    profiles: async (skippedLink) => watchedProfiles(context, await readOrAbsent(() => listFolders(profilesDir(instanceRoot), skippedLink, listDirByStamp), [])),
 
     async modOrder(profile) {
       return modlistAt(modlistFile(instanceRoot, profile));

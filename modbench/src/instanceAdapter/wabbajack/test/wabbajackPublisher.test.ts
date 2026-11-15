@@ -444,7 +444,18 @@ describe('publisher tags following a mod folder (publishing.md, Publisher tags, 
 
 describe('keeping Modbench\'s files out of what Wabbajack ships (publishing.md, What ships, story 1)', () => {
   const settingsText = () => readFile(join(root, SETTINGS_FILE), 'utf8');
-  const kept = (...present: string[]) => ({ present, owns: (path: string) => path.toLowerCase().endsWith('.manifest.json') });
+  const kept = (...present: string[]) => () => Promise.resolve({ present, owns: (path: string) => path.toLowerCase().endsWith('.manifest.json') });
+
+  it('asks for no kept file while the instance holds no compiler settings', async () => {
+    let asked = false;
+
+    await publisherOver().keepOut(() => {
+      asked = true;
+      return kept()();
+    });
+
+    expect(asked).toBe(false);
+  });
 
   it('lists each file in Ignore, after the entries already there, in every other list left as written', async () => {
     await writeSettings({ Include: ['mods\\A'], Ignore: ['mine'] });
@@ -486,7 +497,7 @@ describe('a change to the compiler settings', () => {
   const settingsText = () => readFile(join(root, SETTINGS_FILE), 'utf8');
   const changeTag = () => publisherOver().changeTag('add', 'Include', [join(root, 'mods', 'A')]);
   const followFolders = () => publisherOver().followFolders([{ from: join(root, 'mods', 'A'), to: join(root, 'mods', 'C') }]);
-  const keepOut = () => publisherOver().keepOut({ present: [join(root, 'x')], owns: () => false });
+  const keepOut = () => publisherOver().keepOut(() => Promise.resolve({ present: [join(root, 'x')], owns: () => false }));
 
   it.each([
     ['changing a publisher tag', changeTag],
@@ -600,7 +611,7 @@ describe('the publisher tags that name no path in the instance (publishing.md, P
 describe('a write to the compiler settings changes only the entries it names (Never silently wrong)', () => {
   const settingsText = () => readFile(join(root, SETTINGS_FILE), 'utf8');
   const folder = (name: string) => join(root, 'mods', name);
-  const kept = (...present: string[]) => ({ present, owns: (path: string) => path.toLowerCase().endsWith('.manifest.json') });
+  const kept = (...present: string[]) => () => Promise.resolve({ present, owns: (path: string) => path.toLowerCase().endsWith('.manifest.json') });
   const settingsWith = (list: string, key = 'Include') => `// shaped by hand\n{\n  /* mine */\n  "${key}": ${list},\n  "Mine": 1,\n}\n`;
   const entries = (...lines: string[]) => `[\n${lines.map((line) => `    ${line}`).join('\n')}\n  ]`;
 

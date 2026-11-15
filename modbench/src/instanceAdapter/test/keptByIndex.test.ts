@@ -4,6 +4,7 @@ import { mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { keptByIndex } from '../keptByIndex';
+import { readTrustingKept } from '../files';
 
 const HOUR_MS = 3_600_000;
 const git = (folder: string, ...args: string[]): void => {
@@ -86,6 +87,19 @@ describe('what git answers from the index and .gitmodules, kept while both keep 
     await modifiedLater(join(gitDir ?? '', 'index'));
 
     expect(await kept(linked, 'answer', read)).toBe(2);
+  });
+
+  it('trusts within a reading the index a change named, and stamps afresh a linked worktree\'s, which no watch follows', async () => {
+    const linked = join(root, 'linked');
+    git(root, 'worktree', 'add', '-q', '-b', 'side', linked);
+    const [gitDir] = execFileSync('git', ['-C', linked, 'rev-parse', '--absolute-git-dir'], { encoding: 'utf8' }).split('\n');
+    const kept = keptByIndex<number>();
+    const inReading = (repository: string): Promise<number> => readTrustingKept([], false, () => kept(repository, 'answer', read)).then(({ answer }) => answer);
+    await readTrustingKept([], true, async () => [await kept(root, 'answer', read), await kept(linked, 'answer', read)]);
+    await modifiedLater(join(root, '.git', 'index'));
+    await modifiedLater(join(gitDir ?? '', 'index'));
+
+    expect([await inReading(root), await inReading(linked)]).toEqual([1, 3]);
   });
 
   it('keeps no answer whose read rejected', async () => {

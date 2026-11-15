@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { exists, ignoreSkippedLink, isRepository, listFolders, readOrAbsent } from '../files';
+import { ignoreSkippedLink, isRepository, listDirByStamp, listedIn, listFolders, readOrAbsent } from '../files';
 import { git } from '../git';
 import { keptByIndex } from '../keptByIndex';
 import { BUILD_FILE } from '../../wire/sourceMod';
@@ -23,9 +23,9 @@ export async function sourceFoldersTracked(instanceRoot: string, names: readonly
 export async function sourceModFoldersIn(instanceRoot: string): Promise<ReadonlyMap<string, string>> {
   const root = sourceRootDir(instanceRoot);
   const withBuildFile: { readonly name: string; readonly own: boolean }[] = [];
-  for (const name of (await readOrAbsent(() => listFolders(root, ignoreSkippedLink), [])).sort()) {
+  for (const name of (await readOrAbsent(() => listFolders(root, ignoreSkippedLink, listDirByStamp), [])).sort()) {
     const folder = join(root, name);
-    if (await exists(join(folder, BUILD_FILE))) withBuildFile.push({ name, own: await isRepository(folder) });
+    if (await listedIn(folder, BUILD_FILE)) withBuildFile.push({ name, own: await isRepository(folder) });
   }
   const tracked = await sourceFoldersTracked(instanceRoot, withBuildFile.filter(({ own }) => !own).map(({ name }) => name));
   return new Map(withBuildFile.filter(({ name, own }) => own || tracked.has(name)).map(({ name }) => [name, join(root, name)]));

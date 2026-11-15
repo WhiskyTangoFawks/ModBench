@@ -213,19 +213,17 @@ export type DownloadedFiles =
   | { readonly kind: 'listed'; readonly downloadsDir: string; readonly files: readonly DownloadedFile[] | undefined }
   | { readonly kind: 'unresolved'; readonly reason: string };
 
-/** The plugin files at the root of the game folder's Data folder, as the folder spells them; or why
- *  there is no answer: a game folder not found, or a Data folder that could not be listed. */
-export type DataFolderPlugins =
-  | { readonly kind: 'listed'; readonly names: ReadonlySet<string> }
-  | { readonly kind: 'unresolved' }
-  | { readonly kind: 'unreadable'; readonly reason: string };
+/** Why a fact of the Data folder has no answer: a game folder not found, or a Data folder that could not be listed. */
+export type DataFolderUnlisted = { readonly kind: 'unresolved' } | { readonly kind: 'unreadable'; readonly reason: string };
+
+/** The plugin files at the root of the game folder's Data folder, as the folder spells them; or why there is no answer. */
+export type DataFolderPlugins = { readonly kind: 'listed'; readonly names: ReadonlySet<string> } | DataFolderUnlisted;
 
 /** Every file at any depth of the game's Data folder, by its path in it in lower case: that path as spelled, and its
  *  own path; or why there is no answer. */
 export type DataFolderFiles =
   | { readonly kind: 'listed'; readonly files: ReadonlyMap<string, { readonly relativePath: string; readonly path: string }> }
-  | { readonly kind: 'unresolved' }
-  | { readonly kind: 'unreadable'; readonly reason: string };
+  | DataFolderUnlisted;
 
 /** Each plugin the game can load, keyed as it compares names, spelled as the copy it loads: an
  *  enabled mod's or Overwrite's at their root, else the Data folder's; and the enabled mods, by name. */
@@ -240,8 +238,7 @@ export type PluginsProvided =
  *  their paths in it, as the folder spells them; or why there is no answer, as for its plugins. */
 export type DataFolderArchives =
   | { readonly kind: 'listed'; readonly archives: readonly string[]; readonly stringsFiles: readonly string[] }
-  | { readonly kind: 'unresolved' }
-  | { readonly kind: 'unreadable'; readonly reason: string };
+  | DataFolderUnlisted;
 
 /** Where a mod's files come from: an installation file, extracted, or a folder, copied and left as it was. */
 export type InstallPackage = { readonly kind: 'archive'; readonly path: string } | { readonly kind: 'folder'; readonly path: string };
