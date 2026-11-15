@@ -85,3 +85,20 @@ describe('handing mEdit the unsaved documents', () => {
     expect(answers).toEqual([{ failed: 'unreachable' }, undefined]);
   });
 });
+
+describe('whether a hand-over is pending', () => {
+  it('is true from a hand-over until its put has answered', async () => {
+    const mEdit = fakeWire('running');
+    let answer!: () => void;
+    mEdit.answerWith(() => new Promise((resolve) => { answer = () => { resolve(undefined); }; }));
+    const handOver = createUnsavedHandOver(mEdit.wire);
+    expect(handOver.pending()).toBe(false);
+
+    handOver.hand(typed('first'));
+    expect(handOver.pending()).toBe(true);
+
+    await vi.waitFor(() => { expect(mEdit.put).toEqual(['first']); });
+    answer();
+    await vi.waitFor(() => { expect(handOver.pending()).toBe(false); });
+  });
+});
