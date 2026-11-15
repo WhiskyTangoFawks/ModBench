@@ -4,7 +4,7 @@ import type { DataFolderPlugins, FileRead, FileStamp, GameFolder, ModFolders, Or
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { buildFileConflictIndex, FileConflictLookup, modOrigin, type FileConflictIndex } from '../fileConflictIndex';
 import {
-  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, sourceFiles, type PluginWithNoLine, stampedSnapshot,
+  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, sourceFiles, type PluginWithNoLine, snapshotStamper,
   type ArchiveSources,
   type LoadOrderPlugin, type LoadOrderPluginLine,
 } from '../loadOrderSnapshot';
@@ -440,7 +440,7 @@ describe('the snapshot the sync PUTs, read straight from the value rather than a
         ? { kind: 'unreadable', reason: `EACCES ${path}` }
         : { kind: 'read', answer: { size: BigInt(path.length), modifiedNs: 1n } });
     };
-    const value: Parameters<typeof stampedSnapshot>[0] = {
+    const value: Parameters<ReturnType<typeof snapshotStamper>>[0] = {
       dataFolder: '/game/Data', gameRelease: 'Fallout4',
       places: [],
       plugins: [{
@@ -452,7 +452,7 @@ describe('the snapshot the sync PUTs, read straight from the value rather than a
       archivesByPlugin: [{ name: 'A.esp', origin: 'ModA', archives: ['/a/A - Main.ba2'] }], stringsFiles: ['/t/A_en.STRINGS'],
     };
 
-    const stamped = await stampedSnapshot(value, stampOf);
+    const stamped = await snapshotStamper()(value, stampOf);
 
     expect(stamped).toEqual({
       ...value,

@@ -1,7 +1,7 @@
 // mods.md, Indicators: a badge and a colour on a mod's row for each status that holds.
 
 import * as vscode from 'vscode';
-import type { InstanceValue, InstanceView } from '../instanceLoader/instance';
+import type { Concerns, InstanceValue, InstanceView } from '../instanceLoader/instance';
 import { indicatorsOf, MOD_INDICATORS, type IndicatorsValue, type ModIndicator } from './modFileStates';
 import { onSettingChange } from '../drivingLib/setting';
 import type { OpenRows } from './openRows';
@@ -102,7 +102,7 @@ export class IndicatorDecorationProvider implements vscode.FileDecorationProvide
 
 /** VS Code takes one decoration from each provider and joins their badges, and never re-queries one,
  *  so each fires on every new instance value (ADR-0003), setting change, and row opened or closed. */
-export abstract class OpenableRowDecorations<C> implements vscode.Disposable {
+export abstract class OpenableRowDecorations<C, K extends keyof InstanceValue> implements vscode.Disposable {
   abstract readonly providers: readonly IndicatorDecorationProvider[];
   private current: C | undefined;
   private readonly subscriptions: vscode.Disposable[];
@@ -110,13 +110,14 @@ export abstract class OpenableRowDecorations<C> implements vscode.Disposable {
   constructor(
     private readonly instance: Pick<InstanceView, 'value' | 'subscribe'>,
     private readonly openRows: OpenRows,
-    private readonly carriersOf: (value: InstanceValue) => C,
+    private readonly carriersOf: (value: Pick<InstanceValue, K>) => C,
+    concerns: Concerns<K>,
   ) {
     this.subscriptions = [
       instance.subscribe((value) => {
         this.current = carriersOf(value);
         this.refresh();
-      }),
+      }, concerns),
       openRows.onDidChange(() => { this.refresh(); }),
     ];
   }
@@ -140,11 +141,11 @@ export abstract class OpenableRowDecorations<C> implements vscode.Disposable {
   }
 }
 
-export class ModIndicatorDecorations extends OpenableRowDecorations<Carriers> {
+export class ModIndicatorDecorations extends OpenableRowDecorations<Carriers, keyof IndicatorsValue> {
   readonly providers: readonly IndicatorDecorationProvider[];
 
   constructor(instance: Pick<InstanceView, 'value' | 'subscribe'>, open: OpenRows, settings: WorkspaceSettings) {
-    super(instance, open, carriersOf);
+    super(instance, open, carriersOf, { mods: true, modGroups: true, filesByMod: true, stackedCopies: true });
     const carried = (uri: vscode.Uri) => {
       const carriers = this.carriers();
       const key = uri.toString();

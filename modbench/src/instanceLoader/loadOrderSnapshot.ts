@@ -14,6 +14,7 @@ import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
 import { pluginCompanionRule, type PluginCompanionRule } from '../tables/gamePaths';
 import type { InstanceValue } from './instance';
 import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN, exactPluginAddressKey, pluginNameKey, type PluginAddress, type PluginPlace, type StampedFile } from '../wire/pluginAddress';
+import { lastBuilt } from '../ports/lastBuilt';
 
 export type { DataFolderFiles, DataFolderPlugins } from '../instanceAdapter/instanceAdapter';
 
@@ -96,9 +97,12 @@ export type SourceFilesOf = (origin: string) => SourceFiles | undefined;
 
 export const NO_SOURCE_FILES: SourceFilesOf = () => undefined;
 
+/** The facts `sourceFiles` reads that change. */
+export const SOURCE_FILES_READ = { mods: true, paths: true } as const;
+
 /** The files of the source folder the Instance adapter answered for the origin's mod (ADR-0007).
  *  `undefined` for Overwrite and the game folder, which are no mod (ADR-0012). */
-export function sourceFiles(value: Pick<InstanceValue, 'mods' | 'entryKey' | 'paths'>, origin: string): SourceFiles | undefined {
+export function sourceFiles(value: Pick<InstanceValue, keyof typeof SOURCE_FILES_READ | 'entryKey'>, origin: string): SourceFiles | undefined {
   const folder = byOrigin(origin, { overwrite: undefined, data: undefined, mod: (name) => value.paths.sourceDirs.get(modOfOrigin(value, name)?.name ?? name) });
   return folder === undefined ? undefined : { file: (relativePath) => fileInFolder(folder, relativePath) };
 }
@@ -386,24 +390,32 @@ export function loadOrderSnapshotOf(value: {
 const stampText = (read: FileRead<FileStamp>): string =>
   (read.kind === 'unreadable' ? read.reason : `${read.answer.size}/${read.answer.modifiedNs}`);
 
-/** The snapshot with each archive and strings file it hands stamped at its own path, each path read once, so no file it
- *  hands goes without its stamp. */
-export async function stampedSnapshot(
-  value: LoadOrderSnapshotValue<string>, stampOf: (path: string) => Promise<FileRead<FileStamp>>,
-): Promise<LoadOrderSnapshotValue> {
-  const reads = new Map<string, Promise<StampedFile>>();
-  const stamped = (paths: readonly string[]): Promise<StampedFile[]> => Promise.all(paths.map((path) => {
-    const read = reads.get(path) ?? stampOf(path).then((stamp) => ({ path, stamp: stampText(stamp) }));
-    reads.set(path, read);
-    return read;
-  }));
-  const [plugins, listedArchives, archivesByPlugin, stringsFiles] = await Promise.all([
-    Promise.all(value.plugins.map(async (plugin) => ({ ...plugin, archives: await stamped(plugin.archives), stringsFiles: await stamped(plugin.stringsFiles) }))),
-    stamped(value.listedArchives),
-    Promise.all(value.archivesByPlugin.map(async (plugin) => ({ ...plugin, archives: await stamped(plugin.archives) }))),
-    stamped(value.stringsFiles),
-  ]);
-  return { ...value, plugins, listedArchives, archivesByPlugin, stringsFiles };
+const pathsToStamp = (value: LoadOrderSnapshotValue<string>): string[] => [...new Set([
+  ...value.plugins.flatMap((plugin) => [...plugin.archives, ...plugin.stringsFiles]), ...value.listedArchives,
+  ...value.archivesByPlugin.flatMap((plugin) => plugin.archives), ...value.stringsFiles,
+])];
+
+function stampedWith(value: LoadOrderSnapshotValue<string>, paths: readonly string[], ...stamps: string[]): LoadOrderSnapshotValue {
+  const stampAt = new Map(paths.map((path, at) => [path, stamps[at] ?? '']));
+  const stamped = (files: readonly string[]): StampedFile[] => files.map((path) => ({ path, stamp: stampAt.get(path) ?? '' }));
+  return {
+    ...value,
+    plugins: value.plugins.map((plugin) => ({ ...plugin, archives: stamped(plugin.archives), stringsFiles: stamped(plugin.stringsFiles) })),
+    listedArchives: stamped(value.listedArchives),
+    archivesByPlugin: value.archivesByPlugin.map((plugin) => ({ ...plugin, archives: stamped(plugin.archives) })),
+    stringsFiles: stamped(value.stringsFiles),
+  };
+}
+
+/** Stamps a snapshot's archives and strings files, each path read once, so no file it hands goes without its stamp; it
+ *  hands the snapshot it stamped last while that snapshot and every stamp are the same. */
+export function snapshotStamper(): (value: LoadOrderSnapshotValue<string>, stampOf: (path: string) => Promise<FileRead<FileStamp>>) => Promise<LoadOrderSnapshotValue> {
+  const paths = lastBuilt(pathsToStamp);
+  const stamped = lastBuilt(stampedWith);
+  return async (value, stampOf) => {
+    const toStamp = paths(value);
+    return stamped(value, toStamp, ...(await Promise.all(toStamp.map(async (path) => stampText(await stampOf(path))))));
+  };
 }
 
 const listed = (names: readonly string[]): string =>

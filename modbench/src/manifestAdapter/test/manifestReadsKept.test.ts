@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { manifestAt, manifestIn, type Manifest } from '../manifestAdapter';
 import { manifestText } from '../manifestText';
+import { readTrustingKept } from '../../repositoriesLib/stampedReads';
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
@@ -69,6 +70,19 @@ describe('a folder\'s manifest read by the stamps of its folder and its file', (
     await modifiedLater(folder);
 
     expect(await manifestIn(folder)).toEqual({ refused: "its folder holds two manifests, 'Mod.manifest.json' and 'Other.manifest.json'" });
+  });
+
+  it('reads the file again, within a reading that trusts what is kept, only where the re-read is named it or checks the disk', async () => {
+    settle();
+    const readWithin = async (named: string[], disk: boolean) => (await readTrustingKept(named, disk, () => manifestIn(folder))).answer;
+    await readWithin([], true);
+    await writeFile(file, manifestText(manifestOf('BBBBBBBBBBA=')));
+    await modifiedLater(file);
+
+    const unnamed = await readWithin([], false);
+    const named = await readWithin([file], false);
+
+    expect([unnamed, named]).toEqual([{ manifest: manifestOf('AAAAAAAAAAA=') }, { manifest: manifestOf('BBBBBBBBBBA=') }]);
   });
 
   it('reads a folder that is not there as holding no manifest', async () => {

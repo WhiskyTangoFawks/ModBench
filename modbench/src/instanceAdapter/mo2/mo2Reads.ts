@@ -17,9 +17,9 @@ import { listOwnEntries } from '../gameFolder/ownEntries';
 import { sameName } from '../../symbolNames/symbolNames';
 import { pathTokensWritten } from './mo2PathTokens';
 import { pushRefusalWritten } from './mo2Submodules';
-import { get, ignoreSkippedLink, isAbsent, parsedBy, textByStamp, isRepository, listDirByStamp, listEntries, listFolders, readOrAbsent, readOrReason, identityOf, type ResolvedEntry, type SkippedLink, stampOf } from '../files';
+import { get, ignoreSkippedLink, isAbsent, parsedBy, textByStamp, isRepository, listDirByStamp, listEntries, listFolders, readOrAbsent, readOrReason, identityOf, type ResolvedEntry, type SkippedLink, stampByStamp, stampOf } from '../files';
 import { isOwnTemp } from '../../repositoriesLib/wholeWrites';
-import { anyCase, type DeployedPath, type DownloadedFile, type DownloadedFiles, type GameFolder, type InstanceAdapter, type ManagerNames, type ManagerRunning, type ModFolder, type ModFolders, type SortingRuleFile } from '../instanceAdapter';
+import { anyCase, type DeployedPath, type DownloadedFile, type DownloadedFiles, type GameFolder, type InstanceAdapter, type ManagerNames, type ManagerRunning, type ModFolder, type ModFolders, type ModMeta, type SortingRuleFile } from '../instanceAdapter';
 import { DATA_FOLDER_GLOB, DOWNLOADS_WATCH_GLOB, FIRST_LEVEL, PROFILE_WATCH_PATTERN, profileDir, downloadedFilePath, downloadedFileMetadataPath, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile, sortingRuleFilePaths } from './layout';
 import { fileNamedIn, mo2Archives } from './mo2Archives';
 import type { ReadingSource } from '../instanceReading';
@@ -79,15 +79,24 @@ export async function currentGameFolder({ instanceRoot, resolveGameFolder }: Mo2
 
 const MO2_NAMES: ManagerNames = { manager: 'MO2', modOrderFile: MODLIST_FILE_NAME, downloadedFileMetadataFile: METADATA_FILE_SUFFIX };
 
+const NO_META_INI: MetaIni = {};
+
 /** A mod's meta.ini as it reads, `{}` for a separator, a mod with no folder and a meta that is gone. */
 export async function readMetaIni(context: Mo2Context, mod: string, folders: ModFolders | undefined | 'list'): Promise<MetaIni> {
-  if (entryNamed(mod).kind === 'separator') return {};
+  if (entryNamed(mod).kind === 'separator') return NO_META_INI;
   const folder = await modFolderNamed(context, mod, folders);
-  return folder === undefined ? {} : readMetaIniIn(folder);
+  return folder === undefined ? NO_META_INI : readMetaIniIn(folder);
 }
 
 /** The meta.ini of the mod folder `folder`, `{}` when it is gone. */
-export const readMetaIniIn = (folder: string): Promise<MetaIni> => readOrAbsent(() => metaIniAt(modMetaFileIn(folder)), {});
+export const readMetaIniIn = (folder: string): Promise<MetaIni> => readOrAbsent(() => metaIniAt(modMetaFileIn(folder)), NO_META_INI);
+
+const modMetas = new WeakMap<MetaIni, ModMeta>();
+const keptModMetaOf = (metaIni: MetaIni): ModMeta => {
+  const meta = modMetas.get(metaIni) ?? modMetaOf(metaIni);
+  modMetas.set(metaIni, meta);
+  return meta;
+};
 
 async function sortingRuleFile(path: string): Promise<SortingRuleFile> {
   try {
@@ -176,7 +185,7 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
       return modlistAt(modlistFile(instanceRoot, profile));
     },
 
-    modMeta: async (mod, folders) => modMetaOf(await readMetaIni(context, mod, folders)),
+    modMeta: async (mod, folders) => keptModMetaOf(await readMetaIni(context, mod, folders)),
 
     modFolders: async (skippedLink) => {
       const all = await listModFolders(context, skippedLink);
@@ -250,7 +259,7 @@ export function mo2Reads(
     foldersRefused: (folders, asked) => foldersRefused(instanceRoot, folders, asked),
     sourceFolder: (mod) => modSourceDir(instanceRoot, mod),
     entryKey,
-    fileStamp: (path) => readOrReason(() => stampOf(path)),
+    fileStamp: (path) => readOrReason(() => stampByStamp(path)),
   };
   return reads;
 }

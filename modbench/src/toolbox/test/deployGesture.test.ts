@@ -32,7 +32,11 @@ import { registerDeployCommands } from '../deployGesture';
 import { tagRecordingReporterFor } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
-import type { InstanceSubscriber } from '../../instanceLoader/instance';
+import { Instance, type InstanceSubscriber } from '../../instanceLoader/instance';
+import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { fakeWorkspace } from '../../test/fakeWorkspace';
+import { GAME_FOLDER_SETTING_ID } from '../../test/gameFolderSetting';
 import type { DeployCommands, DeployResult, MoveToOverwriteResult, PurgeResult } from '../../instanceCommands/deploy';
 
 const value = instanceValueFixture();
@@ -192,6 +196,21 @@ describe('Deploy', () => {
 
 describe('the problems on the files the deployment folder holds that deploy does not manage', () => {
   const held = () => [...present(collections[0], 'the collection')].map(([uri, [problem]]) => [uri.fsPath, problem?.message]);
+
+  it('are read again at each value the instance lands, as no watch follows the deployment folder', async () => {
+    const instance = new Instance({
+      adapter: fakeInstanceAdapter(readingFixture()).adapter, gameFolderSettingId: GAME_FOLDER_SETTING_ID,
+      log: { info: () => undefined, warn: () => undefined, error: () => undefined }, medit: new InMemoryMEditClient(), workspace: fakeWorkspace(),
+    });
+    const unmanaged = vi.fn<DeployCommands['unmanaged']>(() => Promise.resolve({ applied: true, folder: '/deployed', unmanaged: [] }));
+    const { reporterFor } = tagRecordingReporterFor();
+    registerDeployCommands({ commands: { deploy: vi.fn(), purge: vi.fn(), moveToOverwrite: vi.fn(), unmanaged }, instance, reporterFor });
+
+    for (let read = 0; read < 3; read++) await instance.refresh(['/instance/profiles/Default/modlist.txt']);
+
+    instance.dispose();
+    expect(unmanaged).toHaveBeenCalledTimes(3);
+  });
 
   it('are one on each file after a deploy, naming the file it left out at a path', async () => {
     const { run } = deployAnswering(

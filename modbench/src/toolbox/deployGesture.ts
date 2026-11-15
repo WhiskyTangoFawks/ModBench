@@ -25,7 +25,7 @@ export function registerDeployCommands({ commands, instance, reporterFor }: Depl
     if (held.applied) problems.publish(held.unmanaged, leftOut);
     else collection.clear();
   };
-  // A recompute reads the disk again on refresh: the files the user changed by hand are read there (ADR-0003).
+  // No watch follows the deployment folder, so each value reads again the files the user changed there by hand (ADR-0003).
   const subscription = instance.subscribe(() => { void publishProblems(); });
   const deploy = async (reportsItself: boolean): Promise<DeployResult> => {
     const { files, plugins, gameName } = await instance.landed();

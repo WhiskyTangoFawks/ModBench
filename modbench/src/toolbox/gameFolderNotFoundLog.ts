@@ -5,6 +5,6 @@ function lineFor(gameFolder: Extract<GameFolder, { kind: 'notFound' }>): string 
   return `[instance] Game folder not found. Modbench looked at: ${looked}. Set ${gameFolder.setting} to the game folder to fix it.`;
 }
 
-export function gameFolderNotFoundLine({ gameFolder }: InstanceValue): string | undefined {
+export function gameFolderNotFoundLine({ gameFolder }: Pick<InstanceValue, 'gameFolder'>): string | undefined {
   return gameFolder.kind === 'found' ? undefined : lineFor(gameFolder);
 }

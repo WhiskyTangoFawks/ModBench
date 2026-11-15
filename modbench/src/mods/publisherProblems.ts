@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { modbenchDiagnostic } from '../drivingLib/modbenchDiagnostic';
 import { diagnosticsByPath } from './diagnosticsByPath';
-import type { InstanceView, InstanceValue, TagPathProblem } from '../instanceLoader/instance';
+import type { InstanceOf, InstanceValue, TagPathProblem } from '../instanceLoader/instance';
 
 const wording = (problem: TagPathProblem): string => {
   const entry = `${problem.tag.name}: "${problem.entry}"`;
@@ -11,9 +11,9 @@ const wording = (problem: TagPathProblem): string => {
 export class PublisherProblems {
   private readonly following: vscode.Disposable;
 
-  constructor(private readonly collection: vscode.DiagnosticCollection, instance: Pick<InstanceView, 'value' | 'subscribe'>) {
+  constructor(private readonly collection: vscode.DiagnosticCollection, instance: Pick<InstanceOf<'publisherConfiguration'>, 'value' | 'subscribe'>) {
     this.show(instance.value);
-    this.following = instance.subscribe((value) => { this.show(value); });
+    this.following = instance.subscribe((value) => { this.show(value); }, { publisherConfiguration: true });
   }
 
   dispose(): void {
@@ -21,7 +21,7 @@ export class PublisherProblems {
     this.collection.dispose();
   }
 
-  private show({ publisherConfiguration }: InstanceValue): void {
+  private show({ publisherConfiguration }: Pick<InstanceValue, 'publisherConfiguration'>): void {
     this.collection.clear();
     if (publisherConfiguration.kind !== 'read') return;
     const range = (line: number) => new vscode.Range(line - 1, 0, line - 1, Number.MAX_SAFE_INTEGER);

@@ -5,6 +5,7 @@ import type { Dirent } from 'node:fs';
 import { sep } from 'node:path';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
+import { lastHanded, noneLeft } from '../../ports/lastBuilt';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
 import { factsOf, listDirByStamp, realPathIfThere } from '../files';
@@ -183,12 +184,18 @@ const listingsStill = async ({ listings }: Walked): Promise<boolean> => {
 
 const modKey = (rootOnly: boolean, folder: string): string => `mod|${rootOnly}|${folder}`;
 
+const folderParts = ({ relativePath, path, includedPath, excluded, ...rest }: OriginFolder): unknown[] => [relativePath, path, includedPath, excluded, ...noneLeft(rest)];
+
+const fileParts = ({ sourcePath, markedExcluded, ...folder }: OriginFile): unknown[] => [sourcePath, markedExcluded, ...folderParts(folder)];
+
 /** An instance's origin files, each answered again while every folder its walk listed still answers the listing it did.
  *  It keeps the walks of the mod folders the latest reading names, so it ends with the instance it describes. */
 export function originFilesReader(
   context: Mo2Context,
 ): (origin: FileOrigin, rootOnly: boolean, modFolders: ModFolders | undefined | 'list') => Promise<OriginFiles> {
   const walked = new Map<string, Walked>();
+  // A walk its stamps do not cover is walked each time, and answers the files it answered last while it walks the same.
+  const uncovered = new Map<string, ReturnType<typeof lastHanded<OriginFiles>>>();
   let named: ModFolders | undefined;
 
   const forgetUnnamed = (modFolders: ModFolders): void => {
@@ -198,6 +205,15 @@ export function originFilesReader(
     for (const key of walked.keys()) if (key.startsWith('mod|') && !live.has(key)) walked.delete(key);
   };
 
+  const walkedAgain = (key: string, files: OriginFiles): OriginFiles => {
+    const handed = uncovered.get(key) ?? lastHanded<OriginFiles>();
+    uncovered.set(key, handed);
+    const { origin, folder, notes, files: own, folders, ...rest } = files;
+    return handed(files, [
+      origin, folder, notes.length, ...notes, own.length, ...own.flatMap(fileParts), ...folders.flatMap(folderParts), ...noneLeft(rest),
+    ]);
+  };
+
   async function walkedOnce(key: string, walk: () => Promise<Walk>, filesOf: (walk: Walk) => OriginFiles): Promise<OriginFiles> {
     const before = walked.get(key);
     if (before !== undefined && await listingsStill(before)) return before.files;
@@ -205,7 +221,7 @@ export function originFilesReader(
     const files = filesOf(done);
     if (done.stampsCover) walked.set(key, { listings: done.listings, files });
     else walked.delete(key);
-    return files;
+    return done.stampsCover ? files : walkedAgain(key, files);
   }
 
   return async (origin, rootOnly, modFolders) => {

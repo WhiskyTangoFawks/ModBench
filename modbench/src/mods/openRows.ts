@@ -4,7 +4,9 @@ import { modOrigin, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
 import { fileRowUri } from './modFiles';
 import { modRowUri, overwriteRowUri, separatorRowUri } from './modIndicators';
 
-function openableRows(value: InstanceValue): ReadonlySet<string> {
+const OPENABLE_READ = { mods: true, foldersByMod: true, overwriteFolders: true, modGroups: true } as const;
+
+function openableRows(value: Pick<InstanceValue, keyof typeof OPENABLE_READ>): ReadonlySet<string> {
   const keys = new Set<string>();
   for (const entry of value.mods) {
     if (entry.kind !== 'mod') continue;
@@ -31,7 +33,7 @@ export class OpenRows implements vscode.Disposable {
     this.subscription = instance.subscribe((value) => {
       const openable = openableRows(value);
       for (const key of this.expanded) if (!openable.has(key)) this.expanded.delete(key);
-    });
+    }, OPENABLE_READ);
   }
 
   has(key: string): boolean {

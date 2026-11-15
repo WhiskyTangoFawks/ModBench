@@ -20,7 +20,7 @@ export function firstReadOf(
   // Constructed after the first read already failed: the failure is held, not just fired.
   if (unread() && instance.readFailure !== undefined) resolve();
   const subscriptions = [
-    instance.subscribe(() => resolve()),
+    instance.subscribe(() => resolve(), {}),
     instance.onReadFailure(() => resolve()),
   ];
   return {
@@ -35,6 +35,6 @@ export function markFirstReadLanded(instance: Pick<Instance, 'subscribe'>): vsco
   const subscription = instance.subscribe(() => {
     subscription.dispose();
     void vscode.commands.executeCommand('setContext', INSTANCE_READ_KEY, true);
-  });
+  }, {});
   return subscription;
 }

@@ -1611,6 +1611,7 @@ describe('the MO2 Instance adapter', () => {
 
       describe('read again', () => {
         const folder = (): string => join(root, 'mods', 'Harder VATS');
+        const callsOn = (spy: typeof readdir | typeof stat, path: string): number => vi.mocked(spy).mock.calls.filter(([called]) => String(called) === path).length;
         const settled = async (): Promise<void> => {
           await mkdir(join(folder(), 'Textures'), { recursive: true });
           await writeFile(join(folder(), 'Textures', 'a.dds'), '');
@@ -1682,10 +1683,11 @@ describe('the MO2 Instance adapter', () => {
           });
 
           const first = await source.originFiles(mod('Harder VATS'), 'list');
+          const walked = callsOn(stat, join(folder(), 'Gone'));
           const second = await source.originFiles(mod('Harder VATS'), 'list');
 
           expect(first.notes).toEqual([expect.stringMatching(/Gone/)]);
-          expect(second).not.toBe(first);
+          expect(callsOn(stat, join(folder(), 'Gone'))).toBeGreaterThan(walked);
           expect(second.notes).toEqual([expect.stringMatching(/Gone/)]);
         });
 
@@ -1700,14 +1702,16 @@ describe('the MO2 Instance adapter', () => {
           expect(again).not.toBe(first);
         });
 
-        it('answers the files of a mod that links to a file afresh each time, as a link\'s target is not stamped', async () => {
+        it('walks a mod that links to a file again each time, as a link\'s target is not stamped, and answers the files it answered while it walks the same', async () => {
           await settled();
           await symlink(join(folder(), 'Textures', 'a.dds'), join(folder(), 'Linked.dds'));
 
           const first = await source.originFiles(mod('Harder VATS'), 'list');
+          const followed = callsOn(stat, join(folder(), 'Linked.dds'));
           const second = await source.originFiles(mod('Harder VATS'), 'list');
 
-          expect(second).not.toBe(first);
+          expect(callsOn(stat, join(folder(), 'Linked.dds'))).toBeGreaterThan(followed);
+          expect(second).toBe(first);
         });
       });
 
@@ -1851,11 +1855,13 @@ describe('the MO2 Instance adapter', () => {
         });
 
         const first = await source.originFiles(origin, 'list');
-        const second = await source.originFiles(origin, 'list');
+        const listings = (): number => vi.mocked(readdir).mock.calls.filter(([path]) => String(path) === held).length;
+        const walked = listings();
+        await source.originFiles(origin, 'list');
 
         expect(relativePaths(first.files)).toContain('Textures/a.dds');
         expect(first.notes).toEqual([expect.stringMatching(/Locked.*EACCES/)]);
-        expect(second).not.toBe(first);
+        expect(listings()).toBeGreaterThan(walked);
       });
 
       it('rejects when a link\'s target cannot be checked for a reason other than its absence, simulated through a mocked stat as chmod denies nothing when the runner is root', async () => {

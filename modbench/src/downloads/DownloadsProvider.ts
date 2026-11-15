@@ -6,7 +6,7 @@ import {
   downloadedFileContextValue, filterExcludedRows, sortDownloadedFileRows, type DownloadedFileSortColumn,
 } from './downloadedFileRows';
 import {
-  instanceMessages, type LocatedDownloadedFileRow, type DownloadedFileRow, type DownloadedFileStatus, type InstanceValue, type InstanceView,
+  instanceMessages, MESSAGE_READS, type LocatedDownloadedFileRow, type DownloadedFileRow, type DownloadedFileStatus, type InstanceOf, type InstanceValue,
 } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
@@ -71,9 +71,11 @@ export class DownloadedFileNode extends vscode.TreeItem {
 
 export type DownloadsTreeNode = DownloadedFileNode | ErrorNode;
 
+const DOWNLOADS_READS = { ...MESSAGE_READS, downloadedFiles: true } as const;
+
 interface DownloadsProviderOptions {
   /** downloads/ rows, metadata folded in. */
-  instance: InstanceView;
+  instance: InstanceOf<keyof typeof DOWNLOADS_READS>;
 }
 
 /** Flat: downloaded files have no grouping or reorder concept, so every row is a leaf. One row per
@@ -82,8 +84,8 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<DownloadsTreeNode | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  private readonly instance: InstanceView;
-  private instanceValue: InstanceValue;
+  private readonly instance: DownloadsProviderOptions['instance'];
+  private instanceValue: Pick<InstanceValue, keyof typeof DOWNLOADS_READS>;
   private readonly instanceSubscription: vscode.Disposable;
   private readonly readFailureSubscription: vscode.Disposable;
   private readonly firstRead: FirstRead;
@@ -105,7 +107,7 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
     this.instanceSubscription = options.instance.subscribe((value) => {
       this.instanceValue = value;
       this.invalidate();
-    });
+    }, DOWNLOADS_READS);
     this.readFailureSubscription = options.instance.onReadFailure(() => this._onDidChangeTreeData.fire(undefined));
   }
 

@@ -3,7 +3,7 @@ import type { Reporter } from '../ports/reporter';
 import type { PluginDiagnosisReport, PluginAddress, LoadOrderSnapshot } from '../client';
 import { originsOfLinesNotRestored } from '../pluginCommands/pluginsNotRestored';
 import { linesWithoutFile, modsWithManifests } from '../instanceLoader/linesNotRestored';
-import { instanceLastGoodReadFailure, managerRunningMessage, type Instance, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
+import { instanceLastGoodReadFailure, managerRunningMessage, MESSAGE_READS, type Instance, type InstanceOf, type InstanceView } from '../instanceLoader/instance';
 import { messageLine } from '../drivingLib/messageLine';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
@@ -44,10 +44,17 @@ export type RecordBrowserFacet = Pick<
   'getPluginChildren' | 'getChildren' | 'getTreeItem' | 'onDidChangeTreeData' | 'reopen'
 >;
 
+const TREE_READS = {
+  ...MESSAGE_READS, plugins: true, pluginsLoadedWithNoLine: true, sortingRuleFiles: true, blueprintLoadsLast: true, dataFolderPlugins: true, dataFolderFiles: true,
+  files: true, listedSourceMods: true, gameFolder: true, holdsRepository: true, mods: true,
+} as const;
+
+type TreeInstance = InstanceOf<keyof typeof TREE_READS | 'entryKey'>;
+
 interface PluginsTreeProviderOptions {
   fileReads: FileReads;
   /** Name, origin, line, enabled and winning for every plugin: the row input. */
-  instance: PluginsInstance;
+  instance: TreeInstance;
   /** A row's children. */
   records: RecordBrowserFacet;
   /** Every plugin-keyed fact. */
@@ -119,11 +126,11 @@ export class PluginsTreeProvider
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<PluginsTreeNode | undefined | null>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  private readonly instance: PluginsInstance;
+  private readonly instance: TreeInstance;
   private readonly reporter: Reporter;
   private readonly records: RecordBrowserFacet;
   private readonly modStatuses: LastModStatuses;
-  private instanceValue: InstanceValue;
+  private instanceValue: TreeInstance['value'];
   private readonly readRules = rulesReader();
   private rules: ReadRules;
   private readonly subscriptions: vscode.Disposable[] = [];
@@ -175,16 +182,16 @@ export class PluginsTreeProvider
     this.instanceValue = options.instance.value;
     this.rules = this.readRules(this.instanceValue.sortingRuleFiles);
     this.firstRead = firstReadOf(options.instance);
-    this.subscriptions.push(this.firstRead, options.instance.subscribe((value) => {
-      this.instanceValue = value;
+    this.subscriptions.push(this.firstRead, options.instance.subscribe(() => {
+      this.instanceValue = options.instance.value;
       this.cache = undefined;
-      const rules = this.readRules(value.sortingRuleFiles);
+      const rules = this.readRules(this.instanceValue.sortingRuleFiles);
       if (rules !== this.rules) {
         this.rules = rules;
         void this.facts.rejudge();
       }
       this._onDidChangeTreeData.fire(undefined);
-    }), options.instance.onReadFailure(() => this.render()), options.instance.onRedraw(() => this.render()));
+    }, TREE_READS), options.instance.onReadFailure(() => this.render()), options.instance.onRedraw(() => this.render()));
     this.modStatuses = options.modStatuses;
     this.subscriptions.push(
       options.modStatuses.onDidChange(() => {

@@ -8,7 +8,7 @@ const valueFor = (activeProfile: string) => instanceValueFixture({ activeProfile
 
 function logged(instance: FakeInstance): string[] {
   const lines: string[] = [];
-  logOncePerFailure(instance, lineOf, (line) => lines.push(line));
+  logOncePerFailure(instance, { activeProfile: true }, lineOf, (line) => lines.push(line));
   return lines;
 }
 
