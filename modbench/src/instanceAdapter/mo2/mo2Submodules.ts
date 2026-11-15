@@ -16,6 +16,7 @@ import type { FileProblems } from '../../ports/fileProblems';
 import type { Mo2Context } from './mo2Context';
 import { PRE_PUSH_HOOK, PRE_PUSH_HOOK_NAME } from '../prePushHook';
 import { sourceFoldersTracked } from './sourceModFolders';
+import { withoutTelling } from '../../repositoriesLib/writesTold';
 
 type Mo2Submodules = Pick<InstanceAdapter, 'writeSubmodules' | 'writeSourceModLines' | 'followFoldersInRepository' | 'sourceHost' | 'submodule' | 'unclonedSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk' | 'sourceFolderTracked'>;
 
@@ -115,11 +116,11 @@ async function sourceModLinesWritten(instanceRoot: string, submodules?: Readonly
   if (!(await exists(file))) return;
   const onDisk = await sourceFoldersOf(instanceRoot, submodules);
   const folders = { ...onDisk, plain: [...new Set([...onDisk.plain, ...letIn.filter((name) => !onDisk.submodules.includes(name))])] };
-  await putIfChanged(file, (before) => {
+  await withoutTelling(() => putIfChanged(file, (before) => {
     const after = withSourceModLines(before, folders);
     if (after === undefined) throw new Error(`${file} has a source folders marker with no match, so its source folder lines are left as they are`);
     return after;
-  });
+  }));
 }
 
 /** Rewrites the source folder lines when the source folders change, in an ignore list that holds the whitelist. A marker

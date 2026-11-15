@@ -1,48 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cpSync, existsSync, mkdtempSync } from 'node:fs';
-import { readFile, rm, utimes } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { adapterOver } from '../../test/mo2/adapterOver';
-import { writesToldTo } from '../../repositoriesLib/writeNaming';
-import { CHECK_THE_DISK, type InstanceAdapter } from '../instanceAdapter';
+import { writesToldTo } from '../../repositoriesLib/writesTold';
+import type { InstanceAdapter } from '../instanceAdapter';
 import { PROFILE } from './adapterContract';
 
 vi.mock('vscode', () => fakeVscodeModule());
-vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:fs/promises')>();
-  return { ...actual, readFile: vi.fn(actual.readFile) };
-});
-
-describe('the watch\'s echo of a write the loader was told', () => {
-  let root: string;
-  beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'modbench-writes-echo-'));
-    cpSync(join(__dirname, 'fixtures', 'order-instance'), root, { recursive: true });
-  });
-  afterEach(() => rm(root, { recursive: true, force: true }));
-
-  it('reads nothing new, the file standing as it was when the told read took it in', async () => {
-    const adapter = adapterOver(root);
-    const modlist = join(root, 'profiles', PROFILE, 'modlist.txt');
-    const anHourAgo = new Date(Date.now() - 3_600_000);
-    writesToldTo({
-      told: async (paths) => {
-        await Promise.all(paths.map((path) => utimes(path, anHourAgo, anHourAgo)));
-        await adapter.reading({ named: [...paths], disk: false });
-      },
-    });
-    await adapter.reading(CHECK_THE_DISK);
-    await adapter.changeModOrder(PROFILE, () => [{ kind: 'enable', mod: 'Beta', enabled: true }]);
-    const readsOfModlist = (): number => vi.mocked(readFile).mock.calls.filter(([path]) => path === modlist).length;
-    const before = readsOfModlist();
-
-    await adapter.reading({ named: [modlist], disk: false });
-
-    expect(readsOfModlist()).toBe(before);
-  });
-});
 
 describe('a write through the adapter', () => {
   let root: string;

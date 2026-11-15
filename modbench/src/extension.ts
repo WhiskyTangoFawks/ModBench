@@ -12,7 +12,7 @@ import { surfaceReadModel, surfaceRefusedWrites } from './drivingLib/writingGest
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
 import { ambientWrites } from './instanceLoader/ambientWrites';
-import { leaveWritesUnnamed, writesNamedTo, writesToldTo } from './repositoriesLib/writeNaming';
+import { leaveWritesUnnamed, diskCheckedBy, writesToldTo } from './repositoriesLib/writesTold';
 import { highlightFollowingFocus } from './drivingLib/highlightFollowsFocus';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, loadOrderComing, sourceModRepositoriesOver } from './editor';
@@ -387,7 +387,7 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 function start(context: vscode.ExtensionContext): void {
-  writesNamedTo(ambientWrites);
+  diskCheckedBy(ambientWrites);
   const outputChannel = vscode.window.createOutputChannel('Modbench', { log: true });
   context.subscriptions.push(outputChannel);
 

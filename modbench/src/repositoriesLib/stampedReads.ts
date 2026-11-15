@@ -27,6 +27,8 @@ export interface Kept<T> {
   readonly stamp: FileStamp;
   readonly value: T;
   readonly settled: boolean;
+  /** The content a write handed over, for the one read that names it. */
+  readonly handed?: boolean;
 }
 
 // Windows names a file whatever the case of its path, and VS Code's watcher spells a drive in lower case.
@@ -46,6 +48,12 @@ export function keptTrusted<T>(
   // A folder's stamp can stay as it was for an entry added (ADR-0003), so a change named and a check of the disk forget it.
   everyKept.push((checked) => forgetChanged(kept, stampOf, checked, stampMayMiss));
   return keptByStamp(stampOf, read, kept);
+}
+
+/** Keeps `value`, the content a write of `path` just made, as the answer of the one trusted read that names it. A read after that
+ *  checks the stamp as any other. */
+export function handKept<T>(kept: Map<string, Kept<T>>, path: string, value: T, stamp: FileStamp): void {
+  kept.set(pathKey(path), { path, stamp, value, settled: false, handed: true });
 }
 
 const alsoKeyOf = (path: string | undefined): string | undefined => (path === undefined ? undefined : pathKey(path));
@@ -117,6 +125,10 @@ function keptByStamp<T>(stampOf: (path: string) => Promise<FileStamp>, read: (pa
     const held = kept.get(key);
     if (held?.settled === true && trusting.getStore() === true) return held.value;
     const stamp = await stampOf(path);
+    if (held?.handed === true && trusting.getStore() === true && sameStamp(held.stamp, stamp)) {
+      kept.set(key, { ...held, handed: false });
+      return held.value;
+    }
     if (held?.settled === true && sameStamp(held.stamp, stamp)) return held.value;
     const readFromMs = Date.now();
     const value = await read(path);

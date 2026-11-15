@@ -24,7 +24,7 @@ import { parseModlist } from './codecs/modlistText';
 import { addLoadAfter } from '../../sortingRules/lootMetadata';
 import { currentDownloadsDir, entryKey, folderHolding, listedAs, newModFolder, metaGameOfDomain, refuseFolderTaken, type Mo2Context } from './mo2Context';
 import { readPluginsProvided, type ReadingSource } from '../instanceReading';
-import { toldAfter } from '../../repositoriesLib/writeNaming';
+import { toldAfter } from '../../repositoriesLib/writesTold';
 
 type Mo2Changes = Pick<InstanceAdapter,
   | 'changePluginOrder' | 'changePluginOrderOverProvided' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'markDownloadedFile' | 'writeNexusFileInfo'

@@ -19,6 +19,7 @@ import { ArchiveContentsHeld, unreadableArchiveLines, type ArchiveRead, type Arc
 import { FactsOfReading } from './factsOfReading';
 import { WrittenFiles } from './writtenFiles';
 import { collectingWrites } from './ambientWrites';
+import { withoutTelling } from '../repositoriesLib/writesTold';
 
 /** The rows this value is made of. A view names a row's shape through the read model that
  *  publishes it, never through the codec that parsed the file behind it. */
@@ -39,18 +40,27 @@ interface Run {
   tellsUnheard: boolean;
   fromEvents: boolean;
   readonly settled: Promise<void>;
-  /** Settles when the read has landed, before its subscribers have. */
+  /** Settles when the read has landed, before its subscribers have; rejects with the failure of a read that failed. A run dropped
+   *  for a write in flight settles with the run that reads what it was to read. */
   readonly held: Promise<void>;
-  hold(): void;
+  readonly inherited: Run[];
+  hold(failure?: Error): void;
   land(settled: Promise<void>): void;
 }
 
 function nextRun(): Run {
   let land!: (settled: Promise<void>) => void;
-  let hold!: () => void;
+  let settleHeld!: (failure?: Error) => void;
   const settled = new Promise<void>((resolve) => { land = resolve; });
-  const held = new Promise<void>((resolve) => { hold = resolve; });
-  return { named: new Set(), disk: false, tellsUnheard: false, fromEvents: false, settled, held, hold, land };
+  const held = new Promise<void>((resolve, reject) => { settleHeld = (failure) => { if (failure === undefined) resolve(); else reject(failure); }; });
+  // A refresh asks for `settled` alone, so a failure nobody asked `held` for is not an unhandled one.
+  held.catch(() => undefined);
+  const inherited: Run[] = [];
+  const hold = (failure?: Error): void => {
+    settleHeld(failure);
+    for (const run of inherited) run.hold(failure);
+  };
+  return { named: new Set(), disk: false, tellsUnheard: false, fromEvents: false, settled, held, inherited, hold, land };
 }
 
 type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'dataFolderFiles' | 'gameArchives' | 'archives' | 'archiveContents' | 'listingNotes' | 'managerRunning' | 'publisherConfiguration' | 'programVersions';
@@ -555,6 +565,7 @@ export class Instance implements Subscription {
       next.disk ||= this.dropped.disk;
       next.tellsUnheard ||= this.dropped.tellsUnheard;
       next.fromEvents ||= this.dropped.fromEvents;
+      next.inherited.push(...this.dropped.inherited);
       this.dropped = undefined;
     }
     for (const path of named) next.named.add(path);
@@ -577,8 +588,8 @@ export class Instance implements Subscription {
     this.reading = true;
     for (let run = this.next; run !== undefined; run = this.next) {
       this.next = undefined;
-      const { settled } = await this.recompute(run);
-      run.hold();
+      const { settled, failed, dropped } = await this.recompute(run);
+      if (!dropped) run.hold(failed);
       run.land(settled);
     }
     this.reading = false;
@@ -586,7 +597,7 @@ export class Instance implements Subscription {
 
   // A read that throws logs and leaves the last value and the last sequence in place, so a file
   // another tool is half-way through writing never empties the trees.
-  private async recompute(run: Run): Promise<{ settled: Promise<void> }> {
+  private async recompute(run: Run): Promise<{ settled: Promise<void>; failed?: Error; dropped?: true }> {
     let next: InstanceValue;
     const epoch = this.quietEpoch;
     try {
@@ -597,7 +608,7 @@ export class Instance implements Subscription {
       const failure = errorMessage(err);
       this.options.log.error(`[instance] Failed to read the instance: ${failure}`);
       this.failure = failure;
-      return { settled: this.notify(this.failureListeners, 'read-failure', (listener) => listener()) };
+      return { settled: this.notify(this.failureListeners, 'read-failure', (listener) => listener()), failed: new Error(failure) };
     }
     if (epoch !== this.quietEpoch || this.quiets > 0) return this.dropRun(run);
     const before = this.current;
@@ -606,22 +617,24 @@ export class Instance implements Subscription {
     this.failure = undefined;
     this.setLate(this.heardSinceRun());
     this.seq++;
-    const reread: Reread = { named: [...run.named], disk: run.disk };
+    const changed = tellsEvery || (Object.keys(next) as (keyof InstanceValue)[]).some((fact) => next[fact] !== before[fact]);
+    const reread: Reread = { named: changed ? [...run.named] : [], disk: run.disk };
     if (this.workspaceMovedFrom(next)) void this.enqueue({ disk: false, tellsUnheard: false });
     const told = this.subscribers.filter(({ concerns }) => tellsEvery || concerns === undefined || concerns.some((fact) => next[fact] !== before[fact]));
     return { settled: this.notify(told.map(({ subscriber }) => subscriber), 'value', (subscriber) => subscriber(next, this.seq, reread)) };
   }
 
   // What a dropped run was to read is read by the next run, so a change the watch heard while a write ran is never lost.
-  private dropRun(run: Run): { settled: Promise<void> } {
+  private dropRun(run: Run): { settled: Promise<void>; dropped: true } {
     const dropped = this.dropped ?? nextRun();
     this.dropped = dropped;
     for (const path of run.named) dropped.named.add(path);
     dropped.disk ||= run.disk;
     dropped.tellsUnheard ||= run.tellsUnheard;
     dropped.fromEvents ||= run.fromEvents;
+    dropped.inherited.push(run);
     if (this.quiets === 0) void this.enqueue({ disk: false, tellsUnheard: false });
-    return { settled: Promise.resolve() };
+    return { settled: Promise.resolve(), dropped: true };
   }
 
   // A throwing subscriber would otherwise reject the queue for good, and no later recompute
@@ -649,7 +662,7 @@ export class Instance implements Subscription {
 
   private async read({ named, disk, tellsUnheard }: Run): Promise<InstanceValue> {
     const { adapter, log } = this.options;
-    const reading = await adapter.reading({ named: [...named], disk });
+    const reading = await withoutTelling(() => adapter.reading({ named: [...named], disk }));
     if (tellsUnheard) for (const path of reading.unheardChanges) log.info(`[instance] The check of the disk found a change no event named: ${path}`);
     return this.facts.of(reading, this.workspaceDataFolder(reading.gameFolder), {
       sourceMods: (sourceMods) => { this.tellReading(reading, sourceMods); },

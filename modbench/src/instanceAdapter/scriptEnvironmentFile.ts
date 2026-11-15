@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
-import { toldAfter } from '../repositoriesLib/writeNaming';
+import { toldAfter } from '../repositoriesLib/writesTold';
 
 const WORKSPACE_FOLDER = '${workspaceFolder}';
 

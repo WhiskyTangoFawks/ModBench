@@ -7,7 +7,7 @@ import { errorMessage } from '../ports/errorMessage';
 import { isManifestPath, MANIFEST_SUFFIX } from '../repositoriesLib/manifestPath';
 import type { PackagesAsked } from '../repositoriesLib/statusValues';
 import { ownTempPrefix, renameOver } from '../repositoriesLib/wholeWrites';
-import { toldAfter } from '../repositoriesLib/writeNaming';
+import { toldAfter } from '../repositoriesLib/writesTold';
 import { BUILD_FILE, PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
 import { heldTextAt, heldTexts, samePath, type HeldTexts } from '../symbolNames/symbolNames';
 import type { BuildFileAgainst, BuildFileLack, BuildFileRead, BuildStep } from './buildFile';

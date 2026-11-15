@@ -1,6 +1,7 @@
 // The instance repository holds this machine's folders and accounts by a token (instance-repository.md, The repository,
 // stories 3 and 6).
 
+import { withoutTelling } from '../../repositoriesLib/writesTold';
 import { mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -362,7 +363,7 @@ export function mo2PathTokens(context: Mo2Context, gameFolder: () => Promise<Gam
       if (!(await isRepository(instanceRoot))) return undefined;
       const takeBack: Undo[] = [];
       try {
-        return await withLock(programsLock(instanceRoot), () => written(takeBack));
+        return await withoutTelling(() => withLock(programsLock(instanceRoot), () => written(takeBack)));
       } catch (err) {
         throw await undoAll(takeBack.reverse(), err);
       }

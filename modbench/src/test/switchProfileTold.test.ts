@@ -5,7 +5,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 
 import { rm } from 'node:fs/promises';
 import { Instance } from '../instanceLoader/instance';
-import { writesToldTo } from '../repositoriesLib/writeNaming';
+import { writesToldTo } from '../repositoriesLib/writesTold';
 import { instanceCommands } from '../instanceCommands/instanceCommands';
 import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
 import { fakeWorkspace } from './fakeWorkspace';

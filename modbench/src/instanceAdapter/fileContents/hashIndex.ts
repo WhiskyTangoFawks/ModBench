@@ -10,6 +10,7 @@ import { digestOf } from './contentDigest';
 import { append, ensureDir, get, listDir, makeTempDir, readOrReason, remove, stampOf, withLock } from '../files';
 import { sameStamp, settledBefore } from '../../repositoriesLib/stampedReads';
 import type { FileRead, FileStamp, HashedDownloadedFile, HashedFile, InstanceAdapter } from '../instanceAdapter';
+import { withoutTelling } from '../../repositoriesLib/writesTold';
 
 const INDEX_FILE = 'hashes.jsonl';
 /** The prefix of an extraction of a downloaded file, which a crash can leave behind. */
@@ -120,7 +121,7 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
       return;
     }
     if (read.kind === 'unreadable') return;
-    await ensureDir(folder).then(() => append(indexFile, lineOf(kind, path, entry.stamp, read.answer))).catch((err: unknown) => { unwritten = errorMessage(err); });
+    await withoutTelling(() => ensureDir(folder).then(() => append(indexFile, lineOf(kind, path, entry.stamp, read.answer)))).catch((err: unknown) => { unwritten = errorMessage(err); });
   }
 
   const shown = (path: string, read: FileRead<unknown>): void => {

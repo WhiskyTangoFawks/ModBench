@@ -12,11 +12,11 @@ import { pipeline } from 'node:stream/promises';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import type { FileRead } from './instanceAdapter';
-import { keptTrusted, pathKey, stampFrom, type FileStamp, type Kept } from '../repositoriesLib/stampedReads';
+import { handKept, keptTrusted, pathKey, stampFrom, type FileStamp, type Kept } from '../repositoriesLib/stampedReads';
 import { isOwnTemp, ownTempPrefix, renameOver, tempOwner } from '../repositoriesLib/wholeWrites';
 import { digestOf } from './fileContents/contentDigest';
 import type { MoveToTrash } from '../ports/trash';
-import { toldAfter } from '../repositoriesLib/writeNaming';
+import { toldAfter } from '../repositoriesLib/writesTold';
 
 /** ADR-0007, answered without the backend. */
 export function isRepository(sourceFolder: string): Promise<boolean> {
@@ -219,6 +219,7 @@ async function writeAtomic(path: string, text: string): Promise<void> {
     await rm(tmp, { force: true });
     throw reportedAsTarget(err, tmp, target);
   }
+  handKept(texts, path, text, await stampOf(path));
 }
 
 /** Streams `bytes` to a temp beside `path`, and moves it to `path` only when `keep` accepts the temp; answers whether it did.
@@ -301,14 +302,25 @@ export const listDirByStamp = keptTrusted(stampOf, listDir, listings, true);
 /** `path`'s stamp, kept as `listDirByStamp` keeps a listing. */
 export const stampByStamp = stampKept(stampOf);
 
+const texts = new Map<string, Kept<string>>();
+
+/** The text of a file, read again only when its stamp has changed; the text a write handed over stands for the one read that names it. */
+export const textByStamp = stampKept(readText, texts);
+
 export { keptUntilNamed, outsideTrustedRead, readTrustingKept, trustingKept } from '../repositoriesLib/stampedReads';
 
-/** A reader of the text `parse` makes of a file, which reads and parses it again only when the file's stamp has changed. */
-export const parsedBy = <T>(parse: (text: string) => T): ((path: string) => Promise<T>) =>
-  stampKept(async (path) => parse(await readText(path)));
-
-/** As `parsedBy`, for the text itself. */
-export const textByStamp = parsedBy((text: string) => text);
+/** A reader of what `parse` makes of a file's text, parsing again only when the text is not the one parsed before. */
+export const parsedBy = <T>(parse: (text: string) => T): ((path: string) => Promise<T>) => {
+  const parsed = new Map<string, { readonly text: string; readonly value: T }>();
+  return stampKept(async (path) => {
+    const text = await textByStamp(path);
+    const held = parsed.get(pathKey(path));
+    if (held?.text === text) return held.value;
+    const value = parse(text);
+    parsed.set(pathKey(path), { text, value });
+    return value;
+  });
+};
 
 /** Hands over a link that cannot be followed, by its path, with why. */
 export type SkippedLink = (linkPath: string, reason: string) => void;

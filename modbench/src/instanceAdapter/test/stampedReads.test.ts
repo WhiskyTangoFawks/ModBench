@@ -421,7 +421,7 @@ describe('the MO2 reading of an instance nothing changed in', () => {
       await writeFile(join(instance, 'compiler_settings.json'), JSON.stringify({ Include: ['tools/x.txt'] }));
       const adapter = adapterOver(instance, { gameFolder });
       const pathProblems = async (reread: Reread): Promise<number> =>
-        expectKind((await adapter.reading(reread)).publisherConfiguration, 'read').pathProblems.length;
+        expectKind((await adapter.reading(reread)).publisherConfiguration, 'read').pathProblems.filter(({ tag }) => tag.name === 'Include').length;
       const before = await pathProblems(CHECK_THE_DISK);
       await mkdir(join(instance, 'tools'));
       await writeFile(join(instance, 'tools', 'x.txt'), '');

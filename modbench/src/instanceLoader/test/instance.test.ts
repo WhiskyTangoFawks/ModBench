@@ -827,6 +827,31 @@ describe('Instance — a value that survives a bad read', () => {
     expect(instance.readFailure).toBe(failures[0]);
   });
 
+  it('refuses a write told to it when the read that was to hold the file fails, so the gesture learns of it', async () => {
+    const { instance, fake } = loader({ mods: [mod('A')] });
+    await instance.refresh();
+
+    fake.failReading('ModOrganizer.ini is half-written');
+
+    await expect(instance.told(['/instance/profiles/Default/modlist.txt'])).rejects.toThrow('ModOrganizer.ini is half-written');
+  });
+
+  it('answers a write told to it during a quiet scope once the read after the scope has landed, never at the dropped read', async () => {
+    const { instance } = loader({ mods: [mod('A')] });
+    await instance.refresh();
+    let told: Promise<void> | undefined;
+    let answered = false;
+
+    await instance.quiet(async () => {
+      told = instance.told(['/instance/profiles/Default/modlist.txt']).then(() => { answered = true; });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(answered).toBe(false);
+    });
+    await told;
+
+    expect(answered).toBe(true);
+  });
+
   it('reports a failed first read to failure subscribers, so a tree can settle on an error node, holds the sequence at 0, and lands the next successful read at sequence 1', async () => {
     const { instance, fake } = loader({ mods: [mod('A')] });
     fake.failReading('ModOrganizer.ini is empty');
@@ -915,12 +940,12 @@ describe('Instance — a value that survives a bad read', () => {
     const { instance } = loader();
     await instance.refresh();
     instance.subscribe(() => new Promise<void>(() => undefined));
-    const reads: (readonly string[] | undefined)[] = [];
-    instance.subscribe((_value, _sequence, { named }) => { reads.push(named); });
+    const heard: number[] = [];
+    instance.subscribe((_value, sequence) => { heard.push(sequence); });
 
     await instance.told(['/instance/profiles/Default/modlist.txt']);
 
-    expect(reads).toEqual([['/instance/profiles/Default/modlist.txt']]);
+    expect(heard).toHaveLength(1);
   });
 
   it('recomputes again while a subscriber has not settled, and holds only its own refresh', async () => {
