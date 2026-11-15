@@ -1,7 +1,7 @@
 // MO2's parsed reads: each file read through its own codec, and each answer about where the
 // instance keeps what.
 
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, sep } from 'node:path';
 import { foldersRefused } from '../foldersRefused';
 import { parsePlugins } from '../../loadOrderFileCodec/pluginsText';
 import { isInstallationFileName } from '../fileContents/installationFileNames';
@@ -12,7 +12,6 @@ import { entryNamed, MODLIST_FILE_NAME, modLineKey, parseModlist } from './codec
 import { readGamePath, readSelectedProfile, SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
 import { gameOfSettings } from './mo2Game';
 import { programsOf } from '../../tables/gamePaths';
-import { present } from '../../ports/present';
 import type { ManagerGamePath } from '../gameFolder/gameFolderResolver';
 import { creationClubFileOf, dataFolderOf, listDataFolderFiles, listDataFolderPlugins, readCreationClubList } from '../gameFolder/dataFolder';
 import { listOwnEntries } from '../gameFolder/ownEntries';
@@ -149,10 +148,11 @@ const creationClubListOf = (context: Mo2Context, deployedPath: DeployedPath): Re
 export function readingSource(context: Mo2Context, publisherFile: ConfigurationFile | undefined, deployedPath: DeployedPath): ReadingSource {
   const { instanceRoot, resolveGameFolder, resolveDownloadsFolder, watch, mo2Running } = context;
   const originFilesOf = originFilesReader(context);
-  const settingsPath = settingsFile(instanceRoot);
-  // Resolved once for the settings a reading holds, and again when a change names the settings file or the disk is checked.
-  let managed: ManagerGamePath | undefined;
-  const resolvedGameFolder = keptUntilNamed(() => resolveGameFolder(present(managed, 'the settings a reading holds')));
+  // A change inside the Data folder names its own file, so the key sits below the folder: a change to the folder or the game folder forgets it.
+  const resolvedGameFolder = keptUntilNamed(
+    (managed) => resolveGameFolder(JSON.parse(managed) as ManagerGamePath),
+    (folder) => { const data = dataFolderOf(folder); return data === undefined ? undefined : data + sep; },
+  );
   // No path holds this answer, so only a check of the disk forgets it.
   const running = keptUntilNamed((): Promise<ManagerRunning> => mo2Running().then(
     (isRunning): ManagerRunning => ({ kind: isRunning ? 'running' : 'notRunning' }),
@@ -170,8 +170,7 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
         ...game,
         // What the settings resolve is what the watch follows.
         gameFolder: async () => {
-          managed = managedGamePath(iniText, game.gameRelease);
-          const gameFolder = await resolvedGameFolder(settingsPath);
+          const gameFolder = await resolvedGameFolder(JSON.stringify(managedGamePath(iniText, game.gameRelease)));
           const dataFolder = dataFolderOf(gameFolder);
           const programs = programsOf(game.gameRelease);
           watch.follow('dataFolder', dataFolder === undefined ? [] : [dataFolder], DATA_FOLDER_GLOB);

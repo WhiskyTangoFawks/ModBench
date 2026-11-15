@@ -402,24 +402,24 @@ describe('the MO2 Instance adapter', () => {
         ]).toEqual([{ kind: 'notRunning' }, { kind: 'unknown', reason: 'tasklist exited with code 1' }]);
       });
 
-      it('asks whether MO2 is running at a check of the disk, and where the game is when the settings change, and in no reading that names other files', async () => {
+      it('asks again where the game is when the game path the settings hold or the Data folder changes, and whether MO2 is running only at a check of the disk', async () => {
+        const game = join(root, 'game');
         const asked: string[] = [];
         const adapter = adapterOver(root, {
           mo2Running: () => { asked.push('running'); return Promise.resolve(false); },
-          gameFolder: () => { asked.push('game'); return Promise.resolve({ kind: 'notFound', looked: [], setting: 'none' }); },
+          gameFolder: () => { asked.push('game'); return Promise.resolve({ kind: 'found', root: game, dataFolder: join(game, 'Data') }); },
         });
-        const unrelated = { named: [join(root, 'mods', 'Harder VATS', 'Harder VATS.esp')], disk: false };
-
         const askedBy = async (reread: Reread): Promise<string[]> => {
           asked.length = 0;
           await adapter.reading(reread);
           return [...asked].sort();
         };
+        const unrelated = { named: [join(root, 'mods', 'Harder VATS', 'Harder VATS.esp')], disk: false };
+        const first = await askedBy(CHECK_THE_DISK);
+        const settings = join(root, 'ModOrganizer.ini');
+        await writeFile(settings, setIniValue(await readFile(settings, 'utf8'), 'General', 'gamePath', join(root, 'elsewhere')));
 
-        const settings = { named: [join(root, 'ModOrganizer.ini')], disk: false };
-
-        expect([await askedBy(CHECK_THE_DISK), await askedBy(unrelated), await askedBy(settings), await askedBy(CHECK_THE_DISK)])
-          .toEqual([['game', 'running'], [], ['game'], ['game', 'running']]);
+        expect([first, await askedBy(unrelated), await askedBy({ named: [join(game, 'Data')], disk: false })]).toEqual([['game', 'running'], ['game'], ['game']]);
       });
 
       it('answers the meta of a mod folder the mod order does not list, beside the listed ones', async () => {
