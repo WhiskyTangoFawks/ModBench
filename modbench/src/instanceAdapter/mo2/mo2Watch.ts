@@ -57,15 +57,15 @@ export function mo2Watch(instanceRoot: string, gameFolderChanged: (listener: () 
   };
   const onSourceChange = changedWhere(isRepositoryChange);
   const onGitDirectoryChange = changedWhere(isGitDirectoryChange);
-  const onChangeFor = (base: string, what?: FollowedFolder): ((path: string) => void) =>
-    (base === sources ? onSourceChange : what === 'gitDirectory' ? onGitDirectoryChange : changed);
+  const onChangeFor = (base: string): ((path: string) => void) => (base === sources ? onSourceChange : changed);
+  const onFollowedChange = (what: FollowedFolder): ((path: string) => void) => (what === 'gitDirectory' ? onGitDirectoryChange : changed);
   const heldKey = (base: string, glob: string): string => `${base}\0${glob}`;
-  const heldFor = (base: string, glob: string, what?: FollowedFolder): HeldFolderWatch | undefined => {
+  const heldFor = (base: string, glob: string, onChange: (path: string) => void): HeldFolderWatch | undefined => {
     const key = heldKey(base, glob);
-    if (!held.has(key)) held.set(key, heldFolderWatchFor(glob, { onChange: onChangeFor(base, what), holds: isRepositoryChange, onFailure: checkDue }));
+    if (!held.has(key)) held.set(key, heldFolderWatchFor(glob, { onChange, holds: isRepositoryChange, onFailure: checkDue }));
     return held.get(key);
   };
-  const watch = (base: string, glob: string, what?: FollowedFolder): Subscription => watchFiles(base, glob, onChangeFor(base, what), heldFor(base, glob, what));
+  const watch = (base: string, glob: string, onChange = onChangeFor(base)): Subscription => watchFiles(base, glob, onChange, heldFor(base, glob, onChange));
   const armed = (): boolean => listeners.size > 0;
   const rearmed = ({ glob, watches }: Followed, arming: (base: string) => Subscription | undefined): Followed => {
     for (const watching of watches.values()) watching?.dispose();
@@ -75,7 +75,7 @@ export function mo2Watch(instanceRoot: string, gameFolderChanged: (listener: () 
   const arm = (): void => {
     fixed = instanceWatches(instanceRoot).map(({ base, pattern }) => watch(base, pattern));
     fixed.push(gameFolderChanged(checkDue));
-    for (const [what, folders] of followed) followed.set(what, rearmed(folders, (base) => watch(base, folders.glob, what)));
+    for (const [what, folders] of followed) followed.set(what, rearmed(folders, (base) => watch(base, folders.glob, onFollowedChange(what))));
   };
   const disarm = (): void => {
     for (const subscription of fixed) subscription.dispose();
@@ -107,7 +107,7 @@ export function mo2Watch(instanceRoot: string, gameFolderChanged: (listener: () 
         }
       }
       const added = bases.filter((base) => !watches.has(base));
-      for (const base of added) watches.set(base, armed() ? watch(base, glob, what) : undefined);
+      for (const base of added) watches.set(base, armed() ? watch(base, glob, onFollowedChange(what)) : undefined);
       followed.set(what, { glob, watches });
       if (added.length > 0 && armed()) checkDue();
     }),

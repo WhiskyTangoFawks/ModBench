@@ -380,7 +380,7 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     expect([first, unnamed, named]).toEqual([['A'], ['A'], ['A', 'B']]);
   });
 
-  describe('in a repository, whose git reads VS Code\'s git extension runs again at a change at its git directory\'s first level', () => {
+  describe('in a repository, whose git reads VS Code\'s git extension runs again at a change in the working tree or at its git directory\'s first level', () => {
     let adapter: ReturnType<typeof managerOver>;
     const git = (...args: string[]): void => {
       execFileSync('git', ['-C', instance, '-c', 'user.name=Modbench', '-c', 'user.email=modbench@example.com', ...args]);
@@ -410,12 +410,42 @@ describe('the MO2 reading of an instance nothing changed in', () => {
       await adapter.reading(CHECK_THE_DISK);
     });
 
-    it('runs no git in a reading named a file outside the git directory', async () => {
+    it.each([
+      ['a file outside the repository', () => join(dirname(instance), 'Fallout 4', 'Data', 'Fallout4.esm')],
+      ['a file in a source mod\'s own git directory', () => join(instance, 'source', 'Harder VATS', '.git', 'index')],
+      ['a file below the first level of the git directory', () => join(gitDir(), 'refs', 'heads', 'main')],
+    ])('runs no git in a reading named %s', async (_file, file) => {
       const kept = await gitRunIn(CHECK_THE_DISK);
 
-      const unrelated = await gitRunIn({ named: [join(instance, 'mods', 'Harder VATS', 'Harder VATS.esp')], disk: false });
+      const unrelated = await gitRunIn({ named: [file()], disk: false });
 
       expect([kept.length > 0, unrelated]).toEqual([true, []]);
+    });
+
+    it('runs each git read it keeps once again in a reading named a burst of working-tree files', async () => {
+      const kept = await gitRunIn(CHECK_THE_DISK);
+      const burst = [join(instance, 'mods', 'Harder VATS', 'Harder VATS.esp'), join(instance, 'profiles', 'Default', 'modlist.txt'), join(instance, 'overwrite', 'a.ini')];
+
+      expect([kept.length > 0, new Set(kept).size === kept.length, await gitRunIn({ named: burst, disk: false })]).toEqual([true, true, kept]);
+    });
+
+    it('runs a git read again whose run failed', async () => {
+      const run = spawns.getMockImplementation() as ((file: string, args: string[], options: unknown) => Promise<unknown>) | undefined;
+      let failed: string | undefined;
+      spawns.mockImplementation((file: string, args: string[], options: unknown) => {
+        if (failed !== undefined || !args.includes('HEAD')) return run?.(file, args, options);
+        failed = args.slice(2).join(' ');
+        return Promise.reject(Object.assign(new Error('spawn git EAGAIN'), { code: 'EAGAIN' }));
+      });
+      try {
+        await gitRunIn(CHECK_THE_DISK);
+
+        const again = (await gitRunIn({ named: [], disk: false })).filter((command) => command === failed);
+
+        expect([failed, again]).toEqual(['rev-parse -q --verify HEAD', ['rev-parse -q --verify HEAD']]);
+      } finally {
+        spawns.mockImplementation(run ?? (() => undefined));
+      }
     });
 
     it('runs every git read it keeps again at a check of the disk', async () => {

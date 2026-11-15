@@ -1151,18 +1151,13 @@ describe('the MO2 Instance adapter', () => {
         return signals;
       };
 
-      it.each([
-        ['HEAD', 1], ['config', 1], ['index', 1], ['packed-refs', 1], ['COMMIT_EDITMSG', 1], ['index.lock', 0], ['refs/heads/main', 0], ['objects/ab/cdef', 0],
-      ])('signals a change to %s %i times', async (inside, signalled) => {
+      it.each<[string, number, string?]>([
+        ['HEAD', 1], ['config', 1], ['index', 1], ['packed-refs', 1], ['COMMIT_EDITMSG', 1], ['index.lock', 0],
+        ['.watchman-cookie-host-1', 0, 'watchman-cookie-host-1'], ['refs/heads/main', 0], ['objects/ab/cdef', 0],
+      ])('signals a change to %s %i times', async (inside, signalled, heardAsByVsCodesMatcher) => {
         execFileSync('git', ['init', '-q', root]);
 
-        expect(await signalsAt(join(root, '.git'), inside)).toBe(signalled);
-      });
-
-      it('signals no change to a cookie file of watchman\'s', async () => {
-        execFileSync('git', ['init', '-q', root]);
-
-        expect(await signalsAt(join(root, '.git'), '.watchman-cookie-host-1', 'watchman-cookie-host-1')).toBe(0);
+        expect(await signalsAt(join(root, '.git'), inside, heardAsByVsCodesMatcher)).toBe(signalled);
       });
 
       it('follows the git directory a .git file names', async () => {

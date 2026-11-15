@@ -1,8 +1,9 @@
 import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 import { errnoCode } from '../ports/errno';
+import { pathKey } from '../repositoriesLib/stampedReads';
 import { leaveWritesUnnamed } from '../repositoriesLib/writeNaming';
 import { GIT_DIR, keptUntilNamed, readOrAbsent, stampKept } from './files';
 
@@ -74,17 +75,37 @@ const gitDirAt = stampKept(async (dotGit: string): Promise<string> => {
 /** The git directory of the repository at `repository`. */
 export const gitDirOf = (repository: string): Promise<string> => readOrAbsent(() => gitDirAt(join(repository, GIT_DIR)), join(repository, GIT_DIR));
 
-// VS Code's git extension runs its reads again at a change at the first level of the git directory, and reads git's
-// configuration outside the repository only as part of them (extensions/git/src/repository.ts, DotGitWatcher).
-const answersIn = keptUntilNamed(() => Promise.resolve(new Map<string, Promise<string>>()));
+interface Answers {
+  readonly root: string;
+  readonly gitDir: string;
+  readonly byArgs: Map<string, Promise<string>>;
+}
 
-/** What git answers in `repository` for a read its git directory's first level and git's configuration decide: kept within
- *  a reading until a change names that first level or the disk is checked, read each time outside one. */
+const WITHIN_A_GIT_DIRECTORY = /\.git($|\\|\/)/;
+
+// VS Code's git extension reads git again at a change in the working tree outside any .git, or at the git directory's
+// first level (extensions/git/src/repository.ts, the constructor's watchers and DotGitWatcher).
+const changesGit = ({ root, gitDir }: Answers, named: readonly string[]): boolean => named.some((path) => {
+  const inTree = relative(root, pathKey(path));
+  const outsideTree = inTree === '' || isAbsolute(inTree) || inTree.split(sep)[0] === '..';
+  return (!outsideTree && !WITHIN_A_GIT_DIRECTORY.test(inTree)) || pathKey(dirname(path)) === gitDir;
+});
+
+const answersIn = keptUntilNamed(async (repository: string): Promise<Answers> =>
+  ({ root: pathKey(repository), gitDir: pathKey(await gitDirOf(repository)), byArgs: new Map() }), changesGit);
+
+const exitedWith = (err: unknown, code: number): boolean => typeof err === 'object' && err !== null && 'code' in err && err.code === code;
+
+/** What git answers in `repository`, kept as VS Code's git extension keeps its git state. A run that fails is not kept, and
+ *  git's exit code 1, which `config --get` and `rev-parse --verify` answer with, is. */
 export async function gitKept(repository: string, ...args: string[]): Promise<string> {
-  const answers = await answersIn(await gitDirOf(repository));
-  const key = [repository, ...args].join('\0');
-  const answer = answers.get(key) ?? git(repository, ...args);
-  answers.set(key, answer);
+  const { byArgs } = await answersIn(repository);
+  const key = args.join('\0');
+  const answer = byArgs.get(key) ?? git(repository, ...args);
+  byArgs.set(key, answer);
+  void answer.catch((err: unknown) => {
+    if (!exitedWith(err, 1) && byArgs.get(key) === answer) byArgs.delete(key);
+  });
   return answer;
 }
 
