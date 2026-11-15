@@ -664,6 +664,9 @@ export interface InstanceReading extends InstanceGame {
   readonly unwatchedFolders: readonly UnwatchedFolder[];
   /** Each path the check of the disk found changed that no event named. */
   readonly unheardChanges: readonly string[];
+  /** Runs `read` trusting what the latest reading left kept, the instance's files and the manifests: each is read again
+   *  only where a change named it or the disk was checked. */
+  readonly trustingKept: <T>(read: () => Promise<T>) => Promise<T>;
   readonly managerRunning: ManagerRunning;
   readonly publisherConfiguration: PublisherConfiguration;
 }
@@ -805,7 +808,7 @@ export interface InstanceAdapter extends DataFileReads {
   /** Makes git hold each folder's path by a path token, and the working tree this machine's paths. Answers why a path
    *  token stays in the working tree. Writes nothing without a repository. A failed first write is undone. */
   writePathTokens(): Promise<string | undefined>;
-  /** The stamp of an origin file, at the path it is read from. */
+  /** The stamp of an origin file, at the path it is read from; the kept one inside a reading's `trustingKept`. */
   fileStamp(path: string): Promise<FileRead<FileStamp>>;
   /** An origin file's size and hash at the path it is read from, kept in the hash index (ADR-0013). Two files with one
    *  hash hold the same bytes. */

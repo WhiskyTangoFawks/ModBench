@@ -3,7 +3,7 @@
 
 import { firstLines } from '../loadOrderFileCodec/firstLines';
 import { pluginKey, PLUGINS_FILE_NAME } from '../loadOrderFileCodec/pluginsText';
-import { ignoreSkippedLink, readTrustingKept, type SkippedLink } from './files';
+import { ignoreSkippedLink, readTrustingKept, trustingKept, type SkippedLink } from './files';
 import {
   CHECK_THE_DISK, filesWinningFirst, type Reread, type DataFolderArchives, type DataFolderFiles, type DataFolderPlugins, type DownloadedFiles, type EntryRef, type FileOrigin, type GameFolder,
   type ManagerNames, type ManagerRunning, type ModFolders, type ModMeta, type ModlistEntry, type OriginFiles, type PluginEntry, type PluginsProvided,
@@ -16,6 +16,8 @@ import { loadedWithNoLineOf } from '../tables/gamePaths';
 import { originsWinningFirst } from '../symbolNames/symbolNames';
 import { ignoreLink, type IgnoredLink } from './gameFolder/ownEntries';
 import { programVersions } from './gameFolder/programVersions';
+import { lastBuilt } from '../ports/lastBuilt';
+import { readingSteadier } from './steadyReading';
 
 export interface ArchiveReads {
   /** The archives the game's INIs list, in load order, a key's last value winning. `notes` says what
@@ -75,24 +77,42 @@ export interface ReadingSource extends ArchiveReads {
 // How long another tool's write takes to settle before an empty mod order is believed.
 const SETTLE_MS = 200;
 
-const modsWithMeta = async (source: ReadingSource, profile: string, folders: Promise<ModFolders | undefined>): Promise<ModlistEntry[]> =>
-  Promise.all((await source.modOrder(profile)).map(async (entry) =>
-    (entry.kind === 'mod' ? { ...entry, ...(await source.modMeta(entry.name, await folders)) } : entry)));
+interface ModOrderRead {
+  readonly listed: readonly ModlistEntry[];
+  readonly metas: readonly (ModMeta | undefined)[];
+}
+
+const readModOrder = async (source: ReadingSource, profile: string, folders: Promise<ModFolders | undefined>): Promise<ModOrderRead> => {
+  const listed = await source.modOrder(profile);
+  return { listed, metas: await Promise.all(listed.map(async (entry) => (entry.kind === 'mod' ? source.modMeta(entry.name, await folders) : undefined))) };
+};
 
 const withNotes = <T>(lines: readonly T[], keyOf: (line: T) => string, describe: (line: T) => string): { kept: T[]; notes: string[] } => {
   const { kept, repeats } = firstLines(lines, keyOf);
   return { kept, notes: repeats.map((line) => `${describe(line)} on more than one line; the first line holds`) };
 };
 
-async function settled(readModOrder: () => Promise<ModlistEntry[]>): Promise<ModlistEntry[]> {
-  const mods = await readModOrder();
-  if (mods.length > 0) return mods;
+async function settled<T>(read: () => Promise<T>, lines: (read: T) => readonly unknown[]): Promise<T> {
+  const order = await read();
+  if (lines(order).length > 0) return order;
   await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
-  return readModOrder();
+  return read();
 }
 
 const metaOf = ({ version, nexusId, installationFileName, installedFileKeys }: ModMeta): ModMeta =>
   ({ version, nexusId, installationFileName, installedFileKeys });
+
+const steadiers = new WeakMap<ReadingSource, { readonly steadied: ReturnType<typeof readingSteadier>; readonly pluginOrder: (listed: PluginEntry[]) => { kept: PluginEntry[]; notes: string[] }; readonly modGroups: typeof groupModOrder }>();
+
+const steadierOf = (source: ReadingSource) => {
+  const steadier = steadiers.get(source) ?? {
+    steadied: readingSteadier(),
+    pluginOrder: lastBuilt((listed: PluginEntry[]) => withNotes(listed, ({ name }) => pluginKey(name), ({ name }) => `${PLUGINS_FILE_NAME} lists the plugin ${name}`)),
+    modGroups: lastBuilt(groupModOrder),
+  };
+  steadiers.set(source, steadier);
+  return steadier;
+};
 
 // A listed mod's meta is the one already read. A folder the mod order does not list is read only
 // when downloaded files are there to be matched against it.
@@ -111,10 +131,10 @@ async function folderMetaOf(
  *  mid-read cannot mix one profile's mod order with another's plugin order. */
 export async function readInstance(source: ReadingSource, { named, disk }: Reread = CHECK_THE_DISK): Promise<ManagerReading> {
   const { answer, unheard } = await readTrustingKept(named, disk, () => readWhole(source));
-  return { ...answer, unheardChanges: unheard };
+  return { ...answer, unheardChanges: unheard, trustingKept };
 }
 
-async function readWhole(source: ReadingSource): Promise<Omit<ManagerReading, 'unheardChanges'>> {
+async function readWhole(source: ReadingSource): Promise<Omit<ManagerReading, 'unheardChanges' | 'trustingKept'>> {
   const settings = await source.settings();
   const { profile, gameName, gameRelease } = settings;
   const skippedLinks = new Map<string, string>();
@@ -122,8 +142,9 @@ async function readWhole(source: ReadingSource): Promise<Omit<ManagerReading, 'u
   const gameFolderLinks = new Set<string>();
   const ignoreGameLink: IgnoredLink = (linkPath) => gameFolderLinks.add(linkPath);
   const modFoldersRead = source.modFolders(skipLink);
-  const modsRead = settled(() => modsWithMeta(source, profile, modFoldersRead)).then((listed) =>
-    withNotes(listed, source.modLineKey, ({ kind, name }) => `${source.names.modOrderFile} lists the ${kind} ${name}`));
+  const modOrderRead = settled(() => readModOrder(source, profile, modFoldersRead), ({ listed }) => listed);
+  const modsRead = modOrderRead.then(({ listed, metas }) =>
+    withNotes(listed.map((entry, at) => ({ ...entry, ...metas[at] })), source.modLineKey, ({ kind, name }) => `${source.names.modOrderFile} lists the ${kind} ${name}`));
   const modsKept = modsRead.then(({ kept }) => kept);
   const downloadedFilesRead = settings.downloadedFiles(skipLink);
   const [mods, pluginsListed, downloadedFiles, game, profiles, modFolders, runtimeOutput, sourceModFolders, sortingRuleFiles, modFiles, folderMeta, holdsRepository, repositorySetUp, managerRunning] = await Promise.all([
@@ -152,13 +173,16 @@ async function readWhole(source: ReadingSource): Promise<Omit<ManagerReading, 'u
     source.repositorySetUp(),
     source.managerRunning(),
   ]);
-  const { archiveList, dataFolderArchives, ...gameFacts } = game;
-  const pluginOrder = withNotes(pluginsListed, ({ name }) => pluginKey(name), ({ name }) => `${PLUGINS_FILE_NAME} lists the plugin ${name}`);
+  const { listed, metas } = await modOrderRead;
+  const steadier = steadierOf(source);
+  const steady = steadier.steadied({
+    ...game, archiveList: game.archiveList.archives, mods, modsReadFrom: [listed, ...metas], downloadedFiles, profiles, modFolders, sourceModFolders,
+    sortingRuleFiles, unwatchedFolders: source.unwatchedFolders(), managerRunning, modFiles, folderMeta,
+  });
+  const pluginOrder = steadier.pluginOrder(pluginsListed);
   return {
-    profile, gameName, gameRelease, mods: mods.kept, modGroups: groupModOrder(mods.kept), pluginOrder: pluginOrder.kept, orderNotes: [...mods.notes, ...pluginOrder.notes], downloadedFiles, ...gameFacts,
-    archiveList: archiveList.archives, archiveListNotes: archiveList.notes, dataFolderArchives,
-    profiles, modFolders, runtimeOutput, modFiles, folderMeta,
-    sourceModFolders, sortingRuleFiles, holdsRepository, repositorySetUp, unwatchedFolders: source.unwatchedFolders(), managerRunning,
+    profile, gameName, gameRelease, ...steady, mods: steady.mods.kept, modGroups: steadier.modGroups(steady.mods.kept), pluginOrder: pluginOrder.kept,
+    orderNotes: [...mods.notes, ...pluginOrder.notes], archiveListNotes: game.archiveList.notes, runtimeOutput, holdsRepository, repositorySetUp,
     gameFolderLinks: gameFolderLinks.size,
     linkNotes: [...skippedLinks].map(([linkPath, reason]) => `${linkPath} is a link Modbench cannot follow, so it is not read: ${reason}`),
   };
@@ -168,7 +192,7 @@ async function readWhole(source: ReadingSource): Promise<Omit<ManagerReading, 'u
 export async function readPluginsProvided(source: ReadingSource, profile: string): Promise<PluginsProvided> {
   const settings = await source.settings();
   const [mods, runtimeOutput, gameFolder, modFolders] = await Promise.all([
-    settled(() => source.modOrder(profile)).then((listed) => firstLines(listed, source.modLineKey).kept),
+    settled(() => source.modOrder(profile), (listed) => listed).then((listed) => firstLines(listed, source.modLineKey).kept),
     source.originRootFiles({ kind: 'runtimeOutput' }, 'list'),
     settings.gameFolder(),
     source.modFolders(ignoreSkippedLink),

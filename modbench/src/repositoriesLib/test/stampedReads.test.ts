@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { link, mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { keptByStamp as keptByStampOf, stampFrom } from '../stampedReads';
+import { keptTrusted, stampFrom, trustingKept } from '../stampedReads';
 
-const keptByStamp = <T>(read: (path: string) => Promise<T>, options: Parameters<typeof keptByStampOf<T>>[2] = {}): ((path: string) => Promise<T>) =>
-  keptByStampOf(async (path) => stampFrom(await stat(path, { bigint: true })), read, options);
+const keptByStamp = <T>(read: (path: string) => Promise<T>): ((path: string) => Promise<T>) =>
+  keptTrusted(async (path) => stampFrom(await stat(path, { bigint: true })), read);
 
 const HOUR_MS = 3_600_000;
 
@@ -63,31 +63,34 @@ describe('a read kept by the stamp of its file', () => {
   });
 
   it('reads every time while the stamp is younger than two seconds, though it trusts', async () => {
-    const kept = keptByStamp(read, { trusts: () => true });
+    const kept = keptByStamp(read);
     await kept(path);
 
-    expect(await kept(path)).toBe(2);
+    expect(await trustingKept(() => kept(path))).toBe(2);
   });
 
   it('hands what it keeps without looking at the stamp while it trusts', async () => {
     settle();
-    let trusting = false;
-    const kept = keptByStamp(read, { trusts: () => trusting });
+    const kept = keptByStamp(read);
     await kept(path);
     await modifiedLater(path);
-    trusting = true;
 
-    expect(await kept(path)).toBe(1);
+    expect(await trustingKept(() => kept(path))).toBe(1);
   });
 
-  it('keeps two paths under one key as one', async () => {
+  it.each([['win32', 'holds'], ['linux', 'does not hold']] as const)('on %s %s a path spelled in another case as the one it kept', async (platform, holds) => {
     settle();
-    const other = join(root, 'other.txt');
-    await link(path, other);
-    const kept = keptByStamp(read, { keyOf: () => 'same' });
-    await kept(path);
+    const kept = keptByStamp(read);
+    const real = Object.getOwnPropertyDescriptor(process, 'platform');
+    Object.defineProperty(process, 'platform', { value: platform });
+    try {
+      await kept(path);
+      const answer = await trustingKept(() => kept(path.toUpperCase())).then((value) => value, () => 'not kept');
 
-    expect(await kept(other)).toBe(1);
+      expect(answer === 1).toBe(holds === 'holds');
+    } finally {
+      if (real !== undefined) Object.defineProperty(process, 'platform', real);
+    }
   });
 
   it('keeps nothing of a read that rejected', async () => {

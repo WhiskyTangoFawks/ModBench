@@ -25,7 +25,7 @@ export function registerBuildEntryPoint({ instance, reporter }: BuildEntryPointD
     void vscode.commands.executeCommand('setContext', BUILD_TARGETS_KEY, [...modsByBuildTarget(paths.sourceDirs).keys()]);
   };
   publish(instance.value);
-  const subscription = instance.subscribe(publish);
+  const subscription = instance.subscribe(publish, { paths: true });
   const command = vscode.commands.registerCommand('modbench.source.build', async (clicked?: unknown, selected?: readonly unknown[]) => {
     const targets = modsByBuildTarget(instance.value.paths.sourceDirs);
     const mods = new Set<string>();

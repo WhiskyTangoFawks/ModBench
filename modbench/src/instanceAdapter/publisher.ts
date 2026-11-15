@@ -3,6 +3,7 @@
 
 import type { ChangeListener, InstanceAdapter, InstanceReading, PublisherConfiguration, PublisherTag, Reread, Subscription } from './instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
+import { lastHanded } from '../ports/lastBuilt';
 import type { PathSpelling, TokenProgram } from './pathTokens';
 import type { EntryNames, EntryReading, HeldTexts } from '../symbolNames/symbolNames';
 
@@ -61,6 +62,7 @@ export interface Publisher {
 const withEnvironmentFile = ({ present, owns }: KeptFiles, environmentFile: string): KeptFiles => ({ present: [...present, environmentFile], owns });
 
 export function withPublisher(manager: ManagerAdapter, publisher: Publisher, scriptEnvironmentFilePath: () => string): Omit<InstanceAdapter, 'scriptEnvironmentFile'> {
+  const keepOutFailed = lastHanded<PublisherConfiguration>();
   const keepOut = async () => publisher.keepOut(withEnvironmentFile(await manager.filesKept(), scriptEnvironmentFilePath()));
   const afterKeepingOut = async <T>(write: Promise<T>): Promise<T> => {
     const written = await write;
@@ -112,7 +114,8 @@ export function withPublisher(manager: ManagerAdapter, publisher: Publisher, scr
     try {
       await keepOut();
     } catch (err) {
-      return { kind: 'unreadable', reason: errorMessage(err) };
+      const reason = errorMessage(err);
+      return keepOutFailed({ kind: 'unreadable', reason }, [reason]);
     }
     return publisher.configuration();
   }

@@ -11,5 +11,5 @@ export function reportUnwatchedFolders(instance: Pick<Instance, 'subscribe'>, re
     if (fresh.length === 0) return;
     reporter.report('warning', 'A change shows only after a refresh in each folder Modbench cannot watch',
       fresh.map(({ folder, reason }) => `"${folder}" (${reason})`).join(', '));
-  });
+  }, { unwatchedFolders: true });
 }

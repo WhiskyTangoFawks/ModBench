@@ -4,6 +4,7 @@ import type { MEditClient } from '../client/MEditClient';
 import type { FileRead, FileStamp, OriginFile } from '../instanceAdapter/instanceAdapter';
 import { pluginCompanionRule } from '../tables/gamePaths';
 import { isReadFailed } from '../wire/readFailed';
+import { lastHanded } from '../ports/lastBuilt';
 
 /** An archive's files, by their forward-slash paths in it; or why it cannot be read; or unanswered, while mEdit has not
  *  said. */
@@ -27,14 +28,14 @@ export class ArchiveContentsHeld {
   private held = new Map<string, { readonly stamp: string; readonly read: Extract<ArchiveRead, { readonly kind: 'read' }> }>();
   private unanswered = false;
 
-  constructor(private readonly reader: ArchiveReader, private readonly stampOf: (path: string) => Promise<FileRead<FileStamp>>) {}
+  constructor(private readonly reader: ArchiveReader) {}
 
   get anyUnanswered(): boolean {
     return this.unanswered;
   }
 
-  async read(gameRelease: string, archives: readonly string[]): Promise<ReadonlyMap<string, ArchiveRead>> {
-    const stamps = await Promise.all(archives.map(async (path) => ({ path, stamp: await this.stampOf(path) })));
+  async read(gameRelease: string, archives: readonly string[], stampOf: (path: string) => Promise<FileRead<FileStamp>>): Promise<ReadonlyMap<string, ArchiveRead>> {
+    const stamps = await Promise.all(archives.map(async (path) => ({ path, stamp: await stampOf(path) })));
     const changed = stamps.flatMap(({ path, stamp }) =>
       (stamp.kind === 'read' && this.held.get(path)?.stamp !== stampKey(stamp.answer) ? [path] : []));
     const answered = changed.length === 0 ? [] : await this.reader.getArchiveContents(gameRelease, changed);
@@ -53,8 +54,10 @@ export class ArchiveContentsHeld {
     }));
     this.held = held;
     this.unanswered = [...reads.values()].includes(UNANSWERED);
-    return reads;
+    return this.handed(reads, [...reads].flatMap(([path, read]) => [path, read.kind === 'unreadable' ? read.reason : read]));
   }
+
+  private readonly handed = lastHanded<ReadonlyMap<string, ArchiveRead>>();
 }
 
 /** A line for the Output for each archive that cannot be read, and why. */

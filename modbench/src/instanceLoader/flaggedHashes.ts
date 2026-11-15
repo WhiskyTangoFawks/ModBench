@@ -5,6 +5,7 @@ import type { FileRead, FileStamp, InstanceAdapter, OriginFile } from '../instan
 import { manifestAt, type FlaggedRead } from '../manifestAdapter/manifestAdapter';
 import type { FlaggedPluginFile } from '../wire/messages';
 import { isReadFailed } from '../wire/readFailed';
+import { lastHanded } from '../ports/lastBuilt';
 
 export type FlaggedReader = Pick<MEditClient, 'getFlaggedPluginHashes' | 'onStatusChanged'>;
 
@@ -36,15 +37,15 @@ export class FlaggedHashesHeld {
   private held = new Map<string, { readonly key: string; readonly read: Extract<FlaggedRead, { readonly kind: 'read' }> }>();
   private unanswered = false;
 
-  constructor(private readonly reader: Pick<MEditClient, 'getFlaggedPluginHashes'>, private readonly stampOf: (path: string) => Promise<FileRead<FileStamp>>) {}
+  constructor(private readonly reader: Pick<MEditClient, 'getFlaggedPluginHashes'>) {}
 
   get anyUnanswered(): boolean {
     return this.unanswered;
   }
 
-  async read(gameRelease: string, files: readonly FlaggedPluginFile[]): Promise<ReadonlyMap<string, FlaggedRead>> {
+  async read(gameRelease: string, files: readonly FlaggedPluginFile[], stampOf: (path: string) => Promise<FileRead<FileStamp>>): Promise<ReadonlyMap<string, FlaggedRead>> {
     const keyed = await Promise.all(files.map(async (file) => {
-      const stamp = await this.stampOf(file.path);
+      const stamp = await stampOf(file.path);
       return { file, stamp, key: stamp.kind === 'read' ? keyOf(stamp.answer, file.flags) : undefined };
     }));
     const changed = keyed.flatMap(({ file, key }) => (key !== undefined && this.held.get(file.path)?.key !== key ? [file] : []));
@@ -61,6 +62,8 @@ export class FlaggedHashesHeld {
     }));
     this.held = held;
     this.unanswered = [...reads.values()].includes(UNANSWERED);
-    return reads;
+    return this.handed(reads, [...reads].flatMap(([path, read]) => [path, read.kind === 'unreadable' ? read.reason : read]));
   }
+
+  private readonly handed = lastHanded<ReadonlyMap<string, FlaggedRead>>();
 }

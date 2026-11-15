@@ -18,8 +18,12 @@ interface ModSyncDeps {
 // disk, so the sync writes nothing and the loop stops; a sync that wrote unconditionally never would.
 export function modSyncOn({ instance, syncMods, channel }: ModSyncDeps): ModSyncOn {
   const modSync = createModSync(syncMods, channel, instance.value.managerNames.modOrderFile);
-  const subscription = instance.subscribe(() => { void modSync.run(); });
-  return { modSync, dispose: () => { subscription.dispose(); } };
+  const subscriptions = [
+    instance.subscribe(() => { void modSync.run(); }, { mods: true, modFolders: true }),
+    // Recovery is not gated (ADR-0003): a sync whose failure stands is tried again at each value, as the first one was.
+    instance.subscribe(() => { if (modSync.message() !== undefined) void modSync.run(); }),
+  ];
+  return { modSync, dispose: () => { for (const subscription of subscriptions) subscription.dispose(); } };
 }
 
 export function registerModSyncCommand(

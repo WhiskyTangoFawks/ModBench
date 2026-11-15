@@ -17,6 +17,6 @@ export function loadOrderComing(
       const { loadOrderStatus } = client;
       return loadOrderStatus ? loadOrderStatus.refusal === undefined : instance?.hasLoadOrderToHand ?? false;
     },
-    onChanged: (listener) => instance?.subscribe(() => { listener(); }) ?? { dispose: () => undefined },
+    onChanged: (listener) => instance?.subscribe(() => { listener(); }, { loadOrderSnapshot: true }) ?? { dispose: () => undefined },
   };
 }

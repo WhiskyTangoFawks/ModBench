@@ -3,7 +3,7 @@ import { gameFolderNotFoundLine } from './gameFolderNotFoundLog';
 import { ErrorNode } from '../drivingLib/errorNode';
 import { messageLine } from '../drivingLib/messageLine';
 import { logOncePerFailure } from '../drivingLib/logOncePerFailure';
-import { instanceMessages, type InstanceValue, type ProgramVersion, type InstanceView } from '../instanceLoader/instance';
+import { instanceMessages, MESSAGE_READS, type InstanceOf, type InstanceValue, type ProgramVersion } from '../instanceLoader/instance';
 import type { PluginsTxtWhere } from '../deployment/pluginsTxtPlace';
 import { deploymentFolderOf, type DeploymentFolderSetting } from '../instanceCommands/deploy';
 
@@ -15,8 +15,14 @@ export interface DeploymentRowSetting extends DeploymentFolderSetting {
   changed(listener: () => void): vscode.Disposable;
 }
 
+const TOOLBOX_READS = {
+  ...MESSAGE_READS, gameName: true, gameFolder: true, programVersions: true, gameFolderLinks: true, activeProfile: true, holdsRepository: true,
+} as const;
+
+type ToolboxValue = Pick<InstanceValue, keyof typeof TOOLBOX_READS>;
+
 type ToolboxDeps =
-  | { instance: InstanceView; channel: Pick<vscode.LogOutputChannel, 'warn'>; deploymentFolder: DeploymentRowSetting; pluginsTxtPlace: PluginsTxtPlaceOf }
+  | { instance: InstanceOf<keyof typeof TOOLBOX_READS>; channel: Pick<vscode.LogOutputChannel, 'warn'>; deploymentFolder: DeploymentRowSetting; pluginsTxtPlace: PluginsTxtPlaceOf }
   | { instance: undefined };
 
 const versionText = (version: ProgramVersion): string => {
@@ -34,14 +40,14 @@ const gameVersionText = (version: ProgramVersion): string =>
 
 const linksText = (count: number): string => `${count} ${count === 1 ? 'link' : 'links'}, which Modbench ignores`;
 
-function foundTooltip(root: string, { programVersions, gameFolderLinks }: InstanceValue): string {
+function foundTooltip(root: string, { programVersions, gameFolderLinks }: ToolboxValue): string {
   const versions = programVersions.kind === 'found'
     ? [`Game: ${gameVersionText(programVersions.game)}`, `Script extender: ${versionText(programVersions.extender)}`]
     : ['Modbench knows no program of this game'];
   return [root, ...versions, ...(gameFolderLinks > 0 ? [linksText(gameFolderLinks)] : [])].join('\n');
 }
 
-function gameRow(value: InstanceValue): vscode.TreeItem {
+function gameRow(value: ToolboxValue): vscode.TreeItem {
   const { gameName, gameFolder } = value;
   const row = new vscode.TreeItem('Game');
   if (gameFolder.kind === 'found') {
@@ -61,7 +67,7 @@ function gameRow(value: InstanceValue): vscode.TreeItem {
   return row;
 }
 
-function profileRow({ activeProfile }: InstanceValue): vscode.TreeItem {
+function profileRow({ activeProfile }: ToolboxValue): vscode.TreeItem {
   const row = new vscode.TreeItem('Profile');
   row.description = activeProfile;
   row.iconPath = new vscode.ThemeIcon('account');
@@ -71,7 +77,7 @@ function profileRow({ activeProfile }: InstanceValue): vscode.TreeItem {
   return row;
 }
 
-function modlistRow({ holdsRepository }: InstanceValue): vscode.TreeItem {
+function modlistRow({ holdsRepository }: ToolboxValue): vscode.TreeItem {
   const row = new vscode.TreeItem('Modlist');
   row.iconPath = new vscode.ThemeIcon('source-control');
   row.contextValue = 'modlist';
@@ -103,9 +109,10 @@ export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>
     const changed = () => this._onDidChangeTreeData.fire(undefined);
     this.subscriptions = deps.instance
       ? [
-        deps.instance.subscribe(changed), deps.instance.onReadFailure(changed),
+        deps.instance.subscribe(changed, TOOLBOX_READS),
+        deps.instance.onReadFailure(changed),
         deps.deploymentFolder.changed(changed),
-        logOncePerFailure(deps.instance, gameFolderNotFoundLine, (line) => deps.channel.warn(line)),
+        logOncePerFailure(deps.instance, { gameFolder: true }, gameFolderNotFoundLine, (line) => deps.channel.warn(line)),
       ]
       : [];
   }

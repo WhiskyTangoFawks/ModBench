@@ -1,4 +1,5 @@
 import { GAME_FOLDER_SETTING_ID } from '../../test/gameFolderSetting';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -31,18 +32,21 @@ const filesOfMod = (name: string, ...relativePaths: string[]): OriginFiles =>
 
 const GAME_FOLDER: GameFolder = { kind: 'found', root: '/game', dataFolder: '/game/Data' };
 const inDataFolder = (...names: string[]): DataFolderPlugins => ({ kind: 'listed', names: new Set(names) });
-const GAME_FOUND: Partial<InstanceReading> = {
+type Fixture = Partial<InstanceReading> & Partial<Pick<InstanceAdapter, 'fileStamp'>>;
+
+const STAMPED: Fixture = { fileStamp: () => Promise.resolve({ kind: 'read', answer: { size: 1n, modifiedNs: 1n } }) };
+const GAME_FOUND: Fixture = {
   gameFolder: GAME_FOLDER,
   dataFolderPlugins: inDataFolder(),
   dataFolderArchives: { kind: 'listed', archives: [], stringsFiles: [] } satisfies DataFolderArchives,
 };
 
-function loader(overrides: Partial<InstanceReading> = {}, wrap: (adapter: InstanceAdapter) => InstanceAdapter = (adapter) => adapter, workspace = fakeWorkspace()) {
+function loader({ fileStamp, ...overrides }: Fixture = {}, wrap: (adapter: InstanceAdapter) => InstanceAdapter = (adapter) => adapter, workspace = fakeWorkspace()) {
   const fake = fakeInstanceAdapter(readingFixture(overrides));
   const medit = new InMemoryMEditClient();
   const log = leveledLog();
   const instance = new Instance({
-    adapter: wrap(fake.adapter),
+    adapter: wrap(fileStamp === undefined ? fake.adapter : { ...fake.adapter, fileStamp }),
     gameFolderSettingId: GAME_FOLDER_SETTING_ID,
     log,
     medit,
@@ -295,6 +299,87 @@ describe('Instance — the value', () => {
       { name: 'NonAsciiRetexture - Addon.esl', path: `/instance/mods/${NONO}/NonAsciiRetexture - Addon.esl`, origin: NONO, line: null, enabled: false, winning: true },
       { name: 'Harder VATS.esp', path: '/instance/mods/Harder VATS/Harder VATS.esp', origin: 'Harder VATS', line: null, enabled: false, winning: false },
     ]);
+  });
+});
+
+describe('Instance — what a read tells', () => {
+  const MODLIST = '/instance/profiles/Default/modlist.txt';
+
+  it('hands each fact a read found unchanged as the object it was', async () => {
+    const { instance, medit } = loader({
+      ...GAME_FOUND, ...STAMPED, mods: [mod('A')], modFolders: modFoldersOf('A'), pluginOrder: [{ name: 'A.esp', enabled: true }], archiveList: ['A - Main.ba2'],
+      modFiles: new Map([['A', filesOfMod('A', 'A.esp', 'A - Main.ba2', 'Scripts/Quest.pex', 'Strings/A_en.STRINGS')]]),
+    });
+    medit.setQueryAnswer('getArchiveContents', [{ archive: '/instance/mods/A/A - Main.ba2', files: ['Scripts/Archived.pex'], unreadable: null }]);
+    await instance.refresh();
+    const first = instance.value;
+
+    await instance.refresh();
+
+    expect(instance.sequence).toBe(2);
+    const now = new Map(Object.entries(instance.value));
+    expect(Object.entries(first).filter(([fact, held]) => now.get(fact) !== held).map(([fact]) => fact)).toEqual([]);
+  });
+
+  it('takes the stamp of a mod\'s own file as the reading kept it, and of a file a link in the mod points to afresh, as no watch follows it', async () => {
+    const trust = new AsyncLocalStorage<true>();
+    const stamped = new Map<string, boolean>();
+    const linked = { ...fileIn('/instance/mods/A', 'Linked.ba2'), sourcePath: '/elsewhere/Linked.ba2' };
+    const { instance, medit } = loader({
+      mods: [mod('A')], modFiles: new Map([['A', { ...filesOfMod('A', 'Own.ba2'), files: [fileIn('/instance/mods/A', 'Own.ba2'), linked] }]]),
+      trustingKept: (read) => trust.run(true, read),
+      fileStamp: (path) => {
+        stamped.set(path, trust.getStore() === true);
+        return Promise.resolve({ kind: 'read', answer: { size: 1n, modifiedNs: 1n } });
+      },
+    });
+    medit.setQueryAnswer('getArchiveContents', []);
+
+    await instance.refresh([MODLIST]);
+
+    expect(stamped).toEqual(new Map([['/instance/mods/A/Own.ba2', true], ['/elsewhere/Linked.ba2', false]]));
+  });
+
+  it('tells a subscriber that names its concerns of the first value, then only of a value in which one of them changed', async () => {
+    const { instance, fake } = loader({ mods: [mod('A')] });
+    const told: number[] = [];
+    instance.subscribe((_value, sequence) => { told.push(sequence); }, { mods: true });
+
+    await instance.refresh([MODLIST]);
+    await instance.refresh([MODLIST]);
+    fake.read({ profiles: ['Default', 'Other'] });
+    await instance.refresh([MODLIST]);
+    fake.read({ mods: [mod('A'), mod('B')] });
+    await instance.refresh([MODLIST]);
+
+    expect(told).toEqual([1, 4]);
+  });
+
+  it('tells a subscriber that names its concerns of the value that lands after a failed read, which ends the failure\'s message', async () => {
+    const { instance, fake } = loader({ mods: [mod('A')] });
+    const told: number[] = [];
+    instance.subscribe((_value, sequence) => { told.push(sequence); }, { mods: true });
+
+    await instance.refresh([MODLIST]);
+    fake.failReading('locked');
+    await instance.refresh([MODLIST]);
+    fake.failReading(undefined);
+    await instance.refresh([MODLIST]);
+    await instance.refresh([MODLIST]);
+
+    expect(told).toEqual([1, 2]);
+  });
+
+  it('tells a subscriber that names its concerns of each check of the disk, as a check is how the user recovers', async () => {
+    const { instance } = loader({ mods: [mod('A')] });
+    const told: number[] = [];
+    instance.subscribe((_value, sequence) => { told.push(sequence); }, { mods: true });
+
+    await instance.refresh([MODLIST]);
+    await instance.refresh([MODLIST]);
+    await instance.refresh();
+
+    expect(told).toEqual([1, 3]);
   });
 });
 
@@ -785,7 +870,7 @@ describe('Instance — a value that survives a bad read', () => {
     fake.read({ modFiles: new Map(modFiles) });
     await instance.refresh();
     const unchanged = instance.value.files;
-    fake.read({ modFiles: new Map([['A', filesOfMod('A', 'a.dds')]]) });
+    fake.read({ modFiles: new Map([['A', filesOfMod('A', 'a.dds', 'b.dds')]]) });
     await instance.refresh();
 
     expect(unchanged).toBe(first);
@@ -977,7 +1062,8 @@ describe('Instance — game folder and the archives the game loads', () => {
       pluginOrder: [{ name: 'Patch Mod.esp', enabled: true }],
       modFolders: modFoldersOf('Patch Mod'),
       modFiles: new Map([['Patch Mod', filesOfMod('Patch Mod', 'Patch Mod.esp', 'Strings/Patch Mod_en.STRINGS')]]),
-    }, (adapter) => ({ ...adapter, fileStamp: (path) => Promise.resolve({ kind: 'read', answer: { size: 5n, modifiedNs: path === stringsFile ? modifiedNs : 0n } }) }));
+      fileStamp: (path) => Promise.resolve({ kind: 'read', answer: { size: 5n, modifiedNs: path === stringsFile ? modifiedNs : 0n } }),
+    });
     await instance.refresh();
     const before = handedStringsFiles(instance.value.loadOrderSnapshot);
 
@@ -1218,10 +1304,10 @@ describe('Instance — what each flagged plugin could have held before its flags
     await writeManifestIn(folder, { packages: [], exclude: [], ignore: [], flags: new Map(Object.entries(flagsOf)), files: new Map(Object.keys(flagsOf).map((path) => [path, COPY])) });
     let stamp = 1n;
     const modPlugin = fileIn(folder, 'Mod.esp');
-    const made = loader(
-      { mods: [mod('A')], modFolders: modFoldersIn(mods, 'A'), modFiles: new Map([['A', { origin: 'A', folder, files: [modPlugin, fileIn(folder, 'Other.esp')], folders: [], notes: [] }]]), holdsRepository },
-      (adapter) => ({ ...adapter, fileStamp: () => Promise.resolve({ kind: 'read', answer: { size: 1n, modifiedNs: stamp } }) }),
-    );
+    const made = loader({
+      mods: [mod('A')], modFolders: modFoldersIn(mods, 'A'), modFiles: new Map([['A', { origin: 'A', folder, files: [modPlugin, fileIn(folder, 'Other.esp')], folders: [], notes: [] }]]), holdsRepository,
+      fileStamp: () => Promise.resolve({ kind: 'read', answer: { size: 1n, modifiedNs: stamp } }),
+    });
     return { ...made, plugin: modPlugin.sourcePath, touch: () => { stamp += 1n; } };
   }
 
@@ -1299,16 +1385,17 @@ describe('Instance — what each flagged plugin could have held before its flags
 describe('Instance — what each archive holds', () => {
   const MOD_ARCHIVE = '/instance/mods/A/A - Main.ba2';
   const OVERWRITE_ARCHIVE = '/overwrite/B.ba2';
-  const ARCHIVES_HELD: Partial<InstanceReading> = {
+  const ARCHIVES_HELD: Fixture = {
     mods: [mod('A')],
     modFiles: new Map([['A', filesOfMod('A', 'A.esp', 'A - Main.ba2', 'meshes/Not At The Root.ba2')]]),
     runtimeOutput: { origin: 'overwrite', folder: '/overwrite', files: [fileIn('/overwrite', 'B.ba2')], folders: [], notes: [] },
+    ...STAMPED,
   };
   const holding = (archive: string, ...files: string[]) => ({ archive, files, unreadable: null });
   const asked = (medit: InMemoryMEditClient) => medit.calls.filter((call) => call.method === 'getArchiveContents').map((call) => call.args);
 
   it('carries what mEdit says each archive at the root of a mod or Overwrite holds, by the path it is read from', async () => {
-    const { instance, medit } = loader(ARCHIVES_HELD, (adapter) => ({ ...adapter, fileStamp: () => Promise.resolve({ kind: 'read', answer: { size: 1n, modifiedNs: 1n } }) }));
+    const { instance, medit } = loader(ARCHIVES_HELD);
     medit.setQueryAnswer('getArchiveContents', [holding(MOD_ARCHIVE, 'meshes/a.nif'), { archive: OVERWRITE_ARCHIVE, files: [], unreadable: 'it is no BA2' }]);
 
     await instance.refresh();
@@ -1322,9 +1409,9 @@ describe('Instance — what each archive holds', () => {
 
   it('asks mEdit again only for an archive whose stamp changed since it answered', async () => {
     let overwriteStamp = 1n;
-    const { instance, medit } = loader(ARCHIVES_HELD, (adapter) => ({
-      ...adapter, fileStamp: (path) => Promise.resolve({ kind: 'read', answer: { size: 1n, modifiedNs: path === OVERWRITE_ARCHIVE ? overwriteStamp : 1n } }),
-    }));
+    const { instance, medit } = loader({
+      ...ARCHIVES_HELD, fileStamp: (path) => Promise.resolve({ kind: 'read', answer: { size: 1n, modifiedNs: path === OVERWRITE_ARCHIVE ? overwriteStamp : 1n } }),
+    });
     medit.setQueryAnswerOnce('getArchiveContents', [holding(MOD_ARCHIVE, 'meshes/a.nif'), holding(OVERWRITE_ARCHIVE, 'old.nif')]);
     medit.setQueryAnswerOnce('getArchiveContents', [holding(OVERWRITE_ARCHIVE, 'new.nif')]);
     await instance.refresh();
@@ -1340,7 +1427,7 @@ describe('Instance — what each archive holds', () => {
   });
 
   it('asks again for an archive mEdit could not read, and holds the answer once it can, its stamp unchanged', async () => {
-    const { instance, medit } = loader(ARCHIVES_HELD, (adapter) => ({ ...adapter, fileStamp: () => Promise.resolve({ kind: 'read', answer: { size: 1n, modifiedNs: 1n } }) }));
+    const { instance, medit } = loader(ARCHIVES_HELD);
     medit.setQueryAnswerOnce('getArchiveContents', [{ archive: MOD_ARCHIVE, files: [], unreadable: 'EBUSY' }, holding(OVERWRITE_ARCHIVE)]);
     medit.setQueryAnswerOnce('getArchiveContents', [holding(MOD_ARCHIVE, 'meshes/a.nif')]);
     await instance.refresh();
@@ -1352,7 +1439,7 @@ describe('Instance — what each archive holds', () => {
   });
 
   it('holds an archive unanswered while mEdit cannot be reached, never unreadable, and asks again once mEdit runs', async () => {
-    const { instance, medit } = loader(ARCHIVES_HELD, (adapter) => ({ ...adapter, fileStamp: () => Promise.resolve({ kind: 'read', answer: { size: 1n, modifiedNs: 1n } }) }));
+    const { instance, medit } = loader(ARCHIVES_HELD);
     medit.setQueryFailureOnce('getArchiveContents', { failed: 'unreachable' });
     medit.setQueryAnswerOnce('getArchiveContents', [holding(MOD_ARCHIVE, 'meshes/a.nif'), holding(OVERWRITE_ARCHIVE)]);
     await instance.refresh();
@@ -1365,9 +1452,9 @@ describe('Instance — what each archive holds', () => {
   });
 
   it('tells the Output once, until it changes, each archive that cannot be read, and why', async () => {
-    const { instance, medit, warnings } = loader(ARCHIVES_HELD, (adapter) => ({
-      ...adapter, fileStamp: (path) => Promise.resolve(path === OVERWRITE_ARCHIVE ? { kind: 'unreadable', reason: 'gone' } : { kind: 'read', answer: { size: 1n, modifiedNs: 1n } }),
-    }));
+    const { instance, medit, warnings } = loader({
+      ...ARCHIVES_HELD, fileStamp: (path) => Promise.resolve(path === OVERWRITE_ARCHIVE ? { kind: 'unreadable', reason: 'gone' } : { kind: 'read', answer: { size: 1n, modifiedNs: 1n } }),
+    });
     medit.setQueryAnswer('getArchiveContents', [{ archive: MOD_ARCHIVE, files: [], unreadable: 'it is no BA2' }]);
 
     await instance.refresh();
@@ -1380,9 +1467,9 @@ describe('Instance — what each archive holds', () => {
   });
 
   it('says why an archive is not read when its stamp cannot be read, and asks mEdit nothing for it', async () => {
-    const { instance, medit } = loader(ARCHIVES_HELD, (adapter) => ({
-      ...adapter, fileStamp: (path) => Promise.resolve(path === MOD_ARCHIVE ? { kind: 'unreadable', reason: 'gone' } : { kind: 'read', answer: { size: 1n, modifiedNs: 1n } }),
-    }));
+    const { instance, medit } = loader({
+      ...ARCHIVES_HELD, fileStamp: (path) => Promise.resolve(path === MOD_ARCHIVE ? { kind: 'unreadable', reason: 'gone' } : { kind: 'read', answer: { size: 1n, modifiedNs: 1n } }),
+    });
     medit.setQueryAnswer('getArchiveContents', [holding(OVERWRITE_ARCHIVE)]);
 
     await instance.refresh();
@@ -1413,14 +1500,15 @@ describe('Instance — what each archive holds', () => {
     const FILE = 'meshes/x.nif';
     const GAME_ARCHIVE = join('/game/Data', 'Fallout4 - Meshes.ba2');
     const MOD_ARCHIVE_LATER = '/instance/mods/A/A - Main.ba2';
-    const reading: Partial<InstanceReading> = {
+    const reading: Fixture = {
       ...GAME_FOUND, mods: [mod('A')], archiveList: ['Fallout4 - Meshes.ba2'],
       dataFolderArchives: { kind: 'listed', archives: ['Fallout4 - Meshes.ba2'], stringsFiles: [] },
       modFiles: new Map([['A', filesOfMod('A', 'A.esp', 'A - Main.ba2')]]),
       pluginOrder: [{ name: 'A.esp', enabled: true }],
+      ...STAMPED,
     };
     const read = async (inWorkspace: boolean) => {
-      const { instance, medit, workspace } = loader(reading, (adapter) => ({ ...adapter, fileStamp: () => Promise.resolve({ kind: 'read', answer: { size: 1n, modifiedNs: 1n } }) }), fakeWorkspace(inWorkspace));
+      const { instance, medit, workspace } = loader(reading, undefined, fakeWorkspace(inWorkspace));
       medit.setQueryAnswer('getArchiveContents', [holding(GAME_ARCHIVE, FILE), holding(MOD_ARCHIVE_LATER, FILE)]);
       await instance.refresh();
       return { instance, value: instance.value, medit, workspace };
@@ -1436,7 +1524,7 @@ describe('Instance — what each archive holds', () => {
     });
 
     it('holds the scripts the game folder\'s archives and a mod\'s archives hold, each with no file of its own', async () => {
-      const { instance, medit } = loader(reading, (adapter) => ({ ...adapter, fileStamp: () => Promise.resolve({ kind: 'read', answer: { size: 1n, modifiedNs: 1n } }) }), fakeWorkspace(true));
+      const { instance, medit } = loader(reading, undefined, fakeWorkspace(true));
       medit.setQueryAnswer('getArchiveContents', [holding(GAME_ARCHIVE, 'Scripts/Quest.pex'), holding(MOD_ARCHIVE_LATER, 'Scripts/Actor.pex')]);
 
       await instance.refresh();
@@ -1485,9 +1573,9 @@ describe('Instance — what each archive holds', () => {
       let reached = (): void => undefined;
       const stamped = new Promise<void>((resolve) => { release = resolve; });
       const underway = new Promise<void>((resolve) => { reached = resolve; });
-      const { instance, medit, workspace } = loader(reading, (adapter) => ({
-        ...adapter, fileStamp: async () => { reached(); await stamped; return { kind: 'read', answer: { size: 1n, modifiedNs: 1n } }; },
-      }));
+      const { instance, medit, workspace } = loader({
+        ...reading, fileStamp: async () => { reached(); await stamped; return { kind: 'read', answer: { size: 1n, modifiedNs: 1n } }; },
+      });
       medit.setQueryAnswer('getArchiveContents', [holding(GAME_ARCHIVE, FILE), holding(MOD_ARCHIVE_LATER, FILE)]);
 
       const first = instance.refresh();
@@ -1505,11 +1593,8 @@ describe('Instance — what each archive holds', () => {
     const FILE = 'meshes/x.nif';
     const archived = (name: string, archive: string) =>
       ({ origin: modOrigin(name), at: { kind: 'archived', gameRelease: 'Fallout4', archive: `/instance/mods/${name}/${archive}`, file: FILE } });
-    const stackOf = async (reading: Partial<InstanceReading>, answers: ReturnType<typeof holding>[]) => {
-      const { instance, medit } = loader(
-        { pluginOrder: [{ name: 'A.esp', enabled: true }, { name: 'Off.esp', enabled: false }], ...reading },
-        (adapter) => ({ ...adapter, fileStamp: () => Promise.resolve({ kind: 'read', answer: { size: 1n, modifiedNs: 1n } }) }),
-      );
+    const stackOf = async (reading: Fixture, answers: ReturnType<typeof holding>[]) => {
+      const { instance, medit } = loader({ pluginOrder: [{ name: 'A.esp', enabled: true }, { name: 'Off.esp', enabled: false }], ...STAMPED, ...reading });
       medit.setQueryAnswer('getArchiveContents', answers);
       await instance.refresh();
       return instance.value.stackedCopies.get(FILE)?.copies;

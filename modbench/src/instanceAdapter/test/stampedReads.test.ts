@@ -7,8 +7,7 @@ import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
 import { managerOver } from '../../test/mo2/adapterOver';
 import { listDir, listDirByStamp, parsedBy, readTrustingKept } from '../files';
 import { sortingRuleFilePaths } from '../mo2/layout';
-import { CHECK_THE_DISK, type InstanceReading } from '../instanceAdapter';
-
+import { CHECK_THE_DISK, type InstanceReading, type Reread } from '../instanceAdapter';
 vi.mock('vscode', () => fakeVscodeModule());
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
@@ -278,6 +277,38 @@ describe('the MO2 reading of an instance nothing changed in', () => {
     expect(filesOf(unnamed)).not.toContain('added.txt');
     expect([filesOf(checked)?.includes('added.txt'), checked.unheardChanges]).toEqual([true, [folder]]);
     expect([filesOf(named)?.includes('named.txt'), named.unheardChanges]).toEqual([true, []]);
+  });
+
+  it('hands each fact of a re-read that found nothing changed as the object it was, the notes for the Output aside', async () => {
+    const adapter = managerOver(instance);
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
+    const first = await adapter.reading(CHECK_THE_DISK);
+
+    const again = new Map(Object.entries(await adapter.reading({ named: [], disk: false })));
+
+    const notes = new Set(['orderNotes', 'archiveListNotes', 'linkNotes', 'unheardChanges']);
+    expect(Object.entries(first).filter(([fact, held]) => !notes.has(fact) && again.get(fact) !== held).map(([fact]) => fact)).toEqual([]);
+  });
+
+  it('takes a file\'s stamp again, within a reading, only where a re-read is named it or checks the disk, and outside one each time', async () => {
+    const adapter = managerOver(instance);
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + HOUR_MS });
+    const file = [...(await adapter.reading()).modFiles.values()].flatMap((listed) => listed.files)[0]?.sourcePath ?? '';
+    const stampAt = async (reread: Reread): Promise<unknown> => (await adapter.reading(reread)).trustingKept(() => adapter.fileStamp(file));
+    const before = await stampAt(CHECK_THE_DISK);
+    await modifiedLater(file);
+
+    const unnamed = await stampAt({ named: [], disk: false });
+    const named = await stampAt({ named: [file], disk: false });
+    await modifiedLater(file);
+    const outside = await adapter.fileStamp(file);
+    await modifiedLater(file);
+    const checked = await stampAt(CHECK_THE_DISK);
+
+    expect(unnamed).toEqual(before);
+    expect(named).not.toEqual(before);
+    expect(outside).not.toEqual(named);
+    expect(checked).not.toEqual(outside);
   });
 });
 

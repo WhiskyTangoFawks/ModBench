@@ -2,6 +2,7 @@
 // cloned builds where it is (source.md, Build, story 4).
 
 import { errorMessage } from '../ports/errorMessage';
+import { lastHanded } from '../ports/lastBuilt';
 import { manifestIn } from './manifestFiles';
 import { repositoryOf } from './manifestPackages';
 
@@ -41,13 +42,22 @@ async function linkIn(folder: string): Promise<Link> {
 export async function sourceModsOf(
   folders: readonly ModFolderAt[] | undefined, repositories: ReadonlyMap<string, string>, keyOf: (mod: string) => string,
 ): Promise<SourceMods> {
+  const mods = (folders ?? []).filter(({ kind }) => kind === 'mod');
+  const links = await Promise.all(mods.map(({ path }) => linkIn(path)));
+  return sourceModsHanded(sourceModsFrom(mods, links, repositories, keyOf), [folders, repositories, keyOf, ...links.flatMap(linkParts)]);
+}
+
+const sourceModsHanded = lastHanded<SourceMods>();
+
+const linkParts = (link: Link): unknown[] =>
+  ['repository' in link ? link.repository : undefined, 'unreadable' in link ? link.unreadable : undefined, 'noManifest' in link, 'unlinked' in link];
+
+function sourceModsFrom(mods: readonly ModFolderAt[], links: readonly Link[], repositories: ReadonlyMap<string, string>, keyOf: (mod: string) => string): SourceMods {
   const notes: string[] = [];
   const byKey = new Map<string, { readonly mod: string; readonly folder: string }>();
   const named = new Set<string>();
   const manifested = new Map<string, boolean>();
   const linked = new Set<string>();
-  const mods = (folders ?? []).filter(({ kind }) => kind === 'mod');
-  const links = await Promise.all(mods.map(({ path }) => linkIn(path)));
   for (const [index, { modName: name, path: folder }] of mods.entries()) {
     const link = links[index] ?? { noManifest: true as const };
     if ('unreadable' in link) notes.push(`${folder} builds from no repository, as ${link.unreadable}.`);

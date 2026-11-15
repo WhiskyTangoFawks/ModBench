@@ -13,7 +13,11 @@ import type { WorkspaceSettings } from './workspaceSettings';
  *  @public Read by packageJson.test, which holds package.json to it. */
 export const GREY_INACTIVE_FILES_SETTING = 'modbench.mods.greyInactiveFiles';
 
-type FilesValue = Pick<InstanceValue, 'mods' | 'files' | 'filesByMod' | 'foldersByMod' | 'overwriteFiles' | 'overwriteFolders' | 'archiveContents' | 'loadsArchive' | 'stackedCopies' | 'dataFolderFiles'>;
+const FILES_READ = {
+  mods: true, files: true, filesByMod: true, foldersByMod: true, overwriteFiles: true, overwriteFolders: true, archiveContents: true, loadsArchive: true,
+  stackedCopies: true, dataFolderFiles: true,
+} as const;
+type FilesValue = Pick<InstanceValue, keyof typeof FILES_READ>;
 
 interface Inactive {
   readonly rows: ReadonlySet<string>;
@@ -72,7 +76,7 @@ export class InactiveFileDecorationProvider implements vscode.FileDecorationProv
       instance.subscribe(() => {
         this.inactive = undefined;
         this.changed.fire(undefined);
-      }),
+      }, FILES_READ),
       onSettingChange(setting.onDidChangeConfiguration, GREY_INACTIVE_FILES_SETTING, () => { this.changed.fire(undefined); }),
     ];
   }

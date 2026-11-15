@@ -14,6 +14,6 @@ export function publishRepository(instance: Pick<Instance, 'value' | 'subscribe'
     void vscode.commands.executeCommand('setContext', SET_UP_KEY, repositorySetUp);
   };
   publish(instance.value);
-  const subscription = instance.subscribe(publish);
+  const subscription = instance.subscribe(publish, { holdsRepository: true, repositorySetUp: true });
   return new vscode.Disposable(() => { subscription.dispose(); });
 }
