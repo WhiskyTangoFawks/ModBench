@@ -1274,14 +1274,13 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
 
 describe('HttpMEditClient — whether the record index may be late', () => {
   it('is true from a snapshot handed until its load order has settled', async () => {
-    let sent = false;
     const { response, push } = pushableStreamResponse();
     let answerPut!: () => void;
     const putAnswered = new Promise<void>((resolve) => { answerPut = resolve; });
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(response)],
       ['/unsaved-documents', noContent],
-      ['/load-order/status', () => Promise.resolve(jsonResponse(200, loadOrderStatusEventFixture({ conflictsComputed: !sent }).loadOrderStatus))],
+      ['/load-order/status', () => Promise.resolve(jsonResponse(200, loadOrderStatusEventFixture({ state: 'None', conflictsComputed: false }).loadOrderStatus))],
       ['/load-order', () => putAnswered.then(() => jsonResponse(200, { applied: true, version: 1 }))],
     ]);
     const client = makeClient(fetch);
@@ -1289,7 +1288,6 @@ describe('HttpMEditClient — whether the record index may be late', () => {
     await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
 
     void client.sendLoadOrder(EMPTY_SNAPSHOT);
-    sent = true;
     expect(client.recordIndexMayBeLate).toBe(true);
 
     answerPut();
@@ -1300,13 +1298,14 @@ describe('HttpMEditClient — whether the record index may be late', () => {
     await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
   });
 
-  it('is true from unsaved documents handed until mEdit has answered their PUT', async () => {
+  it('is true from unsaved documents handed until their PUT is answered and the status shows nothing validating', async () => {
     let puts = 0;
     let answerPut!: () => void;
     const putAnswered = new Promise<void>((resolve) => { answerPut = resolve; });
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
       ['/unsaved-documents', () => (puts++ === 0 ? noContent() : putAnswered.then(() => new Response(null, { status: 204 })))],
+      ['/load-order/status', () => Promise.resolve(jsonResponse(200, loadOrderStatusEventFixture().loadOrderStatus))],
     ]);
     const client = makeClient(fetch);
     await client.start();
@@ -1319,64 +1318,75 @@ describe('HttpMEditClient — whether the record index may be late', () => {
     await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
   });
 
-  it('stays true past the answer to a change signal, until the sweep it started has settled', async () => {
-    const { response, push } = pushableStreamResponse();
-    let validating = false;
-    const status = () => jsonResponse(200, loadOrderStatusEventFixture({ validating }).loadOrderStatus);
-    const fetch = routedFetch([
-      ['/notifications/stream', () => Promise.resolve(response)],
-      ['/unsaved-documents', noContent],
-      ['/load-order/status', () => Promise.resolve(status())],
-      ['/signal-change', () => { validating = true; return noContent(); }],
-    ]);
-    const client = makeClient(fetch);
-    await client.start();
-    await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+  describe.each<[string, (client: MEditClient) => void]>([
+    ['a change signal', (client) => { client.signalChange(['/m/Foo.esp']); }],
+    ['unsaved documents', (client) => { client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]); }],
+  ])('after %s are answered', (_what, hand) => {
+    async function started() {
+      const { response, push } = pushableStreamResponse();
+      let status: NonNullable<Parameters<typeof loadOrderStatusEventFixture>[0]> = {};
+      let statusWhenAnswered: typeof status = {};
+      let statusFails = false;
+      let statusReads = 0;
+      const answerHand = () => { status = statusWhenAnswered; return noContent(); };
+      const fetch = routedFetch([
+        ['/notifications/stream', () => Promise.resolve(response)],
+        ['/unsaved-documents', answerHand],
+        ['/signal-change', answerHand],
+        ['/load-order/status', () => {
+          statusReads++;
+          return Promise.resolve(statusFails ? new Response(null, { status: 500 }) : jsonResponse(200, loadOrderStatusEventFixture(status).loadOrderStatus));
+        }],
+      ]);
+      const client = makeClient(fetch);
+      await client.start();
+      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+      return {
+        client, push,
+        hand: async (answeredWith: typeof status, failing = false) => {
+          statusWhenAnswered = answeredWith;
+          statusFails = failing;
+          const reads = statusReads;
+          hand(client);
+          await vi.waitFor(() => { expect(statusReads).toBeGreaterThan(reads); });
+        },
+      };
+    }
 
-    client.signalChange(['/m/Foo.esp']);
-    await vi.waitFor(() => { expect(fetch.mock.calls.some(([req]) => req.url.includes('/signal-change'))).toBe(true); });
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(client.recordIndexMayBeLate).toBe(true);
+    it('stays true until the sweep it started has settled', async () => {
+      const { client, push, hand: handOver } = await started();
 
-    push(loadOrderStatusTick({ conflictsComputed: true, validating: false }));
-    await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
-  });
+      await handOver({ validating: true });
+      expect(client.recordIndexMayBeLate).toBe(true);
 
-  it('is false once a change signal is answered and mEdit has nothing validating', async () => {
-    const fetch = routedFetch([
-      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
-      ['/unsaved-documents', noContent],
-      ['/load-order/status', () => Promise.resolve(jsonResponse(200, loadOrderStatusEventFixture().loadOrderStatus))],
-      ['/signal-change', noContent],
-    ]);
-    const client = makeClient(fetch);
-    await client.start();
-    await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+      push(loadOrderStatusTick({ conflictsComputed: true, validating: false }));
+      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+    });
 
-    client.signalChange([]);
+    it('is false when mEdit has nothing validating', async () => {
+      const { client, hand: handOver } = await started();
 
-    await vi.waitFor(() => { expect(fetch.mock.calls.some(([req]) => req.url.includes('/signal-change'))).toBe(true); });
-    await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
-  });
+      await handOver({ validating: false });
 
-  it('stays true past the answer to unsaved documents, until the sweep they started has settled', async () => {
-    const { response, push } = pushableStreamResponse();
-    let puts = 0;
-    const fetch = routedFetch([
-      ['/notifications/stream', () => Promise.resolve(response)],
-      ['/unsaved-documents', () => { puts++; return noContent(); }],
-      ['/load-order/status', () => Promise.resolve(jsonResponse(200, loadOrderStatusEventFixture({ validating: puts > 1 }).loadOrderStatus))],
-    ]);
-    const client = makeClient(fetch);
-    await client.start();
-    await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+    });
 
-    client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]);
-    await vi.waitFor(() => { expect(puts).toBe(2); });
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(client.recordIndexMayBeLate).toBe(true);
+    it('is false when mEdit holds no load order, as nothing is then late', async () => {
+      const { client, hand: handOver } = await started();
 
-    push(loadOrderStatusTick({ conflictsComputed: true, validating: false }));
-    await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+      await handOver({ state: 'None', conflictsComputed: false });
+
+      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+    });
+
+    it('keeps waiting on the stream when the status cannot be read', async () => {
+      const { client, push, hand: handOver } = await started();
+
+      await handOver({ validating: true }, true);
+      expect(client.recordIndexMayBeLate).toBe(true);
+
+      push(loadOrderStatusTick({ conflictsComputed: true, validating: false }));
+      await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
+    });
   });
 });
