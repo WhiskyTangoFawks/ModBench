@@ -31,17 +31,18 @@ internal sealed class RecordQueries(
 
     private readonly ConflictClassifier _conflictClassifier = new ConflictClassifier(logger);
 
-    public Answer<IReadOnlyList<PluginResponse>, IndexRefused> GetPlugins() =>
-        _answer.Of(PluginResponses);
+    public Answer<IReadOnlyList<PluginResponse>, IndexRefused> GetPlugins(IReadOnlyCollection<PluginAddress>? plugins = null) =>
+        _answer.Of(() => PluginResponses(plugins));
 
-    private IReadOnlyList<PluginResponse> PluginResponses()
+    private IReadOnlyList<PluginResponse> PluginResponses(IReadOnlyCollection<PluginAddress>? named)
     {
         using var reads = RequireReads().InOneSnapshot();
         var opened = reads.OpenedPlugins;
         // The rows and their order are the load order's; the facts reading the file yielded are the
         // Index's. A plugin the Index has not opened has none of the latter and is not a row.
         var snapshot = _loadOrder.Require();
-        var rows = snapshot.Plugins.Where(c => opened.ContainsKey(c.Key)).ToList();
+        var asked = named is null ? null : new HashSet<PluginAddress>(named, PluginAddress.Comparer);
+        var rows = snapshot.Plugins.Where(c => opened.ContainsKey(c.Key) && (asked?.Contains(c.Key) ?? true)).ToList();
         var parseFailures = reads.GetPluginsWithParseFailures();
         var derivations = reads.GetDerivations();
         PluginResponse ToResponse(RegisteredPlugin plugin, bool hasMatchingRecords)

@@ -41,6 +41,28 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         long.Parse(IndexFiles.Rows(Modlist.InstanceRoot, sql).Single().Single(), CultureInfo.InvariantCulture);
 
     [RealSizeFact]
+    public void OnePluginsFacts_AreReadWithinOneFilesRead_WhereEveryPluginsTakeLonger()
+    {
+        PluginAddress[] one = [Modlist.BigSourcePlugin.Key];
+        Assert.Single(Index.Queries.GetPlugins(one).Value());
+        Assert.Equal(RealSizeModlist.Plugins, Index.Queries.GetPlugins().Value().Count);
+
+        var oneTook = Fastest(() => Index.Queries.GetPlugins(one).Value());
+        var everyTook = Fastest(() => Index.Queries.GetPlugins().Value());
+
+        Console.WriteLine($"BUDGET One plugin's facts: {oneTook.TotalMilliseconds:F2} ms; every plugin's: {everyTook.TotalMilliseconds:F2} ms");
+        Assert.True(oneTook <= OneFilesRead * 3, $"One plugin's facts took {oneTook.TotalMilliseconds:F1} ms.");
+        Assert.True(oneTook < everyTook, $"One plugin's facts took {oneTook.TotalMilliseconds:F2} ms, every plugin's {everyTook.TotalMilliseconds:F2} ms.");
+    }
+
+    private static TimeSpan Fastest(Action read) => Enumerable.Range(0, Runs * 4).Min(_ =>
+    {
+        var took = System.Diagnostics.Stopwatch.StartNew();
+        read();
+        return took.Elapsed;
+    });
+
+    [RealSizeFact]
     public void ALaunchWithNothingChanged_IsReadyWithinLitRsTenSeconds()
     {
         _ = Index;

@@ -20,6 +20,14 @@ internal static class PluginEndpoints
             .Produces<IReadOnlyList<PluginResponse>>()
             .ProducesProblem(503);
 
+        app.MapPost("/plugins/facts", (PluginFactsRequest request, IQueries svc) =>
+            EndpointMapping.Ok(svc.GetPlugins(request.Plugins)))
+            .WithName("GetPluginFacts")
+            .WithTags(Tag)
+            .WithDescription("GET /plugins for only the plugins named, each by name and origin: the same facts, a cost that follows the plugins named.")
+            .Produces<IReadOnlyList<PluginResponse>>()
+            .ProducesProblem(503);
+
         // Every mutable plugin in the load order, diagnosed off its original bytes — the
         // session-load complement of init's refusal. With no load order applied the refusal is a
         // 503, never an unmapped 500.
@@ -476,6 +484,8 @@ internal sealed record RenameSourceChangesRequest(
 internal sealed record MoveLastWrittenRequest(string Origin, string Name, string TreeName, string NewName);
 
 internal sealed record DecompileRequest(IReadOnlyList<PluginAddress> Plugins, bool Force);
+
+internal sealed record PluginFactsRequest(IReadOnlyList<PluginAddress> Plugins);
 
 internal sealed record CompileRequest(IReadOnlyList<PluginAddress> Plugins);
 

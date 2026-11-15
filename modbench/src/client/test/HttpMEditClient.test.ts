@@ -852,6 +852,22 @@ describe('HttpMEditClient — sendLoadOrder', () => {
   });
 });
 
+describe('HttpMEditClient — getPlugins', () => {
+  it('asks for only the plugins named, each by name and origin', async () => {
+    const asked = [{ name: 'Shared.esp', origin: 'ModB' }];
+    const { result, request } = await exchange((c) => c.getPlugins(asked), () => Promise.resolve(jsonResponse(200, [])));
+
+    expect(result).toEqual([]);
+    expect([request.method, new URL(request.url).pathname, await request.json()]).toEqual(['POST', '/plugins/facts', { plugins: asked }]);
+  });
+
+  it('asks for every plugin when none are named', async () => {
+    const { request } = await exchange((c) => c.getPlugins(), () => Promise.resolve(jsonResponse(200, [])));
+
+    expect([request.method, new URL(request.url).pathname]).toEqual(['GET', '/plugins']);
+  });
+});
+
 describe('HttpMEditClient — getArchiveFile', () => {
   const asked = { gameRelease: 'Fallout4', archive: '/mods/A/A - Main.ba2', file: 'scripts/a.pex' };
 
@@ -1158,7 +1174,7 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
     client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]);
     const { token: held, cancel } = cancellableToken();
 
-    const asking = client.getPlugins(held);
+    const asking = client.getPlugins(undefined, held);
     cancel();
     expect(await asking).toEqual(cancelled);
 
@@ -1183,7 +1199,7 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
     await client.start();
     const { token: flying, cancel } = cancellableToken();
 
-    const asking = client.getPlugins(flying);
+    const asking = client.getPlugins(undefined, flying);
     await vi.waitFor(() => expect(sent).toBe(true));
     cancel();
 
@@ -1201,7 +1217,7 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
     await client.start();
     const { token: answered, unsubscribed } = cancellableToken();
 
-    await client.getPlugins(answered);
+    await client.getPlugins(undefined, answered);
 
     expect(unsubscribed).toHaveBeenCalledOnce();
   });
@@ -1247,7 +1263,7 @@ describe('HttpMEditClient — a read whose token is cancelled', () => {
     const client = makeClient(fetch);
     await client.start();
 
-    const answer = await client.getPlugins({ isCancellationRequested: true, onCancellationRequested: () => ({ dispose: () => undefined }) });
+    const answer = await client.getPlugins(undefined, { isCancellationRequested: true, onCancellationRequested: () => ({ dispose: () => undefined }) });
 
     expect(answer).toEqual(cancelled);
     expect(requests).toEqual([]);

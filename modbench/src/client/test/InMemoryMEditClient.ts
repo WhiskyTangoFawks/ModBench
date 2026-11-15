@@ -1,3 +1,4 @@
+import { pluginAddressKey, type PluginAddress } from '../../wire/pluginAddress';
 import { IGNORED_THROWS } from './fixtures';
 import type { Disposable } from '../eventEmitter';
 import type {
@@ -6,7 +7,7 @@ import type {
 import type { LoadOrderStatus, NotificationEvent } from '../apiClient';
 import { SseNotificationSubscriber } from '../notificationStream';
 import { announceAfterReopen, createLoadOrderSender, type LoadOrderWire } from '../loadOrderSender';
-import type { ReadFailed } from '../../wire/readFailed';
+import { isReadFailed, type ReadFailed } from '../../wire/readFailed';
 import { keepRecordIndexChanges } from '../recordIndexChanges';
 import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 
@@ -358,7 +359,12 @@ export class InMemoryMEditClient implements MEditClient {
     return this.command('setPluginFileFlags', args);
   }
 
-  getPlugins(): ReturnType<MEditClient['getPlugins']> { return this.query('getPlugins', []); }
+  async getPlugins(plugins?: readonly PluginAddress[]): ReturnType<MEditClient['getPlugins']> {
+    const answer = await this.query('getPlugins', plugins ? [plugins] : []);
+    if (!plugins || isReadFailed(answer)) return answer;
+    const asked = new Set(plugins.map(pluginAddressKey));
+    return answer.filter((row) => asked.has(pluginAddressKey({ name: row.name, origin: row.origin })));
+  }
   getDiagnoses(): ReturnType<MEditClient['getDiagnoses']> { return this.query('getDiagnoses', []); }
   getPluginIndexing(...args: Parameters<MEditClient['getPluginIndexing']>): ReturnType<MEditClient['getPluginIndexing']> {
     return this.query('getPluginIndexing', args);
