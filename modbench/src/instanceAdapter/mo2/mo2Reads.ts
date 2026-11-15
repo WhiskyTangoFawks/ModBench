@@ -1,7 +1,7 @@
 // MO2's parsed reads: each file read through its own codec, and each answer about where the
 // instance keeps what.
 
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, sep } from 'node:path';
 import { foldersRefused } from '../foldersRefused';
 import { parsePlugins } from '../../loadOrderFileCodec/pluginsText';
 import { isInstallationFileName } from '../fileContents/installationFileNames';
@@ -18,7 +18,7 @@ import { listOwnEntries } from '../gameFolder/ownEntries';
 import { sameName } from '../../symbolNames/symbolNames';
 import { pathTokensWritten } from './mo2PathTokens';
 import { pushRefusalWritten } from './mo2Submodules';
-import { get, ignoreSkippedLink, isAbsent, parsedBy, textByStamp, isRepository, listDirByStamp, listEntries, listFolders, readOrAbsent, readOrReason, identityOf, type ResolvedEntry, type SkippedLink, stampByStamp } from '../files';
+import { get, ignoreSkippedLink, isAbsent, keptUntilNamed, parsedBy, textByStamp, isRepository, listDirByStamp, listEntries, listFolders, readOrAbsent, readOrReason, identityOf, type ResolvedEntry, type SkippedLink, stampByStamp } from '../files';
 import { isOwnTemp } from '../../repositoriesLib/wholeWrites';
 import { anyCase, type DeployedPath, type DownloadedFile, type DownloadedFiles, type GameFolder, type InstanceAdapter, type ManagerNames, type ManagerRunning, type ModFolder, type ModFolders, type ModMeta, type SortingRuleFile } from '../instanceAdapter';
 import { DATA_FOLDER_GLOB, DOWNLOADS_WATCH_GLOB, PROFILE_WATCH_PATTERN, profileDir, downloadedFilePath, downloadedFileMetadataPath, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile, sortingRuleFilePaths } from './layout';
@@ -148,6 +148,16 @@ const creationClubListOf = (context: Mo2Context, deployedPath: DeployedPath): Re
 export function readingSource(context: Mo2Context, publisherFile: ConfigurationFile | undefined, deployedPath: DeployedPath): ReadingSource {
   const { instanceRoot, resolveGameFolder, resolveDownloadsFolder, watch, mo2Running } = context;
   const originFilesOf = originFilesReader(context);
+  // A change inside the Data folder names its own file, so the key sits below the folder: a change to the folder or the game folder forgets it.
+  const resolvedGameFolder = keptUntilNamed(
+    (managed) => resolveGameFolder(JSON.parse(managed) as ManagerGamePath),
+    (folder) => { const data = dataFolderOf(folder); return data === undefined ? undefined : data + sep; },
+  );
+  // No path holds this answer, so only a check of the disk forgets it.
+  const running = keptUntilNamed((): Promise<ManagerRunning> => mo2Running().then(
+    (isRunning): ManagerRunning => ({ kind: isRunning ? 'running' : 'notRunning' }),
+    (err: unknown): ManagerRunning => ({ kind: 'unknown', reason: errorMessage(err) }),
+  ));
   return {
     names: MO2_NAMES,
     modLineKey,
@@ -160,7 +170,7 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
         ...game,
         // What the settings resolve is what the watch follows.
         gameFolder: async () => {
-          const gameFolder = await resolveGameFolder(managedGamePath(iniText, game.gameRelease));
+          const gameFolder = await resolvedGameFolder(JSON.stringify(managedGamePath(iniText, game.gameRelease)));
           const dataFolder = dataFolderOf(gameFolder);
           const programs = programsOf(game.gameRelease);
           watch.follow('dataFolder', dataFolder === undefined ? [] : [dataFolder], DATA_FOLDER_GLOB);
@@ -216,10 +226,7 @@ export function readingSource(context: Mo2Context, publisherFile: ConfigurationF
     holdsRepository: () => isRepository(instanceRoot),
     repositorySetUp: async () => await isRepository(instanceRoot) && await pushRefusalWritten(context) && await pathTokensWritten(context, publisherFile),
     unwatchedFolders: () => watch.unwatchedFolders(),
-    managerRunning: () => mo2Running().then(
-      (running): ManagerRunning => ({ kind: running ? 'running' : 'notRunning' }),
-      (err: unknown): ManagerRunning => ({ kind: 'unknown', reason: errorMessage(err) }),
-    ),
+    managerRunning: () => running('manager running'),
   };
 }
 
