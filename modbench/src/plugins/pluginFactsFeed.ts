@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { LoadOrderRefusal, MEditClient, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
 import { errorMessage } from '../ports/errorMessage';
-import { pluginAddressKey } from '../wire/pluginAddress';
+import { pluginAddressKey, samePluginAddress } from '../wire/pluginAddress';
 import { PluginFacts, type LootInput, type PluginProblem, type SourceUnreadableProblem } from './pluginFacts';
 import { ruleFileDiagnostics, type RuleFileDiagnostic } from '../sortingRules/ruleFileDiagnostics';
 import type { FileFacts, FileRead } from '../sortingRules/lootConditions';
@@ -67,9 +67,9 @@ export class PluginFactsFeed implements vscode.Disposable {
 
   constructor(private readonly deps: PluginFactsFeedDeps) {
     this.unsubscribe = deps.client.onNotification('external-change', (event) => {
-      this.facts.externalChange(event);
+      const named = this.facts.externalChange(event);
       deps.publishChangedOutside(this.facts.problems().changedOutside);
-      this.changed.fire(undefined);
+      this.changed.fire(named);
     });
   }
 
@@ -148,14 +148,19 @@ export class PluginFactsFeed implements vscode.Disposable {
 
   /** Judges the order the last reconcile judged again. Before that reconcile there is nothing to judge. */
   async rejudge(): Promise<void> {
+    await this.rejudgeAnnouncing([]);
+  }
+
+  // The change event names the plugins the judgement altered besides those the caller announces, or everything when the caller does.
+  private async rejudgeAnnouncing(announced: readonly PluginAddress[] | undefined): Promise<void> {
     const judged = this.facts.judgedOrder();
     if (judged === undefined) return;
     const rejudgement = ++this.rejudgements;
     const loot = await this.lootRules(judged);
     if (rejudgement !== this.rejudgements || judged !== this.facts.judgedOrder()) return;
-    this.facts.rejudged(loot);
+    const altered = this.facts.rejudged(loot);
     this.publishSorting();
-    this.changed.fire(undefined);
+    this.changed.fire(announced && [...announced, ...altered.filter((plugin) => !announced.some((a) => samePluginAddress(a, plugin)))]);
   }
 
   /** Re-reads the facts of the plugins named, or of every plugin when none are, and judges again
@@ -174,7 +179,7 @@ export class PluginFactsFeed implements vscode.Disposable {
     if ('failure' in plugins) return this.factsFailed(plugins.failure);
     const sortingChanged = this.facts.refreshed(plugins, named);
     this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);
-    if (this.facts.judgedOrder() !== undefined && sortingChanged) await this.rejudge();
+    if (this.facts.judgedOrder() !== undefined && sortingChanged) await this.rejudgeAnnouncing(named);
     else this.changed.fire(named);
   }
 

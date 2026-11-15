@@ -247,6 +247,20 @@ describe('PluginFactsFeed', () => {
     expect([beforeReconcile, sortingErrors.items.map((errors) => errors.length)]).toEqual([0, [1, 0]]);
   });
 
+  it('names only the plugins whose judgement the changed rules altered', async () => {
+    const B = { name: 'B.esp', origin: 'SomeMod' };
+    let rules = NO_RULES;
+    const { feed, client, changes } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B], rules: () => rules });
+    client.setQueryAnswer('getPlugins', [held(), held({ name: 'B.esp' })]);
+    await feed.reconciled([]);
+    changes.mockClear();
+    rules = rulesOf(filesWith('plugins:\n  - name: A.esp\n    req: [Missing.esp]\n'));
+
+    await feed.rejudge();
+
+    expect(changes.mock.calls).toEqual([[[A]]]);
+  });
+
   describe('judging again as the facts are re-read', () => {
     const B = { name: 'B.esp', origin: 'SomeMod' };
     const raised = (errors: readonly (readonly unknown[])[]) => errors.map((published) => published.length > 0);
@@ -329,6 +343,18 @@ describe('PluginFactsFeed', () => {
       await Promise.all([overtaken, later]);
 
       expect(changes.mock.calls).toEqual([[[A]], [[B]]]);
+    });
+
+    it('names the plugins asked about and the plugins whose judgement the re-read altered', async () => {
+      const { feed, client, changes } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B] });
+      client.setQueryAnswer('getPlugins', [held({ isMaster: true }), held({ name: 'B.esp', isMaster: true })]);
+      await feed.reconciled([]);
+      changes.mockClear();
+      client.setQueryAnswer('getPlugins', [held({ isMaster: false })]);
+
+      await feed.refresh([A]);
+
+      expect(changes.mock.calls).toEqual([[[A, B]]]);
     });
 
     it('judges again for an edited description, which a version condition of the sorting rules reads', async () => {
@@ -593,7 +619,17 @@ describe('PluginFactsFeed', () => {
     client.emit({ kind: 'external-change', plugin: '', origin: 'SomeMod', keys: [], sequence: 0, changedPlugins: [{ name: 'A.esp', bytesSha256: 'ab12' }] });
 
     expect(changedOutside.items.map((warnings) => warnings.map(({ plugin, origin }) => ({ plugin, origin })))).toEqual([[{ plugin: 'A.esp', origin: 'SomeMod' }]]);
-    expect(changes).toHaveBeenCalledOnce();
+    expect(changes.mock.calls).toEqual([[[A]]]);
+  });
+
+  it('names the plugin a later settle of the mod no longer holds changed, so its row is redrawn', () => {
+    const { client, changes } = feedOver();
+    client.emit({ kind: 'external-change', plugin: '', origin: 'SomeMod', keys: [], sequence: 0, changedPlugins: [{ name: 'A.esp', bytesSha256: 'ab12' }] });
+    changes.mockClear();
+
+    client.emit({ kind: 'external-change', plugin: '', origin: 'SomeMod', keys: [], sequence: 1, changedPlugins: [] });
+
+    expect(changes.mock.calls).toEqual([[[A]]]);
   });
 
   it('stops listening for the notification once disposed', () => {

@@ -190,9 +190,29 @@ export class PluginFacts {
   }
 
   /** The sorting rules judged again over the order the last reconcile judged, because LOOT's rules changed. A no-op
-   *  before the first reconcile completes, as the order is not judged before then. */
-  rejudged(loot: LootInput): void {
-    if (this.judgedActiveOrder !== undefined) this.judgeSorting(this.judgedActiveOrder, loot);
+   *  before the first reconcile completes, as the order is not judged before then. The plugins
+   *  whose sorting statuses or offered moves changed come back. */
+  rejudged(loot: LootInput): PluginAddress[] {
+    if (this.judgedActiveOrder === undefined) return [];
+    const before = this.judgements();
+    this.judgeSorting(this.judgedActiveOrder, loot);
+    const after = this.judgements();
+    return [...new Map([...before, ...after])]
+      .filter(([key]) => before.get(key)?.signature !== after.get(key)?.signature)
+      .map(([, { address }]) => address);
+  }
+
+  private judgements(): Map<string, { address: PluginAddress; signature: string }> {
+    const byPlugin = new Map<string, { address: PluginAddress; broken: BrokenRule[]; moves: OfferedMove[] }>();
+    const entry = (address: PluginAddress) => {
+      const key = pluginAddressKey(address);
+      const held = byPlugin.get(key) ?? { address, broken: [], moves: [] };
+      byPlugin.set(key, held);
+      return held;
+    };
+    for (const address of this.sortingNames) entry(address).broken = this.sorting.get(address) ?? [];
+    for (const move of this.offered) entry(move.mover).moves.push(move);
+    return new Map([...byPlugin].map(([key, { address, broken, moves }]) => [key, { address, signature: JSON.stringify([broken, moves]) }]));
   }
 
   /** Whether mEdit has read the plugin, and it is a blueprint plugin. */
@@ -361,11 +381,14 @@ export class PluginFacts {
   }
 
   /** Each settle of a source mod names every plugin of it that changed outside Modbench, so it
-   *  replaces what the mod's last settle named. */
-  externalChange(event: NotificationPayloads['external-change']): void {
-    this.changedByMod.set(event.origin, event.changedPlugins.map(({ name }) => ({ name, origin: event.origin })));
+   *  replaces what the mod's last settle named. The plugins whose standing changed come back. */
+  externalChange(event: NotificationPayloads['external-change']): PluginAddress[] {
+    const before = this.changedByMod.get(event.origin) ?? [];
+    const after = event.changedPlugins.map(({ name }) => ({ name, origin: event.origin }));
+    this.changedByMod.set(event.origin, after);
     this.changed = new ByPluginAddress<true>();
     for (const address of [...this.changedByMod.values()].flat()) this.changed.set(address, true);
+    return [...before, ...after];
   }
 
   /** Each plugin a mod's manifest names that is not restored, with that mod, replacing the last. */

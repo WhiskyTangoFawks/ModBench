@@ -419,14 +419,16 @@ describe('the Plugins view re-renders for a reconcile tick only when it landed s
     expect(rerenders).toHaveLength(1);
   });
 
-  it('re-renders for a tick that landed a failure though no plugin was indexed, since a failed plugin never joins the indexed set', () => {
+  it('re-renders for a tick that landed a failure though no plugin was indexed, since a failed plugin never joins the indexed set', async () => {
     const { client, rerenders } = reconciling();
 
     client.emit(tick({ indexedPlugins: [A] }));
     const afterTheFirst = rerenders.length;
     client.emit(tick({ indexedPlugins: [A], failures: [{ name: 'B.esp', origin: 'SomeMod', reason: 'RACE parse' }] }));
 
-    expect(rerenders.length).toBeGreaterThan(afterTheFirst);
+    await settle();
+
+    expect(rerenders.length - afterTheFirst).toBe(5);
   });
 });
 

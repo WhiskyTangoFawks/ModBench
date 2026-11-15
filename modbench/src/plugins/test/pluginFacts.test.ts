@@ -12,9 +12,9 @@ const failure = (reason: string, address = A): PluginLoadFailure => ({ ...addres
 const diagnosis = (text: string, address = A): PluginDiagnosisReport => (
   { plugin: address.name, origin: address.origin, text }
 );
-const changedOutside = (facts: PluginFacts, origin: string, ...names: string[]): void => facts.externalChange({
-  origin, changedPlugins: names.map((name) => ({ name, bytesSha256: 'ab12' })),
-});
+const changedOutside = (facts: PluginFacts, origin: string, ...names: string[]): void => {
+  facts.externalChange({ origin, changedPlugins: names.map((name) => ({ name, bytesSha256: 'ab12' })) });
+};
 
 const CHANGED_TEXT = 'Changed outside Modbench: its bytes differ from what Modbench last wrote.';
 
