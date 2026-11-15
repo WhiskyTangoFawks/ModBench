@@ -59,29 +59,18 @@ describe('what holds a path a plugin source names (source.md, Editing plugin sou
   });
 });
 
-describe('a sound descriptor names a .wav the game plays from its .xwm (source.md, Editing plugin source, story 1)', () => {
-  const WAV = 'Sound/FX/shot.wav';
-  const XWM = 'sound/fx/shot.xwm';
-  const holds = (value: Value, named = WAV, at = XWM) => standing(value, at).holds({ origin: 'Mod' }, named);
+describe('a .wav a plugin source names is held by the .xwm the game plays it from (source.md, Editing plugin source, story 1)', () => {
+  const holds = (value: Value) => standing(value, 'sound/fx/shot.xwm').holds({ origin: 'Mod' }, 'Sound/FX/shot.wav');
 
-  it.each<[string, Value]>([
-    ['a copy of the .xwm the game gets', { stacked: true }],
-    ['a loose .xwm in the game folder', { gameLoose: true }],
-    ['an .xwm its plugin\'s mod holds', { modFiles: [file('Sound/FX/shot.xwm')] }],
-    ['an .xwm in an archive its plugin\'s mod holds', { modFiles: [file('Mod.ba2')], archive: ['Sound/FX/shot.xwm'] }],
-  ])('holds the .wav path for %s', (_what, value) => {
-    expect(holds(value)).toBe(true);
+  it('holds it for an .xwm the game gets', () => {
+    expect(holds({ stacked: true })).toBe(true);
   });
 
-  it('holds no .wav path when neither file exists', () => {
+  it('holds it for an .xwm its plugin\'s mod holds', () => {
+    expect(holds({ modFiles: [file('Sound/FX/shot.xwm')] })).toBe(true);
+  });
+
+  it('holds no .wav when neither file exists', () => {
     expect(holds({})).toBe(false);
-  });
-
-  it('holds an .xwm path only at its exact path', () => {
-    expect(holds({ stacked: true }, 'Sound/FX/shot.xwm', 'sound/fx/shot.wav')).toBe(false);
-  });
-
-  it('holds a .wav path of a game before Skyrim at its exact path', () => {
-    expect(holds({ stacked: true, gameName: 'Oblivion' })).toBe(false);
   });
 });

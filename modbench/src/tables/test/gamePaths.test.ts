@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import {
-  archiveListsOf, masterExtensionsOf, archiveFormatsOf, blueprintLoadsLastIn, creationClubListFile, gameReleaseForGame, loadedWithNoLineOf, nexusDomainsForGame, shortNameForNexusDomain, nexusDomainForMetaGame, gamePathInfoForRelease, lootRepositoryOf, papyrusScriptAt, papyrusScriptFiles, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
+  archiveListsOf, masterExtensionsOf, archiveFormatsOf, blueprintLoadsLastIn, creationClubListFile, gameReleaseForGame, loadedWithNoLineOf, nexusDomainsForGame, shortNameForNexusDomain, nexusDomainForMetaGame, gamePathInfoForRelease, lootRepositoryOf, papyrusScriptAt, papyrusScriptFiles, pathsTheGameTries, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
 } from '../gamePaths';
 
 const NOT_WRITTEN = 'a game whose plugins.txt Modbench does not write';
@@ -307,5 +307,19 @@ describe('papyrusScriptFiles', () => {
 
   it('places none for a release no reference names the folders of', () => {
     expect(papyrusScriptFiles('Starfield', 'Quest')).toBeUndefined();
+  });
+});
+
+describe('pathsTheGameTries', () => {
+  it.each<[string, string | undefined, string, string[]]>([
+    ['a .wav the game plays from its .xwm', 'Fallout4', 'Sound/a.WAV', ['Sound/a.WAV', 'Sound/a.xwm']],
+    ['a .wav in Skyrim', 'SkyrimSE', 'Sound/a.wav', ['Sound/a.wav', 'Sound/a.xwm']],
+    ['a .wav in a release that does not play it from an .xwm', 'Starfield', 'Sound/a.wav', ['Sound/a.wav']],
+    ['a .wav in a release the table does not hold', undefined, 'Sound/a.wav', ['Sound/a.wav']],
+    ['an .xwm at its exact path', 'Fallout4', 'Sound/a.xwm', ['Sound/a.xwm']],
+    ['a .fuz at its exact path', 'Fallout4', 'Sound/a.fuz', ['Sound/a.fuz']],
+    ['a path that only ends in wav', 'Fallout4', 'Sound/a.wavx', ['Sound/a.wavx']],
+  ])('tries %s', (_what, release, path, tried) => {
+    expect(pathsTheGameTries(release, path)).toEqual(tried);
   });
 });

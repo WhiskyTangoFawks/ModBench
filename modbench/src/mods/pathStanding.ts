@@ -8,9 +8,9 @@ import { copyTheGameGets } from './fileCopy';
 
 const STANDING_READ = {
   stackedCopies: true, dataFolderFiles: true, gameFolderArchived: true, gameFolderInWorkspace: true, gameFolder: true, filesByMod: true, overwriteFiles: true,
-  archiveContents: true,
+  archiveContents: true, gameName: true,
 } as const;
-type StandingValue = Pick<InstanceValue, keyof typeof STANDING_READ> & { readonly gameName: string };
+type StandingValue = Pick<InstanceValue, keyof typeof STANDING_READ>;
 
 function modHolds(value: StandingValue, origin: string, folded: string): boolean {
   const files = origin === OVERWRITE_ORIGIN ? value.overwriteFiles : value.filesByMod.get(origin) ?? [];

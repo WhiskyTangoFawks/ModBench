@@ -151,7 +151,7 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
     papyrusFolders: SKYRIM_PAPYRUS, archives: SKYRIM_ARCHIVES_PACKED,
   },
   Starfield: {
-    gameName: 'Starfield', lightPlugins: true, playsWavFromXwm: true, nexusSlug: 'starfield', lootRepository: 'starfield', steamAppId: '1716740', steamFolderName: 'Starfield',
+    gameName: 'Starfield', lightPlugins: true, nexusSlug: 'starfield', lootRepository: 'starfield', steamAppId: '1716740', steamFolderName: 'Starfield',
     masters: STARFIELD_MASTERS, creationClubList: 'Starfield.ccc', blueprintLoadsLast: true,
     scriptExtenderFolder: 'sfse', programs: { game: 'Starfield.exe', extenderLoader: 'sfse_loader.exe' }, pluginCompanions: FALLOUT4_COMPANIONS,
     archiveLists: { myGamesFolder: 'Starfield', defaultIni: 'Starfield.ini', userInis: ['StarfieldCustom.ini'], keys: RESOURCE_INDEX_KEYS },
@@ -198,7 +198,7 @@ export function nexusDomainForMetaGame(gameName: string): string | undefined {
   return release === undefined ? NEXUS_DOMAINS_OF_UNSUPPORTED_SHORT_NAMES[gameName] : GAME_PATHS[release]?.nexusSlug;
 }
 
-/** The paths the game gets for a path a plugin source names, in the order it tries them. */
+/** The paths the game gets for a path a plugin source names. */
 export function pathsTheGameTries(release: string | undefined, dataPath: string): readonly string[] {
   const plays = release !== undefined && GAME_PATHS[release]?.playsWavFromXwm === true;
   return plays && dataPath.toLowerCase().endsWith('.wav') ? [dataPath, `${dataPath.slice(0, -4)}.xwm`] : [dataPath];
