@@ -304,7 +304,7 @@ describe('PluginFactsFeed', () => {
       expect(client.calls.map(({ args }) => args)).toEqual([[]]);
     });
 
-    it('forgets a named plugin the answer no longer holds', async () => {
+    it('forgets a named plugin the answer does not hold', async () => {
       const { feed, client } = feedOver({ shownPlugins: () => [A, B], activePlugins: () => [A, B] });
       client.setQueryAnswer('getPlugins', reads(false));
       await feed.reconciled([]);

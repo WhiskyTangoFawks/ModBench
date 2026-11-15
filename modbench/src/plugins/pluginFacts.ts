@@ -210,10 +210,9 @@ export class PluginFacts {
     return this.judgedActiveOrder;
   }
 
-  /** The facts alone, leaving which plugins are held as they are and the sorting statuses as the
-   *  last reconcile judged them. Whether what the sorting rules judge changed. `asked` names the
-   *  plugins the answer is for, each of which the answer leaves out when it no longer shows it;
-   *  without it the answer is every plugin. */
+  /** The facts alone, leaving the held plugins and the sorting statuses as the last reconcile
+   *  judged them. `asked` names the plugins the answer covers; none means every plugin. Whether
+   *  what the sorting rules judge changed. */
   refreshed(plugins: readonly PluginMetadata[], asked?: readonly PluginAddress[]): boolean {
     answered(this.factsRead);
     if (asked === undefined) this.answers.clear();
