@@ -12,7 +12,7 @@ export type ArchiveRead = FileRead<readonly string[]> | { readonly kind: 'unansw
 
 const UNANSWERED: ArchiveRead = { kind: 'unanswered' };
 
-export type ArchiveReader = Pick<MEditClient, 'getArchiveContents' | 'onStatusChanged'>;
+export type ArchiveReader = Pick<MEditClient, 'getArchiveContents'>;
 
 const stampKey = ({ size, modifiedNs }: FileStamp): string => `${size}/${modifiedNs}`;
 

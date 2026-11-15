@@ -10,7 +10,7 @@ import { fakeInstanceAdapter, modFoldersIn, pluginFilesHeld, readingFixture, rep
 import { recordingTasks } from '../../test/recordingTasks';
 import { sourceCommands } from '../sourceCommands';
 import type { BuildMod } from '../../client/MEditClient';
-import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
+import { loadOrderStatusEventFixture, notificationEventFixture } from '../../client/test/fixtures';
 
 let root: string;
 let SOURCES: Record<string, string>;
@@ -59,6 +59,18 @@ describe('sourceCommands build, between mods', () => {
 
     expect(await outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }], refused: [] });
     expect(askedOfMEdit(client)).toContainEqual({ name: 'B.esp', origin: 'ModB' });
+  });
+
+  it('asks mEdit again at once when it names a change in the record index, without waiting out the recheck', async () => {
+    const { client, built } = buildingModBThenModA(modBHoldsPlugin);
+    client.setQueryAnswer('getPluginIndexing', NOT_YET);
+
+    const outcome = built();
+    await vi.waitFor(() => { expect(builtMods(client)).toEqual(['ModB']); });
+    client.setQueryAnswer('getPluginIndexing', AS_ON_DISK);
+    client.emit(notificationEventFixture({ kind: 'plugin-changed', plugin: 'B.esp', origin: 'ModB' }));
+
+    expect(await outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }], refused: [] });
   });
 
   it.each<[string, ReturnType<typeof pluginFilesHeld>, boolean]>([

@@ -9,7 +9,7 @@ const RECHECK_MS = 250;
 export type LoadOrderSnapshot = () => { readonly refusal: string } | { readonly plugins: unknown } | undefined;
 
 interface Deps {
-  client: Pick<MEditClient, 'getPluginIndexing' | 'onLoadOrderStatus'>;
+  client: Pick<MEditClient, 'getPluginIndexing' | 'onDidChange'>;
   adapter: Pick<InstanceAdapter, 'reading'>;
   loadOrderSnapshot: LoadOrderSnapshot;
 }
@@ -64,10 +64,10 @@ function standingOf(plugin: PluginAddress, answer: Awaited<ReturnType<MEditClien
   return { kind: 'waiting' };
 }
 
-function nextStatusOrRecheck(client: Pick<MEditClient, 'onLoadOrderStatus'>, signal: AbortSignal | undefined): { woken: Promise<void>; cancel: () => void } {
+function nextStatusOrRecheck(client: Pick<MEditClient, 'onDidChange'>, signal: AbortSignal | undefined): { woken: Promise<void>; cancel: () => void } {
   let cancel = (): void => undefined;
   const woken = new Promise<void>((resolve) => {
-    const stop = client.onLoadOrderStatus(() => { cancel(); });
+    const { dispose: stop } = client.onDidChange(() => { cancel(); });
     const timer = setTimeout(() => { cancel(); }, RECHECK_MS);
     signal?.addEventListener('abort', () => { cancel(); }, { once: true });
     cancel = () => { clearTimeout(timer); stop(); resolve(); };
