@@ -99,7 +99,7 @@ describe('the MO2 adapter\'s repository', () => {
       expect(runGit('check-ignore', '.vscode/settings.json').trim()).toBe('.vscode/settings.json');
     });
 
-    it('lets the repository hold the sorting rule files, which a clone needs', async () => {
+    it('lets the repository hold the userlist, and leaves out the masterlist and prelude LOOT supplies', async () => {
       const adapter = await instance();
       runGit('init', '--quiet');
       for (const file of ['masterlist.yaml', 'prelude.yaml', 'userlist.yaml', 'other.yaml']) await put(file, 'plugins: []\n');
@@ -107,7 +107,7 @@ describe('the MO2 adapter\'s repository', () => {
       await adapter.writeIgnoreList();
 
       expect(runGit('status', '--porcelain', '--', '*.yaml').split('\n').filter((line) => line !== '').map((line) => line.slice(3)).sort())
-        .toEqual(['masterlist.yaml', 'prelude.yaml', 'userlist.yaml']);
+        .toEqual(['userlist.yaml']);
     });
 
     it('lets the repository hold each separator\'s folder by its metadata, which a clone needs, and no mod\'s metadata', async () => {
