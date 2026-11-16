@@ -153,7 +153,7 @@ export interface ReferencedByList {
   message: string | undefined;
 }
 
-export type ReferencedByClient = Pick<MEditClient, 'getReferencesInActiveOrCompiledPlugins' | 'getChildRecordTypes' | 'getPlugins' | 'loadOrderStatus'>;
+export type ReferencedByClient = Pick<MEditClient, 'getReferencesInActiveOrCompiledPlugins' | 'getChildRecordTypes' | 'getPlugins' | 'recordIndexMayBeLate'>;
 
 async function editabilityFromPlugins(client: Pick<MEditClient, 'getPlugins'>): Promise<ConditionsOf> {
   const plugins = await client.getPlugins();
@@ -167,7 +167,7 @@ export async function readReferencedBy(
   client: ReferencedByClient, target: string, list: string,
 ): Promise<ReferencedByList> {
   const read = await client.getReferencesInActiveOrCompiledPlugins(target);
-  const indexing = client.loadOrderStatus?.conflictsComputed ? undefined : INDEXING_MESSAGE;
+  const indexing = client.recordIndexMayBeLate ? INDEXING_MESSAGE : undefined;
   if (isReadFailed(read)) {
     return { provider: new ReferencedByTreeProvider([new ErrorNode(failureReason(read))]), message: indexing };
   }

@@ -927,7 +927,7 @@ describe('what a record tab\'s webview posts', () => {
       await readAnswered(tab);
 
       expect(loadAnswered(tab)).toEqual([{
-        type: 'recordLoadAnswered', requestId: 'r1', ok: true, compare, plugins: activeA, conflictsComputed: true,
+        type: 'recordLoadAnswered', requestId: 'r1', ok: true, compare, plugins: activeA, comparisonComplete: true,
         loadFailures: [failure], documentPlugin: COPY_PLUGIN, modsByOrigin: {}, fileCopyAlone: false, fileOverriddenBy: null,
         columnStatuses: { 'A.esp': { label: '(read-only)', reason: expect.stringContaining('Version in Git') as unknown } },
       }]);
@@ -948,6 +948,66 @@ describe('what a record tab\'s webview posts', () => {
       expect(loadAnswered(tab)).toMatchObject([{ compare: { diffs: [{ cellStates: { 'A.esp': 'OnlyOne' } }] } }]);
     });
 
+    it('is answered comparisonComplete false while a change signal is unanswered, though the status holds conflicts computed', async () => {
+      const mEdit = client();
+      mEdit.emit(conflictsComputedTick);
+      mEdit.setStatus('running');
+      mEdit.answerSignals(() => new Promise<undefined>(() => undefined));
+      void mEdit.signalChange(['/m/A.esp']);
+      const { open } = makeEditor(mEdit);
+      const tab = open(GUN);
+
+      tab.receive(loadRequest);
+      await readAnswered(tab);
+
+      expect(loadAnswered(tab)).toMatchObject([{ comparisonComplete: false }]);
+    });
+
+    describe('when the record index stops being late', () => {
+      const loadRecordPosts = (tab: FakePanel) => answered(tab).filter((message) => typeof message === 'object' && message !== null && Reflect.get(message, 'type') === 'loadRecord');
+      const holdingSignal = () => {
+        const mEdit = client();
+        mEdit.setStatus('running');
+        let answerSignal!: () => void;
+        mEdit.answerSignals(() => new Promise<undefined>((r) => { answerSignal = () => { r(undefined); }; }));
+        return { mEdit, answerSignal: () => { answerSignal(); }, signal: () => { void mEdit.signalChange(['/m/A.esp']); } };
+      };
+
+      it('has a tab that showed the comparison incomplete read again, once', async () => {
+        const { mEdit, answerSignal, signal } = holdingSignal();
+        signal();
+        const { open } = makeEditor(mEdit);
+        const tab = open(GUN);
+        tab.receive(loadRequest);
+        await readAnswered(tab);
+        expect(loadAnswered(tab)).toMatchObject([{ comparisonComplete: false }]);
+        const postsBefore = loadRecordPosts(tab).length;
+
+        answerSignal();
+
+        await vi.waitFor(() => expect(loadRecordPosts(tab)).toHaveLength(postsBefore + 1));
+        await aMacrotask();
+        expect(loadRecordPosts(tab)).toHaveLength(postsBefore + 1);
+      });
+
+      it('leaves a tab that showed the comparison complete as it is', async () => {
+        const { mEdit, answerSignal, signal } = holdingSignal();
+        const { open } = makeEditor(mEdit);
+        const tab = open(GUN);
+        tab.receive(loadRequest);
+        await readAnswered(tab);
+        expect(loadAnswered(tab)).toMatchObject([{ comparisonComplete: true }]);
+        signal();
+        const postsBefore = loadRecordPosts(tab).length;
+
+        answerSignal();
+        await vi.waitFor(() => expect(mEdit.recordIndexMayBeLate).toBe(false));
+        await aMacrotask();
+
+        expect(loadRecordPosts(tab)).toHaveLength(postsBefore);
+      });
+    });
+
     describe('for a record no active plugin holds', () => {
       const gone: { formKey: string; plugin: { name: string; origin: string }; reason: 'RecordGone' | 'NotInPlugin'; message: string } = { formKey: GUN, plugin: { name: 'A.esp', origin: 'ModA' }, reason: 'RecordGone', message: `${GUN} is held by no plugin.` };
       const answeredFor = async (answer: { compare: typeof compare | null; missing: (typeof gone)[] }) => {
@@ -965,7 +1025,7 @@ describe('what a record tab\'s webview posts', () => {
       it('is answered gone, naming it, when no registered plugin holds it', async () => {
         const { tab, outputChannel } = await answeredFor({ compare: null, missing: [gone] });
 
-        expect(loadAnswered(tab)).toEqual([expect.objectContaining({ ok: true, compare: null, gone: [GUN], copiesLacking: [], conflictsComputed: false, loadFailures: [] })]);
+        expect(loadAnswered(tab)).toEqual([expect.objectContaining({ ok: true, compare: null, gone: [GUN], copiesLacking: [], loadFailures: [] })]);
         expect(outputChannel.warn).toHaveBeenCalledWith(expect.stringContaining(GUN));
       });
 

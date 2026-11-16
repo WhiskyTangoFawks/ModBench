@@ -246,7 +246,7 @@ export type RecordLoadAnswer =
   | ({
       ok: true;
       plugins: components['schemas']['PluginResponse'][] | null;
-      conflictsComputed: boolean;
+      comparisonComplete: boolean;
       // The plugins mEdit cannot read, as the Plugins tree is told them.
       loadFailures: components['schemas']['PluginLoadFailure'][];
       documentPlugin: PluginAddress;

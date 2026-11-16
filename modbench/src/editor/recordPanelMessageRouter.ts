@@ -45,13 +45,13 @@ export interface RouteRecordPanelMessageDeps {
   plugin: PluginAddress;
   documentText: (pluginActive: boolean) => Promise<string | undefined>;
   // The panel's read of `formKey` is answered, and the webview shows that record from then on.
-  readAnswered: (formKey: string, columns: readonly RecordCopy[]) => void;
+  readAnswered: (formKey: string, columns: readonly RecordCopy[], comparisonComplete: boolean) => void;
   // A refusal for want of a load order is not read yet while one is on its way.
   loadOrderComing: () => boolean;
   // The grid's place, which the tab an edit's move of the file opens shows again.
   keepViewState: (state: ViewState) => void;
-  // The latest load-order status, read rather than fetched.
-  conflictsComputed: () => boolean;
+  // Whether the record index may not yet hold what Modbench handed it.
+  recordIndexMayBeLate: () => boolean;
   loadFailures: () => readonly PluginLoadFailure[];
   modFacts: ModFacts;
   // The origins the panel's last read showed, which it is told the state of when the instance changes.
@@ -87,7 +87,7 @@ export function routerDepsForTab(
     ...document,
     titleFromRead: (formKey, columns) => { if (tab.isOpen) document.titleFromRead(formKey, columns); },
     keepViewState: (state) => { tab.keepPlace(state); },
-    readAnswered: (formKey, columns) => { tab.answered(formKey, columns); },
+    readAnswered: (formKey, columns, complete) => { tab.answered(formKey, columns, complete); },
   };
 }
 
@@ -217,7 +217,8 @@ function tellAnswered(
   const origins = (overrides ?? []).map((o) => o.origin);
   deps.originsShown(origins);
   deps.titleFromRead(m.formKey, overrides);
-  deps.readAnswered(m.formKey, m.columns);
+  const comparisonComplete = !deps.recordIndexMayBeLate();
+  deps.readAnswered(m.formKey, m.columns, comparisonComplete);
   const standing = deps.modFacts.standingOf(deps.plugin);
   const { overriddenBy: fileOverriddenBy } = fileStanding({ pluginActive, columnsShown: m.columns.length > 0, standing });
   const fileCopy = overrides?.find((o) => o.formKey === m.formKey && samePluginAddress(pluginAddressOf(o), deps.plugin));
@@ -227,7 +228,7 @@ function tellAnswered(
   deps.reply({
     type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: true,
     ...answered, ...(answered.compare && { compare: withMasterCellStates(answered.compare) }), plugins: listed, columnStatuses: statuses,
-    conflictsComputed: deps.conflictsComputed(), loadFailures: [...deps.loadFailures()], documentPlugin: deps.plugin,
+    comparisonComplete, loadFailures: [...deps.loadFailures()], documentPlugin: deps.plugin,
     modsByOrigin: modsByOrigin(origins, deps.modFacts), fileOverriddenBy,
   });
 }

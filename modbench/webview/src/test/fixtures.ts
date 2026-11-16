@@ -53,7 +53,7 @@ export interface FixturePlugin {
 
 export interface PanelOpts {
   plugins?: FixturePlugin[];
-  conflictsComputed?: boolean;
+  comparisonComplete?: boolean;
   loadFailures?: PluginLoadFailure[];
   modsByOrigin?: Record<string, ModRepository>;
   /** The column of the copy the tab's document holds. Unstated, the winning copy's, as a record
@@ -90,7 +90,7 @@ export function loaded(
     editableSet: columnsWhere(pluginCanBeEdited),
     columnStatuses: opts.columnStatuses ?? {},
     modsByOrigin: opts.modsByOrigin ?? {},
-    conflictsComputed: opts.conflictsComputed ?? true,
+    comparisonComplete: opts.comparisonComplete ?? true,
     loadFailures: opts.loadFailures ?? [],
     fileColumn: opts.fileColumn === undefined
       ? result ? winnerColumn(result) : undefined
