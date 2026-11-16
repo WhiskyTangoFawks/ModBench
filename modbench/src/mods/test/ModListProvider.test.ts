@@ -17,7 +17,7 @@ vi.mock('vscode', () => ({
   Uri, DataTransferItem, DataTransfer,
 }));
 
-import { ModListProvider, SeparatorNode, ModNode, OverwriteNode, type ModlistNode } from '../ModListProvider';
+import { ModListProvider, SeparatorGroupNode, SeparatorNode, ModNode, OverwriteNode, type ModlistNode } from '../ModListProvider';
 import { OpenRows } from '../openRows';
 import { separatorRowUri } from '../modIndicators';
 import { NO_MOD_STATUSES } from '../../test/noModStatuses';
@@ -820,5 +820,66 @@ describe('the Mods tree\'s rows', () => {
       expect([row.resourceUri?.scheme, row.resourceUri?.path]).toEqual(['modbench-overwrite', '/']);
       expect(row.contextValue).toBe('runtimeOutput');
     });
+  });
+});
+
+describe('separators that share a prefix', () => {
+  const grouped = (): ModlistEntry[] => [
+    mod('Rock'), sep('textures - Retextures'), mod('Fix'), sep('textures - Fixes'), mod('Lone'), sep('Plain'), mod('Base'),
+  ];
+
+  it('sit under a group of the prefix, labelled less it', async () => {
+    const provider = makeProvider(grouped());
+    const roots = await provider.getChildren();
+    const group = expectInstanceOf(roots.find((n) => n.kind === 'separatorGroup'), SeparatorGroupNode);
+
+    expect(rowsOf(roots)).toEqual(['mod Base', 'separator Plain', 'separatorGroup textures', 'runtimeOutput Overwrite']);
+    expect(rowsOf(await provider.getChildren(group))).toEqual(['separator Fixes', 'separator Retextures']);
+    expect(group.id).toBe('separatorGroup:textures');
+  });
+
+  it('are reversed with the view, group and children alike', async () => {
+    const provider = makeProvider(grouped());
+    provider.setViewDirection('winningAtTop');
+    const roots = await provider.getChildren();
+    const group = expectInstanceOf(roots.find((n) => n.kind === 'separatorGroup'), SeparatorGroupNode);
+
+    expect(rowsOf(roots)).toEqual(['runtimeOutput Overwrite', 'separatorGroup textures', 'separator Plain', 'mod Base']);
+    expect(rowsOf(await provider.getChildren(group))).toEqual(['separator Retextures', 'separator Fixes']);
+  });
+
+  it('give a separator the group as its parent, and a mod the separator', async () => {
+    const provider = makeProvider(grouped());
+    const group = expectInstanceOf((await provider.getChildren()).find((n) => n.kind === 'separatorGroup'), SeparatorGroupNode);
+    const [fixes] = await provider.getChildren(group);
+
+    expect(provider.getParent(present(fixes, 'Fixes'))).toMatchObject({ id: 'separatorGroup:textures' });
+    expect(provider.getParent(group)).toBeUndefined();
+    expect(provider.getParent(expectInstanceOf(provider.rowFor({ kind: 'mod', name: 'Fix' }), ModNode))).toMatchObject({ id: 'separator:textures - Fixes' });
+  });
+
+  it('show their group under a filter while a mod under it shows, and expand it', async () => {
+    const provider = makeProvider(grouped());
+    provider.setFilter('rock', true);
+    const roots = await provider.getChildren();
+
+    expect(rowsOf(roots)).toEqual(['separatorGroup textures', 'runtimeOutput Overwrite']);
+    expect(roots[0]?.collapsibleState).toBe(TreeItemCollapsibleState.Expanded);
+    expect(rowsOf(await provider.getChildren(roots[0]))).toEqual(['separator Retextures']);
+  });
+
+  it('show every separator under a group whose label matches the filter', async () => {
+    const provider = makeProvider(grouped());
+    provider.setFilter('textures', true);
+    const group = present((await provider.getChildren())[0], 'the group');
+
+    expect(rowsOf(await provider.getChildren(group))).toEqual(['separator Fixes', 'separator Retextures']);
+  });
+
+  it('show no group while a filter flattens the view', async () => {
+    const provider = makeProvider(grouped());
+    provider.setFilter('lone', false);
+
+    expect(rowsOf(await provider.getChildren())).toEqual(['mod Lone', 'runtimeOutput Overwrite']);
   });
 });
