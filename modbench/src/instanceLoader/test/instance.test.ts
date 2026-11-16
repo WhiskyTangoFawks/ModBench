@@ -733,6 +733,31 @@ describe('Instance — a write that changes several files', () => {
     expect(fake.rereads).toEqual([CHECK, reread('/instance/mods/A/a.esp')]);
   });
 
+  it('answers a write its own work tells it at once, and reads that file again after it', async () => {
+    const { instance, fake } = loader();
+    await instance.refresh();
+
+    await instance.quiet(() => instance.told(['/instance/profiles/Default/modlist.txt']));
+
+    expect(fake.rereads.at(-1)).toEqual(reread('/instance/profiles/Default/modlist.txt'));
+  });
+
+  it('returns, while another overlaps it, once the read after both holds what its work wrote', async () => {
+    const { instance, fake } = loader();
+    await instance.refresh();
+    let finishOther!: () => void;
+    let returned = false;
+
+    const other = instance.quiet(() => new Promise<void>((resolve) => { finishOther = resolve; }));
+    const own = instance.quiet(() => instance.told(['/instance/profiles/Default/modlist.txt'])).then(() => { returned = true; });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(returned).toBe(false);
+    finishOther();
+    await Promise.all([other, own]);
+
+    expect(fake.rereads.at(-1)).toEqual(reread('/instance/profiles/Default/modlist.txt'));
+  });
+
   it('reads again no file after work that names none, and checks the disk after work that left its files unnamed', async () => {
     const { instance, fake } = loader();
     await instance.refresh();
@@ -798,10 +823,10 @@ describe('Instance — a write that changes several files', () => {
     const heard = vi.fn();
     instance.onReadFailure(heard);
 
-    await instance.quiet(async () => {
+    await expect(instance.quiet(async () => {
       fake.failReading('ModOrganizer.ini is empty');
       await instance.refresh();
-    });
+    })).rejects.toThrow('ModOrganizer.ini is empty');
 
     expect(heard).toHaveBeenCalledTimes(1);
     expect(errorLines).toHaveLength(1);
@@ -837,17 +862,18 @@ describe('Instance — a value that survives a bad read', () => {
     await expect(instance.told(['/instance/profiles/Default/modlist.txt'])).rejects.toThrow('ModOrganizer.ini is half-written');
   });
 
-  it('answers a write told to it during a quiet scope once the read after the scope has landed, never at the dropped read', async () => {
+  it('answers another write told to it during a quiet scope once the read after the scope has landed, never at the dropped read', async () => {
     const { instance } = loader({ mods: [mod('A')] });
     await instance.refresh();
-    let told: Promise<void> | undefined;
+    let finishWork!: () => void;
     let answered = false;
 
-    await instance.quiet(async () => {
-      told = instance.told(['/instance/profiles/Default/modlist.txt']).then(() => { answered = true; });
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      expect(answered).toBe(false);
-    });
+    const quiet = instance.quiet(() => new Promise<void>((resolve) => { finishWork = resolve; }));
+    const told = instance.told(['/instance/profiles/Default/modlist.txt']).then(() => { answered = true; });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(answered).toBe(false);
+    finishWork();
+    await quiet;
     await told;
 
     expect(answered).toBe(true);
