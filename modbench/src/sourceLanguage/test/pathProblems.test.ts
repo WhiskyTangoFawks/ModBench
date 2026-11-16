@@ -49,6 +49,8 @@ const asked = (client: InMemoryMEditClient) => client.calls.filter((call) => cal
 
 afterEach(() => { vi.useRealTimers(); });
 
+let releaseSecond: (text: string) => void = () => undefined;
+
 describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
   it('puts a path that no file the game gets and no file its mod holds names on the path itself', async () => {
     const { settled } = feed([answerFor()]);
@@ -180,6 +182,31 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     expect(published[1]?.get(FILE)?.[0]?.start.character).toBe(SPAN.start + 2);
   });
 
+  it('is settled only once the judgement of a change is published', async () => {
+    const texts = [Promise.resolve(TEXT), new Promise<string>((resolve) => { releaseSecond = resolve; })];
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getPluginFilePaths', [answerFor()]);
+    const published: ProblemsByFile[] = [];
+    const { settled } = feedPathProblems({
+      client, ask: problemsAsker(client), sourceFiles: sourceFolders, reporter: recordingReporter(),
+      readText: () => texts.shift() ?? Promise.resolve(TEXT),
+      paths: { judged: () => true, holds: () => false, subscribe: () => ({ dispose: () => undefined }) },
+      publish: (problems) => published.push(problems), languageStatus: () => undefined,
+    });
+    await settled();
+    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+
+    let ended = false;
+    const waiting = settled().then(() => { ended = true; });
+    await vi.waitFor(() => { expect(asked(client)).toHaveLength(2); });
+    await new Promise((resolve) => { setTimeout(resolve, 20); });
+    expect(ended).toBe(false);
+    releaseSecond(TEXT);
+    await waiting;
+
+    expect(published).toHaveLength(2);
+  });
+
   it('keeps one ask in flight and at most one pending, however many notifications arrive meanwhile', async () => {
     const { settled, client } = feed([answerFor()]);
     await settled(1);
@@ -217,20 +244,6 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     await vi.waitFor(() => { expect(published).toHaveLength(2); });
 
     expect(reads).toEqual([FILE]);
-  });
-
-  it('does not ask before the load order settles', async () => {
-    const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getPluginFilePaths', [answerFor()]);
-    client.emit(loadOrderStatusEventFixture({ state: 'Reconciling', conflictsComputed: false, version: 1 }));
-    feedPathProblems({
-      client, ask: problemsAsker(client), sourceFiles: sourceFolders, readText: () => Promise.resolve(TEXT), reporter: recordingReporter(),
-      paths: { judged: () => true, holds: () => false, subscribe: () => ({ dispose: () => undefined }) }, publish: () => undefined, languageStatus: () => undefined,
-    });
-    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
-    await new Promise((resolve) => { setTimeout(resolve, 20); });
-
-    expect(asked(client)).toEqual([[undefined]]);
   });
 
   describe.each([

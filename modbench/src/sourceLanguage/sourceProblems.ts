@@ -1,13 +1,12 @@
 import type { MEditClient, PluginAddress, PluginProblems } from '../client';
 import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import { askingOnChange } from '../drivingLib/problemsAsker';
-import { coalesced } from '../ports/coalesced';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import type { PathHop } from '../wire/messages';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { locationOf, type Segment } from './sourceText';
-import { askedAgain, lastRead, readiness, tellingOnSurface, type Asked, type Position, type Told } from './feedShape';
+import { askedAgain, lastRead, askingWhenNotLate, settling, tellingOnSurface, type Asked, type Feed, type Position, type Told } from './feedShape';
 import { answerOf, failureReason, type ReadFailed } from '../wire/readFailed';
 
 type SourceProblem = PluginProblems['problems'][number];
@@ -18,7 +17,7 @@ export interface ProblemOnFile { message: string; start: Position; end: Position
 export type ProblemsByFile = ReadonlyMap<string, ProblemOnFile[]>;
 
 export interface SourceProblemsDeps {
-  client: Pick<MEditClient, 'loadOrderStatus' | 'onUnsavedHandOver'>;
+  client: Pick<MEditClient, 'recordIndexMayBeLate' | 'onDidChangeRecordIndexMayBeLate' | 'onUnsavedHandOver'>;
   ask: Pick<Asked, 'getPluginProblems' | 'onPluginChanged' | 'onAskedAgain'>;
   sourceFiles: SourceFilesOf;
   reporter: Pick<Reporter, 'shownOnSurface'>;
@@ -108,7 +107,7 @@ function nextHeld(held: Map<string, Contribution>, answered: Map<string, Contrib
 /** Publishes what mEdit answers is wrong in each compiled plugin's source. A plugin mEdit
  *  cannot answer for keeps the links it last had and takes the stops it now answers, and the
  *  language status says why. */
-export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
+export function feedSourceProblems(deps: SourceProblemsDeps): Feed {
   const { client, reporter, publish, languageStatus, unsavedStatus } = deps;
   const tellUnplaced = tellingOnSurface(reporter);
   let held = new Map<string, Contribution>();
@@ -130,7 +129,6 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
     unsavedStatus(why === undefined ? undefined : lastRead(unsavedBecause(why)));
     showStatus();
   };
-  const { ready, answeredAtSubscribe } = readiness(client);
   const unplacedStatus = () => unplacedHeld.size > 0
     ? lastRead([...unplacedHeld.values()].map(({ plugin, why }) => `${plugin}: ${why}`).join('; '))
     : undefined;
@@ -152,7 +150,6 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
     const target = plugin === undefined ? WHOLE_SET : pluginAddressKey(plugin);
     try {
       const answer = placed(answerOf(await deps.ask.getPluginProblems(plugin)), deps);
-      if (first) answeredAtSubscribe();
       settle(target, answer);
     } catch (error) {
       if (!first) keepLastAnswer(target, error);
@@ -161,22 +158,24 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
   let wholeWanted = true;
   let atSubscribe = true;
   const asking = new Map<string, PluginAddress>();
-  const askWanted = coalesced(async () => {
+  const asks = settling();
+  const askWanted = asks.asking(async () => {
     const [whole, first, named] = [wholeWanted, atSubscribe, [...asking.values()]];
     [wholeWanted, atSubscribe] = [false, false];
     asking.clear();
     await Promise.all(whole ? [ask(undefined, first)] : named.map((plugin) => ask(plugin)));
   });
-  const askPluginWhenReady = ({ plugin }: { plugin: PluginAddress }) => {
-    if (!ready()) return;
+  const askPlugin = (plugin: PluginAddress) => {
     asking.set(pluginAddressKey(plugin), plugin);
     askWanted();
   };
+  const whenNotLate = askingWhenNotLate(client, askPlugin);
   const unsubscribe = [
-    deps.ask.onPluginChanged(askingOnChange(() => { wholeWanted = true; askWanted(); }, askPluginWhenReady)),
-    deps.ask.onAskedAgain('getPluginProblems', askedAgain(() => { wholeWanted = true; askWanted(); }, askPluginWhenReady)),
+    deps.ask.onPluginChanged(askingOnChange(() => { wholeWanted = true; askWanted(); }, whenNotLate.plugin)),
+    deps.ask.onAskedAgain('getPluginProblems', askedAgain(() => { wholeWanted = true; askWanted(); }, whenNotLate.plugin)),
     client.onUnsavedHandOver(handedOver),
+    whenNotLate.stop,
   ];
   askWanted();
-  return () => { for (const off of unsubscribe) off(); };
+  return { stop: () => { for (const off of unsubscribe) off(); }, settled: asks.settled };
 }

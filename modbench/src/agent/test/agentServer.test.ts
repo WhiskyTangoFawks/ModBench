@@ -34,6 +34,7 @@ import type { MEditClient } from '../../client/MEditClient';
 import type { ModStatus } from '../../manifestAdapter/manifestAdapter';
 import { status } from '../../test/modStatusFixture';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { EMPTY_SNAPSHOT } from '../../client/test/fixtures';
 import { comparisonOf } from '../../test/comparison';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { fakeInstanceAdapter, fileIn, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
@@ -115,13 +116,16 @@ const symbols: SymbolIndex = {
 };
 beforeEach(() => { symbolReads.asked = []; symbolReads.definition = { file: '/mods/Mod' }; symbolReads.references = { references: [], leftOut: [] }; });
 
+const feeds = { caughtUp: (): Promise<void> => Promise.resolve() };
+afterEach(() => { feeds.caughtUp = () => Promise.resolve(); });
+
 async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new InMemoryMEditClient(), terminalEnvironment: TerminalEnvironment = NO_ENVIRONMENT, deployment: AgentServerOptions['deployment'] = NO_DEPLOYMENT, standing: AgentServerOptions['standing'] = NO_STANDING) {
   const reporter = recordingReporter();
   const lines: string[] = [];
   const warned: string[] = [];
   const errored: string[] = [];
   const server = serveAgent({
-    port, instance, copyReads: fakeInstanceAdapter(readingFixture(), copyAnswers).adapter, mEdit, symbols, terminalEnvironment, reporter, statuses, deployment, standing, pluginsShown,
+    port, instance, copyReads: fakeInstanceAdapter(readingFixture(), copyAnswers).adapter, mEdit, symbols, problemsCaughtUp: () => feeds.caughtUp(), terminalEnvironment, reporter, statuses, deployment, standing, pluginsShown,
     log: { ...SILENT_LOG, info: (line) => lines.push(line), warn: (line) => { lines.push(line); warned.push(line); }, error: (line) => { lines.push(line); errored.push(line); } },
   });
   running.push(server);
@@ -604,6 +608,43 @@ describe('the agent server, given an instance value', () => {
       { file: '/i/source/Rocks/plugin-source/Rocks.esp.json', severity: 'Error', line: 5, message: 'bad reference' },
       { file: '/i/source/Rocks/plugin-source/Rocks.esp.json', severity: 'Information', line: 10, message: 'odd value', code: 7 },
     ]);
+  });
+
+  it('answers list_problems with the diagnostics once the feeds have caught up with the changes mEdit named', async () => {
+    const { client } = await clientOf(new FakeInstance(VALUE));
+    const problem = { severity: 0, range: { start: { line: 0 } }, message: 'Could not be resolved', source: 'Modbench' };
+    diagnosticsHeld.held = [[{ scheme: 'file', fsPath: '/i/Rocks.esp.json' }, [problem]]];
+    let caughtUp!: () => void;
+    feeds.caughtUp = () => new Promise<void>((resolve) => { caughtUp = () => { resolve(); }; });
+
+    const asked = read(client, 'list_problems');
+    await new Promise((resolve) => { setTimeout(resolve, 30); });
+    diagnosticsHeld.held = [];
+    caughtUp();
+
+    expect(await asked).toEqual([]);
+  });
+
+  describe('list_problems, when the record index may be late', () => {
+    const LATE_LINE = 'The record index may be late: this answer may predate a write.';
+    const blocksOf = async (client: Client) => CallToolResultSchema.parse(await client.callTool({ name: 'list_problems', arguments: {} })).content
+      .map((block) => (block.type === 'text' ? block.text : ''));
+
+    it('says its answer may predate a write', async () => {
+      const mEdit = new InMemoryMEditClient();
+      mEdit.setStatus('running');
+      mEdit.answerPuts(() => new Promise(() => undefined));
+      void mEdit.sendLoadOrder(EMPTY_SNAPSHOT);
+      const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
+
+      expect(await blocksOf(client)).toContain(LATE_LINE);
+    });
+
+    it('says nothing of lateness when the record index is not late', async () => {
+      const { client } = await clientOf(new FakeInstance(VALUE));
+
+      expect(await blocksOf(client)).not.toContain(LATE_LINE);
+    });
   });
 
   describe('list_problems given paths', () => {
