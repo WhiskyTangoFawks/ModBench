@@ -28,7 +28,7 @@ import { toldAfter } from '../../repositoriesLib/writesTold';
 
 type Mo2Changes = Pick<InstanceAdapter,
   | 'changePluginOrder' | 'changePluginOrderOverProvided' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'markDownloadedFile' | 'writeNexusFileInfo'
-  | 'putDownloadedFile' | 'copyDownloadedFile' | 'trashDownloadedFile' | 'selectProfile' | 'changeUserlist' | 'changeMasterlist' | 'uncommittedMasterlist'>;
+  | 'putDownloadedFile' | 'copyDownloadedFile' | 'trashDownloadedFile' | 'selectProfile' | 'changeUserlist' | 'changeMasterlist'>;
 
 async function heldDownloadedFile(context: Mo2Context, name: string): Promise<{ downloadsDir: string; file: string } | undefined> {
   const downloadsDir = await currentDownloadsDir(context);
@@ -216,7 +216,7 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
       return putIfChanged(sortingRuleFilePaths(instanceRoot).userlist, (before) => addLoadAfter(before, additions), { ifMissing: '' });
     },
 
-    changeMasterlist({ masterlist, prelude }) {
+    changeMasterlist({ masterlist, prelude }, trash) {
       const paths = sortingRuleFilePaths(instanceRoot);
       return withLock(paths.masterlist, () => withLock(paths.prelude, async () => {
         const undos: Undo[] = [];
@@ -225,6 +225,7 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
           for (const [path, text] of [[paths.masterlist, masterlist], [paths.prelude, prelude]] as const) {
             const before = (await exists(path)) ? await get(path) : undefined;
             if (before === text) continue;
+            if (before !== undefined) await trash(path);
             await write(path, text);
             undos.unshift(() => (before === undefined ? remove(path) : write(path, before)));
             written.push(basename(path));
@@ -234,14 +235,6 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
         }
         return { written };
       }));
-    },
-
-    async uncommittedMasterlist() {
-      if (!(await isRepository(instanceRoot))) return [];
-      const paths = sortingRuleFilePaths(instanceRoot);
-      const files = [basename(paths.masterlist), basename(paths.prelude)];
-      const status = await git(instanceRoot, 'status', '--porcelain', '-z', '--no-renames', '--', ...files);
-      return status.split('\0').filter((entry) => entry !== '').map((entry) => entry.slice(3));
     },
 
     selectProfile(profile) {
