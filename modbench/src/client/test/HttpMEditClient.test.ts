@@ -388,7 +388,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     const asking = (...replies: unknown[]) => {
       const queue = [...replies];
       const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, queue.shift())));
-      const bodies = () => Promise.all(fetch.mock.calls.map(async ([req]) => { const body: { keys: unknown; known: unknown } = JSON.parse(await req.clone().text()); return body; }));
+      const bodies = () => Promise.all(fetch.mock.calls.map(async ([req]) => { const body: unknown = JSON.parse(await req.clone().text()); return body; }));
       return { client: makeClient(fetch), fetch, bodies };
     };
 
@@ -448,7 +448,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       await client.getPluginProblems(REFERS);
       await client.getPluginProblems(REFERS, undefined, ['A']);
 
-      expect((await bodies()).map(({ keys }) => keys)).toEqual([null, ['A'], null]);
+      expect(await bodies()).toEqual([expect.objectContaining({ keys: null }), expect.objectContaining({ keys: ['A'] }), expect.objectContaining({ keys: null })]);
     });
 
     it('asks the whole plugin when it holds none of it', async () => {
