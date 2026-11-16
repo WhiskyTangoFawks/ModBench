@@ -25,6 +25,7 @@ const TOOLBOX = 'modbench.toolbox';
 
 const modRow = (name: string) => ({ argument: { kind: 'mod', name }, name });
 const separatorRow = (name: string) => ({ argument: { kind: 'separator', name }, name });
+const groupRow = { kind: 'separatorGroup', label: 'Pack' };
 const folderRow = { argument: { kind: 'folder', path: '/instance/mods/ModA/meshes' }, name: 'meshes' };
 
 const focused = (id: string | undefined, selection: readonly unknown[] = []) => ({
@@ -44,6 +45,8 @@ describe('the mods a Mods gesture runs over (instance-repository.md, Every mod)'
     ['a separator named without its case as the mod manager names it', focused(undefined), separatorRow('weapons'), [separatorRow('weapons')], named(['ModA'])],
     ['a selected row that is neither a mod nor a separator refused, naming it', focused(undefined), modRow('ModA'), [modRow('ModA'), folderRow],
       named(['ModA'], [{ item: 'meshes', reason: 'it is not a mod or a separator' }])],
+    ['a selected separator group refused, naming it, and no mod run for it', focused(MODS_VIEW, [groupRow]), undefined, undefined,
+      named([], [{ item: 'Pack', reason: 'it is not a mod or a separator' }])],
   ])('are %s', (_case, deps, clicked, selected, expected) => {
     expect(modsToRun(deps, clicked, selected)).toEqual(expected);
   });
