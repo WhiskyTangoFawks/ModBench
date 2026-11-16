@@ -447,6 +447,35 @@ public sealed class ModelIdentityTests
         Assert.Null(divergence);
     }
 
+    [Fact]
+    public async Task DivergenceFrom_WhenAFormKeyDiffersOnlyInThePluginNamesCase_ReturnsNull()
+    {
+        var original = NpcWithAHeadPart(new FormKey(ModKey.FromFileName("Upper.esp"), 0x817));
+        var recompiled = NpcWithAHeadPart(new FormKey(ModKey.FromFileName("UPPER.ESP"), 0x817));
+
+        Assert.Null(await DivergenceAsync(original, recompiled));
+    }
+
+    [Theory]
+    [InlineData("Upper.esp", 0x818u)]
+    [InlineData("Other.esp", 0x817u)]
+    public async Task DivergenceFrom_WhenAFormKeyDiffersInItsIdOrBeyondCase_NamesTheField(string plugin, uint id)
+    {
+        var original = NpcWithAHeadPart(new FormKey(ModKey.FromFileName("Upper.esp"), 0x817));
+        var recompiled = NpcWithAHeadPart(new FormKey(ModKey.FromFileName(plugin), id));
+
+        Assert.Contains("HeadParts", await DivergenceAsync(original, recompiled));
+    }
+
+    private static Fallout4Mod NpcWithAHeadPart(FormKey headPart)
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        var npc = new Npc(new FormKey(mod.ModKey, 0x800), Fallout4Release.Fallout4) { EditorID = "Npc" };
+        npc.HeadParts.Add(new FormLink<IHeadPartGetter>(headPart));
+        mod.Npcs.Add(npc);
+        return mod;
+    }
+
     private static async Task<string?> DivergenceAsync(Fallout4Mod original, Fallout4Mod recompiled)
     {
         using var scratch = new ScratchDirectory("medit-modelidentity-");
