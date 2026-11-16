@@ -633,7 +633,7 @@ describe('the agent server, given an instance value', () => {
     it('says its answer may predate a write mEdit has made and the client has not heard', async () => {
       const mEdit = new InMemoryMEditClient();
       mEdit.setStatus('running');
-      mEdit.mEditSequence = 5;
+      mEdit.sequenceMEditStandsAt = 5;
       const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
 
       expect(await blocksOf(client)).toContain(LATE_LINE);

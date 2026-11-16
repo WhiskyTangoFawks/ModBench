@@ -145,9 +145,10 @@ class HttpMEditClient implements MEditClient {
     // The stream is open exactly while the backend is attached, so no module outside this one
     // starts or stops it.
     this.lifecycle.onStatusChanged((status) => {
-      if (status === 'running') this.notifications.start();
-      else this.notifications.stop();
-      if (status === 'running') void this.hearFromHere();
+      if (status === 'running') {
+        this.notifications.start();
+        void this.hearFromHere();
+      } else this.notifications.stop();
     });
     this.notifications.onReconnected(() => { void this.hearFromHere(); });
     for (const kind of ['rows-changed', 'plugin-changed', 'record-index-changed'] as const) {
@@ -212,11 +213,10 @@ class HttpMEditClient implements MEditClient {
 
   onDidChange(listener: (change: RecordIndexChange) => void): Disposable { return this.changes.onDidChange(listener); }
   onDidChangeRecordIndexMayBeLate(listener: (late: boolean) => void): Disposable { return this.lateness.event(listener); }
-  async hasHeardEveryChange(): Promise<boolean> {
-    const current = await this.currentSequence();
-    if (current !== undefined) this.mEditSequence = Math.max(this.mEditSequence, current);
+  async refreshRecordIndexLateness(token?: ReadCancellation): Promise<void> {
+    const current = await this.currentSequence(token);
+    if (!isReadFailed(current)) this.mEditSequence = Math.max(this.mEditSequence, current);
     this.lateness.note();
-    return !this.behindMEdit;
   }
 
   private get behindMEdit(): boolean { return this.notifications.heardSequence < this.mEditSequence; }
@@ -487,17 +487,11 @@ class HttpMEditClient implements MEditClient {
     this.notifications.forgetHeard();
     this.mEditSequence = 0;
     const current = await this.currentSequence();
-    if (current !== undefined) this.notifications.hearUpTo(current);
+    if (!isReadFailed(current)) this.notifications.hearUpTo(current);
   }
 
-  private async currentSequence(): Promise<number | undefined> {
-    try {
-      const { data } = await this.apiClient.GET('/load-order/sequence', {});
-      return data;
-    } catch (e) {
-      this.log.error(`[HttpMEditClient] reading the record index sequence threw: ${errorMessage(e)}`);
-      return undefined;
-    }
+  private currentSequence(token?: ReadCancellation): Promise<number | ReadFailed> {
+    return this.read('GET /load-order/sequence', (api, signal) => api.GET('/load-order/sequence', { signal }), noBodyFails, { token, held: false });
   }
 
   // Undefined when the read fails: the caller then waits on the stream's own ticks.

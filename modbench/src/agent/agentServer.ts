@@ -13,7 +13,7 @@ import { instanceMessages, type InstanceView } from '../instanceLoader/instance'
 import type { Log } from '../ports/log';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
-import type { MEditClient } from '../client/MEditClient';
+import type { MEditClient, ReadCancellation } from '../client/MEditClient';
 import type { Source } from './source';
 import { AGENT_PORT_SETTING } from './agentPort';
 import { FILE_CONFLICTS } from './fileConflicts';
@@ -43,7 +43,7 @@ export interface AgentServerOptions {
   port: number;
   instance: Pick<InstanceView, 'value' | 'sequence' | 'readFailure'> | undefined;
   copyReads: CopyReads | undefined;
-  mEdit: Pick<MEditClient, 'recordIndexMayBeLate' | 'hasHeardEveryChange' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getPlugins' | 'getCopyDocument' | 'getRenderedDocument' | 'getArchiveCopies'>;
+  mEdit: Pick<MEditClient, 'recordIndexMayBeLate' | 'refreshRecordIndexLateness' | 'resolveNames' | 'selectRows' | 'getComparison' | 'getPlugins' | 'getCopyDocument' | 'getRenderedDocument' | 'getArchiveCopies'>;
   symbols: SymbolIndex;
   problemsCaughtUp: () => Promise<void>;
   terminalEnvironment: TerminalEnvironment;
@@ -155,13 +155,21 @@ function mcpServerOf({ instance, copyReads, mEdit, symbols, problemsCaughtUp, te
   };
   const maybeLate = () => (mEdit.recordIndexMayBeLate ? ['The record index may be late: this answer may predate a write.'] : []);
   register(server, log, () => [...reading('instance', 'sortingRules', 'sourceLanguage')(), ...maybeLate()], PROBLEMS, async (args, cancelled) => {
-    await mEdit.hasHeardEveryChange();
+    await mEdit.refreshRecordIndexLateness(readCancellationOf(cancelled));
     await untilCaughtUp(problemsCaughtUp, cancelled);
     return PROBLEMS.of(args, problemFolders);
   });
   register(server, log, reading('instance'), READ_GUIDE, (args) => READ_GUIDE.of(currentValue(instance), args));
   return server;
 }
+
+const readCancellationOf = (signal: AbortSignal): ReadCancellation => ({
+  get isCancellationRequested() { return signal.aborted; },
+  onCancellationRequested: (listener) => {
+    signal.addEventListener('abort', listener, { once: true });
+    return { dispose: () => { signal.removeEventListener('abort', listener); } };
+  },
+});
 
 const LOOPBACK = '127.0.0.1';
 

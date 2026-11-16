@@ -1351,15 +1351,33 @@ describe('HttpMEditClient — whether the record index may be late', () => {
     it('is not while mEdit has advanced past the last sequence a notification carried', async () => {
       let sequence = 3;
       const { client, push } = await hearing(() => sequence);
-      await vi.waitFor(async () => { expect(await client.hasHeardEveryChange()).toBe(true); });
+      await client.refreshRecordIndexLateness();
+      expect(client.recordIndexMayBeLate).toBe(false);
 
       sequence = 5;
       push(rowsTick(4));
-      await vi.waitFor(async () => { expect(await client.hasHeardEveryChange()).toBe(false); });
-      expect(client.recordIndexMayBeLate).toBe(true);
+      await vi.waitFor(async () => { await client.refreshRecordIndexLateness(); expect(client.recordIndexMayBeLate).toBe(true); });
       push(rowsTick(5));
       await vi.waitFor(() => { expect(client.recordIndexMayBeLate).toBe(false); });
-      expect(await client.hasHeardEveryChange()).toBe(true);
+    });
+
+    it('hears a process it reconnects to from where that process stands', async () => {
+      let sequence = 3;
+      const { streams, open } = reopeningStreams();
+      const fetch = routedFetch([
+        ['/notifications/stream', () => open()],
+        ['/load-order/sequence', () => Promise.resolve(jsonResponse(200, sequence))],
+      ]);
+      const client = makeClient(fetch, { reconnectDelayMs: 1 });
+      await client.start();
+      await vi.waitFor(() => { expect(streams).toHaveLength(1); });
+      await client.refreshRecordIndexLateness();
+
+      sequence = 7;
+      streams[0].end();
+      await vi.waitFor(() => { expect(streams).toHaveLength(2); });
+
+      await vi.waitFor(async () => { await client.refreshRecordIndexLateness(); expect(client.recordIndexMayBeLate).toBe(false); });
     });
   });
 

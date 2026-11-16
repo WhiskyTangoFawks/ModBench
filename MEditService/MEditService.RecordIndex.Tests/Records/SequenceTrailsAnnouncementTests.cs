@@ -48,6 +48,7 @@ public sealed class SequenceTrailsAnnouncementTests : IDisposable
         _index.Reconcile(_holder, _dataFolder, [entry], GameRelease.Fallout4, _instanceRoot);
         var before = _index.Sequence;
         _released = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _holding = false;
 
         PluginBinaries.Touch(_pluginPath);
         _index.SignalChange();

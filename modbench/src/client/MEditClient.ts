@@ -409,11 +409,10 @@ export interface MEditClient {
   /** Whether the record index may not yet hold what Modbench handed it: a snapshot, a change signal or the
    *  unsaved documents is unanswered, or the sweep one started has not settled. */
   readonly recordIndexMayBeLate: boolean;
-  /** Reads mEdit's current sequence and answers whether every change it has made has been announced to this
-   *  client: no further on than the last one a notification carried. While it answered false,
-   *  `recordIndexMayBeLate` holds until the notification arrives. A write made past Modbench, such as a
+  /** Reads mEdit's current sequence, so `recordIndexMayBeLate` holds while mEdit is further on than the last
+   *  sequence a notification carried, until the notification arrives. A write made past Modbench, such as a
    *  script's, is known only by this read. */
-  hasHeardEveryChange(): Promise<boolean>;
+  refreshRecordIndexLateness(token?: ReadCancellation): Promise<void>;
   /** Told the new value wherever `recordIndexMayBeLate` changes, which no change of the record index tells. */
   onDidChangeRecordIndexMayBeLate(listener: (late: boolean) => void): Disposable;
 

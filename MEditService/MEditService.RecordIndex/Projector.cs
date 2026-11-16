@@ -105,7 +105,7 @@ internal sealed class Projector(
         if (!cameFromElsewhere) moved = SetWorkingTreeStates(key, touched, changes);
         else if (LearnWorkingTreeStates(plugin).Holds(out var learned, out _)) moved = learned;
         else return false;
-        AnnounceRows(projection, key, [.. touched.Union(moved, StringComparer.Ordinal)]);
+        projection.NameRows(key, [.. touched.Union(moved, StringComparer.Ordinal)]);
         return true;
     });
 
@@ -129,7 +129,7 @@ internal sealed class Projector(
     }
 
     // A key absent from one side reads as that value's default: a clean row, or no row.
-    private static IEnumerable<string> KeysDiffering<T>(
+    internal static IEnumerable<string> KeysDiffering<T>(
         IReadOnlyDictionary<string, T> before, IReadOnlyDictionary<string, T> after) =>
         before.Keys.Union(after.Keys, StringComparer.Ordinal)
             .Where(formKey => !EqualityComparer<T>.Default.Equals(
@@ -173,7 +173,7 @@ internal sealed class Projector(
 
         // Embedded children are named, since a record panel open on a placed ref inside a refreshed
         // cell has no other signal.
-        if (touched.Count > 0) AnnounceRows(projection, key, [.. touched.Distinct(StringComparer.Ordinal)]);
+        if (touched.Count > 0) projection.NameRows(key, [.. touched.Distinct(StringComparer.Ordinal)]);
         return null;
     });
 
@@ -223,12 +223,10 @@ internal sealed class Projector(
         // or gained.
         var moved = KeysDiffering(before, after).Union(KeysDiffering(statesBefore, statesAfter), StringComparer.Ordinal);
         projection.OweWinnerSweep(KeysDiffering(before, after));
-        AnnounceRows(projection, key, [.. formKeys.Union(moved, StringComparer.Ordinal)]);
+        projection.NameRows(key, [.. formKeys.Union(moved, StringComparer.Ordinal)]);
         return null;
     }
 
-    private static void AnnounceRows(Store.Store.Projection projection, PluginAddress key, IReadOnlyList<string> formKeys) =>
-        projection.NameRows(key, formKeys);
 
     /// <summary>Compares <paramref name="plugin"/>'s rows against the system of record they
     /// came from, the tree <paramref name="state"/> stamps or else the binary, and refreshes what
@@ -321,7 +319,7 @@ internal sealed class Projector(
             : index.Commit(projection =>
             {
                 if (!LearnWorkingTreeStates(plugin).Holds(out var moved, out var unlearned)) return unlearned;
-                if (moved.Count > 0) AnnounceRows(projection, key, moved);
+                if (moved.Count > 0) projection.NameRows(key, moved);
                 return null;
             });
 
