@@ -6,7 +6,8 @@ import {
   deleteSeparatorInText, insertModAtWinningEnd, insertSeparatorBesideInText, modLineKey, moveModsInText, moveSeparatorsInText,
   parseModlist, removeModFromText, renameModLineInText, renameSeparatorInText, separatorModName, setEnabledInText,
 } from './codecs/modlistText';
-import { ensureDir, get, remove, rename, undoAll, type Undo, withLock, write } from '../files';
+import { ensureDir, get, remove, rename, stampOf, undoAll, type Undo, withLock, write } from '../files';
+import { sameStamp } from '../../repositoriesLib/stampedReads';
 import {
   entryNotFound, type EntryRef, type InstanceAdapter, type ModlistEntry, type ModOrderChange, type MovePlace,
   type SeparatorsPlace,
@@ -159,13 +160,13 @@ export function mo2ModOrder(context: Mo2Context): Mo2ModOrder {
   };
 
   return {
-    // The folders move, the file is written and any move is put back, all under the file's one
-    // lock, so no change queued behind this one sees a folder this one moved and then undid. A
-    // file another program wrote meanwhile is read again and decided over (ADR-0003).
+    // All under the file's one lock, so no queued change sees a folder this one moved and undid.
+    // A file another program wrote meanwhile is decided over again (ADR-0003).
     changeModOrder(profile, decide) {
       const file = modlistFile(instanceRoot, profile);
       return withLock(file, async () => {
         for (;;) {
+          const stamp = await stampOf(file);
           const before = await get(file);
           const folders = await listModFolders(context, ignoreSkippedLink);
           const changes = decide(firstLines(parseModlist(before), modLineKey).kept, folders && modFoldersOf(folders));
@@ -185,7 +186,7 @@ export function mo2ModOrder(context: Mo2Context): Mo2ModOrder {
               const undo = await moveFolders(change);
               if (undo) undos.unshift(undo);
             }
-            if (await get(file) !== before) throw WRITTEN_MEANWHILE;
+            if (!sameStamp(await stampOf(file), stamp)) throw WRITTEN_MEANWHILE;
             if (after === before) return { wrote: false, landed: resolved };
             await write(file, after);
             return { wrote: true, landed: resolved };
