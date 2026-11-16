@@ -3,7 +3,6 @@ import type { ProblemsAsker } from '../drivingLib/problemsAsker';
 import { coalesced } from '../ports/coalesced';
 import type { Reporter } from '../ports/reporter';
 import { addNamed, type Named } from '../drivingLib/namedPlugins';
-import { pluginAddressKey } from '../wire/pluginAddress';
 import type { ProblemOnFile, ProblemsByFile } from './sourceProblems';
 
 export type Asked = ProblemsAsker<PluginFilePaths, PluginProblems>;

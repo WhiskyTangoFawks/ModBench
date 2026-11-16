@@ -354,10 +354,23 @@ function createMockBackend(): http.Server {
       });
       return;
     }
-    if (url.split('?')[0] === '/plugins/problems') {
+    if (method === 'POST' && url.split('?')[0] === '/plugins/problems') {
       const named = new URL(url, 'http://localhost').searchParams;
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(pluginProblems.filter(({ plugin }) => !named.has('plugin') || (plugin.name === named.get('plugin') && plugin.origin === named.get('origin')))));
+      let body = '';
+      req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+      req.on('end', () => {
+        const asked: unknown = JSON.parse(body);
+        const keys = isRecord(asked) && Array.isArray(asked.keys) ? asked.keys.map(String) : undefined;
+        const answer = pluginProblems
+          .filter(({ plugin }) => !named.has('plugin') || (plugin.name === named.get('plugin') && plugin.origin === named.get('origin')))
+          .map((each) => {
+            const problems = each.problems.filter(({ formKey }) => keys === undefined || keys.includes(formKey ?? ''));
+            const formKeys = [...new Set([...problems.map(({ formKey }) => formKey ?? ''), ...keys ?? []])];
+            return { ...each, problems, records: formKeys.map((formKey) => ({ formKey, resultId: JSON.stringify(problems.filter((problem) => (problem.formKey ?? '') === formKey)), unchanged: false, unread: [] })) };
+          });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(answer));
+      });
       return;
     }
     if (url === '/plugins') {

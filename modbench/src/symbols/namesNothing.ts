@@ -8,7 +8,6 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { placeIn } from '../symbolNames/symbolNames';
 import { heldText } from '../textDocuments/heldText';
-import { pluginAddressKey } from '../wire/pluginAddress';
 import { inOrder, type NamesNothing, type SymbolKinds } from './symbolKind';
 import type { NamedPlugin } from './scriptsNamed';
 

@@ -807,10 +807,12 @@ class HttpMEditClient implements MEditClient {
     let asked = await ask(plugin && keys && held.holds(plugin) ? keys : undefined, true);
     if (!isReadFailed(asked.answer) && asked.keyed && asked.answer.some(({ failure }) => failure != null)) asked = await ask(undefined, true);
     if (isReadFailed(asked.answer)) return asked.answer;
-    const merged = held.merge(asked.answer, asked.known, plugin, asked.keyed);
-    if (merged !== STALE) return merged;
+    const first = held.merge(asked.answer, asked.known, plugin, asked.keyed);
+    if (first !== STALE) return first;
     const whole = await ask(undefined, false);
-    return isReadFailed(whole.answer) ? whole.answer : held.merge(whole.answer, [], plugin, false) as A[];
+    if (isReadFailed(whole.answer)) return whole.answer;
+    const merged = held.merge(whole.answer, [], plugin, false);
+    return merged === STALE ? whole.answer : merged;
   }
 
   getRecordTypes({ name: plugin, origin }: PluginAddress, token?: ReadCancellation): Promise<PluginRecordTypeCount[] | ReadFailed> {

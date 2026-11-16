@@ -212,10 +212,6 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   const sharedFile = { kind: 'OwnFile', location: '/source/ModA/plugin-source/Shared.esp/Npcs/SharedNpc - 000800_Shared.esp.json' };
   const fileRecord = { formKey: sharedKey, plugin: 'Shared.esp', origin: 'ModA' };
   const sourcePath = '/source/ModA/plugin-source/Shared.esp/Npcs/SharedNpc - 000800_Shared.esp.json';
-  const problems = [{
-    plugin: { name: 'Refers.esp', origin: 'ReferringMod' },
-    problems: [{ formKey: '000800:Refers.esp', targetFormKey: '000ABC:Absent.esp', sourceRelativePath: 'Refers.esp/Npcs/Npc.json', message: 'Race: 000ABC:Absent.esp is held by no active plugin' }],
-  }];
   const same = <T>(answer: T) => ({ answer, reads: answer });
   const createdRecord = { formKey: '000900:MyPatch.esp', ...changes };
   const formKeyEdit: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: 'FormKey' }], value: '000900:MyPatch.esp' };
@@ -392,7 +388,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     const asking = (...replies: unknown[]) => {
       const queue = [...replies];
       const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, queue.shift())));
-      const bodies = async () => Promise.all(fetch.mock.calls.map(([req]) => req.clone().json() as Promise<unknown>));
+      const bodies = () => Promise.all(fetch.mock.calls.map(async ([req]) => { const body: { keys: unknown; known: unknown } = await req.clone().json(); return body; }));
       return { client: makeClient(fetch), fetch, bodies };
     };
 
@@ -414,7 +410,10 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       const second = await client.getPluginProblems(REFERS);
 
       expect(second).toEqual(first);
-      expect(isReadFailed(first) ? undefined : (second as unknown[])[0]).toBe(isReadFailed(first) ? undefined : first[0]);
+      const [before] = isReadFailed(first) ? [] : first;
+      const [after] = isReadFailed(second) ? [] : second;
+      expect(before).toBeDefined();
+      expect(after).toBe(before);
     });
 
     it('asks only for the records named, and puts what it answers beside the records it holds', async () => {
@@ -430,7 +429,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       expect(isReadFailed(merged) ? [] : merged[0]?.problems.map(({ formKey, message }) => [formKey, message])).toEqual([['A', 'names no record'], ['B', 'changed']]);
     });
 
-    it('drops a record the plugin no longer has problems of when it answers that record clean', async () => {
+    it('drops a record whose answer comes back clean', async () => {
       const { client } = asking([answerOf([{ formKey: 'A', id: '1' }, { formKey: 'B', id: '2' }])], [answerOf([{ formKey: 'B', id: '3', unchanged: false }], { problems: [] })]);
 
       await client.getPluginProblems(REFERS);
@@ -449,7 +448,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       await client.getPluginProblems(REFERS);
       await client.getPluginProblems(REFERS, undefined, ['A']);
 
-      expect((await bodies()).map((body) => (body as { keys: unknown }).keys)).toEqual([null, ['A'], null]);
+      expect((await bodies()).map(({ keys }) => keys)).toEqual([null, ['A'], null]);
     });
 
     it('asks the whole plugin when it holds none of it', async () => {

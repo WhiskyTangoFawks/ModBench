@@ -1,5 +1,4 @@
 import type * as vscode from 'vscode';
-import type { PluginAddress } from '../client';
 import type { Reveal } from '../drivingLib/symbolRows';
 import type { CopyAt } from '../instanceLoader/fileConflictIndex';
 import type { EntrySymbol, PluginName, ScriptSymbol, TextSpan } from '../symbolNames/symbolNames';

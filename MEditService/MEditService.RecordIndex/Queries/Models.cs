@@ -393,9 +393,8 @@ public sealed record KnownResult(PluginAddress Plugin, string FormKey, string Re
 /// <summary>The records asked, or the whole plugin when <paramref name="Keys"/> is null, with the results the caller holds.</summary>
 public sealed record RecordsAsked(IReadOnlyList<string>? Keys, IReadOnlyList<KnownResult> Known);
 
-/// <summary>A record's answer as pull diagnostics give a document's: <paramref name="ResultId"/> names what it holds, and
-/// when <paramref name="Unchanged"/> the caller's result of that id stands and the answer's rows leave the record out.
-/// <paramref name="Unread"/>: the copies of the record mEdit could not read.</summary>
+/// <summary>A record's answer, named by <paramref name="ResultId"/>; <paramref name="Unchanged"/> leaves its rows out.
+/// <paramref name="Unread"/>: the copies mEdit could not read.</summary>
 public sealed record RecordResult(string FormKey, string ResultId, bool Unchanged, IReadOnlyList<string> Unread);
 
 /// <summary>A file path a record of a compiled plugin's source names at <paramref name="FieldPath"/>, in the file
