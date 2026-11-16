@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 
-describe('the incomplete-comparison message, gated on `conflictsComputed` alone, as the whole-set sweep leaves a Ready load order with stale winners until it re-runs', () => {
+describe('the incomplete-comparison message, gated on `comparisonComplete` alone, as the whole-set sweep leaves a Ready load order with stale winners until it re-runs', () => {
   it('is exactly the reviewed wording, which names both that the comparison is incomplete and that the colours are not final, as an absent conflict badge looks the same as "no conflict"', () => {
     expect(recordPanelIncompleteMessage(false)).toBe(
       'This record\'s comparison is not complete: the colours are not final.',

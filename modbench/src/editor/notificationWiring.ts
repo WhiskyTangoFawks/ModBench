@@ -4,7 +4,7 @@ import { isReadFailed } from '../wire/readFailed';
 
 // A plugin named with no keys is every record of it. A tab waiting on a report reads once mEdit holds its record.
 export function subscribeRecordTabsToNotifications(
-  client: Pick<MEditClient, 'onDidChange' | 'getRecordOwners'>,
+  client: Pick<MEditClient, 'onDidChange' | 'onDidChangeRecordIndexMayBeLate' | 'getRecordOwners'>,
   tabs: Iterable<RecordTab>,
 ): () => void {
   const subscription = client.onDidChange((change) => {
@@ -21,5 +21,8 @@ export function subscribeRecordTabsToNotifications(
         () => undefined);
     }
   });
-  return () => { subscription.dispose(); };
+  const lateness = client.onDidChangeRecordIndexMayBeLate((late) => {
+    if (!late) for (const tab of tabs) tab.indexSettled();
+  });
+  return () => { subscription.dispose(); lateness.dispose(); };
 }

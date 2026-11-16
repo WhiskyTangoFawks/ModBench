@@ -36,7 +36,7 @@ const postedColumns = () => {
 };
 
 describe('RecordPanelClient, a record\'s read', () => {
-  const read = { ok: true, compare: { overrides: [], diffs: [], conflictAll: 'OnlyOne' }, plugins: [], conflictsComputed: true, loadFailures: [] };
+  const read = { ok: true, compare: { overrides: [], diffs: [], conflictAll: 'OnlyOne' }, plugins: [], comparisonComplete: true, loadFailures: [] };
 
   it('asks the host for the record by its formKey', () => {
     void createRecordPanelClient().load('000001:A.esp');
@@ -48,7 +48,7 @@ describe('RecordPanelClient, a record\'s read', () => {
 
   it('reads a record held by no active plugin as a null result, not a failure', async () => {
     const promise = createRecordPanelClient().load('000001:A.esp');
-    answer(lastRequestId(), { ok: true, compare: null, gone: ['000002:A.esp'], copiesLacking: ['mEdit said so'], plugins: null, conflictsComputed: true, loadFailures: [] });
+    answer(lastRequestId(), { ok: true, compare: null, gone: ['000002:A.esp'], copiesLacking: ['mEdit said so'], plugins: null, comparisonComplete: true, loadFailures: [] });
 
     expect(await promise).toMatchObject({ ok: true, result: null, gone: ['000002:A.esp'], copiesLacking: ['mEdit said so'] });
   });
@@ -69,8 +69,8 @@ describe('RecordPanelClient, a record\'s read', () => {
     ['that no mod overrides the file\'s plugin', { fileOverriddenBy: null }],
     ['the plugins mEdit cannot read', { loadFailures: [{ name: 'Bad.esp', origin: 'Mod', reason: 'truncated' }] }],
     ['that mEdit reads every plugin', { loadFailures: [] }],
-    ['that the sweep is still outstanding', { conflictsComputed: false }],
-    ['that the sweep has run', { conflictsComputed: true }],
+    ['that the sweep is still outstanding', { comparisonComplete: false }],
+    ['that the sweep has run', { comparisonComplete: true }],
     ['each column\'s status', { columnStatuses: { 'A.esp': { label: '(read-only)', reason: 'Why.' } } }],
   ])('says %s, as the host answered it', async (_case, field) => {
     const promise = createRecordPanelClient().load('000001:A.esp');

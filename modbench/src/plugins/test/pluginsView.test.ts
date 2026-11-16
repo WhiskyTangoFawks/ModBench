@@ -152,6 +152,7 @@ function syncRefusing() {
 function clientHoldingNothing(): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
   client.setQueryAnswer('getPlugins', []);
+  client.setQueryAnswer('getDiagnoses', []);
   return client;
 }
 

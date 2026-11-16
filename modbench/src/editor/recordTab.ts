@@ -34,6 +34,7 @@ export class RecordTab {
   private clock = 0;
   private open = true;
   private landed = false;
+  private shownIncomplete = false;
   private readonly owned: vscode.Disposable[] = [];
   private pageListens: () => void = () => undefined;
   // A tab's page listens once it asks its first read, so a message posted before it is lost.
@@ -140,6 +141,11 @@ export class RecordTab {
     if (shown && !this.awaitsReport()) this.read(shown);
   }
 
+  /** The record index is settled: a tab that showed the comparison incomplete reads again. */
+  indexSettled(): void {
+    if (this.shownIncomplete) this.refresh();
+  }
+
   /** The FormKey the tab waits on a report for, when no edit of it is in flight. */
   waitingFor(): string | undefined {
     return this.inFlight || !this.awaitsReport() ? undefined : this.formKey;
@@ -152,8 +158,9 @@ export class RecordTab {
 
   /** The tab's read of `formKey` is answered: it shows that record from now on, and `columns`
    *  beside it. Reading a chain's last key ends every move in it, back to the key the tab last read. */
-  answered(formKey: string, columns: readonly RecordCopy[]): void {
+  answered(formKey: string, columns: readonly RecordCopy[], comparisonComplete: boolean): void {
     this.columnsRead = columns;
+    this.shownIncomplete = !comparisonComplete;
     this.landed = true;
     const answeredAt = ++this.clock;
     let ended = this.moves.filter(move => move.readAnsweredAt === undefined && move.to === formKey);

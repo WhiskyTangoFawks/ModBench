@@ -87,7 +87,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
 
   it('reads the record it shows once, after the answer, when mEdit reports a record it shows as a column changed', async () => {
     const { client, panel, tab } = openOn('000800:Mod.esp');
-    tab.answered('000800:Mod.esp', [{ formKey: '000801:Mod.esp', plugin: EDITED_MOD_ESP_FROM_MODA.plugin }]);
+    tab.answered('000800:Mod.esp', [{ formKey: '000801:Mod.esp', plugin: EDITED_MOD_ESP_FROM_MODA.plugin }], true);
     const { write, answer } = writeAnsweredWhenTheTestChooses();
 
     const editing = tab.gate()(EDITED_MOD_ESP_FROM_MODA, write);
@@ -222,7 +222,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
       const openedBefore = tab.gate();
       await tab.gate()(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
       client.emit(rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
-      tab.answered('000900:Mod.esp', []);
+      tab.answered('000900:Mod.esp', [], true);
 
       expect(await sentTo(tab, EDITED_MOD_ESP_FROM_MODA, openedBefore)).toEqual(['000900:Mod.esp']);
       expect(await sentTo(tab, EDITED_MOD_ESP_FROM_MODA)).toEqual(['000800:Mod.esp']);
@@ -308,7 +308,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
     await tab.gate()(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
     await tab.gate()(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000A00:Mod.esp'));
     client.emit(rowsChanged(['000900:Mod.esp', '000A00:Mod.esp']));
-    tab.answered('000A00:Mod.esp', []);
+    tab.answered('000A00:Mod.esp', [], true);
 
     const targets: string[] = [];
     await tab.gate()(EDITED_MOD_ESP_FROM_MODA, formKey => { targets.push(formKey); return Promise.resolve(undefined); });
