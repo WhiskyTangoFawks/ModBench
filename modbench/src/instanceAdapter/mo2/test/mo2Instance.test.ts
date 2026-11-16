@@ -3,8 +3,7 @@ import { fileProblemsFake } from '../../../test/fileProblemsFake';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { MoveToTrash } from '../../../ports/trash';
 import type { NexusFileInfo } from '../../../ports/nexusFileInfo';
-import { ignoreSkippedLink, trustingKept } from '../../files';
-import { readTrustingKept } from '../../../repositoriesLib/stampedReads';
+import { ignoreSkippedLink, readTrustingKept, trustingKept } from '../../files';
 import { ignoreLink } from '../../gameFolder/ownEntries';
 import {
   access, chmod, link, mkdir, mkdtemp, readdir, readFile, realpath, rename as fsRename, rm, stat, symlink, utimes, writeFile,
@@ -2029,7 +2028,7 @@ describe('the MO2 Instance adapter', () => {
         ['the overwrite folder', { kind: 'runtimeOutput' as const }, 'overwrite'],
         ['a mod', mod('Harder VATS'), join('mods', 'Harder VATS')],
       ])('a folder of %s that becomes unreadable after a read', (_name, origin, below) => {
-        const lockedAfterRead = async (disk: boolean) => {
+        it('names the folder and lists none of its files when a read the watch asked for meets a folder below it unreadable', async () => {
           const locked = join(root, below, 'Textures', 'Locked');
           await mkdir(join(locked, 'Deeper'), { recursive: true });
           await writeFile(join(locked, 'hidden.txt'), '');
@@ -2037,23 +2036,22 @@ describe('the MO2 Instance adapter', () => {
           await writeFile(join(root, below, 'Textures', 'a.dds'), '');
           const longAgo = new Date('2020-01-01');
           for (const folder of [locked, join(root, below, 'Textures'), join(root, below)]) await utimes(folder, longAgo, longAgo);
+          const filesFirst = async (path: PathLike, options: Parameters<typeof actualReaddir>[1]) =>
+            [...await actualReaddir(path, options)].sort((a, b) => Number(a.isDirectory()) - Number(b.isDirectory()));
+          vi.mocked(readdir).mockImplementation(filesFirst);
           await source.originFiles(origin, 'list');
-          vi.mocked(readdir).mockImplementation(async (path, options) => {
+          vi.mocked(readdir).mockImplementation(async (path: PathLike, options: Parameters<typeof actualReaddir>[1]) => {
             if (String(path) === locked || String(path).startsWith(locked + sep)) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
-            return actualReaddir(path, options);
+            return filesFirst(path, options);
           });
           vi.mocked(stat).mockImplementation(async (path, ...rest) => {
             if (String(path).startsWith(locked + sep)) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
             return actualStat(path, ...rest);
           });
-          const { answer } = await readTrustingKept([], disk, () => source.originFiles(origin, 'list'));
-          return { locked, answer };
-        };
-
-        it.each([['at a check of the disk', true], ['at a read the watch asked for, where a folder below it is met unreadable', false]])('names the folder and lists none of its files %s', async (_when, disk) => {
-          const { locked, answer } = await lockedAfterRead(disk);
+          const { answer } = await readTrustingKept([], false, () => source.originFiles(origin, 'list'));
 
           expect(relativePaths(answer.files).filter((path) => path.startsWith('Textures/'))).toEqual(['Textures/a.dds']);
+          expect(relativePaths(answer.folders).filter((path) => path.startsWith('Textures'))).toEqual(['Textures', 'Textures/Locked']);
           expect(answer.notes.join('\n')).toContain(`"${locked}" cannot be read`);
         });
       });

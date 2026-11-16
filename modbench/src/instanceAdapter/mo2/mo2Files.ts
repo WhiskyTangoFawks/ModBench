@@ -2,7 +2,7 @@
 // overwrite folder listed whole. Neither answers the adapter's own writes in flight.
 
 import type { Dirent } from 'node:fs';
-import { sep } from 'node:path';
+import { dirname, sep } from 'node:path';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { lastHanded, noneLeft } from '../../ports/lastBuilt';
@@ -63,14 +63,13 @@ const keepFolder = (walk: Walk, path: string): void => {
   walk.folders.push({ relativePath, path, includedPath: includedPathOf(relativePath), excluded: isExcluded(relativePath) });
 };
 
-// A subfolder gone mid-walk or unreadable is skipped alone, noted, with none of its files. The root's absence is its
-// caller's to answer. Answers whether it was denied.
-async function inSubfolder(walk: Walk, dir: string, visit: () => Promise<void>): Promise<boolean> {
+// A subfolder gone mid-walk or unreadable is skipped alone, noted. The root's absence is its caller's to answer.
+// A denial lists the parent afresh: its kept listing may predate the denial.
+async function inSubfolder(walk: Walk, dir: string, visit: () => Promise<void>): Promise<void> {
   const filesBefore = walk.files.length;
   const foldersBefore = walk.folders.length;
   try {
     await visit();
-    return false;
   } catch (err) {
     const code = errnoCode(err);
     if (code !== 'ENOENT' && code !== 'EACCES' && code !== 'EPERM') throw err;
@@ -78,19 +77,14 @@ async function inSubfolder(walk: Walk, dir: string, visit: () => Promise<void>):
     walk.files.length = filesBefore;
     walk.folders.length = walk.folders[foldersBefore]?.path === dir ? foldersBefore + 1 : foldersBefore;
     walk.notes.push(code === 'ENOENT' ? `"${dir}" was removed mid-read, skipped` : `"${dir}" cannot be read (${errorMessage(err)}), skipped`);
-    return code !== 'ENOENT';
+    if (code !== 'ENOENT') await listDir(dirname(dir));
   }
 }
 
-// A folder below `dir` was denied, so `dir`'s kept listing may predate the denial: listing it afresh refuses when it is denied too.
-const relistedIfBelowDenied = async (dir: string, belowDenied: boolean): Promise<void> => {
-  if (belowDenied) await listDir(dir);
-};
-
 // A directory reached through a link (`linkedTo`, its real path) is entered only when that is none of its ancestors'. Resolving
 // them only then keeps a walk with no link to one stat per folder.
-function descend(walk: Walk, dir: string, ancestors: readonly string[], linkedTo?: string): Promise<boolean> {
-  return inSubfolder(walk, dir, async () => {
+async function descend(walk: Walk, dir: string, ancestors: readonly string[], linkedTo?: string): Promise<void> {
+  await inSubfolder(walk, dir, async () => {
     if (linkedTo !== undefined && (await Promise.all(ancestors.map(realPathIfThere))).includes(linkedTo)) {
       walk.notes.push(`link cycle at "${dir}", skipped`);
       return;
@@ -124,7 +118,7 @@ async function walkDir(walk: Walk, dir: string, ancestors: readonly string[]): P
     if (isOwnTemp(dirent.name)) continue;
     const path = childOf(dir, dirent.name);
     if (dirent.isDirectory()) {
-      if (!walk.rootOnly) await relistedIfBelowDenied(dir, await descend(walk, path, ancestors));
+      if (!walk.rootOnly) await descend(walk, path, ancestors);
     } else if (dirent.isFile()) {
       keep(walk, path);
     } else if (dirent.isSymbolicLink()) {
@@ -152,10 +146,10 @@ async function listWhole(walk: Walk, dir: string): Promise<void> {
     const path = childOf(dir, dirent.name);
     if (dirent.isDirectory()) {
       if (walk.rootOnly) continue;
-      await relistedIfBelowDenied(dir, await inSubfolder(walk, path, () => {
+      await inSubfolder(walk, path, () => {
         keepFolder(walk, path);
         return listWhole(walk, path);
-      }));
+      });
     }
     else if (dirent.isFile()) keep(walk, path);
     else if (dirent.isSymbolicLink()) walk.notes.push(`link "${path}" is not followed here, skipped`);
