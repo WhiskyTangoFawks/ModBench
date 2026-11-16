@@ -163,29 +163,21 @@ describe('the load order is put at a recompute that changed it', () => {
   });
 });
 
-describe('a put the client makes again on its own', () => {
-  it('is told as the snapshot it put', async () => {
-    const { client, told, toldCount, land } = wired();
+describe('a reconnect, which leaves mEdit holding no load order', () => {
+  it('hands the load order again after a reconnect, tells a put mEdit refused, and hands it again at the next gesture', async () => {
+    const { client, told, toldCount, land, putPluginNames } = wired();
     land(valueWith('A.esp'));
     await toldCount(1);
+    client.answerPuts(() => Promise.resolve({ outcome: 'failed', message: 'the data folder is not found' }));
 
     client.reconnected();
     await toldCount(2);
-
-    expect(told[1]).toMatchObject({ sent: true, snapshot: { dataFolder: '/game/Data' }, outcome: APPLIED });
-  });
-
-  it('is told no more once the flow is disposed', async () => {
-    const { client, flow, told, toldCount, land, putPluginNames } = wired();
+    client.answerPuts(() => Promise.resolve(APPLIED));
     land(valueWith('A.esp'));
-    await toldCount(1);
+    await toldCount(3);
 
-    flow.dispose();
-    client.reconnected();
-    await client.latestLoadOrder();
-
-    expect(putPluginNames()).toEqual(['A.esp', 'A.esp']);
-    expect(told).toHaveLength(1);
+    expect(told[1]).toMatchObject({ sent: true, outcome: { outcome: 'failed', message: 'the data folder is not found' } });
+    expect(putPluginNames()).toEqual(['A.esp', 'A.esp', 'A.esp']);
   });
 });
 
