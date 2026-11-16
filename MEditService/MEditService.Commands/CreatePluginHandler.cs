@@ -2,7 +2,6 @@ using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
-using MEditService.RecordIndex.Queries;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
@@ -18,16 +17,14 @@ public sealed class CreatePluginHandler
     private readonly IPluginAdapter _adapter;
     private readonly LoadOrderHolder _holder;
     private readonly ISourceAdapter _source;
-    private readonly IQueries _index;
-    private readonly ILogger _logger;
+    private readonly HeldWrites _held;
     private readonly PluginDecompiler _decompiler;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
     internal CreatePluginHandler(
-        IPluginAdapter adapter, LoadOrderHolder holder, ISourceAdapter source, SchemaReflector schemaReflector, IQueries index,
+        IPluginAdapter adapter, LoadOrderHolder holder, ISourceAdapter source, SchemaReflector schemaReflector, HeldWrites held,
         ILogger<CreatePluginHandler> logger) =>
-        (_adapter, _holder, _source, _index, _logger, _decompiler) =
-        (adapter, holder, source, index, logger, new PluginDecompiler(logger, adapter, source, schemaReflector));
+        (_adapter, _holder, _source, _held, _decompiler) = (adapter, holder, source, held, new PluginDecompiler(logger, adapter, source, schemaReflector));
 
     private async Task<Answer<PluginAddress, PluginCreateRefused>> LandSourceIfCompiledPlugin(
         LoadOrderSnapshot loadOrder, PluginAddress address, string folder, string? sourceFolder, string written)
@@ -54,7 +51,7 @@ public sealed class CreatePluginHandler
         LoadOrderSnapshot loadOrder, PluginAddress address, string folder, string? sourceFolder, string written, CancellationToken cancel)
     {
         var landed = await LandSourceIfCompiledPlugin(loadOrder, address, folder, sourceFolder, written);
-        if (landed.Holds(out _, out _)) await _index.ReadBack([address], _logger, cancel);
+        if (landed.Holds(out _, out _)) await _held.ReadBack([address], cancel);
         return landed;
     }
 
@@ -95,9 +92,8 @@ public sealed class CreatePluginHandler
             : match.ToList();
     }
 
-    /// <summary>Refuses, writing nothing, when no load order is held. <paramref name="sourceFolder"/> is null for
-    /// Overwrite. <paramref name="flags"/> may be left out where one combination is offered. <paramref name="cancel"/>
-    /// stops the wait, not the write.</summary>
+    /// <summary>Refuses, writing nothing, when no load order is held. <paramref name="sourceFolder"/> is the
+    /// mod's, null for Overwrite. <paramref name="flags"/> may be left out where one combination is offered.</summary>
     public async Task<Answer<PluginAddress, PluginCreateRefused>> CreatePlugin(
         PluginAddress plugin, string folder, string? sourceFolder, IReadOnlyList<string>? flags = null, CancellationToken cancel = default)
     {

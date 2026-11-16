@@ -5,7 +5,6 @@ using MEditService.LoadOrder;
 using MEditService.ModFolderAdapter;
 using MEditService.PluginAdapter;
 using MEditService.PluginAdapter.Repair;
-using MEditService.RecordIndex.Queries;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
@@ -19,7 +18,7 @@ public sealed class DecompileAndRepairPluginHandler
     private readonly LoadOrderHolder _loadOrder;
     private readonly IPluginAdapter _adapter;
     private readonly ISourceAdapter _source;
-    private readonly IQueries _index;
+    private readonly HeldWrites _held;
     private readonly ILogger _logger;
     private readonly PluginRepairer _repairer;
     private readonly ModInit _init;
@@ -27,16 +26,15 @@ public sealed class DecompileAndRepairPluginHandler
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
     internal DecompileAndRepairPluginHandler(
         LoadOrderHolder loadOrder, IPluginAdapter adapter, ISourceAdapter source, IModFolderRepository modFolders,
-        SchemaReflector schemaReflector, IQueries index, ILogger<DecompileAndRepairPluginHandler> logger)
+        SchemaReflector schemaReflector, HeldWrites held, ILogger<DecompileAndRepairPluginHandler> logger)
     {
         var decompiler = new PluginDecompiler(logger, adapter, source, schemaReflector);
-        (_loadOrder, _adapter, _source, _index, _logger) = (loadOrder, adapter, source, index, logger);
+        (_loadOrder, _adapter, _source, _held, _logger) = (loadOrder, adapter, source, held, logger);
         _repairer = new PluginRepairer(adapter, decompiler);
         _init = new ModInit(logger, source, modFolders, decompiler);
     }
 
-    /// <summary>A source with working-tree changes is refused, listing them, unless <paramref name="force"/> waives them.
-    /// <paramref name="cancel"/> stops the wait for the record index's read back, not the writes.</summary>
+    /// <summary>A source with working-tree changes is refused, listing them, unless <paramref name="force"/> waives them.</summary>
     public async Task<Answer<DecompileAndRepairResult, SelectionRefusal<DecompileAndRepairRefusal>>> DecompileAndRepairAsync(
         IReadOnlyList<PluginToRepair> plugins, bool force, CancellationToken cancel = default)
     {
@@ -54,7 +52,7 @@ public sealed class DecompileAndRepairPluginHandler
         var heldByANewSourceFolder = new HashSet<PluginAddress>(PluginAddress.Comparer);
         var repaired = await ItemWrite.OverAsync(_source, plugins, SamePlugin.Instance, DecompileAndRepairRefusal.GitUnavailable, item =>
             RepairOneAsync(loadOrder, item, targets[item.Plugin], repairedHere, (leftOutOfANewSourceFolder, heldByANewSourceFolder), force));
-        await _index.ReadBack([.. repaired.Landed.Select(landed => landed.Item.Plugin), .. heldByANewSourceFolder], _logger, cancel);
+        await _held.ReadBackSource([.. repaired.Landed.Select(landed => landed.Item.Plugin), .. heldByANewSourceFolder], cancel);
         return repaired.ToAnswer(
             landed => landed.Item.Plugin,
             refused => Explained(refused, leftOutOfANewSourceFolder, heldByANewSourceFolder),

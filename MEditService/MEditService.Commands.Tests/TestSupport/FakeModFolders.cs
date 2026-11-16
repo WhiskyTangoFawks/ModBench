@@ -31,6 +31,8 @@ internal sealed class FakeModFolders : IModFolderRepository
     public IReadOnlyList<string> FilePaths(string modFolder) =>
         [.. _files.Keys.Where(file => file.Folder == modFolder).Select(file => file.Path)];
 
+    public string FullPathOf(string folder, string path) => Path.GetFullPath(Path.Combine(folder, path));
+
     public bool DataFolderExists(string dataFolder) => Directory.Exists(dataFolder);
 
     public string ExcludedName(string name, string exclusionMark) => name + exclusionMark;

@@ -69,11 +69,23 @@ public sealed class DecompilePluginHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task ADecompileWhoseRequestIsCancelled_StillWritesEveryPlugin()
+    {
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        await TestEditService.DecompileHandler(_holder, index: _index.Queries)
+            .DecompileAsync([CompiledPlugin("First.esp"), CompiledPlugin("Second.esp")], force: true, cancelled.Token);
+
+        Assert.Contains("SecondNpc", SourceTextOf("Second.esp"), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Decompile_HandsTheRecordIndexEachPluginItWroteToReadBack_AndNoneItRefused()
     {
         await Decompile(CompiledPlugin("Second.esp"), CompiledPlugin("Absent.esp"));
 
-        Assert.Equal([HandedPlugin.ReadBack(CompiledPlugin("Second.esp"))], Assert.Single(_index.Hands).Require());
+        Assert.Equal([HandedPlugin.ReadBackSource(CompiledPlugin("Second.esp"))], Assert.Single(_index.Hands).Require());
     }
 
     [Fact]

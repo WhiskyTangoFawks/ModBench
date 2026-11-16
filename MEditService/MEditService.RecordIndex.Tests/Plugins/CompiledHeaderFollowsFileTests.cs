@@ -80,11 +80,8 @@ public sealed class CompiledHeaderFollowsFileTests : IDisposable
             ReadWrittenBuilt([Master]);
         }
         WriteBuilt(referencingMaster: !dropsMaster);
-        var hand = _index.Queries.Hold([HandedPlugin.ReadBack(_built.Key)], CancellationToken.None);
+        Assert.Null(await _index.Queries.Hold([HandedPlugin.ReadBack(_built.Key)], CancellationToken.None).WaitAsync(Generous));
 
-        _index.SignalChange([_built.Key]);
-
-        Assert.Null(await hand.WaitAsync(Generous));
         Assert.Equal(dropsMaster ? [] : [Master], MastersOfBuilt());
     }
 

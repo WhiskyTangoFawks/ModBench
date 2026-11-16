@@ -4,18 +4,24 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Commands.Edits;
 
-internal static class HeldWrites
+/// <summary>A writer hands the record index its write and returns once it holds it (ADR-0029). The token stops the wait,
+/// never the write. A write the record index could not read is answered as written, and logged.</summary>
+internal sealed class HeldWrites(IQueries index, ILogger<HeldWrites> logger)
 {
-    /// <summary>Hands the record index <paramref name="written"/>, and returns once it holds it (ADR-0029); <paramref name="cancel"/>
-    /// stops the wait, not the write. A write it could not read is answered as written, and logged.</summary>
-    internal static async Task Held(this IQueries index, IReadOnlyList<HandedPlugin>? written, ILogger logger, CancellationToken cancel)
+    internal async Task Hand(IReadOnlyList<HandedPlugin>? written, CancellationToken cancel)
     {
         if (written is { Count: 0 }) return;
         if (await index.Hold(written, cancel).ConfigureAwait(false) is { } unread)
             logger.LogWarning("A write landed that the record index has not read: {Message}", unread);
     }
 
-    /// <summary>As <see cref="Held"/>, for a write that cannot know its rows, so each plugin is read back whole.</summary>
-    internal static Task ReadBack(this IQueries index, IEnumerable<PluginAddress> written, ILogger logger, CancellationToken cancel) =>
-        index.Held([.. written.Distinct(PluginAddress.Comparer).Select(HandedPlugin.ReadBack)], logger, cancel);
+    /// <summary>The plugins whose files, and those whose sources, a write cannot know the rows of, each read back whole.</summary>
+    internal Task ReadBack(IEnumerable<PluginAddress> files, IEnumerable<PluginAddress> sources, CancellationToken cancel) =>
+        Hand([
+            .. files.Distinct(PluginAddress.Comparer).Select(HandedPlugin.ReadBack),
+            .. sources.Distinct(PluginAddress.Comparer).Select(HandedPlugin.ReadBackSource)], cancel);
+
+    internal Task ReadBack(IEnumerable<PluginAddress> files, CancellationToken cancel) => ReadBack(files, [], cancel);
+
+    internal Task ReadBackSource(IEnumerable<PluginAddress> sources, CancellationToken cancel) => ReadBack([], sources, cancel);
 }

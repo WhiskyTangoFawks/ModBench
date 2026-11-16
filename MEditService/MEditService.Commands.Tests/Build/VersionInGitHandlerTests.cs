@@ -66,7 +66,19 @@ public sealed class VersionInGitHandlerTests : IDisposable
 
         await TestEditService.VersionInGitHandler(_holder, index: index.Queries).VersionInGitAsync(ToVersionInGit.In(Snapshot, Origin));
 
-        Assert.Equal([HandedPlugin.ReadBack(new PluginAddress(PluginName, Origin))], Assert.Single(index.Hands).Require());
+        Assert.Equal([HandedPlugin.ReadBackSource(new PluginAddress(PluginName, Origin))], Assert.Single(index.Hands).Require());
+    }
+
+    [Fact]
+    public async Task Init_WhoseRequestIsCancelled_StillPutsEveryPluginsSourceInItsSourceFolder()
+    {
+        _holder.Apply(Snapshot);
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        await TestEditService.VersionInGitHandler(_holder).VersionInGitAsync(ToVersionInGit.In(Snapshot, Origin), cancelled.Token);
+
+        Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(PluginName, Origin, "", _mod, Line: null, PluginStrings.None)));
     }
 
     [Fact]

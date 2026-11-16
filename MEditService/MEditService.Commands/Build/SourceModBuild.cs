@@ -42,8 +42,28 @@ internal sealed class SourceModBuild
             _ => throw new ArgumentOutOfRangeException(nameof(mod), mod.Step, "A build file names no other built-in step."),
         };
         return ran is ItemAnswer<BuildRefusal, ModBuildOutcome>.Wrote { Outcome: var outcome }
-            ? ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(outcome with { Uncommitted = source.Uncommitted, Unpushed = source.Unpushed })
+            ? ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(outcome with
+            {
+                Uncommitted = source.Uncommitted,
+                Unpushed = source.Unpushed,
+                MadeFilesOf = PluginsOf(loadOrder, outcome.Made.Select(made => _modFolders.FullPathOf(mod.Folder, made.Path))),
+            })
             : ran;
+    }
+
+    // A copy can place a plugin, and an unpack or a pack its strings.
+    private List<PluginAddress>? PluginsOf(LoadOrderSnapshot loadOrder, IEnumerable<string> paths)
+    {
+        List<PluginAddress> plugins = [];
+        foreach (var path in paths)
+        {
+            switch (_plugins.Touching(loadOrder, path))
+            {
+                case PathAnswer.Unnamed: return null;
+                case PathAnswer.Touches touches: plugins.AddRange(touches.Plugins.Select(plugin => plugin.Key)); break;
+            }
+        }
+        return plugins;
     }
 
     private static IReadOnlyList<string> PathsRead(BuildStep step) => step switch

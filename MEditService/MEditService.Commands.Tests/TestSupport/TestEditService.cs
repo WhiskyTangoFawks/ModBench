@@ -64,7 +64,8 @@ internal static class TestEditService
         LoadOrderHolder holder, ISourceAdapter? source = null, IModFolderRepository? modFolders = null, IQueries? index = null) =>
         Over(holder, source: source, modFolders: modFolders, index: index).GetRequiredService<BuildModHandler>();
 
-    internal static CloneSubmodulesHandler CloneSubmodulesHandler() => Over(new LoadOrderHolder()).GetRequiredService<CloneSubmodulesHandler>();
+    internal static CloneSubmodulesHandler CloneSubmodulesHandler(LoadOrderHolder? holder = null, IQueries? index = null) =>
+        Over(holder ?? new LoadOrderHolder(), index: index).GetRequiredService<CloneSubmodulesHandler>();
 
     internal static DecompilePluginHandler DecompileHandler(LoadOrderHolder holder, IPluginAdapter? adapter = null, IQueries? index = null) =>
         Over(holder, adapter: adapter, index: index).GetRequiredService<DecompilePluginHandler>();

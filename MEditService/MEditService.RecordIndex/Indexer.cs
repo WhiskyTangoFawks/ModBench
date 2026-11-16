@@ -364,15 +364,15 @@ internal sealed class Indexer : IDisposable
             }
             else
             {
-                _namedHands.Add(new Hand(held, [.. written.Select(plugin => plugin.Plugin)]));
-                foreach (var (plugin, files, documents) in written) Name(plugin, files, documents);
+                _namedHands.Add(new Hand(held, written));
+                foreach (var (plugin, files, documents, _) in written) Name(plugin, files, documents);
                 WakeWorker();
             }
         }
         return held.Task.WaitAsync(cancel);
     }
 
-    private sealed record Hand(TaskCompletionSource<string?> Held, IReadOnlyList<PluginAddress> Plugins);
+    private sealed record Hand(TaskCompletionSource<string?> Held, IReadOnlyList<HandedPlugin> Plugins);
 
     private const string Closed = "mEdit's record index closed before it read the plugin source mEdit wrote.";
 
@@ -520,24 +520,26 @@ internal sealed class Indexer : IDisposable
 
     private static string? NotReadBecause(string? reason) => reason is null ? null : NotReadYet + reason;
 
-    private string? WhyNotHeld(IReadOnlyList<PluginAddress> plugins, HashSet<PluginAddress> read)
+    private string? WhyNotHeld(IReadOnlyList<HandedPlugin> plugins, HashSet<PluginAddress> read)
     {
         OpenScope? scope;
         lock (_lock) scope = _scope;
         if (scope is null) return Stopped;
-        List<string> unheld = [.. plugins.Distinct(PluginAddress.Comparer).Select(plugin => WhyNotHeld(scope, plugin, read)).OfType<string>()];
+        List<string> unheld = [.. plugins.DistinctBy(handed => handed.Plugin, PluginAddress.Comparer).Select(handed => WhyNotHeld(scope, handed, read)).OfType<string>()];
         return unheld.Count == 0 ? null : NotReadYet + string.Join(" ", unheld);
     }
 
-    private static string? WhyNotHeld(OpenScope scope, PluginAddress plugin, HashSet<PluginAddress> read)
+    private static string? WhyNotHeld(OpenScope scope, HandedPlugin handed, HashSet<PluginAddress> read)
     {
-        if (scope.LoadOrder.Plugin(plugin) is null) return $"the load order does not hold {plugin.Name} ({plugin.Origin}).";
+        var plugin = handed.Plugin;
+        if (scope.LoadOrder.Plugin(plugin) is not { } registered) return $"the load order does not hold {plugin.Name} ({plugin.Origin}).";
+        if (handed.OfSource && scope.Projector.TruthOf(registered) != DerivedFrom.SourceTree)
+            return $"the load order names no plugin source of {plugin.Name} ({plugin.Origin}), so its rows are read from its binary.";
         if (scope.Held.FailureOf(plugin) is { } failed) return $"{plugin.Name} ({plugin.Origin}): {failed.Reason}";
         if (scope.Failed.WhyTreeStopped(plugin) is { } stopped) return $"{plugin.Name} ({plugin.Origin}): {stopped.Reason}";
         return read.Contains(plugin) ? null : $"{plugin.Name} ({plugin.Origin}) was not read.";
     }
 
-    // Answers the plugins it read.
     private List<PluginAddress> ValidateNamed(List<string> paths, HashSet<PluginAddress> named, Dictionary<PluginAddress, AskedFiles> files)
     {
         var scope = RequireScope();

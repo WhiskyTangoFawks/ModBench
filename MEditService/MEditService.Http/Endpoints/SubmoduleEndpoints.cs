@@ -21,10 +21,12 @@ internal static class SubmoduleEndpoints
         return app;
     }
 
-    internal static IResult CloneSubmodules(CloneSubmodulesRequest req, CloneSubmodulesHandler handler, ILoggerFactory loggerFactory, CancellationToken aborted) =>
+    internal static async Task<IResult> CloneSubmodules(
+        CloneSubmodulesRequest req, CloneSubmodulesHandler handler, ILoggerFactory loggerFactory, CancellationToken aborted) =>
         req.Submodules is { Count: > 0 } submodules && submodules.All(submodule => submodule is { IsWhole: true })
             ? EndpointMapping.Answered(
-                "Clone submodules", loggerFactory.CreateLogger(nameof(SubmoduleEndpoints)), handler.Clone([.. submodules.Select(submodule => submodule.ToSubmodule())], aborted))
+                "Clone submodules", loggerFactory.CreateLogger(nameof(SubmoduleEndpoints)),
+                await handler.Clone([.. submodules.Select(submodule => submodule.ToSubmodule())], aborted))
             : EndpointMapping.BadRequest("At least one submodule is required, and every submodule needs the folder git checks it out in and the commit the instance repository pins.");
 }
 

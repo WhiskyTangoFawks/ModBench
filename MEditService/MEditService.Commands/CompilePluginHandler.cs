@@ -1,9 +1,7 @@
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
-using MEditService.RecordIndex.Queries;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
-using Microsoft.Extensions.Logging;
 
 namespace MEditService.Commands;
 
@@ -13,23 +11,20 @@ public sealed class CompilePluginHandler
     private readonly PluginCompileService _compileService;
     private readonly LoadOrderHolder _loadOrder;
     private readonly ISourceAdapter _source;
-    private readonly IQueries _index;
-    private readonly ILogger _logger;
+    private readonly HeldWrites _held;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal CompilePluginHandler(
-        PluginCompileService compileService, LoadOrderHolder loadOrder, ISourceAdapter source, IQueries index, ILogger<CompilePluginHandler> logger) =>
-        (_compileService, _loadOrder, _source, _index, _logger) = (compileService, loadOrder, source, index, logger);
+    internal CompilePluginHandler(PluginCompileService compileService, LoadOrderHolder loadOrder, ISourceAdapter source, HeldWrites held) =>
+        (_compileService, _loadOrder, _source, _held) = (compileService, loadOrder, source, held);
 
     /// <summary>Refuses with <see cref="CompileRefusal.NoLoadOrder"/>, writing nothing, when none is held: no
-    /// plugin of the selection escapes it (commands.md, A selection is one gesture). <paramref name="cancel"/> stops
-    /// the wait, not the writes.</summary>
+    /// plugin of the selection escapes it (commands.md, A selection is one gesture).</summary>
     public async Task<Answer<CompileResult, SelectionRefusal<CompileRefusal>>> CompileAsync(
         IReadOnlyList<PluginAddress> plugins, CancellationToken cancel = default)
     {
         if (WhyNoPluginCompiles() is { } none) return none;
         var (landed, refused) = await Each(plugins, _compileService.CompileAsync);
-        await _index.ReadBack(landed.Select(compiled => compiled.Item), _logger, cancel);
+        await _held.ReadBack(landed.Select(compiled => compiled.Item), cancel);
         return new CompileResult(
             [.. landed.Select(compiled => new CompiledPlugin(compiled.Item.Name, compiled.Item.Origin, compiled.Outcome))],
             [.. refused.Select(item => new CompileRefused(item.Item, item.Refusal, item.Message))]);

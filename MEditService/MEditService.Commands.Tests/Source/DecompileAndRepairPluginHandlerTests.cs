@@ -91,7 +91,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         await Repair(ToRepair(plugin));
 
         Assert.Equal(
-            [HandedPlugin.ReadBack(new PluginAddress("Clean.esp", NewModName)), HandedPlugin.ReadBack(plugin)],
+            [HandedPlugin.ReadBackSource(new PluginAddress("Clean.esp", NewModName)), HandedPlugin.ReadBackSource(plugin)],
             Assert.Single(_index.Hands).Require().OrderBy(handed => handed.Plugin.Name, StringComparer.Ordinal));
     }
 
@@ -112,6 +112,21 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         Assert.Equal([$"Repair {Malformed}", $"Init {NewModName}"], Subjects(_root, 3));
         Assert.Contains($"source/{NewModName}/plugin-source/{Malformed}/", Git(_root, "ls-tree", "-r", "--name-only", "HEAD"), StringComparison.Ordinal);
         Assert.Equal("the link", Git(_root, "show", $"HEAD~1:mods/{NewModName}/{linked.Name}"));
+    }
+
+    [Fact]
+    public async Task DecompileAndRepair_WhoseRequestIsCancelled_StillRepairsEveryPlugin()
+    {
+        var first = AddToNewMod(Lossless.Malformed);
+        var second = AddToNewMod(Lossless.Malformed with { FileName = "Second Malformed.esp" });
+        Load(Entry(_newMod, Malformed), Entry(_newMod, "Second Malformed.esp"));
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        await TestEditService.Over(_holder, index: _index.Queries)
+            .GetRequiredService<DecompileAndRepairPluginHandler>().DecompileAndRepairAsync([ToRepair(first), ToRepair(second)], force: false, cancelled.Token);
+
+        Assert.Equal("Repair Second Malformed.esp", Subjects(_newMod, 1).Single());
     }
 
     [Fact]

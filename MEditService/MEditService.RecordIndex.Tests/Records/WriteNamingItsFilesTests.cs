@@ -119,6 +119,12 @@ public sealed class WriteNamingItsFilesTests : IDisposable
         _index.Settled();
     }
 
+    private void Watched((LoadOrderEntry Entry, SourceChanges Made) saved)
+    {
+        _index.SignalChange([Named(saved)]);
+        Waits.Reached(() => !_index.Status.Validating, "the watch's read");
+    }
+
     private static string RowsIn(string instance) =>
         string.Join("\n", Relations.SelectMany(relation => IndexFiles.Rows(instance, relation).Select(row => $"{relation}: {string.Join(" | ", row)}")));
 
@@ -151,7 +157,21 @@ public sealed class WriteNamingItsFilesTests : IDisposable
             test.Overriding.Key, test.Copied(test._keys.Cell, test._keys.Cell.ToString()))),
     };
 
-    public static TheoryData<string> WriteKinds() => [.. Writes.Keys];
+    private static readonly Dictionary<string, Action<WriteNamingItsFilesTests, (LoadOrderEntry, SourceChanges)>> Roads = new()
+    {
+        ["handed by its writer"] = (test, saved) => test.Written(saved),
+        ["named by the watch"] = (test, saved) => test.Watched(saved),
+    };
+
+    public static TheoryData<string, string> WriteKindsByRoad()
+    {
+        TheoryData<string, string> table = [];
+        foreach (var write in Writes.Keys)
+        {
+            foreach (var road in Roads.Keys) table.Add(write, road);
+        }
+        return table;
+    }
 
     private static readonly string[] MakingACellsBlock = ["an interior cell created", "an exterior cell created", "a record copied as an override"];
 
@@ -160,10 +180,10 @@ public sealed class WriteNamingItsFilesTests : IDisposable
     public static TheoryData<string> WritesMakingACellsBlock() => [.. MakingACellsBlock];
 
     [Theory]
-    [MemberData(nameof(WriteKinds))]
-    public async Task AHandedWrite_LeavesTheRowsAReadOfTheSameBytesHolds(string write)
+    [MemberData(nameof(WriteKindsByRoad))]
+    public void AWrite_LeavesTheRowsAFreshReadOfTheTreeHolds(string write, string road)
     {
-        Assert.Null(await Hold(Handed(Writes[write](this))));
+        Roads[road](this, Writes[write](this));
 
         AssertTheRowsAFreshReadHolds();
     }

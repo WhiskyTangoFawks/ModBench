@@ -442,6 +442,17 @@ public sealed class BuildModHandlerTests : IDisposable
 
         await Landed(new ModToBuild(ModName, SourceFolder, ModFolder, new BuildStep.Decompile([Plugin])));
 
+        Assert.Equal([HandedPlugin.ReadBackSource(new PluginAddress(Plugin, ModName))], Assert.Single(_index.Hands).Require());
+    }
+
+    [Fact]
+    public async Task ACopyThatPlacesAPlugin_HandsTheRecordIndexThePluginToReadBack()
+    {
+        await InitializedWithALocalizedPlugin();
+        new Fallout4Mod(ModKey.FromFileName(Plugin), Fallout4Release.Fallout4).WriteToBinary(Path.Combine(SourceFolder, Plugin));
+
+        await Landed(new ModToBuild(ModName, SourceFolder, ModFolder, new BuildStep.Copy([Plugin])));
+
         Assert.Equal([HandedPlugin.ReadBack(new PluginAddress(Plugin, ModName))], Assert.Single(_index.Hands).Require());
     }
 

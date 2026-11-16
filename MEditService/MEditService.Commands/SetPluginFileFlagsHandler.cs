@@ -3,8 +3,6 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
-using MEditService.RecordIndex.Queries;
-using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
 namespace MEditService.Commands;
@@ -44,15 +42,13 @@ public sealed class SetPluginFileFlagsHandler
 {
     private readonly IPluginAdapter _plugins;
     private readonly LoadOrderHolder _loadOrder;
-    private readonly IQueries _index;
-    private readonly ILogger _logger;
+    private readonly HeldWrites _held;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal SetPluginFileFlagsHandler(IPluginAdapter plugins, LoadOrderHolder loadOrder, IQueries index, ILogger<SetPluginFileFlagsHandler> logger) =>
-        (_plugins, _loadOrder, _index, _logger) = (plugins, loadOrder, index, logger);
+    internal SetPluginFileFlagsHandler(IPluginAdapter plugins, LoadOrderHolder loadOrder, HeldWrites held) =>
+        (_plugins, _loadOrder, _held) = (plugins, loadOrder, held);
 
-    /// <summary>Answers once the record index has read back each plugin the load order holds that was written;
-    /// <paramref name="cancel"/> stops the wait, not the writes.</summary>
+    /// <summary>Answers once the record index has read back each plugin the load order holds that was written.</summary>
     public async Task<SetPluginFileFlagsResult> Set(IReadOnlyList<PluginFileFlagsToSet> files, GameRelease gameRelease, CancellationToken cancel = default)
     {
         var known = GameCodecs.For(gameRelease).LoadFlags;
@@ -67,7 +63,7 @@ public sealed class SetPluginFileFlagsHandler
             else refused.Add(new PluginFileFlagRefused(file.Path, RefusalOf(failure), failure.Reason));
         }
 
-        await _index.ReadBack(PluginsWritten(applied.Select(set => set.Path)), _logger, cancel);
+        await _held.ReadBack(PluginsWritten(applied.Select(set => set.Path)), cancel);
         return new SetPluginFileFlagsResult(applied, refused);
     }
 

@@ -20,6 +20,8 @@ public static class CommandHandlers
     public static IServiceCollection AddCommandHandlers(this IServiceCollection services)
     {
         // One instance each for the write side: they hold singletons and decide nothing per request.
+        services.AddSingleton(sp => new HeldWrites(sp.GetRequiredService<IQueries>(), sp.GetRequiredService<ILogger<HeldWrites>>()));
+
         services.AddSingleton(sp => new LoadOrderResolution(
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<IPluginAdapter>(),
@@ -44,7 +46,7 @@ public static class CommandHandlers
             sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<UnsavedDocuments>(),
             sp.GetRequiredService<LoadOrderHolder>(),
-            sp.GetRequiredService<IQueries>(),
+            sp.GetRequiredService<HeldWrites>(),
             sp.GetRequiredService<ILogger<EditRecordHandler>>()));
 
         services.AddSingleton(sp => new CreateRecordHandler(
@@ -52,7 +54,7 @@ public static class CommandHandlers
             sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<UnsavedDocuments>(),
             sp.GetRequiredService<LoadOrderHolder>(),
-            sp.GetRequiredService<IQueries>(),
+            sp.GetRequiredService<HeldWrites>(),
             sp.GetRequiredService<ILogger<CreateRecordHandler>>()));
 
         services.AddSingleton(sp => new CopyRecordHandler(
@@ -60,7 +62,7 @@ public static class CommandHandlers
             sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<UnsavedDocuments>(),
             sp.GetRequiredService<LoadOrderHolder>(),
-            sp.GetRequiredService<IQueries>(),
+            sp.GetRequiredService<HeldWrites>(),
             sp.GetRequiredService<ILogger<CopyRecordHandler>>()));
 
         services.AddSingleton(sp => new DeleteRecordHandler(
@@ -68,7 +70,7 @@ public static class CommandHandlers
             sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<UnsavedDocuments>(),
             sp.GetRequiredService<LoadOrderHolder>(),
-            sp.GetRequiredService<IQueries>(),
+            sp.GetRequiredService<HeldWrites>(),
             sp.GetRequiredService<ILogger<DeleteRecordHandler>>()));
 
         services.AddSingleton(sp => new DeleteRecordChangesHandler(
@@ -117,7 +119,7 @@ public static class CommandHandlers
             sp.GetRequiredService<IModFolderRepository>(),
             sp.GetRequiredService<INotificationPublisher>(),
             sp.GetRequiredService<SchemaReflector>(),
-            sp.GetRequiredService<IQueries>(),
+            sp.GetRequiredService<HeldWrites>(),
             sp.GetRequiredService<ILogger<VersionInGitHandler>>()));
 
         services.AddSingleton(sp => new DecompilePluginHandler(
@@ -125,7 +127,7 @@ public static class CommandHandlers
             sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<SchemaReflector>(),
-            sp.GetRequiredService<IQueries>(),
+            sp.GetRequiredService<HeldWrites>(),
             sp.GetRequiredService<ILogger<DecompilePluginHandler>>()));
 
         services.AddSingleton(sp => new DecompileAndRepairPluginHandler(
@@ -134,7 +136,7 @@ public static class CommandHandlers
             sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<IModFolderRepository>(),
             sp.GetRequiredService<SchemaReflector>(),
-            sp.GetRequiredService<IQueries>(),
+            sp.GetRequiredService<HeldWrites>(),
             sp.GetRequiredService<ILogger<DecompileAndRepairPluginHandler>>()));
 
         services.AddSingleton(sp => new RenameSourceChangesHandler(
@@ -153,8 +155,7 @@ public static class CommandHandlers
                 sp.GetRequiredService<ILogger<PluginCompileService>>()),
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<ISourceAdapter>(),
-            sp.GetRequiredService<IQueries>(),
-            sp.GetRequiredService<ILogger<CompilePluginHandler>>()));
+            sp.GetRequiredService<HeldWrites>()));
 
         services.AddSingleton(sp => new SourceModBuild(
             sp.GetRequiredService<CompilePluginHandler>(),
@@ -171,25 +172,24 @@ public static class CommandHandlers
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<INotificationPublisher>(),
-            sp.GetRequiredService<IQueries>(),
-            sp.GetRequiredService<ILogger<BuildModHandler>>()));
+            sp.GetRequiredService<HeldWrites>()));
 
-        services.AddSingleton(sp => new CloneSubmodulesHandler(sp.GetRequiredService<ISourceAdapter>()));
+        services.AddSingleton(sp => new CloneSubmodulesHandler(
+            sp.GetRequiredService<ISourceAdapter>(), sp.GetRequiredService<LoadOrderHolder>(), sp.GetRequiredService<HeldWrites>()));
 
         services.AddSingleton(sp => new SourceFolderMoveChangesHandler(sp.GetRequiredService<ISourceAdapter>()));
 
         services.AddSingleton(sp => new FollowSourceFolderMoveHandler(sp.GetRequiredService<ISourceAdapter>()));
 
         services.AddSingleton(sp => new SetPluginFileFlagsHandler(
-            sp.GetRequiredService<IPluginAdapter>(), sp.GetRequiredService<LoadOrderHolder>(), sp.GetRequiredService<IQueries>(),
-            sp.GetRequiredService<ILogger<SetPluginFileFlagsHandler>>()));
+            sp.GetRequiredService<IPluginAdapter>(), sp.GetRequiredService<LoadOrderHolder>(), sp.GetRequiredService<HeldWrites>()));
 
         services.AddSingleton(sp => new CreatePluginHandler(
             sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<SchemaReflector>(),
-            sp.GetRequiredService<IQueries>(),
+            sp.GetRequiredService<HeldWrites>(),
             sp.GetRequiredService<ILogger<CreatePluginHandler>>()));
 
         services.AddSingleton(sp => new CreatePluginInModHandler(

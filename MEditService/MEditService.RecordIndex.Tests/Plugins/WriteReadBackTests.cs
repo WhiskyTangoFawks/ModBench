@@ -82,12 +82,26 @@ public sealed class WriteReadBackTests : IDisposable
         Assert.Contains("\"Written\"", _index.Queries.GetRenderedDocument(_compiledPlugin.Key, _npc).Value()?.Text, StringComparison.Ordinal);
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task AWriteReadBack_IsAnsweredOnceTheRecordIndexHoldsWhatItWrote_WithNoChangeSignalled(bool writeNamesItsPlugin)
+    [Fact]
+    public async Task AWriteReadBack_IsAnsweredOnceTheRecordIndexHoldsWhatItWrote_WithNoChangeSignalled()
     {
-        await AssertHeldAndWritten(writeNamesItsPlugin ? ReadBack() : CheckOfTheDisk());
+        await AssertHeldAndWritten(ReadBack());
+    }
+
+    [Fact]
+    public async Task AReadBackOfTheSourceOfAPluginTheLoadOrderNamesNoSourceOf_IsAnsweredThatItsRowsAreItsBinarys()
+    {
+        var other = _fixture.Plugins.Single(plugin => plugin.Name == OtherPlugin).Key;
+
+        var unread = await _index.Queries.Hold([HandedPlugin.ReadBackSource(other)], CancellationToken.None).WaitAsync(Generous);
+
+        Assert.Contains($"names no plugin source of {OtherPlugin}", unread, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AReadBackOfTheSourceOfAPluginTheLoadOrderNamesASourceOf_IsHeld()
+    {
+        await AssertHeldAndWritten(_index.Queries.Hold([HandedPlugin.ReadBackSource(_compiledPlugin.Key)], CancellationToken.None));
     }
 
     [Fact]

@@ -25,6 +25,8 @@ source: @../../spec/architecture/target-architecture.medit_data.source
 source.label: Mod source
 sourceadapter: @../../spec/architecture/target-architecture.medit_repositories.sourceadapter
 sourceadapter.label: Source adapter
+indexer: @../../spec/architecture/target-architecture.medit_readmodel.recordindex.indexer
+indexer.label: Indexer
 instanceloader: @../../spec/architecture/target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 views: "every view" {class: driving}
@@ -62,6 +64,8 @@ modsource: "a mod source with a remote" {
   sourceadapter -> commands: "the commit" {class: compile}
   commands -> sourceadapter: "the pin" {class: compile}
   sourceadapter -> source: "the clone, when absent · the followed branch, when at the pin" {class: compile}
+  commands -> indexer: "read back each plugin whose source folder the load order names it cloned" {class: compile}
+  indexer -> commands: "held, or why not" {class: compile}
   commands -> http: "cloned, or at another commit" {class: compile}
   http -> client: "cloned, or at another commit" {class: compile}
   client -> sourcecommands: "cloned, or at another commit" {class: compile}

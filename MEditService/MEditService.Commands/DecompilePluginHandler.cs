@@ -2,7 +2,6 @@ using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
-using MEditService.RecordIndex.Queries;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
@@ -14,18 +13,17 @@ public sealed class DecompilePluginHandler
 {
     private readonly LoadOrderHolder _loadOrder;
     private readonly ISourceAdapter _source;
-    private readonly IQueries _index;
-    private readonly ILogger _logger;
+    private readonly HeldWrites _held;
     private readonly PluginDecompiler _decompiler;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
     internal DecompilePluginHandler(
-        LoadOrderHolder loadOrder, IPluginAdapter adapter, ISourceAdapter source, SchemaReflector schemaReflector, IQueries index,
+        LoadOrderHolder loadOrder, IPluginAdapter adapter, ISourceAdapter source, SchemaReflector schemaReflector, HeldWrites held,
         ILogger<DecompilePluginHandler> logger) =>
-        (_loadOrder, _source, _index, _logger, _decompiler) = (loadOrder, source, index, logger, new PluginDecompiler(logger, adapter, source, schemaReflector));
+        (_loadOrder, _source, _held, _decompiler) = (loadOrder, source, held, new PluginDecompiler(logger, adapter, source, schemaReflector));
 
     /// <summary>Refuses, writing nothing, when no load order is held or git cannot run. A plugin whose source has
-    /// working-tree changes is refused unless <paramref name="force"/>. <paramref name="cancel"/> stops the wait, not the writes.</summary>
+    /// working-tree changes is refused unless <paramref name="force"/>.</summary>
     public async Task<Answer<DecompileResult, SelectionRefusal<DecompileRefusal>>> DecompileAsync(
         IReadOnlyList<PluginAddress> plugins, bool force, CancellationToken cancel = default)
     {
@@ -34,7 +32,7 @@ public sealed class DecompilePluginHandler
 
         var decompiled = await ItemWrite.OverAsync(
             _source, plugins, PluginAddress.Comparer, DecompileRefusal.GitUnavailable, plugin => DecompileOneAsync(loadOrder, plugin, force));
-        await _index.ReadBack(decompiled.Landed.Select(landed => landed.Item), _logger, cancel);
+        await _held.ReadBackSource(decompiled.Landed.Select(landed => landed.Item), cancel);
         return decompiled.ToAnswer(
             landed => landed.Item,
             refused => new DecompileRefused(refused.Item, refused.Refusal, refused.Message),

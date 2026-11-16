@@ -31,16 +31,16 @@ internal sealed class WriteSessions(ISourceAdapter source, IReadOnlyList<Documen
     }
 
     /// <summary>The <paramref name="outcome"/> of a gesture whose changes are in these sessions, once they are written and
-    /// <paramref name="index"/> holds the documents handed it; an outcome that changed nothing is not written.</summary>
+    /// <paramref name="held"/> holds the documents handed it; an outcome that changed nothing is not written.</summary>
     internal async Task<RecordEditResult> Handed(
-        RecordEditResult outcome, string doing, LoadOrderHolder loadOrder, IQueries index, ILogger logger, CancellationToken cancel)
+        RecordEditResult outcome, string doing, LoadOrderHolder loadOrder, HeldWrites held, ILogger logger, CancellationToken cancel)
     {
         if (!outcome.Applied || !_byFolder.Values.Any(Changes)) return outcome;
         if (Write() is { } failure) return WriteFailure.Refusal(failure, doing, logger);
         var written = _byFolder.Values.SelectMany(session => session.Written).ToList();
         var handed = PluginsWritten(loadOrder.Current)?.Select(named => new HandedPlugin(
             named.Key, named.Value, [.. written.Where(document => named.Value.Contains(document.Path, StringComparer.Ordinal))])).ToList();
-        await index.Held(handed, logger, cancel).ConfigureAwait(false);
+        await held.Hand(handed, cancel).ConfigureAwait(false);
         return outcome;
     }
 
