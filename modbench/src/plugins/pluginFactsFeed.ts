@@ -100,7 +100,7 @@ export class PluginFactsFeed implements vscode.Disposable {
   /** The completed reconcile's whole hand-off, in one read: which files the backend holds, and
    *  every fact it answers about each plugin. Returns how many plugins it holds; `undefined` when
    *  the read failed or a newer step superseded it. */
-  async reconciled(failures: readonly PluginLoadFailure[]): Promise<number | undefined> {
+  async reconciled(failures: readonly PluginLoadFailure[]): Promise<{ held: number; active: number } | undefined> {
     const generation = ++this.generation;
     const plugins = await this.readPlugins(undefined);
     if (generation !== this.generation) return undefined;
@@ -112,20 +112,19 @@ export class PluginFactsFeed implements vscode.Disposable {
     this.deps.publishFailedToRead(this.facts.problems().failedToRead);
     this.publishSorting();
     this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);
-    await this.readChangedWithoutARow();
+    await this.readChangedOutside();
     if (generation !== this.generation) return undefined;
     // Diagnoses stay as the last scan left them (no blink) until the scan lands a fresh answer.
     this.changed.fire(undefined);
     // Fire-and-forget: the hand-off must not wait on a whole-load-order scan. A failed scan is
     // ADR-0019's background tier, and retries at the next reconcile.
     void this.scanDiagnoses(generation);
-    return plugins.length;
+    return { held: plugins.length, active: active.length };
   }
 
-  // A plugin mEdit never opened has no row in its facts, so it is told changed outside by its index state.
-  private async readChangedWithoutARow(): Promise<void> {
+  private async readChangedOutside(): Promise<void> {
     const indexing = await this.deps.client.getPluginsIndexing();
-    if (!isReadFailed(indexing)) this.facts.changedWithoutARow(indexing.filter(({ changedOutside }) => changedOutside).map(({ name, origin }) => ({ name, origin })));
+    if (!isReadFailed(indexing)) this.facts.changedOutsideAre(indexing.filter(({ changedOutside }) => changedOutside).map(({ name, origin }) => ({ name, origin })));
     this.deps.publishChangedOutside(this.facts.problems().changedOutside);
   }
 
@@ -181,7 +180,7 @@ export class PluginFactsFeed implements vscode.Disposable {
     if ('failure' in plugins) return this.factsFailed(plugins.failure);
     const sortingChanged = this.facts.refreshed(plugins, named);
     this.deps.publishSourceUnreadable(this.facts.problems().sourceUnreadable);
-    await this.readChangedWithoutARow();
+    await this.readChangedOutside();
     if (generation !== this.generation) return;
     if (this.facts.judgedOrder() !== undefined && sortingChanged) await this.rejudgeAnnouncing(named);
     else this.changed.fire(named);

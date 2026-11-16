@@ -14,10 +14,10 @@ import { fakeLoadOrder, forgetEditor, NO_MODS, register } from './editorHarness'
 import { WEBVIEW_TO_EXTENSION } from '../../wire/messages';
 import { present } from '../../ports/present';
 import { comparisonOf } from '../../test/comparison';
-import { loadOrderStatusEventFixture, notificationEventFixture, pluginMetadataFixture } from '../../client/test/fixtures';
+import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { DATA_DIRECTORY_ORIGIN, samePluginAddress } from '../../wire/pluginAddress';
 import { columnKey } from '../../wire/columnKey';
-import { fire } from '../../client/test/fireFrame';
+import { holdsLoadOrder, changeNamesPlugin } from '../../client/test/says';
 
 const COPY_PLUGIN = { name: 'A.esp', origin: 'ModA' };
 const renderedUri = (formKey: string, fileName: string) => vscode.Uri.from({
@@ -215,7 +215,6 @@ describe('the focused cell of the record tab in focus', () => {
 
 });
 
-const conflictsComputedTick = loadOrderStatusEventFixture();
 
 describe('conflicts computed', () => {
   it('has every open record tab read its record again', () => {
@@ -223,7 +222,7 @@ describe('conflicts computed', () => {
     const { open } = makeEditor(client);
     const tabs = [open('000801:A.esp'), open('000802:A.esp')];
 
-    fire(client, conflictsComputedTick);
+    holdsLoadOrder(client);
 
     expect(tabs.map((tab) => tab.webview.postMessage.mock.calls)).toEqual([
       [[{ type: 'loadRecord', formKey: '000801:A.esp' }]],
@@ -247,7 +246,7 @@ describe('an edit of a FormID, fired with no panel', () => {
 
     await commandHandlers.get('modbench.record.editField')?.(
       { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin }, { op: 'set', path: [{ kind: 'member', name: 'FormID' }], value: 'x' });
-    fire(client, notificationEventFixture({ kind: 'rows-changed', plugin: 'A.esp', origin: 'ModA', keys: [OLD, MOVED], sequence: 2 }));
+    changeNamesPlugin(client, { name: 'A.esp', origin: 'ModA' }, [OLD, MOVED]);
 
     expect(tab.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: MOVED }]]);
   });
@@ -351,7 +350,7 @@ describe('a record file\'s tab', () => {
     expect(client.calls).toContainEqual({ method: 'getRecordOfFile', args: [FILE] });
     expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
     expect(askedFromThePalette()).toBe('000801:A.esp');
-    fire(client, conflictsComputedTick);
+    holdsLoadOrder(client);
     expect(tab.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: GUN }]]);
   });
 
@@ -393,7 +392,7 @@ describe('a record file\'s tab', () => {
     expect(pageGlobal(tab, 'mEditLoadError')).toBeUndefined();
     expect(outputChannel.warn).not.toHaveBeenCalled();
 
-    client.reconnected();
+    client.change(undefined);
 
     await vi.waitFor(() => expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN));
   });
@@ -419,7 +418,7 @@ describe('a record file\'s tab', () => {
     const tab = await openFile(FILE);
     expect(pageGlobal(tab, 'mEditLoadError')).toEqual({ failed: 'unreachable' });
 
-    client.reconnected();
+    client.change(undefined);
 
     await vi.waitFor(() => expect(pageGlobal(tab, 'mEditLoadError')).toBeUndefined());
   });
@@ -432,7 +431,7 @@ describe('a record file\'s tab', () => {
     const tab = await openFile(FILE);
     expect(pageGlobal(tab, 'mEditLoadError')).toEqual({ failed: 'unreachable' });
 
-    client.reconnected();
+    client.change(undefined);
 
     await vi.waitFor(() => expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN));
     expect(pageGlobal(tab, 'mEditLoadError')).toBeUndefined();
@@ -690,7 +689,7 @@ describe('a record tab closed', () => {
     tab.close();
     land(holding);
     await resolving;
-    fire(client, conflictsComputedTick);
+    holdsLoadOrder(client);
 
     expect(pageGlobal(tab, 'mEditFormKey')).toBeUndefined();
     expect(tab.webview.postMessage).not.toHaveBeenCalled();
@@ -799,7 +798,7 @@ describe('what a record tab\'s webview posts', () => {
       const postsBefore = loadRecordPosts(tab).length;
 
       loadOrder.coming = false;
-      fire(mEdit, loadOrderStatusEventFixture({ state: 'Failed', message: 'indexing failed', conflictsComputed: false }));
+      holdsLoadOrder(mEdit, { settled: false, refusal: { kind: 'failed', message: 'indexing failed' } });
 
       await vi.waitFor(() => expect(loadRecordPosts(tab)).toHaveLength(postsBefore + 1));
     });
@@ -813,7 +812,7 @@ describe('what a record tab\'s webview posts', () => {
       await aMacrotask();
       const postsBefore = loadRecordPosts(tab).length;
 
-      fire(mEdit, conflictsComputedTick);
+      holdsLoadOrder(mEdit);
 
       await vi.waitFor(() => expect(loadRecordPosts(tab)).toHaveLength(postsBefore + 1));
       tab.receive({ ...loadRequest, requestId: 'r2' });
@@ -922,7 +921,7 @@ describe('what a record tab\'s webview posts', () => {
       const { open } = makeEditor(mEdit);
       const tab = open(GUN);
       const failure = { name: 'Bad.esp', origin: 'Mod', reason: 'truncated' };
-      fire(mEdit, loadOrderStatusEventFixture({ failures: [failure] }));
+      holdsLoadOrder(mEdit, { failures: [failure] });
 
       tab.receive(loadRequest);
       await readAnswered(tab);
@@ -951,7 +950,7 @@ describe('what a record tab\'s webview posts', () => {
 
     it('is answered comparisonComplete false while a change signal is unanswered, though the status holds conflicts computed', async () => {
       const mEdit = client();
-      fire(mEdit, conflictsComputedTick);
+      holdsLoadOrder(mEdit);
       mEdit.setStatus('running');
       mEdit.answerSignals(() => new Promise<undefined>(() => undefined));
       void mEdit.signalChange(['/m/A.esp']);
@@ -1312,7 +1311,7 @@ describe('several records opened at once', () => {
     const tab = await openDocument(vscode.Uri.file(GUN_FILE));
 
     await openSeveral();
-    client.reconnected();
+    client.change(undefined);
     await vi.waitFor(() => expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN));
     expect(columnsPosted(tab)).toEqual([]);
     tab.receive(firstRead);
@@ -1341,8 +1340,8 @@ describe('several records opened at once', () => {
     tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [{ formKey: AMMO, plugin: winner }] });
     await readAnswered(tab);
 
-    fire(client, notificationEventFixture({ kind: 'rows-changed', plugin: 'C.esp', origin: 'ModC', keys: [KNIFE], sequence: 1 }));
-    fire(client, notificationEventFixture({ kind: 'rows-changed', plugin: 'B.esp', origin: 'ModB', keys: [AMMO], sequence: 2 }));
+    changeNamesPlugin(client, { name: 'C.esp', origin: 'ModC' }, [KNIFE]);
+    changeNamesPlugin(client, { name: 'B.esp', origin: 'ModB' }, [AMMO]);
 
     expect(tab.webview.postMessage.mock.calls).toEqual([[expect.objectContaining({ type: 'recordLoadAnswered' })], [{ type: 'loadRecord', formKey: GUN }]]);
   });
@@ -1423,18 +1422,18 @@ describe('several records opened at once', () => {
 describe('mEdit\'s reports to an open record tab', () => {
   const GUN = '000801:A.esp';
   const reported = (kind: 'rows-changed' | 'plugin-changed', keys: string[]) =>
-    notificationEventFixture({ kind, plugin: 'A.esp', origin: 'ModA', keys, sequence: 1 });
+    [{ plugin: { name: 'A.esp', origin: 'ModA' }, ...(kind === 'rows-changed' && { keys }) }];
 
   it('has a tab read its record again when a report names it or a plugin\'s change names no record, and not when a report names another record', () => {
     const client = new InMemoryMEditClient();
     const { open } = makeEditor(client);
     const tab = open(GUN);
 
-    fire(client, reported('rows-changed', ['000802:A.esp']));
+    client.change(reported('rows-changed', ['000802:A.esp']));
     expect(tab.webview.postMessage).not.toHaveBeenCalled();
 
-    fire(client, reported('rows-changed', [GUN]));
-    fire(client, reported('plugin-changed', [GUN]));
+    client.change(reported('rows-changed', [GUN]));
+    client.change(reported('plugin-changed', [GUN]));
     expect(tab.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: GUN }], [{ type: 'loadRecord', formKey: GUN }]]);
   });
 
@@ -1444,7 +1443,7 @@ describe('mEdit\'s reports to an open record tab', () => {
     const tab = open(GUN);
 
     editor.dispose();
-    fire(client, reported('rows-changed', [GUN]));
+    client.change(reported('rows-changed', [GUN]));
 
     expect(tab.webview.postMessage).not.toHaveBeenCalled();
   });

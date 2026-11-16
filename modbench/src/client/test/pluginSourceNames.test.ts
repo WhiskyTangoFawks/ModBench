@@ -3,7 +3,6 @@ import { pluginSourceNames } from '../pluginSourceNames';
 import type { DocumentName } from '../MEditClient';
 import { InMemoryMEditClient } from './InMemoryMEditClient';
 import { localFailure } from '../../wire/readFailed';
-import { fire } from './fireFrame';
 
 const SOURCE = '/instance/source/Mod/plugin-source/Mod.esp/Npc.json';
 const README = '/instance/README.md';
@@ -36,15 +35,16 @@ describe('asking the record index what plugin source names (target-architecture.
     expect([answers, asked()]).toEqual([[NAMED, NAMED], [[TEXT, path, at]]]);
   });
 
+  const mod = { name: 'Mod.esp', origin: 'Mod' };
   it.each([
-    ['rows-changed'],
-    ['plugin-changed'],
-    ['record-index-changed'],
-  ])('asks again once the record index tells of %s', async (kind) => {
+    ['rows', [{ plugin: mod, keys: [] }]],
+    ['a plugin', [{ plugin: mod }]],
+    ['everything', undefined],
+  ])('asks again once the change event names %s', async (_what, change) => {
     const { names, client, asked } = asking();
 
     await names.getPluginSourceNames(TEXT, SOURCE, 3);
-    fire(client, { kind, plugin: 'Mod.esp', origin: 'Mod', keys: [], sequence: 1 });
+    client.change(change);
     await names.getPluginSourceNames(TEXT, SOURCE, 3);
 
     expect(asked()).toHaveLength(2);

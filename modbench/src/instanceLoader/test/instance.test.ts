@@ -16,10 +16,9 @@ import { factsOf } from '../instanceFacts';
 import { modOrigin } from '../fileConflictIndex';
 import { fakeWorkspace } from '../../test/fakeWorkspace';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 import { writeManifestIn } from '../../manifestAdapter/manifestAdapter';
 import { ambientWrites } from '../ambientWrites';
-import { fire } from '../../client/test/fireFrame';
+import { holdsLoadOrder } from '../../client/test/says';
 
 const instances: Instance[] = [];
 
@@ -1454,7 +1453,7 @@ describe('Instance — what each flagged plugin could have held before its flags
     await instance.refresh();
     const unreached = instance.value.flaggedHashes.get(plugin);
 
-    fire(medit, loadOrderStatusEventFixture());
+    holdsLoadOrder(medit);
     const reached = (await pastSequence(instance, 1)).flaggedHashes.get(plugin);
 
     expect([unreached, reached]).toEqual([{ kind: 'unanswered' }, { kind: 'read', answer: [COPY] }]);
@@ -1535,7 +1534,7 @@ describe('Instance — what each archive holds', () => {
     await instance.refresh();
     const unreached = instance.value.archiveContents.get(MOD_ARCHIVE);
 
-    fire(medit, loadOrderStatusEventFixture());
+    holdsLoadOrder(medit);
     const reached = (await pastSequence(instance, 1)).archiveContents.get(MOD_ARCHIVE);
 
     expect([unreached, reached]).toEqual([{ kind: 'unanswered' }, { kind: 'read', answer: ['meshes/a.nif'] }]);

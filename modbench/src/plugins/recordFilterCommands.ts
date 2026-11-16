@@ -79,7 +79,7 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
   const onChange = async (): Promise<void> => {
     try {
       const cleared = answerOf(await client.getFilterCleared());
-      const told = JSON.stringify(cleared);
+      const told = JSON.stringify(cleared && { source: cleared.source, reason: cleared.reason });
       if (cleared === null || told === reported) {
         reported = cleared === null ? '' : reported;
         return await showHeld();

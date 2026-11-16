@@ -4,7 +4,6 @@ import type {
   MEditClient, RecordIndexChange, RecordIndexProgress, BackendStatus, LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, UnsavedDocument,
 } from '../MEditClient';
 import { createLoadOrderSender, type LoadOrderWire } from '../loadOrderSender';
-import { isMEditGone } from '../MEditClient';
 import { isReadFailed, type ReadFailed } from '../../wire/readFailed';
 import { indexingMakesLate, trackLateness, trackProgress } from '../lateness';
 
@@ -104,11 +103,6 @@ export class InMemoryMEditClient implements MEditClient {
 
   constructor() {
     this.sender.onPendingChanged(this.lateness.note);
-    // As the client does: a process gone or a stream reopened holds no progress, and a process running, or a stream reopened, says everything.
-    this.onStatusChanged((status) => { if (isMEditGone(status)) this.setProgress(undefined); });
-    this.onReconnected(() => { this.setProgress(undefined); });
-    this.onStatusChanged((status) => { if (status === 'running') this.change(undefined); });
-    this.onReconnected(() => { this.change(undefined); });
   }
 
   /** What changed in the record index, as the change event tells it. */

@@ -14,7 +14,7 @@ interface ReconciledDeps {
   statusBar: Pick<StatusBar, 'ready'>;
   registerRepositories: () => void;
   /** The completed reconcile's whole hand-off to the tree, so no caller can apply one part of
-   *  it without the rest. Answers how many plugins the load order holds, none when the hand-off did not land. */
+   *  it without the rest. Answers how many plugins are active, none when it did not land. */
   applyReconciled: (failures: readonly PluginLoadFailure[], totalPlugins: number) => Promise<number | undefined>;
 }
 
@@ -23,8 +23,8 @@ interface ReconciledDeps {
 async function settleReconciled({ progress, failures }: Heard, deps: ReconciledDeps): Promise<void> {
   reportSkippedPlugins(failures, deps);
   deps.registerRepositories();
-  const held = await deps.applyReconciled(failures, progress.total);
-  if (held !== undefined) deps.statusBar.ready(held);
+  const active = await deps.applyReconciled(failures, progress.total);
+  if (active !== undefined) deps.statusBar.ready(active);
 }
 
 // plugins.md, States 3: the tree's own wording for a row not yet held while mEdit is unreachable.
@@ -82,7 +82,13 @@ export function followIndexStatus(deps: IndexStatusDeps): { narrator: FollowedNa
       return;
     }
     const indexing = await client.getPluginsIndexing();
-    if (read !== reads || isReadFailed(indexing)) return;
+    if (read !== reads) return;
+    if (isReadFailed(indexing)) {
+      if (current.refusal === undefined) return;
+      heard = true;
+      narrator.hear({ progress: current, indexed: [], failures: [] });
+      return;
+    }
     heard = true;
     narrator.hear({
       progress: current, failures: loadFailuresOf(indexing),
@@ -113,11 +119,12 @@ async function applyReconciled(
   // reconcile would read as short.
   totalPlugins: number,
 ): Promise<number | undefined> {
-  const held = await facts.reconciled(failures);
+  const counted = await facts.reconciled(failures);
   // Superseded by a newer step, which shows its own state, or a failed read the feed reported.
-  if (held === undefined) return undefined;
+  if (counted === undefined) return undefined;
+  const { held, active } = counted;
   // Do not remove as logging noise: `held + failures.length` landing close to
   // `totalPlugins` is what tells a stuck-tail reconcile here from one broken upstream.
   log('info', `[loadOrder] applying reconciled load order to tree: ${held} in the load order, ${failures.length} failed, of ${totalPlugins} plugins`);
-  return held;
+  return active;
 }

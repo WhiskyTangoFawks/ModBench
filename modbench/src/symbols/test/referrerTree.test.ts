@@ -7,11 +7,11 @@ import {
   readReferencedBy,
   referencedByCopyValue,
 } from '../referrerTree';
-import { loadOrderStatusEventFixture, pluginMetadataFixture } from '../../client/test/fixtures';
+import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { ReferenceResult } from '../../client';
 import { present } from '../../ports/present';
-import { fire } from '../../client/test/fireFrame';
+import { holdsLoadOrder, changeNamesPlugin } from '../../client/test/says';
 
 type Node = ReturnType<Awaited<ReturnType<typeof readReferencedBy>>['provider']['getChildren']>[number];
 const isHolder = (node: Node): node is Extract<Node, { plugin: unknown }> => 'plugin' in node;
@@ -29,7 +29,7 @@ function indexed(references: ReferenceResult[]): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
   client.setQueryAnswer('getReferencesInActiveOrCompiledPlugins', references);
   client.setQueryAnswer('getPlugins', []);
-  fire(client, loadOrderStatusEventFixture());
+  holdsLoadOrder(client);
   return client;
 }
 
@@ -83,7 +83,7 @@ describe('the Referenced By list — states', () => {
   it('is a snapshot of the references in the active and compiled plugins: mEdit is asked once, however often the view asks for rows and whatever changes after', async () => {
     const client = indexed([reference({ formKey: '000002:Fallout4.esm' })]);
     const { provider } = await readReferencedBy(client, TARGET, 'a list');
-    fire(client, { kind: 'rows-changed', plugin: '', origin: '', keys: [], sequence: 0 });
+    changeNamesPlugin(client, { name: '', origin: '' });
     provider.getChildren();
     provider.getChildren();
     expect(client.calls.filter((c) => c.method.startsWith('getReferences'))).toEqual([{ method: 'getReferencesInActiveOrCompiledPlugins', args: [TARGET] }]);

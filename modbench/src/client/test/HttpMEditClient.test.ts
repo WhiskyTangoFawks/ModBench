@@ -98,6 +98,21 @@ describe('HttpMEditClient — the record index standing', () => {
     expect(client.recordIndexProgress).toBeUndefined();
   });
 
+  it('is late while the record index is not settled, or refuses the load order, and carries the reason', async () => {
+    const { response, push } = pushableStreamResponse();
+    const client = makeClient(routedFetch([['/notifications/stream', () => Promise.resolve(response)]]));
+    await client.start();
+
+    push(loadOrderStatusTick({ conflictsComputed: false, version: 1 }));
+    await vi.waitFor(() => expect(client.recordIndexMayBeLate).toBe(true));
+    push(loadOrderStatusTick({ state: 'HeldElsewhere', message: 'another window holds the record index', conflictsComputed: false, version: 1 }));
+    await vi.waitFor(() => expect(client.recordIndexProgress?.refusal).toEqual({ kind: 'heldElsewhere', message: 'another window holds the record index' }));
+    expect(client.recordIndexMayBeLate).toBe(true);
+    push(loadOrderStatusTick({ conflictsComputed: true, version: 2 }));
+
+    await vi.waitFor(() => expect(client.recordIndexMayBeLate).toBe(false));
+  });
+
   it('is gone once the stream reopens, as it may have reattached to another process', async () => {
     const { streams, open } = reopeningStreams();
     const client = makeClient(routedFetch([['/notifications/stream', open]]), { reconnectDelayMs: 0 });

@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { PluginLoadFailure } from '../MEditClient';
-import { InMemoryMEditClient } from './InMemoryMEditClient';
+import { trackProgress } from '../lateness';
+import type { RecordIndexProgress } from '../MEditClient';
 import { loadOrderStatusEventFixture } from './fixtures';
-import { fire } from './fireFrame';
+import { keepers } from './keepers';
 
 const tick = (conflictsComputed: boolean, failures: PluginLoadFailure[] = [], version = 1) =>
   loadOrderStatusEventFixture({ conflictsComputed, failures, version });
@@ -11,198 +12,201 @@ const bad = { name: 'Bad.esp', origin: 'Mod', reason: 'truncated' };
 
 describe('the client\'s record index progress', () => {
   it('is undefined before the first tick', () => {
-    expect(new InMemoryMEditClient().recordIndexProgress).toBeUndefined();
+    expect(keepers().standing.progress()).toBeUndefined();
   });
 
   it('reads the latest tick', () => {
-    const client = new InMemoryMEditClient();
+    const client = keepers();
 
-    fire(client, tick(true, [bad]));
-    expect(client.recordIndexProgress).toMatchObject({ settled: true, done: 1, version: 1 });
+    client.fire(tick(true, [bad]));
+    expect(client.standing.progress()).toMatchObject({ settled: true, done: 1, version: 1 });
 
-    fire(client, tick(false));
-    expect(client.recordIndexProgress).toMatchObject({ settled: false, done: 0 });
+    client.fire(tick(false));
+    expect(client.standing.progress()).toMatchObject({ settled: false, done: 0 });
   });
 
   it('resets when the backend leaves running, so a restarted process\'s reconcile starts unsettled', () => {
-    const client = new InMemoryMEditClient();
-    fire(client, tick(true));
+    const client = keepers();
+    client.fire(tick(true));
 
     client.setStatus('disconnected');
 
-    expect(client.recordIndexProgress).toBeUndefined();
+    expect(client.standing.progress()).toBeUndefined();
   });
 
   it('resets when the stream reopens, since it may have reattached to another process', () => {
-    const client = new InMemoryMEditClient();
-    fire(client, tick(true));
+    const client = keepers();
+    client.fire(tick(true));
 
     client.reconnected();
 
-    expect(client.recordIndexProgress).toBeUndefined();
+    expect(client.standing.progress()).toBeUndefined();
   });
 
   describe('the change event, on a status heard', () => {
     it('is told for each ready status newer than the last settled one, even when its picture is the last\'s', () => {
-      const client = new InMemoryMEditClient();
+      const client = keepers();
       const changed = vi.fn();
       client.onDidChange(changed);
 
-      fire(client, tick(true, [], 1));
-      fire(client, tick(true, [], 1));
-      fire(client, tick(true, [], 2));
+      client.fire(tick(true, [], 1));
+      client.fire(tick(true, [], 1));
+      client.fire(tick(true, [], 2));
 
       expect(changed).toHaveBeenCalledTimes(2);
     });
 
     it('is told when a reconcile of the version already settled, as a refresh runs, becomes ready', () => {
-      const client = new InMemoryMEditClient();
-      fire(client, tick(true, [], 1));
+      const client = keepers();
+      client.fire(tick(true, [], 1));
       const changed = vi.fn();
       client.onDidChange(changed);
 
-      fire(client, tick(false, [], 1));
-      fire(client, tick(true, [], 1));
+      client.fire(tick(false, [], 1));
+      client.fire(tick(true, [], 1));
 
       expect(changed).toHaveBeenCalledOnce();
     });
 
     it('is not told when a sweep over a named change stops validating, as that change was named', () => {
-      const client = new InMemoryMEditClient();
-      fire(client, loadOrderStatusEventFixture({ conflictsComputed: true, validating: false, version: 1 }));
+      const client = keepers();
+      client.fire(loadOrderStatusEventFixture({ conflictsComputed: true, validating: false, version: 1 }));
       const changed = vi.fn();
       client.onDidChange(changed);
 
-      fire(client, loadOrderStatusEventFixture({ conflictsComputed: true, validating: true, version: 1 }));
-      fire(client, loadOrderStatusEventFixture({ conflictsComputed: true, validating: false, version: 1 }));
+      client.fire(loadOrderStatusEventFixture({ conflictsComputed: true, validating: true, version: 1 }));
+      client.fire(loadOrderStatusEventFixture({ conflictsComputed: true, validating: false, version: 1 }));
 
       expect(changed).not.toHaveBeenCalled();
     });
 
     it('is not told when a reconcile starts, or while it runs', () => {
-      const client = new InMemoryMEditClient();
-      fire(client, tick(true, [], 1));
+      const client = keepers();
+      client.fire(tick(true, [], 1));
       const changed = vi.fn();
       client.onDidChange(changed);
 
-      fire(client, tick(false, [], 2));
-      fire(client, tick(false, [], 2));
+      client.fire(tick(false, [], 2));
+      client.fire(tick(false, [], 2));
 
       expect(changed).not.toHaveBeenCalled();
     });
 
     it('is told, with the new failures already readable, when the failures differ, and not when they repeat', () => {
-      const client = new InMemoryMEditClient();
+      const client = keepers();
       const seen: unknown[] = [];
-      client.onDidChange(() => seen.push(client.recordIndexProgress?.done));
+      client.onDidChange(() => seen.push(client.standing.progress()?.done));
 
-      fire(client, tick(false, [bad]));
-      fire(client, tick(false, [{ ...bad }]));
-      fire(client, tick(false));
+      client.fire(tick(false, [bad]));
+      client.fire(tick(false, [{ ...bad }]));
+      client.fire(tick(false));
 
       expect(seen).toEqual([1, 0]);
     });
 
     it('is not told of a reset, and the next process\'s versions start over', () => {
-      const client = new InMemoryMEditClient();
-      fire(client, tick(true, [], 5));
+      const client = keepers();
+      client.fire(tick(true, [], 5));
       const changed = vi.fn();
       client.onDidChange(changed);
 
       client.setStatus('disconnected');
       expect(changed).not.toHaveBeenCalled();
 
-      fire(client, tick(true, [], 1));
+      client.fire(tick(true, [], 1));
       expect(changed).toHaveBeenCalledOnce();
     });
 
     it('is told when a refusal arrives, and when it lifts, though no reconcile settled', () => {
-      const client = new InMemoryMEditClient();
-      fire(client, tick(false, [], 1));
+      const client = keepers();
+      client.fire(tick(false, [], 1));
       const changed = vi.fn();
       client.onDidChange(changed);
 
-      fire(client, loadOrderStatusEventFixture({ state: 'HeldElsewhere', message: 'another window holds the record index', version: 1 }));
-      fire(client, loadOrderStatusEventFixture({ state: 'HeldElsewhere', message: 'another window holds the record index', version: 1 }));
+      client.fire(loadOrderStatusEventFixture({ state: 'HeldElsewhere', message: 'another window holds the record index', version: 1 }));
+      client.fire(loadOrderStatusEventFixture({ state: 'HeldElsewhere', message: 'another window holds the record index', version: 1 }));
       expect(changed).toHaveBeenCalledOnce();
 
-      fire(client, tick(false, [], 1));
+      client.fire(tick(false, [], 1));
       expect(changed).toHaveBeenCalledTimes(2);
     });
 
     it('is told when the load order is dropped, and when it is restored', () => {
-      const client = new InMemoryMEditClient();
-      fire(client, tick(true, [], 1));
+      const client = keepers();
+      client.fire(tick(true, [], 1));
       const changed = vi.fn();
       client.onDidChange(changed);
 
-      fire(client, loadOrderStatusEventFixture({ state: 'None', conflictsComputed: false, version: 1 }));
+      client.fire(loadOrderStatusEventFixture({ state: 'None', conflictsComputed: false, version: 1 }));
       expect(changed).toHaveBeenCalledOnce();
 
-      fire(client, tick(false, [], 1));
+      client.fire(tick(false, [], 1));
       expect(changed).toHaveBeenCalledTimes(2);
     });
 
     it('stops telling a listener once it unsubscribes', () => {
-      const client = new InMemoryMEditClient();
+      const client = keepers();
       const changed = vi.fn();
       client.onDidChange(changed).dispose();
 
-      fire(client, tick(true));
+      client.fire(tick(true));
 
       expect(changed).not.toHaveBeenCalled();
     });
   });
 
   describe('the record index\'s progress', () => {
-    it('is the plugins indexed or failed out of the load order, while it indexes, and the record index is late', () => {
-      const client = new InMemoryMEditClient();
-      const seen: unknown[] = [];
-      client.onDidChangeRecordIndexProgress((progress) => seen.push(progress));
+    it('is the plugins indexed or failed out of the load order, while it indexes', () => {
+      const client = keepers();
 
-      fire(client, loadOrderStatusEventFixture({ conflictsComputed: false, totalPlugins: 3, indexedPlugins: [{ name: 'A.esp', origin: 'Mod' }], failures: [bad] }));
+      client.fire(loadOrderStatusEventFixture({ conflictsComputed: false, totalPlugins: 3, indexedPlugins: [{ name: 'A.esp', origin: 'Mod' }], failures: [bad] }));
 
-      expect([client.recordIndexProgress, seen, client.recordIndexMayBeLate]).toEqual([{ done: 2, total: 3, version: 1, settled: false }, [{ done: 2, total: 3, version: 1, settled: false }], true]);
+      expect(client.standing.progress()).toEqual({ done: 2, total: 3, version: 1, settled: false });
     });
 
-    it('is settled, and not late, once the reconcile settles', () => {
-      const client = new InMemoryMEditClient();
-      fire(client, tick(false));
+    it('is settled once the reconcile settles', () => {
+      const client = keepers();
+      client.fire(tick(false));
 
-      fire(client, tick(true));
+      client.fire(tick(true));
 
-      expect([client.recordIndexProgress?.settled, client.recordIndexMayBeLate]).toEqual([true, false]);
+      expect(client.standing.progress()?.settled).toBe(true);
     });
 
-    it('carries the reason mEdit refuses the load order, which keeps the record index late', () => {
-      const client = new InMemoryMEditClient();
+    it('carries the reason mEdit refuses the load order', () => {
+      const client = keepers();
 
-      fire(client, loadOrderStatusEventFixture({ state: 'HeldElsewhere', message: 'another window holds the record index', conflictsComputed: false }));
+      client.fire(loadOrderStatusEventFixture({ state: 'HeldElsewhere', message: 'another window holds the record index', conflictsComputed: false }));
 
-      expect([client.recordIndexProgress?.refusal, client.recordIndexMayBeLate]).toEqual([{ kind: 'heldElsewhere', message: 'another window holds the record index' }, true]);
+      expect(client.standing.progress()?.refusal).toEqual({ kind: 'heldElsewhere', message: 'another window holds the record index' });
     });
 
     it.each([
-      ['the load order is dropped', (client: InMemoryMEditClient) => { fire(client, loadOrderStatusEventFixture({ state: 'None', conflictsComputed: false })); }],
-      ['the process is gone', (client: InMemoryMEditClient) => { client.setStatus('disconnected'); }],
+      ['the load order is dropped', (client: ReturnType<typeof keepers>) => { client.fire(loadOrderStatusEventFixture({ state: 'None', conflictsComputed: false })); }],
+      ['the process is gone', (client: ReturnType<typeof keepers>) => { client.setStatus('disconnected'); }],
     ])('is none once %s', (_case, end) => {
-      const client = new InMemoryMEditClient();
-      fire(client, tick(false));
+      const client = keepers();
+      client.fire(tick(false));
 
       end(client);
 
-      expect(client.recordIndexProgress).toBeUndefined();
+      expect(client.standing.progress()).toBeUndefined();
     });
+  });
+});
 
-    it('is told only when it changes', () => {
-      const client = new InMemoryMEditClient();
-      const told = vi.fn();
-      client.onDidChangeRecordIndexProgress(told);
+describe('the progress told to a listener', () => {
+  it('is told only when it changes', () => {
+    const held: { progress?: RecordIndexProgress } = {};
+    const told = vi.fn();
+    const tracked = trackProgress(() => held.progress);
+    tracked.event(told);
 
-      fire(client, tick(false));
-      fire(client, tick(false));
+    tracked.note();
+    held.progress = { done: 1, total: 2, version: 1, settled: false };
+    tracked.note();
+    tracked.note();
 
-      expect(told).toHaveBeenCalledOnce();
-    });
+    expect(told.mock.calls).toEqual([[{ done: 1, total: 2, version: 1, settled: false }]]);
   });
 });

@@ -98,7 +98,7 @@ import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { RecordBrowser, type RecordBrowserNode } from '../RecordBrowser';
 import { soleGroup } from './browserRows';
 import type { LoadOrderSnapshot, PluginMetadata, RecordSummary } from '../../client';
-import { loadOrderStatusEventFixture, notificationEventFixture, pluginMetadataFixture, recordTypeCountFixture } from '../../client/test/fixtures';
+import { pluginMetadataFixture, recordTypeCountFixture } from '../../client/test/fixtures';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
@@ -110,26 +110,24 @@ import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 import { NO_MOD_STATUSES } from '../../test/noModStatuses';
 import { recordingReporter, scriptedDialog, type RecordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
-import { fire } from '../../client/test/fireFrame';
+import { holdsLoadOrder, changeNamesPlugin } from '../../client/test/says';
 
 const FOUND = { kind: 'found', root: '/game', dataFolder: '/game/Data' } as const;
 const ARMOR_SQL = 'SELECT form_key FROM "armo"';
 const workspaceUri = (name: string) => ({ scheme: 'file', path: `/workspace/${name}` });
 
-const rowsChanged = notificationEventFixture({ kind: 'rows-changed', plugin: 'Test.esp', origin: 'ModA', sequence: 1 });
+const named = (kind: 'rows-changed' | 'plugin-changed', keys: string[] = []) =>
+  [{ plugin: { name: 'Test.esp', origin: 'ModA' }, ...(kind === 'rows-changed' && { keys }) }];
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 const pluginReads = (client: InMemoryMEditClient) => client.calls.filter((call) => call.method === 'getPlugins').length;
 
-const tick = (over: Parameters<typeof loadOrderStatusEventFixture>[0] = {}) => loadOrderStatusEventFixture(
-  { state: 'Reconciling', totalPlugins: 3, activePlugins: 3, conflictsComputed: false, ...over },
-);
 
 const silentChannel = { error: vi.fn(), info: vi.fn() };
 
 async function handedOff(client: InMemoryMEditClient): Promise<void> {
   const before = pluginReads(client);
-  fire(client, tick({ state: 'Ready', conflictsComputed: true }));
+  holdsLoadOrder(client, { total: 3 });
   await vi.waitFor(() => { expect(pluginReads(client)).toBeGreaterThan(before); });
   await settle();
   client.calls.length = 0;
@@ -161,7 +159,7 @@ function clientHoldingNothing(): InMemoryMEditClient {
 let clearedAt = 0;
 function clears(client: InMemoryMEditClient, source: string): void {
   client.setQueryAnswer('getFilterCleared', { source, reason: 'Conversion Error', sequence: ++clearedAt });
-  fire(client, notificationEventFixture({ kind: 'record-index-changed' }));
+  client.change(undefined);
 }
 
 function pluginsView(
@@ -297,7 +295,7 @@ describe('the Plugins view\'s selection relates to its masters (plugins.md, The 
     }), { client });
     await handedOff(client);
     const [dep] = await rows();
-    fire(client, notificationEventFixture({ kind: 'rows-changed', plugin: 'Dep.esp', origin: 'SomeMod', sequence: 1 }));
+    changeNamesPlugin(client, { name: 'Dep.esp', origin: 'SomeMod' });
     await vi.waitFor(() => { expect(pluginReads(client)).toBe(1); });
     await settle();
 
@@ -352,7 +350,7 @@ describe('the Plugins view follows mEdit\'s change event', () => {
     gameFolder: FOUND,
   });
 
-  it.each(['rows-changed', 'plugin-changed'])('redraws only the named plugin\'s row, and re-reads only its records, on mEdit\'s %s', async (kind) => {
+  it.each(['rows-changed', 'plugin-changed'] as const)('redraws only the named plugin\'s row, and re-reads only its records, on mEdit\'s %s', async (kind) => {
     const { client, recordBrowser, rows, provider } = pluginsView(twoPlugins());
     await handedOff(client);
     const [test] = await rows();
@@ -360,7 +358,7 @@ describe('the Plugins view follows mEdit\'s change event', () => {
     const redrawn: unknown[] = [];
     provider().onDidChangeTreeData?.((element) => redrawn.push(element));
 
-    fire(client, { ...rowsChanged, kind });
+    client.change(named(kind));
 
     await vi.waitFor(() => { expect(pluginReads(client)).toBe(1); });
     await settle();
@@ -368,13 +366,13 @@ describe('the Plugins view follows mEdit\'s change event', () => {
     expect(new Set(redrawn)).toEqual(new Set([test]));
   });
 
-  it.each(['rows-changed', 'plugin-changed'])('asks mEdit for only the named plugin\'s facts, and for no diagnosis scan, on mEdit\'s %s', async (kind) => {
+  it.each(['rows-changed', 'plugin-changed'] as const)('asks mEdit for only the named plugin\'s facts, and for no diagnosis scan, on mEdit\'s %s', async (kind) => {
     const { client, rows } = pluginsView(twoPlugins());
     await handedOff(client);
     await rows();
     client.calls.length = 0;
 
-    fire(client, { ...rowsChanged, kind });
+    client.change(named(kind));
 
     await vi.waitFor(() => { expect(pluginReads(client)).toBe(1); });
     await settle();
@@ -389,22 +387,21 @@ describe('the Plugins view follows mEdit\'s change event', () => {
     const redrawn: unknown[] = [];
     provider().onDidChangeTreeData?.((element) => redrawn.push(element));
 
-    client.setStatus('running');
+    client.change(undefined);
 
     await vi.waitFor(() => { expect(pluginReads(client)).toBe(1); });
     expect(refresh.mock.calls).toEqual([[undefined]]);
     expect(redrawn).toContain(undefined);
   });
 
-  it('re-reads every plugin after a dropped connection', async () => {
+  it('re-reads every plugin when the change says everything', async () => {
     const { client, recordBrowser } = pluginsView();
     client.answerPuts(() => Promise.resolve({ outcome: 'applied', version: 1 }));
     client.setStatus('running');
     await client.sendLoadOrder(snapshotOf('A.esp', 'B.esp', 'C.esp'));
     const refresh = vi.spyOn(recordBrowser, 'refresh');
 
-    client.reconnected();
-    await client.latestLoadOrder();
+    client.change(undefined);
 
     await vi.waitFor(() => { expect(refresh.mock.calls.map(([named]) => named?.length)).toEqual([undefined]); });
   });
@@ -414,8 +411,8 @@ describe('the Plugins view follows mEdit\'s change event', () => {
     const refresh = vi.spyOn(recordBrowser, 'refresh');
 
     plugins.dispose();
-    fire(client, rowsChanged);
-    fire(client, { ...rowsChanged, kind: 'plugin-changed' });
+    client.change(named('rows-changed'));
+    client.change(named('plugin-changed'));
 
     expect(refresh).not.toHaveBeenCalled();
   });
@@ -434,7 +431,7 @@ describe('the Plugins view re-renders for a reconcile tick only when it landed s
   it('re-renders for a tick that landed a new plugin', async () => {
     const { client, rerenders } = reconciling();
 
-    fire(client, tick({ indexedPlugins: [A] }));
+    holdsLoadOrder(client, { settled: false, total: 3, indexed: [A] });
 
     await vi.waitFor(() => { expect(rerenders).toHaveLength(1); });
   });
@@ -442,9 +439,9 @@ describe('the Plugins view re-renders for a reconcile tick only when it landed s
   it('does not re-render for a tick that landed nothing new', async () => {
     const { client, rerenders } = reconciling();
 
-    fire(client, tick({ indexedPlugins: [A] }));
-    fire(client, tick({ indexedPlugins: [A] }));
-    fire(client, tick({ indexedPlugins: [A] }));
+    holdsLoadOrder(client, { settled: false, total: 3, indexed: [A] });
+    holdsLoadOrder(client, { settled: false, total: 3, indexed: [A] });
+    holdsLoadOrder(client, { settled: false, total: 3, indexed: [A] });
     await settle();
 
     expect(rerenders).toHaveLength(1);
@@ -453,10 +450,10 @@ describe('the Plugins view re-renders for a reconcile tick only when it landed s
   it('re-renders for a tick that landed a failure though no plugin was indexed, since a failed plugin never joins the indexed set', async () => {
     const { client, rerenders } = reconciling();
 
-    fire(client, tick({ indexedPlugins: [A] }));
+    holdsLoadOrder(client, { settled: false, total: 3, indexed: [A] });
     await settle();
     const afterTheFirst = rerenders.length;
-    fire(client, tick({ indexedPlugins: [A], failures: [{ name: 'B.esp', origin: 'SomeMod', reason: 'RACE parse' }] }));
+    holdsLoadOrder(client, { settled: false, total: 3, indexed: [A], failures: [{ name: 'B.esp', origin: 'SomeMod', reason: 'RACE parse' }] });
 
     await vi.waitFor(() => { expect(rerenders.slice(afterTheFirst)).toContain(undefined); });
   });
@@ -469,9 +466,9 @@ describe('the Plugins view\'s Problems', () => {
       plugins: [{ name: 'Test.esp', path: onDisk, origin: 'ModA', line: 0, enabled: true, winning: true }],
     }));
 
-    fire(client, loadOrderStatusEventFixture());
-    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ name: 'Test.esp', origin: 'ModA', changedOutside: true })]);
-    fire(client, { ...rowsChanged, kind: 'plugin-changed', plugin: 'Test.esp', origin: 'ModA' });
+    holdsLoadOrder(client);
+    client.setQueryAnswer('getPluginsIndexing', [{ name: 'Test.esp', origin: 'ModA', state: 'Indexed', changedOutside: true }]);
+    client.change(named('plugin-changed'));
 
     await vi.waitFor(() => {
       const collection = present(h.diagnostics.get('modbench-changed-outside'), 'the changed-outside collection');
@@ -490,10 +487,10 @@ describe('the Plugins view\'s Problems', () => {
       { plugin: 'Test.esp', origin: 'ModA', text: 'short' },
     ]);
 
-    fire(client, tick({
-      state: 'Ready', conflictsComputed: true,
+    holdsLoadOrder(client, {
+      total: 3,
       failures: [{ name: 'Test.esp', origin: 'ModA', reason: 'Could not read this plugin.', diagnosis: 'duplicate FormKey' }],
-    }));
+    });
 
     const published = (name: string) => [...present(h.diagnostics.get(name), name)]
       .map(([uri, diagnostics]) => [uri.fsPath, diagnostics.map((d) => [d.message, d.severity])]);
@@ -519,7 +516,7 @@ describe('the Plugins view\'s Problems', () => {
       { plugin: 'Vanilla.esm', origin: 'Data/', text: 'short' },
     ]);
 
-    fire(client, tick({ state: 'Ready', conflictsComputed: true }));
+    holdsLoadOrder(client, { total: 3 });
 
     await vi.waitFor(() => expect([...present(h.diagnostics.get('modbench-diagnosis'), 'the malformed collection')]
       .map(([uri, diagnostics]) => [uri.fsPath, diagnostics.map((d) => d.code)]))
@@ -557,7 +554,7 @@ describe('a record row\'s badge, from mEdit\'s stream', () => {
     expect(await badges.provideFileDecoration(uri)).toBeUndefined();
 
     client.setQueryAnswer('getRecords', { items: [summary('Modified')], total: 1 });
-    fire(client, { ...rowsChanged, keys: [FORM_KEY] });
+    client.change(named('rows-changed', [FORM_KEY]));
     await vi.waitFor(() => { expect(badgeChanges).toEqual([[uri]]); });
     await asVsCodeReReadsAnExpandedGroupOnTreeChange(recordBrowser, group);
 
@@ -773,17 +770,22 @@ describe('the record filter, from the commands that set and clear it', () => {
       expect(view.description()).toBeUndefined();
     });
 
-    it('reports a clearing again whose sequence is lower than the last, as after the record index file was deleted', async () => {
+    it('reports a clearing once however often the change says everything, and again when its content differs, whatever its sequence', async () => {
       const view = await showingA();
       view.client.setQueryAnswer('getActiveFilter', null);
       view.client.setQueryAnswer('getFilterCleared', { source: 'a', reason: 'Conversion Error', sequence: 9 });
-      fire(view.client, notificationEventFixture({ kind: 'record-index-changed' }));
+      view.client.change(undefined);
       await vi.waitFor(() => { expect(view.reporter.reports).toEqual(warned); });
 
-      view.client.setQueryAnswer('getFilterCleared', { source: 'a', reason: 'Conversion Error', sequence: 1 });
-      fire(view.client, notificationEventFixture({ kind: 'record-index-changed' }));
+      view.client.setQueryAnswer('getFilterCleared', { source: 'a', reason: 'Conversion Error', sequence: 12 });
+      view.client.change(undefined);
+      await settle();
+      expect(view.reporter.reports).toEqual(warned);
 
-      await vi.waitFor(() => { expect(view.reporter.reports).toEqual([...warned, ...warned]); });
+      view.client.setQueryAnswer('getFilterCleared', { source: 'a', reason: 'Another error', sequence: 1 });
+      view.client.change(undefined);
+
+      await vi.waitFor(() => { expect(view.reporter.reports).toHaveLength(2); });
     });
 
     it('shows no filter when the clearing outruns the reply to the set it clears', async () => {
@@ -813,7 +815,7 @@ describe('the record filter, from the commands that set and clear it', () => {
       await view.filter({ scheme: 'untitled', path: 'a' });
       view.client.setQueryAnswer('getActiveFilter', null);
 
-      view.client.reconnected();
+      view.client.change(undefined);
 
       await vi.waitFor(() => { expect(view.description()).toBeUndefined(); });
       expect(view.reporter.reports).toEqual([]);
@@ -825,7 +827,7 @@ describe('the record filter, from the commands that set and clear it', () => {
       view.holds('a');
       await view.filter({ scheme: 'untitled', path: 'a' });
 
-      fire(view.client, rowsChanged);
+      view.client.change(named('rows-changed'));
       await settle();
 
       expect(view.activeFilterReads()).toBe(1);
@@ -968,7 +970,7 @@ describe('the Plugins view\'s message line and name filter', () => {
 
   async function applyFilter(client: InMemoryMEditClient, source: string | undefined) {
     if (source === undefined) {
-      fire(client, rowsChanged);
+      client.change(named('rows-changed'));
     } else {
       client.setQueryAnswer('setFilter', null);
       client.setQueryAnswer('getActiveFilter', { sql: ARMOR_SQL, source });
@@ -1159,7 +1161,7 @@ describe('the Plugins view\'s message line and name filter', () => {
       await messageIs(NO_MATCH, 'the message after the keystroke');
 
       plugins.progress.say('Starting backend…');
-      fire(client, tick({ indexedPlugins: [{ name: 'TestMod.esp', origin: 'SomeMod' }] }));
+      holdsLoadOrder(client, { settled: false, total: 3, indexed: [{ name: 'TestMod.esp', origin: 'SomeMod' }] });
       await settle();
 
       expect(view().message).toBe('Starting backend…');

@@ -1227,7 +1227,7 @@ describe('the agent server, reading a record through mEdit', () => {
   ]);
 
   const pluginListed = (name: string, extra: { isImmutable?: boolean; isCompiledPlugin?: boolean } = {}) => ({
-    name, origin: 'Big Rocks', path: `/m/${name}`, isLight: false, isMaster: false, isBlueprint: false, masters: [], isImmutable: false, changedOutside: false,
+    name, origin: 'Big Rocks', path: `/m/${name}`, isLight: false, isMaster: false, isBlueprint: false, masters: [], isImmutable: false,
     inLoadOrder: true, hasMatchingRecords: true, isCompiledPlugin: true, hasParseFailure: false, ...extra,
   });
   const PLUGINS = [pluginListed('A.esp'), pluginListed('B.esp')];

@@ -47,9 +47,7 @@ vi.mock('vscode', () => ({
 import { ExtendedFieldDocuments, type OpenExtendedFieldEditorParams } from '../extendedFieldEditor';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { type CompareResult } from '../../client';
-import { notificationEventFixture } from '../../client/test/fixtures';
 import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
-import { fire } from '../../client/test/fireFrame';
 
 type Diff = CompareResult['diffs'][number];
 
@@ -72,8 +70,8 @@ const deacon: OpenExtendedFieldEditorParams = {
   recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', readOnly: false,
 };
 
-const rowsChanged = (keys: string[]) => notificationEventFixture({ kind: 'rows-changed', plugin: 'Fallout4.esm', origin: 'Data/', keys });
-const pluginChanged = (plugin: string, origin: string) => notificationEventFixture({ kind: 'plugin-changed', plugin, origin });
+const rowsChanged = (keys: string[]) => [{ plugin: { name: 'Fallout4.esm', origin: 'Data/' }, keys }];
+const pluginChanged = (plugin: string, origin: string) => [{ plugin: { name: plugin, origin } }];
 
 let client: InMemoryMEditClient;
 let reporter: RecordingReporter;
@@ -145,7 +143,7 @@ describe('the extended-field documents', () => {
     const changes = recordChanges();
     client.setQueryAnswer('getComparison', descriptionOf('changed elsewhere'));
 
-    fire(client, rowsChanged(['000123:Fallout4.esm']));
+    client.change(rowsChanged(['000123:Fallout4.esm']));
 
     expect(changes).toEqual([[{ type: 1, uri }]]);
     expect(await textOf(uri)).toBe('changed elsewhere');
@@ -155,7 +153,7 @@ describe('the extended-field documents', () => {
     await documents.open(deacon);
     const before = await provider().stat(shownUri());
 
-    fire(client, rowsChanged(['000123:Fallout4.esm']));
+    client.change(rowsChanged(['000123:Fallout4.esm']));
 
     expect((await provider().stat(shownUri())).mtime).toBeGreaterThan(before.mtime);
   });
@@ -165,7 +163,7 @@ describe('the extended-field documents', () => {
     await textOf(shownUri());
     const changes = recordChanges();
 
-    fire(client, rowsChanged(['000999:Fallout4.esm']));
+    client.change(rowsChanged(['000999:Fallout4.esm']));
 
     expect(changes).toEqual([]);
   });
@@ -175,8 +173,8 @@ describe('the extended-field documents', () => {
     await textOf(shownUri());
     const changes = recordChanges();
 
-    fire(client, pluginChanged('Other.esp', 'Data/'));
-    fire(client, pluginChanged('Fallout4.esm', 'Data/'));
+    client.change(pluginChanged('Other.esp', 'Data/'));
+    client.change(pluginChanged('Fallout4.esm', 'Data/'));
 
     expect(changes).toHaveLength(1);
   });
@@ -187,7 +185,7 @@ describe('the extended-field documents', () => {
     const changes = recordChanges();
     closeTab(shownUri());
 
-    fire(client, rowsChanged(['000123:Fallout4.esm']));
+    client.change(rowsChanged(['000123:Fallout4.esm']));
 
     expect(changes).toEqual([]);
   });

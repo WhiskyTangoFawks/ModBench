@@ -6,13 +6,12 @@ import { delimiter, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 import { reachMEditFromEnvFile } from '../scriptEnvironmentFile';
-import { fire } from '../../client/test/fireFrame';
+import { holdsLoadOrder, type Holds } from '../../client/test/says';
 
 const SCRIPTS = '/ext/scripts';
-const heldElsewhere = loadOrderStatusEventFixture({ state: 'HeldElsewhere', message: 'other' });
-const holding = loadOrderStatusEventFixture();
+const heldElsewhere: Holds = { refusal: { kind: 'heldElsewhere', message: 'other' } };
+const holding: Holds = {};
 
 function portOf(server: Server): number {
   const address = server.address();
@@ -42,7 +41,7 @@ describe('the file the Python tooling reads to reach mEdit', () => {
   const windowHolding = async (port: number, scriptsPath = SCRIPTS) => {
     const client = new InMemoryMEditClient();
     const stop = reach(client, scriptsPath);
-    fire(client, holding);
+    holdsLoadOrder(client, holding);
     client.claimedPort(port);
     await settled();
     return { client, stop };
@@ -67,7 +66,7 @@ describe('the file the Python tooling reads to reach mEdit', () => {
     const { client } = await windowHolding(41000);
     client.setStatus('stopped');
     client.claimedPort(41001);
-    fire(client, loadOrderStatusEventFixture({ conflictsComputed: false }));
+    holdsLoadOrder(client, { settled: false });
     await settled();
 
     expect(held).toBe(`PYTHONPATH=${SCRIPTS}\nMEDIT_PORT=41001\n`);
@@ -77,7 +76,7 @@ describe('the file the Python tooling reads to reach mEdit', () => {
     const client = new InMemoryMEditClient();
     reach(client);
     client.claimedPort(41000);
-    fire(client, heldElsewhere);
+    holdsLoadOrder(client, heldElsewhere);
     await settled();
 
     expect(held).toBeUndefined();
@@ -96,8 +95,8 @@ describe('the file the Python tooling reads to reach mEdit', () => {
     const client = new InMemoryMEditClient();
     reach(client);
     client.claimedPort(41000);
-    fire(client, heldElsewhere);
-    fire(client, loadOrderStatusEventFixture({ version: 2 }));
+    holdsLoadOrder(client, heldElsewhere);
+    holdsLoadOrder(client, { version: 2 });
     await settled();
 
     expect(held).toContain('MEDIT_PORT=41000');
@@ -105,7 +104,7 @@ describe('the file the Python tooling reads to reach mEdit', () => {
 
   it('writes nothing again when the bytes would not change', async () => {
     const { client } = await windowHolding(41000);
-    fire(client, loadOrderStatusEventFixture({ version: 2 }));
+    holdsLoadOrder(client, { version: 2 });
     client.claimedPort(41000);
     await settled();
 

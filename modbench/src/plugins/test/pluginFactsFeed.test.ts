@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { PluginAddress, PluginDiagnosisReport, PluginMetadata } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { loadOrderStatusEventFixture, pluginMetadataFixture } from '../../client/test/fixtures';
+import { pluginMetadataFixture } from '../../client/test/fixtures';
 import type { ReadFailed } from '../../wire/readFailed';
 import { EventEmitter } from '../../test/vscodeMock';
 
@@ -9,7 +9,7 @@ vi.mock('vscode', () => ({ EventEmitter }));
 
 import { PluginFactsFeed, type PluginFactsFeedDeps } from '../pluginFactsFeed';
 import { rulesReader, type SortingRuleFiles } from '../../sortingRules/lootMetadata';
-import { fire } from '../../client/test/fireFrame';
+import { holdsLoadOrder, holdsNoLoadOrder } from '../../client/test/says';
 
 const USERLIST = '/instance/userlist.yaml';
 const filesWith = (masterlist: string, userlist = ''): SortingRuleFiles => ({
@@ -57,16 +57,16 @@ interface FeedOptions {
   readonly present?: readonly string[];
   readonly asked?: (reads: unknown) => void;
   readonly gates?: readonly Promise<undefined>[];
-  readonly holdsLoadOrder?: boolean;
+  readonly holdsALoadOrder?: boolean;
 }
 
 const factsAsked = (client: InMemoryMEditClient) => client.calls.filter(({ method }) => method === 'getPlugins').map(({ args }) => args);
 
 function feedOver({
-  shownPlugins = () => [A], activePlugins = () => [], publishDiagnoses, rules = () => NO_RULES, present = [], asked, gates = [], holdsLoadOrder = true,
+  shownPlugins = () => [A], activePlugins = () => [], publishDiagnoses, rules = () => NO_RULES, present = [], asked, gates = [], holdsALoadOrder = true,
 }: FeedOptions = {}) {
   const client = clientFindingNoDefects();
-  if (holdsLoadOrder) fire(client, loadOrderStatusEventFixture());
+  if (holdsALoadOrder) holdsLoadOrder(client);
   const diagnoses = watched<readonly PluginDiagnosisReport[]>();
   const changedOutside = watched<readonly { plugin: string; origin: string }[]>();
   const sourceUnreadable = watched<readonly { plugin: string; origin: string }[]>();
@@ -117,7 +117,7 @@ describe('PluginFactsFeed', () => {
     client.setQueryAnswer('getPlugins', [held({ isCompiledPlugin: true }), held({ name: 'Unshown.esp' })]);
     client.setQueryAnswer('getDiagnoses', []);
 
-    expect(await feed.reconciled([])).toBe(1);
+    expect(await feed.reconciled([])).toEqual({ held: 1, active: 0 });
 
     expect(compiledPluginFlag(feed)).toBe(true);
     expect(feed.rows.contextFlags({ name: 'Unshown.esp', origin: 'SomeMod' })).toEqual([]);
@@ -417,8 +417,8 @@ describe('PluginFactsFeed', () => {
     });
 
     it('asks nothing while mEdit says it holds no load order', async () => {
-      const { feed, client } = feedOver({ holdsLoadOrder: false });
-      fire(client, loadOrderStatusEventFixture({ state: 'None', conflictsComputed: false }));
+      const { feed, client } = feedOver({ holdsALoadOrder: false });
+      holdsNoLoadOrder(client);
       client.calls.length = 0;
 
       await feed.refresh();
@@ -430,13 +430,12 @@ describe('PluginFactsFeed', () => {
       const { feed, client } = feedOver();
       client.setQueryAnswer('getPlugins', [held()]);
       await feed.reconciled([]);
-      client.setStatus('stopped');
-      client.setStatus('running');
+      holdsNoLoadOrder(client);
       client.calls.length = 0;
 
       await feed.refresh();
       const whileNoneHeld = [...client.calls];
-      fire(client, loadOrderStatusEventFixture());
+      holdsLoadOrder(client);
       await feed.refresh();
 
       expect({ whileNoneHeld, after: client.calls.map(({ method }) => method).filter((method) => method !== 'getPluginsIndexing') }).toEqual({ whileNoneHeld: [], after: ['getPlugins'] });
@@ -577,7 +576,7 @@ describe('PluginFactsFeed', () => {
     await feed.refresh();
     slow.resolve([held({ isCompiledPlugin: true })]);
 
-    expect(await handOff).toBe(1);
+    expect(await handOff).toEqual({ held: 1, active: 0 });
     expect(compiledPluginFlag(feed)).toBe(true);
   });
 
@@ -710,7 +709,7 @@ describe('PluginFactsFeed', () => {
     expect(sourceUnreadable.items.map((entries) => entries.map(({ plugin, origin }) => ({ plugin, origin })))).toEqual([[{ plugin: 'A.esp', origin: 'SomeMod' }]]);
   });
 
-  it('publishes a plugin mEdit never opened and says changed outside, which no read of its facts names', async () => {
+  it('publishes a plugin mEdit never opened and says changed outside, which no row of its facts names', async () => {
     const { feed, client, changedOutside } = feedOver();
     client.setQueryAnswer('getPlugins', []);
     client.setQueryAnswer('getPluginsIndexing', [{ name: 'Never.esp', origin: 'SomeMod', state: 'Failed', reason: 'truncated', changedOutside: true }]);
@@ -725,7 +724,8 @@ describe('PluginFactsFeed', () => {
     ['a reconcile', (feed: PluginFactsFeed) => feed.reconciled([])],
   ])('publishes the plugin mEdit says changed outside, to the Problems panel on %s', async (_what, read) => {
     const { feed, client, changedOutside } = feedOver();
-    client.setQueryAnswer('getPlugins', [held({ changedOutside: true })]);
+    client.setQueryAnswer('getPlugins', [held()]);
+    client.setQueryAnswer('getPluginsIndexing', [{ name: 'A.esp', origin: 'SomeMod', state: 'Indexed', changedOutside: true }]);
 
     await read(feed);
 

@@ -12,10 +12,7 @@ const failure = (reason: string, address = A): PluginLoadFailure => ({ ...addres
 const diagnosis = (text: string, address = A): PluginDiagnosisReport => (
   { plugin: address.name, origin: address.origin, text }
 );
-const answeredChangedOutside = (facts: PluginFacts, changed: boolean, ...plugins: PluginAddress[]): void => {
-  facts.refreshed(plugins.map((plugin) => held({ ...plugin, changedOutside: changed })), plugins);
-};
-const changedOutside = (facts: PluginFacts, ...plugins: PluginAddress[]): void => { answeredChangedOutside(facts, true, ...plugins); };
+const changedOutside = (facts: PluginFacts, ...plugins: PluginAddress[]): void => { facts.changedOutsideAre(plugins); };
 
 const CHANGED_TEXT = 'Changed outside Modbench: its bytes differ from what Modbench last wrote.';
 
@@ -98,10 +95,10 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
     ['failed to read, then sorting errors', scenes(failed, lackingMasters('Ghost.esm')), 'error'],
     ['sorting errors, then unreadable records', scenes(lackingMasters('Ghost.esm'), unreadable), 'error'],
     ['unreadable records over plugin source unreadable', scenes(sourceUnreadable, unreadable), 'error'],
-    ['plugin source unreadable over changed outside', reconciledWith({ pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true }, changedOutside: true }), 'warning'],
-    ['unreadable records, then changed outside', reconciledWith({ hasParseFailure: true, changedOutside: true }), 'error'],
+    ['plugin source unreadable over changed outside', scenes(reconciledWith({ pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }), changed), 'warning'],
+    ['unreadable records, then changed outside', scenes(reconciledWith({ hasParseFailure: true }), changed), 'error'],
     ['changed outside, then malformed', scenes(changed, malformed), 'warning'],
-    ['sorting errors over changed outside', ((facts: PluginFacts) => facts.reconciled([held({ masters: ['Ghost.esm'], changedOutside: true })], [], [A], [A])) satisfies Scene, 'error'],
+    ['sorting errors over changed outside', scenes(lackingMasters('Ghost.esm'), changed), 'error'],
     ['unreadable records over malformed', scenes(unreadable, malformed), 'error'],
     ['failed to read over malformed', scenes(malformed, failed), 'error'],
     ['malformed alone', malformed, 'warning'],
@@ -117,8 +114,9 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
   it('lists every status in the spec order whatever the order they landed in', () => {
     const facts = new PluginFacts();
     malformed(facts);
+    changed(facts);
     facts.reconciled([
-      held({ isMaster: true, masters: ['Ghost.esm'], hasParseFailure: true, changedOutside: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }),
+      held({ isMaster: true, masters: ['Ghost.esm'], hasParseFailure: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }),
       held({ name: 'B.esp' }),
     ], [failure('Malformed record')], [B, A], [B, A], masterlistOf("plugins:\n  - name: 'A.esp'\n    after: ['B.esp']\n"));
 
@@ -276,7 +274,7 @@ describe('PluginFacts — which statuses stay and which land (plugins.md, A row,
     const facts = new PluginFacts();
     const C = { name: 'C.esp', origin: 'OtherMod' };
     changedOutside(facts, A, C);
-    answeredChangedOutside(facts, false, A);
+    changedOutside(facts, C);
 
     expect(facts.description(A)).toBeUndefined();
     expect(facts.description(C)).toBe('changed outside Modbench');
@@ -300,7 +298,7 @@ describe('PluginFacts — the Problems panel reads the answers the rows read', (
       { plugin: 'C.esp', origin: 'OtherMod', text: CHANGED_TEXT },
     ]);
 
-    answeredChangedOutside(facts, false, A);
+    changedOutside(facts, { name: 'C.esp', origin: 'OtherMod' });
     expect(facts.problems().changedOutside).toEqual([{ plugin: 'C.esp', origin: 'OtherMod', text: CHANGED_TEXT }]);
   });
 
@@ -643,7 +641,8 @@ describe('PluginFacts — a plugin\'s masters (plugins.md, The highlight, story 
 describe('PluginFacts — what a row shows of its plugin, as data for the agent (agent.md, Any agent, story 8)', () => {
   it('is each status\'s words and tooltip line, whether it is read-only, whether it is a compiled plugin, and its masters', () => {
     const facts = new PluginFacts();
-    facts.reconciled([held({ isImmutable: true, masters: ['Ghost.esm'], changedOutside: true })], [failure('Malformed record')], [A], [A]);
+    facts.reconciled([held({ isImmutable: true, masters: ['Ghost.esm'] })], [failure('Malformed record')], [A], [A]);
+    changed(facts);
 
     expect(facts.shown(A)).toEqual({
       statuses: [
