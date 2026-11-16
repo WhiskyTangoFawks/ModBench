@@ -12,7 +12,7 @@ import { pipeline } from 'node:stream/promises';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import type { FileRead } from './instanceAdapter';
-import { foundUnchanged, handKept, keptTrusted, pathKey, stampFrom, type FileStamp, type Kept } from '../repositoriesLib/stampedReads';
+import { foundUnchanged, handKept, keptTrusted, pathKey, sameStamp, stampFrom, type FileStamp, type Kept } from '../repositoriesLib/stampedReads';
 import { isOwnTemp, ownTempPrefix, renameOver, tempOwner } from '../repositoriesLib/wholeWrites';
 import { digestOf } from './fileContents/contentDigest';
 import type { MoveToTrash } from '../ports/trash';
@@ -394,8 +394,8 @@ export function remove(path: string): Promise<void> {
   return toldAfter([path], () => rm(path, { recursive: true, force: true }));
 }
 
-/** Hands `edit` the text of `path`, serialized per path, and skips the write when `edit` changed
- *  nothing, so an unwritten file never fires its watcher. An awaiting `edit` holds the lock. */
+/** Hands `edit` the text of `path`, serialized per path, and skips the write when `edit` changed nothing.
+ *  `edit` runs again over a file another program wrote meanwhile. */
 export function putIfChanged(
   path: string, edit: (before: string) => string | Promise<string>, opts: PutOptions = {},
 ): Promise<{ wrote: boolean }> {
@@ -408,14 +408,27 @@ export function putIfChangedUntold(
   path: string, edit: (before: string) => string | Promise<string>, opts: PutOptions = {}, wrote: () => void = () => undefined,
 ): Promise<{ wrote: boolean }> {
   return withLock(path, async () => {
-    const before = await readOr(path, opts.ifMissing);
-    const after = await edit(before);
-    if (after === before) return { wrote: false };
-    wrote();
-    await writeAtomic(path, after);
-    return { wrote: true };
+    for (;;) {
+      const stamp = await stampIfThere(path);
+      const before = await readOr(path, opts.ifMissing);
+      const after = await edit(before);
+      if (!sameStampOrAbsent(await stampIfThere(path), stamp)) continue;
+      if (after === before) return { wrote: false };
+      wrote();
+      await writeAtomic(path, after);
+      return { wrote: true };
+    }
   });
 }
+
+const stampIfThere = (path: string): Promise<FileStamp | undefined> =>
+  stampOf(path).catch((err: unknown) => {
+    if (errnoCode(err) === 'ENOENT') return undefined;
+    throw err;
+  });
+
+const sameStampOrAbsent = (a: FileStamp | undefined, b: FileStamp | undefined): boolean =>
+  a === undefined || b === undefined ? a === b : sameStamp(a, b);
 
 /** As `write`, for a file the loader does not read, or a write that tells the loader itself. */
 export const writeUntold = (path: string, text: string): Promise<void> => writeAtomic(path, text);

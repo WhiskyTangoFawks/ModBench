@@ -166,6 +166,19 @@ describe('a file rewritten only where it changes', () => {
     expect(await readFile(path)).toEqual(cp1252);
   });
 
+  it('edits again the text another program wrote while an awaiting edit ran, so that write is not lost', async () => {
+    await writeFile(path, 'one\n');
+    const edit = vi.fn((text: string) => Promise.resolve(text.toUpperCase()));
+    edit.mockImplementationOnce(async (text: string) => {
+      await writeFile(path, `${text}outside\n`);
+      return text.toUpperCase();
+    });
+
+    await putIfChanged(path, edit);
+
+    expect(await readFile(path, 'utf8')).toBe('ONE\nOUTSIDE\n');
+  });
+
   it('writes back every line it does not change byte for byte, a BOM and a name outside ASCII among them', async () => {
     await writeFile(path, `${BOM}*Café.esp${CRLF}*A.esp${CRLF}`);
 
