@@ -17,9 +17,8 @@ public interface INotification;
 public sealed record RowsChangedNotification(PluginAddress Plugin, IReadOnlyList<string> Keys, long Sequence)
     : INotification;
 
-/// <summary>A validation changed a plugin as a whole (ADR-0003): re-derived or removed it, or its read
-/// failed or recovered while its rows stood, or it came to be changed outside Modbench or no longer. It names
-/// the plugin, not rows.</summary>
+/// <summary>A validation changed a plugin as a whole (ADR-0003): re-derived or removed it, its read failed or
+/// recovered while its rows stood, or its changed-outside standing flipped. It names the plugin, not rows.</summary>
 public sealed record PluginChangedNotification(PluginAddress Plugin, long Sequence)
     : INotification;
 

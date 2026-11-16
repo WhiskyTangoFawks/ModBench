@@ -9,6 +9,7 @@ import { subscribeRecordTabsToNotifications } from '../notificationWiring';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { loadOrderStatusEventFixture, notificationEventFixture } from '../../client/test/fixtures';
 import { fakePanel } from './editorVscode';
+import { fire } from '../../client/test/fireFrame';
 
 const EDITED_MOD_ESP_FROM_MODA = { formKey: '000800:Mod.esp', plugin: { name: 'Mod.esp', origin: 'ModA' } };
 
@@ -17,7 +18,7 @@ const rowsChanged = (keys: string[]) => notificationEventFixture({ kind: 'rows-c
 const PLUGIN_CHANGED = notificationEventFixture({ kind: 'plugin-changed', plugin: 'Mod.esp', origin: 'ModA', sequence: 2 });
 
 const settles = (client: InMemoryMEditClient) => {
-  client.emit(loadOrderStatusEventFixture({ state: 'Ready', conflictsComputed: true, version: (client.recordIndexProgress?.version ?? 0) + 1 }));
+  fire(client, loadOrderStatusEventFixture({ state: 'Ready', conflictsComputed: true, version: (client.recordIndexProgress?.version ?? 0) + 1 }));
 };
 
 
@@ -56,7 +57,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
 
     expect(tab.formKey).toBe('000900:Mod.esp');
     expect(loadsOf(panel)).toEqual([]);
-    client.emit(rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
+    fire(client, rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
     expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000900:Mod.esp' }]);
   });
 
@@ -65,7 +66,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
     const { write, answer } = writeAnsweredWhenTheTestChooses();
 
     const editing = tab.gate()(EDITED_MOD_ESP_FROM_MODA, write);
-    client.emit(rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
+    fire(client, rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
     expect(loadsOf(panel)).toEqual([]);
     answer('000900:Mod.esp');
     await editing;
@@ -78,7 +79,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
     const { write, answer } = writeAnsweredWhenTheTestChooses();
 
     const editing = tab.gate()(EDITED_MOD_ESP_FROM_MODA, write);
-    client.emit(rowsChanged(['000800:Mod.esp']));
+    fire(client, rowsChanged(['000800:Mod.esp']));
     answer(undefined);
     await editing;
 
@@ -91,7 +92,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
     const { write, answer } = writeAnsweredWhenTheTestChooses();
 
     const editing = tab.gate()(EDITED_MOD_ESP_FROM_MODA, write);
-    client.emit(rowsChanged(['000801:Mod.esp']));
+    fire(client, rowsChanged(['000801:Mod.esp']));
     expect(loadsOf(panel)).toEqual([]);
     answer(undefined);
     await editing;
@@ -102,7 +103,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
   it('reads a tab again when mEdit refuses the load order, which the change event says as everything', () => {
     const { client, panel } = openOn('000800:Mod.esp');
 
-    client.emit(loadOrderStatusEventFixture({ state: 'HeldElsewhere', message: 'another window holds the record index', conflictsComputed: false }));
+    fire(client, loadOrderStatusEventFixture({ state: 'HeldElsewhere', message: 'another window holds the record index', conflictsComputed: false }));
 
     expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000800:Mod.esp' }]);
   });
@@ -127,7 +128,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
     const written: string[] = [];
 
     const stale = tabs.gateShowing(EDITED_MOD_ESP_FROM_MODA)(EDITED_MOD_ESP_FROM_MODA, key => { written.push(key); return write(); });
-    client.emit(rowsChanged(['000800:Mod.esp', '000900:Mod.esp', '000900:Mod.esp']));
+    fire(client, rowsChanged(['000800:Mod.esp', '000900:Mod.esp', '000900:Mod.esp']));
     expect(loadsOf(moved.panel)).toEqual([]);
     answer('000a00:Mod.esp');
     await stale;
@@ -141,7 +142,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
     const { client, panel, tab } = openOn('000800:Mod.esp', '000800:Mod.esp');
     const { write, answer } = writeAnsweredWhenTheTestChooses();
     const editing = tab.gate()(EDITED_MOD_ESP_FROM_MODA, write);
-    client.emit(rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
+    fire(client, rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
 
     panel.close();
     answer('000900:Mod.esp');
@@ -158,7 +159,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
     const { write, answer } = writeAnsweredWhenTheTestChooses();
 
     const edit = editing.tab.gate()(EDITED_MOD_ESP_FROM_MODA, write);
-    client.emit(rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
+    fire(client, rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
     answer('000900:Mod.esp');
     await edit;
 
@@ -172,7 +173,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
     await tab.gate()(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
     settles(client);
     expect(loadsOf(panel)).toEqual([]);
-    client.emit(rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
+    fire(client, rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
     settles(client);
 
     expect(loadsOf(panel)).toEqual([
@@ -199,7 +200,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
     const { write, answer } = writeAnsweredWhenTheTestChooses();
 
     const editing = tab.gate()(EDITED_MOD_ESP_FROM_MODA, write);
-    client.emit(rowsChanged(['000800:Mod.esp']));
+    fire(client, rowsChanged(['000800:Mod.esp']));
     settles(client);
     answer(undefined);
     await editing;
@@ -229,7 +230,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
       const { client, tab } = openOn('000800:Mod.esp');
       const openedBefore = tab.gate();
       await tab.gate()(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
-      client.emit(rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
+      fire(client, rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
       tab.answered('000900:Mod.esp', [], true);
 
       expect(await sentTo(tab, EDITED_MOD_ESP_FROM_MODA, openedBefore)).toEqual(['000900:Mod.esp']);
@@ -253,7 +254,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
       client.setQueryAnswer('getRecordOwners', [{ name: 'Mod.esp', origin: 'ModA' }]);
       await tab.gate()(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
 
-      client.emit(PLUGIN_CHANGED);
+      fire(client, PLUGIN_CHANGED);
       await vi.waitFor(() => expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000900:Mod.esp' }]));
       settles(client);
 
@@ -272,9 +273,9 @@ describe('a record tab going with the record to its new FormKey and reading it t
       answerOwner(client);
       await tab.gate()(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
 
-      client.emit(PLUGIN_CHANGED);
+      fire(client, PLUGIN_CHANGED);
       await vi.waitFor(() => expect(client.calls.some(c => c.method === 'getRecordOwners')).toBe(true));
-      client.emit(rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
+      fire(client, rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
 
       expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000900:Mod.esp' }]);
     });
@@ -284,7 +285,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
     it('reads the record it shows again, as a change from any other tool reaches it as a write of Modbench\'s does', () => {
       const { client, panel } = openOn('000800:Mod.esp');
 
-      client.emit(PLUGIN_CHANGED);
+      fire(client, PLUGIN_CHANGED);
 
       expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000800:Mod.esp' }]);
     });
@@ -294,7 +295,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
     it('reads the record again when mEdit says the record index changed, as it does when it clears the record filter', () => {
       const { client, panel } = openOn('000800:Mod.esp');
 
-      client.emit(notificationEventFixture({ kind: 'record-index-changed' }));
+      fire(client, notificationEventFixture({ kind: 'record-index-changed' }));
 
       expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000800:Mod.esp' }]);
     });
@@ -315,7 +316,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
     const { client, tab } = openOn('000800:Mod.esp');
     await tab.gate()(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
     await tab.gate()(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000A00:Mod.esp'));
-    client.emit(rowsChanged(['000900:Mod.esp', '000A00:Mod.esp']));
+    fire(client, rowsChanged(['000900:Mod.esp', '000A00:Mod.esp']));
     tab.answered('000A00:Mod.esp', [], true);
 
     const targets: string[] = [];

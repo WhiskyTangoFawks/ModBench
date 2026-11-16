@@ -110,6 +110,7 @@ import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 import { NO_MOD_STATUSES } from '../../test/noModStatuses';
 import { recordingReporter, scriptedDialog, type RecordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
+import { fire } from '../../client/test/fireFrame';
 
 const FOUND = { kind: 'found', root: '/game', dataFolder: '/game/Data' } as const;
 const ARMOR_SQL = 'SELECT form_key FROM "armo"';
@@ -128,7 +129,7 @@ const silentChannel = { error: vi.fn(), info: vi.fn() };
 
 async function handedOff(client: InMemoryMEditClient): Promise<void> {
   const before = pluginReads(client);
-  client.emit(tick({ state: 'Ready', conflictsComputed: true }));
+  fire(client, tick({ state: 'Ready', conflictsComputed: true }));
   await vi.waitFor(() => { expect(pluginReads(client)).toBeGreaterThan(before); });
   await settle();
   client.calls.length = 0;
@@ -160,7 +161,7 @@ function clientHoldingNothing(): InMemoryMEditClient {
 let clearedAt = 0;
 function clears(client: InMemoryMEditClient, source: string): void {
   client.setQueryAnswer('getFilterCleared', { source, reason: 'Conversion Error', sequence: ++clearedAt });
-  client.emit(notificationEventFixture({ kind: 'record-index-changed' }));
+  fire(client, notificationEventFixture({ kind: 'record-index-changed' }));
 }
 
 function pluginsView(
@@ -296,7 +297,7 @@ describe('the Plugins view\'s selection relates to its masters (plugins.md, The 
     }), { client });
     await handedOff(client);
     const [dep] = await rows();
-    client.emit(notificationEventFixture({ kind: 'rows-changed', plugin: 'Dep.esp', origin: 'SomeMod', sequence: 1 }));
+    fire(client, notificationEventFixture({ kind: 'rows-changed', plugin: 'Dep.esp', origin: 'SomeMod', sequence: 1 }));
     await vi.waitFor(() => { expect(pluginReads(client)).toBe(1); });
     await settle();
 
@@ -359,7 +360,7 @@ describe('the Plugins view follows mEdit\'s change event', () => {
     const redrawn: unknown[] = [];
     provider().onDidChangeTreeData?.((element) => redrawn.push(element));
 
-    client.emit({ ...rowsChanged, kind });
+    fire(client, { ...rowsChanged, kind });
 
     await vi.waitFor(() => { expect(pluginReads(client)).toBe(1); });
     await settle();
@@ -373,7 +374,7 @@ describe('the Plugins view follows mEdit\'s change event', () => {
     await rows();
     client.calls.length = 0;
 
-    client.emit({ ...rowsChanged, kind });
+    fire(client, { ...rowsChanged, kind });
 
     await vi.waitFor(() => { expect(pluginReads(client)).toBe(1); });
     await settle();
@@ -413,8 +414,8 @@ describe('the Plugins view follows mEdit\'s change event', () => {
     const refresh = vi.spyOn(recordBrowser, 'refresh');
 
     plugins.dispose();
-    client.emit(rowsChanged);
-    client.emit({ ...rowsChanged, kind: 'plugin-changed' });
+    fire(client, rowsChanged);
+    fire(client, { ...rowsChanged, kind: 'plugin-changed' });
 
     expect(refresh).not.toHaveBeenCalled();
   });
@@ -433,7 +434,7 @@ describe('the Plugins view re-renders for a reconcile tick only when it landed s
   it('re-renders for a tick that landed a new plugin', async () => {
     const { client, rerenders } = reconciling();
 
-    client.emit(tick({ indexedPlugins: [A] }));
+    fire(client, tick({ indexedPlugins: [A] }));
 
     await vi.waitFor(() => { expect(rerenders).toHaveLength(1); });
   });
@@ -441,9 +442,9 @@ describe('the Plugins view re-renders for a reconcile tick only when it landed s
   it('does not re-render for a tick that landed nothing new', async () => {
     const { client, rerenders } = reconciling();
 
-    client.emit(tick({ indexedPlugins: [A] }));
-    client.emit(tick({ indexedPlugins: [A] }));
-    client.emit(tick({ indexedPlugins: [A] }));
+    fire(client, tick({ indexedPlugins: [A] }));
+    fire(client, tick({ indexedPlugins: [A] }));
+    fire(client, tick({ indexedPlugins: [A] }));
     await settle();
 
     expect(rerenders).toHaveLength(1);
@@ -452,10 +453,10 @@ describe('the Plugins view re-renders for a reconcile tick only when it landed s
   it('re-renders for a tick that landed a failure though no plugin was indexed, since a failed plugin never joins the indexed set', async () => {
     const { client, rerenders } = reconciling();
 
-    client.emit(tick({ indexedPlugins: [A] }));
+    fire(client, tick({ indexedPlugins: [A] }));
     await settle();
     const afterTheFirst = rerenders.length;
-    client.emit(tick({ indexedPlugins: [A], failures: [{ name: 'B.esp', origin: 'SomeMod', reason: 'RACE parse' }] }));
+    fire(client, tick({ indexedPlugins: [A], failures: [{ name: 'B.esp', origin: 'SomeMod', reason: 'RACE parse' }] }));
 
     await vi.waitFor(() => { expect(rerenders.slice(afterTheFirst)).toContain(undefined); });
   });
@@ -468,9 +469,9 @@ describe('the Plugins view\'s Problems', () => {
       plugins: [{ name: 'Test.esp', path: onDisk, origin: 'ModA', line: 0, enabled: true, winning: true }],
     }));
 
-    client.emit(loadOrderStatusEventFixture());
+    fire(client, loadOrderStatusEventFixture());
     client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ name: 'Test.esp', origin: 'ModA', changedOutside: true })]);
-    client.emit({ ...rowsChanged, kind: 'plugin-changed', plugin: 'Test.esp', origin: 'ModA' });
+    fire(client, { ...rowsChanged, kind: 'plugin-changed', plugin: 'Test.esp', origin: 'ModA' });
 
     await vi.waitFor(() => {
       const collection = present(h.diagnostics.get('modbench-changed-outside'), 'the changed-outside collection');
@@ -489,7 +490,7 @@ describe('the Plugins view\'s Problems', () => {
       { plugin: 'Test.esp', origin: 'ModA', text: 'short' },
     ]);
 
-    client.emit(tick({
+    fire(client, tick({
       state: 'Ready', conflictsComputed: true,
       failures: [{ name: 'Test.esp', origin: 'ModA', reason: 'Could not read this plugin.', diagnosis: 'duplicate FormKey' }],
     }));
@@ -518,7 +519,7 @@ describe('the Plugins view\'s Problems', () => {
       { plugin: 'Vanilla.esm', origin: 'Data/', text: 'short' },
     ]);
 
-    client.emit(tick({ state: 'Ready', conflictsComputed: true }));
+    fire(client, tick({ state: 'Ready', conflictsComputed: true }));
 
     await vi.waitFor(() => expect([...present(h.diagnostics.get('modbench-diagnosis'), 'the malformed collection')]
       .map(([uri, diagnostics]) => [uri.fsPath, diagnostics.map((d) => d.code)]))
@@ -556,7 +557,7 @@ describe('a record row\'s badge, from mEdit\'s stream', () => {
     expect(await badges.provideFileDecoration(uri)).toBeUndefined();
 
     client.setQueryAnswer('getRecords', { items: [summary('Modified')], total: 1 });
-    client.emit({ ...rowsChanged, keys: [FORM_KEY] });
+    fire(client, { ...rowsChanged, keys: [FORM_KEY] });
     await vi.waitFor(() => { expect(badgeChanges).toEqual([[uri]]); });
     await asVsCodeReReadsAnExpandedGroupOnTreeChange(recordBrowser, group);
 
@@ -776,11 +777,11 @@ describe('the record filter, from the commands that set and clear it', () => {
       const view = await showingA();
       view.client.setQueryAnswer('getActiveFilter', null);
       view.client.setQueryAnswer('getFilterCleared', { source: 'a', reason: 'Conversion Error', sequence: 9 });
-      view.client.emit(notificationEventFixture({ kind: 'record-index-changed' }));
+      fire(view.client, notificationEventFixture({ kind: 'record-index-changed' }));
       await vi.waitFor(() => { expect(view.reporter.reports).toEqual(warned); });
 
       view.client.setQueryAnswer('getFilterCleared', { source: 'a', reason: 'Conversion Error', sequence: 1 });
-      view.client.emit(notificationEventFixture({ kind: 'record-index-changed' }));
+      fire(view.client, notificationEventFixture({ kind: 'record-index-changed' }));
 
       await vi.waitFor(() => { expect(view.reporter.reports).toEqual([...warned, ...warned]); });
     });
@@ -824,7 +825,7 @@ describe('the record filter, from the commands that set and clear it', () => {
       view.holds('a');
       await view.filter({ scheme: 'untitled', path: 'a' });
 
-      view.client.emit(rowsChanged);
+      fire(view.client, rowsChanged);
       await settle();
 
       expect(view.activeFilterReads()).toBe(1);
@@ -967,7 +968,7 @@ describe('the Plugins view\'s message line and name filter', () => {
 
   async function applyFilter(client: InMemoryMEditClient, source: string | undefined) {
     if (source === undefined) {
-      client.emit(rowsChanged);
+      fire(client, rowsChanged);
     } else {
       client.setQueryAnswer('setFilter', null);
       client.setQueryAnswer('getActiveFilter', { sql: ARMOR_SQL, source });
@@ -1158,7 +1159,7 @@ describe('the Plugins view\'s message line and name filter', () => {
       await messageIs(NO_MATCH, 'the message after the keystroke');
 
       plugins.progress.say('Starting backend…');
-      client.emit(tick({ indexedPlugins: [{ name: 'TestMod.esp', origin: 'SomeMod' }] }));
+      fire(client, tick({ indexedPlugins: [{ name: 'TestMod.esp', origin: 'SomeMod' }] }));
       await settle();
 
       expect(view().message).toBe('Starting backend…');

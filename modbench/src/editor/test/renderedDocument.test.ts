@@ -22,6 +22,7 @@ vi.mock('vscode', () => ({
 import { RenderedDocuments } from '../renderedDocument';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { notificationEventFixture } from '../../client/test/fixtures';
+import { fire } from '../../client/test/fireFrame';
 
 interface ContentProvider {
   provideTextDocumentContent(uri: unknown): Promise<string>;
@@ -80,7 +81,7 @@ describe('an open rendered document, when mEdit reports a change', () => {
     const uri = GUN_URI;
     h.textDocuments.push({ uri }, { uri: renderedUri('/ModA/A.esp/Other.json', 'formKey=000802%3AA.esp&name=A.esp&origin=ModA') });
 
-    client.emit(rowsChanged(modA, [GUN]));
+    fire(client, rowsChanged(modA, [GUN]));
 
     expect(changed).toEqual([uri]);
   });
@@ -90,7 +91,7 @@ describe('an open rendered document, when mEdit reports a change', () => {
     const { changed } = rendered(client);
     h.textDocuments.push({ uri: GUN_URI });
 
-    client.emit(rowsChanged({ name: 'A.esp', origin: 'ModB' }, [GUN]));
+    fire(client, rowsChanged({ name: 'A.esp', origin: 'ModB' }, [GUN]));
 
     expect(changed).toEqual([]);
   });
@@ -101,7 +102,7 @@ describe('an open rendered document, when mEdit reports a change', () => {
     const uri = GUN_URI;
     h.textDocuments.push({ uri }, { uri: { scheme: 'file', path: uri.path, query: uri.query } });
 
-    client.emit(notificationEventFixture({ kind: 'plugin-changed', plugin: 'A.esp', origin: 'ModA' }));
+    fire(client, notificationEventFixture({ kind: 'plugin-changed', plugin: 'A.esp', origin: 'ModA' }));
 
     expect(changed).toEqual([uri]);
   });

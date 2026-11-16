@@ -5,6 +5,7 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { editingFlow } from '../editing';
 import type { PutLoadOrderResult } from '../loadOrder';
 import type { LoadOrderSource } from '../loadOrder';
+import { fire } from '../../client/test/fireFrame';
 
 const APPLIED: LoadOrderOutcome = { outcome: 'applied', version: 7 };
 
@@ -185,8 +186,8 @@ describe('a rebuild of the record index, which still holds the load order', () =
     land(valueWith('A.esp'));
     await toldCount(1);
 
-    client.emit(loadOrderStatusEventFixture({ state: 'Reconciling', conflictsComputed: false }));
-    client.emit(notificationEventFixture({ kind: 'record-index-changed' }));
+    fire(client, loadOrderStatusEventFixture({ state: 'Reconciling', conflictsComputed: false }));
+    fire(client, notificationEventFixture({ kind: 'record-index-changed' }));
     await client.latestLoadOrder();
 
     expect(putPluginNames()).toEqual(['A.esp']);

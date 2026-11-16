@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import type { BackendStatus, RecordIndexChange } from '../MEditClient';
 import { InMemoryMEditClient } from './InMemoryMEditClient';
 import { EMPTY_SNAPSHOT, loadOrderStatusEventFixture } from './fixtures';
+import { fire } from './fireFrame';
 
 function heard(client: InMemoryMEditClient): RecordIndexChange[] {
   const changes: RecordIndexChange[] = [];
@@ -16,7 +17,7 @@ describe('the client\'s one change event', () => {
     const client = new InMemoryMEditClient();
     const changes = heard(client);
 
-    client.emit(rows);
+    fire(client, rows);
 
     expect(changes).toEqual([[{ plugin: { name: 'A.esp', origin: 'Mod' }, keys: ['0001:A.esp'] }]]);
   });
@@ -25,7 +26,7 @@ describe('the client\'s one change event', () => {
     const client = new InMemoryMEditClient();
     const changes = heard(client);
 
-    client.emit({ ...rows, kind: 'plugin-changed', keys: [] });
+    fire(client, { ...rows, kind: 'plugin-changed', keys: [] });
 
     expect(changes).toEqual([[{ plugin: { name: 'A.esp', origin: 'Mod' } }]]);
   });
@@ -34,7 +35,7 @@ describe('the client\'s one change event', () => {
     const client = new InMemoryMEditClient();
     const changes = heard(client);
 
-    client.emit({ ...rows, kind: 'record-index-changed', plugin: '', origin: '', keys: [] });
+    fire(client, { ...rows, kind: 'record-index-changed', plugin: '', origin: '', keys: [] });
 
     expect(changes).toEqual([undefined]);
   });
@@ -43,7 +44,7 @@ describe('the client\'s one change event', () => {
     const client = new InMemoryMEditClient();
     const changes = heard(client);
 
-    client.emit(loadOrderStatusEventFixture({ conflictsComputed: true, version: 1 }));
+    fire(client, loadOrderStatusEventFixture({ conflictsComputed: true, version: 1 }));
 
     expect(changes).toEqual([undefined]);
   });
@@ -74,7 +75,7 @@ describe('the client\'s one change event', () => {
     const changes = heard(client);
 
     client.setStatus(status);
-    client.emit(loadOrderStatusEventFixture({ conflictsComputed: false, version: 1 }));
+    fire(client, loadOrderStatusEventFixture({ conflictsComputed: false, version: 1 }));
 
     expect(changes).toEqual([]);
   });
@@ -85,7 +86,7 @@ describe('the client\'s one change event', () => {
     const subscription = client.onDidChange((change) => changes.push(change));
 
     subscription.dispose();
-    client.emit(rows);
+    fire(client, rows);
 
     expect(changes).toEqual([]);
   });

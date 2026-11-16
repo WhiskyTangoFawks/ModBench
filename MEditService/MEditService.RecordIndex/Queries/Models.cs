@@ -428,7 +428,8 @@ public sealed record PluginIndexedState(PluginIndexing State, string? Reason = n
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum IndexOfPluginState { Pending, Indexed, Failed }
 
-/// <summary>A plugin of the load order and how far the record index has come with it. Reason and Diagnosis are set only when it failed. ChangedOutside is the plugin file's bytes not being the ones Modbench last wrote (ADR-0003), which a plugin never opened has no row to say.</summary>
+/// <summary>A plugin of the load order and how far the record index has come with it. Reason and Diagnosis are set only when
+/// it failed. ChangedOutside is ADR-0003's, said here for a plugin never opened.</summary>
 public sealed record IndexOfPlugin(
     string Name, string Origin, IndexOfPluginState State, string? Reason = null, string? Diagnosis = null, bool ChangedOutside = false);
 

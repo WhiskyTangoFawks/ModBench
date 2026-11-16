@@ -3,6 +3,7 @@ import { pluginSourceNames } from '../pluginSourceNames';
 import type { DocumentName } from '../MEditClient';
 import { InMemoryMEditClient } from './InMemoryMEditClient';
 import { localFailure } from '../../wire/readFailed';
+import { fire } from './fireFrame';
 
 const SOURCE = '/instance/source/Mod/plugin-source/Mod.esp/Npc.json';
 const README = '/instance/README.md';
@@ -43,7 +44,7 @@ describe('asking the record index what plugin source names (target-architecture.
     const { names, client, asked } = asking();
 
     await names.getPluginSourceNames(TEXT, SOURCE, 3);
-    client.emit({ kind, plugin: 'Mod.esp', origin: 'Mod', keys: [], sequence: 1 });
+    fire(client, { kind, plugin: 'Mod.esp', origin: 'Mod', keys: [], sequence: 1 });
     await names.getPluginSourceNames(TEXT, SOURCE, 3);
 
     expect(asked()).toHaveLength(2);

@@ -1,16 +1,12 @@
 import { pluginAddressKey, type PluginAddress } from '../../wire/pluginAddress';
-import { IGNORED_THROWS } from './fixtures';
-import type { Disposable } from '../eventEmitter';
+import { EventEmitter, type Disposable } from '../eventEmitter';
 import type {
-  MEditClient, RecordIndexChange, RecordIndexProgress, IndexOfPlugin, BackendStatus, LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, UnsavedDocument,
+  MEditClient, RecordIndexChange, RecordIndexProgress, BackendStatus, LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, UnsavedDocument,
 } from '../MEditClient';
-import type { NotificationEvent } from '../apiClient';
-import { SseNotificationSubscriber } from '../notificationStream';
 import { createLoadOrderSender, type LoadOrderWire } from '../loadOrderSender';
+import { isMEditGone } from '../MEditClient';
 import { isReadFailed, type ReadFailed } from '../../wire/readFailed';
 import { indexingMakesLate, trackLateness, trackProgress } from '../lateness';
-import { keepRecordIndexChanges } from '../recordIndexChanges';
-import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 
 type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getPluginIndexing' | 'getPluginProblems' | 'getPluginFilePaths' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'getArchiveContents' | 'getArchiveFile' | 'getArchiveCopies' | 'getFlaggedPluginHashes'
@@ -54,9 +50,8 @@ type Scripted<T> = { value: T };
 type ScriptedAnswers = { [K in QueryMethod]: Scripted<Answer<K>>[] };
 type ScriptedResults = { [K in CommandMethod]: Scripted<Answer<K>>[] };
 
-/** The in-memory adapter (target-architecture.d2, mEdit client): a test scripts each answer by
- *  method name, drives notifications with `emit`, and reads every recorded call back. An
- *  unscripted query rejects, so a forgotten script fails loudly, not silently empty. */
+/** The in-memory adapter (target-architecture.d2, mEdit client): a test scripts each answer by method name,
+ *  fires the change event, sets the progress and reads every recorded call back. An unscripted query rejects. */
 export class InMemoryMEditClient implements MEditClient {
   readonly calls: RecordedCall[] = [];
 
@@ -67,7 +62,9 @@ export class InMemoryMEditClient implements MEditClient {
   private queryQueues: { [K in QueryMethod]?: QueryQueues[K] } = {};
   private readonly commandResults: { [K in CommandMethod]?: ScriptedResults[K] } = {};
   private readonly commandHandlers: { [K in CommandMethod]?: Handlers[K] } = {};
-  private readonly notifications = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream: () => Promise.reject(new Error('never started')) });
+  private readonly changes = new EventEmitter<RecordIndexChange>();
+  private progressNow: RecordIndexProgress | undefined;
+  private heardSequence = 0;
   private readonly statusListeners = new Set<(status: BackendStatus) => void>();
   private readonly portListeners = new Set<(port: number) => void>();
   private readonly reconnectListeners = new Set<() => void>();
@@ -77,16 +74,6 @@ export class InMemoryMEditClient implements MEditClient {
   private signalAnswer: () => Promise<void> = () => Promise.resolve();
   private startAnswer: () => Promise<void> = () => { this.setStatus('running'); return Promise.resolve(); };
   private stopAnswer: () => void = () => undefined;
-  private readonly loadOrderStatusKept = keepLoadOrderStatus({
-    onNotification: (kind, listener) => this.notifications.onNotification(kind, listener),
-    onStatusChanged: (listener) => this.onStatusChanged(listener),
-    onReconnected: (listener) => this.onReconnected(listener),
-  });
-  private readonly changes = keepRecordIndexChanges({
-    onNotification: (kind, listener) => this.notifications.onNotification(kind, listener),
-    onStatusChanged: (listener) => this.onStatusChanged(listener),
-    onReconnected: (listener) => this.onReconnected(listener),
-  }, this.loadOrderStatusKept);
   private readonly snapshotsPut: LoadOrderSnapshot[] = [];
   private readonly sender = createLoadOrderSender({
     status: () => this.status,
@@ -117,8 +104,25 @@ export class InMemoryMEditClient implements MEditClient {
 
   constructor() {
     this.sender.onPendingChanged(this.lateness.note);
-    this.loadOrderStatusKept.onStatus(() => { this.lateness.note(); this.progress.note(); });
+    // As the client does: a process gone or a stream reopened holds no progress, and a process running, or a stream reopened, says everything.
+    this.onStatusChanged((status) => { if (isMEditGone(status)) this.setProgress(undefined); });
+    this.onReconnected(() => { this.setProgress(undefined); });
+    this.onStatusChanged((status) => { if (status === 'running') this.change(undefined); });
+    this.onReconnected(() => { this.change(undefined); });
   }
+
+  /** What changed in the record index, as the change event tells it. */
+  change(change: RecordIndexChange): void { this.changes.fire(change); }
+
+  /** How far the record index has come, which lateness carries; undefined while it holds no load order. */
+  setProgress(progress: RecordIndexProgress | undefined): void {
+    this.progressNow = progress;
+    this.lateness.note();
+    this.progress.note();
+  }
+
+  /** A notification carried this sequence of the record index. */
+  hearSequence(sequence: number): void { this.heardSequence = Math.max(this.heardSequence, sequence); }
 
   /** Answers each PUT of a snapshot, as the backend would, from the snapshot and its abort signal. */
   answerPuts(answer: LoadOrderWire['put']): void {
@@ -241,8 +245,8 @@ export class InMemoryMEditClient implements MEditClient {
   onExit(listener: () => void): () => void { return this.sender.onExit(listener); }
   stop(): Promise<void> { return this.sender.stop(); }
 
-  onDidChange(listener: (change: RecordIndexChange) => void): Disposable { return this.changes.onDidChange(listener); }
-  /** The sequence mEdit stands at, which `refreshRecordIndexLateness` reads and compares with the last an emitted notification carried. */
+  onDidChange(listener: (change: RecordIndexChange) => void): Disposable { return this.changes.event(listener); }
+  /** The sequence mEdit stands at, which `refreshRecordIndexLateness` reads and compares with the last sequence a notification carried. */
   sequenceMEditStandsAt = 0;
   private readSequence = 0;
   refreshRecordIndexLateness(): Promise<void> {
@@ -251,9 +255,9 @@ export class InMemoryMEditClient implements MEditClient {
     return Promise.resolve();
   }
   get recordIndexMayBeLate(): boolean {
-    return this.sender.pending() || this.notifications.heardSequence < this.readSequence || indexingMakesLate(this.recordIndexProgress);
+    return this.sender.pending() || this.heardSequence < this.readSequence || indexingMakesLate(this.recordIndexProgress);
   }
-  get recordIndexProgress(): RecordIndexProgress | undefined { return this.loadOrderStatusKept.progress(); }
+  get recordIndexProgress(): RecordIndexProgress | undefined { return this.progressNow; }
   onDidChangeRecordIndexProgress(listener: (progress: RecordIndexProgress | undefined) => void): Disposable { return this.progress.event(listener); }
   onDidChangeRecordIndexMayBeLate(listener: (late: boolean) => void): Disposable { return this.lateness.event(listener); }
 
@@ -274,10 +278,6 @@ export class InMemoryMEditClient implements MEditClient {
   /** A put of the unsaved documents answers: undefined when mEdit took them, else why not. */
   settleHandOver(failure: ReadFailed | undefined): void {
     for (const listener of this.handOverListeners) listener(failure);
-  }
-
-  emit(event: NotificationEvent): void {
-    this.notifications.dispatch(event);
   }
 
   private record(method: string, args: unknown[]): void {
@@ -499,13 +499,10 @@ export class InMemoryMEditClient implements MEditClient {
   clearFilter(): ReturnType<MEditClient['clearFilter']> { return this.query('clearFilter', []); }
   getActiveFilter(): ReturnType<MEditClient['getActiveFilter']> { return this.query('getActiveFilter', []); }
   getFilterCleared(): ReturnType<MEditClient['getFilterCleared']> { return this.query('getFilterCleared', []); }
+  /** Answers nothing opened and nothing pending unless a test scripts it. */
   getPluginsIndexing(): ReturnType<MEditClient['getPluginsIndexing']> {
     if (this.queryAnswers.getPluginsIndexing?.length || this.queryQueues.getPluginsIndexing?.length || this.queryFailures.has('getPluginsIndexing')) return this.query('getPluginsIndexing', []);
     this.record('getPluginsIndexing', []);
-    const status = this.loadOrderStatusKept.current();
-    return Promise.resolve([
-      ...(status?.indexedPlugins ?? []).map(({ name, origin }): IndexOfPlugin => ({ name, origin, state: 'Indexed', changedOutside: false })),
-      ...(status?.failures ?? []).map(({ name, origin, reason, diagnosis }): IndexOfPlugin => ({ name, origin, state: 'Failed', reason, diagnosis, changedOutside: false })),
-    ]);
+    return Promise.resolve([]);
   }
 }

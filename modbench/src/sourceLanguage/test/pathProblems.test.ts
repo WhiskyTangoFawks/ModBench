@@ -6,8 +6,8 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import type { PluginFilePaths } from '../../client';
 import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
-import type { NotificationEvent } from '../../client/apiClient';
 import type { SourceFilesOf } from '../../instanceLoader/loadOrderSnapshot';
+import { fire, type Frame } from '../../client/test/fireFrame';
 
 const RETRY_AFTER_MS = 1000;
 const HOLDER = '000800:Names.esp';
@@ -90,7 +90,7 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     await settled(1);
     client.setQueryAnswer('getPluginFilePaths', [answerFor(PLUGIN, [])]);
 
-    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+    fire(client, { kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
     await vi.waitFor(() => { expect(published.length).toBe(2); });
 
     expect([asked(client), [...published[1]?.keys() ?? []]]).toEqual([[[undefined], [PLUGIN]], ['/source/OtherMod/Other.esp/Set.json']]);
@@ -101,8 +101,8 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     await settled(1);
     client.setQueryAnswer('getPluginFilePaths', [answerFor()]);
 
-    client.emit(loadOrderStatusEventFixture({ state: 'Reconciling', conflictsComputed: false, version: 2 }));
-    client.emit(loadOrderStatusEventFixture({ state: 'Ready', conflictsComputed: true, version: 3 }));
+    fire(client, loadOrderStatusEventFixture({ state: 'Reconciling', conflictsComputed: false, version: 2 }));
+    fire(client, loadOrderStatusEventFixture({ state: 'Ready', conflictsComputed: true, version: 3 }));
     await vi.waitFor(() => { expect(published.length).toBe(2); });
 
     expect([...published[1]?.keys() ?? []]).toEqual([FILE]);
@@ -123,7 +123,7 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     await settled(1);
     client.setQueryFailureOnce('getPluginFilePaths', { failed: 'timed-out' });
 
-    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+    fire(client, { kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
     await vi.waitFor(() => { expect(status.at(-1)).toContain('mEdit did not answer in time.'); });
 
     expect(published).toHaveLength(1);
@@ -133,7 +133,7 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     const { settled, client } = feed([answerFor()]);
     await settled(1);
 
-    for (const kind of ['rows-changed', 'plugin-changed', 'rows-changed'] as const) client.emit({ kind, plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+    for (const kind of ['rows-changed', 'plugin-changed', 'rows-changed'] as const) fire(client, { kind, plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
     await vi.waitFor(() => { expect(asked(client)).toHaveLength(2); });
     await Promise.resolve();
 
@@ -145,7 +145,7 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     await settled(1);
     client.setQueryAnswer('getPluginFilePaths', []);
 
-    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+    fire(client, { kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
 
     expect(await settled(2)).toEqual(new Map());
   });
@@ -154,11 +154,11 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     const { settled, client } = feed([answerFor()]);
     await settled(1);
     client.setQueryFailureOnce('getPluginFilePaths', { failed: 'timed-out' });
-    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+    fire(client, { kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
     await vi.waitFor(() => { expect(asked(client)).toHaveLength(2); });
     client.setQueryAnswer('getPluginFilePaths', [answerFor(PLUGIN, [])]);
 
-    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 2 });
+    fire(client, { kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 2 });
 
     expect(await settled(2)).toEqual(new Map());
   });
@@ -177,7 +177,7 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     text = `  ${TEXT}`;
     client.setQueryAnswer('getPluginFilePaths', [answerFor()]);
 
-    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+    fire(client, { kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
     await vi.waitFor(() => { expect(published).toHaveLength(2); });
 
     expect(published[1]?.get(FILE)?.[0]?.start.character).toBe(SPAN.start + 2);
@@ -196,7 +196,7 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     });
     await settled();
     client.setQueryAnswer('getPluginFilePaths', [answerFor()]);
-    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+    fire(client, { kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
 
     let ended = false;
     const waiting = settled().then(() => { ended = true; });
@@ -214,11 +214,11 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     await settled(1);
     let answerFirst!: (answer: PluginFilePaths[]) => void;
     client.setQueryAnswerOnce('getPluginFilePaths', new Promise<PluginFilePaths[]>((resolve) => { answerFirst = resolve; }));
-    const named = (sequence: number): NotificationEvent => ({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence });
-    client.emit(named(1));
+    const named = (sequence: number): Frame => ({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence });
+    fire(client, named(1));
     await vi.waitFor(() => { expect(asked(client)).toHaveLength(2); });
 
-    for (let sequence = 2; sequence < 6; sequence += 1) client.emit(named(sequence));
+    for (let sequence = 2; sequence < 6; sequence += 1) fire(client, named(sequence));
     await new Promise((resolve) => { setTimeout(resolve, 20); });
     expect(asked(client)).toHaveLength(2);
 
@@ -252,9 +252,9 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     const { settled, client } = feed([answerFor()]);
     await settled(1);
 
-    client.emit({ kind: 'rows-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [HOLDER], sequence: 1 });
+    fire(client, { kind: 'rows-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [HOLDER], sequence: 1 });
     await vi.waitFor(() => { expect(client.calls.filter((call) => call.method === 'getPluginFilePaths')).toHaveLength(2); });
-    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 2 });
+    fire(client, { kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 2 });
     await vi.waitFor(() => { expect(client.calls.filter((call) => call.method === 'getPluginFilePaths')).toHaveLength(3); });
 
     expect(client.calls.filter((call) => call.method === 'getPluginFilePaths').map((call) => call.args[2])).toEqual([undefined, [HOLDER], undefined]);
@@ -272,7 +272,7 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     });
     await vi.waitFor(() => { expect(published).toHaveLength(1); });
 
-    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+    fire(client, { kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
     await vi.waitFor(() => { expect(asked(client)).toHaveLength(2); });
     await new Promise((resolve) => setTimeout(resolve, 20));
 
@@ -281,8 +281,8 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
   });
 
   describe.each([
-    ['the whole set', (client: InMemoryMEditClient) => { client.emit(loadOrderStatusEventFixture({ state: 'Ready', conflictsComputed: true, version: 2 })); }, undefined],
-    ['a plugin', (client: InMemoryMEditClient) => { client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 }); }, PLUGIN],
+    ['the whole set', (client: InMemoryMEditClient) => { fire(client, loadOrderStatusEventFixture({ state: 'Ready', conflictsComputed: true, version: 2 })); }, undefined],
+    ['a plugin', (client: InMemoryMEditClient) => { fire(client, { kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 }); }, PLUGIN],
   ] as const)('an ask for %s that failed', (_what, trigger, target) => {
     const failedOnce = async () => {
       const made = feed([answerFor()]);

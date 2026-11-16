@@ -14,6 +14,7 @@ import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { recordingTasks } from '../../test/recordingTasks';
 import { restoreFromManifest, type RestoreStatus } from '../restoreFromManifest';
+import { fire } from '../../client/test/fireFrame';
 
 const HA = 'AAAAAAAAAAA=';
 const HB = 'BBBBBBBBBBA=';
@@ -644,7 +645,7 @@ describe('restore from manifest', () => {
       await vi.advanceTimersByTimeAsync(1_000);
       const endedBeforeIndexed = ended;
       client.setQueryAnswer('getPluginIndexing', { state: 'AsOnDisk' });
-      client.emit(loadOrderStatusEventFixture());
+      fire(client, loadOrderStatusEventFixture());
 
       expect([endedBeforeIndexed, (await outcome).landed.map(({ mod }) => mod)]).toEqual([false, ['ModC', 'ModB', 'ModA']]);
     });
@@ -687,7 +688,7 @@ describe('restore from manifest', () => {
       await vi.advanceTimersByTimeAsync(1_000);
       const endedBeforeIndexed = ended;
       client.setQueryAnswer('getPluginIndexing', { state: 'AsOnDisk' });
-      client.emit(loadOrderStatusEventFixture());
+      fire(client, loadOrderStatusEventFixture());
 
       expect([endedBeforeIndexed, (await outcome).refused]).toEqual([false, []]);
     });

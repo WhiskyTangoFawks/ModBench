@@ -19,13 +19,14 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
+import { fire } from '../../client/test/fireFrame';
 
 const statusBarText = (): string => present(h.items.at(-1), 'the status bar item').text;
 
 beforeEach(() => { h.items.length = 0; });
 
 const tell = async (client: InMemoryMEditClient, event: ReturnType<typeof loadOrderStatusEventFixture>): Promise<void> => {
-  client.emit(event);
+  fire(client, event);
   await new Promise((resolve) => { setTimeout(resolve, 0); });
 };
 

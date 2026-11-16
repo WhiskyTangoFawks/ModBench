@@ -5,6 +5,7 @@ import type { CopyChanged } from '../../wire/recordCopy';
 vi.mock('vscode', () => ({ Disposable: class { constructor(public dispose: () => void) {} } }));
 
 import { followCopiesIntoDocuments } from '../copyFollowers';
+import { fire } from '../../client/test/fireFrame';
 
 const inModA = { formKey: '000803:A.esp', plugin: { name: 'A.esp', origin: 'ModA' } };
 const inModB = { formKey: '000901:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } };
@@ -22,8 +23,8 @@ function following() {
 
 describe('the copies a report changes, for the child documents and the carrier alike', () => {
   const reports: [string, (client: InMemoryMEditClient) => void, typeof inModA[]][] = [
-    ['rows changed in its plugin', (c) => { c.emit({ kind: 'rows-changed', plugin: 'A.esp', origin: 'ModA', keys: ['000804:A.esp'], sequence: 1 }); }, [inModA]],
-    ['rows changed in another plugin of the same name', (c) => { c.emit({ kind: 'rows-changed', plugin: 'A.esp', origin: 'ModB', keys: ['000803:A.esp'], sequence: 1 }); }, []],
+    ['rows changed in its plugin', (c) => { fire(c, { kind: 'rows-changed', plugin: 'A.esp', origin: 'ModA', keys: ['000804:A.esp'], sequence: 1 }); }, [inModA]],
+    ['rows changed in another plugin of the same name', (c) => { fire(c, { kind: 'rows-changed', plugin: 'A.esp', origin: 'ModB', keys: ['000803:A.esp'], sequence: 1 }); }, []],
   ];
 
   it.each(reports)('%s', (_name, report, changed) => {

@@ -11,6 +11,7 @@ import { recordingTasks } from '../../test/recordingTasks';
 import { sourceCommands } from '../sourceCommands';
 import type { BuildMod } from '../../client/MEditClient';
 import { loadOrderStatusEventFixture, notificationEventFixture } from '../../client/test/fixtures';
+import { fire } from '../../client/test/fireFrame';
 
 let root: string;
 let SOURCES: Record<string, string>;
@@ -58,7 +59,7 @@ describe('sourceCommands build, between mods', () => {
     const outcome = built();
     await vi.waitFor(() => { expect(askedOfMEdit(client)).toContainEqual({ name: 'B.esp', origin: 'ModB' }); });
     client.setQueryAnswer('getPluginIndexing', AS_ON_DISK);
-    client.emit(event());
+    fire(client, event());
 
     expect(await outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }], refused: [] });
   });
@@ -96,7 +97,7 @@ describe('sourceCommands build, between mods', () => {
     }
     expect(builtMods(client)).toEqual(['ModB']);
     client.setQueryAnswer('getPluginIndexing', AS_ON_DISK);
-    client.emit(loadOrderStatusEventFixture());
+    fire(client, loadOrderStatusEventFixture());
 
     expect(await outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }], refused: [] });
   });
@@ -116,7 +117,7 @@ describe('sourceCommands build, between mods', () => {
     }
     expect(builtMods(client)).toEqual(['ModB']);
     client.setQueryAnswer('getPluginIndexing', AS_ON_DISK);
-    client.emit(loadOrderStatusEventFixture());
+    fire(client, loadOrderStatusEventFixture());
 
     expect(await outcome).toMatchObject({ landed: [{ mod: 'ModB' }, { mod: 'ModA' }], refused: [] });
   });

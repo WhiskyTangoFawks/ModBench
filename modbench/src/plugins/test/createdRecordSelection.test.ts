@@ -6,6 +6,7 @@ vi.mock('vscode', () => ({ commands: { executeCommand } }));
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { notificationEventFixture } from '../../client/test/fixtures';
 import { createdRecordSelection, type RecordPlace } from '../createdRecordSelection';
+import { fire } from '../../client/test/fireFrame';
 
 const PLUGIN = { name: 'MyPatch.esp', origin: 'ModA' };
 const NPCS: RecordPlace<string> = { plugin: PLUGIN, recordType: 'npc_' };
@@ -50,7 +51,7 @@ describe('createdRecordSelection', () => {
     const open = opening();
     selection.watch(PLUGIN).select(NPCS, NEW);
 
-    stream.emit(rowsChanged([NEW]));
+    fire(stream, rowsChanged([NEW]));
     await open;
 
     expect(asked).toEqual([`npc_ ${NEW}`]);
@@ -63,7 +64,7 @@ describe('createdRecordSelection', () => {
     const open = opening();
     selection.watch(PLUGIN).select(undefined, NEW);
 
-    stream.emit(rowsChanged([NEW]));
+    fire(stream, rowsChanged([NEW]));
     await open;
 
     expect([asked, revealed]).toEqual([[], []]);
@@ -77,7 +78,7 @@ describe('createdRecordSelection', () => {
     const { stream, selection, revealed, opened, opening } = harness();
     const open = opening();
     const watch = selection.watch(PLUGIN);
-    stream.emit(event);
+    fire(stream, event);
 
     watch.select(NPCS, NEW);
     await open;
@@ -90,13 +91,13 @@ describe('createdRecordSelection', () => {
     const { stream, asked, selection, opened, opening } = harness();
     const open = opening();
     const watch = selection.watch(PLUGIN);
-    stream.emit(rowsChanged([OTHER]));
+    fire(stream, rowsChanged([OTHER]));
 
     watch.select(NPCS, NEW);
     await aWindow();
     expect([asked, opened()]).toEqual([[], []]);
 
-    stream.emit(rowsChanged([NEW]));
+    fire(stream, rowsChanged([NEW]));
     await open;
     expect(opened()).toEqual([OPEN_NEW]);
   });
@@ -106,7 +107,7 @@ describe('createdRecordSelection', () => {
     const open = opening();
     selection.watch(PLUGIN).select(QUEST, NEW);
 
-    stream.emit(rowsChanged([NEW]));
+    fire(stream, rowsChanged([NEW]));
     await open;
 
     expect(asked).toEqual([`quest row ${NEW}`]);
@@ -120,11 +121,11 @@ describe('createdRecordSelection', () => {
     const open = opening();
     selection.watch(PLUGIN).select(NPCS, NEW);
 
-    stream.emit(event);
+    fire(stream, event);
     await aWindow();
     expect(opened()).toEqual([]);
 
-    stream.emit(rowsChanged([NEW]));
+    fire(stream, rowsChanged([NEW]));
     await open;
     expect(opened()).toEqual([OPEN_NEW]);
   });
@@ -134,11 +135,11 @@ describe('createdRecordSelection', () => {
     const open = opening();
     selection.watch(PLUGIN).select(QUEST, NEW);
 
-    stream.emit(pluginChanged('ModB'));
+    fire(stream, pluginChanged('ModB'));
     await aWindow();
     expect(opened()).toEqual([]);
 
-    stream.emit(pluginChanged());
+    fire(stream, pluginChanged());
     await open;
 
     expect(asked).toEqual([`quest row ${NEW}`]);
@@ -150,11 +151,11 @@ describe('createdRecordSelection', () => {
     const { stream, asked, selection, opened, opening } = harness(() => false);
     const open = opening();
     selection.watch(PLUGIN).select(NPCS, NEW);
-    stream.emit(pluginChanged());
+    fire(stream, pluginChanged());
     await open;
 
-    stream.emit(rowsChanged([NEW]));
-    stream.emit(pluginChanged());
+    fire(stream, rowsChanged([NEW]));
+    fire(stream, pluginChanged());
     await aWindow();
 
     expect(asked).toHaveLength(1);
@@ -166,7 +167,7 @@ describe('createdRecordSelection', () => {
     const open = opening();
     selection.watch(PLUGIN).select(NPCS, NEW);
 
-    stream.emit(rowsChanged([NEW]));
+    fire(stream, rowsChanged([NEW]));
     await open;
 
     expect(revealed).toEqual([]);
@@ -178,10 +179,10 @@ describe('createdRecordSelection', () => {
     const open = opening();
     selection.watch(PLUGIN).select(NPCS, NEW);
 
-    stream.emit(rowsChanged([NEW]));
-    stream.emit(rowsChanged([NEW]));
+    fire(stream, rowsChanged([NEW]));
+    fire(stream, rowsChanged([NEW]));
     await open;
-    stream.emit(rowsChanged([NEW]));
+    fire(stream, rowsChanged([NEW]));
     await aWindow();
 
     expect(opened()).toEqual([OPEN_NEW]);
@@ -194,7 +195,7 @@ describe('createdRecordSelection', () => {
     selection.watch(PLUGIN).select(NPCS, NEW);
     first.select(NPCS, OTHER);
 
-    stream.emit(rowsChanged([OTHER, NEW]));
+    fire(stream, rowsChanged([OTHER, NEW]));
     await open;
 
     expect(opened()).toEqual([OPEN_NEW]);
@@ -206,7 +207,7 @@ describe('createdRecordSelection', () => {
     watch.forget();
     watch.select(NPCS, NEW);
 
-    stream.emit(rowsChanged([NEW]));
+    fire(stream, rowsChanged([NEW]));
     await aWindow();
 
     expect(asked).toEqual([]);

@@ -9,6 +9,7 @@ vi.mock('vscode', () => ({ EventEmitter }));
 
 import { PluginFactsFeed, type PluginFactsFeedDeps } from '../pluginFactsFeed';
 import { rulesReader, type SortingRuleFiles } from '../../sortingRules/lootMetadata';
+import { fire } from '../../client/test/fireFrame';
 
 const USERLIST = '/instance/userlist.yaml';
 const filesWith = (masterlist: string, userlist = ''): SortingRuleFiles => ({
@@ -59,14 +60,13 @@ interface FeedOptions {
   readonly holdsLoadOrder?: boolean;
 }
 
-/** The plugins each read of their facts named, which the read of their index state is not. */
 const factsAsked = (client: InMemoryMEditClient) => client.calls.filter(({ method }) => method === 'getPlugins').map(({ args }) => args);
 
 function feedOver({
   shownPlugins = () => [A], activePlugins = () => [], publishDiagnoses, rules = () => NO_RULES, present = [], asked, gates = [], holdsLoadOrder = true,
 }: FeedOptions = {}) {
   const client = clientFindingNoDefects();
-  if (holdsLoadOrder) client.emit(loadOrderStatusEventFixture());
+  if (holdsLoadOrder) fire(client, loadOrderStatusEventFixture());
   const diagnoses = watched<readonly PluginDiagnosisReport[]>();
   const changedOutside = watched<readonly { plugin: string; origin: string }[]>();
   const sourceUnreadable = watched<readonly { plugin: string; origin: string }[]>();
@@ -418,7 +418,7 @@ describe('PluginFactsFeed', () => {
 
     it('asks nothing while mEdit says it holds no load order', async () => {
       const { feed, client } = feedOver({ holdsLoadOrder: false });
-      client.emit(loadOrderStatusEventFixture({ state: 'None', conflictsComputed: false }));
+      fire(client, loadOrderStatusEventFixture({ state: 'None', conflictsComputed: false }));
       client.calls.length = 0;
 
       await feed.refresh();
@@ -436,7 +436,7 @@ describe('PluginFactsFeed', () => {
 
       await feed.refresh();
       const whileNoneHeld = [...client.calls];
-      client.emit(loadOrderStatusEventFixture());
+      fire(client, loadOrderStatusEventFixture());
       await feed.refresh();
 
       expect({ whileNoneHeld, after: client.calls.map(({ method }) => method).filter((method) => method !== 'getPluginsIndexing') }).toEqual({ whileNoneHeld: [], after: ['getPlugins'] });

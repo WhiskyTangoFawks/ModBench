@@ -4,6 +4,7 @@ import { problemsAsker } from '../../drivingLib/problemsAsker';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 import type { PluginAddress } from '../../client';
+import { fire } from '../../client/test/fireFrame';
 
 const A: PluginAddress = { name: 'A.esp', origin: 'ModA' };
 
@@ -19,8 +20,8 @@ function world() {
   return {
     asker, heard, stop, asked,
     instanceChanges: () => { for (const listener of instance) listener(); },
-    pluginChanges: () => { client.emit({ kind: 'plugin-changed', plugin: A.name, origin: A.origin, keys: [], sequence: 1 }); },
-    settles: () => { client.emit(loadOrderStatusEventFixture({ state: 'Ready', conflictsComputed: true, version: 1 })); },
+    pluginChanges: () => { fire(client, { kind: 'plugin-changed', plugin: A.name, origin: A.origin, keys: [], sequence: 1 }); },
+    settles: () => { fire(client, loadOrderStatusEventFixture({ state: 'Ready', conflictsComputed: true, version: 1 })); },
   };
 }
 

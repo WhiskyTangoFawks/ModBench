@@ -49,6 +49,7 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { type CompareResult } from '../../client';
 import { notificationEventFixture } from '../../client/test/fixtures';
 import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
+import { fire } from '../../client/test/fireFrame';
 
 type Diff = CompareResult['diffs'][number];
 
@@ -144,7 +145,7 @@ describe('the extended-field documents', () => {
     const changes = recordChanges();
     client.setQueryAnswer('getComparison', descriptionOf('changed elsewhere'));
 
-    client.emit(rowsChanged(['000123:Fallout4.esm']));
+    fire(client, rowsChanged(['000123:Fallout4.esm']));
 
     expect(changes).toEqual([[{ type: 1, uri }]]);
     expect(await textOf(uri)).toBe('changed elsewhere');
@@ -154,7 +155,7 @@ describe('the extended-field documents', () => {
     await documents.open(deacon);
     const before = await provider().stat(shownUri());
 
-    client.emit(rowsChanged(['000123:Fallout4.esm']));
+    fire(client, rowsChanged(['000123:Fallout4.esm']));
 
     expect((await provider().stat(shownUri())).mtime).toBeGreaterThan(before.mtime);
   });
@@ -164,7 +165,7 @@ describe('the extended-field documents', () => {
     await textOf(shownUri());
     const changes = recordChanges();
 
-    client.emit(rowsChanged(['000999:Fallout4.esm']));
+    fire(client, rowsChanged(['000999:Fallout4.esm']));
 
     expect(changes).toEqual([]);
   });
@@ -174,8 +175,8 @@ describe('the extended-field documents', () => {
     await textOf(shownUri());
     const changes = recordChanges();
 
-    client.emit(pluginChanged('Other.esp', 'Data/'));
-    client.emit(pluginChanged('Fallout4.esm', 'Data/'));
+    fire(client, pluginChanged('Other.esp', 'Data/'));
+    fire(client, pluginChanged('Fallout4.esm', 'Data/'));
 
     expect(changes).toHaveLength(1);
   });
@@ -186,7 +187,7 @@ describe('the extended-field documents', () => {
     const changes = recordChanges();
     closeTab(shownUri());
 
-    client.emit(rowsChanged(['000123:Fallout4.esm']));
+    fire(client, rowsChanged(['000123:Fallout4.esm']));
 
     expect(changes).toEqual([]);
   });

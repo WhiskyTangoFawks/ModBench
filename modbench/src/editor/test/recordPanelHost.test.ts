@@ -7,6 +7,7 @@ vi.mock('vscode', () => editorVscode);
 import * as vscode from 'vscode';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { notificationEventFixture } from '../../client/test/fixtures';
+import { fire } from '../../client/test/fireFrame';
 
 function isPanel(candidate: unknown): candidate is vscode.WebviewPanel {
   return typeof candidate === 'object' && candidate !== null && 'webview' in candidate;
@@ -173,8 +174,8 @@ describe('a child record\'s tab, on mEdit\'s report of its record', () => {
     meditClient.setQueryAnswer('getCopyDocument', { kind: 'ContainersFile', location: OTHER_CELL_FILE });
     await childTabShown(meditClient);
 
-    meditClient.emit(changed);
-    meditClient.emit({ ...changed, sequence: 2 });
+    fire(meditClient, changed);
+    fire(meditClient, { ...changed, sequence: 2 });
     answerFirst({ kind: 'ContainersFile', location: CELL_FILE });
 
     await vi.waitFor(() => expect(opened()).toEqual([`modbench-child-record:${OTHER_CELL_FILE}?${query}`]));
@@ -189,9 +190,9 @@ describe('a child record\'s tab, on mEdit\'s report of its record', () => {
     const { warn, provider } = await childTabShown(meditClient);
     const closing = await showChild(provider, '000802:A.esp');
 
-    meditClient.emit(changed);
+    fire(meditClient, changed);
     closing.close();
-    meditClient.emit({ ...changed, sequence: 2 });
+    fire(meditClient, { ...changed, sequence: 2 });
     answerFirst({ kind: 'ContainersFile', location: CELL_FILE });
 
     await vi.waitFor(() => expect(opened()).toEqual([`modbench-child-record:${OTHER_CELL_FILE}?${query}`]));
@@ -203,7 +204,7 @@ describe('a child record\'s tab, on mEdit\'s report of its record', () => {
     meditClient.setQueryAnswer('getCopyDocument', null);
     const { warn } = await childTabShown(meditClient);
 
-    meditClient.emit(changed);
+    fire(meditClient, changed);
 
     await vi.waitFor(() => expect(warn).toHaveBeenCalledWith(
       `${PLACED}'s tab stays on modbench-child-record:${CELL_FILE}?${query}: A.esp (ModA) holds no ${PLACED}.`));
@@ -215,7 +216,7 @@ describe('a child record\'s tab, on mEdit\'s report of its record', () => {
     meditClient.setQueryAnswer('getCopyDocument', { kind: 'ContainersFile', location: OTHER_CELL_FILE });
     const { warn } = await childTabShown(meditClient, false);
 
-    meditClient.emit(changed);
+    fire(meditClient, changed);
 
     await vi.waitFor(() => expect(warn).toHaveBeenCalledWith(
       `${PLACED}'s tab stays on modbench-child-record:${CELL_FILE}?${query}: VS Code shows the tab in no group.`));
