@@ -41,6 +41,7 @@ internal sealed class Store : IDisposable
     private readonly Projection _projection;
     private IReadOnlyDictionary<string, RecordTableSchema>? _schemas;
     private PluginIngest? _pluginIngest;
+    private Language _stringsLanguage = Language.English;
     private WorkingTreeOverlay? _workingTreeOverlay;
     private bool _recordTypeViewsCreated;
 
@@ -277,9 +278,11 @@ internal sealed class Store : IDisposable
         DiscardFileWrittenUnderAnotherVersion(indexVersion);
         _schemas = _schemaReflector.GetSchemas(release);
         Release = release;
-        _pluginIngest = new PluginIngest(Connection, _logger, release, contentStamp);
-        _workingTreeOverlay = new WorkingTreeOverlay(Connection, _logger, _schemas, release, contentStamp);
+        _pluginIngest = new PluginIngest(Connection, _logger, release, contentStamp, () => _stringsLanguage);
+        _workingTreeOverlay = new WorkingTreeOverlay(Connection, _logger, _schemas, release, contentStamp, () => _stringsLanguage);
         TableDdlBuilder.CreateTables(Connection);
+        _stringsLanguage = Enum.Parse<Language>(DuckDbSql.ScalarString(Connection, $"SELECT language FROM {TableDdlBuilder.StringsLanguageRelation}")
+            ?? throw new InvalidOperationException("The strings language has no row."));
         DuckDbSql.Execute(Connection, $"DELETE FROM {IndexVersionRelation}");
         DuckDbSql.Execute(Connection, $"INSERT INTO {IndexVersionRelation} (value) VALUES ($1)", indexVersion);
     }
@@ -449,17 +452,17 @@ internal sealed class Store : IDisposable
     {
         var plugins = new Dictionary<PluginAddress, IndexedPlugin>(PluginAddress.Comparer);
         foreach (var (key, filePath, contentHash, _) in IndexedFiles())
-            plugins[key] = new IndexedPlugin((filePath, contentHash), null);
-        foreach (var (key, stamp) in DuckDbSql.Rows(
-            Connection, $"SELECT plugin, origin, derived_from FROM {PluginDerivationRelation}",
-            reader => (Key: reader.GetPluginAddress(), Stamp: reader.GetString(2))))
+            plugins[key] = new IndexedPlugin((filePath, contentHash), null, null);
+        foreach (var (key, stamp, namesLanguage) in DuckDbSql.Rows(
+            Connection, $"SELECT plugin, origin, derived_from, names_language FROM {PluginDerivationRelation}",
+            reader => (Key: reader.GetPluginAddress(), Stamp: reader.GetString(2), Language: reader.GetString(3))))
         {
             if (!Enum.TryParse<DerivedFrom>(stamp, out var derivedFrom))
             {
                 _logger.LogWarning("The record index holds an unknown derivation {Derivation} for {Plugin} ({Origin}); treating its rows as derived from none", stamp, key.Name, key.Origin);
                 continue;
             }
-            plugins[key] = (plugins.TryGetValue(key, out var indexed) ? indexed : new IndexedPlugin(null, null)) with { DerivedFrom = derivedFrom };
+            plugins[key] = (plugins.TryGetValue(key, out var indexed) ? indexed : new IndexedPlugin(null, null, null)) with { DerivedFrom = derivedFrom, NamesLanguage = namesLanguage };
         }
         List<PluginAddress> trees = [.. comparing.Where(key => plugins.GetValueOrDefault(key)?.DerivedFrom == DerivedFrom.SourceTree)];
         return new IndexedStamps(plugins, trees.Count > 0 ? HeldDocumentStamps(trees) : []);
@@ -490,8 +493,9 @@ internal sealed class Store : IDisposable
     /// <summary>The language the translated texts show in, from the next read on.</summary>
     public void SetStringsLanguage(Language language)
     {
-        if (DuckDbSql.Execute(Connection, $"UPDATE {TableDdlBuilder.StringsLanguageRelation} SET language = $1 WHERE language <> $1", language.ToString()) > 0)
-            BumpSequence();
+        if (DuckDbSql.Execute(Connection, $"UPDATE {TableDdlBuilder.StringsLanguageRelation} SET language = $1 WHERE language <> $1", language.ToString()) == 0) return;
+        _stringsLanguage = language;
+        BumpSequence();
     }
 
     /// <summary>What <paramref name="key"/>'s rows took their strings from, or null when none.</summary>
@@ -513,8 +517,8 @@ internal sealed class Store : IDisposable
     {
         DeletePluginFacts(plugin, origin);
         DuckDbSql.Execute(Connection, $"""
-            INSERT INTO {PluginDerivationRelation} (plugin, origin, derived_from) VALUES ($1, $2, $3)
-            """, plugin, origin, derivedFrom.ToString());
+            INSERT INTO {PluginDerivationRelation} (plugin, origin, derived_from, names_language) VALUES ($1, $2, $3, $4)
+            """, plugin, origin, derivedFrom.ToString(), _stringsLanguage.ToString());
         if (filePath == null) return;
         if (ClaimOf(filePath) is { } claim) StampFileClaim(plugin, origin, filePath, claim, stringsRead);
     }
@@ -1308,7 +1312,7 @@ internal sealed class Store : IDisposable
 
 }
 
-internal sealed record IndexedPlugin((string FilePath, string ContentHash)? File, DerivedFrom? DerivedFrom);
+internal sealed record IndexedPlugin((string FilePath, string ContentHash)? File, DerivedFrom? DerivedFrom, string? NamesLanguage);
 
 /// <summary>What the store held of each plugin's rows when it was asked: the file they were built from, and the truth.</summary>
 internal sealed class IndexedStamps(
@@ -1320,4 +1324,6 @@ internal sealed class IndexedStamps(
     public (string FilePath, string ContentHash)? FileOf(PluginAddress key) => plugins.TryGetValue(key, out var indexed) ? indexed.File : null;
 
     public DerivedFrom? DerivationOf(PluginAddress key) => plugins.TryGetValue(key, out var indexed) ? indexed.DerivedFrom : null;
+
+    public string? NamesLanguageOf(PluginAddress key) => plugins.TryGetValue(key, out var indexed) ? indexed.NamesLanguage : null;
 }

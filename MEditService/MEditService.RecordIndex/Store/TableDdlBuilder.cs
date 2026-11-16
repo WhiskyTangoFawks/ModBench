@@ -229,7 +229,9 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
                 content_hash    VARCHAR NOT NULL,
                 parse_diagnosis VARCHAR,
                 masters         VARCHAR[] NOT NULL DEFAULT [],
-                form_key_plugin VARCHAR {FilenameIdentity}
+                form_key_plugin VARCHAR {FilenameIdentity},
+                full_name       VARCHAR,
+                base            VARCHAR
             )
             """);
 
@@ -289,6 +291,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
                 plugin       VARCHAR {FilenameIdentity} NOT NULL,
                 origin       VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 derived_from VARCHAR NOT NULL,
+                names_language VARCHAR NOT NULL,
                 PRIMARY KEY (plugin, origin)
             )
             """);

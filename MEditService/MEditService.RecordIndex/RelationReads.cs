@@ -201,7 +201,7 @@ internal sealed class RelationReads(
         var filter = query.Scope == RecordQueryScope.Navigator ? store.Filter : null;
         var scope = query is { Scope: RecordQueryScope.Search, Plugin: not null } ? RecordScope.EveryRegisteredPlugin : RecordScope.Active;
         var (where, paramValues) = BuildWhere(
-            query.Plugin?.Name, query.Search, filter?.Listing, query.Origin, query.RecordTypes, query.SearchFormKey);
+            query.Plugin?.Name, query.Search, filter?.Listing, query.Origin, query.RecordTypes, query.SearchFormKey, query.FormKeys);
         var unheld = query.GroupOnly ? NavigatorSql.Unheld("r") : "";
         var dataParams = new List<string>(paramValues);
         var holdings = HoldingsOf(query.Plugin?.Name, query.Origin, dataParams);
@@ -217,10 +217,9 @@ internal sealed class RelationReads(
                 SELECT 1 FROM above_failure a
                 WHERE a.form_key = r.form_key AND a.plugin = r.plugin AND a.origin = r.origin
             ) AS has_parse_failure,
-            {FullNameOf("r")} AS full_name
+            r.full_name AS full_name
             """;
 
-        var total = context.Scalar<long>($"WITH {NavigatorSql.HeldFor(scope, holdings)} SELECT COUNT(*) FROM {scope.Records} r{unheld}{where}", [.. dataParams]);
 
         // xEdit's navigator lists a group in FormID order, and its record picker lists by EditorID.
         // (plugin, origin) makes either order total, so LIMIT/OFFSET pages stably.
@@ -232,7 +231,10 @@ internal sealed class RelationReads(
             LIMIT {query.Limit} OFFSET {query.Offset}
             """, ReadSummary, [.. dataParams]);
 
-        return new PagedResult<RecordSummary>(items, (int)total);
+        var total = query.FormKeys is null
+            ? (int)context.Scalar<long>($"WITH {NavigatorSql.HeldFor(scope, holdings)} SELECT COUNT(*) FROM {scope.Records} r{unheld}{where}", [.. dataParams])
+            : items.Count;
+        return new PagedResult<RecordSummary>(items, total);
     }
 
     // A listing of one plugin walks that plugin's holdings alone, bound after the listing's own
@@ -627,6 +629,15 @@ internal sealed class RelationReads(
         return new Dictionary<PluginAddress, string>(rows, PluginAddress.Comparer);
     }
 
+    /// <summary>The strings language each plugin's names were derived in.</summary>
+    public IReadOnlyDictionary<PluginAddress, string> GetNamesLanguages()
+    {
+        using var context = OpenRead();
+        var rows = context.Rows($"SELECT plugin, origin, names_language FROM {TableDdlBuilder.PluginDerivationTable}",
+            reader => KeyValuePair.Create(reader.GetPluginAddress(), reader.GetString(2)));
+        return new Dictionary<PluginAddress, string>(rows, PluginAddress.Comparer);
+    }
+
     /// <summary>What each registered plugin's rows were derived from. A plugin with no rows is absent.</summary>
     public IReadOnlyDictionary<PluginAddress, DerivedFrom> GetDerivations()
     {
@@ -673,7 +684,7 @@ internal sealed class RelationReads(
         return context.Rows($"""
             WITH RECURSIVE {NavigatorSql.AboveAFailure(RecordScope.Active, "WHERE h.plugin = $1 AND h.origin = $2")}
             SELECT cl.cell_form_key, c.editor_id, cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y,
-                   {FullNameOf("c")}, c.parse_diagnosis,
+                   c.full_name, c.parse_diagnosis,
                    c.parse_diagnosis IS NOT NULL OR EXISTS (
                        SELECT 1 FROM above_failure a
                        WHERE a.form_key = cl.cell_form_key AND a.plugin = cl.plugin AND a.origin = cl.origin
@@ -716,15 +727,11 @@ internal sealed class RelationReads(
     public CellChildRecords GetCellChildRecords(PluginAddress plugin, string cellFormKey)
     {
         using var context = OpenRead();
-
-        // ADR-0005: the placed ref's base form comes out of the document rather than a
-        // `base` column; json_extract_string unquotes the stored FormLink text, and a placed ref
-        // with no base reads NULL.
         var children = context.Rows($"""
             WITH {NavigatorSql.HeldFor(RecordScope.Active, "WHERE h.plugin = $2 AND h.origin = $3")},
             children AS (
-                SELECT p.placement_group, r.record_type, p.form_key, r.editor_id, json_extract_string(r.body, '$.Base') AS base,
-                       r.parse_diagnosis, {FullNameOf("r")} AS full_name, r.working_tree_state, r.form_key_plugin
+                SELECT p.placement_group, r.record_type, p.form_key, r.editor_id, r.base,
+                       r.parse_diagnosis, r.full_name, r.working_tree_state, r.form_key_plugin
                 FROM ({NavigatorSql.CellChildren}) p
                 JOIN records r ON r.form_key = p.form_key AND r.plugin = p.plugin AND r.origin = p.origin
                 WHERE p.parent_cell = $1 AND r.plugin = $2 AND r.origin = $3{store.Filter.AlsoKeeps("p")}
@@ -800,14 +807,11 @@ internal sealed class RelationReads(
     private static int? NullableInt(DbDataReader reader, int ordinal) =>
         reader.IsDBNull(ordinal) ? null : reader.GetInt32(ordinal);
 
-    private static string FullNameOf(string alias) =>
-        $"NULLIF({TranslatedStringSql.Resolved($"{alias}.body", "$.Name")}, '')";
-
     // The callers hold ADR-0012, not this builder: every caller passes a plugin's name and origin
     // both or neither.
     private static (string where, List<string> paramValues) BuildWhere(
         string? plugin, string? search, string? filterCondition = null, string? origin = null,
-        IReadOnlyList<string>? recordTypes = null, string? searchFormKey = null)
+        IReadOnlyList<string>? recordTypes = null, string? searchFormKey = null, IReadOnlyList<string>? formKeys = null)
     {
         var conditions = new List<string>();
         var values = new List<string>();
@@ -817,6 +821,13 @@ internal sealed class RelationReads(
             var placeholders = recordTypes.Select((_, i) => $"${values.Count + i + 1}");
             conditions.Add($"record_type IN ({string.Join(", ", placeholders)})");
             values.AddRange(recordTypes.Select(NormalizeRecordType));
+        }
+
+        if (formKeys != null)
+        {
+            var placeholders = formKeys.Select((_, i) => $"${values.Count + i + 1}");
+            conditions.Add($"form_key IN ({string.Join(", ", placeholders)})");
+            values.AddRange(formKeys);
         }
 
         if (plugin != null)
@@ -885,7 +896,7 @@ internal sealed class RelationReads(
         return context.Rows($"""
             SELECT cc.child, cc.slot, cc.slot_index
             FROM holdings cc
-            LEFT JOIN records r ON r.form_key = cc.child AND r.plugin = cc.plugin AND r.origin = cc.origin
+            LEFT JOIN {TableDdlBuilder.MirrorSchema}.records r ON r.form_key = cc.child AND r.plugin = $2 AND r.origin = $3
             WHERE cc.parent = $1 AND cc.plugin = $2 AND cc.origin = $3{inFilter}
             ORDER BY {order}
             """, reader => new HoldingRow(parentFormKey, reader.GetString(0), reader.GetString(1), reader.GetInt32(2)),

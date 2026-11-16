@@ -7,6 +7,7 @@ using MEditService.Codec.Serialization;
 using MEditService.RecordIndex.Queries;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Strings;
 
 namespace MEditService.RecordIndex.Store;
 
@@ -22,9 +23,11 @@ internal sealed class PluginIngest
     private readonly ContainerDocuments _containers;
     private readonly RecordTypes _types;
     private readonly GameRelease _release;
+    private readonly Func<Language> _stringsLanguage;
 
-    public PluginIngest(DuckDBConnection connection, ILogger logger, GameRelease release, Func<string, string> contentStamp)
+    public PluginIngest(DuckDBConnection connection, ILogger logger, GameRelease release, Func<string, string> contentStamp, Func<Language> stringsLanguage)
     {
+        _stringsLanguage = stringsLanguage;
         _contentStamp = contentStamp;
         _connection = connection;
         _logger = logger;
@@ -40,7 +43,7 @@ internal sealed class PluginIngest
     internal sealed record PreparedRecord(
         string RecordType, string FormKey, string Body, string ContentHash, List<FormReferenceRow> Refs,
         List<string> Masters, List<HoldingRow> Holdings, List<CellLocationRow> CellLocations,
-        string? EditorId, string? ParseDiagnosis);
+        string? EditorId, string? ParseDiagnosis, DerivedColumns.Columns Derived);
 
     // ADR-0005, from the one stream that carries the documents. A DuckDB appender holds its rows
     // outside DuckDB's memory limit until it is disposed, so each batch disposes its own, inside the
@@ -279,7 +282,8 @@ internal sealed class PluginIngest
         return new PreparedRecord(
             document.RecordType, document.FormKey, ContainerDocumentEdits.WithChildSlotsCut(document.Text, document.RecordType, _release),
             _contentStamp(document.Text), refs,
-            RecordMasters.Of(pluginFileName, document.FormKey, refs.Select(r => r.TargetFormKey)), holdings, cellLocations, editorId, document.ParseDiagnosis);
+            RecordMasters.Of(pluginFileName, document.FormKey, refs.Select(r => r.TargetFormKey)), holdings, cellLocations, editorId, document.ParseDiagnosis,
+            refused ? default : DerivedColumns.Of(root, _stringsLanguage()));
     }
 
     private static void AppendPrepared(
@@ -297,6 +301,8 @@ internal sealed class PluginIngest
         row.AppendValue(prepared.ParseDiagnosis);
         row.AppendValue(prepared.Masters);
         row.AppendValue(RecordMasters.PluginNamedBy(prepared.FormKey));
+        row.AppendValue(prepared.Derived.FullName);
+        row.AppendValue(prepared.Derived.Base);
         row.EndRow();
     }
 

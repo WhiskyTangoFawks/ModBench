@@ -939,11 +939,12 @@ internal sealed class Indexer : IDisposable
         var respelled = resolved.Select(r => r.Key).Where(key => held.IsSpelledOtherwise(key)).ToList();
         var derivations = store.Reads.GetDerivations();
         var stringsReads = store.Reads.GetStringsReads();
+        var namesLanguages = store.Reads.GetNamesLanguages();
         // A plugin's text is read through its strings files, so other ones are a new read of it (ADR-0003).
         var restrung = resolved
             .Where(r => open.TryGetValue(r.Key, out var h)
                 && (!h.Strings.Equals(r.Strings)
-                    || !StringsStillRead(snapshot, r, derivations.TryGetValue(r.Key, out var d) ? d : null, stringsReads.GetValueOrDefault(r.Key))))
+                    || !StringsStillRead(snapshot, r, derivations.TryGetValue(r.Key, out var d) ? d : null, stringsReads.GetValueOrDefault(r.Key), namesLanguages.GetValueOrDefault(r.Key))))
             .ToList();
         // A plugin in an error state whose bytes have not changed is not arriving: retrying it would
         // pay the failed parse again on every snapshot that merely mentions it.
@@ -1132,8 +1133,9 @@ internal sealed class Indexer : IDisposable
         // (Store.ValidateAgainstDisk), so a second hash of every binary here would pay that whole cost
         // twice for no new answer.
         var truth = scope.Projector.TruthOf(plugin.Registered);
-        if (truth != DerivedFrom.SourceTree) return indexed.DerivationOf(plugin.Key) is var derivedFrom && derivedFrom == truth
-            && StringsStillRead(scope.LoadOrder, plugin.Registered, derivedFrom, scope.Store.IndexedStringsRead(plugin.Key));
+        var derivedFrom = indexed.DerivationOf(plugin.Key);
+        if (!StringsStillRead(scope.LoadOrder, plugin.Registered, derivedFrom, scope.Store.IndexedStringsRead(plugin.Key), indexed.NamesLanguageOf(plugin.Key))) return false;
+        if (truth != DerivedFrom.SourceTree) return derivedFrom == truth;
 
         try
         {
@@ -1307,9 +1309,16 @@ internal sealed class Indexer : IDisposable
 
     private static ModPath ModPathOf(string path) => new(ModKey.FromFileName(Path.GetFileName(path)), path);
 
-    // A binary's rows hold its texts as its strings gave them. A tree's hold their own, and a plugin not localized has none.
-    private bool StringsStillRead(LoadOrderSnapshot loadOrder, RegisteredPlugin plugin, DerivedFrom? derivedFrom, string? read) =>
-        derivedFrom is null or DerivedFrom.SourceTree || read is null || read == StringsReadBy(loadOrder, plugin);
+    // A binary's rows hold its texts as its strings gave them. A tree's hold every language, and the language its names were
+    // derived in is a fact of the plugin.
+    private bool StringsStillRead(
+        LoadOrderSnapshot loadOrder, RegisteredPlugin plugin, DerivedFrom? derivedFrom, string? read, string? namesLanguage) =>
+        derivedFrom switch
+        {
+            null => true,
+            DerivedFrom.SourceTree => namesLanguage == loadOrder.StringsLanguage.ToString(),
+            _ => read is null || read == StringsReadBy(loadOrder, plugin),
+        };
 
     // The language a read shows its texts in, and each place it takes its strings from, by the stamp Mod Management
     // handed with it, or why a place could not be read (ADR-0003).
