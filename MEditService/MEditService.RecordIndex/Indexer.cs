@@ -1309,8 +1309,8 @@ internal sealed class Indexer : IDisposable
 
     private static ModPath ModPathOf(string path) => new(ModKey.FromFileName(Path.GetFileName(path)), path);
 
-    // A binary's rows hold its texts as its strings gave them, and a plugin not localized has none. A tree's hold its texts in every
-    // language, and the strings language its names were derived in is a fact of the plugin.
+    // A binary's rows hold its texts as its strings gave them. A tree's hold every language, and the language its names were
+    // derived in is a fact of the plugin.
     private bool StringsStillRead(
         LoadOrderSnapshot loadOrder, RegisteredPlugin plugin, DerivedFrom? derivedFrom, string? read, string? namesLanguage) =>
         derivedFrom switch
