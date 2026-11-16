@@ -15,8 +15,7 @@ import { loadOrderTextOf } from './codecs/loadOrderText';
 import { parseDownloadedFileMeta, setHiddenInText, setInstalledInText, setNexusFileInfoInText, setUninstalledInText } from './codecs/downloads';
 import { readSelectedProfile, setSelectedProfileInText } from './codecs/modOrganizerIni';
 import { spliceDownloadedFileMeta, trashDownloadedFileMeta } from './downloadedFileMeta';
-import { ensureDir, exists, get, isRepository, putIfChanged, putStreamedIf, readOrAbsent, remove, rename, undoAll, type Undo, withLock, write } from '../files';
-import { git } from '../git';
+import { ensureDir, exists, get, putIfChanged, putStreamedIf, readOrAbsent, remove, rename, undoAll, type Undo, withLock, write } from '../files';
 import { digestOf } from '../fileContents/contentDigest';
 import { entryNotFound, type DownloadedFileMark, InstanceAdapter, PluginOrderChange } from '../instanceAdapter';
 import { downloadedFileMetadataPath, downloadedFilePath, everyModlistFile, pluginOrderFiles, settingsFile, sortingRuleFilePaths } from './layout';
@@ -28,7 +27,7 @@ import { toldAfter } from '../../repositoriesLib/writesTold';
 
 type Mo2Changes = Pick<InstanceAdapter,
   | 'changePluginOrder' | 'changePluginOrderOverProvided' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'markDownloadedFile' | 'writeNexusFileInfo'
-  | 'putDownloadedFile' | 'copyDownloadedFile' | 'trashDownloadedFile' | 'selectProfile' | 'changeUserlist' | 'changeMasterlist' | 'uncommittedMasterlist'>;
+  | 'putDownloadedFile' | 'copyDownloadedFile' | 'trashDownloadedFile' | 'selectProfile' | 'changeUserlist' | 'changeMasterlist'>;
 
 async function heldDownloadedFile(context: Mo2Context, name: string): Promise<{ downloadsDir: string; file: string } | undefined> {
   const downloadsDir = await currentDownloadsDir(context);
@@ -216,7 +215,7 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
       return putIfChanged(sortingRuleFilePaths(instanceRoot).userlist, (before) => addLoadAfter(before, additions), { ifMissing: '' });
     },
 
-    changeMasterlist({ masterlist, prelude }) {
+    changeMasterlist({ masterlist, prelude }, trash) {
       const paths = sortingRuleFilePaths(instanceRoot);
       return withLock(paths.masterlist, () => withLock(paths.prelude, async () => {
         const undos: Undo[] = [];
@@ -225,8 +224,9 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
           for (const [path, text] of [[paths.masterlist, masterlist], [paths.prelude, prelude]] as const) {
             const before = (await exists(path)) ? await get(path) : undefined;
             if (before === text) continue;
-            await write(path, text);
             undos.unshift(() => (before === undefined ? remove(path) : write(path, before)));
+            if (before !== undefined) await trash(path);
+            await write(path, text);
             written.push(basename(path));
           }
         } catch (err) {
@@ -234,14 +234,6 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
         }
         return { written };
       }));
-    },
-
-    async uncommittedMasterlist() {
-      if (!(await isRepository(instanceRoot))) return [];
-      const paths = sortingRuleFilePaths(instanceRoot);
-      const files = [basename(paths.masterlist), basename(paths.prelude)];
-      const status = await git(instanceRoot, 'status', '--porcelain', '-z', '--no-renames', '--', ...files);
-      return status.split('\0').filter((entry) => entry !== '').map((entry) => entry.slice(3));
     },
 
     selectProfile(profile) {
