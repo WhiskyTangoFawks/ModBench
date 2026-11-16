@@ -337,8 +337,7 @@ export interface ModFolders {
 }
 
 /** Decides the changes to mod order from the order, and the mod folders, as they stand when the
- *  changes land; `folders` is undefined when there is no folder for mods at all. It runs again
- *  when another program wrote the order meanwhile. */
+ *  changes land; `folders` is undefined when there is no folder for mods at all. May run again. */
 export type DecideModOrder = (order: readonly ModlistEntry[], folders: ModFolders | undefined) => readonly ModOrderChange[];
 
 /** Decides the changes to plugin order from the order as it stands when the changes land. */
@@ -849,7 +848,7 @@ export interface InstanceAdapter extends DataFileReads {
   // Changes.
   /** Every change lands in one write, its folders with it. Naming an entry not there, or adding a
    *  separator that is, rejects all of it. Adding at the winning end an entry there, or dropping
-   *  one not there, changes nothing. `decide` may run more than once. */
+   *  one not there, changes nothing. */
   changeModOrder(profile: string, decide: DecideModOrder): Promise<ModOrderWritten>;
   /** Every change lands in one write. A change naming a plugin that is not there rejects, and
    *  nothing is written. Adding a plugin that is there changes nothing. */
