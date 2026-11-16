@@ -1508,13 +1508,13 @@ describe('the agent server, reading a record through mEdit', () => {
     const OTHER_A = { name: 'A.esp', path: '/m2/A.esp', origin: 'Other', line: 1, enabled: true, winning: true };
     const OTHER_ENABLED = { ...ENABLED, mods: [...ENABLED.mods, { kind: 'mod' as const, name: 'Other', enabled: true }], plugins: [OVERRIDDEN_A, OTHER_A] };
 
-    const asked = async (instance: typeof VALUE, owners: Awaited<ReturnType<InMemoryMEditClient['getRecordOwners']>>, document: unknown = { kind: 'OwnFile', location: '/s/x.json' }) => {
+    const asked = async (instance: typeof VALUE, owners: Awaited<ReturnType<InMemoryMEditClient['getRecordOwners']>>, document: Awaited<ReturnType<InMemoryMEditClient['getCopyDocument']>> = { kind: 'OwnFile', location: '/s/x.json' }) => {
       const mEdit = new InMemoryMEditClient();
       mEdit.setQueryAnswer('resolveNames', NPC);
       mEdit.setQueryAnswer('getPlugins', [{ ...pluginListed('A.esp'), inLoadOrder: false }]);
       mEdit.setQueryAnswer('getComparison', null);
       mEdit.setQueryAnswer('getRecordOwners', owners);
-      mEdit.setQueryAnswer('getCopyDocument', document as never);
+      mEdit.setQueryAnswer('getCopyDocument', document);
       const { client } = await clientOf(new FakeInstance(instance), mEdit);
       return call(client, 'read_record', { name: 'SharedNpc' });
     };
