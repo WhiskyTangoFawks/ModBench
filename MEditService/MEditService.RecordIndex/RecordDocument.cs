@@ -33,7 +33,7 @@ internal sealed record OverrideStack(string FormKey, string RecordType, IReadOnl
 
 /// <summary><c>GroupOnly</c> lists a group in FormID order, otherwise by EditorID.
 /// <c>SearchFormKey</c> is a FormID search's FormKey, matched beside the EditorID text.
-/// <c>Plugin</c> and <c>Origin</c> filter apart (ADR-0012). <c>FormKeys</c> lists only those records.</summary>
+/// <c>Plugin</c> and <c>Origin</c> filter apart (ADR-0012).</summary>
 internal sealed record RecordQuery(
     RecordQueryScope Scope,
     IReadOnlyList<string>? RecordTypes = null,
