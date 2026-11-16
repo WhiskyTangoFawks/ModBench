@@ -15,6 +15,8 @@ plugin: @../../spec/architecture/target-architecture.medit_data.plugin
 sourceadapter: @../../spec/architecture/target-architecture.medit_repositories.sourceadapter
 sourceadapter.label: Source adapter
 source: @../../spec/architecture/target-architecture.medit_data.source
+indexer: @../../spec/architecture/target-architecture.medit_readmodel.recordindex.indexer
+indexer.label: Indexer
 instance: @../../spec/architecture/target-architecture.modbench_data.instance
 instance.label: "Instance\nplugins.txt · mods · Overwrite"
 instanceadapter: @../../spec/architecture/target-architecture.modbench_repositories.instanceadapter
@@ -37,6 +39,8 @@ builtmod: "in a built mod" {
   commands -> sourceadapter: "the empty plugin's source" {class: edit}
   sourceadapter -> source: documents {class: edit}
 }
+commands -> indexer: "read back the plugin" {class: edit}
+indexer -> commands: "why not: the load order does not hold it" {class: edit}
 commands -> http: applied or refusal {class: edit}
 http -> client: applied or refusal {class: edit}
 client -> plugins: applied or refusal {class: edit}

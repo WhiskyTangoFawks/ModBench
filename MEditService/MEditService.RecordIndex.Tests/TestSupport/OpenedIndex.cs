@@ -34,14 +34,6 @@ internal sealed class OpenedIndex(ServiceProvider container, LoadOrderHolder hol
     /// <summary>A change signalled as Signal change signals one whose paths name <paramref name="changes"/>' files.</summary>
     internal void SignalChange(IReadOnlyCollection<PluginChange> changes) => container.GetRequiredService<ISourceAdapter>().SignalChange(changes);
 
-    /// <summary>Returns once the record index has read <paramref name="own"/>, as a writer waits for its own; a refusal
-    /// here is a broken fixture.</summary>
-    internal void AwaitWrites(OwnWrites own)
-    {
-        if (Queries.AwaitSourceWrites(own, CancellationToken.None).GetAwaiter().GetResult() is { } unread)
-            throw new InvalidOperationException($"Expected the Index to read the writes: {unread.Refusal}: {unread.Message}");
-    }
-
     /// <summary>Returns once a write in flight has finished: setting the filter again passes the write
     /// gate every write passes, and a validation announces inside its hold. With no store open, no
     /// write is in flight.</summary>

@@ -1,5 +1,6 @@
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.RecordIndex.Queries;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -37,18 +38,18 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
 
     public void Dispose() => _data.Dispose();
 
-    private CreatePluginInModHandler Handler => TestEditService.PluginCreateInModHandler(_holder);
+    private readonly HandedWrites _index = HandedWrites.Create();
+
+    private CreatePluginInModHandler Handler => TestEditService.PluginCreateInModHandler(_holder, _index.Queries);
 
     [Fact]
-    public async Task CreatePluginIn_AModTheLoadOrderHoldsAPluginOf_WritesItInThatModsFolderAndMarksTheWrite()
+    public async Task CreatePluginIn_AModTheLoadOrderHoldsAPluginOf_WritesItInThatModsFolder_AndHandsItToTheRecordIndexToReadBack()
     {
-        var written = _holder.SourceWrites;
-
         var result = await Handler.CreatePluginIn(Mod.ToUpperInvariant(), "Second.esp", []);
 
         Assert.Equal(new PluginAddress("Second.esp", Mod), result.Created());
         Assert.True(File.Exists(Path.Combine(_folder, "Second.esp")));
-        Assert.True(_holder.SourceWrites > written);
+        Assert.Equal([HandedPlugin.ReadBack(result.Created())], Assert.Single(_index.Hands).Require());
     }
 
     [Fact]
@@ -76,14 +77,12 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task CreatePluginIn_ThatRefuses_MarksNothing()
+    public async Task CreatePluginIn_ThatRefuses_HandsTheRecordIndexNothing()
     {
-        var written = _holder.SourceWrites;
-
         var result = (await Handler.CreatePluginIn(Mod, "First.esp", [])).Refused();
 
         Assert.Equal(PluginCreateRefusal.FileExists, result.Refusal);
-        Assert.Equal(written, _holder.SourceWrites);
+        Assert.Empty(_index.Hands);
     }
 
     [Theory]
@@ -91,13 +90,11 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
     [InlineData(PluginOrigin.DataDirectory)]
     public async Task CreatePluginIn_AnOriginThatIsNoPlaceOfTheLoadOrder_RefusesNamingItAndWritesNothing(string origin)
     {
-        var written = _holder.SourceWrites;
-
         var result = (await Handler.CreatePluginIn(origin, "Second.esp", [])).Refused();
 
         Assert.Equal(PluginCreateRefusal.OriginNotAMod, result.Refusal);
         Assert.Contains(origin, result.Message, StringComparison.Ordinal);
         Assert.False(File.Exists(Path.Combine(_data.DataFolder, "Second.esp")));
-        Assert.Equal(written, _holder.SourceWrites);
+        Assert.Empty(_index.Hands);
     }
 }

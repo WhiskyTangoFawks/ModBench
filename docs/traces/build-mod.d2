@@ -29,6 +29,8 @@ modfolderadapter: @../../spec/architecture/target-architecture.medit_repositorie
 modfolderadapter.label: Mod folder adapter
 modfolder: @../../spec/architecture/target-architecture.medit_data.modfolder
 modfolder.label: "Mod folders\nassets · archives"
+indexer: @../../spec/architecture/target-architecture.medit_readmodel.recordindex.indexer
+indexer.label: Indexer
 instanceloader: @../../spec/architecture/target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 views: "every view" {class: driving}
@@ -57,6 +59,8 @@ builtin: "each built-in step, a decompile, compile, copy or pack, in build-file 
   sourceadapter -> engine: "each plugin source folder it moved aside, in this build or one before" {class: compile}
   engine -> modfolderadapter: "the files a copy writes · the archives a pack makes" {class: compile}
   modfolderadapter -> modfolder: "the folder" {class: compile}
+  engine -> indexer: "read back each plugin compiled or decompiled, or whose file or strings a step made" {class: compile}
+  indexer -> engine: "held, or why not" {class: compile}
   engine -> http: "the files it made · what it moved aside or packed" {class: compile}
   http -> client: "the files it made · what it moved aside or packed" {class: compile}
   client -> sourcecommands: "the files it made · what it moved aside or packed" {class: compile}

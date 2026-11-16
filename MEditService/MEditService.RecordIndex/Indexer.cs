@@ -129,8 +129,6 @@ internal sealed class Indexer : IDisposable
 
     private bool _reconcileAsked;
     private bool _checkAsked;
-    // The source writes made before the last change signalled: the check it asks for vouches only for those.
-    private long _writesSignalled;
     private readonly List<string> _handed = [];
     private readonly HashSet<PluginAddress> _named = new(PluginAddress.Comparer);
     private readonly Dictionary<PluginAddress, AskedFiles> _namedFiles = new(PluginAddress.Comparer);
@@ -145,26 +143,8 @@ internal sealed class Indexer : IDisposable
     // of this class's other locks is taken inside it.
     private readonly Lock _turns = new();
 
-    // The source writes made before the change signalled that the last whole check of the disk answered, guarded by _lock
-    // and announced by _writesRead, which a write waits on.
-    private long _writesChecked;
-
-    // The source writes made before each plugin's last re-read began, guarded by _lock and announced by _writesRead.
-    private readonly Dictionary<PluginAddress, long> _writesReReadOf = new(PluginAddress.Comparer);
-
-    // The source writes made before each plugin's last failed re-read began, and why it failed, guarded by _lock.
-    private readonly Dictionary<PluginAddress, (long Writes, string Failure)> _reReadFailedOf = new(PluginAddress.Comparer);
-
-    // The source writes made before the change signalled that the last failed check of the disk answered, and why it
-    // failed, guarded by _lock.
-    private (long Writes, string Failure) _checkFailed = (0, "");
-
-    // Replaced under _lock, then completed, each time a re-read or a check of the disk lands or fails.
-    private TaskCompletionSource _writesRead = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
     // Guarded by _lock.
     private bool _openedUnchecked;
-    private static readonly TimeSpan SourceWriteReadLimit = TimeSpan.FromSeconds(60);
 
     // LoadOrder: the snapshot the scope last reconciled, which holds the masters a plugin is read against.
     private sealed record OpenScope(HeldPlugins Held, Store.Store Store, Projector Projector, FailedReads Failed, LoadOrderSnapshot LoadOrder);
@@ -344,10 +324,8 @@ internal sealed class Indexer : IDisposable
     }
 
     // ADR-0001: the files a change names are read again, a plugin it names with no file is read whole, and a change that
-    // names none checks every plugin. A change signalled vouches for no write.
-    private void OnChange(IReadOnlyCollection<PluginChange>? changes) => OnWritten(changes, write: 0);
-
-    private void OnWritten(IReadOnlyCollection<PluginChange>? changes, long write)
+    // names none checks every plugin.
+    private void OnChange(IReadOnlyCollection<PluginChange>? changes)
     {
         if (changes is null)
         {
@@ -356,13 +334,13 @@ internal sealed class Indexer : IDisposable
         }
         lock (_turns)
         {
-            foreach (var (plugin, files) in changes) Name(plugin, files, [], write);
+            foreach (var (plugin, files) in changes) Name(plugin, files, []);
             WakeWorker();
         }
     }
 
     // Guarded by _turns.
-    private void Name(PluginAddress plugin, IReadOnlyList<string>? files, IReadOnlyList<WrittenDocument> documents, long write)
+    private void Name(PluginAddress plugin, IReadOnlyList<string>? files, IReadOnlyList<WrittenDocument> documents)
     {
         if (files is null)
         {
@@ -370,7 +348,7 @@ internal sealed class Indexer : IDisposable
             return;
         }
         if (!_namedFiles.TryGetValue(plugin, out var asked)) _namedFiles[plugin] = asked = new AskedFiles();
-        asked.Add(files, documents, write);
+        asked.Add(files, documents);
     }
 
     public Task<string?> Hold(IReadOnlyList<HandedPlugin>? written, CancellationToken cancel)
@@ -386,15 +364,15 @@ internal sealed class Indexer : IDisposable
             }
             else
             {
-                _namedHands.Add(new Hand(held, [.. written.Select(plugin => plugin.Plugin)]));
-                foreach (var (plugin, files, documents) in written) Name(plugin, files, documents, write: 0);
+                _namedHands.Add(new Hand(held, written));
+                foreach (var (plugin, files, documents, _) in written) Name(plugin, files, documents);
                 WakeWorker();
             }
         }
         return held.Task.WaitAsync(cancel);
     }
 
-    private sealed record Hand(TaskCompletionSource<string?> Held, IReadOnlyList<PluginAddress> Plugins);
+    private sealed record Hand(TaskCompletionSource<string?> Held, IReadOnlyList<HandedPlugin> Plugins);
 
     private const string Closed = "mEdit's record index closed before it read the plugin source mEdit wrote.";
 
@@ -413,15 +391,11 @@ internal sealed class Indexer : IDisposable
 
         public List<string> Files { get; } = [];
 
-        // The last write whose files these are, which a read of them vouches for.
-        public long Write { get; private set; }
-
         public IReadOnlyList<WrittenDocument> Handed => [.. _documents.Where(document => !_fromFile.Contains(document.Key)).Select(document => document.Value)];
 
-        public void Add(IReadOnlyList<string> files, IReadOnlyList<WrittenDocument> documents, long write)
+        public void Add(IReadOnlyList<string> files, IReadOnlyList<WrittenDocument> documents)
         {
             Files.AddRange(files);
-            Write = Math.Max(Write, write);
             foreach (var document in documents) _documents[Path.GetFullPath(document.Path)] = document;
             _fromFile.UnionWith(files.Select(Path.GetFullPath).Where(path => !documents.Any(document => PathComparer.Equals(Path.GetFullPath(document.Path), path))));
         }
@@ -432,7 +406,6 @@ internal sealed class Indexer : IDisposable
         lock (_turns)
         {
             _checkAsked = true;
-            _writesSignalled = _holder.SourceWrites;
             WakeWorker();
         }
     }
@@ -500,12 +473,12 @@ internal sealed class Indexer : IDisposable
             }
             if (_reconcileAsked || _checkAsked)
             {
-                long? writes = _checkAsked ? _writesSignalled : null;
-                List<TaskCompletionSource<string?>> checking = _checkAsked ? [.. _checkHands] : [];
-                if (_checkAsked) _checkHands.Clear();
-                _validatingTurn = _checkAsked;
+                var check = _checkAsked;
+                List<TaskCompletionSource<string?>> checking = check ? [.. _checkHands] : [];
+                if (check) _checkHands.Clear();
+                _validatingTurn = check;
                 (_reconcileAsked, _checkAsked) = (false, false);
-                return () => ReconcileHeld(writes, checking);
+                return () => ReconcileHeld(check, checking);
             }
             List<string> paths = [.. _handed];
             HashSet<PluginAddress> named = new(_named, PluginAddress.Comparer);
@@ -516,15 +489,12 @@ internal sealed class Indexer : IDisposable
             _namedFiles.Clear();
             _namedHands.Clear();
             _validatingTurn = true;
-            var written = _holder.SourceWrites;
-            return () => ValidateAndPublish(paths, named, files, written, hands);
+            return () => ValidateAndPublish(paths, named, files, hands);
         }
     }
 
-    // A plugin read whole reads every write on disk when its turn began; one read alone, only the writes whose files it read.
     private void ValidateAndPublish(
-        List<string> paths, HashSet<PluginAddress> named, Dictionary<PluginAddress, AskedFiles> files, long writes,
-        List<Hand> hands)
+        List<string> paths, HashSet<PluginAddress> named, Dictionary<PluginAddress, AskedFiles> files, List<Hand> hands)
     {
         var moved = false;
         string? unread = Stopped;
@@ -532,12 +502,8 @@ internal sealed class Indexer : IDisposable
         _exclusive.Enter();
         try
         {
-            List<(PluginAddress Plugin, long Writes)> reRead = [];
-            var failure = ValidationFailure(() => reRead = ValidateNamed(paths, named, files, writes), CancellationToken.None, out var busy);
-            if (failure is null) VouchForWritesTo(reRead);
-            else FailReReadOf([.. named.Select(plugin => (plugin, writes)), .. files.Select(asked => (asked.Key, asked.Value.Write))], failure);
+            var failure = ValidationFailure(() => read.UnionWith(ValidateNamed(paths, named, files)), CancellationToken.None, out var busy);
             moved = Swap(standing => standing with { ReReadFailure = failure });
-            read.UnionWith(reRead.Select(plugin => plugin.Plugin));
             unread = NotReadBecause(failure ?? (busy ? Busy : null));
         }
         finally
@@ -554,50 +520,31 @@ internal sealed class Indexer : IDisposable
 
     private static string? NotReadBecause(string? reason) => reason is null ? null : NotReadYet + reason;
 
-    private string? WhyNotHeld(IReadOnlyList<PluginAddress> plugins, HashSet<PluginAddress> read)
+    private string? WhyNotHeld(IReadOnlyList<HandedPlugin> plugins, HashSet<PluginAddress> read)
     {
         OpenScope? scope;
         lock (_lock) scope = _scope;
         if (scope is null) return Stopped;
-        List<string> unheld = [.. plugins.Distinct(PluginAddress.Comparer).Select(plugin => WhyNotHeld(scope, plugin, read)).OfType<string>()];
+        List<string> unheld = [.. plugins.DistinctBy(handed => handed.Plugin, PluginAddress.Comparer).Select(handed => WhyNotHeld(scope, handed, read)).OfType<string>()];
         return unheld.Count == 0 ? null : NotReadYet + string.Join(" ", unheld);
     }
 
-    private static string? WhyNotHeld(OpenScope scope, PluginAddress plugin, HashSet<PluginAddress> read)
+    private string? WhyNotHeld(OpenScope scope, HandedPlugin handed, HashSet<PluginAddress> read)
     {
-        if (scope.LoadOrder.Plugin(plugin) is null) return $"the load order does not hold {plugin.Name} ({plugin.Origin}).";
+        var plugin = handed.Plugin;
+        if (scope.LoadOrder.Plugin(plugin) is not { } registered) return $"the load order does not hold {plugin.Name} ({plugin.Origin}).";
+        if (handed.OfSource && scope.Projector.TruthOf(registered) != DerivedFrom.SourceTree)
+        {
+            return _source.WhySourceDoesNotRead(registered) is { } unreadable
+                ? $"{plugin.Name} ({plugin.Origin}): {unreadable.Reason}"
+                : $"the load order names no plugin source of {plugin.Name} ({plugin.Origin}), so its rows are read from its binary.";
+        }
         if (scope.Held.FailureOf(plugin) is { } failed) return $"{plugin.Name} ({plugin.Origin}): {failed.Reason}";
         if (scope.Failed.WhyTreeStopped(plugin) is { } stopped) return $"{plugin.Name} ({plugin.Origin}): {stopped.Reason}";
         return read.Contains(plugin) ? null : $"{plugin.Name} ({plugin.Origin}) was not read.";
     }
 
-    private void VouchForWritesTo(List<(PluginAddress Plugin, long Writes)> reRead)
-    {
-        lock (_lock)
-        {
-            foreach (var (key, writes) in reRead) _writesReReadOf[key] = Math.Max(_writesReReadOf.GetValueOrDefault(key), writes);
-        }
-        AnnounceWritesRead();
-    }
-
-    private void FailReReadOf(List<(PluginAddress Plugin, long Writes)> named, string failure)
-    {
-        lock (_lock)
-        {
-            foreach (var (key, writes) in named) _reReadFailedOf[key] = (writes, failure);
-        }
-        AnnounceWritesRead();
-    }
-
-    private void AnnounceWritesRead()
-    {
-        TaskCompletionSource announced;
-        lock (_lock) (announced, _writesRead) = (_writesRead, new(TaskCreationOptions.RunContinuationsAsynchronously));
-        announced.SetResult();
-    }
-
-    private List<(PluginAddress Plugin, long Writes)> ValidateNamed(
-        List<string> paths, HashSet<PluginAddress> named, Dictionary<PluginAddress, AskedFiles> files, long writes)
+    private List<PluginAddress> ValidateNamed(List<string> paths, HashSet<PluginAddress> named, Dictionary<PluginAddress, AskedFiles> files)
     {
         var scope = RequireScope();
         named.UnionWith(paths
@@ -605,20 +552,16 @@ internal sealed class Indexer : IDisposable
             .OfType<PathAnswer.Touches>()
             .SelectMany(touches => touches.Plugins)
             .Select(plugin => plugin.Key));
-        List<(PluginAddress Plugin, long Writes)> readAlone = [.. scope.Held.Plugins
+        List<PluginAddress> readAlone = [.. scope.Held.Plugins
             .Where(plugin => !named.Contains(plugin.Key) && files.TryGetValue(plugin.Key, out var asked) && ReadFiles(scope, plugin, asked))
-            .Select(plugin => (plugin.Key, files[plugin.Key].Write))];
-        named.UnionWith(files.Keys.Where(key => !readAlone.Exists(read => PluginAddress.Comparer.Equals(read.Plugin, key))));
+            .Select(plugin => plugin.Key)];
+        named.UnionWith(files.Keys.Where(key => !readAlone.Contains(key, PluginAddress.Comparer)));
         var holding = scope.Held.Plugins.Where(plugin => named.Contains(plugin.Key)).ToList();
         if (holding.Count > 0 || scope.Store.SweepOwed) Validate(scope, holding, CancellationToken.None);
         // A plugin that failed to open is not held: the reconcile opens it again.
         if (scope.LoadOrder.Plugins.Any(plugin => named.Contains(plugin.Key) && scope.Held.Find(plugin.Key) is null)) AskReconcile();
-        return [.. holding.Select(plugin => (plugin.Key, writes)), .. readAlone, .. NotInTheLoadOrder(scope, named).Select(plugin => (plugin, writes))];
+        return [.. holding.Select(plugin => plugin.Key), .. readAlone];
     }
-
-    // The record index holds nothing of a plugin the load order lacks, so a write to it has nothing to be read.
-    private static IEnumerable<PluginAddress> NotInTheLoadOrder(OpenScope scope, HashSet<PluginAddress> named) =>
-        named.Where(plugin => scope.LoadOrder.Plugin(plugin) is null);
 
     // A read that stands on a failure is cleared only by reading the plugin whole, as is one the named read fails on.
     private bool ReadFiles(OpenScope scope, PluginMetadata plugin, AskedFiles asked)
@@ -637,7 +580,7 @@ internal sealed class Indexer : IDisposable
 
     // Disposal is read with the exclusive right held, which Dispose takes after setting it, so no
     // reconcile opens a store after Dispose.
-    private void ReconcileHeld(long? writesSignalled, List<TaskCompletionSource<string?>> checking)
+    private void ReconcileHeld(bool check, List<TaskCompletionSource<string?>> checking)
     {
         string? unread = Stopped;
         try
@@ -645,22 +588,21 @@ internal sealed class Indexer : IDisposable
             unread = Reconcile(() =>
             {
                 lock (_turns) return _disposed ? null : _holder.Held;
-            }, writesSignalled);
+            }, check);
         }
         finally { Answer(checking, unread); }
     }
 
     // ADR-0013's one verb, then, for a check of the disk, every plugin validated. The arrival is read once the
     // exclusive right is held, so a refill reconciles the load order held then. Null reconciles nothing.
-    private string? Reconcile(Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, long? writesSignalled)
+    private string? Reconcile(Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, bool check)
     {
-        long writes = writesSignalled ?? 0;
         bool arrived;
         string? refusal;
         bool busy;
         try
         {
-            arrived = ReconcileOrRefuse(arrival, writesSignalled is not null, ref writes, out refusal, out busy);
+            arrived = ReconcileOrRefuse(arrival, check, out refusal, out busy);
         }
         catch (OperationCanceledException ex)
         {
@@ -668,82 +610,16 @@ internal sealed class Indexer : IDisposable
             _logger.LogInformation(ex, "Load order reconcile was superseded before it completed");
             return Stopped;
         }
-        if (arrived)
-        {
-            lock (_lock)
-            {
-                if (refusal is null) _writesChecked = Math.Max(_writesChecked, writes);
-                else if (writesSignalled is { } signalled && signalled > _checkFailed.Writes) _checkFailed = (signalled, refusal);
-            }
-            AnnounceWritesRead();
-        }
         if (!arrived) return Stopped;
         return NotReadBecause(refusal ?? (busy ? Busy : null));
     }
 
-    /// <summary>Read-your-writes: returns once each of <paramref name="own"/> has been read, by a check of the disk or a
-    /// re-read of the plugins it named. Throws <see cref="IndexNotReadyException"/> otherwise.</summary>
-    public async Task AwaitTheReadOf(OwnWrites own, CancellationToken cancel)
-    {
-        var writes = own.Snapshot();
-        var deadline = _timeProvider.GetUtcNow() + SourceWriteReadLimit;
-        while (true)
-        {
-            Task announced;
-            bool checkUnfinished;
-            lock (_lock)
-            {
-                var unread = writes.Where(write => !Read(write)).ToList();
-                checkUnfinished = unread.Exists(write => write.Plugins is null);
-                if (unread.Count == 0) return;
-                if (FailedReadOf(unread) is { } failed) throw new IndexNotReadyException(NotReadYet + failed);
-                announced = _writesRead.Task;
-            }
-            var remaining = deadline - _timeProvider.GetUtcNow();
-            if (remaining <= TimeSpan.Zero) throw NotRead(checkUnfinished);
-            await announced.WaitAsync(remaining, _timeProvider, cancel).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
-            cancel.ThrowIfCancellationRequested();
-        }
-    }
-
     private const string NotReadYet = "mEdit's record index has not read the plugin source mEdit wrote: ";
-
-    private IndexNotReadyException NotRead(bool checkUnfinished)
-    {
-        var reason = Status.Message is { } message ? $" ({message})" : "";
-        var unfinished = checkUnfinished ? "its check of the disk" : "its re-read of the plugins written";
-        return new IndexNotReadyException($"{NotReadYet}{unfinished} did not finish{reason}.");
-    }
-
-    // Guarded by _lock.
-    private bool Read(SourceWrite write) =>
-        write.Count <= _writesChecked
-        || (write.Plugins is { } plugins && plugins.All(plugin => _writesReReadOf.GetValueOrDefault(plugin) >= write.Count));
-
-    // The check or re-read asked after an unread write that failed: nothing reads that write until another change.
-    // Guarded by _lock.
-    private string? FailedReadOf(List<SourceWrite> unread)
-    {
-        foreach (var write in unread)
-        {
-            if (write.Plugins is null)
-            {
-                if (_checkFailed.Writes >= write.Count) return $"its check of the disk failed: {_checkFailed.Failure}";
-                continue;
-            }
-            foreach (var plugin in write.Plugins)
-            {
-                if (_reReadFailedOf.TryGetValue(plugin, out var failed) && failed.Writes >= write.Count)
-                    return $"its re-read of the plugins written failed: {failed.Failure}";
-            }
-        }
-        return null;
-    }
 
     // A superseded reconcile throws and publishes nothing. The closing swap and its publish share one
     // hold of _lock, so no reader sees a version before the status answering it.
     private bool ReconcileOrRefuse(
-        Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, bool check, ref long writes, out string? refusal, out bool busy)
+        Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, bool check, out string? refusal, out bool busy)
     {
         busy = false;
         _exclusive.Enter();
@@ -777,15 +653,9 @@ internal sealed class Indexer : IDisposable
             }
             progressed |= ReconcileProgressively(scope, snapshot, token);
             lock (_lock) check |= _openedUnchecked;
-            if (!check)
-            {
-                writes = 0;
-                return true;
-            }
+            if (!check) return true;
             failure = ValidateHeld(token, out busy);
             if (!busy) lock (_lock) _openedUnchecked = false;
-            // A validation the busy gate stopped has not read the disk whole.
-            if (busy) writes = 0;
             return true;
         }
         catch (Exception ex) when (CancelledBy(ex, token))
@@ -1626,7 +1496,6 @@ internal sealed class Indexer : IDisposable
         _holder.Arrived += OnArrived;
         _unsaved.Arrived += ValidateTreesHolding;
         _source.ChangeSignalled += OnChange;
-        _holder.Written += OnWritten;
     }
 
     private void OnArrived(LoadOrderSnapshot snapshot, long version) => AskReconcile();
@@ -1655,7 +1524,6 @@ internal sealed class Indexer : IDisposable
         _holder.Arrived -= OnArrived;
         _unsaved.Arrived -= ValidateTreesHolding;
         _source.ChangeSignalled -= OnChange;
-        _holder.Written -= OnWritten;
 
         lock (_turns)
         {

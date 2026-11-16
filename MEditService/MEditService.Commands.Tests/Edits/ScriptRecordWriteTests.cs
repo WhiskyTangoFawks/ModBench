@@ -2,6 +2,7 @@ using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 
@@ -10,11 +11,21 @@ namespace MEditService.Commands.Tests.Edits;
 public sealed class ScriptRecordWriteTests
 {
     private static RecordEditResult Copy(CopyFixture mod, CopyMode mode, PluginAddress destination) =>
-        mod.ScriptCopyHandler.Copy(new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString()), mode, destination, replace: false)
+        mod.ScriptCopyHandler.Copy(new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString()), mode, destination, replace: false, CancellationToken.None)
             .GetAwaiter().GetResult().AsResult();
 
+    private static RecordEditResult Create(SourceEditFixture mod) =>
+        mod.ScriptCreateHandler.Create(mod.Plugin, "npc_", container: null, position: null, CancellationToken.None).GetAwaiter().GetResult().AsResult();
+
     private static RecordEditResult Delete(SourceEditFixture mod, string formKey) =>
-        mod.ScriptDeleteHandler.Delete(new RecordAt(mod.Plugin, formKey)).GetAwaiter().GetResult();
+        mod.ScriptDeleteHandler.Delete(new RecordAt(mod.Plugin, formKey), CancellationToken.None).GetAwaiter().GetResult();
+
+    private static void AssertHanded(TestInstance mod, PluginAddress plugin, string file)
+    {
+        var handed = Assert.Single(Assert.Single(mod.Index.Hands).Require());
+        var document = Assert.Single(handed.Documents, document => document.Path == file);
+        Assert.Equal((plugin, File.ReadAllText(file), FileStamp.Of(file)), (handed.Plugin, document.Text, document.Stamp));
+    }
 
     [Fact]
     public void ACopyAsOverride_IsWrittenToTheDestinationsTree()
@@ -38,6 +49,17 @@ public sealed class ScriptRecordWriteTests
         Assert.True(outcome.Applied, outcome.Message);
         Assert.NotEqual(mod.SourceNpc.ToString(), outcome.NewFormKey.Require());
         Assert.NotNull(mod.Document(mod.DestinationPlugin, outcome.NewFormKey.Require()));
+    }
+
+    [Fact]
+    public void ACopy_HandsTheRecordIndexTheDocumentItWrote()
+    {
+        using var mod = CopyFixture.Create();
+
+        var outcome = Copy(mod, CopyMode.New, mod.DestinationPlugin);
+
+        AssertHanded(mod, mod.DestinationPlugin, Path.Combine(
+            mod.DestinationModFolder, SourceModTree.DocumentFile(mod.DestinationModFolder, mod.DestinationPlugin, outcome.NewFormKey.Require()).Require()));
     }
 
     [Fact]
@@ -69,10 +91,20 @@ public sealed class ScriptRecordWriteTests
     {
         using var mod = SourceEditFixture.CompiledPlugin();
 
-        var outcome = mod.ScriptCreateHandler.Create(mod.Plugin, "npc_").AsResult();
+        var outcome = Create(mod);
 
         Assert.True(outcome.Applied, outcome.Message);
         Assert.NotNull(mod.Document(outcome.NewFormKey.Require()));
+    }
+
+    [Fact]
+    public void ACreate_HandsTheRecordIndexTheDocumentItWrote()
+    {
+        using var mod = SourceEditFixture.CompiledPlugin();
+
+        var outcome = Create(mod);
+
+        AssertHanded(mod, mod.Plugin, Path.Combine(mod.ModFolder, mod.DocumentFile(outcome.NewFormKey.Require()).Require()));
     }
 
     [Fact]
@@ -83,7 +115,7 @@ public sealed class ScriptRecordWriteTests
         mod.Unsaved.Apply([new DocumentChange(header, File.ReadAllText(header) + " ")]);
         var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
 
-        var outcome = mod.ScriptCreateHandler.Create(mod.Plugin, "npc_").AsResult();
+        var outcome = Create(mod);
 
         Assert.Equal(RecordEditRefusal.UnsavedChanges, outcome.Refusal);
         Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
@@ -101,29 +133,15 @@ public sealed class ScriptRecordWriteTests
     }
 
     [Fact]
-    public void ADelete_MarksItsPluginWritten()
-    {
-        using var mod = SourceEditFixture.CompiledPlugin();
-        var own = mod.Holder.BeginOwnWrites();
-
-        Delete(mod, mod.Npc.ToString());
-
-        Assert.Equal([mod.Plugin], own.Snapshot().SelectMany(write => write.Plugins ?? []));
-    }
-
-    [Fact]
-    public void ADelete_NamesTheFileItWrote()
+    public void ADelete_HandsTheRecordIndexItsPlugin_NamingTheFileItDeleted()
     {
         using var mod = SourceEditFixture.CompiledPlugin();
         var file = Path.Combine(mod.ModFolder, mod.DocumentFile(mod.Npc.ToString()).Require());
-        IReadOnlyCollection<PluginChange>? named = null;
-        mod.Holder.Written += (written, _) => named = written;
 
         Delete(mod, mod.Npc.ToString());
 
-        var written = Assert.Single(named.Require());
-        Assert.Equal(mod.Plugin, written.Plugin);
-        Assert.Equal([file], written.Files);
+        var handed = Assert.Single(Assert.Single(mod.Index.Hands).Require());
+        Assert.Equal((mod.Plugin, file, 0), (handed.Plugin, Assert.Single(handed.Files.Require()), handed.Documents.Count));
     }
 
     [Fact]

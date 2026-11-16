@@ -12,6 +12,9 @@ public interface IModFolderRepository
     /// seekable stream. A throwing write, or the bytes already there, leave the folder as it was.</summary>
     void WriteFile(string folder, string path, Action<Stream> write);
 
+    /// <summary>The full path of the file at <paramref name="path"/> under <paramref name="folder"/>.</summary>
+    string FullPathOf(string folder, string path);
+
     bool DataFolderExists(string dataFolder);
 
     /// <summary>The name the mod manager gives a file or folder that a build leaves out.</summary>

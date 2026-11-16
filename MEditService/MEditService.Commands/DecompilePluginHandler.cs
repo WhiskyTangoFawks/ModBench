@@ -13,27 +13,26 @@ public sealed class DecompilePluginHandler
 {
     private readonly LoadOrderHolder _loadOrder;
     private readonly ISourceAdapter _source;
+    private readonly HeldWrites _held;
     private readonly PluginDecompiler _decompiler;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
     internal DecompilePluginHandler(
-        LoadOrderHolder loadOrder, IPluginAdapter adapter, ISourceAdapter source, SchemaReflector schemaReflector, ILogger<DecompilePluginHandler> logger) =>
-        (_loadOrder, _source, _decompiler) = (loadOrder, source, new PluginDecompiler(logger, adapter, source, schemaReflector));
+        LoadOrderHolder loadOrder, IPluginAdapter adapter, ISourceAdapter source, SchemaReflector schemaReflector, HeldWrites held,
+        ILogger<DecompilePluginHandler> logger) =>
+        (_loadOrder, _source, _held, _decompiler) = (loadOrder, source, held, new PluginDecompiler(logger, adapter, source, schemaReflector));
 
-    /// <summary>Refuses with <see cref="DecompileRefusal.NoLoadOrder"/>, writing nothing, when none is held; git
-    /// missing refuses the whole selection once. A plugin whose source has working-tree changes is refused
-    /// unless <paramref name="force"/>.</summary>
+    /// <summary>Refuses, writing nothing, when no load order is held or git cannot run. A plugin whose source has
+    /// working-tree changes is refused unless <paramref name="force"/>.</summary>
     public async Task<Answer<DecompileResult, SelectionRefusal<DecompileRefusal>>> DecompileAsync(
         IReadOnlyList<PluginAddress> plugins, bool force, CancellationToken cancel = default)
     {
         if (_loadOrder.Held is not { Snapshot: var loadOrder })
             return new SelectionRefusal<DecompileRefusal>(DecompileRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
 
-        var decompiled = await ItemWrite.OverAsync(_source, plugins, PluginAddress.Comparer, DecompileRefusal.GitUnavailable, plugin =>
-        {
-            cancel.ThrowIfCancellationRequested();
-            return DecompileOneAsync(loadOrder, plugin, force, cancel);
-        });
+        var decompiled = await ItemWrite.OverAsync(
+            _source, plugins, PluginAddress.Comparer, DecompileRefusal.GitUnavailable, plugin => DecompileOneAsync(loadOrder, plugin, force));
+        await _held.ReadBackSource(decompiled.Landed.Select(landed => landed.Item), cancel);
         return decompiled.ToAnswer(
             landed => landed.Item,
             refused => new DecompileRefused(refused.Item, refused.Refusal, refused.Message),
@@ -41,7 +40,7 @@ public sealed class DecompilePluginHandler
     }
 
     private async Task<ItemAnswer<DecompileRefusal, NoOutcome>> DecompileOneAsync(
-        LoadOrderSnapshot loadOrder, PluginAddress key, bool force, CancellationToken cancel)
+        LoadOrderSnapshot loadOrder, PluginAddress key, bool force)
     {
         if (loadOrder.Plugin(key) is not { } plugin)
         {
@@ -68,22 +67,16 @@ public sealed class DecompilePluginHandler
                 loss.Unreadable ? DecompileRefusal.WorkingTreeStatusUnreadable : DecompileRefusal.WorkingTreeChanges, loss.Message);
         }
 
-        var decompiled = await _decompiler.DecompileAsync(loadOrder, plugin, mod.Folder, onParsed: () => { }, cancel);
+        var decompiled = await _decompiler.DecompileAsync(loadOrder, plugin, mod.Folder, onParsed: () => { }, CancellationToken.None);
         if (decompiled.Source is not { } source) return ItemAnswer<DecompileRefusal, NoOutcome>.Refused(decompiled.Refusal, decompiled.Message);
 
         return repository.ReplaceSourceFrom(key, source.Files, source.BinarySha256) switch
         {
-            null => Written(key),
+            null => ItemAnswer<DecompileRefusal, NoOutcome>.Landed(default),
             SourceFailure.GitUnavailable gitMissing => ItemAnswer<DecompileRefusal, NoOutcome>.Refused(DecompileRefusal.GitUnavailable, gitMissing.Reason),
             SourceFailure.TwinFolders twins => ItemAnswer<DecompileRefusal, NoOutcome>.Refused(DecompileRefusal.AmbiguousSource, twins.Reason),
             var failure => ItemAnswer<DecompileRefusal, NoOutcome>.Refused(
                 DecompileRefusal.WriteFailed, $"Could not write {plugin.Name}'s source: {failure.Reason}"),
         };
-    }
-
-    private ItemAnswer<DecompileRefusal, NoOutcome> Written(PluginAddress plugin)
-    {
-        _loadOrder.SourceWritten([new PluginChange(plugin, null)]);
-        return ItemAnswer<DecompileRefusal, NoOutcome>.Landed(default);
     }
 }

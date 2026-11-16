@@ -1,4 +1,5 @@
 using MEditService.LoadOrder;
+using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -71,6 +72,20 @@ public sealed class PluginSourceUnreadableTests : IDisposable
         Assert.Contains(PluginName.ToUpperInvariant(), unreadable?.Reason, StringComparison.Ordinal);
         Assert.Contains(PluginName.ToLowerInvariant(), unreadable?.Reason, StringComparison.Ordinal);
         Assert.False(unreadable?.DecompileRepairs);
+    }
+
+    [PosixFact]
+    public async Task AReadBackOfAPluginSourceWithTwinFolders_IsAnsweredNamingBothFolders()
+    {
+        var sources = Path.GetDirectoryName(SourceRoot).Require();
+        Directory.Move(SourceRoot, Path.Combine(sources, PluginName.ToUpperInvariant()));
+        Directory.CreateDirectory(Path.Combine(sources, PluginName.ToLowerInvariant()));
+        using var index = Reconciled();
+
+        var unread = await index.Queries.Hold([HandedPlugin.ReadBackSource(Plugin)], CancellationToken.None);
+
+        Assert.Contains(PluginName.ToUpperInvariant(), unread, StringComparison.Ordinal);
+        Assert.Contains(PluginName.ToLowerInvariant(), unread, StringComparison.Ordinal);
     }
 
     [Fact]

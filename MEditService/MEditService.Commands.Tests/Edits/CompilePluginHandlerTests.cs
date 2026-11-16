@@ -1,5 +1,6 @@
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.RecordIndex.Queries;
 using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -22,24 +23,39 @@ public sealed class CompilePluginHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task ACompile_MarksItsPluginWritten_ForTheReadsAfterIt()
+    public async Task ACompile_HandsTheRecordIndexItsPluginToReadBack()
     {
-        var own = _mod.Holder.BeginOwnWrites();
-
         (await _mod.CompileHandler.CompileAsync([_mod.Plugin])).Value();
 
-        Assert.Equal([_mod.Plugin], own.Snapshot().SelectMany(write => write.Plugins ?? []));
+        Assert.Equal([HandedPlugin.ReadBack(_mod.Plugin)], Assert.Single(_mod.Index.Hands).Require());
     }
 
     [Fact]
-    public async Task ARefusedCompile_MarksNothingWritten()
+    public async Task ACompile_IsAnsweredOnlyOnceTheRecordIndexHasReadItBack()
     {
-        var before = _mod.Holder.SourceWrites;
+        var (handed, held) = (new TaskCompletionSource(), new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously));
+        _mod.Index.Answer = () =>
+        {
+            handed.SetResult();
+            return held.Task;
+        };
+
+        var compiling = _mod.CompileHandler.CompileAsync([_mod.Plugin]);
+
+        await handed.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.NotSame(compiling, await Task.WhenAny(compiling, Task.Delay(TimeSpan.FromMilliseconds(200))));
+        held.SetResult(null);
+        Assert.Single((await compiling).Value().Applied);
+    }
+
+    [Fact]
+    public async Task ARefusedCompile_HandsTheRecordIndexNothing()
+    {
         Directory.Delete(PluginSourceRoot.In(_mod.ModFolder, CompileFixture.PluginName), recursive: true);
 
         (await _mod.CompileHandler.CompileAsync([_mod.Plugin])).Value();
 
-        Assert.Equal(before, _mod.Holder.SourceWrites);
+        Assert.Empty(_mod.Index.Hands);
     }
 
     [Fact]
