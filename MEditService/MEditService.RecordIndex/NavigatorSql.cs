@@ -32,21 +32,20 @@ internal static class NavigatorSql
     /// <summary>Two CTEs for a <c>WITH RECURSIVE</c>: <see cref="HeldFor"/>'s <c>held</c>, and
     /// <c>above_failure</c>, every record holding an unreadable one at any depth.</summary>
     internal static string AboveAFailure(RecordScope scope, string where) =>
-        Above(scope, where, "above_failure", "TRUE", "f.parse_diagnosis IS NOT NULL", $"{TableDdlBuilder.MirrorSchema}.records");
+        Above(scope, where, "above_failure", "TRUE", "f.parse_diagnosis IS NOT NULL");
 
     /// <summary>As <see cref="AboveAFailure"/>, with <c>above_change</c>: every record holding one with
     /// a working-tree change <paramref name="keep"/> keeps, once per state, in <c>fact</c>.</summary>
     internal static string AboveAChange(RecordScope scope, string where, string keep) =>
         Above(scope, where, "above_change", "f.working_tree_state",
-            $"f.working_tree_state <> '{WorkingTreeState.None.Stored()}'{keep}", scope.Records);
+            $"f.working_tree_state <> '{WorkingTreeState.None.Stored()}'{keep}");
 
-    // `f` is the record the walk climbs from, so a seed's condition and fact name it. A seed read off the table beside the records view
-    // skips the view's joins.
-    private static string Above(RecordScope scope, string where, string name, string seedFact, string seedCondition, string seedRecords) => $"""
+    // `f` is the record the walk climbs from, so a seed's condition and fact name it.
+    private static string Above(RecordScope scope, string where, string name, string seedFact, string seedCondition) => $"""
         {HeldFor(scope, where)},
         {name}(plugin, origin, form_key, fact) AS (
             SELECT held.plugin, held.origin, held.parent, {seedFact} FROM held
-            JOIN {seedRecords} f ON f.form_key = held.child AND f.plugin = held.plugin AND f.origin = held.origin
+            JOIN {scope.Records} f ON f.form_key = held.child AND f.plugin = held.plugin AND f.origin = held.origin
             WHERE {seedCondition}
             UNION
             SELECT held.plugin, held.origin, held.parent, a.fact FROM held
