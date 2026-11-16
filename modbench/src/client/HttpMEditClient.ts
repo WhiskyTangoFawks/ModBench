@@ -37,8 +37,8 @@ import { failureReason, isReadFailed, localFailure, type ReadFailed } from '../w
 import type { ArchivedCopy, FlaggedPluginFile, FlaggedPluginHashes } from '../wire/messages';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 
-// 30s is an ordinary HTTP-client default. A slow call and a hung one look the same to the tree,
-// so nothing tries to tell them apart.
+// 30s is an ordinary HTTP-client default for every read: a slow one and a hung one look the same to the tree.
+// A write has no limit, since the writer finishes its own write (ADR-0029).
 const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
 
 interface PostSpec<T> {
@@ -116,6 +116,7 @@ type RecordsAsked = components['schemas']['RecordsAsked'];
 interface ReadOptions<A> {
   absent?: { status: number; answers: A };
   held?: boolean;
+  unlimited?: boolean;
   token?: ReadCancellation;
 }
 
@@ -247,7 +248,7 @@ class HttpMEditClient implements MEditClient {
   onUnsavedHandOver(listener: (failure: ReadFailed | undefined) => void): () => void { return this.handOver.onSettled(listener); }
 
   private putUnsavedDocuments(documents: readonly UnsavedDocument[]): Promise<ReadFailed | undefined> {
-    return this.read('putUnsavedDocuments', (api, signal) => api.PUT('/unsaved-documents', { body: { documents: [...documents] }, signal }), () => undefined, { held: false });
+    return this.read('putUnsavedDocuments', (api, signal) => api.PUT('/unsaved-documents', { body: { documents: [...documents] }, signal }), () => undefined, { held: false, unlimited: true });
   }
 
   // ── notifications ────────────────────────────────────────────────────────
@@ -708,7 +709,7 @@ class HttpMEditClient implements MEditClient {
     what: string,
     call: (api: ApiClient, signal: AbortSignal) => Promise<{ data?: D; error?: unknown; response: Response }>,
     answer: (data: D | undefined) => A | ReadFailed | Promise<A | ReadFailed>,
-    { absent, held = true }: Omit<ReadOptions<A>, 'token'>,
+    { absent, held = true, unlimited = false }: Omit<ReadOptions<A>, 'token'>,
     controller: AbortController,
   ): Promise<A | ReadFailed> {
     if (held) {
@@ -737,6 +738,7 @@ class HttpMEditClient implements MEditClient {
       this.log.error(`[HttpMEditClient] ${what} threw: ${errorMessage(e)}`);
       return UNREACHABLE;
     });
+    if (unlimited) return settled;
     // Races rather than trusting the fetch to honor the signal: a hung backend and an
     // uncooperative test double both still settle. The signal is aborted anyway, so a fetch that
     // honors it cancels for real.

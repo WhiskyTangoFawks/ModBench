@@ -115,11 +115,11 @@ internal static class IndexEndpoints
         return Results.NoContent();
     }
 
-    private static IResult GetFilter(IQueries svc, ILoggerFactory loggerFactory)
+    private static IResult GetFilter(IQueries svc, ILoggerFactory loggerFactory, CancellationToken cancel)
     {
         var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
         logger.LogInformation("Received GetFilter");
-        return EndpointMapping.Answered(svc.GetFilter(), filter => filter is null ? Results.NoContent() : Results.Ok(filter));
+        return EndpointMapping.Answered(svc.GetFilter(cancel), filter => filter is null ? Results.NoContent() : Results.Ok(filter));
     }
 
     private static IResult GetFilterCleared(IQueries svc) =>

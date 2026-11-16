@@ -1042,13 +1042,6 @@ describe('HttpMEditClient — read timeout, checked through getRecordTypes, stan
     expect(sawSignal?.aborted).toBe(true);
   });
 
-  it('limits the names a document holds, a read that once had no limit', async () => {
-    const fetch = vi.fn(() => new Promise<Response>(() => {}));
-    const client = makeClient(fetch, { timeoutMs: 20 });
-
-    await expect(client.getPluginSourceNames('{}', 'a.json')).resolves.toEqual({ failed: 'timed-out' });
-  });
-
   it('does not time out a read that answers before the deadline', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, [])));
     const client = makeClient(fetch, { timeoutMs: 20 });
@@ -1295,6 +1288,28 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]);
 
     await vi.waitFor(() => expect(settled).toHaveBeenCalledWith({ failed: 'refused', refusal: 'Not plugin source.' }));
+  });
+
+  it('leaves a hand-over to finish however long it takes, as a write is never timed', async () => {
+    let answerHandOver!: () => void;
+    const answered = new Promise<void>((resolve) => { answerHandOver = resolve; });
+    const handedOver = vi.fn();
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/unsaved-documents', () => { handedOver(); return answered.then(() => new Response(null, { status: 204 })); }],
+    ]);
+    const client = makeClient(fetch, { timeoutMs: 20 });
+    const settled = vi.fn();
+    client.onUnsavedHandOver(settled);
+    await client.start();
+
+    client.handUnsavedDocuments([{ path: '/m/plugin-source/MyPatch.esp/Npc.json', text: '{}' }]);
+    await vi.waitFor(() => expect(handedOver).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(settled).not.toHaveBeenCalled();
+
+    answerHandOver();
+    await vi.waitFor(() => expect(settled).toHaveBeenCalledWith(undefined));
   });
 
   it('answers a thrown request as an unknown refusal in the words for it, never fetch\'s text', async () => {

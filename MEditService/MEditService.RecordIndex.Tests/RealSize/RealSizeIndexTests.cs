@@ -303,12 +303,9 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     }
 
     [RealSizeFact]
-    public void ASlowReadItsCallerLeft_StopsWithinAQuarterOfAGesture()
+    public void ASlowReadItsCallerLeft_StopsWithinThreeKeystrokes()
     {
         const string slow = "SELECT max(hash(a.form_key || b.form_key)) AS v FROM records a, (SELECT form_key FROM records LIMIT 20000) b";
-        var callerStays = Stopwatch.StartNew();
-        using (Index.Queries.SelectRows(slow).Value()) { }
-        var uncancelledAfterTheCallerLeft = callerStays.Elapsed - OneGesture;
         using var left = new CancellationTokenSource();
         var read = Task.Run(() => Index.Queries.SelectRows(slow, left.Token));
         Thread.Sleep(OneGesture);
@@ -317,7 +314,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         left.Cancel();
         Assert.ThrowsAny<OperationCanceledException>(() => read.GetAwaiter().GetResult());
 
-        Console.WriteLine($"BUDGET The record index working on after the extension cancelled a slow read: {abandoned.Elapsed.TotalSeconds:F2} s; before reads stopped, {uncancelledAfterTheCallerLeft.TotalSeconds:F2} s");
+        Console.WriteLine($"BUDGET The record index working on after the extension cancelled a slow read: {abandoned.Elapsed.TotalSeconds:F2} s");
         Assert.True(abandoned.Elapsed <= OneKeystroke * 3, $"The read went on for {abandoned.Elapsed.TotalSeconds:F2} s after its caller left.");
     }
 

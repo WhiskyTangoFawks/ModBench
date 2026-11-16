@@ -42,7 +42,7 @@ public sealed class AbandonedReadTests : IDisposable
 
         await left.CancelAsync();
 
-        Assert.Throws<OperationCanceledException>(() => { while (taken.MoveNext()) { } });
+        Assert.Throws<OperationCanceledException>(() => taken.MoveNext());
     }
 
     [Fact]
@@ -52,6 +52,6 @@ public sealed class AbandonedReadTests : IDisposable
         using var left = new CancellationTokenSource();
         left.Cancel();
 
-        Assert.Throws<OperationCanceledException>(() => index.Queries.GetPlugins(cancel: left.Token));
+        Assert.Throws<OperationCanceledException>(() => index.Queries.GetPlugins(null, left.Token));
     }
 }

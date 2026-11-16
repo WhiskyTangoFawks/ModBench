@@ -138,7 +138,7 @@ internal static class RecordEndpoints
         .ProducesProblem(400)
         .ProducesProblem(503);
 
-        app.MapGet("/plugin-source/record", (string? path, IQueries svc, CancellationToken cancel) =>
+        app.MapGet("/plugin-source/record", (string? path, IQueries svc) =>
         {
             if (path is null || !Path.IsPathFullyQualified(path))
                 return EndpointMapping.BadRequest("Name the file by its absolute path.");

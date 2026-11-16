@@ -13,7 +13,7 @@ internal static class ReferencePlacement
 {
     public static PlacedReferences Of(
         RelationReads reads, string target, Func<PluginAddress, ISourceRepositoryReads?> treeOf,
-        Func<PluginAddress, RecordIdentity, Answer<string, SourceFailure>> renderedFileName, Func<string, string> textAt)
+        Func<PluginAddress, RecordIdentity, Answer<string, SourceFailure>> renderedFileName, Func<string, string> textAt, CancellationToken cancel)
     {
         var referrers = reads.GetReferencedByInActiveOrCompiledPlugins(target)
             .Select(row => (At: new RecordAt(new PluginAddress(row.Plugin, row.Origin), row.FormKey), Identity: new RecordIdentity(row.FormKey, row.RecordType, row.EditorId)))
@@ -23,6 +23,7 @@ internal static class ReferencePlacement
         var placing = new Placing(target);
         foreach (var (at, identity) in referrers)
         {
+            cancel.ThrowIfCancellationRequested();
             if (trees[at.Plugin] is { } tree) placing.InFile(at, tree.DocumentOf(at.Plugin, identity), textAt);
         }
 

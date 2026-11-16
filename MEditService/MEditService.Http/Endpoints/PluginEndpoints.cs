@@ -14,7 +14,7 @@ internal static class PluginEndpoints
     public static IEndpointRouteBuilder MapPluginEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/plugins", (IQueries svc, CancellationToken cancel) =>
-            EndpointMapping.Ok(svc.GetPlugins(cancel: cancel)))
+            EndpointMapping.Ok(svc.GetPlugins(null, cancel)))
             .WithName("GetPlugins")
             .WithTags(Tag)
             .Produces<IReadOnlyList<PluginResponse>>()
@@ -31,7 +31,7 @@ internal static class PluginEndpoints
             .ProducesProblem(400)
             .ProducesProblem(503);
 
-        app.MapGet("/plugins/indexing", (IQueries svc, CancellationToken cancel) =>
+        app.MapGet("/plugins/indexing", (IQueries svc) =>
             EndpointMapping.Ok(svc.GetPluginsIndexing()))
             .WithName("GetPluginsIndexing")
             .WithTags(Tag)
@@ -104,7 +104,7 @@ internal static class PluginEndpoints
             .Produces<IReadOnlyList<CopyNaming>>()
             .ProducesProblem(503);
 
-        app.MapGet("/plugins/{plugin}/indexed-as-on-disk", (string plugin, string? origin, IQueries svc, CancellationToken cancel) =>
+        app.MapGet("/plugins/{plugin}/indexed-as-on-disk", (string plugin, string? origin, IQueries svc) =>
         {
             if (!EndpointMapping.PluginAt(plugin, origin, out var address, out var refused)) return refused;
             return EndpointMapping.Ok(svc.GetPluginIndexedAsOnDisk(address));
@@ -142,7 +142,7 @@ internal static class PluginEndpoints
             .ProducesProblem(400)
             .ProducesProblem(503);
 
-        app.MapGet("/record-types/creatable", (IQueries svc, CancellationToken cancel) =>
+        app.MapGet("/record-types/creatable", (IQueries svc) =>
             EndpointMapping.Ok(svc.GetCreatableRecordTypes()))
             .WithName("GetCreatableRecordTypes")
             .WithTags(Tag)
@@ -190,7 +190,7 @@ internal static class PluginEndpoints
             .ProducesProblem(422)
             .ProducesProblem(503);
 
-        app.MapGet("/plugins/creatable-extensions", (IQueries svc, CancellationToken cancel) =>
+        app.MapGet("/plugins/creatable-extensions", (IQueries svc) =>
             EndpointMapping.Ok(svc.GetCreatablePluginExtensions()))
             .WithName("GetCreatablePluginExtensions")
             .WithTags(Tag)
@@ -198,7 +198,7 @@ internal static class PluginEndpoints
             .Produces<IReadOnlyList<string>>()
             .ProducesProblem(503);
 
-        app.MapGet("/plugins/creatable-flags", (string name, IQueries svc, CancellationToken cancel) =>
+        app.MapGet("/plugins/creatable-flags", (string name, IQueries svc) =>
             EndpointMapping.Ok(svc.GetCreatablePluginFlags(name)))
             .WithName("GetCreatablePluginFlags")
             .WithTags(Tag)
