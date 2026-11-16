@@ -1088,13 +1088,14 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     expect(requests).toHaveLength(1);
   });
 
-  it.each(gestures)('sends the %s request only once the load order sent before it has settled', async (_name, gesture, route) => {
-    const { response, push } = pushableStreamResponse();
+  it.each(gestures)('sends the %s request once mEdit has answered the load order sent before it, not once its sweep has finished', async (_name, gesture, route) => {
+    let answerPut!: () => void;
+    const putAnswered = new Promise<void>((resolve) => { answerPut = resolve; });
     let putLoadOrder = false;
     const requests: string[] = [];
     const fetch = routedFetch([
-      ['/notifications/stream', () => Promise.resolve(response)],
-      ['/load-order', () => { putLoadOrder = true; return Promise.resolve(jsonResponse(200, { applied: true, version: 1 })); }],
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/load-order', () => { putLoadOrder = true; return putAnswered.then(() => jsonResponse(200, { applied: true, version: 1 })); }],
       [route, (req) => { requests.push(new URL(req.url).pathname); return Promise.resolve(jsonResponse(200, { applied: [], refused: [] })); }],
     ]);
     const client = makeClient(fetch);
@@ -1106,7 +1107,7 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(requests).toEqual([]);
 
-    push(readyTickThatSettlesPutLoadOrder());
+    answerPut();
     await gesturing;
     expect(requests).toHaveLength(1);
   });

@@ -262,7 +262,7 @@ class HttpMEditClient implements MEditClient {
     if (spec.answersChanges !== true) this.leaveWritesUnnamed();
     try {
       await this.handOver.sent();
-      await this.loadOrder.latest();
+      await this.loadOrder.applied();
     } catch (e) {
       return this.refusedUnreachable(spec, e);
     }
@@ -660,7 +660,7 @@ class HttpMEditClient implements MEditClient {
     formKey: string, { name: plugin, origin }: PluginAddress, envelope: RecordEditEnvelope,
   ): Promise<RecordEditChangesOutcome> {
     await this.handOver.sent();
-    await this.loadOrder.latest();
+    await this.loadOrder.applied();
     let result;
     try {
       result = await this.apiClient.POST('/records/{formKey}/edit-changes', {
