@@ -1,10 +1,8 @@
-import { WrittenFiles } from '../instanceLoader/writtenFiles';
-
 export const progressSteps: string[] = [];
 
 export const instanceThatReads = {
   refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); },
-  quiet: <T>(work: (written: WrittenFiles) => Promise<T>): Promise<T> => work(new WrittenFiles()),
+  writing: <T>(work: () => Promise<T>): Promise<T> => work(),
 };
 
 export async function recordedWithProgress(

@@ -1,4 +1,3 @@
-import { WrittenFiles } from '../../instanceLoader/writtenFiles';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Uri } from '../../test/vscodeMock';
 
@@ -44,8 +43,7 @@ function deferred<T>() {
 
 function follower(symbols: ReadonlyMap<string, RenamedSymbol> | Error, answers: Readonly<Record<string, Answer>> = {}) {
   const events: string[] = [];
-  const locksTaken: string[] = [];
-  let quiet = 0;
+  let writing = 0;
   const reporter = recordingReporter();
   const rename = async ({ apply }: RenameEditing, from: string, to: string): Promise<ChangeResult> => {
     events.push(`plan ${from} as ${to}`);
@@ -53,7 +51,7 @@ function follower(symbols: ReadonlyMap<string, RenamedSymbol> | Error, answers: 
     if ('refusal' in answer) return { applied: false, refusal: answer.refusal };
     const unapplied = await apply([CHANGES]);
     if (unapplied !== undefined) return { applied: false, unapplied };
-    events.push(`commit ${to}${quiet > 0 ? ', quiet' : ''}`);
+    events.push(`commit ${to}${writing > 0 ? ', writing' : ''}`);
     return { applied: true, cannotFollow: answer.cannotFollow };
   };
   const renamePlugin = vi.fn((editing: RenameEditing, { name }: { name: string }, to: string) => rename(editing, name, to));
@@ -73,25 +71,25 @@ function follower(symbols: ReadonlyMap<string, RenamedSymbol> | Error, answers: 
     profiles: { renameProfile },
     scripts: { renameScript: (editing, { name, to }) => renameScript(editing, name, to.name ?? '') },
     source: {
-      applyWorkspaceChanges: (items) => { events.push(`apply ${String(items.length)}${quiet > 0 ? ', quiet' : ''}`); return Promise.resolve(); },
-      oneAtATime: (job) => { locksTaken.push(quiet > 0 ? 'quiet' : 'not quiet'); return job(); },
+      applyWorkspaceChanges: (items) => { events.push(`apply ${String(items.length)}${writing > 0 ? ', writing' : ''}`); return Promise.resolve(); },
+      oneAtATime: (job) => job(),
       refreshSourceControlFor: () => undefined,
     },
     instance: {
-      quiet: async (work) => {
-        quiet += 1;
-        try { return await work(new WrittenFiles()); } finally { quiet -= 1; }
+      writing: async (work) => {
+        writing += 1;
+        try { return await work(); } finally { writing -= 1; }
       },
     },
     reporter,
   });
-  return { follow, events, locksTaken, reporter, renamePlugin, renameMod, renameSeparator, renameDownloadedFile, renameProfile, renameScript };
+  return { follow, events, reporter, renamePlugin, renameMod, renameSeparator, renameDownloadedFile, renameProfile, renameScript };
 }
 
 const renaming = (rename: FileRename, symbol: RenamedSymbol): [string, RenamedSymbol] => [`${rename.from} > ${rename.to}`, symbol];
 
 describe('following a rename VS Code makes of a file or folder that is a symbol (symbols.md, The features, stories 6 and 9)', () => {
-  it('plans against the old name before the rename lands, then applies the edit and commits, the instance quiet throughout', async () => {
+  it('plans against the old name before the rename lands, then applies the edit and commits, all one write of several files', async () => {
     const landing = deferred<boolean>();
     const { follow, events, reporter } = follower(new Map([renaming(RENAME, PLUGIN_RENAMED)]));
 
@@ -101,16 +99,8 @@ describe('following a rename VS Code makes of a file or folder that is a symbol 
 
     landing.resolve(true);
     await following.done;
-    expect(events).toEqual(['plan Patch.esp as Renamed.esp', 'apply 1, quiet', 'commit Renamed.esp, quiet']);
+    expect(events).toEqual(['plan Patch.esp as Renamed.esp', 'apply 1, writing', 'commit Renamed.esp, writing']);
     expect(reporter.reports).toEqual([]);
-  });
-
-  it('takes the source lock once the instance is quiet, the order the rename gestures take them in, so neither waits on the other', async () => {
-    const { follow, locksTaken } = follower(new Map([renaming(RENAME, PLUGIN_RENAMED)]));
-
-    await follow([RENAME], Promise.resolve(true)).done;
-
-    expect(locksTaken).toEqual(['quiet']);
   });
 
   it.each([

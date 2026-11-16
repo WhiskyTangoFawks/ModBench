@@ -18,6 +18,7 @@ import { fakeWorkspace } from '../../test/fakeWorkspace';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 import { writeManifestIn } from '../../manifestAdapter/manifestAdapter';
+import { ambientWrites } from '../ambientWrites';
 
 const instances: Instance[] = [];
 
@@ -724,112 +725,91 @@ describe('Instance — a write that changes several files', () => {
     expect(fake.rereads).toEqual([CHECK, reread('/instance/mods/A/a.esp')]);
   });
 
-  it('reads again only the files its work names as written', async () => {
+  it('reads again, after it, the files its work names as written', async () => {
     const { instance, fake } = loader();
     await instance.refresh();
 
-    await instance.quiet((written) => { written.name(['/instance/mods/A/a.esp']); return Promise.resolve(); });
+    await instance.writing(() => { ambientWrites.name(['/instance/mods/A/a.esp']); return Promise.resolve(); });
 
     expect(fake.rereads).toEqual([CHECK, reread('/instance/mods/A/a.esp')]);
-  });
-
-  it('answers a write its own work tells it at once, and reads that file again after it', async () => {
-    const { instance, fake } = loader();
-    await instance.refresh();
-
-    await instance.quiet(() => instance.told(['/instance/profiles/Default/modlist.txt']));
-
-    expect(fake.rereads.at(-1)).toEqual(reread('/instance/profiles/Default/modlist.txt'));
-  });
-
-  it('returns, while another overlaps it, once the read after both holds what its work wrote', async () => {
-    const { instance, fake } = loader();
-    await instance.refresh();
-    let finishOther!: () => void;
-    let returned = false;
-
-    const other = instance.quiet(() => new Promise<void>((resolve) => { finishOther = resolve; }));
-    const own = instance.quiet(() => instance.told(['/instance/profiles/Default/modlist.txt'])).then(() => { returned = true; });
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(returned).toBe(false);
-    finishOther();
-    await Promise.all([other, own]);
-
-    expect(fake.rereads.at(-1)).toEqual(reread('/instance/profiles/Default/modlist.txt'));
   });
 
   it('reads again no file after work that names none, and checks the disk after work that left its files unnamed', async () => {
     const { instance, fake } = loader();
     await instance.refresh();
 
-    await instance.quiet(() => Promise.resolve());
-    await instance.quiet((written) => { written.leaveUnnamed(); return Promise.resolve(); });
+    await instance.writing(() => Promise.resolve());
+    await instance.writing(() => { ambientWrites.leaveUnnamed(); return Promise.resolve(); });
 
-    expect(fake.rereads).toEqual([CHECK, { named: [], disk: false }, CHECK]);
+    expect(fake.rereads).toEqual([CHECK, CHECK]);
   });
 
-  it('lands no value read inside it, and lands the refresh after it', async () => {
+  it('lands each value read while it runs', async () => {
     const { instance } = loader();
     await instance.refresh();
     const before = instance.sequence;
 
-    await instance.quiet(async () => {
+    await instance.writing(async () => {
       await instance.refresh();
-      expect(instance.sequence).toBe(before);
+      expect(instance.sequence).toBe(before + 1);
+    });
+  });
+
+  it('answers a write its work tells it once the value holds that file', async () => {
+    const { instance, fake } = loader();
+    await instance.refresh();
+    const before = instance.sequence;
+
+    await instance.writing(async () => {
+      await instance.told(['/instance/profiles/Default/modlist.txt']);
+      expect(fake.rereads.at(-1)).toEqual(reread('/instance/profiles/Default/modlist.txt'));
+      expect(instance.sequence).toBe(before + 1);
+    });
+  });
+
+  it('hands a subscriber that writes no value while it runs, and the last once it ends, with every file read again since', async () => {
+    const { instance } = loader();
+    await instance.refresh();
+    const heard: [number, Reread][] = [];
+    instance.subscribeWriter((_value, sequence, rereadSince) => { heard.push([sequence, rereadSince]); });
+
+    await instance.writing(async () => {
+      await instance.refresh(['/instance/mods/A/a.esp']);
+      await instance.refresh(['/instance/mods/B/b.esp']);
+      expect(heard).toEqual([]);
     });
 
-    expect(instance.sequence).toBe(before + 1);
+    expect(heard).toEqual([[instance.sequence, reread('/instance/mods/A/a.esp', '/instance/mods/B/b.esp')]]);
   });
 
-  it('reads again, after it, what the events named while it ran, though the read they started was dropped', async () => {
-    const { instance, fake } = loader();
-    await instance.refresh();
-
-    fakeClockLeavingSetImmediateReal();
-    try {
-      await instance.quiet(async (written) => {
-        fake.changed('/instance/mods/B/meta.ini');
-        await vi.advanceTimersByTimeAsync(SETTLE_MS);
-        written.name(['/instance/mods/A/a.esp']);
-      });
-    } finally {
-      vi.useRealTimers();
-    }
-
-    expect(fake.rereads.at(-1)).toEqual(reread('/instance/mods/B/meta.ini', '/instance/mods/A/a.esp'));
-  });
-
-  it('checks the disk, after it, when the events that came while it ran could not be named', async () => {
-    const { instance, fake } = loader();
-    await instance.refresh();
-
-    fakeClockLeavingSetImmediateReal();
-    try {
-      await instance.quiet(async (written) => {
-        fake.changed(undefined);
-        await vi.advanceTimersByTimeAsync(SETTLE_MS);
-        written.name(['/instance/mods/A/a.esp']);
-      });
-    } finally {
-      vi.useRealTimers();
-    }
-
-    expect(fake.rereads.at(-1)).toEqual({ named: ['/instance/mods/A/a.esp'], disk: true });
-  });
-
-  it('reports only the failure of the read after it, not of one inside it that fails on a file the write is half-way through', async () => {
-    const { instance, fake, errorLines } = loader();
+  it('hands a subscriber that writes nothing after it when no value that landed while it ran changed what the subscriber reads', async () => {
+    const { instance } = loader({ mods: [mod('A')] });
     await instance.refresh();
     const heard = vi.fn();
-    instance.onReadFailure(heard);
+    instance.subscribeWriter(heard, { mods: true });
 
-    await expect(instance.quiet(async () => {
-      fake.failReading('ModOrganizer.ini is empty');
-      await instance.refresh();
-    })).rejects.toThrow('ModOrganizer.ini is empty');
+    await instance.writing(() => instance.refresh(['/instance/mods/A/a.esp']));
+
+    expect(heard).not.toHaveBeenCalled();
+  });
+
+  it('returns from a write inside another once its own work ends, and hands a subscriber that writes the last value once the outer one ends', async () => {
+    const { instance } = loader();
+    await instance.refresh();
+    const heard = vi.fn();
+    instance.subscribeWriter(heard);
+    let finishOuter!: () => void;
+
+    const outer = instance.writing(async () => {
+      await instance.writing(() => instance.refresh());
+      expect(heard).not.toHaveBeenCalled();
+      await new Promise<void>((resolve) => { finishOuter = resolve; });
+    });
+    await vi.waitFor(() => { expect(finishOuter).toBeDefined(); });
+    finishOuter();
+    await outer;
 
     expect(heard).toHaveBeenCalledTimes(1);
-    expect(errorLines).toHaveLength(1);
   });
 });
 
@@ -860,23 +840,6 @@ describe('Instance — a value that survives a bad read', () => {
     fake.failReading('ModOrganizer.ini is half-written');
 
     await expect(instance.told(['/instance/profiles/Default/modlist.txt'])).rejects.toThrow('ModOrganizer.ini is half-written');
-  });
-
-  it('answers another write told to it during a quiet scope once the read after the scope has landed, never at the dropped read', async () => {
-    const { instance } = loader({ mods: [mod('A')] });
-    await instance.refresh();
-    let finishWork!: () => void;
-    let answered = false;
-
-    const quiet = instance.quiet(() => new Promise<void>((resolve) => { finishWork = resolve; }));
-    const told = instance.told(['/instance/profiles/Default/modlist.txt']).then(() => { answered = true; });
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(answered).toBe(false);
-    finishWork();
-    await quiet;
-    await told;
-
-    expect(answered).toBe(true);
   });
 
   it('reports a failed first read to failure subscribers, so a tree can settle on an error node, holds the sequence at 0, and lands the next successful read at sequence 1', async () => {

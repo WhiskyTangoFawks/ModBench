@@ -24,7 +24,7 @@ export interface RenamePluginDeps {
   commands: Pick<PluginCommands, 'renameRefusal' | 'renamePlugin'>;
   client: Pick<MEditClient, 'getCreatablePluginExtensions'>;
   source: SourceEditing;
-  instance: Pick<Instance, 'value' | 'quiet'>;
+  instance: Pick<Instance, 'value' | 'writing'>;
   reporter: Reporter;
 }
 
@@ -78,7 +78,7 @@ export function registerRenamePluginCommand(
       return { plugin, newName: name };
     },
     run: ({ plugin, newName }) => holdingTheWrite('modbench.plugin.rename', async () => vscode.window.withProgress({ location: { viewId: PLUGINS_KEY_ARGS.view } }, () =>
-      instance.quiet(() => source.oneAtATime(() => renamed({ commands, source }, plugin, newName))))),
+      instance.writing(() => source.oneAtATime(() => renamed({ commands, source }, plugin, newName))))),
     report: (result) => {
       if (result.applied) reportPartial(reporter, result.partial);
       else reporter.report('error', result.refusal, result.detail);

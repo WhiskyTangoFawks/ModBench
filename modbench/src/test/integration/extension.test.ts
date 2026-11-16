@@ -869,6 +869,22 @@ describe('a gesture the agent runs', () => {
     assert.deepStrictEqual(readdirSync(modDir).filter((file) => file.endsWith('.esp')), ['Renamed.esp']);
   });
 
+  it('renames a mod, its line keeping its place and its enabled state, and mod sync writing nothing after it', async () => {
+    const [renamed, ...listed] = ['Renamed', 'Rename Me', 'Last Mod'].map((name) => path.join(root, 'mods', name));
+    try {
+      for (const folder of listed) mkdirSync(folder);
+      writeFileSync(modlistPath, '+Agent Mod\r\n+Rename Me\r\n-Last Mod\r\n');
+      await waitFor('the agent to read Rename Me', async () => (await callTool('list_mods')).text.includes('Rename Me'));
+
+      const answer = await callTool('mod_rename', { argument: [{ name: 'Rename Me' }], options: { name: 'Renamed' } });
+
+      assert.strictEqual(answer.isError, false, answer.text);
+      assert.strictEqual(readFileSync(modlistPath, 'utf8'), '+Agent Mod\r\n+Renamed\r\n-Last Mod\r\n');
+    } finally {
+      for (const folder of [renamed, ...listed]) rmSync(present(folder, 'a mod folder'), { recursive: true, force: true });
+    }
+  });
+
   it('reads the Toolbox\'s deployment folder from the setting the live wiring reads', async () => {
     const folder = path.join(root, '..', 'agent-deployment');
     await vscode.workspace.getConfiguration('modbench').update('deployment.folder', folder, vscode.ConfigurationTarget.Workspace);

@@ -9,7 +9,7 @@ export interface ModSyncOn {
 }
 
 interface ModSyncDeps {
-  instance: Pick<Instance, 'subscribe' | 'value'>;
+  instance: Pick<Instance, 'subscribeWriter' | 'value'>;
   syncMods: ModSyncRun;
   channel: SyncChannel;
 }
@@ -19,9 +19,9 @@ interface ModSyncDeps {
 export function modSyncOn({ instance, syncMods, channel }: ModSyncDeps): ModSyncOn {
   const modSync = createModSync(syncMods, channel, instance.value.managerNames.modOrderFile);
   const subscriptions = [
-    instance.subscribe(() => { void modSync.run(); }, { mods: true, modFolders: true }),
+    instance.subscribeWriter(() => { void modSync.run(); }, { mods: true, modFolders: true }),
     // Recovery is not gated (ADR-0003): a sync whose failure stands is tried again at each value, as the first one was.
-    instance.subscribe(() => { if (modSync.message() !== undefined) void modSync.run(); }),
+    instance.subscribeWriter(() => { if (modSync.message() !== undefined) void modSync.run(); }),
   ];
   return { modSync, dispose: () => { for (const subscription of subscriptions) subscription.dispose(); } };
 }
