@@ -22,6 +22,10 @@ public sealed record RowsChangedNotification(PluginAddress Plugin, IReadOnlyList
 public sealed record PluginChangedNotification(PluginAddress Plugin, long Sequence)
     : INotification;
 
+/// <summary>The record index moved and no more is named: a subscriber re-reads everything it shows. Sequence is
+/// the Index's projection sequence right after.</summary>
+public sealed record RecordIndexChangedNotification(long Sequence) : INotification;
+
 /// <summary>The Index's <see cref="LoadOrderStatus"/> whenever it changes — reconciling through to
 /// Ready, the same transitions <c>GET /load-order/status</c> polling would have observed.</summary>
 public sealed record LoadOrderStatusNotification(LoadOrderStatus Status) : INotification;

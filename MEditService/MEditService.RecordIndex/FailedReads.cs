@@ -149,7 +149,7 @@ internal sealed class FailedReads(Store.Store index, ISourceAdapter source, ILog
             if (found.Count == 0) _problems.Remove(key);
             else _problems[key] = found;
         }
-        index.Commit(projection => projection.ReadFailedOrRecovered(key));
+        index.Commit(projection => projection.PluginChanged(key));
     }
 
     // The views read a later read's failure again as it begins, changes and clears; the Output gets
@@ -172,7 +172,7 @@ internal sealed class FailedReads(Store.Store index, ISourceAdapter source, ILog
                 "Could not read {Plugin} ({Origin}), so it shows the last good read: {Reason}",
                 key.Name, key.Origin, string.Join(" ", now.Select(file => file.Message)));
         }
-        index.Commit(projection => projection.ReadFailedOrRecovered(key));
+        index.Commit(projection => projection.PluginChanged(key));
     }
 
     private static IReadOnlyList<SourceFileFailure>? LaterReadFailureOf(Failure? failure) =>

@@ -72,6 +72,7 @@ internal sealed record NotificationEvent(
     {
         RowsChangedNotification n => new("rows-changed", n.Plugin.Name, n.Plugin.Origin, n.Keys, n.Sequence),
         PluginChangedNotification n => new("plugin-changed", n.Plugin.Name, n.Plugin.Origin, [], n.Sequence),
+        RecordIndexChangedNotification n => new("record-index-changed", "", "", [], n.Sequence),
         LoadOrderStatusNotification n => new("load-order-status", "", "", [], 0, LoadOrderStatus: n.Status),
         VersionInGitProgressNotification n => new("version-in-git-progress", "", n.Progress.Mod ?? "", [], 0, ModlistProgress: n.Progress, VersionInGitPhase: n.Phase),
         BuildProgressNotification n => new("build-progress", "", n.Progress.Mod ?? "", [], 0, ModlistProgress: n.Progress),

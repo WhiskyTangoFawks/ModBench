@@ -15,6 +15,7 @@ export function keepRecordIndexChanges(
 
   client.onNotification('rows-changed', ({ plugin, keys }) => { tell([{ plugin, keys }]); });
   client.onNotification('plugin-changed', ({ plugin }) => { tell([{ plugin }]); });
+  client.onNotification('record-index-changed', () => { tell(undefined); });
   client.onNotification('record-filter-cleared', () => { tell(undefined); });
   loadOrder.onSettled(() => { tell(undefined); });
   client.onReconnected(() => { tell(undefined); });

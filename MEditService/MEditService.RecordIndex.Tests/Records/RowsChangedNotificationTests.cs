@@ -64,6 +64,8 @@ public sealed class RowsChangedNotificationTests
         var gained = GainACopyOfARecordUnderAFormKeyNeitherRefHolds(entry, index, moved.ToString());
         entry.RenameByHand(index.DocumentOf(moved.ToString(), entry.Key), "EditedNpc");
 
+        var loaded = notifications.Notifications.Count;
+
         index.NextCheck();
 
         var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
@@ -71,7 +73,7 @@ public sealed class RowsChangedNotificationTests
         Assert.Equal([moved.ToString(), gained], notification.Keys.Order(StringComparer.Ordinal));
         Assert.DoesNotContain(still.ToString(), notification.Keys);
         Assert.Equal(index.Sequence, notification.Sequence);
-        Assert.Empty(notifications.Notifications.OfType<PluginChangedNotification>());
+        Assert.Empty(notifications.Since(loaded).OfType<PluginChangedNotification>());
         Assert.NotNull(index.CopyIn(gained, entry.Key));
     }
 
@@ -83,11 +85,13 @@ public sealed class RowsChangedNotificationTests
         using var ___ = index;
         var gained = GainACopyOfARecordUnderAFormKeyNeitherRefHolds(entry, index, moved.ToString());
 
+        var loaded = notifications.Notifications.Count;
+
         index.NextCheck();
 
         var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
         Assert.Equal([gained], notification.Keys);
-        Assert.Empty(notifications.Notifications.OfType<PluginChangedNotification>());
+        Assert.Empty(notifications.Since(loaded).OfType<PluginChangedNotification>());
         Assert.NotNull(index.CopyIn(gained, entry.Key));
     }
 

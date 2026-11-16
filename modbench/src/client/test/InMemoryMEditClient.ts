@@ -241,7 +241,15 @@ export class InMemoryMEditClient implements MEditClient {
   stop(): Promise<void> { return this.sender.stop(); }
 
   onDidChange(listener: (change: RecordIndexChange) => void): Disposable { return this.changes.onDidChange(listener); }
-  get recordIndexMayBeLate(): boolean { return this.sender.pending(); }
+  /** The sequence mEdit stands at, which `refreshRecordIndexLateness` reads and compares with the last an emitted notification carried. */
+  sequenceMEditStandsAt = 0;
+  private readSequence = 0;
+  refreshRecordIndexLateness(): Promise<void> {
+    this.readSequence = this.sequenceMEditStandsAt;
+    this.lateness.note();
+    return Promise.resolve();
+  }
+  get recordIndexMayBeLate(): boolean { return this.sender.pending() || this.notifications.heardSequence < this.readSequence; }
   onDidChangeRecordIndexMayBeLate(listener: (late: boolean) => void): Disposable { return this.lateness.event(listener); }
 
   get loadOrderStatus(): LoadOrderStatus | undefined { return this.loadOrderStatusKept.current(); }

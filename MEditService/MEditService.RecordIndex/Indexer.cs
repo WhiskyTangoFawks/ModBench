@@ -1093,7 +1093,7 @@ internal sealed class Indexer : IDisposable
         var until = _timeProvider.GetUtcNow() + ArrivalsLandTogetherFor;
         try
         {
-            scope.Store.Commit(_ =>
+            scope.Store.Commit(projection =>
             {
                 var indexed = arrivals.Value;
                 var first = true;
@@ -1108,7 +1108,11 @@ internal sealed class Indexer : IDisposable
                         if (!scope.Held.Open(plugin, Registration.In(snapshot, plugin.Key), snapshot).Holds(out var metadata, out var failure))
                             return ReadOutcome.Failed(failure);
                         var outcome = RegisterWarmOrIndex(scope, metadata, state, indexed, token);
-                        if (outcome.Failure is null) landed.Add(metadata);
+                        if (outcome.Failure is null)
+                        {
+                            landed.Add(metadata);
+                            projection.PluginChanged(metadata.Key);
+                        }
                         return outcome;
                     }, token);
                 }
@@ -1374,7 +1378,7 @@ internal sealed class Indexer : IDisposable
         {
             _logger.LogInformation("{Plugin} ({Origin}): header changed, masters now [{Masters}]", plugin.Name, plugin.Origin, string.Join(", ", reopened.Masters));
         }
-        scope.Store.Commit(projection => projection.Announce(sequence => new PluginChangedNotification(plugin.Key, sequence)));
+        scope.Store.Commit(projection => projection.PluginChanged(plugin.Key));
         return reopened;
     }
 
@@ -1449,8 +1453,9 @@ internal sealed class Indexer : IDisposable
 
     private ReadOutcome ReadWhole(OpenScope scope, PluginMetadata plugin, ReadState state) => scope.Store.Commit(projection =>
     {
+        var before = scope.Store.EffectiveContentHashes(plugin.Key);
         var read = IndexOnePlugin(scope, plugin, state, CancellationToken.None);
-        if (read.Failure is null) projection.PluginChanged(plugin.Key);
+        if (read.Failure is null) projection.PluginReread(plugin.Key, before);
         return read;
     });
 

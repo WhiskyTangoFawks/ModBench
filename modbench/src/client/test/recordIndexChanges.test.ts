@@ -39,6 +39,15 @@ describe('the client\'s one change event', () => {
     expect(changes).toEqual([undefined]);
   });
 
+  it('says everything when mEdit says the record index changed', () => {
+    const client = new InMemoryMEditClient();
+    const changes = heard(client);
+
+    client.emit({ ...rows, kind: 'record-index-changed', plugin: '', origin: '', keys: [] });
+
+    expect(changes).toEqual([undefined]);
+  });
+
   it('says everything when a load order settles', () => {
     const client = new InMemoryMEditClient();
     const changes = heard(client);
