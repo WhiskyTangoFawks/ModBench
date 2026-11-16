@@ -14,14 +14,14 @@ export interface Holds {
 /** mEdit holds a load order: how far it has indexed it, which plugins it holds or failed, and, once settled or refused, the change that says everything. */
 export function holdsLoadOrder(client: InMemoryMEditClient, holds: Holds = {}): void {
   const { settled = true, version = 1, indexed = [], failures = [], refusal } = holds;
-  client.setProgress({
-    done: indexed.length + failures.length, total: holds.total ?? indexed.length + failures.length, version, settled: settled && refusal === undefined,
-    ...(refusal && { refusal }),
-  });
   client.setQueryAnswer('getPluginsIndexing', [
     ...indexed.map(({ name, origin }) => ({ name, origin, state: 'Indexed' as const, changedOutside: false })),
     ...failures.map(({ name, origin, reason, diagnosis }) => ({ name, origin, state: 'Failed' as const, reason, diagnosis, changedOutside: false })),
   ]);
+  client.setProgress({
+    done: indexed.length + failures.length, total: holds.total ?? indexed.length + failures.length, version, settled: settled && refusal === undefined,
+    ...(refusal && { refusal }),
+  });
   if (settled || refusal !== undefined) client.change(undefined);
 }
 

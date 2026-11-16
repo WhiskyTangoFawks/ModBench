@@ -493,10 +493,5 @@ export class InMemoryMEditClient implements MEditClient {
   clearFilter(): ReturnType<MEditClient['clearFilter']> { return this.query('clearFilter', []); }
   getActiveFilter(): ReturnType<MEditClient['getActiveFilter']> { return this.query('getActiveFilter', []); }
   getFilterCleared(): ReturnType<MEditClient['getFilterCleared']> { return this.query('getFilterCleared', []); }
-  /** Answers nothing opened and nothing pending unless a test scripts it. */
-  getPluginsIndexing(): ReturnType<MEditClient['getPluginsIndexing']> {
-    if (this.queryAnswers.getPluginsIndexing?.length || this.queryQueues.getPluginsIndexing?.length || this.queryFailures.has('getPluginsIndexing')) return this.query('getPluginsIndexing', []);
-    this.record('getPluginsIndexing', []);
-    return Promise.resolve([]);
-  }
+  getPluginsIndexing(): ReturnType<MEditClient['getPluginsIndexing']> { return this.query('getPluginsIndexing', []); }
 }
