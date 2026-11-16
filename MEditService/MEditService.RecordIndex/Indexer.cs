@@ -481,16 +481,40 @@ internal sealed class Indexer : IDisposable
                 return () => ReconcileHeld(check, checking);
             }
             List<string> paths = [.. _handed];
-            HashSet<PluginAddress> named = new(_named, PluginAddress.Comparer);
-            Dictionary<PluginAddress, AskedFiles> files = new(_namedFiles, PluginAddress.Comparer);
-            List<Hand> hands = [.. _namedHands];
             _handed.Clear();
-            _named.Clear();
-            _namedFiles.Clear();
-            _namedHands.Clear();
             _validatingTurn = true;
-            return () => ValidateAndPublish(paths, named, files, hands);
+            return TakeNamed(paths);
         }
+    }
+
+    // Guarded by _turns.
+    private Action TakeNamed(List<string> paths)
+    {
+        HashSet<PluginAddress> named = new(_named, PluginAddress.Comparer);
+        Dictionary<PluginAddress, AskedFiles> files = new(_namedFiles, PluginAddress.Comparer);
+        List<Hand> hands = [.. _namedHands];
+        _named.Clear();
+        _namedFiles.Clear();
+        _namedHands.Clear();
+        return () => ValidateAndPublish(paths, named, files, hands);
+    }
+
+    // ADR-0029: long work lands the changes named meanwhile between its steps, unless one names a plugin the work is still to
+    // land, or a newer load order waits for the work's end. True when it landed any.
+    private bool LandNamedBetween(Func<PluginAddress, bool> stillToLand)
+    {
+        Action landing;
+        bool validating;
+        lock (_turns)
+        {
+            if (_reconcileAsked || (_named.Count == 0 && _namedFiles.Count == 0 && _namedHands.Count == 0)) return false;
+            if (_named.Concat(_namedFiles.Keys).Any(stillToLand)) return false;
+            landing = TakeNamed([]);
+            (validating, _validatingTurn) = (_validatingTurn, true);
+        }
+        try { landing(); }
+        finally { lock (_turns) _validatingTurn = validating; }
+        return true;
     }
 
     private void ValidateAndPublish(
@@ -954,6 +978,7 @@ internal sealed class Indexer : IDisposable
         while (pending.Count > 0)
         {
             if (LandArrivals(scope, snapshot, pending, indexed, token) > 0) firstUsableMs ??= timer.ElapsedMilliseconds;
+            LandNamedBetween(key => pending.Any(plugin => PluginAddress.Comparer.Equals(plugin.Key, key)));
         }
 
         // The whole-set sweep, and the moment conflict information becomes correct: a plugin that
@@ -1243,29 +1268,22 @@ internal sealed class Indexer : IDisposable
     {
         var scope = RequireScope();
         // A plugin not held failed to open, and the reconcile opens it again once its bytes change.
-        Validate(scope, scope.Held.Plugins, token);
+        Validate(scope, scope.Held.Plugins, token, landNamedBetween: true);
     }
 
-    // Each plugin read whole lands in its own transaction, so one read before a throw is listed too:
-    // in a finally, after the commit's own finally has landed it.
-    private void Validate(OpenScope scope, IEnumerable<PluginMetadata> plugins, CancellationToken token)
+    // ADR-0029: each plugin lands in a commit of its own, which announces it. A change landed between moves the stamps, so
+    // they are read again. The commit of no plugin lands a sweep owed.
+    private void Validate(OpenScope scope, IReadOnlyList<PluginMetadata> plugins, CancellationToken token, bool landNamedBetween = false)
     {
-        var landed = new List<PluginMetadata>();
-        try
+        if (plugins.Count == 0) scope.Store.Commit(_ => { });
+        Store.IndexedStamps? indexed = null;
+        for (var at = 0; at < plugins.Count; at++)
         {
-            scope.Store.Commit(_ =>
-            {
-                var indexed = scope.Store.IndexedStamps(plugins.Select(plugin => plugin.Key).Where(key => !scope.Projector.Matched(key)));
-                foreach (var plugin in plugins)
-                {
-                    token.ThrowIfCancellationRequested();
-                    if (ValidateOne(scope, plugin, indexed, token)) landed.Add(plugin);
-                }
-            });
-        }
-        finally
-        {
-            ListLanded(landed);
+            token.ThrowIfCancellationRequested();
+            if (scope.Held.Find(plugins[at].Key) is not { } plugin) continue;
+            indexed ??= scope.Store.IndexedStamps(plugins.Skip(at).Select(held => held.Key).Where(key => !scope.Projector.Matched(key)));
+            if (scope.Store.Commit(_ => ValidateOne(scope, plugin, indexed, token))) ListLanded([plugin]);
+            if (landNamedBetween && LandNamedBetween(_ => false)) indexed = null;
         }
     }
 

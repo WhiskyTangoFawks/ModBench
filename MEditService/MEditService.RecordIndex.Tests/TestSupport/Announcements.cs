@@ -16,8 +16,8 @@ internal static class Announcements
     internal static Predicate<INotification> FailureNamed(string plugin) =>
         n => n is LoadOrderStatusNotification status && status.Status.Failures.Any(f => f.Name == plugin);
 
-    /// <summary>Two checks of the disk, each answered once the change it found is announced. A check
-    /// validates every plugin before it announces, so a plugin neither announced is known quiet.</summary>
+    /// <summary>Two checks of the disk, each answered once the change it found is announced and its validation has
+    /// closed, so a plugin neither announced is known quiet.</summary>
     internal static IReadOnlyList<INotification> AnnouncedByChecks(
         this OpenedIndex index, InMemoryNotificationPublisher notifications, Func<Predicate<INotification>> change)
     {

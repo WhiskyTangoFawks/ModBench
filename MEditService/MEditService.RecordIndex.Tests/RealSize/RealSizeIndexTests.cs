@@ -181,7 +181,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
         Assert.Equal((named + 1, whole), (realSize.Source.NamedReads, realSize.Source.WholeTreeReads));
     }
 
-    private DocumentsPutBack CheckpointOfEarlierWritesLanded()
+    private FilesPutBack CheckpointOfEarlierWritesLanded()
     {
         var plugin = Modlist.BigSourcePlugin;
         var path = plugin.SourceFileOf(Index.DocumentOf(Modlist.TheManyDocuments[^1], plugin.Key));
@@ -194,7 +194,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
 
     private void WrittenAndRead(PluginChange written)
     {
-        Assert.Null(Index.Queries.Hold([new HandedPlugin(written.Plugin, written.Files, [])], CancellationToken.None).GetAwaiter().GetResult());
+        Held(written);
         Waits.Reached(() => !Index.Status.Validating, "the record index's read of the write");
     }
 
@@ -213,6 +213,29 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
             Waits.Reached(() => !Index.Status.Validating, "the record index's read of the echo");
         }, "Reading the watcher's echo of a write");
     }
+
+    [RealSizeFact]
+    public void AnEditMadeDuringACheckThatReadsManyPlugins_ReturnsWithinOneGesture()
+    {
+        var (plugin, formKey) = (Modlist.BigSourcePlugin, Modlist.TheManyDocuments[2]);
+        var record = Index.DocumentOf(formKey, plugin.Key);
+        var path = plugin.SourceFileOf(record);
+        var rewritten = Modlist.SmallBinaryPlugins;
+        using var restored = Restoring([path, .. rewritten.Select(small => small.Path)],
+            () => CheckEnded() && !Index.Status.Validating && Index.RowOf(formKey, plugin.Key)?.EditorId == record.EditorId);
+        foreach (var small in rewritten) PluginBinaries.Touch(small.Path);
+        var check = Index.Queries.Hold(null, CancellationToken.None);
+        plugin.HandEdit(record, $"\"{record.EditorId}\"", "\"Edited\"");
+
+        Budgets.Ran(OneGesture, () => Held(new PluginChange(plugin.Key, [path])), $"An edit made during a check that reads {rewritten.Count} plugins");
+
+        Assert.False(check.IsCompleted, "The check ended before the edit returned.");
+        Assert.Equal("Edited", Index.RowOf(formKey, plugin.Key)?.EditorId);
+        Assert.Null(check.GetAwaiter().GetResult());
+    }
+
+    private void Held(PluginChange written) =>
+        Assert.Null(Index.Queries.Hold([new HandedPlugin(written.Plugin, written.Files, [])], CancellationToken.None).GetAwaiter().GetResult());
 
     [RealSizeFact]
     public void ARecordItsWriterCreated_IsReadWithinOneGesture()
@@ -249,16 +272,16 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     private int ReferencesListed() =>
         Index.Queries.GetCellChildRecords(Modlist.BigSourcePlugin.Key, Modlist.BigCell).Value().Temporary.Count;
 
-    private DocumentsPutBack Restoring(string path, Func<bool> restored) => Restoring([path], restored);
+    private FilesPutBack Restoring(string path, Func<bool> restored) => Restoring([path], restored);
 
-    private DocumentsPutBack Restoring(IReadOnlyList<string> paths, Func<bool> restored) =>
-        new([.. paths.Select(path => (path, File.ReadAllText(path)))], realSize, restored);
+    private FilesPutBack Restoring(IReadOnlyList<string> paths, Func<bool> restored) =>
+        new([.. paths.Select(path => (path, File.ReadAllBytes(path)))], realSize, restored);
 
-    private sealed class DocumentsPutBack(IReadOnlyList<(string Path, string Text)> documents, RealSizeIndex realSize, Func<bool> restored) : IDisposable
+    private sealed class FilesPutBack(IReadOnlyList<(string Path, byte[] Bytes)> files, RealSizeIndex realSize, Func<bool> restored) : IDisposable
     {
         public void Dispose() => realSize.Restore(() =>
         {
-            foreach (var (path, text) in documents) File.WriteAllText(path, text);
+            foreach (var (path, bytes) in files) File.WriteAllBytes(path, bytes);
             realSize.Index.SignalChange();
         }, restored);
     }
