@@ -4,7 +4,7 @@ import { feedSourceProblems, type ProblemsByFile } from '../sourceProblems';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import type { PluginProblems } from '../../client';
-import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
+import { EMPTY_SNAPSHOT, loadOrderStatusEventFixture } from '../../client/test/fixtures';
 import type { NotificationEvent } from '../../client/apiClient';
 import type { SourceFilesOf } from '../../instanceLoader/loadOrderSnapshot';
 
@@ -25,6 +25,14 @@ const reconciledAgain = (client: InMemoryMEditClient) => {
   client.emit(loadOrderStatusEventFixture({ state: 'Ready', conflictsComputed: true, version }));
 };
 
+function late(client: InMemoryMEditClient): () => void {
+  client.setStatus('running');
+  let answer!: () => void;
+  client.answerPuts(() => new Promise((resolve) => { answer = () => { resolve({ outcome: 'abandoned' }); }; }));
+  void client.sendLoadOrder(EMPTY_SNAPSHOT);
+  return () => { answer(); };
+}
+
 const sourceFolders: SourceFilesOf = (origin) => ({ file: (relativePath) => `/source/${origin}/${relativePath}` });
 
 function feed(sourceFiles = sourceFolders, answeredAtSubscribe?: PluginProblems[] | PromiseLike<PluginProblems[]>) {
@@ -34,7 +42,7 @@ function feed(sourceFiles = sourceFolders, answeredAtSubscribe?: PluginProblems[
   const reporter = recordingReporter();
   const status: (string | undefined)[] = [];
   const unsaved: (string | undefined)[] = [];
-  feedSourceProblems({
+  const { settled } = feedSourceProblems({
     client,
     ask: problemsAsker(client, RETRY_AFTER_MS),
     sourceFiles,
@@ -50,7 +58,7 @@ function feed(sourceFiles = sourceFolders, answeredAtSubscribe?: PluginProblems[
     await vi.waitFor(() => { expect(published.length).toBeGreaterThan(before); });
     return published[published.length - 1] ?? new Map();
   };
-  return { client, reporter, published, status, unsaved, answered };
+  return { client, reporter, published, status, unsaved, answered, settled };
 }
 
 afterEach(() => { vi.useRealTimers(); });
@@ -115,14 +123,24 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
     expect([...shown]).toEqual([]);
   });
 
-  it('asks nothing when a plugin\'s failure arrives mid-reconcile, since mEdit would answer that it is not ready', () => {
-    const { client } = feed();
-    const asked = () => client.calls.filter(({ method }) => method === 'getPluginProblems').length;
-    const before = asked();
+  it('is settled only once the answer to a change is published', async () => {
+    const { client, answered, published, settled } = feed();
+    await answered([{ plugin: PLUGIN, problems: [problem()] }]);
+    let answer: (answer: PluginProblems[]) => void = () => undefined;
+    client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((resolve) => { answer = resolve; }));
+    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+    const before = published.length;
+    const asked = client.calls.filter(({ method }) => method === 'getPluginProblems').length;
 
-    client.emit(loadOrderStatusEventFixture({ ...RECONCILING, failures: [{ name: 'Bad.esp', origin: 'Mod', reason: 'truncated' }] }));
+    let ended = false;
+    const waiting = settled().then(() => { ended = true; });
+    await vi.waitFor(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(asked + 1); });
+    expect(ended).toBe(false);
+    answer([{ plugin: PLUGIN, problems: [] }]);
+    await waiting;
 
-    expect(asked()).toBe(before);
+    expect(published.length).toBe(before + 1);
+    expect([...published[before] ?? []]).toEqual([]);
   });
 
   it('shows mEdit\'s answer at subscribe, and asks again on a save before any load-order-status', async () => {
@@ -147,24 +165,13 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
     expect(reporter.shownFailures).toEqual([]);
   });
 
-  it('asks nothing on a save when the record index began reconciling while the ask at subscribe was in flight', async () => {
+  it('asks nothing on a save when the record index began to be late while the ask at subscribe was in flight', async () => {
     let answer!: (problems: PluginProblems[]) => void;
     const { client, published, answered } = feed(sourceFolders, new Promise<PluginProblems[]>((resolve) => { answer = resolve; }));
-    client.emit(loadOrderStatusEventFixture(RECONCILING));
+    late(client);
     answer([]);
     await vi.waitFor(() => { expect(published).toHaveLength(1); });
     client.emit({ kind: 'rows-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [REFERRER], sequence: 1 });
-
-    await answered([]);
-
-    expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(2);
-  });
-
-  it.each(['rows-changed', 'plugin-changed'])('asks nothing on %s while the record index reconciles', async (kind) => {
-    const { client, answered } = feed();
-    await answered([]);
-    client.emit(loadOrderStatusEventFixture(RECONCILING));
-    client.emit({ kind, plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [REFERRER], sequence: 1 });
 
     await answered([]);
 
