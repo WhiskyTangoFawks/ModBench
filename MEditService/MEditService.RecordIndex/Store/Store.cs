@@ -483,7 +483,11 @@ internal sealed class Store : IDisposable
             Connection,
             $"UPDATE {PluginDerivationRelation} SET derived_from = $1 WHERE plugin = $2 AND origin = $3 AND derived_from <> $1",
             derivedFrom.ToString(), key.Name, key.Origin);
-        if (restamped > 0) BumpSequence();
+        if (restamped > 0)
+        {
+            BumpSequence();
+            NamePluginFacts(key);
+        }
         tx.Commit();
     }
 

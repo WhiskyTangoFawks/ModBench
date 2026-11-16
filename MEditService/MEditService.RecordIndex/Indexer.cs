@@ -483,37 +483,53 @@ internal sealed class Indexer : IDisposable
             List<string> paths = [.. _handed];
             _handed.Clear();
             _validatingTurn = true;
-            return TakeNamed(paths);
+            return TakeNamed(paths, _ => false);
         }
     }
 
-    // Guarded by _turns.
-    private Action TakeNamed(List<string> paths)
+    // Guarded by _turns. Leaves the names of plugins still to land, and every hand naming one with each plugin it names.
+    private Action? TakeNamed(List<string> paths, Func<PluginAddress, bool> stillToLand)
     {
-        HashSet<PluginAddress> named = new(_named, PluginAddress.Comparer);
-        Dictionary<PluginAddress, AskedFiles> files = new(_namedFiles, PluginAddress.Comparer);
-        List<Hand> hands = [.. _namedHands];
-        _named.Clear();
-        _namedFiles.Clear();
-        _namedHands.Clear();
+        HashSet<PluginAddress> waiting = new(_named.Concat(_namedFiles.Keys).Where(stillToLand), PluginAddress.Comparer);
+        List<Hand> handsWaiting;
+        int waited;
+        do
+        {
+            waited = waiting.Count;
+            handsWaiting = [.. _namedHands.Where(hand => hand.Plugins.Any(handed => waiting.Contains(handed.Plugin)))];
+            waiting.UnionWith(handsWaiting.SelectMany(hand => hand.Plugins.Select(handed => handed.Plugin)));
+        }
+        while (waiting.Count > waited);
+
+        HashSet<PluginAddress> named = new(_named.Where(key => !waiting.Contains(key)), PluginAddress.Comparer);
+        Dictionary<PluginAddress, AskedFiles> files = _namedFiles.Where(asked => !waiting.Contains(asked.Key)).ToDictionary(PluginAddress.Comparer);
+        List<Hand> hands = [.. _namedHands.Except(handsWaiting)];
+        if (paths.Count == 0 && named.Count == 0 && files.Count == 0 && hands.Count == 0) return null;
+        _named.ExceptWith(named);
+        foreach (var key in files.Keys) _namedFiles.Remove(key);
+        _namedHands.RemoveAll(hands.Contains);
         return () => ValidateAndPublish(paths, named, files, hands);
     }
 
-    // ADR-0029: long work lands the changes named meanwhile between its steps, unless one names a plugin the work is still to
-    // land, or a newer load order waits for the work's end. True when it landed any.
-    private bool LandNamedBetween(Func<PluginAddress, bool> stillToLand)
+    // ADR-0029: long work lands what was named meanwhile between its steps, except a plugin still to land, and nothing while
+    // a newer load order waits. A landing that reopened the store stops the work with its failure.
+    private bool LandNamedBetween(OpenScope scope, Func<PluginAddress, bool> stillToLand)
     {
-        Action landing;
+        Action? landing;
         bool validating;
+        var newerWaits = !ReferenceEquals(_holder.Held?.Snapshot, scope.LoadOrder);
         lock (_turns)
         {
-            if (_reconcileAsked || (_named.Count == 0 && _namedFiles.Count == 0 && _namedHands.Count == 0)) return false;
-            if (_named.Concat(_namedFiles.Keys).Any(stillToLand)) return false;
-            landing = TakeNamed([]);
+            if (newerWaits || TakeNamed([], stillToLand) is not { } taken) return false;
+            landing = taken;
             (validating, _validatingTurn) = (_validatingTurn, true);
         }
         try { landing(); }
         finally { lock (_turns) _validatingTurn = validating; }
+        lock (_lock)
+        {
+            if (!ReferenceEquals(_scope, scope)) throw new IndexFaultException(_standing.ReReadFailure ?? NotReopened);
+        }
         return true;
     }
 
@@ -954,15 +970,13 @@ internal sealed class Indexer : IDisposable
             PublishStatus();
         }
 
-        ReDeriveMovedTruths(scope, reDerived, token);
-        foreach (var plugin in restrung)
-        {
-            token.ThrowIfCancellationRequested();
+        HashSet<PluginAddress> toArrive = new(arriving.Select(plugin => plugin.Key), PluginAddress.Comparer);
+        ReadEachLandingBetween(scope, reDerived, toArrive.Contains, plugin => ReDerive(scope, plugin, token), token);
+        ReadEachLandingBetween(scope, restrung, toArrive.Contains, plugin =>
             ReadOne(scope, plugin, state =>
                 held.Open(plugin, Registration.In(snapshot, plugin.Key), snapshot).Holds(out var metadata, out var failure)
                     ? ReadWhole(scope, metadata, state)
-                    : ReadOutcome.Failed(failure), token);
-        }
+                    : ReadOutcome.Failed(failure), token), token);
 
         // Two distinct numbers: time to the first queryable plugin (the tree becomes usable) and
         // time to the winner sweep completing. Measured here rather than client-side, where the
@@ -978,7 +992,7 @@ internal sealed class Indexer : IDisposable
         while (pending.Count > 0)
         {
             if (LandArrivals(scope, snapshot, pending, indexed, token) > 0) firstUsableMs ??= timer.ElapsedMilliseconds;
-            LandNamedBetween(key => pending.Any(plugin => PluginAddress.Comparer.Equals(plugin.Key, key)));
+            LandNamedBetween(scope, key => pending.Any(plugin => PluginAddress.Comparer.Equals(plugin.Key, key)));
         }
 
         // The whole-set sweep, and the moment conflict information becomes correct: a plugin that
@@ -1005,23 +1019,30 @@ internal sealed class Indexer : IDisposable
         derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom != scope.Projector.TruthOf(plugin)
         && !scope.Failed.Holds(plugin.Key);
 
-    // A plugin whose folder gained or lost its repository or its tree since it was indexed. Nothing here
-    // has compared the two truths, so the plugin is re-derived whole from the one its folder now offers.
-    private void ReDeriveMovedTruths(OpenScope scope, IReadOnlyList<RegisteredPlugin> plugins, CancellationToken token)
+    private void ReadEachLandingBetween(
+        OpenScope scope, IReadOnlyList<RegisteredPlugin> plugins, Func<PluginAddress, bool> stillToLand, Action<RegisteredPlugin> read,
+        CancellationToken token)
     {
         foreach (var plugin in plugins)
         {
             token.ThrowIfCancellationRequested();
-            if (scope.Held.Find(plugin.Key) is not { } metadata) continue;
-
-            if (_logger.IsEnabled(LogLevel.Information))
-            {
-                _logger.LogInformation(
-                    "{Plugin} ({Origin}) now reads as {Truth}; re-deriving it", plugin.Name, plugin.Origin,
-                    scope.Projector.TruthOf(plugin));
-            }
-            ReadOne(scope, plugin, state => IndexOnePlugin(scope, metadata, state, token), token);
+            read(plugin);
+            LandNamedBetween(scope, stillToLand);
         }
+    }
+
+    // A plugin whose folder gained or lost its repository or its tree since it was indexed. Nothing here
+    // has compared the two truths, so the plugin is re-derived whole from the one its folder now offers.
+    private void ReDerive(OpenScope scope, RegisteredPlugin plugin, CancellationToken token)
+    {
+        if (scope.Held.Find(plugin.Key) is not { } metadata) return;
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "{Plugin} ({Origin}) now reads as {Truth}; re-deriving it", plugin.Name, plugin.Origin,
+                scope.Projector.TruthOf(plugin));
+        }
+        ReadOne(scope, plugin, state => IndexOnePlugin(scope, metadata, state, token), token);
     }
 
     // plugins.md, A row, Plugin: one plugin that cannot be read is that row's "Failed to read", never
@@ -1107,15 +1128,15 @@ internal sealed class Indexer : IDisposable
     private void FailRead(OpenScope scope, PluginAddress key, LoadFailure failure) =>
         FailRead(scope, key, ReadFailure(failure.Reason, scope.Store.DerivationOf(key)), failure.IsDiagnosis ? failure.Reason : null);
 
-    // A landing reapplies the record filter, so arrivals indexed before land together. A plugin the
-    // record index has not read lands alone, so no plugin waits on its read to be listed.
-    private static readonly TimeSpan ArrivalsLandTogetherFor = TimeSpan.FromSeconds(0.5);
+    // A landing reapplies the record filter, so arrivals indexed before, and plugins a check validates, land together. A
+    // plugin the record index has not read lands alone, so no plugin waits on its read to be listed.
+    private static readonly TimeSpan LandTogetherFor = TimeSpan.FromSeconds(0.5);
 
     private int LandArrivals(
         OpenScope scope, LoadOrderSnapshot snapshot, Queue<RegisteredPlugin> pending, Lazy<Store.IndexedStamps> arrivals, CancellationToken token)
     {
         var landed = new List<PluginMetadata>();
-        var until = _timeProvider.GetUtcNow() + ArrivalsLandTogetherFor;
+        var until = _timeProvider.GetUtcNow() + LandTogetherFor;
         try
         {
             scope.Store.Commit(projection =>
@@ -1264,26 +1285,59 @@ internal sealed class Indexer : IDisposable
             ? string.Join('\n', places.Select(place => $"{Store.Store.RelativeWithin(loadOrder.DataFolderPath, place)}|{plugin.Strings.StampOf(place) ?? loadOrder.StampOf(place)}"))
             : failure.Reason);
 
+    // ADR-0029: the plugins validated within a landing's time land together, and what was named meanwhile lands between,
+    // moving the stamps. A plugin not held failed to open, and the reconcile opens it again once its bytes change.
     private void ValidateIndex(CancellationToken token)
     {
         var scope = RequireScope();
-        // A plugin not held failed to open, and the reconcile opens it again once its bytes change.
-        Validate(scope, scope.Held.Plugins, token, landNamedBetween: true);
+        var plugins = scope.Held.Plugins;
+        Store.IndexedStamps? indexed = null;
+        var at = 0;
+        do
+        {
+            var until = _timeProvider.GetUtcNow() + LandTogetherFor;
+            var landed = new List<PluginMetadata>();
+            try
+            {
+                scope.Store.Commit(_ =>
+                {
+                    indexed ??= scope.Store.IndexedStamps(plugins.Skip(at).Select(held => held.Key).Where(key => !scope.Projector.Matched(key)));
+                    for (var first = true; at < plugins.Count && (first || _timeProvider.GetUtcNow() < until); first = false)
+                    {
+                        token.ThrowIfCancellationRequested();
+                        if (scope.Held.Find(plugins[at++].Key) is { } plugin && ValidateOne(scope, plugin, indexed, token)) landed.Add(plugin);
+                    }
+                });
+            }
+            finally
+            {
+                ListLanded(landed);
+            }
+            if (LandNamedBetween(scope, _ => false)) indexed = null;
+        }
+        while (at < plugins.Count);
     }
 
-    // ADR-0029: each plugin lands in a commit of its own, which announces it. A change landed between moves the stamps, so
-    // they are read again. The commit of no plugin lands a sweep owed.
-    private void Validate(OpenScope scope, IReadOnlyList<PluginMetadata> plugins, CancellationToken token, bool landNamedBetween = false)
+    // Each plugin read whole lands in its own transaction, so one read before a throw is listed too:
+    // in a finally, after the commit's own finally has landed it.
+    private void Validate(OpenScope scope, IEnumerable<PluginMetadata> plugins, CancellationToken token)
     {
-        if (plugins.Count == 0) scope.Store.Commit(_ => { });
-        Store.IndexedStamps? indexed = null;
-        for (var at = 0; at < plugins.Count; at++)
+        var landed = new List<PluginMetadata>();
+        try
         {
-            token.ThrowIfCancellationRequested();
-            if (scope.Held.Find(plugins[at].Key) is not { } plugin) continue;
-            indexed ??= scope.Store.IndexedStamps(plugins.Skip(at).Select(held => held.Key).Where(key => !scope.Projector.Matched(key)));
-            if (scope.Store.Commit(_ => ValidateOne(scope, plugin, indexed, token))) ListLanded([plugin]);
-            if (landNamedBetween && LandNamedBetween(_ => false)) indexed = null;
+            scope.Store.Commit(_ =>
+            {
+                var indexed = scope.Store.IndexedStamps(plugins.Select(plugin => plugin.Key).Where(key => !scope.Projector.Matched(key)));
+                foreach (var plugin in plugins)
+                {
+                    token.ThrowIfCancellationRequested();
+                    if (ValidateOne(scope, plugin, indexed, token)) landed.Add(plugin);
+                }
+            });
+        }
+        finally
+        {
+            ListLanded(landed);
         }
     }
 

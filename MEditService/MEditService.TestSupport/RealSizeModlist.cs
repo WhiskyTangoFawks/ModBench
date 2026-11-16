@@ -63,7 +63,9 @@ public sealed class RealSizeModlist : IDisposable
     public IReadOnlyList<string> TheManyDocuments => _manyDocuments;
 
     /// <summary>The plugins of a few records each, read from their binaries.</summary>
-    public IReadOnlyList<LoadOrderEntry> SmallBinaryPlugins => [.. LoadOrder.Where((_, rank) => rank > 400 && !IsSourceTree(rank))];
+    public IReadOnlyList<LoadOrderEntry> SmallBinaryPlugins => [.. LoadOrder.Where((_, rank) => RecordsOf(rank) <= FewRecords && !IsSourceTree(rank))];
+
+    private const int FewRecords = 50;
 
     /// <summary>A source mod no commit holds the tree of, kept out of the load order until a test brings it in.</summary>
     public LoadOrderEntry UncommittedPlugin => _uncommitted.Require();
