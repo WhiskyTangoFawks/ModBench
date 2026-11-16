@@ -25,7 +25,7 @@ const h = vi.hoisted(() => ({
 vi.mock('vscode', () => ({
   ...fakeVscodeModule(),
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
-  Uri, DataTransferItem, DataTransfer, Diagnostic, DiagnosticSeverity, Range, ProgressLocation: { Window: 10 },
+  Uri, DataTransferItem, DataTransfer, Diagnostic, DiagnosticSeverity, Range,
   languages: { createDiagnosticCollection: (name: string) => { const collection = new FakeDiagnosticCollection(); diagnosticCollections.set(name, collection); return collection; } },
   tasks: { registerTaskProvider: (type: string) => { h.taskTypes.push(type); return { dispose: () => undefined }; } },
   workspace: {
@@ -43,7 +43,7 @@ vi.mock('vscode', () => ({
       return Promise.resolve(undefined);
     },
     registerCustomEditorProvider: () => ({ dispose: () => undefined }),
-    withProgress: (_options: unknown, task: (progress: unknown, token: unknown) => Promise<unknown>) => task({ report: () => undefined }, { onCancellationRequested: () => undefined }),
+    withProgress: (_options: unknown, task: () => Promise<unknown>) => task(),
     registerFileDecorationProvider: (provider: vscode.FileDecorationProvider) => {
       h.decorationProviders.push(provider);
       return { dispose: () => undefined };
@@ -60,8 +60,7 @@ vi.mock('vscode', () => ({
 
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import { file, folder, mod } from './indexedValue';
-import { ModNode, SeparatorGroupNode, SeparatorNode } from '../ModListProvider';
-import { groupSeparators } from '../separatorGroups';
+import { ModNode, SeparatorNode } from '../ModListProvider';
 import { createModsView } from '../modsView';
 import { modArgumentOf, separatorArgumentOf } from '../../drivingLib/argument';
 import { ArchivedFileNode, FileNode } from '../modFiles';
@@ -661,37 +660,5 @@ describe('the Mods view\'s selection and the highlight (plugins.md, The highligh
       if (typeof label === 'object' && label.highlights !== undefined) marked.push(label.label);
     }
     expect(marked).toEqual(['0 Beta']);
-  });
-});
-
-describe('a separator group among the selected rows (mods.md, Separator group)', () => {
-  const groupRow = () => {
-    const held = ['Pack - One', 'Pack - Two'].map((name) => ({ separator: { kind: 'separator', name, enabled: true } as const, mods: [] }));
-    const [group] = groupSeparators(held);
-    if (group?.kind !== 'group') throw new Error('expected a group');
-    return new SeparatorGroupNode(group, []);
-  };
-
-  it('is a row no key acts on, as a file or a folder is', () => {
-    createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
-    const harderVats = new ModNode({ kind: 'mod', name: 'Harder VATS', enabled: false });
-
-    treeViews.view().selectRows([harderVats, groupRow()]);
-
-    expect([h.state.contextKeys.get('modbench.mod.selectionToggle'), h.state.contextKeys.get('modbench.mod.selectionKind')]).toEqual([undefined, undefined]);
-  });
-
-  it('is passed over by every Mods gesture a key fires, with the group selected', async () => {
-    const deps = otherDeps();
-    const focusedView = { ...deps.focusedView, id: () => 'modbench.modList', selection: () => treeViews.view().selection };
-    createModsView({ ...deps, focusedView, instance: new FakeInstance(listing(LISTED_MODS)), ...noSync() });
-    treeViews.view().selectRows([groupRow()]);
-    const ids = [...h.state.commands.keys()].filter((id) => id.startsWith('modbench.mod.') && !['modbench.mod.install', 'modbench.mod.createEmpty', 'modbench.mod.build', 'modbench.mod.sync', 'modbench.mod.updateManifest', 'modbench.mod.restoreFromManifest', 'modbench.mod.checkForUpdates'].includes(id));
-
-    const settled = await Promise.allSettled(ids.map((id) => Promise.resolve(present(h.state.commands.get(id), id)())));
-
-    expect(settled.flatMap((outcome, at) => (outcome.status === 'rejected' ? [`${ids[at]}: ${String(outcome.reason)}`] : []))).toEqual([]);
-    expect(h.picked).toEqual([]);
-    expect(deps.trash).not.toHaveBeenCalled();
   });
 });

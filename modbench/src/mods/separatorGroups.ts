@@ -11,7 +11,6 @@ export interface SeparatorLeaf {
 
 export interface SeparatorGroup {
   readonly kind: 'group';
-  /** The prefix path, and which run of that path this is, counting in mod order. */
   readonly path: string;
   readonly run: number;
   readonly label: string;

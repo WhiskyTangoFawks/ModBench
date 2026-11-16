@@ -7,8 +7,16 @@ vi.mock('vscode', () => ({
 
 import { modsKeyContext } from '../gestureEntry';
 import { file, folder } from './indexedValue';
-import { ModNode, OverwriteNode, SeparatorNode } from '../ModListProvider';
+import { ModNode, OverwriteNode, SeparatorGroupNode, SeparatorNode } from '../ModListProvider';
+import { groupSeparators } from '../separatorGroups';
 import { FileNode, FolderNode } from '../modFiles';
+
+const separatorGroupRow = () => {
+  const held = ['Pack - One', 'Pack - Two'].map((name) => ({ separator: { kind: 'separator', name, enabled: true } as const, mods: [] }));
+  const [entry] = groupSeparators(held);
+  if (entry?.kind !== 'group') throw new Error('expected a group');
+  return new SeparatorGroupNode(entry, []);
+};
 
 const separatorRow = (name: string) => new SeparatorNode({ kind: 'separator', name, enabled: true }, []);
 
@@ -63,6 +71,7 @@ describe('what the Mods keys read off the selection', () => {
     ['an enabled mod and a file', [enabledMod, texturesLeaf]],
     ['a disabled mod and a folder', [disabledMod, texturesFolder]],
     ['a separator and a file', [group, texturesLeaf]],
+    ['a disabled mod and a separator group', [disabledMod, separatorGroupRow()]],
   ])('Space, Delete and F2 do nothing over %s, either of which may be the focused row', (_case, selection) => {
     expect(modsKeyContext(selection, byRow)).toMatchObject({ selectionToggle: undefined, selectionKind: undefined });
   });
