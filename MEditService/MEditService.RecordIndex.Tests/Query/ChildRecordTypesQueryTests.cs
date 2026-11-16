@@ -93,4 +93,15 @@ public sealed class ChildRecordTypesQueryTests : IDisposable
     {
         Assert.Null(_index.Queries.GetChildRecordTypes(new PluginAddress("Other.esp", PluginOrigin.DataDirectory), Quest).Value());
     }
+
+    [Fact]
+    public void ACellOfAPluginThatIsNotActive_IsAnsweredLikeAnyOther()
+    {
+        var shadowed = new PluginAddress(PluginName, "OtherMod");
+        Assert.Null(Assert.Single(_index.Queries.GetPlugins().Value(), plugin => plugin.Origin == shadowed.Origin).LoadOrderIndex);
+
+        var types = _index.Queries.GetChildRecordTypes(shadowed, ExteriorCell).Value();
+
+        Assert.Equal(["Navmesh", .. PlacedRecordTables.DisplayNames], types?.Select(t => t.DisplayName));
+    }
 }
