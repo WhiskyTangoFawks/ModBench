@@ -363,6 +363,19 @@ describe('the Plugins view follows mEdit\'s change event', () => {
     expect(new Set(redrawn)).toEqual(new Set([test]));
   });
 
+  it.each(['rows-changed', 'plugin-changed'])('asks mEdit for only the named plugin\'s facts, and for no diagnosis scan, on mEdit\'s %s', async (kind) => {
+    const { client, rows } = pluginsView(twoPlugins());
+    await handedOff(client);
+    await rows();
+    client.calls.length = 0;
+
+    client.emit({ ...rowsChanged, kind });
+
+    await vi.waitFor(() => { expect(pluginReads(client)).toBe(1); });
+    await settle();
+    expect(client.calls.map(({ method, args }) => [method, args])).toEqual([['getPlugins', [[TEST]]]]);
+  });
+
   it('redraws every row, and re-reads every plugin\'s records, when the change names none', async () => {
     const { client, recordBrowser, rows, provider } = pluginsView(twoPlugins());
     await handedOff(client);
