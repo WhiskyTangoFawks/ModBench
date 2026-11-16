@@ -571,7 +571,7 @@ internal sealed class RelationReads(
     /// naming <paramref name="fileName"/> that no file can be named for.</summary>
     public IReadOnlyList<NamedAt> GetFileNamings(string dataPath, string fileName) =>
         DocumentNamesWhere(
-            $"n.kind = '{DocumentNameKind.File}' AND (n.name = $1 OR contains(lower(n.refusal), lower($2))) AND {ActiveOrCompiled}", dataPath, fileName);
+            $"n.kind = '{DocumentNameKind.File}' AND (CASE WHEN n.refusal IS NULL THEN n.name = $1 ELSE contains(lower(n.name), lower($2)) END) AND {ActiveOrCompiled}", dataPath, fileName);
 
     private List<NamedAt> DocumentNamesWhere(string filter, params object[] values)
     {
@@ -597,10 +597,10 @@ internal sealed class RelationReads(
     {
         if (copies.Count == 0) return [];
         var (filter, values) = CopyBodies.Naming(copies);
-        return CopiesWhere(filter, "TRUE", values);
+        return CopiesWhere(filter, values);
     }
 
-    private IEnumerable<CopyHoldingText> CopiesWhere(string recordFilter, string pluginFilter, params object[] values)
+    private IEnumerable<CopyHoldingText> CopiesWhere(string recordFilter, params object[] values)
     {
         using var context = OpenRead();
         // The record filter and the length sit below the join, which would otherwise carry every document it matches (ADR-0010).
@@ -611,7 +611,6 @@ internal sealed class RelationReads(
             {TableDdlBuilder.RegisteredJoin("r", "plugin", "origin")}
             JOIN {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} d
               ON d.plugin = r.plugin AND d.origin = r.origin
-            WHERE {pluginFilter}
             ORDER BY r.plugin, r.origin, r.form_key
             """, reader => (Copy: CopySizeOf(reader), InPluginSource: reader.GetBoolean(4)), values);
         foreach (var (found, stored) in located.Zip(Stored(context, located.Select(found => new[] { found.Copy }))))

@@ -396,7 +396,7 @@ public sealed class RealSizeIndexTests(RealSizeIndex realSize)
     {
         MemberReferences? listed = null;
 
-        Budgets.Ran(OneKeystroke, () => listed = Index.Queries.GetFileReferences("Meshes/Generated/Mod007/Static0.nif").Value(), "Listing the references to a file path", Runs);
+        Budgets.Ran(OneKeystroke, () => listed = Index.Queries.GetFileReferences(RealSizeModlist.AFileTheBigSourcePluginNames).Value(), "Listing the references to a file path", Runs);
         Assert.NotEmpty(listed?.Copies ?? []);
     }
 

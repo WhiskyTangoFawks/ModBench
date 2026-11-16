@@ -388,8 +388,13 @@ internal sealed class RecordQueries(
     private static MemberReferences MemberReferencesOf(IReadOnlyList<NamedAt> named) =>
         new(
             [.. named.Where(found => found.Row.Refusal is null)
-                .GroupBy(found => (found.Row.FormKey, found.Plugin))
-                .Select(copy => new CopyNamingAtMembers(copy.Key.FormKey, copy.Key.Plugin, copy.First().InPluginSource, [.. copy.Select(found => found.Row.FieldPath)], copy.First().Row.RecordType, copy.First().Row.EditorId))],
+                .GroupBy(found => new RecordAt(found.Plugin, found.Row.FormKey), RecordAt.Comparer)
+                .Select(copy =>
+                {
+                    var first = copy.First();
+                    return new CopyNamingAtMembers(
+                        first.Row.FormKey, first.Plugin, first.InPluginSource, [.. copy.Select(found => found.Row.FieldPath)], first.Row.RecordType, first.Row.EditorId);
+                })],
             [.. named.Where(found => found.Row.Refusal is not null)
                 .Select(found => $"{ReadFailures.Copy(found.Row.FormKey, found.Plugin)}: {found.Row.FieldPath}: {found.Row.Refusal}")]);
 
@@ -421,7 +426,6 @@ internal sealed class RecordQueries(
             ? SourceAnswer.Of<CopyDocument?>(null)
             : CopyDocumentOf(plugin, identity));
 
-    // A caller that already holds the identity costs the record index no read.
     public Answer<CopyDocument?, IndexRefused> GetCopyDocument(PluginAddress plugin, RecordIdentity identity) =>
         _answer.Sourced(() => CopyDocumentOf(plugin, identity));
 

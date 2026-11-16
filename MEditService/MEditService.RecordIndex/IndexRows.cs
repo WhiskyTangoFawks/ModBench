@@ -22,7 +22,7 @@ internal record struct FormReferenceRow(
     string? EditorId);
 
 /// <summary>A script or a file a record's document names, at <paramref name="FieldPath"/>. A path no file can be named for
-/// has no <paramref name="Name"/>, and says why.</summary>
+/// holds the path as the record wrote it in <paramref name="Name"/>, and says why in <paramref name="Refusal"/>.</summary>
 internal sealed record DocumentNameRow(
     string FormKey, string RecordType, string? EditorId, DocumentNameKind Kind, string FieldPath, string? Name, string? Refusal);
 

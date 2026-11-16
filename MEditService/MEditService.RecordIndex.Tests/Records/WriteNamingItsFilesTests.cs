@@ -19,7 +19,7 @@ public sealed class WriteNamingItsFilesTests : IDisposable
 
     private static readonly string[] Relations =
     [
-        "SELECT * FROM mirror.records", "SELECT * FROM mirror.form_references", "SELECT * FROM mirror.holdings",
+        "SELECT * FROM mirror.records", "SELECT * FROM mirror.form_references", "SELECT * FROM mirror.holdings", "SELECT * FROM mirror.document_names",
         "SELECT * FROM mirror.cell_location", "SELECT * FROM winners",
     ];
 

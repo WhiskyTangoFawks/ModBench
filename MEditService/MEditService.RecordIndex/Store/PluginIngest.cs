@@ -336,11 +336,11 @@ internal sealed class PluginIngest
     private static List<DocumentNameRow> NamesIn(string body, RecordTableSchema schema, string formKey, string recordType, string? editorId)
     {
         var named = NamedInDocument.Of(body, schema.RecordColumns);
-        var files = named.Files;
+        var files = named.Assets;
         return
         [
             .. files.Files.Select(file => new DocumentNameRow(formKey, recordType, editorId, DocumentNameKind.File, file.FieldPath, file.DataPath, null)),
-            .. files.Refusals.Select(refused => new DocumentNameRow(formKey, recordType, editorId, DocumentNameKind.File, refused.FieldPath, null, refused.Reason)),
+            .. files.Refusals.Select(refused => new DocumentNameRow(formKey, recordType, editorId, DocumentNameKind.File, refused.FieldPath, refused.Given, refused.Reason)),
             .. named.Scripts
                 .Select(script => new DocumentNameRow(formKey, recordType, editorId, DocumentNameKind.Script, script.FieldPath, script.Name, null)),
         ];

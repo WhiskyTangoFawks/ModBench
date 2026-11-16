@@ -95,6 +95,7 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     [InlineData("holdings")]
     [InlineData("cell_location")]
     [InlineData("form_references")]
+    [InlineData("document_names")]
     public void ASideTablesRows_AreIdentical_CompiledPluginAndNonCompiledPlugin(string relation)
     {
         var binary = RowsOf(fixture.BinaryInstanceRoot, relation);

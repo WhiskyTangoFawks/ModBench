@@ -325,7 +325,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
 
     // The scripts and files a document names, one row each. A file's name is its path in the Data folder; a path its
-    // asset type cannot hold has no name, and says why.
+    // asset type cannot hold is named as written, and says why.
     internal static void CreateDocumentNamesTable(DuckDBConnection connection) =>
         DuckDbSql.Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.document_names (

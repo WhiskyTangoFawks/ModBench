@@ -16,7 +16,7 @@ public class AssetPathsTests
     private static IReadOnlyList<AssetPath> Collected(Tes5.Static record) =>
         NamedInDocument.Of(
             RecordTextCodec.SerializeToText(record, GameRelease.SkyrimSE),
-            SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["stat"].RecordColumns).Files.Files;
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["stat"].RecordColumns).Assets.Files;
 
     [Fact]
     public void APathARecordNames_IsTheFileInTheDataFolder_UnderItsAssetTypesFolder()
@@ -36,7 +36,7 @@ public class AssetPathsTests
 
         var collected = NamedInDocument.Of(
             RecordTextCodec.SerializeToText(record, GameRelease.Fallout4),
-            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["txst"].RecordColumns).Files.Files;
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["txst"].RecordColumns).Assets.Files;
 
         Assert.Equal(
             [
@@ -57,7 +57,7 @@ public class AssetPathsTests
     private static NamedFiles CollectedFrom(string given) =>
         NamedInDocument.Of(
             JsonSerializer.Serialize(new { Model = new { File = given } }),
-            SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["stat"].RecordColumns).Files;
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)["stat"].RecordColumns).Assets;
 
     [Fact]
     public void APathThatAlreadyNamesItsAssetTypesFolder_IsNotPrefixedTwice()

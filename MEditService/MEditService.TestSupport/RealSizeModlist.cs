@@ -15,6 +15,7 @@ public sealed class RealSizeModlist : IDisposable
     public const int ReferencesInTheBigCell = 4_000;
     public const int ManyDocuments = 1_000;
     public const string AttachedScript = "Generated:Attached";
+    public static readonly string AFileTheBigSourcePluginNames = $"Meshes/Generated/Mod{BigSourceRank:D3}/Static0.nif";
     private const int NpcsPerAttachedScript = 20;
 
     // LitR's records per plugin, by rank from the largest.

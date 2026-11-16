@@ -22,7 +22,7 @@ internal static class ScriptAttachments
 }
 
 /// <summary>The files and the scripts a document names, read from one parse of it.</summary>
-public sealed record NamedInDocument(NamedFiles Files, IReadOnlyList<ScriptAttachment> Scripts)
+public sealed record NamedInDocument(NamedFiles Assets, IReadOnlyList<ScriptAttachment> Scripts)
 {
     public static NamedInDocument Of(string text, IReadOnlyList<ColumnSpec> columns)
     {

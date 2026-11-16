@@ -95,6 +95,7 @@ public class RegistrationScopingTests
         var race = mod.Races.AddNew($"Race{tag}");
         var npc = mod.Npcs.AddNew($"Npc{tag}");
         npc.Race.SetTo(race.FormKey);
+        npc.VirtualMachineAdapter = new VirtualMachineAdapter { Scripts = [new ScriptEntry { Name = "Attached" }] };
 
         var wrld = mod.Worldspaces.AddNew($"World{tag}");
         var extCell = new Cell(mod) { EditorID = $"Cell{tag}", Grid = new CellGrid { Point = new P2Int(0, 0) } };
@@ -410,6 +411,7 @@ public class RegistrationScopingTests
     [InlineData("form_lookup", "plugin")]
     [InlineData("form_references", "source_plugin")]
     [InlineData("holdings", "plugin")]
+    [InlineData("document_names", "plugin")]
     [InlineData("cell_location", "plugin")]
     [InlineData("npc_", "plugin")]
     public void APluginThatIsNotActive_IsInNoRelationTheSqlDoorReads(string relation, string pluginColumn)

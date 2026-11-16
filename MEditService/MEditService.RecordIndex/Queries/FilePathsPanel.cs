@@ -54,12 +54,12 @@ internal static class FilePathsPanel
             unread.AddRange(refused);
             if (refused.Count > 0) unreadOf[copy.Key] = refused;
             var first = copy.First();
-            if (copy.All(row => row.Name is null)) continue;
+            if (copy.All(row => row.Refusal is not null)) continue;
             if (!SourceFilePlacement.Places(plugin.Key, new RecordIdentity(first.FormKey, first.RecordType, first.EditorId), repository, out var file, out var failure))
                 return (Failed(plugin, failure, ProblemsFailureKind.Placement), NoUnread);
             foreach (var row in copy)
             {
-                if (row.Name is not { } name) continue;
+                if (row.Refusal is not null || row.Name is not { } name) continue;
                 if (row.Kind == DocumentNameKind.File) paths.Add(new NamedFilePath(row.FormKey, row.FieldPath, file, name));
                 else scripts.Add(new NamedScript(row.FormKey, row.FieldPath, file, name));
             }
