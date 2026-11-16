@@ -275,6 +275,21 @@ public sealed class CompiledTree
             drop.Field ?? throw new InvalidOperationException($"Expected the plugin written from the tree to hold {drop.Record.FormKey}.")))];
     }
 
+    // The game matches a plugin's name without case, so the plugin written names each master as the load
+    // order does, not as the source first spelled it.
+    private void SpellPluginsAsTheLoadOrderDoes(IReadOnlyList<string> masterOrder)
+    {
+        var spellings = masterOrder.Select(name => ModKey.FromFileName(name)).ToDictionary(key => key);
+        var respelled = new Dictionary<FormKey, FormKey>();
+        foreach (var key in _mod.EnumerateFormLinks().Select(link => link.FormKey))
+        {
+            if (!key.IsNull && spellings.TryGetValue(key.ModKey, out var spelled)
+                && !string.Equals(spelled.FileName.String, key.ModKey.FileName.String, StringComparison.Ordinal))
+                respelled.TryAdd(key, new FormKey(spelled, key.ID));
+        }
+        if (respelled.Count > 0) _mod.RemapLinks(respelled);
+    }
+
     /// <summary>The mod written to a temp file beside <paramref name="pluginPath"/> for
     /// <paramref name="land"/> to Commit into place, and discarded once it returns. Only the styles
     /// of <paramref name="masters"/>, the plugins the tree references, are read.</summary>
@@ -282,6 +297,7 @@ public sealed class CompiledTree
         string pluginPath, IReadOnlyList<string> masterOrder, IEnumerable<string> masters, Func<PreparedPluginSave, T> land)
     {
         if (!MasterStyles.Of(masters.Select(name => ModKey.FromFileName(name)), _loadOrder).Holds(out var styles, out var unread)) return unread;
+        SpellPluginsAsTheLoadOrderDoes(masterOrder);
         var landing = false;
         try
         {
