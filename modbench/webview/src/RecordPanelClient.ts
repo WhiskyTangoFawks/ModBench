@@ -29,10 +29,8 @@ interface LoadedPanel {
   columnStatuses: Readonly<Record<string, ColumnStatus>>;
   // The repository state of each origin that names a mod, which a column header offers version in git or decompile on.
   modsByOrigin: Record<string, ModRepository>;
-  // Whether the winner sweep has run (editor.md, States, story 3). Fails *closed*: an absent
-  // answer reads as "not computed", never as "settled", or a status-fetch blip would render a
-  // settled-looking grid over a comparison nothing checked.
-  conflictsComputed: boolean;
+  // Whether mEdit's record index may not be late (editor.md, States, story 3).
+  comparisonComplete: boolean;
   loadFailures: PluginLoadFailure[];
   // The column of the copy the tab's document holds; undefined when the read holds no such copy.
   fileColumn: ColumnKey | undefined;
@@ -83,7 +81,7 @@ export function createRecordPanelClient(): RecordPanelClient {
         editableSet: pluginList ? new Set(pluginList.filter(pluginCanBeEdited).map(p => columnKey(p))) : null,
         columnStatuses: answer.columnStatuses,
         modsByOrigin: answer.modsByOrigin,
-        conflictsComputed: answer.conflictsComputed,
+        comparisonComplete: answer.comparisonComplete,
         loadFailures: answer.loadFailures,
         fileColumn: fileCopy && copyColumnKey(fileCopy),
         fileCopyAlone: answer.fileCopyAlone,

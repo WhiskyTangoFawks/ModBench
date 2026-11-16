@@ -54,8 +54,19 @@ describe('the Referenced By list — states', () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getPlugins', []);
     client.setQueryAnswer('getReferencesInActiveOrCompiledPlugins', []);
+    client.setStatus('running');
+    client.answerSignals(() => new Promise<undefined>(() => undefined));
+    void client.signalChange(['/m/A.esp']);
     expect((await listOf(client)).message).toBe('No references found. mEdit is still indexing plugins: this list may not be complete.');
     client.setQueryAnswer('getReferencesInActiveOrCompiledPlugins', [reference({ formKey: '000002:Fallout4.esm' })]);
+    expect((await listOf(client)).message).toBe('mEdit is still indexing plugins: this list may not be complete.');
+  });
+
+  it('says the list may be incomplete while a change signal is unanswered, though the status holds conflicts computed', async () => {
+    const client = indexed([reference({ formKey: '000002:Fallout4.esm' })]);
+    client.setStatus('running');
+    client.answerSignals(() => new Promise<undefined>(() => undefined));
+    void client.signalChange(['/m/A.esp']);
     expect((await listOf(client)).message).toBe('mEdit is still indexing plugins: this list may not be complete.');
   });
 

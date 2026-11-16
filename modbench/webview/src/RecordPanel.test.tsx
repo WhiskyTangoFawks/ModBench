@@ -319,7 +319,7 @@ describe('RecordPanel — a file whose plugin is disabled, or in a disabled mod'
   afterEach(() => vi.unstubAllGlobals());
 
   it('shows its column alone, saying so above the grid and not that the comparison is incomplete, while mEdit indexes too', async () => {
-    renderPanel(alone, { ...opts, conflictsComputed: false });
+    renderPanel(alone, { ...opts, comparisonComplete: false });
 
     await waitFor(() => expect(screen.getByText(NOT_ACTIVE)).toBeInTheDocument());
     expect(screen.queryByText(required(recordPanelIncompleteMessage(false), 'the incomplete message'))).not.toBeInTheDocument();
@@ -384,7 +384,7 @@ describe('RecordPanel — a file whose plugin another mod\'s file overrides', ()
   });
 
   it('still says the comparison is incomplete while mEdit indexes', async () => {
-    renderPanel(overridden, { ...opts, conflictsComputed: false });
+    renderPanel(overridden, { ...opts, comparisonComplete: false });
 
     await waitFor(() => expect(screen.getByText(required(recordPanelIncompleteMessage(false), 'the incomplete message'))).toBeInTheDocument());
   });
@@ -900,13 +900,13 @@ describe('RecordPanel — incomplete-comparison banner', () => {
   });
 
   it('states the comparison is incomplete when opened while the winner sweep is outstanding', async () => {
-    renderPanel(compareResult, { conflictsComputed: false });
+    renderPanel(compareResult, { comparisonComplete: false });
     await waitFor(() => screen.getByText(incompleteMessage));
   });
 
   it('a panel already open when the sweep lands reads again and reflects settled data, not just clears its banner over stale content', async () => {
     const load = vi.fn()
-      .mockResolvedValueOnce(loaded(compareResult, { plugins: pluginsResponse, conflictsComputed: false }))
+      .mockResolvedValueOnce(loaded(compareResult, { plugins: pluginsResponse, comparisonComplete: false }))
       .mockResolvedValue(loaded(compareResult, { plugins: pluginsResponse }));
     renderPanel(compareResult, { load });
     await waitFor(() => screen.getByText(incompleteMessage));
@@ -1982,7 +1982,7 @@ describe('RecordPanel — several records side by side', () => {
   });
 
   it('says nothing of an incomplete comparison: the colours compare copies of one record', async () => {
-    renderPanel(sideBySide, { plugins: compiledPlugin, conflictsComputed: false });
+    renderPanel(sideBySide, { plugins: compiledPlugin, comparisonComplete: false });
 
     await waitFor(() => expect(screen.getByText('Ammo Name')).toBeInTheDocument());
     expect(screen.queryByText(required(recordPanelIncompleteMessage(false), 'the message'))).not.toBeInTheDocument();
