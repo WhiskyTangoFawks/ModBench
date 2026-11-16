@@ -2,13 +2,13 @@
 // overwrite folder listed whole. Neither answers the adapter's own writes in flight.
 
 import type { Dirent } from 'node:fs';
-import { sep } from 'node:path';
+import { dirname, sep } from 'node:path';
 import { errnoCode } from '../../ports/errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { lastHanded, noneLeft } from '../../ports/lastBuilt';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
-import { factsOf, listDirByStamp, realPathIfThere } from '../files';
+import { factsOf, listDir, listDirByStamp, realPathIfThere } from '../files';
 import { isOwnTemp } from '../../repositoriesLib/wholeWrites';
 import type { FileOrigin, ModFolders, OriginFile, OriginFiles, OriginFolder } from '../instanceAdapter';
 import { isManifestPath } from '../../repositoriesLib/manifestPath';
@@ -63,16 +63,21 @@ const keepFolder = (walk: Walk, path: string): void => {
   walk.folders.push({ relativePath, path, includedPath: includedPathOf(relativePath), excluded: isExcluded(relativePath) });
 };
 
-// A subfolder that is gone mid-walk or that this process may not read is skipped alone, noted. The root's
-// absence is its caller's to answer.
+// A subfolder gone mid-walk or unreadable is skipped alone, noted. The root's absence is its caller's to answer.
+// A denial lists the parent afresh: its kept listing may predate the denial.
 async function inSubfolder(walk: Walk, dir: string, visit: () => Promise<void>): Promise<void> {
+  const filesBefore = walk.files.length;
+  const foldersBefore = walk.folders.length;
   try {
     await visit();
   } catch (err) {
     const code = errnoCode(err);
     if (code !== 'ENOENT' && code !== 'EACCES' && code !== 'EPERM') throw err;
     walk.stampsCover = false;
+    walk.files.length = filesBefore;
+    walk.folders.length = walk.folders[foldersBefore]?.path === dir ? foldersBefore + 1 : foldersBefore;
     walk.notes.push(code === 'ENOENT' ? `"${dir}" was removed mid-read, skipped` : `"${dir}" cannot be read (${errorMessage(err)}), skipped`);
+    if (code !== 'ENOENT') await listDir(dirname(dir));
   }
 }
 
