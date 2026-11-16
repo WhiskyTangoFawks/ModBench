@@ -2029,14 +2029,14 @@ describe('the MO2 Instance adapter', () => {
         ['the overwrite folder', { kind: 'runtimeOutput' as const }, 'overwrite'],
         ['a mod', mod('Harder VATS'), join('mods', 'Harder VATS')],
       ])('a folder of %s that becomes unreadable after a read', (_name, origin, below) => {
-        it('names the folder and lists none of its files at a check of the disk', async () => {
+        const lockedAfterRead = async (disk: boolean) => {
           const locked = join(root, below, 'Textures', 'Locked');
           await mkdir(join(locked, 'Deeper'), { recursive: true });
           await writeFile(join(locked, 'hidden.txt'), '');
           await writeFile(join(locked, 'Deeper', 'deeper.txt'), '');
           await writeFile(join(root, below, 'Textures', 'a.dds'), '');
           const longAgo = new Date('2020-01-01');
-          for (const folder of [join(locked, 'Deeper'), locked, join(root, below, 'Textures'), join(root, below)]) await utimes(folder, longAgo, longAgo);
+          for (const folder of [locked, join(root, below, 'Textures'), join(root, below)]) await utimes(folder, longAgo, longAgo);
           await source.originFiles(origin, 'list');
           vi.mocked(readdir).mockImplementation(async (path, options) => {
             if (String(path) === locked || String(path).startsWith(locked + sep)) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
@@ -2046,7 +2046,12 @@ describe('the MO2 Instance adapter', () => {
             if (String(path).startsWith(locked + sep)) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
             return actualStat(path, ...rest);
           });
-          const { answer } = await readTrustingKept([], true, () => source.originFiles(origin, 'list'));
+          const { answer } = await readTrustingKept([], disk, () => source.originFiles(origin, 'list'));
+          return { locked, answer };
+        };
+
+        it.each([['at a check of the disk', true], ['at a read the watch asked for, where a folder below it is met unreadable', false]])('names the folder and lists none of its files %s', async (_when, disk) => {
+          const { locked, answer } = await lockedAfterRead(disk);
 
           expect(relativePaths(answer.files).filter((path) => path.startsWith('Textures/'))).toEqual(['Textures/a.dds']);
           expect(answer.notes.join('\n')).toContain(`"${locked}" cannot be read`);
