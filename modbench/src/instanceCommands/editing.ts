@@ -7,7 +7,7 @@ import { errorMessage } from '../ports/errorMessage';
 import { putLoadOrder, type ViewOrder, type LoadOrderSource, type PutLoadOrderResult } from './loadOrder';
 
 export interface EditingDeps {
-  client: Pick<MEditClient, 'sendLoadOrder' | 'onLaunch' | 'latestLoadOrder' | 'signalChange'>;
+  client: Pick<MEditClient, 'sendLoadOrder' | 'onLaunch' | 'onDidChange' | 'loadOrderStatus' | 'latestLoadOrder' | 'signalChange'>;
   instanceRoot: string;
   /** The Plugins view's order of the active plugins; `onChange` is the moment it may have changed, as Editing read the plugins. */
   viewOrder: { of: ViewOrder; onChange(listener: () => void): { dispose(): void } };
@@ -89,8 +89,10 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
     await tells.settled();
   };
 
+  const refusals = client.onDidChange(() => { if (client.loadOrderStatus?.refusal !== undefined) handed = undefined; });
   const unsubscribes = [
     () => { changeOfOrder.dispose(); },
+    () => { refusals.dispose(); },
     client.onLaunch((launched) => {
       const shown = launches.track(tellLaunch(launched));
       if (!entering) void around(() => shown);

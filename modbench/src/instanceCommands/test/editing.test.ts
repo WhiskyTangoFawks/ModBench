@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { LaunchOutcome, LoadOrderOutcome, LoadOrderProgress, LoadOrderSnapshot } from '../../client';
+import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { editingFlow } from '../editing';
 import type { PutLoadOrderResult } from '../loadOrder';
@@ -174,6 +175,22 @@ describe('a put the client makes again on its own', () => {
 
     expect(putPluginNames()).toEqual(['A.esp', 'A.esp']);
     expect(told).toHaveLength(1);
+  });
+
+  it('leaves the next gesture handing the load order again when the put failed', async () => {
+    const { client, toldCount, land, putPluginNames } = wired();
+    land(valueWith('A.esp'));
+    await toldCount(1);
+    client.answerPuts(() => Promise.resolve({ outcome: 'failed', message: 'no' }));
+    client.reconnected();
+    await client.latestLoadOrder();
+    client.emit(loadOrderStatusEventFixture({ state: 'Failed', message: 'no', conflictsComputed: false }));
+    client.answerPuts(() => Promise.resolve(APPLIED));
+
+    land(valueWith('A.esp'));
+    await toldCount(2);
+
+    expect(putPluginNames()).toEqual(['A.esp', 'A.esp', 'A.esp']);
   });
 });
 
