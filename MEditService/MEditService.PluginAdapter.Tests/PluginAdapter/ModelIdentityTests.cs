@@ -452,10 +452,10 @@ public sealed class ModelIdentityTests
         { "a plugin name in another case", () => (HeadPart("Upper.esp", 0x817), HeadPart("UPPER.ESP", 0x817)), false },
         { "an id", () => (HeadPart("Upper.esp", 0x817), HeadPart("Upper.esp", 0x818)), true },
         { "a plugin beyond case", () => (HeadPart("Upper.esp", 0x817), HeadPart("Other.esp", 0x817)), true },
-        { "None in another case", () => (EditorId("None"), EditorId("none")), true },
-        { "leading whitespace", () => (EditorId("000817:Upper.esp"), EditorId(" 000817:Upper.esp")), true },
-        { "an underscore for the colon", () => (EditorId("000817:Upper.esp"), EditorId("000817_Upper.esp")), true },
-        { "an id in another hex case", () => (EditorId("00081D:Upper.esp"), EditorId("00081d:Upper.esp")), true },
+        { "None in another case", () => (ScriptString("None"), ScriptString("none")), true },
+        { "leading whitespace", () => (ScriptString("000817:Upper.esp"), ScriptString(" 000817:Upper.esp")), true },
+        { "an underscore for the colon", () => (ScriptString("000817:Upper.esp"), ScriptString("000817_Upper.esp")), true },
+        { "an id in another hex case", () => (ScriptString("00081D:Upper.esp"), ScriptString("00081d:Upper.esp")), true },
     };
 
     [Theory]
@@ -471,7 +471,14 @@ public sealed class ModelIdentityTests
     private static Fallout4Mod HeadPart(string plugin, uint id) =>
         NpcWith(npc => npc.HeadParts.Add(new FormLink<IHeadPartGetter>(new FormKey(ModKey.FromFileName(plugin), id))));
 
-    private static Fallout4Mod EditorId(string text) => NpcWith(npc => npc.EditorID = text);
+    private static Fallout4Mod ScriptString(string text) => NpcWith(npc => npc.VirtualMachineAdapter = new VirtualMachineAdapter
+    {
+        Scripts = [new ScriptEntry
+        {
+            Name = "Script",
+            Properties = [new ScriptStringProperty { Name = "Text", Data = text }],
+        }],
+    });
 
     private static Fallout4Mod NpcWith(Action<Npc> set)
     {
