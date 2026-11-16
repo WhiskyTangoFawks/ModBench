@@ -191,9 +191,14 @@ internal static class ModelIdentity
         }
     }
 
-    // A plugin name is the same name in any case: the game and Mutagen's ModKey match it so.
+    // A plugin name is the same name in any case: the game and Mutagen's ModKey match it so. Only a string
+    // already spelled as Mutagen writes a FormKey is one: the parser also trims, reads "None" in any case,
+    // takes "_" for ":" and any case of hex, and none of those is a case of a plugin name.
     private static bool SameFormKey(string left, string right) =>
-        FormKey.TryFactory(left, out var leftKey) && FormKey.TryFactory(right, out var rightKey) && leftKey == rightKey;
+        AsWritten(left) is { } leftKey && AsWritten(right) is { } rightKey && leftKey == rightKey;
+
+    private static FormKey? AsWritten(string text) =>
+        FormKey.TryFactory(text, out var key) && text == key.ToString() ? key : null;
 
     private static bool IsZeroSpelling(string rawNumber) => rawNumber is "0" or "-0" or "0.0" or "-0.0";
 

@@ -447,31 +447,37 @@ public sealed class ModelIdentityTests
         Assert.Null(divergence);
     }
 
-    [Fact]
-    public async Task DivergenceFrom_WhenAFormKeyDiffersOnlyInThePluginNamesCase_ReturnsNull()
+    public static TheoryData<string, Func<(Fallout4Mod Original, Fallout4Mod Recompiled)>, bool> FormKeySpellings => new()
     {
-        var original = NpcWithAHeadPart(new FormKey(ModKey.FromFileName("Upper.esp"), 0x817));
-        var recompiled = NpcWithAHeadPart(new FormKey(ModKey.FromFileName("UPPER.ESP"), 0x817));
-
-        Assert.Null(await DivergenceAsync(original, recompiled));
-    }
+        { "a plugin name in another case", () => (HeadPart("Upper.esp", 0x817), HeadPart("UPPER.ESP", 0x817)), false },
+        { "an id", () => (HeadPart("Upper.esp", 0x817), HeadPart("Upper.esp", 0x818)), true },
+        { "a plugin beyond case", () => (HeadPart("Upper.esp", 0x817), HeadPart("Other.esp", 0x817)), true },
+        { "None in another case", () => (EditorId("None"), EditorId("none")), true },
+        { "leading whitespace", () => (EditorId("000817:Upper.esp"), EditorId(" 000817:Upper.esp")), true },
+        { "an underscore for the colon", () => (EditorId("000817:Upper.esp"), EditorId("000817_Upper.esp")), true },
+        { "an id in another hex case", () => (EditorId("00081D:Upper.esp"), EditorId("00081d:Upper.esp")), true },
+    };
 
     [Theory]
-    [InlineData("Upper.esp", 0x818u)]
-    [InlineData("Other.esp", 0x817u)]
-    public async Task DivergenceFrom_WhenAFormKeyDiffersInItsIdOrBeyondCase_NamesTheField(string plugin, uint id)
+    [MemberData(nameof(FormKeySpellings))]
+    public async Task DivergenceFrom_WhenAFormKeyDiffers_OnlyInThePluginNamesCaseIsTheSameValue(
+        string _, Func<(Fallout4Mod Original, Fallout4Mod Recompiled)> mods, bool diverges)
     {
-        var original = NpcWithAHeadPart(new FormKey(ModKey.FromFileName("Upper.esp"), 0x817));
-        var recompiled = NpcWithAHeadPart(new FormKey(ModKey.FromFileName(plugin), id));
+        var (original, recompiled) = mods();
 
-        Assert.Contains("HeadParts", await DivergenceAsync(original, recompiled));
+        Assert.Equal(diverges, await DivergenceAsync(original, recompiled) is not null);
     }
 
-    private static Fallout4Mod NpcWithAHeadPart(FormKey headPart)
+    private static Fallout4Mod HeadPart(string plugin, uint id) =>
+        NpcWith(npc => npc.HeadParts.Add(new FormLink<IHeadPartGetter>(new FormKey(ModKey.FromFileName(plugin), id))));
+
+    private static Fallout4Mod EditorId(string text) => NpcWith(npc => npc.EditorID = text);
+
+    private static Fallout4Mod NpcWith(Action<Npc> set)
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var npc = new Npc(new FormKey(mod.ModKey, 0x800), Fallout4Release.Fallout4) { EditorID = "Npc" };
-        npc.HeadParts.Add(new FormLink<IHeadPartGetter>(headPart));
+        set(npc);
         mod.Npcs.Add(npc);
         return mod;
     }

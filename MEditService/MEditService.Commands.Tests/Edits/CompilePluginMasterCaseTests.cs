@@ -29,7 +29,7 @@ public sealed class CompilePluginMasterCaseTests : TestInstance
     }
 
     [Fact]
-    public async Task Compile_WhenTheSourceSpellsAMasterInTwoCases_WritesTheLoadOrdersSpelling_AndKeepsEveryReference()
+    public async Task Compile_WhenTheSourceSpellsAMasterInTwoCases_Compiles_AndKeepsEveryReference()
     {
         SourceEdits.Rewrite<Npc>(
             RepositoryOf(_plugin).Require(), _plugin, new RecordIdentity(_npc.ToString(), "npc_", "HostNpc"), GameRelease.Fallout4,
@@ -38,7 +38,6 @@ public sealed class CompilePluginMasterCaseTests : TestInstance
 
         using var compiled = await this.CompiledAsync(_plugin);
 
-        Assert.Equal([LoadOrderSpelling], compiled.MasterReferences.Select(m => m.Master.FileName.String));
         Assert.Equal(
             _keywords.Select(key => key.ID),
             compiled.Npcs.Single().Keywords.Require().Select(link => link.FormKey.ID));

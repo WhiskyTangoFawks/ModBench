@@ -275,19 +275,30 @@ public sealed class CompiledTree
             drop.Field ?? throw new InvalidOperationException($"Expected the plugin written from the tree to hold {drop.Record.FormKey}.")))];
     }
 
-    // The game matches a plugin's name without case, so the plugin written names each master as the load
-    // order does, not as the source first spelled it.
+    // Mutagen writes a master under the first spelling of its name that a record carries, and the game
+    // matches names without case. So each name in a record's own FormKey and in its links is respelled as
+    // masterOrder spells it, and the header names the master as the load order does.
     private void SpellPluginsAsTheLoadOrderDoes(IReadOnlyList<string> masterOrder)
     {
-        var spellings = masterOrder.Select(name => ModKey.FromFileName(name)).ToDictionary(key => key);
-        var respelled = new Dictionary<FormKey, FormKey>();
-        foreach (var key in _mod.EnumerateFormLinks().Select(link => link.FormKey))
-        {
-            if (!key.IsNull && spellings.TryGetValue(key.ModKey, out var spelled)
-                && !string.Equals(spelled.FileName.String, key.ModKey.FileName.String, StringComparison.Ordinal))
-                respelled.TryAdd(key, new FormKey(spelled, key.ID));
-        }
-        if (respelled.Count > 0) _mod.RemapLinks(respelled);
+        var spellings = new Dictionary<ModKey, ModKey>();
+        foreach (var key in masterOrder.Select(name => ModKey.FromFileName(name))) spellings.TryAdd(key, key);
+
+        FormKey Respelled(FormKey key) =>
+            !key.IsNull && spellings.TryGetValue(key.ModKey, out var spelled)
+            && !string.Equals(spelled.FileName.String, key.ModKey.FileName.String, StringComparison.Ordinal)
+                ? new FormKey(spelled, key.ID)
+                : key;
+
+        static bool Differs(FormKey key, FormKey other) =>
+            !string.Equals(key.ModKey.FileName.String, other.ModKey.FileName.String, StringComparison.Ordinal);
+
+        var respelledLinks = new Dictionary<FormKey, FormKey>();
+        foreach (var key in _mod.EnumerateFormLinks().Select(link => link.FormKey).Where(key => Differs(key, Respelled(key))))
+            respelledLinks.TryAdd(key, Respelled(key));
+        if (respelledLinks.Count > 0) _mod.RemapLinks(respelledLinks);
+
+        foreach (var record in _mod.EnumerateMajorRecords().OfType<IMajorRecordInternal>().Where(record => Differs(record.FormKey, Respelled(record.FormKey))))
+            record.FormKey = Respelled(record.FormKey);
     }
 
     /// <summary>The mod written to a temp file beside <paramref name="pluginPath"/> for
