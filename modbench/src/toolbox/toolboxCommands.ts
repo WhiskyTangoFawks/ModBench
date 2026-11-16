@@ -1,8 +1,7 @@
 import * as vscode from 'vscode';
-import type { RefreshResult } from '../instanceCommands/loadOrder';
 import type { Instance } from '../instanceLoader/instance';
 import type { InstanceCommands } from '../instanceCommands/instanceCommands';
-import { AgentCall, answeredToAgent, isAgentCall, registerWritingCommand, profilesOf, type NoItemsResult } from '../drivingLib/agentGesture';
+import { AgentCall, answeredToAgent, isAgentCall, registerWritingCommand, profilesOf } from '../drivingLib/agentGesture';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { Refusal } from '../drivingLib/refusal';
@@ -54,38 +53,65 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
 }
 
 interface RefreshGestureDeps {
-  commands: Pick<InstanceCommands, 'refresh'>;
+  instance: Pick<Instance, 'refresh'>;
+  /** The record index's status as mEdit last published it. */
+  loadOrderStatus: () => { readonly refusal?: { readonly kind: 'heldElsewhere' | 'failed' } } | undefined;
+  reporterFor: (tag: string) => Reporter;
+  instanceRoot: string;
+  /** Whether mEdit is up to take the check. */
+  mEditStatus: () => 'starting' | 'running' | 'disconnected' | 'stopped';
+}
+
+const heldElsewhereMessage = (then: string): string => `This instance is open in another Modbench window. Close it, then ${then}.`;
+
+export function registerRefreshCommand(deps: RefreshGestureDeps): vscode.Disposable {
+  const reporter = deps.reporterFor('refresh');
+  const message = heldElsewhereMessage('refresh');
+  const unchecked = 'Checked the instance, but not the index: mEdit is not running.';
+  return registerWritingCommand('modbench.instance.refresh', async (called?: unknown) => {
+    await runWritingGesture('modbench.instance.refresh', TOOLBOX_VIEW, deps.instance, (_progress, written) => {
+      written.leaveUnnamed();
+      return Promise.resolve();
+    });
+    const fromAgent = called instanceof AgentCall;
+    if (deps.mEditStatus() !== 'running') {
+      if (fromAgent) return { applied: false, refusal: unchecked };
+      reporter.report('error', unchecked);
+      return undefined;
+    }
+    if (deps.loadOrderStatus()?.refusal?.kind === 'heldElsewhere') {
+      if (fromAgent) return { applied: false, refusal: message, detail: deps.instanceRoot };
+      reporter.report('error', message, deps.instanceRoot);
+      return undefined;
+    }
+    return fromAgent ? answeredToAgent({ applied: true }) : undefined;
+  });
+}
+
+interface RebuildGestureDeps {
+  commands: Pick<InstanceCommands, 'rebuildRecordIndex'>;
   /** Armed before the rebuild is asked for: `ended` settles once mEdit's refill ends, since the
    *  rebuild answers before it has read anything again. A refused rebuild starts no refill, so its
    *  wait is released. */
   nextRefill: () => { ended: Promise<void>; release: () => void };
-  instance: Pick<Instance, 'value' | 'refresh'>;
+  instance: Pick<Instance, 'refresh'>;
   reporterFor: (tag: string) => Reporter;
-  /** Names this instance in toolbox.md's Reporting story 1. Modbench cannot name the other
-   *  window that holds the record index, only the one refused here. */
+  /** Names this instance in a refusal: Modbench cannot name the other window that holds the record index. */
   instanceRoot: string;
 }
 
-export function registerRefreshCommand(deps: RefreshGestureDeps): vscode.Disposable {
-  const reporter = deps.reporterFor('refresh');
-  const refusalOf = (outcome: Extract<RefreshResult, { applied: false }>) => outcome.heldElsewhere
-    ? { message: 'This instance is open in another Modbench window. Close it, then refresh.', detail: deps.instanceRoot }
-    : { message: 'Could not refresh.', detail: outcome.refusal };
-  const run = async (fromAgent: boolean): Promise<NoItemsResult | undefined> => {
-    const refill = deps.nextRefill();
-    const outcome = await deps.commands.refresh();
-    if (outcome.applied) {
-      await refill.ended;
-      await deps.instance.refresh();
-      return fromAgent ? answeredToAgent(outcome) : undefined;
-    }
-    refill.release();
-    await deps.instance.refresh();
-    const { message, detail } = refusalOf(outcome);
-    if (fromAgent) return { applied: false, refusal: message, detail };
-    reporter.report('error', message, detail);
-    return undefined;
-  };
-  return registerWritingCommand('modbench.instance.refresh', (called?: unknown) =>
-    runWritingGesture('modbench.instance.refresh', TOOLBOX_VIEW, deps.instance, () => run(called instanceof AgentCall)));
+export function registerRebuildRecordIndexCommand(deps: RebuildGestureDeps): vscode.Disposable {
+  const reporter = deps.reporterFor('rebuildRecordIndex');
+  return registerWritingCommand('modbench.instance.rebuildRecordIndex', () =>
+    runWritingGesture('modbench.instance.rebuildRecordIndex', TOOLBOX_VIEW, deps.instance, async () => {
+      const refill = deps.nextRefill();
+      const outcome = await deps.commands.rebuildRecordIndex();
+      if (outcome.applied) {
+        await refill.ended;
+        return;
+      }
+      refill.release();
+      if (outcome.heldElsewhere) reporter.report('error', heldElsewhereMessage('rebuild the index'), deps.instanceRoot);
+      else reporter.report('error', 'Could not rebuild the index.', outcome.refusal);
+    }));
 }

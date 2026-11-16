@@ -14,6 +14,8 @@ export interface UnsavedHandOver {
   /** Resolves once every put handed so far has answered. */
   sent: () => Promise<void>;
   pending: () => boolean;
+  /** Told wherever `pending` may have changed. */
+  onPendingChanged: (listener: () => void) => () => void;
 }
 
 /** Puts each hand-over at once and in order while mEdit runs, and the newest again whenever the
@@ -24,9 +26,15 @@ export function createUnsavedHandOver(wire: UnsavedDocumentsWire): UnsavedHandOv
   let newest: readonly UnsavedDocument[] = [];
   let sending = Promise.resolve();
   let unanswered = 0;
+  const pendingListeners = new Set<() => void>();
+  const pendingChanged = () => { for (const listener of pendingListeners) listener(); };
   const put = (documents: readonly UnsavedDocument[]): void => {
     unanswered++;
-    sending = sending.then(() => wire.put(documents)).then(settle, () => { settle({ failed: 'unreachable' }); }).finally(() => { unanswered--; });
+    pendingChanged();
+    sending = sending.then(() => wire.put(documents)).then(settle, () => { settle({ failed: 'unreachable' }); }).finally(() => {
+      unanswered--;
+      pendingChanged();
+    });
   };
   wire.onStatusChanged((status) => { if (status === 'running') put(newest); });
   wire.onReconnected(() => { put(newest); });
@@ -37,6 +45,10 @@ export function createUnsavedHandOver(wire: UnsavedDocumentsWire): UnsavedHandOv
     },
     sent: () => sending,
     pending: () => unanswered > 0,
+    onPendingChanged: (listener) => {
+      pendingListeners.add(listener);
+      return () => { pendingListeners.delete(listener); };
+    },
     onSettled: (listener) => {
       listeners.add(listener);
       return () => { listeners.delete(listener); };

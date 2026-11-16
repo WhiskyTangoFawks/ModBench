@@ -78,7 +78,7 @@ import { masterlistCommands } from './instanceCommands/masterlist';
 import { registerMasterlistCommand } from './toolbox/masterlistGesture';
 import { createHttpLootMetadata } from './lootMetadata/httpLootMetadata';
 import type { LootMetadata } from './lootMetadata/lootMetadata';
-import { registerRefreshCommand, registerToolboxCommands, TOOLBOX_VIEW } from './toolbox/toolboxCommands';
+import { registerRebuildRecordIndexCommand, registerRefreshCommand, registerToolboxCommands, TOOLBOX_VIEW } from './toolbox/toolboxCommands';
 import { afterTrust, openedFolder, whenOpened } from './toolbox/instanceCheck';
 import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
 import { toastOncePerFailure } from './drivingLib/toastOncePerFailure';
@@ -112,7 +112,7 @@ type Own = <T extends vscode.Disposable>(disposable: T) => T;
 
 type ViewsClient = Pick<MEditClient,
   'sendLoadOrder' | 'onLoadOrderResent' | 'latestLoadOrder' | 'signalChange' | 'onLaunch' | 'onExit' | 'start' | 'rebuildIndex'
-  | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'getPluginNameReferences' | 'getScriptReferences' | 'getFileReferences' | 'getPluginSourceNames' | 'getScriptRenameSourceChanges' | 'getCopyDocument' | 'getRecordOwners' | 'moveLastWritten' | 'getSourceFolderMoveChanges' | 'followSourceFolderMove' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'getFlaggedPluginHashes' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'onDidChange' | 'getPluginIndexing' | 'getArchiveCopies'>;
+  | 'onNotification' | 'getPlugins' | 'getRenameSourceChanges' | 'getPluginNameReferences' | 'getScriptReferences' | 'getFileReferences' | 'getPluginSourceNames' | 'getScriptRenameSourceChanges' | 'getCopyDocument' | 'getRecordOwners' | 'moveLastWritten' | 'getSourceFolderMoveChanges' | 'followSourceFolderMove' | 'decompileAndRepair' | 'getCreatablePluginExtensions' | 'getCreatablePluginFlags' | 'build' | 'versionInGit' | 'cloneSubmodules' | 'setPluginFileFlags' | 'getFlaggedPluginHashes' | 'loadOrderStatus' | 'onLoadOrderStatus' | 'status' | 'onDidChange' | 'getPluginIndexing' | 'getArchiveCopies'>;
 
 interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -300,7 +300,8 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
       [MODS_KEY_ARGS.view, mods.nameFilter], [PLUGINS_KEY_ARGS.view, plugins.nameFilter], [DOWNLOADS_KEY_ARGS.view, downloads.nameFilter],
     ]),
   ));
-  own(registerRefreshCommand({
+  own(registerRefreshCommand({ instance, loadOrderStatus: () => client.loadOrderStatus, mEditStatus: () => client.status, reporterFor, instanceRoot }));
+  own(registerRebuildRecordIndexCommand({
     commands, nextRefill: plugins.nextRefill, instance, reporterFor, instanceRoot,
   }));
   ownAll(own, registerDeployCommands({

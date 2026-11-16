@@ -6,7 +6,7 @@ import { AGENT_GESTURES } from '../agent/gestures';
 import type { GestureCommand } from '../ports/phrase';
 import { catalogCommandIds, GESTURES_MARKDOWN, RETIRED_AHEAD_OF_CODE, SPECIFIED_AHEAD_OF_CODE } from './commandsCatalog';
 
-const KEPT_FROM_THE_AGENT = ['modbench.instance.logIn'];
+const KEPT_FROM_THE_AGENT = ['modbench.instance.logIn', 'modbench.instance.rebuildRecordIndex'];
 const GIVEN_TO_THE_AGENT = ['modbench.record.open'];
 
 describe('the gestures the agent runs (agent.md, Gestures, story 1)', () => {
