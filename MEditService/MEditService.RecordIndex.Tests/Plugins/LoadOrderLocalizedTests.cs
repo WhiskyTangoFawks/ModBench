@@ -220,6 +220,51 @@ public sealed class LoadOrderLocalizedTests
         Assert.Equal(("Levier", "Lever"), (french, english));
     }
 
+    private static PluginFixtureData LocalizedTree()
+    {
+        var data = new PluginFixtureBuilder("load-order-localized-tree")
+            .WithPlugin("Tree.esp", mod =>
+            {
+                mod.UsingLocalization = true;
+                mod.Activators.AddNew("MainLever").Name = new TranslatedString(
+                    Language.English,
+                    new KeyValuePair<Language, string>(Language.French, "Levier"),
+                    new KeyValuePair<Language, string>(Language.English, "Lever"));
+            }, origin: "Tree")
+            .Build();
+        SourceMods.Init(data.Plugins.Single());
+        return data;
+    }
+
+    private static string? TreeNameIn(OpenedIndex index, LoadOrderHolder holder, PluginFixtureData data, Language language)
+    {
+        index.Receive(holder, SnapshotOf(data, data.Plugins, gameReads: [], instanceRoot: data.InstanceRoot, language: language));
+        return index.Queries.GetRecords(["acti"], data.Plugins.Single().Key, search: null, limit: 10, offset: 0).Value().Items.Single().FullName;
+    }
+
+    [Fact]
+    public void ATreesListedName_FollowsTheStringsLanguageWhenItMoves()
+    {
+        using var data = LocalizedTree();
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder);
+
+        var names = new[] { TreeNameIn(index, holder, data, Language.English), TreeNameIn(index, holder, data, Language.French) };
+
+        Assert.Equal(new[] { "Lever", "Levier" }, names);
+    }
+
+    [Fact]
+    public void ATreesListedName_FollowsTheStringsLanguageANewSessionNames()
+    {
+        using var data = LocalizedTree();
+        var holder = new LoadOrderHolder();
+        using (var cold = Indexes.Open(holder)) TreeNameIn(cold, holder, data, Language.English);
+        using var warm = Indexes.Open(holder);
+
+        Assert.Equal("Levier", TreeNameIn(warm, holder, data, Language.French));
+    }
+
     [Fact]
     public void AChangeOfTheStringsLanguage_NeverShowsReadyOnceTheSequenceHasMovedAndTheReconcileHasNotCaughtUp()
     {

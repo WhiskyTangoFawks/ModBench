@@ -231,7 +231,6 @@ internal sealed class RelationReads(
             LIMIT {query.Limit} OFFSET {query.Offset}
             """, ReadSummary, [.. dataParams]);
 
-        // A read of named records is the whole listing, which needs no count of the rest.
         var total = query.FormKeys is null
             ? (int)context.Scalar<long>($"WITH {NavigatorSql.HeldFor(scope, holdings)} SELECT COUNT(*) FROM {scope.Records} r{unheld}{where}", [.. dataParams])
             : items.Count;
@@ -626,6 +625,15 @@ internal sealed class RelationReads(
     {
         using var context = OpenRead();
         var rows = context.Rows($"SELECT plugin, origin, strings_read FROM {Store.Store.FilesRelation} WHERE strings_read IS NOT NULL",
+            reader => KeyValuePair.Create(reader.GetPluginAddress(), reader.GetString(2)));
+        return new Dictionary<PluginAddress, string>(rows, PluginAddress.Comparer);
+    }
+
+    /// <summary>The strings language each plugin's names were derived in.</summary>
+    public IReadOnlyDictionary<PluginAddress, string> GetNamesLanguages()
+    {
+        using var context = OpenRead();
+        var rows = context.Rows($"SELECT plugin, origin, names_language FROM {TableDdlBuilder.PluginDerivationTable}",
             reader => KeyValuePair.Create(reader.GetPluginAddress(), reader.GetString(2)));
         return new Dictionary<PluginAddress, string>(rows, PluginAddress.Comparer);
     }

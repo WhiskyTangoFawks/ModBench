@@ -452,17 +452,17 @@ internal sealed class Store : IDisposable
     {
         var plugins = new Dictionary<PluginAddress, IndexedPlugin>(PluginAddress.Comparer);
         foreach (var (key, filePath, contentHash, _) in IndexedFiles())
-            plugins[key] = new IndexedPlugin((filePath, contentHash), null);
-        foreach (var (key, stamp) in DuckDbSql.Rows(
-            Connection, $"SELECT plugin, origin, derived_from FROM {PluginDerivationRelation}",
-            reader => (Key: reader.GetPluginAddress(), Stamp: reader.GetString(2))))
+            plugins[key] = new IndexedPlugin((filePath, contentHash), null, null);
+        foreach (var (key, stamp, namesLanguage) in DuckDbSql.Rows(
+            Connection, $"SELECT plugin, origin, derived_from, names_language FROM {PluginDerivationRelation}",
+            reader => (Key: reader.GetPluginAddress(), Stamp: reader.GetString(2), Language: reader.GetString(3))))
         {
             if (!Enum.TryParse<DerivedFrom>(stamp, out var derivedFrom))
             {
                 _logger.LogWarning("The record index holds an unknown derivation {Derivation} for {Plugin} ({Origin}); treating its rows as derived from none", stamp, key.Name, key.Origin);
                 continue;
             }
-            plugins[key] = (plugins.TryGetValue(key, out var indexed) ? indexed : new IndexedPlugin(null, null)) with { DerivedFrom = derivedFrom };
+            plugins[key] = (plugins.TryGetValue(key, out var indexed) ? indexed : new IndexedPlugin(null, null, null)) with { DerivedFrom = derivedFrom, NamesLanguage = namesLanguage };
         }
         List<PluginAddress> trees = [.. comparing.Where(key => plugins.GetValueOrDefault(key)?.DerivedFrom == DerivedFrom.SourceTree)];
         return new IndexedStamps(plugins, trees.Count > 0 ? HeldDocumentStamps(trees) : []);
@@ -517,8 +517,8 @@ internal sealed class Store : IDisposable
     {
         DeletePluginFacts(plugin, origin);
         DuckDbSql.Execute(Connection, $"""
-            INSERT INTO {PluginDerivationRelation} (plugin, origin, derived_from) VALUES ($1, $2, $3)
-            """, plugin, origin, derivedFrom.ToString());
+            INSERT INTO {PluginDerivationRelation} (plugin, origin, derived_from, names_language) VALUES ($1, $2, $3, $4)
+            """, plugin, origin, derivedFrom.ToString(), _stringsLanguage.ToString());
         if (filePath == null) return;
         if (ClaimOf(filePath) is { } claim) StampFileClaim(plugin, origin, filePath, claim, stringsRead);
     }
@@ -965,7 +965,7 @@ internal sealed class Store : IDisposable
     /// is the plugin's truth however many records its binary holds, and it refuses a FormKey two
     /// documents claim before any is indexed.</summary>
     public void IndexTree(IPluginDocuments documents, PluginMetadata registered, string? filePath, CancellationToken token) =>
-        Index(documents, registered, filePath, DerivedFrom.SourceTree, stringsRead: _stringsLanguage.ToString(), recordsHeld: null, token);
+        Index(documents, registered, filePath, DerivedFrom.SourceTree, stringsRead: null, recordsHeld: null, token);
 
     /// <summary>A binary whose documents miss one of the <paramref name="recordsHeld"/> records it holds, or that holds one
     /// FormKey in two groups, is not indexed, and the failure says which. xEdit refuses a duplicate FormID to load.</summary>
@@ -1312,7 +1312,7 @@ internal sealed class Store : IDisposable
 
 }
 
-internal sealed record IndexedPlugin((string FilePath, string ContentHash)? File, DerivedFrom? DerivedFrom);
+internal sealed record IndexedPlugin((string FilePath, string ContentHash)? File, DerivedFrom? DerivedFrom, string? NamesLanguage);
 
 /// <summary>What the store held of each plugin's rows when it was asked: the file they were built from, and the truth.</summary>
 internal sealed class IndexedStamps(
@@ -1324,4 +1324,6 @@ internal sealed class IndexedStamps(
     public (string FilePath, string ContentHash)? FileOf(PluginAddress key) => plugins.TryGetValue(key, out var indexed) ? indexed.File : null;
 
     public DerivedFrom? DerivationOf(PluginAddress key) => plugins.TryGetValue(key, out var indexed) ? indexed.DerivedFrom : null;
+
+    public string? NamesLanguageOf(PluginAddress key) => plugins.TryGetValue(key, out var indexed) ? indexed.NamesLanguage : null;
 }
