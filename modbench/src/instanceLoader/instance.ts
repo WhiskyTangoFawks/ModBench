@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Log } from '../ports/log';
 import { FileConflictLookup, NO_GAME_FOLDER_ARCHIVED, type GameFolderArchived, type FileWinners, type StackedCopies } from './fileConflictIndex';
 import {
@@ -344,6 +345,8 @@ export class Instance implements Subscription {
 
   private quietEpoch = 0;
 
+  private readonly quietWork = new AsyncLocalStorage<WrittenFiles>();
+
   private readonly changes: Subscription;
 
   private readonly workspaceWatch: Subscription;
@@ -457,28 +460,44 @@ export class Instance implements Subscription {
   /** A read of the files `wrote` names, or a check of the disk when none is named. Settles when its read has run; a read
    *  that overlapped `quiet` is dropped, not landed. */
   refresh(wrote?: readonly string[]): Promise<void> {
-    return this.enqueue({ named: wrote, disk: wrote === undefined, tellsUnheard: false });
+    return this.enqueue({ named: wrote, disk: wrote === undefined, tellsUnheard: false }).settled;
   }
 
   /** Answers once the value holds the files a write just wrote, without waiting for the subscribers: a subscriber may be
    *  the writer's own caller, holding a lock the write took. */
   told(wrote: readonly string[]): Promise<void> {
-    return this.enqueue({ named: wrote, disk: false, tellsUnheard: false }, 'valueLanded');
+    const work = this.quietWork.getStore();
+    if (work !== undefined) {
+      work.name(wrote);
+      return Promise.resolve();
+    }
+    return this.enqueue({ named: wrote, disk: false, tellsUnheard: false }).valueLanded;
   }
 
-  /** Runs `work`, a write to several files the value reads, then refreshes at the files `work` names. A read that overlapped
-   *  it never lands: it may hold some files from before the write and some after. */
+  /** Runs `work`, a write to several files the value reads, and answers once the value holds the files it names. A read
+   *  that overlapped it never lands: it may hold some files from before the write and some after. */
   async quiet<T>(work: (written: WrittenFiles) => Promise<T>): Promise<T> {
     const written = new WrittenFiles();
     this.quietEpoch++;
     this.quiets++;
+    let answer: T;
     try {
-      return await collectingWrites(written, () => work(written));
-    } finally {
-      this.quiets--;
-      this.quietEpoch++;
-      await this.refresh(written.named);
+      answer = await this.quietWork.run(written, () => collectingWrites(written, () => work(written)));
+    } catch (err) {
+      await this.closeQuiet(written).catch(() => undefined);
+      throw err;
     }
+    await this.closeQuiet(written);
+    return answer;
+  }
+
+  // A read another open `quiet` drops settles at once; its value lands with the read after the last one closes.
+  private async closeQuiet(written: WrittenFiles): Promise<void> {
+    this.quiets--;
+    this.quietEpoch++;
+    const run = this.enqueue({ named: written.named, disk: written.named === undefined, tellsUnheard: false });
+    await run.valueLanded;
+    await run.settled;
   }
 
   /** The value once the first read has landed: reads when none has, and holds the read it has. */
@@ -560,7 +579,7 @@ export class Instance implements Subscription {
 
   private enqueue({ named = [], disk, tellsUnheard, fromEvents = false }: {
     named?: readonly string[]; disk: boolean; tellsUnheard: boolean; fromEvents?: boolean;
-  }, answers: 'settled' | 'valueLanded' = 'settled'): Promise<void> {
+  }): Run {
     const next = this.next ?? nextRun();
     this.next = next;
     if (this.dropped !== undefined) {
@@ -582,7 +601,7 @@ export class Instance implements Subscription {
     next.disk ||= disk;
     next.tellsUnheard ||= tellsUnheard;
     void this.drain();
-    return next[answers];
+    return next;
   }
 
   // A run settles with its value's subscribers; the next run does not wait for them.

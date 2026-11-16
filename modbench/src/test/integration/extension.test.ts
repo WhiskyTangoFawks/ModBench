@@ -151,6 +151,7 @@ function namesIn(body: string, list: 'places'): string[] {
   return entries.map((entry: unknown) => (isRecord(entry) ? String(entry.name) : '?'));
 }
 let rebuildIndexShouldFail = false;
+let signalFindsAnotherWindowHoldingTheIndex = false;
 const RAW_INDEX_LOCKED_DETAIL = 'raw backend detail: index lock held by pid 4242';
 type MockLoadOrderStatus = {
   state: 'None' | 'Reconciling' | 'Ready' | 'HeldElsewhere' | 'Failed';
@@ -227,6 +228,10 @@ function createMockBackend(): http.Server {
         signalledPaths.push(pathsSignalled(body));
         res.writeHead(204);
         res.end();
+        if (signalFindsAnotherWindowHoldingTheIndex) {
+          loadOrderStatus = { ...loadOrderStatus, state: 'HeldElsewhere', message: 'another Modbench window holds the record index' };
+          pushLoadOrderStatus();
+        }
       });
       return;
     }
@@ -2280,44 +2285,72 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
   });
 });
 
-describe('Refresh rebuilds the record index, then re-reads the instance', () => {
-  afterEach(() => { rebuildIndexShouldFail = false; });
+async function errorToastsDuring(run: () => Thenable<unknown>): Promise<string[]> {
+  const errors: string[] = [];
+  const realShowError = vscode.window.showErrorMessage;
+  Object.defineProperty(vscode.window, 'showErrorMessage', {
+    configurable: true,
+    value: (message: string) => { errors.push(message); return Promise.resolve(undefined); },
+  });
+  try {
+    await run();
+  } finally {
+    Object.defineProperty(vscode.window, 'showErrorMessage', { configurable: true, value: realShowError });
+  }
+  return errors;
+}
 
-  it('POSTs /index/rebuild, then signals the change the re-read found', async () => {
+describe('Refresh checks the instance and the record index against the disk', () => {
+  const held = loadOrderStatus;
+  afterEach(() => {
+    signalFindsAnotherWindowHoldingTheIndex = false;
+    loadOrderStatus = held;
+  });
+
+  it('POSTs /signal-change to check the disk, and discards no record index', async () => {
     const since = requestLog.length;
 
     await vscode.commands.executeCommand('modbench.instance.refresh');
 
-    const rebuilt = requestLog.indexOf('POST /index/rebuild', since);
-    assert.ok(rebuilt !== -1, 'modbench.instance.refresh must rebuild the record index');
-    await waitFor('a POST /signal-change after the rebuild',
-      () => requestLog.slice(rebuilt).includes('POST /signal-change') ? true : undefined);
+    const asked = requestLog.slice(since);
+    assert.ok(asked.includes('POST /signal-change'), 'modbench.instance.refresh must ask mEdit to check the disk');
+    assert.ok(!asked.includes('POST /index/rebuild'), 'modbench.instance.refresh must not rebuild the record index');
+  });
+
+  it('reports that another window holds the record index, naming this instance, once the check has settled', async () => {
+    signalFindsAnotherWindowHoldingTheIndex = true;
+
+    const errors = await errorToastsDuring(() => vscode.commands.executeCommand('modbench.instance.refresh'));
+
+    assert.strictEqual(errors.length, 1, `expected exactly one error toast, got: ${JSON.stringify(errors)}`);
+    assert.ok(errors[0]?.includes('This instance is open in another Modbench window'), `expected the refusal's words, got: ${errors[0]}`);
+    assert.ok(errors[0]?.includes(root), `expected the instance named, got: ${errors[0]}`);
+  });
+});
+
+describe('Rebuild record index discards the record index and reads every plugin again', () => {
+  afterEach(() => { rebuildIndexShouldFail = false; });
+
+  it('POSTs /index/rebuild', async () => {
+    const since = requestLog.length;
+
+    await vscode.commands.executeCommand('modbench.instance.rebuildRecordIndex');
+
+    assert.ok(requestLog.slice(since).includes('POST /index/rebuild'), 'modbench.instance.rebuildRecordIndex must rebuild the record index');
   });
 
   it('reports that another window holds the record index, naming this instance', async () => {
     rebuildIndexShouldFail = true;
     const since = requestLog.length;
-    const errors: string[] = [];
-    const realShowError = vscode.window.showErrorMessage;
-    Object.defineProperty(vscode.window, 'showErrorMessage', {
-      configurable: true,
-      value: (message: string) => { errors.push(message); return Promise.resolve(undefined); },
-    });
-    try {
-      await vscode.commands.executeCommand('modbench.instance.refresh');
 
-      assert.ok(requestLog.slice(since).includes('POST /index/rebuild'), 'sanity: the rebuild must still be attempted');
-      assert.strictEqual(errors.length, 1, `expected exactly one error toast, got: ${JSON.stringify(errors)}`);
-      const [toast] = errors;
-      assert.ok(
-        toast?.includes("This instance is open in another Modbench window"),
-        `expected the refusal's words, got: ${toast}`,
-      );
-      assert.ok(toast?.includes(root), `expected the instance named, got: ${toast}`);
-      assert.ok(!toast?.includes(RAW_INDEX_LOCKED_DETAIL), `expected the backend's raw detail kept out of the toast, got: ${toast}`);
-    } finally {
-      Object.defineProperty(vscode.window, 'showErrorMessage', { configurable: true, value: realShowError });
-    }
+    const errors = await errorToastsDuring(() => vscode.commands.executeCommand('modbench.instance.rebuildRecordIndex'));
+
+    assert.ok(requestLog.slice(since).includes('POST /index/rebuild'), 'sanity: the rebuild must still be attempted');
+    assert.strictEqual(errors.length, 1, `expected exactly one error toast, got: ${JSON.stringify(errors)}`);
+    const [toast] = errors;
+    assert.ok(toast?.includes('This instance is open in another Modbench window'), `expected the refusal's words, got: ${toast}`);
+    assert.ok(toast?.includes(root), `expected the instance named, got: ${toast}`);
+    assert.ok(!toast?.includes(RAW_INDEX_LOCKED_DETAIL), `expected the backend's raw detail kept out of the toast, got: ${toast}`);
   });
 });
 

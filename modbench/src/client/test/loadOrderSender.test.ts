@@ -483,7 +483,7 @@ describe('a change signalled', () => {
     client.answerPuts((_sent, _signal, answered) => { answer = answered; return pending<LoadOrderOutcome>().promise; });
     void client.sendLoadOrder(snapshot('A.esp'));
 
-    client.signalChange([]);
+    void client.signalChange([]);
     await vi.waitFor(() => { expect(methods(client)).toEqual(['put']); });
     answer();
 
@@ -498,7 +498,7 @@ describe('a change signalled', () => {
       void client.sendLoadOrder(snapshot('A.esp'));
       void client.sendLoadOrder(snapshot('B.esp'));
 
-      client.signalChange([]);
+      void client.signalChange([]);
       await vi.advanceTimersByTimeAsync(SIGNAL_WAIT_CAP_MS - 1);
       expect(methods(client)).toEqual(['put']);
       await vi.advanceTimersByTimeAsync(1);
@@ -517,7 +517,7 @@ describe('a change signalled', () => {
       let answer!: () => void;
       client.answerPuts((_sent, _signal, answered) => { answer = answered; return pending<LoadOrderOutcome>().promise; });
       void client.sendLoadOrder(snapshot('A.esp'));
-      client.signalChange([]);
+      void client.signalChange([]);
       await vi.advanceTimersByTimeAsync(SIGNAL_WAIT_CAP_MS + 1);
 
       client.setStatus('running');
@@ -537,9 +537,9 @@ describe('a change signalled', () => {
     const released = pending<undefined>();
     client.answerSignals(() => released.promise);
 
-    client.signalChange([]);
-    client.signalChange([]);
-    client.signalChange([]);
+    void client.signalChange([]);
+    void client.signalChange([]);
+    void client.signalChange([]);
     released.resolve(undefined);
     await vi.waitFor(() => { expect(methods(client)).toEqual(['signalChange', 'signalChange']); });
     await client.sendLoadOrder(snapshot('A.esp'));
@@ -554,9 +554,9 @@ describe('a change signalled', () => {
     const client = running();
     const released = pending<undefined>();
     client.answerSignals(() => released.promise);
-    client.signalChange(['/first.esp']);
+    void client.signalChange(['/first.esp']);
 
-    for (const paths of handed) client.signalChange(paths);
+    for (const paths of handed) void client.signalChange(paths);
     released.resolve(undefined);
 
     await vi.waitFor(() => { expect(signalled(client)).toEqual([['/first.esp'], folded]); });
@@ -566,7 +566,7 @@ describe('a change signalled', () => {
     const client = new InMemoryMEditClient();
     client.answerPuts(() => Promise.resolve(APPLIED));
 
-    client.signalChange([]);
+    void client.signalChange([]);
     expect(methods(client)).toEqual([]);
     await client.start();
 
@@ -580,6 +580,79 @@ describe('a change signalled', () => {
     client.reconnected();
 
     await vi.waitFor(() => { expect(methods(client)).toEqual(['put', 'put', 'signalChange']); });
+  });
+});
+
+describe('the promise a change signal returns', () => {
+  const settledWithin = (promise: Promise<void>): Promise<boolean> =>
+    Promise.race([promise.then(() => true), new Promise<boolean>((resolve) => { setTimeout(() => { resolve(false); }, 20); })]);
+
+  function behindAnUnansweredPut() {
+    const client = running();
+    let answer!: () => void;
+    client.answerPuts((_sent, _signal, answered) => { answer = answered; return pending<LoadOrderOutcome>().promise; });
+    void client.sendLoadOrder(snapshot('A.esp'));
+    return { client, answer: () => { answer(); } };
+  }
+
+  it('settles at once while mEdit is not running, and the signal stays owed for the next run', async () => {
+    const client = new InMemoryMEditClient();
+    client.setStatus('disconnected');
+
+    await expect(settledWithin(client.signalChange([]))).resolves.toBe(true);
+    expect(signalled(client)).toEqual([]);
+
+    client.setStatus('running');
+    await vi.waitFor(() => { expect(signalled(client)).toEqual([[]]); });
+  });
+
+  it('waits while mEdit starts, posts the signal once it runs, and settles when it goes instead', async () => {
+    const client = new InMemoryMEditClient();
+    client.setStatus('starting');
+    const waiting = client.signalChange([]);
+    await expect(settledWithin(waiting)).resolves.toBe(false);
+    expect(signalled(client)).toEqual([]);
+
+    client.setStatus('running');
+    await vi.waitFor(() => { expect(signalled(client)).toEqual([[]]); });
+    await waiting;
+
+    const next = new InMemoryMEditClient();
+    next.setStatus('starting');
+    const never = next.signalChange([]);
+    next.setStatus('disconnected');
+    await expect(settledWithin(never)).resolves.toBe(true);
+  });
+
+  it('is one for the signals folded into one, and waits for that signal', async () => {
+    const { client, answer } = behindAnUnansweredPut();
+
+    const all = [client.signalChange(['/a.esp']), client.signalChange(['/b.esp']), client.signalChange([])];
+    await expect(settledWithin(Promise.all(all).then(() => undefined))).resolves.toBe(false);
+    answer();
+    await Promise.all(all);
+
+    expect(signalled(client)).toEqual([[]]);
+  });
+
+  it('settles when mEdit goes before the signal is posted, and the signal stays owed', async () => {
+    const { client } = behindAnUnansweredPut();
+    const waiting = client.signalChange([]);
+
+    client.setStatus('disconnected');
+
+    await expect(settledWithin(waiting)).resolves.toBe(true);
+    expect(signalled(client)).toEqual([]);
+  });
+
+  it('settles when the client stops before the signal is posted', async () => {
+    const { client } = behindAnUnansweredPut();
+    const waiting = client.signalChange([]);
+
+    await client.stop();
+
+    await expect(settledWithin(waiting)).resolves.toBe(true);
+    expect(signalled(client)).toEqual([]);
   });
 });
 

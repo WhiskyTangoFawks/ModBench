@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { PluginAddress, PluginDiagnosisReport, PluginMetadata } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { pluginMetadataFixture } from '../../client/test/fixtures';
+import { loadOrderStatusEventFixture, pluginMetadataFixture } from '../../client/test/fixtures';
 import type { ReadFailed } from '../../wire/readFailed';
 import { EventEmitter } from '../../test/vscodeMock';
 
@@ -56,10 +56,14 @@ interface FeedOptions {
   readonly present?: readonly string[];
   readonly asked?: (reads: unknown) => void;
   readonly gates?: readonly Promise<undefined>[];
+  readonly holdsLoadOrder?: boolean;
 }
 
-function feedOver({ shownPlugins = () => [A], activePlugins = () => [], publishDiagnoses, rules = () => NO_RULES, present = [], asked, gates = [] }: FeedOptions = {}) {
+function feedOver({
+  shownPlugins = () => [A], activePlugins = () => [], publishDiagnoses, rules = () => NO_RULES, present = [], asked, gates = [], holdsLoadOrder = true,
+}: FeedOptions = {}) {
   const client = clientFindingNoDefects();
+  if (holdsLoadOrder) client.emit(loadOrderStatusEventFixture());
   const diagnoses = watched<readonly PluginDiagnosisReport[]>();
   const changedOutside = watched<readonly { plugin: string; origin: string }[]>();
   const sourceUnreadable = watched<readonly { plugin: string; origin: string }[]>();
@@ -393,6 +397,32 @@ describe('PluginFactsFeed', () => {
       await feed.refresh([]);
 
       expect(client.calls).toEqual([]);
+    });
+
+    it('asks nothing while mEdit says it holds no load order', async () => {
+      const { feed, client } = feedOver({ holdsLoadOrder: false });
+      client.emit(loadOrderStatusEventFixture({ state: 'None', conflictsComputed: false }));
+      client.calls.length = 0;
+
+      await feed.refresh();
+
+      expect(client.calls).toEqual([]);
+    });
+
+    it('asks nothing once mEdit has gone, until the restarted mEdit holds a load order', async () => {
+      const { feed, client } = feedOver();
+      client.setQueryAnswer('getPlugins', [held()]);
+      await feed.reconciled([]);
+      client.setStatus('stopped');
+      client.setStatus('running');
+      client.calls.length = 0;
+
+      await feed.refresh();
+      const whileNoneHeld = [...client.calls];
+      client.emit(loadOrderStatusEventFixture());
+      await feed.refresh();
+
+      expect({ whileNoneHeld, after: client.calls.map(({ method }) => method) }).toEqual({ whileNoneHeld: [], after: ['getPlugins'] });
     });
 
     it('reads the next re-read after one that threw', async () => {
