@@ -120,6 +120,26 @@ describe('every script the plugin source of the compiled plugins names', () => {
     expect(await owner.scriptsNamed()).toHaveLength(1);
   });
 
+  it('answers the same list while every answer is the one it had', async () => {
+    const answer = [holding(plugin, 'Gone')];
+    const { owner } = owning(() => answer);
+
+    const first = await owner.scriptsNamed();
+    const again = await owner.scriptsNamed([plugin]);
+
+    expect(again).toBe(first);
+  });
+
+  it('answers another list when an answer is another', async () => {
+    let answer = [holding(plugin, 'Gone')];
+    const { owner } = owning(() => answer);
+    const first = await owner.scriptsNamed();
+
+    answer = [holding(plugin, 'Gone')];
+
+    expect(await owner.scriptsNamed([plugin])).not.toBe(first);
+  });
+
   it('says nothing is answered while the record index cannot answer yet', async () => {
     expect(await owning(() => ({ failed: 'refused', refusal: 'not ready' })).owner.scriptsNamed()).toBeUndefined();
   });

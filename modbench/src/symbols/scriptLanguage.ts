@@ -50,6 +50,8 @@ export function scriptLanguage({ instance, names, client, reporter }: ScriptLang
     if (unjudged === undefined) return 'ready';
     return unjudged.reason === undefined ? 'waiting' : 'stopped';
   };
+  // The same files while the names and the instance value are the same objects.
+  let listed: { named: readonly object[]; value: object | undefined; files: string[] } | undefined;
   const isHeld = (name: string): boolean => scripts().some((script) => sameName(script.name, name));
 
   const nameAt = (document: AskedIn, offset: number, token?: vscode.CancellationToken) => names.scriptAt(document.uri.fsPath, heldText(document), offset, token);
@@ -90,7 +92,10 @@ export function scriptLanguage({ instance, names, client, reporter }: ScriptLang
       const now = standing();
       if (now !== 'ready') return now === 'stopped' ? [] : undefined;
       const named = await names.scriptsNamed(only);
-      return named && [...new Set(named.filter(({ name }) => !isHeld(name)).map(({ file }) => file))];
+      if (named === undefined) return undefined;
+      const value = instance?.value;
+      if (listed?.named !== named || listed.value !== value) listed = { named, value, files: [...new Set(named.filter(({ name }) => !isHeld(name)).map(({ file }) => file))] };
+      return listed.files;
     },
     /** None: a script has no row. */
     tooltipOf: () => Promise.resolve([]),

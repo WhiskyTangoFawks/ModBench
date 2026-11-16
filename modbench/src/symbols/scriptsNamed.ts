@@ -23,6 +23,7 @@ export function scriptsNamed({ paths, sourceFiles, reporter }: ScriptsNamedDeps)
   const held = new Map<string, NamedInFile[]>();
   // An answer mEdit gave again as it was, the same object, names the same scripts.
   const namedBy = new WeakMap<object, NamedInFile[]>();
+  let listed: NamedInFile[] | undefined;
   let told = '';
 
   const tellUnread = (answers: Answered) => {
@@ -34,7 +35,7 @@ export function scriptsNamed({ paths, sourceFiles, reporter }: ScriptsNamedDeps)
   const take = (answers: Answered, only: readonly NamedPlugin[] | undefined) => {
     for (const key of [...held.keys()]) {
       const asked = only === undefined || only.some((plugin) => pluginAddressKey(plugin) === key);
-      if (asked && !answers.some(({ plugin }) => pluginAddressKey(plugin) === key)) held.delete(key);
+      if (asked && !answers.some(({ plugin }) => pluginAddressKey(plugin) === key)) { held.delete(key); listed = undefined; }
     }
     for (const answer of answers) {
       const { plugin, scripts, failure } = answer;
@@ -42,6 +43,7 @@ export function scriptsNamed({ paths, sourceFiles, reporter }: ScriptsNamedDeps)
       if (failure != null) continue;
       const named = namedBy.get(answer) ?? (files === undefined ? [] : scripts.map(({ name, sourceRelativePath }) => ({ file: files.file(sourceRelativePath), name })));
       if (files !== undefined) namedBy.set(answer, named);
+      if (held.get(pluginAddressKey(plugin)) !== named) listed = undefined;
       held.set(pluginAddressKey(plugin), named);
     }
   };
@@ -56,6 +58,7 @@ export function scriptsNamed({ paths, sourceFiles, reporter }: ScriptsNamedDeps)
     const answers = asked.flatMap((answer) => (isReadFailed(answer) ? [] : answer));
     take(answers, only);
     tellUnread(answers);
-    return [...held.values()].flat();
+    listed ??= [...held.values()].flat();
+    return listed;
   };
 }

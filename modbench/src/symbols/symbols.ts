@@ -103,7 +103,7 @@ export function createSymbols(deps: SymbolsDeps): Symbols {
   });
   const disposable = vscode.Disposable.from(
     problems,
-    registerNamesNothing({ kinds, collection: problems, reporter, savedText: deps.savedText, onChanged: changed, asker: deps.asker }),
+    registerNamesNothing({ kinds, collection: problems, reporter, savedText: deps.savedText, instance, onChanged: changed, asker: deps.asker }),
     registerLanguageFeatures({ kinds, reporter, reveal: fileCopies.reveal, rename }),
     registerGoTo({ kinds, reporter: reporterFor('symbol.goTo'), reveal: fileCopies.reveal, selection: () => rows?.selection() ?? [], dataPathOf: (row) => rows?.mods.dataPathOf(row) }),
     publishReferencesView((key, value) => { void vscode.commands.executeCommand('setContext', key, value); }),

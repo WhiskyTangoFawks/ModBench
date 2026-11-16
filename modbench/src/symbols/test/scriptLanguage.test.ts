@@ -131,6 +131,21 @@ describe('a script a document names that no mod, Overwrite, Data folder file or 
     expect(await language().language.filesNamingNothing()).toEqual([SOURCE, '/instance/source/Other/Npc.json']);
   });
 
+  it('lists the same files while its answers and the instance value are the same, and others when either is not', async () => {
+    const named = [...NAMED];
+    const asked = vi.fn<SourceNames['scriptsNamed']>(() => Promise.resolve(named));
+    const { language: judging, instance } = language(NONE, SCRIPTS, {}, { scriptsNamed: asked });
+
+    const first = await judging.filesNamingNothing();
+    const same = await judging.filesNamingNothing([{ name: 'Mod.esp', origin: 'Mod' }]);
+    asked.mockResolvedValueOnce([...NAMED]);
+    const another = await judging.filesNamingNothing();
+    instance.value = { ...instance.value };
+    const afterInstance = await judging.filesNamingNothing();
+
+    expect([same === first, another === first, afterInstance === another]).toEqual([true, false, false]);
+  });
+
   it('asks of the plugins it is given, and says nothing can be said where mEdit has not answered', async () => {
     const asked = vi.fn<SourceNames['scriptsNamed']>(() => Promise.resolve(undefined));
     const only = [{ name: 'Mod.esp', origin: 'Mod' }];

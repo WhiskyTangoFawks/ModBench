@@ -17,6 +17,8 @@ interface NamesNothingDeps {
   reporter: Pick<Reporter, 'shownOnSurface'>;
   /** The text of a file on disk, which no document opens; undefined where it is gone. */
   savedText: (path: string) => Promise<string | undefined>;
+  /** What a name resolves to is read from its value; judging stands while the value is the same object. */
+  instance?: { readonly value: object };
   /** Told whenever what a name resolves to, or what a file names, may have changed: of one plugin's files, or of all. */
   onChanged: (listener: (plugin?: PluginAddress, keys?: readonly string[]) => void) => { dispose: () => unknown };
   /** The one bound on requests, and what it holds of mEdit's answers, dropped whenever a file may have changed. */
@@ -53,8 +55,10 @@ function judgingOpenDocuments(judged: (file: string, text: () => string) => Prom
   };
 }
 
+const NO_FILES: readonly string[] = [];
+
 /** A reference that names nothing is a problem on its place in its file, open or not (symbols.md, The features, story 8). */
-export function registerNamesNothing({ kinds, collection, reporter, savedText, onChanged, asker }: NamesNothingDeps): vscode.Disposable {
+export function registerNamesNothing({ kinds, collection, reporter, savedText, instance, onChanged, asker }: NamesNothingDeps): vscode.Disposable {
   const told = new Set<string>();
   const latest = new Map<string, number>();
   let shown = new Set<string>();
@@ -80,10 +84,10 @@ export function registerNamesNothing({ kinds, collection, reporter, savedText, o
   };
 
   // Undefined where any kind cannot answer: what is shown then stays.
-  const filesHolding = async (only: readonly NamedPlugin[] | undefined): Promise<string[] | undefined> => {
+  const filesHolding = async (only: readonly NamedPlugin[] | undefined): Promise<(readonly string[])[] | undefined> => {
     const lists = await Promise.all(inOrder(kinds).map(async (kind) => {
       try {
-        return kind.filesNamingNothing === undefined ? [] : await kind.filesNamingNothing(only);
+        return kind.filesNamingNothing === undefined ? NO_FILES : await kind.filesNamingNothing(only);
       } catch (error) {
         tellOnce('files', error);
         return undefined;
@@ -92,17 +96,24 @@ export function registerNamesNothing({ kinds, collection, reporter, savedText, o
     const answered = lists.filter((list) => list !== undefined);
     if (answered.length < lists.length) return undefined;
     told.delete('files');
-    return answered.flat();
+    return answered;
   };
 
   let wholeWanted = true;
+  let mustJudge = true;
+  let judgedOf: { lists: (readonly string[])[]; value: object | undefined } | undefined;
   const asking = new Map<string, Named>();
   const judgeAll = coalesced(async () => {
     const only = wholeWanted ? undefined : [...asking.values()].map(({ plugin, keys }) => ({ ...plugin, keys: keys && [...keys] }));
     wholeWanted = false;
     asking.clear();
     const held = vscode.workspace.textDocuments.filter(isFile);
-    const files = await filesHolding(only);
+    const lists = await filesHolding(only);
+    const value = instance?.value;
+    const last = judgedOf;
+    if (lists !== undefined && last !== undefined && !mustJudge && last.value === value && last.lists.length === lists.length && lists.every((list, at) => list === last.lists[at])) return;
+    mustJudge = false;
+    const files = lists?.flat();
     const closed = (files ?? []).filter((file) => !held.some((document) => document.uri.fsPath === file));
     const judging = new Set([...held.map((document) => document.uri.fsPath), ...closed]);
     await Promise.all([
@@ -115,6 +126,7 @@ export function registerNamesNothing({ kinds, collection, reporter, savedText, o
       shown = new Set([...shown, ...judging]);
       return;
     }
+    judgedOf = lists && { lists, value };
     for (const file of shown) if (!judging.has(file)) collection.delete(vscode.Uri.file(file));
     shown = judging;
   });
@@ -130,6 +142,6 @@ export function registerNamesNothing({ kinds, collection, reporter, savedText, o
     }),
     vscode.workspace.onDidOpenTextDocument(open.judge),
     vscode.workspace.onDidChangeTextDocument(({ document }) => { open.judge(document); }),
-    vscode.workspace.onDidCloseTextDocument((document) => { open.forget(document); asker.forget(); judgeAll(); }),
+    vscode.workspace.onDidCloseTextDocument((document) => { open.forget(document); asker.forget(); mustJudge = true; judgeAll(); }),
   );
 }
