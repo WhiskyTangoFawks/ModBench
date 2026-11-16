@@ -5,7 +5,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { answerOf } from '../wire/readFailed';
 import { pluginAddressKey } from '../wire/pluginAddress';
-import { askedAgain, lastRead, positionAt, readiness, settling, tellingOnSurface, type Asked, type Feed, type Told } from './feedShape';
+import { askedAgain, lastRead, positionAt, askingWhenNotLate, indexIsCurrent, settling, tellingOnSurface, type Asked, type Feed, type Told } from './feedShape';
 import type { ProblemOnFile, ProblemsByFile } from './sourceProblems';
 import { stringsAt } from './sourceText';
 
@@ -19,7 +19,7 @@ export interface PathStanding {
 }
 
 export interface PathProblemsDeps {
-  client: Pick<MEditClient, 'loadOrderStatus'>;
+  client: Pick<MEditClient, 'recordIndexMayBeLate' | 'onDidChangeRecordIndexMayBeLate'>;
   ask: Pick<Asked, 'getPluginFilePaths' | 'onPluginChanged' | 'onAskedAgain'>;
   sourceFiles: SourceFilesOf;
   readText: (path: string) => Promise<string>;
@@ -70,7 +70,6 @@ export function feedPathProblems(deps: PathProblemsDeps): Feed {
   const held = new Map<string, Held>();
   const failures = new Map<string, string>();
   const tell = tellingOnSurface(reporter);
-  const { ready, answeredAtSubscribe } = readiness(client);
   let shown = 0;
 
   const unchecked = () => [...held.values()].flatMap(({ answer }) => [
@@ -108,7 +107,6 @@ export function feedPathProblems(deps: PathProblemsDeps): Feed {
     const target = plugin === undefined ? WHOLE_SET : pluginAddressKey(plugin);
     try {
       const answer = answerOf(await deps.ask.getPluginFilePaths(plugin));
-      if (atSubscribe) answeredAtSubscribe();
       take(answer, target);
     } catch (error) {
       if (atSubscribe) return;
@@ -130,13 +128,14 @@ export function feedPathProblems(deps: PathProblemsDeps): Feed {
     await Promise.all(whole ? [ask(undefined, first)] : named.map((plugin) => ask(plugin)));
   });
   const askPluginWhenReady = ({ plugin }: { plugin: PluginAddress }) => {
-    if (!ready()) return;
+    if (!indexIsCurrent(client)) return;
     asking.set(pluginAddressKey(plugin), plugin);
     askWanted();
   };
   const unsubscribe = [
     deps.ask.onPluginChanged(askingOnChange(() => { wholeWanted = true; askWanted(); }, askPluginWhenReady)),
     deps.ask.onAskedAgain('getPluginFilePaths', askedAgain(() => { wholeWanted = true; askWanted(); }, askPluginWhenReady)),
+    askingWhenNotLate(client, () => { wholeWanted = true; askWanted(); }),
   ];
   const judging = paths.subscribe(() => { void judge(); });
   askWanted();

@@ -4,7 +4,7 @@ import { feedSourceProblems, type ProblemsByFile } from '../sourceProblems';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import type { PluginProblems } from '../../client';
-import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
+import { EMPTY_SNAPSHOT, loadOrderStatusEventFixture } from '../../client/test/fixtures';
 import type { NotificationEvent } from '../../client/apiClient';
 import type { SourceFilesOf } from '../../instanceLoader/loadOrderSnapshot';
 
@@ -24,6 +24,14 @@ const reconciledAgain = (client: InMemoryMEditClient) => {
   version += 1;
   client.emit(loadOrderStatusEventFixture({ state: 'Ready', conflictsComputed: true, version }));
 };
+
+function late(client: InMemoryMEditClient): () => void {
+  client.setStatus('running');
+  let answer!: () => void;
+  client.answerPuts(() => new Promise((resolve) => { answer = () => { resolve({ outcome: 'abandoned' }); }; }));
+  void client.sendLoadOrder(EMPTY_SNAPSHOT);
+  return () => { answer(); };
+}
 
 const sourceFolders: SourceFilesOf = (origin) => ({ file: (relativePath) => `/source/${origin}/${relativePath}` });
 
@@ -135,14 +143,21 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
     expect([...published[before] ?? []]).toEqual([]);
   });
 
-  it('asks nothing when a plugin\'s failure arrives mid-reconcile, since mEdit would answer that it is not ready', () => {
-    const { client } = feed();
+  it('asks nothing of a plugin changed while the record index may be late, and the whole set when it is not', async () => {
+    const { client, answered } = feed();
+    await answered([]);
     const asked = () => client.calls.filter(({ method }) => method === 'getPluginProblems').length;
+    const endLateness = late(client);
+    await new Promise((resolve) => { setTimeout(resolve, 20); });
     const before = asked();
-
-    client.emit(loadOrderStatusEventFixture({ ...RECONCILING, failures: [{ name: 'Bad.esp', origin: 'Mod', reason: 'truncated' }] }));
-
+    client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
+    await new Promise((resolve) => { setTimeout(resolve, 20); });
     expect(asked()).toBe(before);
+
+    endLateness();
+
+    await vi.waitFor(() => { expect(asked()).toBeGreaterThan(before); });
+    expect(client.calls.filter(({ method }) => method === 'getPluginProblems').at(-1)?.args).toEqual([undefined]);
   });
 
   it('shows mEdit\'s answer at subscribe, and asks again on a save before any load-order-status', async () => {
@@ -167,10 +182,10 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
     expect(reporter.shownFailures).toEqual([]);
   });
 
-  it('asks nothing on a save when the record index began reconciling while the ask at subscribe was in flight', async () => {
+  it('asks nothing on a save when the record index began to be late while the ask at subscribe was in flight', async () => {
     let answer!: (problems: PluginProblems[]) => void;
     const { client, published, answered } = feed(sourceFolders, new Promise<PluginProblems[]>((resolve) => { answer = resolve; }));
-    client.emit(loadOrderStatusEventFixture(RECONCILING));
+    late(client);
     answer([]);
     await vi.waitFor(() => { expect(published).toHaveLength(1); });
     client.emit({ kind: 'rows-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [REFERRER], sequence: 1 });
@@ -180,10 +195,10 @@ describe('feedSourceProblems (source.md, Editing plugin source, story 1)', () =>
     expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(2);
   });
 
-  it.each(['rows-changed', 'plugin-changed'])('asks nothing on %s while the record index reconciles', async (kind) => {
+  it.each(['rows-changed', 'plugin-changed'])('asks nothing on %s while the record index may be late', async (kind) => {
     const { client, answered } = feed();
     await answered([]);
-    client.emit(loadOrderStatusEventFixture(RECONCILING));
+    late(client);
     client.emit({ kind, plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [REFERRER], sequence: 1 });
 
     await answered([]);

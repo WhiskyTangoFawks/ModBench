@@ -6,7 +6,7 @@ import type { Reporter } from '../ports/reporter';
 import type { PathHop } from '../wire/messages';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { locationOf, type Segment } from './sourceText';
-import { askedAgain, lastRead, readiness, settling, tellingOnSurface, type Asked, type Feed, type Position, type Told } from './feedShape';
+import { askedAgain, lastRead, askingWhenNotLate, indexIsCurrent, settling, tellingOnSurface, type Asked, type Feed, type Position, type Told } from './feedShape';
 import { answerOf, failureReason, type ReadFailed } from '../wire/readFailed';
 
 type SourceProblem = PluginProblems['problems'][number];
@@ -17,7 +17,7 @@ export interface ProblemOnFile { message: string; start: Position; end: Position
 export type ProblemsByFile = ReadonlyMap<string, ProblemOnFile[]>;
 
 export interface SourceProblemsDeps {
-  client: Pick<MEditClient, 'loadOrderStatus' | 'onUnsavedHandOver'>;
+  client: Pick<MEditClient, 'recordIndexMayBeLate' | 'onDidChangeRecordIndexMayBeLate' | 'onUnsavedHandOver'>;
   ask: Pick<Asked, 'getPluginProblems' | 'onPluginChanged' | 'onAskedAgain'>;
   sourceFiles: SourceFilesOf;
   reporter: Pick<Reporter, 'shownOnSurface'>;
@@ -129,7 +129,6 @@ export function feedSourceProblems(deps: SourceProblemsDeps): Feed {
     unsavedStatus(why === undefined ? undefined : lastRead(unsavedBecause(why)));
     showStatus();
   };
-  const { ready, answeredAtSubscribe } = readiness(client);
   const unplacedStatus = () => unplacedHeld.size > 0
     ? lastRead([...unplacedHeld.values()].map(({ plugin, why }) => `${plugin}: ${why}`).join('; '))
     : undefined;
@@ -151,7 +150,6 @@ export function feedSourceProblems(deps: SourceProblemsDeps): Feed {
     const target = plugin === undefined ? WHOLE_SET : pluginAddressKey(plugin);
     try {
       const answer = placed(answerOf(await deps.ask.getPluginProblems(plugin)), deps);
-      if (first) answeredAtSubscribe();
       settle(target, answer);
     } catch (error) {
       if (!first) keepLastAnswer(target, error);
@@ -168,7 +166,7 @@ export function feedSourceProblems(deps: SourceProblemsDeps): Feed {
     await Promise.all(whole ? [ask(undefined, first)] : named.map((plugin) => ask(plugin)));
   });
   const askPluginWhenReady = ({ plugin }: { plugin: PluginAddress }) => {
-    if (!ready()) return;
+    if (!indexIsCurrent(client)) return;
     asking.set(pluginAddressKey(plugin), plugin);
     askWanted();
   };
@@ -176,6 +174,7 @@ export function feedSourceProblems(deps: SourceProblemsDeps): Feed {
     deps.ask.onPluginChanged(askingOnChange(() => { wholeWanted = true; askWanted(); }, askPluginWhenReady)),
     deps.ask.onAskedAgain('getPluginProblems', askedAgain(() => { wholeWanted = true; askWanted(); }, askPluginWhenReady)),
     client.onUnsavedHandOver(handedOver),
+    askingWhenNotLate(client, () => { wholeWanted = true; askWanted(); }),
   ];
   askWanted();
   return { stop: () => { for (const off of unsubscribe) off(); }, settled: asks.settled };

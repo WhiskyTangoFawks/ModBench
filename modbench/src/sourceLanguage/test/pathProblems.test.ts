@@ -5,7 +5,7 @@ import type { ProblemsByFile } from '../sourceProblems';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import type { PluginFilePaths } from '../../client';
-import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
+import { EMPTY_SNAPSHOT, loadOrderStatusEventFixture } from '../../client/test/fixtures';
 import type { NotificationEvent } from '../../client/apiClient';
 import type { SourceFilesOf } from '../../instanceLoader/loadOrderSnapshot';
 
@@ -246,18 +246,23 @@ describe('feedPathProblems (source.md, Editing plugin source, story 1)', () => {
     expect(reads).toEqual([FILE]);
   });
 
-  it('does not ask before the load order settles', async () => {
-    const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getPluginFilePaths', [answerFor()]);
-    client.emit(loadOrderStatusEventFixture({ state: 'Reconciling', conflictsComputed: false, version: 1 }));
-    feedPathProblems({
-      client, ask: problemsAsker(client), sourceFiles: sourceFolders, readText: () => Promise.resolve(TEXT), reporter: recordingReporter(),
-      paths: { judged: () => true, holds: () => false, subscribe: () => ({ dispose: () => undefined }) }, publish: () => undefined, languageStatus: () => undefined,
-    });
+  it('asks nothing of a plugin changed while the record index may be late, and the whole set when it is not', async () => {
+    const { client, settled } = feed([answerFor()]);
+    await settled(1);
+    client.setStatus('running');
+    let end!: () => void;
+    client.answerPuts(() => new Promise((resolve) => { end = () => { resolve({ outcome: 'abandoned' }); }; }));
+    void client.sendLoadOrder(EMPTY_SNAPSHOT);
+    await new Promise((resolve) => { setTimeout(resolve, 20); });
+    const before = asked(client).length;
     client.emit({ kind: 'plugin-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [], sequence: 1 });
     await new Promise((resolve) => { setTimeout(resolve, 20); });
+    expect(asked(client)).toHaveLength(before);
 
-    expect(asked(client)).toEqual([[undefined]]);
+    end();
+
+    await vi.waitFor(() => { expect(asked(client).length).toBeGreaterThan(before); });
+    expect(asked(client).at(-1)).toEqual([undefined]);
   });
 
   describe.each([

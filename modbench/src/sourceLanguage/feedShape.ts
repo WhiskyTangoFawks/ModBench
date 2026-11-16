@@ -31,11 +31,15 @@ export function tellingOnSurface(reporter: Pick<Reporter, 'shownOnSurface'>): (s
   };
 }
 
-/** Whether mEdit's record index answers: once the load order settles, and before any status, once an ask was answered. */
-export function readiness(client: Pick<MEditClient, 'loadOrderStatus'>): { ready: () => boolean; answeredAtSubscribe: () => void } {
-  let answered = false;
-  return { ready: () => client.loadOrderStatus?.conflictsComputed ?? answered, answeredAtSubscribe: () => { answered = true; } };
-}
+type Lateness = Pick<MEditClient, 'recordIndexMayBeLate' | 'onDidChangeRecordIndexMayBeLate'>;
+
+export const indexIsCurrent = (client: Lateness): boolean => !client.recordIndexMayBeLate;
+
+/** Asks for the whole set when the record index stops being late, since the changes told meanwhile were not asked of. */
+export const askingWhenNotLate = (client: Lateness, askWhole: () => void): (() => void) => {
+  const subscription = client.onDidChangeRecordIndexMayBeLate((late) => { if (!late) askWhole(); });
+  return () => { subscription.dispose(); };
+};
 
 /** A publisher for each feed named, each replacing only its own problems; `publishFile` gets every feed's problems on a
  *  file together, and only for a file whose problems changed. A file whose problems went is published with none. */
