@@ -210,7 +210,7 @@ const escapedForIgnoreList = (name: string): string => name.replace(/[\\*?[]/g, 
  *  file in the instance."; instance-repository.md, The manifest, story 2). */
 export const whitelistIgnoreList = (publisherFileName: string | undefined): string => `${[
   '/*', `!/${IGNORE_LIST_FILE}`, `!/${SUBMODULES_FILE}`, `!/${SETTINGS_FILE_NAME}`,
-  ...Object.values(SORTING_RULE_FILES).map((file) => `!/${file}`),
+  `!/${SORTING_RULE_FILES.userlist}`,
   ...publisherFileName === undefined ? [] : [`!/${escapedForIgnoreList(publisherFileName)}`],
   // A source folder is let in by a line of its own, and its own ignore list says what git holds of it.
   `!/${SOURCE_MODS_FOLDER}/`, `/${SOURCE_MODS_FOLDER}/*`,
