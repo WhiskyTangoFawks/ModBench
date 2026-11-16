@@ -4,7 +4,8 @@ import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, T
 vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, Uri }));
 
 import { dropMove, type DraggedRows } from '../moveDrop';
-import { ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
+import { ModNode, OverwriteNode, SeparatorGroupNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
+import { groupSeparators } from '../separatorGroups';
 import type { SortDirection } from '../../drivingLib/sortDirectionToggle';
 import type { Mod } from '../../instanceLoader/instance';
 
@@ -12,6 +13,13 @@ const mod = (name: string): Mod => ({ kind: 'mod', name, enabled: true });
 const modRow = (name: string) => new ModNode(mod(name));
 const separatorRow = (name: string, ...modNames: string[]) =>
   new SeparatorNode({ kind: 'separator', name, enabled: true }, modNames.map(mod));
+
+const separatorGroupRow = () => {
+  const held = ['Pack - One', 'Pack - Two'].map((name) => ({ separator: { kind: 'separator', name, enabled: true } as const, mods: [] }));
+  const [group] = groupSeparators(held);
+  if (group?.kind !== 'group') throw new Error('expected a group');
+  return new SeparatorGroupNode(group, []);
+};
 
 const alpha = modRow('Alpha');
 const beta = modRow('Beta');
@@ -63,6 +71,7 @@ describe.each(BOTH)('a drop is a move, as shown, with %s', (direction) => {
 
   it.each<[string, DraggedRows, ModlistNode, string]>([
     ['mods on Overwrite', { rows: [delta], focused: delta }, new OverwriteNode([], 'MO2'), 'Overwrite is not a mod.'],
+    ['mods on a separator group', { rows: [delta], focused: delta }, separatorGroupRow(), 'A separator group is a heading, so nothing goes onto it.'],
     ['mods on a mod being dragged', { rows: [alpha, delta], focused: delta }, alpha, 'Alpha is being dragged, so nothing goes onto it.'],
     ['separators on a separator being dragged', { rows: [groupA, groupB], focused: groupB }, groupA, 'Group A is being dragged, so nothing goes onto it.'],
     ['mods on a mod being dragged, as the view rebuilt it since the drag began', { rows: [alpha, delta], focused: delta }, modRow('Alpha'), 'Alpha is being dragged, so nothing goes onto it.'],

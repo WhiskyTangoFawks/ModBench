@@ -17,6 +17,7 @@ import {
 import type { ModArgument } from '../drivingLib/argument';
 import { modRowUri, overwriteRowUri, separatorRowUri } from './modIndicators';
 import type { OpenRows } from './openRows';
+import { groupSeparators, type SeparatorEntry, type SeparatorGroup, type SeparatorLeaf } from './separatorGroups';
 import { countsInBadge, differingFiles, ignoreEntriesOf, ignoredFiles, lackedLine, statusDescription } from './statusText';
 import type { ModStatuses } from '../modStatus/modStatuses';
 import type { ModStatus } from '../manifestAdapter/manifestAdapter';
@@ -55,7 +56,7 @@ interface ModListProviderOptions {
 
 // Selection and expansion follow a row across a change on disk, and a mod and a separator may
 // share a name.
-function rowIdentity(kind: 'mod' | 'separator', name: string): string {
+function rowIdentity(kind: 'mod' | 'separator' | 'separatorGroup', name: string): string {
   return `${kind}:${name}`;
 }
 
@@ -88,12 +89,24 @@ export class SeparatorNode extends vscode.TreeItem {
     public readonly separator: Separator,
     public readonly mods: Mod[],
     public readonly shown: ChildrenShown = 'all',
+    public readonly text: string = separator.name,
   ) {
-    super(separator.name, expanderOver(mods, shown));
+    super(text, expanderOver(mods, shown));
     this.id = rowIdentity(this.kind, separator.name);
     this.resourceUri = separatorRowUri(separator.name);
     this.iconPath = blankIcon();
     this.contextValue = 'separator';
+  }
+}
+
+/** A heading over the consecutive separators that share its prefix. It is no mod entry: no gesture reaches it. */
+export class SeparatorGroupNode extends vscode.TreeItem {
+  readonly kind = 'separatorGroup' as const;
+  constructor(public readonly group: SeparatorGroup, public readonly rows: readonly (SeparatorNode | SeparatorGroupNode)[], public readonly shown: ChildrenShown = 'all') {
+    super(group.label, expanderOver(rows, shown));
+    this.id = rowIdentity(this.kind, JSON.stringify([group.path, group.run]));
+    this.contextValue = this.kind;
+    this.iconPath = blankIcon();
   }
 }
 
@@ -162,7 +175,7 @@ export class OverwriteNode extends vscode.TreeItem {
   }
 }
 
-export type ModlistNode = SeparatorNode | ModNode | OverwriteNode | FolderNode | FileNode | ArchivedFolderNode | ArchivedFileNode | ErrorNode;
+export type ModlistNode = SeparatorNode | SeparatorGroupNode | ModNode | OverwriteNode | FolderNode | FileNode | ArchivedFolderNode | ArchivedFileNode | ErrorNode;
 
 const NO_MODS_MESSAGE =
   'No mods or separators. Install Mod… or Create Empty Mod…, in the title bar\'s overflow menu, adds one.';
@@ -186,6 +199,7 @@ export class ModListProvider
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private modGroups?: ModGroups;
+  private separatorEntries?: { readonly roots: readonly SeparatorEntry[]; readonly leaves: ReadonlyMap<string, SeparatorLeaf> };
   private modsHoldingPlugin = new Set<string>();
   private filterText = '';
   private filterLower = '';
@@ -236,6 +250,7 @@ export class ModListProvider
   invalidate(): void {
     this.instanceValue = this.instance.value;
     this.modGroups = undefined;
+    this.separatorEntries = undefined;
     this.positionsHeld = undefined;
     this.marks = undefined;
     this._onDidChangeTreeData.fire(undefined);
@@ -335,7 +350,7 @@ export class ModListProvider
 
   getTreeItem(element: ModlistNode): vscode.TreeItem {
     if (element instanceof ModNode || element instanceof SeparatorNode || element instanceof OverwriteNode) {
-      const label = element instanceof ModNode ? `${this.positions().get(element.mod.name) ?? ''} ${element.mod.name}`.trimStart() : element instanceof SeparatorNode ? element.separator.name : OVERWRITE_LABEL;
+      const label = element instanceof ModNode ? `${this.positions().get(element.mod.name) ?? ''} ${element.mod.name}`.trimStart() : element instanceof SeparatorNode ? element.text : OVERWRITE_LABEL;
       element.label = this.marked().has(element.id ?? '') ? { label, highlights: [[0, label.length]] } : label;
     }
     return element;
@@ -363,11 +378,6 @@ export class ModListProvider
     if (row) this._onDidChangeTreeData.fire(row);
   }
 
-  private separatorRowNamed(name: string): SeparatorNode | undefined {
-    const group = this.loadedModGroups().groups.find((g) => g.separator.name === name);
-    return group && this.groupRow(group);
-  }
-
   private marked(): ReadonlySet<string> {
     this.marks ??= this.markedRows();
     return this.marks;
@@ -384,6 +394,7 @@ export class ModListProvider
   }
 
   async getChildren(element?: ModlistNode): Promise<ModlistNode[]> {
+    if (element instanceof SeparatorGroupNode) return [...element.rows];
     if (element instanceof SeparatorNode) return element.mods.map((m) => this.modNode(m, element.shown));
     if (element instanceof ModNode) {
       return filesIn(element, modOrigin(element.mod.name), element.files, element.folders, undefined, this.within(element));
@@ -418,26 +429,32 @@ export class ModListProvider
   // separator in mod order, and then the separators. The flat list is all ungrouped.
   private entryRoots(tree: ModGroups): { ungrouped: ModlistNode[]; separators: ModlistNode[] } {
     const ungrouped = this.losingFirst(tree.ungrouped);
-    const groups = [...tree.groups].reverse();
-    if (this.filterText && !this.groupingOn) {
-      const flat = [...ungrouped, ...groups.flatMap((g) => this.losingFirst(g.mods))];
+    if (this.flat()) {
+      const flat = [...ungrouped, ...this.losingFirst(tree.groups).flatMap((g) => this.losingFirst(g.mods))];
       return { ungrouped: this.matchingModNodes(flat), separators: [] };
     }
     return {
       ungrouped: this.filterText ? this.matchingModNodes(ungrouped) : ungrouped.map((m) => this.modNode(m)),
-      separators: groups.flatMap((g) => this.groupRow(g) ?? []),
+      separators: this.losingFirst(this.entries().roots).flatMap((entry) => this.rowOf(entry) ?? []),
     };
   }
 
-  private groupRow(group: ModGroup): SeparatorNode | undefined {
-    if (!this.filterText) return this.separatorNode(group.separator, this.inViewOrder(group.mods));
-    const shown = shownUnder('matching', this.matches, group.separator.name);
-    const mods = shown === 'all' ? group.mods : group.mods.filter(this.isFound);
-    return shown === 'all' || mods.length > 0 ? this.separatorNode(group.separator, this.inViewOrder(mods), shown) : undefined;
+  private rowOf(entry: SeparatorEntry, parentShown: ChildrenShown = this.filterText ? 'matching' : 'all'): SeparatorNode | SeparatorGroupNode | undefined {
+    if (entry.kind === 'separator') return this.leafRow(entry, parentShown);
+    const shown = shownUnder(parentShown, this.matches, entry.label);
+    const rows = this.inViewOrder(entry.children).flatMap((child) => this.rowOf(child, shown) ?? []);
+    return shown === 'all' || rows.length > 0 ? new SeparatorGroupNode(entry, rows, shown) : undefined;
   }
 
-  private separatorNode(separator: Separator, mods: Mod[], shown?: ChildrenShown): SeparatorNode {
-    return new SeparatorNode(separator, mods, shown);
+  private separatorRowNamed(name: string): SeparatorNode | undefined {
+    const leaf = this.leafNamed(name);
+    return leaf && this.leafRow(leaf, this.filterText ? 'matching' : 'all');
+  }
+
+  private leafRow({ held, label }: SeparatorLeaf, parentShown: ChildrenShown): SeparatorNode | undefined {
+    const shown = shownUnder(parentShown, this.matches, held.separator.name);
+    const mods = shown === 'all' ? held.mods : held.mods.filter(this.isFound);
+    return shown === 'all' || mods.length > 0 ? new SeparatorNode(held.separator, this.inViewOrder(mods), shown, label) : undefined;
   }
 
   private overwriteNode(): OverwriteNode {
@@ -493,8 +510,34 @@ export class ModListProvider
 
   getParent(element: ModlistNode): ModlistNode | undefined {
     if (element instanceof FolderNode || element instanceof FileNode || element instanceof ArchivedFolderNode || element instanceof ArchivedFileNode) return element.parent;
+    if (element instanceof SeparatorNode || element instanceof SeparatorGroupNode) {
+      const parent = element instanceof SeparatorNode ? this.leafNamed(element.separator.name)?.parent : element.group.parent;
+      return this.flat() ? undefined : parent && this.rowOf(parent);
+    }
     const group = element instanceof ModNode ? this.groupHolding(element.mod.name) : undefined;
-    return group && this.groupRow(group);
+    return group && this.separatorRowNamed(group.separator.name);
+  }
+
+  private flat(): boolean {
+    return this.filterText !== '' && !this.groupingOn;
+  }
+
+  private entries() {
+    this.separatorEntries ??= (() => {
+      const roots = groupSeparators(this.loadedModGroups().groups);
+      const leaves = new Map<string, SeparatorLeaf>();
+      const visit = (entry: SeparatorEntry): void => {
+        if (entry.kind === 'group') entry.children.forEach(visit);
+        else leaves.set(entry.held.separator.name, entry);
+      };
+      roots.forEach(visit);
+      return { roots, leaves };
+    })();
+    return this.separatorEntries;
+  }
+
+  private leafNamed(name: string): SeparatorLeaf | undefined {
+    return this.entries().leaves.get(name);
   }
 
   /** The row the tree shows for an origin, or undefined when it shows none. */
@@ -512,23 +555,23 @@ export class ModListProvider
   }
 
   private groupHolding(modName: string): ModGroup | undefined {
-    if (this.filterText && !this.groupingOn) return undefined;
+    if (this.flat()) return undefined;
     return this.loadedModGroups().groups.find((g) => g.mods.some((m) => m.name === modName));
   }
 
   private showsMod(mod: Mod): boolean {
     if (!this.filterText) return true;
     const group = this.groupHolding(mod.name);
-    return group ? this.groupRow(group)?.mods.some((m) => m.name === mod.name) === true : this.isFound(mod);
+    return group ? this.separatorRowNamed(group.separator.name)?.mods.some((m) => m.name === mod.name) === true : this.isFound(mod);
   }
 
   // Mod order is winning-first. View order only.
-  private losingFirst(mods: readonly Mod[]): Mod[] {
-    return [...mods].reverse();
+  private losingFirst<T>(rows: readonly T[]): T[] {
+    return [...rows].reverse();
   }
 
-  private inViewOrder(mods: readonly Mod[]): Mod[] {
-    return this.direction === 'winningAtTop' ? [...mods] : this.losingFirst(mods);
+  private inViewOrder<T>(rows: readonly T[]): T[] {
+    return this.direction === 'winningAtTop' ? [...rows] : [...rows].reverse();
   }
 
   private matches = (name: string): boolean => name.toLowerCase().includes(this.filterLower);

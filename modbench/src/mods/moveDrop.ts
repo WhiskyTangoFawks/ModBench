@@ -44,6 +44,7 @@ export function dropMove(dragged: DraggedRows, target: ModlistNode | undefined, 
   const end = endAtTop(direction);
   if (target === undefined) return { argument, target: { place: { kind: 'modOrder' }, end: otherEnd(end) } };
   if (target.kind === 'runtimeOutput') return { refusal: 'Overwrite is not a mod.' };
+  if (target.kind === 'separatorGroup') return { refusal: 'A separator group is a heading, so nothing goes onto it.' };
   if (target.kind !== 'mod' && target.kind !== 'separator') return { refusal: 'Nothing goes onto a file or a folder.' };
   const refusal = dragRefusal(target, dragged.rows);
   if (refusal !== undefined) return { refusal };
