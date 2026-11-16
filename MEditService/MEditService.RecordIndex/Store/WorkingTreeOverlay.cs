@@ -52,12 +52,13 @@ internal sealed class WorkingTreeOverlay
         var movedKeys = new List<string>([.. written.Select(d => d.FormKey), .. gone]);
         var held = RecordTypesHeld(key, movedKeys);
 
+        List<string> gained = [];
         var uncarried = Write(key, [.. written.Select(d => held.TryGetValue(d.FormKey, out var recordType)
             ? new Written(d.FormKey, recordType, d.Text, Held: true)
-            : new Written(d.FormKey, d.RecordType, d.Text, Held: false, d.Cell))], movedKeys);
+            : new Written(d.FormKey, d.RecordType, d.Text, Held: false, d.Cell))], movedKeys, gained);
         Remove(key, [.. gone.Where(held.ContainsKey)], uncarried, movedKeys);
         List<string> moved = [.. movedKeys.Distinct(StringComparer.Ordinal)];
-        return (moved, [.. moved.Where(formKey => !held.ContainsKey(formKey)), .. gone.Where(held.ContainsKey)]);
+        return (moved, [.. written.Select(d => d.FormKey).Where(formKey => !held.ContainsKey(formKey)), .. gone.Where(held.ContainsKey), .. gained, .. uncarried]);
     }
 
     private Dictionary<string, string> RecordTypesHeld(PluginAddress key, List<string> formKeys) =>
@@ -67,7 +68,7 @@ internal sealed class WorkingTreeOverlay
                 key.Name, key.Origin, formKeys)
             .ToDictionary(row => row.FormKey, row => row.RecordType, StringComparer.Ordinal);
 
-    private List<string> Write(PluginAddress key, List<Written> documents, List<string> movedKeys)
+    private List<string> Write(PluginAddress key, List<Written> documents, List<string> movedKeys, List<string> gained)
     {
         List<string> uncarried = [];
         while (documents.Count > 0)
@@ -86,6 +87,7 @@ internal sealed class WorkingTreeOverlay
             {
                 var carried = container.Embedded.Select(c => c.FormKey).ToHashSet(StringComparer.Ordinal);
                 uncarried.AddRange(recordedBefore[container.Document.FormKey].Where(child => !carried.Contains(child)));
+                gained.AddRange(carried.Where(child => !recordedBefore[container.Document.FormKey].Contains(child)));
             }
             documents = EmbeddedChildrenMoved(key, [.. derived.SelectMany(d => d.Embedded)]);
             movedKeys.AddRange(documents.Select(d => d.FormKey));
