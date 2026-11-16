@@ -740,13 +740,17 @@ internal sealed class Store : IDisposable
     {
         var targets = scope.NamedRows.Values.SelectMany(keys => keys).Distinct().ToList();
         if (targets.Count == 0) return;
+        var sources = DuckDbSql.Rows(
+            Connection, $"SELECT DISTINCT plugin FROM {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} WHERE derived_from = '{DerivedFrom.SourceTree}'",
+            reader => reader.GetString(0));
+        // Rows are stored by plugin, so naming the source plugins lets the scan skip the others' rows.
         var referrers = DuckDbSql.Rows(Connection, $"""
             SELECT DISTINCT fr.source_plugin, fr.source_origin, fr.source_form_key
             FROM {TableDdlBuilder.MirrorSchema}.form_references fr
             JOIN {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} d
               ON d.plugin = fr.source_plugin AND d.origin = fr.source_origin AND d.derived_from = '{DerivedFrom.SourceTree}'
-            WHERE fr.target_form_key IN (SELECT unnest($1::VARCHAR[]))
-            """, reader => (Plugin: reader.GetPluginAddress(), FormKey: reader.GetString(2)), targets);
+            WHERE fr.source_plugin IN (SELECT unnest($2::VARCHAR[])) AND fr.target_form_key IN (SELECT unnest($1::VARCHAR[]))
+            """, reader => (Plugin: reader.GetPluginAddress(), FormKey: reader.GetString(2)), targets, sources);
         foreach (var plugin in referrers.GroupBy(referrer => referrer.Plugin, PluginAddress.Comparer))
             NameRows(plugin.Key, plugin.Select(referrer => referrer.FormKey), scope);
     }
