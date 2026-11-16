@@ -865,24 +865,6 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     await expect(load).resolves.toMatchObject({ outcome: 'applied', status: { version: 1 } });
   });
 
-  it('says everything changed once the stream reopens, since views read again on a change and never on a reconnect', async () => {
-    const { streams, open } = reopeningStreams();
-    const fetch = routedFetch([
-      ['/notifications/stream', open],
-      ['/load-order/status', () => Promise.resolve(jsonResponse(200, {
-        state: 'Ready', totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 1,
-      }))],
-    ]);
-    const client = makeClient(fetch, { reconnectDelayMs: 0 });
-    await client.start();
-    const heard: unknown[] = [];
-    client.onDidChange((change) => heard.push(change));
-
-    streams[0]?.end();
-
-    await vi.waitFor(() => expect(heard).toEqual([undefined]));
-  });
-
   it('answers a PUT that heard only an older version\'s tick from the process\'s own status', async () => {
     const { response: stream, push } = pushableStreamResponse();
     let answerPut!: (r: Response) => void;
@@ -1077,6 +1059,26 @@ describe('HttpMEditClient, the backend process it hides', () => {
 
     expect(spawn).toHaveBeenCalledWith('/x/backend', ['--urls', 'http://localhost:5172', '--Serilog:MinimumLevel:Default', 'Debug']);
     await vi.waitFor(() => expect(channel.warn).toHaveBeenCalledWith('[backend] slow'));
+  });
+});
+
+describe('HttpMEditClient — the change event', () => {
+  it('says everything changed once the stream reopens, since views read again on a change and never on a reconnect', async () => {
+    const { streams, open } = reopeningStreams();
+    const fetch = routedFetch([
+      ['/notifications/stream', open],
+      ['/load-order/status', () => Promise.resolve(jsonResponse(200, {
+        state: 'Ready', totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 1,
+      }))],
+    ]);
+    const client = makeClient(fetch, { reconnectDelayMs: 0 });
+    await client.start();
+    const heard: unknown[] = [];
+    client.onDidChange((change) => heard.push(change));
+
+    streams[0]?.end();
+
+    await vi.waitFor(() => expect(heard).toEqual([undefined]));
   });
 });
 

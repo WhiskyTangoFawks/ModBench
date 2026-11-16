@@ -218,11 +218,8 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     return slot.hold(snapshot);
   };
 
-  const resend = (): void => {
-    const snapshot = newestHanded;
-    if (!snapshot) return;
-    if (!slot.holdsOne()) void hand(snapshot);
-    void slot.oweSignal([]);
+  const oweCheckAfterReopen = (): void => {
+    if (newestHanded) void slot.oweSignal([]);
   };
 
   // A send in flight when mEdit goes answers abandoned, never a killed backend as a network failure.
@@ -236,7 +233,7 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     }
     slot.pump();
   });
-  wire.onReconnected(resend);
+  wire.onReconnected(oweCheckAfterReopen);
 
   return {
     send: hand,

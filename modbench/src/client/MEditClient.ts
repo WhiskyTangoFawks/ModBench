@@ -407,7 +407,7 @@ export interface MEditClient {
    *  reaches no listener. */
   onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void;
 
-  /** The one change event, shaped as VS Code's `Event`: what changed in the record index, as names or as everything. A status alone is no change. */
+  /** The one change event, shaped as VS Code's `Event`: what changed in the record index, as names or as everything. */
   onDidChange(listener: (change: RecordIndexChange) => void): Disposable;
 
   /** Whether the record index may not yet hold what Modbench handed it: a snapshot, a change signal or the

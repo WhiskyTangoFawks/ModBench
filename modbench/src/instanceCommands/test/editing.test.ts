@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { LaunchOutcome, LoadOrderOutcome, LoadOrderProgress, LoadOrderSnapshot } from '../../client';
-import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { editingFlow } from '../editing';
 import type { PutLoadOrderResult } from '../loadOrder';
@@ -164,32 +163,20 @@ describe('the load order is put at a recompute that changed it', () => {
   });
 });
 
-describe('a put the client makes again on its own', () => {
-  it('is told to no one, since the record index status says how it fared', async () => {
+describe('a reconnect, which leaves mEdit holding no load order', () => {
+  it('hands the load order again after a reconnect, tells a put mEdit refused, and hands it again at the next gesture', async () => {
     const { client, told, toldCount, land, putPluginNames } = wired();
     land(valueWith('A.esp'));
     await toldCount(1);
+    client.answerPuts(() => Promise.resolve({ outcome: 'failed', message: 'the data folder is not found' }));
 
     client.reconnected();
-    await client.latestLoadOrder();
-
-    expect(putPluginNames()).toEqual(['A.esp', 'A.esp']);
-    expect(told).toHaveLength(1);
-  });
-
-  it('leaves the next gesture handing the load order again when the put failed', async () => {
-    const { client, toldCount, land, putPluginNames } = wired();
-    land(valueWith('A.esp'));
-    await toldCount(1);
-    client.answerPuts(() => Promise.resolve({ outcome: 'failed', message: 'no' }));
-    client.reconnected();
-    await client.latestLoadOrder();
-    client.emit(loadOrderStatusEventFixture({ state: 'Failed', message: 'no', conflictsComputed: false }));
-    client.answerPuts(() => Promise.resolve(APPLIED));
-
-    land(valueWith('A.esp'));
     await toldCount(2);
+    client.answerPuts(() => Promise.resolve(APPLIED));
+    land(valueWith('A.esp'));
+    await toldCount(3);
 
+    expect(told[1]).toMatchObject({ sent: true, outcome: { outcome: 'failed', message: 'the data folder is not found' } });
     expect(putPluginNames()).toEqual(['A.esp', 'A.esp', 'A.esp']);
   });
 });

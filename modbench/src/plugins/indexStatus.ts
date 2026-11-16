@@ -65,11 +65,11 @@ export function followIndexStatus(deps: IndexStatusDeps): { narrator: ReconcileN
     }),
     log: (m) => log('error', `[loadOrder] ${m}`),
   });
-  let heard: LoadOrderProgress | undefined;
+  let lastHeardStatus: LoadOrderProgress | undefined;
   const hearCurrent = (): void => {
     const status = client.loadOrderStatus;
-    if (status === heard) return;
-    heard = status;
+    if (status === lastHeardStatus) return;
+    lastHeardStatus = status;
     if (status) narrator.hear(status); else narrator.detached();
   };
   const progressSubscription = client.onDidChangeRecordIndexProgress(hearCurrent);

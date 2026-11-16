@@ -1,5 +1,5 @@
 // Put load order (ADR-0013) when the snapshot changed, and signal change. The client owns the process both go
-// to; what came of each put comes back through `onPut`.
+// to; what came of each put it was asked for comes back through `onPut`.
 
 import type { LaunchOutcome, LoadOrderSnapshot, MEditClient } from '../client';
 import { exactPluginAddressKey } from '../wire/pluginAddress';
@@ -61,8 +61,12 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
     return true;
   };
 
+  let putsUnanswered = 0;
   // A put the backend failed is not told: the status bar reports the stop.
   const tellPut = (put: Promise<PutLoadOrderResult>): void => {
+    putsUnanswered++;
+    const answered = (): void => { putsUnanswered--; };
+    void put.then(answered, answered);
     void tells.track(put.then((result) => {
       if (result.sent && result.outcome.outcome !== 'applied' && handed?.snapshot === result.snapshot) handed = undefined;
       if (result.sent && result.outcome.outcome === 'backendFailed') return;
@@ -89,10 +93,16 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
     await tells.settled();
   };
 
-  const refusals = client.onDidChange(() => { if (client.loadOrderStatus?.refusal !== undefined) handed = undefined; });
+  // mEdit holds no load order, as after a restart: it is handed the one it should hold, as any put is.
+  const holdsNone = client.onDidChange(() => {
+    const status = client.loadOrderStatus;
+    if (last === undefined || putsUnanswered > 0 || (status !== undefined && !status.holdsNone)) return;
+    handed = undefined;
+    put(last.source, last.stringsLanguage);
+  });
   const unsubscribes = [
     () => { changeOfOrder.dispose(); },
-    () => { refusals.dispose(); },
+    () => { holdsNone.dispose(); },
     client.onLaunch((launched) => {
       const shown = launches.track(tellLaunch(launched));
       if (!entering) void around(() => shown);

@@ -191,29 +191,14 @@ describe('a send during a disconnect', () => {
 });
 
 describe('a reconnect', () => {
-  it('puts the newest snapshot again, since the process behind the stream may hold nothing', async () => {
+  it('puts nothing again itself, the flow handing the load order once mEdit is found to hold none', async () => {
     const client = running();
     await client.sendLoadOrder(snapshot('A.esp'));
 
     client.reconnected();
+    await client.latestLoadOrder();
 
-    await vi.waitFor(() => { expect(sentNames(client)).toEqual(['A.esp', 'A.esp']); });
-    expect(sentNames(client)).toEqual(['A.esp', 'A.esp']);
-  });
-
-  it('puts the snapshot in flight again after it, since it may have landed on the process before', async () => {
-    const client = running();
-    const released = pending<LoadOrderOutcome>();
-    client.answerPuts(() => released.promise);
-    const sent = client.sendLoadOrder(snapshot('A.esp'));
-
-    client.reconnected();
-    client.answerPuts(() => Promise.resolve(APPLIED));
-    released.resolve(APPLIED);
-
-    await vi.waitFor(() => { expect(sentNames(client)).toEqual(['A.esp', 'A.esp']); });
-    expect(await sent).toEqual(APPLIED);
-    expect(sentNames(client)).toEqual(['A.esp', 'A.esp']);
+    expect(sentNames(client)).toEqual(['A.esp']);
   });
 
   it('tells a snapshot that was waiting at the reopen to its sender alone, never as a resend', async () => {
@@ -525,13 +510,13 @@ describe('a change signalled', () => {
     await vi.waitFor(() => { expect(methods(client)).toEqual(['start', 'signalChange']); });
   });
 
-  it('follows the snapshot a reconnect puts again, since the process behind the stream may not have checked the disk', async () => {
+  it('follows a reconnect, since the process behind the stream may not have checked the disk', async () => {
     const client = running();
     await client.sendLoadOrder(snapshot('A.esp'));
 
     client.reconnected();
 
-    await vi.waitFor(() => { expect(methods(client)).toEqual(['put', 'put', 'signalChange']); });
+    await vi.waitFor(() => { expect(methods(client)).toEqual(['put', 'signalChange']); });
   });
 });
 
