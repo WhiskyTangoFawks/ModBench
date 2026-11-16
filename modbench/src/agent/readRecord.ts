@@ -22,7 +22,7 @@ const RECORD = {
   plugin: z.strictObject({ name: z.string(), origin: z.string().optional() }).optional(),
 };
 
-type RecordReads = Pick<MEditClient, 'resolveNames' | 'getComparison' | 'getPlugins' | 'getCopyDocument' | 'getRenderedDocument'>;
+type RecordReads = Pick<MEditClient, 'resolveNames' | 'getComparison' | 'getRecordOwners' | 'getPlugins' | 'getCopyDocument' | 'getRenderedDocument'>;
 
 const copyOf = async (
   mEdit: RecordReads, copy: RecordCopy,
@@ -94,6 +94,27 @@ const standingIn = async (mEdit: RecordReads, value: InstanceValue, formKey: str
   return status === null ? {} : { status };
 };
 
+const entryOf = async (mEdit: RecordReads, copy: RecordCopy, isWinner: boolean, standing: object) => {
+  const document = await copyOf(mEdit, copy);
+  return 'refused' in document
+    ? { plugin: copy.plugin, isWinner, reason: document.refused }
+    : { plugin: copy.plugin, isWinner, ...standing, ...document };
+};
+
+const inactiveEntries = async (mEdit: RecordReads, value: InstanceValue, formKey: string) => {
+  const owners = await mEdit.getRecordOwners(formKey);
+  if (isReadFailed(owners)) throw new Refusal(failureReason(owners));
+  if (owners.length === 0) throw new Refusal(`No plugin holds ${formKey}.`);
+  return Promise.all(owners.map(async (plugin) => entryOf(mEdit, { formKey, plugin }, false, await standingIn(mEdit, value, formKey, plugin))));
+};
+
+const activeEntries = async (mEdit: RecordReads, formKey: string, comparison: CompareResult) => {
+  const plugins = await pluginsRead(mEdit);
+  return Promise.all(comparison.overrides.map((copied) => entryOf(
+    mEdit, { formKey, plugin: pluginAddressOf(copied) }, copied.isWinner, standingOf(plugins, comparison, copied, NO_STANDING),
+  )));
+};
+
 const sqlText = (text: string): string => `'${text.replaceAll("'", "''")}'`;
 
 export const READ_RECORD = {
@@ -116,15 +137,7 @@ export const READ_RECORD = {
     }
     const compared = await mEdit.getComparison(formKey);
     if (isReadFailed(compared)) throw new Refusal(failureReason(compared));
-    if (compared === null) throw new Refusal(`No active plugin holds ${formKey}.`);
-    const comparison = withMasterCellStates(compared);
-    const plugins = await pluginsRead(mEdit);
-    const entries = await Promise.all(comparison.overrides.map(async (copied) => {
-      const { isWinner } = copied;
-      const copyAddress = pluginAddressOf(copied);
-      const copy = await copyOf(mEdit, { formKey, plugin: copyAddress });
-      return 'refused' in copy ? { plugin: copyAddress, isWinner, reason: copy.refused } : { plugin: copyAddress, isWinner, ...standingOf(plugins, comparison, copied, NO_STANDING), ...copy };
-    }));
+    const entries = compared === null ? await inactiveEntries(mEdit, value, formKey) : await activeEntries(mEdit, formKey, withMasterCellStates(compared));
     const fitted = fitting(entries, (copies) => ({
       copies: copies.map((entry) => ({ plugin: entry.plugin, isWinner: entry.isWinner, chars: JSON.stringify(entry).length })),
       narrow: 'plugin narrows the read to one copy.',
